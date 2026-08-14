@@ -27,11 +27,27 @@
 
 ## 1. Where work comes from
 
-`docs/requirements.yaml` is the work queue — unchanged schema from the earlier 4-agent
-system. When asked for unscoped work, pick the first `pending` requirement whose
-`depends_on` are all `done`, in file order. When given a specific `REQ-XXX`, look it up
-and route by workflow (see §3 below), not by a single `owner` field — the fuller
-pipeline routes a requirement through multiple roles in sequence, not to one owner.
+**If `letflow-queue` (the multi-host coordination service) is deployed and reachable —
+see `docs/agents/protocols/TASK_QUEUE.md` — call `get_next_task` rather than reading
+`docs/requirements.yaml` directly.** This is a hard rule once multiple hosts are
+running Letflow agents concurrently: reading the file yourself to pick work is exactly
+the race condition the queue service exists to close. `docs/requirements.yaml` remains
+the content authority (id/title/owner/status/stage/description/acceptance_criteria/
+depends_on — unchanged schema) but is a mirror for task-selection purposes once the
+queue is live, kept in sync via `register_task` and DOC-UPDATER's normal status-flip
+step.
+
+**Single-host fallback:** if `letflow-queue` is not deployed yet or unreachable (see
+`TASK_QUEUE.md`'s "Deployment status"), fall back to the pre-queue behavior: pick the
+first `pending` requirement whose `depends_on` are all `done`, in file order — but
+state explicitly that you're in fallback mode rather than silently treating it as
+normal, per `core-directives.md`'s No Speculation rule.
+
+When given a specific `REQ-XXX` directly by the user, look it up and route by workflow
+(see §3 below), not by a single `owner` field — the fuller pipeline routes a
+requirement through multiple roles in sequence, not to one owner. (A directly-named
+REQ-XXX may still need `set_lock` called against its queue task, if one exists, before
+starting — check `TASK_QUEUE.md` for the recovery-path shape.)
 
 ## 2. Standard workflows
 

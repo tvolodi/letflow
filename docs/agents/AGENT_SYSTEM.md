@@ -169,6 +169,7 @@ Default, if none is stated: `ORCH` — same default as the earlier 4-agent syste
 | Handoff lifecycle mechanics | `docs/agents/shared/HANDOFF_PROTOCOL.md` |
 | Git branch/merge mechanics | `docs/agents/protocols/GIT_SETUP.md`, `GIT_MERGE.md` |
 | Incidental-issue forwarding | `docs/agents/protocols/ISSUE_QUEUE.md` |
+| Multi-host task selection/locking (`letflow-queue`) | `docs/agents/protocols/TASK_QUEUE.md` |
 | Standard workflow step chains | `docs/agents/workflows/WF-*.md` |
 | Roster, handoff schema, capability matrix, artifact locations | this document |
 | Orchestration decision logic, stage gates | `docs/agents/ORCHESTRATOR.md` |

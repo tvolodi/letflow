@@ -60,12 +60,16 @@ validator.
 
 ## Where work comes from
 
-`docs/requirements.yaml` is the source of truth for work packages —
+`docs/requirements.yaml` is the content authority for work packages —
 each is sized to one agent turn with an explicit `owner`,
-`description`, and `acceptance_criteria`. Before starting unscoped
-work ("build the next thing"), check it for the next `pending`
-requirement whose `depends_on` are all `done`. When told to work on a
-specific `REQ-XXX`, read its entry in full before touching code.
+`description`, and `acceptance_criteria`. **For task *selection* across
+multiple hosts, ORCH calls `letflow-queue`'s `get_next_task` instead of
+reading this file directly** — see
+[`docs/agents/protocols/TASK_QUEUE.md`](docs/agents/protocols/TASK_QUEUE.md).
+Single-host sessions (queue not deployed/reachable) fall back to reading
+the file directly: check it for the next `pending` requirement whose
+`depends_on` are all `done`. When told to work on a specific `REQ-XXX`,
+read its entry in full before touching code, same as always.
 
 Every requirement carries a `stage` (S0–S8, tie back to
 `docs/migration/`). `docs/migration/stage-N-*.md` holds migration

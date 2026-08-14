@@ -109,6 +109,27 @@ command run) rather than what it may take on trust.
 
 ---
 
+## ⛔ No Agent Discretion Over Task Selection or Locking (multi-host)
+
+**Once `letflow-queue` is deployed and reachable** (see
+`docs/agents/protocols/TASK_QUEUE.md`), no agent — including ORCH's own delegated
+subagents — may read `docs/requirements.yaml` and independently decide which
+requirement to work on, or hand-edit any status/lock field to route around the queue.
+Task selection and locking are **service-mediated, not agent-discretionary**: an agent
+that could "put a lock, or may not put a lock, or may select what they want" defeats
+the entire point of multi-host coordination — two hosts reading the same file at
+nearly the same moment can both see a requirement as available and both start it. Only
+the queue's atomic claim (`get_next_task`) prevents this.
+
+Only `ORCH` calls the queue's four functions (`register_task`, `get_next_task`,
+`set_lock`, `release_lock`); every other role receives its work via the handoff ORCH
+already writes — this is unchanged from how handoffs already work, it just means the
+*source* of what goes into that handoff is now the queue, not a direct file read, once
+multi-host coordination is live. See `TASK_QUEUE.md` for the full protocol and the
+single-host fallback (queue not yet deployed / unreachable).
+
+---
+
 ## ⚠️ Unblock-Everything
 
 Every agent MUST resolve any problem that blocks full completion of the current task,

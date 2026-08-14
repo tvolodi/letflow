@@ -53,6 +53,8 @@
                       ▼
            ┌──────────────────────┐
            │  STEP 3: TEST DESIGN │ ← TEST-DESIGNER
+           │  (scope test first — │   no executable surface (docs-only requirement)?
+           │   skips 3b/4 if N/A) │   → skip straight to STEP 5
            └──────────┬───────────┘
                  VALID?├── NO ──► REWORK (max 3)
                       │
@@ -257,6 +259,26 @@ optional "check before calling it done" step.
 ## Step 3 — Test design
 
 **Agent:** `TEST-DESIGNER`
+
+**Scope test (run first — added after REQ-010's WF02 run surfaced the gap):** does
+Step 2a/2b's `artifacts_out` contain any `.ex`/`.exs`/`.tsx`/`.ts` file — i.e. is there
+executable surface this step could plausibly write a test against? A requirement whose
+only artefacts are `.md` files (a decision record, a stage-doc update) has nothing for
+ExUnit/StreamData to exercise.
+```
+NO executable surface → complete the handoff: status: PASS, summary: "out of scope —
+    no executable surface produced by this requirement (docs-only artifacts:
+    <list them>)", next_action: "Route directly to RELEASE-VALIDATOR (Step 5) —
+    Steps 3b/4 skipped, RELEASE-VALIDATOR verifies acceptance criteria by reading
+    the artefacts directly rather than by test result."
+YES → continue to the full procedure below.
+```
+Do not invent busywork to satisfy this gate (e.g. a test that greps a markdown file for
+a keyword) — a test with no real executable behavior to fail against is exactly the
+"satisfy a gate without substance" anti-pattern `core-directives.md` warns against.
+TEST-DESIGN-VALIDATOR and TEST-RUNNER are skipped entirely when this scope test says
+NO, the same way SECURITY-REVIEWER's out-of-scope PASS skips straight past its own
+invariant checklist.
 
 ```
 1. Read docs/requirements.yaml for the requirement(s), and lib/letflow/design/<module>.md.

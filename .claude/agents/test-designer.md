@@ -19,6 +19,17 @@ AGENT_ID: TEST-DESIGNER
 - The existing property test at `test/letflow/process_instance_test.exs` — the
   established style to match for any state-machine-touching work
 
+## Scope test — run this first
+
+Check Step 2a/2b's `artifacts_out`: does it contain any `.ex`/`.exs`/`.tsx`/`.ts` file?
+A requirement whose only output is `.md` files (a decision record, a stage-doc update)
+has no executable surface to write a test against. If so: record "out of scope — no
+executable surface" and route directly to RELEASE-VALIDATOR (Step 5), skipping
+TEST-DESIGN-VALIDATOR and TEST-RUNNER entirely — see
+`docs/agents/workflows/WF-02_requirement_implementation.md` Step 3 for the full
+procedure. Do not invent a test with nothing real to fail against just to produce an
+artifact.
+
 ## What you do
 
 For each acceptance criterion of the requirement(s) in scope, write:

@@ -795,3 +795,31 @@ history:
       via mkdir -p on next run, not a finished verdict document like
       the four deleted .md files, so it's a different category than
       what this deletion targeted.
+  - req: REQ-010
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-14T21:26:34Z
+    note: >
+      docs/migration/decisions/0001-web-framework.md records an explicit decision:
+      Letflow migrates to Phoenix (router pipelines, controllers) rather than
+      continuing to hand-roll on plain Plug/Bandit, effective at S4. RELEASE-VALIDATOR
+      independently re-verified all three acceptance criteria against the file's actual
+      content before this update: the Decision section states Phoenix explicitly (not
+      a pros/cons list); all 7 middleware modules (trace, auth, content_type, validate,
+      tenant_status, quota_enforcement, rate_limit) are named and reasoned about
+      individually under Dimension B, each mapped to Phoenix's pipeline mechanism vs.
+      the hand-rolled equivalent; and the route count used in the Decision/Reasoning
+      (24, from src/api/routes/) was independently re-verified against R-Co's
+      git-tracked tree rather than trusted from the file's own prose. ELIXIR-DEV's
+      research (lib/letflow/design/0001-web-framework-decision.md) found the file's
+      pre-existing Question section and docs/requirements.yaml's REQ-010 description/
+      acceptance_criteria[2] still cite a stale count of 22 routes (ground truth is 24;
+      promotion_review.zig was missing from every stale source) and REQ-010's
+      description separately undercounts the middleware chain at 6 (omits
+      content_type.zig; ground truth is 7, already correctly reflected in
+      acceptance_criteria[1] and the decision file's own Question section). This
+      discrepancy was filed as docs/issues/ISS-0001.yaml (severity MINOR, also filed to
+      GitHub as https://github.com/tvolodi/letflow/issues/1) rather than silently
+      corrected in place, since fixing it was out of REQ-010's declared file scope
+      (Decision/Reasoning sections only). Flipped docs/requirements.yaml REQ-010
+      status to done.

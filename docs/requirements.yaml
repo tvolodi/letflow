@@ -136,7 +136,7 @@ requirements:
   - id: REQ-010
     title: Write a decision record for Phoenix vs. plain Plug/Bandit
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S0
     description: >
       Letflow currently uses plain Plug + Bandit for 3 routes

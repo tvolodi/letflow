@@ -1,0 +1,371 @@
+# WF-02 — Requirement Implementation
+
+**Trigger:** one or more `pending` requirements in `docs/requirements.yaml` with all
+`depends_on` satisfied, and (if produced by WF-01) validated.
+**Owner:** `ORCH`
+
+## Overview
+
+```
+[INPUT: pending requirement IDs — max 4 per run]
+           │
+           ▼
+┌──────────────────────────┐
+│  STEP 00: GIT SETUP      │ ← ELIXIR-DEV (backend/mixed) or FRONTEND-DEV (frontend-only)
+│  pull → branch → push    │   docs/agents/protocols/GIT_SETUP.md
+└──────────┬───────────────┘
+           │ PASS — ORCH flips status: pending → in_progress, logs "started" event
+           ▼
+┌──────────────────────┐
+│  STEP 1: DESIGN      │ ← CODE-DESIGNER
+│  Module interfaces,  │
+│  @specs, data shape  │
+└──────────┬───────────┘
+           │
+      VALID?├── NO ──► REWORK (max 3)
+           │
+          YES
+           ▼
+┌──────────────────────┐
+│  STEP 1b: DESIGN     │ ← CODE-DESIGN-VALIDATOR ⛔ HARD GATE
+│  GATE                │
+└──────────┬───────────┘
+           │ PASS
+           ▼
+┌──────────────────────┐        ┌──────────────────────┐
+│  STEP 2a: BACKEND    │        │  STEP 2b: FRONTEND   │
+│  lib/ + migrations   │        │  web/ integration    │
+└──────────┬───────────┘        └──────────┬───────────┘
+     FAIL─► REWORK                    FAIL─► REWORK
+           └────────────┬─────────────────┘
+                        ▼
+           ┌──────────────────────┐
+           │  STEP 2c: SECURITY   │ ← SECURITY-REVIEWER ⛔ HARD GATE (in-scope only)
+           └──────────┬───────────┘
+                      │ PASS
+                      ▼
+           ┌──────────────────────┐
+           │  STEP 2d: IDIOM      │ ← REVIEWER ⛔ HARD GATE
+           │  REVIEW              │   OTP idiom, supervision, scope creep,
+           │                      │   decision-record consistency
+           └──────────┬───────────┘
+                      │ PASS
+                      ▼
+           ┌──────────────────────┐
+           │  STEP 3: TEST DESIGN │ ← TEST-DESIGNER
+           └──────────┬───────────┘
+                 VALID?├── NO ──► REWORK (max 3)
+                      │
+                     YES
+                      ▼
+           ┌──────────────────────┐
+           │  STEP 3b: TEST GATE  │ ← TEST-DESIGN-VALIDATOR ⛔ HARD GATE
+           └──────────┬───────────┘
+                      │ PASS
+                      ▼
+           ┌──────────────────────┐
+           │  STEP 4: TEST RUN    │ ← TEST-RUNNER
+           └──────────┬───────────┘
+                 PASS? ├── NO ──► rework responsible agent → back to STEP 4
+                      │
+                     YES
+                      ▼
+           ┌──────────────────────┐
+           │  STEP 5: RELEASE     │ ← RELEASE-VALIDATOR
+           │  VALIDATION          │   (re-runs the suite independently — does
+           └──────────┬───────────┘   not trust Step 4's report alone)
+                 PASS? ├── NO ──► route to blocking agent
+                      │
+                     YES
+                      ▼
+           ┌──────────────────────┐
+           │  STEP 6: DOC UPDATE  │ ← DOC-UPDATER
+           └──────────┬───────────┘
+                      │ PASS — ORCH independently confirms the specific files/fields
+                      │        DOC-UPDATER claims to have changed actually changed
+                      ▼
+┌──────────────────────────┐
+│  STEP FINAL: GIT MERGE   │ ← same agent as Step 00
+│  rebase → PR → merge     │   docs/agents/protocols/GIT_MERGE.md
+└──────────┬───────────────┘
+           │ PASS
+           ▼
+[OUTPUT: requirements' status = done in docs/requirements.yaml;
+ feature/<run-id> squash-merged into main]
+```
+
+## Step 00 — Git setup
+
+**Agent:** `ELIXIR-DEV` (backend/mixed runs) or `FRONTEND-DEV` (frontend-only runs)
+**Protocol:** `docs/agents/protocols/GIT_SETUP.md`
+
+ORCH supplies `context.branch_name = "feature/<run-id>"`. On PASS: ORCH flips the
+requirement(s)' status to `in_progress` in `docs/requirements.yaml` and appends a
+`started` event to `docs/status/requirement_status.yaml` (real UTC timestamp).
+
+## Step 1 — Code design
+
+**Agent:** `CODE-DESIGNER`
+
+```
+1. Read docs/requirements.yaml for the requirement(s) in scope.
+2. Read docs/guides/backend_developer_guide.md and, if frontend-touching,
+   docs/guides/frontend_developer_guide.md.
+3. Read the relevant docs/migration/stage-N-*.md and any docs/migration/decisions/*.md
+   the stage depends on.
+4. For each affected module, write lib/letflow/design/<module>.md:
+   - Public function signatures with @spec-style input/output types
+   - Key data structures (Ecto schema fields, gen_statem state/data shape)
+   - Invariants that must hold
+   - DB tables/columns touched (name, type, constraints, indexes)
+   - Cross-module dependencies
+   - Open questions (not silently resolved by guessing)
+5. Validate against requirements: every acceptance criterion maps to a concrete
+   design element. No acceptance criterion left unaddressed.
+6. Complete the handoff: artifacts_out: ["lib/letflow/design/<module>.md", ...],
+   next_action: "Route to CODE-DESIGN-VALIDATOR".
+```
+
+### Acceptance criteria
+- [ ] Every acceptance criterion maps to a concrete design element
+- [ ] All new types/schemas are defined with field-level detail
+- [ ] DB schema changes fully described (table, columns, indexes, constraints)
+- [ ] Open questions listed explicitly, not silently resolved
+
+## Step 1b — Design gate ⛔ HARD GATE
+
+**Agent:** `CODE-DESIGN-VALIDATOR`
+
+```
+1. Read the design artefact(s) independently — do not read CODE-DESIGNER's
+   result.summary as a substitute for reading the actual .md file.
+2. For each MUST/acceptance criterion:
+   a. Has a corresponding design element? No "TBD"/"to be implemented" deferrals?
+   b. Function signatures fully specified (name, inputs, outputs, error cases)?
+   c. Error handling shape stated ({:ok,_}|{:error,_} tags, not left implicit)?
+   d. Cross-module dependencies listed?
+   e. No implementation code present (no actual .ex/.exs code blocks — signatures
+      and type shapes only, not bodies)?
+3. FAIL immediately on any check failure — no partial credit.
+4. Complete the handoff: PASS → "Route to ELIXIR-DEV (2a) and/or FRONTEND-DEV (2b)" |
+   FAIL → "Rework CODE-DESIGNER", issues listing every failed check by requirement id.
+```
+
+## Step 2a — Backend implementation
+
+**Agent:** `ELIXIR-DEV`
+
+```
+1. Verify branch: git branch --show-current must equal feature/<run-id>. If not: STOP,
+   report FAIL before touching any file.
+2. Read lib/letflow/design/<module>.md for this unit.
+3. Implement lib/letflow/**/*.ex per the design.
+4. Write priv/repo/migrations/*.exs per the design's DB spec.
+5. mix compile --warnings-as-errors — if FAIL, fix and retry (counts as rework).
+6. mix ecto.migrate against a real or Docker-provisioned test DB (see
+   docs/anti-patterns.md's Docker fallback if no local toolchain) — if FAIL, fix
+   migration SQL and retry.
+7. mix format --check-formatted — fix formatting if it fails.
+8. Self-review checklist:
+   [ ] No string interpolation of tenant/user input into raw SQL (INV-7)
+   [ ] No unresolved `{:ok, _} =` match on a path reachable from external I/O (INV-8)
+   [ ] Every state transition still persisted via Letflow.Repo inside the transition
+   [ ] One supervised process per workflow instance preserved, if this touches
+       lib/letflow/process_instance.ex or instance_supervisor.ex
+   [ ] New public functions have a one-line @doc
+   [ ] If any function signature changed: all call sites still compile
+9. Complete the handoff: artifacts_out: ["lib/...", "priv/repo/migrations/..."],
+   next_action: "Route to SECURITY-REVIEWER (2c) once 2b also complete (or immediately
+   if backend-only)".
+```
+
+### Acceptance criteria
+- [ ] `mix compile --warnings-as-errors` exits 0
+- [ ] All migrations apply cleanly against a fresh DB
+- [ ] No SQL string interpolation of tenant/user data
+- [ ] All callers of any changed function signature compile
+
+## Step 2b — Frontend implementation
+
+**Agent:** `FRONTEND-DEV`
+
+```
+1. Verify branch (same check as 2a).
+2. Read lib/letflow/design/<module>.md for the API contract being integrated against.
+3. Read docs/guides/frontend_developer_guide.md.
+4. Make the integration/config change in web/ — per
+   docs/migration/stage-8-frontend-cutover.md's scope framing, this is pointing web/
+   at Letflow's API and closing contract gaps, not rewriting web/'s own components.
+   If a genuine web/ code change turns out to be unavoidable, name it explicitly in
+   result.summary with a one-line reason — do not silently expand scope.
+5. npm run build (or the project's actual build command) — if FAIL, fix and retry.
+6. Self-review: no hardcoded API base URL (use the existing env-var pattern), no
+   token stored in localStorage/sessionStorage beyond what web/'s existing pattern
+   already does.
+7. Complete the handoff: artifacts_out: ["web/..."],
+   next_action: "Route to SECURITY-REVIEWER (2c) once 2a also complete".
+```
+
+### Acceptance criteria
+- [ ] Build exits 0
+- [ ] Any change inside `web/`'s own component code (vs. pure config/CORS) is called
+      out explicitly with a reason
+- [ ] Token handling matches `web/`'s existing pattern
+
+## Step 2c — Security gate ⛔ HARD GATE (in-scope changes only)
+
+**Agent:** `SECURITY-REVIEWER`
+
+Runs after both 2a and 2b return PASS (or whichever applies), before Step 2d.
+
+```
+1. Read context.artifacts_in and the branch diff: git diff main...HEAD
+2. Scope test: does this diff touch a tenant-data path per
+   docs/agents/instructions/security-invariants.md's applicability notes?
+   NO  → PASS, summary: "out of scope — no tenant-data path touched",
+         next_action: "Route to REVIEWER (2d)"
+   YES → continue
+3. For each of INV-1..INV-8, determine APPLIES or NOT-APPLICABLE against this diff.
+4. For each APPLIES invariant, run its "How to verify" check.
+5. FAIL immediately on any applicable invariant failing — all BLOCKER, no partial credit.
+6. Complete the handoff: PASS → "Route to REVIEWER (2d)" |
+   FAIL → "Rework ELIXIR-DEV/FRONTEND-DEV", issues listing failed invariants by number.
+```
+
+## Step 2d — Idiom review ⛔ HARD GATE
+
+**Agent:** `REVIEWER`
+
+Uses the existing REVIEWER procedure (`.claude/agents/reviewer.md`): idiomatic OTP vs.
+crutch, supervision integrity, scope creep, consistency with
+`docs/migration/decisions/`. This gate predates the fuller pipeline and is preserved
+unchanged in substance — it now formally blocks TEST-DESIGNER rather than being an
+optional "check before calling it done" step.
+
+```
+1. Read the diff.
+2. Check against .claude/agents/reviewer.md's four questions (idiomatic vs. crutch,
+   supervision, type-safety gaps, scope creep).
+3. Check against docs/anti-patterns.md.
+4. FAIL if a genuine crutch, broken supervision, or scope creep is found; otherwise
+   PASS with any non-blocking notes recorded for the record (not blocking, but not
+   silently dropped either).
+5. Complete the handoff: PASS → "Route to TEST-DESIGNER (3)" | FAIL → "Rework
+   ELIXIR-DEV/FRONTEND-DEV".
+```
+
+## Step 3 — Test design
+
+**Agent:** `TEST-DESIGNER`
+
+```
+1. Read docs/requirements.yaml for the requirement(s), and lib/letflow/design/<module>.md.
+2. For each requirement without adequate existing test coverage:
+   a. Write test/specs/<REQ-ID>.md (requirement text, test cases, why each exists)
+   b. Write test code under test/letflow/ (or test/letflow_web/ for API-layer tests),
+      following the property-test convention already established for
+      process_instance_test.exs where the change touches state-machine logic
+3. Verify: every acceptance criterion has ≥1 test case that would fail if violated.
+4. Complete the handoff: artifacts_out: ["test/specs/...", "test/letflow/..."],
+   next_action: "Route to TEST-DESIGN-VALIDATOR".
+```
+
+### Acceptance criteria
+- [ ] Every acceptance criterion has at least one test case
+- [ ] Test specs written before/alongside test code, not as an afterthought
+- [ ] No test depends on wall-clock time or unseeded randomness
+
+## Step 3b — Test design gate ⛔ HARD GATE
+
+**Agent:** `TEST-DESIGN-VALIDATOR`
+
+```
+1. Read test spec files and test source files independently.
+2. For each acceptance criterion, verify:
+   a. At least one runnable test targets it (not @tag :skip without a passing
+      counterpart)
+   b. No "TODO: implement test" left in the spec
+   c. Test fixtures use per-test unique data (not shared hardcoded IDs) — matters
+      once tenancy exists; for pre-tenancy code, at minimum no cross-test pollution
+   d. Tests are self-sufficient — don't depend on other tests running first
+   e. No hardcoded secrets/connection strings in test files
+3. FAIL immediately on any check failure.
+4. Complete the handoff: PASS → "Route to TEST-RUNNER (4)" | FAIL → "Rework
+   TEST-DESIGNER".
+```
+
+## Step 4 — Test run
+
+**Agent:** `TEST-RUNNER`
+
+```
+1. mix test — full suite, not just the new tests (Unblock-Everything: a pre-existing
+   failure masking your results must be fixed too, unless it's unrelated and gets
+   forwarded per ISSUE_QUEUE.md).
+2. If no local toolchain: use the Docker fallback documented in docs/anti-patterns.md.
+   Report explicitly if neither is available — do not report PASS without having run
+   it (No Speculation).
+3. Write test/reports/report-<date>-<run-id>.yaml with the actual output.
+4. Complete the handoff: PASS/FAIL/PARTIAL, artifacts_out: ["test/reports/..."],
+   next_action: PASS → "Route to RELEASE-VALIDATOR" |
+                FAIL → "Rework responsible agent (ELIXIR-DEV/FRONTEND-DEV/TEST-DESIGNER)".
+```
+
+Failures caused by this run's own implementation are reworked on this branch. Failures
+unrelated to this run's own acceptance criteria (pre-existing) are filed and forwarded
+per `ISSUE_QUEUE.md` — not fixed here, don't block this step's own PASS verdict.
+
+## Step 5 — Release validation
+
+**Agent:** `RELEASE-VALIDATOR`
+
+```
+1. Independently re-run: mix test (do not trust TEST-RUNNER's report alone — see
+   core-directives.md's "Every producing step has a validating step").
+2. Confirm every requirement_id in scope has all its acceptance_criteria satisfied —
+   check each one explicitly against the actual code/test, not against TEST-RUNNER's
+   summary.
+3. Check docs/status/requirement_status.yaml and docs/requirements.yaml for staleness
+   relative to what actually shipped.
+4. Complete the handoff: PASS → "Route to DOC-UPDATER" |
+   FAIL → identify the blocking issue and name which agent it routes back to.
+```
+
+## Step 6 — Documentation update
+
+**Agent:** `DOC-UPDATER`
+
+```
+1. For each requirement_id: flip status "pending"/"in_progress" → "done" in
+   docs/requirements.yaml.
+2. Append a "done" event to docs/status/requirement_status.yaml (real UTC timestamp,
+   append — do not rewrite prior entries).
+3. Update README.md if the change altered documented current behavior (e.g. the ASCII
+   state diagram, the "Running it" section).
+4. If the requirement named a docs/migration/stage-N-*.md or docs/migration/decisions/
+   file in its acceptance criteria, confirm that file was actually updated.
+5. Complete the handoff: artifacts_out: [every file actually touched, named
+   explicitly — not just "docs updated"], next_action: "Route to ELIXIR-DEV/
+   FRONTEND-DEV for Step Final".
+```
+
+**ORCH's independent check before advancing:** read DOC-UPDATER's `artifacts_out` and
+confirm each named file actually contains the claimed change — grep for the flipped
+status, the new event entry — before writing the DONE log line. This is the "no
+hallucinated completion" check the humanless pipeline depends on (see
+`core-directives.md`).
+
+## Step Final — Git merge
+
+**Agent:** same as Step 00.
+**Protocol:** `docs/agents/protocols/GIT_MERGE.md`
+
+ORCH supplies `context.branch_name` and `context.requirement_ids`. Use DOC-UPDATER's
+`result.summary` as the commit/PR summary. List forwarded `ISS-NNNN` ids under a
+"Forwarded, not fixed here" note if any exist.
+
+## Parallel execution rule
+
+Steps 2a and 2b MAY run in parallel when both are present, on the same branch from Step
+00. ORCH waits for both PASS before routing to 2c. ORCH must not assign overlapping
+`owned_modules` to two concurrent WF-02 runs (see `ORCHESTRATOR.md` §7).

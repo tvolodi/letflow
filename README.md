@@ -22,6 +22,13 @@ stages are expanded into requirements as the stage before them lands.
 Check `docs/requirements.yaml` for the next `pending` requirement
 before starting unscoped work, same as always.
 
+Alongside the staged migration, **MVP-1** (`REQ-101..108`) is a
+narrow, cross-stage milestone aimed at getting one workflow visibly
+running in R-Co's existing `web/` GUI against a real Elixir backend as
+fast as honestly possible — skipping real OIDC/Keycloak in favor of a
+dev-mode bootstrap token. It does not satisfy the stages it touches
+(S0/S1/S3/S4); see `docs/migration/mvp-1-vertical-slice.md`.
+
 ## What's here today
 
 The earliest working slice (still the actual runnable code — the

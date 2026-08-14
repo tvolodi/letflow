@@ -248,3 +248,209 @@ requirements:
       - "docs/migration/stage-0-foundation.md gains a dated REVIEWER section citing all four S0 decisions by file"
       - "verdict explicitly states go/no-go for starting S1, and if no-go, exactly which decision needs revisiting"
     depends_on: [REQ-010, REQ-011, REQ-012, REQ-013]
+
+  # ---------------------------------------------------------------
+  # MVP-1 — minimum visible-GUI vertical slice (milestone, not a
+  # stage). See docs/migration/mvp-1-vertical-slice.md. Each
+  # requirement below carries the real stage it narrowly front-runs
+  # (stage:) plus milestone: MVP-1, so this slice being done is never
+  # confused with that stage itself being done. Deliberately narrow —
+  # skips real OIDC/Keycloak, full Ecto schema parity, and the full
+  # definition-driven engine; see the detail file's "Relationship to
+  # S0-S8" section for exactly what's deferred and why each shortcut
+  # is safe (mainly: web/'s own frontend spec already documents a
+  # dev-mode bootstrap-token path, so MVP-1 isn't inventing one).
+  # ---------------------------------------------------------------
+
+  - id: REQ-101
+    title: Record a provisional MVP-1 web-framework note (not a full S0 decision)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S0
+    milestone: MVP-1
+    description: >
+      MVP-1 needs only 3-4 routes. Rather than blocking on the full
+      Phoenix-vs-Plug/Bandit decision (REQ-010, still pending), add a
+      short provisional note to
+      docs/migration/mvp-1-vertical-slice.md's Decisions section
+      confirming the existing lib/letflow/router.ex (plain Plug +
+      Bandit) is sufficient for MVP-1's route count, and explicitly
+      state this note is superseded by whatever
+      docs/migration/decisions/0001-web-framework.md eventually
+      decides for the real S4 — this is not that decision record and
+      must not be confused with one.
+    acceptance_criteria:
+      - "docs/migration/mvp-1-vertical-slice.md's Decisions section states the provisional choice (continue on Plug/Bandit) with a one-line reason (route count)"
+      - "the note explicitly says it is provisional and will be superseded by REQ-010/0001-web-framework.md, not a replacement for it"
+      - "no docs/migration/decisions/*.md file is created or edited by this requirement"
+    depends_on: []
+
+  - id: REQ-102
+    title: Minimal Ecto schema for MVP-1 (workflow_definitions + instances)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S0
+    milestone: MVP-1
+    description: >
+      Add priv/repo/migrations for two tables scoped to MVP-1 only:
+      workflow_definitions (id, name, and the static 4-state
+      draft/submitted/approved/rejected graph shape already
+      hardcoded in lib/letflow/process_instance.ex, now stored as
+      data instead) and instances (id, definition reference, current
+      state, plus a transition log — either a JSON column or a child
+      table, whichever is less code for this narrow scope). No
+      tenant_id column (MVP-1 assumes a single implicit tenant), no
+      event-sourced replay, no attempt at parity with R-Co's 143
+      migrations. Explicitly out of scope: anything
+      docs/migration/decisions/0003-ecto-schema-strategy.md (REQ-012,
+      still pending) will eventually decide for the real S2/S3 —
+      note in the migration files' module docs that this schema is a
+      throwaway-compatible MVP-1 slice, not the target schema.
+    acceptance_criteria:
+      - "priv/repo/migrations gains workflow_definitions and instances tables, both applied cleanly via mix ecto.migrate"
+      - "a seed or fixture inserts the existing draft/submitted/approved/rejected workflow shape as a workflow_definitions row"
+      - "migration file moduledocs state this is an MVP-1-scoped schema, explicitly not the eventual S2/S3 target schema"
+    depends_on: [REQ-101]
+
+  - id: REQ-103
+    title: Static dev bearer-token auth plug (not real S1/OIDC)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S1
+    milestone: MVP-1
+    description: >
+      Add a Plug that checks incoming requests for one hardcoded/
+      config-seeded bearer token (e.g. via config/dev.exs or an env
+      var, not committed as a literal secret) mapped to one dev user
+      with unrestricted access. No Keycloak, no OIDC protocol
+      handling, no JIT provisioning, no JWKS caching, no role
+      registry — matches the dev-mode "bootstrap token" path already
+      documented in R-Co's web/ frontend spec
+      (BPM_Platform_Frontend_Requirements.md, Constraints &
+      Assumptions section), so this is a real path the frontend
+      expects to support, not an invented shortcut. Explicitly not
+      real S1 (docs/migration/stage-1-identity.md) — must not be
+      reported as S1 being done.
+    acceptance_criteria:
+      - "a request with the correct bearer token reaches the route handler; a request with a missing/wrong token gets 401"
+      - "the token is read from config/env, not hardcoded as a literal string in a committed .ex file"
+      - "the plug's moduledoc explicitly states this is MVP-1 dev-mode auth, not real S1, and names what real S1 still needs to add (Keycloak OIDC, JIT provisioning, JWKS caching, role registry)"
+    depends_on: [REQ-101]
+
+  - id: REQ-104
+    title: Generalize ProcessInstance to run from a stored workflow_definitions row
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    milestone: MVP-1
+    description: >
+      Generalize lib/letflow/process_instance.ex and
+      lib/letflow/instance_supervisor.ex just enough to start an
+      instance from a workflow_definitions row (REQ-102) instead of
+      the currently hardcoded 4-state module, for exactly the one
+      workflow shape REQ-102 seeded — not a generic definition-driven
+      engine. Each transition still gets logged the same way the
+      existing TransitionEvent/instances-log mechanism already does.
+      Explicitly out of scope: service task dispatch, plugin
+      registry, Lua script audit, or any other src/engine/ (S3)
+      capability beyond running this one static shape from stored
+      data.
+    acceptance_criteria:
+      - "starting an instance reads its state graph from the workflow_definitions row rather than a hardcoded module"
+      - "the existing 4 states/transitions (draft/submitted/approved/rejected, submit/approve/reject/resubmit) still behave identically to today's hardcoded version"
+      - "moduledoc states this is a narrow MVP-1 generalization, not the full S3 definition-driven engine, and names what S3 still needs (service task dispatch, plugin registry, Lua script audit)"
+    depends_on: [REQ-102, REQ-103]
+
+  - id: REQ-105
+    title: 3-4 Plug routes for MVP-1 (list/create/get/transition), token-gated
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    milestone: MVP-1
+    description: >
+      Extend lib/letflow/router.ex with routes to list workflow
+      definitions, create an instance, get an instance (current state
+      + transition history), and post an action/transition — all
+      gated by REQ-103's auth plug. Reuses the existing 3-route
+      pattern already in router.ex rather than introducing a new
+      routing library. Explicitly out of scope: the other ~18 R-Co
+      route modules and 7 middleware modules (rate_limit,
+      quota_enforcement, tenant_status, trace, validate,
+      content_type) — note in the router moduledoc that these routes
+      are an MVP-1 slice of the real S4 API surface, not S4 itself.
+    acceptance_criteria:
+      - "GET list-definitions, POST create-instance, GET instance-by-id, and POST transition all work end-to-end via curl against a running mix run --no-halt, demonstrated with actual request/response output quoted"
+      - "all 4 routes reject requests without REQ-103's valid bearer token with 401"
+      - "router moduledoc states these routes are an MVP-1 slice, not the full S4 API surface, and names the remaining route/middleware modules S4 still needs to port"
+    depends_on: [REQ-104]
+
+  - id: REQ-106
+    title: Point web/ at the running Letflow API using the dev bootstrap token
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S8
+    milestone: MVP-1
+    description: >
+      Configure R-Co's existing web/ (React 19 + TypeScript SPA) to
+      target the running Letflow API's base URL instead of the Zig
+      backend, add CORS support to the MVP-1 routes if the browser
+      requires it, and confirm the Application Shell plus at least
+      one real view (Instance Board or Task Inbox) renders against
+      Letflow using REQ-103's dev bootstrap token pasted into web/'s
+      existing token-paste login field. Per S8's existing scope
+      framing (docs/migration/stage-8-frontend-cutover.md), this is
+      integration/config wiring only — no code changes inside web/
+      itself are expected; if one turns out to be unavoidable, name
+      it explicitly and keep it minimal.
+    acceptance_criteria:
+      - "web/ successfully loads workflow_definitions and/or instances from the running Letflow API, confirmed by an actual screenshot or described browser session, not just a curl check"
+      - "the dev bootstrap token from REQ-103 is what authenticates the session, pasted through web/'s existing token field — no Keycloak/OIDC login flow involved"
+      - "any change made inside web/ itself (vs. pure config/CORS) is called out explicitly with a one-line reason"
+    depends_on: [REQ-105]
+
+  - id: REQ-107
+    title: End-to-end MVP-1 smoke test (HTTP + manual GUI walkthrough)
+    owner: TEST-RUNNER
+    status: pending
+    stage: S4
+    milestone: MVP-1
+    description: >
+      Write an automated test exercising the full create-instance ->
+      transition -> get-instance loop over HTTP against REQ-105's
+      routes (extending the existing test/letflow/ suite), then
+      separately perform and document a manual walkthrough of the
+      same loop by driving REQ-106's running web/ GUI in a real
+      browser end to end (per CLAUDE.md's UI-testing rule: type
+      checks and automated tests alone don't confirm the feature
+      works for a user) — create a workflow instance, drive at least
+      one transition, and observe the updated state, all from the
+      GUI, not curl.
+    acceptance_criteria:
+      - "mix test output is quoted showing the new HTTP-level MVP-1 test(s) passing alongside the existing suite"
+      - "a written note (in this requirement's requirement_status.yaml entry) describes the actual manual GUI walkthrough performed — what was clicked, what was seen — not just 'it should work'"
+      - "any bug found during either pass is either fixed with a quoted re-run, or filed as a blocker with the specific repro steps"
+    depends_on: [REQ-106]
+
+  - id: REQ-108
+    title: REVIEWER sign-off gating MVP-1 as done
+    owner: REVIEWER
+    status: pending
+    stage: S1
+    milestone: MVP-1
+    description: >
+      Once REQ-101..107 land, review all MVP-1 deliverables together
+      and append a dated REVIEWER section to
+      docs/migration/mvp-1-vertical-slice.md. Confirm each
+      deliverable is honestly labeled provisional/narrow where it
+      diverges from its real stage's eventual scope (no MVP-1 code or
+      note quietly getting reported elsewhere as "S1 done" or "S4
+      done"), and confirm nothing added contradicts an existing
+      decision record under docs/migration/decisions/ (none are
+      expected to exist yet at REQ-101/102's provisional-note level,
+      but check REQ-010/011/012's status directly rather than
+      assuming).
+    acceptance_criteria:
+      - "docs/migration/mvp-1-vertical-slice.md gains a dated REVIEWER section"
+      - "verdict explicitly confirms each of REQ-101..106's deliverables carries honest provisional/narrow framing, citing the specific moduledoc/note in each"
+      - "verdict explicitly checks REQ-010/011/012's current status in docs/requirements.yaml and states whether any MVP-1 deliverable conflicts with a decision recorded there"
+    depends_on: [REQ-107]

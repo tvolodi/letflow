@@ -19,25 +19,44 @@ they're still relevant, rather than tracked separately.
 
 ## Agent roster
 
-This project uses a 4-agent system, intentionally much smaller than
-R-Co's own 18-role multi-agent pipeline
-(`c:\Users\tvolo\dev\ai-dala\R-Co\`) — no handoff files, no workflow
-YAML, no dual-harness mirroring. **The roster is expected to grow as
-migration stages define real subsystem boundaries** (e.g. a dedicated
-identity/OIDC role once Stage 1 starts, a frontend role once Stage 8
-starts) — but only when a stage actually needs it, not preemptively.
-Match the roster to the active stage's real complexity.
+This project runs R-Co's full agent-pipeline shape
+(`c:\Users\tvolo\dev\ai-dala\R-Co\`), not a trimmed subset — every producing
+role is paired with an independent validating role, the pipeline runs
+commit→push→merge→CI→local-repo-update with no human gate, and every
+role/workflow/guide is written explicitly enough for a weak or
+inexpensive model to execute reliably. See
+`docs/migration/decisions/0004-humanless-pipeline.md` for the full
+rationale (this supersedes an earlier, smaller 4-agent framing this
+file used to describe). Full roster, capability matrix, and artifact
+locations: [`docs/agents/AGENT_SYSTEM.md`](docs/agents/AGENT_SYSTEM.md).
+Routing logic, gates, rework/escalation rules, stage-gate enforcement:
+[`docs/agents/ORCHESTRATOR.md`](docs/agents/ORCHESTRATOR.md).
 
 | `AGENT_ID` | Role | Canonical instructions |
 |---|---|---|
-| `ORCH` | Routes work, classifies requests, delegates, reports outcome. Never writes application code itself. | [`.claude/agents/orchestrator.md`](.claude/agents/orchestrator.md) |
+| `ORCH` | Routes work, dispatches workflows (WF-01–WF-05), enforces gates, merges once green. Never writes application code itself. | [`.claude/agents/orchestrator.md`](.claude/agents/orchestrator.md) |
+| `REQ-ANALYST` | Drafts requirements into `docs/requirements.yaml` | [`.claude/agents/req-analyst.md`](.claude/agents/req-analyst.md) |
+| `REQ-VALIDATOR` | Validates requirements — hard gate on REQ-ANALYST | [`.claude/agents/req-validator.md`](.claude/agents/req-validator.md) |
+| `CODE-DESIGNER` | Produces design artefacts in `lib/letflow/design/` before implementation | [`.claude/agents/code-designer.md`](.claude/agents/code-designer.md) |
+| `CODE-DESIGN-VALIDATOR` | Hard gate on CODE-DESIGNER's design | [`.claude/agents/code-design-validator.md`](.claude/agents/code-design-validator.md) |
 | `ELIXIR-DEV` | Implements/changes `lib/letflow/` and `priv/repo/migrations/` | [`.claude/agents/elixir-dev.md`](.claude/agents/elixir-dev.md) |
-| `TEST-RUNNER` | Runs `mix test`, diagnoses failures, maintains the property test | [`.claude/agents/test-runner.md`](.claude/agents/test-runner.md) |
-| `REVIEWER` | Checks changes for idiomatic OTP usage (crutch vs. real behaviour), supervision integrity, and scope creep, and gates migration-stage work against `docs/migration/decisions/` records | [`.claude/agents/reviewer.md`](.claude/agents/reviewer.md) |
+| `FRONTEND-DEV` | Points `web/` at Letflow's API (integration/config only, not a `web/` rewrite) | [`.claude/agents/frontend-dev.md`](.claude/agents/frontend-dev.md) |
+| `SECURITY-REVIEWER` | Hard gate on tenant-data-path changes — `docs/agents/instructions/security-invariants.md` | [`.claude/agents/security-reviewer.md`](.claude/agents/security-reviewer.md) |
+| `REVIEWER` | Hard gate — idiomatic OTP usage, supervision integrity, scope creep, decision-record consistency | [`.claude/agents/reviewer.md`](.claude/agents/reviewer.md) |
+| `TEST-DESIGNER` | Writes test specs and test code | [`.claude/agents/test-designer.md`](.claude/agents/test-designer.md) |
+| `TEST-DESIGN-VALIDATOR` | Hard gate on TEST-DESIGNER's coverage | [`.claude/agents/test-design-validator.md`](.claude/agents/test-design-validator.md) |
+| `TEST-RUNNER` | Runs `mix test`, diagnoses failures, writes structured reports | [`.claude/agents/test-runner.md`](.claude/agents/test-runner.md) |
+| `ISSUE-FIXER` | Root-cause diagnosis for a queued issue — does not implement the fix itself | [`.claude/agents/issue-fixer.md`](.claude/agents/issue-fixer.md) |
+| `RELEASE-VALIDATOR` | Independently re-verifies acceptance criteria before a requirement/stage is marked done | [`.claude/agents/release-validator.md`](.claude/agents/release-validator.md) |
+| `DOC-UPDATER` | Flips requirement status, appends status history, updates docs | [`.claude/agents/doc-updater.md`](.claude/agents/doc-updater.md) |
+| `UAT-RUNNER` | Scenario-based acceptance checks against a real running instance (load-bearing from S7 on) | [`.claude/agents/uat-runner.md`](.claude/agents/uat-runner.md) |
 
 **Default `AGENT_ID`:** if none is stated, default to `ORCH`. For a
 small single-file fix, `ORCH` may act directly rather than formally
-delegating — see the "keep it light" rule below.
+routing through the full chain — see `docs/agents/ORCHESTRATOR.md`'s
+sizing note. Anything with real implementation surface goes through
+the full workflow; there is no human backstop to catch a skipped
+validator.
 
 ## Where work comes from
 
@@ -64,18 +83,33 @@ real UTC timestamp — from the clock, not memory).
 
 ## Core rules (apply to every agent)
 
+Full statement of these (and more) lives in
+[`docs/agents/instructions/core-directives.md`](docs/agents/instructions/core-directives.md) —
+summarized here:
+
 - **No speculation.** Never report "this should work" or "tests
   should pass." Run it (`mix test`, `mix compile`) and quote the
   actual result. If you can't run it in this environment — no
   toolchain, or `mix deps.get` has no network access (see README
   Notes) — say so explicitly instead of guessing.
 - **Zero manual work.** Don't tell the user to run a command you can
-  run yourself. Apply migrations, run tests, start `docker compose`
-  yourself.
-- **Keep it light, but match effort to the active stage.** Don't build
-  R-Co-style handoff-file machinery, workflow pipelines, or role
-  ceremony a given stage doesn't need. Judge scope per-requirement/
-  per-stage, not against the size of the earliest code in this repo.
+  run yourself. Apply migrations, run tests, start `docker compose`,
+  commit, push, open the PR, and merge yourself — see "Humanless
+  operation" below.
+- **Every producing step has a validating step.** No agent's claim
+  that it finished a task is itself evidence the task is done — a
+  design is checked by a design validator, code by a security/idiom
+  reviewer, tests by a test-design validator, a "done" status by
+  RELEASE-VALIDATOR re-deriving it independently. This is the
+  project's central redundancy principle, adopted specifically so the
+  pipeline stays reliable even when the executing model is weak — see
+  `docs/migration/decisions/0004-humanless-pipeline.md`.
+- **Humanless operation.** There is no human reviewer, approver, or
+  merge-clicker in this pipeline. Agents commit, push, open PRs, wait
+  for CI, and merge to `main` at their own discretion once all gates
+  are green — this is pre-authorized, not something to pause and ask
+  about. Errors are correctable via a later fix run; there is no
+  production deployment at stake yet.
 - **Don't silently re-decide what a decision record already settled.**
   S0's decision records (`docs/migration/decisions/`) are load-bearing
   for every later stage — if a stage's requirement seems to need a
@@ -87,6 +121,8 @@ real UTC timestamp — from the clock, not memory).
 ## Mandatory reading at session start
 
 - `README.md` (full)
+- `docs/agents/AGENT_SYSTEM.md` — full roster and how work flows through it
+- `docs/agents/instructions/core-directives.md` — cross-cutting rules binding every role
 - `docs/requirements.yaml` — find or confirm the requirement in scope
 - `docs/migration/README.md` — stage breakdown
 - `docs/anti-patterns.md` (if it has entries)

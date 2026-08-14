@@ -1,0 +1,250 @@
+# Letflow — Requirements
+#
+# Source of truth for work packages fed to agents (see CLAUDE.md and
+# .claude/agents/*.md). Each requirement is sized to one agent turn:
+# one owner, one deliverable, acceptance criteria an agent can check
+# itself before reporting done.
+#
+# Status values: pending | in_progress | done | blocked
+#
+# Early development produced a handful of one-off findings (idiomatic
+# OTP usage, dev-loop feel, process-per-instance design, static-typing
+# gap) via a goals/evaluation_goal mechanism that has since been
+# retired now that Letflow is a committed migration rather than an
+# evaluation — see docs/status/requirement_status.yaml for the removal
+# record and the condensed verdicts folded into
+# docs/migration/stage-2-event-store-definitions.md and
+# stage-3-instance-engine.md, the two places that still needed them.
+
+# ---------------------------------------------------------------------
+# Stages — full R-Co -> Elixir migration
+#
+# Letflow is the target of a full migration of R-Co
+# (c:\Users\tvolo\dev\ai-dala\R-Co\) to Elixir, staged rather than
+# attempted in one pass. See docs/migration/README.md for the full
+# rationale and R-Co source-path grounding behind each stage.
+#
+# Only Stage 0 is broken into requirements today. Stages 1-8 stay as
+# scoped descriptions until the stage before them lands — writing their
+# requirements now would mean guessing at interfaces Stage 0 hasn't
+# decided yet. Expand each stage into REQ-xxx entries (same schema as
+# below, "one agent turn per requirement") when it becomes the active
+# stage.
+# ---------------------------------------------------------------------
+
+stages:
+  - id: S0
+    name: foundation-and-scaffolding
+    description: >
+      Elixir project shape, Phoenix adoption decision, Ecto schema
+      strategy for the 143-migration data model this eventually needs
+      to cover, CI equivalent to `zig build check`, and a decision
+      record on hand-rolled vs. library-backed for major subsystems
+      (starting with OIDC). Everything else depends on this.
+    depends_on: []
+    detail_file: docs/migration/stage-0-foundation.md
+
+  - id: S1
+    name: identity-and-multi-tenancy
+    description: >
+      Port src/identity/ (18 files) and src/oidc/ (13 files): Keycloak
+      OIDC login, JIT user provisioning, tenant resolution/binding,
+      role registry. Everything downstream is tenant-scoped, so this
+      must be real before S2.
+    depends_on: [S0]
+    detail_file: docs/migration/stage-1-identity.md
+
+  - id: S2
+    name: event-store-and-definitions
+    description: >
+      Port src/event_store/ (3 files: store, platform, registry) and
+      src/definition/ (12 files: graph, promotion, rollback, sandbox,
+      export/import, service-scope validation). See
+      docs/migration/stage-2-event-store-definitions.md's "Early
+      findings" section before designing the event log and data
+      shapes.
+    depends_on: [S1]
+    detail_file: docs/migration/stage-2-event-store-definitions.md
+
+  - id: S3
+    name: instance-engine
+    description: >
+      Port src/engine/ (11 files: instance execution/transition,
+      snapshot + reconstruction, service task dispatch, plugin
+      registry, Lua script audit). Generalizes Letflow's existing
+      ProcessInstance / ParallelApproval / InstanceSupervisor pattern
+      rather than starting fresh.
+    depends_on: [S2]
+    detail_file: docs/migration/stage-3-instance-engine.md
+
+  - id: S4
+    name: api-surface
+    description: >
+      Port src/api/routes/ (22 modules: definitions, instances, tasks,
+      promotions, onboarding, audit, tenant_config, webhooks, dlq,
+      solution_packs, metrics/health/openapi, ...) and
+      src/api/middleware/ (auth, rate_limit, quota_enforcement,
+      tenant_status, trace, validate) as Phoenix controllers/plugs.
+    depends_on: [S3]
+    detail_file: docs/migration/stage-4-api-surface.md
+
+  - id: S5
+    name: scripting-and-plugins
+    description: >
+      Port src/lua/ (29 files, service-task scripting host) and
+      src/wasm/ (19 files, plugin host API). Needs an explicit
+      build-vs-bind decision (Elixir NIFs/Ports to existing Lua/WASM
+      runtimes vs. reimplementing) before work starts.
+    depends_on: [S3]
+    detail_file: docs/migration/stage-5-scripting-plugins.md
+
+  - id: S6
+    name: operational-cross-cutting
+    description: >
+      Port src/scheduler, src/secrets (+ integration), src/obs,
+      src/webhook, src/dlq, src/repository, src/expr, src/ordering.
+    depends_on: [S4]
+    detail_file: docs/migration/stage-6-operational-cross-cutting.md
+
+  - id: S7
+    name: simulation-and-uat-parity
+    description: >
+      Port what's portable from tests/simulation, tests/differential,
+      tests/uat-reports — enough to re-run R-Co's existing business
+      scenarios (SwiftRoute/Vortex/Meridian) against the Elixir
+      backend as a correctness gate.
+    depends_on: [S4, S5, S6]
+    detail_file: docs/migration/stage-7-simulation-uat-parity.md
+
+  - id: S8
+    name: frontend-integration-and-cutover
+    description: >
+      Point web/ (or a compatible surface) at the Elixir backend,
+      close API gaps found in practice, decide on cutover/deprecation
+      of the Zig backend.
+    depends_on: [S7]
+    detail_file: docs/migration/stage-8-frontend-cutover.md
+
+requirements:
+  # ---------------------------------------------------------------
+  # S0 — foundation-and-scaffolding
+  # Full-migration mission starts here. Nothing in S1+ can be sized
+  # correctly until S0's decisions (Phoenix or not, OIDC library or
+  # hand-rolled, Ecto schema strategy) actually land.
+  # ---------------------------------------------------------------
+
+  - id: REQ-010
+    title: Write a decision record for Phoenix vs. plain Plug/Bandit
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S0
+    description: >
+      Letflow currently uses plain Plug + Bandit for 3 routes
+      (lib/letflow/router.ex). R-Co's src/api/routes/ has 22 route
+      modules plus a 6-module middleware chain
+      (src/api/middleware/: auth, rate_limit, quota_enforcement,
+      tenant_status, trace, validate). Write
+      docs/migration/decisions/0001-web-framework.md recording
+      whether Letflow migrates to Phoenix (router pipelines, plugs,
+      controllers) or continues hand-rolling on Plug/Bandit at this
+      scale, with the concrete reasoning (route count, middleware
+      chain composition, community/library support for OIDC
+      integration). This is a decision record, not a rewrite of
+      lib/letflow/router.ex itself — that migration happens under S4.
+    acceptance_criteria:
+      - "docs/migration/decisions/0001-web-framework.md exists with an explicit decision (Phoenix | Plug/Bandit), not just a pros/cons list"
+      - "decision explicitly reasons about src/api/middleware/'s 6 modules and how each maps to the chosen framework's mechanism (Phoenix plug pipeline vs. hand-rolled Plug.Builder chain)"
+      - "decision references the actual route count (22, from src/api/routes/) as part of the reasoning, not a rounded/guessed number"
+    depends_on: []
+
+  - id: REQ-011
+    title: Write a decision record for OIDC/Keycloak integration approach
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S0
+    description: >
+      R-Co hand-rolls OIDC in src/oidc/ (13 files) and src/identity/
+      (18 files: JIT provisioning, JWKS cache, role registry, tenant
+      binding). Write
+      docs/migration/decisions/0002-oidc-integration.md evaluating
+      hand-rolling the equivalent in Elixir vs. adopting an existing
+      library (e.g. assent, ueberauth + an OIDC strategy) against
+      R-Co's actual requirements: multi-realm/multi-tenant Keycloak,
+      JIT user provisioning, JWKS caching, custom role registry. State
+      which specific R-Co behaviors (name the file, e.g.
+      src/identity/manager.zig's JIT provisioning) a library would or
+      wouldn't cover out of the box.
+    acceptance_criteria:
+      - "docs/migration/decisions/0002-oidc-integration.md exists with an explicit decision, not just a pros/cons list"
+      - "decision names at least 2 real R-Co identity behaviors (from src/identity/ or src/oidc/, by filename) and states whether the chosen approach covers each"
+      - "if a library is chosen, decision names the specific library and version constraint"
+    depends_on: []
+
+  - id: REQ-012
+    title: Design the Ecto schema/migration strategy for the target data model
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S0
+    description: >
+      R-Co has 143 Postgres migrations under migrations/. Write
+      docs/migration/decisions/0003-ecto-schema-strategy.md covering:
+      whether Letflow ports the existing SQL schema as Ecto migrations
+      1:1 (preserving table/column names for easier cross-referencing
+      during the port) or redesigns it Ecto-idiomatically; how
+      multi-tenancy is represented at the schema level (tenant_id
+      column vs. schema-per-tenant vs. database-per-tenant — R-Co's
+      adp-01..04 design docs under R-Co's src/design/ describe its own
+      tenant-column approach, read those first rather than
+      re-deriving from scratch); and how the event-sourced tables
+      (event_store) differ in migration strategy from regular CRUD
+      tables. Do not write actual migrations yet — this is the
+      strategy doc S2/S3 requirements will follow.
+    acceptance_criteria:
+      - "docs/migration/decisions/0003-ecto-schema-strategy.md exists with an explicit decision on 1:1 port vs. redesign"
+      - "doc explicitly addresses R-Co's tenant-column approach (cite the specific adp-0x design doc(s) read under R-Co's src/design/) and states whether Letflow adopts or diverges from it, with reasoning"
+      - "doc distinguishes event-store migration strategy from regular table migration strategy"
+    depends_on: []
+
+  - id: REQ-013
+    title: Set up CI/local-check equivalent to `zig build check`
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S0
+    description: >
+      R-Co's `zig build check` (see R-Co's README.md "Development
+      commands" table) runs build-with-error-sets-fail-via-exit-code
+      plus `zig fmt --check` scoped to changed files, as a single gate
+      command. Add an equivalent single-command gate for Letflow — a
+      `mix letflow.check` alias or plain shell script (learn from the
+      documented failure mode in docs/status/requirement_status.yaml's
+      REQ-003 history: a custom Mix task under lib/ forces a full
+      project compile just to be discovered, which previously broke
+      timing capture — decide here whether that same problem applies
+      to a check gate, and pick alias vs. script accordingly) running
+      `mix format --check-formatted`, `mix compile --warnings-as-errors`,
+      and `mix test`.
+    acceptance_criteria:
+      - "a single command runs format-check + compile-with-warnings-as-errors + test, exits non-zero on any failure"
+      - "the command's location (Mix alias vs. standalone script) has an explicit one-line justification referencing whether task-discovery compile overhead applies here, same concern documented in requirement_status.yaml's REQ-003 history"
+      - "running it against a clean checkout is demonstrated (actual output quoted, or explicit note if no toolchain available per CLAUDE.md's No Speculation rule)"
+    depends_on: []
+
+  - id: REQ-014
+    title: Add REVIEWER verdict on S0's four decision records before S1 starts
+    owner: REVIEWER
+    status: pending
+    stage: S0
+    description: >
+      Once REQ-010..013 land, review the four decision records
+      (0001-web-framework, 0002-oidc-integration,
+      0003-ecto-schema-strategy, and the check-gate choice from
+      REQ-013) together for internal consistency — e.g. does the OIDC
+      approach chosen in 0002 actually fit the web framework chosen in
+      0001; does the tenant-modeling choice in 0003 match what 0002
+      assumes about tenant resolution. Flag any contradiction before
+      S1 (identity-and-multi-tenancy) begins, since S1 is the first
+      stage that depends on all of S0.
+    acceptance_criteria:
+      - "docs/migration/stage-0-foundation.md gains a dated REVIEWER section citing all four S0 decisions by file"
+      - "verdict explicitly states go/no-go for starting S1, and if no-go, exactly which decision needs revisiting"
+    depends_on: [REQ-010, REQ-011, REQ-012, REQ-013]

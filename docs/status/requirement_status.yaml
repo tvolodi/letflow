@@ -1,0 +1,797 @@
+# RoCo — Requirement run history
+#
+# docs/requirements.yaml's `status:` field is the current state of
+# each requirement (pending/in_progress/done/blocked) — read that
+# first. This file is the history behind it: one entry per time an
+# agent picked up, finished, or got blocked on a requirement, so you
+# can see what actually happened across turns without digging through
+# conversation history.
+#
+# Append one entry per event. Never rewrite past entries.
+#
+# Entry shape:
+#   - req: REQ-XXX
+#     event: started | done | blocked
+#     agent: AGENT_ID
+#     at: <UTC timestamp from the clock, not memory>
+#     note: short free-text (what shipped, or what's blocking)
+
+history:
+  - req: REQ-001
+    event: started
+    agent: ELIXIR-DEV
+    at: 2026-08-13T19:42:50Z
+    note: implementing RoCo.ParallelApproval gen_statem
+  - req: REQ-001
+    event: blocked
+    agent: ELIXIR-DEV
+    at: 2026-08-13T19:45:13Z
+    note: >
+      RoCo.ParallelApproval + RoCo.ApprovalSupervisor implemented,
+      wired into RoCo.Application, tests written in
+      test/roco/parallel_approval_test.exs covering all 5 acceptance
+      criteria. Cannot run mix compile / mix test — no Elixir/mix
+      toolchain found in this environment (checked bash and
+      PowerShell, no `mix`/`elixir` binary on PATH). Status left
+      in_progress rather than done until someone runs mix test with a
+      real toolchain and confirms.
+  - req: REQ-001
+    event: done
+    agent: ORCH
+    at: 2026-08-13T20:49:04Z
+    note: >
+      Verified via a temporary elixir:1.17-otp-27 Docker container +
+      an isolated postgres:16 container on a private Docker network
+      (local Elixir toolchain unavailable; host port 5434 was already
+      held by R-Co's own r-co-db_test-1, so verification ran
+      container-to-container instead of touching host ports). mix
+      deps.get / mix compile / mix ecto.create / mix ecto.migrate /
+      mix test all ran clean: "2 properties, 10 tests, 0 failures".
+      All 5 acceptance criteria confirmed by their corresponding
+      tests in test/roco/parallel_approval_test.exs. Also fixed an
+      unrelated pre-existing compile error in
+      test/roco/process_instance_test.exs (Ecto.Query.where/2 called
+      without `import Ecto.Query`, so `^id` pin was illegal outside a
+      match) that was blocking the whole suite from compiling; this
+      predates REQ-001 and was not introduced by it. Verification
+      containers and network torn down after the run;
+      config/test.exs restored to its original committed contents.
+  - req: REQ-002
+    event: started
+    agent: REVIEWER
+    at: 2026-08-13T20:49:04Z
+    note: writing G1 verdict comparing ParallelApproval to ProcessInstance
+  - req: REQ-002
+    event: done
+    agent: REVIEWER
+    at: 2026-08-13T20:49:58Z
+    note: >
+      docs/eval/idiomatic-otp.md written with a dated entry covering
+      both modules. Verdict: idiomatic, not a crutch — ParallelApproval
+      tracks dual-approval progress via MapSet on gen_statem data under
+      a single :pending state (parallel_approval.ex:79-89), no extra
+      state atoms, dispatch is real function-clause/guard matching
+      mirroring ProcessInstance's style. Flagged one gap: no catch-all
+      handle_event clause (unlike process_instance.ex:100-102), so an
+      unrecognized message would crash rather than return a typed
+      error — logged as both a minor G1 note and a G4
+      static-typing-gap candidate for REQ-008.
+  - req: REQ-003
+    event: started
+    agent: ELIXIR-DEV
+    at: 2026-08-13T20:51:36Z
+    note: >
+      adding mix roco.timed_test task; no local Elixir toolchain, so
+      ORCH will verify via the same temporary Docker-based mix
+      environment used for REQ-001 once the code is written.
+  - req: REQ-003
+    event: done
+    agent: ELIXIR-DEV
+    at: 2026-08-13T20:56:52Z
+    note: >
+      Added lib/mix/tasks/roco.timed_test.ex (mix roco.timed_test).
+      Times compile phase in-process via Mix.Task.run("compile")
+      bracketed with System.monotonic_time(:millisecond), and test
+      phase as a `mix test` subprocess (System.cmd/3) so the
+      project's own test: alias (ecto.create/ecto.migrate) runs
+      inside test_ms exactly as it would for a developer's plain
+      `mix test`, and so ExUnit's halt-on-failure can't prevent the
+      CSV row from being written. Appends one row to
+      docs/eval/dev-loop-timings.csv (created with header on first
+      run). Not run locally — no mix/elixir toolchain in this
+      environment; ORCH to verify via Docker per REQ-001 precedent.
+      NOTE: this agent overwrote this file's prior format/history
+      when appending this entry — restored by ORCH afterward; see
+      docs/anti-patterns.md.
+  - req: REQ-003
+    event: blocked
+    agent: ORCH
+    at: 2026-08-13T21:06:08Z
+    note: >
+      Verified via the same Docker setup used for REQ-001. mix
+      roco.timed_test runs, exits 0, appends exactly one CSV row per
+      run, and correctly captures test_ms — but compile_ms is always
+      0, including immediately after `rm -rf _build/test/lib/roco`
+      (confirmed a real 10-file recompile happened via "Compiling 10
+      files (.ex) / Generated roco app" in the captured output).
+      Root cause: the task's own module lives under lib/mix/tasks/,
+      so Mix must compile the whole lib/ tree just to load/invoke
+      the task at all, before run/1's body — including its own
+      Mix.Task.run("compile") call — ever executes. That call always
+      finds nothing left to do. Fails acceptance criterion 3
+      (visibly different compile_ms between a no-op rerun and a run
+      after touching process_instance.ex — both were 0). Sending
+      back to ELIXIR-DEV to fix; status reverted to in_progress.
+  - req: REQ-003
+    event: started
+    agent: ELIXIR-DEV
+    at: 2026-08-13T21:09:24Z
+    note: >
+      fixing compile_ms always reading 0, per ORCH's Docker-verified
+      root cause (compile phase timed in-process via
+      Mix.Task.run("compile"), but loading roco.timed_test's own
+      module already forces the whole lib/ tree to compile first, so
+      there's nothing left for that call to do).
+  - req: REQ-003
+    event: done
+    agent: ELIXIR-DEV
+    at: 2026-08-13T21:09:24Z
+    note: >
+      lib/mix/tasks/roco.timed_test.ex: replaced the in-process
+      Mix.Task.run("compile") bracket with a `mix compile` subprocess
+      (System.cmd/3), timed the same way test_ms already was —
+      unified both phases under one time_cmd/2 helper (renamed from
+      time_test/1). A fresh `mix compile` subprocess invokes the
+      built-in compile task directly, never loading
+      Mix.Tasks.Roco.TimedTest itself, so it does real incremental
+      compilation of lib/roco/*.ex with nothing pre-compiled — unlike
+      the in-process call, which only ever ran after Mix's own
+      task-resolution bootstrap had already compiled everything to
+      find/load this task's module. Also added compile-phase exit
+      handling (note + System.halt on nonzero exit) since
+      System.cmd, unlike Mix.Task.run, won't raise on a compile
+      error. Updated @moduledoc to explain why both phases must be
+      subprocesses now, including why the subprocess recompiling its
+      own task file doesn't distort the signal, and noted the fixed
+      Mix/BEAM startup floor the subprocess approach adds (doesn't
+      threaten acceptance criterion 3 since that floor is constant
+      across runs). Not run locally — no mix/elixir toolchain on
+      PATH in this environment (confirmed via `which mix elixir`).
+      Left docs/requirements.yaml REQ-003 status as in_progress per
+      ORCH's instruction; ORCH to re-verify via Docker and flip to
+      done.
+  - req: REQ-003
+    event: blocked
+    agent: ORCH
+    at: 2026-08-13T21:31:42Z
+    note: >
+      Re-verified in Docker. The subprocess fix correctly made
+      compile_ms non-zero (~1.7-1.9s), and test_ms/CSV-append/exit
+      code all still work — but the underlying acceptance criterion
+      3 still fails, for a deeper reason than the first bug. Proved
+      via direct experiment: `mix roco.timed_test --help` (which
+      never even calls run/1) still fully recompiles the roco app
+      from scratch, because Mix must compile the whole project just
+      to resolve/load ANY task defined in lib/mix/tasks/, including
+      this one. So by the time run/1's body executes its `mix
+      compile` subprocess, the OUTER `mix roco.timed_test` process
+      has already forced the real compile as a side effect of
+      finding itself — the inner subprocess again finds nothing to
+      do. Confirmed numerically: raw `mix compile` after `rm -rf
+      _build/test/lib/roco` took 8561ms measured directly, but the
+      exact same scenario run through `mix roco.timed_test` produced
+      compile_ms=1501 (below the no-op noise floor of ~1.6-1.9s) —
+      because the outer process already ate the real compile cost.
+      This is structural: no code living inside lib/mix/tasks/ of
+      this project can ever time this project's own compile step,
+      regardless of subprocess/in-process design. Correct fix (user
+      confirmed): move the actual timing logic to a wrapper script
+      outside lib/ (e.g. scripts/timed_test.sh or .ps1) that runs
+      `mix compile` as its FIRST mix invocation — genuinely the first
+      compile in a fresh BEAM/build state — then `mix test`, then
+      appends the CSV row; keep `mix roco.timed_test` as a thin
+      pass-through to the script for ergonomics. Sending back to
+      ELIXIR-DEV; status remains in_progress.
+  - req: REQ-003
+    event: started
+    agent: ELIXIR-DEV
+    at: 2026-08-14T02:31:00Z
+    note: >
+      moving timing logic out of lib/ entirely per ORCH's structural
+      root-cause finding and user-confirmed fix: no code under this
+      project's lib/ (in-process or subprocess, this task's own module
+      or any other) can ever be the first thing to compile the
+      project, because Mix must compile lib/ just to find/load that
+      code's own module before running it.
+  - req: REQ-003
+    event: done
+    agent: ELIXIR-DEV
+    at: 2026-08-14T02:38:00Z
+    note: >
+      Added scripts/timed_test.sh (plain POSIX sh, no argument-parsing
+      framework). It runs mix compile as its literal first command -
+      since the script itself is invoked directly by sh, never
+      resolved as a Mix task, this is genuinely the first Mix
+      invocation in the whole process tree, with nothing having
+      compiled the project first. Then runs mix test "$@" (forwarding
+      args, so the project's test: alias - ecto.create/ecto.migrate/
+      test - still runs exactly as a developer's own mix test would).
+      Times both phases via date +%s%N / 1e6 for milliseconds,
+      computes total_ms, and appends one row to
+      docs/eval/dev-loop-timings.csv (creating it with the established
+      header if missing) - note sanitized (CR/LF stripped, commas ->
+      semicolons, truncated to 200 chars) the same way the prior
+      Elixir version did. Uses set -eu but wraps each mix compile/mix
+      test call in set +e / capture $? / set -e so a failing phase
+      doesn't abort the script before the CSV row is written -
+      verified this specific interaction first with an isolated sh -c
+      repro (set -e does swallow the captured exit code without the
+      +e/-e bracket) before relying on it.
+      Rewrote lib/mix/tasks/roco.timed_test.ex to a pure passthrough:
+      run/1 now only execs sh scripts/timed_test.sh via System.cmd
+      (streaming stdio, forwarding args) and halts with its exit code
+      - no timing logic left in Elixir. Updated its @moduledoc to
+      explain the final architecture and cite the concrete --help
+      experiment and 1501ms-vs-8561ms numbers from ORCH's prior
+      blocked note as evidence.
+      Dry-ran scripts/timed_test.sh directly (sh scripts/timed_test.sh)
+      in this environment, which has no mix/elixir toolchain (which
+      mix elixir exits 2, not found) - this only exercises the
+      script's own control flow (timing math, set -e/+e interaction,
+      CSV header/append, note sanitization, exit-code propagation),
+      NOT real compile/test behavior: mix compile and mix test both
+      failed with "command not found" (exit 127) as expected, and the
+      script correctly still appended one CSV row (note="compile
+      phase exited 127") and exited 127 instead of crashing. Deleted
+      that dry-run row afterward and left
+      docs/eval/dev-loop-timings.csv absent, per instruction, so the
+      user's Docker verification creates it fresh. Made the script
+      executable (chmod +x) though it's meant to be invoked as sh
+      scripts/timed_test.sh regardless of the execute bit, per
+      instruction, for portability from Git Bash on the Windows host.
+      Did not run mix compile/mix test for real anywhere - no
+      toolchain here, and explicitly instructed not to attempt it;
+      user will re-verify via Docker. Left docs/requirements.yaml
+      REQ-003 status as in_progress per instruction.
+  - req: REQ-003
+    event: done
+    agent: ORCH
+    at: 2026-08-13T21:55:28Z
+    note: >
+      Re-verified in Docker: the wrapper-script fix still failed —
+      `mix roco.timed_test` (even as a one-line pass-through) forces
+      the same project-wide compile via Mix's task-resolution
+      bootstrap before the script ever launches, so the script's own
+      `mix compile` still measured a no-op (confirmed directly: `mix
+      roco.timed_test --no-start` printed "Compiling 10 files" before
+      the script's output even started). Running scripts/timed_test.sh
+      DIRECTLY (bypassing `mix roco.timed_test` entirely) worked
+      correctly. Per user decision, removed
+      lib/mix/tasks/roco.timed_test.ex (and now-empty lib/mix/tasks/,
+      lib/mix/ dirs) entirely — scripts/timed_test.sh, run via `sh
+      scripts/timed_test.sh`, is now the sole real deliverable. Amended
+      REQ-003's acceptance criteria in docs/requirements.yaml to
+      reference the script instead of a mix task. Added a pointer in
+      README.md's "Running it" section. Final Docker verification: 4
+      true no-op runs gave compile_ms in [2263, 3153]; a run right
+      after `rm -rf _build/test/lib/roco` gave compile_ms=9898 — more
+      than 3x the top of the no-op band, unambiguous signal. All 12
+      tests passed on every run (2 properties, 10 tests, 0 failures).
+      Verification containers/network torn down, config/test.exs
+      restored, verification-only CSV rows deleted so
+      docs/eval/dev-loop-timings.csv starts clean from real usage
+      (first real rows will accumulate as REQ-004 and later
+      requirements run `sh scripts/timed_test.sh`).
+  - req: REQ-005
+    event: started
+    agent: ELIXIR-DEV
+    at: 2026-08-13T21:56:08Z
+    note: implementing RoCo.RowApproval (plain Ecto schema, no gen_statem)
+  - req: REQ-005
+    event: blocked
+    agent: ELIXIR-DEV
+    at: 2026-08-13T22:00:32Z
+    note: >
+      Implemented: priv/repo/migrations/20260814000002_create_approvals.exs
+      (approvals table: binary_id id, nullable finance_approved_at/
+      ops_approved_at utc_datetime columns, status string default
+      "pending", timestamps()); lib/roco/row_approval/approval.ex
+      (plain Ecto.Schema); lib/roco/row_approval.ex (context module:
+      create/0, approve/2, get/1 — no gen_statem/GenServer/
+      DynamicSupervisor, just Repo.get/Repo.update_all against a
+      single row per instance). test/roco/row_approval_test.exs
+      mirrors parallel_approval_test.exs's 5 non-supervision test
+      cases (order-independence both ways, idempotent double-approval,
+      get/1 while pending, unknown-approver rejection). Found and
+      fixed one bug during self-review before reporting: to_view/1
+      originally used String.to_existing_atom(approval.status), which
+      would only succeed if :pending/:approved happened to already be
+      interned by some other module (e.g. ParallelApproval) loading
+      first — RowApproval itself never uses those as literal atoms
+      outside @type specs, which don't materialize atoms at runtime.
+      Replaced with explicit status_atom/1 clauses. Flagged to ORCH as
+      a G4 static-typing-gap candidate: a sum type would have forced
+      exhaustive handling of the status string at compile time instead
+      of this being silently environment-order-dependent at runtime.
+      Cannot run mix compile / mix test — no Elixir/mix toolchain on
+      PATH in this environment (confirmed via `which mix elixir`,
+      exit 2). Status left in_progress in docs/requirements.yaml per
+      instruction; ORCH to verify via the Docker-based toolchain used
+      for REQ-001/003.
+  - req: REQ-005
+    event: done
+    agent: ORCH
+    at: 2026-08-13T22:04:34Z
+    note: >
+      Verified via the same Docker setup used for REQ-001/003. mix
+      deps.get / mix ecto.create / mix ecto.migrate (applying
+      20260814000002_create_approvals.exs) / mix test all ran clean:
+      "2 properties, 15 tests, 0 failures" (up from 10, confirming
+      all 5 new test/roco/row_approval_test.exs cases passed
+      alongside the existing suite). Confirmed by reading
+      lib/roco/row_approval.ex and
+      lib/roco/row_approval/approval.ex: no gen_statem, GenServer, or
+      DynamicSupervisor anywhere, plain Repo.get/update_all against
+      an Ecto schema. Migration exists and applied. Behavior mirrors
+      RoCo.ParallelApproval's acceptance criteria (order-independent
+      approval, idempotent double-approval, unknown-approver
+      rejection, pending-state introspection). Verification
+      containers/network torn down, config/test.exs restored.
+  - req: REQ-006
+    event: started
+    agent: TEST-RUNNER
+    at: 2026-08-13T22:05:16Z
+    note: writing crash-isolation test for ParallelApproval + comparison note for RowApproval
+  - req: REQ-006
+    event: done
+    agent: TEST-RUNNER
+    at: 2026-08-13T22:07:01Z
+    note: >
+      Added "killing one instance's process does not affect a sibling
+      instance's state" to test/roco/parallel_approval_test.exs:72-111.
+      Starts two instances, drives the survivor to one approval and the
+      victim to full :approved, looks up the victim's live pid via
+      GenServer.whereis/1 against the same via/1 Registry tuple
+      ParallelApproval itself uses, kills it with
+      Process.exit(pid, :kill), and asserts the sibling is completely
+      unaffected (same pid, same pre-kill state via get/1) while the
+      killed instance's fate is checked against traced (not assumed)
+      OTP :transient semantics: child_spec/1 sets restart: :transient
+      (parallel_approval.ex:39-45); :transient restarts on ABNORMAL
+      termination only, and Process.exit(pid, :kill) delivers :kill,
+      reported to monitors as :killed (asserted directly via
+      Process.monitor/1 + assert_receive in the test) — abnormal, so
+      the DynamicSupervisor restarts the child from its stored spec,
+      which bakes in the same id, so the same Registry key comes back
+      under a brand-new pid. Test asserts new_pid != victim_pid and
+      that the restarted instance is back at :pending with
+      approved_by: [] (fresh init/1, not a resume — gen_statem data was
+      never persisted, so approved-state progress is lost across the
+      restart even though the id stays callable). Cannot run mix test —
+      no Elixir/mix toolchain on PATH in this environment (confirmed
+      via `which mix elixir`, exit 2); ORCH to verify via the
+      Docker-based toolchain used for REQ-001/003/005, with particular
+      attention to the :transient + :kill assertions since they're the
+      part most likely to be wrong if my reading of the OTP Supervisor
+      docs' restart-value semantics is mistaken.
+      Also created docs/eval/process-per-instance-win.md (didn't exist
+      yet) with a dated entry laying out both failure modes side by
+      side: ParallelApproval's traced crash/restart behavior above, and
+      RowApproval's nearest equivalent (no process to crash; isolation
+      and per-statement atomicity come from Postgres row-scoped SQL for
+      free, but a bad/wrong row has no independent "restart" the way a
+      supervised process does — it just sits there wrong until
+      something else notices). Written as raw evidence for REQ-007
+      (REVIEWER), not a verdict — no "which is better" claim made.
+      Left docs/requirements.yaml REQ-006 status as in_progress per
+      instruction; ORCH to flip to done after Docker verification.
+  - req: REQ-006
+    event: done
+    agent: ORCH
+    at: 2026-08-13T22:10:36Z
+    note: >
+      Verified via the same Docker setup used for prior requirements.
+      mix deps.get / mix ecto.create / mix ecto.migrate / mix test all
+      ran clean: "2 properties, 16 tests, 0 failures" (up from 15,
+      confirming the new crash-isolation test in
+      test/roco/parallel_approval_test.exs passed, including its
+      :transient + :killed restart-semantics assertions). Comparison
+      note confirmed present in docs/eval/process-per-instance-win.md,
+      describing both failure modes side by side without prejudging
+      REQ-007's verdict. Verification containers/network torn down,
+      config/test.exs restored.
+  - req: REQ-007
+    event: started
+    agent: REVIEWER
+    at: 2026-08-13T22:11:12Z
+    note: writing G3 verdict comparing ParallelApproval vs RowApproval
+  - req: REQ-007
+    event: done
+    agent: REVIEWER
+    at: 2026-08-13T22:12:06Z
+    note: >
+      Appended final verdict section to
+      docs/eval/process-per-instance-win.md (dated
+      2026-08-13T22:12:06Z). Verdict: for this specific feature,
+      process-per-instance was operationally heavier than needed —
+      RowApproval was simpler and the process model bought less than
+      it cost. Evidence cited: raw line counts (ParallelApproval
+      122 lines across parallel_approval.ex + approval_supervisor.ex
+      vs RowApproval 150 lines across row_approval.ex +
+      approval.ex + migration, but RowApproval's actual logic is
+      ~45-50 lines once moduledoc/comments are excluded, so volume
+      alone doesn't decide it); supervision complexity (26-line
+      ApprovalSupervisor plus the 40-line crash-isolation test
+      parallel_approval_test.exs:72-111 needed to prove a property
+      RowApproval gets for free from `WHERE id = $1`, per the
+      REQ-006 entry's own line 82-91); the crash-isolation result
+      (parallel_approval_test.exs:108-110 — restart guarantees "id
+      stays callable," not "progress survives," since gen_statem
+      data is never persisted, while RowApproval's Repo.update_all
+      at row_approval.ex:85-87 gives durable, crash-proof commits
+      for zero supervision code); and the core question of whether
+      process-per-instance was actually needed (no — two independent
+      booleans converging to one terminal state, per
+      parallel_approval.ex:62's MapSet-of-size-0/1/2 data shape,
+      is minimal stateful logic with no timers/backpressure/OS
+      resources, exactly the profile RowApproval shows fits in ~50
+      lines of plain Ecto with an identical mirrored test suite).
+      Named the conditions under which the process model's case
+      would look different (expensive in-memory state, timers,
+      backpressure, held OS resources) so the verdict isn't read as
+      anti-gen_statem in general — G1's REQ-002 idiomatic-OTP finding
+      for ParallelApproval stands independently. Both acceptance
+      criteria met: entry has an explicit verdict (not just
+      observations) and cites specific evidence by file/line and
+      test name from both REQ-005 (row_approval.ex, approval.ex,
+      the migration) and REQ-006 (parallel_approval_test.exs:72-111,
+      the REQ-006 comparison-note entry's own line citations).
+      Flipped docs/requirements.yaml REQ-007 status to done.
+  - req: REQ-008
+    event: started
+    agent: ELIXIR-DEV
+    at: 2026-08-13T22:13:47Z
+    note: >
+      creating docs/eval/static-typing-gap.md incident log; retroactively
+      logging incidents already surfaced during REQ-001/002/005 review
+      (missing catch-all handle_event clause in ParallelApproval per
+      REQ-002's REVIEWER note; to_view/1's original
+      String.to_existing_atom load-order fragility caught during
+      REQ-005's self-review).
+  - req: REQ-008
+    event: done
+    agent: ELIXIR-DEV
+    at: 2026-08-13T22:14:55Z
+    note: >
+      Created docs/eval/static-typing-gap.md: documented entry format at
+      the top (what happened / how it was caught / what a type system
+      would have done), plus an "Attribution matters more than incident
+      count" note distinguishing strict (a)/(b)/(c) criteria (property
+      test failure or runtime crash) from review-caught near-misses.
+      Checked docs/status/requirement_status.yaml in full for any
+      recorded test failure during REQ-001/003/005/006 development —
+      found none; every reported mix test run across the set was clean
+      ("0 failures" at REQ-001, REQ-003 x4, REQ-005, REQ-006). Logged
+      this explicitly as the zero-incidents-in-the-strict-sense data
+      point the acceptance criteria call for. Retroactively logged both
+      genuine near-miss incidents as separate dated entries, honestly
+      categorized as "caught by code review," not (a)/(b)/(c): (1)
+      ParallelApproval's missing catch-all handle_event clause
+      (lib/roco/parallel_approval.ex:65-95 vs.
+      lib/roco/process_instance.ex:100-102), found by REVIEWER's REQ-002
+      static review, never triggered by any test or crash; (2)
+      RowApproval's original to_view/1 using
+      String.to_existing_atom(approval.status), an atom-interning
+      load-order hazard, found by ELIXIR-DEV's own self-review while
+      writing REQ-005, fixed (lib/roco/row_approval.ex:99-114) before
+      any test ran against the buggy version. Added a summary table
+      (0/0/0 for the strict a/b/c categories, 2 for review-caught
+      near-misses) and an honest closing read: the property-test/
+      runtime-crash safety net has not yet caught anything in this
+      session — everything found so far was caught by human/agent
+      review before execution. Flipped docs/requirements.yaml REQ-008
+      status to done; both acceptance criteria met (file exists with
+      format documented at top; "no incidents" in the strict sense is
+      explicitly stated alongside the two honestly-categorized
+      near-misses). No code changes required for this requirement — it
+      is a documentation-only deliverable, so no mix compile/test run
+      was needed or performed.
+  - req: REQ-009
+    event: started
+    agent: REVIEWER
+    at: 2026-08-13T22:16:54Z
+    note: writing G4 verdict from docs/eval/static-typing-gap.md's incident log
+  - req: REQ-009
+    event: done
+    agent: REVIEWER
+    at: 2026-08-13T22:17:53Z
+    note: >
+      Appended final dated verdict section to
+      docs/eval/static-typing-gap.md (2026-08-13T22:17:53Z). Independently
+      spot-checked REQ-008's two source citations against the actual
+      files before trusting them: confirmed
+      lib/roco/parallel_approval.ex:65-95 has no catch-all handle_event
+      clause (four guarded clauses only), and confirmed
+      lib/roco/row_approval.ex:113-114 has the explicit status_atom/1
+      clauses ("pending"/"approved") replacing the original
+      to_existing_atom/1 hazard. Both checked out against the live code,
+      not just the log's prose. Verdict: nice-to-have, not load-bearing,
+      as of this entry — 0 incidents met any strict (a)/(b)/(c) criterion
+      across REQ-001-008, and the 2 real near-miss bugs found were both
+      caught by code/self-review before any test ever executed against
+      the buggy version, so the property test never had a chance to
+      catch-or-miss either one; review won the race both times. Explicitly
+      scoped the verdict: this pilot's unusually high review intensity
+      (REVIEWER static review + ELIXIR-DEV self-review + ORCH Docker
+      verification on every change) and still-small codebase size are
+      named as conditions that don't necessarily generalize to a larger
+      or faster-moving team, where the same property test could plausibly
+      become load-bearing. Both acceptance criteria met: dated summary
+      section appended to the existing file (not a new file), with an
+      explicit load-bearing-vs-nice-to-have verdict citing the incident
+      count (0 strict, 2 review-caught) as evidence. Flipped
+      docs/requirements.yaml REQ-009 status to done. Documentation-only
+      deliverable; no code changed, so no mix compile/test run was
+      needed.
+  - req: REQ-004
+    event: started
+    agent: ORCH
+    at: 2026-08-13T22:21:52Z
+    note: >
+      Collected 5 real dev-loop-timings.csv rows (prerequisite for
+      REQ-004) by running `sh scripts/timed_test.sh` 5 times in the
+      same Docker-based Elixir+Postgres setup used throughout this
+      session — doubled as a final full-suite regression check:
+      "2 properties, 16 tests, 0 failures" on every one of the 5 runs.
+      compile_ms: 1506-4908ms, test_ms: 3641-4106ms across the 5 rows.
+      Verification containers/network torn down, config/test.exs
+      restored. Now delegating REQ-004 (G2 verdict) to REVIEWER.
+  - req: REQ-004
+    event: done
+    agent: REVIEWER
+    at: 2026-08-13T22:24:17Z
+    note: >
+      Created docs/eval/dev-loop-feel.md with a dated entry
+      (2026-08-13T22:22:56Z). Computed min/median/max directly from the
+      5 real rows in docs/eval/dev-loop-timings.csv (verified by
+      independent script, not hand arithmetic alone): compile_ms
+      min=1506 median=1655 max=4908 (one outlier row at 4908ms vs. a
+      tight 1506-1661ms cluster for the other four); test_ms min=3641
+      median=3709 max=4106 (tight spread, consistent with fixed DB
+      setup + 16-test cost dominating); total_ms min=5147 median=5653
+      max=8617. Explicitly stated no RoCo agent has direct Zig-side
+      timing data and did not invent one — compared instead against (1)
+      README.md's own stated motivation for the pilot (lines 3-7,
+      81-82) and (2) general, hedged knowledge of zig build test's
+      typical fast-incremental-compile characteristics, framed
+      qualitatively (BEAM loop reads as "fine, not exceptional," not a
+      fabricated number-for-number comparison). Noted the Docker
+      -container caveat (throwaway verification container, not a warm
+      persistent dev machine; Docker Desktop/Windows bind-mount
+      overhead; shared host resources plausibly explain the compile_ms
+      outlier row) per instruction, and flagged that this entry has no
+      iex-reload-specific timing yet, only compile+full-test-suite via
+      scripts/timed_test.sh. Also wrote up the REQ-003 three-attempt
+      saga (in-process Mix.Task.run timer -> subprocess-inside-a-Mix
+      -task -> final standalone shell script) as an independent
+      qualitative dev-loop-feel data point: Mix's task-resolution model
+      forces a full project compile just to discover any task under
+      lib/, which made straightforward self-instrumentation of the
+      build step surprisingly difficult until the timing logic moved
+      entirely outside Mix. All 3 acceptance criteria met: file exists
+      with a dated entry; min/median/max are computed from actual CSV
+      values (shown in a table, cross-checked via a small node script,
+      not estimated); entry explicitly states it could not measure the
+      Zig-side baseline and names exactly what it compared against
+      instead. Flipped docs/requirements.yaml REQ-004 status to done.
+      Documentation-only deliverable; no code changed, so no mix
+      compile/test run was needed or performed for this requirement
+      itself (relied on the 5 CSV rows and their "2 properties, 16
+      tests, 0 failures" regression result already captured and
+      reported by ORCH in the REQ-004 started-event above).
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-14T09:15:49Z
+    note: >
+      User confirmed (in-session, not a REQ) that RoCo's mission
+      expands from "disposable G1-G4 pilot" (all done as of REQ-009)
+      to a full staged migration of R-Co to Elixir. Verified R-Co's
+      actual scope directly rather than assuming (259 .zig files
+      across ~35 src/ subsystems, 143 migrations, 13,564-line
+      requirements.yaml, 18-role agent system) before staging.
+      Appended a `stages:` list (S0-S8) and Stage 0's requirements
+      (REQ-010..014) to docs/requirements.yaml, validated the
+      resulting YAML parses cleanly via `npx js-yaml` (no local Python
+      or js-yaml available, network access worked for npx) with zero
+      duplicate IDs across 14 requirements. Updated README.md
+      (migration status section, reframed "what to actually watch
+      for" as historical "Pilot findings" feeding the migration
+      rather than being superseded by it) and CLAUDE.md ("What this
+      project is", agent roster note that it's expected to grow
+      per-stage, requirements now carry evaluation_goal OR stage,
+      decision-record/pilot-signal core rules). Created
+      docs/migration/ with a README (stage index, S5 branches off S3
+      in parallel with S4) plus one file per stage (stage-0 fully
+      fleshed since it's active; S1-S8 scoped skeletons per the
+      approved plan) and docs/migration/decisions/ stubs for S0's
+      three pending decision records (0001-web-framework,
+      0002-oidc-integration, 0003-ecto-schema-strategy). Every R-Co
+      path cited in these docs (adp-01..04b design docs, bo-swiftroute
+      /bo-vortex/bo-meridian agent files, route/middleware/identity
+      file lists) was confirmed to actually exist via direct listing,
+      not assumed from memory of the roster tables. No Elixir
+      application code was written — Stage 0's REQ-010..014 are scoped
+      for ELIXIR-DEV/REVIEWER to pick up next, same as any other
+      requirement.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-14T15:06:23Z
+    note: >
+      User decided the pilot's working name "RoCo" (Ro-Co read
+      awkwardly, and "Robotized Company" was only ever R-Co's own
+      working name) should become "Letflow" going forward — a double
+      meaning of "let it flow" as a workflow engine, and "let it flow
+      by itself" via AI agents running it rather than a human driving
+      each step. Renamed the project throughout: lib/roco/ ->
+      lib/letflow/ and test/roco/ -> test/letflow/ (plain filesystem
+      moves, no git history to preserve — this repo has no .git yet),
+      every RoCo.* module -> Letflow.*, :roco app atom -> :letflow,
+      mix.exs, config/{config,dev,test}.exs, docker-compose.yml
+      (postgres user/password/db roco->letflow), the two existing
+      priv/repo/migrations/*.exs module names, README.md, CLAUDE.md,
+      docs/requirements.yaml (header comment plus every RoCo/roco
+      occurrence across both the done G1-G4 requirements and the new
+      S0 stage requirements - these describe code that itself got
+      renamed, so the rename is accurate, not narrative revisionism),
+      docs/migration/* (written this same session, no historical value
+      to preserve), docs/anti-patterns.md (living reference doc, not
+      an append-only log), and all four .claude/agents/*.md files
+      (also updated stale "small disposable pilot" / "don't push for
+      Phoenix" framing in orchestrator.md, elixir-dev.md, and
+      reviewer.md to match CLAUDE.md's already-updated migration-stage
+      guidance, since leaving those internally inconsistent would have
+      been a real defect, not just an unrenamed string).
+      Deliberately did NOT bulk-rename docs/eval/*.md (G1-G4 dated
+      verdict logs) or rewrite past entries in this file — both are
+      append-only historical records per their own stated convention
+      (see docs/anti-patterns.md's "Overwriting
+      docs/status/requirement_status.yaml instead of appending" entry,
+      which exists specifically to prevent rewriting history like
+      this). Instead added one short dated naming-note callout near
+      the top of each docs/eval/*.md file explaining that RoCo.*
+      references in entries below it are historical and now correspond
+      to Letflow.* in the actual code, then appended this entry here
+      rather than editing any prior one. Verified via grep: zero
+      remaining RoCo/roco references anywhere except the intentional
+      historical mentions (README.md's "under the working name RoCo",
+      CLAUDE.md's parenthetical, the docs/eval/ naming notes, and the
+      untouched dated entries those notes point at).
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-14T15:17:50Z
+    note: >
+      User asked to remove "pilot" and Zig-vs-Elixir-competition
+      framing project-wide: Letflow is committed as the migration
+      target outright, not something under evaluation for whether it
+      "makes sense at all." Rewrote README.md (dropped the
+      "disposable pilot... is Elixir/OTP credible" opening entirely;
+      renamed "Pilot findings" section to "Early findings"; kept the
+      G1-G4 questions themselves since they're genuine engineering
+      findings, just reframed as historical record rather than "the
+      pilot's actual deliverable") and CLAUDE.md (same framing swap,
+      "pilot phase" -> "early development" throughout). Updated
+      docs/requirements.yaml's header/stage-narrative comments
+      (goals: block, the S0-S8 intro comment, S2/S3/REQ-010's
+      description text — all written this session, safe to edit) but
+      deliberately left REQ-004's description/acceptance_criteria and
+      REQ-013's "zig build check" citation alone: REQ-004 is `status:
+      done` and its Zig-comparison content describes what that
+      requirement actually did (genuine historical record, same
+      append-only principle as docs/status entries), and REQ-013's zig
+      build check reference is a legitimate technical citation of the
+      R-Co command being ported, not competition framing. Updated all
+      four .claude/agents/*.md files and docs/migration/* (stage-0,
+      stage-2, stage-3, stage-4, decisions/0001) to drop "pilot"
+      language, but left docs/migration/stage-8-frontend-cutover.md's
+      "the Zig backend" alone since that's a factual reference to the
+      real existing service being cut over from, not evaluative
+      framing. Reframed docs/eval/README.md and all four
+      docs/eval/*.md files' intro paragraphs (fixed the now-broken
+      "README.md §'What to actually watch for'" cross-reference to
+      point at the renamed "Early findings" section) — left every
+      dated entry below each file's naming-note callout completely
+      untouched, same append-only reasoning as the RoCo->Letflow
+      rename. Also found and fixed two moduledocs
+      (lib/letflow/process_instance.ex,
+      lib/letflow/instance_supervisor.ex) with "pilot" language that
+      the earlier RoCo-rename pass hadn't caught (they never mentioned
+      RoCo/roco by name, so the earlier targeted grep missed them),
+      and config/prod.exs's stub comment ("not a concern for this
+      pilot... if the pilot graduates"). Verified via grep across the
+      whole repo: all remaining "pilot"/zig mentions are either (a)
+      inside already-appended dated entries in docs/eval/*.md and this
+      file, (b) REQ-004's done historical description, or (c)
+      legitimate .zig source-path citations of real R-Co files —
+      nothing live frames Letflow as an evaluation/competition
+      anymore.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-14T15:20:57Z
+    note: >
+      User reported Postgres port 5434 (Letflow's dev/test port,
+      chosen to avoid R-Co's own 5432/5433) is busy on their machine.
+      Moved to 5462 everywhere it's configured: config/dev.exs,
+      config/test.exs, docker-compose.yml's port mapping. Updated
+      every doc that documents the port as current/prescriptive
+      guidance: README.md, .claude/agents/test-runner.md, and both
+      docs/anti-patterns.md mentions (the Docker-verification
+      workaround entry) — the second anti-patterns.md mention also
+      dropped its specific claim that R-Co's `r-co-db_test-1`
+      container was the collision source, since that was tied to port
+      5434 specifically and isn't known to hold at 5462, generalized
+      to "another local Postgres container" instead. Left
+      docs/status/requirement_status.yaml's one 5434 mention
+      (line ~45, inside an already-appended historical event
+      describing a specific past verification run) untouched, same
+      append-only reasoning as prior scope-change entries. Did not
+      verify the new port actually resolves the conflict (no
+      toolchain/Docker verification run in this session) — that's on
+      the user's next `docker compose up -d`.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-14T15:33:07Z
+    note: >
+      User confirmed the G1-G4 goals/evaluation_goal mechanism and
+      REQ-001..009 are obsolete now that Letflow is a committed
+      migration rather than an evaluation, and asked to delete
+      everything: both the requirements.yaml entries AND docs/eval/
+      itself (offered a lesser option first — keep docs/eval/ as
+      historical findings since Stage 2/3 and two source files still
+      cited it as live evidence — user chose full deletion instead).
+      Removed the `goals:` block and REQ-001..009 from
+      docs/requirements.yaml entirely (requirements: now starts
+      directly at REQ-010; validated the resulting YAML parses with
+      zero remaining REQ-001..009/goals references). Before deleting
+      docs/eval/ (idiomatic-otp.md, dev-loop-feel.md,
+      process-per-instance-win.md, static-typing-gap.md, README.md),
+      read each file's final dated verdict and folded the two findings
+      that were still live-cited elsewhere directly into the citing
+      docs, condensed, so the actual engineering conclusions survive
+      even though the tracking apparatus doesn't: the
+      process-per-instance verdict (row-based state was operationally
+      simpler than process-per-instance for a low-complexity approval
+      feature, but the process model's case gets stronger for
+      expensive-to-reconstruct state/timers/backpressure/OS resources)
+      into docs/migration/stage-2-event-store-definitions.md and
+      stage-3-instance-engine.md; the idiomatic-OTP verdict (confirmed
+      idiomatic, no crutch smell, isolation preserved via a second
+      DynamicSupervisor) into stage-3-instance-engine.md. Then deleted
+      docs/eval/ entirely (rm -rf; no git in this repo, so this is not
+      recoverable via version control — flagged that explicitly before
+      executing). Updated every live cross-reference to the deleted
+      directory/goals system: lib/letflow/instance_supervisor.ex and
+      row_approval.ex moduledocs (dropped docs/eval citations and the
+      G3/REQ-005 reference), README.md (dropped the "Early findings"
+      section and its docs/eval/dev-loop-feel.md citation), CLAUDE.md
+      (dropped the evaluation_goal/stage split down to stage-only,
+      dropped the "preserve early findings' signal" rule entirely,
+      fixed the REVIEWER roster line), docs/migration/README.md
+      (dropped the "Relationship to docs/eval/" section and a
+      "same convention as docs/eval/README.md" cross-reference), and
+      all three .claude/agents/*.md files (elixir-dev.md,
+      reviewer.md — description frontmatter and Purpose section
+      reworked since dev-loop-feel/static-typing-gap were named
+      evaluation questions there, not just citations — and
+      test-runner.md, which had two broken "README §4"/"Early
+      findings item 4" references from the earlier pilot-framing
+      cleanup that hadn't been caught yet). scripts/timed_test.sh was
+      deliberately left writing to docs/eval/dev-loop-timings.csv —
+      that CSV is a live, ongoing raw timing log the script recreates
+      via mkdir -p on next run, not a finished verdict document like
+      the four deleted .md files, so it's a different category than
+      what this deletion targeted.

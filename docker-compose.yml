@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: letflow
+      POSTGRES_PASSWORD: letflow
+      POSTGRES_DB: letflow_dev
+    ports:
+      - "5462:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U letflow"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - letflow_pg:/var/lib/postgresql/data
+
+volumes:
+  letflow_pg:

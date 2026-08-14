@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mix test*)",
+      "Bash(mix compile*)",
+      "Bash(mix format*)",
+      "Bash(mix ecto.*)",
+      "Bash(mix deps.get*)",
+      "Bash(mix run*)",
+      "Bash(docker compose up*)",
+      "Bash(docker compose down*)",
+      "Bash(docker compose ps*)",
+      "Bash(curl -s localhost:4000*)",
+      "Bash(curl -s -X POST localhost:4000*)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
+    ]
+  }
+}

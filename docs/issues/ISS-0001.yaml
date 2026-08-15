@@ -39,4 +39,14 @@ affected_files:
   - docs/requirements.yaml
   - docs/migration/decisions/0001-web-framework.md
 github_issue: https://github.com/tvolodi/letflow/issues/1
-status: open
+status: resolved
+resolved_at: 2026-08-15T19:03:12Z
+resolution: >
+  Fixed as recommended: docs/requirements.yaml REQ-010's description now says 24
+  routes / 7 middleware modules (content_type added to the description's middleware
+  list). docs/migration/decisions/0001-web-framework.md's Question section prose and
+  code-block listing both corrected to 24, with promotion_review.zig added to the
+  enumerated route modules. The file's "Note on the route count" paragraph updated to
+  record that the fix has been applied in place rather than describing the staleness
+  as still-current. Applied directly by ORCH (small, mechanical, no design ambiguity)
+  ahead of starting S1 work.

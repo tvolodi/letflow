@@ -861,3 +861,42 @@ history:
       claimable `open` state after being force-released for
       inspection — flipped all three to done so they don't surface as
       false-positive claimable work.
+  - req: REQ-011
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-15T15:59:29Z
+    note: >
+      docs/migration/decisions/0002-oidc-integration.md records an explicit partial-
+      adoption decision: Letflow adopts ueberauth_oidcc ({:ueberauth_oidcc, "~> 0.4"},
+      pulling in {:oidcc, "~> 3.7"}) for the token-verification/JWKS-caching layer only
+      — JIT user provisioning, the tenant<->realm binding table, and the custom role
+      registry are hand-rolled regardless of library choice, since no candidate
+      evaluated (assent ~> 0.3, ueberauth_keycloak_strategy 0.4.0) provides them either.
+      RELEASE-VALIDATOR independently re-verified all three acceptance criteria against
+      the file's actual content before this update, plus independently re-verified the
+      R-Co source citations (src/oidc/jit_provisioning.zig, src/identity/registry.zig's
+      createOrGetJitOidcUser, src/identity/provider/oidc/jwks_cache.zig,
+      src/oidc/realm_tenant_binding.zig, src/identity/role_registry.zig). The file's
+      pre-existing Question section misattributed JIT provisioning to
+      src/identity/manager.zig (that path does not exist; the real facade is at
+      src/identity/provider/manager.zig and does not implement JIT semantics) — this
+      was corrected in the Reasoning section's citations but the stale Question-section
+      wording itself was left as-is (out of REQ-011's declared file scope) and filed
+      separately as docs/issues/ISS-0002.yaml (also on GitHub,
+      https://github.com/tvolodi/letflow/issues/4) rather than silently fixed in place.
+      Updated 0002-oidc-integration.md's header (line 3) from "Status: pending
+      (REQ-011)" to "Status: decided (REQ-011)" per REVIEWER/RELEASE-VALIDATOR's flag
+      that it was stale relative to the now-fully-populated Decision/Reasoning sections
+      — checked docs/migration/decisions/0001-web-framework.md first for an established
+      "decided" convention to match, found that 0001's own header is itself still stale
+      ("Status: pending (REQ-010)" despite REQ-010 being done), so filed that as a
+      separate new issue (docs/issues/ISS-0003.yaml, GitHub
+      https://github.com/tvolodi/letflow/issues/5) rather than silently fixing a file
+      outside this run's declared scope, and used "Status: decided (REQ-011)" as the
+      first instance of this repo's decided-header phrasing. README.md checked and
+      confirmed it documents nothing REQ-011 changed (same as REQ-010 — an internal
+      architecture decision record, no change to documented running/setup behavior).
+      docs/migration/stage-0-foundation.md deliberately left untouched — REQ-014 (still
+      pending) is the requirement that reviews all four S0 decision records together and
+      updates that file; doing so here would be doing REQ-014's job early. Flipped
+      docs/requirements.yaml REQ-011 status to done.

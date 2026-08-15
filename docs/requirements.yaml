@@ -161,7 +161,7 @@ requirements:
   - id: REQ-011
     title: Write a decision record for OIDC/Keycloak integration approach
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S0
     impl_order: 5  # letflow-queue task id
     description: >

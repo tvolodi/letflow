@@ -1,0 +1,30 @@
+id: ISS-0003
+title: 0001-web-framework.md's header still says pending even though REQ-010 is done and the Decision/Reasoning sections are fully populated
+discovered_by: DOC-UPDATER
+discovered_in_run: WF02-REQ011
+discovered_at: 2026-08-15T15:58:44Z
+severity: MINOR
+description: >
+  While updating docs/migration/decisions/0002-oidc-integration.md's header per
+  REQ-011's Step 6 (flipping "Status: pending (REQ-011)" to reflect the now-recorded
+  decision), checked docs/migration/decisions/0001-web-framework.md to find the
+  established phrasing convention for a decided record's header, per this run's
+  instructions. Found that 0001-web-framework.md's line 3 still reads "Status: pending
+  (REQ-010). Owner: ELIXIR-DEV." even though docs/requirements.yaml's REQ-010 has had
+  status: done since 2026-08-14T21:26:34Z (see docs/status/requirement_status.yaml's
+  REQ-010 "done" entry) and 0001's own Decision/Reasoning sections are fully populated
+  with an explicit Phoenix decision and detailed reasoning (Dimensions A/B/C). This is
+  the same class of staleness REVIEWER/RELEASE-VALIDATOR flagged for 0002 during this
+  run — a header that never got updated when the requirement that produced the decision
+  was completed. Left uncorrected here: fixing 0001 is outside REQ-011's declared file
+  scope (0002-oidc-integration.md only), and no established "decided" phrasing exists
+  yet in this repo to copy from — this run's DOC-UPDATER instead used
+  "Status: decided (REQ-011)" for 0002 as the first instance of that convention, which a
+  future fix for this issue could reuse for 0001 too.
+  Recommended fix: update docs/migration/decisions/0001-web-framework.md's line 3 to
+  "Status: decided (REQ-010). Owner: ELIXIR-DEV." (or whatever phrasing the fix run
+  settles on, ideally matching 0002's).
+affected_files:
+  - docs/migration/decisions/0001-web-framework.md
+github_issue: https://github.com/tvolodi/letflow/issues/5
+status: open

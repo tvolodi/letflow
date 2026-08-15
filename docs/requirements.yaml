@@ -508,7 +508,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S1
-    impl_order: TBD  # letflow-queue task id, assigned at registration
+    impl_order: 28  # letflow-queue task id
     description: >
       Add priv/repo/migrations and corresponding lib/letflow/ Ecto schema
       modules for the three identity tables S1's later requirements build on,
@@ -572,7 +572,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S1
-    impl_order: TBD  # letflow-queue task id, assigned at registration
+    impl_order: 29  # letflow-queue task id
     description: >
       Execute the mix.exs dependency addition and supervision-tree wiring
       docs/migration/decisions/0002-oidc-integration.md explicitly deferred to
@@ -614,7 +614,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S1
-    impl_order: TBD  # letflow-queue task id, assigned at registration
+    impl_order: 30  # letflow-queue task id
     description: >
       Port src/oidc/claim_mapping.zig's mapVerifiedClaims as a pure Elixir
       function (no I/O — zero DB/network calls, matching claim_mapping.zig's
@@ -645,7 +645,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S1
-    impl_order: TBD  # letflow-queue task id, assigned at registration
+    impl_order: 31  # letflow-queue task id
     description: >
       Port the real JIT-provisioning orchestration from src/oidc/jit_provisioning.zig
       together with the actual upsert from src/identity/registry.zig's
@@ -689,7 +689,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S1
-    impl_order: TBD  # letflow-queue task id, assigned at registration
+    impl_order: 32  # letflow-queue task id
     description: >
       Port src/oidc/realm_tenant_binding.zig's resolveTenantByRealm and
       resolveRealmByTenant as Letflow.Identity functions operating on REQ-015's
@@ -721,7 +721,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S1
-    impl_order: TBD  # letflow-queue task id, assigned at registration
+    impl_order: 33  # letflow-queue task id
     description: >
       Port src/identity/role_registry.zig's TenantRoleStore (list_roles,
       upsert_role) and resolveRoleInTx as Letflow.Identity.RoleRegistry
@@ -756,7 +756,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S1
-    impl_order: TBD  # letflow-queue task id, assigned at registration
+    impl_order: 34  # letflow-queue task id
     description: >
       Add a Plug (or Plug pipeline) to lib/letflow/router.ex wiring together
       REQ-016's ueberauth_oidcc verification, REQ-017's claim mapping,

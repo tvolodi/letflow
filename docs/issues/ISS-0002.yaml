@@ -55,4 +55,18 @@ affected_files:
   - docs/migration/decisions/0002-oidc-integration.md
   - docs/requirements.yaml
 github_issue: https://github.com/tvolodi/letflow/issues/4
-status: open
+status: resolved
+resolved_at: 2026-08-15T19:08:00Z
+resolution: >
+  Fixed as recommended: docs/migration/decisions/0002-oidc-integration.md's Question
+  section now cites src/oidc/jit_provisioning.zig (JIT orchestration) and
+  src/identity/registry.zig's createOrGetJitOidcUser (the actual upsert) instead of
+  the nonexistent src/identity/manager.zig, and identity/jwks_cache.zig corrected to
+  identity/provider/oidc/jwks_cache.zig in the same section. The "Note on source
+  accuracy" paragraph in the Reasoning section updated to record the fix as applied
+  rather than still-pending. docs/requirements.yaml's REQ-011 description field
+  updated to the same corrected file reference. The lower-confidence
+  ueberauth_keycloak_strategy JWKS-caching follow-up noted in this issue's
+  description was not itself a defect to fix (it was already flagged as an open
+  research gap, not a false claim) — left as-is, not re-actioned here. Applied
+  directly by ORCH (small, mechanical, no design ambiguity) ahead of starting S1.

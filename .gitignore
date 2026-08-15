@@ -24,3 +24,7 @@ letflow-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# Local environment / secrets — never commit
+.env
+.env.*

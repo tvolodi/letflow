@@ -4,7 +4,7 @@ Status: decided (REQ-012). Owner: ELIXIR-DEV.
 
 ## Question
 
-R-Co has 143 Postgres migrations under `migrations/`. Does Letflow port
+R-Co has 146 Postgres migrations under `migrations/`. Does Letflow port
 the existing SQL schema as Ecto migrations 1:1 (preserving
 table/column names for easier cross-referencing during the port), or
 redesign it Ecto-idiomatically? How is multi-tenancy represented at
@@ -63,10 +63,9 @@ special case.
 ### Dimension A — 1:1 port vs. Ecto-idiomatic redesign
 
 R-Co's actual migration count, verified against `C:\Users\tvolo\dev\ai-dala\R-Co\migrations\`
-this session (`ls migrations/*.sql | wc -l`), is **146**, not the 143 cited in this
-requirement's own `description` and in this file's pre-existing Question section
-(filed as `ISS-0004`, see below — not corrected here, out of this file's scope). Of
-those 146, 31 carry a `GBL-` prefix, meaning they operate on the global `public` schema
+(`ls migrations/*.sql | wc -l`), is **146**. This requirement's own `description` and
+this file's Question section originally cited a stale 143 (filed as `ISS-0004`); both
+have since been corrected to 146 to match. Of those 146, 31 carry a `GBL-` prefix, meaning they operate on the global `public` schema
 only and exist specifically to reconcile R-Co's own two-phase tenant-modeling history —
 most concretely, `GBL-112_tnt01_drop_legacy_public_business_tables.sql`, whose own
 header states migrations 001–059 created business tables in `public`, migration 060

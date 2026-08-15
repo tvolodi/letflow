@@ -1,0 +1,113 @@
+# Test run report — WF-02 Step 4
+# Written by TEST-RUNNER. RELEASE-VALIDATOR independently re-runs the suite
+# rather than trusting this report alone (core-directives.md).
+
+req_id: REQ-015
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: REQ-015
+date_utc: 2026-08-16
+git:
+  branch: main
+  commit: de00ab959aefbe1d7f79160bf972a7fb4fefedf7
+
+environment:
+  toolchain: local (not Docker fallback)
+  elixir: "Erlang/OTP 29 [erts-17.0.5] ... Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  postgres_container: letflow-postgres-1 (already running, healthy, port 5462)
+  command_run: "mix letflow.check  (== format --check-formatted, compile --warnings-as-errors, test)"
+  note: >
+    Ran mix letflow.check end-to-end (exit 0), then re-ran each of its three
+    steps independently (mix format --check-formatted; mix compile
+    --warnings-as-errors; mix test) to get clean, individually-quotable
+    output/exit codes for this report. Also ran mix test --trace once more to
+    enumerate every test by file/name for the pre-existing-vs-new breakdown
+    below. All runs used the same tree/commit, no code changes made.
+
+verdict: PASS
+
+checks:
+  format_check:
+    result: PASS
+    exit_code: 0
+    output: "(no output — mix format --check-formatted printed nothing, meaning no file needs reformatting)"
+
+  compile_warnings_as_errors:
+    result: PASS
+    exit_code: 0
+    output: "(no output — mix compile --warnings-as-errors printed nothing, meaning a clean compile with zero warnings)"
+
+  test_suite:
+    result: PASS
+    exit_code: 0
+    summary_line_verbatim: "Result: 32 passed (2 properties, 30 tests)"
+    finished_line_verbatim: "Finished in 0.4 seconds (0.2s async, 0.2s sync)"
+    failures: 0
+    excluded: 0
+    skipped: 0
+    doctests: 0
+    note: >
+      Confirmed by two independent full-suite runs (mix letflow.check's test
+      step, and a standalone mix test --seed 0 run): both produced
+      "32 passed (2 properties, 30 tests)" with no Failures: section and no
+      non-zero exit code. A third run with --trace enumerated every
+      individual test to build the per-file breakdown below.
+    known_noise_not_a_failure: >
+      Two ExUnit.Case.register_test/4 deprecation warnings appear
+      (property "no sequence of actions produces an invalid state" in
+      process_instance_test.exs:64, and property "no sequence of approvals
+      produces an invalid state" in parallel_approval_test.exs:145) — these
+      are deprecation warnings from the property test macro's internals, not
+      failures, and are pre-existing (unrelated to REQ-015's changes, both
+      properties predate this requirement). Full SQL query debug logging
+      also appears in raw output (config/test.exs / test log level default)
+      — verbose but not indicative of any problem; suppressed by grep in the
+      quoted commands above where noted.
+
+test_file_breakdown:
+  pre_existing_18_confirmed_no_regressions:
+    - file: test/letflow/process_instance_test.exs
+      count: 5
+      detail: "1 property (no sequence of actions produces an invalid state) + 4 example tests"
+    - file: test/letflow/parallel_approval_test.exs
+      count: 8
+      detail: "1 property (no sequence of approvals produces an invalid state) + 7 example tests"
+    - file: test/letflow/row_approval_test.exs
+      count: 5
+      detail: "5 example tests"
+    subtotal: 18
+  new_req_015_14:
+    - file: test/letflow/identity/tenant_test.exs
+      count: 4
+    - file: test/letflow/identity/user_test.exs
+      count: 6
+    - file: test/letflow/identity/group_test.exs
+      count: 1
+    - file: test/letflow/identity/tenant_role_test.exs
+      count: 3
+    subtotal: 14
+  grand_total: 32
+  cross_check: >
+    18 pre-existing + 14 new REQ-015 = 32, matching the suite's own
+    "32 passed (2 properties, 30 tests)" summary line exactly (2 properties
+    = process_instance_test.exs + parallel_approval_test.exs properties,
+    both pre-existing; 30 example tests = 16 pre-existing example tests + 14
+    new REQ-015 example tests). This independently verifies
+    TEST-DESIGN-VALIDATOR's cited count of 32 rather than just repeating it.
+
+acceptance_criteria_test_coverage_observed:
+  # Cross-referenced against test/specs/REQ-015.md, not re-derived from scratch.
+  criterion_1_migrations_apply_cleanly: "PASS (implicit) — mix.exs test alias runs ecto.create/ecto.migrate --quiet before any test; all 14 new identity tests executed against real inserted rows, which is only possible if all 4 migrations applied cleanly"
+  criterion_2_moduledoc_citations: "not exercised by ExUnit (documentation check, per test spec's own note) — not re-verified by TEST-RUNNER in this run beyond what TEST-DESIGN-VALIDATOR already gated"
+  criterion_3_migration_moduledoc_prefix_statement: "not exercised by ExUnit (documentation check, per test spec's own note)"
+  criterion_4_users_partial_unique_index: "PASS — user_test.exs 'two users with external_id: nil can both be inserted' and 'two users with the same (external_realm, external_id): the second raises a constraint error' both passed"
+  criterion_5_no_auth_source_check_constraint: "PASS — user_test.exs 'auth_source/external-fields inconsistency is NOT rejected at the DB level (no CHECK constraint)' passed"
+
+diagnosis: "N/A — no failures observed, nothing routed to ELIXIR-DEV or TEST-DESIGNER"
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-16-REQ-015.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

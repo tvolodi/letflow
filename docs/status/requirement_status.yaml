@@ -1102,3 +1102,58 @@ history:
       file, per this requirement's acceptance criteria. Flipped docs/requirements.yaml
       REQ-014 status to done. S1 (docs/migration/stage-1-identity.md) may now be
       expanded into requirements.
+  - req: REQ-015
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-15T20:46:16Z
+    note: >
+      Built priv/repo/migrations (create_tenants, create_groups, create_tenant_role,
+      create_users, in that FK-safe order) plus four lib/letflow/identity/ Ecto.Schema
+      modules (tenant.ex, group.ex, tenant_role.ex, user.ex), per
+      docs/migration/decisions/0003-ecto-schema-strategy.md Decision B (schema-per-
+      tenant, tenant_id retained intra-schema) and Decision A (Ecto-idiomatic:
+      binary_id PK, Ecto.Enum status columns), porting column shapes from R-Co's
+      adp-04/adp-04a/adp-04b design docs. Schema-per-tenant provisioning itself
+      (Ecto :prefix/dynamic-repo mechanism) was explicitly deferred, not built: all
+      four tables target Ecto's single default schema, with the deferral and its
+      reasoning stated verbatim in every migration's header comment and in
+      lib/letflow/design/identity-schema.md §1, which also names the recommended
+      follow-up (a tenant_schemas registry + provisioning function + migration-replay
+      mechanism) for REQ-ANALYST to register as a real requirement when S2 is
+      expanded — not yet filed as its own docs/issues/ entry as of this update, since
+      REQ-015's acceptance criteria only required the deferral to be stated, not the
+      follow-up to be pre-registered. FK strategy is deliberately asymmetric: no
+      DB-level foreign key from tenant_id columns (users.tenant_id, groups.tenant_id)
+      to tenants.id, since those tables are expected to move behind separate
+      per-tenant schema prefixes once the deferred provisioning mechanism lands and a
+      same-schema FK today would only need to be dropped later — tenant scoping is
+      enforced at the service/repository boundary instead, per adp-04's own
+      repository contract. By contrast, tenant_role.group_id DOES carry a real DB
+      foreign key to groups.id, because tenant_role and groups are both per-tenant-
+      owned tables that will keep living in the same tenant schema together even
+      after the deferred mechanism ships, so that FK never needs to be dropped. Every
+      gate passed cleanly with real independent verification and no discrepancies to
+      flag this time (unlike REQ-013's earlier overclaim): CODE-DESIGN-VALIDATOR
+      PASSed after one rework fixing a comment defect; SECURITY-REVIEWER PASSed;
+      REVIEWER PASSed, independently re-running mix letflow.check; TEST-DESIGN-
+      VALIDATOR PASSed, independently running 14/14 new tests plus the full 32/32
+      suite; TEST-RUNNER reported 32/32 passing; RELEASE-VALIDATOR PASSed,
+      independently re-verifying all 5 acceptance criteria against the actual
+      migration/schema files and real command output. Flipped docs/requirements.yaml
+      REQ-015 status to done. README.md and
+      docs/guides/backend_developer_guide.md checked and deliberately left
+      untouched: README's "Running it" section already covers mix ecto.setup/
+      mix ecto.migrate generically without enumerating individual tables (same
+      precedent as the transition_events/approvals migrations before it), and
+      nothing in REQ-015's own deliverable is user-runnable/observable behavior yet
+      (no route or running process touches these tables); the backend guide's §5/§6
+      already point at 0003/0002 by decision record rather than by individual
+      requirement, so no update was needed there either — same reasoning REQ-011/
+      REQ-012's DOC-UPDATER passes already applied. docs/migration/stage-1-identity.md
+      updated: header line changed from "Status: not started. ... Requirements: none
+      expanded yet." to "Status: in progress. Requirements: REQ-015 (done); REQ-016
+      through REQ-021 pending.", matching stage-0-foundation.md's established
+      "Status: <state>. Requirements: ..." header convention. No REVIEWER sign-off
+      section added to stage-1-identity.md — that lands once all of S1's requirements
+      (REQ-015..021) are done, mirroring stage-0-foundation.md's pattern of gating
+      that section on the whole stage, not one requirement.

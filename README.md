@@ -77,6 +77,21 @@ curl -s localhost:4000/instances/<id>
 mix test
 ```
 
+To run format-check + compile-with-warnings-as-errors + test as a
+single fail-fast gate (equivalent to R-Co's `zig build check`):
+
+```
+mix letflow.check
+```
+
+> As of this writing, `mix letflow.check` correctly exits 1 at the
+> `mix format --check-formatted` step: 5 pre-existing files fail
+> formatting under a recent Elixir/Mix toolchain, unrelated to whatever
+> you're working on — see `docs/issues/ISS-0008.yaml` (BLOCKER, open).
+> This is the gate working as designed, not a bug in the gate itself.
+> A genuinely clean end-to-end run isn't reproducible until ISS-0008 is
+> resolved.
+
 To also capture compile/test timing, run the suite via the timing
 script instead — it appends one row to `docs/eval/dev-loop-timings.csv`
 per run:

@@ -945,3 +945,51 @@ history:
       schema-per-tenant, not tenant-column-only, when S2/S3 are first expanded into
       requirements; also explicitly not touched here). Flipped docs/requirements.yaml
       REQ-012 status to done.
+  - req: REQ-013
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-15T17:36:44Z
+    note: >
+      mix letflow.check (mix.exs aliases/0) runs format --check-formatted then
+      compile --warnings-as-errors then test as a single fail-fast gate, matching
+      REQ-003's precedent: a Mix alias (not a lib/mix/tasks/ custom task) was chosen
+      specifically because REQ-003's task-discovery-forces-full-compile problem
+      applies only to code living under lib/mix/tasks/, which this isn't — the
+      justification comment in mix.exs states this explicitly. `def cli do
+      [preferred_envs: ["letflow.check": :test]] end` was added after real testing
+      showed a custom alias name doesn't inherit the built-in `test` alias's
+      MIX_ENV auto-switch. RELEASE-VALIDATOR independently re-ran mix letflow.check
+      against the committed tree and got exit 1 at the format-check step — NOT a
+      clean pass — and ORCH separately re-ran it and got the identical result; both
+      independently confirmed this is the same failure already tracked as
+      docs/issues/ISS-0008.yaml (BLOCKER, pre-existing, reproduces against main
+      too): 5 files (lib/letflow/router.ex, lib/letflow/row_approval/approval.ex,
+      lib/letflow/events/transition_event.ex, test/letflow/process_instance_test.exs,
+      test/letflow/parallel_approval_test.exs) fail mix format --check-formatted
+      under this environment's Elixir/Mix 1.20.3 due to formatter paren-style drift,
+      unrelated to anything REQ-013 touched (mix.exs itself formats cleanly).
+      Correcting the framing here: the Step 2a commit message (6699644) describes
+      "a clean passing run," but that pass was only reachable by temporarily
+      reformatting the 5 ISS-0008 files for that one demonstration, then reverting
+      them — a legitimate one-time proof that the alias's pass-path works on clean
+      input, but not a state reproducible in the actual committed tree today. As of
+      this entry, running `mix letflow.check` against the committed tree correctly
+      exits 1 at the format-check step, and will continue to do so until ISS-0008
+      is resolved. This is REQ-013's mechanism working exactly as designed —
+      correctly detecting a real formatting problem and failing fast, with accurate
+      exit-code behavior and an accurate REQ-003-precedent justification comment,
+      all independently re-confirmed by RELEASE-VALIDATOR and ORCH — not a defect
+      in REQ-013's own deliverable. ISS-0008 remains open, separately tracked, and
+      out of REQ-013's scope to fix (bulk-reformatting 5 unrelated files was never
+      part of this requirement's acceptance criteria). README.md's "Running it"
+      section gained a `mix letflow.check` mention, with the same honest caveat
+      (not currently a clean run pending ISS-0008) rather than presenting it as
+      unconditionally working today. docs/migration/stage-0-foundation.md checked
+      and deliberately left untouched — REQ-013's acceptance criteria don't name a
+      stage/decision file for this step to update, and REQ-014 (still pending) is
+      the requirement that reviews all four S0 decisions/deliverables together and
+      appends the dated REVIEWER section to that file, same reasoning already
+      applied at REQ-011/REQ-012. Flipped docs/requirements.yaml REQ-013 status to
+      done: the check-gate mechanism itself is real, correct, and independently
+      verified twice; ISS-0008 is a separate, already-tracked, out-of-scope
+      blocker, not a defect in this requirement's own work.

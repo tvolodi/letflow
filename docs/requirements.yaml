@@ -174,8 +174,8 @@ requirements:
       R-Co's actual requirements: multi-realm/multi-tenant Keycloak,
       JIT user provisioning, JWKS caching, custom role registry. State
       which specific R-Co behaviors (name the file, e.g.
-      src/identity/manager.zig's JIT provisioning) a library would or
-      wouldn't cover out of the box.
+      src/oidc/jit_provisioning.zig's JIT provisioning orchestration)
+      a library would or wouldn't cover out of the box.
     acceptance_criteria:
       - "docs/migration/decisions/0002-oidc-integration.md exists with an explicit decision, not just a pros/cons list"
       - "decision names at least 2 real R-Co identity behaviors (from src/identity/ or src/oidc/, by filename) and states whether the chosen approach covers each"

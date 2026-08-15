@@ -4,11 +4,13 @@ Status: decided (REQ-011). Owner: ELIXIR-DEV.
 
 ## Question
 
-R-Co hand-rolls OIDC in `src/oidc/` (13 files) and `src/identity/` (18
-files, including `manager.zig` for JIT provisioning, `jwks_cache.zig`,
-`role_registry.zig`, `provider/` for Keycloak specifics). Does Letflow
-hand-roll the Elixir equivalent, or adopt a library (e.g. `assent`,
-`ueberauth` + an OIDC strategy)?
+R-Co hand-rolls OIDC in `src/oidc/` (13 files, including
+`jit_provisioning.zig` for JIT provisioning orchestration) and
+`src/identity/` (18 files, including `registry.zig`'s
+`createOrGetJitOidcUser` for the actual JIT upsert,
+`provider/oidc/jwks_cache.zig`, `role_registry.zig`, `provider/` for
+Keycloak specifics). Does Letflow hand-roll the Elixir equivalent, or
+adopt a library (e.g. `assent`, `ueberauth` + an OIDC strategy)?
 
 ## Decision
 
@@ -29,9 +31,9 @@ and any supervision-tree wiring it needs, is S1 execution work
 
 ## Reasoning
 
-**Note on source accuracy:** the Question section above (pre-existing, not edited by
-this decision) attributes JIT provisioning to `src/identity/manager.zig`. Verified
-directly against R-Co's source this session: that attribution is wrong. The file at
+**Note on source accuracy:** the Question section originally (pre-existing, not edited
+as part of REQ-011 itself) attributed JIT provisioning to `src/identity/manager.zig`.
+Verified directly against R-Co's source: that attribution was wrong. The file at
 `src/identity/manager.zig` does not exist — the actual path is
 `src/identity/provider/manager.zig`, and it is a thin multi-provider delegation facade
 (every public method one-line-forwards to a configured `IdentityProvider`; the only
@@ -40,9 +42,11 @@ non-trivial logic in it is a lexical JWT-shape pre-check used to decide whether
 semantics. The real JIT orchestration lives in **`src/oidc/jit_provisioning.zig`**,
 backed by **`src/identity/registry.zig`'s `createOrGetJitOidcUser`** function. This
 Reasoning cites those two correctly-attributed files below, not `manager.zig`. The
-skeleton's misattribution is filed separately as `docs/issues/ISS-0002.yaml` rather
-than corrected in place here (out of this requirement's file scope — see
-`lib/letflow/design/0002-oidc-integration-decision.md` §5, §7.1).
+skeleton's misattribution was filed separately as `docs/issues/ISS-0002.yaml` rather
+than corrected in place as part of REQ-011 itself (out of that requirement's file
+scope — see `lib/letflow/design/0002-oidc-integration-decision.md` §5, §7.1); it has
+since been fixed in the Question section above, in the same pass that resolved
+ISS-0002.
 
 For each R-Co behavior below: does `ueberauth_oidcc` cover it out of the box, or does
 Letflow still need custom code?

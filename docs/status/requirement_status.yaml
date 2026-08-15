@@ -993,3 +993,77 @@ history:
       done: the check-gate mechanism itself is real, correct, and independently
       verified twice; ISS-0008 is a separate, already-tracked, out-of-scope
       blocker, not a defect in this requirement's own work.
+  - req: REQ-101
+    event: cancelled
+    agent: ORCH
+    at: 2026-08-15T18:40:00Z
+    note: >
+      Claimed letflow-queue task 8 (REQ-101) intending to start it, then found
+      its target file, docs/migration/mvp-1-vertical-slice.md, does not exist
+      in the current tree. Traced via git log: created in commit aaf6ffb
+      ("docs: MVP-1 vertical-slice planning and full agent pipeline"), then
+      deleted in its entirety by commit d41beb0 (message "20260815", authored
+      directly by the user, not by any agent — a 90-line pure deletion with no
+      other changes). Asked the user how to proceed rather than guessing;
+      instructed to cancel the whole MVP-1 requirement chain rather than
+      restore the file. Marking REQ-101 status cancelled in
+      docs/requirements.yaml. REQ-102..108 (letflow-queue task ids 10-16) all
+      depend on REQ-101 directly or transitively and target the same deleted
+      file or its REVIEWER-signoff section — cancelled together in the same
+      pass, see their own entries below. No application code or other docs
+      touched by this event; this is a backlog-pruning correction, not an
+      implementation.
+  - req: REQ-102
+    event: cancelled
+    agent: ORCH
+    at: 2026-08-15T18:40:00Z
+    note: >
+      Cancelled alongside REQ-101 — see that entry for the full reasoning
+      (MVP-1 milestone dropped by the user via commit d41beb0, which deleted
+      docs/migration/mvp-1-vertical-slice.md with no replacement). REQ-102
+      depended on REQ-101 and had no independent target file of its own.
+  - req: REQ-103
+    event: cancelled
+    agent: ORCH
+    at: 2026-08-15T18:40:00Z
+    note: >
+      Cancelled alongside REQ-101 — see that entry for the full reasoning.
+      REQ-103 depended on REQ-101 and had no independent target file of its
+      own.
+  - req: REQ-104
+    event: cancelled
+    agent: ORCH
+    at: 2026-08-15T18:40:00Z
+    note: >
+      Cancelled alongside REQ-101 — see that entry for the full reasoning.
+      REQ-104 depended on REQ-102 and REQ-103, both cancelled.
+  - req: REQ-105
+    event: cancelled
+    agent: ORCH
+    at: 2026-08-15T18:40:00Z
+    note: >
+      Cancelled alongside REQ-101 — see that entry for the full reasoning.
+      REQ-105 depended on REQ-104, cancelled.
+  - req: REQ-106
+    event: cancelled
+    agent: ORCH
+    at: 2026-08-15T18:40:00Z
+    note: >
+      Cancelled alongside REQ-101 — see that entry for the full reasoning.
+      REQ-106 depended on REQ-105, cancelled.
+  - req: REQ-107
+    event: cancelled
+    agent: ORCH
+    at: 2026-08-15T18:40:00Z
+    note: >
+      Cancelled alongside REQ-101 — see that entry for the full reasoning.
+      REQ-107 depended on REQ-106, cancelled.
+  - req: REQ-108
+    event: cancelled
+    agent: ORCH
+    at: 2026-08-15T18:40:00Z
+    note: >
+      Cancelled alongside REQ-101 — see that entry for the full reasoning.
+      REQ-108 depended on REQ-107, cancelled, and its own acceptance criteria
+      required appending a REVIEWER section to the now-deleted
+      docs/migration/mvp-1-vertical-slice.md — moot with the file gone.

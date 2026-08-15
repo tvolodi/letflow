@@ -37,7 +37,7 @@ stages:
     name: foundation-and-scaffolding
     description: >
       Elixir project shape, Phoenix adoption decision, Ecto schema
-      strategy for the 143-migration data model this eventually needs
+      strategy for the 146-migration data model this eventually needs
       to cover, CI equivalent to `zig build check`, and a decision
       record on hand-rolled vs. library-backed for major subsystems
       (starting with OIDC). Everything else depends on this.
@@ -189,7 +189,7 @@ requirements:
     stage: S0
     impl_order: 6  # letflow-queue task id
     description: >
-      R-Co has 143 Postgres migrations under migrations/. Write
+      R-Co has 146 Postgres migrations under migrations/. Write
       docs/migration/decisions/0003-ecto-schema-strategy.md covering:
       whether Letflow ports the existing SQL schema as Ecto migrations
       1:1 (preserving table/column names for easier cross-referencing

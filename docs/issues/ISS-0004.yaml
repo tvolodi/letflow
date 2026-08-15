@@ -42,4 +42,14 @@ affected_files:
   - docs/migration/decisions/0003-ecto-schema-strategy.md
   - docs/requirements.yaml
 github_issue: https://github.com/tvolodi/letflow/issues/7
-status: open
+status: resolved
+resolved_at: 2026-08-15T19:37:00Z
+resolution: >
+  Fixed as recommended: docs/requirements.yaml's REQ-012 description and stage-0
+  summary description (docs/migration/README.md's S0 stage entry within
+  requirements.yaml) both changed from 143 to 146. 0003-ecto-schema-strategy.md's
+  Question section changed from 143 to 146, and the Reasoning section's note about
+  the discrepancy updated to record it as fixed rather than still-pending. REQ-102's
+  own description (cancelled along with the rest of the MVP-1 milestone) still says
+  143 in passing prose — left untouched since that requirement is dead text, not
+  worth editing. Applied directly by ORCH ahead of starting S1 implementation.

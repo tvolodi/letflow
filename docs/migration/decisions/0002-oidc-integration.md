@@ -1,6 +1,6 @@
 # 0002 — OIDC/Keycloak integration: hand-roll vs. library
 
-Status: pending (REQ-011). Owner: ELIXIR-DEV.
+Status: decided (REQ-011). Owner: ELIXIR-DEV.
 
 ## Question
 

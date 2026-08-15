@@ -27,4 +27,13 @@ description: >
 affected_files:
   - docs/migration/decisions/0001-web-framework.md
 github_issue: https://github.com/tvolodi/letflow/issues/5
-status: open
+status: resolved
+resolved_at: 2026-08-15T19:05:33Z
+resolution: >
+  Fixed already, as a side effect of ISS-0009's fix (PR #17, same underlying
+  staleness — ISS-0009 covered stage-0-foundation.md's Decisions list plus this exact
+  header line; ISS-0003 covers only the header line, filed separately/earlier).
+  docs/migration/decisions/0001-web-framework.md line 3 now reads "Status: decided
+  (REQ-010). Owner: ELIXIR-DEV.", matching 0002/0003's convention as recommended.
+  Claimed queue task 20 for this issue, found the fix already landed, closed without
+  duplicate work rather than re-editing an already-correct line.

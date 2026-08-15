@@ -270,7 +270,9 @@ requirements:
   - id: REQ-101
     title: Record a provisional MVP-1 web-framework note (not a full S0 decision)
     owner: ELIXIR-DEV
-    status: pending
+    status: cancelled  # MVP-1 milestone dropped by user, commit d41beb0 deleted
+      # docs/migration/mvp-1-vertical-slice.md (this and REQ-102..108's target file)
+      # with no replacement; see docs/status/requirement_status.yaml
     stage: S0
     milestone: MVP-1
     impl_order: 8  # letflow-queue task id
@@ -294,7 +296,7 @@ requirements:
   - id: REQ-102
     title: Minimal Ecto schema for MVP-1 (workflow_definitions + instances)
     owner: ELIXIR-DEV
-    status: pending
+    status: cancelled  # MVP-1 milestone dropped, see REQ-101's note
     stage: S0
     milestone: MVP-1
     impl_order: 10  # letflow-queue task id; depends_on translated to queue task id [8]
@@ -322,7 +324,7 @@ requirements:
   - id: REQ-103
     title: Static dev bearer-token auth plug (not real S1/OIDC)
     owner: ELIXIR-DEV
-    status: pending
+    status: cancelled  # MVP-1 milestone dropped, see REQ-101's note
     stage: S1
     milestone: MVP-1
     impl_order: 11  # letflow-queue task id; depends_on translated to queue task id [8]
@@ -348,7 +350,7 @@ requirements:
   - id: REQ-104
     title: Generalize ProcessInstance to run from a stored workflow_definitions row
     owner: ELIXIR-DEV
-    status: pending
+    status: cancelled  # MVP-1 milestone dropped, see REQ-101's note
     stage: S3
     milestone: MVP-1
     impl_order: 12  # letflow-queue task id; depends_on translated to queue task ids [10,11]
@@ -373,7 +375,7 @@ requirements:
   - id: REQ-105
     title: 3-4 Plug routes for MVP-1 (list/create/get/transition), token-gated
     owner: ELIXIR-DEV
-    status: pending
+    status: cancelled  # MVP-1 milestone dropped, see REQ-101's note
     stage: S4
     milestone: MVP-1
     impl_order: 13  # letflow-queue task id; depends_on translated to queue task id [12]
@@ -397,7 +399,7 @@ requirements:
   - id: REQ-106
     title: Point web/ at the running Letflow API using the dev bootstrap token
     owner: ELIXIR-DEV
-    status: pending
+    status: cancelled  # MVP-1 milestone dropped, see REQ-101's note
     stage: S8
     milestone: MVP-1
     impl_order: 14  # letflow-queue task id; depends_on translated to queue task id [13]
@@ -422,7 +424,7 @@ requirements:
   - id: REQ-107
     title: End-to-end MVP-1 smoke test (HTTP + manual GUI walkthrough)
     owner: TEST-RUNNER
-    status: pending
+    status: cancelled  # MVP-1 milestone dropped, see REQ-101's note
     stage: S4
     milestone: MVP-1
     impl_order: 15  # letflow-queue task id; depends_on translated to queue task id [14]
@@ -446,7 +448,7 @@ requirements:
   - id: REQ-108
     title: REVIEWER sign-off gating MVP-1 as done
     owner: REVIEWER
-    status: pending
+    status: cancelled  # MVP-1 milestone dropped, see REQ-101's note
     stage: S1
     milestone: MVP-1
     impl_order: 16  # letflow-queue task id; depends_on translated to queue task id [15]

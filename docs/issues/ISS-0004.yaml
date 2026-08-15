@@ -1,0 +1,45 @@
+id: ISS-0004
+title: REQ-012 description and 0003-ecto-schema-strategy.md skeleton cite 143 R-Co migrations; actual count is 146
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ012
+discovered_at: 2026-08-15T16:30:31Z
+severity: MINOR
+description: >
+  docs/requirements.yaml's REQ-012 description and
+  docs/migration/decisions/0003-ecto-schema-strategy.md's pre-existing Question
+  section both say "143 Postgres migrations" under R-Co's migrations/ directory.
+
+  Verified directly this session via `ls migrations/*.sql | wc -l` against
+  C:\Users\tvolo\dev\ai-dala\R-Co\migrations\ (lib/letflow/design/
+  0003-ecto-schema-strategy-decision.md section 2.1 has the full research): the
+  actual count is 146, not 143.
+
+  Breakdown of the 146:
+  - 78 files with a plain three-digit numeric prefix (001_event_store.sql ...
+    069_retroactive_tenant_schema_provision.sql), continuing into four-digit
+    prefixes up to 1162_plc01_module_id_unique_per_tenant.sql.
+  - 31 files with a GBL- prefix (GBL-073_... through GBL-142_...) — global-schema-only
+    migrations, exempt from a lint rule (lint_migration_schema.py) that otherwise
+    forbids non-GBL files from referencing public.<business_table>.
+  - The remainder are four-digit-numbered files without a GBL- prefix, continuing the
+    per-tenant-replayed numbering scheme into the 1100s.
+  - Numeric prefixes are not globally unique (050, 056, 1139, 1154 each used twice) —
+    R-Co's migration runner orders by full filename, not purely by numeric prefix.
+
+  This is the same class of stale-count discrepancy ISS-0001 found for REQ-010's route
+  count and ISS-0002 found for REQ-011's JIT-provisioning file path.
+
+  Not corrected in place as part of REQ-012 — out of that requirement's declared file
+  scope, which is limited to the Decision/Reasoning sections of
+  0003-ecto-schema-strategy.md (the Question section is pre-existing and explicitly
+  not to be rewritten as part of REQ-012). The Decision/Reasoning sections written for
+  REQ-012 cite the correct count (146) and note this discrepancy inline rather than
+  repeating the skeleton's error.
+
+  Recommended fix: update docs/requirements.yaml's REQ-012 description and
+  0003-ecto-schema-strategy.md's Question section to say "146 Postgres migrations."
+affected_files:
+  - docs/migration/decisions/0003-ecto-schema-strategy.md
+  - docs/requirements.yaml
+github_issue: https://github.com/tvolodi/letflow/issues/7
+status: open

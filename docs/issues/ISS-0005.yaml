@@ -1,0 +1,56 @@
+id: ISS-0005
+title: R-Co's adp-0x tenant-modeling design docs are stale relative to R-Co's actual schema-per-tenant implementation
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ012
+discovered_at: 2026-08-15T16:30:31Z
+severity: MAJOR
+description: >
+  R-Co's six src/design/adp-0x*.md documents (adp-01-tenant-column-event-store.md,
+  adp-02-tenant-columns-definition-instance-audit.md,
+  adp-03-tenant-context-resolution-api.md, adp-04-user-tenant-binding.md,
+  adp-04a-external-identity-linkage-user.md, adp-04b-tenant-realm-binding.md) all
+  describe the same additive tenant_id-column-in-one-shared-schema multi-tenancy
+  model. None of the six, read in full this session (lib/letflow/design/
+  0003-ecto-schema-strategy-decision.md sections 1 and 2.2 have the full research),
+  mentions schema-per-tenant, a tenant_schemas registry table, or a per-tenant
+  schema-provisioning function anywhere in their text.
+
+  R-Co's actual migration history (verified directly this session against
+  C:\Users\tvolo\dev\ai-dala\R-Co\migrations\) shows R-Co later layered a second,
+  orthogonal isolation mechanism on top of the tenant-column pattern:
+
+  - migrations/060_schema_per_tenant_bootstrap.sql (tagged SPT-01) creates a
+    public.tenant_schemas registry and a
+    public.bpm_provision_tenant_schema(p_tenant_id UUID) function that provisions a
+    real Postgres schema per tenant, and widens public.schema_migrations's primary
+    key to (schema_name, version).
+  - migrations/GBL-112_tnt01_drop_legacy_public_business_tables.sql drops 19 named
+    legacy public-schema business tables that migrations 001-059 had created before
+    migration 060 existed.
+  - src/db/migrations.zig's runForSchema replays the migration set once per
+    registered tenant schema under a search_path of <schema>,public.
+  - iss0150-gh482-20260810-adp0x-schema-fix.md documents six broken R-Co integration
+    tests that assumed table_schema = 'public' for tables that actually live under
+    tenant_default/per-tenant schemas post-GBL-112 — direct catalog-level
+    confirmation the cutover is real and complete, not aspirational.
+  - 1147_par01_events_partitioning.sql explicitly classifies events/events_archive as
+    PER_TENANT in R-Co's own dual-schema classification scheme.
+
+  The adp-0x docs were seemingly never updated to reflect this shift — they describe
+  R-Co's tenant-modeling approach as it stood at an earlier point in its evolution,
+  not its current, actual state. A future reader of the adp-0x docs alone (without
+  also reading the migration history) would be misled into thinking R-Co's isolation
+  model is tenant-column-only, when the current reality is schema-per-tenant with
+  tenant_id columns retained as an intra-schema mechanism.
+
+  This is a documentation-currency problem in R-Co's own src/design/ tree, not a
+  Letflow-side defect, and is out of scope for Letflow's own pipeline to fix in R-Co's
+  repository. Recorded here so a future reader isn't misled the same way this design's
+  first read nearly was. Letflow's own docs/migration/decisions/
+  0003-ecto-schema-strategy.md now explicitly reasons from R-Co's actual current
+  implementation (schema-per-tenant + intra-schema tenant_id) rather than the adp-0x
+  docs alone — see that file's Decision B and Reasoning sections.
+affected_files:
+  - docs/migration/decisions/0003-ecto-schema-strategy.md
+github_issue: https://github.com/tvolodi/letflow/issues/8
+status: open

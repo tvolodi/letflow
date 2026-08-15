@@ -1,0 +1,44 @@
+id: ISS-0009
+title: stage-0-foundation.md's "Decisions" list still shows 0001/0002/0003 as "pending" after REQ-010..012 landed
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ014
+discovered_at: 2026-08-15T18:00:00Z
+severity: MINOR
+description: >
+  docs/migration/stage-0-foundation.md's "## Decisions" section (lines 36-38) lists:
+
+    - decisions/0001-web-framework.md — pending (REQ-010)
+    - decisions/0002-oidc-integration.md — pending (REQ-011)
+    - decisions/0003-ecto-schema-strategy.md — pending (REQ-012)
+
+  All three requirements are done (docs/requirements.yaml, docs/status/
+  requirement_status.yaml) and all three decision files' own "Status:" lines
+  already correctly say "decided" (0001 still says "pending (REQ-010)" at its own
+  top line too — see below — but 0002 and 0003 say "Status: decided"). This
+  summary list in stage-0-foundation.md was never updated when REQ-010/011/012
+  closed, so it now contradicts the decision files it links to.
+
+  Separately, and slightly differently: decisions/0001-web-framework.md's own line 3
+  still reads "Status: pending (REQ-010)" even though REQ-010 is done and 0001's
+  Decision section is fully written — this is the same staleness one level down,
+  inside 0001 itself, not just in stage-0-foundation.md's summary of it. (0002 and
+  0003 both correctly say "Status: decided" at their own top line, so 0001 is the
+  outlier here.)
+
+  Found during REQ-014's cross-decision consistency review (docs/migration/
+  stage-0-foundation.md's new dated REVIEWER section). Not corrected in place as
+  part of that review — REQ-014's acceptance criteria call for adding a dated
+  REVIEWER section citing the four decisions, not for editing the pre-existing
+  "Decisions" list or reopening 0001's own file, and this is the same class of
+  stale-status drift the pipeline has consistently tracked as a separate issue
+  rather than silently fixed in passing (see ISS-0001, ISS-0004, ISS-0006).
+
+  Recommended fix: update stage-0-foundation.md's three list lines from "pending"
+  to "decided", and fix decisions/0001-web-framework.md's own line 3 from
+  "Status: pending (REQ-010)" to "Status: decided (REQ-010)" to match the pattern
+  already used in 0002/0003.
+affected_files:
+  - docs/migration/stage-0-foundation.md
+  - docs/migration/decisions/0001-web-framework.md
+github_issue: https://github.com/tvolodi/letflow/issues/15
+status: open

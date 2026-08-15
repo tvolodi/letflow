@@ -26,7 +26,17 @@ description: >
   Decision B and confirm the design uses schema-per-tenant (Ecto :prefix/dynamic-repo),
   not a tenant-column-only shared-schema approach. Close this issue once that citation
   is confirmed present in the first S2 or S3 design artefact.
+
+  Widened 2026-08-15 during REQ-014's cross-decision consistency review (WF02-REQ014):
+  the same concern applies to S1's identity/tenant-binding tables
+  (docs/migration/stage-1-identity.md), not just S2/S3 — those tables fall under 0003
+  Decision B like every other business table. stage-1-identity.md doesn't currently
+  assert the wrong model (it simply hasn't been expanded into schema-design requirements
+  yet), so this isn't a new contradiction, just the same follow-up extended to a third
+  stage doc. See docs/migration/stage-0-foundation.md's dated REQ-014 REVIEWER section,
+  item 4.
 affected_files:
+  - docs/migration/stage-1-identity.md
   - docs/migration/stage-2-event-store-definitions.md
   - docs/migration/stage-3-instance-engine.md
 github_issue: https://github.com/tvolodi/letflow/issues/10

@@ -26,6 +26,12 @@ from claiming the same one. Per the project's own operating principle
 discretion over which task to pick or whether to lock it — that decision is made by the
 service, not by an agent reading a file and choosing.
 
+Removing GitHub Issues as a control path also removed the one place a human could
+casually see queue state (open/claimed/done) without querying the service directly —
+`letflow-queue` closes that gap itself, as a function of the app, by mirroring tasks to
+GitHub Issues for **visibility only** (see "GitHub Issues visibility" below), rather
+than reintroducing Issues as something an agent reads to decide what to do.
+
 ---
 
 ## Hard rule: agents do not read `docs/requirements.yaml` to pick work
@@ -204,10 +210,34 @@ Concretely:
 
 ## Deployment status
 
-As of this file's creation, `letflow-queue` is scaffolded (own repo,
-`tvolodi/letflow-queue`) but not yet deployed — deployment is tracked as
-`ai-dala-infra`'s `T-0107` (setup) and `T-0108` (first deploy to test), which require
-the user to trigger `ai-dala-infra`'s own approval-gated workflow (Letflow's agents
-have no access to that repo or its host — see that project's `CLAUDE.md` "Hard rules").
-Until `T-0108` is `done`, treat `letflow-queue` as unreachable and use the single-host
-fallback.
+`letflow-queue` is deployed and live at `https://queue-test.ai-dala.com` (`ai-dala-infra`'s
+`T-0107`/`T-0108`, both `done` as of 2026-08-15). The S0/MVP-1 backlog (REQ-010..014,
+REQ-101..108) is registered — see `docs/status/requirement_status.yaml`'s
+`SCOPE-CHANGE` entry for the full REQ-ID ↔ queue-task-id mapping. A prod deployment
+(`queue.ai-dala.com`) is not yet planned — test only, per T-0107's notes.
+
+## GitHub Issues visibility (not a control path)
+
+`letflow-queue` mirrors tasks to GitHub Issues on `tvolodi/letflow` for human visibility
+— **this is display-only, not a second control mechanism.** The "no agent discretion"
+rule above still holds in full: an agent must never read or act on a GitHub Issue to
+select or lock work.
+
+- `register_task` best-effort creates a GitHub Issue (title = task title, body =
+  description + acceptance criteria) and stores the returned issue number on the task.
+  If GitHub is unreachable or `GITHUB_TOKEN`/`GITHUB_REPO` isn't configured on the
+  service, task registration still succeeds — this never blocks the core function.
+- `get_next_task` best-effort pulls open GitHub Issues first and imports any not yet
+  tracked (by issue number) as new tasks, before running its claim query — so an issue
+  opened directly on GitHub becomes claimable without anyone calling `register_task`
+  by hand. Imported tasks get `depends_on: []` (GitHub issues have no queue-native way
+  to express a dependency yet — a known limitation, not solved here) and a generic
+  single-item `acceptance_criteria` pointing at the issue body (no markdown parsing).
+- `release_lock` with `status: "done"` best-effort closes the linked GitHub Issue.
+
+**As of this writing, nothing files issues directly against `tvolodi/letflow` for
+`letflow-queue` to pull in** — the import direction exists and is tested, but the
+project intentionally isn't using it yet ("let it appear when the system is more or
+less ready," per the design conversation). Treat it as available, not yet exercised.
+
+See `letflow-queue`'s own `README.md` for the exact request/response shapes.

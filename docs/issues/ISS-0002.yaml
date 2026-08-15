@@ -1,0 +1,58 @@
+id: ISS-0002
+title: 0002-oidc-integration.md skeleton's Question section misattributes JIT provisioning to src/identity/manager.zig
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ011
+discovered_at: 2026-08-15T15:48:21Z
+severity: MINOR
+description: >
+  docs/migration/decisions/0002-oidc-integration.md's pre-existing Question section
+  (and REQ-011's own description field in docs/requirements.yaml) describe
+  src/identity/ as containing "manager.zig for JIT provisioning" — implying JIT user
+  provisioning is implemented at src/identity/manager.zig.
+
+  Verified directly against R-Co's source this session (lib/letflow/design/
+  0002-oidc-integration-decision.md sections 1-2 has the full research): that file
+  path does not exist. The actual path is src/identity/provider/manager.zig (nested
+  under provider/, not flat under identity/), and it is a thin multi-provider
+  delegation facade — every public method (verifyBearerToken, provisionUser,
+  provisionRealm, grantRoles, ...) is a one-line forward call to whatever
+  IdentityProvider is configured, returning error.NotImplemented if none is. The one
+  piece of real logic in that file is a lexical JWT-shape pre-check
+  (looksLikeJwt/isJwtSegmentLexicallyDecodable) used to decide whether dual_accept
+  mode should attempt OIDC verification at all — it does not implement JIT semantics.
+
+  The actual JIT provisioning orchestration lives in src/oidc/jit_provisioning.zig
+  (doc-comment: "OIDC-09 — JIT user provisioning orchestration... bridges the OIDC-08
+  claim-mapping output (IdentityContext) and the ADP-04a identity service
+  (createOrGetJitOidcUser)"), backed by src/identity/registry.zig's
+  createOrGetJitOidcUser function (idempotent upsert keyed on (tenant_id,
+  external_realm, external_id), hardcoded password_hash='__OIDC_ONLY__' and
+  auth_source='oidc', per-realm config, hard-fail-closed on provisioning failure).
+
+  This is the same kind of stale-source-reference discrepancy ISS-0001 found for
+  REQ-010's route/middleware counts. Not corrected in place as part of REQ-011 — out
+  of that requirement's declared file scope, which is limited to the
+  Decision/Reasoning sections of 0002-oidc-integration.md (the Question section is
+  pre-existing and explicitly not to be rewritten as part of REQ-011). The
+  Decision/Reasoning sections written for REQ-011 cite the correct files
+  (src/oidc/jit_provisioning.zig + src/identity/registry.zig's createOrGetJitOidcUser)
+  and note this discrepancy inline rather than repeating the skeleton's error.
+
+  Also flagged in the same research pass, lower confidence: ueberauth_keycloak_strategy
+  0.4.0's JWKS-caching behavior could not be confirmed or denied from its available
+  documentation this session (its README covers the authorize/token/userinfo URL
+  pattern, not token-verification internals) — not itself a stale-doc defect, but
+  worth a follow-up source read before anyone relies on/rules out that package's
+  caching behavior in a future decision.
+
+  Recommended fix: update docs/migration/decisions/0002-oidc-integration.md's Question
+  section (and REQ-011's description field in docs/requirements.yaml) to say
+  "src/oidc/jit_provisioning.zig (orchestration) + src/identity/registry.zig's
+  createOrGetJitOidcUser (the actual upsert)" instead of "src/identity/manager.zig",
+  and correct identity/jwks_cache.zig -> identity/provider/oidc/jwks_cache.zig in the
+  same section while there.
+affected_files:
+  - docs/migration/decisions/0002-oidc-integration.md
+  - docs/requirements.yaml
+github_issue: https://github.com/tvolodi/letflow/issues/4
+status: open

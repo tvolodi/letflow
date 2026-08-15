@@ -1157,3 +1157,83 @@ history:
       section added to stage-1-identity.md — that lands once all of S1's requirements
       (REQ-015..021) are done, mirroring stage-0-foundation.md's pattern of gating
       that section on the whole stage, not one requirement.
+  - req: REQ-016
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-15T22:18:55Z
+    note: >
+      Built the mix.exs dependency addition and supervision-tree wiring
+      docs/migration/decisions/0002-oidc-integration.md explicitly deferred to S1
+      execution: {:ueberauth_oidcc, "~> 0.4"} added to mix.exs (resolves
+      {:oidcc, "~> 3.7"} transitively), and lib/letflow/application.ex's children
+      list gained a supervised Oidcc.ProviderConfiguration.Worker child spec — one
+      realm/issuer, sourced from config :letflow, :oidc in config/dev.exs and
+      config/test.exs (issuer/provider_name read via Application config, never a
+      hardcoded literal), placed after Letflow.Repo and before Bandit remains last.
+      Full escalation history, worth stating plainly rather than burying, since this
+      is the pipeline's redundancy actually catching a real, would-have-shipped bug:
+      the original design (lib/letflow/design/req016-oidc-dependency-supervision.md)
+      left backoff_type unset, i.e. oidcc's library default of :stop. Empirical
+      testing during implementation — booting the app against the placeholder
+      unreachable .invalid issuer required by this requirement's own scope (no real
+      Keycloak instance exists yet) — found this crashes the ENTIRE Letflow
+      application, not just the OIDC worker: the worker exited within ~90ms with
+      reason {:configuration_load_failed, {:failed_connect, ...}}, restarted 4 times
+      in under 150ms, exceeding Letflow.Supervisor's default max_restarts: 3,
+      max_seconds: 5 (application.ex sets neither option, so Elixir's Supervisor
+      defaults applied), and the whole application crashed with "Application letflow
+      exited: shutdown", not recovering within a 30-second observation window.
+      ELIXIR-DEV correctly escalated rather than silently patching. The first
+      proposed fix (backoff_type: :retry) was checked against oidcc source
+      (deps/oidcc/src/oidcc_backoff.erl's type spec: stop | exponential | random |
+      random_exponential) and found invalid — :retry is not a member of the type,
+      and would have crashed the worker on the very first fetch failure with a
+      function_clause error, a strictly worse outcome. This was corrected to
+      backoff_type: :random, matching ueberauth_oidcc's own Application module's
+      chosen safe default for this exact case. Design doc updated (two rework
+      cycles at CODE-DESIGN-VALIDATOR: first fixed a self-contradicting comment
+      about backoff assumptions, second incorporated this empirical finding and
+      corrected the design to backoff_type: :random) and re-verified: with
+      backoff_type: :random in place, the application boots and stays up against
+      the same unreachable placeholder issuer, the worker retries indefinitely on a
+      random backoff interval instead of exiting, and no restart-loop or supervisor
+      destabilization occurs. REVIEWER independently confirmed via oidcc source
+      (oidcc_backoff.erl's priv_handle_retry/4 random clause) that this failure mode
+      is now provably excluded, not just empirically unlikely — the :random clause
+      structurally has no give-up/stop branch, so the worker process itself never
+      exits on repeated fetch failure and no supervisor restart is even triggered on
+      that path. All gates passed: CODE-DESIGN-VALIDATOR PASS after the two rework
+      cycles above; SECURITY-REVIEWER PASS; REVIEWER PASS with the independent
+      source-level confirmation just described; TEST-DESIGN-VALIDATOR PASS,
+      confirmed sound scope-test reasoning; TEST-RUNNER PASS, 35/35; RELEASE-
+      VALIDATOR PASS, independently reproducing the 16-second no-crash boot
+      observation with its own fresh boot run rather than trusting TEST-RUNNER's or
+      ELIXIR-DEV's report. Considered filing a separate docs/issues/ISS-00xx.yaml
+      entry for the backoff_type escalation, following this pipeline's established
+      convention (ISS-0001 through ISS-0009) of tracking discovered issues as a
+      record — decided against it: that convention exists for defects discovered
+      but deferred/out-of-scope/left for a later run (every existing ISS-000x entry
+      fits that shape). This escalation is structurally different: it was found AND
+      fixed within this same run, inside the design/implementation/review loop the
+      pipeline already runs on every requirement, with two independent gates
+      (CODE-DESIGN-VALIDATOR's rework cycle and REVIEWER's source-level
+      confirmation) already re-verifying the fix from first principles — a separate
+      issue record would duplicate, not add to, what's already fully captured in
+      lib/letflow/design/req016-oidc-dependency-supervision.md's own §7 (empirical
+      verification procedure and results) and §11 item 2 (the full open-question
+      resolution history: evidence, decision, value correction, confirmed retry
+      behavior) plus this entry. Flipped docs/requirements.yaml REQ-016 status to
+      done. README.md checked and deliberately left untouched: its "Running it" and
+      "What's here today" sections describe the actual runnable workflow-engine
+      slice and generic mix commands; no OIDC functionality is user-observable or
+      runnable yet (no route touches it, no real Keycloak issuer exists), same
+      reasoning already applied at REQ-011/012/015's DOC-UPDATER passes.
+      docs/guides/backend_developer_guide.md §6 checked and deliberately left
+      untouched: it already accurately describes the ueberauth_oidcc partial-
+      adoption decision and names REQ-015 through REQ-021 collectively as what
+      implements it at the decision level — it doesn't enumerate per-requirement
+      mechanics for REQ-015 either, so adding REQ-016-specific detail would break
+      that established pattern rather than follow it. docs/migration/stage-1-
+      identity.md's header line updated from "Requirements: REQ-015 (done); REQ-016
+      through REQ-021 (docs/requirements.yaml) pending." to "Requirements: REQ-015,
+      REQ-016 (done); REQ-017 through REQ-021 (docs/requirements.yaml) pending."

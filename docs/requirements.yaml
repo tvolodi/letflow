@@ -570,7 +570,7 @@ requirements:
   - id: REQ-016
     title: Add ueberauth_oidcc dependency and supervise Oidcc.ProviderConfiguration.Worker
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S1
     impl_order: 29  # letflow-queue task id
     description: >

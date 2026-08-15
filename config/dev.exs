@@ -13,3 +13,10 @@ config :letflow, Letflow.Repo,
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
+
+# Placeholder — no real Keycloak instance exists yet. Replace with a real
+# per-environment issuer URL once realm provisioning (deferred past S1, see
+# the S1 section note in docs/requirements.yaml) exists.
+config :letflow, :oidc,
+  issuer: "https://placeholder-keycloak.invalid/realms/bpm-default",
+  provider_name: Letflow.Oidc.DefaultProvider

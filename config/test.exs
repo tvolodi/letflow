@@ -8,3 +8,14 @@ config :letflow, Letflow.Repo,
   port: 5462,
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2
+
+# Placeholder — no real Keycloak instance exists yet. Replace with a real
+# per-environment issuer URL once realm provisioning (deferred past S1, see
+# the S1 section note in docs/requirements.yaml) exists.
+# Duplicated from config/dev.exs: this repo's config files don't cascade
+# (each env file loads independently via config.exs's
+# import_config "#{config_env()}.exs"), so the :oidc key must be set here
+# too or it's absent under MIX_ENV=test.
+config :letflow, :oidc,
+  issuer: "https://placeholder-keycloak.invalid/realms/bpm-default",
+  provider_name: Letflow.Oidc.DefaultProvider

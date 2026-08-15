@@ -1,0 +1,157 @@
+# Test run report — WF-02 Step 4
+# Written by TEST-RUNNER. RELEASE-VALIDATOR independently re-runs the suite
+# rather than trusting this report alone (core-directives.md).
+
+req_id: REQ-016
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: REQ-016
+date_utc: 2026-08-16
+git:
+  branch: feature/WF02-REQ016
+  commit: a65fefc08ba001c4ade0fab2dd4bb029b7cc7915
+  working_tree_note: >
+    Working tree has unstaged/untracked changes on top of the commit above
+    (config/dev.exs, config/test.exs, lib/letflow/application.ex, mix.exs,
+    mix.lock modified; lib/letflow/design/req016-oidc-dependency-supervision.md,
+    test/letflow/application_test.exs, test/specs/REQ-016.md untracked) — this
+    is REQ-016's implementation + design + test artefacts, not yet committed.
+    All checks below ran against this working tree exactly as it stands.
+
+environment:
+  toolchain: local (not Docker fallback)
+  elixir: "Erlang/OTP 29 [erts-17.0.5] ... Elixir 1.20.3 (compiled with Erlang/OTP 29)"
+  postgres_container: letflow-postgres-1 (already running, port 5462, confirmed via docker compose up -d)
+  deps_get: >
+    Ran `mix deps.get` before checks since mix.exs gained a new dependency
+    (ueberauth_oidcc ~> 0.4). Resolved cleanly, network access available in
+    this run: ueberauth_oidcc 0.4.2 and its transitive oidcc 3.8.0 both
+    fetched/unchanged, all other deps unchanged. No network-access limitation
+    hit this run (contrast README.md's Notes section caveat, which did not
+    apply here).
+  command_run: "mix letflow.check  (== format --check-formatted, compile --warnings-as-errors, test)"
+  note: >
+    Ran mix letflow.check end-to-end (exit 0), then re-ran each of its three
+    steps independently (mix format --check-formatted; mix compile
+    --warnings-as-errors --force; mix test) to get clean, individually-quotable
+    output/exit codes. Also ran mix test --trace once more to enumerate every
+    test by file/name for the breakdown below. All runs used the same working
+    tree, no code changes made by TEST-RUNNER.
+
+verdict: PASS
+
+checks:
+  format_check:
+    result: PASS
+    exit_code: 0
+    output: "(no output — mix format --check-formatted printed nothing, meaning no file needs reformatting)"
+
+  compile_warnings_as_errors:
+    result: PASS
+    exit_code: 0
+    output: "Compiling 14 files (.ex)\nGenerated letflow app"
+    note: >
+      Ran with --force (full recompile, not incremental) to make sure the new
+      Oidcc.ProviderConfiguration.Worker child-spec code and the new
+      :ueberauth_oidcc dependency were actually recompiled from scratch, not
+      served from a stale .beam cache. Zero warnings, zero errors.
+
+  test_suite:
+    result: PASS
+    exit_code: 0
+    summary_line_verbatim: "Result: 35 passed (2 properties, 33 tests)"
+    finished_line_verbatim: "Finished in 0.4 seconds (0.2s async, 0.2s sync)"
+    failures: 0
+    excluded: 0
+    skipped: 0
+    doctests: 0
+    note: >
+      Confirmed by three independent full-suite runs (mix letflow.check's own
+      test step, a standalone mix test run, and mix test --trace to enumerate
+      individual tests): all three produced "35 passed (2 properties, 33
+      tests)" with no Failures: section and exit code 0 every time. Searched
+      raw output for "Failures:", numbered failure entries ("  1)" etc.), and
+      any warning: lines beyond the two known pre-existing deprecation
+      warnings — none found.
+    known_noise_not_a_failure: >
+      (1) Two ExUnit.Case.register_test/4 deprecation warnings, same as
+      REQ-015's report (property "no sequence of actions produces an invalid
+      state" in process_instance_test.exs:64, and property "no sequence of
+      approvals produces an invalid state" in parallel_approval_test.exs:145)
+      — pre-existing, unrelated to REQ-016.
+      (2) A new log line this run, expected per REQ-016's own test spec:
+      "03:1x:xx.xxx [error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in
+      NNNN ms. Error Details: {:configuration_load_failed, ...:nxdomain}}" —
+      this is Oidcc.ProviderConfiguration.Worker logging its (expected, by
+      design) inability to reach the .invalid placeholder issuer configured
+      in config/test.exs. It is not a test failure: the worker's backoff_type
+      is :random (not the library default :stop, per the design doc's fix),
+      so this retry-and-continue behavior is exactly what criterion 4 asks
+      for, and the suite's 35/35 pass confirms it does not crash the app or
+      fail any test. Full SQL query debug logging also appears in raw output
+      (config/test.exs / test log level default) — verbose but not indicative
+      of any problem.
+
+test_file_breakdown:
+  # Cross-checked via mix test --trace, which enumerates every individual
+  # test by file and name — not just repeating the requirement's expected
+  # count, independently re-derived from the trace output.
+  pre_existing_18_confirmed_no_regressions:
+    - file: test/letflow/process_instance_test.exs
+      count: 5
+      detail: "1 property (no sequence of actions produces an invalid state) + 4 example tests"
+    - file: test/letflow/parallel_approval_test.exs
+      count: 8
+      detail: "1 property (no sequence of approvals produces an invalid state) + 7 example tests"
+    - file: test/letflow/row_approval_test.exs
+      count: 5
+      detail: "5 example tests"
+    subtotal: 18
+  req_015_14_confirmed_no_regressions:
+    - file: test/letflow/identity/tenant_test.exs
+      count: 4
+    - file: test/letflow/identity/user_test.exs
+      count: 6
+    - file: test/letflow/identity/group_test.exs
+      count: 1
+    - file: test/letflow/identity/tenant_role_test.exs
+      count: 3
+    subtotal: 14
+  new_req_016_3:
+    - file: test/letflow/application_test.exs
+      count: 3
+      detail: >
+        "the OIDC provider-configuration worker is alive and registered under
+        its configured name" (L#21); "Letflow.Supervisor supervises the OIDC
+        worker as a real child, not just config-referenced" (L#30); "the
+        worker's issuer/name are sourced from config, not hardcoded, and
+        match what booted" (L#44)
+    subtotal: 3
+  grand_total: 35
+  cross_check: >
+    18 pre-existing (confirmed unchanged from REQ-015's report) + 14 REQ-015
+    (confirmed unchanged) + 3 new REQ-016 = 35, matching the suite's own
+    "35 passed (2 properties, 33 tests)" summary line exactly (2 properties =
+    same two pre-existing property tests, unchanged; 33 example tests = 16
+    pre-existing + 14 REQ-015 + 3 REQ-016 example tests). No test was added,
+    removed, or renamed in any pre-existing file — this independently
+    verifies TEST-DESIGN-VALIDATOR's cited count of 35 rather than just
+    repeating it.
+
+acceptance_criteria_test_coverage_observed:
+  # Cross-referenced against test/specs/REQ-016.md and lib/letflow/design/
+  # req016-oidc-dependency-supervision.md, not re-derived from scratch.
+  criterion_1_mixexs_lists_dep_resolves: "PASS (direct inspection + live re-verification) — mix.exs line lists {:ueberauth_oidcc, \"~> 0.4\"}; mix deps.get this run resolved ueberauth_oidcc 0.4.2 and transitive oidcc 3.8.0 cleanly with real network access (not just reading a stale mix.lock); every green compile below is further continuous proof the modules actually resolved"
+  criterion_2_supervised_child_spec_config_sourced: "PASS — application_test.exs's three tests all passed: worker is a live registered pid under its configured name; Supervisor.which_children(Letflow.Supervisor) contains a [Oidcc.ProviderConfiguration.Worker] entry with a live pid; issuer/provider_name are read from Application.fetch_env!(:letflow, :oidc) and the live process is registered under that exact config-sourced name"
+  criterion_3_compile_warnings_as_errors: "PASS — mix compile --warnings-as-errors --force ran clean, zero warnings, exit 0, as part of both the standalone run and mix letflow.check"
+  criterion_4_unreachable_issuer_stated_explicitly: "PASS (stated here, not silently assumed) — config/test.exs points :oidc at the unreachable placeholder https://placeholder-keycloak.invalid/realms/bpm-default (RFC 2606 .invalid TLD, deliberately non-resolving). Every test run in this report shows the worker logging repeated 'Metadata load failed ... Retrying in NNNN ms ... :nxdomain' errors while the app and all 35 tests continue to pass — the worker does not crash the application. This is live evidence from this run, not a restatement of the design doc's separate manual 30-second boot observation (lib/letflow/design/req016-oidc-dependency-supervision.md §7/§11)."
+
+diagnosis: "N/A — no failures observed, nothing routed to ELIXIR-DEV or TEST-DESIGNER"
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-16-REQ-016.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

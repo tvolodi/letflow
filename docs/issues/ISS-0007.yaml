@@ -1,0 +1,33 @@
+id: ISS-0007
+title: Confirm stage-2/stage-3 migration design correctly reads 0003's Decision B (schema-per-tenant, not tenant-column-only) when their own schema work starts
+discovered_by: ORCH
+discovered_in_run: WF02-REQ012
+discovered_at: 2026-08-15T16:37:25Z
+severity: MINOR
+description: >
+  docs/migration/decisions/0003-ecto-schema-strategy.md's Cross-references section
+  states: "docs/migration/stage-2-event-store-definitions.md and
+  stage-3-instance-engine.md inherit this decision for their own table shapes (not
+  edited as part of this requirement) ... both should read Decision B as
+  'schema-per-tenant via Ecto prefix/dynamic-repo support, tenant_id retained
+  intra-schema,' not 'tenant_id column only,' when they begin their own schema work."
+
+  Flagged by REVIEWER during REQ-012's WF-02 Step 2d as a real gap, same as ISS-0006:
+  this follow-up existed only as prose inside the decision record, not as a tracked
+  issue. REVIEWER's own judgement was that this one is lower-risk than ISS-0006 since
+  CODE-DESIGN-VALIDATOR's consistency check on S2/S3's eventual design artefacts should
+  structurally catch a design that ignored Decision B independent of this ticket
+  existing — but filed anyway per the same "don't leave it as prose that could be
+  lost" discipline this pipeline applies to ISS-0004/ISS-0005.
+
+  Recommended action: when S2 (event-store-and-definitions) or S3 (instance-engine) is
+  first expanded into requirements, whichever CODE-DESIGNER pass handles the schema
+  design should explicitly cite docs/migration/decisions/0003-ecto-schema-strategy.md's
+  Decision B and confirm the design uses schema-per-tenant (Ecto :prefix/dynamic-repo),
+  not a tenant-column-only shared-schema approach. Close this issue once that citation
+  is confirmed present in the first S2 or S3 design artefact.
+affected_files:
+  - docs/migration/stage-2-event-store-definitions.md
+  - docs/migration/stage-3-instance-engine.md
+github_issue: https://github.com/tvolodi/letflow/issues/10
+status: open

@@ -900,3 +900,48 @@ history:
       pending) is the requirement that reviews all four S0 decision records together and
       updates that file; doing so here would be doing REQ-014's job early. Flipped
       docs/requirements.yaml REQ-011 status to done.
+  - req: REQ-012
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-15T16:43:11Z
+    note: >
+      docs/migration/decisions/0003-ecto-schema-strategy.md records three separate
+      decisions. A — Ecto-idiomatic schema redesign, not a 1:1 port of R-Co's raw-SQL
+      migrations, though meaningful table/column names are preserved for
+      cross-referencing during the port. B — multi-tenancy is represented as
+      schema-per-tenant via Ecto's :prefix/dynamic-repo query-prefixing support, with
+      tenant_id columns retained inside each schema as an intra-schema
+      invariant/query-predicate discipline — this explicitly follows R-Co's actual,
+      current, two-layer implementation (schema-per-tenant + intra-schema tenant_id),
+      not the six adp-0x design docs' original tenant-column-only proposal, which was
+      read in full and found to be stale relative to R-Co's real migration history
+      (migration 060's schema-per-tenant bootstrap, GBL-112's later legacy-table
+      drop). C — event-store tables get a distinct migration strategy from regular
+      CRUD tables: partitioning is deferred (matching R-Co's own history of adding it
+      only once row-count pressure justified it), but the primary key is defined as
+      (event_id, created_at) up front and a dedicated idempotency sidecar table is
+      built from the start, so the future partitioning retrofit doesn't also force a
+      breaking primary-key change or a compounded idempotency migration later.
+      RELEASE-VALIDATOR independently re-verified all three acceptance criteria plus
+      four load-bearing R-Co source citations before this update and returned PASS.
+      Updated 0003-ecto-schema-strategy.md's header (line 3) from "Status: pending
+      (REQ-012)" to "Status: decided (REQ-012)", matching the exact phrasing
+      0002-oidc-integration.md's header already established as this repo's decided-
+      header convention (0001-web-framework.md's own header is still stale, tracked
+      separately as ISS-0003 — not fixed here, out of this run's scope). README.md
+      checked and confirmed it documents nothing REQ-012 changed (same as REQ-010/011
+      — an internal architecture decision record, no change to documented
+      running/setup behavior). docs/migration/stage-0-foundation.md deliberately left
+      untouched, same reasoning as REQ-011's entry above — REQ-014 (still pending)
+      reviews all four S0 decision records together and updates that file. Four
+      issues were filed this run: ISS-0004 (REQ-012's description and 0003's Question
+      section cite a stale 143 R-Co migration count; actual is 146), ISS-0005 (R-Co's
+      six adp-0x tenant-modeling design docs are stale relative to R-Co's actual
+      schema-per-tenant implementation — an R-Co-side documentation-currency problem,
+      not a Letflow defect), ISS-0006 (docs/guides/backend_developer_guide.md §5's
+      "Multi-tenancy — not decided yet" framing now needs to point at this decision;
+      explicitly not touched here, out of REQ-012's own file scope), and ISS-0007
+      (confirm stage-2/stage-3 migration design docs correctly read Decision B as
+      schema-per-tenant, not tenant-column-only, when S2/S3 are first expanded into
+      requirements; also explicitly not touched here). Flipped docs/requirements.yaml
+      REQ-012 status to done.

@@ -1,0 +1,31 @@
+id: ISS-0006
+title: docs/guides/backend_developer_guide.md §5 needs to point at 0003-ecto-schema-strategy.md now that multi-tenancy is decided
+discovered_by: ORCH
+discovered_in_run: WF02-REQ012
+discovered_at: 2026-08-15T16:37:25Z
+severity: MINOR
+description: >
+  docs/guides/backend_developer_guide.md's §5 is titled "Multi-tenancy — not decided
+  yet" and tells ELIXIR-DEV not to assume any specific tenant-modeling mechanism until
+  docs/migration/decisions/0003-ecto-schema-strategy.md's REQ-012 lands. REQ-012 is now
+  done (schema-per-tenant via Ecto :prefix/dynamic-repo support, tenant_id retained
+  intra-schema — see 0003-ecto-schema-strategy.md's Decision B) — 0003's own
+  Cross-references section already states this explicitly: "docs/guides/
+  backend_developer_guide.md §5 ... is now superseded by this decision for any future
+  task reading that guide — a follow-up doc update ... should point §5 at this decision
+  once REQ-012 is marked done."
+
+  Flagged by REVIEWER during REQ-012's WF-02 Step 2d as a real gap: this follow-up
+  existed only as prose inside the decision record, not as a tracked issue, breaking
+  this same run's own established convention (ISS-0004 and ISS-0005 were filed as real
+  issues for comparable out-of-scope findings in the same diff). Filed here per that
+  flag rather than left to be lost.
+
+  Recommended fix: update docs/guides/backend_developer_guide.md §5's heading/content
+  to state the schema-per-tenant decision (with a pointer to
+  docs/migration/decisions/0003-ecto-schema-strategy.md), replacing the "not decided
+  yet" framing.
+affected_files:
+  - docs/guides/backend_developer_guide.md
+github_issue: https://github.com/tvolodi/letflow/issues/9
+status: open

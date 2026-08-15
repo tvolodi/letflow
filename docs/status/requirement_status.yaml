@@ -1067,3 +1067,38 @@ history:
       REQ-108 depended on REQ-107, cancelled, and its own acceptance criteria
       required appending a REVIEWER section to the now-deleted
       docs/migration/mvp-1-vertical-slice.md — moot with the file gone.
+  - req: REQ-014
+    event: done
+    agent: REVIEWER
+    at: 2026-08-15T18:46:34Z
+    note: >
+      Cross-decision consistency review of all four S0 decisions
+      (decisions/0001-web-framework.md Phoenix/REQ-010,
+      decisions/0002-oidc-integration.md ueberauth_oidcc partial adoption/REQ-011,
+      decisions/0003-ecto-schema-strategy.md schema-per-tenant with intra-schema
+      tenant_id/REQ-012, and the REQ-013 mix letflow.check check-gate choice).
+      Verdict: GO for S1. Checked pairwise: (1) 0002's OIDC/JIT tenant-resolution key
+      shape (tenant_id, external_realm, external_id) is consistent with 0003's
+      schema-per-tenant-plus-intra-schema-tenant_id model, confirmed independently
+      rather than assumed from 0003's own cross-reference claiming this; (2) 0001's
+      Phoenix choice and 0002's ueberauth_oidcc choice are mutually orthogonal — OIDC
+      attaches as a Plug/supervised-OTP-worker concern regardless of router, both
+      records already state and cross-reference this, confirmed on inspection; (3) the
+      REQ-013 check-gate is generic build tooling with no dependency on router/OIDC/
+      schema strategy in either direction; (4) noted (not a blocker) that
+      stage-1-identity.md doesn't yet cite 0003 Decision B for its own users/tenant
+      tables — forward-looking scope item for S1's CODE-DESIGNER pass, not a S1-start
+      blocker, since nothing currently in stage-1-identity.md asserts the wrong model.
+      Re-checked ISS-0006 and ISS-0007 (REVIEWER's own prior follow-ups from REQ-012):
+      both remain legitimately open and non-blocking for S1; ISS-0007 widened to also
+      name stage-1-identity.md per finding (4) above (docs/issues/ISS-0007.yaml,
+      github.com/tvolodi/letflow/issues/10). Filed docs/issues/ISS-0009.yaml (MINOR,
+      github.com/tvolodi/letflow/issues/15): stage-0-foundation.md's "Decisions" list
+      still shows 0001/0002/0003 as "pending" after REQ-010..012 landed, and
+      0001-web-framework.md's own line 3 still says "Status: pending (REQ-010)"
+      unlike 0002/0003's "Status: decided" — documentation-currency drift, not a
+      substantive contradiction, doesn't change the GO verdict. Dated REVIEWER section
+      appended to docs/migration/stage-0-foundation.md citing all four decisions by
+      file, per this requirement's acceptance criteria. Flipped docs/requirements.yaml
+      REQ-014 status to done. S1 (docs/migration/stage-1-identity.md) may now be
+      expanded into requirements.

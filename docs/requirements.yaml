@@ -236,7 +236,7 @@ requirements:
   - id: REQ-014
     title: Add REVIEWER verdict on S0's four decision records before S1 starts
     owner: REVIEWER
-    status: pending
+    status: done
     stage: S0
     impl_order: 9  # letflow-queue task id; depends_on translated to queue task ids [4,5,6,7]
     description: >

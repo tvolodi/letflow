@@ -62,7 +62,7 @@ defmodule Letflow.ProcessInstanceTest do
   # invariant directly — no sequence of actions can ever leave an instance
   # in something other than one of the four known states.
   property "no sequence of actions produces an invalid state" do
-    check all actions <- list_of(action_generator(), max_length: 20) do
+    check all(actions <- list_of(action_generator(), max_length: 20)) do
       id = start_instance!()
 
       Enum.each(actions, fn action ->

@@ -1,0 +1,6 @@
+# Elixir's formatter always writes LF; letting Windows checkouts convert
+# .ex/.exs to CRLF (via core.autocrlf) makes `mix format --check-formatted`
+# fail on files nobody actually edited. Force LF for source Git tracks,
+# regardless of local autocrlf settings. See docs/issues/ISS-0008.yaml.
+*.ex text eol=lf
+*.exs text eol=lf

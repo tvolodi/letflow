@@ -54,4 +54,34 @@ affected_files:
   - test/letflow/process_instance_test.exs
   - test/letflow/parallel_approval_test.exs
 github_issue: https://github.com/tvolodi/letflow/issues/12
-status: open
+status: resolved
+resolved_at: 2026-08-15T19:59:00Z
+resolution: >
+  Resolved via option (a): ran real `mix format` (not --check) on exactly the 5
+  affected files under this environment's actual toolchain (Elixir/Mix 1.20.3, OTP
+  29). Diff confirmed formatting-only (parenthesization of `plug`/`field`/`check all`
+  macro calls) via git diff before committing — no logic changes. mix.exs's `elixir:
+  "~> 1.14"` constraint left as-is (still the correct minimum-supported-version
+  declaration; the committed code simply now matches whatever formatter last touched
+  it, same approach used for the 5 files here).
+
+  A second, related issue surfaced while re-verifying: mix.exs itself started
+  failing the same check after the fix, not from any content change but from a
+  Windows-checkout artifact — this repo had no .gitattributes, so git's
+  core.autocrlf=true was converting .ex/.exs files (LF in the git object store) to
+  CRLF on checkout, which `mix format --check-formatted` treats as "not formatted"
+  since the formatter always writes LF. Added .gitattributes forcing `eol=lf` for
+  *.ex/*.exs, then `git add --renormalize` to confirm no other tracked Elixir file
+  was silently affected (none were — only the 5 just-reformatted files showed as
+  changed). This second finding wasn't part of ISS-0008's original scope (mix.exs
+  was confirmed clean when this issue was filed) but blocks the exact same command
+  and shares the same root symptom class, so fixed in the same pass rather than
+  filing a separate issue for a one-line .gitattributes addition.
+
+  Verified with real output: `mix letflow.check` now exits 0 — format check passes,
+  `compile --warnings-as-errors` passes, full test suite passes (18 tests: 2
+  properties, 16 tests, 0 failures). This is the first genuinely clean run since
+  REQ-013 landed; REQ-013's requirement_status.yaml entry can now be considered
+  fully satisfied in practice, not just mechanism-correct. Decided and executed
+  autonomously per the user's standing instruction not to be asked to choose between
+  implementation-level technical options.

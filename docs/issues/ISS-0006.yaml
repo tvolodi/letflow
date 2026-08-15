@@ -28,4 +28,16 @@ description: >
 affected_files:
   - docs/guides/backend_developer_guide.md
 github_issue: https://github.com/tvolodi/letflow/issues/9
-status: open
+status: resolved
+resolved_at: 2026-08-15T19:29:00Z
+resolution: >
+  Fixed as recommended: docs/guides/backend_developer_guide.md §5 heading changed from
+  "Multi-tenancy — not decided yet" to "Multi-tenancy — schema-per-tenant (decided)",
+  content now states Decision B directly and points at
+  docs/migration/decisions/0003-ecto-schema-strategy.md, also naming S1's own
+  tenant-scoped tables as following the same decision. §6 (OIDC/identity) fixed in the
+  same pass — same class of staleness, same file, adjacent section, no separate issue
+  existed for it — now states 0002's partial-adoption decision and correctly notes
+  REQ-103 was never built (MVP-1 cancelled) rather than still describing it as
+  not-yet-decided prior art. Applied directly by ORCH ahead of starting S1
+  implementation work, since ELIXIR-DEV will read this guide for REQ-015..021.

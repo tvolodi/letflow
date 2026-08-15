@@ -13,6 +13,10 @@ defmodule Letflow.MixProject do
     ]
   end
 
+  def cli do
+    [preferred_envs: ["letflow.check": :test]]
+  end
+
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
@@ -40,7 +44,15 @@ defmodule Letflow.MixProject do
     [
       "ecto.setup": ["ecto.create", "ecto.migrate"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
-      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"]
+      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
+      # `mix.exs` alias, not a `lib/mix/tasks/` custom task: REQ-003's
+      # task-discovery-forces-compile problem (`docs/status/requirement_status.yaml`)
+      # applied only to a module Mix must load from `lib/mix/tasks/` before running it,
+      # and only broke a *timing measurement* that needed a genuinely-first compile to
+      # measure — this alias needs neither (it wants `mix compile` to run as one of its
+      # own steps regardless, and reads from `mix.exs` data, never from a compiled
+      # `lib/` module), so the concern doesn't apply.
+      "letflow.check": ["format --check-formatted", "compile --warnings-as-errors", "test"]
     ]
   end
 end

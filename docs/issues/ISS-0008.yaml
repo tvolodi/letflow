@@ -1,0 +1,57 @@
+id: ISS-0008
+title: mix format --check-formatted fails on pre-existing files under Elixir 1.20.3 (formatter paren-style drift vs. project's declared ~> 1.14)
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ013
+discovered_at: 2026-08-15T17:16:09Z
+severity: BLOCKER
+description: >
+  While implementing REQ-013's `mix letflow.check` alias (mix.exs aliases/0 —
+  format --check-formatted, then compile --warnings-as-errors, then test), the
+  first real end-to-end run of the new alias against this environment's clean
+  checkout failed at step 1 (`mix format --check-formatted`), not because of
+  anything introduced by REQ-013's own change, but because five pre-existing,
+  already-committed files fail the format check under this sandbox's toolchain:
+  Elixir 1.20.3 / Mix 1.20.3 (OTP 29). `mix.exs` itself (the only file this
+  requirement's scope touches) passes `mix format --check-formatted` cleanly —
+  the failures are entirely in unrelated files.
+
+  Root cause: this project's mix.exs declares `elixir: "~> 1.14"`, but the
+  formatter's paren-insertion rules for macro-like calls (`plug`, `field`,
+  `check all`) changed between the Elixir version these files were originally
+  formatted under and this environment's 1.20.3. Confirmed non-branch-specific:
+  the identical failure reproduces against `main`'s copy of
+  lib/letflow/router.ex via `git show main:lib/letflow/router.ex | mix format
+  --check-formatted -` (exit 1, same diff), so this is a pre-existing,
+  repo-wide condition, not something introduced by the feature/WF02-REQ013
+  branch or by this task.
+
+  Files that fail, with the specific paren-style diff mix format now wants:
+    - lib/letflow/router.ex (`plug Plug.Parsers, ...` -> `plug(Plug.Parsers, ...)`, `plug :match` -> `plug(:match)`, `plug :dispatch` -> `plug(:dispatch)`)
+    - lib/letflow/row_approval/approval.ex (`field :x, :type` -> `field(:x, :type)`, three fields)
+    - lib/letflow/events/transition_event.ex (`field :x, :type` -> `field(:x, :type)`, four fields)
+    - test/letflow/process_instance_test.exs (`check all actions <- ...` -> `check all(actions <- ...)`)
+    - test/letflow/parallel_approval_test.exs (`check all actions <- ...` -> `check all(actions <- ...)`)
+
+  Impact: blocks REQ-013's acceptance criterion 3 (a genuine clean/passing
+  end-to-end `mix letflow.check` run) in this environment, since step 1 now
+  fails on files this task did not touch and is out of scope to bulk-reformat
+  under REQ-013's explicit scope boundary (mix.exs alias entry only). Also
+  blocks any future CI run pinned to a similarly recent Elixir/Mix toolchain
+  from ever getting a clean `mix format --check-formatted` on this codebase
+  as-is.
+
+  Recommended action: either (a) run `mix format` for real (not --check) on the
+  five affected files under this project's actual target toolchain and commit
+  the reformatted output as its own small fix, or (b) pin the project's CI/dev
+  toolchain to an Elixir version whose formatter output matches what's already
+  committed, and document the pin in docs/guides/backend_developer_guide.md
+  §1. Whoever picks this up should confirm which of (a)/(b) matches the
+  project's actual toolchain decision before acting — not assumed here.
+affected_files:
+  - lib/letflow/router.ex
+  - lib/letflow/row_approval/approval.ex
+  - lib/letflow/events/transition_event.ex
+  - test/letflow/process_instance_test.exs
+  - test/letflow/parallel_approval_test.exs
+github_issue: https://github.com/tvolodi/letflow/issues/12
+status: open

@@ -21,14 +21,22 @@ AGENT_ID: TEST-DESIGNER
 
 ## Scope test — run this first
 
-Check Step 2a/2b's `artifacts_out`: does it contain any `.ex`/`.exs`/`.tsx`/`.ts` file?
-A requirement whose only output is `.md` files (a decision record, a stage-doc update)
-has no executable surface to write a test against. If so: record "out of scope — no
-executable surface" and route directly to RELEASE-VALIDATOR (Step 5), skipping
-TEST-DESIGN-VALIDATOR and TEST-RUNNER entirely — see
+Check Step 2a/2b's `artifacts_out`: is there **application-executable surface** — real
+Elixir/frontend logic — to write a test against? File extension is a starting
+heuristic, not the actual test: `mix.exs`, `.formatter.exs`, and similar `.exs`
+project-config files literally match a bare `.ex`/`.exs` check while containing zero
+application logic (a `mix.exs` alias declaration is verified by running the command it
+declares and quoting real output, not by an ExUnit test asserting on the declaration
+itself — that would be manufactured busywork, not real coverage). A requirement whose
+only output is `.md` files, or `.ex`/`.exs` files that are pure project/build
+configuration rather than application logic, has no executable surface to write a test
+against. If so: record "out of scope — no executable surface (docs-only or
+build-config-only: <list the files, with a one-line note on why any `.ex`/`.exs` file
+is config rather than logic>)" and route directly to RELEASE-VALIDATOR (Step 5),
+skipping TEST-DESIGN-VALIDATOR and TEST-RUNNER entirely — see
 `docs/agents/workflows/WF-02_requirement_implementation.md` Step 3 for the full
-procedure. Do not invent a test with nothing real to fail against just to produce an
-artifact.
+procedure and worked examples. Do not invent a test with nothing real to fail against
+just to produce an artifact.
 
 ## What you do
 

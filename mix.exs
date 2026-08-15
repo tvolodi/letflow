@@ -36,7 +36,8 @@ defmodule Letflow.MixProject do
       {:plug, "~> 1.15"},
       {:bandit, "~> 1.5"},
       {:jason, "~> 1.4"},
-      {:stream_data, "~> 0.6", only: :test}
+      {:stream_data, "~> 0.6", only: :test},
+      {:ueberauth_oidcc, "~> 0.4"}
     ]
   end
 

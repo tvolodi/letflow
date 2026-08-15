@@ -7,8 +7,16 @@ defmodule Letflow.Application do
 
   @impl true
   def start(_type, _args) do
+    oidc_config = Application.fetch_env!(:letflow, :oidc)
+
     children = [
       Letflow.Repo,
+      {Oidcc.ProviderConfiguration.Worker,
+       %{
+         issuer: Keyword.fetch!(oidc_config, :issuer),
+         name: Keyword.fetch!(oidc_config, :provider_name),
+         backoff_type: :random
+       }},
       {Registry, keys: :unique, name: Letflow.Registry},
       Letflow.InstanceSupervisor,
       Letflow.ApprovalSupervisor,

@@ -1,18 +1,18 @@
 # 0001 — Web framework: Phoenix vs. Plug/Bandit
 
-Status: pending (REQ-010). Owner: ELIXIR-DEV.
+Status: decided (REQ-010). Owner: ELIXIR-DEV.
 
 ## Question
 
 Letflow currently uses plain Plug + Bandit for 3 routes
-(`lib/letflow/router.ex`). R-Co's `src/api/routes/` has 22 route modules:
+(`lib/letflow/router.ex`). R-Co's `src/api/routes/` has 24 route modules:
 
 ```
 audit.zig  definitions.zig  definition_rollback.zig  dlq.zig
 entities.zig  health.zig  identity.zig  instances.zig  metrics.zig
 onboarding.zig  openapi.zig  pin_rebind.zig  platform_migrations.zig
 promotion.zig  promotions.zig  promotion_assertion.zig
-promotion_read.zig  services.zig  simulation_test.zig
+promotion_read.zig  promotion_review.zig  services.zig  simulation_test.zig
 solution_packs.zig  tasks.zig  tenant_config.zig  webhooks.zig
 ```
 
@@ -34,18 +34,18 @@ owns the actual execution — this record does not touch `lib/letflow/router.ex`
 `mix.exs`).
 
 Note on the route count this decision is reasoned against: R-Co's `src/api/routes/`
-contains **24** route modules, not the 22 cited in this file's own Question section
-above and in `docs/requirements.yaml`'s REQ-010 entry. That count was verified directly
-against disk twice during design (`lib/letflow/design/0001-web-framework-decision.md`
-§2.1) and includes `promotion_review.zig`, which is present on disk and in neither this
-file's original Question-section listing nor REQ-010's description. 24 is ground truth
-and is what the reasoning below uses; the stale 22 in the Question section and in
-`docs/requirements.yaml` is tracked separately as `docs/issues/ISS-0001.yaml` rather than
-silently edited here (out of this requirement's file scope — see the design's §3 "What
-NOT to do"). The middleware count of 7 (used below) already matches this file's own
-Question section and `docs/migration/stage-4-api-surface.md`; only REQ-010's
-`description` field is stale on that count (says 6, omits `content_type`), also tracked
-in ISS-0001.
+contains **24** route modules. That count was verified directly against disk twice
+during design (`lib/letflow/design/0001-web-framework-decision.md` §2.1) and includes
+`promotion_review.zig`. At the time this record was originally written, this file's own
+Question section and `docs/requirements.yaml`'s REQ-010 entry both stated a stale **22**
+(omitting `promotion_review.zig`, among other gaps), tracked as
+`docs/issues/ISS-0001.yaml`; both have since been corrected in place (Question section
+above, and REQ-010's `description`/`acceptance_criteria` in `docs/requirements.yaml`) to
+match the 24 ground truth the reasoning below always used. The middleware count of 7
+(used below) already matched this file's own Question section and
+`docs/migration/stage-4-api-surface.md` from the start; only REQ-010's `description`
+field was stale on that count (said 6, omitted `content_type`) — also corrected as part
+of the same ISS-0001 fix.
 
 ## Reasoning
 

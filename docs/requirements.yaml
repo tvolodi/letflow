@@ -141,10 +141,10 @@ requirements:
     impl_order: 4  # letflow-queue task id (registered retroactively, already done)
     description: >
       Letflow currently uses plain Plug + Bandit for 3 routes
-      (lib/letflow/router.ex). R-Co's src/api/routes/ has 22 route
-      modules plus a 6-module middleware chain
+      (lib/letflow/router.ex). R-Co's src/api/routes/ has 24 route
+      modules plus a 7-module middleware chain
       (src/api/middleware/: auth, rate_limit, quota_enforcement,
-      tenant_status, trace, validate). Write
+      tenant_status, trace, validate, content_type). Write
       docs/migration/decisions/0001-web-framework.md recording
       whether Letflow migrates to Phoenix (router pipelines, plugs,
       controllers) or continues hand-rolling on Plug/Bandit at this
@@ -155,7 +155,7 @@ requirements:
     acceptance_criteria:
       - "docs/migration/decisions/0001-web-framework.md exists with an explicit decision (Phoenix | Plug/Bandit), not just a pros/cons list"
       - "decision explicitly reasons about src/api/middleware/'s 6 modules and how each maps to the chosen framework's mechanism (Phoenix plug pipeline vs. hand-rolled Plug.Builder chain)"
-      - "decision references the actual route count (22, from src/api/routes/) as part of the reasoning, not a rounded/guessed number"
+      - "decision references the actual route count (24, from src/api/routes/) as part of the reasoning, not a rounded/guessed number"
     depends_on: []
 
   - id: REQ-011

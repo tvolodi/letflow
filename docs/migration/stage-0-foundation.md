@@ -33,9 +33,9 @@ one command. → REQ-013.
 
 ## Decisions
 
-- [`decisions/0001-web-framework.md`](decisions/0001-web-framework.md) — pending (REQ-010)
-- [`decisions/0002-oidc-integration.md`](decisions/0002-oidc-integration.md) — pending (REQ-011)
-- [`decisions/0003-ecto-schema-strategy.md`](decisions/0003-ecto-schema-strategy.md) — pending (REQ-012)
+- [`decisions/0001-web-framework.md`](decisions/0001-web-framework.md) — decided (REQ-010)
+- [`decisions/0002-oidc-integration.md`](decisions/0002-oidc-integration.md) — decided (REQ-011)
+- [`decisions/0003-ecto-schema-strategy.md`](decisions/0003-ecto-schema-strategy.md) — decided (REQ-012)
 - Check-gate choice (Mix alias vs. standalone script) — recorded
   directly in REQ-013's completion note in
   `docs/status/requirement_status.yaml`, not a separate decision file;

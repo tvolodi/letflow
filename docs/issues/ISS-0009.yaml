@@ -41,4 +41,12 @@ affected_files:
   - docs/migration/stage-0-foundation.md
   - docs/migration/decisions/0001-web-framework.md
 github_issue: https://github.com/tvolodi/letflow/issues/15
-status: open
+status: resolved
+resolved_at: 2026-08-15T19:03:12Z
+resolution: >
+  Fixed as recommended: docs/migration/stage-0-foundation.md's Decisions list lines
+  changed from "pending" to "decided" for all three (0001/0002/0003).
+  decisions/0001-web-framework.md's own line 3 changed from "Status: pending (REQ-010)"
+  to "Status: decided (REQ-010)", matching 0002/0003's existing pattern. Applied
+  directly by ORCH (small, mechanical, no design ambiguity) ahead of starting S1 work,
+  alongside the related ISS-0001 fix touching the same file.

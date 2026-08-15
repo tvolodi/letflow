@@ -469,3 +469,320 @@ requirements:
       - "verdict explicitly confirms each of REQ-101..106's deliverables carries honest provisional/narrow framing, citing the specific moduledoc/note in each"
       - "verdict explicitly checks REQ-010/011/012's current status in docs/requirements.yaml and states whether any MVP-1 deliverable conflicts with a decision recorded there"
     depends_on: [REQ-107]
+
+  # ---------------------------------------------------------------
+  # S1 — identity-and-multi-tenancy
+  # Expanded once S0's four decision records were REVIEWER-gated GO
+  # for S1 (docs/migration/stage-0-foundation.md's dated 2026-08-15
+  # REVIEWER section). Inherits docs/migration/decisions/
+  # 0002-oidc-integration.md (ueberauth_oidcc for token-verification/
+  # JWKS-caching only; JIT provisioning, tenant<->realm binding, role
+  # registry, and Keycloak Admin REST API provisioning are ALL
+  # hand-rolled regardless of library choice) and
+  # 0003-ecto-schema-strategy.md Decision B (schema-per-tenant via
+  # Ecto :prefix/dynamic-repo, tenant_id retained intra-schema — NOT
+  # a tenant-column-only model). Real R-Co source ported:
+  # src/identity/ (18 files) + src/oidc/ (13 files) + the identity
+  # half of src/api/middleware/ (auth.zig, tenant_status.zig).
+  #
+  # Scope deliberately excludes (flagged as future work, not silently
+  # dropped): OIDC-14's full realm-provisioning profile (token
+  # lifetimes/password policy/MFA — realm_provisioning.zig),
+  # OIDC-15's two-phase realm deletion (realm_deletion.zig),
+  # realm_seed.zig's seed-artifact validation, migration_helper.zig's
+  # bulk internal-to-OIDC user migration tooling,
+  # verification_benchmark.zig, test_token_helper.zig, and
+  # agent_lifecycle.zig's IdP-scope model for non-human actors — none
+  # of these block a real OIDC login + JIT provisioning + tenant
+  # resolution + role lookup working end to end, which is what
+  # "S1 must be real before S2" (docs/migration/README.md) requires.
+  # Onboarding's tenant-creation admin flow (onboarding.zig) and the
+  # Keycloak Admin REST API adapter itself
+  # (provider/adapters/keycloak/provider.zig) are also deferred past
+  # this batch — see REQ-016's description for why realm provisioning
+  # can be stubbed for S1's first pass.
+  # ---------------------------------------------------------------
+
+  - id: REQ-015
+    title: Ecto schema/migrations for tenants, users, and tenant_role (Decision B)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S1
+    impl_order: TBD  # letflow-queue task id, assigned at registration
+    description: >
+      Add priv/repo/migrations and corresponding lib/letflow/ Ecto schema
+      modules for the three identity tables S1's later requirements build on,
+      following docs/migration/decisions/0003-ecto-schema-strategy.md Decision
+      B (schema-per-tenant via Ecto :prefix/dynamic-repo, tenant_id retained
+      as an intra-schema column) and Decision A (Ecto-idiomatic: binary_id PK,
+      Ecto.Enum for status columns, names preserved where R-Co's carry
+      meaning). Port the column shapes from R-Co's src/design/adp-04-user-tenant-binding.md,
+      adp-04a-external-identity-linkage-user.md, and adp-04b-tenant-realm-binding.md
+      (all three read in full for this stage's expansion):
+      - tenants: id (binary_id), slug (unique), display_name, status
+        (Ecto.Enum, e.g. active/migrating per src/api/middleware/tenant_status.zig's
+        MIGRATING check), idp_realm_id (string, nullable at the column level but
+        enforced non-null-for-non-default-tenant by application logic per
+        adp-04b — do not enforce that conditional rule via a DB CHECK
+        constraint, it depends on runtime OIDC-mode config), plus a unique
+        index on idp_realm_id (partial: WHERE idp_realm_id IS NOT NULL, per
+        adp-04b's Open Question OQ-2 resolved in favor of partial — R-Co's own
+        adp-04b leaves this open, so name the choice explicitly in the
+        migration's moduledoc rather than silently picking one).
+      - users: id (binary_id), tenant_id (binary_id, NOT NULL — no
+        default-tenant-UUID backfill needed since Letflow has no legacy rows),
+        username, display_name, email, password_hash, status (Ecto.Enum:
+        active/inactive), auth_source (Ecto.Enum: internal/oidc, default
+        internal), external_id (string, nullable), external_realm (string,
+        nullable), inserted_at/updated_at. Add a partial unique index on
+        (external_realm, external_id) WHERE external_id IS NOT NULL (adp-04a's
+        NULL-collision-safe form, not a plain unique constraint) and an index
+        on (tenant_id, status, inserted_at) per adp-04's
+        idx_users_tenant_status_created. Do NOT add a CHECK constraint
+        enforcing auth_source-vs-external-fields consistency (adp-04a's rule 2)
+        at the DB level for this requirement — note in the schema moduledoc
+        that this is an application-level (changeset) invariant, ported in
+        REQ-018/REQ-019, not a migration-level one.
+      - tenant_role: id (binary_id), name (string, unique per tenant schema),
+        group_id (binary_id — references a groups table; if no groups table
+        exists yet in Letflow, add a minimal groups table too: id, tenant_id,
+        name — src/identity/role_registry.zig's upsertRole checks group
+        existence before writing), inserted_at. Schema module should expose
+        the same shape as src/identity/role_registry.zig's TenantRoleStore
+        will need in REQ-020 (list, upsert-by-name).
+      Per Decision B, all three tables are created via Ecto's :prefix option
+      (or documented as pending the tenant-schema-provisioning mechanism if
+      that mechanism itself isn't built yet — state explicitly in the
+      migration moduledoc whether this requirement also builds the minimal
+      tenant-schema-provisioning function/registry, or targets a single
+      default schema for now with the multi-schema provisioning path flagged
+      as a follow-up; either is acceptable but must be stated, not left
+      ambiguous, since REQ-016..021 build on top of whichever choice is made
+      here).
+    acceptance_criteria:
+      - "priv/repo/migrations gains migrations for tenants, users, groups, and tenant_role, all applying cleanly via mix ecto.migrate"
+      - "corresponding lib/letflow/ Ecto.Schema modules exist for all four tables with @moduledoc citing the R-Co adp-04/04a/04b design doc each table's shape is ported from"
+      - "the migration moduledoc explicitly states whether Ecto :prefix/schema-per-tenant provisioning is built in this requirement or deferred, per this requirement's own description"
+      - "users has a partial unique index on (external_realm, external_id) WHERE external_id IS NOT NULL, not a plain unique constraint"
+      - "no DB-level CHECK constraint enforces auth_source-vs-external-fields consistency; the schema moduledoc states this is deferred to application-level changesets"
+    depends_on: []
+
+  - id: REQ-016
+    title: Add ueberauth_oidcc dependency and supervise Oidcc.ProviderConfiguration.Worker
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S1
+    impl_order: TBD  # letflow-queue task id, assigned at registration
+    description: >
+      Execute the mix.exs dependency addition and supervision-tree wiring
+      docs/migration/decisions/0002-oidc-integration.md explicitly deferred to
+      S1 execution (see that decision's "Deferred to S1 execution" closing
+      paragraph). Add {:ueberauth_oidcc, "~> 0.4"} to mix.exs deps (pulls in
+      {:oidcc, "~> 3.7"} transitively). Add a supervised child spec for
+      Oidcc.ProviderConfiguration.Worker to lib/letflow/application.ex's
+      children list — one per configured realm/issuer, per 0002's Reasoning
+      section naming this as "likely one per configured realm/issuer, given
+      the per-realm JIT config invariant in src/oidc/jit_provisioning.zig."
+      Since Letflow has no real Keycloak instance running yet and no realm
+      provisioning built (realm_provisioning.zig/onboarding.zig are
+      explicitly out of this S1 batch's scope, see the S1 section comment
+      above this requirement), configure exactly one realm/issuer from
+      config/dev.exs (or config/runtime.exs) pointed at a config-supplied
+      issuer URL — do not hardcode a literal Keycloak URL. If no reachable
+      OIDC issuer exists in this environment (no Keycloak container
+      available), the worker's supervised start is still demonstrated as
+      correctly wired (child spec present, application starts under
+      supervision) — document explicitly if the worker itself cannot
+      complete its first metadata fetch for lack of a reachable issuer,
+      per CLAUDE.md's No Speculation rule, rather than silently omitting the
+      child spec because it can't fully initialize in this environment.
+      This requirement's scope is entirely mix.exs dependency addition plus
+      supervision-tree wiring in application.ex, configured from
+      config/dev.exs or config/runtime.exs — it does not touch REQ-015's
+      tenants/users/groups/tenant_role schema and shares no module or config
+      table with it, so it has no prerequisite within this batch and can
+      start immediately.
+    acceptance_criteria:
+      - "mix.exs lists {:ueberauth_oidcc, \"~> 0.4\"}, and mix deps.get resolves it (or the Docker-fallback equivalent, actual output quoted)"
+      - "lib/letflow/application.ex's children list includes a supervised Oidcc.ProviderConfiguration.Worker child spec, sourced from config rather than a literal hardcoded issuer URL"
+      - "mix compile --warnings-as-errors passes with the new dependency in the tree"
+      - "if the worker cannot reach a real issuer in this environment, that is stated explicitly (what was and wasn't verified), not silently glossed over"
+    depends_on: []
+
+  - id: REQ-017
+    title: Pure claim-mapping module (OIDC-08 equivalent)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S1
+    impl_order: TBD  # letflow-queue task id, assigned at registration
+    description: >
+      Port src/oidc/claim_mapping.zig's mapVerifiedClaims as a pure Elixir
+      function (no I/O — zero DB/network calls, matching claim_mapping.zig's
+      own Key Invariant 1) that maps verified OIDC claims (as returned by
+      ueberauth_oidcc's callback) to a Letflow-internal identity-context
+      struct: external_user_id (sub), tenant_id (nullable), realm, roles
+      (list, defaulting to []), email (defaulting to ""), preferred_username
+      (defaulting to the sub value), display_name (nullable). Per-realm
+      configurable claim paths (tenant_id_claim, roles_claim_paths,
+      email_claim, preferred_username_claim, display_name_claim) should be
+      passed as a config struct/map argument, not hardcoded — mirroring
+      claim_mapping.zig's ClaimMappingConfig, sourced from application config
+      for now (a DB-backed per-realm config table is not required for this
+      requirement; note that as a deferred item if R-Co's design implies one
+      eventually). Match claim_mapping.zig's defaulting rules exactly (Key
+      Invariant 3): missing optional claims never error, they default per the
+      field-specific rule listed above. sub missing is the one error case
+      (claim_mapping.zig's SubClaimMissing).
+    acceptance_criteria:
+      - "the mapping function has no Repo call, no HTTP call, and no other I/O anywhere in its call graph — verified by inspection and stated explicitly in the handoff"
+      - "given claims missing every optional field, the function returns defaults matching claim_mapping.zig's Key Invariant 3 (email->\"\", preferred_username->sub value, roles->[], display_name->nil, tenant_id->nil) rather than erroring"
+      - "given claims with no sub/subject, the function returns an error (not a default), matching claim_mapping.zig's SubClaimMissing"
+      - "@moduledoc cites src/oidc/claim_mapping.zig as the ported source"
+    depends_on: []
+
+  - id: REQ-018
+    title: JIT user provisioning (createOrGetJitOidcUser equivalent)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S1
+    impl_order: TBD  # letflow-queue task id, assigned at registration
+    description: >
+      Port the real JIT-provisioning orchestration from src/oidc/jit_provisioning.zig
+      together with the actual upsert from src/identity/registry.zig's
+      createOrGetJitOidcUser (lines ~843-912 in R-Co's source) into a
+      Letflow.Identity context module operating on REQ-015's users schema.
+      Implement as an idempotent upsert keyed on (tenant_id, external_realm,
+      external_id) — external_realm and external_id here are the users
+      table's own DB columns per REQ-015's schema, populated respectively
+      from REQ-017's identity-context struct's realm field and
+      external_user_id field (REQ-017 names its struct field realm, not
+      external_realm; the two are the same value under different names at
+      this producer/consumer boundary — struct field -> DB column — so do
+      not assume a struct field literally named external_realm exists to
+      read from). Upsert as: select-first, then INSERT ... ON CONFLICT
+      (external_realm, external_id) WHERE external_id IS NOT NULL DO
+      NOTHING, with a re-select fallback on conflict (race-safe
+      upsert-or-fetch, matching registry.zig's pattern exactly — do not use a
+      naive "insert, catch unique-constraint error" pattern instead, since
+      that changes the concurrency semantics R-Co's implementation
+      deliberately chose). Set password_hash to a fixed OIDC-only marker
+      value (R-Co uses the literal "__OIDC_ONLY__") and auth_source: :oidc on
+      every JIT-created row. Per-realm JIT config (enabled/disabled, default
+      status, default_roles falling back to VIEWER) is a config-sourced
+      struct for now (same "no DB-backed per-realm config table required yet"
+      scope note as REQ-017), matching jit_provisioning.zig's
+      JitProvisioningConfig shape. Provisioning failure must be a hard
+      failure per jit_provisioning.zig's Key Invariant 2 ("the auth pipeline
+      MUST NOT proceed") — return {:error, reason}, never swallow.
+      This requirement takes REQ-017's mapped identity context struct as
+      input, not raw claims directly; REQ-017's realm field is the source
+      value written to this table's external_realm column.
+    acceptance_criteria:
+      - "calling the provisioning function twice with the same (tenant_id, external_realm, external_id) returns the same user_id both times, with created: true only on the first call — demonstrated with an actual test or iex session, not just described"
+      - "the inserted row has password_hash set to the fixed OIDC-only marker and auth_source: :oidc"
+      - "a simulated concurrent-insert race (two calls racing before either commits) is handled by the re-select fallback without raising an unhandled exception — either demonstrated or the code path is inspected and cited explicitly if concurrency can't be simulated in this environment"
+      - "@moduledoc cites src/oidc/jit_provisioning.zig and src/identity/registry.zig's createOrGetJitOidcUser as the ported source"
+    depends_on: [REQ-015, REQ-017]
+
+  - id: REQ-019
+    title: Tenant<->realm binding (OIDC-12/ADP-04b equivalent)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S1
+    impl_order: TBD  # letflow-queue task id, assigned at registration
+    description: >
+      Port src/oidc/realm_tenant_binding.zig's resolveTenantByRealm and
+      resolveRealmByTenant as Letflow.Identity functions operating on REQ-015's
+      tenants schema, enforcing the one-to-one tenant<->realm invariant
+      documented in both realm_tenant_binding.zig and
+      src/design/adp-04b-tenant-realm-binding.md: each tenant has at most one
+      idp_realm_id, each idp_realm_id maps to at most one tenant,
+      idp_realm_id is immutable after tenant creation (enforce this at the
+      changeset level — no update path exposes idp_realm_id once set, except
+      possibly a dedicated admin-only rotation function if you choose to add
+      one; if you don't, say so explicitly rather than leaving it
+      ambiguously reachable through a generic update changeset), and the
+      default tenant is pinned to idp_realm_id = "bpm-default". Also port
+      adp-04a's realm-ownership guard ("Cross-tenant collision boundaries"
+      §1/§3: identity resolution requires tenant context and must verify the
+      token's claimed external_realm actually maps to the request's resolved
+      tenant before any (external_realm, external_id) user lookup proceeds)
+      as a function REQ-021's pipeline wiring will call before invoking
+      REQ-018's JIT provisioning.
+    acceptance_criteria:
+      - "resolveTenantByRealm(idp_realm_id) and resolveRealmByTenant(tenant_id) both work against REQ-015's tenants table, tested with the seeded default tenant (bpm-default)"
+      - "attempting to bind a second tenant to an already-bound idp_realm_id is rejected (unique index or explicit changeset validation), not silently overwritten"
+      - "attempting to change an existing tenant's idp_realm_id via the normal update changeset is rejected or the changeset simply omits idp_realm_id from its allowed fields — whichever approach is taken, it's stated explicitly in the moduledoc"
+      - "a realm-ownership guard function exists that rejects a (tenant_id, external_realm) pair where external_realm is not the realm bound to tenant_id"
+    depends_on: [REQ-015]
+
+  - id: REQ-020
+    title: Per-tenant role registry (TenantRoleStore/IDN-05 equivalent)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S1
+    impl_order: TBD  # letflow-queue task id, assigned at registration
+    description: >
+      Port src/identity/role_registry.zig's TenantRoleStore (list_roles,
+      upsert_role) and resolveRoleInTx as Letflow.Identity.RoleRegistry
+      functions operating on REQ-015's tenant_role/groups schema. list_roles
+      returns all role bindings sorted by name, empty list (not an error)
+      when none exist. upsert_role(name, group_id) validates the role name
+      (non-empty, <=128 codepoints, no control characters — port
+      role_registry.zig's isValidRoleName check) and that group_id references
+      an existing group before writing (role_registry.zig's existence check),
+      then inserts-or-updates the (name -> group_id) binding transactionally.
+      resolve_role_in_tx(name) is the transition-time lookup R-Co calls from
+      src/engine/instance.zig's applyTransition (S3 territory, not built yet
+      in Letflow) — port it now as a standalone function since S1 owns the
+      role registry itself, matching role_registry.zig's error-swallowing
+      behavior (a lookup failure returns nil/"unbound", never raises or
+      propagates an error, so a future S3 caller's transition never fails due
+      to a role-lookup problem). Confirm via source inspection (already done
+      in this stage's research, restate in the handoff) that this module has
+      no direct call-site coupling to the OIDC/claim-mapping pipeline
+      (REQ-017/018/019) — it's a standalone workflow-engine-facing registry,
+      not part of token verification.
+    acceptance_criteria:
+      - "list_roles/1 returns [] (not an error) against an empty tenant_role table, and returns all rows sorted by name when populated"
+      - "upsert_role/2 with a non-existent group_id returns an error tuple rather than inserting a dangling reference"
+      - "upsert_role/2 called twice with the same name and a different group_id updates the existing binding rather than creating a duplicate row"
+      - "resolve_role_in_tx/2 (or equivalent inside-an-existing-transaction call) returns nil on any lookup failure (unknown name, table/connection issue) rather than raising"
+      - "@moduledoc cites src/identity/role_registry.zig and states explicitly that this module has no coupling to the OIDC token-verification pipeline"
+    depends_on: [REQ-015]
+
+  - id: REQ-021
+    title: Wire identity into the Plug request pipeline (auth.zig/tenant_status.zig equivalent)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S1
+    impl_order: TBD  # letflow-queue task id, assigned at registration
+    description: >
+      Add a Plug (or Plug pipeline) to lib/letflow/router.ex wiring together
+      REQ-016's ueberauth_oidcc verification, REQ-017's claim mapping,
+      REQ-019's tenant<->realm resolution + ownership guard, and REQ-018's
+      JIT provisioning into one request-scoped flow, porting
+      src/api/middleware/auth.zig's orchestration order (verify token ->
+      resolve tenant from realm -> guard realm ownership -> JIT
+      provision/lookup user -> attach an auth context to the connection) and
+      src/api/middleware/tenant_status.zig's write-pause check (reject POST/
+      PUT/PATCH/DELETE with 503 + Retry-After when the resolved tenant's
+      status is "migrating"; GET/HEAD pass through unchanged). A request with
+      a missing/invalid bearer token is rejected before any of the above
+      runs (401). This replaces the never-built REQ-103 dev-bearer-token plug
+      (cancelled along with the rest of the MVP-1 milestone, see REQ-101's
+      status note) as Letflow's first real auth plug — do not treat REQ-103
+      as prior art to extend, it never landed. No routes exist yet in
+      lib/letflow/router.ex that need real tenant-scoped data (S2/S3/S4
+      aren't built), so this requirement's acceptance is about the plug
+      pipeline itself working correctly against a synthetic/test request,
+      not about protecting a real business route yet — note explicitly which
+      existing router.ex routes (if any) the plug is actually mounted in
+      front of, versus left available for S4 to attach to later.
+    acceptance_criteria:
+      - "a request with a valid OIDC bearer token (or a test double standing in for ueberauth_oidcc's verification result, if a real Keycloak issuer isn't reachable in this environment — state explicitly which was used) flows through verify -> tenant resolution -> realm-ownership guard -> JIT provisioning and ends with an auth context (user_id, tenant_id, roles) available to the next plug in the chain"
+      - "a request with a missing or malformed bearer token is rejected with 401 before tenant resolution or JIT provisioning runs"
+      - "a write request (POST/PUT/PATCH/DELETE) against a tenant whose status is migrating is rejected with 503 and a Retry-After header; a GET/HEAD request against the same tenant passes through"
+      - "a request whose token's realm does not match the resolved tenant's bound realm is rejected, not silently JIT-provisioned under the wrong tenant"
+      - "moduledoc explicitly states this plug supersedes REQ-103 (never built) as Letflow's first real auth plug, and names which router.ex routes (if any) it is mounted in front of"
+    depends_on: [REQ-016, REQ-017, REQ-018, REQ-019, REQ-020]

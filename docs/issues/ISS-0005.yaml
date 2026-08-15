@@ -53,4 +53,19 @@ description: >
 affected_files:
   - docs/migration/decisions/0003-ecto-schema-strategy.md
 github_issue: https://github.com/tvolodi/letflow/issues/8
-status: open
+status: resolved
+resolved_at: 2026-08-15T19:34:30Z
+resolution: >
+  No action needed beyond what this issue already recorded as done: Letflow's own
+  docs/migration/decisions/0003-ecto-schema-strategy.md already reasons from R-Co's
+  actual current implementation (schema-per-tenant + intra-schema tenant_id, per
+  migrations/060_schema_per_tenant_bootstrap.sql and GBL-112) rather than the stale
+  adp-0x docs alone — see that file's Decision B and Reasoning sections, unchanged
+  since this issue was filed. Fixing R-Co's own src/design/adp-0x*.md staleness is
+  explicitly out of scope for Letflow's pipeline (a separate repository, not owned by
+  this project) and was never this issue's recommended action — it exists purely as a
+  documentation-currency record so a future reader of adp-0x isn't misled the way this
+  design's first read nearly was. Confirmed at REQ-015's WF-02 kickoff (S1's first
+  implementation task, which also reasons from schema-per-tenant per Decision B) that
+  0003's citation of R-Co's real migration history is still intact and unchanged.
+  Closing as resolved/informational — nothing further to do in this repository.

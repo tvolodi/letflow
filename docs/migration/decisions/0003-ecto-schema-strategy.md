@@ -1,6 +1,6 @@
 # 0003 — Ecto schema/migration strategy
 
-Status: pending (REQ-012). Owner: ELIXIR-DEV.
+Status: decided (REQ-012). Owner: ELIXIR-DEV.
 
 ## Question
 

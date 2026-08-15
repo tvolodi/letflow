@@ -185,7 +185,7 @@ requirements:
   - id: REQ-012
     title: Design the Ecto schema/migration strategy for the target data model
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S0
     impl_order: 6  # letflow-queue task id
     description: >

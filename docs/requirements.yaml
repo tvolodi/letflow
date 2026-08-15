@@ -138,6 +138,7 @@ requirements:
     owner: ELIXIR-DEV
     status: done
     stage: S0
+    impl_order: 4  # letflow-queue task id (registered retroactively, already done)
     description: >
       Letflow currently uses plain Plug + Bandit for 3 routes
       (lib/letflow/router.ex). R-Co's src/api/routes/ has 22 route
@@ -162,6 +163,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S0
+    impl_order: 5  # letflow-queue task id
     description: >
       R-Co hand-rolls OIDC in src/oidc/ (13 files) and src/identity/
       (18 files: JIT provisioning, JWKS cache, role registry, tenant
@@ -185,6 +187,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S0
+    impl_order: 6  # letflow-queue task id
     description: >
       R-Co has 143 Postgres migrations under migrations/. Write
       docs/migration/decisions/0003-ecto-schema-strategy.md covering:
@@ -210,6 +213,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S0
+    impl_order: 7  # letflow-queue task id
     description: >
       R-Co's `zig build check` (see R-Co's README.md "Development
       commands" table) runs build-with-error-sets-fail-via-exit-code
@@ -234,6 +238,7 @@ requirements:
     owner: REVIEWER
     status: pending
     stage: S0
+    impl_order: 9  # letflow-queue task id; depends_on translated to queue task ids [4,5,6,7]
     description: >
       Once REQ-010..013 land, review the four decision records
       (0001-web-framework, 0002-oidc-integration,
@@ -268,6 +273,7 @@ requirements:
     status: pending
     stage: S0
     milestone: MVP-1
+    impl_order: 8  # letflow-queue task id
     description: >
       MVP-1 needs only 3-4 routes. Rather than blocking on the full
       Phoenix-vs-Plug/Bandit decision (REQ-010, still pending), add a
@@ -291,6 +297,7 @@ requirements:
     status: pending
     stage: S0
     milestone: MVP-1
+    impl_order: 10  # letflow-queue task id; depends_on translated to queue task id [8]
     description: >
       Add priv/repo/migrations for two tables scoped to MVP-1 only:
       workflow_definitions (id, name, and the static 4-state
@@ -318,6 +325,7 @@ requirements:
     status: pending
     stage: S1
     milestone: MVP-1
+    impl_order: 11  # letflow-queue task id; depends_on translated to queue task id [8]
     description: >
       Add a Plug that checks incoming requests for one hardcoded/
       config-seeded bearer token (e.g. via config/dev.exs or an env
@@ -343,6 +351,7 @@ requirements:
     status: pending
     stage: S3
     milestone: MVP-1
+    impl_order: 12  # letflow-queue task id; depends_on translated to queue task ids [10,11]
     description: >
       Generalize lib/letflow/process_instance.ex and
       lib/letflow/instance_supervisor.ex just enough to start an
@@ -367,6 +376,7 @@ requirements:
     status: pending
     stage: S4
     milestone: MVP-1
+    impl_order: 13  # letflow-queue task id; depends_on translated to queue task id [12]
     description: >
       Extend lib/letflow/router.ex with routes to list workflow
       definitions, create an instance, get an instance (current state
@@ -390,6 +400,7 @@ requirements:
     status: pending
     stage: S8
     milestone: MVP-1
+    impl_order: 14  # letflow-queue task id; depends_on translated to queue task id [13]
     description: >
       Configure R-Co's existing web/ (React 19 + TypeScript SPA) to
       target the running Letflow API's base URL instead of the Zig
@@ -414,6 +425,7 @@ requirements:
     status: pending
     stage: S4
     milestone: MVP-1
+    impl_order: 15  # letflow-queue task id; depends_on translated to queue task id [14]
     description: >
       Write an automated test exercising the full create-instance ->
       transition -> get-instance loop over HTTP against REQ-105's
@@ -437,6 +449,7 @@ requirements:
     status: pending
     stage: S1
     milestone: MVP-1
+    impl_order: 16  # letflow-queue task id; depends_on translated to queue task id [15]
     description: >
       Once REQ-101..107 land, review all MVP-1 deliverables together
       and append a dated REVIEWER section to

@@ -143,7 +143,7 @@ defmodule Letflow.ParallelApprovalTest do
   end
 
   property "no sequence of approvals produces an invalid state" do
-    check all actions <- list_of(approver_generator(), max_length: 20) do
+    check all(actions <- list_of(approver_generator(), max_length: 20)) do
       id = start_instance!()
 
       Enum.each(actions, fn approver -> ParallelApproval.approve(id, approver) end)

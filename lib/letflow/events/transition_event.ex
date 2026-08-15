@@ -10,10 +10,10 @@ defmodule Letflow.Events.TransitionEvent do
 
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "transition_events" do
-    field :instance_id, :string
-    field :from_state, :string
-    field :to_state, :string
-    field :action, :string
+    field(:instance_id, :string)
+    field(:from_state, :string)
+    field(:to_state, :string)
+    field(:action, :string)
 
     timestamps(updated_at: false)
   end

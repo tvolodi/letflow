@@ -12,9 +12,9 @@ defmodule Letflow.RowApproval.Approval do
 
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "approvals" do
-    field :finance_approved_at, :utc_datetime
-    field :ops_approved_at, :utc_datetime
-    field :status, :string, default: "pending"
+    field(:finance_approved_at, :utc_datetime)
+    field(:ops_approved_at, :utc_datetime)
+    field(:status, :string, default: "pending")
 
     timestamps()
   end

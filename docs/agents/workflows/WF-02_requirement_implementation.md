@@ -261,16 +261,33 @@ optional "check before calling it done" step.
 **Agent:** `TEST-DESIGNER`
 
 **Scope test (run first — added after REQ-010's WF02 run surfaced the gap):** does
-Step 2a/2b's `artifacts_out` contain any `.ex`/`.exs`/`.tsx`/`.ts` file — i.e. is there
-executable surface this step could plausibly write a test against? A requirement whose
-only artefacts are `.md` files (a decision record, a stage-doc update) has nothing for
-ExUnit/StreamData to exercise.
+Step 2a/2b's `artifacts_out` contain any file with **application-executable surface** —
+i.e. is there real Elixir/frontend logic this step could plausibly write a test
+against? A requirement whose only artefacts are `.md` files (a decision record, a
+stage-doc update) has nothing for ExUnit/StreamData to exercise.
+
+**File-extension is a starting heuristic, not the actual test — apply judgement, don't
+pattern-match blindly (gap found during REQ-013's WF02 run: `mix.exs`/`.formatter.exs`/
+similar `.exs` project-config files literally match a bare `.ex`/`.exs` extension check
+while containing zero application logic — REVIEWER correctly flagged that a literal
+reading would wrongly force this gate to continue).** The real question is: would a
+test written against this artefact exercise real behavior, or would it just be
+`grep`-ing a config file for a keyword (the exact manufactured-busywork anti-pattern
+`core-directives.md` warns against)? Project/build configuration (`mix.exs`'s
+`aliases`/`cli`/`deps` declarations, `.formatter.exs`, `config/*.exs` outside actual
+business logic) is, for this scope test's purpose, in the same "nothing to unit-test"
+category as decision-record prose — it's verified by actually running the command it
+declares (quote real output, same as any other requirement's acceptance-criteria
+demonstration), not by an ExUnit test asserting on its own declaration.
 ```
-NO executable surface → complete the handoff: status: PASS, summary: "out of scope —
-    no executable surface produced by this requirement (docs-only artifacts:
-    <list them>)", next_action: "Route directly to RELEASE-VALIDATOR (Step 5) —
-    Steps 3b/4 skipped, RELEASE-VALIDATOR verifies acceptance criteria by reading
-    the artefacts directly rather than by test result."
+NO application-executable surface → complete the handoff: status: PASS, summary: "out
+    of scope — no executable surface produced by this requirement (docs-only or
+    build-config-only artifacts: <list them>, with a one-line note on why each is
+    config/declaration rather than application logic if any has a .ex/.exs extension)",
+    next_action: "Route directly to RELEASE-VALIDATOR (Step 5) — Steps 3b/4 skipped,
+    RELEASE-VALIDATOR verifies acceptance criteria by reading the artefacts directly
+    (including any quoted command-output demonstration from Step 2a) rather than by
+    test result."
 YES → continue to the full procedure below.
 ```
 Do not invent busywork to satisfy this gate (e.g. a test that greps a markdown file for

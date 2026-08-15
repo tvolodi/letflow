@@ -160,20 +160,31 @@ established shape: `binary_id` primary key, `null: false` on required columns,
 
 ---
 
-## 5. Multi-tenancy — not decided yet
+## 5. Multi-tenancy — schema-per-tenant (decided)
 
-`docs/migration/decisions/0003-ecto-schema-strategy.md` (REQ-012) has not landed. Don't
-assume schema-per-tenant, a `tenant_id` column, or any other specific mechanism until
-that decision record exists — read it first if your task touches anything that sounds
-tenant-scoped.
+`docs/migration/decisions/0003-ecto-schema-strategy.md` (REQ-012) decided Decision B:
+schema-per-tenant via Ecto `:prefix`/dynamic-repo support, with `tenant_id` retained as
+an intra-schema column (not the sole isolation mechanism, and not a tenant-column-only
+shared-schema model). Read that decision record in full before writing anything
+tenant-scoped — it also covers Decision A (Ecto-idiomatic redesign, not a 1:1 SQL port)
+and Decision C (event-store insert-only, composite PK, idempotency sidecar table). S1's
+own `users`/`tenant`/tenant-binding tables (`docs/migration/stage-1-identity.md`) follow
+Decision B like every other business table.
 
 ---
 
-## 6. OIDC / identity — not decided yet
+## 6. OIDC / identity — ueberauth_oidcc (partial adoption, decided)
 
-`docs/migration/decisions/0002-oidc-integration.md` (REQ-011) has not landed either.
-MVP-1's auth (REQ-103) is a static dev bearer token, explicitly not real S1 identity —
-don't build anything beyond that pattern until 0002 exists.
+`docs/migration/decisions/0002-oidc-integration.md` (REQ-011) decided a **partial**
+library adoption: `ueberauth_oidcc` (`~> 0.4`, pulling in `oidcc ~> 3.7`) for the
+token-verification/JWKS-caching layer only. JIT user provisioning, tenant↔realm binding,
+the custom role registry, and Keycloak Admin REST API provisioning are all hand-rolled
+regardless of library choice — see that decision record's Reasoning section for exactly
+which R-Co behaviors are/aren't covered out of the box. This hand-rolled surface is what
+S1 (`docs/migration/stage-1-identity.md`, REQ-015 through REQ-021) implements. MVP-1's
+static-dev-bearer-token plug (REQ-103) was never built — the whole MVP-1 milestone was
+cancelled (see REQ-101's status note in `docs/requirements.yaml`) — so REQ-021's plug is
+Letflow's first real auth plug, not an extension of REQ-103.
 
 ---
 

@@ -1328,3 +1328,96 @@ history:
       docs/requirements.yaml REQ-018 status to in_progress. Routing to
       CODE-DESIGNER next (WF-02 Step 1) since this is real implementation
       surface on a tenant-data path (SECURITY-REVIEWER gate applies).
+  - req: REQ-018
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-16T01:38:38Z
+    note: >
+      Built Letflow.Identity.provision_oidc_user/3 (context module), backed by
+      Letflow.Oidc.JitProvisioningConfig (per-realm config struct: enabled,
+      default_status, default_roles falling back to VIEWER) and
+      User.jit_changeset/2, porting src/oidc/jit_provisioning.zig's
+      orchestration together with src/identity/registry.zig's
+      createOrGetJitOidcUser (~lines 843-912) onto REQ-015's users schema.
+      Upsert mechanism, stated precisely since the design changed twice under
+      empirical pressure: Repo.insert/2 with on_conflict: :nothing and
+      conflict_target: {:unsafe_fragment, "(external_realm, external_id) WHERE
+      external_id IS NOT NULL"}, re-selecting on conflict — NOT Ecto.Multi, NOT
+      raw Repo.query, NOT a naive insert-then-rescue-unique-constraint pattern,
+      matching registry.zig's race-safe insert-or-fetch semantics as the
+      requirement demanded. Two deviations from the original design
+      (lib/letflow/design/req018-jit-provisioning.md), both empirically forced
+      and both independently re-verified by REVIEWER against actual Ecto
+      source rather than taken on ELIXIR-DEV's word: (1) conflict_target:
+      syntax — the design's anticipated forms (a named-constraint reference,
+      and a plain column-list [:external_realm, :external_id]) both failed
+      against the installed Ecto 3.14/ecto_sql 3.14 and Postgres's partial-
+      index semantics, since the unique index is partial (WHERE external_id IS
+      NOT NULL) and Postgres's ON CONFLICT target-inference requires the
+      literal partial-index predicate to be restated at the call site, which
+      neither anticipated form expresses — {:unsafe_fragment, ...} restating
+      the exact index expression was the only form that matched the actual
+      index definition; REVIEWER independently confirmed this against
+      ecto_sql's on_conflict handling in source, not just ELIXIR-DEV's test
+      run. (2) insert-vs-conflict-suppressed disambiguation — the design
+      anticipated reading the returned struct's id: nil as the "conflict
+      suppressed the insert" signal, but that signal never fires: users.id is
+      a client-generated binary_id primary key (Ecto.UUID autogenerate), so
+      Ecto populates id on the struct before the INSERT is even sent,
+      regardless of whether the row actually landed. Replaced with a
+      Repo.get/2 existence check keyed on the pre-generated id immediately
+      after the insert call, disambiguating created vs. already-existed
+      correctly; REVIEWER independently verified this against Ecto's
+      autogenerate source (confirming binary_id primary keys are populated
+      client-side pre-insert, not server-side post-insert) rather than
+      accepting the empirical observation alone. Two open design questions
+      left explicitly unresolved, per instruction to carry them forward rather
+      than silently resolve either: OQ-3 — users.username carries a global
+      (not per-tenant) uniqueness index, which creates a real, accepted
+      cross-tenant collision edge case (two tenants' OIDC users sharing the
+      same preferred_username claim value cannot both JIT-provision under that
+      literal username); option (a) was chosen — store the verbatim
+      preferred_username claim value and accept the narrow failure mode as a
+      known limitation, rather than mangling the value with a tenant-scoping
+      suffix/prefix, and no schema change was made. OQ-6 — role-binding
+      persistence (attaching JIT-resolved default_roles to the created user)
+      is deferred entirely to REQ-020/REQ-02x, since no user<->role join table
+      exists in any status: done requirement's schema yet (REQ-015 built
+      tenant_role and groups, not a user-role binding table); default_roles is
+      threaded through JitProvisioningConfig and computed but not yet
+      persisted anywhere. RELEASE-VALIDATOR's pipeline included a genuine
+      FAIL-then-PASS rework cycle, a real instance of the pipeline's
+      redundancy catching a real gap rather than rubber-stamping: first pass
+      FAILed on uncommitted test artifacts (test files present in the working
+      tree but not committed to the branch, so a fresh clone would not have
+      run the same suite TEST-RUNNER reported against); ELIXIR-DEV's rework
+      commit bd52a16 committed the missing artifacts; RELEASE-VALIDATOR
+      re-verified on the second pass and PASSed, confirming the committed tree
+      now matches what was actually tested. Full gate-by-gate summary, all
+      PASS this run: CODE-DESIGN-VALIDATOR PASS; SECURITY-REVIEWER PASS (all
+      applicable invariants INV-1, INV-4, INV-6, INV-7, INV-8 satisfied);
+      REVIEWER PASS, including the deep source-level verification of both
+      empirically-forced deviations described above; TEST-DESIGN-VALIDATOR
+      PASS; TEST-RUNNER PASS, 78/78; RELEASE-VALIDATOR PASS on its second pass
+      (first pass FAIL on uncommitted-test-artifacts, fixed by bd52a16, then
+      re-verified PASS). Flipped docs/requirements.yaml REQ-018 status to
+      done. README.md checked and deliberately left untouched: no OIDC/
+      identity functionality is user-observable or runnable yet (no route
+      touches it, no real Keycloak issuer exists) — REQ-018 adds a context
+      module, not a route or runnable user-facing behavior, same reasoning
+      already applied at REQ-011/012/015/016/017's DOC-UPDATER passes.
+      docs/guides/backend_developer_guide.md checked and deliberately left
+      untouched for the same reason: §6 already names REQ-015 through REQ-021
+      collectively as what implements the ueberauth_oidcc decision, rather
+      than enumerating per-requirement mechanics, so adding REQ-018-specific
+      detail would break that established pattern rather than follow it.
+      docs/migration/stage-1-identity.md's header line updated from "Status:
+      in progress. Depends on: S0. Requirements: REQ-015, REQ-016, REQ-017
+      (done); REQ-018 through REQ-021 (docs/requirements.yaml) pending." to
+      "Status: in progress. Depends on: S0. Requirements: REQ-015, REQ-016,
+      REQ-017, REQ-018 (done); REQ-019 through REQ-021 (docs/requirements.yaml)
+      pending." No REVIEWER sign-off section added to stage-1-identity.md yet
+      — that lands once all of S1's requirements (REQ-015..021) are done,
+      same precedent as REQ-015/016/017's DOC-UPDATER passes. No lib/, test/,
+      or implementation/test file was touched by this DOC-UPDATER pass — those
+      were already correct and gated by the prior steps in this run.

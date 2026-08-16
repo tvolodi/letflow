@@ -1,0 +1,180 @@
+# S1 (identity-and-multi-tenancy) — WF-04 stage-gate release validation
+#
+# Produced by RELEASE-VALIDATOR at WF-04 Step 2, per
+# docs/agents/workflows/WF-04_full_test_run.md and
+# docs/agents/ORCHESTRATOR.md §8. Independently re-derived — re-ran the full
+# test suite directly rather than trusting TEST-RUNNER's
+# test/reports/report-2026-08-16-WF04.yaml, and re-checked every REQ-015..021
+# acceptance criterion against the actual current lib/letflow/, priv/repo/
+# migrations/, and test/letflow/ files rather than against
+# docs/status/requirement_status.yaml's history narration.
+
+stage: S1
+stage_name: identity-and-multi-tenancy
+validated_at: 2026-08-16T08:00:11Z
+validator: RELEASE-VALIDATOR
+head_commit: 1b1ab1fd97d5666738fae28a1fe7f675c689c54c
+verdict: PASS
+
+requirements_checked:
+  - id: REQ-015
+    title: Ecto schema/migrations for tenants, users, and tenant_role (Decision B)
+    status_in_requirements_yaml: done
+    independent_verdict: PASS
+    evidence:
+      - "priv/repo/migrations/20260816000001_create_tenants.exs through ..000004_create_users.exs read directly; all apply cleanly (mix test's ecto.create/ecto.migrate --quiet step succeeded as part of this run)"
+      - "lib/letflow/identity/{tenant,user,group,tenant_role}.ex all exist with @moduledoc citations: tenant.ex and user.ex cite adp-04/adp-04a/adp-04b; group.ex cites adp-04's Group struct; tenant_role.ex cites src/identity/role_registry.zig and src/design/idn05-role-registry.md (the source REQ-015's own description names for that table -- see note below)"
+      - "users migration has unique_index(:users, [:external_realm, :external_id], where: \"external_id IS NOT NULL\", name: :users_external_identity_partial_index) -- confirmed partial, not plain unique"
+      - "no DB CHECK constraint for auth_source-vs-external-fields consistency in either the migration or the schema; both explicitly state this is an application-level (changeset) invariant"
+      - "CreateTenants migration header explicitly states schema-per-tenant provisioning (Ecto :prefix/dynamic-repo) is NOT built in this migration -- all four tables target Ecto's single default schema, deferral stated verbatim"
+    findings: []
+    note: >
+      Acceptance criterion 2's generic phrasing ("citing the R-Co adp-04/04a/04b
+      design doc") doesn't literally cover tenant_role.ex, whose moduledoc cites
+      role_registry.zig instead -- but REQ-015's own description explicitly
+      names role_registry.zig, not any adp-0x doc, as tenant_role's shape source.
+      Not a defect; the requirement's own scoping text overrides the acceptance
+      criterion's generic phrasing here. Filed as an observation, not a finding.
+
+  - id: REQ-016
+    title: Add ueberauth_oidcc dependency and supervise Oidcc.ProviderConfiguration.Worker
+    status_in_requirements_yaml: done
+    independent_verdict: PASS
+    evidence:
+      - "mix.exs deps/0 lists {:ueberauth_oidcc, \"~> 0.4\"}; mix.lock confirms resolution to ueberauth_oidcc 0.4.2, pulling in oidcc 3.8.0 transitively"
+      - "lib/letflow/application.ex's children list includes {Oidcc.ProviderConfiguration.Worker, %{issuer: Keyword.fetch!(oidc_config, :issuer), name: Keyword.fetch!(oidc_config, :provider_name), backoff_type: :random}}, sourced from Application.fetch_env!(:letflow, :oidc), never a hardcoded literal"
+      - "mix compile --warnings-as-errors re-run by this validator: exit 0"
+      - "mix test re-run by this validator: app boots against config/test.exs's placeholder .invalid issuer, logs 'Metadata load failed ... Retrying in ...ms' repeatedly without crashing the application or restart-looping (backoff_type: :random confirmed in source)"
+      - "test/letflow/application_test.exs's 3 tests (worker alive/registered, supervised as a real child, config-sourced not hardcoded) all passed in this validator's own suite run"
+    findings: []
+
+  - id: REQ-017
+    title: Pure claim-mapping module (OIDC-08 equivalent)
+    status_in_requirements_yaml: done
+    independent_verdict: PASS
+    evidence:
+      - "lib/letflow/oidc/claim_mapping.ex read function-by-function: map_verified_claims/3, resolve_claim_path/2, resolve_optional_string_claim/3, resolve_roles/2 -- no Repo, HTTP, File, or Application.get_env/fetch_env! call found anywhere in the module"
+      - "given claims missing every optional field: email->\"\", preferred_username->subject value, roles->[], display_name->nil, tenant_id->nil -- confirmed by reading the default-handling branches directly, matching Key Invariant 3"
+      - "subject in [nil, \"\"] is the sole {:error, :sub_claim_missing} branch -- confirmed by reading map_verified_claims/3's guard"
+      - "@moduledoc cites src/oidc/claim_mapping.zig"
+    findings: []
+
+  - id: REQ-018
+    title: JIT user provisioning (createOrGetJitOidcUser equivalent)
+    status_in_requirements_yaml: done
+    independent_verdict: PASS
+    evidence:
+      - "lib/letflow/identity.ex's provision_oidc_user/3 -> upsert_by_external_identity/3 -> insert_or_fetch/3 implements select-first / Repo.insert(on_conflict: :nothing, conflict_target: {:unsafe_fragment, \"(external_realm, external_id) WHERE external_id IS NOT NULL\"}) / re-select-on-conflict -- not Ecto.Multi, not insert-then-rescue"
+      - "User.jit_changeset/2 (lib/letflow/identity/user.ex) sets password_hash to the literal \"__OIDC_ONLY__\" and auth_source: :oidc via put_change/3 unconditionally, after cast/3 -- IdentityContext has no such fields, so no caller input can override them"
+      - "test/letflow/identity_test.exs's concurrent-race test (two Task.async barrier-synchronized calls, Ecto.Adapters.SQL.Sandbox.allow/3'd onto the same connection) re-run by this validator: passed, resolved to exactly one row, both callers succeeded, no unhandled exception"
+      - "@moduledoc cites src/oidc/jit_provisioning.zig and src/identity/registry.zig's createOrGetJitOidcUser (lines ~843-912)"
+    findings: []
+
+  - id: REQ-019
+    title: Tenant<->realm binding (OIDC-12/ADP-04b equivalent)
+    status_in_requirements_yaml: done
+    independent_verdict: PASS
+    evidence:
+      - "resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 (lib/letflow/identity.ex) confirmed against Letflow.Identity.Tenant via Repo.get_by/2 and Repo.get/2"
+      - "one-to-one invariant enforced by a real unique partial index, tenants_idp_realm_id_partial_index (CreateTenants migration), not just changeset-level validation -- confirmed by reading the migration"
+      - "idp_realm_id immutability: Tenant.update_changeset/2's cast/3 field list is [:display_name, :status] only -- :idp_realm_id is structurally absent, confirmed by reading the schema file directly; no rotation function exists anywhere in tenant.ex, stated explicitly in its moduledoc"
+      - "verify_realm_ownership/2 re-queries resolve_realm_by_tenant/1 rather than trusting a caller-supplied realm; returns {:error, :realm_tenant_mismatch} on any mismatch (including a nil bound realm) and {:error, :not_found} for an unknown tenant_id"
+      - "default tenant pinning to idp_realm_id == \"bpm-default\" enforced by Tenant.validate_default_tenant_pinning/1, confirmed by reading the private function"
+    findings: []
+
+  - id: REQ-020
+    title: Per-tenant role registry (TenantRoleStore/IDN-05 equivalent)
+    status_in_requirements_yaml: done
+    independent_verdict: PASS
+    evidence:
+      - "list_roles/0 (lib/letflow/identity/role_registry.ex) uses Repo.all(from t in TenantRole, order_by: [asc: t.name]) -- confirmed real ORDER BY, not insertion-order reliance; test/letflow/role_registry_test.exs's zeta/alpha/mid-name test (deliberately non-alphabetical insertion order) passed in this validator's own re-run"
+      - "upsert_role/2 -> do_upsert_role/2 checks Repo.get(Group, group_id) inside Repo.transaction/1 before writing, Repo.rollback(:group_not_found) on a missing group -- confirmed by reading the transaction body"
+      - "a second upsert_role/2 call with the same name and a different group_id hits on_conflict: [set: [group_id: group_id]] keyed on conflict_target: :name -- update, not duplicate-insert, confirmed by reading insert_or_update_role/2"
+      - "resolve_role_in_tx/1 wraps its Repo.get_by/2 call in rescue _ -> nil; test/letflow/role_registry_test.exs's CastError-forcing test (passing a non-string name) re-run by this validator: passed, returned nil rather than raising"
+      - "@moduledoc states no alias/call to any Letflow.Oidc.* module or to Letflow.Identity's OIDC-pipeline functions -- confirmed true by inspection of role_registry.ex's own alias list (Group, TenantRole, Repo only)"
+    findings: []
+
+  - id: REQ-021
+    title: Wire identity into the Plug request pipeline (auth.zig/tenant_status.zig equivalent)
+    status_in_requirements_yaml: done
+    independent_verdict: PASS
+    evidence:
+      - "lib/letflow/plugs/auth_pipeline.ex's call/2 is one with chain in the exact documented order: extract_bearer_token -> verify_token -> extract_realm -> resolve_tenant -> guard_realm_ownership -> map_claims -> provision_user -> attach_auth_context; a missing/malformed Authorization header fails at the first clause, before any DB or claim-mapping work runs -- confirmed by reading the chain and by test/letflow/plugs/auth_pipeline_test.exs's 'none of the above rejected requests write any user row anywhere' test, re-run and passed"
+      - "lib/letflow/plugs/tenant_status.ex's call/2 pattern-matches @write_methods (POST/PUT/PATCH/DELETE) for the write-pause check; a :migrating tenant gets 503 + retry-after: 30 header; GET/HEAD hit the fallback call/2 clause with zero DB query -- confirmed both by reading the code and by test/letflow/plugs/tenant_status_test.exs's telemetry-handler test (asserts no [:letflow, :repo, :query] event fires for a GET), re-run and passed"
+      - "a token whose realm does not match the resolved tenant's bound realm is rejected via guard_realm_ownership/2 -> Identity.verify_realm_ownership/2, called before provision_user/3 in the with chain -- confirmed by chain ordering and by test/letflow/plugs/auth_pipeline_test.exs's realm-ownership-guard tests, re-run and passed"
+      - "both auth_pipeline.ex and tenant_status.ex moduledocs state this supersedes the never-built REQ-103 plug and name all 3 of Letflow.Router's existing routes (POST /instances, POST /instances/:id/actions, GET /instances/:id) as not currently mounted behind either plug"
+    findings: []
+
+decision_record_cross_check:
+  - decision: docs/migration/decisions/0002-oidc-integration.md
+    status: consistent
+    note: >
+      mix.exs/application.ex match exactly ({:ueberauth_oidcc, "~> 0.4"},
+      supervised Oidcc.ProviderConfiguration.Worker sourced from config). 0002's
+      "likely one per configured realm/issuer" phrasing is a forward-looking
+      hint, not a mandate this batch violates -- REQ-016's own description
+      explicitly narrows scope to exactly one realm/issuer for S1 (no real
+      Keycloak/realm-provisioning exists yet), which application.ex correctly
+      reflects (one child spec).
+  - decision: docs/migration/decisions/0003-ecto-schema-strategy.md
+    status: consistent
+    note: >
+      Decision B (schema-per-tenant via Ecto :prefix/dynamic-repo, tenant_id
+      retained intra-schema) is correctly read in stage-1-identity.md's
+      "Decisions" section. REQ-015's migrations target Ecto's single default
+      schema and say so explicitly in every migration's header comment -- a
+      documented deferral 0003 itself anticipates ("a tenant_schemas-equivalent
+      registry and a provisioning path... are needed at S2/S3 execution time"),
+      not a silent divergence.
+
+issues_reviewed:
+  - id: ISS-0007
+    disposition: remains legitimately open, not a blocker for this stage gate
+    note: >
+      Its S1-scoped concern (stage-1-identity.md reading Decision B correctly)
+      is satisfied -- confirmed above. Its close condition is tied to the first
+      S2/S3 design artefact citing Decision B, which hasn't happened yet
+      (REQ-022 is status: pending). Not relevant to S1's own gate.
+  - id: ISS-0008
+    disposition: resolved, independently re-confirmed
+    note: >
+      mix format --check-formatted re-run by this validator: exit 0. Matches
+      the issue file's own resolved_at record.
+
+test_suite_reruns:
+  - run: 1
+    command: "mix test"
+    result: "132 passed (4 properties, 128 tests), 0 failures"
+    exit_code: 0
+  - run: 2
+    command: "mix test --seed 0"
+    result: "132 passed (4 properties, 128 tests), 0 failures"
+    exit_code: 0
+  - run: 3
+    command: "mix test (captured to file)"
+    result: "132 passed (4 properties, 128 tests), 0 failures"
+    exit_code: 0
+  - command: "mix compile --warnings-as-errors"
+    exit_code: 0
+  - command: "mix format --check-formatted"
+    exit_code: 0
+note_on_result_format: >
+  This environment's ExUnit (Elixir 1.20.3 / OTP 29) prints "Result: N passed
+  (X properties, Y tests)" rather than the older "X properties, Y tests, Z
+  failures" format. No occurrence of "fail" in any of the 3 runs' captured
+  output besides the expected, benign "Metadata load failed for issuer
+  https://placeholder-keycloak.invalid/..." retry log line from REQ-016's
+  supervised worker against its intentionally-unreachable placeholder issuer.
+
+reviewer_signoff:
+  appended: true
+  location: docs/migration/stage-1-identity.md
+  dated_section: "2026-08-16 — WF-04 stage-gate release validation (RELEASE-VALIDATOR)"
+
+findings:
+  blockers: []
+  majors: []
+  minors: []
+
+overall_verdict: PASS
+next_action: "ORCH may clear the S1 stage gate and proceed to S2 (event-store-and-definitions)."

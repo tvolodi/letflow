@@ -1,0 +1,188 @@
+# Test run report — WF-04 Step 1 (Full Test Run)
+# Stage-gate validation pass for Stage S1 (identity-and-multi-tenancy), ahead of
+# ORCH clearing S1 for S2 implementation routing.
+
+workflow: WF-04
+step: 1
+agent: TEST-RUNNER
+run_id: WF04-20260816
+date_utc: 2026-08-16T07:54:14Z
+
+git:
+  branch: main
+  branch_confirmed: true
+  commit: 1b1ab1fd97d5666738fae28a1fe7f675c689c54c
+  commit_subject: "chore(S2): write orchestrator.log entries for the WF-01 REQ-022..042 run"
+  working_tree: clean (no code changes made in this run — read-only validation pass,
+    so per WF-04 Step 00's git-setup exception no feature branch was created)
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH, no
+    fallback needed
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5] [source] [64-bit] [smp:16:16] [ds:16:16:10] [async-threads:1] [jit:ns] / Elixir 1.20.3 (compiled with Erlang/OTP 29)"
+  mix_version: "Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  postgres_container: letflow-postgres-1 (already running via docker compose, port
+    5462, healthy — confirmed via `docker ps` before running: "letflow-postgres-1:
+    Up 15 hours (healthy)". No `docker compose up -d` needed, no other containers in
+    this environment's Docker host touched.)
+  command_run: "MIX_ENV=test mix test --seed 0  (full suite, entire repo, not scoped
+    to any one requirement or stage — the `test` alias in mix.exs runs `ecto.create
+    --quiet` and `ecto.migrate --quiet` first automatically: `test: [\"ecto.create
+    --quiet\", \"ecto.migrate --quiet\", \"test\"]`)"
+
+verdict: PASS
+
+runs_performed:
+  # Ran the full suite twice, independently, to cross-check the result before
+  # writing this report — not because the first run was in doubt, but because the
+  # first invocation used --trace (to get a full per-test file/line breakdown for
+  # this report) and --trace forces max_cases: 1 (fully serial), which is a
+  # materially different execution mode than the default concurrent run. The second
+  # run reproduces the same 132/132 result under normal (concurrent, non-traced)
+  # conditions, which is what a real `mix test` invocation looks like.
+  - label: full_suite_traced
+    command_run: "MIX_ENV=test mix test --seed 0 --trace"
+    exit_code_note: >
+      Not directly captured (piped through `tee` for the saved log), but zero
+      failure markers found in the saved log and the summary line reads
+      "132 passed" with no failure count, matching the untraced re-run below whose
+      exit code was captured directly as 0.
+    ran_with: "Running ExUnit with seed: 0, max_cases: 1 (forced serial by --trace)"
+    summary_line_verbatim: "Result: 132 passed (4 properties, 128 tests)"
+    finished_line_verbatim: "Finished in 2.2 seconds (1.8s async, 0.4s sync)"
+    log_saved_to: scratch/wf04_full_test_run.log (1478 lines, git-ignored per
+      core-directives.md's scratch rule)
+  - label: full_suite_untraced_exit_code_confirmation
+    command_run: "MIX_ENV=test mix test --seed 0"
+    exit_code: 0
+    summary_line_verbatim: "Result: 132 passed (4 properties, 128 tests)"
+    finished_line_verbatim: "Finished in 1.4 seconds (0.9s async, 0.5s sync)"
+    log_saved_to: scratch/wf04_full_test_run_rerun.log (1316 lines, git-ignored)
+    note: >
+      This is the run whose exit code was captured directly (not through a pipe),
+      confirming PASS at the process level, not just by string-matching the summary
+      line.
+
+checks:
+  test_suite_full:
+    result: PASS
+    exit_code: 0
+    total: 132
+    passed: 132
+    failed: 0
+    properties: 4
+    example_tests: 128
+    excluded: 0
+    skipped: 0
+    doctests: 0
+    note: >
+      Grepped both saved logs (scratch/wf04_full_test_run.log,
+      scratch/wf04_full_test_run_rerun.log) for failure/assertion/error markers
+      (regex covering "Failures:", "Failure", "failure:", "** (", "Assertion",
+      "Excluded:", "Skipped:", "Doctests:", "[error]", "[warn"): zero matches in
+      either log. No "Failures:" section present in either run. No doctest calls
+      exist anywhere in lib/ or test/ (grepped, zero hits), so doctests: 0 is exact,
+      not an omission.
+
+  seed_and_determinism:
+    global_exunit_seed: 0
+    note: >
+      `Running ExUnit with seed: 0, max_cases: 1` confirmed verbatim in the traced
+      run's log header. Both runs used `--seed 0` explicitly (not the default
+      random seed) so this result is reproducible. The 4 StreamData property tests
+      below do not print their own independent seed on a pure pass (StreamData only
+      surfaces its generation seed in a failure report) — they ran under the same
+      global ExUnit seed 0, and since neither run reported a property failure, no
+      StreamData seed was emitted to capture. Re-running with the same `--seed 0`
+      will reproduce the identical generated cases for all 4 properties.
+
+  property_tests:
+    - name: "no sequence of actions produces an invalid state"
+      file: test/letflow/process_instance_test.exs:64
+      result: PASS
+      duration: 346.8ms (traced run)
+    - name: "no sequence of approvals produces an invalid state"
+      file: test/letflow/parallel_approval_test.exs:145
+      result: PASS
+      duration: 11.3ms (traced run)
+    - name: "for any claims map and any non-empty string sub, map_verified_claims/3 never raises and always returns a well-shaped {:ok, %IdentityContext{}}"
+      file: test/letflow/oidc/claim_mapping_property_test.exs:57
+      result: PASS
+    - name: "for any claims map, an empty-string subject always returns {:error, :sub_claim_missing}, never raises"
+      file: test/letflow/oidc/claim_mapping_property_test.exs:84
+      result: PASS
+
+  known_noise_not_a_failure:
+    - >
+      Pre-existing ExUnit.Case.register_test/4 deprecation compiler warnings for the
+      4 property tests (process_instance_test.exs:64, parallel_approval_test.exs:145,
+      claim_mapping_property_test.exs:57 and :84) — same warnings documented as
+      non-blocking noise in every prior WF-02 test report back through REQ-018.
+      Compiler warnings, not test failures; do not affect exit code or pass count.
+    - >
+      Neither run in this pass reproduced the "[error] Metadata load failed for
+      issuer https://placeholder-keycloak.invalid/..." line that earlier REQ-021's
+      report documented as expected/pre-existing noise from REQ-016's Ueberauth OIDC
+      worker attempting to reach a deliberately unreachable placeholder issuer —
+      grepped both saved logs for "[error]" and "[warn" explicitly, zero hits in
+      either. Timing-dependent (whether the worker's retry fires inside the test
+      run's window), not a regression: its absence here is not evidence anything
+      changed, and its presence in REQ-021's run was never a failure either.
+    - >
+      Verbose SQL query debug logging appears throughout both raw logs
+      (config/test.exs's default test log level) — expected, not indicative of any
+      problem. This is why the saved logs are 1300+ lines for 132 tests.
+
+test_files_full_suite:
+  # All 16 test files under test/, one mix test invocation covering all of them —
+  # not scoped to any single requirement or stage. Per-file counts derived from the
+  # traced run's [L#nn] markers, cross-checked to sum to the reported total.
+  - { file: test/letflow/application_test.exs, tests: 3 }
+  - { file: test/letflow/identity/group_test.exs, tests: 1 }
+  - { file: test/letflow/identity/tenant_role_test.exs, tests: 3 }
+  - { file: test/letflow/identity/tenant_test.exs, tests: 4 }
+  - { file: test/letflow/identity/user_test.exs, tests: 6 }
+  - { file: test/letflow/identity_test.exs, tests: 29 }
+  - { file: test/letflow/oidc/claim_mapping_property_test.exs, tests: 2, note: "both are the property tests" }
+  - { file: test/letflow/oidc/claim_mapping_test.exs, tests: 25 }
+  - { file: test/letflow/oidc/jit_provisioning_config_test.exs, tests: 6 }
+  - { file: test/letflow/parallel_approval_test.exs, tests: 8, note: "includes 1 property test" }
+  - { file: test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs, tests: 3 }
+  - { file: test/letflow/plugs/auth_pipeline_test.exs, tests: 10 }
+  - { file: test/letflow/plugs/tenant_status_test.exs, tests: 9 }
+  - { file: test/letflow/process_instance_test.exs, tests: 5, note: "includes 1 property test" }
+  - { file: test/letflow/role_registry_test.exs, tests: 13 }
+  - { file: test/letflow/row_approval_test.exs, tests: 5 }
+  cross_check: >
+    3+1+3+4+6+29+2+25+6+8+3+10+9+5+13+5 = 132, matching the suite's own summary
+    line ("Result: 132 passed (4 properties, 128 tests)") exactly. 16 test files
+    total (found via `find test -name "*_test.exs"`), all 16 executed in this run
+    (no file excluded or skipped).
+
+stage_context:
+  # For RELEASE-VALIDATOR's benefit at WF-04 Step 2 — not independently re-verified
+  # in this Step 1 pass, just the requirements.yaml status as read.
+  stage_under_gate: S1 (identity-and-multi-tenancy)
+  requirements_tagged_S1_status_done: [REQ-015, REQ-016, REQ-017, REQ-018, REQ-019, REQ-020, REQ-021]
+  requirements_tagged_S1_status_cancelled: [REQ-103, REQ-108]
+  note: >
+    This Step 1 run is a full-suite pass/fail check, not a per-requirement
+    acceptance-criteria audit — that independent re-check is RELEASE-VALIDATOR's
+    job at Step 2, per WF-04. Listed here only so the next step doesn't have to
+    re-derive which requirements are in scope for the gate from scratch.
+
+pre_existing_failures_found: none
+issues_filed: none
+code_changes_made: none (read-only validation pass, no application or test code
+  touched)
+
+diagnosis: "N/A — no failures observed in either run. Nothing to route to
+  ELIXIR-DEV, FRONTEND-DEV, or TEST-DESIGNER."
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-16-WF04.yaml
+  next_action: "Route to RELEASE-VALIDATOR (WF-04 Step 2 — independent re-verification
+    of every done S1 requirement's acceptance criteria against current code, not a
+    re-run of this report)."

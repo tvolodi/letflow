@@ -10,6 +10,13 @@ defmodule Letflow.Router do
   plug(:match)
   plug(:dispatch)
 
+  # GET /health -> {"status": "ok"} — used by deploy/redeploy-test.sh's
+  # post-deploy health check, no auth/DB dependency by design so it stays
+  # reliable as a liveness signal.
+  get "/health" do
+    send_json(conn, 200, %{status: "ok"})
+  end
+
   # POST /instances -> {"id": "..."}
   post "/instances" do
     id = Ecto.UUID.generate()

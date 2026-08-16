@@ -1,0 +1,34 @@
+services:
+  app:
+    image: letflow-test:latest
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3113:4000"
+    restart: unless-stopped
+
+  # Own Postgres per app, same convention as every other Postgres-backed
+  # deployment on this host (ai-qadam, bilimbaga-test, penpot, immich) —
+  # no shared instance. Internal-only: no host port published, reached by
+  # `app` over the compose network only. Credentials come from the same
+  # .env as `app` (POSTGRES_PASSWORD must match the password embedded in
+  # app's DATABASE_URL — see deploy/.env.example).
+  db:
+    image: postgres:16
+    env_file: .env
+    environment:
+      POSTGRES_USER: letflow
+      POSTGRES_DB: letflow_test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U letflow"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - letflow_test_pg:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  letflow_test_pg:

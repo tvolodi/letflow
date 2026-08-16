@@ -28,6 +28,10 @@ letflow-*.tar
 # Local environment / secrets — never commit
 .env
 .env.*
+# ...except the deploy env *template* (no real secrets, tracked on purpose
+# so `deploy/.env` has something to be copied from) — same convention as
+# the sibling letflow-queue repo's deploy/.env.example.
+!deploy/.env.example
 
 # Scratch space for one-off scripts, debug dumps, logs — see
 # docs/agents/instructions/core-directives.md's file-placement rules

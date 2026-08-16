@@ -11,6 +11,8 @@ defmodule Letflow.Application do
 
     children = [
       Letflow.Repo,
+      {Ecto.Migrator,
+       repos: Application.fetch_env!(:letflow, :ecto_repos), skip: skip_migrations?()},
       {Oidcc.ProviderConfiguration.Worker,
        %{
          issuer: Keyword.fetch!(oidc_config, :issuer),
@@ -28,4 +30,10 @@ defmodule Letflow.Application do
     opts = [strategy: :one_for_one, name: Letflow.Supervisor]
     Supervisor.start_link(children, opts)
   end
+
+  # Migrations run automatically on boot, but only inside a compiled
+  # release (deploy/Dockerfile's `bin/letflow start`) — `mix ecto.migrate`
+  # already covers local dev/test via README's `mix ecto.setup` /
+  # the `test` alias in mix.exs, and RELEASE_NAME is unset in both.
+  defp skip_migrations?, do: System.get_env("RELEASE_NAME") == nil
 end

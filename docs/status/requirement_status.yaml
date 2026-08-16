@@ -1421,3 +1421,12 @@ history:
       same precedent as REQ-015/016/017's DOC-UPDATER passes. No lib/, test/,
       or implementation/test file was touched by this DOC-UPDATER pass — those
       were already correct and gated by the prior steps in this run.
+  - req: REQ-019
+    event: started
+    agent: ELIXIR-DEV
+    at: 2026-08-16T03:49:31Z
+    note: >
+      WF02-REQ019-20260816 run started. feature/WF02-REQ019-20260816 branch
+      created and pushed (Step 00 git setup PASS). Beginning CODE-DESIGNER
+      design step for tenant<->realm binding (resolveTenantByRealm/
+      resolveRealmByTenant equivalents) plus adp-04a's realm-ownership guard.

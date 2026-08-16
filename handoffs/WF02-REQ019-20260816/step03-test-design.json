@@ -1,0 +1,63 @@
+{
+  "handoff_id": "5383853a-f894-4fa2-93b9-a3c019b16d72",
+  "run_id": "WF02-REQ019-20260816",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ019-20260816/step03-test-design.json",
+  "created_at": "2026-08-16T04:45:15Z",
+  "started_at": "2026-08-16T04:30:00Z",
+  "completed_at": "2026-08-16T04:45:15Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S1",
+    "requirement_ids": ["REQ-019"],
+    "related_handoff_ids": ["1a3ccae9-59a1-4690-9859-3c12526fea32"],
+    "artifacts_in": [
+      "lib/letflow/design/req019-tenant-realm-binding.md",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/tenant.ex",
+      "test/letflow/identity_test.exs",
+      "test/specs/REQ-018.md",
+      "handoffs/WF02-REQ019-20260816/step02c-security-review.json",
+      "handoffs/WF02-REQ019-20260816/step02d-reviewer.json"
+    ],
+    "owned_modules": ["test/letflow/identity_test.exs", "test/specs/REQ-019.md"]
+  },
+  "task": {
+    "description": "WF-02 Step 3 (TEST-DESIGNER) for run-id WF02-REQ019-20260816: write test/specs/REQ-019.md and test code covering all 4 of REQ-019's acceptance criteria plus the default-tenant pinning and oidc_mode-conditional requirement rules, extending test/letflow/identity_test.exs (the existing REQ-018 file for the same Letflow.Identity context module).",
+    "acceptance_criteria": [
+      "resolveTenantByRealm(idp_realm_id) and resolveRealmByTenant(tenant_id) both work against REQ-015's tenants table, tested with the seeded default tenant (bpm-default)",
+      "attempting to bind a second tenant to an already-bound idp_realm_id is rejected (unique index or explicit changeset validation), not silently overwritten",
+      "attempting to change an existing tenant's idp_realm_id via the normal update changeset is rejected or the changeset simply omits idp_realm_id from its allowed fields — whichever approach is taken, it's stated explicitly in the moduledoc",
+      "a realm-ownership guard function exists that rejects a (tenant_id, external_realm) pair where external_realm is not the realm bound to tenant_id"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: IN SCOPE (real application-executable Elixir logic in lib/letflow/identity.ex and lib/letflow/identity/tenant.ex, SECURITY-REVIEWER + REVIEWER approved per step02c/step02d). Wrote test/specs/REQ-019.md (19 numbered test cases, each mapped to its acceptance criterion or design-flagged item, plus fixture-isolation and 'what seeded means' sections) and extended test/letflow/identity_test.exs with 19 new tests across 6 new describe blocks: resolve_tenant_by_realm/1 + resolve_realm_by_tenant/1 (AC1, 5 tests including the {:ok, nil} divergence), one-to-one collision rejection (AC2, 3 tests), idp_realm_id immutability via update_changeset/2 (AC3, 2 tests -- changeset-level get_change check plus a Postgres re-select persistence check), verify_realm_ownership/2 every branch (AC4, 4 tests -- match/mismatch/not-found/nil-realm, turning SECURITY-REVIEWER's step02c hand-traced fail-open check into standing tests), default-tenant pinning (3 tests -- wrong value, correct value, omitted value), and oidc_mode-conditional idp_realm_id requirement (3 tests -- required-when-enabled, optional-when-disabled, present-when-enabled). All fixtures use per-test-unique idp_realm_id/slug via a new unique_slug/1 helper (mirroring the existing unique_realm/1 pattern) except where the literal 'bpm-default' is deliberately the value under test, which is safe because every test runs in its own Ecto.Adapters.SQL.Sandbox per-test transaction (confirmed by reading test/support/data_case.ex) -- no shared/destructive reuse across tests. Ran the full local toolchain (mix + the already-running letflow-postgres-1 Docker container on localhost:5462, no throwaway-container fallback needed since both were already available): mix compile --warnings-as-errors clean, mix test test/letflow/identity_test.exs -> 29 passed (10 pre-existing REQ-018 tests untouched and still passing, 19 new REQ-019 tests), full mix test suite -> 97 passed (4 properties, 93 tests), zero regressions elsewhere. Verified the new tests actually discriminate correct from incorrect behavior, not just pass by construction: temporarily reintroduced :idp_realm_id into update_changeset/2's cast/3 list (breaking AC3 immutability) and replaced verify_realm_ownership/2's body with a hardcoded :ok (breaking AC4's fail-open guarantee), re-ran the suite -> 5 of the 29 tests failed, all and only the tests targeting exactly those two broken behaviors (both immutability tests; the mismatch, not-found, and nil-realm verify_realm_ownership/2 tests -- the :ok-match test did not fail since a hardcoded :ok still returns :ok for a real match, correctly showing that test alone would not have caught this specific injected bug, which is why the other three branch tests exist). Restored both files immediately after (confirmed via git diff -- byte-identical to the SECURITY-REVIEWER/REVIEWER-approved committed versions, zero net change), re-ran mix test test/letflow/identity_test.exs -> back to 29 passed. This is real evidence every acceptance criterion has at least one test that would fail if violated, not an assumption.",
+    "artifacts_out": [
+      "test/specs/REQ-019.md",
+      "test/letflow/identity_test.exs",
+      "handoffs/WF02-REQ019-20260816/step03-test-design.json"
+    ],
+    "issues": [],
+    "test_evidence": {
+      "mix_compile": "clean, --warnings-as-errors, no output",
+      "identity_test_result": "29 passed, 0 failed (10 pre-existing REQ-018 + 19 new REQ-019)",
+      "full_suite_result": "97 passed (4 properties, 93 tests), 0 failed",
+      "fail_demonstration": "5/29 failed when idp_realm_id immutability and verify_realm_ownership/2's guard logic were deliberately broken; exactly the tests targeting those two behaviors failed, no others; both source files restored to their exact committed state afterward (git diff clean)"
+    },
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ019-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ019-20260816",
+      "push_status": "pending_commit"
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

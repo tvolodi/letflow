@@ -1,0 +1,92 @@
+id: ISS-0020
+title: "Three rationale/precision gaps in REQ-023's shipped artefacts: the tenant_id asymmetry is correct but unexplained, design SS2.4 reason (c) is mechanically wrong, and jsonb's non-byte-transparency is unrecorded"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ023-20260816
+discovered_at: 2026-08-16T17:22:03Z
+severity: MINOR
+description: >
+  Three separate documentation/rationale gaps found by REVIEWER at WF-02
+  Step 2d. None blocks REQ-023's acceptance criteria, none is a code defect,
+  and REVIEWER passed the gate with all three recorded as non-blocking. They
+  are grouped into one record because they share a shape -- in each case the
+  shipped *decision* is correct and the shipped *explanation* is missing,
+  imprecise, or absent -- and because each is a one-to-three-sentence fix
+  that a future requirement touching these files can absorb cheaply. Filing
+  them separately would create three near-empty records.
+
+  (1) The tenant_id asymmetry is correct but its reasoning is nowhere.
+  Only three of the six new tables carry a tenant_id column (events,
+  events_archive, instance_projections -- ORCH confirmed by grep: exactly
+  those three of the six modules under lib/letflow/event_store/ mention it).
+  REVIEWER verified this asymmetry is right, against R-Co rather than by
+  assumption: 027_adp01_event_store_tenant.sql adds tenant_id only to
+  events/events_archive, and R-Co actively DROPS it from instance_sequence
+  in four separate later migrations (GBL-116:117, GBL-123:91, GBL-130:121,
+  GBL-131:90). So Letflow's distribution matches R-Co's settled state
+  exactly. What is missing is any sentence in the design artefact or the
+  schema moduledocs saying *why* three tables have it and three do not. A
+  later reader -- or a later agent applying 0003 Decision B's "tenant_id
+  columns retained inside each schema" rule literally -- would reasonably
+  read the omission as an oversight and "fix" it by adding the column to the
+  other three, silently diverging from R-Co's own conclusion.
+  Suggested fix: one sentence in the design artefact and/or the three
+  moduledocs, when REQ-025 next touches these files.
+
+  (2) Design section 2.4's reason (c) is mechanically wrong, though its
+  conclusion stands. Section 2.4 rejects a directory-source alternative for
+  tenant_scoped_migrations/0 partly on the grounds that redefining a
+  migration module would trip a compiler diagnostic and so fail
+  --warnings-as-errors. REVIEWER checked this: "redefining module" is a
+  runtime warning emitted by the code server, not a compiler diagnostic, so
+  mix compile --warnings-as-errors would not fail on it. The rejection is
+  still correct -- REVIEWER independently verified reasons (a) and (b), and
+  each carries the decision on its own: (a) a directory source would change
+  two already-gated REQ-022 @specs, and (b) Ecto's own
+  Ecto.Migrator.migrations_for/1 globs with ** (deps/ecto_sql source, around
+  lines 663-665), so putting migrations in a tenant/ subdirectory would
+  still have them swept up by a plain mix ecto.migrate and the prefix()
+  guard would remain mandatory anyway, i.e. the subdirectory buys nothing.
+  So this is a wrong supporting argument inside a right decision, not a
+  wrong decision. Worth correcting so a later requirement citing section 2.4
+  does not inherit and propagate the mistaken mechanism.
+
+  (3) jsonb is not byte-transparent, and that tradeoff is unrecorded.
+  event_payload_store.payload ships as :map/jsonb. REVIEWER ruled this
+  justified and properly disclosed (see ISS-0017's sibling discussion and
+  the Step 2d handoff: no acceptance criterion constrains the type, both
+  R-Co citations -- 012_event_retention.sql:19 and
+  1147_par01_events_partitioning.sql:219 -- are JSONB, and under 0003
+  Decision A a text/bytea choice would have been the divergence). The
+  unrecorded consequence is that jsonb normalises its input: it cannot
+  round-trip an opaque binary blob byte-for-byte the way bytea could, and
+  key order/whitespace/duplicate keys are not preserved. Nothing in Letflow
+  needs byte-transparency today -- the payload is documented as JSON object
+  bytes throughout event_store.md -- so this is not a defect. It is recorded
+  here so that if a future requirement ever does need to store an opaque
+  blob or a hash-stable payload representation (R-Co's own
+  adp-05-instance-artifact-hash.md and adp-09-tamper-evident-audit-chain.md
+  are the plausible candidates), the constraint is findable rather than
+  rediscovered by a failing hash comparison.
+
+  All three discovered by REVIEWER during REQ-023's Step 2d hard gate, which
+  PASSED. Filed and forwarded per docs/agents/protocols/ISSUE_QUEUE.md
+  rather than fixed in-run: (1) and (3) are rationale additions to artefacts
+  this run has already carried through two hard gates, and (2) is a
+  correction to a design artefact that passed the Step 1b gate -- editing
+  any of them now would modify gated artefacts after the fact rather than
+  through a gate.
+
+  Separately, and NOT part of this record because it is being closed inside
+  this run: REVIEWER also flagged that the manifest's version-to-filename
+  pairing in tenant_scoped_migrations/0 is unguarded (a wrong-but-unique
+  version number would be caught by nothing). ORCH forwarded that to
+  TEST-DESIGNER at Step 3 as an actionable test rather than filing it, since
+  it is fixable within this run's own remaining steps.
+affected_files:
+  - lib/letflow/design/req023-event-store-schema.md
+  - lib/letflow/event_store/event.ex
+  - lib/letflow/event_store/archived_event.ex
+  - lib/letflow/event_store/instance_projection.ex
+  - lib/letflow/event_store/stored_payload.ex
+github_issue: https://github.com/tvolodi/letflow/issues/76
+status: open

@@ -7,6 +7,22 @@ shape + module/function signatures + Ecto.Schema shape only. No implementation c
 function bodies, no changeset bodies. ELIXIR-DEV writes the actual `.exs`/`.ex` files
 from this.
 
+**Revision note (rework iteration 1):** CODE-DESIGN-VALIDATOR FAILed the prior draft
+(commit `0b3057f`) on one BLOCKER — §4's interface note asserted `register_type/2`,
+`validate_payload/3`, `get_type/2` should each take `prefix :: String.t()` directly from
+the caller, citing `Letflow.TenantProvisioning.replay_migrations/2` as precedent. That
+citation was wrong: `replay_migrations/2` actually takes `tenant_id`, not `prefix`, and
+resolves `schema_name` internally, returning `{:error, :tenant_not_provisioned}` when
+unprovisioned. This revision applies fix option (a): all three functions now take
+`tenant_id :: Ecto.UUID.t()` and resolve the physical schema internally via
+`Letflow.TenantProvisioning.Registration`, matching `replay_migrations/2`'s actual
+convention, with `{:error, :tenant_not_provisioned}` added to each function's error
+union. Changed sections: §4 (opening interface note, rewritten), §4.1, §4.2, §4.3
+(specs + behavior steps), §6 (cross-module dependencies), §7.2 (index entry) and new
+§7.3, §8 (traceability table rows 2–4). Unchanged: §1 (JSON Schema library decision),
+§2, §3 (migration shape), §4.4/§4.5 (validator algorithm/struct), §5 (Ecto schema) —
+none of these referenced the wrong convention or need to change to fix the BLOCKER.
+
 ## 0. Sources read for this design
 
 - `docs/requirements.yaml` REQ-024 (full entry, including both OPEN QUESTIONs) and
@@ -305,38 +321,87 @@ implementation time, not a design-time blocker, named here so it isn't a surpris
 
 ## 4. Public function signatures (`Letflow.EventStore.Registry`)
 
-**Interface note on arity, read before the individual specs below:** REQ-024's
-description names `register_type/2 (or /3)`, `validate_payload/2`, `get_type/1`. Those
-numbers describe R-Co's own call shape after dropping Zig's `self`/`allocator`
-parameters (2 and 1 conceptual arguments respectively) — but R-Co's `Registry` is a
-**struct already bound to one pool/schema at `init/2` time**, so `event_type`/`payload`
-alone are enough to identify what to query. Letflow's `Registry` is a **stateless
-context module** (no analogous per-call-site pre-bound struct exists anywhere else in
-this codebase — `Letflow.Identity`, `Letflow.TenantProvisioning` are both plain
-function-only modules too), and per REQ-024's own AC1, this table is schema-per-tenant —
-every DB call this module makes must carry an explicit `prefix` the same way
-`Letflow.TenantProvisioning.replay_migrations/2` does. The requirement text never
-addresses how tenant scope threads through these three functions (an omission, not a
-deliberate exclusion — confirmed by re-reading the full entry, §0). Resolving that gap
-is exactly the kind of real interface decision this role is asked to make, not defer:
+**Interface note on arity and tenant-scope resolution, read before the individual specs
+below:** REQ-024's description names `register_type/2 (or /3)`, `validate_payload/2`,
+`get_type/1`. Those numbers describe R-Co's own call shape after dropping Zig's
+`self`/`allocator` parameters (2 and 1 conceptual arguments respectively) — but R-Co's
+`Registry` is a **struct already bound to one pool/schema at `init/2` time**, so
+`event_type`/`payload` alone are enough to identify what to query. Letflow's `Registry`
+is a **stateless context module** (no analogous per-call-site pre-bound struct exists
+anywhere else in this codebase — `Letflow.Identity`, `Letflow.TenantProvisioning` are
+both plain function-only modules too), and per REQ-024's own AC1, this table is
+schema-per-tenant — every DB call this module makes must resolve a tenant's physical
+schema before querying. The requirement text never addresses how tenant scope threads
+through these three functions (an omission, not a deliberate exclusion — confirmed by
+re-reading the full entry, §0). Resolving that gap is exactly the kind of real interface
+decision this role is asked to make, not defer.
+
+**Correction (rework iteration 1):** the prior draft of this section asserted the
+second/third argument should be `prefix :: String.t()`, supplied by the caller, "the
+same way `Letflow.TenantProvisioning.replay_migrations/2` does." That citation was
+factually wrong — re-read directly against `lib/letflow/tenant_provisioning.ex` for this
+rework: `replay_migrations/2` (lines 153–181) takes `tenant_id`, not `prefix`. It
+internally resolves `schema_name` via `Repo.get_by(Registration, tenant_id: tenant_id)`
+(line 161) and returns `{:error, :tenant_not_provisioned}` (line 163) if no
+`Registration` row exists for that tenant — the module owns both prefix derivation and
+the not-provisioned error case; no public function in `tenant_provisioning.ex` takes a
+raw prefix string from an external caller (`schema_name_for_tenant/1` is a pure
+derivation with no provisioning check; `provision_tenant_schema/1` also takes
+`tenant_id`, not `prefix`). This design now follows fix option (a) from
+CODE-DESIGN-VALIDATOR's rework instructions: match `replay_migrations/2`'s actual
+convention exactly, rather than the convention this draft previously (incorrectly)
+attributed to it.
+
 - `register_type/2` **stays literally `/2`** — `attrs :: map()` (bundling
   name/schema_version/json_schema/description, matching `Letflow.TenantProvisioning`'s
   own `attrs` idiom rather than a dedicated `RegisterParams` struct — see §4.1) plus
-  `prefix :: String.t()` as the second argument.
+  **`tenant_id :: Ecto.UUID.t()`** (not `prefix`) as the second argument.
 - `validate_payload/2` becomes **`validate_payload/3`** — `event_type`, `payload`, and
-  `prefix` are three genuinely separate conceptual inputs once tenant scope is made
-  explicit; there is no non-distorting way to bundle two of the three into one argument
-  the way `register_type/2` bundles four record fields into one `attrs` map (attrs
-  are already naturally one cohesive "the record being created" concept; `event_type`
-  + `payload` are not the same kind of thing and forcing them into one map purely to
-  preserve a `/2` label would be exactly the kind of shape-over-substance distortion
-  `core-directives.md`'s "Never Satisfy a Gate by Editing What It Measures" principle
-  warns against, applied to interface design rather than a literal gate).
-- `get_type/1` becomes **`get_type/2`** — `event_type` plus `prefix`, same reasoning.
+  **`tenant_id`** are three genuinely separate conceptual inputs once tenant scope is
+  made explicit; there is no non-distorting way to bundle two of the three into one
+  argument the way `register_type/2` bundles four record fields into one `attrs` map
+  (attrs are already naturally one cohesive "the record being created" concept;
+  `event_type` + `payload` are not the same kind of thing and forcing them into one map
+  purely to preserve a `/2` label would be exactly the kind of shape-over-substance
+  distortion `core-directives.md`'s "Never Satisfy a Gate by Editing What It Measures"
+  principle warns against, applied to interface design rather than a literal gate).
+- `get_type/1` becomes **`get_type/2`** — `event_type` plus **`tenant_id`**, same
+  reasoning.
 
-This divergence is called out here, in the traceability table (§8), and must be
-mentioned in `Letflow.EventStore.Registry`'s own `@moduledoc` (one sentence: "arities
-differ from REQ-024's literal text because tenant-prefix threading is mandatory — see
+**Tenant-scope resolution mechanism (new in this rework iteration):**
+`register_type/2` and `get_type/2` each independently resolve `tenant_id` to a physical
+`schema_name` as their first behavior step, via
+`Repo.get_by(Letflow.TenantProvisioning.Registration, tenant_id: tenant_id)` — the exact
+same lookup `replay_migrations/2` performs inline. A `nil` result (no `Registration` row
+for that `tenant_id`) short-circuits the function with `{:error, :tenant_not_provisioned}`,
+added to all three functions' error unions (§4.1–§4.3). `validate_payload/3` does
+**not** duplicate this lookup itself — it has no direct `Repo` call of its own (its only
+DB access is via its own internal call to `get_type/2`, §4.2 step 2), so it simply
+forwards `tenant_id` to `get_type/2` and propagates whatever error `get_type/2` returns,
+`:tenant_not_provisioned` included. Stated explicitly so ELIXIR-DEV doesn't triplicate
+the lookup: only two of the three functions (`register_type/2`, `get_type/2`) contain
+the resolution step themselves.
+
+**Why duplicate the lookup between `register_type/2` and `get_type/2` rather than
+extracting a shared helper:** `Letflow.TenantProvisioning` currently exposes no public
+function with the exact contract this design needs (`tenant_id -> {:ok, schema_name} |
+{:error, :tenant_not_provisioned}`) — `schema_name_for_tenant/1` is pure derivation with
+no provisioning check, and the actual check-and-resolve logic lives inline inside
+`replay_migrations/2`, not factored out. Extracting it into a new shared
+`Letflow.TenantProvisioning` function would mean this design reaching into and modifying
+a sibling requirement's already-merged module beyond the one edit already anticipated
+there (`tenant_scoped_migrations/0`, §3) — judged out of REQ-024's scope. The two-call-site
+duplication (a single `Repo.get_by/2` line, not a complex algorithm) is accepted here
+rather than triggering that refactor; named as a real cross-module dependency in §6 and
+flagged in §7.3 for REVIEWER to decide whether a future fast-follow should extract it.
+
+This divergence (arity note + resolution mechanism) is called out here, in the
+traceability table (§8), and must be mentioned in `Letflow.EventStore.Registry`'s own
+`@moduledoc` (two sentences: "arities differ from REQ-024's literal text because
+tenant-scope threading is mandatory, and the second/third argument is `tenant_id`, not a
+raw prefix string — the module resolves the physical schema internally via
+`Letflow.TenantProvisioning`, returning `{:error, :tenant_not_provisioned}` if the
+tenant has no provisioned schema yet — see
 `lib/letflow/design/req024-event-type-registry.md` §4") so CODE-DESIGN-VALIDATOR and
 REVIEWER see the reasoning rather than an unexplained mismatch against the requirement
 text.
@@ -344,8 +409,9 @@ text.
 ### 4.1 `register_type/2`
 
 ```
-@spec register_type(attrs :: map(), prefix :: String.t()) ::
+@spec register_type(attrs :: map(), tenant_id :: Ecto.UUID.t()) ::
         {:ok, EventType.t()}
+        | {:error, :tenant_not_provisioned}
         | {:error, Ecto.Changeset.t()}
         | {:error, :duplicate_event_type_version}
         | {:error, :schema_version_not_monotonic}
@@ -359,7 +425,12 @@ or-atom-key tolerance, matching every other `attrs`-taking function in this code
 
 **Behavior, in order:**
 
-1. Build `EventType.changeset(%EventType{}, attrs)` (§5, `EventType`'s own changeset):
+1. **Resolve `tenant_id` to `schema_name`** (§4's opening note): `Repo.get_by(
+   Letflow.TenantProvisioning.Registration, tenant_id: tenant_id)`. `nil` → return
+   `{:error, :tenant_not_provisioned}` immediately — no changeset work attempted.
+   Otherwise bind the row's `schema_name` field for use as the `prefix:` option value in
+   steps 4–5 below.
+2. Build `EventType.changeset(%EventType{}, attrs)` (§5, `EventType`'s own changeset):
    `cast([:name, :schema_version, :json_schema, :description])`,
    `validate_required([:name, :schema_version, :json_schema])`,
    `validate_length(:name, min: 1, max: 128)`,
@@ -376,23 +447,23 @@ or-atom-key tolerance, matching every other `attrs`-taking function in this code
    enforced type" pattern `0003-ecto-schema-strategy.md`'s TEXT→`Ecto.Enum` swap
    already established as a legitimate Decision-A-style simplification, applied here to
    R-Co's leading-byte `isJsonObject` hack.
-2. If the changeset is invalid at this point, return `{:error, changeset}` immediately
+3. If the changeset is invalid at this point, return `{:error, changeset}` immediately
    — no DB round-trip.
-3. **Monotonicity pre-check (a Letflow-specific rule beyond R-Co — see the callout
+4. **Monotonicity pre-check (a Letflow-specific rule beyond R-Co — see the callout
    below):** query the current maximum `schema_version` already registered for `name`
-   under `prefix` (`Repo.aggregate/4`-shaped: `MAX(schema_version) WHERE name = $1`,
-   `prefix: prefix`). Let `current_max` be that value, or `0` if no rows exist yet for
-   `name`.
+   under `schema_name` (the value resolved in step 1 — `Repo.aggregate/4`-shaped:
+   `MAX(schema_version) WHERE name = $1`, `prefix: schema_name`). Let `current_max` be
+   that value, or `0` if no rows exist yet for `name`.
    - If `changeset.schema_version < current_max` → return
      `{:error, :schema_version_not_monotonic}`.
    - If `changeset.schema_version == current_max` (only possible when `current_max > 0`,
      i.e. a row with that exact `(name, schema_version)` pair already exists) → return
      `{:error, :duplicate_event_type_version}` directly — no need to even attempt the
      `INSERT` for this case, since it is already known to collide.
-4. Otherwise (`schema_version > current_max`), attempt the insert
-   (`Repo.insert(changeset, prefix: prefix)`). The unique index on `(name,
+5. Otherwise (`schema_version > current_max`), attempt the insert
+   (`Repo.insert(changeset, prefix: schema_name)`). The unique index on `(name,
    schema_version)` (§3) is the race-safe backstop for the rare concurrent-registration
-   case the step-3 pre-check can't fully close (two concurrent `register_type/2` calls
+   case the step-4 pre-check can't fully close (two concurrent `register_type/2` calls
    both reading the same `current_max` before either commits, both attempting
    `current_max + 1`) — map a `unique_constraint` violation on this index to
    `{:error, :duplicate_event_type_version}`, the same way
@@ -403,15 +474,15 @@ or-atom-key tolerance, matching every other `attrs`-taking function in this code
    (e.g. version 5 and version 3 committing in either order) are not fully serialized by
    this design — the unique index only protects against an *exact* `(name,
    schema_version)` collision, not out-of-order-but-distinct versions racing past the
-   step-3 `MAX` check. This is a best-effort ordering guarantee, not a
+   step-4 `MAX` check. This is a best-effort ordering guarantee, not a
    transaction-with-advisory-lock hard invariant (unlike
    `provision_tenant_schema/1`'s `pg_advisory_xact_lock` use) — stated explicitly as an
    accepted risk rather than silently glossed over, matching the same
    accepted-risk-disclosure pattern `req022-tenant-schema-provisioning.md` §3.1 already
    uses for its own `hashtext` collision note. If this ever needs to be a hard
    invariant, a future requirement can add the same advisory-lock pattern around steps
-   3–4; not built here since REQ-024's acceptance criteria don't ask for it.
-5. Return `{:ok, %EventType{}}` on success.
+   4–5; not built here since REQ-024's acceptance criteria don't ask for it.
+6. Return `{:ok, %EventType{}}` on success.
 
 **Callout — `:schema_version_not_monotonic` is a new rule, not a straight R-Co port.**
 R-Co's own `registerType`/`validateRegisterParams` has **no** "greater than all existing
@@ -430,8 +501,9 @@ independently.
 ### 4.2 `validate_payload/3`
 
 ```
-@spec validate_payload(event_type :: String.t(), payload :: String.t(), prefix :: String.t()) ::
+@spec validate_payload(event_type :: String.t(), payload :: String.t(), tenant_id :: Ecto.UUID.t()) ::
         :ok
+        | {:error, :tenant_not_provisioned}
         | {:error, :unknown_event_type}
         | {:error, {:payload_validation_failed, [ValidationFailure.t()]}}
         | {:error, term()}
@@ -459,10 +531,14 @@ happens). This is a deliberate choice, not left ambiguous: `validate_payload/3` 
    `JsonSchema` (§4.4) — matches R-Co's own module boundary exactly**, where this check
    lives in `registry.zig`'s `validatePayloadAgainstSchema`, not in the generic,
    schema-driven `json_schema.zig`.
-2. Call `get_type/2` (§4.3) with `event_type` and `prefix`. On
-   `{:error, :unknown_event_type}`, propagate that error directly (ES-05: unregistered
-   event types are always rejected — matches R-Co's `validatePayload`, whose `getType`
-   call's error propagates unchanged).
+2. Call `get_type/2` (§4.3) with `event_type` and `tenant_id`, forwarded as-is —
+   `validate_payload/3` does not resolve `schema_name` itself (§4's opening note). On
+   `{:error, :unknown_event_type}` **or `{:error, :tenant_not_provisioned}`**, propagate
+   that error directly (ES-05: unregistered event types are always rejected — matches
+   R-Co's `validatePayload`, whose `getType` call's error propagates unchanged; the
+   `:tenant_not_provisioned` case has no R-Co analogue since R-Co's `Registry` is always
+   already bound to a valid schema at `init/2` time — this is a Letflow-specific
+   propagation made necessary by tenant-scope resolution now happening per-call, §4).
 3. On `{:ok, %EventType{json_schema: schema}}`, call
    `JsonSchema.validate(decoded_payload, schema)` (§4.4) — returns a (possibly empty)
    list of `ValidationFailure.t()`.
@@ -513,18 +589,24 @@ silently-vanished error case someone might later wonder about.
 ### 4.3 `get_type/2`
 
 ```
-@spec get_type(event_type :: String.t(), prefix :: String.t()) ::
+@spec get_type(event_type :: String.t(), tenant_id :: Ecto.UUID.t()) ::
         {:ok, EventType.t()}
+        | {:error, :tenant_not_provisioned}
         | {:error, :unknown_event_type}
         | {:error, term()}
 ```
 
-**Behavior:** `SELECT * FROM event_type_registry WHERE name = $1 ORDER BY
-schema_version DESC LIMIT 1` (parameterized, `prefix: prefix`) — matches R-Co's
-`getType` query exactly (order/limit clause, §0's `registry.zig` read). Zero rows →
-`{:error, :unknown_event_type}` (**never `nil`, never a raised exception** — this is
-AC4's literal requirement, and matches R-Co's `RegistryError.UnknownEventType`). One row
-→ `{:ok, %EventType{}}`.
+**Behavior, in order:**
+
+1. **Resolve `tenant_id` to `schema_name`** — identical mechanism to §4.1 step 1:
+   `Repo.get_by(Letflow.TenantProvisioning.Registration, tenant_id: tenant_id)`. `nil` →
+   return `{:error, :tenant_not_provisioned}` immediately.
+2. `SELECT * FROM event_type_registry WHERE name = $1 ORDER BY schema_version DESC
+   LIMIT 1` (parameterized, `prefix: schema_name` — the value resolved in step 1, not a
+   caller-supplied argument) — matches R-Co's `getType` query exactly (order/limit
+   clause, §0's `registry.zig` read). Zero rows → `{:error, :unknown_event_type}`
+   (**never `nil`, never a raised exception** — this is AC4's literal requirement, and
+   matches R-Co's `RegistryError.UnknownEventType`). One row → `{:ok, %EventType{}}`.
 
 ### 4.4 `Letflow.EventStore.Registry.JsonSchema.validate/2`
 
@@ -653,8 +735,21 @@ mechanical Ecto naming-convention detail, not an open design question).
 ## 6. Cross-module dependencies
 
 - `Letflow.Repo` — all DB access goes through the existing single `Ecto.Repo`, every
-  call passing `prefix: prefix` explicitly (no dynamic-repo/multi-repo config exists,
-  matching `req022-tenant-schema-provisioning.md` §6's own note).
+  call passing `prefix: schema_name` explicitly, where `schema_name` is resolved
+  internally from the caller's `tenant_id` (§4's opening note) — never supplied directly
+  by the caller (no dynamic-repo/multi-repo config exists, matching
+  `req022-tenant-schema-provisioning.md` §6's own note).
+- **`Letflow.TenantProvisioning.Registration` (the Ecto schema struct — a genuine
+  cross-module read dependency this design did not previously name, added in rework
+  iteration 1):** `register_type/2` (§4.1 step 1) and `get_type/2` (§4.3 step 1) each
+  query it directly, `Repo.get_by(Registration, tenant_id: tenant_id)`, to resolve
+  `schema_name` and detect an unprovisioned tenant. This duplicates — rather than
+  reuses — the exact lookup `replay_migrations/2` performs inline
+  (`tenant_provisioning.ex` lines 160–163), because `Letflow.TenantProvisioning`
+  currently exposes no public function with the standalone contract
+  (`tenant_id -> {:ok, schema_name} | {:error, :tenant_not_provisioned}`) this design
+  needs. Reasoning for accepting the two-call-site duplication instead of extracting a
+  shared helper is in §4's opening note; flagged again in §7.3 for REVIEWER.
 - `Jason` (`~> 1.4`, already a dependency) — `validate_payload/3`'s own `Jason.decode/1`
   call on the raw `payload` argument (§4.2 step 1). No other module in this design uses
   `Jason` directly — `json_schema`/`EventType`'s own map field is decoded by
@@ -669,9 +764,13 @@ mechanical Ecto naming-convention detail, not an open design question).
 - **REQ-025 (`Store.append/1`/`/2`, not yet built)** — the first real caller of
   `validate_payload/3`, per REQ-025's own description ("call REQ-024's
   `validate_payload/2` before any write"). REQ-025's own CODE-DESIGNER should read §4's
-  interface note (arity is actually `/3`, not `/2`, once tenant-prefix is threaded) and
-  this document's §4.2 in full before assuming the literal `/2` the REQ-025 requirement
-  text (drafted before this design existed) currently cites.
+  interface note (arity is actually `/3`, not `/2`, once tenant-scope threading is
+  accounted for) and this document's §4.2 in full before assuming the literal `/2` the
+  REQ-025 requirement text (drafted before this design existed) currently cites. Critically
+  (corrected in this rework iteration): the third argument is `tenant_id`, **not** a raw
+  prefix string — `Store.append/1` supplies the tenant_id it already has (the same way
+  every other tenant-scoped context function in this codebase is called), and must treat
+  `{:error, :tenant_not_provisioned}` as a real, handled outcome, not assume it away.
 - **No dependency on `Letflow.EventStore` (a `Store`/`append` context module)** — that
   module doesn't exist yet (REQ-025's own scope); this design does not anticipate or
   stub its shape.
@@ -686,7 +785,7 @@ tenant-schema classification explicitly the way `1147_par01_events_partitioning.
 explicitly classifies `events`/`events_archive` as `PER_TENANT`. This design **defaults
 to schema-per-tenant**, per Decision B's stated general rule for business tables absent
 a stated exception, applied consistently with how this design otherwise treats the
-table (§3's migration, §4's `prefix` threading throughout).
+table (§3's migration, §4's tenant-scope threading throughout).
 
 **Corroborating (not settling) evidence found during this design's own source reads,
 recorded here so REVIEWER doesn't have to re-derive it from scratch:**
@@ -709,16 +808,34 @@ REQ-024's own text instructs, not presented as closed.
 Already stated in full at §4's opening interface note — restated here only as an index
 entry so this section is a complete list of every open/flagged item in one place.
 `register_type/2` stays literally `/2`; `validate_payload/3` and `get_type/2` diverge
-from the requirement's literal `/2`/`/1` because tenant-prefix threading (AC1) is
-mandatory and the requirement text never addressed it. Not silently resolved — reasoning
-given in full at §4.
+from the requirement's literal `/2`/`/1` because tenant-scope threading (AC1) is
+mandatory and the requirement text never addressed it. The second/third argument is
+`tenant_id :: Ecto.UUID.t()` — resolved internally to a physical `schema_name` via
+`Letflow.TenantProvisioning.Registration` — **not** a raw prefix string supplied by the
+caller (this parameter identity was corrected in rework iteration 1; see §4's "Correction"
+callout for the full history). Not silently resolved — reasoning given in full at §4.
+
+### 7.3 Should the tenant_id→schema_name-with-provisioning-check lookup be extracted
+into a shared `Letflow.TenantProvisioning` function?
+
+**New in rework iteration 1, not resolved here.** `register_type/2` and `get_type/2`
+each independently run `Repo.get_by(Registration, tenant_id: tenant_id)` (§4.1 step 1,
+§4.3 step 1) — the same lookup `replay_migrations/2` already performs inline. Three call
+sites across two modules now share this exact logic with no single source of truth.
+This design accepts the duplication rather than refactoring `Letflow.TenantProvisioning`
+(a sibling, already-merged requirement's module) beyond the one edit already anticipated
+there (§3/§6, `tenant_scoped_migrations/0`) — reasoning in full at §4's opening note and
+§6. Left for REVIEWER to decide whether a future fast-follow requirement should extract
+a shared `Letflow.TenantProvisioning` function (e.g. a `resolve_schema_name/1`-shaped
+`tenant_id -> {:ok, schema_name} | {:error, :tenant_not_provisioned}`) that both this
+module and a refactored `replay_migrations/2` could call — not decided or assumed here.
 
 ## 8. Acceptance-criteria traceability
 
 | REQ-024 acceptance criterion | Concrete design element |
 |---|---|
 | "priv/repo/migrations gains an event_type_registry migration (schema-per-tenant per REQ-022) applying cleanly" | §3 — full migration spec (columns, types, constraints, indexes, required guard pattern, required `tenant_scoped_migrations/0` edit) |
-| "register_type/2 rejects a second registration with the same (name, schema_version) with a distinct, testable error, not a generic changeset failure" | §4.1 steps 3–4 — `{:error, :duplicate_event_type_version}`, both the pre-check path and the unique-constraint-violation backstop path, neither of which leaks a raw `%Ecto.Changeset{}` for this specific case |
-| "validate_payload/2 against a payload missing a required field returns a failure result whose detail names the specific field_path (JSON Pointer form) and constraint, not just a boolean false" | §4.2 (behavior) + §4.4 (the `required` keyword's per-missing-member violation, RFC 6901 `field_path`, literal `constraint` string) + §4.5 (`ValidationFailure` struct shape) — note the arity divergence to `/3`, §4's interface note |
-| "get_type/1 against an unregistered name returns an explicit :unknown_event_type-shaped error rather than nil or an exception" | §4.3 — `{:error, :unknown_event_type}` on zero rows, never `nil`/a raise — note the arity divergence to `/2`, §4's interface note |
+| "register_type/2 rejects a second registration with the same (name, schema_version) with a distinct, testable error, not a generic changeset failure" | §4.1 steps 4–5 — `{:error, :duplicate_event_type_version}`, both the pre-check path and the unique-constraint-violation backstop path, neither of which leaks a raw `%Ecto.Changeset{}` for this specific case. Tenant scope threads via `tenant_id` (step 1, resolved internally to `schema_name`) — not a raw prefix string, corrected in rework iteration 1, see §4. |
+| "validate_payload/2 against a payload missing a required field returns a failure result whose detail names the specific field_path (JSON Pointer form) and constraint, not just a boolean false" | §4.2 (behavior) + §4.4 (the `required` keyword's per-missing-member violation, RFC 6901 `field_path`, literal `constraint` string) + §4.5 (`ValidationFailure` struct shape) — note the arity divergence to `/3`, and that the third argument is `tenant_id` (not prefix), resolved internally by the `get_type/2` call it delegates to — §4's interface note, corrected in rework iteration 1 |
+| "get_type/1 against an unregistered name returns an explicit :unknown_event_type-shaped error rather than nil or an exception" | §4.3 — `{:error, :unknown_event_type}` on zero rows, never `nil`/a raise — note the arity divergence to `/2`, and that the second argument is `tenant_id` (not prefix), resolved internally to `schema_name` in step 1 — §4's interface note, corrected in rework iteration 1 |
 | "the moduledoc names the JSON Schema validation library choice as an explicit open question for CODE-DESIGNER, not a silently made decision" | §1 (full decision + reasoning) + §1.4's closing paragraph, which states exactly what `Letflow.EventStore.Registry`'s `@moduledoc` must say and why that satisfies this criterion even though the choice is now made, not left open (the requirement text itself never silently pre-picked a library — confirmed at §0 — and the moduledoc must document, not hide, that CODE-DESIGNER resolved it here) |

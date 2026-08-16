@@ -147,7 +147,7 @@ Reasoning:
 
 | File | Module | New functions |
 |---|---|---|
-| `lib/letflow/identity/role_registry.ex` | `Letflow.Identity.RoleRegistry` | `list_roles/0`, `upsert_role/2`, `resolve_role_in_tx/2` |
+| `lib/letflow/identity/role_registry.ex` | `Letflow.Identity.RoleRegistry` | `list_roles/0`, `upsert_role/2`, `resolve_role_in_tx/1` |
 
 No changes to `lib/letflow/identity.ex`, `lib/letflow/identity/tenant_role.ex`, or
 `lib/letflow/identity/group.ex` (schema field lists are already correct and final per
@@ -435,10 +435,10 @@ using it as the explicit gate before any query touches `group_id` is what makes
 project's already-established general principle (`Letflow.Identity`'s existing functions
 — see `backend_developer_guide.md` §3.5, `security-invariants.md` INV-8).
 
-### 4.3 `resolve_role_in_tx/2` — "never raise" mechanism, stated explicitly (answers
+### 4.3 `resolve_role_in_tx/1` — "never raise" mechanism, stated explicitly (answers
 task point 2's resolve_role_in_tx sub-instruction)
 
-`resolve_role_in_tx/2` (§6 below) achieves "never raises, swallows all failures into
+`resolve_role_in_tx/1` (§6 below) achieves "never raises, swallows all failures into
 `nil`" through two distinct mechanisms, one per class of failure:
 
 1. **Unknown/unbound name → `nil` via a query primitive that itself never raises for
@@ -450,7 +450,7 @@ task point 2's resolve_role_in_tx sub-instruction)
    *could* raise) → `nil` via an explicit `rescue`.** Unlike `list_roles/0` and
    `upsert_role/2` (§2, §3), which both leave a genuine connection-level failure
    unhandled/propagating (matching this project's established precedent — see §2's own
-   note and `req019-tenant-realm-binding.md`'s OQ-4), `resolve_role_in_tx/2` is
+   note and `req019-tenant-realm-binding.md`'s OQ-4), `resolve_role_in_tx/1` is
    different: REQ-020's acceptance criterion #4 explicitly requires it to "return nil on
    any lookup failure (unknown name, table/connection issue) rather than raising" — a
    stronger, function-specific requirement matching `role_registry.zig`'s own doc
@@ -464,12 +464,12 @@ task point 2's resolve_role_in_tx sub-instruction)
    (and in `Letflow.Identity`'s existing functions) deliberately does not. **This is the
    one place in this design that intentionally diverges from the project's general
    "don't paper over a raised connection error" posture** — justified because
-   `resolve_role_in_tx/2`'s entire reason for existing (per its R-Co source) is to be
+   `resolve_role_in_tx/1`'s entire reason for existing (per its R-Co source) is to be
    the fail-safe fallback inside a larger transition transaction (S3's future
    `applyTransition`) that must not itself fail due to a role-lookup problem; swallowing
    is the *documented, correct* behavior here, not a shortcut.
 
-## 5. `resolve_role_in_tx/2` — full signature (answers task point 2 continued)
+## 5. `resolve_role_in_tx` — full signature (answers task point 2 continued)
 
 ```
 @spec resolve_role_in_tx(repo_or_multi :: Ecto.Repo.t() | Ecto.Multi.t(), name :: String.t()) ::
@@ -487,16 +487,17 @@ transaction-aware by ambient process/connection state once called from *inside* 
 code running inside that callback automatically participates in the same transaction,
 without needing to thread a connection value through explicitly).
 
-**This design specifies: `resolve_role_in_tx/2`'s first parameter is `Letflow.Repo`
-itself (the module name/alias, i.e. `Letflow.Repo`) — not a raw connection struct, not
-an `Ecto.Multi.t()`.** The function is designed to be *called from inside* an existing
-`Repo.transaction/1` callback (the future S3 `applyTransition`'s transaction) — the
-"inside an existing transaction" property comes from *where the function is invoked from*
-(within another function's `Repo.transaction/1` callback), not from a value threaded into
-this function's own arguments. Concretely: `resolve_role_in_tx/2`'s body issues
+**This design specifies: `resolve_role_in_tx`'s parameter list carries no explicit
+connection/transaction argument at all** — not a raw connection struct, not an
+`Ecto.Multi.t()`, not even `Letflow.Repo` itself threaded as a value. The function is
+designed to be *called from inside* an existing `Repo.transaction/1` callback (the
+future S3 `applyTransition`'s transaction) — the "inside an existing transaction"
+property comes from *where the function is invoked from* (within another function's
+`Repo.transaction/1` callback), not from a value threaded into this function's own
+arguments. Concretely: `resolve_role_in_tx/1`'s body issues
 `Repo.get_by(TenantRole, name: name)` (wrapped in the `rescue`, §4.3) exactly the way
 `resolve_tenant_by_realm/1`/`resolve_realm_by_tenant/1` already do elsewhere in this
-codebase — when the *caller* (a future S3 function) invokes `resolve_role_in_tx/2` from
+codebase — when the *caller* (a future S3 function) invokes `resolve_role_in_tx/1` from
 inside its own `Repo.transaction/1` callback, Ecto/Postgrex automatically executes this
 function's `Repo.get_by/2` call against that same open transaction/connection, with no
 special parameter needed to make that happen. **The `repo_or_multi` parameter in the

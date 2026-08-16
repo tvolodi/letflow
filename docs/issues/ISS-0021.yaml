@@ -1,0 +1,74 @@
+id: ISS-0021
+title: "Doc contradiction on who owns handoffs/registry.json: HANDOFF_PROTOCOL.md section 4 step 4 assigns the update to the completing agent, ORCHESTRATOR.md assigns it to ORCH"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ023-20260816
+discovered_at: 2026-08-16T19:05:00Z
+severity: MINOR
+description: >
+  Two authoritative documents give different answers to "who writes
+  handoffs/registry.json," and the contradiction is load-bearing enough that
+  two separate agents in this single run stopped to ask about it.
+
+  docs/agents/shared/HANDOFF_PROTOCOL.md section 4 ("Complete the handoff")
+  step 4 instructs the agent completing a handoff to:
+
+      4. Update the matching entry's status in handoffs/registry.json
+
+  docs/agents/ORCHESTRATOR.md's "ORCH MUST" list instead states:
+
+      - Create and update handoff files; maintain handoffs/registry.json
+
+  and docs/agents/AGENT_SYSTEM.md's section 3.1 capability matrix gives ORCH
+  "handoffs, status only" as its write scope while giving each validating
+  role "handoffs" -- neither of which resolves the registry question
+  explicitly.
+
+  This is not a hypothetical ambiguity. Both ELIXIR-DEV (Step 2a) and
+  RELEASE-VALIDATOR (Step 5) raised it independently during this run,
+  because each had been dispatched with an explicit instruction to leave
+  registry.json alone as ORCH-owned while its own canonical protocol told it
+  to update the file. Each followed the dispatch and flagged the drift
+  rather than silently picking a side, which is the correct behaviour under
+  core-directives.md ("Where this file and any other doc disagree, this file
+  wins -- flag the discrepancy as a MINOR issue in your handoff so the drift
+  gets fixed at the source"), but it cost two agents a decision point that
+  should not exist.
+
+  Why the ORCH-owned reading is operationally the right one, and why the
+  contradiction is nonetheless worth fixing at the source rather than left
+  to convention: registry.json is a single JSON document holding one entry
+  per run, with run-level lock fields (owned_modules, lock_acquired_at,
+  lock_released_at, released_lock) that only ORCH has the context to set
+  correctly. It is also the file that ORCHESTRATOR.md section 7's
+  owned_modules collision check reads. Having every completing agent write
+  to it would mean many writers to one JSON file within a single run -- and
+  in the current two-worktree arrangement, across two concurrently running
+  sessions -- which is exactly the concurrent-write hazard the file's own
+  header comment warns about ("Append-only per HANDOFF_PROTOCOL.md section
+  5 -- never shrink, never regenerate wholesale"). Every run in this
+  project's actual history (REQ-018 through REQ-023) has in practice been
+  ORCH-written, and REQ-028's Step 1b handoff records the same
+  gates-do-not-write-the-registry convention.
+
+  Suggested fix: amend HANDOFF_PROTOCOL.md section 4 step 4 to say that ORCH
+  updates registry.json on the agent's behalf when it processes the
+  completed handoff, so the protocol matches both ORCHESTRATOR.md and actual
+  practice. If instead the project wants completing agents to write it, then
+  ORCHESTRATOR.md's "maintain handoffs/registry.json" needs narrowing and
+  the concurrent-write hazard needs an answer first. Either way the two
+  documents must stop disagreeing -- per core-directives.md's own framing,
+  an unresolved contradiction between authoritative instruction surfaces is
+  precisely the kind of thing that degrades a weak-model-executed pipeline,
+  because an agent following one document literally will violate the other.
+
+  Discovered independently by ELIXIR-DEV at Step 2a and RELEASE-VALIDATOR at
+  Step 5 of REQ-023's WF-02 run. Blocks nothing -- both agents followed the
+  dispatch and the registry is correct -- so per
+  docs/agents/protocols/ISSUE_QUEUE.md it is filed and forwarded rather than
+  fixed in this run.
+affected_files:
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+  - docs/agents/ORCHESTRATOR.md
+  - docs/agents/AGENT_SYSTEM.md
+github_issue: https://github.com/tvolodi/letflow/issues/78
+status: open

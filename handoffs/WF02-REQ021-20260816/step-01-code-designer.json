@@ -1,0 +1,77 @@
+{
+  "handoff_id": "c900d1d7-0376-4002-b983-ef5516fd391b",
+  "run_id": "WF02-REQ021-20260816",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ021-20260816/step-01-code-designer.json",
+  "created_at": "2026-08-16T06:15:47Z",
+  "started_at": null,
+  "completed_at": "2026-08-16T06:15:47Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S1",
+    "requirement_ids": ["REQ-021"],
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/guides/backend_developer_guide.md",
+      "docs/migration/stage-1-identity.md",
+      "docs/migration/decisions/0002-oidc-integration.md",
+      "docs/agents/instructions/security-invariants.md",
+      "lib/letflow/identity.ex",
+      "lib/letflow/oidc/identity_context.ex",
+      "lib/letflow/oidc/claim_mapping.ex",
+      "lib/letflow/oidc/claim_mapping_config.ex",
+      "lib/letflow/oidc/jit_provisioning_config.ex",
+      "lib/letflow/identity/role_registry.ex",
+      "lib/letflow/identity/tenant.ex",
+      "lib/letflow/identity/user.ex",
+      "lib/letflow/application.ex",
+      "lib/letflow/router.ex",
+      "config/dev.exs",
+      "config/test.exs",
+      "lib/letflow/design/req016-oidc-dependency-supervision.md",
+      "lib/letflow/design/req020-role-registry.md",
+      "deps/oidcc/src/oidcc_token.erl",
+      "deps/oidcc/lib/oidcc/token.ex",
+      "deps/oidcc/lib/oidcc/client_context.ex",
+      "deps/oidcc/src/oidcc_client_context.erl",
+      "deps/ueberauth_oidcc/lib/ueberauth/strategy/oidcc.ex",
+      "C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\api\\middleware\\auth.zig",
+      "C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\api\\middleware\\tenant_status.zig"
+    ],
+    "owned_modules": ["lib/letflow/plugs", "lib/letflow/router.ex"]
+  },
+  "task": {
+    "description": "WF-02 Step 1 (CODE-DESIGNER) for run-id WF02-REQ021-20260816: produce the design artefact for REQ-021 (wire identity into the Plug request pipeline, auth.zig/tenant_status.zig equivalent) — the exact Plug module(s), init/1+call/2 shapes, conn.assigns auth-context keys, 401/403/500/503 error-response shapes, the verify -> tenant-resolve -> realm-ownership-guard -> JIT-provisioning -> attach-context call order (guard before provisioning per adp-04a), the tenant-status write-pause check, the verification-adapter decision (real oidcc call vs. test double, justified against the environment's actual Keycloak reachability), and exactly which (if any) of router.ex's 3 existing routes this plug is mounted in front of. Signatures and type shapes only, no implementation code.",
+    "acceptance_criteria": [
+      "AC1: valid-token request flows through verify -> tenant resolution -> realm-ownership guard -> JIT provisioning and ends with an auth context (user_id, tenant_id, roles) available downstream; state explicitly whether a real Keycloak issuer or a test double was used",
+      "AC2: missing/malformed bearer token rejected with 401 before tenant resolution or JIT provisioning runs",
+      "AC3: write request (POST/PUT/PATCH/DELETE) against a migrating tenant rejected with 503 + Retry-After; GET/HEAD passes through",
+      "AC4: token realm not matching the resolved tenant's bound realm is rejected, not silently JIT-provisioned under the wrong tenant",
+      "AC5: moduledoc explicitly states this plug supersedes REQ-103 (never built) as Letflow's first real auth plug, and names which router.ex routes (if any) it is mounted in front of"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req021-auth-plug-pipeline.md covering: (1) two new Plug modules under a new lib/letflow/plugs/ directory -- Letflow.Plugs.AuthPipeline (verify -> tenant-resolve -> realm-ownership-guard -> JIT-provision -> attach conn.assigns[:auth_context]) and Letflow.Plugs.TenantStatus (write-pause check), mirroring auth.zig/tenant_status.zig's own file-level split; (2) verification-adapter decision: Oidcc.Token.validate_jwt/3 (backed by Oidcc.ClientContext.from_configuration_worker/3 with client_secret: :unauthenticated) is the correct real-implementation target, NOT Ueberauth.Strategy.Oidcc (confirmed by reading deps/ueberauth_oidcc/lib/ueberauth/strategy/oidcc.ex -- that module implements only the browser-redirect authcode flow, no bearer-token-verification entry point); a Letflow.Oidc.TokenVerifier behaviour seam (config-selected, matching REQ-016's config-not-hardcoded discipline) is specified so TEST-DESIGNER can substitute a test double; (3) explicit decision to use a test double for AC1, not the running r-co-keycloak-1 container (confirmed reachable via docker ps but it is R-Co's own instance with no confirmed Letflow-specific realm/client, and Letflow's own :oidc config deliberately points at a .invalid placeholder) -- stated per AC1's own authorized fallback clause; (4) realm-ownership guard called and must return :ok strictly before provision_oidc_user/3 is invoked, with an explicit no-code-path-bypasses-this-order guarantee (AC4); (5) exact conn.assigns[:auth_context] shape (user_id, tenant_id, roles) as one nested map, roles sourced from IdentityContext.roles (token-claimed, REQ-017) not RoleRegistry (confirmed standalone/uncoupled per its own moduledoc and REQ-020's design) -- justified explicitly per the task's anti-conflation instruction; (6) exact 401/403/500/503 JSON body shapes and the 503's Retry-After: 30 header (added beyond R-Co's own tenant_status.zig, which has no such header, since AC3 requires one); (7) router.ex wiring decision: both plug modules are built and directly tested but NOT added to router.ex's plug pipeline -- none of the 3 existing routes are tenant-scoped and mounting the plug globally would break them by requiring auth on already-done, already-tested functionality; left available for S4; (8) one deliberate, explicitly-flagged divergence from auth.zig's literal behavior: JIT-provisioning failure returns 500 rather than R-Co's fall-back-to-prior-context, because Letflow (no bootstrap-token/api_tokens mechanism, REQ-103 never built) has no prior authenticated context to fall back to. INV-1/INV-4/INV-7/INV-8 explicitly assessed. Full 5-acceptance-criteria traceability table included. 14 open questions listed explicitly (directory precedent, missing client_id config key, signing_algs allowlist, 401 sub-reason granularity, the TokenVerifier seam itself, realm-extraction mechanism, 401-vs-403 for realm mismatch, 403 for jit_disabled, the fallback-behavior divergence, assign-key shape, Retry-After value, TenantStatus-without-AuthPipeline behavior, tenant-status-lookup module placement, fail-open-vs-fail-closed on DB error). No implementation code present -- verified by grep for defmodule/def .../defp/case-do patterns after removing two trivial init/1 stub bodies that had crept into the initial draft; zero matches on the final file.",
+    "artifacts_out": [
+      "lib/letflow/design/req021-auth-plug-pipeline.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ021-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ021-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

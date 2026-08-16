@@ -754,7 +754,7 @@ requirements:
   - id: REQ-021
     title: Wire identity into the Plug request pipeline (auth.zig/tenant_status.zig equivalent)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S1
     impl_order: 34  # letflow-queue task id
     description: >

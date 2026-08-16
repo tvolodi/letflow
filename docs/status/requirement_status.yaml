@@ -1541,3 +1541,14 @@ history:
       precedent as REQ-015/016/017/018/019's DOC-UPDATER passes. No lib/,
       test/, or priv/ file was touched by this DOC-UPDATER pass — those
       were already correct and gated by the prior steps in this run.
+  - req: REQ-021
+    event: started
+    agent: ELIXIR-DEV
+    at: 2026-08-16T06:08:10Z
+    note: >
+      WF-02 run WF02-REQ021-20260816 started. Wiring REQ-016 (ueberauth_oidcc
+      verification worker) + REQ-017 (claim mapping) + REQ-019 (tenant/realm
+      resolution + ownership guard) + REQ-018 (JIT provisioning) into one
+      Plug pipeline in lib/letflow/router.ex, porting auth.zig's
+      orchestration order and tenant_status.zig's write-pause check.
+      Capstone requirement closing out S1 (REQ-015..021).

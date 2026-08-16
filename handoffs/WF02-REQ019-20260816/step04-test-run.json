@@ -1,0 +1,80 @@
+{
+  "handoff_id": "cedee250-9cad-4709-9a48-a22902b4f6b0",
+  "run_id": "WF02-REQ019-20260816",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ019-20260816/step04-test-run.json",
+  "created_at": "2026-08-16T05:10:19Z",
+  "started_at": "2026-08-16T05:09:09Z",
+  "completed_at": "2026-08-16T05:10:19Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S1",
+    "requirement_ids": ["REQ-019"],
+    "related_handoff_ids": ["5383853a-f894-4fa2-93b9-a3c019b16d72", "8cd2d68a-445c-4444-a642-ce03456f05ca"],
+    "artifacts_in": [
+      "test/specs/REQ-019.md",
+      "test/letflow/identity_test.exs",
+      "handoffs/WF02-REQ019-20260816/step03-test-design.json",
+      "handoffs/WF02-REQ019-20260816/step03b-test-design-gate.json"
+    ],
+    "owned_modules": ["test/letflow/process_instance_test.exs", "test/support/data_case.ex"]
+  },
+  "task": {
+    "description": "WF-02 Step 4 (TEST-RUNNER) for run-id WF02-REQ019-20260816: this WF-02 run reached Step 3b (TEST-DESIGN-VALIDATOR PASS) in a prior session that was interrupted before Step 4 could run. Execute the full mix test suite independently -- do not trust TEST-DESIGNER's or TEST-DESIGN-VALIDATOR's claimed counts (29/97), re-derive them from scratch -- and report actual pass/fail with evidence.",
+    "acceptance_criteria": [
+      "resolveTenantByRealm(idp_realm_id) and resolveRealmByTenant(tenant_id) both work against REQ-015's tenants table, tested with the seeded default tenant (bpm-default)",
+      "attempting to bind a second tenant to an already-bound idp_realm_id is rejected (unique index or explicit changeset validation), not silently overwritten",
+      "attempting to change an existing tenant's idp_realm_id via the normal update changeset is rejected or the changeset simply omits idp_realm_id from its allowed fields -- whichever approach is taken, it's stated explicitly in the moduledoc",
+      "a realm-ownership guard function exists that rejects a (tenant_id, external_realm) pair where external_realm is not the realm bound to tenant_id"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Verified branch is feature/WF02-REQ019-20260816 (confirmed via git branch --show-current). Native Elixir/mix toolchain was reachable directly on PATH (Erlang/OTP 29, Mix 1.20.3) and the letflow-postgres-1 Docker container (port 5462) was already up and healthy via docker compose -- no Docker throwaway-container fallback was needed. Ran mix test (full suite, not just the new REQ-019 tests, per Unblock-Everything) -> Result: 97 passed (4 properties, 93 tests), 0 failed, exit code 0, Finished in 1.1 seconds. Grepped the full raw output for failure/assertion markers -- zero matches anywhere; no 'Failures:' section present. This independently reproduces the exact 97/97 count both TEST-DESIGNER and TEST-DESIGN-VALIDATOR claimed in the prior interrupted session, not by trusting their report but by running it myself from a cold state. Also ran mix test test/letflow/identity_test.exs in isolation (the file TEST-DESIGNER extended for REQ-019) -> Result: 29 passed, 0 failed, matching the prior handoffs' claimed 29/29 exactly (10 pre-existing REQ-018 tests + 19 new REQ-019 tests). No pre-existing failures unrelated to REQ-019 were found anywhere in the suite, so nothing needed filing/forwarding per ISSUE_QUEUE.md. The only non-test-affecting noise observed was the pre-existing (since REQ-016) placeholder-keycloak.invalid OIDC metadata-load retry error (background worker, does not fail/skip any test) and pre-existing ExUnit.Case.register_test/4 deprecation warnings on the three property tests -- both already documented as expected noise in prior test reports for this project. Wrote test/reports/report-2026-08-16-WF02-REQ019-20260816.yaml with the actual command output, pass/fail counts, environment used, and per-acceptance-criterion coverage cross-check. This is hard evidence from an actual run, not a restatement of the prior handoffs' numbers.",
+    "checks": [
+      {
+        "check": "branch verification",
+        "verdict": "PASS",
+        "evidence": "git branch --show-current -> feature/WF02-REQ019-20260816"
+      },
+      {
+        "check": "full suite run, independently reproduced (not copied from TEST-DESIGNER/TEST-DESIGN-VALIDATOR)",
+        "verdict": "PASS",
+        "evidence": "mix test -> 'Finished in 1.1 seconds (0.7s async, 0.3s sync)' / 'Result: 97 passed (4 properties, 93 tests)', exit code 0, zero failure blocks found via grep of the full output"
+      },
+      {
+        "check": "REQ-019 scope file run in isolation",
+        "verdict": "PASS",
+        "evidence": "mix test test/letflow/identity_test.exs -> 'Finished in 0.5 seconds (0.5s async, 0.00s sync)' / 'Result: 29 passed', exit code 0"
+      },
+      {
+        "check": "pre-existing failures unrelated to REQ-019 (Unblock-Everything check)",
+        "verdict": "PASS (none found)",
+        "evidence": "Full suite is 97/97 clean; no failures of any kind to triage as pre-existing vs. REQ-019-caused. Nothing filed to docs/issues/."
+      },
+      {
+        "check": "report file written per docs/agents/workflows/WF-02_requirement_implementation.md Step 4",
+        "verdict": "PASS",
+        "evidence": "test/reports/report-2026-08-16-WF02-REQ019-20260816.yaml written with git evidence, environment, full suite + isolated-file results, known-noise notes, and per-acceptance-criterion coverage cross-check."
+      }
+    ],
+    "test_evidence": {
+      "full_suite": "mix test -> Result: 97 passed (4 properties, 93 tests), 0 failed",
+      "req019_scope_isolated": "mix test test/letflow/identity_test.exs -> Result: 29 passed, 0 failed",
+      "toolchain": "native (local mix/elixir on PATH), not Docker fallback",
+      "postgres": "letflow-postgres-1 container, already running via docker compose, port 5462, healthy"
+    },
+    "artifacts_out": [
+      "test/reports/report-2026-08-16-WF02-REQ019-20260816.yaml",
+      "handoffs/WF02-REQ019-20260816/step04-test-run.json"
+    ],
+    "issues": [],
+    "next_action": "Route to RELEASE-VALIDATOR (Step 5)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -48,9 +48,20 @@ config :letflow, :oidc_claim_mapping, %{
 # user-provisioning configuration for Letflow.Identity.provision_oidc_user/3,
 # distinct from the :oidc and :oidc_claim_mapping keys. A realm with no entry
 # here falls back to Letflow.Oidc.JitProvisioningConfig.default/1.
+#
+# "jit-disabled-test-realm" is a REQ-021 test-only fixture entry (see
+# test/specs/REQ-021.md's "JIT-disabled realm fixture" section) — the only
+# way test/letflow/plugs/auth_pipeline_test.exs can exercise the
+# :jit_disabled -> 403 branch without mutating this file's config at
+# runtime (unsafe under async: true). Not used by any other test.
 config :letflow, :oidc_jit_provisioning, %{
   "bpm-default" => %{
     enabled: true,
+    default_status: :active,
+    default_roles: []
+  },
+  "jit-disabled-test-realm" => %{
+    enabled: false,
     default_status: :active,
     default_roles: []
   }

@@ -1,0 +1,47 @@
+{
+  "handoff_id": "7849a4b1-e081-45fc-80e7-128f5c3d2a86",
+  "run_id": "WF02-REQ024-20260816",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ024-20260816/step-02c-security-reviewer.json",
+  "created_at": "2026-08-16T16:41:41Z",
+  "started_at": "2026-08-16T16:41:41Z",
+  "completed_at": "2026-08-16T16:44:32Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-024"],
+    "related_handoff_ids": ["ebd974a8-627e-49c5-a395-e9a681a3214f"],
+    "artifacts_in": ["lib/letflow/event_store/registry.ex", "lib/letflow/event_store/registry/event_type.ex", "lib/letflow/event_store/registry/json_schema.ex", "lib/letflow/event_store/registry/validation_failure.ex", "priv/repo/migrations/20260816163103_create_event_type_registry.exs"],
+    "owned_modules": ["lib/letflow/event_store"],
+    "note": "Also reviewed lib/letflow/tenant_provisioning.ex (23-line diff, not in artifacts_in but touched by this branch's diff and directly load-bearing for INV-1 -- it registers the new migration in tenant_scoped_migrations/0) and lib/letflow/tenant_provisioning/registration.ex (unchanged, read for the Registration schema/lookup this diff depends on)."
+  },
+  "task": {
+    "description": "HARD GATE. This diff touches a tenant-data path (new schema-per-tenant table, tenant-scoped JSON payload/schema storage and validation). Review git diff main...HEAD on branch feature/WF02-REQ024-20260816 against docs/agents/instructions/security-invariants.md. Give particular attention to INV-1 (tenant isolation -- does tenant_id ever come from anywhere other than a DB-resolved/authenticated source?) and INV-7 (no raw SQL string interpolation of tenant/user input -- this module stores and validates arbitrary JSON payload/schema text, verify none of it ever reaches a raw SQL string).",
+    "acceptance_criteria": [
+      "tenant isolation confirmed: tenant_id is always caller-supplied/DB-resolved, never derived from untrusted payload content",
+      "no string interpolation of tenant/user-controlled input (including JSON payload/schema content) into raw SQL",
+      "the :tenant_not_provisioned error path (rework iteration 1's fix) doesn't leak information about other tenants' provisioning state"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: this diff adds a new schema-per-tenant table (event_type_registry) storing/validating arbitrary tenant-supplied JSON payloads and JSON Schema documents -- self-evidently a tenant-data path. Full review run against INV-1..INV-8. VERDICT: PASS, no invariant failed.\n\nINV-1 (tenant data isolation) -- APPLIES. register_type/2, validate_payload/3, get_type/2 (registry.ex) each take tenant_id as an explicit, caller-supplied Ecto.UUID.t() -- last positional argument in every @spec. Every one of them resolves the physical schema via a private resolve_schema_name/1 (registry.ex, ~line 233-238): `Repo.get_by(Registration, tenant_id: tenant_id)` against Letflow.TenantProvisioning.Registration (lib/letflow/tenant_provisioning/registration.ex, table tenant_schemas) -- a genuine DB lookup, not a header/payload/JWT-claim derivation, and this is byte-for-byte the same pattern already established and presumably-reviewed in TenantProvisioning.replay_migrations/2 (tenant_provisioning.ex line 161). tenant_id is never read from attrs, the JSON payload, or the JSON Schema document -- EventType.changeset/2 (event_type.ex) only casts [:name, :schema_version, :json_schema, :description]; any tenant_id/prefix key present in attrs would be silently ignored by cast/4, not honored. Every DB call in registry.ex explicitly threads prefix: schema_name (get_type/2: `Repo.one(prefix: schema_name)`; insert_with_monotonicity_check/2: `Repo.one(prefix: schema_name)` for the max-version precheck and `Repo.insert(changeset, prefix: schema_name)` for the write) -- schema-per-tenant is genuinely enforced on every query, not partially. The migration (priv/repo/migrations/20260816163103_create_event_type_registry.exs) creates event_type_registry with `prefix: prefix()` under an `if prefix()` guard (no-ops on a plain `mix ecto.migrate`, matching REQ-022's established convention) and the EventType schema (event_type.ex) declares no static prefix -- it is resolved per-call only. The table has NO tenant_id column at all; tenant separation is purely physical-schema, so there is no shared-table-plus-forgotten-filter leak surface. tenant_scoped_migrations/0 (tenant_provisioning.ex) now includes {20_260_816_163_103, CreateEventTypeRegistry}, so replay_migrations/2 will actually provision this table per-tenant. PASS.\n\nINV-2 (server-side field authorisation) -- NOT-APPLICABLE. No API/controller/response-serialization surface in this diff (S4 not started); registry.ex is a context module with no HTTP-facing caller yet (confirmed via grep -- zero call sites of Registry.register_type/validate_payload/get_type anywhere else in the repo).\n\nINV-3 (untrusted runtime sandboxing) -- NOT-APPLICABLE. S5 not started; no Lua/WASM surface touched.\n\nINV-4 (secrets by reference only) -- APPLIES (live invariant). No secret material (API keys, tokens, DB URLs) appears anywhere in the 6 files reviewed. grep for System.get_env / hardcoded-secret heuristics against lib/letflow/event_store returned zero hits. This module has no config/env resolution surface at all. PASS (nothing to leak).\n\nINV-5 (not-found/forbidden indistinguishability) -- NOT-APPLICABLE. No multi-tenant lookup-by-ID HTTP endpoint exists yet (S4 not started); get_type/2 is an internal context function, not wired to any handler.\n\nINV-6 (new data-access paths prove their scoping) -- APPLIES, satisfied by this handoff itself: every new data-access path in the diff (register_type/2, validate_payload/3, get_type/2, the event_type_registry migration) has been explicitly checked against INV-1 above and shown to route through the schema-per-tenant mechanism.\n\nINV-7 (no SQL string interpolation) -- APPLIES (live invariant). grep for `Repo.query`/`Repo.query!` across lib/letflow/event_store and priv/repo/migrations returned zero hits -- confirmed by direct read of registry.ex and json_schema.ex. All DB access goes through Ecto.Query composition (import Ecto.Query; where/order_by/limit/select) and Repo.one/2, Repo.insert/2, Repo.get_by/2 -- all parameterized by construction. The migration uses only the Ecto.Migration DSL (create table/create unique_index), no Ecto.Migration.execute/1 raw SQL. JsonSchema.validate/2 (json_schema.ex) is a pure, I/O-free recursive function over already-decoded Elixir maps -- it never touches Repo or builds any SQL string; the arbitrary tenant-supplied JSON Schema document and event payload only ever reach the database as an Elixir map cast into a jsonb-typed Ecto field (EventType.changeset/2's `cast(attrs, [..., :json_schema, ...])`), never as interpolated SQL text. PASS.\n\nINV-8 (no unhandled crashes on realistic failure paths) -- APPLIES (live invariant). grep heuristic `^\\s*\\{:ok, .*\\} = ` hit one line (registry.ex ~line 248: `{:ok, %EventType{} = event_type} ->`) -- manually confirmed this is a `case` clause inside `case Repo.insert(changeset, prefix: schema_name) do ... end` with both {:ok, _} and {:error, %Ecto.Changeset{}} branches present, not a bare crashing match; false positive. Every I/O-touching path handles both outcomes explicitly: Jason.decode/1 in decode_object_payload/1 (registry.ex) matches {:ok, map}/{:ok, non-map}/{:error, _} all three; resolve_schema_name/1 case-matches nil/%Registration{}; get_type/2's Repo.one result is case-matched nil/%EventType{}; insert_with_monotonicity_check/2's Repo.insert result is case-matched {:ok,_}/{:error,%Ecto.Changeset{}} with a further unique_violation?/2 check mapping a race-lost unique-index hit to {:error, :duplicate_event_type_version} rather than crashing. PASS.\n\n:tenant_not_provisioned error path (rework iteration 1, acceptance criterion 3) -- specifically verified. resolve_schema_name/1's `Repo.get_by(Registration, tenant_id: tenant_id)` is an exact-match lookup scoped to the single tenant_id the caller passed -- it cannot return or iterate over any other tenant's row. On a miss it returns the bare atom {:error, :tenant_not_provisioned} with no interpolated data (no schema_name, no other tenant's tenant_id, no count of provisioned tenants, no message string built from the lookup result) -- the atom carries zero information beyond 'this exact tenant_id has no Registration row'. No timing-based cross-tenant signal is introduced: the query is a single indexed exact-match lookup regardless of whether the tenant_id exists as some *other* tenant's row or no row at all. No leak.",
+    "artifacts_out": ["handoffs/WF02-REQ024-20260816/step-02c-security-reviewer.json"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ024-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ024-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (Step 2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

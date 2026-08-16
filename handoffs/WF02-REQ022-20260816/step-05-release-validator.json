@@ -1,0 +1,54 @@
+{
+  "handoff_id": "d7452bb0-6d55-462c-88ef-1e01c531fa82",
+  "run_id": "WF02-REQ022-20260816",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ022-20260816/step-05-release-validator.json",
+  "created_at": "2026-08-16T09:54:06Z",
+  "started_at": "2026-08-16T09:54:06Z",
+  "completed_at": "2026-08-16T10:01:29Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-022"],
+    "related_handoff_ids": ["464e5276-cc9c-41c7-9c3c-90b841686c04"],
+    "artifacts_in": ["test/reports/report-2026-08-16-WF02-REQ022-20260816.yaml", "lib/letflow/tenant_provisioning.ex", "lib/letflow/tenant_provisioning/registration.ex", "priv/repo/migrations/20260816090045_create_tenant_schemas.exs"],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently re-verify REQ-022 is genuinely done before it's allowed to be marked so. Do not trust TEST-RUNNER's report alone -- re-run the suite yourself. Confirm every acceptance criterion against actual code/tests, and check docs/requirements.yaml / docs/status/requirement_status.yaml for staleness.",
+    "acceptance_criteria": [
+      "priv/repo/migrations gains a tenant_schemas migration (public/default schema) that applies cleanly via mix ecto.migrate, with columns for at minimum tenant_id and schema_name",
+      "a provision_tenant_schema/1-equivalent function exists that issues a real CREATE SCHEMA and records the mapping in tenant_schemas, demonstrated against at least one non-default tenant schema name",
+      "a migration-replay function exists that re-applies priv/repo/migrations/ against a specific tenant schema via Ecto's prefix: option, demonstrated by confirming at least one table exists under the provisioned schema's own information_schema, not just under public",
+      "the moduledoc/description explicitly states, as an open question rather than a silent decision, whether REQ-015's users/groups/tenant_role migrations are retrofitted to use :prefix now or remain in public schema"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified REQ-022, not by trusting TEST-RUNNER's report. (1) Re-ran mix test myself: dropped/recreated/re-migrated the test DB from scratch first (MIX_ENV=test mix ecto.drop && ecto.create && ecto.migrate -- all 6 migrations including 20260816090045_create_tenant_schemas.exs applied cleanly, exit 0), then ran the full suite 5 separate times (no --seed pin, unlike TEST-RUNNER's two --seed 0 runs). 4/5 runs reproduced 'Result: 146 passed (4 properties, 142 tests)' exit 0. 1/5 runs (seed 884432) failed 1 test in test/letflow/plugs/tenant_status_test.exs (Letflow.Plugs.TenantStatusTest's method-short-circuit test) -- root-caused by direct source read to a global :telemetry.attach racing against other async:true tests' Repo queries, a pre-existing REQ-021 test-isolation defect unrelated to REQ-022 (REQ-022's own tenant_provisioning_test.exs is deliberately async:false for exactly this reason). Filed as docs/issues/ISS-0011.yaml + GitHub issue #65 (https://github.com/tvolodi/letflow/issues/65), not fixed here per core-directives.md's Unblock-Everything scope boundary (unrelated, non-deterministic, doesn't block REQ-022's own PASS). Also independently confirmed mix compile --warnings-as-errors (exit 0) and mix format --check-formatted (exit 0). (2) Confirmed all 4 acceptance criteria against actual code, not handoff summaries: AC1 -- read priv/repo/migrations/20260816090045_create_tenant_schemas.exs directly, confirmed tenant_id/schema_name/migrations_applied_at/provisioned_at columns, applied cleanly on the fresh DB above. AC2 -- read lib/letflow/tenant_provisioning.ex's provision_tenant_schema/1 (lines 94-137): real CREATE SCHEMA IF NOT EXISTS + tenant_schemas insert inside one Repo.transaction/1, matches design doc SS3.1 exactly. AC3 -- read replay_migrations/2 (lines 153-181): Ecto.Migrator.run/4 with prefix: schema_name, matches design doc SS3.2 exactly; test/letflow/tenant_provisioning_test.exs's 'successful replay' test confirms the fixture table lands under the tenant's own information_schema and NOT public. AC4 -- read tenant_provisioning.ex lines 27-39: moduledoc states verbatim, as an open question not a silent decision, that REQ-015's users/groups/tenant_role remain in public schema and retrofitting them behind :prefix 'is left open for a future requirement to decide explicitly.' (3) Checked docs/requirements.yaml (REQ-022 status: in_progress, confirmed via grep, not prematurely done) and docs/status/requirement_status.yaml (only one 'started' event at 2026-08-16T08:38:17Z exists for REQ-022, no 'done' event) -- no staleness, DOC-UPDATER has genuinely not run yet. (4) Calling-convention check for ~20 downstream S2 requirements: read REQ-023's full requirements.yaml entry and confirmed its stated convention ('every table... uses Ecto's :prefix option, none targets the public default schema', 'applying cleanly against at least one provisioned tenant schema via REQ-022's migration-replay mechanism') matches what's actually implemented -- tenant_scoped_migrations/0 returns [] (empty, ready for REQ-023 onward to append {version, module} tuples per design doc SS3.4/SS4's guard-pattern), replay_migrations/2's default argument threads straight into Ecto.Migrator.run's :prefix option exactly as documented. No public 'get schema name for an already-provisioned tenant' convenience function exists beyond schema_name_for_tenant/1 (pure derivation, no provisioning check) and direct Repo.get_by(Registration, tenant_id: ...) -- confirmed this matches the codebase's own established convention (direct schema/Repo access from other modules, e.g. tenant_status_test.exs's own Tenant.create_changeset + Repo.insert! pattern, not a mandatory context-function wrapper), not a gap introduced by this requirement. (5) Empirical spot-check performed independently, not re-reading ELIXIR-DEV's own scratch/req022_demo.exs: wrote a fresh scratch/release_validator_req022_spotcheck.exs, ran it against real dev Postgres (MIX_ENV=dev mix run ...) creating a new real tenant (rv-spotcheck-1786874382, id 9132f711-1534-418c-96a7-bbae1a8639ea) and calling Letflow.TenantProvisioning.provision_tenant_schema/1 on it -- got {:ok, %Registration{schema_name: \"tenant_9132f7111534418c96a7bbae1a8639ea\", id: \"617b71b7-fd73-4e26-a67b-1530d78fad42\"}}. Then verified via `docker exec letflow-postgres-1 psql -U letflow -d letflow_dev` (a tool entirely separate from the Elixir/Ecto code path under test): `SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'tenant_9132f7111534418c96a7bbae1a8639ea'` returned exactly 1 row, and `SELECT * FROM public.tenant_schemas WHERE tenant_id = '9132f711-...'` returned the matching registration row -- the schema and registry row genuinely exist in real Postgres, not just per the app's own self-report. Cleaned up afterward (DROP SCHEMA CASCADE + DELETE FROM tenant_schemas/tenants for this spot-check's rows).",
+    "artifacts_out": ["docs/issues/ISS-0011.yaml"],
+    "issues": [
+      {
+        "id": "ISS-0011",
+        "severity": "MINOR",
+        "summary": "test/letflow/plugs/tenant_status_test.exs's method-short-circuit test is flaky under non-default mix test random seeds (global :telemetry.attach races against concurrently running async:true tests) -- pre-existing from REQ-021, unrelated to REQ-022, does not block this PASS verdict.",
+        "github_issue": "https://github.com/tvolodi/letflow/issues/65"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ022-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ022-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER (Step 6)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

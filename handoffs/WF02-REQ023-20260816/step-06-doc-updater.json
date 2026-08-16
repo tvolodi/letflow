@@ -6,15 +6,19 @@
   "from_agent": "ORCH",
   "to_agent": "DOC-UPDATER",
   "file": "handoffs/WF02-REQ023-20260816/step-06-doc-updater.json",
-  "created_at": "2026-08-16T19:08:00Z",
-  "started_at": "2026-08-16T19:08:00Z",
+  "created_at": "2026-08-16T18:42:00Z",
+  "started_at": "2026-08-16T18:42:00Z",
   "completed_at": "2026-08-16T18:49:40Z",
   "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S2",
-    "requirement_ids": ["REQ-023"],
-    "related_handoff_ids": ["488db251-1ead-4447-a899-a8dd78fb925c"],
+    "requirement_ids": [
+      "REQ-023"
+    ],
+    "related_handoff_ids": [
+      "488db251-1ead-4447-a899-a8dd78fb925c"
+    ],
     "artifacts_in": [
       "docs/requirements.yaml (REQ-023 entry, currently status: in_progress)",
       "docs/status/requirement_status.yaml",
@@ -22,7 +26,11 @@
       "README.md",
       "docs/migration/stage-2-event-store-definitions.md"
     ],
-    "owned_modules": ["docs/requirements.yaml", "docs/status", "README.md"]
+    "owned_modules": [
+      "docs/requirements.yaml",
+      "docs/status",
+      "README.md"
+    ]
   },
   "task": {
     "description": "WF-02 Step 6. Flip REQ-023's status to done in docs/requirements.yaml and append a done event to docs/status/requirement_status.yaml with a real UTC clock timestamp, append-only. Then assess -- do not assume in either direction -- whether README.md or docs/migration/stage-2-event-store-definitions.md actually need updating because this requirement changed documented behavior. Follow the precedent REQ-022 and REQ-028 established (git-log confirmed in REQ-028's own release validation): stage-N doc headers are rewritten in bulk at WF-04 stage-gate closure, not incrementally per WF-02 requirement. Do not invent documentation updates this requirement's acceptance criteria never asked for; equally, do not skip one that genuinely applies. Name every file you actually touch explicitly in artifacts_out -- ORCH independently verifies each claimed change landed before writing the DONE log line.",
@@ -65,7 +73,9 @@
     ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ023-20260816",
-      "commit_sha_list": ["af03221"],
+      "commit_sha_list": [
+        "af03221"
+      ],
       "remote_branch": "origin/feature/WF02-REQ023-20260816",
       "push_status": "skipped",
       "pr_url": null,
@@ -74,5 +84,6 @@
     "next_action": "Route to ELIXIR-DEV for Step Final (git merge)"
   },
   "rework_count": 0,
-  "max_rework": 3
+  "max_rework": 3,
+  "orch_timestamp_correction": "ORCH originally stamped created_at/started_at as 2026-08-16T19:08:00Z. That value was EXTRAPOLATED from the run's earlier entries rather than read from the clock, which violates core-directives.md's 'Timestamps come from the clock, never from memory' and HANDOFF_PROTOCOL.md section 3. It ran roughly 23 minutes ahead of the real host clock, which made this handoff's completed_at (2026-08-16T18:49:40Z, correctly clock-read by DOC-UPDATER) PRECEDE its own started_at -- the exact corruption HANDOFF_PROTOCOL section 3 forbids. DOC-UPDATER detected this and reported it rather than fabricating a later completed_at to make the file look consistent, which is the correct behaviour and is why the error was caught at all. Corrected to 2026-08-16T18:42:00Z, reconstructed from two independently recorded facts: DOC-UPDATER logged its own claim at 18:44:46Z, and its measured duration of ~7.2 minutes against a completed_at of 18:49:40Z places dispatch at approximately 18:42. The corrected value is therefore consistent with both, and is explicitly a reconstruction rather than a clock reading -- stated here rather than presented as if it had been measured. A mechanical monotonicity check across all eleven of this run's handoffs found this to be the ONLY violation; the other ten are internally consistent, though several also carry started_at values that drifted ahead of the true clock by a few minutes from the same root cause. Recorded as an anti-pattern in docs/anti-patterns.md so the practice, not just this instance, is fixed."
 }

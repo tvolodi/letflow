@@ -1,0 +1,94 @@
+id: ISS-0023
+title: "GIT_MERGE.md has no worktree variant and no guidance for semantic conflicts -- several of its literal steps are unusable from a secondary git worktree, and its conflict section only addresses textual conflicts"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ023-20260816
+discovered_at: 2026-08-16T19:16:58Z
+severity: MINOR
+description: >
+  Two gaps in docs/agents/protocols/GIT_MERGE.md, both surfaced by REQ-023's
+  Step Final, which was the first merge in this project executed from a
+  secondary git worktree and the first to hit a genuine semantic conflict.
+  Neither blocked the merge -- PR #80 landed green -- but both required the
+  executing agent to depart from the protocol's literal text, which is
+  exactly the situation this project's weak-model-tolerance design
+  constraint says the docs should not create.
+
+  (1) No worktree variant. Several of GIT_MERGE.md's steps are structurally
+  impossible from a secondary worktree that shares one .git with a primary
+  checkout holding the local `main` branch:
+
+    - `git checkout main` (and the post-merge return to it) fails outright:
+      git refuses to check out a branch already checked out in another
+      worktree. Attempting to force past it would corrupt the concurrently
+      running sibling session.
+    - `git add -A` is unsafe in a shared checkout and is contradicted by
+      this project's own established practice of staging by explicit
+      filename (visible in every handoff commit across REQ-018..REQ-024).
+    - `gh pr merge <n> --squash --delete-branch` partially fails by design
+      here: the GitHub-side merge succeeds via the API, but gh's local
+      side effect of switching the checkout to `main` then errors
+      ("fatal: 'main' is already used by worktree at ..."), and because
+      that step errors, `--delete-branch` never runs either. An agent
+      reading only the protocol would reasonably conclude the merge had
+      failed, when it had actually already succeeded.
+
+  The working procedure REQ-023's Step Final used, and which should be
+  written into the protocol as the documented worktree path: branch from a
+  freshly fetched remote ref (`git fetch origin main && git checkout -b
+  <branch> origin/main`) rather than from local main; stage by explicit
+  filename only; after `gh pr merge` errors, verify the merge actually
+  landed with `gh pr view <n> --json state,mergedAt` (expect
+  "state":"MERGED") and ignore the local-checkout error; then delete both
+  refs explicitly (remote via `gh api -X DELETE`, local via `git branch -d`
+  once no longer on it) and return to a clean base with
+  `git fetch origin main --prune && git checkout --detach origin/main` --
+  detached, never checking out local main at any point.
+
+  (2) Section 5b gives no guidance for a SEMANTIC conflict. Its conflict
+  handling addresses textual conflicts and a conflict-count threshold, but
+  REQ-023's Step Final hit something different in kind: REQ-023 and REQ-024
+  (merged concurrently by the other worktree as PR #77) had independently
+  rewritten the same function, Letflow.TenantProvisioning.tenant_scoped_migrations/0,
+  in incompatible ways -- REQ-024 with a bare {version, module} list,
+  REQ-023 with a {version, module, filename} manifest routed through a
+  module-loading fix. Neither "take ours" nor "take theirs" was correct:
+  taking theirs would have discarded a defect fix that REQ-023's own
+  acceptance criterion 1 depended on, and taking ours would have silently
+  dropped REQ-024's migration from the registry, making its table never
+  provision for any tenant. The correct resolution was to merge the two
+  into a seven-entry manifest, which no rule in the protocol tells an agent
+  to look for.
+
+  Worth adding to section 5b, using this merge as a worked example: when
+  both sides changed the same function rather than adjacent lines, resolve
+  by composing both intents and then prove the composition mechanically
+  rather than by inspection. Two checks used here are generalisable --
+  verifying that already-shipped @specs are byte-identical to main after
+  the resolution (`git diff origin/main -- <file> | grep '@spec'`), and
+  exercising the merged result in the exact condition that would expose a
+  wrong resolution (here, dumping the manifest from a cold `mix run
+  --no-start` VM with no Repo and no DB, which is precisely the condition
+  REQ-024's bare-tuple form would have raised under).
+
+  Historical note recorded so the window stays visible rather than being
+  silently erased by the fix: between PR #77 (REQ-024, merged ~2026-08-16)
+  and PR #80 (REQ-023), `main` carried REQ-024's bare-tuple
+  tenant_scoped_migrations/0 -- i.e. `replay_migrations/2` would have
+  raised Ecto.MigrationError in any VM where the migration modules were
+  not already loaded (masked on a fresh test DB by mix.exs's in-VM
+  `test:` alias, failing on a warm one and always in `iex -S mix`). PR #80
+  repaired it as a side effect of the conflict resolution above. No action
+  needed -- this is closed -- but it is the concrete cost of the two gaps
+  described here, and it is the kind of cross-worktree latent defect that
+  ORCHESTRATOR.md section 7's owned_modules lock structurally cannot catch,
+  since that lock is per-checkout.
+
+  Discovered by ELIXIR-DEV during REQ-023's Step Final. Blocking nothing --
+  the merge completed and main is green (271 tests passing, compile clean)
+  -- so per docs/agents/protocols/ISSUE_QUEUE.md filed and forwarded rather
+  than fixed in that run.
+affected_files:
+  - docs/agents/protocols/GIT_MERGE.md
+  - docs/agents/protocols/GIT_SETUP.md
+github_issue: https://github.com/tvolodi/letflow/issues/81
+status: open

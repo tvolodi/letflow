@@ -139,11 +139,11 @@
       "lock_acquired_at": "2026-08-16T15:46:10Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 1 (CODE-DESIGNER) COMPLETED -- PASS, lib/letflow/design/req024-event-type-registry.md written (hand-rolled JSON Schema validator decision, no new mix.exs dependency, no new decision record), routed to Step 1b (CODE-DESIGN-VALIDATOR)",
+      "last_known_step": "Step 1b (CODE-DESIGN-VALIDATOR) COMPLETED -- FAIL: JSON Schema library decision (S1) and no-new-decision-record call independently re-verified and concurred with, but S4's tenant-prefix threading interface note misattributes its 'prefix :: String.t() carried explicitly' convention to Letflow.TenantProvisioning.replay_migrations/2, which actually takes tenant_id and internally resolves schema_name via a Registration lookup with a :tenant_not_provisioned error case -- neither the derivation mechanism nor that error case appears anywhere in req024's register_type/2, validate_payload/3, get_type/2. Routed back to CODE-DESIGNER for rework (see handoffs/WF02-REQ024-20260816/step-01b-code-design-validator.json).",
       "backfilled": false,
       "queue_task_id": 39,
       "queue_agent_id": "tvolodi-orch",
-      "note": "Claimed live via letflow-queue get_next_task (task 39, depends_on: [36]). REQ-023 (task 38) is reserved for a parallel process running concurrently -- confirmed correctly skipped (locked) by the queue's atomic claim rather than assumed; not a queue bug. This requirement touches a tenant-data path (new schema-per-tenant event_type_registry table) -- SECURITY-REVIEWER's Step 2c is expected to run the full review, not take the out-of-scope shortcut. JSON Schema validation library choice is an explicit open question for CODE-DESIGNER per the requirement's own description."
+      "note": "Claimed live via letflow-queue get_next_task (task 39, depends_on: [36]). REQ-023 (task 38) is reserved for a parallel process running concurrently -- confirmed correctly skipped (locked) by the queue's atomic claim rather than assumed; not a queue bug. This requirement touches a tenant-data path (new schema-per-tenant event_type_registry table) -- SECURITY-REVIEWER's Step 2c is expected to run the full review, not take the out-of-scope shortcut. JSON Schema validation library choice is an explicit open question for CODE-DESIGNER per the requirement's own description. Step 1b (CODE-DESIGN-VALIDATOR) returned FAIL on the tenant-prefix threading interface gap -- routed back to CODE-DESIGNER for rework (Step 1/1b loop, max_rework 3), run remains ACTIVE."
     }
   ]
 }

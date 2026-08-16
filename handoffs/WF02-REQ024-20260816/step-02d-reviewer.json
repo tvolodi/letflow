@@ -1,0 +1,52 @@
+{
+  "handoff_id": "cc551492-029c-4381-b465-2935261f3242",
+  "run_id": "WF02-REQ024-20260816",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ024-20260816/step-02d-reviewer.json",
+  "created_at": "2026-08-16T16:45:52Z",
+  "started_at": "2026-08-16T16:45:52Z",
+  "completed_at": "2026-08-16T17:20:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-024"],
+    "related_handoff_ids": ["7849a4b1-e081-45fc-80e7-128f5c3d2a86"],
+    "artifacts_in": ["lib/letflow/event_store/registry.ex", "lib/letflow/event_store/registry/event_type.ex", "lib/letflow/event_store/registry/json_schema.ex", "lib/letflow/event_store/registry/validation_failure.ex", "priv/repo/migrations/20260816163103_create_event_type_registry.exs", "lib/letflow/tenant_provisioning.ex"],
+    "owned_modules": ["lib/letflow/event_store"]
+  },
+  "task": {
+    "description": "HARD GATE. Review git diff main...HEAD on branch feature/WF02-REQ024-20260816 per .claude/agents/reviewer.md's four questions and docs/anti-patterns.md. Note: lib/letflow/tenant_provisioning.ex has a small diff too (registering the new migration in tenant_scoped_migrations/0) -- confirm this is the minimal, correct touch, not scope creep into REQ-022's territory.",
+    "acceptance_criteria": [
+      "idiomatic Elixir/Ecto usage, no crutch patterns, especially in the hand-rolled JSON Schema validator (json_schema.ex)",
+      "no supervision-tree surface touched",
+      "no scope creep beyond REQ-024's 5 acceptance criteria",
+      "consistent with docs/migration/decisions/0003-ecto-schema-strategy.md and the REQ-022 tenant-provisioning calling convention"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed git diff main...HEAD (16 files) against the four gate questions. (1) Idiomatic vs crutch: json_schema.ex is genuinely idiomatic, not a crutch -- one clear recursive entry point (collect/3) dispatching to small private per-keyword functions (enum_violations/numeric_violations/string_violations/object_violations/array_violations), each returning a list and combined via ++, no nested case-statement pile. Directly compared against lib/letflow/definitions/graph.ex (REQ-028): same established style (private per-check functions, Enum.flat_map/++ accumulation, plain non-persisted struct for violations -- ValidationFailure mirrors graph.ex's Violation). The one divergence (type-mismatch short-circuits sibling keyword checks at the same recursion level) is explicitly documented as a deliberate, faithful port of R-Co's own cascade-avoidance behavior, not an inconsistency. registry.ex, event_type.ex, validation_failure.ex all match this codebase's established context-module/same-named-schema-submodule convention (Letflow.Identity/Tenant precedent), binary_id PK, plain attrs :: map() changeset input. (2) Supervision: confirmed zero diff to lib/letflow/process_instance.ex, lib/letflow/instance_supervisor.ex, lib/letflow/application.ex (git diff main...HEAD --stat on all three returns empty). (3) Type-safety gaps: none severe. Validating arbitrary untrusted JSON Schema/payload data is inherently dynamic-data validation -- a stricter static type system wouldn't meaningfully help at the validator's core. Non-blocking note: Registry.resolve_schema_name/1 duplicates (rather than reuses) the exact Repo.get_by(Registration, tenant_id: tenant_id) lookup already present twice in tenant_provisioning.ex (replay_migrations/2 line 161, re_select_registration/1 line 234) -- the module's own comment already flags this and explicitly defers the extraction call to REVIEWER. Judgment: acceptable as-is: extracting now would mean expanding a merged sibling requirement's (REQ-022's) public API beyond the one anticipated touch point (tenant_scoped_migrations/0), for a second call site. Worth watching under a rule-of-three -- if a third module needs the same tenant_id->schema_name resolution, extract a shared Letflow.TenantProvisioning function then. (4) Scope creep: none. Diff's 16 changed files match the handoff's artifacts_in plus process/doc files (requirements.yaml, status history, handoff jsons, orchestrator.log, registry.json, the design doc) -- no other lib/ or priv/ files touched. All 5 of REQ-024's acceptance_criteria are covered: migration applies schema-per-tenant per REQ-022's guard pattern (AC1), register_type/2 returns {:error, :duplicate_event_type_version} on (name, schema_version) collision via pre-check + unique-index backstop (AC2), validate_payload/3 (arity change from /2 to /3 explicitly documented and justified in the moduledoc, not silent) returns field_path (JSON Pointer)/constraint detail on failure (AC3), get_type/2 returns {:error, :unknown_event_type} not nil/exception for an unregistered name (AC4), moduledoc explicitly names the JSON Schema library choice as a decision made at CODE-DESIGNER design time with reasoning, matching AC5's 'explicit open question, not silent' framing. tenant_provisioning.ex's diff is the minimal 2-line array-literal addition to tenant_scoped_migrations/0 plus a moduledoc comment update -- exactly the extension point REQ-022's own design doc and that function's moduledoc named for future tenant-scoped migrations, not unauthorized editing of REQ-022's logic. mix.exs/mix.lock are untouched, confirming the 'no ex_json_schema dependency added' claim is real. REQ-023 (event-store proper, status: pending) is untouched -- this diff doesn't step on it. (5) docs/anti-patterns.md: two existing entries (no local toolchain workaround; don't overwrite requirement_status.yaml), neither applicable to this diff; nothing new to add. (6) Decision 0003 consistency: event_type_registry is explicitly classified under Decision C as a 'regular CRUD table' (grouped with process_definitions, sampled from 004_definitions.sql/002_event_type_registry.sql) rather than an event-log table -- correctly uses a plain binary_id PK, not the (event_id, created_at) composite PK or idempotency-sidecar treatment Decision C reserves for events/events_archive. Migration's guard pattern (if prefix() do ... end, no-op on a plain mix ecto.migrate) matches req022-tenant-schema-provisioning.md section 4's required pattern. tenant_id -> Registration -> schema_name resolution verified directly against tenant_provisioning.ex source (not just the claim in registry.ex's own comment) -- both replay_migrations/2 and re_select_registration/1 call the identical Repo.get_by(Registration, tenant_id: tenant_id), confirming Registry.resolve_schema_name/1 genuinely matches the established convention rather than only asserting it does.",
+    "artifacts_out": ["handoffs/WF02-REQ024-20260816/step-02d-reviewer.json"],
+    "issues": [
+      {
+        "severity": "non-blocking",
+        "description": "Registry.resolve_schema_name/1 (lib/letflow/event_store/registry.ex) duplicates the tenant_id->Registration->schema_name Repo.get_by lookup already present twice in lib/letflow/tenant_provisioning.ex rather than calling a shared function. Already self-flagged in registry.ex's own comment as deferred to REVIEWER. Not blocking for REQ-024 (extraction now would expand REQ-022's already-merged public surface for a single second call site) -- revisit under a rule-of-three if a third module needs the same resolution."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ024-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ024-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (Step 3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

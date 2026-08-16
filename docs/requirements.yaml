@@ -1195,7 +1195,7 @@ requirements:
   - id: REQ-028
     title: Graph structural validator (graph.zig, PD-02)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S2
     impl_order: 37  # letflow-queue task id
     description: >

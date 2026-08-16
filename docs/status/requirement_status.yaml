@@ -1725,3 +1725,13 @@ history:
       docs/issues/ISS-0011.yaml / GitHub issue #65, forwarded rather than fixed
       here per core-directives.md's Unblock-Everything scope boundary. Flipped
       docs/requirements.yaml REQ-022 status to done.
+  - req: REQ-028
+    event: started
+    agent: ORCH
+    at: 2026-08-16T10:50:50Z
+    note: >
+      Claimed from letflow-queue via a real get_next_task call (task id 37,
+      locked_by: tvolodi-orch), depends_on: [] so it's eligible with no S2
+      predecessor required. WF-02 Step 00 (git setup) complete:
+      feature/WF02-REQ028-20260816 branched from main and pushed. Routing to
+      CODE-DESIGNER (Step 1).

@@ -19,12 +19,14 @@ defmodule Letflow.Identity.User do
   it is NOT enforced by this schema module or by a DB-level CHECK
   constraint in the migration.
 
-  No changeset function is defined here — REQ-018 (JIT provisioning
-  upsert) and REQ-019 (tenant-scoped user operations) own the actual
-  changeset functions and their validation logic.
+  `jit_changeset/2` (below) is REQ-018's JIT-provisioning insert changeset —
+  the first changeset function defined on this schema. REQ-019 (tenant-scoped
+  user operations, not yet implemented) owns any further changeset function
+  this module eventually needs.
   """
 
   use Ecto.Schema
+  import Ecto.Changeset
 
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "users" do
@@ -39,5 +41,47 @@ defmodule Letflow.Identity.User do
     field(:external_realm, :string)
 
     timestamps()
+  end
+
+  @type t :: %__MODULE__{}
+
+  @doc """
+  Builds the insert changeset for a JIT-provisioned (OIDC) user, per
+  `lib/letflow/design/req018-jit-provisioning.md` §4/§5. `tenant_id`,
+  `external_realm`, `external_id`, `username`, `display_name`, and `email` are
+  populated from the caller-supplied `attrs` map (built by
+  `Letflow.Identity.provision_oidc_user/3` from its `IdentityContext` and
+  `tenant_id` arguments — never taken directly from raw external input by this
+  function). `password_hash` and `auth_source` are fixed, changeset-internal
+  values — set unconditionally below, never accepted from `attrs`, so no
+  caller can override them.
+  """
+  @spec jit_changeset(t(), map()) :: Ecto.Changeset.t()
+  def jit_changeset(%__MODULE__{} = user, attrs) do
+    user
+    |> cast(attrs, [
+      :tenant_id,
+      :external_realm,
+      :external_id,
+      :username,
+      :display_name,
+      :email,
+      :status
+    ])
+    |> validate_required([
+      :tenant_id,
+      :external_realm,
+      :external_id,
+      :username,
+      :display_name,
+      :email,
+      :status
+    ])
+    |> put_change(:password_hash, "__OIDC_ONLY__")
+    |> put_change(:auth_source, :oidc)
+    |> unique_constraint(:username)
+    |> unique_constraint([:external_realm, :external_id],
+      name: :users_external_identity_partial_index
+    )
   end
 end

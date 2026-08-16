@@ -1,0 +1,133 @@
+id: ISS-0025
+title: "No requirement supplies process_definitions.tenant_id, which REQ-027 ships as NOT NULL with no DB default -- REQ-030's create/1 would fail on every insert"
+discovered_by: CODE-DESIGNER
+discovered_in_run: WF02-REQ027-20260816
+discovered_at: 2026-08-16T19:44:38Z
+severity: MAJOR
+description: >
+  REQ-027 (this run) adds a `tenant_id` column to `process_definitions`,
+  correctly, per 0003 Decision B's rule that tenant_id columns are retained
+  inside each tenant schema as an intra-schema invariant, and per R-Co's
+  adp-02 table mapping which lists process_definitions among the tables
+  carrying one. The column is NOT NULL, matching R-Co.
+
+  Nothing supplies a value for it.
+
+  - R-Co gets away with NOT NULL because its column carries a database-level
+    DEFAULT sourced from a session GUC (a `current_setting(...)`-style
+    tenant context set per connection). Letflow has no equivalent mechanism
+    -- REQ-022 built schema-per-tenant provisioning via Ecto's :prefix, not
+    a session-GUC tenant context -- so Letflow's column has no DB default to
+    fall back on.
+  - REQ-030 is the requirement that owns `create/1`, the function that will
+    actually insert process_definitions rows. ORCH grepped REQ-030's entry
+    in docs/requirements.yaml directly: it mentions `tenant_id` **zero
+    times**. Its described CreateParams-equivalent has no such field, mirroring
+    R-Co's own `CreateParams`, which likewise omits it precisely because
+    R-Co's DB default fills it in.
+
+  So as the requirement set currently stands, REQ-030's `create/1` would
+  attempt an INSERT with no tenant_id, against a NOT NULL column with no
+  default, and fail with a not_null_violation on every call.
+
+  This is a genuine gap in the requirement set rather than a defect in
+  REQ-027's shipped schema. REQ-027's own five acceptance criteria say
+  nothing about tenant_id (they cover the two migrations, three index
+  shapes, the FK, and two moduledocs), and dropping the column or making it
+  nullable to sidestep the problem would silently diverge from Decision B
+  and from R-Co's actual table shape -- a schema decision that belongs to a
+  design gate, not to an implementer working around an insert failure.
+  CODE-DESIGNER correctly declined to resolve it and flagged it as
+  REQ-030's API question instead.
+
+  READ THIS BEFORE THE THREE OPTIONS BELOW (added after RELEASE-VALIDATOR
+  observed that the strongest reasoning in this record was buried in an
+  UPDATE block while the three options were presented as equals):
+  **option (c) is the recommended resolution, not a co-equal alternative.**
+  The attribution-integrity analysis in the SECURITY-REVIEWER update further
+  down establishes that option (a) makes tenant_id caller-controlled, so a
+  row can sit inside tenant A's physical schema while claiming tenant_id = B
+  and nothing in the shipped schema would reject it. Option (c)'s derived
+  value cannot disagree with the schema it is written into. The three are
+  therefore NOT equally good; they are listed together only because each has
+  real tradeoffs worth reading. If (a) is chosen anyway for its
+  explicitness, pair it with a cross-check against the prefix.
+
+  Three candidate resolutions, none obviously right, recorded so whoever
+  picks this up does not have to re-derive them:
+
+  (a) Add tenant_id to REQ-030's create/1 parameters explicitly, making the
+      caller supply it. Simplest and most explicit; means every future
+      caller must thread tenant context down to the context module, and the
+      API diverges from R-Co's CreateParams.
+  (b) Build a Letflow equivalent of R-Co's session-GUC tenant context, so
+      the DB default can fill it in. Closest to R-Co, but it is a
+      cross-cutting mechanism affecting every tenant-scoped table (not just
+      this one), and no existing decision record settles whether Letflow
+      wants a connection-level tenant context alongside :prefix -- so this
+      likely needs its own decision record under
+      docs/migration/decisions/, per CLAUDE.md's rule about not silently
+      re-deciding what decision records cover.
+  (c) Derive it inside the context module from the already-known tenant
+      prefix at write time. Keeps the public API matching R-Co's, but
+      couples the context module to the prefix-naming scheme
+      (`tenant_<32 hex>` per REQ-022's schema_name_for_tenant/1), which is
+      currently an implementation detail of a different module.
+
+  Note this same question will recur for every S2 table carrying a
+  NOT NULL tenant_id, not just process_definitions -- REQ-023 shipped
+  tenant_id on `events`, `events_archive` and `instance_projections` on the
+  same Decision B reasoning, and their writer (REQ-025's append path) has
+  not been implemented yet either. So resolving this well is worth more than
+  the single-table fix it looks like: whichever option is chosen should be
+  recorded somewhere REQ-025 and REQ-030 will both find it.
+
+  Discovered by CODE-DESIGNER while designing REQ-027's column set. Blocks
+  nothing in REQ-027 -- the migration and schema module are correct and its
+  acceptance criteria are fully satisfiable -- so per
+  docs/agents/protocols/ISSUE_QUEUE.md filed and forwarded rather than fixed
+  in this run. It should be resolved BEFORE REQ-030 or REQ-025 is claimed.
+  UPDATE 2026-08-16T20:32:46Z (SECURITY-REVIEWER, same run, Step 2c) -- A NEW EVALUATION AXIS
+  THIS RECORD'S THREE OPTIONS DO NOT WEIGH.
+
+  Step 2c answered ORCH's question about whether an unsatisfiable NOT NULL
+  tenant_id has any tenant-ISOLATION consequence, and concluded it does not
+  (see below). But in reaching that verdict it surfaced a dimension the three
+  candidate resolutions above are not currently compared on:
+  **attribution integrity**.
+
+  Option (a) -- add tenant_id to REQ-030's create/1 parameters -- makes the
+  column CALLER-CONTROLLED. A caller writing into tenant A's schema could
+  supply tenant_id = B. Nothing in the shipped schema would reject it: no
+  index or constraint references tenant_id, so the row would sit inside
+  tenant A's physical schema while claiming to belong to B. That is not an
+  isolation breach (the Postgres schema still bounds who can read it) but it
+  IS an attribution defect, and it corrupts precisely the cross-schema
+  reporting use case 0003 Decision B retains the column FOR.
+
+  Option (c) -- derive it inside the context module from the already-known
+  tenant prefix -- is therefore structurally the strongest of the three on
+  this axis, because a derived value cannot disagree with the schema it is
+  written into. Option (b)'s session-GUC approach sits in between: correct
+  when the GUC is set correctly, silently wrong when it is stale.
+
+  Recommendation added to this record rather than deciding it here: if option
+  (a) is chosen anyway (it has real advantages -- explicitness, and no
+  coupling to REQ-022's naming scheme), pair it with a cross-check that the
+  supplied tenant_id agrees with the prefix being written to, so a mismatch
+  fails loudly instead of being persisted.
+
+  Also recorded from the same review, because it cuts the other way and
+  should not be lost: the currently-shipped NOT NULL column is strictly
+  SAFER than R-Co's own arrangement. An omitted insert here produces a hard
+  not_null_violation, whereas R-Co's session-GUC DEFAULT silently stamps
+  whatever tenant UUID the connection last had -- which under a stale or
+  unset GUC misattributes the row rather than rejecting it. So the current
+  state is a loud failure, not a silent one; that lowers this issue's
+  urgency slightly while leaving it genuinely blocking for REQ-030.
+
+affected_files:
+  - docs/requirements.yaml
+  - lib/letflow/design/req027-definition-core-schema.md
+github_issue: https://github.com/tvolodi/letflow/issues/83
+status: open

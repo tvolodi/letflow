@@ -150,6 +150,62 @@ description: >
   test/letflow/plugs/tenant_status_test.exs:121 is this issue -- re-run
   before concluding otherwise. Any OTHER failing test is a genuine new
   signal and must not be attributed here.
+  UPDATE 2026-08-16T22:39:26Z (TEST-RUNNER, run WF02-REQ027-20260816, Step 4) -- THIRD
+  INDEPENDENT SEED-0 REPRODUCTION, AND A RETRACTION OF THIS RECORD'S OWN
+  PINNED-VS-UNPINNED CLAIM.
+
+  Step 4 ran the full suite 12 times on 29abd0c8, deliberately INTERLEAVING
+  the modes (p,p,u,p,u,p,u,u,p,u,p,u) rather than running them in contiguous
+  blocks, so the result could not be an artefact of ordering or session
+  drift:
+
+      pinned (--seed 0):  6 runs, 5 clean, 1 failed  -> 1/6
+      unpinned:           6 runs, 5 clean, 1 failed  -> 1/6
+      overall:           12 runs, 10 clean, 2 failed
+
+  Failing seeds: 0 and 446139. All ten clean runs reported
+  "307 passed (4 properties, 303 tests)", exit 0.
+
+  1. Seed 0 reproduced again (run 04). That is now THREE independent
+     confirmations by three different agents across three different run sets
+     (Step 3b and Step 4 of REQ-023, and Step 4 here). The
+     seed-0-is-not-a-baseline conclusion is settled.
+
+  2. RETRACTION. The previous UPDATE block recorded a pinned-vs-unpinned
+     split of 3.8% vs 14.3% and described it as "directionally consistent
+     with the documented root cause" -- reasoning that a fixed seed fixes
+     ordering and so makes the race less likely to be hit. **That split did
+     not reproduce.** Here it was 1/6 versus 1/6, identical. With only 2
+     failures in this sample and 3 in the earlier one, neither sample can
+     establish a real difference between the modes, and the earlier split is
+     better explained as sampling noise that was then given a plausible
+     post-hoc mechanism. The explanation was not wrong in its physics -- a
+     seed genuinely does fix ordering -- but it was offered as an account of
+     a difference that the data does not actually support. Recording the
+     retraction because a wrong causal story in an issue record is worse
+     than no story: it invites future runs to "prefer pinned seeds" for a
+     safety margin that does not exist.
+
+     Practical guidance is unchanged and in fact reinforced: pinning buys
+     nothing. Run the suite several times regardless of seed.
+
+  3. The 2/12 = 16.7% observed here is deliberately NOT proposed as a new
+     headline rate, and TEST-RUNNER explicitly declined to do so. That would
+     repeat exactly the small-sample trap this record has now fallen into
+     twice (1/5 = 20%, then 3/9 = 33%). The best-supported figure remains
+     REQ-023's 3/40 = 7.5%; this sample is consistent with it and too small
+     to refine it.
+
+  Attribution re-verified independently rather than inherited: grepping all
+  12 logs together for ExUnit's failure-header pattern yields exactly one
+  distinct failing test across the corpus, and run 04's log captures the race
+  in the act -- foreign queries from other modules (SELECT FROM "approvals",
+  INSERT INTO "tenants", INSERT INTO "users") immediately before the failure
+  block, and more (SELECT FROM "groups", INSERT INTO "tenant_role")
+  immediately after. REQ-027 re-cleared as a cause structurally: its
+  async: true module greps clean for telemetry/attach/Repo (all three hits
+  are prose in comments) and its DB-touching module is async: false.
+
 affected_files:
   - test/letflow/plugs/tenant_status_test.exs
 github_issue: https://github.com/tvolodi/letflow/issues/65

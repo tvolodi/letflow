@@ -1,0 +1,68 @@
+id: ISS-0029
+title: "A REQ-027 test assertion cannot fire: refute table_exists_in_schema?(\"public\", ...) is vacuous under replay_migrations/2, and its comment plus test/specs/REQ-027.md overstate what it proves"
+discovered_by: TEST-DESIGN-VALIDATOR
+discovered_in_run: WF02-REQ027-20260816
+discovered_at: 2026-08-16T22:21:22Z
+severity: MINOR
+description: >
+  test/letflow/definitions/migrations_test.exs around line 300 asserts, after
+  a replay into a tenant schema, that neither new table appears in public:
+
+      refute table_exists_in_schema?("public", "process_definitions")
+
+  That assertion can never fail in the context it runs in, so it provides no
+  detection.
+
+  Mechanism, established from Ecto's source rather than inferred:
+  Ecto.Migration.__prefix__/1 injects the enclosing migrator run's prefix
+  whenever a migration's own table struct carries a nil prefix, and RAISES on
+  a mismatched explicit prefix. Under replay_migrations/2 -- which always
+  passes a real :prefix -- a table therefore lands in the tenant schema
+  whether or not the migration author wrote prefix: prefix() on it. There is
+  no reachable state in which the replay puts these tables in public, so the
+  refute is asserting something the framework already guarantees.
+
+  Demonstrated empirically by TEST-DESIGN-VALIDATOR rather than argued:
+  replacing EVERY prefix: prefix() with prefix: nil across both REQ-027
+  migrations left all 14 tests in that file green. A test that survives the
+  deletion of the thing it claims to verify is not verifying it.
+
+  This is explicitly NOT a gate failure, and Step 3b PASSED with it recorded:
+
+    - AC1's positive half genuinely fires. Mutation MUT-2b (unregistering
+      CreateInstanceDefinitionSnapshots from tenant_scoped_migrations/0)
+      failed 6 tests with a precise diagnostic, so the "tables reach the
+      tenant schema" half is real detection.
+    - The actual :prefix-guard gate is the section-4 guard test in
+      test/letflow/event_store/migrations_test.exs, which runs each
+      registered migration with NO prefix and asserts public is unchanged.
+      Mutation MUT-2a (changing if prefix() do to if true do) failed exactly
+      that test, naming CreateProcessDefinitions in its candidate list. So
+      the property IS covered -- by a different test, in a different file.
+
+  What is wrong is only the claim, not the coverage. The assertion's inline
+  comment and test/specs/REQ-027.md lines 111-113 both present this refute as
+  proof that the :prefix mechanism works, which it is not. That matters
+  because a later reader trusting the spec could conclude the guard property
+  is covered here and, if the section-4 guard test were ever weakened or
+  removed, would not notice the real coverage had gone.
+
+  Suggested fix (small, its own change): either delete the vacuous refute and
+  point the spec at the section-4 guard test as the true owner of that
+  property, or keep it as a cheap sanity check but reword the comment and the
+  spec to say what it actually establishes -- that the replay did not ALSO
+  create the tables in public -- rather than that the prefix mechanism is
+  verified here. Preferring the first: a test that cannot fail is worse than
+  no test, because it occupies the space where a real one would be looked
+  for.
+
+  Discovered by TEST-DESIGN-VALIDATOR during REQ-027's Step 3b hard gate,
+  which PASSED after mutation-verifying all five acceptance criteria (10
+  mutations, all reverted, tree confirmed unmodified). Blocks nothing, so per
+  docs/agents/protocols/ISSUE_QUEUE.md filed and forwarded rather than fixed
+  in this run.
+affected_files:
+  - test/letflow/definitions/migrations_test.exs
+  - test/specs/REQ-027.md
+github_issue: https://github.com/tvolodi/letflow/issues/87
+status: open

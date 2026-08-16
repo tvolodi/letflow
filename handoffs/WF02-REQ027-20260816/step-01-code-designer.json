@@ -1,0 +1,107 @@
+{
+  "handoff_id": "b0081b68-c829-42ba-97f8-08fa2bffc5ce",
+  "run_id": "WF02-REQ027-20260816",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ027-20260816/step-01-code-designer.json",
+  "created_at": "2026-08-16T19:20:38Z",
+  "started_at": "2026-08-16T19:20:38Z",
+  "completed_at": "2026-08-16T19:41:28Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-027"],
+    "related_handoff_ids": ["15f85e7f-1dbc-4401-a6f6-967a4775bdcb"],
+    "artifacts_in": [
+      "docs/requirements.yaml (REQ-027 entry, plus REQ-028/029/030/033 for the downstream contracts)",
+      "c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\design\\definition.md (PD-01/PD-03/PD-04/PD-07/PD-08)",
+      "c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\migrations\\004_definitions.sql",
+      "c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\migrations\\014_definition_stage.sql",
+      "docs/migration/decisions/0003-ecto-schema-strategy.md",
+      "lib/letflow/design/req023-event-store-schema.md (the immediately preceding schema design, same mechanism)",
+      "lib/letflow/design/req022-tenant-schema-provisioning.md (section 4, the mandatory guard pattern)",
+      "lib/letflow/tenant_provisioning.ex (manifest currently holds seven entries)",
+      "lib/letflow/definitions/graph.ex (REQ-028's already-merged pure validator)"
+    ],
+    "owned_modules": ["lib/letflow/definitions", "priv/repo/migrations", "lib/letflow/tenant_provisioning.ex"]
+  },
+  "task": {
+    "description": "Produce the design artefact for REQ-027 (definition core schema) at lib/letflow/design/req027-definition-core-schema.md, per WF-02 Step 1. Design only -- no implementation code, no .ex/.exs files, no migration files. Cover both tables (process_definitions, instance_definition_snapshots) with full column/type/constraint/index detail, the Ecto.Schema module shape, and the migration shape using Ecto's :prefix option with REQ-022 design section 4's mandatory guard pattern. This requirement is structurally the sibling of REQ-023, which merged minutes ago as PR #80 -- read lib/letflow/design/req023-event-store-schema.md and reuse its established conventions rather than inventing new ones, and note the specific hard-won constraints listed in the dispatch prompt.",
+    "acceptance_criteria": [
+      "priv/repo/migrations gains process_definitions and instance_definition_snapshots migrations, both schema-per-tenant via REQ-022's :prefix mechanism, applying cleanly",
+      "process_definitions has a unique index on (name, version) and a partial unique index on name WHERE status = 'active'",
+      "process_definitions has a nullable stage column and a partial index on stage WHERE stage IS NOT NULL, per definition.md's PD-07 section (migrations/014_definition_stage.sql)",
+      "instance_definition_snapshots.definition_id references process_definitions.id with no ON DELETE CASCADE, and the moduledoc states this is deliberate per PD-08",
+      "both Ecto.Schema modules' @moduledoc cite R-Co src/design/definition.md (PD-01/PD-07/PD-08 sections) as the ported source"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req027-definition-core-schema.md (1295 lines), the design-only artefact for REQ-027. Structure and conventions reused from lib/letflow/design/req023-event-store-schema.md (PR #80) rather than reinvented; every deliberate divergence from it is called out with a reason (sections 3.2.3, 5.1, 10 C-3). CONTENT, checkable claim by claim: (1) Section 0 lists every source read with file:line citations, including the exact vendored versions the Ecto mechanics were verified against (mix.lock:5-6 -- ecto 3.14.1, ecto_sql 3.14.0). (2) Section 3.1 specifies process_definitions: 11 columns (id, tenant_id, name, version, description, status, stage, graph, created_by, archived_at, created_at/updated_at via timestamps(inserted_at: :created_at, type: :utc_datetime_usec)) each with Ecto migration type, emitted DB type, null/default and an R-Co citation. Section 3.1.2 gives all 4 indexes (process_definitions_pkey; uq_definition_version UNIQUE (name, version); uq_active_definition UNIQUE (name) WHERE status = 'active'; idx_def_stage (stage) WHERE stage IS NOT NULL; plus idx_def_status) and a 'deliberately NOT created' list covering idx_def_name (redundant with uq_definition_version's leading column), idx_def_fts (PD-10 itself says no GIN index is needed and its ILIKE query cannot use one), and the four 028_adp02 tenant-prefixed variants (degenerate under schema-per-tenant), each with a citation. (3) Section 3.2 specifies instance_definition_snapshots: 6 columns, PK (instance_id), idx_snap_definition, and no tenant_id / no timestamps(), each justified. (4) Section 3.1.2 shows exactly how Ecto expresses a partial UNIQUE index and a partial plain index, verified against deps/: unique_index/3 IS index/3 with [unique: true] prepended (deps/ecto_sql/lib/ecto/migration.ex:1048-1052), so :where/:name/:prefix are all available; the predicate is emitted verbatim at connection.ex:1344; only one :where per index (migration.ex:1739-1746). (5) Section 3.2.2 specifies the FK as references(:process_definitions, column: :id, type: :binary_id, on_delete: :nothing) and proves via connection.ex:1918 that :nothing emits NO ON DELETE clause at all (= Postgres NO ACTION, R-Co's 004:61 shape); type: :binary_id is mandatory because %Reference{}'s default type is :bigserial (migration.ex:513); no :prefix on references/2 because it inherits the table's (connection.ex:1872); the default constraint name is instance_definition_snapshots_definition_id_fkey (connection.ex:1895-1896), identical to R-Co's. Section 3.2.3 explains why :nothing here and not REQ-023's :restrict. (6) Section 4 gives the migration file plan: 20260816193001_create_process_definitions.exs / Letflow.Repo.Migrations.CreateProcessDefinitions and 20260816193002_create_instance_definition_snapshots.exs / ...CreateInstanceDefinitionSnapshots, with ordering (#8 before #9), the three filename/module/version constraints the shipped manifest test enforces (Macro.underscore rule), and exactly where prefix: prefix() threads through create table / create index / references. (7) BOTH halves of REQ-022 section 4 are covered: section 2.1 mandates the if prefix() do ... end guard with a no-op nil branch (citing req022-...md:340-395 and the shipped 20260816120003 fixture), and section 5.3 appends manifest entries EIGHT and NINE to @tenant_scoped_migration_manifest in the same {version, module, filename} three-element form, preserving all seven existing entries, keeping tenant_scoped_migrations/0's @spec byte-identical, and requiring the 'seven entries' wording in the attribute header comment and the function's @doc to be updated to nine. Section 4.4 names both shipped policing tests (the section-4 guard test and the manifest version-to-filename consistency test in test/letflow/event_store/migrations_test.exs) and states the design was made with them in mind. (8) Section 5.1 gives the two Ecto.Schema modules (Letflow.Definitions.ProcessDefinition, Letflow.Definitions.InstanceDefinitionSnapshot under lib/letflow/definitions/), their @primary_key, full field lists, no @schema_prefix, no belongs_to, and the Ecto.Enum declaration. (9) Section 5.2 fully specifies all four functions that will exist -- ProcessDefinition.create_changeset/2 and update_changeset/2, InstanceDefinitionSnapshot.create_changeset/2 -- with @spec, cast/validate_required/validate_length lists, and the unique_constraint/foreign_key_constraint declarations that convert DB violations into {:error, changeset} instead of a raised Ecto.ConstraintError; the return-shape paragraph states the {:ok,_}|{:error,_} boundary explicitly rather than leaving it implicit. A normative 'will deliberately NOT exist' table covers InstanceDefinitionSnapshot.update_changeset/2 (write-once per PD-08, with the explicit note that runtime enforcement is REQ-033's job not this migration's), generic changeset/2, any status-mutating changeset (transitions are guarded single-statement UPDATEs, definition.md:574-595/745-788), transition_allowed?/2 (REQ-030's), deletes, and any Repo call. (10) Section 7 gives the VERBATIM moduledoc text for both modules, quoted so a validator can match it literally: 7.1 names definition.md's PD-01 and PD-07 sections plus 014_definition_stage.sql (AC5) and carries the mandatory schema-only scope note; 7.2 names PD-08 (AC5), states the no-ON-DELETE-CASCADE FK is deliberate and quotes PD-08's own two sentences (AC4), and discloses R-Co's later cascade migration. (11) Section 6 lists 10 invariants; section 8 lists 14 cross-module dependencies with the concrete contract points REQ-030 and REQ-033 must honour; section 9 lists 8 open questions, none silently resolved; section 10 lists 7 R-Co design-doc-vs-source contradictions; section 11 maps all 5 acceptance criteria and every clause of REQ-027's description to a concrete design element. Verified mechanically: zero 'def '/'defmodule '/'defp '/'do' function bodies and zero TBD/TODO/'to be implemented' occurrences in the artefact.",
+    "artifacts_out": [
+      "lib/letflow/design/req027-definition-core-schema.md",
+      "handoffs/WF02-REQ027-20260816/step-01-code-designer.json"
+    ],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "NEW (not among ISS-0012..ISS-0023). R-Co's migrations/1106_iss0125_instance_definition_snapshots_cascade.sql:78-88 drops and re-adds instance_definition_snapshots_definition_id_fkey WITH ON DELETE CASCADE, directly contradicting src/design/definition.md's PD-08 section (lines 2051-2059 and its traceability row at 2190), which states the FK deliberately carries no cascade so that 'Definition hard-deleted (DRAFT) after instances were started from it: instances retain their snapshot and continue normally.' The migration's own header gives the motivation as a test-harness cleanup-ordering problem ('bespoke per-test cleanup helpers that swallowed SQL errors', 1106:8-12), not a design change, and rationalizes it with a claim that contradicts PD-08 outright (1106:14-18). Letflow deliberately follows PD-08's prose and does NOT port 1106, as REQ-027 AC4 and REQ-033 AC4 both require. Recorded because a future agent cross-checking Letflow against R-Co's LIVE schema would find a cascade there and could 'fix' Letflow into snapshot data loss. Mitigated in-code: the design's section 7.2 verbatim moduledoc text discloses this explicitly so the divergence is discoverable without reading the design doc. Design section 10 C-1.",
+        "affected_requirement": "REQ-027"
+      },
+      {
+        "severity": "MAJOR",
+        "description": "NEW. REQ-033's fourth acceptance criterion ('deleting the source process_definitions row (where FK rules permit, e.g. a DRAFT definition) does not remove or invalidate an existing snapshot row', docs/requirements.yaml:1492) cannot be demonstrated as worded. Under the NO ACTION referential action that REQ-027 AC4 mandates and that R-Co's 004_definitions.sql:61 actually declares, NO delete of a referenced definition ever succeeds -- DRAFT or otherwise -- Postgres raises foreign_key_violation (23503). The parenthetical describes a case that does not exist. The behaviour is still correct and satisfies PD-08 a fortiori, but REQ-033's test must assert the delete is REJECTED and the snapshot still readable, not that the delete succeeds. Flagged rather than silently reinterpreted, because a test written to the criterion's literal wording would fail against a correct schema. Design OQ-2.",
+        "affected_requirement": "REQ-033"
+      },
+      {
+        "severity": "MAJOR",
+        "description": "NEW. Nothing in REQ-030's text says who supplies tenant_id for process_definitions. This design gives process_definitions.tenant_id null: false with NO DB default, following 0003 Decision B (docs/migration/decisions/0003-ecto-schema-strategy.md:37-45), adp-02's own table mapping (line 17), and the precedent REQ-023 set for events.tenant_id. R-Co sidesteps the question with a DEFAULT bpm_effective_tenant_id() session-GUC function (028_adp02_tenant_scope_persistence.sql:4-16,33) that Letflow has no equivalent of, and REQ-022's design already established Letflow has no reserved default-tenant UUID. Consequence: REQ-030's create/1 MUST accept and bind a tenant_id, but REQ-030's description (requirements.yaml:1300-1308) never mentions one and R-Co's CreateParams (definition.md:200-209) has no such field to port. Not resolved here (it is REQ-030's API decision); the column will reject an omitting write loudly at the first integration test rather than silently mis-attributing rows. Design OQ-1.",
+        "affected_requirement": "REQ-030"
+      },
+      {
+        "severity": "MINOR",
+        "description": "NEW. R-Co's migrations/004_definitions.sql:41-44 creates idx_def_fts, a GIN index over to_tsvector('english', name || ' ' || description) labelled 'PD-10: full-text search', but definition.md's PD-10 section states the opposite -- 'A new SQL migration is NOT needed for PD-10 ... Correctness does not require a GIN index' (3008-3022) -- and PD-10's actual query is 'name ILIKE $2 OR description ILIKE $2' (2862-2864), which cannot use a to_tsvector GIN index at all. The index is therefore dead weight in R-Co itself: maintained on every write, read by nothing. Not ported (design section 3.1.2), independently confirmed by Letflow's own REQ-042 ('adds no new table, reusing REQ-027's schema as-is', requirements.yaml:1953-1955). Design section 10 C-2, OQ-8 notes that adding it later is a two-part change (index + swapping ILIKE for to_tsquery), not a one-line migration.",
+        "affected_requirement": "REQ-042"
+      },
+      {
+        "severity": "MINOR",
+        "description": "NEW. definition.md:362 lists instance_definition_snapshots.instance_id as an 'FK to process_instances.id'. Verified false twice over: 004_definitions.sql:60 declares it as a bare UUID PRIMARY KEY with no REFERENCES clause, and NO process_instances table exists anywhere in R-Co (a search across all 146 migrations/*.sql finds no CREATE TABLE for it and no occurrence of the identifier -- R-Co's instance table is instance_projections). Letflow follows the SQL and creates no FK on instance_id. Independently, an FK there would be wrong on its own terms: PD-08's EE-01 contract (definition.md:2069-2081) requires the snapshot to be created BEFORE the InstanceStarted event, so a snapshot row can legitimately precede any instance row. Design section 3.2.4, section 10 C-7.",
+        "affected_requirement": "REQ-027"
+      },
+      {
+        "severity": "MINOR",
+        "description": "NEW. Status-value case is a forced choice, not a free one, and this design departs from REQ-023's convention because of it. R-Co stores uppercase DRAFT/ACTIVE/DEPRECATED/ARCHIVED (004_definitions.sql:15-16) and its partial index predicate is WHERE status = 'ACTIVE' (004:36); REQ-023's sibling design preserved R-Co's uppercase for instance_projections.status via Ecto.Enum's keyword-mapping form. REQ-027 instead uses the bare atom-list form (lowercase 'draft'/'active'/...) because REQ-027 AC2 specifies the literal predicate WHERE status = 'active' and its description names the lowercase atoms. The two are not independently choosable: if the enum's dumped value and the index predicate ever disagree, uq_active_definition matches zero rows and PD-03's single-active-per-name invariant is SILENTLY unenforced -- no error, no failing query. Captured as design invariant INV-DEF-3 and stated in the verbatim moduledoc text (section 7.1) so a later edit to either side is visibly a defect. Design section 10 C-3.",
+        "affected_requirement": "REQ-027"
+      },
+      {
+        "severity": "MINOR",
+        "description": "NEW. No Letflow requirement owns a hard-delete path for process_definitions. PD-08's edge case (definition.md:2058-2059) and REQ-033 AC4 (requirements.yaml:1492) both presuppose a DRAFT definition can be hard-deleted, and R-Co's 1106_iss0125_...:6-12 describes real DELETE FROM process_definitions traffic, but REQ-030's function list (requirements.yaml:1300-1341) has no delete/1 and no other requirement defines one -- the lifecycle's terminal state is archived with archived_at set, not deletion. So the FK's referential action currently guards a path no shipped code takes. Not a defect (the constraint is correct either way), but the gap should be closed deliberately: either a requirement adds delete/1, or REQ-033 AC4 is restated in terms of archival. Design OQ-6.",
+        "affected_requirement": "REQ-030"
+      },
+      {
+        "severity": "MINOR",
+        "description": "NEW, informational forward-notes for REQ-030 that this design deliberately did NOT resolve. (a) Graph map-vs-struct boundary: REQ-028 shipped a struct-typed validator (Letflow.Definitions.Graph.validate_graph/1 takes %Graph{nodes: [%Node{}], edges: [%Edge{}]} with atom node_type values, graph.ex:40-48,122-136) while the graph column stores a plain jsonb map with string keys; REQ-027 declares the field as a plain :map rather than introducing an Ecto.Type, because doing so would bind REQ-029/REQ-030 to a conversion contract neither has designed (design OQ-3). (b) The after_created cursor can skip rows: definition.md:1450-1451 defines it as strictly-greater on a non-unique created_at, so two definitions created in the same microsecond straddling a page boundary lose one forever; mitigated by choosing :utc_datetime_usec over second precision, but a real fix is a composite (created_at, id) cursor, which changes the opaque cursor encoding and is REQ-030's API call (design OQ-4). (c) R-Co's create() binds params.stage orelse '' wrapped in NULLIF($6,'') (store.zig:292,303), so an explicitly-supplied empty-string stage is indistinguishable from an omitted one -- which matters because idx_def_stage's predicate is WHERE stage IS NOT NULL; Letflow's changesets do not perform that normalization (design OQ-5a). (d) create_changeset/2 cannot produce PD-01's InitialStatusNotDraft because it does not cast :status at all; REQ-030 must reject a caller-supplied status at its own params boundary (design OQ-5b). (e) definition.md:376-381 specifies ON CONFLICT (name, version) DO NOTHING while store.zig:290 actually uses a bare untargeted ON CONFLICT DO NOTHING for schema-variant reasons that do not apply to Letflow; REQ-030 should use the targeted form, since an untargeted one would also swallow a uq_active_definition conflict and mislabel it DuplicateNameVersion (design section 10 C-5).",
+        "affected_requirement": "REQ-030"
+      },
+      {
+        "severity": "MINOR",
+        "description": "CARRIED FORWARD, not newly filed: req023-event-store-schema.md's OQ-5 (should Letflow's repo move to timestamptz project-wide?) remains open and now affects two more tables. R-Co uses TIMESTAMPTZ throughout (004_definitions.sql:25-27,65); Ecto's :utc_datetime_usec emits timestamp WITHOUT time zone (deps/ecto_sql/lib/ecto/adapters/postgres/connection.ex:2071) and this repo sets no migration_timestamps: [type: :timestamptz]. Restated as design OQ-7 rather than re-filed, so it is visible to whoever decides it -- the blast radius grows with every table added under the current setting. This design applies REQ-023's same mitigation ((now() AT TIME ZONE 'utc') rather than bare now()) on the one column that carries a timestamp default. Also carried forward, not re-filed: this requirement's manifest edit must update the 'seven entries in total' wording in lib/letflow/tenant_provisioning.ex's @tenant_scoped_migration_manifest header comment (183-191) and tenant_scoped_migrations/0's @doc (209-223) to nine -- documentation drift this requirement itself introduces (design section 5.3).",
+        "affected_requirement": "REQ-027"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ027-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ027-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

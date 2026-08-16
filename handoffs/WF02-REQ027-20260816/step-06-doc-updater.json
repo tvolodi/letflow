@@ -1,0 +1,63 @@
+{
+  "handoff_id": "80f6e420-4606-4720-885c-0606bb42a3e4",
+  "run_id": "WF02-REQ027-20260816",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ027-20260816/step-06-doc-updater.json",
+  "created_at": "2026-08-16T22:57:56Z",
+  "started_at": "2026-08-16T22:57:56Z",
+  "completed_at": "2026-08-16T23:02:54Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-027"],
+    "related_handoff_ids": ["e6b8d0fa-a99d-4990-8e4c-2b0a810d139f"],
+    "artifacts_in": [
+      "docs/requirements.yaml (REQ-027 entry, currently status: in_progress)",
+      "docs/status/requirement_status.yaml",
+      "docs/status/REQ-027-release-2026-08-16.yaml",
+      "README.md",
+      "docs/migration/stage-2-event-store-definitions.md"
+    ],
+    "owned_modules": ["docs/requirements.yaml", "docs/status", "README.md"]
+  },
+  "task": {
+    "description": "WF-02 Step 6. Flip REQ-027's status to done in docs/requirements.yaml and append a done event to docs/status/requirement_status.yaml with a real UTC clock timestamp, append-only. Then assess -- do not assume in either direction -- whether README.md or docs/migration/stage-2-event-store-definitions.md genuinely need updating because this requirement changed documented behavior. Follow the precedent REQ-022, REQ-023 and REQ-028 established: stage-N doc headers are rewritten in bulk at WF-04 stage-gate closure, not incrementally per WF-02 requirement. Do not invent doc updates the acceptance criteria never asked for; equally, do not skip one that genuinely applies. Name every file you actually touch in artifacts_out -- ORCH independently verifies each claimed change before writing the DONE log line.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-027 status is done, with no other requirement's entry modified",
+      "docs/status/requirement_status.yaml has a new appended done event with a real UTC timestamp, every prior entry byte-identical",
+      "README.md and docs/migration/stage-2-event-store-definitions.md are each explicitly assessed, with the decision to update or not update stated and justified",
+      "artifacts_out names every file actually touched, not a generic 'docs updated'"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-027 ships Letflow's definition core schema: the two tables R-Co's src/design/definition.md names as store.zig's DB-backed CRUD surface, ported as two migrations (priv/repo/migrations/20260816193001_create_process_definitions.exs, 20260816193002_create_instance_definition_snapshots.exs) plus two Ecto.Schema modules under lib/letflow/definitions/ (process_definition.ex, instance_definition_snapshot.ex). Both tables are schema-per-tenant via Ecto's :prefix -- neither targets the public default schema -- and both migrations carry BOTH mandatory halves of REQ-022 design section 4's guard pattern: the change/0 body wrapped in `if prefix() do ... end`, AND registration of the {version, module, filename} triple in Letflow.TenantProvisioning's tenant_scoped_migrations/0 manifest (entries 8 and 9), since a guarded migration that is never registered is inert rather than merely unbookkept. Three of process_definitions' indexes are constraints, not lookup aids: uq_definition_version (plain unique on (name, version)), which REQ-030's ON CONFLICT (name, version) will use as its arbiter; uq_active_definition (PARTIAL unique on name WHERE status = 'active'), which carries PD-03's single-active-per-name invariant at the migration layer independently of REQ-030's activate/1, so the invariant holds before the activation code that respects it even exists; and idx_def_stage (partial on stage WHERE stage IS NOT NULL), ported verbatim from PD-07's 014_definition_stage.sql so the null majority is never indexed. instance_definition_snapshots' FK to process_definitions.id is declared on_delete: :nothing -- deliberately WITHOUT ON DELETE CASCADE per PD-08, so a hard-deleted DRAFT definition cannot drag away the historical record of what a running instance actually started from; that negative property was verified from the live Postgres catalog rather than from migration source (pg_constraint.confdeltype = 'a' NO ACTION on instance_definition_snapshots_definition_id_fkey, confirmed not 'c'/'n'/'d', plus a real DELETE probe). Scope is schema only, stated in both moduledocs: graph/node/edge validation (REQ-028/029), CRUD (REQ-030) and snapshot create/retrieve (REQ-033) are separate later requirements building on these tables. All WF-02 gates PASS, with RELEASE-VALIDATOR re-running the suite itself rather than trusting Step 4: 6 of 6 runs clean at 307/307 (4 properties, 303 tests), zero reds, the delta from the run's recorded 271 baseline reconciling exactly against REQ-027's own 36 new tests with no unexplained gap. This Step 6 pass flipped docs/requirements.yaml REQ-027 status in_progress -> done (that field only, that requirement only) and appended one done event to docs/status/requirement_status.yaml (append-only, verified pure additions: git diff --numstat reports 77 added / 0 deleted, so every prior entry is byte-identical; both files re-validated as parsing YAML). README.md and docs/migration/stage-2-event-store-definitions.md were each assessed and BOTH deliberately left untouched, with reasons recorded in the status note. No lib/, priv/, test/ or design file was touched by this pass -- all had already cleared hard gates earlier in the run.",
+    "artifacts_out": [
+      "docs/requirements.yaml (REQ-027 `status:` flipped in_progress -> done; single-line change, verified by git diff as 1 insertion / 1 deletion touching no other requirement)",
+      "docs/status/requirement_status.yaml (one `done` event appended for REQ-027, agent DOC-UPDATER, at 2026-08-16T23:01:34Z from `date -u`; 77 lines added, 0 deleted; schema keys req/event/agent/at/note exactly as established)",
+      "handoffs/WF02-REQ027-20260816/step-06-doc-updater.json (this handoff: status PENDING -> IN_PROGRESS -> COMPLETED, result block filled, completed_at from the real clock)"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "No new issues found this pass. Recording the two assessed-and-deliberately-not-touched dispositions for ORCH's independent check, both already-known and already-filed, neither re-filed here: (1) README.md's 'Migration status' section is genuinely stale (still claims only Stage 0 is expanded, and still promotes the cancelled MVP-1 REQ-101..108 milestone while linking the deleted docs/migration/mvp-1-vertical-slice.md) -- already ISS-0022 / GitHub #79, forwarded work belonging to its own run, deliberately not opportunistically fixed here. (2) docs/migration/stage-2-event-store-definitions.md's header still reads 'Status: not started. ... Requirements: none expanded yet.' though REQ-022/023/024/028 are all done -- that is the established bulk-at-WF-04-stage-gate precedent visible in the file itself, not a new omission. Also noting, as HANDOFF_PROTOCOL.md instructs for protocol discrepancies: this dispatch directed me NOT to touch handoffs/registry.json (ORCH-owned) even though HANDOFF_PROTOCOL.md section 4 step 4 says the receiving agent updates it; that contradiction is already filed as ISS-0021/#78 and I followed the dispatch.",
+        "affected_requirement": "REQ-027"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ027-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ027-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV for Step Final (git merge)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

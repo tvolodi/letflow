@@ -1,0 +1,58 @@
+{
+  "handoff_id": "f7c2e9a4-3d1b-4e6f-8a2c-9b5d7e1f4c6a",
+  "run_id": "WF02-REQ019-20260816",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ019-20260816/step01b-design-gate.json",
+  "created_at": "2026-08-16T04:02:27Z",
+  "started_at": "2026-08-16T04:02:27Z",
+  "completed_at": "2026-08-16T04:12:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S1",
+    "requirement_ids": ["REQ-019"],
+    "related_handoff_ids": ["d6a1f3c8-2b9e-4a7d-9f4c-1e8b6c3a5d02"],
+    "artifacts_in": [
+      "lib/letflow/design/req019-tenant-realm-binding.md",
+      "docs/requirements.yaml",
+      "lib/letflow/design/req018-jit-provisioning.md",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/tenant.ex",
+      "lib/letflow/oidc/identity_context.ex",
+      "priv/repo/migrations/20260816000001_create_tenants.exs"
+    ],
+    "owned_modules": ["lib/letflow/identity"]
+  },
+  "task": {
+    "description": "WF-02 Step 1b (CODE-DESIGN-VALIDATOR) for run-id WF02-REQ019-20260816: independently validate CODE-DESIGNER's design artefact lib/letflow/design/req019-tenant-realm-binding.md against REQ-019's 4 acceptance criteria, REQ-015's tenants schema, and REQ-018's provision_oidc_user/3 composition point, per WF-02_requirement_implementation.md Step 1b's procedure. Hard gate — ELIXIR-DEV must not start until PASS.",
+    "acceptance_criteria": [
+      "Every REQ-019 acceptance criterion maps to a concrete design element, no TBD/deferral language",
+      "Function signatures fully specified: name, inputs, outputs, error cases",
+      "Error handling shape stated explicitly ({:ok,_}|{:error,_} tags)",
+      "Cross-module dependencies listed and independently confirmed against actual file contents",
+      "No implementation code present (no .ex/.exs bodies, signatures/type shapes only)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently verified lib/letflow/design/req019-tenant-realm-binding.md in full against docs/requirements.yaml's REQ-019 (exactly 4 acceptance criteria, description, depends_on: [REQ-015]), REQ-015's tenants schema entry, and REQ-018's entry. All 4 acceptance criteria have concrete, unambiguous design elements: (1) resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 fully specced in §5 with exact @spec, query mechanism, and error shape; (2) one-to-one binding enforcement in §3.2 via unique_constraint(:idp_realm_id, name: :tenants_idp_realm_id_partial_index) surfacing REQ-015's existing partial index -- index name independently verified character-for-character against priv/repo/migrations/20260816000001_create_tenants.exs line 40 (exact match); (3) idp_realm_id immutability in §3.3 via structural omission from update_changeset/2's cast/3 list, moduledoc-disclosure instruction given explicitly in §10; (4) verify_realm_ownership/2 guard fully specced in §6 with @spec and all four edge cases (match/mismatch/tenant-not-found/nil-realm) stated exactly, each with its own error atom and reasoning. No TBD/deferral language found anywhere in the design. All function signatures (create_changeset/3, update_changeset/2, resolve_tenant_by_realm/1, resolve_realm_by_tenant/1, verify_realm_ownership/2) carry full @spec input/output/error-tag detail; all error shapes are explicit {:ok,_}|{:error, atom} or Ecto.Changeset.t() tags, none implicit. Cross-module dependencies independently re-derived, not trusted from the design's own claims: read lib/letflow/identity.ex directly and confirmed provision_oidc_user/3's real signature, and confirmed provisioning_error() already contains :realm_tenant_mismatch unused by any function body; read lib/letflow/design/req018-jit-provisioning.md directly (line ~617) and confirmed it explicitly reserves :realm_tenant_mismatch for REQ-019/021 as 'NOT produced by any code path in this design' -- the design's reuse of this atom for the guard's mismatch/nil-realm cases is genuinely the same reserved atom for the same realm-vs-tenant-ownership concept, not a coincidental name collision. Grepped the design file directly for defmodule/def .../case ... do patterns: zero matches; all 12 code fences in the file are @spec-only signature blocks (lines 203-205, 234-237, 269-271, 362-365, 391-394, 421-424), no real function bodies. Independently confirmed no priv/repo/seeds.exs exists anywhere and no .ex/.exs file references a default-tenant row or DEFAULT_TENANT constant (only realm-string config usages of the literal 'bpm-default' exist, in config/dev.exs, config/test.exs, and two REQ-017/018 test files) -- the design's §4 claim about what 'seeded with the default tenant' operationally means (a TEST-DESIGNER-constructed fixture, explicitly not a claimed-to-exist seed) is accurate, not glossed over. The realm-ownership guard's @spec, all four edge cases, and its required call-order before REQ-018's provision_oidc_user/3 (§6.3, explicit pipeline ordering with REQ-021's description cross-checked) are all stated unambiguously. Reviewed all 6 open questions (§8): none affect the correctness of the security-relevant guard logic itself (verify_realm_ownership/2's 4 edge cases are fully resolved with no open question attached) -- all 6 are genuinely deferrable (config-key sourcing, a non-cited mutability judgment call, an out-of-scope seed-file follow-up, a cross-requirement-consistent DB-exception policy, a disclosed-and-justified divergence flagged for awareness not decision, and a future rename left to REQ-021). No FAIL conditions found on any of the 9 checks.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ019-20260816/step01b-design-gate.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ019-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ019-20260816",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (Step 2a)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

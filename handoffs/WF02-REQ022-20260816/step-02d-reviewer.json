@@ -1,0 +1,60 @@
+{
+  "handoff_id": "07f2d74d-91db-4d01-8c44-a4288d14ade3",
+  "run_id": "WF02-REQ022-20260816",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ022-20260816/step-02d-reviewer.json",
+  "created_at": "2026-08-16T09:18:25Z",
+  "started_at": "2026-08-16T09:18:25Z",
+  "completed_at": "2026-08-16T09:21:04Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-022"],
+    "related_handoff_ids": ["0d6ae125-d121-4069-bbe0-14dde73ebc4b"],
+    "artifacts_in": ["lib/letflow/tenant_provisioning.ex", "lib/letflow/tenant_provisioning/registration.ex", "priv/repo/migrations/20260816090045_create_tenant_schemas.exs"],
+    "owned_modules": ["lib/letflow/tenant_provisioning", "priv/repo/migrations"]
+  },
+  "task": {
+    "description": "HARD GATE. Review git diff main...HEAD on branch feature/WF02-REQ022-20260816 per .claude/agents/reviewer.md's four questions (idiomatic vs. crutch, supervision integrity, type-safety gaps, scope creep) and docs/anti-patterns.md, plus consistency with docs/migration/decisions/0003-ecto-schema-strategy.md Decision B/C.",
+    "acceptance_criteria": [
+      "idiomatic Elixir/Ecto usage, no crutch patterns",
+      "no supervision-tree surface touched or broken",
+      "no scope creep beyond REQ-022's 4 acceptance criteria",
+      "consistent with docs/migration/decisions/0003-ecto-schema-strategy.md"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed git diff main...HEAD (5 commits: 21c87f5, 104d2bf, d41391f, 432ad34, 8d2d028) against the four REVIEWER questions. (1) IDIOMATIC VS. CRUTCH: PASS. Letflow.TenantProvisioning follows the exact top-level-context-module + same-named-subdirectory-schema pattern established by Letflow.Identity (verified the claim in tenant_provisioning.ex's moduledoc line 14 by reading identity.ex directly). insert_or_fetch_registration/2 + re_select_registration/1 (tenant_provisioning.ex:205-235) is structurally identical to Letflow.Identity's insert_or_fetch/3 + re_select_on_conflict/2 idiom (identity.ex:152-205): select-first via ON CONFLICT DO NOTHING + returning: true, then a Repo.get/2 existence check to disambiguate 'really inserted' from 'suppressed by ON CONFLICT' for a client-generated binary_id PK -- the claim that this reuses an established, empirically-verified idiom holds, not just an assertion. provision_tenant_schema/1's use of Repo.transaction/1 wrapping a rollback-on-typed-error pattern is idiomatic Ecto. replay_migrations/2 wrapping Ecto.Migrator.run/4 (which raises on failure per its own @spec, confirmed against deps/ecto_sql/lib/ecto/migrator.ex) in try/rescue to produce this project's {:ok,_}|{:error,_} boundary convention is a correct, deliberate adaptation, not a crutch. The two raw Repo.query! (bang) calls inside the transaction (advisory lock + CREATE SCHEMA) are idiomatic 'let it crash' -- Postgres DDL identifiers aren't parameterizable, so raw SQL is the only mechanism, and SECURITY-REVIEWER already traced schema_name's shape-safety end to end. No GenServer/case-state hand-rolling anywhere -- this module has no process/state-machine surface at all. Minor spec-precision nit (non-blocking): provision_tenant_schema/1's @spec declares {:error, term()} as a catch-all that technically covers the {:error, %Ecto.Changeset{}} rollback path, but a more precise {:error, Ecto.Changeset.t()} clause would read better; not a defect. (2) SUPERVISION INTEGRITY: PASS. Directly confirmed via `git diff main...HEAD --stat` that lib/letflow/process_instance.ex, lib/letflow/instance_supervisor.ex, and lib/letflow/application.ex do not appear anywhere in the changed-file list (14 files touched, all under docs/, handoffs/, lib/letflow/tenant_provisioning*, priv/repo/migrations/, test/support/, lib/letflow/design/). REQ-022 is pure DB/schema-provisioning context-module work with zero process/supervision surface, and the diff itself proves that rather than merely asserting it. (3) TYPE-SAFETY GAPS (non-blocking, noted per REVIEWER's own charter item 3): tenant_scoped_migrations/0's growth contract (design doc SS3.4/SS4: every future entry must both follow the prefix()-guard pattern in its own migration file AND be appended to this function's list, or risk either inert-migration or public-schema-corruption failure modes) is enforced by comment and design-doc discipline only -- nothing at compile time (no Dialyzer contract, no macro, no test-enforced invariant yet) stops a future REQ-023+ migration from doing one half without the other. A stricter type system couldn't fully close this either (it's a cross-file protocol/process gap, not a type gap per se), but a property/unit test asserting every {version, module} in tenant_scoped_migrations/0 exports a change/0 that no-ops when prefix() is nil would be a cheap runtime guard worth TEST-DESIGNER considering at Step 3. Also noting (already surfaced and accepted by SECURITY-REVIEWER under INV-8): schema_name's identifier-safety property is a runtime-enforced invariant (Ecto.UUID.cast/1's constrained output shape) rather than a type-level guarantee a newtype/refined-type system would give -- same gap already documented, not new. (4) SCOPE CREEP: PASS, no scope creep found. Cross-checked the diff's 14 changed files and lib/letflow/tenant_provisioning.ex's actual public API (schema_name_for_tenant/1, provision_tenant_schema/1, replay_migrations/2, tenant_scoped_migrations/0) 1:1 against lib/letflow/design/req022-tenant-schema-provisioning.md's SS3 function signatures and SS8 traceability table -- every function maps to a design element, no extra public function or module appears. The migrations_applied_at column is explicitly labeled in the design (SS2) as 'beyond REQ-022's literal minimum' but is grounded in an established precedent (identity-schema.md's own recommended-addition convention) and was already cleared at the design-validation gate (step-01b), not fresh scope creep introduced at implementation time. test/support/req022_migration_fixture.ex: confirmed legitimately in-scope, not scope creep -- design SS5 explicitly calls for exactly this artifact to demonstrate AC3 without inventing a permanent unused production table; the fixture contains no ExUnit test cases or assertions (only an Ecto.Migration module implementing SS4's required prefix()-guard pattern), so it is test-support infrastructure a downstream TEST-DESIGNER will consume, not implementation of TEST-DESIGNER's own test-writing role -- it doesn't preempt Step 3. The migration's index set (two unique indexes, no redundant plain index) is a deliberate, explicitly-stated trim vs. R-Co's redundant index+constraint pair -- a Decision-A-consistent simplification, not scope creep. ANTI-PATTERNS CHECK: docs/anti-patterns.md has 2 entries, neither triggered -- the docs/status/requirement_status.yaml diff appends one new history entry (verified via git diff) rather than rewriting the file, correctly following the second entry's corrective guidance. DECISION-RECORD CONSISTENCY (0003-ecto-schema-strategy.md): Decision B (schema-per-tenant via :prefix, tenant_id retained intra-schema) -- replay_migrations/2 correctly threads Ecto.Migrator.run(Repo, migration_source, :up, prefix: schema_name, ...) (tenant_provisioning.ex:168-172), matching Decision B's named mechanism exactly; tenant_schemas itself is correctly treated as structurally global (no :prefix on its own migration), consistent with 0003's treatment of tenants as a pre-tenant-resolution lookup table, not a violation of Decision B (Decision B never claimed literally every table is tenant-scoped, only business/tenant data). Decision C (event-store tables get no special-casing) -- not directly exercised by this diff (REQ-022 adds no event-store table), but tenant_scoped_migrations/0's design explicitly establishes the exact mechanism REQ-023+ event-store migrations must use with no special case, consistent with and setting up correct compliance with Decision C rather than contradicting it. No quiet divergence from either decision found.",
+    "artifacts_out": ["handoffs/WF02-REQ022-20260816/step-02d-reviewer.json"],
+    "issues": [
+      {
+        "severity": "non-blocking",
+        "category": "type-safety-gap",
+        "location": "lib/letflow/tenant_provisioning.ex:196-198 (tenant_scoped_migrations/0)",
+        "description": "The two-part contract every REQ-023+ tenant-scoped migration must follow (prefix()-guard in the migration file AND an appended {version, module} tuple here) is enforced only by design-doc/comment discipline, not by any compile-time or test-time check. Recommend TEST-DESIGNER add a lightweight guard test at Step 3 (e.g. asserting each listed migration module no-ops under a nil prefix) rather than leaving this purely convention-enforced."
+      },
+      {
+        "severity": "non-blocking",
+        "category": "spec-precision",
+        "location": "lib/letflow/tenant_provisioning.ex:94-98 (provision_tenant_schema/1 @spec)",
+        "description": "The {:error, term()} catch-all technically covers the {:error, %Ecto.Changeset{}} rollback path but a more specific {:error, Ecto.Changeset.t()} clause would document the actual contract more precisely. Cosmetic only."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ022-20260816",
+      "commit_sha_list": ["21c87f5", "104d2bf", "d41391f", "432ad34", "8d2d028"],
+      "remote_branch": "origin/feature/WF02-REQ022-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (Step 3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

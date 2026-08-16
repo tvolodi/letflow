@@ -55,6 +55,51 @@ description: >
   connection-owner pid, or attach only within a per-test unique handler_id AND assert on
   a payload field identifying the query as this test's own, not just presence of any
   query event at all) or make this specific test `async: false`.
+  UPDATE 2026-08-16T18:10Z (TEST-DESIGN-VALIDATOR, run WF02-REQ023-20260816,
+  Step 3b) -- THIS RECORD'S OWN FREQUENCY AND SEED CLAIMS ARE NOW KNOWN TO
+  UNDERSTATE THE PROBLEM. Two corrections, both observed directly rather
+  than inferred:
+
+  1. Frequency is higher than recorded. This record was written from a
+     sample where 4 of 5 runs were clean (~20%). During REQ-023's Step 3b
+     the flake reproduced 3 times in roughly 9 full-suite runs -- about 33%.
+
+  2. **`--seed 0` is NOT safe, contrary to what this record implies.** The
+     original entry notes that TEST-RUNNER's REQ-022 runs used
+     `mix test --seed 0` "which happened not to trigger this," and every
+     subsequent run in this project has leaned on `--seed 0` as the
+     deterministic baseline for exactly that reason. Step 3b observed the
+     failure occur *under `--seed 0`* on a freshly dropped/recreated
+     database. So seed pinning does not avoid this defect; it only made it
+     less likely in the samples taken so far. The root cause recorded above
+     explains why: the race is between an `async: true` module's global
+     `:telemetry.attach` handler and whatever other async test happens to
+     issue a `Letflow.Repo` query concurrently. That interleaving is
+     governed by BEAM scheduler timing, not by ExUnit's seed -- the seed
+     controls test *ordering*, not the concurrent execution timing that
+     actually decides whether a foreign query event lands between this
+     test's `attach` and its `refute_received`. A seed can shift the
+     probability; it cannot make a scheduling race deterministic.
+
+  Not caused by REQ-023. That run's new `async: true` module
+  (test/letflow/event_store/schemas_test.exs) issues zero `Repo` calls and
+  attaches no telemetry -- verified structurally at Step 3b -- so it cannot
+  emit the query events this flake trips on. It does add 24 concurrent
+  tests to the suite, which perturbs scheduling and plausibly explains the
+  higher observed rate: more async work in flight means more opportunities
+  for a foreign query to interleave. That is exposure of an existing defect,
+  not a new one.
+
+  Consequence for future runs, recorded so it is not rediscovered: a report
+  of "N/N passed at --seed 0" is no longer, by itself, evidence that the
+  suite is deterministically green. Steps that need to distinguish a real
+  regression from this flake should run the suite several times and
+  attribute any single failure at
+  test/letflow/plugs/tenant_status_test.exs:121 to this issue explicitly,
+  rather than treating a clean seed-0 run as proof. This raises the priority
+  of actually fixing it: it is now the single largest source of noise in the
+  project's own verification loop, and every downstream gate has to reason
+  around it.
 affected_files:
   - test/letflow/plugs/tenant_status_test.exs
 github_issue: https://github.com/tvolodi/letflow/issues/65

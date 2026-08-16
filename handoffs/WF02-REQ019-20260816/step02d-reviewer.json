@@ -66,7 +66,7 @@
     "decision_record_consistency_check": "0002-oidc-integration.md: this diff's tenant<->realm binding table and its enforcement (unique_constraint on tenants_idp_realm_id_partial_index, immutability via cast/3 omission) is exactly the 'binding table itself, hand-written regardless of library choice' work 0002 already named as out of ueberauth_oidcc's scope — consistent, no divergence, this diff does not touch OIDC token verification/JWKS at all. 0003-ecto-schema-strategy.md: Tenant's moduledoc already states (pre-existing from REQ-015, unchanged by this diff) that the tenants table targets Ecto's single default schema, with schema-per-tenant (Decision B) deferred — correct, since tenants is the tenant-boundary-definition table itself (no tenant_id column, confirmed by reading the schema block), not a tenant-scoped business table Decision B's schema-per-tenant mechanism would apply to. No silent divergence from either decision record found.",
     "git_evidence": {
       "branch_name": "feature/WF02-REQ019-20260816",
-      "commit_sha_list": [],
+      "commit_sha_list": ["24d3209"],
       "remote_branch": "origin/feature/WF02-REQ019-20260816",
       "push_status": "ok",
       "pr_url": null,

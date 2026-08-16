@@ -100,6 +100,56 @@ description: >
   of actually fixing it: it is now the single largest source of noise in the
   project's own verification loop, and every downstream gate has to reason
   around it.
+  UPDATE 2026-08-16T18:35Z (TEST-RUNNER, same run, Step 4) -- RATE REFINED
+  ON A 40-RUN SAMPLE; the seed-0 finding above is INDEPENDENTLY CONFIRMED.
+
+  Step 4 ran the full suite 40 times specifically to characterise this
+  defect rather than to satisfy a gate. Results:
+
+      pinned (--seed 0):  26 runs, 25 clean, 1 failed  ->  3.8%
+      unpinned (random):  14 runs, 12 clean, 2 failed  -> 14.3%
+      overall:            40 runs, 37 clean, 3 failed  ->  7.5%
+
+  Failing seeds: 157649, 603595, and 0.
+
+  Two corrections to the numbers in the previous UPDATE block, which stand
+  as a caution about small samples generally: the true rate is ~7.5%
+  overall, not the ~33% estimated at Step 3b, and not the ~20% this record
+  originally carried. Both earlier figures came from single-digit samples
+  where one occurrence swings the rate enormously (1/5 = 20%, 3/9 = 33%).
+  The 40-run sample supersedes both. This refines the frequency WITHOUT
+  weakening the substantive point -- the defect is real, non-deterministic,
+  and unavoidable by seed pinning.
+
+  The seed-0 claim is now confirmed twice, by two different agents on two
+  different run sets: TEST-DESIGN-VALIDATOR observed it at Step 3b, and
+  Step 4's run 30 reproduced it independently. `--seed 0` is definitively
+  NOT a deterministic baseline for this suite.
+
+  Note the pinned-vs-unpinned split (3.8% vs 14.3%) is directionally
+  consistent with the recorded root cause rather than in tension with it: a
+  fixed seed fixes test ORDERING, which makes one particular interleaving
+  pattern recur and can make the race less likely to be hit -- but it does
+  not serialise the concurrent execution that actually causes it, which is
+  why seed 0 still fails ~1 run in 26.
+
+  Attribution re-verified at Step 4 rather than assumed: grepping all 40
+  run logs together for ExUnit's failure-header pattern yields EXACTLY ONE
+  distinct failing test across the entire corpus, always this one, always
+  with `Failed: 1 test`. Run 08's log captures the race in the act --
+  foreign queries (SELECT FROM "tenants", "approvals") appear immediately
+  before the failure block and (SELECT FROM "users", INSERT INTO "tenants")
+  immediately after, i.e. another async test's queries landing inside this
+  test's telemetry window. REQ-023 re-cleared as a cause: its only new
+  async: true module greps clean for telemetry and Repo (single hit is a
+  moduledoc comment), and its other module is async: false.
+
+  Practical guidance for any later run, derived from this sample: a single
+  re-run of this suite has roughly a 1-in-13 chance of hitting this defect.
+  A lone red run whose ONLY failure is
+  test/letflow/plugs/tenant_status_test.exs:121 is this issue -- re-run
+  before concluding otherwise. Any OTHER failing test is a genuine new
+  signal and must not be attributed here.
 affected_files:
   - test/letflow/plugs/tenant_status_test.exs
 github_issue: https://github.com/tvolodi/letflow/issues/65

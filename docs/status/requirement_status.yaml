@@ -1484,3 +1484,16 @@ history:
       REQ-015/016/017/018's DOC-UPDATER passes. No lib/, test/, or priv/ file
       was touched by this DOC-UPDATER pass — those were already correct and
       gated by the prior steps in this run.
+  - req: REQ-020
+    event: started
+    agent: ORCH
+    at: 2026-08-16T05:20:47Z
+    note: >
+      WF-02 run WF02-REQ020-20260816 started. Step 00 git setup PASS
+      (ELIXIR-DEV): branch feature/WF02-REQ020-20260816 created from
+      up-to-date main and pushed. Scope: port
+      src/identity/role_registry.zig's TenantRoleStore (list_roles,
+      upsert_role) and resolveRoleInTx as Letflow.Identity.RoleRegistry
+      functions against REQ-015's tenant_role/groups schema, per
+      docs/requirements.yaml's REQ-020 entry and R-Co's
+      src/design/idn05-role-registry.md.

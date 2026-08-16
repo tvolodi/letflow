@@ -1,9 +1,12 @@
 defmodule Letflow.IdentityTest do
   @moduledoc """
-  Tests for `Letflow.Identity.provision_oidc_user/3`. See `test/specs/REQ-018.md` for
-  the full test-case rationale, including which criteria are covered by inspection
-  rather than a runtime assertion (AC4's moduledoc citation, and the
-  `:external_identity_collision` defensive branch).
+  Tests for `Letflow.Identity.provision_oidc_user/3` (REQ-018) and
+  `Letflow.Identity.resolve_tenant_by_realm/1`, `resolve_realm_by_tenant/1`,
+  `verify_realm_ownership/2`, plus `Letflow.Identity.Tenant.create_changeset/3`/
+  `update_changeset/2` (REQ-019). See `test/specs/REQ-018.md` and
+  `test/specs/REQ-019.md` for the full test-case rationale, including which criteria
+  are covered by inspection rather than a runtime assertion (REQ-018 AC4's moduledoc
+  citation, and the `:external_identity_collision` defensive branch).
 
   Uses `Letflow.DataCase` (real Postgres, sandboxed connection, rolled back per test)
   per `docs/guides/test_developer_guide.md` DIRECTIVE T-1 — no mocked database anywhere
@@ -18,11 +21,18 @@ defmodule Letflow.IdentityTest do
   explicitly `Ecto.Adapters.SQL.Sandbox.allow/3`-ing each spawned `Task` onto the test
   process's own checked-out connection (per design doc §9's exact guidance) is what
   makes this a genuine two-connection race rather than an accidentally-serialized one.
+
+  Every REQ-019 test also runs `async: true` — each test constructs its own tenant
+  row(s) inside its own sandboxed transaction (rolled back after the test), so even the
+  tests that deliberately reuse the literal `"bpm-default"` slug/realm (per
+  `test/specs/REQ-019.md`'s "What 'seeded default tenant' means here") do not collide
+  with each other across tests.
   """
 
   use Letflow.DataCase, async: true
 
   alias Letflow.Identity
+  alias Letflow.Identity.Tenant
   alias Letflow.Identity.User
   alias Letflow.Oidc.IdentityContext
   alias Letflow.Oidc.JitProvisioningConfig
@@ -32,6 +42,30 @@ defmodule Letflow.IdentityTest do
   # principle and this project's established Ecto.UUID.generate()-per-test convention.
   defp unique_realm(prefix \\ "realm") do
     "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
+  end
+
+  # REQ-019 fixture helpers.
+
+  defp unique_slug(prefix \\ "tenant") do
+    "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
+  end
+
+  defp insert_tenant!(attrs, oidc_mode \\ :enabled) do
+    %Tenant{}
+    |> Tenant.create_changeset(attrs, oidc_mode)
+    |> Repo.insert!()
+  end
+
+  # The one fixture deliberately using the literal "bpm-default" reserved slug/realm —
+  # per test/specs/REQ-019.md, "seeded" means TEST-DESIGNER-constructed, not a real
+  # priv/repo/seeds.exs row. oidc_mode is irrelevant to the pinning rule itself (it's
+  # unconditional), so :enabled is used here without loss of generality.
+  defp insert_default_tenant! do
+    insert_tenant!(%{
+      slug: "bpm-default",
+      display_name: "Default Tenant",
+      idp_realm_id: "bpm-default"
+    })
   end
 
   defp identity_context(overrides \\ %{}) do
@@ -290,6 +324,248 @@ defmodule Letflow.IdentityTest do
 
       persisted = Repo.get(User, id)
       assert persisted.display_name == "Explicit Display Name"
+    end
+  end
+
+  describe "resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 (REQ-019 acceptance criterion 1)" do
+    test "resolve_tenant_by_realm/1 resolves the seeded default tenant (bpm-default) by its idp_realm_id" do
+      tenant = insert_default_tenant!()
+
+      assert {:ok, %Tenant{id: id}} = Identity.resolve_tenant_by_realm("bpm-default")
+      assert id == tenant.id
+    end
+
+    test "resolve_realm_by_tenant/1 resolves the seeded default tenant's (bpm-default) idp_realm_id by its tenant id" do
+      tenant = insert_default_tenant!()
+
+      assert {:ok, "bpm-default"} = Identity.resolve_realm_by_tenant(tenant.id)
+    end
+
+    test "resolve_tenant_by_realm/1 returns {:error, :not_found} for an unknown realm string" do
+      assert {:error, :not_found} = Identity.resolve_tenant_by_realm(unique_realm("nonexistent"))
+    end
+
+    test "resolve_realm_by_tenant/1 returns {:error, :not_found} for an unknown tenant_id" do
+      assert {:error, :not_found} = Identity.resolve_realm_by_tenant(Ecto.UUID.generate())
+    end
+
+    test "resolve_realm_by_tenant/1 returns {:ok, nil} for a tenant that exists but has no bound realm" do
+      tenant =
+        insert_tenant!(
+          %{slug: unique_slug(), display_name: "No Realm Yet", idp_realm_id: nil},
+          :disabled
+        )
+
+      assert {:ok, nil} = Identity.resolve_realm_by_tenant(tenant.id)
+    end
+  end
+
+  describe "Tenant.create_changeset/3 — one-to-one collision rejection (REQ-019 acceptance criterion 2)" do
+    test "creating a second tenant with an already-bound idp_realm_id is rejected, not silently overwritten" do
+      shared_realm = unique_realm("collide")
+
+      insert_tenant!(%{slug: unique_slug(), display_name: "Tenant A", idp_realm_id: shared_realm})
+
+      result =
+        %Tenant{}
+        |> Tenant.create_changeset(
+          %{slug: unique_slug(), display_name: "Tenant B", idp_realm_id: shared_realm},
+          :enabled
+        )
+        |> Repo.insert()
+
+      assert {:error, %Ecto.Changeset{} = changeset} = result
+      assert %{idp_realm_id: ["has already been taken"]} = errors_on(changeset)
+
+      import Ecto.Query
+      rows = Tenant |> where(idp_realm_id: ^shared_realm) |> Repo.all()
+      assert length(rows) == 1
+    end
+
+    test "two tenants with distinct idp_realm_id values both persist successfully" do
+      tenant_a =
+        insert_tenant!(%{
+          slug: unique_slug(),
+          display_name: "Tenant A",
+          idp_realm_id: unique_realm()
+        })
+
+      tenant_b =
+        insert_tenant!(%{
+          slug: unique_slug(),
+          display_name: "Tenant B",
+          idp_realm_id: unique_realm()
+        })
+
+      assert tenant_a.id != tenant_b.id
+      assert tenant_a.idp_realm_id != tenant_b.idp_realm_id
+    end
+  end
+
+  describe "Tenant.update_changeset/2 — idp_realm_id immutability (REQ-019 acceptance criterion 3)" do
+    test "update_changeset/2 does not cast idp_realm_id even when present in attrs" do
+      tenant =
+        insert_tenant!(%{
+          slug: unique_slug(),
+          display_name: "Original Name",
+          idp_realm_id: unique_realm("original")
+        })
+
+      changeset =
+        Tenant.update_changeset(tenant, %{
+          idp_realm_id: "attempted-new-realm",
+          display_name: "New Name"
+        })
+
+      assert Ecto.Changeset.get_change(changeset, :idp_realm_id) == nil
+      assert Ecto.Changeset.get_change(changeset, :display_name) == "New Name"
+      assert changeset.valid?
+    end
+
+    test "persisting update_changeset/2 with an attempted idp_realm_id change leaves the original idp_realm_id unchanged in the database" do
+      original_realm = unique_realm("original")
+
+      tenant =
+        insert_tenant!(%{
+          slug: unique_slug(),
+          display_name: "Original Name",
+          idp_realm_id: original_realm
+        })
+
+      changeset =
+        Tenant.update_changeset(tenant, %{
+          idp_realm_id: "attempted-new-realm",
+          display_name: "New Name"
+        })
+
+      assert {:ok, _updated} = Repo.update(changeset)
+
+      persisted = Repo.get(Tenant, tenant.id)
+      assert persisted.idp_realm_id == original_realm
+      assert persisted.display_name == "New Name"
+    end
+  end
+
+  describe "verify_realm_ownership/2 — realm-ownership guard, every branch (REQ-019 acceptance criterion 4)" do
+    test "verify_realm_ownership/2 returns :ok when external_realm matches the tenant's bound idp_realm_id" do
+      realm = unique_realm()
+
+      tenant =
+        insert_tenant!(%{
+          slug: unique_slug(),
+          display_name: "Matching Tenant",
+          idp_realm_id: realm
+        })
+
+      assert :ok = Identity.verify_realm_ownership(tenant.id, realm)
+    end
+
+    test "verify_realm_ownership/2 returns {:error, :realm_tenant_mismatch} when external_realm does not match the tenant's bound realm" do
+      bound_realm = unique_realm("bound")
+      other_realm = unique_realm("other")
+
+      tenant =
+        insert_tenant!(%{
+          slug: unique_slug(),
+          display_name: "Bound Tenant",
+          idp_realm_id: bound_realm
+        })
+
+      assert {:error, :realm_tenant_mismatch} =
+               Identity.verify_realm_ownership(tenant.id, other_realm)
+    end
+
+    test "verify_realm_ownership/2 returns {:error, :not_found} for a tenant_id that matches no row" do
+      assert {:error, :not_found} =
+               Identity.verify_realm_ownership(Ecto.UUID.generate(), unique_realm())
+    end
+
+    test "verify_realm_ownership/2 returns {:error, :realm_tenant_mismatch}, not :ok and not a crash, for a tenant with no bound realm" do
+      tenant =
+        insert_tenant!(
+          %{slug: unique_slug(), display_name: "No Realm Bound", idp_realm_id: nil},
+          :disabled
+        )
+
+      assert {:error, :realm_tenant_mismatch} =
+               Identity.verify_realm_ownership(tenant.id, unique_realm("some-external-realm"))
+    end
+  end
+
+  describe "Tenant.create_changeset/3 — default-tenant pinning (design §3.2/§4)" do
+    test "create_changeset/3 rejects slug bpm-default paired with a different idp_realm_id" do
+      changeset =
+        Tenant.create_changeset(
+          %Tenant{},
+          %{slug: "bpm-default", display_name: "Default Tenant", idp_realm_id: unique_realm()},
+          :enabled
+        )
+
+      refute changeset.valid?
+      assert %{idp_realm_id: [_ | _]} = errors_on(changeset)
+    end
+
+    test "create_changeset/3 accepts slug bpm-default paired with idp_realm_id bpm-default" do
+      changeset =
+        Tenant.create_changeset(
+          %Tenant{},
+          %{slug: "bpm-default", display_name: "Default Tenant", idp_realm_id: "bpm-default"},
+          :enabled
+        )
+
+      assert changeset.valid?
+    end
+
+    test "create_changeset/3 rejects slug bpm-default with idp_realm_id omitted entirely" do
+      changeset =
+        Tenant.create_changeset(
+          %Tenant{},
+          %{slug: "bpm-default", display_name: "Default Tenant"},
+          :enabled
+        )
+
+      refute changeset.valid?
+      assert %{idp_realm_id: [_ | _]} = errors_on(changeset)
+    end
+  end
+
+  describe "Tenant.create_changeset/3 — oidc_mode-conditional idp_realm_id requirement (design §3.2)" do
+    test "create_changeset/3 requires idp_realm_id for a non-default tenant when oidc_mode is :enabled" do
+      changeset =
+        Tenant.create_changeset(
+          %Tenant{},
+          %{slug: unique_slug(), display_name: "Non-default Tenant"},
+          :enabled
+        )
+
+      refute changeset.valid?
+      assert %{idp_realm_id: [_ | _]} = errors_on(changeset)
+    end
+
+    test "create_changeset/3 allows a non-default tenant with no idp_realm_id when oidc_mode is :disabled" do
+      changeset =
+        Tenant.create_changeset(
+          %Tenant{},
+          %{slug: unique_slug(), display_name: "Non-default Tenant"},
+          :disabled
+        )
+
+      assert changeset.valid?
+    end
+
+    test "create_changeset/3 accepts a non-default tenant with idp_realm_id present when oidc_mode is :enabled" do
+      changeset =
+        Tenant.create_changeset(
+          %Tenant{},
+          %{
+            slug: unique_slug(),
+            display_name: "Non-default Tenant",
+            idp_realm_id: unique_realm()
+          },
+          :enabled
+        )
+
+      assert changeset.valid?
     end
   end
 

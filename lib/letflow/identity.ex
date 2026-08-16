@@ -6,6 +6,16 @@ defmodule Letflow.Identity do
   `src/identity/registry.zig`'s `createOrGetJitOidcUser` (lines ~843-912),
   operating on REQ-015's `users` schema (`Letflow.Identity.User`).
 
+  `resolve_tenant_by_realm/1`, `resolve_realm_by_tenant/1`, and
+  `verify_realm_ownership/2` (below) port `src/oidc/realm_tenant_binding.zig`
+  and the realm-ownership guard from
+  `src/design/adp-04b-tenant-realm-binding.md` /
+  `src/design/adp-04a-external-identity-linkage-user.md`'s "Cross-tenant
+  collision boundaries" section, operating on REQ-015's `tenants` schema
+  (`Letflow.Identity.Tenant`). See
+  `lib/letflow/design/req019-tenant-realm-binding.md` for the full design
+  these three functions implement.
+
   Matches this project's established `Letflow.RowApproval`-style pattern: a
   top-level context module in `lib/letflow/`, backed by schema files in a
   same-named subdirectory (`lib/letflow/identity/user.ex` and friends).
@@ -14,6 +24,7 @@ defmodule Letflow.Identity do
   module implements.
   """
 
+  alias Letflow.Identity.Tenant
   alias Letflow.Identity.User
   alias Letflow.Oidc.IdentityContext
   alias Letflow.Oidc.JitProvisioningConfig
@@ -57,6 +68,66 @@ defmodule Letflow.Identity do
       upsert_by_external_identity(identity_context, tenant_id, jit_config)
     else
       {:error, :jit_disabled}
+    end
+  end
+
+  @doc """
+  Resolves the tenant bound to a given IdP realm. This is the authoritative
+  reverse path from a token's realm claim to a tenant — REQ-021's future
+  pipeline calls this before resolving/provisioning the user, and does not
+  resolve tenant identity from a client-supplied `tenant_id` claim directly.
+
+  Returns `{:error, :not_found}` if no tenant is bound to `idp_realm_id`.
+  """
+  @spec resolve_tenant_by_realm(idp_realm_id :: String.t()) ::
+          {:ok, Tenant.t()} | {:error, :not_found}
+  def resolve_tenant_by_realm(idp_realm_id) do
+    case Repo.get_by(Tenant, idp_realm_id: idp_realm_id) do
+      %Tenant{} = tenant -> {:ok, tenant}
+      nil -> {:error, :not_found}
+    end
+  end
+
+  @doc """
+  Resolves the IdP realm bound to a given tenant ID.
+
+  Returns `{:ok, nil}` if the tenant exists but has no bound realm (a
+  legitimate state for a non-default tenant created while OIDC is disabled —
+  not an error). Returns `{:error, :not_found}` if no tenant with that ID
+  exists.
+  """
+  @spec resolve_realm_by_tenant(tenant_id :: Ecto.UUID.t()) ::
+          {:ok, String.t() | nil} | {:error, :not_found}
+  def resolve_realm_by_tenant(tenant_id) do
+    case Repo.get(Tenant, tenant_id) do
+      %Tenant{idp_realm_id: idp_realm_id} -> {:ok, idp_realm_id}
+      nil -> {:error, :not_found}
+    end
+  end
+
+  @doc """
+  Realm-ownership guard: verifies that `external_realm` (a token-claimed,
+  untrusted value) is actually the realm bound to the already-resolved,
+  trusted `tenant_id`. Called by REQ-021's future pipeline before
+  `provision_oidc_user/3`, per adp-04a's "Cross-tenant collision boundaries."
+
+  Re-queries the tenant's bound realm from the database itself (via
+  `resolve_realm_by_tenant/1`) rather than trusting a caller-supplied realm
+  value — a guard that trusted the same claim it's meant to check would be a
+  no-op.
+
+  Returns `:ok` if `external_realm` matches the tenant's bound realm.
+  Returns `{:error, :realm_tenant_mismatch}` if the tenant exists but its
+  bound realm is `nil` or differs from `external_realm`. Returns
+  `{:error, :not_found}` if `tenant_id` does not correspond to any tenant.
+  """
+  @spec verify_realm_ownership(tenant_id :: Ecto.UUID.t(), external_realm :: String.t()) ::
+          :ok | {:error, :realm_tenant_mismatch} | {:error, :not_found}
+  def verify_realm_ownership(tenant_id, external_realm) do
+    case resolve_realm_by_tenant(tenant_id) do
+      {:ok, ^external_realm} -> :ok
+      {:ok, _mismatched_or_nil} -> {:error, :realm_tenant_mismatch}
+      {:error, :not_found} -> {:error, :not_found}
     end
   end
 

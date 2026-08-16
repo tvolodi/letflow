@@ -1,0 +1,107 @@
+{
+  "handoff_id": "8cd2d68a-445c-4444-a642-ce03456f05ca",
+  "run_id": "WF02-REQ019-20260816",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ019-20260816/step03b-test-design-gate.json",
+  "created_at": "2026-08-16T04:50:26Z",
+  "started_at": "2026-08-16T04:44:00Z",
+  "completed_at": "2026-08-16T04:50:26Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S1",
+    "requirement_ids": ["REQ-019"],
+    "related_handoff_ids": ["5383853a-f894-4fa2-93b9-a3c019b16d72"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "test/specs/REQ-019.md",
+      "test/letflow/identity_test.exs",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/tenant.ex",
+      "test/support/data_case.ex",
+      "priv/repo/migrations/20260816000001_create_tenants.exs",
+      "handoffs/WF02-REQ019-20260816/step03-test-design.json"
+    ],
+    "owned_modules": ["test/specs/REQ-019.md", "test/letflow/identity_test.exs"]
+  },
+  "task": {
+    "description": "WF-02 Step 3b (TEST-DESIGN-VALIDATOR) for run-id WF02-REQ019-20260816: independently validate TEST-DESIGNER's test spec and test code for REQ-019 before TEST-RUNNER may start. Hard gate.",
+    "acceptance_criteria": [
+      "resolveTenantByRealm(idp_realm_id) and resolveRealmByTenant(tenant_id) both work against REQ-015's tenants table, tested with the seeded default tenant (bpm-default)",
+      "attempting to bind a second tenant to an already-bound idp_realm_id is rejected (unique index or explicit changeset validation), not silently overwritten",
+      "attempting to change an existing tenant's idp_realm_id via the normal update changeset is rejected or the changeset simply omits idp_realm_id from its allowed fields — whichever approach is taken, it's stated explicitly in the moduledoc",
+      "a realm-ownership guard function exists that rejects a (tenant_id, external_realm) pair where external_realm is not the realm bound to tenant_id"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently read docs/requirements.yaml's REQ-019 entry (lines 687-717, confirmed 4 acceptance criteria verbatim-matching the spec's claimed AC1-AC4), test/specs/REQ-019.md in full, and test/letflow/identity_test.exs in full (559 lines) — not TEST-DESIGNER's handoff summary. Cross-checked the test code against lib/letflow/identity.ex, lib/letflow/identity/tenant.ex, priv/repo/migrations/20260816000001_create_tenants.exs, and test/support/data_case.ex to verify claims rather than trust them. All 5 checks (a-e) pass for all 4 acceptance criteria plus the two design-flagged rules (default-tenant pinning, oidc_mode-conditional requirement). Independently ran mix test test/letflow/identity_test.exs -> 29 passed, 0 failed (matches TEST-DESIGNER's claim; grep-counted 29 'test \"' occurrences in the file as a second cross-check). Independently ran mix test (full suite) -> 97 passed (4 properties, 93 tests), 0 failed (matches TEST-DESIGNER's claim). No @tag :skip anywhere in the file (grepped). No 'TODO: implement test' anywhere in the spec (grepped). No hardcoded secrets/connection strings in the test file (grepped for password/secret/postgres:// /ecto:// /DATABASE_URL patterns — zero matches in identity_test.exs itself; config/test.exs's local docker-compose dev credential is outside the test file and is this project's standard config pattern, not something TEST-DESIGNER introduced). Confirmed the migration's partial unique index name (tenants_idp_realm_id_partial_index, priv/repo/migrations/20260816000001_create_tenants.exs lines 38-41) matches Tenant.create_changeset/3's unique_constraint/2 declaration character-for-character, so the collision test (case 5) exercises a real, correctly-named DB constraint rather than one that would silently no-op.",
+    "checks": [
+      {
+        "check": "a — at least one runnable test per acceptance criterion, no @tag :skip without passing counterpart",
+        "verdict": "PASS",
+        "evidence": "AC1: 5 tests (lines 331-360). AC2: 3 tests (lines 364-394, including the converse/distinct-realm case). AC3: 2 tests (lines 398-438). AC4: 4 tests (lines 442-474, one per branch). Plus 6 tests for default-tenant pinning and oidc_mode-conditional rules (lines 478-547). Grepped the whole file for ':skip' and 'TODO'/'FIXME' — zero matches."
+      },
+      {
+        "check": "b — no 'TODO: implement test' left in the spec",
+        "verdict": "PASS",
+        "evidence": "Grepped test/specs/REQ-019.md for 'TODO: implement test' and '@tag :skip' — zero matches. All 19 numbered test cases have concrete assertions described and cite an actual test name that exists in identity_test.exs."
+      },
+      {
+        "check": "c — test fixtures use per-test unique data, no cross-test-pollution risk under the partial unique index",
+        "verdict": "PASS",
+        "evidence": "unique_realm/1 and unique_slug/1 helpers (lines 43-51) use System.unique_integer([:positive, :monotonic]) — every test not specifically exercising the 'bpm-default' pinning rule uses these. The literal \"bpm-default\" appears only in tests that are deliberately testing the pinning rule itself (lines 65-67, 331-341, 478-511) — confirmed each such test is self-contained (builds its own tenant row inside its own test body, no shared setup/fixture block creating a 'bpm-default' row once for multiple tests to share)."
+      },
+      {
+        "check": "d — tests self-sufficient, no execution-order dependency",
+        "verdict": "PASS",
+        "evidence": "Every test builds its own tenant/user rows via insert_tenant!/insert_default_tenant! inside its own test body; none reads state left behind by another test. use Letflow.DataCase, async: true (line 32) is only safe under per-test isolation, which the sandbox mode check below confirms."
+      },
+      {
+        "check": "e — no hardcoded secrets/connection strings in test files",
+        "verdict": "PASS",
+        "evidence": "Grepped identity_test.exs for password/secret/postgres:// /ecto:// /DATABASE_URL/conn_str patterns — zero matches. The only credential-shaped string in the config chain (config/test.exs's password: \"letflow\") is outside the file under review and is a local docker-compose dev-only credential, this project's existing config pattern."
+      },
+      {
+        "check": "verify_realm_ownership/2's 4 branches are separate test cases, not collapsed",
+        "verdict": "PASS",
+        "evidence": "Read lines 442-474 directly: 4 distinct 'test' blocks — match (line 442), mismatch (line 449), not-found (line 460), nil-bound-realm (line 465) — each with its own fixture and its own single-purpose assertion. None of the 4 assertions could pass under a subtly-broken implementation of a different branch (e.g. the mismatch test uses a genuinely different bound_realm/other_realm pair, not a value that could coincidentally match)."
+      },
+      {
+        "check": "collision test (AC2) asserts the specific unique_constraint error, not just 'fails somehow'",
+        "verdict": "PASS",
+        "evidence": "Line 377-378: asserts {:error, %Ecto.Changeset{}} = result AND %{idp_realm_id: [\"has already been taken\"]} = errors_on(changeset) — a specific field-and-message assertion, not a bare pattern match on {:error, _}. Confirmed by reading Tenant.create_changeset/3 (tenant.ex line 86) that this message and field come specifically from unique_constraint(:idp_realm_id, name: :tenants_idp_realm_id_partial_index), and confirmed that constraint name matches the real migration index (migration lines 38-41) — so this assertion would fail (not silently pass) if the constraint name were ever misspelled against the DB object, since Repo.insert/1 would then raise Ecto.ConstraintError instead of returning the typed changeset error."
+      },
+      {
+        "check": "immutability test (AC3) checks BOTH changeset non-carry AND persisted non-application (DB re-select)",
+        "verdict": "PASS",
+        "evidence": "Two separate tests read directly: lines 398-415 assert Ecto.Changeset.get_change(changeset, :idp_realm_id) == nil at the changeset level (plus that display_name's unrelated change IS present and changeset.valid?, proving the changeset isn't just universally rejecting). Lines 417-438 continue with Repo.update/1 then Repo.get(Tenant, tenant.id) — a genuine re-select from Postgres, not the in-memory update result — and assert persisted.idp_realm_id == original_realm. Both halves are real, distinct assertions against real code paths, matching the spec's claim exactly."
+      },
+      {
+        "check": "fixture realm/slug strings genuinely unique per test; Sandbox mode confirmed to give real per-test isolation before accepting shared 'bpm-default' literal as safe",
+        "verdict": "PASS",
+        "evidence": "Read test/support/data_case.ex directly (24 lines): setup block calls Ecto.Adapters.SQL.Sandbox.checkout(Letflow.Repo) per test (line 16) — this is Ecto's standard mechanism giving each test process its own checked-out connection wrapped in a transaction that is rolled back when the test process exits, which is genuine per-test isolation regardless of async/shared mode (shared mode, used only for non-async tests, affects whether OTHER processes spawned by a test can see that test's own uncommitted data — it does not cause one test's data to leak into another test's separate checkout/rollback cycle). Confirmed this independently rather than assuming it from the spec's or moduledoc's claim. identity_test.exs runs async: true (line 32), meaning each test gets its own independent checkout with no shared mode — the strongest form of isolation, not a weaker one. Every literal 'bpm-default' use is therefore confined to its own test's transaction and rolled back before any other test runs, confirmed safe."
+      },
+      {
+        "check": "test count cross-check: TEST-DESIGNER's claimed 29 passed (file) / 97 passed (suite)",
+        "verdict": "PASS",
+        "evidence": "grep -c '  test \"' test/letflow/identity_test.exs -> 29 (structural count, independent of running anything). mix test test/letflow/identity_test.exs (own run) -> 'Result: 29 passed'. mix test (own full-suite run) -> 'Result: 97 passed (4 properties, 93 tests)'. Both match TEST-DESIGNER's claimed counts exactly."
+      }
+    ],
+    "test_evidence": {
+      "own_mix_test_identity_file": "mix test test/letflow/identity_test.exs -> Finished in 0.5 seconds (0.5s async, 0.00s sync) / Result: 29 passed",
+      "own_mix_test_full_suite": "mix test -> Finished in 1.0 seconds (0.6s async, 0.3s sync) / Result: 97 passed (4 properties, 93 tests)",
+      "structural_test_count": "grep -c '  test \"' test/letflow/identity_test.exs -> 29, matches the run result"
+    },
+    "artifacts_out": [
+      "handoffs/WF02-REQ019-20260816/step03b-test-design-gate.json"
+    ],
+    "issues": [],
+    "next_action": "Route to TEST-RUNNER (Step 4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

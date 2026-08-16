@@ -1,0 +1,79 @@
+{
+  "handoff_id": "1a3ccae9-59a1-4690-9859-3c12526fea32",
+  "run_id": "WF02-REQ019-20260816",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ019-20260816/step02d-reviewer.json",
+  "created_at": "2026-08-16T04:35:58Z",
+  "started_at": "2026-08-16T04:35:58Z",
+  "completed_at": "2026-08-16T04:35:58Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S1",
+    "requirement_ids": ["REQ-019"],
+    "related_handoff_ids": ["9d3b6e2a-1f4c-4a8e-9b7d-2c5e8f0a6d31"],
+    "artifacts_in": [
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/tenant.ex",
+      "lib/letflow/design/req019-tenant-realm-binding.md",
+      "docs/migration/decisions/0002-oidc-integration.md",
+      "docs/migration/decisions/0003-ecto-schema-strategy.md",
+      "docs/anti-patterns.md",
+      "handoffs/WF02-REQ019-20260816/step02c-security-review.json"
+    ],
+    "owned_modules": ["lib/letflow/identity"]
+  },
+  "task": {
+    "description": "WF-02 Step 2d (REVIEWER) for run-id WF02-REQ019-20260816: idiom/scope gate on REQ-019's diff (lib/letflow/identity.ex, lib/letflow/identity/tenant.ex) — the four standard review questions (idiomatic vs. crutch, supervision integrity, type-safety gaps, scope creep), checked against docs/anti-patterns.md, the approved design doc, and docs/migration/decisions/0002 and 0003, plus three specific idiom questions on validate_change/validate_required composition, :realm_tenant_mismatch atom reuse, and verify_realm_ownership/2's re-query pattern. Hard gate — TEST-DESIGNER must not start until PASS.",
+    "acceptance_criteria": [
+      "Diff read in full (git diff main...HEAD, plus direct file reads of both changed files)",
+      "All four standard review questions answered explicitly",
+      "docs/anti-patterns.md checked",
+      "Implementation checked against the approved design doc for scope creep",
+      "docs/migration/decisions/0002 and 0003 checked for silent divergence",
+      "Three specific idiom questions answered with an explicit judgment, not deferred back to the design/security handoffs",
+      "Independent review, not a rubber-stamp of SECURITY-REVIEWER's PASS"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed lib/letflow/identity.ex and lib/letflow/identity/tenant.ex (git diff main...HEAD, plus full reads of both files) against the four standard idiom questions, docs/anti-patterns.md (no entries apply — both prior entries are toolchain/status-file process issues, not code-idiom issues), the approved design doc (lib/letflow/design/req019-tenant-realm-binding.md), and decision records 0002/0003. No crutch found, no supervision touched or collapsed, no scope creep beyond the approved design. One genuine, pre-existing type-safety gap found and flagged (missing Tenant.t() type, item 1 below) — not introduced by this diff but now live because this diff is the first code to reference Tenant.t() in a @spec; not blocking since it is a spec-only annotation gap (no runtime effect, no Dialyzer configured yet in this project to catch it), but should be fixed promptly, ideally before or alongside TEST-DESIGNER's work rather than accumulating. All three specific idiom questions answered with explicit judgment (see summary points below). PASS — no BLOCKER or MAJOR issue found.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ019-20260816/step02d-reviewer.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Letflow.Identity.Tenant has no @type t :: %__MODULE__{} — but lib/letflow/identity.ex's new @specs (resolve_tenant_by_realm/1's {:ok, Tenant.t()}, and this design doc's own §5.1 signature) reference Tenant.t() as if it exists. Letflow.Identity.User (the sibling schema module, same identity/ directory, REQ-018) does define @type t :: %__MODULE__{} (lib/letflow/identity/user.ex line 46) and its own @specs correctly resolve User.t(). This gap predates REQ-019 (Tenant schema landed in REQ-015 without a @type t, and nothing referenced Tenant.t() in a @spec until now), so it is not a defect newly introduced by this diff — but REQ-019 is the first code that actually makes the gap live: Tenant.t() in resolve_tenant_by_realm/1's @spec currently resolves to nothing (Elixir does not raise a compile error for an undefined remote type in a @spec — it silently accepts it, which is exactly the kind of gap a stricter type system would catch at compile time; see type-safety question below). Correct alternative: add @type t :: %__MODULE__{} to Letflow.Identity.Tenant, matching User's existing precedent in the same directory. Small, mechanical, no behavior change. Not a REQ-019 acceptance-criterion item and not blocking this gate, but should not be left to accumulate as a third schema module makes the same omission.",
+        "affected_requirement": "REQ-019"
+      }
+    ],
+    "review_answers": {
+      "q1_idiomatic_vs_crutch": "Idiomatic. Both create_changeset/3 and update_changeset/2 are ordinary Ecto.Changeset pipelines (cast/3 -> validate_required/2 -> custom validate_.../1 -> unique_constraint/2) matching this codebase's established Letflow.RowApproval.Approval / Letflow.Identity.User precedent cited by the design doc §1. The lookup functions (resolve_tenant_by_realm/1, resolve_realm_by_tenant/1) are plain Repo.get_by/2 and Repo.get/2 calls wrapped in a case that converts nil to a typed {:error, :not_found} tuple — no hand-rolled query building, no raw SQL (confirmed: zero Repo.query/3 calls in either file), no reimplementation of something Ecto already provides. verify_realm_ownership/2 is a plain function composing an existing lookup via a 3-clause case, not a hidden state machine or a GenServer standing in for what should be a pure function. No crutch found.",
+      "q2_supervision": "Not applicable to this diff, confirmed directly rather than trusted from the task framing — grepped both changed files for InstanceSupervisor/gen_statem/GenServer/spawn: zero matches. This is pure Ecto.Changeset and Ecto.Repo code (identity/tenancy CRUD), no process, no supervision tree entry, no isolation boundary touched or collapsed. REQ-019's scope is correctly held to schema/context-module work only.",
+      "q3_type_safety_gaps": "One gap found and flagged above (missing Tenant.t(), issue MINOR-1) — a stricter type system (e.g. Rust/OCaml, or even Elixir with Dialyzer wired into this project's CI, which is not yet configured) would have caught the undefined remote type at compile/check time; here it silently compiles and would only surface as a Dialyzer warning if/when Dialyzer is added, or never, since Elixir's own compiler does not validate @spec remote-type references. Separately, oidc_mode :: :enabled | :disabled (create_changeset/3's third argument) is exactly the kind of two-value discriminated argument a sum type in a stricter language would enforce exhaustively at every call site; Elixir's when oidc_mode in [:enabled, :disabled] guard plus the two matching validate_idp_realm_id_required/2 clauses (one per atom, no catch-all clause) is the idiomatic Elixir equivalent — a third atom passed in would raise FunctionClauseError at the validate_idp_realm_id_required/2 call (no silent fallthrough), which is an acceptable runtime-enforced substitute given the language, not a gap worth flagging further.",
+      "q4_scope_creep": "None found. Compared the diff line-by-line against lib/letflow/design/req019-tenant-realm-binding.md §10's instructions to ELIXIR-DEV: exactly the functions specified (create_changeset/3, update_changeset/2, resolve_tenant_by_realm/1, resolve_realm_by_tenant/1, verify_realm_ownership/2) were added, no extra public function, no new abstraction (no behaviour, no macro, no generic plumbing) beyond what the design called for. The design's own §1 explicitly recommended NOT building thin create_tenant/1/update_tenant/2 context wrappers unless needed ('recommended, not required') — ELIXIR-DEV correctly did not add them, which is the conservative choice, not scope creep in the other direction either. No admin rotation function was added (design §3.1 explicitly declined one, citing R-Co's own unresolved OQ-1) — confirmed no such function exists in the diff. provisioning_error() was left unmodified (confirmed by grep — two references, both pre-existing, both in provision_oidc_user/3's own @spec) matching design §7's explicit instruction not to touch it."
+    },
+    "specific_idiom_question_answers": {
+      "validate_change_then_validate_required": "Idiomatic and correct, with one stylistic note. validate_default_tenant_pinning/1 chains validate_change(changeset, :idp_realm_id, fn ...) with validate_required(changeset, [:idp_realm_id]) only inside the slug == \"bpm-default\" branch. This composition is necessary, not just readable-but-suboptimal: validate_change/3's callback only runs when the field is present in changes (Ecto does not invoke a validate_change callback for a field absent from the changeset's changes map), so validate_change/3 alone would silently pass an entirely-omitted idp_realm_id on the default tenant — exactly the gap SECURITY-REVIEWER's step02c handoff confirmed was closed by the validate_required/2 chained after it. This is the standard, textbook Ecto.Changeset idiom for 'field must be present AND match a specific predicate when present' (Ecto's own docs use this same two-function pattern for comparable cases) — there is no single-function alternative in Ecto.Changeset that expresses 'required and value-constrained' in one call; validate_change/3 alone covers only the value-constraint half. I would not write this differently. One minor stylistic preference, not a defect: the piped order is validate_change |> validate_required — reading right-to-left this reads as 'check the value, then check it's present,' slightly inverted from the more natural 'check presence, then check value' order a reader might expect; swapping to validate_required |> validate_change would read marginally more naturally and produce an identical result (Ecto's error accumulation is order-independent for the final changeset.errors list), but this is a taste note only, not something worth a rework cycle.",
+      "realm_tenant_mismatch_atom_reuse": "Reasonable shared-vocabulary choice, not a type-safety concern, and I form this view independently rather than deferring to CODE-DESIGN-VALIDATOR's acceptance of it. The concern would be real if verify_realm_ownership/2's return value were ever assigned to a provisioning_error()-typed variable, pattern-matched against provisioning_error()'s specific member list, or otherwise treated by calling code as if the two types were interchangeable — none of that occurs in this diff (verify_realm_ownership/2's own @spec is fully self-contained: :ok | {:error, :realm_tenant_mismatch} | {:error, :not_found}, not a reference to provisioning_error() at all). The design doc's §7 is explicit and correct that this is atom-vocabulary reuse, not type-alias reuse: :realm_tenant_mismatch was reserved by REQ-018's own design specifically for whichever future function would produce it, and this design is that function — reusing the exact same atom name for the same conceptual failure (a realm that does not belong to the tenant it's being checked against) is more idiomatic than inventing a second, differently-spelled atom for an identical concept, which would be the actual type-safety hazard (two atoms, one meaning, and callers/tests that have to know which function uses which spelling). The residual risk worth naming for the record (already flagged as OQ-6 in the design and not this diff's problem to solve): once REQ-021 composes verify_realm_ownership/2's error type with provision_oidc_user/3's provisioning_error() into one pipeline-level error type, whoever writes that composition must not assume the two :realm_tenant_mismatch atoms are the same *type* just because they're the same atom literal — Elixir's atom equality will happily let two semantically-adjacent-but-formally-distinct error unions share a member name with no compiler warning, which is exactly the kind of union-widening mistake a real sum-type system (Rust's enum variants imported from two different modules, for instance) would force to be handled explicitly at the point of composition. Noted for REQ-021's future design, not a defect here.",
+      "verify_realm_ownership_requery_pattern": "Not a crutch — this is the correct choice and the design doc's §6.2 reasoning is sound; I independently re-derived the same conclusion rather than accepting the design's framing at face value. verify_realm_ownership/2 re-querying via resolve_realm_by_tenant/1 rather than accepting a pre-resolved realm as a third argument is the only version of this function that is actually a guard rather than a no-op: a caller-supplied 'trust me, this is the tenant's real realm' value would let the exact code path this function exists to distrust (a token's own external_realm claim, or a claim rebuilt from it) supply both sides of its own comparison. The one real alternative worth naming (not a crutch, a genuine design fork) would be composing verify_realm_ownership/2 to accept the already-fetched %Tenant{} struct directly (from a caller that already ran resolve_tenant_by_realm/1 moments earlier in the same pipeline) instead of a bare tenant_id, saving the second query at the cost of trusting the caller not to have mutated or gone stale on that struct between fetch and check. That alternative is marginally cheaper but weakens the guard's independence for no strong reason in a per-request auth pipeline (one extra indexed primary-key lookup, per the design's own §6.2 cost accounting, is not meaningfully expensive) — I would not push for it. The current implementation composes correctly with resolve_realm_by_tenant/1 rather than duplicating its query logic inline, which is the right level of reuse (no copy-pasted Repo.get/2 call, no second code path to keep in sync)."
+    },
+    "anti_patterns_check": "Checked docs/anti-patterns.md in full — two entries exist (Docker-based verification fallback, requirement_status.yaml append-only). Neither applies to this diff; no toolchain-verification claim is made here (REVIEWER does not run mix test) and no status file was touched.",
+    "decision_record_consistency_check": "0002-oidc-integration.md: this diff's tenant<->realm binding table and its enforcement (unique_constraint on tenants_idp_realm_id_partial_index, immutability via cast/3 omission) is exactly the 'binding table itself, hand-written regardless of library choice' work 0002 already named as out of ueberauth_oidcc's scope — consistent, no divergence, this diff does not touch OIDC token verification/JWKS at all. 0003-ecto-schema-strategy.md: Tenant's moduledoc already states (pre-existing from REQ-015, unchanged by this diff) that the tenants table targets Ecto's single default schema, with schema-per-tenant (Decision B) deferred — correct, since tenants is the tenant-boundary-definition table itself (no tenant_id column, confirmed by reading the schema block), not a tenant-scoped business table Decision B's schema-per-tenant mechanism would apply to. No silent divergence from either decision record found.",
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ019-20260816",
+      "commit_sha_list": ["24d3209"],
+      "remote_branch": "origin/feature/WF02-REQ019-20260816",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (Step 3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

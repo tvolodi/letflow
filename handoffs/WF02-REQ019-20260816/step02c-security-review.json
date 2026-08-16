@@ -1,0 +1,132 @@
+{
+  "handoff_id": "9d3b6e2a-1f4c-4a8e-9b7d-2c5e8f0a6d31",
+  "run_id": "WF02-REQ019-20260816",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ019-20260816/step02c-security-review.json",
+  "created_at": "2026-08-16T04:27:05Z",
+  "started_at": "2026-08-16T04:27:05Z",
+  "completed_at": "2026-08-16T04:38:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S1",
+    "requirement_ids": ["REQ-019"],
+    "related_handoff_ids": ["26c0041d-fa23-4375-9426-e8bd080b271d"],
+    "artifacts_in": [
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/tenant.ex",
+      "lib/letflow/design/req019-tenant-realm-binding.md",
+      "priv/repo/migrations/20260816000001_create_tenants.exs",
+      "docs/agents/instructions/security-invariants.md",
+      "handoffs/WF02-REQ019-20260816/step02a-elixir-dev.json"
+    ],
+    "owned_modules": ["lib/letflow/identity"]
+  },
+  "task": {
+    "description": "WF-02 Step 2c (SECURITY-REVIEWER) for run-id WF02-REQ019-20260816: security gate on REQ-019's realm-ownership guard (Letflow.Identity.verify_realm_ownership/2, resolve_tenant_by_realm/1, resolve_realm_by_tenant/1) and Letflow.Identity.Tenant.create_changeset/3 / update_changeset/2 — explicitly in scope per handoff instructions (a cross-tenant realm-ownership guard is a security control by definition).",
+    "acceptance_criteria": [
+      "Scope test run explicitly, not short-circuited",
+      "Every INV-1..INV-8 classified APPLIES/NOT-APPLICABLE against this diff with reasoning",
+      "Every APPLIES invariant's How-to-verify procedure actually run, not asserted",
+      "verify_realm_ownership/2 traced branch-by-branch for a fail-open path",
+      "resolve_realm_by_tenant/1's {:ok, nil} return checked for cross-caller misinterpretation risk",
+      "Confirm verify_realm_ownership/2 accepts no caller-supplied bypass/trust flag",
+      "Confirm no tenant-scoped query in this diff is missing its scope, and that the two lookup primitives are correctly unscoped by design (not a gap)",
+      "Confirm unique_constraint and not-found paths are typed returns, not unhandled exceptions"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: IN SCOPE. This diff (lib/letflow/identity.ex, lib/letflow/identity/tenant.ex) adds a cross-tenant realm-ownership guard (verify_realm_ownership/2) plus its supporting lookups and tenant create/update changesets enforcing the tenant<->realm binding invariant -- a security control by definition, matching the handoff's explicit scope framing and this file's own 'lookup-by-ID handler' / 'response-shaping for tenant-scoped entity' scope-test criteria (the changesets shape what can and cannot be persisted for a tenant-defining row). Proceeded to full INV-1..INV-8 assessment. Verdict: PASS, all applicable invariants satisfied, no fail-open path found in verify_realm_ownership/2, no bypass argument exists, no unhandled exception path, no raw SQL, no hardcoded secret. Full branch-by-branch trace of verify_realm_ownership/2's case statement confirms the nil-bound-realm case is deliberately folded into the mismatch branch ({:error, :realm_tenant_mismatch}), not treated as pass-through. resolve_realm_by_tenant/1's {:ok, nil} has exactly one caller in the entire codebase (verify_realm_ownership/2 itself, confirmed by grep across lib/ and test/), which handles it correctly; no other call site exists yet to misinterpret it, since REQ-021 (the future caller) has not been implemented. Migration index name (tenants_idp_realm_id_partial_index) confirmed to match the unique_constraint/2 declaration character-for-character by direct read of priv/repo/migrations/20260816000001_create_tenants.exs lines 38-40. Default-tenant pinning validation (validate_default_tenant_pinning/1) confirmed to correctly reject both a wrong-valued and an entirely-omitted idp_realm_id for the default tenant via the combination of validate_change/3 (catches wrong value when present in changes) chained with validate_required/2 (catches omission) -- not bypassable by omitting the field from attrs.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ019-20260816/step02c-security-review.json"
+    ],
+    "issues": [],
+    "invariant_assessment": [
+      {
+        "id": "INV-1",
+        "title": "Tenant data isolation",
+        "verdict": "NOT-APPLICABLE (formal gate; substance independently confirmed satisfied)",
+        "evidence": "INV-1's own file text states its How-to-verify becomes checkable only once docs/migration/decisions/0003-ecto-schema-strategy.md (REQ-012) lands and S1/S2 migrations formalize the tenancy mechanism -- per this file's Applicability note, an invariant whose stage hasn't started is automatically NOT-APPLICABLE, not a blocker. That said, the design doc's own S9 self-assessment claims INV-1 APPLIES-and-satisfied; I independently checked that claim rather than accepting it: resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 query only the tenants table itself (keyed by idp_realm_id or the primary key id respectively) and return/leak no other tenant's business data; the tenants table has no tenant_id column because it IS the tenant-boundary definition table, not a tenant-scoped business table, so 'missing a tenant_id scope' does not apply to it structurally, confirmed by reading the schema (lib/letflow/identity/tenant.ex lines 53-60, no tenant_id field). verify_realm_ownership/2 is itself a tenant-isolation control (it is the mechanism REQ-021 will use to prevent cross-tenant JIT provisioning), not a query that itself needs scoping. Formal verdict stays NOT-APPLICABLE per this file's stage gating, but no gap was found in the substance."
+      },
+      {
+        "id": "INV-2",
+        "title": "Server-side field authorisation",
+        "verdict": "NOT-APPLICABLE",
+        "evidence": "No API response/serialization surface exists in this diff -- these are internal context-module functions (Letflow.Identity), not controller/plug/view code. No multi-tenant API surface exists yet (S4 not started), matching this file's own stated non-applicability for pre-S4 work."
+      },
+      {
+        "id": "INV-3",
+        "title": "Untrusted runtime sandboxing",
+        "verdict": "NOT-APPLICABLE",
+        "evidence": "This diff touches identity/tenant binding only -- no Lua/WASM scripting or plugin execution surface. S5 has not started."
+      },
+      {
+        "id": "INV-4",
+        "title": "Secrets by reference only",
+        "verdict": "APPLIES -- PASS",
+        "evidence": "Ran both greps from security-invariants.md against the diff's files. grep -rn \"System.get_env\" config/ lib/ --include=*.ex filtered to identity/tenant-related hits: zero matches in this diff (expected -- this code has no secret-resolution surface at all, it reads only tenant_id/idp_realm_id/external_realm values which are identifiers, not secrets). grep -niE \"(password|secret|client_secret|token)\\s*=\\s*\\\"[^\\\"]{8,}\\\" lib/letflow/identity.ex lib/letflow/identity/tenant.ex: zero matches. Manually read both full files -- no secret material (API keys, OIDC client secrets, DB URLs) appears anywhere; the only string literal of note is the @default_tenant_slug \"bpm-default\" constant, which is a tenant identifier, not a credential."
+      },
+      {
+        "id": "INV-5",
+        "title": "Not-found/forbidden indistinguishability",
+        "verdict": "NOT-APPLICABLE",
+        "evidence": "No multi-tenant lookup-by-ID API endpoint exists in this diff -- these are internal functions, not HTTP-reachable handlers. S4 (API surface) has not started, matching this file's stated non-applicability. Noted for the record: resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 both return {:error, :not_found} for a genuinely-absent record, which is a reasonable typed-error foundation for a future S4 endpoint to build an indistinguishable response on top of, but that composition is out of this diff's scope and will be INV-5's concern when REQ-021 or a later API-layer requirement actually exposes these over HTTP."
+      },
+      {
+        "id": "INV-6",
+        "title": "New data-access paths prove their scoping",
+        "verdict": "APPLIES -- PASS",
+        "evidence": "This is the meta-invariant this SECURITY-REVIEWER handoff itself satisfies by existing with status PASS and this explicit per-invariant breakdown, per INV-6's own How-to-verify text. The design doc (lib/letflow/design/req019-tenant-realm-binding.md §9) also self-assessed INV-1/INV-7/INV-8 in advance -- I did not accept that self-assessment at face value; every claim in §9 was independently re-derived against the actual diff in this review (see INV-1, INV-7, INV-8 rows above/below) rather than copied."
+      },
+      {
+        "id": "INV-7",
+        "title": "No SQL string interpolation",
+        "verdict": "APPLIES -- PASS",
+        "evidence": "Ran grep -rn \"Repo.query\" lib/letflow/identity.ex lib/letflow/identity/tenant.ex priv/repo/migrations/20260816000001_create_tenants.exs: zero matches. Every query in this diff goes through Repo.get_by/2 and Repo.get/2 (lib/letflow/identity.ex lines 85, 102), both of which take plain Elixir term arguments (idp_realm_id, tenant_id) via Ecto's parameterized keyword-list API -- no raw SQL, no string concatenation or interpolation of tenant/token-controlled values anywhere in either file."
+      },
+      {
+        "id": "INV-8",
+        "title": "No unhandled crashes on realistic failure paths",
+        "verdict": "APPLIES -- PASS",
+        "evidence": "Ran grep -n \"^\\s*{:ok, .*} = \" lib/letflow/identity.ex lib/letflow/identity/tenant.ex: zero matches -- no bare-match-that-can-raise pattern in either file. Manually traced every branch: resolve_tenant_by_realm/1 uses a case over Repo.get_by/2's %Tenant{}/nil return, both arms typed ({:ok, tenant} | {:error, :not_found}), no raise path. resolve_realm_by_tenant/1 same shape via Repo.get/2. verify_realm_ownership/2's case over resolve_realm_by_tenant/1's result has three clauses ({:ok, ^external_realm}, {:ok, _mismatched_or_nil}, {:error, :not_found}) which are exhaustive against that function's documented/typed return shape -- cannot fall through unmatched, cannot raise CaseClauseError on any value that function can actually return. Changeset error paths: unique_constraint(:slug) and unique_constraint(:idp_realm_id, name: :tenants_idp_realm_id_partial_index) in create_changeset/3 (lib/letflow/identity/tenant.ex lines 85-86) convert a DB unique-index violation into a typed {:error, %Ecto.Changeset{}} return from Repo.insert/2 at the call site, not an unhandled Ecto.ConstraintError -- confirmed the constraint name is declared and matches the migration's actual index name character-for-character (priv/repo/migrations/20260816000001_create_tenants.exs lines 38-40: name: :tenants_idp_realm_id_partial_index). validate_default_tenant_pinning/1's validate_change/3 + validate_required/2 combination produces changeset errors (data), never raises. One residual risk flagged by the design doc itself (§9) and independently confirmed still true: a genuine DB connection-level failure (pool exhaustion, connection drop) inside any Repo call in this diff is not caught and would propagate as a raised exception rather than a typed tuple -- this matches REQ-018's already-accepted precedent for the same class of failure and is not a new gap introduced by this diff, so it does not block this gate; noting it for consistency with how REQ-018's SECURITY-REVIEWER handoff treated the identical residual risk."
+      }
+    ],
+    "scrutiny_point_answers": [
+      {
+        "point": "Does verify_realm_ownership/2 have any path where a mismatched or nil realm could be treated as a pass (fail-open)?",
+        "answer": "No. Traced all three case clauses by hand. Clause 1 (:ok, ^external_realm -> :ok) only matches when the DB-sourced bound realm is literally pin-equal to the caller's external_realm argument. Clause 2 (:ok, _mismatched_or_nil -> {:error, :realm_tenant_mismatch}) is a catch-all for every other {:ok, _} result, which includes both a differing non-nil realm and a nil (unbound) realm -- both correctly produce an error, not :ok. Clause 3 handles the not-found case. No branch returns :ok except the exact-match clause. No fail-open path exists."
+      },
+      {
+        "point": "Does resolve_realm_by_tenant/1's {:ok, nil} return create risk elsewhere in the codebase?",
+        "answer": "Confirmed by grep across lib/ and test/: the only caller of resolve_realm_by_tenant/1 in application code is verify_realm_ownership/2 itself (lib/letflow/identity.ex line 127), which correctly routes {:ok, nil} into the mismatch branch. No other caller exists in this codebase today (REQ-021, the future caller of verify_realm_ownership/2, has not been implemented yet -- confirmed no premature call site exists). No risk found; flagging for REVIEWER/future SECURITY-REVIEWER runs that if a new direct caller of resolve_realm_by_tenant/1 is ever added outside verify_realm_ownership/2, it must not treat {:ok, nil} as 'ownership confirmed' -- it means 'no realm bound,' which is a legitimate non-error state per the function's own doc but is NOT equivalent to a positive ownership check."
+      },
+      {
+        "point": "Does verify_realm_ownership/2 accept a caller-supplied 'already verified' flag or trust anything besides tenant_id?",
+        "answer": "No. Its @spec and implementation take exactly two arguments: tenant_id (trusted, already-resolved) and external_realm (untrusted, token-claimed) -- confirmed by reading the full function body (lib/letflow/identity.ex lines 124-132). There is no third argument, no options keyword list, no flag of any kind. The function always re-queries the tenant's bound realm from the database via resolve_realm_by_tenant/1 internally rather than accepting a pre-resolved or caller-asserted realm value -- a caller cannot claim the check already happened and skip the query."
+      },
+      {
+        "point": "Confirm no tenant-scoped query in this diff is missing a tenant_id/equivalent scope, and that resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 being unscoped is correct, not a gap.",
+        "answer": "Confirmed correct, not a gap. The tenants table (lib/letflow/identity/tenant.ex schema, lines 53-60) has no tenant_id column -- it is the tenant-boundary definition table itself, not a tenant-scoped business table, so INV-1's 'every access to tenant business data must be scoped' does not apply to queries against it (there is no narrower tenant scope than a row of this table itself). resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 are the two primitives that PRODUCE a tenant_id/realm pairing for the rest of the system to scope against -- they are intentionally the boundary-crossing lookups, not themselves scoped queries, and requiring them to take a tenant_id to scope by would be circular (you'd need a tenant_id to look up the tenant_id). This matches the design doc's own §9 reasoning, independently re-derived here rather than trusted."
+      },
+      {
+        "point": "Confirm the unique_constraint's error path and not-found paths are true typed returns, not raised exceptions.",
+        "answer": "Confirmed by reading the actual code, not the handoff's claim. unique_constraint(:idp_realm_id, name: :tenants_idp_realm_id_partial_index) and unique_constraint(:slug) (lib/letflow/identity/tenant.ex lines 85-86) are Ecto.Changeset declarations that cause Repo.insert/2 to return {:error, %Ecto.Changeset{}} on a matching DB constraint violation instead of raising Ecto.ConstraintError -- this is Ecto's standard mechanism and both constraint names were confirmed to match real DB objects (unique_index(:tenants, [:slug]) and the named partial index in priv/repo/migrations/20260816000001_create_tenants.exs lines 36-40). resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 both use a case over Repo.get_by/2 / Repo.get/2's %Struct{}/nil return, explicitly converting nil to {:error, :not_found} rather than leaving a nil to propagate or raise. verify_realm_ownership/2 exhaustively cases over resolve_realm_by_tenant/1's typed return. No exception-raising path was found reachable from tenant-controlled or token-controlled input in this diff, aside from the pre-existing, already-accepted DB-connection-failure residual noted under INV-8."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ019-20260816",
+      "commit_sha_list": ["2530f61"],
+      "remote_branch": "origin/feature/WF02-REQ019-20260816",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (Step 2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

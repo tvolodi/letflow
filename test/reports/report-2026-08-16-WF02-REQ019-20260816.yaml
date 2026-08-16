@@ -1,0 +1,118 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-019
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ019-20260816
+date_utc: 2026-08-16T05:09:09Z
+
+git:
+  branch: feature/WF02-REQ019-20260816
+  branch_confirmed: true
+  commit: 2682e06c605e4211e500c05aceb256ba001ada7d
+  commit_subject: "chore(REQ-019): commit orchestrator.log Step 4 dispatch entry from interrupted run"
+  note: >
+    This WF-02 run reached Step 3b (TEST-DESIGN-VALIDATOR PASS, handoff
+    handoffs/WF02-REQ019-20260816/step03b-test-design-gate.json) in a prior session
+    that was interrupted before Step 4 could execute. This report is that Step 4,
+    run independently — the prior handoffs' claimed test counts (29/97) were not
+    trusted, they were re-derived from scratch in this run.
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH, no fallback needed
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5] ... Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  postgres_container: letflow-postgres-1 (already running via docker compose, port 5462 -> 5432, healthy)
+  command_run: "mix test  (full suite — the test alias runs ecto.create + ecto.migrate --quiet first automatically)"
+
+verdict: PASS
+
+checks:
+  test_suite_full:
+    result: PASS
+    exit_code: 0
+    summary_line_verbatim: "Result: 97 passed (4 properties, 93 tests)"
+    finished_line_verbatim: "Finished in 1.1 seconds (0.7s async, 0.3s sync)"
+    failures: 0
+    excluded: 0
+    skipped: 0
+    doctests: 0
+    note: >
+      Full mix test run, not just the new REQ-019 tests, per Unblock-Everything.
+      Grepped the raw output for failure/assertion markers ("N) ", "Failure", "Assertion",
+      "failure:") — zero matches anywhere in the full ~1000-line log. No "Failures:"
+      section present. Exit code 0. Matches exactly what TEST-DESIGNER (97/97) and
+      TEST-DESIGN-VALIDATOR (97/97, independently reproduced) both reported in the
+      prior interrupted session — this run reproduces that number independently, a
+      third time, rather than copying it from either handoff.
+
+  test_suite_req019_isolated:
+    result: PASS
+    command_run: "mix test test/letflow/identity_test.exs"
+    summary_line_verbatim: "Result: 29 passed"
+    finished_line_verbatim: "Finished in 0.5 seconds (0.5s async, 0.00s sync)"
+    exit_code: 0
+    note: >
+      Ran identity_test.exs (the file TEST-DESIGNER extended for REQ-019: 10
+      pre-existing REQ-018 tests + 19 new REQ-019 tests = 29) in isolation, in
+      addition to the full-suite run above. Matches TEST-DESIGNER's and
+      TEST-DESIGN-VALIDATOR's claimed 29/29 exactly.
+
+  known_noise_not_a_failure:
+    - >
+      10:09:15.561 [error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in 28899 ms.
+      — REQ-016's Ueberauth OIDC worker attempting to reach a deliberately
+      unreachable placeholder issuer configured in config/test.exs. Pre-existing
+      since REQ-016, already documented as expected noise in prior REQ-01x/REQ-018
+      test reports. Does not fail, skip, or affect any test — the worker retries in
+      the background under its own supervisor, independent of test execution.
+    - >
+      Pre-existing ExUnit.Case.register_test/4 deprecation warnings for the three
+      property tests (process_instance_test.exs, parallel_approval_test.exs,
+      oidc/claim_mapping_property_test.exs) — unrelated to REQ-019, non-blocking
+      compiler warnings, not promoted to errors.
+    - >
+      Verbose SQL query debug logging appears in raw mix test output
+      (config/test.exs's default test log level) — expected, not indicative of any
+      problem.
+
+pre_existing_failures_found: none
+issues_filed: none
+
+test_file_breakdown:
+  new_req_019_19:
+    items:
+      - file: test/letflow/identity_test.exs
+        detail: >
+          19 new tests added to the existing REQ-018 identity_test.exs across 6
+          describe blocks: resolve_tenant_by_realm/1 + resolve_realm_by_tenant/1
+          (AC1, 5 tests), one-to-one collision rejection via the partial unique
+          index (AC2, 3 tests), idp_realm_id immutability via update_changeset/2
+          (AC3, 2 tests: changeset-level non-carry + Postgres re-select
+          non-application), verify_realm_ownership/2 all 4 branches (AC4, 4 tests),
+          default-tenant ("bpm-default") pinning (3 tests), and oidc_mode-conditional
+          idp_realm_id requirement (3 tests).
+    subtotal: 19
+  full_suite_grand_total: 97
+  cross_check: >
+    97 total (4 properties, 93 example tests) = 78 pre-existing (REQ-018's own
+    baseline) + 19 new REQ-019 tests. 78 + 19 = 97, matching the suite's own
+    summary line exactly, and matching both prior handoffs' claimed counts.
+
+acceptance_criteria_test_coverage_observed:
+  # Cross-referenced against test/specs/REQ-019.md and docs/requirements.yaml's
+  # REQ-019 acceptance_criteria list (also independently verified by
+  # TEST-DESIGN-VALIDATOR in step03b-test-design-gate.json).
+  criterion_1_resolve_tenant_by_realm_and_resolve_realm_by_tenant: "PASS — 5 tests, identity_test.exs, exercised against the seeded bpm-default tenant."
+  criterion_2_second_tenant_binding_to_bound_realm_rejected: "PASS — 3 tests, asserts the specific unique_constraint error (idp_realm_id: [\"has already been taken\"]), not just a bare {:error, _}."
+  criterion_3_idp_realm_id_immutable_via_update_changeset: "PASS — 2 tests, checks both changeset non-carry and DB re-select non-application."
+  criterion_4_realm_ownership_guard_rejects_mismatched_pair: "PASS — 4 tests, one per branch (match/mismatch/not-found/nil-bound-realm)."
+
+diagnosis: "N/A — no failures observed in this run. Nothing routed back to ELIXIR-DEV or TEST-DESIGNER."
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-16-WF02-REQ019-20260816.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

@@ -230,16 +230,17 @@
       "status": "IN_PROGRESS",
       "owned_modules": [
         "lib/letflow/definitions",
-        "priv/repo/migrations",
         "lib/letflow/tenant_provisioning.ex",
+        "priv/repo/migrations",
         "test/letflow/definitions",
-        "test/specs",
-        "test/letflow/event_store/migrations_test.exs"
+        "test/letflow/event_store/migrations_test.exs",
+        "test/reports",
+        "test/specs"
       ],
       "lock_acquired_at": "2026-08-16T19:18:56Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 3b (TEST-DESIGN-VALIDATOR, HARD GATE) COMPLETED -- PASS, handoff committed 93eaa9d; routed to TEST-RUNNER (Step 4). All five acceptance criteria mutation-verified via 10 mutations, all reverted. Prior: Step 3 (TEST-DESIGNER) PASS 07ff7fe/569f2e4; Step 2d (REVIEWER, HARD GATE) PASS 016f0c6; Step 2c (SECURITY-REVIEWER, HARD GATE) PASS 8c0de79; Step 2a (ELIXIR-DEV) PASS 093b114; Step 1b (CODE-DESIGN-VALIDATOR, HARD GATE) PASS b6fa30b; Step 1 (CODE-DESIGNER) PASS a15bce4.",
+      "last_known_step": "Step 4 (TEST-RUNNER) COMPLETED -- PASS, committed 421d8ab, report test/reports/report-2026-08-16-WF02-REQ027-20260816.yaml. 12 full-suite runs, 10 clean at 307 passed, 2 failures both ISS-0011. Routed to RELEASE-VALIDATOR (Step 5). Prior: Step 3b (TEST-DESIGN-VALIDATOR, HARD GATE) PASS 93eaa9d; Step 3 (TEST-DESIGNER) PASS 07ff7fe; Step 2d (REVIEWER, HARD GATE) PASS 016f0c6; Step 2c (SECURITY-REVIEWER, HARD GATE) PASS 8c0de79; Step 2a (ELIXIR-DEV) PASS 093b114; Step 1b (CODE-DESIGN-VALIDATOR, HARD GATE) PASS b6fa30b; Step 1 (CODE-DESIGNER) PASS a15bce4.",
       "backfilled": false,
       "queue_task_id": 40,
       "queue_agent_id": "worktree2-orch",
@@ -252,7 +253,8 @@
       "step_2d_infra_restart": "The first REVIEWER dispatch was terminated mid-work by an infrastructure session limit, not by a FAIL and not by any defect in the work under review. Its handoff was left IN_PROGRESS with a null result and was never committed, so no partial verdict entered the audit trail. ORCH re-stamped it to PENDING with a fresh clock reading and re-dispatched from the top. rework_count deliberately NOT incremented: ORCHESTRATOR.md section 5's counter tracks REJECTED work, and nothing was rejected -- spending a max_rework slot on an infra termination would consume a budget that exists to catch a producer repeating a mistake. ORCH also pre-resolved the open question the terminated agent was chasing (whether idx_snap_definition exists -- it does, at 20260816193002_create_instance_definition_snapshots.exs:113-116 by that exact name) so the replacement did not have to re-derive it.",
       "orch_independent_verification_2d": "ORCH re-derived REVIEWER's two most consequential factual claims. (1) The status-case correction is CORRECT and reverses ORCH's own earlier framing: grepping every shipped status column shows approvals 'pending', tenants 'active', users 'active', process_definitions 'draft' -- and instance_projections 'ACTIVE'. Four of five are lowercase; instance_projections is the OUTLIER. So REQ-027 aligns with the majority rather than breaking house style, and ORCH's prior characterisation of it as a deliberate divergence was wrong. (2) The tenant_id precedent claim is CORRECT: 20260816120001_create_events.exs:85 and 20260816120003_create_instance_projections.exs:42 both already ship 'add :tenant_id, :binary_id, null: false' with no default and no merged writer, so REQ-023 established this exact pattern one requirement earlier.",
       "orch_independent_verification_3": "ORCH re-derived rather than trusting the report: MIX_TEST_PARTITION=2 mix test at an unpinned seed (12345) returned 307 passed (4 properties, 303 tests) -- exactly the claimed count and exactly baseline 271 plus 36 new. git diff 093b114 over priv/repo/migrations/ and lib/ returned EMPTY, confirming TEST-DESIGNER touched no gated artefact (migrations not reformatted per carry-forward (d), schema modules and design untouched). The section-4 guard test's cleanup extension confirmed present as @later_tenant_scoped_tables at migrations_test.exs:58. ORCH also independently confirmed the residual gap TEST-DESIGNER reported: that list contains exactly process_definitions and instance_definition_snapshots and does NOT include REQ-024's event_type_registry -- filed as ISS-0028.",
-      "orch_independent_verification_3b": "ORCH re-derived rather than trusting the report. Tree restoration confirmed independently, which matters because this gate deliberately applied TEN mutations across migrations, schema modules and test files: git diff 07ff7fe over test/, priv/ and lib/ returned EMPTY and git status was clean, so every mutation was reverted byte-for-byte. Suite re-run directly at an unpinned seed (777) = 307 passed (4 properties, 303 tests), exactly baseline."
+      "orch_independent_verification_3b": "ORCH re-derived rather than trusting the report. Tree restoration confirmed independently, which matters because this gate deliberately applied TEN mutations across migrations, schema modules and test files: git diff 07ff7fe over test/, priv/ and lib/ returned EMPTY and git status was clean, so every mutation was reverted byte-for-byte. Suite re-run directly at an unpinned seed (777) = 307 passed (4 properties, 303 tests), exactly baseline.",
+      "orch_independent_verification_4": "ORCH re-derived rather than trusting the report: commit 421d8ab confirmed to contain exactly two files (the step-04 handoff and a 347-line report), working tree clean. git diff 29abd0c over lib/, priv/, test/letflow and test/specs returned EMPTY, confirming TEST-RUNNER ran and reported without touching any code or test file -- the correct behaviour for this role. Report confirmed present at test/reports/report-2026-08-16-WF02-REQ027-20260816.yaml. ORCH had already independently observed 307 passed at unpinned seeds 12345 and 777 during Steps 3 and 3b, consistent with the distribution reported here."
     }
   ]
 }

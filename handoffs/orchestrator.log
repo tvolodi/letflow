@@ -1,0 +1,30 @@
+2026-08-16T00:26:10Z | START | WF-02 | WF02-REQ018-20260816 | ORCH → ELIXIR-DEV | Step 00 git setup dispatched
+2026-08-16T00:27:12Z | PASS | WF-02 | WF02-REQ018-20260816 | ELIXIR-DEV → ORCH | Step 00 git setup: feature/WF02-REQ018-20260816 created and pushed
+2026-08-16T00:27:12Z | STATUS-FLIP | WF-02 | WF02-REQ018-20260816 | ORCH | REQ-018 pending -> in_progress in docs/requirements.yaml; started event appended to docs/status/requirement_status.yaml
+2026-08-16T00:30:00Z | DISPATCH | WF-02 | WF02-REQ018-20260816 | ORCH → CODE-DESIGNER | Step 1 design dispatched
+2026-08-16T00:35:00Z | PASS | WF-02 | WF02-REQ018-20260816 | CODE-DESIGNER → ORCH | Step 1: lib/letflow/design/req018-jit-provisioning.md produced
+2026-08-16T00:36:00Z | DISPATCH | WF-02 | WF02-REQ018-20260816 | ORCH → CODE-DESIGN-VALIDATOR | Step 1b design gate dispatched
+2026-08-16T00:40:00Z | PASS | WF-02 | WF02-REQ018-20260816 | CODE-DESIGN-VALIDATOR → ORCH | Step 1b PASS, all checks independently verified against source
+2026-08-16T00:41:00Z | DISPATCH | WF-02 | WF02-REQ018-20260816 | ORCH → ELIXIR-DEV | Step 2a backend implementation dispatched
+2026-08-16T01:05:00Z | PASS | WF-02 | WF02-REQ018-20260816 | ELIXIR-DEV → ORCH | Step 2a PASS: lib/letflow/identity.ex, lib/letflow/oidc/jit_provisioning_config.ex, User.jit_changeset/2; mix compile clean; empirical Docker/Postgres verification passed; two empirically-forced design deviations found and fixed (conflict_target unsafe_fragment form; Repo.get/2 disambiguation)
+2026-08-16T01:06:00Z | DISPATCH | WF-02 | WF02-REQ018-20260816 | ORCH → SECURITY-REVIEWER | Step 2c security gate dispatched
+2026-08-16T01:10:00Z | PASS | WF-02 | WF02-REQ018-20260816 | SECURITY-REVIEWER → ORCH | Step 2c PASS: INV-1/4/6/7/8 applicable and satisfied, INV-2/3/5 not-applicable
+2026-08-16T01:11:00Z | DISPATCH | WF-02 | WF02-REQ018-20260816 | ORCH → REVIEWER | Step 2d idiom gate dispatched
+2026-08-16T01:16:00Z | PASS | WF-02 | WF02-REQ018-20260816 | REVIEWER → ORCH | Step 2d PASS: both empirical deviations independently verified correct against Ecto/ecto_sql source, no scope creep, no supervision touched
+2026-08-16T01:17:00Z | DISPATCH | WF-02 | WF02-REQ018-20260816 | ORCH → TEST-DESIGNER | Step 3 test design dispatched
+2026-08-16T01:22:00Z | PASS | WF-02 | WF02-REQ018-20260816 | TEST-DESIGNER → ORCH | Step 3: test/specs/REQ-018.md, test/letflow/identity_test.exs, test/letflow/oidc/jit_provisioning_config_test.exs written; 16/16 own verification run
+2026-08-16T01:23:00Z | DISPATCH | WF-02 | WF02-REQ018-20260816 | ORCH → TEST-DESIGN-VALIDATOR | Step 3b test design gate dispatched
+2026-08-16T01:26:00Z | PASS | WF-02 | WF02-REQ018-20260816 | TEST-DESIGN-VALIDATOR → ORCH | Step 3b PASS: genuine-race evidence confirmed via SQL log, fixture isolation confirmed, 16/16 and 78/78 independently reproduced
+2026-08-16T01:27:00Z | DISPATCH | WF-02 | WF02-REQ018-20260816 | ORCH → TEST-RUNNER | Step 4 test run dispatched
+2026-08-16T01:29:00Z | PASS | WF-02 | WF02-REQ018-20260816 | TEST-RUNNER → ORCH | Step 4 PASS: 78/78 (4 properties, 74 tests); test/reports/report-2026-08-16-WF02-REQ018-20260816.yaml written
+2026-08-16T01:30:00Z | DISPATCH | WF-02 | WF02-REQ018-20260816 | ORCH → RELEASE-VALIDATOR | Step 5 release validation dispatched
+2026-08-16T01:33:00Z | FAIL | WF-02 | WF02-REQ018-20260816 | RELEASE-VALIDATOR → ORCH | Step 5 FAIL (rework 1): TEST-DESIGNER's test artifacts (identity_test.exs, jit_provisioning_config_test.exs, REQ-018.md, test report) existed only as untracked working-tree files, never committed — a fresh checkout would have zero test coverage
+2026-08-16T01:34:00Z | REWORK | WF-02 | WF02-REQ018-20260816 | ORCH → ELIXIR-DEV | Rework iteration 1 dispatched: commit the missing test artifacts
+2026-08-16T01:36:00Z | PASS | WF-02 | WF02-REQ018-20260816 | ELIXIR-DEV → ORCH | Rework 1 PASS: commit bd52a16 adds all four missing files; 78/78 reconfirmed against committed state
+2026-08-16T01:37:00Z | DISPATCH | WF-02 | WF02-REQ018-20260816 | ORCH → RELEASE-VALIDATOR | Step 5 re-run dispatched
+2026-08-16T01:38:00Z | PASS | WF-02 | WF02-REQ018-20260816 | RELEASE-VALIDATOR → ORCH | Step 5 PASS (2nd pass): blocking finding resolved, commit bd52a16 confirmed, 78/78 reconfirmed, zero lib/ drift since Step 2a
+2026-08-16T01:38:38Z | DISPATCH | WF-02 | WF02-REQ018-20260816 | ORCH → DOC-UPDATER | Step 6 doc update dispatched
+2026-08-16T01:40:00Z | PASS | WF-02 | WF02-REQ018-20260816 | DOC-UPDATER → ORCH | Step 6 PASS: docs/requirements.yaml REQ-018 -> done, docs/status/requirement_status.yaml done event appended, docs/migration/stage-1-identity.md header updated — all three independently confirmed by ORCH before advancing
+2026-08-16T01:41:00Z | DISPATCH | WF-02 | WF02-REQ018-20260816 | ORCH → ELIXIR-DEV | Step Final git merge dispatched
+2026-08-16T01:43:06Z | PASS | WF-02 | WF02-REQ018-20260816 | ELIXIR-DEV → ORCH | Step Final PASS: PR #38 squash-merged to main at a6469c4, feature branch deleted, main clean and up to date — independently reverified by ORCH
+2026-08-16T01:44:53Z | DONE | WF-02 | WF02-REQ018-20260816 | ORCH | REQ-018 (JIT user provisioning) done. push_status: ok. All gates PASS (CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER, RELEASE-VALIDATOR after one rework cycle). Merged main@a6469c4, PR https://github.com/tvolodi/letflow/pull/38.

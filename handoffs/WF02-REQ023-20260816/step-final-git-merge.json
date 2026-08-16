@@ -95,7 +95,18 @@
         "handoffs/registry.json",
         "docs/status/requirement_status.yaml",
         "handoffs/orchestrator.log"
-      ]
+      ],
+      "merge_confirmation": {
+        "command": "gh pr merge 80 --squash --delete-branch",
+        "local_side_effect_error": "failed to run git: fatal: 'main' is already used by worktree at 'C:/Users/tvolo/dev/ai-dala/letflow' -- EXPECTED and harmless in this secondary worktree; the merge itself had already happened through the GitHub API before gh attempted the local checkout switch. gh exited 1 on that local step only.",
+        "verified_via": "gh pr view 80 --json state,mergedAt,mergeCommit",
+        "state": "MERGED",
+        "merged_at": "2026-08-16T19:12:46Z",
+        "squash_merge_commit": "0909957025858ea0778fbd5f6c507ad72de3aade",
+        "branch_cleanup": "gh --delete-branch did not run (it failed with the same local-checkout error), so both refs were removed explicitly afterwards: remote deleted via gh api -X DELETE repos/tvolodi/letflow/git/refs/heads/feature/WF02-REQ023-20260816 (exit 0), local deleted via git branch -d feature/WF02-REQ023-20260816 (was 4dae491), then git fetch origin --prune confirmed [deleted] origin/feature/WF02-REQ023-20260816. No force-push at any point.",
+        "final_local_state": "Detached HEAD at origin/main@0909957 (git checkout --detach origin/main), working tree CLEAN, local main ref never checked out or modified. GIT_MERGE.md step 9 acceptance criterion \"git branch --show-current is main\" is not literally satisfiable in a secondary worktree -- see this handoff result.issues[0].",
+        "post_merge_verification": "HEAD == origin/main == 0909957; lib/letflow/event_store/ contains REQ-023 six schema modules alongside REQ-024 registry.ex + registry/; priv/repo/migrations/ contains all seven tenant-scoped migrations 20260816120001..120006 plus 20260816163103."
+      }
     },
     "next_action": "ORCH marks run COMPLETED and releases the letflow-queue lock"
   },

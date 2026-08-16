@@ -1,0 +1,111 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-020
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ020-20260816
+date_utc: 2026-08-16T05:57:06Z
+
+git:
+  branch: feature/WF02-REQ020-20260816
+  branch_confirmed: true
+  commit: be79c598af40c71727b4f36dc1ba92110ea462f1
+  commit_subject: "chore(REQ-020): log Step 3b test design gate PASS"
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH, no fallback needed
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5] ... Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  postgres_container: letflow-postgres-1 (already running via docker compose, port 5462 -> 5432, healthy — confirmed via docker ps before running, no compose up needed)
+  command_run: "mix test  (full suite — the test alias runs ecto.create + ecto.migrate --quiet first automatically)"
+
+verdict: PASS
+
+checks:
+  test_suite_full:
+    result: PASS
+    exit_code: 0
+    summary_line_verbatim: "Result: 110 passed (4 properties, 106 tests)"
+    finished_line_verbatim: "Finished in 1.3 seconds (0.8s async, 0.4s sync)"
+    failures: 0
+    excluded: 0
+    skipped: 0
+    doctests: 0
+    note: >
+      Full mix test run, not just the new REQ-020 test file, per Unblock-Everything.
+      Ran twice independently (once piped to a saved log, once directly) — both runs
+      returned exit code 0 and the identical "110 passed (4 properties, 106 tests)"
+      summary line. Grepped the full ~1259-line saved log for failure/assertion/error
+      markers (regex covering numbered failure headers, "Failures:", "Failure",
+      "failure:", "** (", "Assertion", plus Excluded/Skipped/Doctests counters):
+      zero matches anywhere. No "Failures:" section present in either run.
+
+  test_suite_req020_isolated:
+    result: PASS
+    command_run: "mix test test/letflow/role_registry_test.exs"
+    summary_line_verbatim: "Result: 13 passed"
+    exit_code: 0
+    note: >
+      Ran role_registry_test.exs (the new file TEST-DESIGNER wrote for REQ-020) in
+      isolation, in addition to the full-suite run above. 13/13, exit code 0.
+
+  known_noise_not_a_failure:
+    - >
+      [error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in NNNN ms.
+      — REQ-016's Ueberauth OIDC worker attempting to reach a deliberately
+      unreachable placeholder issuer configured in config/test.exs. Pre-existing
+      since REQ-016, already documented as expected noise in every prior WF-02 test
+      report (REQ-018, REQ-019). Does not fail, skip, or affect any test.
+    - >
+      Pre-existing ExUnit.Case.register_test/4 deprecation warnings for the three
+      property tests (process_instance_test.exs, parallel_approval_test.exs,
+      oidc/claim_mapping_property_test.exs) — unrelated to REQ-020, non-blocking
+      compiler warnings, not promoted to errors.
+    - >
+      Verbose SQL query debug logging appears in raw mix test output
+      (config/test.exs's default test log level) — expected, not indicative of any
+      problem. This is why the full-suite log is ~1259 lines for 110 tests.
+
+pre_existing_failures_found: none
+issues_filed: none
+
+test_file_breakdown:
+  new_req_020:
+    items:
+      - file: test/letflow/role_registry_test.exs
+        detail: >
+          13 new tests across 6 describe blocks: list_roles/0 empty + sorted-by-name
+          (AC1, 2 tests), upsert_role/2 group_id-not-found rejection with no dangling
+          row inserted (AC2, 1 test), upsert_role/2 update-not-duplicate on repeated
+          name with a different group_id, re-selected from Postgres directly (AC3, 1
+          test), resolve_role_in_tx/1 bound/unbound/inside-transaction/raises-become-nil
+          (AC4, 4 tests), plus role-name validation edge cases (empty, >128
+          codepoints, exactly-128 boundary, control character — 4 tests) and
+          group_id syntactically-invalid-UUID rejection distinct from not-found (1
+          test) beyond the bare acceptance criteria. AC5 (@moduledoc content) has no
+          runtime test by design — verified by direct source inspection instead, per
+          test/specs/REQ-020.md.
+    subtotal: 13
+  full_suite_grand_total: 110
+  cross_check: >
+    110 total (4 properties, 106 example tests) = 97 pre-existing (REQ-019's own
+    baseline, itself 78 + 19) + 13 new REQ-020 tests. 97 + 13 = 110, matching the
+    suite's own summary line exactly.
+
+acceptance_criteria_test_coverage_observed:
+  # Cross-referenced against test/specs/REQ-020.md and docs/requirements.yaml's
+  # REQ-020 acceptance_criteria list.
+  criterion_1_list_roles_empty_and_sorted_by_name: "PASS — 2 tests, empty-table case plus a name ordering that would fail under insertion-order/PK-order but passes under a real ORDER BY name."
+  criterion_2_upsert_role_nonexistent_group_id_returns_error: "PASS — 1 test, asserts {:error, :group_not_found} and confirms via direct re-select that no row was inserted."
+  criterion_3_upsert_role_twice_same_name_updates_not_duplicates: "PASS — 1 test, asserts the returned group_id changed and that exactly one row exists afterward via direct re-select."
+  criterion_4_resolve_role_in_tx_returns_nil_never_raises: "PASS — 4 tests: bound name resolves, unbound name returns nil, called from inside an existing Repo.transaction/1 callback still resolves, and a query-level error that would otherwise raise (Ecto.Query.CastError via a malformed input) resolves to nil via the function's own rescue clause rather than propagating."
+  criterion_5_moduledoc_cites_source_and_states_no_oidc_coupling: "Not test-covered by design (a doc-content assertion has no runtime behavior to fail against, matching this project's stated policy against grep-a-markdown-style busywork tests) — verified by direct source inspection: lib/letflow/identity/role_registry.ex's @moduledoc cites src/identity/role_registry.zig and states explicitly it has no coupling to the OIDC/claim-mapping pipeline."
+
+diagnosis: "N/A — no failures observed in this run. Nothing routed back to ELIXIR-DEV or TEST-DESIGNER."
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-16-WF02-REQ020-20260816.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

@@ -59,8 +59,33 @@ description: >
   final verified result was 161/161), so per
   docs/agents/protocols/ISSUE_QUEUE.md it is filed and forwarded rather than
   fixed inside this run.
+  UPDATE 2026-08-16T17:50Z (TEST-DESIGNER, same run, Step 3): independently
+  reproduced. One `mix test` invocation during Step 3 aborted with
+  :eaddrinuse on port 4000 while the sibling worktree held it, and succeeded
+  on retry -- the second occurrence of this failure within a single
+  requirement's run, which upgrades it from "transient oddity" to
+  "reproducible under normal parallel operation."
+
+  TEST-DESIGNER also surfaced a SECOND, distinct isolation gap in the same
+  area, which is worth recording here rather than as its own issue because
+  the fix belongs in the same place: **`MIX_TEST_PARTITION` only takes
+  effect under `MIX_ENV=test`.** `config/test.exs` is the only config file
+  that reads it, so a bare `mix run` (which defaults to `MIX_ENV=dev`)
+  ignores the partition entirely and connects to `letflow_dev` -- the shared
+  development database -- no matter what `MIX_TEST_PARTITION` is set to.
+  Any agent driving a verification script with `mix run` while believing
+  `MIX_TEST_PARTITION=2` protects it is unknowingly writing to the database
+  the *other* worktree develops against. This is a live hazard for the
+  two-worktree arrangement, not a theoretical one: the documented isolation
+  instruction ("always run with MIX_TEST_PARTITION=2") is true for `mix
+  test` and silently false for `mix run`. Suggested handling alongside the
+  port fix: state the `MIX_ENV=test` precondition explicitly wherever the
+  partition instruction appears, and consider having `config/dev.exs` refuse
+  to start when `MIX_TEST_PARTITION` is set, so the mismatch fails loudly
+  instead of silently targeting the wrong database.
 affected_files:
   - lib/letflow/application.ex
   - config/test.exs
+  - config/dev.exs
 github_issue: https://github.com/tvolodi/letflow/issues/71
 status: open

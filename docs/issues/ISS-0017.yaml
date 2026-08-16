@@ -73,8 +73,40 @@ description: >
   core-directives.md's Unblock-Everything directive; the documentation drift
   it leaves behind blocks nothing and is forwarded per
   docs/agents/protocols/ISSUE_QUEUE.md.
+  UPDATE 2026-08-16T17:50Z (Step 3 outcome, and a scope widening):
+
+  The test-surface half of this issue is now CLOSED inside REQ-023's own
+  run. TEST-DESIGNER refreshed both stale statements --
+  `test/specs/REQ-022.md:286` and `test/support/req022_migration_fixture.ex`
+  -- each with a "Refreshed by REQ-023 (ISS-0017)" note pointing at the new
+  section-4 guard test. ORCH confirmed `lib/` remained untouched by that
+  step via an empty `git diff` over the directory, so the gated design
+  artefact was correctly left alone.
+
+  The design-doc half remains open, and TEST-DESIGNER found it is BROADER
+  than this record originally stated. The same stale
+  "`tenant_scoped_migrations/0` currently returns `[]`" claim also appears
+  in **REQ-023's own design artefact**, `lib/letflow/design/req023-event-store-schema.md`,
+  at lines 46 and 883 -- falsified by REQ-023's own Step 2a, in the very
+  same run that produced the document. So two design artefacts now carry the
+  claim, not one:
+
+    - lib/letflow/design/req022-tenant-schema-provisioning.md section 3.4
+      (the original finding: specifies the bare {version, module} shape with
+      no module-loading step)
+    - lib/letflow/design/req023-event-store-schema.md lines 46, 883 (states
+      the function returns [])
+
+  Neither was edited in-run, for the same reason: both are artefacts that
+  passed the Step 1b hard gate, and correcting them after the fact rather
+  than through a gate would sidestep the check that approved them. The
+  REQ-023 artefact is the more urgent of the two to fix, because a future
+  requirement reading it for the event-store schema shape would encounter a
+  statement about the provisioning mechanism that was already false when the
+  document was committed.
 affected_files:
   - lib/letflow/design/req022-tenant-schema-provisioning.md
+  - lib/letflow/design/req023-event-store-schema.md
   - test/specs/REQ-022.md
   - test/support/req022_migration_fixture.ex
 github_issue: https://github.com/tvolodi/letflow/issues/73

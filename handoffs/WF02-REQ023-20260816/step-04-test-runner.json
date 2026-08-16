@@ -1,0 +1,64 @@
+{
+  "handoff_id": "d4fe8404-6fd3-42d9-bae3-e32d18173c35",
+  "run_id": "WF02-REQ023-20260816",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ023-20260816/step-04-test-runner.json",
+  "created_at": "2026-08-16T18:12:00Z",
+  "started_at": "2026-08-16T18:12:00Z",
+  "completed_at": "2026-08-16T18:21:40Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-023"],
+    "related_handoff_ids": ["bea1fe92-9fdc-4a50-9242-79a48fd037c5", "3233b74a-9bc2-4d7c-a1c2-0681d0154572"],
+    "artifacts_in": [
+      "test/letflow/event_store/schemas_test.exs",
+      "test/letflow/event_store/migrations_test.exs",
+      "test/specs/REQ-023.md",
+      "docs/issues/ISS-0011.yaml"
+    ],
+    "owned_modules": ["test/reports"]
+  },
+  "task": {
+    "description": "Run the full suite per WF-02 Step 4 and write a structured report to test/reports/. IMPORTANT deviation from this project's prior Step 4 practice, driven by a correction made at Step 3b earlier in this same run: do NOT treat a single 'mix test --seed 0' run as sufficient evidence. ISS-0011 was updated this run with two corrections -- its real frequency is ~33% rather than ~20%, and it DOES reproduce under --seed 0 on a fresh database, contradicting the assumption every prior run relied on. The root cause is a BEAM scheduler race, not a seed-ordering artifact, so seed pinning shifts probability without conferring determinism. Run the suite several times across pinned and unpinned seeds, report the real distribution, and attribute any single failure at test/letflow/plugs/tenant_status_test.exs:121 to ISS-0011 explicitly rather than to this run's own work.",
+    "acceptance_criteria": [
+      "the full suite is run (not just the new tests), multiple times, across both pinned and unpinned seeds",
+      "the actual pass/fail counts and exit codes are quoted verbatim, not summarized",
+      "any failure is attributed to a named root cause with evidence -- never 'probably flaky' without reading the actual failure",
+      "a structured report is written to test/reports/ per the established naming convention",
+      "pre-existing failures unrelated to REQ-023's acceptance criteria are forwarded, not fixed, and do not block this step's PASS verdict"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Ran the FULL suite 40 times on HEAD 54959b7 (branch confirmed feature/WF02-REQ023-20260816 via `git branch --show-current`), split 26 pinned (`MIX_TEST_PARTITION=2 mix test --seed 0`) / 14 unpinned (`MIX_TEST_PARTITION=2 mix test`), deliberately NOT resting on a single seed-0 run per this run's Step 3b correction to ISS-0011. Distribution: 37/40 runs clean at the expected `Result: 198 passed (4 properties, 194 tests)`, exit code 0; 3/40 runs failed with exit code 2 at `Result: 197/198 passed (4/4 properties, 193/194 tests)` / `Failed: 1 test`. Failing runs: run 08 (unpinned, seed 157649), run 25 (unpinned, seed 603595), and run 30 (PINNED, seed 0). By mode: pinned 25/26 clean (1 failure = 3.8%), unpinned 12/14 clean (2 failures = 14.3%), overall 3/40 = 7.5%. ATTRIBUTION: grepping all 40 logs together for ExUnit's failure-header pattern yields exactly ONE distinct failing test across the entire corpus, and each failing run contained exactly one failure header plus a `Failed: 1 test` trailer. It is verbatim: `1) test method short-circuit -- no DB query at all for a non-write method a GET request issues no Ecto query at all (method short-circuit, no DB round-trip) (Letflow.Plugs.TenantStatusTest) / test/letflow/plugs/tenant_status_test.exs:121 / expected no Ecto query for a GET request / code: refute_received :query_fired, \"expected no Ecto query for a GET request\" / stacktrace: test/letflow/plugs/tenant_status_test.exs:136: (test)`. This is ISS-0011 / GitHub #65 -- pre-existing, introduced by REQ-021, forwarded not fixed. Attribution is evidence-based, not assumed: (a) signature matches ISS-0011 character-for-character (module, file:line, assertion, stacktrace line); (b) mechanism re-verified from source in this run -- tenant_status_test.exs lines 127-132 attach a GLOBAL `:telemetry.attach(handler_id, [:letflow, :repo, :query], ..., test_pid)` handler inside an `async: true` module, so any concurrent async test's Repo query delivers :query_fired and trips `refute_received` at line 136; (c) run 08's log shows the race in the act -- the debug lines immediately before the failure block are foreign queries from other modules (`SELECT ... FROM \"tenants\"`, `SELECT ... FROM \"approvals\"`) and immediately after are more (`SELECT ... FROM \"users\"`, `INSERT INTO \"tenants\"`). NOT caused by REQ-023: its only new `async: true` module (test/letflow/event_store/schemas_test.exs:24) was grepped independently here for `telemetry` and `Repo.` -- the single hit is a moduledoc comment at line 11 saying it attaches no global telemetry handler; zero real Repo calls, zero attaches. Its other new module (test/letflow/event_store/migrations_test.exs:29) is `use Letflow.DataCase, async: false`. Zero other failures in 40 runs -- no regression, nothing dismissed as 'probably flaky'. STATIC GATES: `MIX_TEST_PARTITION=2 MIX_ENV=test mix compile --warnings-as-errors` exit code 0, zero output; `MIX_TEST_PARTITION=2 MIX_ENV=test mix format --check-formatted` exit code 0, zero output. COUNTS: 161 baseline + 24 (schemas_test.exs) + 13 (migrations_test.exs) = 198, matching the Result line exactly. ENVIRONMENT: no `docker compose` command issued -- letflow-postgres-1 confirmed already `Up 25 hours (healthy)` on 5462 via `docker ps`; DB targeting verified empirically as `DB=letflow_test2 PORT=5462`, letflow_test and letflow_dev never touched; zero `eaddrinuse` hits across all 40 logs, so ISS-0015 did not fire and no run aborted environmentally. VERDICT PASS: per WF-02 Step 4's forwarding rule, a pre-existing failure unrelated to this run's acceptance criteria is forwarded, not fixed, and does not block this step's PASS.",
+    "artifacts_out": ["test/reports/report-2026-08-16-WF02-REQ023-20260816.yaml"],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "ISS-0011 / GitHub #65 reproduced 3 times in 40 full-suite runs this step (runs 08 seed 157649, 25 seed 603595, 30 seed 0), always the same single test at test/letflow/plugs/tenant_status_test.exs:121. Forwarded, not fixed, per WF-02 Step 4. Already registered and already updated by ORCH earlier in this run, so NOT re-filed. Two data points worth folding into the record when it is next touched (this step did not edit the issue file): (1) CONFIRMED independently -- the flake does reproduce under `--seed 0` (run 30, exit 2), a second independent seed-0 reproduction from a different agent on a different run set, so a pinned seed is definitively not a deterministic baseline; (2) REFINED frequency -- ISS-0011 originally recorded ~20% (1/5) and Step 3b revised to ~33% (3/9); this 40-run sample observed 7.5% overall (3/40), splitting 3.8% pinned (1/26) and 14.3% unpinned (2/14). The earlier figures came from single-digit samples where one extra hit swings the rate enormously; the 40-run figure is better supported and does not contradict Step 3b's substantive point, it sharpens the rate while confirming the seed-0 reproduction that mattered.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Advisory for RELEASE-VALIDATOR (Step 5), which independently re-runs the suite and must not trust this report alone: on this branch a SINGLE re-run has roughly a 1-in-13 chance of hitting ISS-0011 (3/40 observed here). A single red run showing exactly test/letflow/plugs/tenant_status_test.exs:121 and nothing else is ISS-0011, not a REQ-023 regression -- re-run before concluding otherwise. Any OTHER failing test would be a genuine new signal.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ023-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ023-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to RELEASE-VALIDATOR (5)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

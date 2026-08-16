@@ -844,6 +844,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 36  # letflow-queue task id
     description: >
       Build the multi-schema provisioning mechanism docs/migration/decisions/
       0003-ecto-schema-strategy.md Decision B named but explicitly deferred out
@@ -899,6 +900,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 38  # letflow-queue task id
     description: >
       Add priv/repo/migrations and corresponding Ecto.Schema modules for the
       event-store tables R-Co's src/design/event_store.md documents (Covers:
@@ -976,6 +978,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 39  # letflow-queue task id
     description: >
       Port src/event_store/registry.zig (ES-05) as a Letflow.EventStore.Registry
       context module, per R-Co's src/design/event_store.md's registry.zig
@@ -1041,6 +1044,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 45  # letflow-queue task id
     description: >
       Port src/event_store/store.zig's Store.append() (per
       src/design/event_store.md's full "append" section: Key invariants 1-2,
@@ -1091,6 +1095,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 49  # letflow-queue task id
     description: >
       Port src/event_store/store.zig's Store.read(), Store.readGlobal(),
       Store.pointInTime(), and Store.archive() (per
@@ -1138,6 +1143,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 40  # letflow-queue task id
     description: >
       Add priv/repo/migrations and Ecto.Schema modules for the two core
       definition tables R-Co's src/design/definition.md documents (module
@@ -1191,6 +1197,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 37  # letflow-queue task id
     description: >
       Port src/definition/graph.zig's validateGraph() (per
       src/design/definition.md's graph.zig section, "Named validation checks
@@ -1230,6 +1237,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 44  # letflow-queue task id
     description: >
       Extend REQ-028's graph module with src/definition/graph.zig's
       validateNodeAttributes() (PD-05) and the edge-condition rules (PD-06),
@@ -1281,6 +1289,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 48  # letflow-queue task id
     description: >
       Port src/definition/store.zig's core Store operations (per
       src/design/definition.md's respective PD sections) as a
@@ -1353,6 +1362,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 51  # letflow-queue task id
     description: >
       Port src/definition/service_scope_validator.zig's ServiceScopeValidator
       (per src/design/svc-01-04-service-scope.md section 2.5's public
@@ -1400,6 +1410,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 47  # letflow-queue task id
     description: >
       Port ONLY the SPC-02 (definition-time) half of
       src/definition/sub_process_interface.zig, per
@@ -1445,6 +1456,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 46  # letflow-queue task id
     description: >
       Port src/definition/snapshot.zig's SnapshotStore (per
       src/design/definition.md's PD-08 section) as a
@@ -1486,6 +1498,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 52  # letflow-queue task id
     description: >
       Port src/definition/export_import.zig's ExportImportStore (per
       src/design/definition.md's PD-09 section) as a
@@ -1522,6 +1535,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 41  # letflow-queue task id
     description: >
       Add priv/repo/migrations and an Ecto.Schema module for
       promotion_reviews, per
@@ -1567,6 +1581,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 50  # letflow-queue task id
     description: >
       Port three tightly-coupled, read-only computation modules as one
       requirement (they share the same PlanEntry/PromotionPlan types and are
@@ -1643,6 +1658,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 54  # letflow-queue task id
     description: >
       Port the promotion_reviews state-machine transition functions
       (src/definition/promotion_review.zig, PRM-04, per
@@ -1704,6 +1720,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 55  # letflow-queue task id
     description: >
       Port src/definition/rollback.zig's rollbackDefinitionVersion() (per
       prm-batch1's "PRM-08 design" section) as
@@ -1747,6 +1764,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 42  # letflow-queue task id
     description: >
       Port src/definition/sandbox_pool.zig's SandboxPool (claim/release,
       on-demand Postgres-schema provisioning) and
@@ -1799,6 +1817,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 56  # letflow-queue task id
     description: >
       Port src/definition/assertion_rerun.zig's applyPromotionAssertionRerun()
       (per prm-batch1's "PRM-06 design" section 2 and "PRM-07 design"
@@ -1862,6 +1881,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 43  # letflow-queue task id
     description: >
       Port src/definition/pack_update.zig's computePackUpdatePlan() (per
       prm-batch1's "PRM-09 design" section) as
@@ -1922,6 +1942,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
+    impl_order: 53  # letflow-queue task id
     description: >
       Port src/definition/store.zig's Store.search() (per
       src/design/definition.md's PD-10 section) as

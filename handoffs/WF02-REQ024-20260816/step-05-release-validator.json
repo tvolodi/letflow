@@ -1,0 +1,50 @@
+{
+  "handoff_id": "daaf38ac-5000-4644-9918-c7ae00d075d6",
+  "run_id": "WF02-REQ024-20260816",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ024-20260816/step-05-release-validator.json",
+  "created_at": "2026-08-16T17:33:48Z",
+  "started_at": "2026-08-16T17:33:48Z",
+  "completed_at": "2026-08-16T17:41:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-024"],
+    "related_handoff_ids": ["fd8ce01e-64b8-4833-a360-1250e5065deb"],
+    "artifacts_in": ["test/reports/report-2026-08-16-WF02-REQ024-20260816.yaml", "lib/letflow/event_store/registry.ex"],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently re-verify REQ-024 is genuinely done. Do not trust TEST-RUNNER's report alone. Confirm every acceptance criterion against actual code/tests. This run also involved a rework cycle at Step 1b (tenant-prefix threading bug) -- confirm the shipped implementation actually matches the corrected design, not the original flawed one. docs/issues/ISS-0011.yaml is a known pre-existing flaky test, unrelated to REQ-024 -- if you hit it, don't treat it as blocking.",
+    "acceptance_criteria": [
+      "priv/repo/migrations gains an event_type_registry migration (schema-per-tenant per REQ-022) applying cleanly",
+      "register_type/2 rejects a second registration with the same (name, schema_version) with a distinct, testable error, not a generic changeset failure",
+      "validate_payload/2 against a payload missing a required field returns a failure result whose detail names the specific field_path (JSON Pointer form) and constraint, not just a boolean false",
+      "get_type/1 against an unregistered name returns an explicit :unknown_event_type-shaped error rather than nil or an exception",
+      "the moduledoc names the JSON Schema validation library choice as an explicit open question for CODE-DESIGNER, not a silently made decision"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified REQ-024 end-to-end -- did not read TEST-RUNNER's report as a substitute for re-deriving the verdict myself. (1) Re-ran `mix test` full suite twice myself, different seeds, on this branch (HEAD e86e626): --seed 424242 -> 233/234 passed (4/4 properties, 229/230 tests), the sole failure being Letflow.Plugs.TenantStatusTest's method-short-circuit test (test/letflow/plugs/tenant_status_test.exs:121, refute_received :query_fired) -- signature matches docs/issues/ISS-0011.yaml exactly (global :telemetry.attach race under async: true), a pre-existing issue unrelated to REQ-024; not re-filed per instructions. --seed 987654 -> clean 234/234, consistent with ISS-0011's documented intermittency. Also ran `mix test test/letflow/event_store/` in isolation: 73/73 passed, 0 failures, confirming REQ-024's own tests are clean regardless of ISS-0011. `mix compile --warnings-as-errors` also clean. (2) Checked all 5 acceptance criteria directly against shipped code/tests, not the requirement's status-history narrative: AC1 -- priv/repo/migrations/20260816163103_create_event_type_registry.exs exists, tenant-scoped (`if prefix() do`), wired into Letflow.TenantProvisioning.tenant_scoped_migrations/0; registry_test.exs's migration describe block proves it applies cleanly under a tenant schema and is absent from public. AC2 -- register_type/2 (registry.ex:97-107, insert_with_monotonicity_check/2:225-259) returns the distinct {:error, :duplicate_event_type_version} both via a pre-check and a DB-level unique-index race backstop (concurrent-race test at registry_test.exs:409-465 exercises the backstop path specifically); confirmed empirically below, not just via the test file. AC3 -- validate_payload/3 (registry.ex:139-156) returns {:error, {:payload_validation_failed, [%ValidationFailure{field_path, constraint, actual}]}} with field_path as an RFC-6901 JSON Pointer (json_schema.ex:196-221); confirmed empirically below with a fresh schema/payload of my own construction. AC4 -- get_type/2 (registry.ex:169-181) returns {:error, :unknown_event_type} on a nil Repo.one/2 result, never nil/exception; confirmed empirically below. AC5 -- Registry's own moduledoc (registry.ex:33-55) documents the JSON Schema library choice as an explicitly made decision (hand-rolled Letflow.EventStore.Registry.JsonSchema, not ex_json_schema) with reasoning and a pointer to the design doc's section 1/1.4, and docs/requirements.yaml's REQ-024 entry itself already carries the 'OPEN QUESTION (flag, do not silently pick) ... CODE-DESIGNER decides at WF-02 design time' framing verbatim -- the decision was made explicitly, not silently, and is traceable to the design doc, satisfying AC5's literal wording. (3) Rework-cycle re-verification (Step 1b's tenant-prefix-citation bug): read lib/letflow/event_store/registry.ex directly rather than trusting the handoff chain's narrative. Confirmed all three functions resolve tenant_id -> Letflow.TenantProvisioning.Registration (Repo.get_by(Registration, tenant_id: tenant_id)) -> schema_name via the private resolve_schema_name/1 helper (registry.ex:198-203), returning {:error, :tenant_not_provisioned} when no Registration row exists -- the corrected design, not the original flawed raw-prefix-parameter citation. Cross-checked against lib/letflow/tenant_provisioning.ex directly: Registration is a real schema with a tenant_id field and this is the same lookup shape replay_migrations/2 performs inline (tenant_provisioning.ex) -- genuinely matches, not just claimed to match. (4) Staleness check: docs/requirements.yaml REQ-024 status is 'in_progress' (line 979) and docs/status/requirement_status.yaml's REQ-024 entries end at a 'started' event only (2026-08-16T15:46:56Z) -- both correctly still pre-done, as expected before DOC-UPDATER runs; no stale 'done' claim anywhere. No docs/migration/decisions/ record was added or contradicted (design doc section 1.4 explains why this doesn't rise to a new decision record; docs/migration/decisions/ still only has 0001-0004, consistent with that). (5) Empirical spot-check performed myself (not copied from any test file): wrote scratch/release_validator_req024_spotcheck.exs (git-ignored, run via `MIX_ENV=dev mix run scratch/release_validator_req024_spotcheck.exs` against real dev Postgres) that provisions a genuinely fresh tenant via Letflow.TenantProvisioning.provision_tenant_schema/1 + replay_migrations/2, then calls Letflow.EventStore.Registry.register_type/2, get_type/2, and validate_payload/3 directly against a hand-authored 'widget order' JSON Schema (not present in any test file) that deliberately includes '$ref' (an unsupported-but-documented-inert keyword). Hand-derived expected results before running: duplicate registration -> {:error, :duplicate_event_type_version} (got exactly that); get_type/2 on an unregistered name -> {:error, :unknown_event_type} (got exactly that); a payload satisfying every real constraint but with the inert $ref present -> :ok (got exactly that, proving 'permitted and inert' holds through the real DB-backed path, not just JsonSchema.validate/2's own pure unit tests); a payload with 4 simultaneous violations (missing required 'quantity', 'widget_id' below minLength, invalid 'priority' enum value, an undeclared 'note' property under additionalProperties: false) -> hand-derived the exact 4-member {field_path, constraint} set {{'/quantity','required'}, {'/widget_id','minLength'}, {'/priority','enum'}, {'/note','additionalProperties'}} (got exactly that set, confirming ES-05's 'report every failure, not just the first' contract end-to-end). Verified cleanup left 0 orphan rows/schemas afterward via a separate query. All assertions in the script raise on mismatch and none raised -- script printed SPOTCHECK_ALL_ASSERTIONS_PASSED.",
+    "artifacts_out": [],
+    "issues": [
+      "Re-observed (not newly filed, not blocking): docs/issues/ISS-0011.yaml reproduced again on my own --seed 424242 run, identical signature to its documented root cause. Unrelated to REQ-024."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ024-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ024-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER (Step 6)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

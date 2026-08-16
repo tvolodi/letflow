@@ -1,0 +1,58 @@
+{
+  "handoff_id": "bd7368bd-d9bb-43b4-9ec9-6e2aadd365f7",
+  "run_id": "WF02-REQ028-20260816",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ028-20260816/step-02d-reviewer.json",
+  "created_at": "2026-08-16T11:27:46Z",
+  "started_at": "2026-08-16T11:27:46Z",
+  "completed_at": "2026-08-16T11:30:46Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-028"],
+    "related_handoff_ids": ["39db7a5f-c5e5-4926-ac70-998420f3701c"],
+    "artifacts_in": ["lib/letflow/definitions/graph.ex"],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "HARD GATE. Review git diff main...HEAD -- lib/letflow/definitions/graph.ex on branch feature/WF02-REQ028-20260816 per .claude/agents/reviewer.md's four questions and docs/anti-patterns.md.",
+    "acceptance_criteria": [
+      "idiomatic Elixir usage for a pure structural-validation module, no crutch patterns",
+      "no supervision-tree surface touched",
+      "no scope creep beyond REQ-028's 5 acceptance criteria",
+      "the DFS cycle-detection implementation is idiomatic (not a hand-rolled imperative-style loop where a functional fold/recursion would be clearer)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed lib/letflow/definitions/graph.ex (git diff main...HEAD, 453 new lines, sole file this run's own commits touch under lib/) against the four REVIEWER questions. (1) Idiomatic vs. crutch: PASS. validate_graph/1's 8-check composition (list of function captures |> Enum.flat_map/2) is clean idiomatic functional composition expressing never-short-circuit directly. dfs_visit/6 is genuinely idiomatic functional DFS -- recursion + Enum.reduce/3 threading an immutable {visited, violations} accumulator, on_stack deliberately not propagated back up the call chain (documented in-code), no mutable array/ETS/Process dict, no while-loop-shaped case-in-GenServer crutch. It is NOT an imperative loop ported too literally. The one indirection worth naming: nodes/edges are translated to 0-based integer indices (build_node_index/3 helpers) rather than keying directly on each node's own string id, which reads Zig-flavored at first glance -- but design doc req028-graph-structural-validator.md Sec.6.1 mandates this explicitly and ties it to reproducing graph.zig's nodeIndex first-occurrence-wins semantics exactly (load-bearing for the documented duplicate-id/CHK-04/CHK-06 interaction at Sec.7.2), and Step 1b (CODE-DESIGN-VALIDATOR, commit 7d23d0c) already gated this. Correctly a design decision already on record, not an ELIXIR-DEV idiom lapse -- noted, not flagged as a defect, per REVIEWER's own charter against re-litigating gated decisions. (2) Supervision: PASS, trivially and verified directly -- `git diff --name-only main...HEAD` and `git log -p main..HEAD -- lib/letflow/process_instance.ex lib/letflow/instance_supervisor.ex lib/letflow/application.ex` (0 lines of output) confirm this branch's own commits touch only lib/letflow/definitions/graph.ex, the design doc, and handoff/status bookkeeping files. The dirty-tree changes to application.ex/router.ex/config are pre-existing and outside this branch's commits, as already flagged to the user -- left untouched. (3) Type-safety gaps (non-blocking): @spec coverage is thorough (every public and private function typed, plus @type t/node_type/result on the module and nested Node/Edge/Violation). The gap: node_type and Violation.code are atom unions documented only via @type, not compiler-enforced -- case node.node_type do :START -> ...; :END -> ...; _other -> ... end (check_isolated_nodes/1) silently buckets any typo'd or data-integrity-bug atom into the generic-task branch with no compile-time or runtime signal, where an OCaml/Rust closed sum type would force every match site to be revisited (or fail to compile) when a variant is added or an invalid value reaches this code. Worth noting, not severe -- Ecto validation upstream is the intended guard, not this pure module. (4) Scope creep: none found. Diff is exactly the struct shapes (Node/Edge/Violation, including Edge's condition/is_default fields, which REQ-028's own requirement text calls for as part of the shared GraphEdge port even though CHK-01..08 don't read them yet) plus the 8 named checks and DFS cycle detection -- no behaviours, macros, Ecto schemas, or generic plumbing ahead of REQ-028's 5 ACs. @max_nodes/@max_edges module attributes (already self-flagged by ELIXIR-DEV as a non-behavioral magic-number cleanup) are unremarkable. docs/anti-patterns.md's two entries (toolchain-unavailable workaround, requirement_status.yaml append-only) don't apply to this diff. (5) CHK-04 sanity check on ELIXIR-DEV's flagged deviation (both edge endpoints must resolve via node_index before either node gets outgoing/incoming credit): reasonable and does not silently introduce a different bug. Traced both directions -- it can only ever cause a node whose SOLE relevant edge is dangling on the other end to additionally show as isolated (never the reverse: a fully-valid edge always credits both sides, so no node with real connectivity is ever wrongly marked isolated). That isolated_node violation always co-occurs with CHK-03's own dangling_edge violation on the same edge, so the validator sees both signals together rather than one masking the other -- consistent with, and arguably reinforcing, Key invariant 5 (report everything, don't hide problems), and matches the design doc's literal 'contributes no connectivity to either side' wording. No wrongly-non-isolated case exists under this reading.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Non-blocking type-safety note: node_type/Violation.code are atom unions enforced only by @type documentation, not the compiler. check_isolated_nodes/1's `_other ->` catch-all silently treats any unrecognized/invalid node_type atom as a generic task type rather than raising -- an OCaml/Rust exhaustive match over a closed sum type would force every call site to be revisited when a new variant is introduced or would reject an invalid value at construction. Not severe here since Ecto validation is the intended upstream guard for this pure module, but noting per REVIEWER charter Q3.",
+        "affected_requirement": "REQ-028"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Suggestion for TEST-DESIGNER (non-blocking): given the CHK-04 both-endpoints-must-resolve reading confirmed reasonable in this review, worth adding an explicit test case where a node's only edge is dangling on the far end, asserting it produces BOTH dangling_edge (CHK-03) and isolated_node (CHK-04) in the same validate_graph/1 call -- locks in the co-occurrence behavior this review traced rather than leaving it implicit.",
+        "affected_requirement": "REQ-028"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ028-20260816",
+      "commit_sha_list": ["f92c9f3a2addc1fda17358132043ee8862cf1516", "76f425d7408d9696329ec8835faa06a2698a1fb6", "3e6045fdaf26bf485d1567a0382071c000f21de8", "7d23d0cf87e6a777aa35f89f489698278f64e395", "937396477b36e38b813eb769102b95e169119d4b", "916af22324f2e3020658c13b27742ef963709e58"],
+      "remote_branch": "origin/feature/WF02-REQ028-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (Step 3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

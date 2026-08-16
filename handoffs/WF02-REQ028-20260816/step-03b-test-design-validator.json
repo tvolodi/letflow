@@ -1,0 +1,48 @@
+{
+  "handoff_id": "0b52d32b-afce-46f8-a1e7-e4176ec4e15f",
+  "run_id": "WF02-REQ028-20260816",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ028-20260816/step-03b-test-design-validator.json",
+  "created_at": "2026-08-16T11:45:29Z",
+  "started_at": "2026-08-16T11:45:29Z",
+  "completed_at": "2026-08-16T11:48:06Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-028"],
+    "related_handoff_ids": ["7720e756-1d5f-4f8e-9fa7-f01366e34320"],
+    "artifacts_in": ["test/specs/REQ-028.md", "test/letflow/definitions/graph_test.exs"],
+    "owned_modules": ["test/letflow", "test/specs"]
+  },
+  "task": {
+    "description": "HARD GATE. Independently validate test/specs/REQ-028.md and test/letflow/definitions/graph_test.exs against REQ-028's 5 acceptance criteria and WF-02 Step 3b's checklist (a-e). TEST-DESIGNER claims CHK-05 (duplicate node id) can never fire alone under this algorithm's first-match-wins semantics -- always co-occurs with :isolated_node on the higher-index duplicate. Verify this claim yourself by reading the actual dfs/node_index code, not by trusting the spec's proof. Also verify the reported mutation-test result by re-deriving it.",
+    "acceptance_criteria": [
+      "at least one runnable test targets each acceptance criterion, no @tag :skip without a passing counterpart",
+      "no TODO: implement test left in the spec",
+      "test fixtures are self-sufficient and don't depend on execution order",
+      "no hardcoded secrets/connection strings",
+      "the CHK-05 structural-impossibility claim and the mutation-test result are both independently re-verified, not trusted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. Independently read test/specs/REQ-028.md, test/letflow/definitions/graph_test.exs, and lib/letflow/definitions/graph.ex directly (not TEST-DESIGNER's summary). Checklist (a) all 5 acceptance criteria mapped to runnable tests: AC1 -> 'a realistic, multi-node, multi-edge, fully valid graph...' (line 67); AC2 -> all 9 violation codes each have their own minimal isolated-failing-example test (lines 98-278: missing_start_node, multiple_start_nodes, missing_end_node, dangling_edge, isolated_node, duplicate_node_id, cycle_without_gateway, node_limit_exceeded, edge_limit_exceeded); AC3 -> 'a graph violating 3 checks at once...' (line 285); AC4 -> 3 tests, gateway-cycle-permitted (PARALLEL_GATEWAY, line 319), self-loop-on-non-gateway-rejected (line 341), self-loop-on-gateway-accepted corollary (line 356); AC5 -> verified by direct inspection, re-run myself (grep + mix xref) rather than trusted, see below. No @tag :skip anywhere (grep confirmed). (b) grep for 'TODO' and 'implement test' across both files: no matches. (c) every fixture built from scratch per-test via local node/edge/graph helper calls; no setup block, no module attribute holding shared mutable graph state, no System.unique_integer needed (pure in-memory structs); async: true is justified (zero Repo/Ecto.Sandbox dependency, confirmed independently, see AC5 re-run below) -- no cross-test pollution possible, no ordering dependency. (d) grepped test file for password/secret/connection-string/api_key/token patterns: no matches (trivially true, module and tests are pure). (e) CHK-05 structural-impossibility claim independently re-derived by hand-tracing build_node_index/check_isolated_nodes/build_adjacency/check_cycles against the actual fixture (nodes: x/START idx0, x/END idx1 [duplicate], y/END idx2; edge: x->y): build_node_index uses Map.put_new over an indexed fold -> node_index={x:0,y:2}, index1 never appears as a value (first-match-wins). check_isolated_nodes resolves the edge's source/target only via node_index -> outgoing={0}, incoming={2} -- index1 receives neither. Generalized the proof beyond this one fixture: for ANY node at a higher list-position i whose id was already claimed by an earlier node, index i can never appear in node_index's value set for its own id (by definition of first-match-wins), so no edge naming that id can ever resolve to index i, regardless of node type or graph shape -- and since every node type requires at least one of has_outgoing/has_incoming, index i is always flagged isolated. This matches and generalizes TEST-DESIGNER's proof; I re-derived it independently rather than accepting the spec's own writeup. Also traced check_cycles/build_adjacency/dfs_visit over the same fixture and confirmed zero cycle violations (adjacency={0:[2]}, no back-edge), consistent with the test's exact 2-code assertion. (f) Independently re-ran the mutation test myself (did not trust the spec's reported numbers): mutated lib/letflow/definitions/graph.ex's validate_graph/1 composition from Enum.flat_map to an Enum.reduce_while that halts on the first check returning violations, ran `mix test test/letflow/definitions/graph_test.exs` -> Result: 12/15 passed, 3 failures, exactly the 3 named in the spec (dangling-edge-also-isolated test, CHK-05 companion test, AC3 3-simultaneous-violations test), each with the identical truncated-to-first-code symptom (e.g. 'left: [:dangling_edge], right: [:dangling_edge, :isolated_node]'). Reverted the mutation via Edit; `git diff --stat lib/letflow/definitions/graph.ex` showed no output (clean revert, matches spec's claim). Re-ran full suite post-revert: 161 passed (4 properties, 157 tests), matching pre-mutation baseline exactly. Independently re-ran `mix test test/letflow/definitions/graph_test.exs` standalone (pre-mutation): 15 passed, 0 failures. Independently re-ran AC5's inspection commands: `grep -n \"Repo\\.|Logger\\.|DateTime\\.|System.os_time|HTTPoison|Req\\.|File\\.\" lib/letflow/definitions/graph.ex` -> single match, moduledoc prose only (line 23), no executable code hit; `mix xref callers Letflow.Repo` -> 7 modules listed, graph.ex absent -- both match the spec's quoted output exactly. All 5 REQ-028 acceptance criteria (verified verbatim against docs/requirements.yaml's REQ-028 entry, no misquote) have genuine, independently-reproduced coverage. No fabricated/busywork tests found.",
+    "artifacts_out": ["handoffs/WF02-REQ028-20260816/step-03b-test-design-validator.json"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ028-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ028-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (Step 4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

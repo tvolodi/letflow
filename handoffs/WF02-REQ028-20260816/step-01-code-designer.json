@@ -1,0 +1,48 @@
+{
+  "handoff_id": "d0ccd8ef-3005-49e5-8d02-647e6d97cd5b",
+  "run_id": "WF02-REQ028-20260816",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ028-20260816/step-01-code-designer.json",
+  "created_at": "2026-08-16T10:52:44Z",
+  "started_at": "2026-08-16T10:52:44Z",
+  "completed_at": "2026-08-16T11:01:23Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-028"],
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/requirements.yaml (REQ-028)", "docs/migration/stage-2-event-store-definitions.md"],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "Design the pure graph structural validator for REQ-028 on branch feature/WF02-REQ028-20260816. Write lib/letflow/design/<module>.md per WF-02 Step 1's procedure.",
+    "acceptance_criteria": [
+      "a graph satisfying all 8 checks returns {valid: true, violations: []}",
+      "each of the 8 named checks (CHK-01 through CHK-08) has at least one explicit failing-example test demonstrating its specific violation code is returned, not just a generic invalid-graph test",
+      "a graph violating 3 of the 8 checks simultaneously returns all 3 violations in one call, not just the first encountered (Key invariant 5)",
+      "a cycle that passes through an EXCLUSIVE_GATEWAY or PARALLEL_GATEWAY node is explicitly permitted (not flagged as CYCLE_WITHOUT_GATEWAY), and a self-loop is explicitly rejected, each with its own test",
+      "the function signature and its call sites confirm zero Repo/database calls anywhere in its call graph"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Designed Letflow.Definitions.Graph (lib/letflow/definitions/graph.ex, not yet implemented) as a single-file, zero-dependency pure module porting graph.zig's validateGraph(). Defines plain-struct shapes for Node/Edge/Violation/Graph (the DefinitionGraph container itself), the 7-variant PD-05 NodeType atom set, and validate_graph/1's full @spec returning a bare %{valid: boolean(), violations: [Violation.t()]} map (no :ok/:error tuple, justified against graph.zig's own error taxonomy). All 8 named checks (9 violation codes, CHK-01 produces 2) are specified with exact trigger conditions and message templates. CHK-06's DFS cycle detection is fully worked out as an immutable fold/MapSet recursion (dfs_visit/6 with a full @spec), including the precise self-loop-on-gateway corollary the ported algorithm implies. Documents the never-short-circuit composition (fixed 8-check order, unconditional concatenation) and an explicit independence analysis answering the handoff's own sub-question. Flags 3 open questions (attributes typing, missing node-type-validity 9th check tying back to stage-2's Static-typing-gap finding, and who decodes raw jsonb into these structs) rather than silently resolving them. No implementation code included -- struct shapes are Markdown tables, only @type/@spec/@moduledoc-guidance content appears in fenced blocks.",
+    "artifacts_out": ["lib/letflow/design/req028-graph-structural-validator.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ028-20260816",
+      "commit_sha_list": ["76f425d7408d9696329ec8835faa06a2698a1fb6"],
+      "remote_branch": "origin/feature/WF02-REQ028-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

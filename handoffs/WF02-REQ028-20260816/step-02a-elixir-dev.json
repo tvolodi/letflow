@@ -1,0 +1,56 @@
+{
+  "handoff_id": "5176c79a-c6ad-4bd3-8c60-e6e3e2fe948d",
+  "run_id": "WF02-REQ028-20260816",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ028-20260816/step-02a-elixir-dev.json",
+  "created_at": "2026-08-16T11:11:39Z",
+  "started_at": "2026-08-16T11:11:39Z",
+  "completed_at": "2026-08-16T11:21:35Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-028"],
+    "related_handoff_ids": ["d0ccd8ef-3005-49e5-8d02-647e6d97cd5b", "c6ef28aa-bc09-45ce-858b-f725156fb2f9"],
+    "artifacts_in": ["lib/letflow/design/req028-graph-structural-validator.md"],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "Implement REQ-028 per the gate-approved design lib/letflow/design/req028-graph-structural-validator.md (commit 76f425d, PASSed Step 1b in commit 7d23d0c) on branch feature/WF02-REQ028-20260816. Follow WF-02 Step 2a's procedure exactly: verify branch, implement lib/letflow/definitions/graph.ex per the design, mix compile --warnings-as-errors, mix format --check-formatted, self-review checklist, empirically demonstrate every acceptance criterion. This is a pure module -- no migration, no DB. NOTE: the working tree has real, unrelated, pre-existing uncommitted changes (config/prod.exs, lib/letflow/application.ex, lib/letflow/router.ex, untracked config/runtime.exs) -- do NOT touch or commit these, they are out of scope for this handoff (per HANDOFF_PROTOCOL.md section 7); ORCH has flagged them to the user separately.",
+    "acceptance_criteria": [
+      "a graph satisfying all 8 checks returns {valid: true, violations: []}",
+      "each of the 8 named checks (CHK-01 through CHK-08) has at least one explicit failing-example test demonstrating its specific violation code is returned, not just a generic invalid-graph test",
+      "a graph violating 3 of the 8 checks simultaneously returns all 3 violations in one call, not just the first encountered (Key invariant 5)",
+      "a cycle that passes through an EXCLUSIVE_GATEWAY or PARALLEL_GATEWAY node is explicitly permitted (not flagged as CYCLE_WITHOUT_GATEWAY), and a self-loop is explicitly rejected, each with its own test",
+      "the function signature and its call sites confirm zero Repo/database calls anywhere in its call graph"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented lib/letflow/definitions/graph.ex per the gate-approved design: Letflow.Definitions.Graph (the graph struct itself, nodes/edges) with nested Node/Edge/Violation modules, the 7-variant node_type() union, validate_graph/1 running all 8 checks (CHK-01..CHK-08, 9 violation codes) unconditionally and concatenating results, and dfs_visit/6 implementing the gateway-exempt cycle detection exactly per design doc §6.1-6.4. `mix compile --warnings-as-errors` exits 0 (`Compiling 1 file (.ex) / Generated letflow app`). `mix format --check-formatted` (both scoped to the file and project-wide) exits 0. Every AC empirically demonstrated via scratch/req028_demo.exs (gitignored, run with `mix run --no-start scratch/req028_demo.exs`, exit 0, all in-script pattern-match assertions held): AC1 -- 3-node valid chain (START->HUMAN_TASK->END) returns `valid: true, violations: []`. AC2 -- all 9 codes demonstrated in isolation: missing_start_node, multiple_start_nodes, missing_end_node, dangling_edge (plus a bonus fixture proving both endpoints of one edge fire independently: 2 dangling_edge violations from 1 edge), isolated_node, duplicate_node_id (also empirically confirms the design's own documented CHK-04/CHK-05 duplicate-id attribution interaction, §7.2), cycle_without_gateway, node_limit_exceeded (501 nodes), edge_limit_exceeded (2001 edges). AC3 -- a 2-node graph (duplicate id \"s1\", both node_type START, no edges) returns 5 violations in one call (duplicate_node_id, multiple_start_nodes, missing_end_node, isolated_node x2) -- MapSet.subset? confirms the 3 target codes are all present simultaneously, proving never-short-circuit empirically. AC4 -- (a) a fully valid graph containing a real cycle through an EXCLUSIVE_GATEWAY/PARALLEL_GATEWAY pair returns `valid: true, violations: []` (cycle explicitly permitted); (b) a self-loop on a HUMAN_TASK node returns exactly `[cycle_without_gateway]` (self-loop explicitly rejected); (c) THE FLAGGED COROLLARY -- a self-loop on an EXCLUSIVE_GATEWAY node (with an otherwise-valid START/END pair elsewhere in the graph) returns `valid: true, violations: []` -- empirically confirms the design doc §6.4 corollary holds exactly as predicted: the self-loop-on-gateway case IS accepted by the faithfully-ported rule, not rejected. AC5 -- grep for `Repo\\.|Logger\\.|DateTime\\.|System\\.os_time|HTTPoison|Req\\.|File\\.|GenServer\\.|:httpc` against the file returns zero real matches (one hit is prose inside the moduledoc, not code). `mix xref graph --source lib/letflow/definitions/graph.ex` returns just the file itself with zero outgoing edges -- the module has no dependency on any other file in the project, confirming zero Repo/DB/HTTP calls anywhere in its call graph.",
+    "artifacts_out": [
+      "lib/letflow/definitions/graph.ex"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Two small implementation choices not spelled out further by the design (which explicitly left mechanism choices like this to ELIXIR-DEV, per its §3 note on @gateway_types): (1) added @max_nodes/@max_edges module attributes (500/2000) instead of inlining the literals in CHK-07/CHK-08, purely to avoid magic numbers -- no behavior change. (2) CHK-04's connectivity computation requires BOTH an edge's source AND target to resolve via node_index before counting it toward either node's incoming/outgoing set (implementing the design's literal wording 'a dangling edge contributes no connectivity to either side' at §5's CHK-04 detail) -- this was the one genuinely ambiguous phrase in the design (could have been read as 'exclude only on the failing side'), resolved in favor of the design's explicit 'to either side' wording and empirically verified via the CHK-03 dangling-edge fixture (the dangling edge's live endpoint, t1, correctly stayed non-isolated because it had other valid edges, not because the dangling edge partially counted). Neither is a redesign; both are non-behavioral or design-literal choices, flagged per this handoff's own instruction to document rather than silently decide.",
+        "affected_requirement": "REQ-028"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ028-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ028-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

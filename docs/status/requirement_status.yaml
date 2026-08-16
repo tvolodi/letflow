@@ -1725,3 +1725,62 @@ history:
       docs/issues/ISS-0011.yaml / GitHub issue #65, forwarded rather than fixed
       here per core-directives.md's Unblock-Everything scope boundary. Flipped
       docs/requirements.yaml REQ-022 status to done.
+  - req: REQ-028
+    event: started
+    agent: ORCH
+    at: 2026-08-16T10:50:50Z
+    note: >
+      Claimed from letflow-queue via a real get_next_task call (task id 37,
+      locked_by: tvolodi-orch), depends_on: [] so it's eligible with no S2
+      predecessor required. WF-02 Step 00 (git setup) complete:
+      feature/WF02-REQ028-20260816 branched from main and pushed. Routing to
+      CODE-DESIGNER (Step 1).
+  - req: REQ-028
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-16T12:04:09Z
+    note: >
+      Graph structural validator shipped: Letflow.Definitions.Graph
+      (lib/letflow/definitions/graph.ex), a pure function (zero Repo/database
+      calls anywhere in its call graph, confirmed by RELEASE-VALIDATOR grep +
+      full-file read) implementing all 8 named checks / 9 violation codes
+      ported from graph.zig's validateGraph() (PD-02): missing_start_node,
+      multiple_start_nodes, missing_end_node, dangling_edge, isolated_node,
+      duplicate_node_id, cycle_without_gateway, node_limit_exceeded,
+      edge_limit_exceeded. Cycle detection is DFS-based and gateway-exempt --
+      a cycle passing through an EXCLUSIVE_GATEWAY or PARALLEL_GATEWAY node
+      (including a self-loop on one) is explicitly permitted, while a
+      self-loop on any non-gateway node is rejected, each with its own test.
+      All checks run and all violations collect via Enum.flat_map over the
+      full ordered check list -- never short-circuits on the first failure
+      (Key invariant 5), demonstrated by a 3-simultaneous-violation test
+      asserting exact violation-code order. All WF-02 gates passed:
+      CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER (out of scope -- no
+      tenant-data path touched), REVIEWER (idiom), TEST-DESIGN-VALIDATOR,
+      TEST-RUNNER, and RELEASE-VALIDATOR (independent full-suite re-run, not
+      trusting TEST-RUNNER's report alone). RELEASE-VALIDATOR's own re-run:
+      161/161 tests passing (4 properties, 157 tests), 0 failures, matching
+      TEST-RUNNER's prior report exactly; graph_test.exs run in isolation:
+      15/15. RELEASE-VALIDATOR additionally ran extensive mutation-testing
+      scrutiny beyond the acceptance criteria: independently re-derived and
+      empirically verified (via fresh fixtures not in the test file, run
+      against the real module with `mix run`) both that the
+      never-short-circuit invariant holds for a disconnected-island graph
+      (a self-loop on a node unreachable from START is still visited and
+      flagged) and the CHK-05 structural claim that duplicate_node_id can
+      never fire alone -- it always co-occurs with isolated_node for that
+      same node, because node_index maps a duplicated id to only its first
+      occurrence's position (Map.put_new), so a later occurrence's own
+      list-position can never appear in either adjacency set regardless of
+      node_type. No docs/migration/decisions/ record references the graph
+      validator, so nothing shipped contradicts one. Per REQ-022's
+      established precedent (git-log confirmed: stage-N doc headers are
+      rewritten once, in bulk, at WF-04 stage-gate closure, not
+      incrementally per WF-02 requirement), docs/migration/stage-2-event-
+      store-definitions.md was deliberately left untouched -- REQ-028's own
+      acceptance criteria name no such file either. README.md checked and
+      left untouched: REQ-028 is a purely internal pure-function module with
+      no HTTP route, no command, and (per RELEASE-VALIDATOR's grep) nothing
+      in lib/ calls it yet, so it changes no documented user-observable
+      behavior in README's "What's here today"/"Running it" sections.
+      Flipped docs/requirements.yaml REQ-028 status to done.

@@ -976,7 +976,7 @@ requirements:
   - id: REQ-024
     title: Event type registry (registry.zig, ES-05 -- schema + registerType/validatePayload/getType)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S2
     impl_order: 39  # letflow-queue task id
     description: >

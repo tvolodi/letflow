@@ -1,0 +1,53 @@
+{
+  "handoff_id": "2ad2704c-ffef-4de8-bf82-0de593d56b8a",
+  "run_id": "WF02-REQ022-20260816",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ022-20260816/step-06-doc-updater.json",
+  "created_at": "2026-08-16T10:02:55Z",
+  "started_at": "2026-08-16T10:02:55Z",
+  "completed_at": "2026-08-16T10:08:24Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-022"],
+    "related_handoff_ids": ["d7452bb0-6d55-462c-88ef-1e01c531fa82"],
+    "artifacts_in": ["docs/requirements.yaml", "docs/status/requirement_status.yaml"],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR PASSed REQ-022 (handoffs/WF02-REQ022-20260816/step-05-release-validator.json). Flip REQ-022 to done and append the done event. This is S2's first requirement to land -- check whether docs/migration/stage-2-event-store-definitions.md needs any header/status update to reflect that S2 implementation has begun (matching the established per-requirement precedent from stage-1-identity.md during S1).",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-022 status flipped in_progress -> done",
+      "docs/status/requirement_status.yaml gains a done event (real UTC timestamp, appended not rewritten)",
+      "docs/migration/stage-2-event-store-definitions.md updated if it names REQ-022 by status, or confirmed correctly silent if it doesn't track per-requirement status the way stage-1-identity.md did",
+      "README.md checked and left untouched unless REQ-022 changed documented user-observable behavior (it does not -- internal provisioning mechanism, no new route/command)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Flipped docs/requirements.yaml's REQ-022 entry (line 845) status: in_progress -> done. Appended a done event to docs/status/requirement_status.yaml (after the existing REQ-022 started entry at line 1698), agent: DOC-UPDATER, at: 2026-08-16T10:08:24Z, summarizing what shipped (Letflow.TenantProvisioning's provision_tenant_schema/1 + replay_migrations/2, the tenant_schemas registry migration, all 6 gates PASS, RELEASE-VALIDATOR's 146/146-test independent re-run, and ISS-0011 forwarded not fixed here) -- read the file's full existing history first and appended only, did not rewrite any prior entry (confirmed via re-parsing with js-yaml: history entry count only grew). docs/migration/stage-2-event-store-definitions.md deliberately NOT updated: verified via `git log --follow` that stage-1-identity.md's own header ('Status: not started... Requirements: none expanded yet') stayed byte-for-byte static through the ENTIRE S1 stage -- confirmed it was unchanged by the REQ-015..021 requirement-drafting commit (813082d) and by all 7 individual WF-02 DOC-UPDATER runs (REQ-015 through REQ-021) -- and was only ever rewritten once, in bulk, at WF-04's stage-gate closure (c7194a9, 'chore(WF-04): clear S1 stage gate'). Stage-2's doc shows the identical pattern: ae43ed6 (S2's own requirement-drafting commit) touched only the Scope section's file-count correction and left 'Status: not started... Requirements: none expanded yet' untouched even though it drafted all 21 S2 requirements in the same commit. This is a deliberate, git-evidenced convention, not an oversight: stage-N doc headers/REVIEWER-sign-off are updated once at WF-04 stage-gate time, not incrementally per WF-02 requirement. Also confirmed via the literal WF-02 Step 6 procedure test: REQ-022's own acceptance_criteria (docs/requirements.yaml lines 892-895) name no docs/migration/stage-N-*.md or docs/migration/decisions/*.md file, so there is nothing this step is obligated to update there either. Did not invent a new per-requirement-update convention against this evidence. README.md (top-level) confirmed untouched: read it in full, grepped for S2/REQ-022/'event store'/'Migration status' -- REQ-022 is a purely internal provisioning mechanism (no new route, no new command, no change to the ASCII state diagram or 'Running it' section), so no update was warranted, matching this handoff's own acceptance criterion 4. Separately, per this run's dispatch instructions (item 5, checking 'docs/migration/README.md or any other cross-referencing doc' for stale S2-status pointers): docs/migration/README.md's 'Requirement expansion' section was genuinely stale independent of REQ-022 (it said 'Only Stage 0 is currently broken into requirements (REQ-010..014)', which was already false once S1 (REQ-015..021) landed and S2 (REQ-022..042) was drafted in commit ae43ed6, and nobody had fixed it since -- confirmed via `git log --follow` that this file was not touched by S1's WF-04 stage-gate closure or by ae43ed6) -- corrected it to state Stage 0/1 are done and Stage 2 is expanded (REQ-022..042) with REQ-022 done, REQ-023..042 pending. Also updated the matching run entry in handoffs/registry.json (WF02-REQ022-20260816, currently line ~101) per HANDOFF_PROTOCOL.md section 4 step 4: last_known_step now reads 'Step 6 (DOC-UPDATER) COMPLETED -- PASS, routed to Step Final (git merge, ELIXIR-DEV)', with a note recording Step 5's PASS and this step's doc changes; status remains ACTIVE and released_lock remains false since Step Final (git merge, which releases the queue lock) has not run yet -- that is the next agent's job, not this one's. Validated docs/requirements.yaml, docs/status/requirement_status.yaml (both via `npx js-yaml`) and handoffs/registry.json (via a JSON parse) all still parse cleanly after every edit.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "docs/migration/README.md",
+      "handoffs/registry.json",
+      "handoffs/WF02-REQ022-20260816/step-06-doc-updater.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ022-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ022-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV for Step Final git merge"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

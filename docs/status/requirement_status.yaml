@@ -1697,3 +1697,31 @@ history:
       locked_by: tvolodi-orch) — not the requirements.yaml fallback. WF-02 Step 00
       (git setup) complete: feature/WF02-REQ022-20260816 branched from main and
       pushed. Routing to CODE-DESIGNER (Step 1).
+  - req: REQ-022
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-16T10:08:24Z
+    note: >
+      Schema-per-tenant provisioning mechanism shipped: Letflow.TenantProvisioning
+      (lib/letflow/tenant_provisioning.ex) with provision_tenant_schema/1 (real
+      CREATE SCHEMA IF NOT EXISTS + tenant_schemas registry insert inside one
+      Repo.transaction/1) and replay_migrations/2 (Ecto.Migrator.run/4 with
+      prefix: schema_name, re-applying priv/repo/migrations/ against a specific
+      tenant schema); lib/letflow/tenant_provisioning/registration.ex (the
+      tenant_schemas Ecto schema); priv/repo/migrations/20260816090045_create_tenant_schemas.exs
+      (public/default-schema registry table: tenant_id, schema_name,
+      migrations_applied_at, provisioned_at). Moduledoc states, as an open
+      question rather than a silent decision, that REQ-015's users/groups/
+      tenant_role tables remain in the public schema for now, per REQ-022's own
+      acceptance criterion. All WF-02 gates passed: CODE-DESIGN-VALIDATOR,
+      SECURITY-REVIEWER, REVIEWER (idiom), TEST-DESIGN-VALIDATOR, TEST-RUNNER,
+      and RELEASE-VALIDATOR (independent re-run, not trusting TEST-RUNNER's
+      report alone) all PASS. RELEASE-VALIDATOR's own re-run: 146/146 tests
+      passing (4 properties, 142 tests) on 4 of 5 unseeded runs; the 1 failure
+      observed (seed 884432) was root-caused to a pre-existing REQ-021 test-
+      isolation defect in test/letflow/plugs/tenant_status_test.exs (a global
+      :telemetry.attach racing concurrent async:true tests), unrelated to
+      REQ-022 and not blocking this PASS verdict — filed separately as
+      docs/issues/ISS-0011.yaml / GitHub issue #65, forwarded rather than fixed
+      here per core-directives.md's Unblock-Everything scope boundary. Flipped
+      docs/requirements.yaml REQ-022 status to done.

@@ -842,7 +842,7 @@ requirements:
   - id: REQ-022
     title: Schema-per-tenant provisioning mechanism (tenant_schemas registry + provisioning function)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S2
     impl_order: 36  # letflow-queue task id
     description: >

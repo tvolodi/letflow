@@ -107,11 +107,11 @@
       "lock_acquired_at": "2026-08-16T08:37:43Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 4 (TEST-RUNNER) COMPLETED -- PASS, routed to Step 5 (RELEASE-VALIDATOR)",
+      "last_known_step": "Step 6 (DOC-UPDATER) COMPLETED -- PASS, routed to Step Final (git merge, ELIXIR-DEV)",
       "backfilled": false,
       "queue_task_id": 36,
       "queue_agent_id": "tvolodi-orch",
-      "note": "Claimed live via letflow-queue get_next_task (not the requirements.yaml fallback) -- first run since the queue's S2 backlog was registered this session. Updated live per HANDOFF_PROTOCOL.md §4 step 4, not backfilled."
+      "note": "Claimed live via letflow-queue get_next_task (not the requirements.yaml fallback) -- first run since the queue's S2 backlog was registered this session. Updated live per HANDOFF_PROTOCOL.md §4 step 4, not backfilled. Step 5 (RELEASE-VALIDATOR) PASSed (handoffs/WF02-REQ022-20260816/step-05-release-validator.json); Step 6 (DOC-UPDATER) flipped docs/requirements.yaml REQ-022 to done and appended the done event. Lock remains held (released_lock: false) until Step Final's git merge completes."
     }
   ]
 }

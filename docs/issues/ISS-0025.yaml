@@ -40,6 +40,19 @@ description: >
   CODE-DESIGNER correctly declined to resolve it and flagged it as
   REQ-030's API question instead.
 
+  READ THIS BEFORE THE THREE OPTIONS BELOW (added after RELEASE-VALIDATOR
+  observed that the strongest reasoning in this record was buried in an
+  UPDATE block while the three options were presented as equals):
+  **option (c) is the recommended resolution, not a co-equal alternative.**
+  The attribution-integrity analysis in the SECURITY-REVIEWER update further
+  down establishes that option (a) makes tenant_id caller-controlled, so a
+  row can sit inside tenant A's physical schema while claiming tenant_id = B
+  and nothing in the shipped schema would reject it. Option (c)'s derived
+  value cannot disagree with the schema it is written into. The three are
+  therefore NOT equally good; they are listed together only because each has
+  real tradeoffs worth reading. If (a) is chosen anyway for its
+  explicitness, pair it with a cross-check against the prefix.
+
   Three candidate resolutions, none obviously right, recorded so whoever
   picks this up does not have to re-derive them:
 

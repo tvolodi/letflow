@@ -1,0 +1,76 @@
+id: ISS-0019
+title: "replay_migrations/2's default argument is evaluated outside its own try/rescue, so a migration-file load failure escapes as a raw exception instead of the @spec'd {:error, {:migration_failed, _}}"
+discovered_by: SECURITY-REVIEWER
+discovered_in_run: WF02-REQ023-20260816
+discovered_at: 2026-08-16T17:03:47Z
+severity: MINOR
+description: >
+  `Letflow.TenantProvisioning.replay_migrations/2` (lib/letflow/tenant_provisioning.ex)
+  is declared as:
+
+      def replay_migrations(tenant_id, migration_source \\ tenant_scoped_migrations())
+
+  Its body wraps `Ecto.Migrator.run/4` in a `try/rescue` specifically to
+  convert raised exceptions into this project's `{:ok, _} | {:error, _}`
+  convention -- REQ-022's own `@doc` explains that `Ecto.Migrator.run/4`
+  raises on failure and that the rescue exists to produce
+  `{:error, {:migration_failed, exception}}` at the module's public
+  boundary.
+
+  But an Elixir default argument is not evaluated inside the function body.
+  The compiler generates a separate lower-arity clause whose body calls the
+  full-arity function with the default expression evaluated first --
+  i.e. `tenant_scoped_migrations()` runs *before* control enters the
+  2-arity body, and therefore before the `try/rescue` is established.
+
+  This matters now, and did not before, because of a change REQ-023 (this
+  run) made. Until this run, `tenant_scoped_migrations/0` returned a literal
+  `[]` and could not fail. REQ-023 gave it real work: it now walks a
+  compile-time manifest and calls `Code.require_file` on each migration
+  filename to force the modules to load (the in-scope defect fix documented
+  in ISS-0017). So `tenant_scoped_migrations/0` can now raise -- e.g.
+  `Code.LoadError` if a `priv/repo/migrations/*.exs` file named in the
+  manifest is missing from the deployed artefact.
+
+  When it does, the caller of `replay_migrations/1` receives a raw
+  `Code.LoadError`, not the `{:error, {:migration_failed, _}}` the `@spec`
+  and `@doc` both promise. SECURITY-REVIEWER demonstrated the mechanism with
+  a minimal probe rather than asserting it from language rules alone: a
+  function with a raising default argument and a try/rescue body returned
+  `{:ESCAPED_THE_TRY_RESCUE, ...}` when called at the lower arity, and
+  `{:ok, :given}` when the argument was passed explicitly.
+
+  Deliberately NOT treated as an INV-8 (no-unhandled-crashes) failure, and
+  ORCH agrees with that reasoning: INV-8 concerns paths reachable from
+  external I/O -- tenant, user, or network input. The filename list here is
+  a compile-time literal manifest in the module's own source, unreachable
+  from any request. The trigger is a deployment-integrity fault (a migration
+  file missing from the release), not attacker-influenced input. So this is
+  a contract/robustness defect, not a security one, and it correctly did not
+  block Step 2c's PASS.
+
+  Why file it rather than shrug: the `@spec` currently states a total
+  contract it does not honour, and the failure mode it hides is a
+  deployment-time one -- exactly the situation where a clear
+  `{:error, {:migration_failed, _}}` is more useful than a raw
+  `Code.LoadError` surfacing from inside a provisioning call. It is also
+  cheap to fix.
+
+  Suggested fix (its own small run): either move the default resolution
+  inside the guarded body (e.g. default the parameter to `nil` and resolve
+  `migration_source || tenant_scoped_migrations()` inside the existing
+  `try`), or widen the rescue to cover module loading and add a distinct
+  error tag such as `{:error, {:migration_source_unavailable, exception}}`.
+  The second is more informative but changes the `@spec`'s error union, so
+  it wants a design decision rather than an implementer's pick -- both
+  options recorded here rather than one being chosen unilaterally.
+
+  Discovered by SECURITY-REVIEWER during REQ-023's Step 2c. It concerns
+  REQ-022's shipped function signature, not REQ-023's own acceptance
+  criteria, and blocks none of them, so per
+  docs/agents/protocols/ISSUE_QUEUE.md it is filed and forwarded rather than
+  fixed inside this run.
+affected_files:
+  - lib/letflow/tenant_provisioning.ex
+github_issue: https://github.com/tvolodi/letflow/issues/75
+status: open

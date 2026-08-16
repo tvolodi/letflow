@@ -219,6 +219,29 @@
       "orch_process_defect_self_reported": "ORCH stamped this run's handoff created_at/started_at values by extrapolating from earlier entries instead of reading the clock each time, violating core-directives.md's 'Timestamps come from the clock, never from memory'. The estimates drifted ~23 minutes ahead by step-06, making its clock-read completed_at (18:49:40Z) precede its extrapolated started_at (19:08:00Z) -- the exact corruption HANDOFF_PROTOCOL.md section 3 forbids. Caught by DOC-UPDATER, which reported the contradiction instead of fabricating a later completed_at to make the file self-consistent. A mechanical monotonicity sweep across all eleven handoffs found this to be the ONLY ordering violation; step-06 was corrected to a reconstructed 18:42:00Z with an explicit orch_timestamp_correction field stating it is a reconstruction rather than a measurement. Recorded as a new entry in docs/anti-patterns.md so the practice is fixed, not just this instance.",
       "merge_result": "PR #80 (https://github.com/tvolodi/letflow/pull/80) squash-merged as 0909957; ORCH independently confirmed via gh pr view: state MERGED, mergedAt 2026-08-16T19:12:46Z. UNLIKE REQ-022's and REQ-028's runs this was NOT a no-op rebase: origin/main had advanced 3 commits (16b2871 -> d525092) because the concurrently-running primary worktree merged REQ-024 as PR #77, and REQ-024 had independently rewritten the SAME function this run changed (tenant_scoped_migrations/0). Four conflicts, every one resolved by MERGING both sides rather than picking one: lib/letflow/tenant_provisioning.ex (kept REQ-023's manifest + ensure_migration_module_loaded!/2, added REQ-024's event_type_registry as a version-ordered SEVENTH entry, merged both @docs); handoffs/registry.json (both run entries kept, valid JSON); docs/status/requirement_status.yaml (both sides' events kept in file order); handoffs/orchestrator.log (both kept -- 145 base + 29 main + 33 branch = 207 lines exactly). docs/requirements.yaml auto-merged with REQ-023 and REQ-024 both done. Zero conflicts in priv/repo/migrations/, lib/letflow/event_store/ or test/ (verified, not assumed). The resolution additionally REPAIRED a latent defect REQ-024 had shipped to main: its bare {version, module} form would raise Ecto.MigrationError in any VM where migration modules were not already loaded, masked on a fresh test DB by mix.exs's in-VM test: alias and failing on a warm one.",
       "orch_independent_verification_final": "ORCH re-derived the merge outcome rather than trusting the report: gh pr view 80 returned state MERGED / mergedAt 2026-08-16T19:12:46Z / mergeCommit 0909957. On freshly fetched origin/main (26d6d49): tenant_scoped_migrations/0 confirmed to carry SEVEN manifest entries including 20260816163103_create_event_type_registry.exs, i.e. REQ-024's migration survived the merge rather than being dropped; handoffs/registry.json parses as valid JSON with 8 run entries including BOTH WF02-REQ024-20260816 and WF02-REQ023-20260816, confirming neither worktree's entry was lost; handoffs/orchestrator.log is 207 lines and docs/status/requirement_status.yaml is 1960 lines, both grown not shrunk, so append-only discipline survived a real conflict resolution. Merged main re-verified green by ORCH directly: mix compile --warnings-as-errors exit 0 and MIX_TEST_PARTITION=2 mix test --seed 0 = 271 passed (4 properties, 267 tests), reconciling exactly as 161 pre-existing + 73 REQ-024 + 37 REQ-023. Local worktree left detached at origin/main with a clean tree; local main never checked out or modified at any point in this run."
+    },
+    {
+      "run_id": "WF02-REQ027-20260816",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-027"
+      ],
+      "stage": "S2",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/definitions",
+        "priv/repo/migrations",
+        "lib/letflow/tenant_provisioning.ex"
+      ],
+      "lock_acquired_at": "2026-08-16T19:18:56Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (git setup) COMPLETED -- PASS, feature/WF02-REQ027-20260816 branched from origin/main@fc88355 and pushed",
+      "backfilled": false,
+      "queue_task_id": 40,
+      "queue_agent_id": "worktree2-orch",
+      "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow-wt2 (secondary git worktree, MIX_TEST_PARTITION=2 -> letflow_test2 DB)",
+      "note": "Second run from the secondary worktree, immediately following WF02-REQ023-20260816. Claimed via a real letflow-queue get_next_task call (agent_id worktree2-orch), task id 40 (REQ-027, depends_on REQ-022 which is done). owned_modules overlaps lib/letflow/definitions with REQ-028's already-merged graph.ex and priv/repo/migrations + lib/letflow/tenant_provisioning.ex with REQ-023's just-merged work -- all three are additive-only surfaces (new files, plus two new manifest entries appended to a function whose current seven entries this run must preserve). NOTE the standing cross-worktree caveat: this registry is per-checkout and cannot see the primary worktree's in-flight owned_modules until that run lands on main, so ORCHESTRATOR.md section 7 remains a best-effort local net and the queue claim is the real lock. REQ-023's Step Final proved this concretely -- the primary worktree merged REQ-024 mid-run, editing the very same function, and the collision was only caught at rebase time (see ISS-0023 / GitHub #81)."
     }
   ]
 }

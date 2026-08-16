@@ -1958,3 +1958,19 @@ history:
       pass. No lib/, priv/, test/ or design file was touched by this
       DOC-UPDATER pass -- all of those had already passed hard gates earlier in
       this run.
+  - req: REQ-027
+    event: started
+    agent: ORCH
+    at: 2026-08-16T19:20:25Z
+    note: >
+      WF-02 run WF02-REQ027-20260816 started. Definition core schema
+      (process_definitions + instance_definition_snapshots) per R-Co
+      src/design/definition.md PD-01/PD-03/PD-04/PD-07/PD-08 and REQ-022's
+      schema-per-tenant :prefix mechanism. Claimed via a real letflow-queue
+      get_next_task call (task id 40, agent_id worktree2-orch). Second run
+      from the secondary git worktree
+      (c:\Users\tvolo\dev\ai-dala\letflow-wt2), tests on the
+      letflow_test2 partition via MIX_TEST_PARTITION=2. Branch
+      feature/WF02-REQ027-20260816 created from origin/main@fc88355 and
+      pushed. Baseline re-verified on that commit before branching: 271
+      tests passing (--seed 0), compile clean.

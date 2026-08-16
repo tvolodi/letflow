@@ -1,0 +1,78 @@
+{
+  "handoff_id": "e60f716b-bb80-406e-9942-f5a5b95247f0",
+  "run_id": "WF02-REQ023-20260816",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ023-20260816/step-06-doc-updater.json",
+  "created_at": "2026-08-16T19:08:00Z",
+  "started_at": "2026-08-16T19:08:00Z",
+  "completed_at": "2026-08-16T18:49:40Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-023"],
+    "related_handoff_ids": ["488db251-1ead-4447-a899-a8dd78fb925c"],
+    "artifacts_in": [
+      "docs/requirements.yaml (REQ-023 entry, currently status: in_progress)",
+      "docs/status/requirement_status.yaml",
+      "docs/status/REQ-023-release-2026-08-16.yaml",
+      "README.md",
+      "docs/migration/stage-2-event-store-definitions.md"
+    ],
+    "owned_modules": ["docs/requirements.yaml", "docs/status", "README.md"]
+  },
+  "task": {
+    "description": "WF-02 Step 6. Flip REQ-023's status to done in docs/requirements.yaml and append a done event to docs/status/requirement_status.yaml with a real UTC clock timestamp, append-only. Then assess -- do not assume in either direction -- whether README.md or docs/migration/stage-2-event-store-definitions.md actually need updating because this requirement changed documented behavior. Follow the precedent REQ-022 and REQ-028 established (git-log confirmed in REQ-028's own release validation): stage-N doc headers are rewritten in bulk at WF-04 stage-gate closure, not incrementally per WF-02 requirement. Do not invent documentation updates this requirement's acceptance criteria never asked for; equally, do not skip one that genuinely applies. Name every file you actually touch explicitly in artifacts_out -- ORCH independently verifies each claimed change landed before writing the DONE log line.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-023 status is done",
+      "docs/status/requirement_status.yaml has a new appended done event with a real UTC timestamp from the clock, with every prior entry byte-identical",
+      "README.md and docs/migration/stage-2-event-store-definitions.md are each explicitly assessed, with the decision to update or not update stated and justified",
+      "artifacts_out names every file actually touched, not a generic 'docs updated'"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-023 ships Letflow's event-store schema layer -- the persistence foundation every later S2 requirement (REQ-024 registry, REQ-025 append, REQ-026 read/archive) builds on, with no behaviour wired to it yet. Six migrations landed in priv/repo/migrations/ (20260816120001_create_events.exs, 120002_create_instance_sequence.exs, 120003_create_instance_projections.exs, 120004_create_event_payload_store.exs, 120005_create_events_archive.exs, 120006_create_event_idempotency.exs) alongside six Ecto.Schema modules under lib/letflow/event_store/ (event.ex, instance_sequence.ex, instance_projection.ex, stored_payload.ex, archived_event.ex, idempotency_record.ex). Every table is schema-per-tenant via Ecto's :prefix -- none targets the public default schema -- and every migration carries both mandatory halves of REQ-022 design section 4's guard pattern: the change/0 body wrapped in `if prefix() do ... end` with a literal no-op nil branch, AND registration of its {version, module} tuple in Letflow.TenantProvisioning.tenant_scoped_migrations/0, since an unregistered guarded migration is inert rather than merely undocumented. Three shape decisions follow 0003-ecto-schema-strategy.md Decision C exactly: events (and independently events_archive) use the composite primary key (event_id, created_at) rather than a bare event_id per point 2(a), so the deferred partitioning retrofit can never force a breaking PK change; idempotency uniqueness is relocated entirely to the event_idempotency sidecar table (unique index uq_event_idempotency_key), per point 2(b), with no idempotency_key index on events or events_archive, and IdempotencyRecord's moduledoc records that this supersedes event_store.md's own Open Question #1 two-phase-check recommendation; and events exposes insert_changeset/2 only -- no update_changeset/2 and no UPDATE path against a committed row -- with the moduledoc stating that immutability is a deliberate application-layer invariant per point 1 that no migration file can enforce. instance_projections' moduledoc scopes itself explicitly: the schema is REQ-023's, meaningful population at instance start is EE-01/S3. The run also fixed a real, in-scope defect in REQ-022's shipped code under Unblock-Everything: tenant_scoped_migrations/0 returned bare {version, module} tuples without loading the modules, so Ecto.Migrator.load_migration!/1 raised Ecto.MigrationError the moment a genuinely pending tenant-scoped version was replayed -- proved empirically in a fresh VM against a brand-new probe schema, not argued theoretically, and fixed via a {version, module, filename} manifest plus a private ensure_migration_module_loaded!/2, leaving both REQ-022 @specs byte-identical. Verification was behavioural rather than source-reading at both ends: acceptance criterion 1 was demonstrated against a real provisioned tenant schema at Step 2a and re-demonstrated independently by RELEASE-VALIDATOR, which inspected the Postgres catalog from a SEPARATE psql process and ran the negative control confirming public gained no event-store table at all. All WF-02 gates PASS (CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER, RELEASE-VALIDATOR re-running the suite 17 times rather than trusting Step 4). The suite grew 161 -> 198 (4 properties, 194 tests), reconciling exactly to REQ-023's own two test files (37 passing standalone); the only red runs across that corpus were the pre-existing ISS-0011 / GH #65 telemetry-attach race, forwarded not fixed. Ten issues (ISS-0012..ISS-0021) were filed by ORCH during this run and forwarded rather than fixed; ISS-0017 is the highest-value follow-up because its residual staleness sits inside REQ-023's own gated design artefact. THIS STEP'S OWN EDITS: docs/requirements.yaml REQ-023 status flipped in_progress -> done (that one field on that one requirement, nothing else in the file); one `done` event appended to docs/status/requirement_status.yaml in the file's established req/event/agent/at/note schema with a real clock timestamp (2026-08-16T18:48:21Z) -- verified as a pure addition, 96 lines added / 0 deleted, every prior entry byte-identical, and the file re-parsed as valid YAML afterward (66 history entries). README.md ASSESSED AND DELIBERATELY LEFT UNTOUCHED: REQ-023 adds internal migrations and Ecto.Schema modules with no new HTTP route, no new mix command and nothing user-observable; \"What's here today\" documents the runnable ProcessInstance/Router slice (unchanged) and \"Running it\" documents mix ecto.setup/mix ecto.migrate generically without enumerating tables -- and because of the prefix() guard these six migrations are deliberate no-ops against the default schema, so even the documented setup commands behave exactly as README already describes. Same disposition and reasoning as REQ-015 (also migrations + schema modules) and REQ-028. docs/migration/stage-2-event-store-definitions.md ASSESSED AND DELIBERATELY LEFT UNTOUCHED, following the REQ-022/REQ-028 precedent (git-log confirmed during REQ-028's release validation) that stage-N doc headers are rewritten in bulk at WF-04 stage-gate closure, not incrementally per WF-02 requirement; the file's own header still reads \"Status: not started ... none expanded yet\" despite REQ-022 and REQ-028 both being done, which is that precedent visible in the artefact itself rather than an omission introduced here. REQ-023's five acceptance criteria were re-read in full: none names a stage-N or decisions/ file to update -- criteria 2 and 4 cite 0003 Decision C points 2(a)/2(b) as the standard the shipped migrations and moduledocs must CONFORM to (conformance independently re-verified by RELEASE-VALIDATOR against the live catalog), not as a file to modify, and 0003's header already reads \"Status: decided (REQ-012)\". No lib/, priv/, test/, design, issue or registry file was touched by this pass.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "handoffs/WF02-REQ023-20260816/step-06-doc-updater.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "TIMESTAMP ANOMALY IN THIS HANDOFF'S OWN STAMP (not a defect in REQ-023). This handoff's created_at/started_at are both 2026-08-16T19:08:00Z, but the real UTC clock on this host read 2026-08-16T18:44:46Z when the handoff was claimed and 2026-08-16T18:49:40Z when it was completed -- i.e. ORCH's stamp is roughly 20 minutes ahead of the wall clock. completed_at is recorded from the real clock as instructed (core-directives.md: timestamps come from the clock, never from memory), which means completed_at precedes started_at in this file, contrary to HANDOFF_PROTOCOL.md section 3. Reported rather than papered over: fabricating a later completed_at to satisfy monotonicity would be exactly the 'satisfy a gate by editing what it measures' pattern. started_at was NOT modified, per this run's dispatch. Every other step in this run is internally consistent (step-05 completed at 18:39:31Z), so the anomaly is isolated to step-06's stamp.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Protocol drift, already filed as ISS-0021 / GH #78 and re-observed here: HANDOFF_PROTOCOL.md section 4 step 4 instructs the completing agent to update handoffs/registry.json, while this run's dispatch declares registry.json ORCH-owned and off-limits. Followed the dispatch -- registry.json untouched by this pass.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "NEW, NOT FILED (docs/issues/ is ORCH-owned this run, per dispatch -- raising it here for ORCH to file). README.md's 'Migration status' section is stale independently of REQ-023, and is NOT covered by the existing ISS-0012 (which is scoped to the mix letflow.check / ISS-0008 blockquote only). Two concrete false statements: (a) 'Only Stage 0 (foundation-and-scaffolding) is broken into requirements today' -- S1 (REQ-015..021) is fully done and S2 is expanded into REQ-022..042; (b) the whole MVP-1 paragraph still promotes REQ-101..108 and links docs/migration/mvp-1-vertical-slice.md twice, but that file was deleted in commit d41beb0 and the entire REQ-101..108 chain was cancelled on 2026-08-15 (see this file's own REQ-101 cancelled entry). Deliberately not fixed here: out of REQ-023's acceptance-criteria scope, and unrelated to what this requirement shipped.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "OBSERVATION for the WF-04 S2 stage-gate pass, not fixed here: docs/migration/README.md's 'Requirement expansion' section says 'REQ-022 is done, REQ-023..042 are pending', which was already stale before this run began (REQ-028 is done and merged). Left untouched under the same bulk-rewrite-at-stage-gate precedent applied to stage-2-event-store-definitions.md; worth folding into that same stage-gate doc pass so both files are corrected once, together, rather than drifting further.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ023-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ023-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV for Step Final (git merge)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

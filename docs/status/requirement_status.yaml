@@ -1862,3 +1862,99 @@ history:
       worktrees do not collide on test data. Branch
       feature/WF02-REQ023-20260816 created from origin/main@16b2871 and
       pushed. Baseline before any change: 161/161 tests (--seed 0).
+  - req: REQ-023
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-16T18:48:21Z
+    note: >
+      Event-store schema layer shipped: six migrations
+      (priv/repo/migrations/20260816120001_create_events.exs,
+      120002_create_instance_sequence.exs,
+      120003_create_instance_projections.exs,
+      120004_create_event_payload_store.exs,
+      120005_create_events_archive.exs,
+      120006_create_event_idempotency.exs) and six Ecto.Schema modules under
+      lib/letflow/event_store/ (event.ex, instance_sequence.ex,
+      instance_projection.ex, stored_payload.ex, archived_event.ex,
+      idempotency_record.ex). Every table is schema-per-tenant via Ecto's
+      :prefix -- none targets the public default schema -- and every migration
+      body carries both mandatory halves of REQ-022 design section 4's guard
+      pattern: the change/0 body wrapped in "if prefix() do ... end" with a
+      literal no-op nil branch, AND registration of its {version, module} tuple
+      in Letflow.TenantProvisioning.tenant_scoped_migrations/0 (an unregistered
+      guarded migration is inert, so registration is not optional bookkeeping).
+      events' primary key is the composite (event_id, created_at), not a bare
+      event_id, per 0003 Decision C point 2(a), so the deferred partitioning
+      retrofit never forces a breaking PK-shape change; events_archive
+      independently carries the same shape. Idempotency uniqueness lives
+      exclusively in the event_idempotency sidecar (unique index
+      uq_event_idempotency_key on idempotency_key) per Decision C point 2(b) --
+      deliberately NOT a unique index on events/events_archive, and
+      IdempotencyRecord's moduledoc states it supersedes event_store.md's own
+      Open Question #1 two-phase-check recommendation, which 0003 already
+      resolved. events exposes insert_changeset/2 only, with no
+      update_changeset/2 and no function issuing an UPDATE against a committed
+      row (verified by BEAM module reflection, not just grep), and its moduledoc
+      states that immutability is a deliberate application-layer invariant per
+      Decision C point 1 that the migration file cannot enforce.
+      instance_projections' moduledoc states its schema is REQ-023 scope while
+      meaningful population at instance start is EE-01/S3 territory.
+      IN-SCOPE DEFECT FIX (Unblock-Everything, not scope creep): REQ-022's
+      shipped tenant_scoped_migrations/0 returned bare {version, module} tuples
+      without loading the migration modules, so Ecto.Migrator.load_migration!/1
+      raised Ecto.MigrationError ("module ... is not an Ecto.Migration") the
+      moment a genuinely pending tenant-scoped version was replayed -- proved in
+      a fresh VM against a brand-new probe schema, not argued theoretically.
+      Fixed by a @tenant_scoped_migration_manifest of {version, module,
+      filename} triples plus a private ensure_migration_module_loaded!/2
+      (Code.ensure_loaded?/1 short-circuit, otherwise Code.require_file/1 under
+      Application.app_dir(:letflow, "priv")); both REQ-022 @specs are
+      byte-identical, only the body and a stale @doc changed. Acceptance
+      criterion 1 was demonstrated behaviourally against a real provisioned
+      tenant schema, then re-demonstrated independently by RELEASE-VALIDATOR
+      with catalog inspection from a SEPARATE psql process: the tenant schema
+      holds all six tables plus Ecto's schema_migrations, and the negative
+      control confirms public gained no event-store table at all. All WF-02
+      gates PASS: CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER (idiom),
+      TEST-DESIGN-VALIDATOR, TEST-RUNNER, and RELEASE-VALIDATOR, which re-ran
+      the suite 17 times rather than trusting Step 4's report. Suite grew
+      161 -> 198 (4 properties, 194 tests); the delta reconciles exactly to
+      REQ-023's own two test files (test/letflow/event_store/migrations_test.exs
+      and schemas_test.exs, 37 passing when run alone). The only red runs across
+      that corpus were the pre-existing ISS-0011 / GH #65 telemetry-attach race
+      in test/letflow/plugs/tenant_status_test.exs:121 -- one distinct failing
+      test, byte-identical each time, forwarded not fixed here. Ten issues were
+      filed by ORCH during this run and forwarded rather than fixed
+      (ISS-0012..ISS-0021); ISS-0017 is the highest-value one, since its
+      residual staleness sits inside REQ-023's own design artefact
+      (lib/letflow/design/req023-event-store-schema.md lines 46 and 883 still
+      say tenant_scoped_migrations/0 returns [], which this run falsified) --
+      not edited here because it passed the Step 1b hard gate. Flipped
+      docs/requirements.yaml REQ-023 status to done. README.md checked and
+      deliberately left untouched: REQ-023 adds internal migrations and
+      Ecto.Schema modules with no new HTTP route, no new mix command, and
+      nothing user-observable -- "What's here today" describes the runnable
+      ProcessInstance/Router slice (unchanged) and "Running it" documents
+      mix ecto.setup/mix ecto.migrate generically without enumerating tables,
+      and the guard pattern means these six migrations are deliberate no-ops
+      against the default schema, so even the documented setup commands behave
+      exactly as README already describes. Same disposition and reasoning
+      already applied at REQ-015 (also migrations + schema modules) and
+      REQ-028. docs/migration/stage-2-event-store-definitions.md checked and
+      deliberately left untouched, following the precedent REQ-022 and REQ-028
+      established (git-log confirmed during REQ-028's release validation):
+      stage-N doc headers are rewritten in bulk at WF-04 stage-gate closure,
+      not incrementally per WF-02 requirement -- its header still reads "Status:
+      not started ... none expanded yet" even though REQ-022 and REQ-028 are
+      done, which is that precedent visible in the file itself rather than a
+      new omission introduced here. REQ-023's five acceptance criteria were
+      re-read in full: none names a docs/migration/stage-N-*.md or
+      docs/migration/decisions/*.md file to update. Criteria 2 and 4 cite
+      0003-ecto-schema-strategy.md Decision C points 2(a)/2(b) as the standard
+      the shipped migrations and moduledocs must CONFORM to (conformance
+      independently re-verified by RELEASE-VALIDATOR against the live Postgres
+      catalog), not as a file to modify, and 0003's header already reads
+      "Status: decided (REQ-012)" -- so no decision record needed touching this
+      pass. No lib/, priv/, test/ or design file was touched by this
+      DOC-UPDATER pass -- all of those had already passed hard gates earlier in
+      this run.

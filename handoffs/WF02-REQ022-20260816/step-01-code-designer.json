@@ -1,0 +1,47 @@
+{
+  "handoff_id": "c3fd5c6f-c93c-4c19-9c53-4fb52ca5b727",
+  "run_id": "WF02-REQ022-20260816",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ022-20260816/step-01-code-designer.json",
+  "created_at": "2026-08-16T08:40:11Z",
+  "started_at": "2026-08-16T08:40:11Z",
+  "completed_at": "2026-08-16T08:51:49Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-022"],
+    "related_handoff_ids": ["71a39d50-5e56-45d3-a745-c54d4c85a386"],
+    "artifacts_in": ["docs/requirements.yaml (REQ-022)", "docs/migration/stage-2-event-store-definitions.md", "docs/migration/decisions/0003-ecto-schema-strategy.md", "lib/letflow/design/identity-schema.md"],
+    "owned_modules": ["lib/letflow/tenant_provisioning", "priv/repo/migrations"]
+  },
+  "task": {
+    "description": "Design the schema-per-tenant provisioning mechanism for REQ-022 on branch feature/WF02-REQ022-20260816. Write lib/letflow/design/<module>.md per WF-02 Step 1's procedure: public function signatures with @spec-style types, key data structures, invariants, DB tables/columns/indexes, cross-module deps, and open questions left unresolved (do not silently guess).",
+    "acceptance_criteria": [
+      "priv/repo/migrations gains a tenant_schemas migration (public/default schema) that applies cleanly via mix ecto.migrate, with columns for at minimum tenant_id and schema_name",
+      "a provision_tenant_schema/1-equivalent function exists that issues a real CREATE SCHEMA and records the mapping in tenant_schemas, demonstrated against at least one non-default tenant schema name",
+      "a migration-replay function exists that re-applies priv/repo/migrations/ against a specific tenant schema via Ecto's prefix: option, demonstrated by confirming at least one table exists under the provisioned schema's own information_schema, not just under public",
+      "the moduledoc/description explicitly states, as an open question rather than a silent decision, whether REQ-015's users/groups/tenant_role migrations are retrofitted to use :prefix now or remain in public schema"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Designed Letflow.TenantProvisioning (lib/letflow/tenant_provisioning.ex) and its Ecto schema Letflow.TenantProvisioning.Registration (lib/letflow/tenant_provisioning/registration.ex), plus a new tenant_schemas migration (public/default schema, FK to tenants.id, unique indexes on tenant_id and schema_name, timestamps(inserted_at: :provisioned_at)). Specified provision_tenant_schema/1 (idempotent CREATE SCHEMA IF NOT EXISTS + registry insert, pg_advisory_xact_lock-serialized, atomic via one Repo.transaction, reuses the insert/on_conflict/re-select idiom already established in lib/letflow/identity.ex) and replay_migrations/2 (wraps Ecto.Migrator.run/4 with :prefix, converts its raise-on-failure behavior into {:ok,_}|{:error,_}). Central design decision, verified directly against deps/ecto_sql source rather than assumed: a literal whole-directory migration replay cannot work against this project's actual priv/repo/migrations/ contents (global S1/REQ-022 migrations would re-run against the tenant prefix and collide, and a naive tenant-scoped migration without a prefix()-truthiness guard would leak an empty table into public on every plain mix ecto.migrate) -- so the design specifies (a) an explicit tenant_scoped_migrations/0 registry function (starts at [], REQ-023+ append to it) as the 'designated per-tenant subset' REQ-022's own acceptance criterion anticipates, and (b) a mandatory if-prefix()-then-create-else-noop guard pattern every tenant-scoped migration (REQ-023 onward) must follow, documented prominently since it's load-bearing for ~20 downstream requirements. Stated REQ-022's own flagged open question (users/groups/tenant_role retrofit) explicitly, unresolved, plus one secondary open question this design surfaced (tenant status check before provisioning). Full acceptance-criteria traceability table included. No implementation code -- signatures/type shapes and a migration column table only.",
+    "artifacts_out": ["lib/letflow/design/req022-tenant-schema-provisioning.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ022-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ022-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

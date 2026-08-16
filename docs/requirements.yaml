@@ -1141,7 +1141,7 @@ requirements:
   - id: REQ-027
     title: Definition core schema (process_definitions + instance_definition_snapshots)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S2
     impl_order: 40  # letflow-queue task id
     description: >

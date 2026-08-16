@@ -1974,3 +1974,80 @@ history:
       feature/WF02-REQ027-20260816 created from origin/main@fc88355 and
       pushed. Baseline re-verified on that commit before branching: 271
       tests passing (--seed 0), compile clean.
+  - req: REQ-027
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-16T23:01:34Z
+    note: >
+      Definition core schema shipped: two migrations
+      (priv/repo/migrations/20260816193001_create_process_definitions.exs and
+      20260816193002_create_instance_definition_snapshots.exs) plus two
+      Ecto.Schema modules under lib/letflow/definitions/
+      (process_definition.ex, instance_definition_snapshot.ex), porting R-Co's
+      src/design/definition.md PD-01/PD-03/PD-04/PD-07/PD-08. Both tables are
+      schema-per-tenant via Ecto's :prefix -- neither targets the public
+      default schema -- and both migrations carry BOTH mandatory halves of
+      REQ-022 design section 4's guard pattern: the change/0 body wrapped in
+      "if prefix() do ... end", AND registration of the {version, module,
+      filename} triple in Letflow.TenantProvisioning's
+      tenant_scoped_migrations/0 manifest (entries 8 and 9), since a guarded
+      migration that is never registered is inert rather than merely
+      unbookkept. process_definitions carries three indexes that are
+      constraints rather than mere lookup aids: uq_definition_version, a plain
+      unique index on (name, version) that REQ-030's ON CONFLICT (name,
+      version) will use as its arbiter; uq_active_definition, a PARTIAL unique
+      index on name WHERE status = 'active', which carries PD-03's
+      single-active-per-name invariant at the migration layer independently of
+      REQ-030's activate/1 logic, so the invariant holds even before the
+      activation code that respects it exists; and idx_def_stage, a partial
+      index on stage WHERE stage IS NOT NULL, ported verbatim from PD-07's own
+      014_definition_stage.sql to avoid indexing the null majority. The
+      instance_definition_snapshots FK to process_definitions.id is declared
+      on_delete: :nothing -- deliberately WITHOUT ON DELETE CASCADE, per
+      PD-08's explicit design that a hard-deleted DRAFT definition must not
+      drag its snapshot rows with it, since a snapshot is the historical record
+      of what a running instance actually started from. That negative property
+      was verified from the live Postgres catalog rather than by reading the
+      migration source: pg_constraint.confdeltype = 'a' (NO ACTION) on
+      instance_definition_snapshots_definition_id_fkey, confirmed not 'c'
+      (CASCADE), 'n' (SET NULL), or 'd' (SET DEFAULT), plus a real DELETE
+      probe. Scope is schema only, stated explicitly in both moduledocs: graph
+      and node/edge structural validation (REQ-028/029), CRUD (REQ-030), and
+      snapshot create/retrieve (REQ-033) are separate later requirements
+      building on these tables. All WF-02 gates PASS: CODE-DESIGN-VALIDATOR,
+      SECURITY-REVIEWER, REVIEWER (idiom), TEST-DESIGN-VALIDATOR, TEST-RUNNER,
+      and RELEASE-VALIDATOR, which re-ran the suite itself rather than trusting
+      Step 4's report: 6 of 6 runs clean at 307/307 (4 properties, 303 tests),
+      zero reds, with the delta from the run's own recorded 271 baseline
+      reconciling exactly against REQ-027's 36 new tests
+      (test/letflow/definitions/migrations_test.exs and schemas_test.exs) and
+      no unexplained gap. Flipped docs/requirements.yaml REQ-027 status to
+      done. README.md checked and deliberately left untouched: REQ-027 adds
+      internal schema modules and migrations with no new HTTP route, no new
+      mix command, and nothing user-observable -- "What's here today" describes
+      the runnable ProcessInstance/Router slice (unchanged, and it already
+      does not enumerate REQ-015's, REQ-023's or REQ-024's schema modules
+      either), and because of the prefix() guard these two migrations are
+      deliberate no-ops against the default schema, so the documented
+      mix ecto.setup / mix ecto.migrate commands behave exactly as README
+      already says. Same disposition and reasoning already applied at REQ-015,
+      REQ-023, REQ-024 and REQ-028. README's "Migration status" section IS
+      stale, but that is already filed as ISS-0022 (GitHub #79) and is
+      forwarded work belonging to its own run -- deliberately not
+      opportunistically fixed here. docs/migration/stage-2-event-store-
+      definitions.md checked and deliberately left untouched, following the
+      precedent REQ-022, REQ-023 and REQ-028 established (git-log confirmed):
+      stage-N doc headers are rewritten in bulk at WF-04 stage-gate closure,
+      not incrementally per WF-02 requirement -- its header still reads
+      "Status: not started ... none expanded yet" despite REQ-022/023/024/028
+      being done, which is that precedent visible in the file itself rather
+      than a new omission introduced here. REQ-027's five acceptance criteria
+      were re-read in full: none names a docs/migration/stage-N-*.md or
+      docs/migration/decisions/*.md file. Criteria 3 and 5 do cite
+      definition.md, but that is R-Co's upstream src/design/definition.md --
+      the ported-FROM source, which does not exist anywhere in this repo
+      (verified by find) -- named as the standard the shipped migration and
+      moduledocs must conform to, not a Letflow file to modify; both
+      moduledocs were confirmed to carry that citation. No lib/, priv/, test/
+      or design file was touched by this DOC-UPDATER pass -- all of those had
+      already passed hard gates earlier in this run.

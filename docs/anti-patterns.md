@@ -67,3 +67,56 @@ touching it, preserve its established schema even if a different shape
 seems cleaner, and append (don't replace). If the file is genuinely
 missing, use the header/entry shape already documented in this repo's
 other status files or CLAUDE.md, not an invented one.
+
+## Extrapolating handoff timestamps instead of reading the clock (ORCH)
+
+During REQ-023's WF-02 run, ORCH stamped each dispatched handoff's
+`created_at`/`started_at` by *estimating* a plausible time from the
+run's earlier entries rather than running `date -u` for each one. The
+estimates crept steadily ahead of the real clock — by the eleventh
+handoff (`step-06-doc-updater.json`) they were ~23 minutes fast. That
+made the handoff's `completed_at` (correctly clock-read by
+DOC-UPDATER as `18:49:40Z`) *precede* its own `started_at`
+(`19:08:00Z`), which is exactly the corruption
+`docs/agents/shared/HANDOFF_PROTOCOL.md` §3 forbids and
+`core-directives.md`'s "Bookkeeping Is Not Optional" section exists to
+prevent.
+
+Why this is worth its own entry even though the fix is one command:
+the failure is silent and cumulative. Each individual estimate looked
+reasonable next to the previous one, nothing in the file's appearance
+revealed the drift, and a mechanical check across all eleven handoffs
+found ten of them internally consistent — so the error was invisible
+right up until it produced an impossible ordering. It was caught only
+because DOC-UPDATER read the real clock, noticed the contradiction with
+the `started_at` it had been handed, and *reported it instead of
+quietly writing a later `completed_at`* to make the file look tidy.
+That is the producer/validator principle working on ORCH's own
+bookkeeping, and it only worked because the agent refused to smooth
+over an inconsistency it had not caused.
+
+Note this is the same shape as the existing `.ToUniversalTime()`
+warning in `core-directives.md` — a timestamp that is wrong in a way
+the output string does not reveal. Anything a later reader would use to
+reconstruct sequence (handoff stamps, `requirement_status.yaml` events,
+`orchestrator.log` lines) has to come from the clock, because nothing
+downstream can detect that it didn't.
+
+**Correct alternative:** run the clock command immediately before
+writing each timestamp, every time — never derive one from another
+entry, never round a previous value forward, and never batch-generate
+several stamps from a single reading:
+
+```bash
+date -u +"%Y-%m-%dT%H:%M:%SZ"
+```
+```powershell
+(Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+```
+
+If a bad timestamp has already been committed, correct it *and* record
+that it was a reconstruction rather than a measurement (see
+`handoffs/WF02-REQ023-20260816/step-06-doc-updater.json`'s
+`orch_timestamp_correction` field for the shape) — a silently corrected
+timestamp is indistinguishable from one that was right all along, which
+defeats the audit trail the correction is meant to preserve.

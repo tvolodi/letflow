@@ -180,24 +180,99 @@ defmodule Letflow.TenantProvisioning do
     end
   end
 
+  # {version, module, filename} for every tenant-scoped migration, in ascending
+  # version order. The third element exists only so tenant_scoped_migrations/0
+  # can load the module — see that function's @doc. The version integers MUST
+  # equal the filenames' timestamp prefixes.
+  #
+  # REQ-023's six event-store migrations (lib/letflow/design/req023-event-store-schema.md
+  # §4) followed by REQ-024's event_type_registry migration
+  # (lib/letflow/design/req024-event-type-registry.md §3). Each of these files
+  # carries the §4 guard pattern; registration here is the other mandatory half.
+  @tenant_scoped_migration_manifest [
+    {20_260_816_120_001, Letflow.Repo.Migrations.CreateEvents,
+     "20260816120001_create_events.exs"},
+    {20_260_816_120_002, Letflow.Repo.Migrations.CreateInstanceSequence,
+     "20260816120002_create_instance_sequence.exs"},
+    {20_260_816_120_003, Letflow.Repo.Migrations.CreateInstanceProjections,
+     "20260816120003_create_instance_projections.exs"},
+    {20_260_816_120_004, Letflow.Repo.Migrations.CreateEventPayloadStore,
+     "20260816120004_create_event_payload_store.exs"},
+    {20_260_816_120_005, Letflow.Repo.Migrations.CreateEventsArchive,
+     "20260816120005_create_events_archive.exs"},
+    {20_260_816_120_006, Letflow.Repo.Migrations.CreateEventIdempotency,
+     "20260816120006_create_event_idempotency.exs"},
+    {20_260_816_163_103, Letflow.Repo.Migrations.CreateEventTypeRegistry,
+     "20260816163103_create_event_type_registry.exs"}
+  ]
+
   @doc """
   The designated tenant-scoped subset of `priv/repo/migrations/` —
-  `replay_migrations/2`'s default `migration_source`. Started empty at REQ-022
-  (its own `CreateTenantSchemas` migration is global-only, see the migration's
-  header comment). REQ-024's `event_type_registry` migration is the first
-  real entry (see `lib/letflow/design/req024-event-type-registry.md` §3).
-  Every future tenant-scoped migration must append its own `{version, module}`
-  tuple here, in addition to following the required guard pattern in its own
-  migration file (see this module's design doc §4) — a migration file that
-  does one without the other is either inert (never selected here) or
-  corrupts `public` on a plain `mix ecto.migrate` run (added here without the
-  guard).
+  `replay_migrations/2`'s default `migration_source`. REQ-022 itself
+  contributes zero entries (its own `CreateTenantSchemas` migration is
+  global-only, see the migration's header comment); REQ-023 contributes the six
+  event-store migrations (`lib/letflow/design/req023-event-store-schema.md` §4)
+  and REQ-024 the `event_type_registry` migration
+  (`lib/letflow/design/req024-event-type-registry.md` §3) — seven entries in
+  total, ordered by version. Every future tenant-scoped migration must append its
+  own entry to `@tenant_scoped_migration_manifest`, in addition to following the
+  required guard pattern in its own migration file (see this module's design doc
+  §4) — a migration file that does one without the other is either inert
+  (never selected here) or corrupts `public` on a plain `mix ecto.migrate` run
+  (added here without the guard).
+
+  **This function loads each listed migration module before returning it.**
+  `Ecto.Migrator` resolves a `{version, module}` source through
+  `load_migration!/1`, which requires `Code.ensure_loaded?(module)` to be true
+  (`deps/ecto_sql/lib/ecto/migrator.ex`), but `priv/repo/migrations/*.exs` is
+  never compiled into the application — `mix.exs` sets `elixirc_paths` to
+  `["lib"]` (plus `test/support` under `:test`), so no `.beam` file exists for
+  any migration module. Without this loading step `Ecto.Migrator.run/4` raises
+  `Ecto.MigrationError: module ... is not an Ecto.Migration`, which
+  `replay_migrations/2` surfaces as `{:error, {:migration_failed, exception}}`.
+
+  That failure is state-dependent, which is why REQ-022 never hit it: only
+  *pending* migrations reach `load_migration!/1`, and `mix.exs`'s `test:` alias
+  runs `ecto.migrate` in the same VM, which defines pending migration modules via
+  `Code.compile_file/1`. So the bug is invisible against a freshly-migrated test
+  database and appears against an already-migrated one — and always appears in an
+  `iex -S mix` session or a release, where `mix ecto.migrate` never ran in-process
+  at all.
+
+  `Code.require_file/1` is idempotent, and the `Code.ensure_loaded?/1` guard
+  additionally covers the case where such a `mix ecto.migrate` run already
+  defined the module in this VM — which `require_file/1` would not know about and
+  would otherwise redefine, emitting a "redefining module" warning.
+
+  This function's `@spec` is unchanged from REQ-022's: the return shape is still
+  `[{version, module}]`, and the manifest's third element never escapes it.
+
+  REQ-024's `event_type_registry` entry originally shipped in the bare
+  `{version, module}` form and carried that same latent failure; routing it
+  through the manifest here repairs it too, rather than leaving one of the seven
+  entries loadable only by accident.
   """
   @spec tenant_scoped_migrations() :: [{version :: pos_integer(), module()}]
   def tenant_scoped_migrations do
-    [
-      {20_260_816_163_103, Letflow.Repo.Migrations.CreateEventTypeRegistry}
-    ]
+    Enum.map(@tenant_scoped_migration_manifest, fn {version, module, filename} ->
+      ensure_migration_module_loaded!(module, filename)
+      {version, module}
+    end)
+  end
+
+  # Application.app_dir/2 resolves through _build, where Mix links (or, on
+  # Windows, copies) priv/ on every build — so this path is correct in dev, test
+  # and a release alike.
+  defp ensure_migration_module_loaded!(module, filename) do
+    if Code.ensure_loaded?(module) do
+      :ok
+    else
+      [Application.app_dir(:letflow, "priv"), "repo", "migrations", filename]
+      |> Path.join()
+      |> Code.require_file()
+
+      :ok
+    end
   end
 
   # Reuses the exact idiom already established and empirically verified in

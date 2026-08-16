@@ -1,0 +1,82 @@
+id: ISS-0022
+title: "README.md's 'Migration status' section is stale on its own front page: claims only Stage 0 is expanded, and promotes the cancelled MVP-1 milestone while linking a deleted file"
+discovered_by: DOC-UPDATER
+discovered_in_run: WF02-REQ023-20260816
+discovered_at: 2026-08-16T18:55:08Z
+severity: MAJOR
+description: >
+  README.md's "Migration status" section -- the first substantive section a
+  reader or a session-starting agent encounters, and one CLAUDE.md names in
+  its mandatory-reading list ("README.md (full)") -- contains two
+  independent false statements. Both verified directly by ORCH, not taken
+  from the reporting agent:
+
+  (1) "Only Stage 0 (foundation-and-scaffolding) is broken into requirements
+  today -- later stages are expanded into requirements as the stage before
+  them lands."
+
+  False. Stage 0 (REQ-010..014) and Stage 1 (REQ-015..021) are both fully
+  expanded AND done; Stage 1's stage gate was formally cleared on
+  2026-08-16 (docs/status/S1-release-2026-08-16.yaml). Stage 2 has been
+  expanded into 21 requirements (REQ-022..042) since the WF01-S2-20260816
+  run, of which REQ-022, REQ-024 and REQ-028 are already merged and REQ-023
+  is merging in this run. docs/migration/README.md's own "Requirement
+  expansion" section already says so. README is roughly two stages behind
+  reality.
+
+  (2) The MVP-1 paragraph: "Alongside the staged migration, **MVP-1**
+  (`REQ-101..108`) is a narrow, cross-stage milestone aimed at getting one
+  workflow visibly running in R-Co's existing `web/` GUI ... see
+  `docs/migration/mvp-1-vertical-slice.md`."
+
+  False, and worse than merely outdated -- it promotes work the user
+  explicitly cancelled. ORCH confirmed both halves directly:
+  `ls docs/migration/mvp-1-vertical-slice.md` returns "No such file or
+  directory" (the file was deleted in commit d41beb0), and REQ-101's entry
+  in docs/requirements.yaml reads
+  `status: cancelled  # MVP-1 milestone dropped by user, commit d41beb0`.
+  So README's front page describes a dropped milestone as a live plan and
+  links a file that no longer exists -- twice in the same paragraph, since
+  the doc is referenced both inline and as the closing pointer.
+
+  Why MAJOR rather than MINOR, unlike the other README defect on file
+  (ISS-0012): this section is specifically about *what work exists and what
+  to do next*. CLAUDE.md and docs/agents/ORCHESTRATOR.md both direct agents
+  to read README at session start, and the humanless pipeline has no person
+  who would notice that the front page contradicts the requirement file. An
+  agent taking (1) at face value would conclude S1/S2 still need expanding
+  and could launch a redundant WF-01; one taking (2) at face value could
+  try to claim REQ-101..108 or follow a dead link while trying to
+  understand the project's shape. The project's weak-model-tolerance design
+  constraint makes a confidently-wrong front page more dangerous here than
+  it would be in a human-supervised repo.
+
+  Explicitly distinct from ISS-0012 (GitHub #68), which covers a different
+  README defect in the "Running it" section (the stale `mix letflow.check`
+  / ISS-0008 blockquote). These are two separate stale regions of the same
+  file; whoever fixes one should fix both, but they are recorded separately
+  because they have different causes, different severities, and neither
+  subsumes the other.
+
+  Related and worth fixing in the same pass, though it is a different file:
+  docs/migration/README.md's "Requirement expansion" section says "REQ-022
+  is done, REQ-023..042 are pending," which was already stale before this
+  run began (REQ-028 was done) and is now further out of date (REQ-024 too,
+  and REQ-023 as of this run). That file is the S2 stage doc's sibling and
+  is expected to be refreshed in bulk at WF-04 stage-gate closure per the
+  precedent REQ-022/REQ-028 established -- so it may be more efficient to
+  fold it into that pass rather than fix it standalone.
+
+  Discovered by DOC-UPDATER during REQ-023's Step 6 while assessing whether
+  README needed updating for this requirement. It does not -- REQ-023
+  changes nothing README documents about current behavior, which is why
+  README was correctly left untouched by that step -- but the assessment
+  surfaced these pre-existing defects in the section next to it. Unrelated
+  to REQ-023's acceptance criteria and blocking none of them, so per
+  docs/agents/protocols/ISSUE_QUEUE.md filed and forwarded rather than
+  fixed in this run.
+affected_files:
+  - README.md
+  - docs/migration/README.md
+github_issue: https://github.com/tvolodi/letflow/issues/79
+status: open

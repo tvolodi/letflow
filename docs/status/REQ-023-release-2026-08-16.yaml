@@ -1,0 +1,405 @@
+# REQ-023 (event-store schema/migrations) — WF-02 Step 5 release validation
+#
+# Produced by RELEASE-VALIDATOR at WF-02 Step 5, per
+# docs/agents/workflows/WF-02_requirement_implementation.md Step 5 and
+# docs/agents/instructions/core-directives.md's "Every producing step has a
+# validating step". Independently re-derived throughout: the full suite was
+# re-run 17 times by this validator rather than trusting TEST-RUNNER's
+# test/reports/report-2026-08-16-WF02-REQ023-20260816.yaml, and all five
+# acceptance criteria were checked against the actual shipped code and against
+# a real provisioned tenant schema's Postgres catalog rather than against
+# migration source, test names, or the design artefact's claims about itself.
+#
+# Executed in the secondary worktree (c:\Users\tvolo\dev\ai-dala\letflow-wt2)
+# against the letflow_test2 partition database (MIX_TEST_PARTITION=2), with a
+# separate ORCH session running concurrently in the primary checkout.
+
+requirement: REQ-023
+title: >
+  Event-store schema/migrations (events, instance_sequence,
+  event_payload_store, events_archive, idempotency sidecar,
+  instance_projections)
+run_id: WF02-REQ023-20260816
+stage: S2
+validated_at: 2026-08-16T18:37:08Z
+validator: RELEASE-VALIDATOR
+branch: feature/WF02-REQ023-20260816
+head_commit: 8b7ee3ca84be96873b023221c54e804103127fff
+status_in_requirements_yaml: in_progress  # correct at Step 5; DOC-UPDATER flips to done at Step 6
+verdict: PASS
+
+acceptance_criteria:
+  - n: 1
+    text: >
+      priv/repo/migrations gains migrations for events, instance_sequence,
+      event_payload_store, events_archive, the idempotency sidecar table, and
+      instance_projections, all using Ecto's :prefix option and applying
+      cleanly against at least one provisioned tenant schema via REQ-022's
+      migration-replay mechanism
+    independent_verdict: PASS
+    method: >
+      Not verified by reading migration source alone. A real tenant row was
+      inserted and a real tenant schema provisioned via
+      Letflow.TenantProvisioning.provision_tenant_schema/1, then
+      replay_migrations/1 (REQ-022's own mechanism, the one the criterion
+      names) was invoked, and the resulting Postgres catalog was inspected
+      from a SEPARATE psql process (docker exec letflow-postgres-1 psql -U
+      letflow -d letflow_test2) so the evidence does not depend on the same
+      BEAM process that wrote it.
+    evidence:
+      - "All six files exist: priv/repo/migrations/20260816120001_create_events.exs, ..120002_create_instance_sequence.exs, ..120003_create_instance_projections.exs, ..120004_create_event_payload_store.exs, ..120005_create_events_archive.exs, ..120006_create_event_idempotency.exs"
+      - "Every one of the six passes `prefix: prefix()` on its create table/1 call and on every create index/unique_index call — read directly from each file"
+      - "All six are registered in Letflow.TenantProvisioning's @tenant_scoped_migration_manifest (versions 20260816120001..120006); registration is the mandatory second half of the guard pattern, and an unregistered guarded migration would be inert"
+      - "Provisioned schema tenant_f10f992c6da64fdea7e395e99429193c; replay_migrations/1 returned {:ok, [20260816120001, 20260816120002, 20260816120003, 20260816120004, 20260816120005, 20260816120006]} — all six applied, none skipped, no exception"
+      - "information_schema.tables for that schema lists exactly: event_idempotency, event_payload_store, events, events_archive, instance_projections, instance_sequence, schema_migrations — all six required tables present inside the tenant schema"
+      - "Negative control: information_schema.tables for 'public' after the replay lists only approvals, groups, schema_migrations, tenant_role, tenant_schemas, tenants, transition_events, users — NO event-store table leaked into public, confirming the `if prefix() do` guard behaves as documented"
+      - "Created schema and its registration/tenant rows were dropped afterwards (DROP SCHEMA ... CASCADE + DELETE from tenant_schemas and tenants); post-cleanup `\\dn` shows only `public` and both leftover counts are 0 — the shared DB was returned to its baseline"
+
+  - n: 2
+    text: >
+      events' migration defines the primary key as (event_id, created_at),
+      not a bare event_id, per 0003 Decision C point 2(a)
+    independent_verdict: PASS
+    method: >
+      Verified against the live Postgres catalog, not against the migration
+      file's `primary_key: true` annotations.
+    evidence:
+      - "information_schema.table_constraints JOIN key_column_usage for the provisioned schema returns constraint events_pkey with ordinal_position 1 = event_id and ordinal_position 2 = created_at — a genuine two-column composite PK"
+      - "pg_indexes confirms: CREATE UNIQUE INDEX events_pkey ON <tenant_schema>.events USING btree (event_id, created_at)"
+      - "events_archive independently carries the same composite shape (events_archive_pkey: event_id pos 1, created_at pos 2), consistent with the migration header's stated intent that the archive mirror events' PK shape"
+      - "Letflow.EventStore.Event's schema block declares @primary_key false with both event_id and created_at marked primary_key: true, so the Ecto schema module agrees with the database"
+
+  - n: 3
+    text: >
+      the events Ecto.Schema module has no update_changeset/2 or any function
+      that issues an UPDATE against a committed row; the moduledoc states this
+      is a deliberate immutability invariant per 0003 Decision C point 1
+    independent_verdict: PASS
+    method: >
+      Verified by BEAM module reflection (the module's actual export table),
+      not by grepping for the absence of a string and not by trusting the
+      moduledoc's own assertion about itself.
+    evidence:
+      - "Letflow.EventStore.Event.__info__(:functions), with Ecto-generated __-prefixed entries filtered out, is exactly [insert_changeset: 2] — one function, insert-only"
+      - "function_exported?(Letflow.EventStore.Event, :update_changeset, 2) => false; function_exported?(Letflow.EventStore.Event, :changeset, 2) => false"
+      - "grep over lib/letflow/event_store/ for Repo.|update_changeset|update_all|force_change|update( finds no executable UPDATE path in event.ex — its only two hits are inside doc text (moduledoc line 10 and the @doc's mention of Repo.insert/2). The module makes no Repo call at all."
+      - "Moduledoc requirement met verbatim: event.ex's '## Immutability (REQ-023 acceptance criterion 3)' section states it 'deliberately exposes no update_changeset/2, no generic changeset/2, and no other function that can issue an UPDATE against a committed events row — this is a deliberate immutability invariant, per docs/migration/decisions/0003-ecto-schema-strategy.md Decision C point 1', and explains that the invariant is enforced at the schema-module layer because the migration cannot enforce it"
+    note: >
+      Letflow.EventStore.InstanceProjection DOES export update_changeset/2.
+      Checked deliberately rather than waved past: criterion 3 constrains the
+      events schema module only, and instance_projections is by design a
+      mutable projection (last_event_seq / status are updated as events are
+      appended). Its moduledoc calls out the exception explicitly. Not a
+      violation. The other four modules (ArchivedEvent, IdempotencyRecord,
+      InstanceSequence, StoredPayload) each export insert_changeset/2 only.
+
+  - n: 4
+    text: >
+      the idempotency sidecar table has a unique index on idempotency_key and
+      its own moduledoc states it supersedes event_store.md's Open Question #1
+      two-phase-check recommendation per 0003's resolution
+    independent_verdict: PASS
+    method: >
+      Index half verified from pg_indexes against the real provisioned schema;
+      moduledoc half read directly from the shipped module.
+    evidence:
+      - "pg_indexes: CREATE UNIQUE INDEX uq_event_idempotency_key ON <tenant_schema>.event_idempotency USING btree (idempotency_key) — genuinely UNIQUE and genuinely single-column on idempotency_key"
+      - "Single-enforcement-point claim independently confirmed: no index on events or events_archive in the catalog covers idempotency_key (events has events_pkey, idx_events_global_seq, idx_events_instance_time, idx_events_type, uq_event_sequence; events_archive has events_archive_pkey, idx_archive_instance, idx_archive_time, idx_archive_type)"
+      - "Letflow.EventStore.IdempotencyRecord's moduledoc section '## What this table is, and what it supersedes (REQ-023 acceptance criterion 4)' states it 'supersedes R-Co's src/design/event_store.md \"Open Question #1\" recommendation of a two-phase deduplication check (INSERT into events with ON CONFLICT (idempotency_key) DO NOTHING, then a fallback SELECT against events_archive)' and cites 0003 Decision C point 2(b) for the resolution"
+      - "Sidecar naming choice (event_idempotency, not R-Co's plat_event_idempotency) is cited as the criterion's parent requirement permits, in both the migration header and the moduledoc"
+      - "IdempotencyRecord.insert_changeset/2 carries unique_constraint(:idempotency_key, name: :uq_event_idempotency_key), so the DB index and the changeset agree on the constraint name"
+
+  - n: 5
+    text: >
+      instance_projections' moduledoc explicitly states its schema is
+      event-store scope (this requirement) while its meaningful population is
+      EE-01/S3 scope, not built here
+    independent_verdict: PASS
+    evidence:
+      - "Letflow.EventStore.InstanceProjection's moduledoc has a '## Scope (REQ-023 acceptance criterion 5)' section stating: \"This table's *schema* is event-store scope — this requirement (REQ-023) owns it\" and \"Its *meaningful population at instance start* is EE-01 / S3 territory (src/engine/, not built yet). Do not read this migration as instance-engine work landing early.\""
+      - "It further enumerates the engine-owned columns deliberately not created here (definition_id, correlation_key, current_nodes, variables, error_detail, completed_at, cancelled_at, and the uq_instance_correlation / idx_proj_definition indexes), which is consistent with the shipped migration: the live catalog shows instance_projections carrying only instance_id, tenant_id, status, last_event_seq, started_at, updated_at, with a single idx_proj_status partial index"
+      - "The same scope statement is duplicated in the migration file header (20260816120003_create_instance_projections.exs), so a reader arriving from either direction meets it"
+
+test_suite_reruns:
+  summary: >
+    17 independent full-suite runs by this validator (11 unpinned, 6 at
+    --seed 0). 14 clean at 198/198; 3 red, each with exactly one failing test,
+    and in all three cases the SAME test. Clean-run reference figure matched
+    exactly: "Result: 198 passed (4 properties, 194 tests)".
+  clean_result_line: "Result: 198 passed (4 properties, 194 tests)"
+  baseline_before_req023: 161
+  delta: >
+    +37, and REQ-023's own two test files
+    (test/letflow/event_store/schemas_test.exs and
+    test/letflow/event_store/migrations_test.exs) run alone produce exactly
+    "Result: 37 passed" — 161 + 37 = 198 reconciles with no unexplained gap.
+  unpinned:
+    command: "MIX_TEST_PARTITION=2 mix test"
+    runs: 11
+    clean: 9
+    failed: 2
+    failing_seeds: [661974, 621931]
+    rate: "18.2%"
+  pinned:
+    command: "MIX_TEST_PARTITION=2 mix test --seed 0"
+    runs: 6
+    clean: 5
+    failed: 1
+    rate: "16.7%"
+  overall:
+    runs: 17
+    clean: 14
+    failed: 3
+    rate: "17.6%"
+  distinct_failing_tests_across_all_17_logs: 1
+  red_run_attribution:
+    issue: ISS-0011
+    github_issue: https://github.com/tvolodi/letflow/issues/65
+    verdict: "pre-existing flake, NOT a REQ-023 regression"
+    evidence:
+      - "Aggregating ExUnit's failure-header pattern across all 17 captured logs yields exactly ONE distinct failing test, and every red run reported 'Failed: 1 test'"
+      - "That test is, in all three cases byte-identical: `1) test method short-circuit — no DB query at all for a non-write method a GET request issues no Ecto query at all (method short-circuit, no DB round-trip) (Letflow.Plugs.TenantStatusTest)` at test/letflow/plugs/tenant_status_test.exs:121, failing on `refute_received :query_fired, \"expected no Ecto query for a GET request\"` with stacktrace test/letflow/plugs/tenant_status_test.exs:136"
+      - "This is exactly ISS-0011's recorded signature (REQ-021's async: true module with a global :telemetry.attach handler racing concurrent async tests' Repo queries). Run 3's log captures the race in the act — foreign queries against tenants, approvals, groups and users appear immediately around the failure block, i.e. another async test's queries landing inside this test's telemetry window."
+      - "seed 0 failed once here (1 of 6), independently reproducing for a THIRD time — after TEST-DESIGN-VALIDATOR at Step 3b and TEST-RUNNER at Step 4 — the finding that --seed 0 is not a deterministic baseline for this suite"
+      - "No other test failed in any of the 17 runs, so no genuine new signal was observed. Per ISS-0011's own guidance, any OTHER failing test would have been treated as a real regression; none appeared."
+  observed_rate_vs_recorded: >
+    3/17 (17.6%) here versus ISS-0011's 40-run figure of 7.5%. Recorded as an
+    observation, not a correction: 17 runs is a small sample where one
+    occurrence moves the rate several points, which is precisely the
+    small-sample caution ISS-0011's own Step 4 UPDATE already documents. The
+    40-run sample remains the better estimate. Nothing here contradicts the
+    recorded root cause, and the direction (unpinned 18.2% > pinned 16.7%)
+    is consistent with it.
+
+other_gates_rerun_by_this_validator:
+  - command: "MIX_TEST_PARTITION=2 MIX_ENV=test mix compile --warnings-as-errors"
+    exit_code: 0
+  - command: "MIX_TEST_PARTITION=2 MIX_ENV=test mix compile --force --warnings-as-errors"
+    exit_code: 0
+    note: >
+      Run with --force as well as plain, so the result is a real recompile of
+      all 37 files rather than a no-op against an already-built _build.
+  - command: "mix format --check-formatted"
+    exit_code: 0
+    caveat: >
+      This project gate does NOT cover the six shipped migrations. Confirmed
+      by reading .formatter.exs directly: inputs are
+      ["{mix,.formatter}.exs", "{config,lib,test}/**/*.{ex,exs}"] — priv/ is
+      absent. This is ISS-0016, already filed, and it is pre-existing (it hides
+      all 13 migrations in the repo, not just REQ-023's six).
+  - command: "mix format --dot-formatter <scratch>/formatter.exs --check-formatted priv/repo/migrations/2026081612000*.exs"
+    exit_code: 0
+    note: >
+      Run by this validator to distinguish "REQ-023 shipped badly formatted
+      migrations" from "the gate never covered them". Using a scratch-only
+      formatter config carrying import_deps: [:ecto_sql] (the project's own
+      .formatter.exs was NOT modified), all six REQ-023 migrations check clean.
+      So the migrations are correctly formatted in idiomatic Ecto.Migration
+      style and the gap is purely ISS-0016's missing configuration. Without
+      import_deps the same check fails only because the formatter does not know
+      create/add/timestamps are macros and parenthesises them.
+
+documentation_staleness_check:
+  - file: docs/requirements.yaml
+    verdict: not stale
+    note: >
+      REQ-023's entry reads status: in_progress, which is correct at Step 5 —
+      DOC-UPDATER flips it to done at Step 6. Its description and its five
+      acceptance criteria were re-read verbatim and all match what shipped:
+      the six enumerated tables all exist, the composite-PK instruction, the
+      no-update-path instruction, the sidecar-supersession instruction and the
+      instance_projections scope instruction are each satisfied as recorded
+      above. The requirement leaves the sidecar's name to the implementer's
+      choice "cite either"; event_idempotency was chosen and cited. Separately
+      grepped for the stale "tenant_scoped_migrations/0 returns []" claim that
+      ISS-0017 tracks in two design artefacts — it does NOT appear anywhere in
+      docs/requirements.yaml, so that staleness has not spread into the
+      requirement set.
+  - file: docs/status/requirement_status.yaml
+    verdict: not stale
+    note: >
+      Carries exactly one REQ-023 event, `started` by ORCH at
+      2026-08-16T15:38:45Z, at line 1787 of 1804. That is the correct state at
+      Step 5: the `done` event is DOC-UPDATER's Step 6 responsibility and
+      writing it here would be premature. The file's append-only convention is
+      intact (no REQ-023 entry rewrites earlier history). The started note's
+      recorded pre-change baseline of "161/161 tests (--seed 0)" reconciles
+      exactly with the 198 observed now (161 + REQ-023's own 37).
+
+forwarded_issue_set_review:
+  scope: >
+    ISS-0012 through ISS-0020 (filed this run), plus in-run UPDATE blocks on
+    ISS-0011, ISS-0015 and ISS-0017. Reviewed specifically for a blocker on
+    REQ-023's own five acceptance criteria that was mis-classified as
+    incidental — treated as a real check, since the volume forwarded this run
+    is unusually large and mis-classification is exactly the failure mode that
+    would let a broken requirement merge.
+  conclusion: >
+    No mis-classified blocker found. Every one of the nine is either about a
+    DIFFERENT requirement's scope (REQ-025/REQ-026), about project tooling and
+    docs rather than REQ-023's shipped tables, or about rationale text that no
+    acceptance criterion constrains. The one issue that genuinely DID block a
+    criterion (ISS-0017's code half) was correctly fixed in-run rather than
+    forwarded, and this validator independently confirmed the fix works.
+  issues:
+    - id: ISS-0012
+      severity: MINOR
+      disposition: correctly incidental
+      note: >
+        README's `mix letflow.check` warning still describes ISS-0008 as an
+        open blocker. Documentation-only, about a resolved earlier issue.
+        Touches no REQ-023 criterion.
+    - id: ISS-0013
+      severity: MAJOR
+      disposition: correctly incidental — checked specifically
+      note: >
+        event_retention_policies has no owning requirement. Confirmed
+        independently that this does NOT affect any of REQ-023's five
+        criteria: criterion 1 enumerates exactly six tables (events,
+        instance_sequence, event_payload_store, events_archive, the
+        idempotency sidecar, instance_projections) and
+        event_retention_policies is not among them; criteria 2-5 name only
+        events, the sidecar and instance_projections. All six required tables
+        were verified present in the live catalog. The consuming function is
+        REQ-026's archive/1, which this requirement does not build — there is
+        no code in lib/letflow/event_store/ that reads the missing table, so
+        nothing REQ-023 ships can fail on its absence. Adding it here would
+        have been scope creep against REQ-023's own explicit criteria. Its
+        real deadline is REQ-026, and it is filed with a suggested WF-01
+        resolution.
+    - id: ISS-0014
+      severity: MAJOR
+      disposition: correctly incidental
+      note: >
+        REQ-026 ports Store.archive(), which R-Co retired under PAR-03.
+        Entirely about REQ-026's scope. REQ-023's criterion 1 requires only
+        that events_archive exist as a migration applying cleanly under
+        :prefix — verified — and explicitly nothing in REQ-023 writes to it.
+        A shipped-but-unwritten destination table is the documented intent,
+        not a defect.
+    - id: ISS-0015
+      severity: MAJOR
+      disposition: correctly incidental — environmental
+      note: >
+        Bandit's port 4000 is not partitioned by MIX_TEST_PARTITION, so two
+        concurrent `mix test` runs on one host can collide with :eaddrinuse.
+        Real, and a genuine multi-worktree hazard, but it is a test-harness /
+        supervision-tree concern touching none of REQ-023's five criteria. No
+        :eaddrinuse abort occurred in any of this validator's 17 runs.
+    - id: ISS-0016
+      severity: MINOR
+      disposition: correctly incidental — re-derived independently
+      note: >
+        .formatter.exs excludes priv/repo/migrations/** and lacks
+        import_deps: [:ecto_sql]. This validator confirmed both halves
+        directly and went one step further (see other_gates_rerun_by_this_
+        validator): under a scratch config with import_deps: [:ecto_sql] all
+        six REQ-023 migrations format clean, exit 0. So no REQ-023 criterion
+        is affected and no formatting defect was actually shipped — the gap is
+        pre-existing project configuration covering all 13 migrations.
+    - id: ISS-0017
+      severity: MINOR
+      disposition: correctly classified — its blocking half was fixed in-run, residue is doc-only
+      note: >
+        This is the one issue that genuinely touched criterion 1: REQ-022's
+        tenant_scoped_migrations/0 previously returned a literal [], which
+        would have made the replay apply nothing. Per Unblock-Everything that
+        code defect was fixed inside this run, and the fix is independently
+        confirmed here — replay_migrations/1 returned all six versions and six
+        real tables appeared in the tenant schema. What remains open is
+        documentation staleness only: the "returns []" claim still stands in
+        lib/letflow/design/req022-tenant-schema-provisioning.md §3.4 and in
+        REQ-023's own design artefact at lines 46 and 883. No acceptance
+        criterion constrains design-artefact prose, and correcting a
+        Step-1b-gated artefact after the fact would sidestep the gate that
+        approved it. Correctly forwarded. Flagged below as an observation
+        because a stale claim inside this run's OWN design artefact is the
+        highest-value item in the forwarded set for a follow-up run.
+    - id: ISS-0018
+      severity: MINOR
+      disposition: correctly incidental
+      note: >
+        security-invariants.md INV-4's verification greps use --include=*.ex
+        and so cannot match config/*.exs. A defect in a gate's own instructions,
+        not in REQ-023's code; SECURITY-REVIEWER reached its Step 2c verdict by
+        other means.
+    - id: ISS-0019
+      severity: MINOR
+      disposition: correctly incidental — but adjacent to criterion 1, so checked closely
+      note: >
+        replay_migrations/2's default argument is evaluated outside its own
+        try/rescue, so a migration-file load failure escapes as a raw exception
+        instead of the @spec'd {:error, {:migration_failed, _}}. This touches
+        the very mechanism criterion 1 depends on, so it was examined rather
+        than skimmed. It is an error-PATH shape defect only: it changes how a
+        failure is reported, never whether a successful replay succeeds. The
+        success path was exercised end-to-end here and returned
+        {:ok, [six versions]} with six real tables to show for it, so criterion
+        1 is satisfied regardless. Correctly not a blocker; worth fixing as
+        latent robustness in REQ-022's public boundary.
+    - id: ISS-0020
+      severity: MINOR
+      disposition: correctly incidental
+      note: >
+        Three rationale/precision gaps in REQ-023's own artefacts (unexplained
+        tenant_id asymmetry; design §2.4 reason (c) mechanically wrong;
+        jsonb's non-byte-transparency unrecorded). Read in full and checked
+        against the criteria: all three are about explanation quality, none
+        asserts that a shipped decision is wrong, and none touches the five
+        criteria — which constrain table existence and :prefix usage, the
+        events PK shape, the absence of an events update path, the sidecar's
+        unique index and supersession statement, and instance_projections'
+        scope statement. Each of those five was verified true here
+        independently of the prose the issue criticises.
+    - id: ISS-0011
+      severity: MINOR
+      disposition: correctly forwarded, not fixed here — pre-existing from REQ-021
+      note: >
+        The sole source of red in this validator's 17 runs. Independently
+        re-confirmed above, including a third independent reproduction of the
+        "--seed 0 is not deterministic" finding. Belongs to
+        Letflow.Plugs.TenantStatusTest (REQ-021's coverage), not to any file
+        REQ-023 shipped. REQ-023's own new async: true module
+        (test/letflow/event_store/schemas_test.exs) is re-cleared as a cause:
+        it makes no Repo call and attaches no telemetry.
+
+new_findings_by_this_validator:
+  blockers: []
+  majors: []
+  minors: []
+  observations:
+    - >
+      HANDOFF_PROTOCOL.md §4 step 4 instructs the completing agent to update
+      handoffs/registry.json, while this run's dispatch instructs
+      RELEASE-VALIDATOR to leave registry.json alone as ORCH-owned. Followed
+      the run instruction (registry.json untouched) and recording the
+      discrepancy per core-directives.md's rule to flag doc drift as MINOR
+      rather than silently pick a side. Not filed as a new ISS — it is a
+      protocol-text question for ORCH, not a defect in REQ-023.
+    - >
+      ISS-0017's residual doc staleness sits inside REQ-023's OWN design
+      artefact (lib/letflow/design/req023-event-store-schema.md lines 46 and
+      883 state tenant_scoped_migrations/0 returns [], falsified by this same
+      run's Step 2a). Already tracked; noted here only because it is the item
+      in the forwarded set most likely to mislead the next requirement that
+      reads this artefact. Deliberately not edited — it passed the Step 1b
+      gate, and this validator does not modify gated artefacts.
+
+verdict_detail:
+  criteria_passed: 5
+  criteria_failed: 0
+  suite_status: >
+    Green. 14 of 17 runs clean at 198/198; the 3 reds are one known
+    pre-existing flake with a single distinct failing test across the entire
+    17-log corpus, attributed to ISS-0011 on direct log evidence rather than
+    on assumption.
+  database_hygiene: >
+    The one tenant schema created during verification was dropped, along with
+    its tenant_schemas registration and its tenants row. Post-cleanup
+    verification: only `public` remains in letflow_test2, 0 leftover
+    registrations, 0 leftover rv-req023-* tenants. All work was confined to
+    the letflow_test2 partition; letflow_test and letflow_dev were never
+    touched.
+
+overall_verdict: PASS
+next_action: "Route to DOC-UPDATER (6)."

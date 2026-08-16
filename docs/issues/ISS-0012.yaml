@@ -1,0 +1,58 @@
+id: ISS-0012
+title: "README.md's `mix letflow.check` warning still describes ISS-0008 as an open BLOCKER after it was resolved on 2026-08-15 -- the documented failure no longer reproduces"
+discovered_by: ORCH
+discovered_in_run: WF02-REQ023-20260816
+discovered_at: 2026-08-16T15:45:06Z
+severity: MINOR
+description: >
+  README.md's "Running it" section carries a blockquote stating:
+
+    "As of this writing, `mix letflow.check` correctly exits 1 at the
+    `mix format --check-formatted` step: 5 pre-existing files fail formatting
+    under a recent Elixir/Mix toolchain, unrelated to whatever you're working
+    on -- see `docs/issues/ISS-0008.yaml` (BLOCKER, open). This is the gate
+    working as designed, not a bug in the gate itself. A genuinely clean
+    end-to-end run isn't reproducible until ISS-0008 is resolved."
+
+  Two of that blockquote's factual claims are now false, verified directly rather
+  than inferred:
+
+  1. `docs/issues/ISS-0008.yaml` has `status: resolved` with
+     `resolved_at: 2026-08-15T19:59:00Z` and a full resolution narrative (the 5
+     files were reformatted, and a .gitattributes `eol=lf` rule was added to stop
+     git's core.autocrlf=true from re-breaking the check on Windows checkouts).
+     README still calls it "(BLOCKER, open)".
+
+  2. The failure it describes does not reproduce. Ran
+     `mix format --check-formatted` in this worktree
+     (c:\Users\tvolo\dev\ai-dala\letflow-wt2, at origin/main@16b2871 plus this
+     run's own branch point): exit code 0, no output, zero unformatted files --
+     not the "exits 1 / 5 files fail" behavior README documents.
+
+  Why it matters: a reader following README's own instructions is told, on the
+  project's front page, that a clean end-to-end `mix letflow.check` run is
+  structurally impossible right now and that ISS-0008 must be resolved first.
+  Both statements are stale. Under this project's humanless-operation model an
+  agent reading README at session start could reasonably take this as license to
+  skip or discount the check gate, or waste a run "fixing" an already-fixed
+  issue. It is a documentation-drift defect, not a code defect -- nothing in
+  lib/ or the mix task is wrong.
+
+  Discovered incidentally while establishing a pre-change toolchain baseline for
+  REQ-023's WF-02 run (verifying compile/format/test state before any code
+  change, per core-directives.md's No Speculation rule). It is unrelated to
+  REQ-023's own acceptance criteria and blocks none of them, so per
+  ISSUE_QUEUE.md it is filed and forwarded here rather than fixed inside this
+  run -- the fix is a README edit that belongs to its own later run (a WF-03, or
+  a DOC-UPDATER step on any run that has cause to touch README anyway).
+
+  Suggested fix when picked up: replace the blockquote with an accurate current
+  statement (ISS-0008 resolved 2026-08-15; the format step passes; if the
+  blockquote is worth keeping at all, retarget it at the still-open ISS-0011
+  seed-dependent test flake, which IS a live reason a `mix letflow.check` run can
+  intermittently exit non-zero -- but note that is a test-isolation defect, not a
+  formatting one, so the wording cannot simply be reused).
+affected_files:
+  - README.md
+github_issue: https://github.com/tvolodi/letflow/issues/68
+status: open

@@ -1,0 +1,103 @@
+id: ISS-0014
+title: "REQ-026 ports Store.archive(), which R-Co retired under PAR-03 -- the requirement names a source function that no longer exists upstream, and event_store.md still documents it"
+discovered_by: CODE-DESIGNER
+discovered_in_run: WF02-REQ023-20260816
+discovered_at: 2026-08-16T16:05:57Z
+severity: MAJOR
+description: >
+  REQ-026's description says to "Port src/event_store/store.zig's
+  Store.read(), Store.readGlobal(), Store.pointInTime(), and Store.archive()
+  (per src/design/event_store.md's respective sections: ... ES-07 for
+  archive)". Its fourth acceptance criterion is "calling archive/1 twice in
+  a row moves the same rows the first time and zero additional rows the
+  second time (idempotent), verified by row counts before/after each call".
+
+  Store.archive() does not exist in R-Co any more.
+
+  Verified independently by ORCH by reading the actual source, not taken
+  from CODE-DESIGNER's report. c:\Users\tvolo\dev\ai-dala\R-Co\src\event_store\store.zig
+  (around lines 1288-1310) carries an explicit retirement block:
+
+    "archive() retired -- PAR-03 (this batch, WF02-batch-3-20260811)
+     Store.archive() (ES-07's row-level archival-move mechanics) has been
+     REMOVED. Its DELETE FROM events / DELETE FROM events_archive-adjacent
+     pattern is incompatible with PAR-03's 'No DELETE statement SHALL run
+     against events or events_archive at any point' rule. The mechanism it
+     implemented is superseded by PartitionRetention.runArchivalAging() /
+     runEphemeralDrop() (src/scheduler/partition_retention.zig), which
+     operate at whole-PARTITION granularity via DETACH/ATTACH/DROP rather
+     than row-level DELETE."
+
+  The same block records that its former dependent tests (TC-ES-07-01,
+  TC-ES-07-02, TC-ADP-11-02, TC-ADP-11-03) were rewritten to assert the
+  retirement, and that upsertRetentionPolicy() was deliberately NOT removed.
+
+  Meanwhile src/design/event_store.md still documents archive() in its
+  public interface and in "DB tables / columns per operation", and still
+  states invariants 11 and 12 about archival idempotency and
+  non-blocking-ness -- which is exactly where REQ-026's acceptance criteria
+  were drawn from. The design doc is stale relative to its own module's
+  source. This is the same class of design-doc-vs-source drift that
+  docs/migration/README.md's header already warns about ("if a cited path is
+  gone or renamed by the time you read this, that's drift to reconcile, not
+  a typo to silently work around") -- here it is a cited *function*, not a
+  path.
+
+  Why this matters beyond REQ-026: Letflow's decision record
+  docs/migration/decisions/0003-ecto-schema-strategy.md Decision C point 2
+  deliberately DEFERS partitioning ("unpartitioned first ... rather than
+  speculatively partitioning a table with no rows yet") while adopting the
+  parts of R-Co's post-partitioning shape that are cheap now (the
+  (event_id, created_at) PK, the idempotency sidecar). PAR-03's
+  partition-granularity retention is the other half of that deferral: the
+  replacement mechanism for archive() only works on a partitioned table,
+  which Letflow deliberately does not have yet. So Letflow cannot simply
+  "port the replacement instead" -- there is a genuine design question here
+  that no existing decision record settles, and it should not be resolved
+  silently by whichever agent happens to pick up REQ-026.
+
+  The three candidate resolutions, none of them obviously right:
+  (a) Port the pre-PAR-03 row-level archive() from R-Co's git history --
+      correct for an unpartitioned table, matches REQ-026's stated
+      acceptance criteria as written, but knowingly ports a mechanism
+      upstream has already rejected, and will have to be retired again if
+      Letflow ever partitions.
+  (b) Defer archive/1 out of REQ-026 entirely (keep read/readGlobal/
+      pointInTime/platform sentinels), and re-scope retention as its own
+      later requirement alongside partitioning -- keeps Letflow from
+      building something it knows is a dead end, but leaves events_archive
+      (shipped by REQ-023, this run) with nothing that writes to it for now.
+  (c) Port PartitionRetention's whole-partition model now, which forces
+      partitioning earlier than 0003 Decision C point 2 chose to -- this
+      would contradict a standing decision record and therefore, per
+      CLAUDE.md's "Don't silently re-decide what a decision record already
+      settled", needs REVIEWER sign-off and probably a new decision record
+      rather than an implementer's judgement call.
+
+  Suggested handling: resolve this in a WF-01 run (or a decision record
+  under docs/migration/decisions/) BEFORE REQ-026 is claimed, so its
+  ELIXIR-DEV is not forced to pick between (a)/(b)/(c) mid-implementation.
+  Whichever is chosen, REQ-026's acceptance criterion 4 needs rewording,
+  since it currently presumes (a).
+
+  Related but separate: event_store.md's "Open questions #1" (two-phase
+  idempotency check across events/events_archive) and its invariants 4 and
+  5 are ALSO obsolete -- R-Co's migrations/1147_par01_events_partitioning.sql
+  removed both the uq_event_idempotency and uq_event_archive_idempotency
+  indexes those invariants depend on. That specific staleness is already
+  resolved for Letflow by 0003 Decision C point 2(b) (the sidecar table),
+  which REQ-023 implements in this run, so it needs no separate action --
+  recorded here only so a later reader does not re-derive it as a new
+  finding.
+
+  Discovered by CODE-DESIGNER while cross-checking REQ-023's events_archive
+  design against the R-Co functions that will read and write it. Not
+  blocking REQ-023's own acceptance criteria (REQ-023 ships the
+  events_archive *table*; archive/1 is REQ-026's function), so per
+  docs/agents/protocols/ISSUE_QUEUE.md it is filed and forwarded rather
+  than fixed inside this run.
+affected_files:
+  - docs/requirements.yaml
+  - docs/migration/stage-2-event-store-definitions.md
+github_issue: https://github.com/tvolodi/letflow/issues/70
+status: open

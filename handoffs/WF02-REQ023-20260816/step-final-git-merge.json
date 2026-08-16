@@ -1,0 +1,104 @@
+{
+  "handoff_id": "eba5a699-40b2-4d7f-ae86-2f3b30561abb",
+  "run_id": "WF02-REQ023-20260816",
+  "workflow_id": "WF-02",
+  "step": "Final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ023-20260816/step-final-git-merge.json",
+  "created_at": "2026-08-16T18:57:56Z",
+  "started_at": "2026-08-16T18:57:56Z",
+  "completed_at": "2026-08-16T19:10:22Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": [
+      "REQ-023"
+    ],
+    "related_handoff_ids": [
+      "e60f716b-bb80-406e-9942-f5a5b95247f0",
+      "488db251-1ead-4447-a899-a8dd78fb925c"
+    ],
+    "artifacts_in": [
+      "handoffs/WF02-REQ023-20260816/step-06-doc-updater.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/event_store",
+      "priv/repo/migrations",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/letflow/event_store",
+      "test/specs",
+      "test/support",
+      "test/reports"
+    ]
+  },
+  "task": {
+    "description": "Execute docs/agents/protocols/GIT_MERGE.md on feature/WF02-REQ023-20260816. All eight prior steps passed, including four hard gates. THIS IS NOT A NO-OP REBASE, unlike REQ-022's and REQ-028's: origin/main has advanced 3 commits since this branch's base (16b2871 -> d525092) because the concurrently-running primary worktree merged REQ-024 as PR #77. REQ-024 edited the SAME function this run edited -- Letflow.TenantProvisioning.tenant_scoped_migrations/0 -- so there is a genuine semantic conflict requiring a real merge, not a pick-one-side resolution. Full instructions are in the dispatch prompt. This run also executes in the secondary git worktree, so gh pr merge's local-checkout side effect will fail harmlessly; verify the merge via the GitHub API instead.",
+    "acceptance_criteria": [
+      "the rebase onto origin/main is completed with every conflict resolved by MERGING both sides, never by discarding either",
+      "tenant_scoped_migrations/0 returns SEVEN entries after the rebase -- REQ-023's six plus REQ-024's event_type_registry -- all routed through REQ-023's module-loading fix",
+      "handoffs/registry.json is valid JSON containing BOTH this run's and REQ-024's entries",
+      "docs/status/requirement_status.yaml and handoffs/orchestrator.log contain both sides' appended entries in file order, with no entry from either side dropped",
+      "mix compile --warnings-as-errors, mix format --check-formatted, and the full suite are all re-verified green AFTER the rebase, with real counts quoted",
+      "the PR is opened and merged, verified by gh pr view reporting state MERGED",
+      "no force-push at any point"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Step Final (GIT_MERGE.md) executed on feature/WF02-REQ023-20260816 from the SECONDARY worktree (c:\\Users\\tvolo\\dev\\ai-dala\\letflow-wt2), concurrently with the primary checkout's own ORCH session. Local main was never checked out or touched at any point, and no force-push was issued at any point. PRE-REBASE STATE: branch base origin/main@16b2871; origin/main had advanced 3 commits to d525092 because the primary worktree merged REQ-024 (event type registry) as PR #77 (55de5b6) plus two close-out commits (cbd8fd7, d525092). This was therefore a REAL rebase with a genuine semantic conflict, unlike REQ-022's and REQ-028's no-op rebases. 26 commits were replayed onto d525092. FOUR files conflicted in total -- within GIT_MERGE.md step 5a's <=5 threshold, and NONE of them was under priv/repo/migrations/, lib/letflow/process_instance.ex or lib/letflow/instance_supervisor.ex, so the escalation branch did not apply. Every conflict was resolved by MERGING BOTH SIDES; nothing from either side was discarded. CONFLICT 1 -- lib/letflow/tenant_provisioning.ex (the semantic one, at replay of commit 2fe967f 'Step 2a'). Both runs rewrote Letflow.TenantProvisioning.tenant_scoped_migrations/0 AND its @doc. origin/main (REQ-024) had set the body to the bare-tuple form with a single entry [{20_260_816_163_103, Letflow.Repo.Migrations.CreateEventTypeRegistry}]; this branch returned six entries via the {version, module, filename} @tenant_scoped_migration_manifest module attribute routed through the private ensure_migration_module_loaded!/2. RESOLUTION: kept REQ-023's manifest + module-loading structure and ADDED REQ-024's migration as a SEVENTH manifest entry -- {20_260_816_163_103, Letflow.Repo.Migrations.CreateEventTypeRegistry, \"20260816163103_create_event_type_registry.exs\"} -- ordered by version, so it sorts last after REQ-023's 20260816120001..120006. REQ-024's filename and module name were read directly out of priv/repo/migrations/20260816163103_create_event_type_registry.exs rather than inferred, and that file was confirmed to carry the 'if prefix() do' guard. The manifest's leading comment was updated to name REQ-024's migration alongside REQ-023's six. The two @doc versions were merged into ONE description that covers both the module-loading step and the fact that the registry now carries REQ-023's six plus REQ-024's one (seven, ordered by version), and a closing paragraph was added recording that REQ-024's entry originally shipped in the bare {version, module} form and is repaired by being routed through the same fix. REQ-023's structure had to survive rather than deferring to main because REQ-024's bare form is the exact defect this run proved: Ecto.Migrator.load_migration!/1 requires Code.ensure_loaded?(module), but priv/repo/migrations/*.exs is never compiled (mix.exs elixirc_paths = [\"lib\"]), so replay_migrations/2 raises Ecto.MigrationError in any VM where those modules are not already loaded -- masked on a fresh test DB (the test: alias runs ecto.migrate in-VM) and failing on a warm one. origin/main therefore carried that latent defect for REQ-024's migration, and this merge repairs it. VERIFIED: the only lines removed versus origin/main in this file are REQ-024's superseded @doc paragraph and its three-line bare-tuple body -- confirmed by inspecting every '-' line of git diff origin/main -- lib/letflow/tenant_provisioning.ex. BOTH of REQ-022's shipped @specs are BYTE-IDENTICAL to origin/main: that diff contains no changed @spec line (the single '@spec' string appearing as an addition is prose inside the @doc, not a spec), and schema_name_for_tenant/1, provision_tenant_schema/1, replay_migrations/2 and tenant_scoped_migrations/0 all retain their origin/main spec text unchanged; tenant_scoped_migrations/0's return shape is still [{version :: pos_integer(), module()}] and the manifest's third element never escapes the function. CONFLICT 2 -- handoffs/registry.json (at replay of commit 8dedead 'Step 00'). Both sides appended a run entry. RESOLUTION: both entries kept, joined with the correct JSON object separator so the array stayed well-formed. VERIFIED valid JSON via json.load: 8 runs, ending WF02-REQ022-20260816, WF02-REQ028-20260816, WF02-REQ024-20260816 (COMPLETED, from main) and WF02-REQ023-20260816 (IN_PROGRESS, this run) -- both run entries present. Content was NOT otherwise modified; registry.json is ORCH-owned and this step only merged the two sides' entries. CONFLICT 3 -- docs/status/requirement_status.yaml (same commit). Both sides appended events. RESOLUTION: both kept, in file order (main's REQ-024 block first, then this branch's REQ-023 block). VERIFIED it still parses as YAML via yaml.safe_load: 68 history entries, tail = REQ-024 started, REQ-024 done, REQ-023 started, REQ-023 done (2026-08-16T18:48:21Z). No entry from either side dropped. CONFLICT 4 -- handoffs/orchestrator.log (same commit). Both sides appended. RESOLUTION: both kept, in file order. VERIFIED by exact line arithmetic, which is the real check that this append-only file did not shrink: base 16b2871 = 145 lines, origin/main = 174 (+29), pre-rebase branch tip = 178 (+33), merged result = 207 = 145 + 29 + 33 exactly. 27 lines mention WF02-REQ024-20260816 and 33 mention WF02-REQ023-20260816. AUTO-MERGED, NO CONFLICT -- docs/requirements.yaml: REQ-024 flipped its own entry to done on main and this branch flipped REQ-023's; different requirements, git merged them cleanly. VERIFIED both flips survive: REQ-022 done, REQ-023 done, REQ-024 done, REQ-028 done, file parses as YAML. NO CONFLICT WHERE NONE WAS EXPECTED -- verified rather than assumed: priv/repo/migrations/ (distinct filenames; all six REQ-023 files applied as clean adds alongside REQ-024's, 14 migration files total), lib/letflow/event_store/ (REQ-024's registry.ex + registry/{event_type,json_schema,validation_failure}.ex coexist with REQ-023's six schema modules), and test/ (REQ-024's registry_test.exs + registry/json_schema_test.exs coexist with REQ-023's migrations_test.exs + schemas_test.exs). Zero conflict markers remain anywhere in lib/, docs/, handoffs/, test/ or priv/. POST-REBASE RE-VERIFICATION (all against the letflow_test2 partition via MIX_TEST_PARTITION=2; letflow_test and letflow_dev never touched, no docker compose up issued, port 5462 Postgres already running from the sibling worktree): (1) MIX_TEST_PARTITION=2 MIX_ENV=test mix compile --warnings-as-errors -> EXIT 0 ('Compiling 5 files (.ex) / Generated letflow app', no warnings). (2) mix format --check-formatted -> EXIT 0, no output. (3) Full suite run FOUR times (seeds 0, 424242, 7, 0) -> 271 passed (4 properties, 267 tests), EXIT 0 on every run. The expected count legitimately CHANGED from this branch's pre-rebase 198 because REQ-024 added its own tests; the real post-rebase number is 271 and it reconciles exactly: 161 (base) + 73 (REQ-024) + 37 (REQ-023) = 271. ISS-0011 (test/letflow/plugs/tenant_status_test.exs:121 telemetry-attach race, GH #65) did NOT surface in any of the four runs; no other failure occurred in any run. (4) THE TWO REQ-023 TESTS THAT ARE THE REAL CHECK ON THIS MERGE both pass and both now cover REQ-024's migration, because both iterate tenant_scoped_migrations/0: the REQ-022 section-4 guard test ('every migration registered in tenant_scoped_migrations/0 creates nothing in public when run with no :prefix') and the manifest version-to-filename consistency test ('each registered migration's version matches the numeric prefix of the file it was actually loaded from'), plus the strictly-ascending-versions test. Run in isolation: test/letflow/event_store/migrations_test.exs = 13 passed; the three named tests targeted by line = 3 passed, 10 excluded. REQ-024's migration passing the guard test confirms its own 'if prefix() do' guard is intact. (5) SEVEN-ENTRY MANIFEST CONFIRMED EMPIRICALLY, not by reading source: dumped via MIX_TEST_PARTITION=2 MIX_ENV=test mix run --no-start (a COLD VM in which mix ecto.migrate never ran -- precisely the condition under which REQ-024's bare-tuple form would have failed). Result: entry count 7; 20260816120001 CreateEvents, 20260816120002 CreateInstanceSequence, 20260816120003 CreateInstanceProjections, 20260816120004 CreateEventPayloadStore, 20260816120005 CreateEventsArchive, 20260816120006 CreateEventIdempotency, 20260816163103 CreateEventTypeRegistry; every module reported Code.ensure_loaded? = true and each loaded_from basename equals its manifest filename (20260816163103 paired with 20260816163103_create_event_type_registry.exs); all tuples arity 2 (so the @spec still holds); versions strictly ascending. --no-start was used deliberately so no Repo started and no database was contacted -- a bare mix run would have defaulted to MIX_ENV=dev and hit the shared letflow_dev DB. PUSH AND PR: the remote branch was still sitting at its Step-00 push (16b2871), so the rebased tip was a pure FAST-FORWARD -- verified with git merge-base --is-ancestor before pushing, which is why no force-push was needed or used. Pushed 16b2871..6ae07ac, exit 0. gh auth confirmed live (account tvolodi). Opened PR #80 (https://github.com/tvolodi/letflow/pull/80), body built on DOC-UPDATER's step-06 result.summary and additionally covering: the six tables and their migrations/schema modules, the composite (event_id, created_at) PK on events and events_archive per 0003 Decision C 2(a), idempotency relocated to the event_idempotency sidecar per 2(b) with no idempotency_key index on events/events_archive, insert-only immutability per point 1, both halves of REQ-022 section 4's guard pattern, the tenant_scoped_migrations/0 module-loading fix stated explicitly as ALSO repairing REQ-024's entry, the full conflict/resolution table, all six gate results, the post-rebase count of 271, and the 'Forwarded, not fixed here' list (ISS-0012/#68, ISS-0013/#69, ISS-0014/#70, ISS-0015/#71, ISS-0016/#72, ISS-0017/#73, ISS-0018/#74, ISS-0019/#75, ISS-0020/#76, ISS-0021/#78, ISS-0022/#79, plus updates to ISS-0011/#65). NO CI: .github/ does not exist at all, so .github/workflows/ does not exist either (REQ-013 still pending). There was NO CI run on this PR and no CI check passed -- stated explicitly in the PR body rather than implied, per GIT_MERGE.md's Precondition, which authorises merging on the agent's own locally-run and reported compile/format/test results until REQ-013 lands. MERGE: gh pr merge 80 --squash --delete-branch was executed and the merge was confirmed independently through the GitHub API with gh pr view 80 --json state,mergedAt -- see this handoff's post-merge close-out note and the ORCH report for the confirmed state, mergedAt timestamp and resulting main SHA. As anticipated for this worktree, gh's local-checkout side effect (switching to main) cannot succeed here because local main is checked out in the sibling worktree; that local error is expected and harmless, since the merge itself happens via the GitHub API before that step runs. Local base was then restored WITHOUT touching local main, via git fetch origin main --prune && git checkout --detach origin/main.",
+    "artifacts_out": [
+      "branch: feature/WF02-REQ023-20260816 (rebased onto origin/main@d525092, squash-merged into main via PR #80, branch deleted)",
+      "https://github.com/tvolodi/letflow/pull/80",
+      "lib/letflow/tenant_provisioning.ex (merge resolution: seven-entry @tenant_scoped_migration_manifest, merged @doc, REQ-022 @specs byte-identical)",
+      "handoffs/registry.json (conflict resolution only: both runs' entries kept, valid JSON)",
+      "docs/status/requirement_status.yaml (conflict resolution only: both sides' events kept, 68 entries, valid YAML)",
+      "handoffs/orchestrator.log (conflict resolution only: both sides' lines kept, 207 lines)",
+      "docs/requirements.yaml (auto-merged: REQ-023 and REQ-024 both done)",
+      "handoffs/WF02-REQ023-20260816/step-final-git-merge.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "GIT_MERGE.md is not executable verbatim from a secondary worktree and needs a documented worktree variant. Step 2 mandates 'git add -A', which this run's dispatch explicitly forbids (files were staged by explicit name throughout). Step 9 mandates 'git checkout main' + 'git pull --ff-only origin main' + 'git branch -d', which is structurally impossible when local main is checked out in the sibling worktree; the equivalent used here was 'git fetch origin main --prune && git checkout --detach origin/main', which satisfies the protocol's intent (return to a clean, current base) without ever touching the local main ref. The protocol's acceptance criteria ('git branch --show-current is main') therefore cannot be met literally in a worktree. Same class of documented deviation ORCH already recorded for GIT_SETUP.md at Step 00 of this run.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "GIT_MERGE.md step 5's conflict-handling branch has no guidance for the case that actually occurred here -- a SEMANTIC conflict where both sides edited the same function and the correct resolution is to merge the two implementations rather than pick either. Step 5b says only 'apply the correct resolution (preserve valid changes from both sides)', which is right in principle but gives an agent with limited judgement nothing mechanical to follow, contrary to core-directives.md's weak-model-tolerance constraint. Worth adding a worked example (this REQ-023/REQ-024 tenant_scoped_migrations/0 merge is a good one) and an explicit instruction to verify post-merge that neither side's contract changed -- the @spec byte-identity check used here.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Latent defect found ON origin/main and repaired by this merge rather than merely noted: REQ-024 (PR #77) registered its event_type_registry migration in tenant_scoped_migrations/0 in the bare {version, module} form, which this run had already proved defective -- Ecto.Migrator.load_migration!/1 requires Code.ensure_loaded?(module), but priv/repo/migrations/*.exs is never compiled (mix.exs elixirc_paths = [\"lib\"]), so replay_migrations/2 raises Ecto.MigrationError in any VM where the module is not already loaded. Between PR #77 merging and this PR merging, main carried that defect. It is fixed here by routing REQ-024's entry through REQ-023's manifest, and was confirmed fixed in a cold --no-start VM. Recorded so the window is visible in the audit trail rather than disappearing silently into a conflict resolution.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ023-20260816",
+      "commit_sha_list": [
+        "3c253b1 (rebased Step 00 -- resolved registry.json / requirement_status.yaml / orchestrator.log conflicts, both sides kept)",
+        "71df633 (rebased Step 2a -- resolved lib/letflow/tenant_provisioning.ex semantic conflict, seven-entry manifest)",
+        "6ae07ac (rebased branch tip before this handoff's own commit)"
+      ],
+      "rebased_onto": "origin/main@d525092",
+      "previous_base": "16b2871",
+      "remote_branch": "origin/feature/WF02-REQ023-20260816",
+      "push_status": "ok",
+      "push_detail": "fast-forward 16b2871..6ae07ac, exit 0; no force-push used at any point",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/80",
+      "pr_number": 80,
+      "pr_create_error": null,
+      "conflicted_files": [
+        "lib/letflow/tenant_provisioning.ex",
+        "handoffs/registry.json",
+        "docs/status/requirement_status.yaml",
+        "handoffs/orchestrator.log"
+      ]
+    },
+    "next_action": "ORCH marks run COMPLETED and releases the letflow-queue lock"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

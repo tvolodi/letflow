@@ -1,0 +1,74 @@
+id: ISS-0018
+title: "security-invariants.md INV-4's verification greps use --include=*.ex, which structurally cannot match config/*.exs -- the invariant's own primary target is invisible to its own check"
+discovered_by: SECURITY-REVIEWER
+discovered_in_run: WF02-REQ023-20260816
+discovered_at: 2026-08-16T17:03:47Z
+severity: MINOR
+description: >
+  INV-4 ("Secrets by reference only") documents its verification as, at
+  docs/agents/instructions/security-invariants.md lines 114-115:
+
+      grep -rn "System.get_env" config/ lib/ --include=*.ex
+      grep -rniE "(password|secret|client_secret|token)\s*=\s*\"[^\"]{8,}" lib/ config/ --include=*.ex
+
+  Both commands name `config/` as a search root, but `--include=*.ex` matches
+  only `.ex` files. Every file in `config/` is a `.exs` file. So the glob and
+  the search root contradict each other: the checks cannot inspect a single
+  file in `config/`, which is precisely where this invariant's own cited
+  Reference points (`config/dev.exs`'s bearer token, and
+  `config/runtime.exs`'s `DATABASE_URL`).
+
+  This is a gate that cannot see its own primary target.
+
+  The bug is internal to the file and demonstrable by comparison rather than
+  argument: INV-7's own verification grep, in the SAME document at line 181,
+  gets it right --
+
+      grep -rn "Repo.query" lib/ priv/repo/migrations/ --include=*.ex --include=*.exs
+
+  -- passing both globs so it can reach `.exs` migration files. INV-4 simply
+  omits the second `--include`. ORCH confirmed both line numbers and both
+  flag sets directly.
+
+  Why it matters despite being one missing flag: core-directives.md's
+  Humanless Operation section states that "because there is no human
+  backstop, every gate in this pipeline must actually gate," and that
+  validators must re-derive their verdict rather than trust a producer. A
+  documented "How to verify" command that silently returns zero hits on the
+  directory it names is worse than no command at all -- it produces a
+  confident clean result while having examined nothing, and an agent
+  following the instruction literally (which this project explicitly designs
+  for: "weak-model tolerance is a design constraint") would report INV-4 as
+  verified on the strength of an empty result set. That is the exact
+  failure shape core-directives.md's "Never Satisfy a Gate by Editing What
+  It Measures" section exists to prevent, arrived at by accident rather than
+  intent.
+
+  It did not cause a false PASS in this run: SECURITY-REVIEWER noticed the
+  mismatch while running the check, compensated with supplementary `.exs`
+  passes over `config/` and `lib/`, and reported INV-4 PASS on the strength
+  of those instead. So REQ-023's own gate verdict is sound. The defect is in
+  the instruction, not in this run's application of it.
+
+  Suggested fix: change both INV-4 greps to
+  `--include=*.ex --include=*.exs`, matching INV-7's shape. While there,
+  audit the rest of the file for the same mismatch (line 211's INV-8 grep
+  targets `lib/letflow/` with `--include=*.ex`, which is correct for that
+  invariant since it concerns compiled application code, but it is worth an
+  explicit confirmation rather than an assumption).
+
+  Related observation recorded so the record shows it was assessed rather
+  than missed, not as a defect to fix: `config/test.exs` carries a literal
+  7-character local Postgres password. It falls below INV-4's `{8,}`
+  heuristic threshold, `config/` is untouched by this run's diff, and it is
+  a throwaway container credential for a local test database -- no action
+  recommended.
+
+  Discovered by SECURITY-REVIEWER while executing WF-02 Step 2c for REQ-023.
+  Unrelated to REQ-023's acceptance criteria and blocking none of them, so
+  per docs/agents/protocols/ISSUE_QUEUE.md filed and forwarded rather than
+  fixed in this run.
+affected_files:
+  - docs/agents/instructions/security-invariants.md
+github_issue: https://github.com/tvolodi/letflow/issues/74
+status: open

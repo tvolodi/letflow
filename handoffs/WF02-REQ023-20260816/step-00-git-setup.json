@@ -1,0 +1,53 @@
+{
+  "handoff_id": "253134a0-9f03-49fe-ba7e-77cf35609c70",
+  "run_id": "WF02-REQ023-20260816",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ023-20260816/step-00-git-setup.json",
+  "created_at": "2026-08-16T15:38:45Z",
+  "started_at": "2026-08-16T15:38:45Z",
+  "completed_at": "2026-08-16T15:39:10Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-023"],
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": ["lib/letflow/event_store", "priv/repo/migrations"]
+  },
+  "task": {
+    "description": "Execute docs/agents/protocols/GIT_SETUP.md for run WF02-REQ023-20260816. WORKTREE ADAPTATION (documented deviation, not a skipped step): this run executes in the secondary git worktree c:\\Users\\tvolo\\dev\\ai-dala\\letflow-wt2, which shares one .git with the primary checkout c:\\Users\\tvolo\\dev\\ai-dala\\letflow where the local branch `main` is checked out. GIT_SETUP.md steps 1-2 (`git checkout main` + `git pull --ff-only origin main`) are structurally impossible here -- git refuses to check out a branch already checked out in another worktree -- and attempting them would corrupt the concurrently-running primary session's state. The protocol's *intent* (branch from a verified-current origin/main, never from a stale or diverged local ref) is satisfied instead by `git fetch origin main --prune` followed by `git checkout -b feature/WF02-REQ023-20260816 origin/main`, which branches directly from the freshly-fetched remote ref and cannot inherit local divergence, since no local main ref is consulted at all. Then push -u origin as the coordination signal (step 7), unchanged. Claimed from letflow-queue task id 38 (REQ-023), locked_by: worktree2-orch.",
+    "acceptance_criteria": [
+      "git fetch origin main --prune exited 0 and origin/main tip identified",
+      "git branch --show-current outputs feature/WF02-REQ023-20260816",
+      "the new branch's merge-base with origin/main is origin/main itself (i.e. branched from the fetched remote tip, not a stale local ref)",
+      "git push -u origin feature/WF02-REQ023-20260816 exited 0"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "git fetch origin main --prune exited 0; origin/main tip confirmed at 16b2871 (chore(deploy): add letflow-test deploy scaffolding for hetzner-prod), unchanged from this worktree's detached HEAD start point. git checkout -b feature/WF02-REQ023-20260816 origin/main created the branch directly from the fetched remote ref (output: \"branch 'feature/WF02-REQ023-20260816' set up to track 'origin/main'\" then \"Switched to a new branch\"); the local `main` branch ref was never read or written, per the worktree constraint above. git branch --show-current returned feature/WF02-REQ023-20260816. git push -u origin feature/WF02-REQ023-20260816 exited 0 ([new branch] feature/WF02-REQ023-20260816 -> feature/WF02-REQ023-20260816). git status was clean at branch creation -- unlike the primary worktree, this checkout carries no pre-existing unrelated dirty files. Baseline toolchain verification before any code change (No Speculation, and to establish what a regression would look like later): MIX_TEST_PARTITION=2 MIX_ENV=test mix compile --warnings-as-errors exited 0 with no output; MIX_TEST_PARTITION=2 mix test --seed 0 returned 'Result: 161 passed (4 properties, 157 tests)' against the letflow_test2 partition database. One unpinned-seed run of the same suite returned 160/161 with a single failure -- confirmed by reading docs/issues/ISS-0011.yaml to be the already-filed, pre-existing seed-dependent telemetry race in test/letflow/plugs/tenant_status_test.exs:121 (introduced in REQ-021, GitHub issue #65, forwarded-not-fixed by REQ-022's run). Pre-existing, unrelated to this run, not fixed here. Executed directly by ORCH (mechanical, no design judgment), matching the precedent set by WF02-REQ022/REQ028's own step-00 handoffs.",
+    "artifacts_out": ["branch: feature/WF02-REQ023-20260816"],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Pre-existing flaky test ISS-0011 (test/letflow/plugs/tenant_status_test.exs:121, global :telemetry.attach under async: true) reproduced once in this worktree under an unpinned seed. Already filed as ISS-0011 / GitHub issue #65 by REQ-022's run; forwarded, not fixed here, per ISSUE_QUEUE.md and WF-02 Step 4's pre-existing-failure rule.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ023-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ023-20260816",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH flips REQ-023 to in_progress and routes to CODE-DESIGNER (Step 1)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

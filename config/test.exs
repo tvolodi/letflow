@@ -16,9 +16,17 @@ config :letflow, Letflow.Repo,
 # (each env file loads independently via config.exs's
 # import_config "#{config_env()}.exs"), so the :oidc key must be set here
 # too or it's absent under MIX_ENV=test.
+#
+# token_verifier is overridden here (unlike dev/prod's real
+# Letflow.Oidc.TokenVerifier.Oidcc adapter) to Letflow.Oidc.TokenVerifierDouble
+# — no real, Letflow-provisioned Keycloak issuer is reachable in this
+# environment (see lib/letflow/design/req021-auth-plug-pipeline.md §3.2).
 config :letflow, :oidc,
   issuer: "https://placeholder-keycloak.invalid/realms/bpm-default",
-  provider_name: Letflow.Oidc.DefaultProvider
+  provider_name: Letflow.Oidc.DefaultProvider,
+  client_id: "letflow-placeholder-client",
+  signing_algs: ["RS256"],
+  token_verifier: Letflow.Oidc.TokenVerifierDouble
 
 # Duplicated from config/dev.exs (this repo's config files don't cascade —
 # see the :oidc key's comment above for the same note). Per-realm

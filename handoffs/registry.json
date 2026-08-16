@@ -107,7 +107,7 @@
       "lock_acquired_at": "2026-08-16T08:37:43Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 2a (ELIXIR-DEV) COMPLETED -- PASS, routed to Step 2c (SECURITY-REVIEWER)",
+      "last_known_step": "Step 3b (TEST-DESIGN-VALIDATOR) COMPLETED -- PASS, routed to Step 4 (TEST-RUNNER)",
       "backfilled": false,
       "queue_task_id": 36,
       "queue_agent_id": "tvolodi-orch",

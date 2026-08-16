@@ -123,7 +123,7 @@
       "lock_acquired_at": "2026-08-16T10:50:30Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 1 (CODE-DESIGNER) COMPLETED -- PASS (lib/letflow/design/req028-graph-structural-validator.md, commit 76f425d), routed to Step 1b (CODE-DESIGN-VALIDATOR)",
+      "last_known_step": "Step 1b (CODE-DESIGN-VALIDATOR) COMPLETED -- PASS (handoffs/WF02-REQ028-20260816/step-01b-code-design-validator.json), design independently cross-checked against R-Co's src/definition/graph.zig and src/design/definition.md, routed to Step 2a (ELIXIR-DEV)",
       "backfilled": false,
       "queue_task_id": 37,
       "queue_agent_id": "tvolodi-orch",

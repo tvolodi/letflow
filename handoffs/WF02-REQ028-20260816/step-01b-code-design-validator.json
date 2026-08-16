@@ -1,0 +1,48 @@
+{
+  "handoff_id": "c6ef28aa-bc09-45ce-858b-f725156fb2f9",
+  "run_id": "WF02-REQ028-20260816",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ028-20260816/step-01b-code-design-validator.json",
+  "created_at": "2026-08-16T11:05:09Z",
+  "started_at": "2026-08-16T11:05:09Z",
+  "completed_at": "2026-08-16T11:09:14Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-028"],
+    "related_handoff_ids": ["d0ccd8ef-3005-49e5-8d02-647e6d97cd5b"],
+    "artifacts_in": ["lib/letflow/design/req028-graph-structural-validator.md"],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "HARD GATE. Independently validate lib/letflow/design/req028-graph-structural-validator.md (commit 76f425d) on branch feature/WF02-REQ028-20260816 against REQ-028's 5 acceptance criteria and WF-02 Step 1b's checklist. Read the design artefact directly -- do not read CODE-DESIGNER's handoff result.summary as a substitute.",
+    "acceptance_criteria": [
+      "a graph satisfying all 8 checks returns {valid: true, violations: []}",
+      "each of the 8 named checks (CHK-01 through CHK-08) has at least one explicit failing-example test demonstrating its specific violation code is returned, not just a generic invalid-graph test",
+      "a graph violating 3 of the 8 checks simultaneously returns all 3 violations in one call, not just the first encountered (Key invariant 5)",
+      "a cycle that passes through an EXCLUSIVE_GATEWAY or PARALLEL_GATEWAY node is explicitly permitted (not flagged as CYCLE_WITHOUT_GATEWAY), and a self-loop is explicitly rejected, each with its own test",
+      "the function signature and its call sites confirm zero Repo/database calls anywhere in its call graph"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently read lib/letflow/design/req028-graph-structural-validator.md in full (all 559 lines) and cross-checked it directly against C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\definition\\graph.zig (read in full, 1380 lines) and C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\design\\definition.md (shared-types block lines 21-100, PD-02 checks table + CHK-06 algorithm outline lines 104-170, PD-05 NodeType-correction section lines 897-1036, Key invariants + traceability table lines 469-500), not CODE-DESIGNER's handoff summary. All 5 REQ-028 acceptance criteria (grepped verbatim from docs/requirements.yaml lines 1227-1232) map to concrete, non-deferred design elements: AC1 -> design SS4+7.1 (result type + unconditional-concat proof); AC2 -> design SS5's table giving all 9 violation codes (CHK-01 fires 2) with exact trigger/message per check, sufficient for TEST-DESIGNER to build minimal failing fixtures with no further interpretation; AC3 -> design SS7.1 (fixed-order unconditional call to all 8 checks, no early return) + SS7.2 (explicit independence proof between checks); AC4 -> design SS6.3-6.4 (gateway exemption + self-loop corollary, verified below); AC5 -> design SS8 (stdlib-only dependency list, grep/mix-xref verification commands) + SS10 (zero lib/letflow/ cross-module deps). Function signatures (b): validate_graph/1's @spec, the 8 private check_*/1 @specs (uniform Graph.t() -> [Violation.t()]), and dfs_visit/6's full @spec (SS6.3) are all present with named input/output types; no signature is left partial. Error shape (c): SS4 explicitly states validate_graph/1 returns a bare %{valid, violations} map, never {:ok,_}|{:error,_}, with an explicit, sourced justification (graph.zig's GraphError has only an OutOfMemory case with no Elixir equivalent) rather than an implicit/undocumented divergence from backend_developer_guide.md SS3.5's usual convention. Cross-module deps (d): SS10 states 'None' inside lib/letflow/, consistent with AC5 and the pure-module framing; forward dependents (REQ-029/030) are named and I independently confirmed both claims against docs/requirements.yaml (REQ-029 line 1242: 'Extend REQ-028's graph module...'; REQ-030 lines 1293-1301: Letflow.Definitions context calling REQ-028/029's validators before writes) -- accurate, not fabricated. No implementation code (e): grepped the design doc for defmodule/def/do-block patterns -- the only 'defmodule' hit is prose describing file layout (SS1), not a code fence; every code fence in the document is a bare @type/@spec/@enforce_keys declaration or a markdown table, with zero function bodies. Central R-Co claim verified directly: definition.md's shared-types block (lines 27-37) states the NodeType 7-variant set (START/END/HUMAN_TASK/SERVICE_TASK/EXCLUSIVE_GATEWAY/PARALLEL_GATEWAY/TIMER) as authoritative with an explicit note 'USER_TASK was renamed to HUMAN_TASK and SCRIPT_TASK replaced by TIMER per PD-05', and the PD-05 section (lines 910-940) shows the literal BEFORE (USER_TASK/SCRIPT_TASK) / AFTER (7-variant) enum diff; the PD-02 table (lines 145-156) documents exactly CHK-01 through CHK-08 with the same violation codes/trigger wording the design doc's SS5 table uses verbatim (cross-checked every message string against graph.zig's actual addViolation() calls, e.g. line 261 'No START node found in the definition graph', line 330 'Node '{s}' is isolated...', lines 420-423 the CYCLE_WITHOUT_GATEWAY message -- all match the design doc's SS5 table character-for-character). Design SS0 also correctly flags that graph.zig's *current* (post-SPC-02) NodeType enum has 8 variants including SUB_PROCESS, and correctly defers to the requirement text's 7-variant instruction rather than the literal current source -- an accurate, not glossed-over, discrepancy. CHK-06 algorithm (SS6): traced graph.zig's actual dfsVisit (lines 395-442) instruction-by-instruction against design SS6.1-6.3 -- node_index-via-Map.put_new first-match-wins semantics, adjacency built by skipping dangling edges, gateway_set membership test, the on_stack back-edge branch's '!is_gateway[u] and !is_gateway[v]' condition, and the outer driver visiting every unvisited index (not just START-reachable nodes) all match line-for-line. The self-loop/gateway corollary (SS6.4) is independently verifiable from the same code: when u==v (self-loop), is_gateway[node_idx] and is_gateway[t] are literally the same boolean read, so a self-loop on a gateway node necessarily takes the 'at least one endpoint is a gateway' permitted branch and a self-loop on a non-gateway node necessarily takes the rejected branch -- this is not asserted by the design doc, it is a direct consequence of the ported code that I re-derived independently and confirmed matches SS6.4's claim exactly. (Noted, not a defect: definition.md's own CHK-06 table cell says 'self-loops always rejected', which is an imprecise one-line summary that the design doc correctly does not follow -- the detailed algorithm outline at definition.md lines 158-170 and the Key-invariants traceability row at line 500 ('CHK-06: self-loop is cycle without gateway -> rejected') both actually agree with the design doc's gateway-conditional reading, and the design doc explicitly surfaces this corollary in writing rather than silently picking one interpretation.) Never-short-circuit invariant (Key invariant 5, definition.md line 475, cited accurately by design SS4/SS7.1): confirmed graph.zig's validateGraph() (lines 191-384) has zero early returns and executes all 8 checks unconditionally against the same unmodified input; design SS7.1's composition (fixed-order, unconditional, concatenated, no combinator short-circuits) reproduces this shape, and SS7.2 additionally proves no check's *meaningfulness* depends on another check's outcome, so 3 simultaneously-triggerable violations genuinely all fire together -- this claim holds up under critical reading, not just asserted. Open questions (SS9.1 Node.attributes typing, SS9.2 no 9th node-type-validity check, SS9.3 who decodes raw jsonb into the struct) are all stated as open and explicitly confirmed not to block any of REQ-028's 5 ACs (none of CHK-01..CHK-08 reads attributes; node-type validity is out of scope for the 8 named checks per graph.zig itself; JSON decoding is explicitly REQ-030's concern) -- none is a silent resolution of a required design element. Checked docs/anti-patterns.md in full (70 lines): its two entries (Docker toolchain fallback, requirement_status.yaml append-only) are not applicable to this design artefact; no relevant anti-pattern found that this design walks into. No 'TBD'/'to be implemented' language found anywhere (grepped explicitly, zero matches). All 5 checks (a-e) pass for all 5 acceptance criteria; FAIL not warranted.",
+    "artifacts_out": ["handoffs/WF02-REQ028-20260816/step-01b-code-design-validator.json"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ028-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ028-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (Step 2a) to implement lib/letflow/definitions/graph.ex per lib/letflow/design/req028-graph-structural-validator.md."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

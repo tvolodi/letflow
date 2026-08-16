@@ -1,0 +1,75 @@
+{
+  "handoff_id": "4ea4c465-429e-4183-b747-dab1a06010bc",
+  "run_id": "WF02-REQ021-20260816",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ021-20260816/step-02d-reviewer.json",
+  "created_at": "2026-08-16T06:31:12Z",
+  "started_at": "2026-08-16T06:31:12Z",
+  "completed_at": "2026-08-16T06:36:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S1",
+    "requirement_ids": ["REQ-021"],
+    "related_handoff_ids": ["f1a9c3e7-5b2d-4e6a-9f0c-8d3b1a7e2c4f"],
+    "artifacts_in": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/plugs/tenant_status.ex",
+      "lib/letflow/oidc/token_verifier.ex",
+      "lib/letflow/oidc/token_verifier/oidcc.ex",
+      "test/support/token_verifier_double.ex",
+      "config/dev.exs",
+      "config/test.exs",
+      "lib/letflow/design/req021-auth-plug-pipeline.md",
+      "lib/letflow/application.ex",
+      "docs/migration/decisions/0002-oidc-integration.md",
+      "docs/anti-patterns.md",
+      "handoffs/WF02-REQ021-20260816/step-02c-security-reviewer.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 2d (REVIEWER, hard gate) for run-id WF02-REQ021-20260816: idiom/scope review of ELIXIR-DEV's auth Plug pipeline (Letflow.Plugs.AuthPipeline, Letflow.Plugs.TenantStatus, Letflow.Oidc.TokenVerifier + Oidcc/double implementations, config changes), already SECURITY-REVIEWER-PASSed at Step 2c on the same diff.",
+    "acceptance_criteria": [
+      "Evaluate the with/else step-tagging pattern in auth_pipeline.ex's call/2 for idiom quality, independent of SECURITY-REVIEWER's INV-8 pass",
+      "Confirm this diff does not touch process_instance.ex/instance_supervisor.ex/application.ex's supervision tree, and that verify_token/1 correctly references REQ-016's supervised Oidcc.ProviderConfiguration.Worker rather than an unsupervised process",
+      "Check @spec coverage on new public functions (Plug callbacks, TokenVerifier behaviour callback, both adapter modules)",
+      "Confirm via git diff --stat that no already-done REQ-015..020 file (identity.ex, role_registry.ex, etc.) was modified",
+      "Evaluate TenantStatus's fail-closed divergence from tenant_status.zig's fail-open behavior against CLAUDE.md's 'don't silently re-decide a settled decision' rule, checking docs/migration/decisions/ directly",
+      "Confirm AC5's moduledoc wording: does auth_pipeline.ex state it supersedes REQ-103, and does it name which router.ex routes it is/isn't mounted in front of"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed the full diff (git diff main...feature/WF02-REQ021-20260816) and read every new file in full. (1) Idiomatic vs. crutch: the with/else step-tagging ({:error, {:step, reason}} instead of matching bare reason atoms) is genuine idiom, not a crutch. Several of the wrapped callees (TokenVerifier implementations, Identity.resolve_tenant_by_realm/1, Identity.provision_oidc_user/3) independently use generic atoms like :not_found for unrelated failure modes; without the step tag, the else block could not distinguish 'tenant not found' from 'ownership record not found' from 'JIT-disabled', which the design's own HTTP-status-code mapping (401 vs 403 vs 500) requires. This is the standard Elixir answer to disjoint-callee-error-namespace collisions, not a workaround for something the design should have specified differently -- the design doc (Sec3-4) documents the same reasoning. Tagging happens at the call site of each private step function, not by wrapping a single generic helper, so each tag stays adjacent to the code that assigns its meaning. (2) Supervision: confirmed via git diff --stat that process_instance.ex, instance_supervisor.ex, and application.ex are untouched. verify_bearer_token/2 (oidcc.ex) calls Oidcc.ClientContext.from_configuration_worker(provider_name, client_id, :unauthenticated) where provider_name is threaded from Application.fetch_env!(:letflow, :oidc)[:provider_name] -- the same atom (Letflow.Oidc.DefaultProvider) application.ex registers the supervised Oidcc.ProviderConfiguration.Worker child under. No spawn, no second worker, no bypass -- this correctly reads through the existing REQ-016 supervised process rather than starting anything new. (3) Type-safety gaps: no @spec anywhere on auth_pipeline.ex's init/1, call/2, or any of its 9 private step functions; none on tenant_status.ex's init/1/call/2; none on token_verifier.ex's @callback definition (the @doc above it is prose-only, not a @spec, though the @callback line itself is the behaviour's type contract so this is a lesser gap than the other two files); none on token_verifier/oidcc.ex's verify_bearer_token/2. This is a real, worth-flagging gap -- Plug's own behaviour only mandates init/1 and call/2's arity, not their argument/return types, so nothing here is a compile error, but every {:error, {atom, term}} tuple shape flowing through the with-chain is currently documented only in code comments, not machine-checked. A stricter type system (or even just Dialyzer-checked @spec/@type declarations for the tagged-error union) would have caught a mismatched tag atom between call/2's else clauses and a step function's actual {:error, {tag, reason}} shape at compile/analysis time rather than as a silent unmatched-clause fallthrough at runtime. Non-blocking for this gate (REQ-021's acceptance criteria don't require it, and this matches the codebase's existing @spec density elsewhere), but worth a follow-up requirement once this pipeline gets its first real caller in S4. (4) Scope creep: git diff --stat confirms the only lib/ changes are new files under lib/letflow/plugs/ and lib/letflow/oidc/token_verifier*, plus config/dev.exs and config/test.exs edits -- no modification to identity.ex, role_registry.ex, or any other already-done REQ-015..020 file. No new behaviour/macro abstraction beyond the single TokenVerifier behaviour, which the design doc justifies directly (dev/test adapter seam) and which SECURITY-REVIEWER also verified compiles test-only via mix.exs's elixirc_paths. Not scope creep. (5) TenantStatus fail-closed divergence: checked all 4 files in docs/migration/decisions/ directly -- none mandates fail-open or fail-closed behavior for a tenant-status DB-error path; 0002-oidc-integration.md's only fail-open/fail-closed mention is about an unrelated JWKS-caching tradeoff, not this check. No decision record is being silently re-decided. This is a legitimate, explicitly-flagged implementation choice within scope: the moduledoc states the divergence and its rationale in prose, cites the design doc's OQ-14 (Sec6.4) which frames it as 'this design's own recommendation, stated as a recommendation and not a mandate... left open for the next gate to confirm rather than decided silently here' -- i.e., the design doc itself routed this exact question to REVIEWER rather than deciding it unilaterally, and ELIXIR-DEV implemented the recommended (not mandated) option while flagging it prominently in two places (moduledoc + design doc). This is the opposite of silent re-deciding. REVIEWER confirms: fail-closed is the correct choice here -- a DB error during a migration write-pause check crashes only the single in-flight request-handling process under Bandit/Plug's per-request isolation (matching SECURITY-REVIEWER's independent INV-8 analysis), and silently failing open would let a transient DB hiccup bypass a data-integrity safeguard, which is a worse failure mode than a loud per-request 500. (6) AC5 moduledoc check: auth_pipeline.ex's moduledoc opens with the literal sentence 'Letflow's first real auth plug -- supersedes the never-built REQ-103 dev-bearer-token plug (cancelled along with the rest of the MVP-1 milestone; REQ-103 is not prior art this module extends, it never landed.)' -- explicit, not inferred. It also states in bold 'Not mounted in front of any route today' and names all 3 of router.ex's existing routes by method+path, explaining why none is a mount point yet and that the module is left available for S4. AC5 is satisfied verbatim, not just in spirit. Checked docs/anti-patterns.md's two entries (toolchain-availability, status-file-append-only) -- neither applies to this diff. No genuine crutch, no supervision break, no scope creep found. Verdict: PASS.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ021-20260816/step-02d-reviewer.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "No @spec on any public/callback function in lib/letflow/plugs/auth_pipeline.ex, lib/letflow/plugs/tenant_status.ex, lib/letflow/oidc/token_verifier.ex (the @callback itself has a type signature but no companion @spec/@type alias for the {:error, {tag, reason}} union used throughout auth_pipeline.ex), or lib/letflow/oidc/token_verifier/oidcc.ex. Not blocking -- matches existing codebase density and REQ-021's acceptance criteria don't require it -- but this is the kind of transition/dispatch logic (item 3 of REVIEWER's charter) where a stricter type system would catch a tag-atom mismatch between call/2's else clauses and a step function's actual error shape at compile time instead of at runtime. Worth a follow-up requirement (Dialyzer @spec pass across lib/letflow/plugs/ and lib/letflow/oidc/) once S4 gives this pipeline a real caller.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "docs/migration/stage-1-identity.md's 'REVIEWER sign-off' section still reads '(None yet -- this stage hasn't started.)' despite S1 having multiple done requirements (REQ-011 through REQ-020) and REQ-021 now at this gate. Stale, not introduced by this diff -- flagging per this role's stage-gate-doc responsibility rather than silently working around it. Belongs to DOC-UPDATER, not a rework trigger for ELIXIR-DEV.",
+        "affected_requirement": "REQ-021"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ021-20260816",
+      "commit_sha_list": ["203232a843af97fd06942779423963f2e8716226"],
+      "remote_branch": "origin/feature/WF02-REQ021-20260816",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,83 @@
+{
+  "handoff_id": "f55e7526-6f20-4847-ae99-d6ccb7e3dc4c",
+  "run_id": "WF02-REQ021-20260816",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ021-20260816/step-03-test-designer.json",
+  "created_at": "2026-08-16T06:45:53Z",
+  "started_at": "2026-08-16T06:45:53Z",
+  "completed_at": "2026-08-16T06:52:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S1",
+    "requirement_ids": ["REQ-021"],
+    "related_handoff_ids": ["4ea4c465-429e-4183-b747-dab1a06010bc"],
+    "artifacts_in": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/plugs/tenant_status.ex",
+      "lib/letflow/oidc/token_verifier.ex",
+      "lib/letflow/oidc/token_verifier/oidcc.ex",
+      "test/support/token_verifier_double.ex",
+      "lib/letflow/design/req021-auth-plug-pipeline.md",
+      "docs/requirements.yaml",
+      "docs/guides/test_developer_guide.md",
+      "test/letflow/identity_test.exs",
+      "test/letflow/oidc/claim_mapping_test.exs",
+      "test/letflow/application_test.exs",
+      "test/specs/REQ-020.md",
+      "scratch/req021_demo.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 3 (TEST-DESIGNER) for run-id WF02-REQ021-20260816: write test/specs/REQ-021.md and test code covering all 5 acceptance criteria for the auth Plug pipeline (Letflow.Plugs.AuthPipeline, Letflow.Plugs.TenantStatus), which passed SECURITY-REVIEWER and REVIEWER gates at Steps 2c/2d.",
+    "acceptance_criteria": [
+      "AC1: valid token double -> full pipeline -> conn.assigns[:auth_context] with user_id/tenant_id/roles present, covered by a runnable test",
+      "AC2: missing header -> 401 halted before any DB/tenant-resolution work runs, covered with an ordering-sensitive test",
+      "AC3: write method against a seeded :migrating tenant -> 503 + Retry-After; GET/HEAD passes through, covered by a runnable test",
+      "AC4: token realm mismatch -> rejected, not silently JIT-provisioned under the wrong tenant -- assert no user row created",
+      "AC5 (moduledoc-content criterion): verified by direct inspection, documented as such in the spec, not force-fit into a runtime test",
+      "No test depends on wall-clock time or unseeded randomness",
+      "Fixtures use per-test unique data, no shared hardcoded IDs",
+      "Every acceptance criterion has >=1 test case that would fail if the behavior were violated"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote test/specs/REQ-021.md and three test files: test/letflow/plugs/auth_pipeline_test.exs (async: true, 9 tests covering AC1/AC2/AC4 via config-wired Letflow.Oidc.TokenVerifierDouble), test/letflow/plugs/tenant_status_test.exs (async: true, 10 tests covering AC3 plus a method-short-circuit telemetry check and the undefined-auth-context edge case), and test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs (async: false, 3 tests covering the sub_claim_missing and :jit_disabled branches end-to-end via a new test-only double). Added test/support/configurable_token_verifier_double.ex -- a second, stateless Letflow.Oidc.TokenVerifier double (module name/shape explicitly left to TEST-DESIGNER by the design doc's Sec3.2) needed because the existing, already-reviewed TokenVerifierDouble only recognizes one fixed sentinel token (realm bpm-default, subject test-subject-001), which can't reach the JIT-disabled-realm or missing-sub-claim branches. This double derives every claim from the raw token string itself (no Application.put_env, no process/Agent state), so it's safe under async: true wherever it's called directly; the one describe block that needs it wired end-to-end through the real plug (Application.fetch_env!(:letflow, :oidc)[:token_verifier] is read fresh per-call, with no per-call override) lives in its own async: false module with setup/on_exit swapping and restoring config :letflow, :oidc -- isolated from every async: true test in the suite by ExUnit's own non-overlapping module scheduling. Added one static config/test.exs fixture entry (\"jit-disabled-test-realm\" -> enabled: false) to make the :jit_disabled branch reachable without per-test config mutation.\n\nAC4 required the most design work: AuthPipeline.call/2's with-chain passes the SAME realm value to both resolve_tenant_by_realm/1 and verify_realm_ownership/2, both keyed on the identical idp_realm_id column -- so, given consistent DB state, they cannot structurally disagree except via a genuine concurrent write racing between the two calls (no seam exists to inject that deterministically without instrumenting production code). Independently confirmed this by finding ELIXIR-DEV's own scratch/req021_demo.exs self-verification script, which reaches the identical conclusion and demonstrates the guard's rejection by calling Identity.verify_realm_ownership/2 directly against a wrong-tenant/right-realm pairing. Test cases 15-17 in the spec (and the corresponding 'acceptance criterion 4' describe block in auth_pipeline_test.exs) follow that same proven approach: the guard function is called with the plug's exact argument shape against a provably-mismatched tenant, its rejection is asserted, and a row-count query confirms no user was written under the wrong tenant -- plus a full-plug test confirming the pipeline never reaches provisioning when tenant resolution itself fails. This is stated explicitly as the chosen strategy (not a full end-to-end race) in the spec's 'AC4 test strategy' section, along with what is NOT covered (a true TOCTOU race) and why.\n\nAC5 (moduledoc content) is verified by direct inspection in the spec (same treatment as REQ-020's AC5), not given a runtime test -- a test asserting on the moduledoc's own string content would be manufactured busywork per this project's anti-pattern guidance, not real coverage.\n\nEvery test file compiles cleanly (mix compile --warnings-as-errors, MIX_ENV=test, exit 0) and mix format --check-formatted passes. Ran the new tests directly against the already-running letflow-postgres-1 Docker container (docker ps confirmed it healthy on port 5462, matching config/test.exs) as a compile/sanity check, NOT as the formal TEST-RUNNER verification this project's pipeline requires at Step 4: mix test test/letflow/plugs/ test/specs/ --seed 0 -> 22/22 passed, and the full suite (mix test --seed 0) -> 132/132 passed (4 properties, 128 tests), no regressions against the pre-existing 131/132 baseline observed when the new config/test.exs fixture was temporarily absent (a git-stash artifact, not a real baseline number -- confirmed by re-running clean). I did NOT write test/reports/ (TEST-RUNNER's own artifact) and did not mark this run's formal test-execution status -- that is Step 4's job.",
+    "artifacts_out": [
+      "test/specs/REQ-021.md",
+      "test/letflow/plugs/auth_pipeline_test.exs",
+      "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs",
+      "test/letflow/plugs/tenant_status_test.exs",
+      "test/support/configurable_token_verifier_double.ex",
+      "config/test.exs"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "A true TOCTOU race between AuthPipeline.call/2's resolve_tenant_by_realm/1 read and verify_realm_ownership/2's re-read (the one AC4 scenario not covered end-to-end at the plug level -- see test/specs/REQ-021.md's 'AC4 test strategy' section) is not deterministically reproducible without instrumenting AuthPipeline.call/2 itself to expose a pause point, which is out of TEST-DESIGNER's scope to add. Flagged for awareness, not blocking -- the guard's own re-query-not-trust mechanism (the actual defense against this class of race) is directly tested, and the structural argument for why this specific interleaving cannot occur under normal (non-racing) operation is documented and cross-checked against ELIXIR-DEV's own independent scratch script.",
+        "affected_requirement": "REQ-021"
+      },
+      {
+        "severity": "MINOR",
+        "description": "handoffs/registry.json still does not exist in this repo (same pre-existing gap SECURITY-REVIEWER already flagged at Step 2c) -- not created by this handoff either, per HANDOFF_PROTOCOL.md step 4's instruction to update it; nothing exists to update. Belongs to whichever future requirement builds the mix letflow.lint_handoffs tooling HANDOFF_PROTOCOL.md's Enforcement note describes as a known gap.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ021-20260816",
+      "commit_sha_list": ["fc1cd43da6abae51168371792288b3a9e8336499"],
+      "remote_branch": "origin/feature/WF02-REQ021-20260816",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (3b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

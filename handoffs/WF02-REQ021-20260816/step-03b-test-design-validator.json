@@ -1,0 +1,74 @@
+{
+  "handoff_id": "8b0e5b2c-2a2f-4b3e-9e2b-2a6a6a2e6d31",
+  "run_id": "WF02-REQ021-20260816",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ021-20260816/step-03b-test-design-validator.json",
+  "created_at": "2026-08-16T06:48:53Z",
+  "started_at": "2026-08-16T06:48:53Z",
+  "completed_at": "2026-08-16T07:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S1",
+    "requirement_ids": ["REQ-021"],
+    "related_handoff_ids": ["f55e7526-6f20-4847-ae99-d6ccb7e3dc4c"],
+    "artifacts_in": [
+      "test/specs/REQ-021.md",
+      "test/letflow/plugs/auth_pipeline_test.exs",
+      "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs",
+      "test/letflow/plugs/tenant_status_test.exs",
+      "test/support/configurable_token_verifier_double.ex",
+      "docs/requirements.yaml",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex",
+      "test/specs/REQ-020.md",
+      "mix.exs",
+      "config/dev.exs",
+      "config/prod.exs",
+      "config/test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 3b (TEST-DESIGN-VALIDATOR) for run-id WF02-REQ021-20260816: independently re-derive whether TEST-DESIGNER's test spec and 3 test files provide real, non-vacuous coverage of all 5 REQ-021 acceptance criteria, with specific scrutiny of AC4's structural-proof coverage strategy.",
+    "acceptance_criteria": [
+      "Every acceptance criterion has >=1 runnable test, no @tag :skip without a passing counterpart",
+      "No 'TODO: implement test' left in the spec",
+      "Test fixtures use per-test unique data, checked against test source not spec claims",
+      "Tests are self-sufficient; async:true/async:false split independently justified",
+      "No hardcoded secrets/connection strings",
+      "AC4 coverage independently judged, not deferred to TEST-DESIGNER's own framing",
+      "At least 2 tests confirmed non-vacuous by reading assertions against actual implementation code",
+      "AC5's moduledoc-inspection exemption confirmed against a real REQ-020 precedent",
+      "New test double confirmed test-only reachable (elixirc_paths) and unwired in dev/prod config"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently read test/specs/REQ-021.md in full, all three test files (auth_pipeline_test.exs: 10 tests, auth_pipeline_configurable_verifier_test.exs: 3 tests, tenant_status_test.exs: 9 tests -- 22 total, matching the self-reported 22/22), test/support/configurable_token_verifier_double.ex, REQ-021's requirements.yaml entry (5 ACs, verbatim text matches the spec's quoted text exactly), and REQ-020's spec (the AC5 precedent, confirmed real -- REQ-020's spec independently documents the identical moduledoc-inspection treatment for its own AC5, same reasoning, same anti-pattern citation). All 5 ACs have runnable, non-@tag-skip test coverage; no 'TODO: implement test' anywhere in the spec. Every fixture uses System.unique_integer/1-suffixed slugs/realms via unique_slug/1 and unique_realm/1 helpers in all three files -- verified directly against the test source, not the spec's claim -- except the deliberate, sandbox-safe reuse of the literal 'bpm-default' realm (required by TokenVerifierDouble's one fixed sentinel claim) and 'jit-disabled-test-realm' (required to match one static config/test.exs entry), both justified the same way identity_test.exs already established and safe because Ecto sandbox transactions never see each other's rows. async:true (auth_pipeline_test.exs, tenant_status_test.exs) vs async:false (auth_pipeline_configurable_verifier_test.exs) split is independently justified: read auth_pipeline.ex:111-114 and confirmed verify_token/1 resolves the verifier via Application.fetch_env!(:letflow, :oidc) fresh on every call with no per-call override, so reaching ConfigurableTokenVerifierDouble end-to-end through the real plug requires Application.put_env/3 -- global, process-shared VM state unsafe under concurrent async:true tests; the async:false module correctly wraps this in setup/on_exit with restore-on-exit-even-on-failure. ConfigurableTokenVerifierDouble itself derives every claim from the raw token string (no Application.put_env, no Agent/process state) so it is genuinely safe to reference directly from the async:true file's own helpers if ever needed. No hardcoded secrets/connection strings found (grepped all 4 new files for password/secret/api_key/client_secret -- zero matches); config/test.exs's static 'jit-disabled-test-realm' fixture entry is a config key/status flag, not a credential. Confirmed test/support/configurable_token_verifier_double.ex is test-only reachable: mix.exs:20-21 shows elixirc_paths(:test) includes 'test/support' while elixirc_paths(_) (dev/prod) does not -- same rule SECURITY-REVIEWER already verified for the first double at Step 2c. Grepped config/dev.exs and config/prod.exs for any reference to ConfigurableTokenVerifierDouble or token_verifier override: zero matches in either; dev.exs wires the real Letflow.Oidc.TokenVerifier.Oidcc adapter, prod.exs has no :oidc key override at all (inherits runtime config), config/test.exs only wires the config-wired TokenVerifierDouble (not the Configurable one) as :token_verifier -- exactly as the spec claims.\n\nAC4 independent judgment: read lib/letflow/plugs/auth_pipeline.ex's actual call/2 with-chain (lines 56-64) and lib/letflow/identity.ex's actual resolve_tenant_by_realm/1 (Repo.get_by(Tenant, idp_realm_id: realm)) and verify_realm_ownership/2 (re-queries resolve_realm_by_tenant/1 by tenant_id, compares against the passed realm) directly, not from the spec's description of them. The structural claim holds under inspection: resolve_tenant/1 finds a tenant BY that realm value; guard_realm_ownership/2 then re-queries that SAME tenant's bound realm by tenant_id and compares -- given one consistent DB snapshot within a single request, these two reads cannot disagree by construction, only a genuine concurrent write landing between the two calls could produce disagreement, and no seam exists in the with-chain to inject that deterministically without instrumenting production code (confirmed no test-visible pause point exists in call/2). This is judged an acceptable, honestly disclosed test-coverage limitation, not a gap that leaves AC4's wording under-tested: AC4's actual text ('a request whose token's realm does not match the resolved tenant's bound realm is rejected, not silently JIT-provisioned under the wrong tenant') is about the guard's rejection behavior and its effect (no JIT under wrong tenant), which cases 15-17 prove directly and non-vacuously -- case 15 calls Identity.verify_realm_ownership(tenant_b.id, realm) against a tenant provably not bound to that realm and asserts {:error, :realm_tenant_mismatch} (this is the exact rejection branch at identity.ex:129, {:ok, _mismatched_or_nil} -> {:error, :realm_tenant_mismatch} -- a test that would fail immediately if the guard were buggy and always returned :ok), case 16 folds in a row-count check under tenant_b staying zero, case 17 hits the plug level and confirms no row is written when resolution itself fails. The TOCTOU race explicitly NOT covered (concurrent write racing the two reads) is a different, narrower claim than what AC4's wording asks for, and ELIXIR-DEV's own independent scratch/req021_demo.exs (read directly, lines ~55-73) reaches the identical structural conclusion using the identical mechanism (calling verify_realm_ownership/2 directly against a wrong-tenant/right-realm pairing) -- two independent authors reaching the same design conclusion from reading the same code is corroborating, not circular.\n\nVacuousness check on 2 representative tests, traced against actual implementation: (1) 'the realm-ownership guard rejects a tenant that does not own the token's claimed realm...' (auth_pipeline_test.exs:181) -- would fail immediately if verify_realm_ownership/2 were buggy (e.g. always returning :ok), since the test's core assertion is exactly the {:error, :realm_tenant_mismatch} return value; non-vacuous. (2) 'a POST request against a :migrating tenant is rejected 503 with a Retry-After header' (tenant_status_test.exs:54) -- would fail if TenantStatus.call/2's status check or the Retry-After header were removed/wrong; the test asserts conn.status == 503 AND the exact header value AND halted AND JSON body shape, all specific and independently falsifiable; non-vacuous. AC5 (moduledoc content) is correctly excluded from runtime testing -- read test/specs/REQ-020.md directly and confirmed the precedent is real: REQ-020's own spec (lines 254-284) documents the identical direct-inspection treatment for its AC5, citing the same anti-pattern reasoning (a String.contains? assertion on the moduledoc proves nothing about behavior). Independently re-read lib/letflow/plugs/auth_pipeline.ex lines 1-34 myself and confirmed the cited content is actually present: lines 3-5 name REQ-103 and 'never-built'/'cancelled', lines 23-31 state 'Not mounted in front of any route today' and name all 3 existing router.ex routes by pattern.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ021-20260816/step-03b-test-design-validator.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "handoffs/registry.json still does not exist in this repo (pre-existing gap, already flagged by SECURITY-REVIEWER at Step 2c and TEST-DESIGNER at Step 3) -- HANDOFF_PROTOCOL.md step 4.4 calls for updating the matching registry entry, but no registry file exists to update. Not created by this handoff either; belongs to the future mix letflow.lint_handoffs tooling requirement HANDOFF_PROTOCOL.md's Enforcement note already describes.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ021-20260816",
+      "commit_sha_list": ["6938f197a5baa8221a5000dcee9c7960373dc982"],
+      "remote_branch": "origin/feature/WF02-REQ021-20260816",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

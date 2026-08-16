@@ -17,9 +17,22 @@ config :letflow, Letflow.Repo,
 # Placeholder — no real Keycloak instance exists yet. Replace with a real
 # per-environment issuer URL once realm provisioning (deferred past S1, see
 # the S1 section note in docs/requirements.yaml) exists.
+#
+# client_id: a placeholder OAuth client identifier (REQ-021's OQ-2) — not
+# itself secret. It is only used to build an *unauthenticated*
+# Oidcc.ClientContext (no client_secret), since this plug is a resource
+# server that only verifies already-issued bearer tokens, never performs a
+# token exchange. signing_algs: the JWT signing-algorithm allowlist required
+# by Oidcc.Token.validate_jwt/3 (REQ-021's OQ-3) — RS256 matches Keycloak's
+# default signing algorithm. token_verifier: which
+# Letflow.Oidc.TokenVerifier implementation Letflow.Plugs.AuthPipeline calls
+# — the real oidcc-backed adapter here, a test double in config/test.exs.
 config :letflow, :oidc,
   issuer: "https://placeholder-keycloak.invalid/realms/bpm-default",
-  provider_name: Letflow.Oidc.DefaultProvider
+  provider_name: Letflow.Oidc.DefaultProvider,
+  client_id: "letflow-placeholder-client",
+  signing_algs: ["RS256"],
+  token_verifier: Letflow.Oidc.TokenVerifier.Oidcc
 
 # Per-realm claim-path configuration for Letflow.Oidc.ClaimMapping — distinct
 # from the :oidc key above (that one is REQ-016's provider-worker-startup

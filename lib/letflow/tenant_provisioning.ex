@@ -187,8 +187,10 @@ defmodule Letflow.TenantProvisioning do
   #
   # REQ-023's six event-store migrations (lib/letflow/design/req023-event-store-schema.md
   # §4) followed by REQ-024's event_type_registry migration
-  # (lib/letflow/design/req024-event-type-registry.md §3). Each of these files
-  # carries the §4 guard pattern; registration here is the other mandatory half.
+  # (lib/letflow/design/req024-event-type-registry.md §3) and REQ-027's two
+  # definition-core migrations (lib/letflow/design/req027-definition-core-schema.md §4)
+  # — nine entries in total. Each of these files carries the §4 guard pattern;
+  # registration here is the other mandatory half.
   @tenant_scoped_migration_manifest [
     {20_260_816_120_001, Letflow.Repo.Migrations.CreateEvents,
      "20260816120001_create_events.exs"},
@@ -203,7 +205,11 @@ defmodule Letflow.TenantProvisioning do
     {20_260_816_120_006, Letflow.Repo.Migrations.CreateEventIdempotency,
      "20260816120006_create_event_idempotency.exs"},
     {20_260_816_163_103, Letflow.Repo.Migrations.CreateEventTypeRegistry,
-     "20260816163103_create_event_type_registry.exs"}
+     "20260816163103_create_event_type_registry.exs"},
+    {20_260_816_193_001, Letflow.Repo.Migrations.CreateProcessDefinitions,
+     "20260816193001_create_process_definitions.exs"},
+    {20_260_816_193_002, Letflow.Repo.Migrations.CreateInstanceDefinitionSnapshots,
+     "20260816193002_create_instance_definition_snapshots.exs"}
   ]
 
   @doc """
@@ -211,9 +217,12 @@ defmodule Letflow.TenantProvisioning do
   `replay_migrations/2`'s default `migration_source`. REQ-022 itself
   contributes zero entries (its own `CreateTenantSchemas` migration is
   global-only, see the migration's header comment); REQ-023 contributes the six
-  event-store migrations (`lib/letflow/design/req023-event-store-schema.md` §4)
-  and REQ-024 the `event_type_registry` migration
-  (`lib/letflow/design/req024-event-type-registry.md` §3) — seven entries in
+  event-store migrations (`lib/letflow/design/req023-event-store-schema.md` §4),
+  REQ-024 the `event_type_registry` migration
+  (`lib/letflow/design/req024-event-type-registry.md` §3) and REQ-027 the two
+  definition-core migrations, `process_definitions` and
+  `instance_definition_snapshots`
+  (`lib/letflow/design/req027-definition-core-schema.md` §4) — nine entries in
   total, ordered by version. Every future tenant-scoped migration must append its
   own entry to `@tenant_scoped_migration_manifest`, in addition to following the
   required guard pattern in its own migration file (see this module's design doc
@@ -249,8 +258,10 @@ defmodule Letflow.TenantProvisioning do
 
   REQ-024's `event_type_registry` entry originally shipped in the bare
   `{version, module}` form and carried that same latent failure; routing it
-  through the manifest here repairs it too, rather than leaving one of the seven
-  entries loadable only by accident.
+  through the manifest here repairs it too, rather than leaving one entry
+  loadable only by accident. Every entry added since — REQ-027's two — uses the
+  three-element form for the same reason; reverting any of them to the bare
+  `{version, module}` shape would reintroduce the defect.
   """
   @spec tenant_scoped_migrations() :: [{version :: pos_integer(), module()}]
   def tenant_scoped_migrations do

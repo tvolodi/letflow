@@ -1,0 +1,56 @@
+{
+  "handoff_id": "d3f8a2b1-9c4e-4a7f-8b6d-1e2f3a4b5c6d",
+  "run_id": "WF02-REQ021-20260816",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ021-20260816/step-01b-code-design-validator.json",
+  "created_at": "2026-08-16T06:19:03Z",
+  "started_at": "2026-08-16T06:19:03Z",
+  "completed_at": "2026-08-16T06:19:03Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S1",
+    "requirement_ids": ["REQ-021"],
+    "related_handoff_ids": ["c900d1d7-0376-4002-b983-ef5516fd391b"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req021-auth-plug-pipeline.md",
+      "lib/letflow/identity.ex",
+      "lib/letflow/oidc/claim_mapping.ex",
+      "handoffs/WF02-REQ021-20260816/step-01-code-designer.json"
+    ],
+    "owned_modules": ["lib/letflow/plugs", "lib/letflow/router.ex"]
+  },
+  "task": {
+    "description": "WF-02 Step 1b (CODE-DESIGN-VALIDATOR) for run-id WF02-REQ021-20260816: independently validate lib/letflow/design/req021-auth-plug-pipeline.md against REQ-021's 5 acceptance criteria — AC coverage, no TBD/deferral language, fully-specified function signatures (Plug init/1+call/2, TokenVerifier behaviour seam, cross-checked against Letflow.Identity's actual @specs), explicit error-response shapes (401/403/500/503 + Retry-After), cross-module dependency listing, zero implementation code, ambiguity-bar check on the 14 open questions, verification-adapter decision firmness, realm-guard-before-JIT ordering, and router.ex wiring clarity for AC5.",
+    "acceptance_criteria": [
+      "AC1: valid-token request flows through verify -> tenant resolution -> realm-ownership guard -> JIT provisioning and ends with an auth context (user_id, tenant_id, roles) available downstream; state explicitly whether a real Keycloak issuer or a test double was used",
+      "AC2: missing/malformed bearer token rejected with 401 before tenant resolution or JIT provisioning runs",
+      "AC3: write request (POST/PUT/PATCH/DELETE) against a migrating tenant rejected with 503 + Retry-After; GET/HEAD passes through",
+      "AC4: token realm not matching the resolved tenant's bound realm is rejected, not silently JIT-provisioned under the wrong tenant",
+      "AC5: moduledoc explicitly states this plug supersedes REQ-103 (never built) as Letflow's first real auth plug, and names which router.ex routes (if any) it is mounted in front of"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently read docs/requirements.yaml's REQ-021 entry (5 ACs) and the full 829-line lib/letflow/design/req021-auth-plug-pipeline.md, then cross-checked each of the 4 Letflow.Identity function signatures the design cites (provision_oidc_user/3, resolve_tenant_by_realm/1, resolve_realm_by_tenant/1, verify_realm_ownership/2) against lib/letflow/identity.ex's actual @specs -- exact match on all four, including error-tuple shapes. Also independently verified Letflow.Oidc.ClaimMapping.map_verified_claims/3's signature against lib/letflow/oidc/claim_mapping.ex -- matches design's §4.5 citation. Ran my own grep for defmodule/def .../defp/case-do/end patterns across the design file -- zero matches; every fenced block is a @spec/@callback signature, a JSON body shape, or a type map, never an executable function body -- confirming the design's own no-implementation-code claim rather than trusting it. All 5 ACs map to concrete, unambiguous design elements (traceability table in §11, independently re-traced against §3.2/§4.2-§4.5/§5.1/§6/§7/§8, not just read off the table). AC1: §3.2 makes a firm, justified decision to use a test double (not the reachable r-co-keycloak-1 container, because it is R-Co's own instance with no confirmed Letflow realm/client and Letflow's own config deliberately points at a .invalid placeholder) -- this is a stated choice for this implementation pass, not left open to ELIXIR-DEV, satisfying AC1's fallback clause correctly. AC4: §4.4 states an explicit call-order guarantee (provision_oidc_user/3 is never invoked unless verify_realm_ownership/2 already returned :ok in the same request, no code path bypasses this) -- reflected in the call-sequence spec itself, not just prose intent. AC5: §8 explicitly states zero of the 3 existing router.ex routes are mounted behind either new plug module (all three are non-tenant-scoped and mounting would break their existing unauthenticated behavior), left available for S4 -- §7 requires this exact fact be written into the moduledoc, so AC5 is unambiguously satisfied rather than left for ELIXIR-DEV to decide. Reviewed all 14 open questions against the ambiguity bar (could two reasonable implementers build materially different things for the SAME acceptance criterion): none qualify as AC-blocking. OQ-1/2/3/5/13 are structural/config/naming choices explicitly left to ELIXIR-DEV with a stated fallback, not behavioral ambiguity on any AC. OQ-4/6/7/8/9/10/11 each represent a firm decision the design already made (with rationale), flagged only for REVIEWER sign-off on whether the judgment call was the right one -- not gaps in the design itself. OQ-12 and OQ-14 concern scenarios outside all 5 stated ACs (an unmounted-plug-ordering case that cannot occur given §8's mount decision, and a DB-error case AC3's wording never reaches) -- legitimately deferrable. Error-response shapes are all explicit and concrete: 401 (§5.2), 403 (§5.3), 500 (§5.4), 503 + Retry-After: \"30\" (§5.5) -- no implicit or TBD status codes anywhere. Cross-module dependencies (REQ-016/017/018/019/020's specific functions) are listed throughout with exact signatures. No TBD/deferral language found anywhere in the document -- every one of the 14 open questions is a stated recommendation with explicit rationale, not a blank placeholder.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ021-20260816/step-01b-code-design-validator.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ021-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ021-20260816",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (2a)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

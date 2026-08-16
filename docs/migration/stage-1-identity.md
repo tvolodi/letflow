@@ -1,7 +1,8 @@
 # Stage 1 — Identity & multi-tenancy
 
-Status: in progress. Depends on: S0. Requirements: REQ-015, REQ-016, REQ-017,
-REQ-018, REQ-019, REQ-020 (done); REQ-021 (`docs/requirements.yaml`) pending.
+Status: in progress — all S1 requirements done, stage gate pending. Depends on:
+S0. Requirements: REQ-015, REQ-016, REQ-017, REQ-018, REQ-019, REQ-020, REQ-021
+(all done).
 
 ## Scope
 
@@ -35,4 +36,5 @@ stage-specific decision file here only if S1 surfaces a genuinely new choice nei
 
 ## REVIEWER sign-off
 
-(None yet — this stage hasn't started.)
+(None yet — all REQ-015..021 requirements are done, but the stage-gate
+REVIEWER sign-off itself is separate WF-04 scope, not yet run.)

@@ -1552,3 +1552,50 @@ history:
       Plug pipeline in lib/letflow/router.ex, porting auth.zig's
       orchestration order and tenant_status.zig's write-pause check.
       Capstone requirement closing out S1 (REQ-015..021).
+  - req: REQ-021
+    event: done
+    agent: ELIXIR-DEV
+    at: 2026-08-16T06:57:35Z
+    note: >
+      Built lib/letflow/plugs/auth_pipeline.ex and lib/letflow/plugs/tenant_status.ex,
+      wiring REQ-016's ueberauth_oidcc verification, REQ-017's claim mapping, REQ-019's
+      tenant<->realm resolution + realm-ownership guard, and REQ-018's JIT provisioning
+      into one request-scoped Plug pipeline, porting src/api/middleware/auth.zig's
+      orchestration order (verify token -> resolve tenant from realm -> guard realm
+      ownership -> JIT provision/lookup user -> attach auth context) and
+      src/api/middleware/tenant_status.zig's write-pause check (POST/PUT/PATCH/DELETE
+      against a migrating tenant rejected with 503 + Retry-After; GET/HEAD pass
+      through with zero DB query). A missing/malformed bearer token is rejected with
+      401 before tenant resolution or JIT provisioning runs. RELEASE-VALIDATOR
+      independently re-verified all 5 acceptance criteria against the actual code/tests
+      (auth_pipeline.ex, tenant_status.ex, identity.ex, and their test files), not
+      TEST-RUNNER's or REVIEWER's reports, and independently re-ran the full suite:
+      132/132 passing (4 properties, 128 tests) on commit a48d7453b2d39669277b8eae12a
+      131527422ac8a, matching TEST-RUNNER's Step 4 report via a genuinely separate
+      invocation. AC5 confirmed verbatim in the moduledoc: auth_pipeline.ex states this
+      plug supersedes the never-built REQ-103 dev-bearer-token plug (cancelled with the
+      rest of MVP-1, not prior art) as Letflow's first real auth plug, and names all 3
+      of Letflow.Router's existing routes (POST /instances, POST /instances/:id/actions,
+      GET /instances/:id) as non-tenant-scoped and not currently mounted behind this
+      plug — available for S4 to attach to later. Flipped docs/requirements.yaml
+      REQ-021 status to done. This closes out Stage S1 (REQ-015 through REQ-021 all now
+      done) for the first time. README.md checked and confirmed it documents nothing
+      REQ-021 changed: router.ex itself is unmodified and no route is currently
+      protected by the new plug pipeline, so no user-observable/runnable behavior
+      changed — same disposition as REQ-016 through REQ-020's DOC-UPDATER passes.
+      docs/guides/backend_developer_guide.md checked and deliberately left untouched
+      for the same reason already applied at REQ-015 through REQ-020: it names
+      REQ-015 through REQ-021 collectively rather than enumerating per-requirement
+      mechanics. REQ-021's 5 acceptance_criteria re-read in full: none names a specific
+      docs/migration/decisions/*.md file, so no decision record needed touching this
+      pass. docs/migration/stage-1-identity.md's header line updated from "Status: in
+      progress. Depends on: S0. Requirements: REQ-015, REQ-016, REQ-017, REQ-018,
+      REQ-019, REQ-020 (done); REQ-021 (docs/requirements.yaml) pending." to "Status:
+      in progress — all S1 requirements done, stage gate pending. Depends on: S0.
+      Requirements: REQ-015, REQ-016, REQ-017, REQ-018, REQ-019, REQ-020, REQ-021 (all
+      done)." No REVIEWER stage-gate sign-off section added — RELEASE-VALIDATOR
+      explicitly flagged that a full stage-gate REVIEWER sign-off is separate WF-04
+      scope, not this run's job; flagging to ORCH that S1 is now fully done and a
+      WF-04 stage-gate run can be scheduled. No lib/, test/, or priv/ file was touched
+      by this DOC-UPDATER pass — those were already correct and gated by the prior
+      steps in this run.

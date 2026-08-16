@@ -1,0 +1,47 @@
+id: ISS-0010
+title: handoffs/registry.json has never been created, despite HANDOFF_PROTOCOL.md requiring every handoff completion to update it
+discovered_by: SECURITY-REVIEWER
+discovered_in_run: WF02-REQ021
+discovered_at: 2026-08-16T06:55:00Z
+severity: MINOR
+description: >
+  docs/agents/shared/HANDOFF_PROTOCOL.md §4 ("Complete the handoff") step 4 requires
+  every agent completing a handoff to "Update the matching entry's status in
+  handoffs/registry.json". docs/agents/AGENT_SYSTEM.md §7 similarly says every agent
+  "MUST check the registry (handoffs/registry.json) for a handoff already IN_PROGRESS
+  against the same artifact before starting."
+
+  handoffs/registry.json does not exist anywhere in this repo's git history —
+  confirmed via `ls handoffs/registry.json` (No such file or directory) and via git
+  log search. Every WF-02 run so far (REQ-015 through REQ-021, at minimum) has
+  completed every step's handoff without ever creating or updating this file, and no
+  step has failed or been blocked by its absence — the pipeline has simply proceeded
+  as if the registry-check step were optional.
+
+  First flagged by SECURITY-REVIEWER at REQ-021's Step 2c, then independently
+  re-flagged (carried forward, not re-discovered) at REQ-021's Step 3 (TEST-DESIGNER),
+  Step 3b (TEST-DESIGN-VALIDATOR), and Step 4 (TEST-RUNNER) — every one of those four
+  steps checked for the file and found it missing, and each correctly treated it as
+  pre-existing and out of scope for their own handoff rather than silently fixing it
+  in passing.
+
+  Impact: the parallel-run collision-prevention mechanism this file is supposed to
+  back (docs/agents/ORCHESTRATOR.md §7's owned_modules lock, AGENT_SYSTEM.md §7's
+  conflict-prevention check) has no actual data to check against. This has not caused
+  a real collision yet because Letflow has so far run one WF-02 at a time,
+  single-host — but the gap becomes load-bearing the moment multi-host or concurrent
+  runs start (see docs/agents/protocols/TASK_QUEUE.md's "Deployment status" for the
+  related letflow-queue service, which is a different, service-mediated mechanism for
+  task selection, not a substitute for this file's per-artifact lock-check role).
+
+  Also relevant: HANDOFF_PROTOCOL.md's own "Enforcement note" section already
+  acknowledges no `tools/lint_handoffs.py`-equivalent linter exists yet for Letflow
+  (R-Co has one) and names this as "a known gap, not an oversight" — this registry.json
+  absence is a concrete, specific instance of exactly the class of gap that note
+  anticipated, not a new category of problem.
+affected_files:
+  - handoffs/registry.json
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+  - docs/agents/AGENT_SYSTEM.md
+github_issue: https://github.com/tvolodi/letflow/issues/42
+status: open

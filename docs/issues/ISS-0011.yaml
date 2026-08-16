@@ -1,0 +1,61 @@
+id: ISS-0011
+title: "test/letflow/plugs/tenant_status_test.exs's method-short-circuit test is flaky under non-default random seeds -- global :telemetry.attach races against concurrently running async: true tests"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ022-20260816
+discovered_at: 2026-08-16T14:56:00Z
+severity: MINOR
+description: >
+  Independently re-running `mix test` (full suite, no --seed pin) as part of REQ-022's
+  Step 5 release validation, per core-directives.md's mandate to re-derive the suite's
+  pass/fail status rather than trust TEST-RUNNER's report -- TEST-RUNNER's own Step 4 run
+  (test/reports/report-2026-08-16-WF02-REQ022-20260816.yaml) used `mix test --seed 0`
+  both times, which happened not to trigger this.
+
+  Ran the full suite 5 times total in this session: 4 runs (including one against a
+  freshly dropped/recreated/migrated test DB) passed 146/146 clean; one run (default
+  random seed 884432) failed 1 test:
+
+    1) test method short-circuit -- no DB query at all for a non-write method a GET
+       request issues no Ecto query at all (method short-circuit, no DB round-trip)
+       (Letflow.Plugs.TenantStatusTest)
+       test/letflow/plugs/tenant_status_test.exs:121
+       expected no Ecto query for a GET request
+       code: refute_received :query_fired, "expected no Ecto query for a GET request"
+       stacktrace:
+         test/letflow/plugs/tenant_status_test.exs:136: (test)
+
+  Root cause (read directly from the test file, not guessed): this test module is
+  `async: true` (test/letflow/plugs/tenant_status_test.exs:19) and its one flaky test
+  (lines 121-140) does `:telemetry.attach(handler_id, [:letflow, :repo, :query], ...,
+  test_pid)` -- a GLOBAL telemetry handler, not scoped to this test's own sandboxed
+  connection/process. `:telemetry.attach/4` subscribes to every emission of that event
+  name process-wide, so under `async: true` (many other test modules' async tests running
+  concurrently, all issuing their own real `Letflow.Repo` queries against the same
+  Postgres connection pool's telemetry emitter) this handler can and did receive a
+  `:query_fired` message triggered by a DIFFERENT, concurrently running test's query, not
+  this test's own `call_plug(:get, ...)` call -- causing `refute_received` to fail on an
+  event this test never caused. This is a pre-existing test-isolation defect from REQ-021
+  (git blame: test/letflow/plugs/tenant_status_test.exs was added in that requirement's
+  WF-02 run), unrelated to REQ-022's own code or tests (REQ-022's own
+  tenant_provisioning_test.exs is `async: false` for the whole module, specifically to
+  avoid exactly this class of interference -- see that file's own moduledoc -- so REQ-022
+  did not introduce or worsen this).
+
+  Not blocking REQ-022: the failing test belongs to a different module
+  (Letflow.Plugs.TenantStatusTest, REQ-021's own acceptance-criterion-3 coverage), fails
+  under an out-of-REQ-022-scope root cause (test isolation of a REQ-021 test), and does
+  not reproduce deterministically (4 of 5 runs in this session were clean). Per
+  core-directives.md's Unblock-Everything scope boundary ("Failures unrelated to this
+  run's own acceptance criteria (pre-existing) are filed and forwarded... not fixed here,
+  don't block this step's own PASS verdict"), filed here rather than fixed as part of
+  REQ-022's Step 5.
+
+  Suggested fix direction (not implemented here): scope the telemetry handler to this
+  test's own connection/transaction (e.g. filter on `metadata.repo`/checked-out
+  connection-owner pid, or attach only within a per-test unique handler_id AND assert on
+  a payload field identifying the query as this test's own, not just presence of any
+  query event at all) or make this specific test `async: false`.
+affected_files:
+  - test/letflow/plugs/tenant_status_test.exs
+github_issue: https://github.com/tvolodi/letflow/issues/65
+status: open

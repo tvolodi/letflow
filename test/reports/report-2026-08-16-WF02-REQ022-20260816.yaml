@@ -1,0 +1,173 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-022
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ022-20260816
+date_utc: 2026-08-16T09:52:04Z
+
+git:
+  branch: feature/WF02-REQ022-20260816
+  branch_confirmed: true
+  commit: bca76b34bdbfa0a21d9d6c897f4636c91918fd2b
+  commit_subject: "chore(WF02-REQ022): TEST-DESIGN-VALIDATOR PASS -- independent gate on Step 3"
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH, no fallback needed
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5] ... Mix 1.20.3 / Elixir 1.20.3 (compiled with Erlang/OTP 29)"
+  postgres_container: letflow-postgres-1 (already running via docker compose, port 5462 -> 5432, healthy — confirmed via `docker ps` before running, no compose up needed)
+  command_run: "mix test --seed 0  (full suite — the test alias runs ecto.create + ecto.migrate --quiet first automatically)"
+
+verdict: PASS
+
+checks:
+  test_suite_full:
+    result: PASS
+    exit_code: 0
+    summary_line_verbatim: "Result: 146 passed (4 properties, 142 tests)"
+    finished_line_verbatim: "Finished in 1.2 seconds (0.6s async, 0.6s sync)"
+    failures: 0
+    excluded: 0
+    skipped: 0
+    doctests: 0
+    note: >
+      Ran twice independently (mix test --seed 0), once piped through `tee` for a
+      live look and once redirected straight to a log file with the shell exit
+      code captured explicitly (EXIT_CODE=0). Both runs produced the identical
+      "146 passed (4 properties, 142 tests)" summary line. Second run's output
+      (1502 lines) saved to
+      scratch/req022_full_test_run2.log and grepped for failure markers (regex
+      covering "Failures:", "Failure:", "failure:", "** (", "Assertion",
+      "Excluded:", "Skipped:", "Doctests:"): zero matches anywhere. No
+      "Failures:" section present in either run.
+
+  test_file_isolated:
+    file: test/letflow/tenant_provisioning_test.exs
+    command_run: "mix test test/letflow/tenant_provisioning_test.exs --seed 0"
+    summary_line_verbatim: "Result: 14 passed"
+    exit_code: 0
+    note: >
+      Ran the new REQ-022 test file alone (separate invocation from the full-suite
+      runs above) to confirm the delta in isolation. 14/14, matches the file's own
+      14 describe/test declarations counted directly from the source (2 for
+      schema_name_for_tenant/1, 5 for the tenant_schemas migration + Registration
+      changeset, 4 for provision_tenant_schema/1, 2 for replay_migrations/2's two
+      describe blocks, 1 for the beyond-bare-ACs nil-prefix guard-pattern test).
+      Matches TEST-DESIGNER's and TEST-DESIGN-VALIDATOR's own reported 14/14.
+
+  compile_warnings_as_errors:
+    command_run: "mix compile --warnings-as-errors"
+    result: PASS
+    note: "Clean, zero output, zero warnings promoted to errors."
+
+  postgres_cleanup_independently_reverified:
+    method: >
+      Queried letflow-postgres-1 directly via `docker exec ... psql -U letflow -d
+      letflow_test` (not trusting TEST-DESIGN-VALIDATOR's prior quote of the same
+      checks) after the full-suite run completed.
+    results:
+      - query: "SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname LIKE 'tenant_%';"
+        result: "0 rows"
+      - query: "SELECT count(*) FROM public.tenant_schemas;"
+        result: 0
+      - query: "SELECT count(*) FROM public.tenants WHERE slug LIKE 'req022-%';"
+        result: 0
+      - query: "SELECT count(*) FROM public.schema_migrations WHERE version = 999999999;"
+        result: 0
+    conclusion: >
+      No orphan tenant schemas, tenant_schemas rows, req022-* tenant rows, or the
+      migration-fixture's sentinel migration version persist after the run. The
+      :auto-mode Sandbox cleanup TEST-DESIGNER/TEST-DESIGN-VALIDATOR described for
+      the two Migrator-touching describe blocks holds up under independent
+      re-verification.
+
+  known_noise_not_a_failure:
+    - >
+      [error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in NNNN ms.
+      — REQ-016's Ueberauth OIDC worker attempting to reach a deliberately
+      unreachable placeholder issuer configured in config/test.exs. Pre-existing
+      since REQ-016, already documented as expected noise in every prior WF-02 test
+      report (REQ-018 through REQ-021). Does not fail, skip, or affect any test.
+    - >
+      Pre-existing ExUnit.Case.register_test/4 deprecation warnings (4 occurrences
+      in this run's log) for the property tests (process_instance_test.exs,
+      parallel_approval_test.exs, oidc/claim_mapping_property_test.exs) —
+      unrelated to REQ-022, non-blocking compiler warnings, not promoted to
+      errors (confirmed separately via the warnings-as-errors compile check
+      above, which comes back clean because these are ExUnit macro-expansion
+      warnings, not mix compile warnings).
+    - >
+      Verbose SQL query debug logging appears in raw mix test output
+      (config/test.exs's default test log level) — expected, not indicative of any
+      problem. This is why the full-suite log is ~1500 lines for 146 tests.
+
+pre_existing_failures_found: none
+issues_filed: none
+
+test_file_breakdown:
+  new_req_022:
+    items:
+      - file: test/letflow/tenant_provisioning_test.exs
+        detail: >
+          14 tests. AC1 (tenant_schemas migration + Registration changeset): 5
+          tests — migration applied cleanly with tenant_id/schema_name columns,
+          changeset requires both fields, unique_constraint on tenant_id, unique
+          constraint on schema_name across different tenants, foreign_key_constraint
+          against tenants for an unknown tenant_id. AC2 (provision_tenant_schema/1):
+          4 tests — real CREATE SCHEMA confirmed via information_schema.schemata
+          plus a recorded tenant_schemas row, idempotent double-call (schema
+          created only once), unknown tenant_id returns {:error,
+          :tenant_not_found} with no orphan schema/row, syntactically invalid
+          tenant_id returns {:error, :invalid_tenant_id} without touching the
+          database. AC3 (replay_migrations/2): 2 tests — unprovisioned tenant
+          short-circuits to {:error, :tenant_not_provisioned} without invoking
+          Ecto.Migrator, successful replay of a migration fixture into the
+          tenant's own schema confirmed via that schema's own
+          information_schema (not public). Plus 2 supporting tests for
+          schema_name_for_tenant/1 (valid UUID -> tenant_<32 hex chars>,
+          invalid UUID -> {:error, :invalid_tenant_id}) and 1 beyond-bare-ACs
+          test (nil :prefix is a real no-op, leaves public untouched) flagged
+          by REVIEWER at Step 2d as a non-blocking addition.
+    subtotal: 14
+  full_suite_grand_total: 146
+  cross_check: >
+    146 total (4 properties, 142 example tests) = 132 pre-existing (REQ-021's own
+    baseline, itself independently confirmed in
+    test/reports/report-2026-08-16-WF02-REQ021-20260816.yaml) + 14 new REQ-022
+    tests. 132 + 14 = 146, matching the suite's own summary line exactly. Also
+    matches ELIXIR-DEV's, TEST-DESIGNER's, and TEST-DESIGN-VALIDATOR's own
+    independently reported number (146 passed, 4 properties + 142 tests) — this
+    Step 4 run is the independent, formal re-verification of that number, not a
+    substitute for it: run separately, twice, on the current HEAD (bca76b3),
+    output saved to a log file and grepped programmatically for failure markers
+    rather than eyeballed, plus a live Postgres query re-check of the cleanup
+    claim rather than trusting the prior report's quote of the same checks.
+
+acceptance_criteria_test_coverage_observed:
+  # Cross-referenced against test/specs/REQ-022.md and docs/requirements.yaml's
+  # REQ-022 acceptance_criteria list (lines 892-895).
+  criterion_1_tenant_schemas_migration_applies_cleanly_with_tenant_id_and_schema_name: "PASS — 5 tests (tenant_schemas migration + Registration changeset describe block), including a direct information_schema check that the migration applied cleanly in public with both required columns present."
+  criterion_2_provision_tenant_schema_issues_real_create_schema_and_records_mapping: "PASS — 4 tests (provision_tenant_schema/1 describe block), the happy-path test independently confirms the real CREATE SCHEMA via information_schema.schemata (not just trusting the function's return value), plus idempotency, not-found, and invalid-input branches."
+  criterion_3_replay_migrations_reapplies_against_specific_tenant_schema_via_prefix: "PASS — 2 tests (replay_migrations/2, two describe blocks: unprovisioned short-circuit + successful replay), the successful-replay test confirms the fixture table exists under the provisioned tenant's own information_schema and explicitly NOT under public."
+  criterion_4_moduledoc_states_users_groups_tenant_role_retrofit_as_open_question: "Not test-covered by design (a doc-content assertion has no runtime behavior to fail against, matching this project's established policy against grep-a-markdown-style busywork tests — same treatment as REQ-020 AC5 and REQ-021 AC5) — independently re-verified by direct source inspection in this run (not trusting TEST-DESIGN-VALIDATOR's prior quote): lib/letflow/tenant_provisioning.ex lines 27-39, under the heading '## Open question (REQ-022 acceptance criterion 4 — not resolved here)', states verbatim that users/groups/tenant_role remain in the public schema and that retrofitting them behind :prefix 'is left open for a future requirement to decide explicitly — not assumed either way by this module.'"
+
+diagnosis: "N/A — no failures observed in this run. Nothing routed back to ELIXIR-DEV or TEST-DESIGNER."
+
+regression_check_vs_baseline: >
+  REQ-021's own formally re-verified baseline (test/reports/report-2026-08-16-WF02-REQ021-20260816.yaml)
+  was 132 passed (4 properties, 128 tests), 0 failures. This run reproduces
+  132 + 14 = 146 passed (4 properties, 142 tests) independently, twice, on the
+  current HEAD commit (bca76b3, the TEST-DESIGN-VALIDATOR PASS commit — one
+  commit later than TEST-DESIGNER's own Step 3 run), with output captured to
+  log files and programmatically grepped for failure markers rather than
+  eyeballed, plus a live re-query of Postgres to independently reconfirm the
+  no-orphan-state cleanup claim rather than trusting the prior report's quote
+  of the same checks. Zero regressions confirmed.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-16-WF02-REQ022-20260816.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

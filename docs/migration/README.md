@@ -63,11 +63,12 @@ S0-S8" section for what that distinction looks like in practice.
 
 ## Requirement expansion
 
-Only Stage 0 is currently broken into `docs/requirements.yaml`
-requirements (REQ-010..014). Expand a later stage into requirements
-only once the stage(s) it `depends_on` are done — sizing a stage's
-requirements correctly generally requires the interfaces/decisions the
-prior stage produced. Follow the same schema and one-agent-turn sizing
+Stage 0 (REQ-010..014) and Stage 1 (REQ-015..021) are fully expanded and
+done. Stage 2 is expanded into requirements (REQ-022..042, 21 total);
+REQ-022 is done, REQ-023..042 are pending. Expand a later stage into
+requirements only once the stage(s) it `depends_on` are done — sizing a
+stage's requirements correctly generally requires the interfaces/decisions
+the prior stage produced. Follow the same schema and one-agent-turn sizing
 as the existing requirements.
 
 ## Two applications of the agent-pipeline principles (forward note, not built yet)

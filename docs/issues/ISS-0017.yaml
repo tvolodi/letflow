@@ -1,0 +1,81 @@
+id: ISS-0017
+title: "REQ-022's design doc and test spec are now stale against the shipped tenant_scoped_migrations/0 (say it 'returns []' / omit the module-loading step REQ-023 had to add)"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ023-20260816
+discovered_at: 2026-08-16T16:46:54Z
+severity: MINOR
+description: >
+  REQ-023 (this run) had to change `Letflow.TenantProvisioning.tenant_scoped_migrations/0`
+  in two ways: register its six `{version, module}` tuples (which REQ-022's
+  design always intended -- see its §3.4 and §4's "both halves are mandatory"
+  rule), and fix a genuine defect REQ-022's design did not anticipate.
+
+  The defect, confirmed independently by ORCH, by CODE-DESIGN-VALIDATOR
+  against `deps/ecto_sql/lib/ecto/migrator.ex`, and finally empirically by
+  ELIXIR-DEV: `Ecto.Migrator.load_migration!/1` requires
+  `Code.ensure_loaded?(module)`, but `priv/repo/migrations/*.exs` is never
+  compiled (`mix.exs:20-21` sets `elixirc_paths` to `["lib"]`). REQ-022's
+  §3.4 designed `tenant_scoped_migrations/0` as a bare list of
+  `{version, module}` tuples, which would therefore raise
+  `Ecto.MigrationError` in any VM where those modules were not already
+  loaded. ELIXIR-DEV demonstrated the counterfactual directly rather than
+  arguing it: in a fresh VM against an already-migrated DB with a genuinely
+  pending version, the bare-tuple form raised
+  "module Letflow.Repo.Migrations.CreateEvents is not an Ecto.Migration",
+  while the fixed function loaded and applied all six.
+
+  It was masked until now because `mix.exs:48`'s `test:` alias runs
+  `ecto.migrate` in the same VM (which `Code.compile_file`s the migration
+  files as a side effect) and because only *pending* migrations are ever
+  loaded -- i.e. it passed on a fresh test DB and would have failed on a warm
+  one, and always in `iex -S mix`. REQ-022 shipped green precisely because
+  its own `tenant_scoped_migrations/0` returned `[]`, so nothing ever
+  exercised the loading path.
+
+  The code is fixed (REQ-023 added a private
+  `ensure_migration_module_loaded!/2` plus a `{version, module, filename}`
+  manifest, with the third element never escaping the function so REQ-022's
+  shipped `@spec` stays byte-identical -- ORCH confirmed via
+  `git diff origin/main` that no `@spec` line changed). What is NOT fixed is
+  the surrounding documentation, which now describes a mechanism that no
+  longer matches the code:
+
+  1. `lib/letflow/design/req022-tenant-schema-provisioning.md` §3.4 (and §4's
+     surrounding narrative) still specifies the bare `{version, module}`
+     design with no module-loading step. A future requirement's
+     CODE-DESIGNER reading that section for the "required pattern for every
+     tenant-scoped migration" -- which §4 explicitly instructs them to do --
+     would re-derive the broken shape.
+  2. `test/specs/REQ-022.md:286` and `test/support/req022_migration_fixture.ex:6`
+     still say the function "returns `[]` today." It now returns six entries.
+
+  Why this is filed rather than fixed here: (1) is a design artefact for a
+  *different, already-merged* requirement, and editing another requirement's
+  gated design doc from inside this run would sidestep the design gate that
+  approved it. (2) is TEST-DESIGNER-owned surface (`test/specs/`,
+  `test/support/`), and REQ-023's own Step 3 has not run yet at the time of
+  filing -- ORCH is carrying the `test/specs/REQ-022.md` and fixture-comment
+  staleness forward to TEST-DESIGNER as an explicit instruction for that
+  step, so that half may well be closed within this run; this record exists
+  so the *design-doc* half is not lost either way.
+
+  Forward note recorded here so it is not lost: REVIEWER's REQ-022 review
+  suggested a guard test that iterates `tenant_scoped_migrations/0` and
+  asserts every entry follows §4's prefix() guard pattern. That test was not
+  writable then, because the function returned `[]` and there was nothing to
+  iterate. As of REQ-023 it returns six real entries, so that test is now
+  genuinely writable and would mechanically enforce §4's rule for every
+  future tenant-scoped migration instead of relying on each ELIXIR-DEV
+  remembering to read §4.
+
+  Discovered by ELIXIR-DEV during REQ-023's Step 2a. The code defect blocked
+  REQ-023's own acceptance criterion 1 and so was fixed in-run under
+  core-directives.md's Unblock-Everything directive; the documentation drift
+  it leaves behind blocks nothing and is forwarded per
+  docs/agents/protocols/ISSUE_QUEUE.md.
+affected_files:
+  - lib/letflow/design/req022-tenant-schema-provisioning.md
+  - test/specs/REQ-022.md
+  - test/support/req022_migration_fixture.ex
+github_issue: https://github.com/tvolodi/letflow/issues/73
+status: open

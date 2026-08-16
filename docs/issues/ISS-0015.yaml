@@ -1,0 +1,66 @@
+id: ISS-0015
+title: "Bandit's port 4000 is hardcoded in the supervision tree and not partitioned by MIX_TEST_PARTITION -- two concurrent `mix test` runs on one host collide with :eaddrinuse"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ023-20260816
+discovered_at: 2026-08-16T16:46:54Z
+severity: MAJOR
+description: >
+  `lib/letflow/application.ex:25` starts the HTTP listener as:
+
+      {Bandit, plug: Letflow.Router, port: 4000}
+
+  The port is a hardcoded literal. It is read from no config file and no
+  environment variable (ORCH confirmed directly: grepping `port` across
+  `config/*.exs` returns only the Postgres port 5462 in `config/dev.exs`;
+  there is no 4000 anywhere in `config/`).
+
+  Because this child sits in the application supervision tree, it starts on
+  every `mix test` run. `config/test.exs` already partitions the *database*
+  by `MIX_TEST_PARTITION` (`letflow_test#{System.get_env("MIX_TEST_PARTITION")}`),
+  which is what lets two checkouts run suites concurrently without corrupting
+  each other's data -- but that mechanism does not extend to the listening
+  port. So two concurrent test runs on the same host bind, or try to bind,
+  the same TCP port 4000.
+
+  This is not hypothetical. It fired during this run: ELIXIR-DEV's first
+  `mix test` invocation aborted with a transient `:eaddrinuse` on port 4000.
+  Nothing held 4000 on re-check and the retry passed cleanly (161/161), so it
+  did not affect this requirement's outcome -- but the failure mode is real
+  and it is a *silent, misleading* one: the resulting error surfaces as an
+  application-start failure, not as "another test run is using this port,"
+  so an agent hitting it is likely to misdiagnose it as a defect in whatever
+  code it just wrote.
+
+  Why this matters more now than it used to: Letflow development has started
+  running two git worktrees against one host concurrently
+  (c:\Users\tvolo\dev\ai-dala\letflow and c:\Users\tvolo\dev\ai-dala\letflow-wt2),
+  specifically to get parallel throughput, with `MIX_TEST_PARTITION=2` as the
+  documented isolation mechanism for the second one. That arrangement makes
+  simultaneous `mix test` runs the expected steady state rather than a rare
+  coincidence. The DB half of the isolation works; the port half does not
+  exist. As parallel runs become routine this will fire intermittently and
+  cost real diagnosis time each occurrence, because the symptom does not name
+  its cause.
+
+  Suggested resolution (its own run, not this one): make the port configurable
+  the same way the database name already is -- read it from config with a
+  4000 default, and in `config/test.exs` derive it from `MIX_TEST_PARTITION`
+  (e.g. `4000 + partition`) so partition 2 lands on 4002. Consider also
+  whether the HTTP listener should start at all under `MIX_ENV=test`: no
+  current test drives it over a real socket (the router is exercised through
+  `Plug.Test` conn structs), so a `config/test.exs`-gated `start_http:` flag
+  would sidestep the collision entirely and shave startup work off every test
+  run. That is a design judgement for CODE-DESIGNER, not something to decide
+  here -- both options are recorded rather than one being silently picked.
+
+  Discovered incidentally by ELIXIR-DEV during REQ-023's Step 2a while
+  running the suite to confirm no regression. Unrelated to REQ-023's own
+  acceptance criteria and blocking none of them (the retry passed and the
+  final verified result was 161/161), so per
+  docs/agents/protocols/ISSUE_QUEUE.md it is filed and forwarded rather than
+  fixed inside this run.
+affected_files:
+  - lib/letflow/application.ex
+  - config/test.exs
+github_issue: https://github.com/tvolodi/letflow/issues/71
+status: open

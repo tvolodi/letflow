@@ -1,13 +1,17 @@
 {
-  "_comment": "Per-run lock/status registry backing docs/agents/ORCHESTRATOR.md §7's owned_modules collision check and AGENT_SYSTEM.md §7's pre-start check. Append-only per HANDOFF_PROTOCOL.md §5 -- never shrink, never regenerate wholesale. Created 2026-08-16 to close ISS-0010 (this file had never existed; REQ-015 through REQ-021 all ran and merged without it). Entries below for REQ-018/019/020/021 are a best-effort backfill reconstructed from each run's own handoffs/<run_id>/step-*.json files and docs/status/requirement_status.yaml, not live-recorded at the time -- see each entry's backfilled: true flag. Every run listed is already merged to main (Step Final PASS), so all are status COMPLETED with released_lock: true; none represent an active lock.",
+  "_comment": "Per-run lock/status registry backing docs/agents/ORCHESTRATOR.md \u00a77's owned_modules collision check and AGENT_SYSTEM.md \u00a77's pre-start check. Append-only per HANDOFF_PROTOCOL.md \u00a75 -- never shrink, never regenerate wholesale. Created 2026-08-16 to close ISS-0010 (this file had never existed; REQ-015 through REQ-021 all ran and merged without it). Entries below for REQ-018/019/020/021 are a best-effort backfill reconstructed from each run's own handoffs/<run_id>/step-*.json files and docs/status/requirement_status.yaml, not live-recorded at the time -- see each entry's backfilled: true flag. Every run listed is already merged to main (Step Final PASS), so all are status COMPLETED with released_lock: true; none represent an active lock.",
   "runs": [
     {
       "run_id": "WF02-REQ018-20260816",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-018"],
+      "requirement_ids": [
+        "REQ-018"
+      ],
       "stage": "S1",
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/identity"],
+      "owned_modules": [
+        "lib/letflow/identity"
+      ],
       "lock_acquired_at": "2026-08-16T00:00:00Z",
       "lock_released_at": "2026-08-16T00:00:00Z",
       "released_lock": true,
@@ -24,10 +28,16 @@
     {
       "run_id": "WF02-REQ019-20260816",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-019"],
+      "requirement_ids": [
+        "REQ-019"
+      ],
       "stage": "S1",
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/identity", "test/letflow/identity_test.exs", "test/specs/REQ-019.md"],
+      "owned_modules": [
+        "lib/letflow/identity",
+        "test/letflow/identity_test.exs",
+        "test/specs/REQ-019.md"
+      ],
       "lock_acquired_at": "2026-08-16T04:00:00Z",
       "lock_released_at": "2026-08-16T07:00:00Z",
       "released_lock": true,
@@ -51,10 +61,15 @@
     {
       "run_id": "WF02-REQ020-20260816",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-020"],
+      "requirement_ids": [
+        "REQ-020"
+      ],
       "stage": "S1",
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/identity/role_registry.ex", "lib/letflow/identity/tenant_role.ex"],
+      "owned_modules": [
+        "lib/letflow/identity/role_registry.ex",
+        "lib/letflow/identity/tenant_role.ex"
+      ],
       "lock_acquired_at": "2026-08-16T00:00:00Z",
       "lock_released_at": "2026-08-16T00:00:00Z",
       "released_lock": true,
@@ -72,10 +87,17 @@
     {
       "run_id": "WF02-REQ021-20260816",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-021"],
+      "requirement_ids": [
+        "REQ-021"
+      ],
       "stage": "S1",
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/plugs", "lib/letflow/router.ex", "lib/letflow/oidc/token_verifier.ex", "lib/letflow/oidc/token_verifier"],
+      "owned_modules": [
+        "lib/letflow/plugs",
+        "lib/letflow/router.ex",
+        "lib/letflow/oidc/token_verifier.ex",
+        "lib/letflow/oidc/token_verifier"
+      ],
       "lock_acquired_at": "2026-08-16T06:00:00Z",
       "lock_released_at": "2026-08-16T06:57:35Z",
       "released_lock": true,
@@ -95,15 +117,20 @@
         "handoffs/WF02-REQ021-20260816/step-06-doc-updater.json",
         "PR #41 (merged)"
       ],
-      "note": "This is the only run of the four with a complete on-disk handoff trail (step-01 through step-06), though registry.json itself was still never updated live during the run -- the gap ISS-0010 describes. This entry is the first live-accurate backfill; future runs should update this file directly per HANDOFF_PROTOCOL.md §4 step 4 rather than requiring another backfill."
+      "note": "This is the only run of the four with a complete on-disk handoff trail (step-01 through step-06), though registry.json itself was still never updated live during the run -- the gap ISS-0010 describes. This entry is the first live-accurate backfill; future runs should update this file directly per HANDOFF_PROTOCOL.md \u00a74 step 4 rather than requiring another backfill."
     },
     {
       "run_id": "WF02-REQ022-20260816",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-022"],
+      "requirement_ids": [
+        "REQ-022"
+      ],
       "stage": "S2",
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/tenant_provisioning", "priv/repo/migrations"],
+      "owned_modules": [
+        "lib/letflow/tenant_provisioning",
+        "priv/repo/migrations"
+      ],
       "lock_acquired_at": "2026-08-16T08:37:43Z",
       "lock_released_at": "2026-08-16T10:15:28Z",
       "released_lock": true,
@@ -111,15 +138,19 @@
       "backfilled": false,
       "queue_task_id": 36,
       "queue_agent_id": "tvolodi-orch",
-      "note": "Claimed live via letflow-queue get_next_task (not the requirements.yaml fallback) -- first run since the queue's S2 backlog was registered this session. Updated live per HANDOFF_PROTOCOL.md §4 step 4, not backfilled. Step 5 (RELEASE-VALIDATOR) PASSed (handoffs/WF02-REQ022-20260816/step-05-release-validator.json); Step 6 (DOC-UPDATER) flipped docs/requirements.yaml REQ-022 to done and appended the done event. Step Final (ELIXIR-DEV): origin/main had moved (56b7540, TASK_QUEUE S2-backlog registration) but was already an ancestor of this branch's HEAD, so the rebase was a no-op with zero conflicts; mix compile --warnings-as-errors and mix test (146/146) re-verified green post-fetch; pushed, opened PR #66, squash-merged (--delete-branch), and returned to a clean main at da73c15. No CI existed to wait on (.github/workflows/ absent, REQ-013 still pending) -- proceeded per GIT_MERGE.md's documented interim behavior for that case. Lock released (released_lock: true) and run marked COMPLETED."
+      "note": "Claimed live via letflow-queue get_next_task (not the requirements.yaml fallback) -- first run since the queue's S2 backlog was registered this session. Updated live per HANDOFF_PROTOCOL.md \u00a74 step 4, not backfilled. Step 5 (RELEASE-VALIDATOR) PASSed (handoffs/WF02-REQ022-20260816/step-05-release-validator.json); Step 6 (DOC-UPDATER) flipped docs/requirements.yaml REQ-022 to done and appended the done event. Step Final (ELIXIR-DEV): origin/main had moved (56b7540, TASK_QUEUE S2-backlog registration) but was already an ancestor of this branch's HEAD, so the rebase was a no-op with zero conflicts; mix compile --warnings-as-errors and mix test (146/146) re-verified green post-fetch; pushed, opened PR #66, squash-merged (--delete-branch), and returned to a clean main at da73c15. No CI existed to wait on (.github/workflows/ absent, REQ-013 still pending) -- proceeded per GIT_MERGE.md's documented interim behavior for that case. Lock released (released_lock: true) and run marked COMPLETED."
     },
     {
       "run_id": "WF02-REQ028-20260816",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-028"],
+      "requirement_ids": [
+        "REQ-028"
+      ],
       "stage": "S2",
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/definitions"],
+      "owned_modules": [
+        "lib/letflow/definitions"
+      ],
       "lock_acquired_at": "2026-08-16T10:50:30Z",
       "lock_released_at": "2026-08-16T12:11:30Z",
       "released_lock": true,
@@ -148,21 +179,28 @@
     {
       "run_id": "WF02-REQ023-20260816",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-023"],
+      "requirement_ids": [
+        "REQ-023"
+      ],
       "stage": "S2",
       "status": "IN_PROGRESS",
-      "owned_modules": ["lib/letflow/event_store", "priv/repo/migrations", "lib/letflow/tenant_provisioning.ex"],
+      "owned_modules": [
+        "lib/letflow/event_store",
+        "priv/repo/migrations",
+        "lib/letflow/tenant_provisioning.ex"
+      ],
       "owned_modules_amended_at": "2026-08-16T16:05:57Z",
       "owned_modules_amendment_reason": "lib/letflow/tenant_provisioning.ex added to this run's lock after Step 1's design landed. REQ-022's shipped tenant_scoped_migrations/0 returns [] and its own @doc mandates that every tenant-scoped migration from REQ-023 onward append its {version, module} tuple there -- so REQ-023 structurally cannot satisfy its acceptance criterion 1 (migrations applying against a provisioned tenant schema via REQ-022's replay mechanism) without editing that file. CODE-DESIGNER additionally found a genuine defect in the same function that blocks the same acceptance criterion (see last_known_step). This is Unblock-Everything scope (it blocks THIS run's own AC), not scope creep. Recorded here rather than silently widening the lock.",
       "lock_acquired_at": "2026-08-16T15:38:26Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 1b (CODE-DESIGN-VALIDATOR, HARD GATE) COMPLETED -- PASS, handoff committed 97b4559; routed to ELIXIR-DEV (Step 2a). Prior: Step 1 (CODE-DESIGNER) COMPLETED -- PASS, lib/letflow/design/req023-event-store-schema.md (1184 lines) committed 2f7a8b8. Design additionally identified a blocking defect in REQ-022's shipped replay mechanism: tenant_scoped_migrations/0 returns {version, module} tuples, but Ecto.Migrator.load_migration!/1 requires Code.ensure_loaded?(module) and priv/repo/migrations/*.exs is never compiled (mix.exs elixirc_paths is [\"lib\"] -- ORCH independently confirmed this at mix.exs:20-21), so replay_migrations/2 would raise Ecto.MigrationError. Masked today only because mix.exs's test alias runs ecto.migrate in the same VM and only pending migrations are ever loaded -- i.e. it passes on a fresh test DB and fails on a warm one. Design resolves it via a Code.require_file guard inside tenant_scoped_migrations/0, leaving both shipped @specs byte-identical.",
+      "last_known_step": "Step 2a (ELIXIR-DEV) COMPLETED -- PASS, implementation committed 2fe967f (13 files, +1087/-8) and handoff acb5cdc. Six migrations + six Ecto.Schema modules + tenant_scoped_migrations/0 registration and its in-scope module-loading defect fix. Routed to SECURITY-REVIEWER (Step 2c, hard gate). Prior: Step 1b (CODE-DESIGN-VALIDATOR, HARD GATE) PASS 97b4559; Step 1 (CODE-DESIGNER) PASS 2f7a8b8.",
       "backfilled": false,
       "queue_task_id": 38,
       "queue_agent_id": "worktree2-orch",
       "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow-wt2 (secondary git worktree, MIX_TEST_PARTITION=2 -> letflow_test2 DB)",
-      "note": "FIRST RUN FROM THE SECONDARY WORKTREE. This run executes in c:\\Users\\tvolo\\dev\\ai-dala\\letflow-wt2, a git worktree of the same repository as the primary checkout, with a concurrent ORCH session running in the primary checkout under queue agent_id tvolodi-orch. Claimed live via a real letflow-queue get_next_task call (agent_id: worktree2-orch), task id 38 (REQ-023, depends_on: [36] = REQ-022, done) -- the queue's atomic claim, not this local registry, is what prevents the two worktrees from claiming the same requirement. IMPORTANT for anyone reading this file for ORCHESTRATOR.md Sec.7 collision checks: this registry is per-checkout and is only merged across worktrees when each side pushes, so it CANNOT see the other worktree's in-flight owned_modules until that run lands on main. Treat Sec.7 as a best-effort local safety net here, not a cross-worktree guarantee; the queue claim is the real lock. owned_modules for this run (lib/letflow/event_store, priv/repo/migrations) were chosen to be additive-only -- new files under a new directory plus new timestamped migration files -- so a concurrent run touching a different lib/letflow/ subtree cannot conflict at the file level. Baseline before any change: mix test --seed 0 = 161/161 against letflow_test2; one unpinned-seed run reproduced pre-existing ISS-0011 only."
+      "note": "FIRST RUN FROM THE SECONDARY WORKTREE. This run executes in c:\\Users\\tvolo\\dev\\ai-dala\\letflow-wt2, a git worktree of the same repository as the primary checkout, with a concurrent ORCH session running in the primary checkout under queue agent_id tvolodi-orch. Claimed live via a real letflow-queue get_next_task call (agent_id: worktree2-orch), task id 38 (REQ-023, depends_on: [36] = REQ-022, done) -- the queue's atomic claim, not this local registry, is what prevents the two worktrees from claiming the same requirement. IMPORTANT for anyone reading this file for ORCHESTRATOR.md Sec.7 collision checks: this registry is per-checkout and is only merged across worktrees when each side pushes, so it CANNOT see the other worktree's in-flight owned_modules until that run lands on main. Treat Sec.7 as a best-effort local safety net here, not a cross-worktree guarantee; the queue claim is the real lock. owned_modules for this run (lib/letflow/event_store, priv/repo/migrations) were chosen to be additive-only -- new files under a new directory plus new timestamped migration files -- so a concurrent run touching a different lib/letflow/ subtree cannot conflict at the file level. Baseline before any change: mix test --seed 0 = 161/161 against letflow_test2; one unpinned-seed run reproduced pre-existing ISS-0011 only.",
+      "orch_independent_verification_2a": "ORCH re-ran and re-derived rather than trusting the report: mix compile --warnings-as-errors exit 0; mix format --check-formatted exit 0; MIX_TEST_PARTITION=2 mix test --seed 0 = 161 passed (4 properties, 157 tests) exit 0, exactly baseline. Guard pattern confirmed present in all six migrations (grep 'if prefix() do' = 2 hits each: the guard plus its documented no-op comment). All six {version, module} tuples confirmed registered in tenant_scoped_migrations/0's manifest. git diff origin/main -- lib/letflow/tenant_provisioning.ex shows zero changed @spec lines, confirming REQ-022's contract is byte-identical. AC3 confirmed: update_changeset exists ONLY on instance_projection.ex (legitimate per 0003 Decision C point 3, which treats projection tables as ordinary CRUD); event.ex, archived_event.ex, instance_sequence.ex and idempotency_record.ex each explicitly document its deliberate absence. AC4 confirmed: idempotency_record.ex moduledoc cites event_store.md's Open Question #1. AC5 confirmed: instance_projection.ex moduledoc names EE-01/S3 as the population scope. Working tree clean, registry.json untouched by the subagent as instructed."
     }
   ]
 }

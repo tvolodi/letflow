@@ -1,0 +1,60 @@
+id: ISS-0016
+title: ".formatter.exs excludes priv/repo/migrations/** and lacks import_deps: [:ecto_sql], so no migration file has ever been format-checked by the project gate"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ023-20260816
+discovered_at: 2026-08-16T16:46:54Z
+severity: MINOR
+description: >
+  `.formatter.exs` reads, in full:
+
+      [
+        inputs: ["{mix,.formatter}.exs", "{config,lib,test}/**/*.{ex,exs}"]
+      ]
+
+  Two consequences, both confirmed by ORCH reading the file directly:
+
+  1. `priv/repo/migrations/**` is not in `inputs`, so `mix format` never
+     formats a migration and `mix format --check-formatted` never checks one.
+     Every migration file in the repo is, as far as the project's own
+     formatting gate is concerned, invisible.
+  2. There is no `import_deps: [:ecto_sql]`, so even if migrations were added
+     to `inputs`, the formatter would not know Ecto.Migration's macros
+     (`create`, `add`, `timestamps`, ...) are macros and would parenthesise
+     them, producing a large mechanical diff across every existing migration
+     the first time it ran.
+
+  ELIXIR-DEV ran an explicit out-of-band format check over
+  `priv/repo/migrations/` during REQ-023's Step 2a: it flags **all 13**
+  migration files, including the 7 that pre-date this requirement. So this is
+  a long-standing pre-existing gap, not something REQ-023 introduced -- the
+  six migrations added by REQ-023 match the shipped style of the seven that
+  came before them, and the project gate `mix format --check-formatted` exits
+  0 both before and after this requirement (ORCH re-ran it independently:
+  exit 0).
+
+  Why it is worth fixing rather than shrugging at: `mix letflow.check` is
+  documented in README as the project's single fail-fast quality gate, and
+  README's own framing treats a formatting failure as a real gate failure
+  (see the ISS-0008 history). A whole directory of tracked Elixir source
+  silently exempt from that gate is a hole in it. It is also exactly the kind
+  of thing that looks like it works until someone adds `priv/**` to `inputs`
+  in passing and suddenly gets a 13-file diff they did not intend.
+
+  Deliberately NOT fixed in this run. Fixing it correctly means adding both
+  `import_deps: [:ecto_sql]` and the `priv/repo/migrations/**` input, then
+  running the resulting reformat across all 13 files -- a repo-wide
+  mechanical diff touching 7 files that have nothing to do with REQ-023.
+  Bundling that into an event-store requirement would bury a
+  formatting-infrastructure change inside a schema change and make REQ-023's
+  own diff much harder to review. It wants its own small requirement or WF-03
+  run, where the reformat diff is the whole point and can be verified as
+  formatting-only (the same way ISS-0008 was handled: reformat, then confirm
+  via `git diff` that nothing but whitespace/parenthesisation moved).
+
+  Discovered by ELIXIR-DEV during REQ-023's Step 2a. Unrelated to REQ-023's
+  acceptance criteria and blocking none of them, so per
+  docs/agents/protocols/ISSUE_QUEUE.md filed and forwarded, not fixed here.
+affected_files:
+  - .formatter.exs
+github_issue: https://github.com/tvolodi/letflow/issues/72
+status: open

@@ -1430,3 +1430,57 @@ history:
       created and pushed (Step 00 git setup PASS). Beginning CODE-DESIGNER
       design step for tenant<->realm binding (resolveTenantByRealm/
       resolveRealmByTenant equivalents) plus adp-04a's realm-ownership guard.
+  - req: REQ-019
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-16T05:15:33Z
+    note: >
+      Built Letflow.Identity.resolve_tenant_by_realm/1, resolve_realm_by_tenant/1,
+      and verify_realm_ownership/2, porting src/oidc/realm_tenant_binding.zig's
+      resolveTenantByRealm/resolveRealmByTenant plus adp-04a's realm-ownership
+      guard, operating on REQ-015's tenants schema. The one-to-one tenant<->realm
+      invariant (each tenant has at most one idp_realm_id, each idp_realm_id maps
+      to at most one tenant) is enforced via a unique partial index on
+      tenants.idp_realm_id (WHERE idp_realm_id IS NOT NULL), not just changeset
+      validation, matching realm_tenant_binding.zig and
+      src/design/adp-04b-tenant-realm-binding.md. idp_realm_id immutability after
+      creation is enforced at the changeset level: update_changeset/2's cast list
+      omits idp_realm_id entirely, so no update path can change it once set — no
+      admin-only rotation function was added, stated explicitly per the
+      requirement's instruction to say so rather than leave it ambiguously
+      reachable. The default/seeded tenant is pinned to idp_realm_id =
+      "bpm-default", matching R-Co's convention. verify_realm_ownership/2
+      implements adp-04a's Cross-tenant collision boundaries §1/§3 guard,
+      rejecting a (tenant_id, external_realm) pair where external_realm is not
+      the realm actually bound to tenant_id — wired for REQ-021's future pipeline
+      to call before REQ-018's JIT provisioning, not yet itself wired into a
+      running request pipeline (REQ-021 does that). RELEASE-VALIDATOR
+      independently re-verified all 4 acceptance criteria against the actual
+      code/tests (not just TEST-RUNNER's report) and reported PASS: 97/97 full
+      suite, 29/29 in this requirement's own test file, no staleness/drift found
+      between docs/requirements.yaml, docs/status/requirement_status.yaml, and
+      what actually shipped. One minor cosmetic formatting fix was applied and
+      committed separately by ORCH directly (commit 77438ca) ahead of this
+      DOC-UPDATER pass. Flipped docs/requirements.yaml REQ-019 status to done.
+      README.md checked and confirmed it documents nothing REQ-019 changed: no
+      OIDC/identity/tenant/realm functionality is user-observable or runnable
+      yet (no route touches it, no real Keycloak issuer exists) — same reasoning
+      already applied at REQ-011/012/015/016/017/018's DOC-UPDATER passes.
+      docs/guides/backend_developer_guide.md checked and deliberately left
+      untouched for the same reason: it already names REQ-015 through REQ-021
+      collectively as what implements the ueberauth_oidcc decision, rather than
+      enumerating per-requirement mechanics, so adding REQ-019-specific detail
+      would break that established pattern rather than follow it. REQ-019's
+      acceptance_criteria re-read in full: none of its 4 criteria name a
+      specific docs/migration/decisions/*.md file, so no decision record needed
+      touching this pass. docs/migration/stage-1-identity.md's header line
+      updated from "Status: in progress. Depends on: S0. Requirements: REQ-015,
+      REQ-016, REQ-017, REQ-018 (done); REQ-019 through REQ-021
+      (docs/requirements.yaml) pending." to "Status: in progress. Depends on:
+      S0. Requirements: REQ-015, REQ-016, REQ-017, REQ-018, REQ-019 (done);
+      REQ-020 through REQ-021 (docs/requirements.yaml) pending." No REVIEWER
+      sign-off section added to stage-1-identity.md yet — that lands once all
+      of S1's requirements (REQ-015..021) are done, same precedent as
+      REQ-015/016/017/018's DOC-UPDATER passes. No lib/, test/, or priv/ file
+      was touched by this DOC-UPDATER pass — those were already correct and
+      gated by the prior steps in this run.

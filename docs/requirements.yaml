@@ -687,7 +687,7 @@ requirements:
   - id: REQ-019
     title: Tenant<->realm binding (OIDC-12/ADP-04b equivalent)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S1
     impl_order: 32  # letflow-queue task id
     description: >

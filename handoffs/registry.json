@@ -139,7 +139,7 @@
       "lock_acquired_at": "2026-08-16T15:46:10Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 00 (git setup) COMPLETED -- PASS, routed to Step 1 (CODE-DESIGNER)",
+      "last_known_step": "Step 1 (CODE-DESIGNER) COMPLETED -- PASS, lib/letflow/design/req024-event-type-registry.md written (hand-rolled JSON Schema validator decision, no new mix.exs dependency, no new decision record), routed to Step 1b (CODE-DESIGN-VALIDATOR)",
       "backfilled": false,
       "queue_task_id": 39,
       "queue_agent_id": "tvolodi-orch",

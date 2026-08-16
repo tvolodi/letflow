@@ -1,0 +1,65 @@
+{
+  "handoff_id": "d3f6a8e2-9b1c-4e7a-8f2d-6c4b1a9e0f37",
+  "run_id": "WF02-REQ021-20260816",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "RELEASE-VALIDATOR",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ021-20260816/step-05-release-validator.json",
+  "created_at": "2026-08-16T06:55:27Z",
+  "started_at": "2026-08-16T06:55:27Z",
+  "completed_at": "2026-08-16T06:55:27Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S1",
+    "requirement_ids": ["REQ-021"],
+    "related_handoff_ids": ["a41b097a-abfd-4b9b-b620-c087649c8ba5"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "docs/migration/stage-1-identity.md",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/plugs/tenant_status.ex",
+      "lib/letflow/identity.ex",
+      "test/letflow/plugs/auth_pipeline_test.exs",
+      "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs",
+      "test/letflow/plugs/tenant_status_test.exs",
+      "test/specs/REQ-021.md",
+      "test/reports/report-2026-08-16-WF02-REQ021-20260816.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 5 (RELEASE-VALIDATOR) for run-id WF02-REQ021-20260816: independently re-run the full test suite and re-verify all 5 of REQ-021's acceptance criteria against the actual code/tests, not against TEST-RUNNER's or REVIEWER's reports. Last gate before DOC-UPDATER flips status to done.",
+    "acceptance_criteria": [
+      "mix test independently re-run, actual output quoted",
+      "each of REQ-021's 5 acceptance criteria checked against real code/tests, not summaries",
+      "requirement_status.yaml / requirements.yaml staleness checked",
+      "stage-1-identity.md's current state checked for whether S1 is now fully done"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-ran `mix test` (local toolchain, Erlang/OTP present, real Postgres) on HEAD commit a48d745: 'Result: 132 passed (4 properties, 128 tests)', 0 failures -- matches TEST-RUNNER's Step 4 report exactly, confirmed by a genuinely separate invocation in this session, not copied from its report. All 5 acceptance criteria independently re-verified against actual code/tests: AC1 -- read auth_pipeline.ex's call/2 (lines 57-64) directly, confirmed the `with` chain order is extract_bearer_token -> verify_token -> extract_realm -> resolve_tenant -> guard_realm_ownership -> map_claims -> provision_user -> attach_auth_context, matching verify->tenant resolution->realm-ownership guard->JIT provisioning->auth-context; found and read the passing test 'a valid bearer token flows through the full pipeline...' (auth_pipeline_test.exs:92-108) which asserts conn.assigns[:auth_context] shape and cross-checks the persisted User row directly against Postgres rather than trusting the in-memory assign. AC2 -- confirmed extract_bearer_token/1 (step 1a, line 99-104) is the first clause in the with chain, before any Repo/verifier call; found the 5 passing tests at auth_pipeline_test.exs:125-177 covering missing header, wrong scheme, empty token, wrong case, and unverifiable-token, plus a combined zero-rows-written assertion. AC3 -- read tenant_status.ex directly: @write_methods ~w(POST PUT PATCH DELETE) (line 37) guards the write-checking clause (line 44), :migrating status returns 503 + retry-after: \"30\" (lines 58-61, 74-86, @retry_after_seconds literal confirmed), non-write methods hit the pass-through clause (line 49) with zero DB query, confirmed by the telemetry-based test at tenant_status_test.exs:120-140 (asserts no [:letflow, :repo, :query] event fires for GET). Found and read both halves' passing tests (migrating-tenant-rejected: tenant_status_test.exs:54-96; active-tenant-passes: :98-118). AC4 -- read Identity.verify_realm_ownership/2 (lib/letflow/identity.ex:126-132) directly: it re-queries resolve_realm_by_tenant/1 from the DB rather than trusting the caller-supplied realm (confirmed by reading resolve_realm_by_tenant/1 itself, lines 100-106), called at auth_pipeline.ex line 61 (guard_realm_ownership/2) strictly before map_claims/provision_user (lines 62-63) -- confirmed by reading the with-chain ordering directly, not by trusting the moduledoc's claim about it. Independently re-derived a view on the documented AC4 coverage limitation (structural same-column argument instead of a true TOCTOU race test, test/specs/REQ-021.md's 'AC4 test strategy' section): agree this is acceptable for S1's current scope -- the structural argument is genuine (both resolve_tenant_by_realm and verify_realm_ownership key off the identical idp_realm_id column for the same tenant_id within one request, so they cannot disagree absent an actual concurrent write racing between the two specific reads, which is a materially different and weaker claim than 'untested and unreasoned-about'), the re-query-not-trust design of verify_realm_ownership/2 is itself the real defense a race would need and that mechanism IS directly tested (case 15, auth_pipeline_test.exs:181-198), and no real Keycloak/production traffic exists yet at S1 to make a live race a near-term risk -- concur with TEST-DESIGN-VALIDATOR's prior answer on independent re-derivation, not by copying it. AC5 -- read lib/letflow/plugs/auth_pipeline.ex lines 1-34 directly (not the test spec's quotation of it): lines 3-5 state 'Letflow's first real auth plug -- supersedes the never-built REQ-103 dev-bearer-token plug (cancelled along with the rest of the MVP-1 milestone; REQ-103 is not prior art this module extends, it never landed)'; lines 23-31 state '**Not mounted in front of any route today.** All 3 of `Letflow.Router`'s existing routes (`POST /instances`, `POST /instances/:id/actions`, `GET /instances/:id`) are non-tenant-scoped...' naming all 3 routes explicitly by pattern and stating none are currently gated. Both required elements present verbatim. Staleness check: docs/requirements.yaml's REQ-021 entry correctly still reads status: in_progress (not prematurely flipped) -- confirmed via direct grep/read, ORCH's Step 00 in_progress flip is the last status write on record. docs/status/requirement_status.yaml's most recent REQ-021 entry is the 'started' event from ELIXIR-DEV at Step 00 (2026-08-16T06:08:10Z) -- no premature 'done' event exists. Neither file shows drift from what actually shipped: the code/tests read directly in this validation match what both files describe. Stage-level note for DOC-UPDATER: docs/migration/stage-1-identity.md's header line still reads 'REQ-021 (docs/requirements.yaml) pending' and its 'REVIEWER sign-off' section still reads '(None yet -- this stage hasn't started.)' -- both are now stale relative to reality (REQ-015 through REQ-020 are all done, REQ-021 -- the last of S1 -- has just passed this gate). Once DOC-UPDATER flips REQ-021 to done, ALL of S1 (REQ-015..021) will be done for the first time -- DOC-UPDATER should update stage-1-identity.md's header line accordingly and flag to ORCH whether a stage-level REVIEWER sign-off section (WF-04 stage-gate territory, not this run's job) is now due, per this run's own instructions. This is a flag for DOC-UPDATER/ORCH, not something RELEASE-VALIDATOR alters itself.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "docs/migration/stage-1-identity.md's header line and 'REVIEWER sign-off' section will both be stale the instant REQ-021 flips to done (header still lists REQ-021 as pending; sign-off section still says the stage hasn't started even though REQ-015-020 are done and REQ-021 has now passed every gate). Not a blocker for this requirement's own DOC-UPDATER pass, but DOC-UPDATER should update the header line as part of its normal per-requirement stage-doc touch, and should flag to ORCH that S1 is now fully done pending this flip, so a stage-gate WF-04 run (with its own REVIEWER sign-off) can be scheduled -- that sign-off itself is out of scope for a single-requirement WF-02 run.",
+        "affected_requirement": "REQ-021"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ021-20260816",
+      "commit_sha_list": ["a48d7453b2d39669277b8eae12a131527422ac8a"],
+      "remote_branch": "origin/feature/WF02-REQ021-20260816",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

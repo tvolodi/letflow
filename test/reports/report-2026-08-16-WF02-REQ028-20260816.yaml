@@ -1,0 +1,192 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-028
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ028-20260816
+date_utc: 2026-08-16T16:52:00Z
+
+git:
+  branch: feature/WF02-REQ028-20260816
+  branch_confirmed: true
+  commit: e03beb828a4ab9d5cb0868c71e2a8d04ec089476
+  commit_subject: "chore(WF-02/REQ-028): TEST-DESIGN-VALIDATOR PASS on Step 3b (graph structural validator tests)"
+  note: >
+    Working tree also carries real, unrelated, pre-existing uncommitted changes
+    (config/prod.exs, lib/letflow/application.ex, lib/letflow/router.ex,
+    config/runtime.exs, deploy/, .gitignore) that this run did not touch, per
+    the dispatching handoff's instruction. Not part of this test run's own
+    diff.
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH, no fallback needed
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5] ... Mix 1.20.3 / Elixir 1.20.3 (compiled with Erlang/OTP 29)"
+  postgres_container: letflow-postgres-1 (confirmed Running via `docker compose up -d`, port 5462 -> 5432)
+  command_run: "mix test  (full suite, default random seed) and mix test --seed 0 (full suite — the test alias runs ecto.create + ecto.migrate --quiet first automatically)"
+
+verdict: PASS
+
+checks:
+  test_suite_full:
+    result: PASS
+    exit_code: 0
+    summary_line_verbatim: "Result: 161 passed (4 properties, 157 tests)"
+    finished_line_verbatim: "Finished in 1.1 seconds (0.6s async, 0.4s sync)"
+    failures: 0
+    excluded: 0
+    skipped: 0
+    doctests: 0
+    note: >
+      Ran twice independently: once with `mix test` (default random seed,
+      ExUnit reported "seed: 391894"), once with `mix test --seed 0`. Both
+      runs produced the identical "161 passed (4 properties, 157 tests)"
+      summary line and exit code 0. First run's output (1526 lines) saved to
+      scratchpad/req028_full_test_run1.log, second run's to
+      scratchpad/req028_full_test_run2.log, both grepped for failure markers
+      (regex covering "Failures:", "Failure:", "failure:", "** (",
+      "Excluded:", "Skipped:", "Doctests:"): zero matches in either run. No
+      "Failures:" section present in either run. The default-seed run
+      (391894) specifically exercises a non-pinned seed, which is the
+      condition under which ISS-0011 (tenant_status_test.exs flakiness)
+      previously resurfaced during REQ-022's release validation — it did NOT
+      resurface here; both runs were clean.
+
+  test_file_isolated:
+    file: test/letflow/definitions/graph_test.exs
+    command_run: "mix test test/letflow/definitions/graph_test.exs --seed 0"
+    summary_line_verbatim: "Result: 15 passed"
+    exit_code: 0
+    note: >
+      Ran the new REQ-028 test file alone (separate invocation from the
+      full-suite runs above) to confirm the delta in isolation. 15/15,
+      matching TEST-DESIGNER's and TEST-DESIGN-VALIDATOR's own reported
+      15/15 for this file (async: true — pure module, no
+      Letflow.Repo/Ecto.Sandbox dependency, per the file's own moduledoc).
+
+  compile_warnings_as_errors:
+    command_run: "mix compile --warnings-as-errors"
+    result: PASS
+    exit_code: 0
+    note: "Clean, zero output, zero warnings promoted to errors."
+
+  postgres_cleanup_independently_reverified:
+    method: >
+      Queried letflow-postgres-1 directly via `docker exec ... psql -U letflow
+      -d letflow_test` after the full-suite runs completed. REQ-028's own
+      test file (graph_test.exs) never touches Postgres at all (pure
+      structs/functions only), so this check is inherited from the
+      pre-existing suite's own DB-touching tests (tenant_provisioning_test.exs
+      etc.) — re-confirmed clean rather than assumed.
+    results:
+      - query: "SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname LIKE 'tenant_%';"
+        result: "0 rows"
+      - query: "SELECT count(*) FROM public.tenant_schemas;"
+        result: 0
+      - query: "SELECT count(*) FROM public.tenants WHERE slug LIKE 'req022-%';"
+        result: 0
+    conclusion: >
+      No orphan tenant schemas or rows persist after the run.
+
+  known_noise_not_a_failure:
+    - >
+      [error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in NNNN ms.
+      — REQ-016's Ueberauth OIDC worker attempting to reach a deliberately
+      unreachable placeholder issuer configured in config/test.exs. Pre-existing
+      since REQ-016, already documented as expected noise in every prior WF-02 test
+      report. Does not fail, skip, or affect any test.
+    - >
+      Pre-existing ExUnit.Case.register_test/4 deprecation warnings (4
+      occurrences per run) for the property tests (process_instance_test.exs,
+      parallel_approval_test.exs, oidc/claim_mapping_property_test.exs) —
+      unrelated to REQ-028, non-blocking compiler warnings, not promoted to
+      errors (confirmed separately via the warnings-as-errors compile check
+      above, which comes back clean).
+    - >
+      Verbose SQL query debug logging appears in raw mix test output
+      (config/test.exs's default test log level) — expected, not indicative
+      of any problem.
+
+pre_existing_failures_found: none
+issues_filed: none
+issues_referenced_not_refiled:
+  - id: ISS-0011
+    note: >
+      Known flaky test (test/letflow/plugs/tenant_status_test.exs's
+      method-short-circuit test, telemetry-handler race under async: true,
+      filed during REQ-022's release validation, github issue #65, still
+      status: open). Watched for specifically in this run by using an
+      unpinned default seed (391894) on the first of the two full-suite runs
+      — the same class of condition that triggered it before. It did NOT
+      resurface in either run of this session. Not re-filed, per this run's
+      dispatching instructions; noted here only.
+
+test_file_breakdown:
+  new_req_028:
+    items:
+      - file: test/letflow/definitions/graph_test.exs
+        detail: >
+          15 tests, all async: true (pure module — Letflow.Definitions.Graph
+          makes zero Ecto.Repo/database calls, confirmed by source
+          inspection: lib/letflow/definitions/graph.ex's only match for
+          "Repo" is its own moduledoc documenting the zero-I/O contract, and
+          one unrelated comment using the word "repeated"). AC1 (fully valid
+          graph): 1 test. AC2 (each of the 8 named checks CHK-01..CHK-08 has
+          its own minimal failing-example fixture): 8 tests across 7 describe
+          blocks (CHK-01 covers both :missing_start_node and
+          :multiple_start_nodes in one block). AC3 (3 simultaneous
+          violations returned together, not short-circuited): 1 test. AC4
+          (gateway cycles permitted, non-gateway self-loop rejected,
+          gateway self-loop accepted): 3 tests. Plus 1 REVIEWER-suggested
+          non-blocking test (Step 2d, handoffs/WF02-REQ028-20260816/
+          step-03-test-designer.json) locking in that a dangling-only edge
+          also isolates its source node (both :dangling_edge and
+          :isolated_node fire together).
+    subtotal: 15
+  full_suite_grand_total: 161
+  cross_check: >
+    161 total (4 properties, 157 example tests) = 146 pre-existing (REQ-022's
+    own formally re-verified baseline, test/reports/report-2026-08-16-WF02-REQ022-20260816.yaml,
+    itself 4 properties + 142 tests) + 15 new REQ-028 tests. 142 + 15 = 157
+    example tests; 4 properties unchanged (REQ-028 adds no new property
+    test, per TEST-DESIGNER's design — example-based coverage was judged
+    correct here since every acceptance criterion names a specific check/code,
+    not a general invariant). 146 + 15 = 161, matching the suite's own summary
+    line exactly. Also matches ELIXIR-DEV's, TEST-DESIGNER's, and
+    TEST-DESIGN-VALIDATOR's own independently reported number (161 passed, 4
+    properties + 157 tests) from earlier steps this session — this Step 4 run
+    is the independent, formal re-verification of that number, not a
+    substitute for it: run separately, twice (once unpinned seed, once seed
+    0), on the current HEAD (e03beb8), output saved to log files and
+    programmatically grepped for failure markers rather than eyeballed, plus
+    a live Postgres query re-check of the cleanup claim.
+
+acceptance_criteria_test_coverage_observed:
+  # Cross-referenced against test/specs/REQ-028.md and docs/requirements.yaml's
+  # REQ-028 acceptance_criteria list (lines 1187-1192).
+  criterion_1_fully_valid_graph_returns_valid_true_empty_violations: "PASS — 1 test (AC1 describe block), a realistic multi-node/multi-edge graph including a permitted gateway cycle."
+  criterion_2_each_of_8_named_checks_has_own_failing_example: "PASS — 8 tests across 7 describe blocks, one per CHK-01..CHK-08 (CHK-01's block covers both its violation codes: :missing_start_node and :multiple_start_nodes)."
+  criterion_3_three_simultaneous_violations_all_returned_not_short_circuited: "PASS — 1 test (AC3 describe block), asserts the exact 3-element ordered violation-code list, not just a count or unordered set."
+  criterion_4_gateway_cycles_permitted_self_loop_rejected_each_own_test: "PASS — 3 tests (AC4 describe block): gateway-cycle permitted, non-gateway self-loop rejected, and the more subtle gateway self-loop accepted (design doc Section 6.4 corollary)."
+  criterion_5_zero_repo_database_calls_in_call_graph: "Not test-covered by a runtime assertion by design (a call-graph purity claim has no I/O side effect to assert against; matching this project's established policy against grep-a-markdown-style busywork tests) — independently re-verified by direct source inspection in this run (not trusting TEST-DESIGN-VALIDATOR's prior quote): grepped lib/letflow/definitions/graph.ex for 'Repo|Ecto\\.Repo' — the only 2 matches are the moduledoc's own documentation of the zero-I/O contract (line 22) and an unrelated comment using the word 'repeated' (line 189). No Letflow.Repo or Ecto.Repo call anywhere in the 453-line module."
+
+diagnosis: "N/A — no failures observed in this run. Nothing routed back to ELIXIR-DEV or TEST-DESIGNER."
+
+regression_check_vs_baseline: >
+  REQ-022's own formally re-verified baseline (test/reports/report-2026-08-16-WF02-REQ022-20260816.yaml)
+  was 146 passed (4 properties, 142 tests), 0 failures. This run reproduces
+  146 + 15 = 161 passed (4 properties, 157 tests) independently, twice
+  (unpinned default seed and seed 0), on the current HEAD commit (e03beb8,
+  the TEST-DESIGN-VALIDATOR PASS commit for Step 3b), with output captured
+  to log files and programmatically grepped for failure markers rather than
+  eyeballed, plus a live re-query of Postgres to independently reconfirm the
+  no-orphan-state cleanup claim. Zero regressions confirmed. ISS-0011's
+  known flaky condition was specifically watched for (one run used an
+  unpinned seed) and did not resurface.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-16-WF02-REQ028-20260816.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

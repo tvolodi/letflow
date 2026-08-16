@@ -1,0 +1,59 @@
+id: ISS-0028
+title: "The section-4 guard test's stray-table cleanup omits REQ-024's event_type_registry, so a guard failure on that migration would leave a stray public table in a database shared with a concurrently running worktree"
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF02-REQ027-20260816
+discovered_at: 2026-08-16T22:04:31Z
+severity: MINOR
+description: >
+  test/letflow/event_store/migrations_test.exs holds the section-4 guard test,
+  which iterates Letflow.TenantProvisioning.tenant_scoped_migrations/0 and
+  asserts every registered migration is a real no-op when run without a
+  :prefix. Its ASSERTION coverage is complete and automatically follows the
+  manifest -- it now covers all nine entries, including REQ-024's
+  event_type_registry and REQ-027's two new tables.
+
+  Its stray-table CLEANUP does not follow the manifest. The on_exit hook
+  drops a hand-maintained list, and that list has drifted behind the manifest
+  twice now:
+
+    - @event_store_tables covers REQ-023's six.
+    - @later_tenant_scoped_tables, added by REQ-027 (this run) to close the
+      same gap for its own two tables, contains exactly
+      ["process_definitions", "instance_definition_snapshots"].
+    - Nothing covers REQ-024's event_type_registry.
+
+  So if the guard on 20260816163103_create_event_type_registry.exs were ever
+  broken, that test would correctly FAIL -- and then leave a stray
+  public.event_type_registry table behind in letflow_test2.
+
+  Why this is worth closing rather than shrugging at, despite being a
+  one-line fix: the leak lands in a database deliberately shared between two
+  concurrently running git worktrees. A stray table in public is exactly the
+  cross-run contamination the MIX_TEST_PARTITION arrangement exists to
+  prevent, and the next run to hit it would see a confusing failure whose
+  cause is a previous run's cleanup rather than anything in its own diff.
+  The residual risk today is low -- REQ-024's guard IS present and correct
+  (verified: its change/0 is wrapped in if prefix() do), so the cleanup path
+  only runs if something regresses it -- but a cleanup hook that is silent
+  precisely when it is needed is a poor safety net.
+
+  Suggested fix, which also stops the drift recurring: derive the cleanup
+  list FROM the manifest rather than hand-maintaining a parallel list. The
+  test already reads tenant_scoped_migrations/0 for its assertions, so the
+  table names could be derived from the same source (or, more simply, the
+  two hand-maintained lists could be merged into one that a reviewer is
+  likelier to notice going stale). A hand-maintained list that must be
+  updated by every future tenant-scoped migration is the same both-halves
+  coupling problem REQ-022 design section 4 already warns about, one level
+  up.
+
+  Discovered by TEST-DESIGNER during REQ-027's Step 3, while adding
+  @later_tenant_scoped_tables for its own two tables. Deliberately not fixed
+  in this run: it concerns REQ-024's table, not REQ-027's, and blocks none
+  of REQ-027's five acceptance criteria, so per
+  docs/agents/protocols/ISSUE_QUEUE.md it is filed and forwarded rather than
+  folded into a requirement it does not belong to.
+affected_files:
+  - test/letflow/event_store/migrations_test.exs
+github_issue: https://github.com/tvolodi/letflow/issues/86
+status: open

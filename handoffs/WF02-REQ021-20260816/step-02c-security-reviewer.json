@@ -1,0 +1,72 @@
+{
+  "handoff_id": "f1a9c3e7-5b2d-4e6a-9f0c-8d3b1a7e2c4f",
+  "run_id": "WF02-REQ021-20260816",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ021-20260816/step-02c-security-reviewer.json",
+  "created_at": "2026-08-16T06:28:38Z",
+  "started_at": "2026-08-16T06:28:38Z",
+  "completed_at": "2026-08-16T06:33:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S1",
+    "requirement_ids": ["REQ-021"],
+    "related_handoff_ids": ["b3d552fc-8bc4-4aab-9c76-790c5021b6c4"],
+    "artifacts_in": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/plugs/tenant_status.ex",
+      "lib/letflow/oidc/token_verifier.ex",
+      "lib/letflow/oidc/token_verifier/oidcc.ex",
+      "test/support/token_verifier_double.ex",
+      "config/dev.exs",
+      "config/test.exs",
+      "config/prod.exs",
+      "mix.exs",
+      "lib/letflow/identity.ex",
+      "docs/agents/instructions/security-invariants.md",
+      "handoffs/WF02-REQ021-20260816/step02a-elixir-dev.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 2c (SECURITY-REVIEWER, hard gate) for run-id WF02-REQ021-20260816: assess ELIXIR-DEV's auth Plug pipeline implementation (Letflow.Plugs.AuthPipeline, Letflow.Plugs.TenantStatus, Letflow.Oidc.TokenVerifier + its Oidcc/double implementations, config/dev.exs and config/test.exs changes) against every applicable invariant in docs/agents/instructions/security-invariants.md. This is the first code that resolves tenant identity from a bearer token and JIT-provisions a user under it -- squarely a tenant-data/auth path, treated as in-scope without the scope-test shortcut.",
+    "acceptance_criteria": [
+      "Every one of INV-1..INV-8 is individually assessed as APPLIES or NOT-APPLICABLE against the actual diff, with justification",
+      "Every APPLIES invariant's 'How to verify' procedure is actually run, not assumed",
+      "INV-1: confirm provision_user/3's tenant_id argument is the DB-resolved value from resolve_tenant_by_realm/1, never a token-claimed value",
+      "INV-4: confirm no literal secret in config/dev.exs, config/test.exs, or the oidcc adapter; confirm client_secret: :unauthenticated is actually implemented, not a placeholder secret string",
+      "INV-7: confirm no raw/interpolated SQL was introduced; TenantStatus's Repo.get/2 is parameterized by construction",
+      "INV-8: confirm every step of AuthPipeline's with-chain reaches a deliberate HTTP response on failure, not an unhandled crash; independently evaluate (not merely defer) whether TenantStatus's fail-closed choice on a genuine Repo.get/2 error is acceptable",
+      "Confirm test/support/token_verifier_double.ex only compiles under MIX_ENV=test via mix.exs's elixirc_paths",
+      "Confirm config/dev.exs's token_verifier defaults to the real adapter (Letflow.Oidc.TokenVerifier.Oidcc), not the test double"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed the full diff (git diff main...feature/WF02-REQ021-20260816 -- lib/ config/ test/support/) and read every new/changed file directly rather than trusting ELIXIR-DEV's handoff summary. INV-1 (tenant data isolation) APPLIES and PASSES: lib/letflow/plugs/auth_pipeline.ex's with-chain resolves tenant via resolve_tenant(realm) -> Identity.resolve_tenant_by_realm/1 (Repo.get_by(Tenant, idp_realm_id: realm), DB-backed), binds the result to `tenant`, then guard_realm_ownership(tenant.id, realm) re-queries the tenant's bound realm independently (Identity.verify_realm_ownership/2 -> resolve_realm_by_tenant/1, its own Repo.get/2) rather than trusting the claim -- and provision_user(identity_context, tenant.id, realm) at line 63 passes `tenant.id`, the DB-resolved struct field, not identity_context.tenant_id (the token-claimed hint field, confirmed never read anywhere in auth_pipeline.ex). No code path in this diff takes a tenant_id from unverified/claim-derived data. INV-4 (secrets by reference only) APPLIES and PASSES: grep for hardcoded-secret patterns across lib/letflow/plugs, lib/letflow/oidc, config/dev.exs, config/test.exs, config/prod.exs returned zero hits. config/dev.exs's new client_id (\"letflow-placeholder-client\") is a public OAuth client identifier, not a secret, and is only ever passed to Oidcc.ClientContext.from_configuration_worker/3 with the literal atom :unauthenticated as the third argument (lib/letflow/oidc/token_verifier/oidcc.ex line 39) -- confirmed this is the real, library-supported no-client-secret mode, not a placeholder secret string standing in for a real one; no client_secret key exists anywhere in the diff. config/prod.exs is unfilled (pre-existing, unrelated to this change). INV-7 (no SQL interpolation) APPLIES and PASSES: grep for Repo.query across lib/letflow/plugs and lib/letflow/oidc returned zero hits. TenantStatus's only DB access is Repo.get(Tenant, tenant_id) (tenant_status.ex line 59), Ecto's parameterized-by-construction API -- no raw SQL introduced anywhere in this diff. INV-8 (no unhandled crashes on realistic failure paths) APPLIES and PASSES: every step of AuthPipeline's with-chain (extract_bearer_token, verify_token, extract_realm, resolve_tenant, guard_realm_ownership, map_claims, provision_user) returns a tagged {:ok,_}/{:error,{:step,reason}} tuple, and the else clause in call/2 (lines 65-92) enumerates every tagged failure shape each callee can produce, mapping each to a deliberate 401/403/500 JSON response via reject/4 -- no bare pattern match that can raise on realistic input exists in this diff (grep for '^\\s*{:ok, .*} = ' across the new files returned zero hits). On the ELIXIR-DEV-flagged MINOR issue (TenantStatus fail-closed vs. R-Co's fail-open on a genuine Repo.get/2 DB error): independently evaluated, not deferred. check_write_pause/2 (tenant_status.ex lines 58-72) has no try/rescue around Repo.get/2 -- a genuine DB error (pool exhaustion, connection failure, query timeout) raises and propagates unhandled out of call/2. Under this project's Bandit/Plug request-handling model, an unhandled exception inside a plug crashes only the single in-flight request-handling process (isolated, supervised per-request), not a shared process serving other tenants' concurrent requests -- this is the 'let a doomed [request] crash and restart under supervision' case INV-8's own text carves out as fine, not the 'unhandled crash inside a shared process taking down unrelated tenants' work' case it prohibits. The tradeoff (loud per-request failure vs. silently bypassing a migration write-pause safeguard) is a legitimate data-integrity judgment call, matches the design doc's own stated recommendation (req021-auth-plug-pipeline.md SS6.4), and does not constitute an INV-8 violation. Verdict: fail-closed here is acceptable and satisfies INV-8; no rework required on this point. INV-2, INV-3, INV-5 confirmed NOT-APPLICABLE by reading security-invariants.md's own text directly (not assumed): INV-2 'Reference: None yet -- no multi-tenant API surface exists (S4 not started)'; INV-3 'Reference: None yet -- S5 (scripting/plugins) has not started'; INV-5 'Reference: None yet -- no multi-tenant lookup-by-ID endpoints exist (S4 not started)' -- none of the 5 new files in this diff are an API route, a lookup-by-ID endpoint, or a scripting/plugin host function (confirmed: router.ex is byte-for-byte unmodified per ELIXIR-DEV's own handoff and re-confirmed via git diff --stat showing no router.ex entry). INV-6 (meta-invariant, this handoff's own existence) satisfied by this handoff itself. Additional checks per this run's specific instructions: (1) test/support/token_verifier_double.ex -- confirmed mix.exs's elixirc_paths(:test) returns [\"lib\", \"test/support\"] while elixirc_paths(_) (dev/prod) returns [\"lib\"] only (mix.exs lines 20-21) -- the test double is structurally unreachable from a dev/prod compile, not merely unreferenced by config. (2) config/dev.exs's token_verifier key is set to the literal Letflow.Oidc.TokenVerifier.Oidcc (the real adapter) at line 25 of the diff -- confirmed directly from file content, not from ELIXIR-DEV's summary; dev cannot accidentally default to the test double since config/dev.exs never references Letflow.Oidc.TokenVerifierDouble at all (that atom only appears in config/test.exs).",
+    "artifacts_out": [
+      "handoffs/WF02-REQ021-20260816/step-02c-security-reviewer.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "handoffs/registry.json does not exist anywhere in this repo (confirmed via git log --all -- handoffs/registry.json returning no history) despite HANDOFF_PROTOCOL.md step 4 instructing every handoff completion to update the matching entry in it. This is a pre-existing pipeline-wide gap predating this run, not something introduced by REQ-021's change -- flagging per HANDOFF_PROTOCOL.md's own instruction to report protocol-mechanics discrepancies as MINOR rather than silently working around them. Did not block this gate on it since it affects every prior run equally and is not a security defect in REQ-021's diff itself.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ021-20260816",
+      "commit_sha_list": ["3bcd1d90e2cb2429718d07bddfad60c0f1214e81"],
+      "remote_branch": "origin/feature/WF02-REQ021-20260816",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

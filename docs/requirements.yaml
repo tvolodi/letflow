@@ -719,7 +719,7 @@ requirements:
   - id: REQ-020
     title: Per-tenant role registry (TenantRoleStore/IDN-05 equivalent)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S1
     impl_order: 33  # letflow-queue task id
     description: >

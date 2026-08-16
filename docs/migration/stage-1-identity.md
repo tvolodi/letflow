@@ -1,7 +1,7 @@
 # Stage 1 — Identity & multi-tenancy
 
 Status: in progress. Depends on: S0. Requirements: REQ-015, REQ-016, REQ-017,
-REQ-018, REQ-019 (done); REQ-020 through REQ-021 (`docs/requirements.yaml`) pending.
+REQ-018, REQ-019, REQ-020 (done); REQ-021 (`docs/requirements.yaml`) pending.
 
 ## Scope
 

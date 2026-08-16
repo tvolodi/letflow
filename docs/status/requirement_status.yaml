@@ -1497,3 +1497,47 @@ history:
       functions against REQ-015's tenant_role/groups schema, per
       docs/requirements.yaml's REQ-020 entry and R-Co's
       src/design/idn05-role-registry.md.
+  - req: REQ-020
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-16T06:01:41Z
+    note: >
+      Letflow.Identity.RoleRegistry (list_roles/0, upsert_role/2,
+      resolve_role_in_tx/1) ported from src/identity/role_registry.zig,
+      all 5 acceptance criteria verified, 110/110 full suite passing.
+      RELEASE-VALIDATOR independently re-verified all 5 acceptance
+      criteria against the actual code/tests before this update: list_roles/1
+      returns [] against an empty tenant_role table and all rows sorted by
+      name when populated; upsert_role/2 with a non-existent group_id
+      returns an error tuple rather than inserting a dangling reference;
+      upsert_role/2 called twice with the same name and a different
+      group_id updates the existing binding rather than duplicating it;
+      resolve_role_in_tx/2 returns nil on any lookup failure rather than
+      raising; @moduledoc cites src/identity/role_registry.zig and states
+      explicitly that this module has no coupling to the OIDC
+      token-verification pipeline (REQ-017/018/019), matching the source
+      inspection restated in this requirement's own description. Flipped
+      docs/requirements.yaml REQ-020 status to done. README.md checked and
+      confirmed it documents nothing REQ-020 changed: no identity/role
+      functionality is user-observable or runnable yet (no route touches
+      it) — same reasoning already applied at REQ-011/012/015/016/017/
+      018/019's DOC-UPDATER passes. docs/guides/backend_developer_guide.md
+      checked and deliberately left untouched for the same reason: it
+      already names REQ-015 through REQ-021 collectively as what
+      implements the identity/OIDC decisions, rather than enumerating
+      per-requirement mechanics, so adding REQ-020-specific detail would
+      break that established pattern rather than follow it. REQ-020's
+      acceptance_criteria re-read in full: none of its 5 criteria name a
+      specific docs/migration/decisions/*.md file, so no decision record
+      needed touching this pass. docs/migration/stage-1-identity.md's
+      header line updated from "Status: in progress. Depends on: S0.
+      Requirements: REQ-015, REQ-016, REQ-017, REQ-018, REQ-019 (done);
+      REQ-020 through REQ-021 (docs/requirements.yaml) pending." to
+      "Status: in progress. Depends on: S0. Requirements: REQ-015,
+      REQ-016, REQ-017, REQ-018, REQ-019, REQ-020 (done); REQ-021
+      (docs/requirements.yaml) pending." No REVIEWER sign-off section
+      added to stage-1-identity.md yet — that lands once all of S1's
+      requirements (REQ-015..021) are done; REQ-021 is still pending, same
+      precedent as REQ-015/016/017/018/019's DOC-UPDATER passes. No lib/,
+      test/, or priv/ file was touched by this DOC-UPDATER pass — those
+      were already correct and gated by the prior steps in this run.

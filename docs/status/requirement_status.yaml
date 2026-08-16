@@ -1784,3 +1784,18 @@ history:
       in lib/ calls it yet, so it changes no documented user-observable
       behavior in README's "What's here today"/"Running it" sections.
       Flipped docs/requirements.yaml REQ-028 status to done.
+  - req: REQ-024
+    event: started
+    agent: ORCH
+    at: 2026-08-16T15:46:56Z
+    note: >
+      Claimed from letflow-queue via a real get_next_task call (task id 39,
+      locked_by: tvolodi-orch). REQ-023 (task 38, depends_on: [36]) is
+      reserved for a parallel process running concurrently and was correctly
+      skipped by the queue's atomic claim (still locked by the other agent)
+      -- confirmed this was correct queue behavior, not a bug, before
+      proceeding. WF-02 Step 00 (git setup) complete:
+      feature/WF02-REQ024-20260816 branched from main and pushed. Working
+      tree confirmed clean before branching (the previously-flagged
+      unrelated deploy-prep files were committed separately by the user,
+      16b2871). Routing to CODE-DESIGNER (Step 1).

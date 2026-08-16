@@ -1,0 +1,69 @@
+id: ISS-0013
+title: "event_retention_policies has no owning requirement -- REQ-026's archive/1 reads a table that no requirement in docs/requirements.yaml creates"
+discovered_by: CODE-DESIGNER
+discovered_in_run: WF02-REQ023-20260816
+discovered_at: 2026-08-16T16:05:57Z
+severity: MAJOR
+description: >
+  REQ-026 (Event read paths, archive, and platform sentinels) specifies
+  archive/1 as: "moves events past retention_days (a global fallback;
+  per-event-type policies from event_retention_policies take precedence, 0
+  retention_days means only explicit policies apply) into REQ-023's
+  events_archive ..." -- i.e. archive/1 must SELECT from a table named
+  event_retention_policies.
+
+  No requirement in docs/requirements.yaml creates that table.
+
+  Verified independently by ORCH, not taken from CODE-DESIGNER's report:
+  `grep -n "retention" docs/requirements.yaml` returns exactly three lines
+  (1125, 1126, 1127) -- all three inside REQ-026's own description, all
+  three consuming the table, none creating it. REQ-023 (this run) is the
+  event-store schema/migration requirement and its acceptance criteria
+  enumerate exactly six tables: events, instance_sequence,
+  event_payload_store, events_archive, the idempotency sidecar, and
+  instance_projections. event_retention_policies is not among them, so
+  adding it inside REQ-023 would be scope creep against that requirement's
+  own explicit acceptance criteria rather than a fix.
+
+  In R-Co, event_retention_policies is created by migrations/003_event_archive.sql
+  -- the SAME migration file that creates events_archive (confirmed by
+  reading that file directly: events_archive at its line 9, then
+  event_retention_policies in the "Retention policy table" section of the
+  same file, with columns id/event_type/policy/keep_days/keep_count/
+  created_at/updated_at and a chk_retention_policy CHECK constraint).
+  That co-location in one upstream file is the most likely reason the split
+  went unnoticed when S2 was expanded into requirements: whoever scoped
+  REQ-023 took the events_archive half and not the retention-policy half.
+
+  Impact if not resolved before REQ-026 runs: REQ-026's ELIXIR-DEV will
+  reach archive/1, find no table and no migration, and face a bad choice --
+  silently add an unspecified migration (scope creep, no acceptance
+  criterion covering its shape, no design gate over its columns), or stub
+  the policy lookup (shipping an archive/1 that ignores per-event-type
+  policies, silently failing REQ-026's own description). Both are worse
+  than fixing the requirement set now.
+
+  Suggested resolution (for a WF-01 run, not this WF-02 run): add
+  event_retention_policies to the requirement set explicitly, either by
+  amending REQ-026's own acceptance criteria to include creating its
+  migration + schema module, or as a small new requirement sequenced
+  between REQ-023 and REQ-026. Prefer whichever keeps REQ-023's shipped
+  scope untouched, since REQ-023 will already have merged by then. Note
+  while scoping it: R-Co later reworked retention under PAR-03
+  (migrations/037_adp11_replay_safe_retention_policy.sql and
+  1149_par03_retention_class.sql), and upsertRetentionPolicy() explicitly
+  SURVIVED the PAR-03 archive retirement described in ISS-0014 -- so the
+  policy table itself is still live upstream even though Store.archive()
+  is not. Scope the port against R-Co's current retention shape, not
+  003_event_archive.sql's original alone.
+
+  Discovered by CODE-DESIGNER as open question OQ-1 while designing REQ-023
+  (it needed to determine whether events_archive's sibling table was in or
+  out of its own scope). Not blocking REQ-023's own acceptance criteria --
+  REQ-023 ships six tables and archive/1 is REQ-026's function, not this
+  requirement's -- so per docs/agents/protocols/ISSUE_QUEUE.md it is filed
+  and forwarded here rather than fixed inside this run.
+affected_files:
+  - docs/requirements.yaml
+github_issue: https://github.com/tvolodi/letflow/issues/69
+status: open

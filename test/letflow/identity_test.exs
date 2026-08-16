@@ -384,10 +384,18 @@ defmodule Letflow.IdentityTest do
 
     test "two tenants with distinct idp_realm_id values both persist successfully" do
       tenant_a =
-        insert_tenant!(%{slug: unique_slug(), display_name: "Tenant A", idp_realm_id: unique_realm()})
+        insert_tenant!(%{
+          slug: unique_slug(),
+          display_name: "Tenant A",
+          idp_realm_id: unique_realm()
+        })
 
       tenant_b =
-        insert_tenant!(%{slug: unique_slug(), display_name: "Tenant B", idp_realm_id: unique_realm()})
+        insert_tenant!(%{
+          slug: unique_slug(),
+          display_name: "Tenant B",
+          idp_realm_id: unique_realm()
+        })
 
       assert tenant_a.id != tenant_b.id
       assert tenant_a.idp_realm_id != tenant_b.idp_realm_id
@@ -441,7 +449,13 @@ defmodule Letflow.IdentityTest do
   describe "verify_realm_ownership/2 — realm-ownership guard, every branch (REQ-019 acceptance criterion 4)" do
     test "verify_realm_ownership/2 returns :ok when external_realm matches the tenant's bound idp_realm_id" do
       realm = unique_realm()
-      tenant = insert_tenant!(%{slug: unique_slug(), display_name: "Matching Tenant", idp_realm_id: realm})
+
+      tenant =
+        insert_tenant!(%{
+          slug: unique_slug(),
+          display_name: "Matching Tenant",
+          idp_realm_id: realm
+        })
 
       assert :ok = Identity.verify_realm_ownership(tenant.id, realm)
     end
@@ -451,7 +465,11 @@ defmodule Letflow.IdentityTest do
       other_realm = unique_realm("other")
 
       tenant =
-        insert_tenant!(%{slug: unique_slug(), display_name: "Bound Tenant", idp_realm_id: bound_realm})
+        insert_tenant!(%{
+          slug: unique_slug(),
+          display_name: "Bound Tenant",
+          idp_realm_id: bound_realm
+        })
 
       assert {:error, :realm_tenant_mismatch} =
                Identity.verify_realm_ownership(tenant.id, other_realm)
@@ -539,7 +557,11 @@ defmodule Letflow.IdentityTest do
       changeset =
         Tenant.create_changeset(
           %Tenant{},
-          %{slug: unique_slug(), display_name: "Non-default Tenant", idp_realm_id: unique_realm()},
+          %{
+            slug: unique_slug(),
+            display_name: "Non-default Tenant",
+            idp_realm_id: unique_realm()
+          },
           :enabled
         )
 

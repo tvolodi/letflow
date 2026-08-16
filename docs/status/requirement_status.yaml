@@ -1844,3 +1844,21 @@ history:
       internal module with no HTTP route or command and no documented
       user-observable behavior changed. Flipped docs/requirements.yaml
       REQ-024 status to done.
+  - req: REQ-023
+    event: started
+    agent: ORCH
+    at: 2026-08-16T15:38:45Z
+    note: >
+      WF-02 run WF02-REQ023-20260816 started. Event-store schema/migrations
+      (events, instance_sequence, event_payload_store, events_archive,
+      idempotency sidecar, instance_projections) per 0003 Decision C and
+      REQ-022's schema-per-tenant :prefix mechanism. Claimed via a real
+      letflow-queue get_next_task call (task id 38, agent_id:
+      worktree2-orch) -- NOT the requirements.yaml fallback. This run
+      executes in the secondary git worktree
+      (c:\Users\tvolo\dev\ai-dala\letflow-wt2) concurrently with a separate
+      ORCH session in the primary checkout; tests run against the
+      letflow_test2 partition database via MIX_TEST_PARTITION=2 so the two
+      worktrees do not collide on test data. Branch
+      feature/WF02-REQ023-20260816 created from origin/main@16b2871 and
+      pushed. Baseline before any change: 161/161 tests (--seed 0).

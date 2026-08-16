@@ -898,7 +898,7 @@ requirements:
   - id: REQ-023
     title: Event-store schema/migrations (events, instance_sequence, event_payload_store, events_archive, idempotency sidecar, instance_projections)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S2
     impl_order: 38  # letflow-queue task id
     description: >

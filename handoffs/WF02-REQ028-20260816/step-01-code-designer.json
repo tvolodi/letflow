@@ -35,7 +35,7 @@
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ028-20260816",
-      "commit_sha_list": ["PENDING_COMMIT"],
+      "commit_sha_list": ["76f425d7408d9696329ec8835faa06a2698a1fb6"],
       "remote_branch": "origin/feature/WF02-REQ028-20260816",
       "push_status": "skipped",
       "pr_url": null,

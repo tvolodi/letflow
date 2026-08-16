@@ -123,11 +123,11 @@
       "lock_acquired_at": "2026-08-16T10:50:30Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 00 (git setup) COMPLETED -- PASS, routed to Step 1 (CODE-DESIGNER)",
+      "last_known_step": "Step 1 (CODE-DESIGNER) COMPLETED -- PASS (lib/letflow/design/req028-graph-structural-validator.md, commit 76f425d), routed to Step 1b (CODE-DESIGN-VALIDATOR)",
       "backfilled": false,
       "queue_task_id": 37,
       "queue_agent_id": "tvolodi-orch",
-      "note": "Claimed live via letflow-queue get_next_task (task 37, depends_on: []). Pure-function requirement (graph structural validator, no I/O/DB) -- SECURITY-REVIEWER's Step 2c scope test is expected to take the out-of-scope shortcut, to be confirmed at that step rather than assumed here."
+      "note": "Claimed live via letflow-queue get_next_task (task 37, depends_on: []). Pure-function requirement (graph structural validator, no I/O/DB) -- SECURITY-REVIEWER's Step 2c scope test is expected to take the out-of-scope shortcut, to be confirmed at that step rather than assumed here. Step 1 design: Letflow.Definitions.Graph (single new file, zero lib/letflow/ dependencies), all 8 CHK checks + DFS cycle detection fully specified, no implementation code."
     }
   ]
 }

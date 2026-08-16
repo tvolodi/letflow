@@ -102,16 +102,16 @@
       "workflow_id": "WF-02",
       "requirement_ids": ["REQ-022"],
       "stage": "S2",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "owned_modules": ["lib/letflow/tenant_provisioning", "priv/repo/migrations"],
       "lock_acquired_at": "2026-08-16T08:37:43Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 6 (DOC-UPDATER) COMPLETED -- PASS, routed to Step Final (git merge, ELIXIR-DEV)",
+      "lock_released_at": "2026-08-16T10:15:28Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (git merge, ELIXIR-DEV) COMPLETED -- PASS, PR #66 squash-merged into main as da73c15",
       "backfilled": false,
       "queue_task_id": 36,
       "queue_agent_id": "tvolodi-orch",
-      "note": "Claimed live via letflow-queue get_next_task (not the requirements.yaml fallback) -- first run since the queue's S2 backlog was registered this session. Updated live per HANDOFF_PROTOCOL.md §4 step 4, not backfilled. Step 5 (RELEASE-VALIDATOR) PASSed (handoffs/WF02-REQ022-20260816/step-05-release-validator.json); Step 6 (DOC-UPDATER) flipped docs/requirements.yaml REQ-022 to done and appended the done event. Lock remains held (released_lock: false) until Step Final's git merge completes."
+      "note": "Claimed live via letflow-queue get_next_task (not the requirements.yaml fallback) -- first run since the queue's S2 backlog was registered this session. Updated live per HANDOFF_PROTOCOL.md §4 step 4, not backfilled. Step 5 (RELEASE-VALIDATOR) PASSed (handoffs/WF02-REQ022-20260816/step-05-release-validator.json); Step 6 (DOC-UPDATER) flipped docs/requirements.yaml REQ-022 to done and appended the done event. Step Final (ELIXIR-DEV): origin/main had moved (56b7540, TASK_QUEUE S2-backlog registration) but was already an ancestor of this branch's HEAD, so the rebase was a no-op with zero conflicts; mix compile --warnings-as-errors and mix test (146/146) re-verified green post-fetch; pushed, opened PR #66, squash-merged (--delete-branch), and returned to a clean main at da73c15. No CI existed to wait on (.github/workflows/ absent, REQ-013 still pending) -- proceeded per GIT_MERGE.md's documented interim behavior for that case. Lock released (released_lock: true) and run marked COMPLETED."
     }
   ]
 }

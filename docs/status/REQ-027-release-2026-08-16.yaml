@@ -1,0 +1,508 @@
+# REQ-027 (definition core schema) — WF-02 Step 5 release validation
+#
+# Produced by RELEASE-VALIDATOR at WF-02 Step 5, per
+# docs/agents/workflows/WF-02_requirement_implementation.md Step 5 and
+# docs/agents/instructions/core-directives.md's "Every producing step has a
+# validating step". Independently re-derived throughout: the full suite was
+# re-run 6 times by this validator rather than trusting TEST-RUNNER's
+# test/reports/report-2026-08-16-WF02-REQ027-20260816.yaml, and all five
+# acceptance criteria were checked against a real provisioned tenant schema's
+# Postgres catalog and against BEAM module reflection — not against migration
+# source, test names, the design artefact, or a moduledoc's claim about itself.
+#
+# Executed in the secondary worktree (c:\Users\tvolo\dev\ai-dala\letflow-wt2)
+# against the letflow_test2 partition database (MIX_TEST_PARTITION=2), with a
+# separate ORCH session running concurrently in the primary checkout.
+
+requirement: REQ-027
+title: >
+  Definition core schema (process_definitions +
+  instance_definition_snapshots)
+run_id: WF02-REQ027-20260816
+stage: S2
+validated_at: 2026-08-16T22:50:24Z
+validator: RELEASE-VALIDATOR
+branch: feature/WF02-REQ027-20260816
+head_commit: e0f4e64721487079d21885fce62a32d1cfedb30f
+status_in_requirements_yaml: in_progress  # correct at Step 5; DOC-UPDATER flips to done at Step 6
+verdict: PASS
+
+live_catalog_method: >
+  A real tenants row was inserted, a real tenant schema provisioned via
+  Letflow.TenantProvisioning.provision_tenant_schema/1, and
+  replay_migrations/1 (REQ-022's own mechanism, the one criterion 1 names)
+  invoked. Every structural claim below was then read out of pg_indexes,
+  pg_constraint and information_schema for that live schema, and the two
+  silent-correctness properties were additionally exercised BEHAVIOURALLY with
+  real INSERT/UPDATE/DELETE statements. Provisioned schema:
+  tenant_781572b14d9c4d58a740461bcce33f2b. It was dropped afterwards along
+  with its tenant_schemas registration and its tenants row — see
+  database_hygiene.
+
+acceptance_criteria:
+  - n: 1
+    text: >
+      priv/repo/migrations gains process_definitions and
+      instance_definition_snapshots migrations, both schema-per-tenant via
+      REQ-022's :prefix mechanism, applying cleanly
+    independent_verdict: PASS
+    method: >
+      Not verified by reading migration source. Verified by running REQ-022's
+      replay against a real tenant schema and reading the resulting catalog,
+      plus an independent MUTATION of the :prefix guard to prove the guard
+      property is genuinely detected somewhere (see the ISS-0029 entry under
+      forwarded_issue_set_review).
+    evidence:
+      - "Both files exist: priv/repo/migrations/20260816193001_create_process_definitions.exs and priv/repo/migrations/20260816193002_create_instance_definition_snapshots.exs, sorting in FK-safe order (…193001 before …193002)"
+      - "Both are registered in Letflow.TenantProvisioning's @tenant_scoped_migration_manifest (versions 20260816193001, 20260816193002) — registration is the mandatory second half of the guard pattern; a guarded-but-unregistered migration is inert forever"
+      - "replay_migrations/1 returned {:ok, [20260816120001, 20260816120002, 20260816120003, 20260816120004, 20260816120005, 20260816120006, 20260816163103, 20260816193001, 20260816193002]} — nine versions, including REQ-027's two, no exception, nothing skipped"
+      - "information_schema.tables for the tenant schema lists exactly: event_idempotency, event_payload_store, event_type_registry, events, events_archive, instance_definition_snapshots, instance_projections, instance_sequence, process_definitions, schema_migrations — both REQ-027 tables present INSIDE the tenant schema"
+      - "<tenant_schema>.schema_migrations records all nine versions, so the replay was genuinely applied and recorded per-tenant rather than against public"
+      - "NEGATIVE CONTROL: SELECT from information_schema.tables WHERE table_schema='public' AND table_name IN ('process_definitions','instance_definition_snapshots') returned [] — neither table leaked into public"
+      - "MUTATION (run by this validator, reverted immediately): changing `if prefix() do` to `if true do` in 20260816193001 makes test/letflow/event_store/migrations_test.exs:493 FAIL with 'a registered tenant-scoped migration created something in public when run with no :prefix', listing CreateProcessDefinitions among the candidates — 12/13 passed. So the schema-per-tenant property has real detection. Reverted via git checkout; git status confirms the tree unmodified and no stray public table was left behind."
+    note: >
+      The negative control above is, on its own, the vacuous assertion
+      ISS-0029 correctly identifies: under replay_migrations/2 Ecto injects
+      the run's prefix regardless of what the migration author wrote, so
+      "not in public after a prefixed replay" cannot fail. It is recorded here
+      as a consistency check only. The load-bearing evidence for this
+      criterion is the mutation result, which exercises the no-prefix path.
+
+  - n: 2
+    text: >
+      process_definitions has a unique index on (name, version) and a partial
+      unique index on name WHERE status = 'active'
+    independent_verdict: PASS
+    method: Read out of pg_indexes for the live tenant schema, then exercised behaviourally.
+    evidence:
+      - "pg_indexes: CREATE UNIQUE INDEX uq_definition_version ON <tenant_schema>.process_definitions USING btree (name, version) — genuinely UNIQUE, genuinely the two-column (name, version) pair"
+      - "pg_indexes: CREATE UNIQUE INDEX uq_active_definition ON <tenant_schema>.process_definitions USING btree (name) WHERE ((status)::text = 'active'::text) — genuinely UNIQUE, single-column on name, genuinely PARTIAL on the active predicate"
+      - "Letflow.Definitions.ProcessDefinition's changesets declare unique_constraint([:name, :version], name: :uq_definition_version) and unique_constraint(:name, name: :uq_active_definition), so the schema module and the database agree on both index names"
+      - "Also present, beyond the criterion but R-Co-sourced (004:39) and declared in the migration header: idx_def_status on (status). Plus process_definitions_pkey on (id). No unexpected index."
+    silent_correctness_check:
+      property: >
+        The stored `status` enum value must be lowercase, or
+        uq_active_definition's predicate matches zero rows and PD-03's
+        single-active-per-name invariant is silently unenforced — the index
+        would exist, be reported by every structural check, and enforce
+        nothing. This is the criterion's real risk, and it cannot be settled
+        by looking at the index alone.
+      verdict: PASS — verified behaviourally, not by inspection
+      evidence:
+        - "Two rows inserted into the live tenant schema with the same name ('shared-name') and different versions ('1.0.0', '2.0.0'), letting the column default supply status. SELECT returned status = \"draft\" for both — lowercase, matching the predicate's case"
+        - "UPDATE …SET status = 'active' on the first row: ACCEPTED"
+        - "UPDATE …SET status = 'active' on the second row: REJECTED — {:rejected, :unique_violation, \"uq_active_definition\", \"duplicate key value violates unique constraint \\\"uq_active_definition\\\"\"}. The index is live and enforcing PD-03, by constraint name."
+        - "SELECT count(*) … WHERE status = 'active' returned 1 — the predicate matches a real row, so the partial index is populated rather than inert"
+        - "Postgres normalized the predicate to WHERE ((status)::text = 'active'::text), exactly as the migration header anticipates. Dump value and predicate literal agree."
+
+  - n: 3
+    text: >
+      process_definitions has a nullable stage column and a partial index on
+      stage WHERE stage IS NOT NULL, per definition.md's PD-07 section
+      (migrations/014_definition_stage.sql)
+    independent_verdict: PASS
+    method: information_schema.columns and pg_indexes for the live tenant schema.
+    evidence:
+      - "information_schema.columns: stage | character varying | is_nullable = YES | column_default = NULL — nullable, with no default, so an omitted stage genuinely lands as NULL (which idx_def_stage's predicate depends on)"
+      - "pg_indexes: CREATE INDEX idx_def_stage ON <tenant_schema>.process_definitions USING btree (stage) WHERE (stage IS NOT NULL) — a partial, NON-unique index, which is the correct shape (PD-07's stage labels are open-ended and shared)"
+      - "Confirmed by insertion: both definitions inserted without a stage value read back stage = nil, so the NULL path is real and not defeated by a default"
+      - "No CHECK constraint and no enum on stage — pg_constraint for the table carries only the pkey; consistent with PD-07's 'no enum validation, stage labels are open-ended text'. Letflow.Definitions.ProcessDefinition bounds it only with validate_length(:stage, max: 255)."
+
+  - n: 4
+    text: >
+      instance_definition_snapshots.definition_id references
+      process_definitions.id with no ON DELETE CASCADE, and the moduledoc
+      states this is deliberate per PD-08
+    independent_verdict: PASS
+    method: >
+      pg_constraint's confdeltype read directly — the one field that
+      distinguishes NO ACTION from CASCADE and cannot be faked by a
+      well-worded comment — then exercised behaviourally, then the moduledoc
+      half checked against the COMPILED docs chunk rather than the source
+      file.
+    silent_correctness_check:
+      property: "pg_constraint.confdeltype must be 'a' (NO ACTION), not 'c' (CASCADE)"
+      verdict: PASS
+    evidence:
+      - "pg_constraint row: conname = instance_definition_snapshots_definition_id_fkey, contype = 'f', confdeltype = 'a', confupdtype = 'a' — 'a' is NO ACTION. Not 'c' (CASCADE), not 'n' (SET NULL), not 'd' (SET DEFAULT)"
+      - "pg_get_constraintdef: FOREIGN KEY (definition_id) REFERENCES <tenant_schema>.process_definitions(id) — no ON DELETE clause emitted at all, and the reference resolves INSIDE the tenant schema (ref_schema = the tenant schema, ref_table = process_definitions), confirming the %Reference{} prefix fallback works as the migration header claims"
+      - "The only two constraints on the table are that FK and instance_definition_snapshots_pkey (PRIMARY KEY (instance_id)) — no second, cascading FK hiding elsewhere"
+      - "BEHAVIOURAL: a snapshot row was inserted referencing an existing definition, then DELETE of that definition was attempted. Result: {:rejected, :foreign_key_violation, \"instance_definition_snapshots_definition_id_fkey\", \"update or delete on table \\\"process_definitions\\\" violates foreign key constraint …\"}. Snapshot count after the rejected delete: 1. Parent definition count: 1. Nothing cascaded; nothing was lost."
+      - "Moduledoc half, verified through Code.fetch_docs/1 (the compiled BEAM docs chunk, not the .ex source — so this is the doc that actually shipped): Letflow.Definitions.InstanceDefinitionSnapshot's @moduledoc is present (4512 bytes) and carries the section '## No `ON DELETE CASCADE` on `definition_id` (REQ-027 acceptance criterion 4)', stating 'This is deliberate, per PD-08's \"FK without `ON DELETE CASCADE`\" paragraph' and quoting PD-08's guarantee that snapshot rows persist regardless of what happens to the source definition"
+      - "The same moduledoc records that R-Co's own later 1106_iss0125 migration replaced this FK with a CASCADE variant for a test-harness reason, and that Letflow deliberately does not port it — a warning a future agent cross-checking against R-Co's live schema needs, since 'fixing' it would cause exactly the data loss this table exists to prevent"
+    note: >
+      Behavioural consequence worth restating because it shapes REQ-033:
+      under NO ACTION no delete of a referenced definition succeeds at all,
+      DRAFT or otherwise. The snapshot survives a fortiori. The moduledoc
+      already states this and ISS-0024 tracks the REQ-033 criterion that is
+      worded as though a permitted-delete case exists.
+
+  - n: 5
+    text: >
+      both Ecto.Schema modules' @moduledoc cite R-Co src/design/definition.md
+      (PD-01/PD-07/PD-08 sections) as the ported source
+    independent_verdict: PASS
+    method: >
+      Code.fetch_docs/1 against the compiled modules — proving the text is a
+      real @moduledoc attribute that survived compilation into the docs
+      chunk, not a stripped comment — with token containment checked
+      programmatically rather than by eye.
+    evidence:
+      - "Letflow.Definitions.ProcessDefinition: @moduledoc present in the compiled docs chunk, 4329 bytes. Contains 'src/design/definition.md': true; 'PD-01': true; 'PD-07': true; 'PD-08': true"
+      - "Letflow.Definitions.InstanceDefinitionSnapshot: @moduledoc present, 4512 bytes. Contains 'src/design/definition.md': true; 'PD-01': true; 'PD-07': true; 'PD-08': true"
+      - "The citations are substantive, not keyword-stuffed: ProcessDefinition's '## Ported source (REQ-027 acceptance criterion 5)' section names which PD-01 sub-sections were ported (module purpose, Store.create, the Definition↔process_definitions mapping, the uq_definition_version/uq_active_definition constraints table) and attributes stage + idx_def_stage to PD-07 with its SQL source (migrations/014_definition_stage.sql). InstanceDefinitionSnapshot's names PD-08's SnapshotStore, the Snapshot struct's column mapping and the Atomicity guarantee section, with DDL from migrations/004_definitions.sql. Each module also points at the other, so a reader arriving at either finds the whole PD-01/PD-07/PD-08 set."
+      - "requirements.yaml's separate 'note explicitly in both moduledocs' scope instruction is also satisfied: both carry a '## Scope — this requirement builds schema only' section naming REQ-028/029 (graph validation), REQ-030 (CRUD) and REQ-033 (snapshot functions) as the separate requirements building on these tables"
+    note: >
+      Public export surface, read from each module's __info__(:functions)
+      rather than from the moduledoc's claim about itself:
+      ProcessDefinition exports [create_changeset: 2, update_changeset: 2];
+      InstanceDefinitionSnapshot exports [create_changeset: 2] only — no
+      update_changeset/2, no generic changeset/2, no delete path, which is
+      what its write-once moduledoc section asserts. No acceptance criterion
+      requires this, but it was checked because the moduledoc makes the claim.
+
+test_suite_reruns:
+  summary: >
+    6 independent full-suite runs by this validator, all unpinned (per
+    ISS-0011's settled conclusion that --seed 0 buys nothing). ALL SIX CLEAN
+    at 307/307. Zero reds; ISS-0011's flake did not fire in this sample,
+    which is unremarkable at its recorded ~7.5% rate.
+  command: "MIX_TEST_PARTITION=2 MIX_ENV=test mix test"
+  clean_result_line: "Result: 307 passed (4 properties, 303 tests)"
+  runs: 6
+  clean: 6
+  failed: 0
+  exit_codes: [0, 0, 0, 0, 0, 0]
+  run_durations_seconds: [33.3, 32.2, 30.1, 29.3, 24.2, 22.7]
+  note_on_run_5: >
+    Run 5 was executed deliberately AFTER the criterion-1 mutation was
+    reverted, so the suite is confirmed green on a restored tree rather than
+    only before the mutation was applied.
+  baseline_before_req027: 271
+  delta: >
+    +36, reconciled rather than asserted: REQ-027's own two test files
+    (test/letflow/definitions/migrations_test.exs and
+    test/letflow/definitions/schemas_test.exs) run alone produce exactly
+    "Result: 36 passed", and 271 + 36 = 307 with no unexplained gap.
+  iss0011_attribution: >
+    Not applicable this run — no test failed in any of the six runs, so there
+    was nothing to attribute. Recorded explicitly rather than left implicit:
+    per ISS-0011's own guidance a lone failure at
+    test/letflow/plugs/tenant_status_test.exs:121 would have been that flake
+    and any OTHER failing test a genuine new signal. Neither occurred.
+  targeted_runs:
+    - command: "MIX_TEST_PARTITION=2 MIX_ENV=test mix test test/letflow/definitions/migrations_test.exs test/letflow/definitions/schemas_test.exs"
+      result: "Result: 36 passed"
+      exit_code: 0
+      purpose: baseline reconciliation
+    - command: "MIX_TEST_PARTITION=2 MIX_ENV=test mix test test/letflow/event_store/migrations_test.exs (with :prefix guard mutated)"
+      result: "Result: 12/13 passed — §4 guard test failed, naming CreateProcessDefinitions"
+      exit_code: 2
+      purpose: >
+        mutation-verify that the criterion-1 :prefix property has real
+        detection somewhere in the suite, independently of ISS-0029's claim
+        that it does. Mutation reverted; tree confirmed clean.
+
+other_gates_rerun_by_this_validator:
+  - command: "MIX_TEST_PARTITION=2 MIX_ENV=test mix compile --warnings-as-errors"
+    exit_code: 0
+  - command: "MIX_TEST_PARTITION=2 MIX_ENV=test mix compile --force --warnings-as-errors"
+    exit_code: 0
+    note: >
+      Run with --force as well as plain, so this is a real recompile of all
+      43 files ("Compiling 43 files (.ex) / Generated letflow app") rather
+      than a no-op against an already-built _build.
+  - command: "mix format --check-formatted"
+    exit_code: 0
+    caveat: >
+      This project gate does NOT cover the two shipped migrations. Re-confirmed
+      by reading .formatter.exs directly this run: inputs are
+      ["{mix,.formatter}.exs", "{config,lib,test}/**/*.{ex,exs}"] — priv/ is
+      still absent. That is ISS-0016, already filed and pre-existing (it hides
+      all 15 migrations in the repo, not just REQ-027's two).
+  - command: "mix format --dot-formatter <scratch>/fmt.exs --check-formatted priv/repo/migrations/2026081619300*.exs"
+    exit_code: 0
+    note: >
+      Run by this validator to distinguish "REQ-027 shipped badly formatted
+      migrations" from "the gate never covered them" — the same distinction
+      REQ-023's release record drew. Under a scratch-only formatter config
+      carrying import_deps: [:ecto_sql] (the project's own .formatter.exs was
+      NOT modified), both REQ-027 migrations check clean. So no formatting
+      defect was shipped; the gap is purely ISS-0016's missing configuration.
+
+documentation_staleness_check:
+  - file: docs/requirements.yaml
+    verdict: not stale
+    note: >
+      REQ-027's entry reads status: in_progress, which is CORRECT at Step 5 —
+      DOC-UPDATER flips it to done at Step 6. Its description and its five
+      acceptance criteria were re-read verbatim and cross-checked column by
+      column against the live catalog. process_definitions: id/uuid,
+      name/version varchar, description text nullable, status varchar default
+      'draft', stage varchar nullable, graph jsonb default
+      '{"edges": [], "nodes": []}', created_by uuid, archived_at nullable,
+      created_at/updated_at — every column the description enumerates is
+      present with the described nullability and default.
+      instance_definition_snapshots carries exactly the six columns the
+      description names (instance_id, definition_id, definition_name,
+      definition_ver, graph, snapshotted_at) and no more, satisfying the
+      "no updated_at/timestamps() beyond snapshotted_at" instruction
+      structurally rather than by assertion.
+    observation: >
+      One genuine imprecision, recorded rather than filed: the description's
+      enumerated process_definitions column list does not mention `tenant_id`,
+      yet the shipped table carries it as NOT NULL. This is not an
+      undocumented addition — the same description's preamble explicitly
+      places the table "under Decision B's general rule, same as every other
+      tenant-owned table this stage adds", which is what licenses the column,
+      and REQ-023 shipped the identical pattern on events, events_archive and
+      instance_projections (verified directly: all three carry
+      `add :tenant_id, :binary_id, null: false`). No acceptance criterion
+      constrains the column list. The substantive consequence — that nothing
+      supplies a value — is already ISS-0025, whose affected_files names
+      docs/requirements.yaml. Not filed separately to avoid duplicating it.
+  - file: docs/status/requirement_status.yaml
+    verdict: not stale
+    note: >
+      Carries exactly one REQ-027 event, `started` by ORCH at
+      2026-08-16T19:20:25Z, at line 1961 of 1976 — the last entry in the file.
+      That is the correct state at Step 5: the `done` event is DOC-UPDATER's
+      Step 6 responsibility and writing it here would be premature. The
+      append-only convention is intact (the REQ-027 entry rewrites no earlier
+      history). The started note's recorded pre-change baseline of "271 tests
+      passing (--seed 0)" reconciles exactly with the 307 observed now
+      (271 + REQ-027's own 36), so the file's own recorded number is
+      independently corroborated rather than merely consistent.
+
+forwarded_issue_set_review:
+  scope: >
+    ISS-0024 through ISS-0029 (filed this run), plus in-run UPDATE blocks on
+    ISS-0011, ISS-0018 and ISS-0025. Reviewed specifically for an issue that
+    actually blocks one of REQ-027's OWN five acceptance criteria but was
+    classified as incidental — treated as a real check rather than a
+    formality, since mis-classification is the failure mode that would let a
+    broken requirement merge under a humanless pipeline.
+  conclusion: >
+    No mis-classified blocker found. Each of the six is either about a
+    DIFFERENT requirement's scope (REQ-033, REQ-030/REQ-025), about agent
+    tooling and role files rather than REQ-027's shipped tables, or about a
+    test/spec claim whose underlying property this validator independently
+    confirmed is covered elsewhere. The two flagged for specific attention
+    (ISS-0025 and ISS-0029) were each re-derived from primary evidence rather
+    than from the earlier gates' verdicts, and both hold up.
+  issues:
+    - id: ISS-0024
+      severity: MAJOR
+      disposition: correctly incidental — about REQ-033's criterion, not REQ-027's
+      note: >
+        REQ-033's AC 4 presumes a class of process_definitions row whose
+        deletion the FK permits while a snapshot references it ("where FK
+        rules permit, e.g. a DRAFT definition"). No such class exists.
+        Independently confirmed here behaviourally, not argued: the DELETE of
+        a referenced definition was rejected with 23503
+        foreign_key_violation, and the definition's status was `active`, i.e.
+        the constraint plainly does not consult the status column. So the
+        issue's diagnosis is right. It touches none of REQ-027's five
+        criteria — criterion 4 is worded correctly ("references … with no ON
+        DELETE CASCADE, and the moduledoc states this is deliberate") and was
+        fully satisfied above. Should be resolved before REQ-033 is claimed;
+        the risk the issue names (an implementer "fixing" the schema by
+        adding CASCADE) would invert PD-08 and destroy snapshot data.
+    - id: ISS-0025
+      severity: MAJOR
+      disposition: correctly incidental for REQ-027 — genuinely blocking for REQ-030/REQ-025
+      independent_view: >
+        Agreed with both prior gates, on independently re-derived grounds
+        rather than by deferring to them. Four points:
+
+        (1) No acceptance criterion is touched. REQ-027's five criteria
+        concern the two migrations applying under :prefix, three index
+        shapes, the FK's referential action plus a moduledoc statement, and
+        two moduledoc citations. None mentions tenant_id, and all five were
+        verified PASS above with the column in place.
+
+        (2) The column does not impede anything REQ-027 ships. The migration
+        applied cleanly, and rows were inserted, updated and constraint-tested
+        against the live table in this validation by supplying tenant_id
+        explicitly — the column is usable, it simply has no designated
+        supplier yet.
+
+        (3) The precedent claim was checked, not accepted. events,
+        events_archive and instance_projections each carry
+        `add :tenant_id, :binary_id, null: false` with no DB default —
+        read directly from priv/repo/migrations/20260816120001, …120003 and
+        …120005. So REQ-023 shipped this exact pattern, it merged, and
+        treating REQ-027 as a blocker would apply a standard REQ-023 was not
+        held to. Consistency argues for forwarding, and the issue's own text
+        correctly notes the resolution must serve REQ-025 and REQ-030 both.
+
+        (4) The failure mode is loud, not silent — which is the dispositive
+        point for a release gate. An insert omitting tenant_id raises
+        not_null_violation (23502) immediately; it cannot produce a
+        mis-attributed row. That is strictly safer than R-Co's session-GUC
+        DEFAULT, which silently stamps whatever tenant the connection last
+        carried. Nothing can ship broken-but-quiet on this path.
+
+        Where this validator would go slightly further than the record: the
+        SECURITY-REVIEWER UPDATE's attribution-integrity argument for option
+        (c) is the strongest reasoning in the issue, and it is currently
+        buried in an UPDATE block below three options presented as equals. If
+        this is picked up by a weak model reading top-down, it may not reach
+        it. That is a presentation concern about the issue record, not a
+        defect in REQ-027, and it is not re-filed.
+    - id: ISS-0026
+      severity: MAJOR
+      disposition: correctly incidental — agent role-file staleness, not shipped code
+      note: >
+        .claude/agents/security-reviewer.md still calls INV-1 "almost always
+        NOT-APPLICABLE" while the authoritative security-invariants.md makes
+        it checkable once 0003 lands and S2 migrations exist — both true since
+        before REQ-023. Real, and correctly rated MAJOR under the
+        weak-model-tolerance constraint. But it constrains no REQ-027
+        acceptance criterion, and it did not cause a miss here: Step 2c
+        determined INV-1 APPLIES and passed on that basis. Tenant isolation
+        for REQ-027's own tables was independently re-confirmed by this
+        validator anyway — both tables live inside the tenant schema, neither
+        appears in public, and the FK resolves within the tenant schema.
+    - id: ISS-0027
+      severity: MINOR
+      disposition: correctly incidental — defence-in-depth on REQ-022's module
+      note: >
+        Registration.changeset/2 has no validate_format on schema_name, so
+        the DDL-identifier guarantee is positional (call-graph-shaped) rather
+        than intrinsic. Not exploitable today and REQ-027 adds no new call
+        site into schema_name_for_tenant/1. Independently corroborated in
+        passing: the schema this validator provisioned was named
+        tenant_781572b14d9c4d58a740461bcce33f2b, matching
+        ^tenant_[0-9a-f]{32}$ exactly. Belongs to REQ-022's module and
+        constrains no REQ-027 criterion; adding a validation to another
+        requirement's module mid-run would be the quiet scope expansion the
+        gates exist to catch.
+    - id: ISS-0028
+      severity: MINOR
+      disposition: correctly incidental — and incidentally CONFIRMED accurate this run
+      note: >
+        The §4 guard test's stray-table cleanup is hand-maintained and omits
+        REQ-024's event_type_registry. Confirmed accurate as a side effect of
+        this validator's criterion-1 mutation: that mutation deliberately
+        broke CreateProcessDefinitions' guard, the guard test failed as
+        designed, and afterwards no stray public.process_definitions remained
+        — because process_definitions IS in @later_tenant_scoped_tables. The
+        same run therefore demonstrates both that the cleanup works for
+        REQ-027's tables and that the list is the hand-maintained one whose
+        gap ISS-0028 describes for REQ-024's table. Concerns REQ-024's table,
+        blocks no REQ-027 criterion, correctly forwarded.
+    - id: ISS-0029
+      severity: MINOR
+      disposition: correctly incidental — the property it claims IS covered elsewhere, verified by mutation
+      note: >
+        The specific check ORCH asked for. ISS-0029 says
+        `refute table_exists_in_schema?("public", …)` in
+        test/letflow/definitions/migrations_test.exs is vacuous under
+        replay_migrations/2, because Ecto injects the run's prefix regardless
+        of what the migration wrote — so the assertion cannot fail and the
+        :prefix property is not verified there. This validator reproduced the
+        vacuity independently (the same negative control run against the live
+        catalog returned [], as it must) and then went to the question that
+        actually matters: is the property covered ANYWHERE, or is criterion 1
+        left genuinely unverified?
+
+        It is covered. test/letflow/event_store/migrations_test.exs:493 (the
+        §4 guard test) iterates tenant_scoped_migrations/0 — which this
+        validator confirmed contains both REQ-027 modules, since the replay
+        returned both their versions — runs each migration with NO :prefix
+        under synthetic never-before-applied probe versions (so each change/0
+        genuinely executes rather than being skipped as already-applied), and
+        asserts the full public table set is unchanged.
+
+        Verified by mutation rather than by reading: changing `if prefix() do`
+        to `if true do` in 20260816193001 made exactly that test FAIL —
+        "a registered tenant-scoped migration created something in public when
+        run with no :prefix", with CreateProcessDefinitions in the named
+        candidate list, 12/13 passed, exit 2. Mutation reverted; git status
+        confirms an unmodified tree and no stray table survived.
+
+        So no acceptance criterion is left actually unverified. What remains
+        wrong is only the CLAIM — the inline comment and test/specs/REQ-027.md
+        lines 111-113 present the vacuous refute as proof the :prefix
+        mechanism works. That is a correctness-of-documentation defect worth
+        closing (a later reader could conclude the property is covered there
+        and not notice if the real coverage were removed), but it is not a
+        blocker.
+    - id: ISS-0011
+      severity: MINOR
+      disposition: correctly forwarded, not fixed here — pre-existing from REQ-021
+      note: >
+        Did not fire in any of this validator's six runs, so there was no red
+        to attribute. Its UPDATE blocks were read in full before running, and
+        the guidance was followed: runs were left unpinned, because the record
+        now retracts its own pinned-vs-unpinned split and three agents across
+        three run sets have reproduced the failure under --seed 0. Belongs to
+        Letflow.Plugs.TenantStatusTest, not to anything REQ-027 shipped.
+    - id: ISS-0018
+      severity: MINOR
+      disposition: correctly incidental — a defect in a gate's own instructions
+      note: >
+        INV-4's verification greps use --include=*.ex (cannot match
+        config/*.exs) and, per this run's UPDATE, are additionally anchored on
+        `=` assignment, which Elixir keyword-form config never uses — so
+        repairing only the glob would produce a check that looks fixed and
+        stays blind. A genuinely useful UPDATE. It concerns
+        security-invariants.md, not REQ-027's code, and Step 2c reached its
+        verdict by other means.
+
+new_findings_by_this_validator:
+  blockers: []
+  majors: []
+  minors: []
+  observations:
+    - >
+      HANDOFF_PROTOCOL.md §4 step 4 instructs the completing agent to update
+      handoffs/registry.json, while this run's dispatch instructs
+      RELEASE-VALIDATOR to leave registry.json alone as ORCH-owned. Followed
+      the run instruction (registry.json untouched) and recording the
+      discrepancy per core-directives.md's rule to flag doc drift as MINOR
+      rather than silently pick a side. This is the SECOND run in which this
+      validator role has hit it — REQ-023's release record raised the
+      identical point at 2026-08-16T18:37Z and it is still unresolved. Not
+      filed as a new ISS: it is a protocol-text question for ORCH, not a
+      defect in REQ-027. Noted as recurring so it stops being rediscovered.
+    - >
+      docs/requirements.yaml's REQ-027 description enumerates
+      process_definitions' columns without `tenant_id`, which the shipped
+      table carries as NOT NULL. Licensed by the same description's Decision B
+      preamble and matching REQ-023's precedent, and its substantive
+      consequence is already ISS-0025. Recorded here only so a future reader
+      comparing the requirement text against the live table does not read the
+      column as unauthorised.
+
+verdict_detail:
+  criteria_passed: 5
+  criteria_failed: 0
+  suite_status: >
+    Green, unusually cleanly. 6 of 6 runs clean at 307/307, zero failures of
+    any kind, with the delta from the 271 baseline reconciled exactly against
+    REQ-027's own 36 tests. Compile (plain and --force) and format gates all
+    exit 0.
+  strongest_evidence: >
+    The two silent-correctness properties — the ones that would have shipped
+    green if wrong — were both settled behaviourally against a live database
+    rather than by inspection: pg_constraint.confdeltype = 'a' plus a DELETE
+    genuinely rejected with 23503 and the snapshot intact; and a lowercase
+    'draft'/'active' round-trip in which a second activation of the same name
+    was rejected by uq_active_definition by constraint name, with the
+    predicate matching a real row.
+  database_hygiene: >
+    The one tenant schema created during verification
+    (tenant_781572b14d9c4d58a740461bcce33f2b) was dropped, along with its
+    tenant_schemas registration and its tenants row. Post-cleanup verification
+    from the script and again from a separate psql process: only `public`
+    remains in letflow_test2, 0 leftover rv-req027-* tenants, 0 rows in
+    tenant_schemas, and no stray public.process_definitions or
+    public.instance_definition_snapshots after the deliberate guard mutation.
+    All work was confined to the letflow_test2 partition; letflow_test and
+    letflow_dev were never touched, no docker compose up was issued, and no
+    branch was changed.
+
+overall_verdict: PASS
+next_action: "Route to DOC-UPDATER (6)."

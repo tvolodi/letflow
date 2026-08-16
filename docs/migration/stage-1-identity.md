@@ -151,11 +151,15 @@ itself anticipates ("a `tenant_schemas`-equivalent registry and a
 provisioning path... are needed at S2/S3 execution time"), not a silent
 divergence from Decision B.
 
-**`docs/issues/ISS-0007.yaml` disposition:** re-checked, remains legitimately
-open. Its S1-scoped concern (this stage doc reading Decision B correctly) is
-satisfied — confirmed above — but the issue's close condition is tied to the
-first S2/S3 design artefact citing Decision B, which hasn't happened yet
-(S2's REQ-022 is `status: pending`). Not a blocker for this stage gate.
+**`docs/issues/ISS-0007.yaml` disposition:** was open as of this stage gate
+(S1-scoped concern satisfied — confirmed above — but the issue's close
+condition was tied to the first S2/S3 design artefact citing Decision B,
+which hadn't happened yet). Closed 2026-08-16 once REQ-022 (S2's first
+schema-design requirement) landed and its design artefact
+(`lib/letflow/design/req022-tenant-schema-provisioning.md`) was independently
+confirmed to cite and implement Decision B during REQ-022's own WF-02 gates —
+see `docs/issues/ISS-0007.yaml`'s resolution note. Not a blocker for this
+(already-cleared) S1 stage gate either way.
 
 **Independent full-suite re-run:** `mix test` (this validator's own
 invocation, HEAD `1b1ab1f`, plus the untracked

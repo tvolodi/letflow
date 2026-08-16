@@ -40,4 +40,24 @@ affected_files:
   - docs/migration/stage-2-event-store-definitions.md
   - docs/migration/stage-3-instance-engine.md
 github_issue: https://github.com/tvolodi/letflow/issues/10
-status: open
+status: resolved
+resolved_in_run: WF02-REQ022-20260816
+resolved_at: 2026-08-16T10:43:18Z
+resolution: >
+  REQ-022 (schema-per-tenant provisioning mechanism) is the first S2 design
+  artefact to do real schema design work, and it explicitly cites and
+  implements docs/migration/decisions/0003-ecto-schema-strategy.md's Decision
+  B (schema-per-tenant via Ecto :prefix, tenant_id retained intra-schema) --
+  see lib/letflow/design/req022-tenant-schema-provisioning.md's own citations
+  of Decision B/C. This was independently re-verified during REQ-022's own
+  WF-02 Step 1b (CODE-DESIGN-VALIDATOR) and Step 2d (REVIEWER) gates, not
+  taken on the design's own word. This satisfies this issue's own stated
+  close condition exactly ("close once confirmed present in the first S2 or
+  S3 design artefact"). No dedicated WF-03 fix run was needed since there was
+  no defect to fix -- this was a confirm-and-close tracking issue, resolved
+  as a direct consequence of REQ-022 landing. S1's half of this issue was
+  already confirmed satisfied earlier (docs/migration/stage-1-identity.md's
+  WF-04 stage-gate REVIEWER section); S3 (instance-engine) hasn't started
+  yet and isn't blocked by this closure -- if S3's eventual schema work
+  needs its own confirmation, that's new work for that stage, not a reason
+  to hold this ticket open.

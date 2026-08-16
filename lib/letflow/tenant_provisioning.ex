@@ -182,19 +182,22 @@ defmodule Letflow.TenantProvisioning do
 
   @doc """
   The designated tenant-scoped subset of `priv/repo/migrations/` —
-  `replay_migrations/2`'s default `migration_source`. Starts empty: REQ-022
-  itself contributes zero entries (its own `CreateTenantSchemas` migration is
-  global-only, see the migration's header comment). Every future
-  tenant-scoped migration (REQ-023 onward) must append its own
-  `{version, module}` tuple here, in addition to following the required guard
-  pattern in its own migration file (see this module's design doc §4) — a
-  migration file that does one without the other is either inert
-  (never selected here) or corrupts `public` on a plain `mix ecto.migrate` run
-  (added here without the guard).
+  `replay_migrations/2`'s default `migration_source`. Started empty at REQ-022
+  (its own `CreateTenantSchemas` migration is global-only, see the migration's
+  header comment). REQ-024's `event_type_registry` migration is the first
+  real entry (see `lib/letflow/design/req024-event-type-registry.md` §3).
+  Every future tenant-scoped migration must append its own `{version, module}`
+  tuple here, in addition to following the required guard pattern in its own
+  migration file (see this module's design doc §4) — a migration file that
+  does one without the other is either inert (never selected here) or
+  corrupts `public` on a plain `mix ecto.migrate` run (added here without the
+  guard).
   """
   @spec tenant_scoped_migrations() :: [{version :: pos_integer(), module()}]
   def tenant_scoped_migrations do
-    []
+    [
+      {20_260_816_163_103, Letflow.Repo.Migrations.CreateEventTypeRegistry}
+    ]
   end
 
   # Reuses the exact idiom already established and empirically verified in

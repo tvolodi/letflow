@@ -1,0 +1,48 @@
+{
+  "handoff_id": "3409b2fb-6ebe-4940-830f-6262d222273d",
+  "run_id": "WF02-REQ024-20260816",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ024-20260816/step-01-code-designer.json",
+  "created_at": "2026-08-16T15:49:01Z",
+  "started_at": "2026-08-16T15:49:01Z",
+  "completed_at": "2026-08-16T16:18:23Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-024"],
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/requirements.yaml (REQ-024)", "lib/letflow/design/req022-tenant-schema-provisioning.md", "lib/letflow/tenant_provisioning.ex"],
+    "owned_modules": ["lib/letflow/event_store"]
+  },
+  "task": {
+    "description": "Design Letflow.EventStore.Registry for REQ-024 on branch feature/WF02-REQ024-20260816. Write lib/letflow/design/<module>.md per WF-02 Step 1's procedure. REWORK ITERATION 1: CODE-DESIGN-VALIDATOR FAILed (handoffs/WF02-REQ024-20260816/step-01b-code-design-validator.json) on a BLOCKER: your existing draft's S4 interface note requires register_type/2, validate_payload/3, get_type/2 to accept prefix :: String.t() directly from the caller, citing Letflow.TenantProvisioning.replay_migrations/2 as precedent -- but replay_migrations/2 actually takes tenant_id, not prefix (lib/letflow/tenant_provisioning.ex lines 153-181), internally resolving schema_name via Repo.get_by(Registration, tenant_id: tenant_id) and returning {:error, :tenant_not_provisioned} if unprovisioned. Fix your draft (lib/letflow/design/req024-event-type-registry.md) so it either (a) takes tenant_id and internally resolves schema_name via Letflow.TenantProvisioning (naming that as a real S6 cross-module dependency), matching replay_migrations/2's actual convention including a :tenant_not_provisioned-equivalent error case in all 3 function's error unions, or (b) keeps prefix :: String.t() but explicitly names the resolution mechanism the caller is expected to use before calling and the error case for an unprovisioned tenant. Read lib/letflow/tenant_provisioning.ex directly yourself this time, don't re-cite from memory of your own prior draft.",
+    "acceptance_criteria": [
+      "priv/repo/migrations gains an event_type_registry migration (schema-per-tenant per REQ-022) applying cleanly",
+      "register_type/2 rejects a second registration with the same (name, schema_version) with a distinct, testable error, not a generic changeset failure",
+      "validate_payload/2 against a payload missing a required field returns a failure result whose detail names the specific field_path (JSON Pointer form) and constraint, not just a boolean false",
+      "get_type/1 against an unregistered name returns an explicit :unknown_event_type-shaped error rather than nil or an exception",
+      "the moduledoc names the JSON Schema validation library choice as an explicit open question for CODE-DESIGNER, not a silently made decision"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REWORK ITERATION 1 fix for the single BLOCKER CODE-DESIGN-VALIDATOR raised against commit 0b3057f (handoffs/WF02-REQ024-20260816/step-01b-code-design-validator.json). Re-read lib/letflow/tenant_provisioning.ex directly (not from memory of the prior draft) and confirmed the validator's finding: replay_migrations/2 (lines 153-181) takes tenant_id, not prefix -- it resolves schema_name internally via Repo.get_by(Registration, tenant_id: tenant_id) (line 161) and returns {:error, :tenant_not_provisioned} (line 163) when unprovisioned; no public function in that module takes a raw prefix string from a caller. Applied fix option (a) (both options were acceptable per the validator's verdict; chose (a) because it matches replay_migrations/2's actual convention exactly rather than pushing an under-specified resolution burden onto REQ-025's Store.append/1, this design's own named first consumer). Changed lib/letflow/design/req024-event-type-registry.md: SS4's opening interface note rewritten with an explicit 'Correction (rework iteration 1)' callout citing the real tenant_provisioning.ex line numbers; register_type/2, validate_payload/3, get_type/2 all now take tenant_id :: Ecto.UUID.t() instead of prefix :: String.t(), with {:error, :tenant_not_provisioned} added to all three error unions (SS4.1, SS4.2, SS4.3). register_type/2 and get_type/2 each gained an explicit first behavior step resolving tenant_id -> schema_name via Repo.get_by(Letflow.TenantProvisioning.Registration, tenant_id: tenant_id) (renumbering register_type/2's remaining steps 1-5 to 2-6, with all internal step cross-references -- 'step-3 pre-check', 'steps 3-4' -- corrected to match); validate_payload/3 does not duplicate the lookup since its only DB access is via its own internal get_type/2 call, so it just forwards tenant_id and propagates :tenant_not_provisioned alongside :unknown_event_type. SS6 (cross-module dependencies) now names Letflow.TenantProvisioning.Registration as a real dependency (previously omitted -- the validator's second finding) and states explicitly why the lookup is duplicated across two call sites rather than extracted into a shared TenantProvisioning function (no such function currently exists; refactoring a sibling already-merged requirement's module was judged out of REQ-024's scope). Added SS7.3 flagging that extraction question for REVIEWER, not resolved here. SS7.2 and SS8's traceability table rows for AC2-AC4 updated to reflect tenant_id (not prefix) and the corrected step numbers. Left unchanged, confirmed not implicated by the fix: SS1 (JSON Schema library decision), SS2, SS3 (migration shape), SS4.4/SS4.5 (validator algorithm sketch / ValidationFailure struct), SS5 (EventType Ecto schema) -- none referenced the wrong prefix convention. Full-file grep for 'prefix' after the edit confirms every remaining occurrence is either the unrelated Ecto.Migration :prefix mechanism (SS3's migration guard pattern) or the corrected schema_name-fed Repo prefix: option, not a caller-supplied argument.",
+    "artifacts_out": ["lib/letflow/design/req024-event-type-registry.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ024-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ024-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

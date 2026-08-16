@@ -1784,3 +1784,63 @@ history:
       in lib/ calls it yet, so it changes no documented user-observable
       behavior in README's "What's here today"/"Running it" sections.
       Flipped docs/requirements.yaml REQ-028 status to done.
+  - req: REQ-024
+    event: started
+    agent: ORCH
+    at: 2026-08-16T15:46:56Z
+    note: >
+      Claimed from letflow-queue via a real get_next_task call (task id 39,
+      locked_by: tvolodi-orch). REQ-023 (task 38, depends_on: [36]) is
+      reserved for a parallel process running concurrently and was correctly
+      skipped by the queue's atomic claim (still locked by the other agent)
+      -- confirmed this was correct queue behavior, not a bug, before
+      proceeding. WF-02 Step 00 (git setup) complete:
+      feature/WF02-REQ024-20260816 branched from main and pushed. Working
+      tree confirmed clean before branching (the previously-flagged
+      unrelated deploy-prep files were committed separately by the user,
+      16b2871). Routing to CODE-DESIGNER (Step 1).
+  - req: REQ-024
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-16T17:43:26Z
+    note: >
+      Event type registry shipped: Letflow.EventStore.Registry
+      (lib/letflow/event_store/registry.ex) with register_type/2,
+      validate_payload/3, and get_type/2, backed by a new
+      event_type_registry migration (schema-per-tenant, per REQ-022's
+      provisioning/migration-replay mechanism). JSON Schema validation is a
+      hand-rolled validator (Letflow.EventStore.Registry.JsonSchema) matching
+      R-Co's own supported keyword subset (type, minimum/maximum,
+      minLength/maxLength, enum, required, properties, items,
+      additionalProperties) rather than the ex_json_schema hex package --
+      this was an explicit open question in REQ-024's own text, resolved by
+      CODE-DESIGNER with reasoning recorded in the design doc (section 1/1.4)
+      rather than a new docs/migration/decisions/ record, since it doesn't
+      rise to the kind of new-library-dependency adoption 0002/0003 recorded;
+      RELEASE-VALIDATOR independently confirmed this framing rather than
+      trusting the design doc's own claim. One rework cycle occurred at Step
+      1b (CODE-DESIGN-VALIDATOR): the initial design mis-cited the
+      tenant-prefix resolution convention; corrected to resolve tenant_id ->
+      Letflow.TenantProvisioning.Registration -> schema_name (the same
+      lookup shape replay_migrations/2 uses), returning
+      {:error, :tenant_not_provisioned} when no Registration row exists.
+      RELEASE-VALIDATOR independently re-read the shipped code (not the
+      handoff chain's narrative) and confirmed all three public functions
+      use the corrected resolution path. All WF-02 gates passed:
+      CODE-DESIGN-VALIDATOR (after the one rework), SECURITY-REVIEWER,
+      REVIEWER (idiom), TEST-DESIGN-VALIDATOR, TEST-RUNNER, and
+      RELEASE-VALIDATOR (independent re-run, not trusting TEST-RUNNER's
+      report alone, plus its own empirical spot-check script against a
+      freshly provisioned tenant). RELEASE-VALIDATOR's own re-run: 234/234
+      tests passing across two different unseeded runs (one run hit the
+      pre-existing docs/issues/ISS-0011.yaml flake --
+      test/letflow/plugs/tenant_status_test.exs's global :telemetry.attach
+      race under async: true -- 233/234 on that seed, clean 234/234 on the
+      other; not a REQ-024 defect, not re-filed); test/letflow/event_store/
+      run in isolation: 73/73. Per REQ-022/REQ-028's established precedent,
+      docs/migration/stage-2-event-store-definitions.md was deliberately
+      left untouched (bulk-updated once at WF-04 stage-gate time, not
+      per-requirement). README.md checked and left untouched: REQ-024 is an
+      internal module with no HTTP route or command and no documented
+      user-observable behavior changed. Flipped docs/requirements.yaml
+      REQ-024 status to done.

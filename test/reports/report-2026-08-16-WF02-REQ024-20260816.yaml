@@ -1,0 +1,215 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-024
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ024-20260816
+date_utc: 2026-08-16T22:31:00Z
+
+git:
+  branch: feature/WF02-REQ024-20260816
+  branch_confirmed: true
+  commit: e4cc9e3f2e0a0f8c78ccc6258ac9a600f16651d0
+  commit_subject: "chore(WF02-REQ024): TEST-DESIGN-VALIDATOR PASS -- independently reproduced concurrency test, bug fixes, migration-loading workaround scope (Step 3b)"
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH, no fallback needed
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5] ... Mix 1.20.3 / Elixir 1.20.3 (compiled with Erlang/OTP 29)"
+  postgres_container: letflow-postgres-1 (already running via docker compose, port 5462 -> 5432, healthy — confirmed via `docker ps` before running, no compose up needed)
+  command_run: "mix test --seed <N>  (full suite — the test alias runs ecto.create + ecto.migrate --quiet first automatically), run twice with different seeds per WF-02 Step 4"
+
+verdict: PASS
+
+checks:
+  test_suite_full_run1:
+    command_run: "mix test --seed 0"
+    result: FAIL (known issue only)
+    exit_code: 1
+    summary_line_verbatim: "Result: 233/234 passed (4/4 properties, 229/230 tests)"
+    finished_line_verbatim: "Finished in 5.7 seconds (1.0s async, 4.7s sync)"
+    failures: 1
+    failure_detail_verbatim: >
+      1) test method short-circuit — no DB query at all for a non-write method a GET
+      request issues no Ecto query at all (method short-circuit, no DB round-trip)
+      (Letflow.Plugs.TenantStatusTest)
+         test/letflow/plugs/tenant_status_test.exs:121
+         expected no Ecto query for a GET request
+         code: refute_received :query_fired, "expected no Ecto query for a GET request"
+         stacktrace:
+           test/letflow/plugs/tenant_status_test.exs:136: (test)
+    identified_as: >
+      docs/issues/ISS-0011.yaml — pre-existing, already-filed, already root-caused issue
+      (global :telemetry.attach in test/letflow/plugs/tenant_status_test.exs races against
+      concurrently-running async:true tests under non-default/varying seeds). Filed by
+      RELEASE-VALIDATOR during REQ-022's Step 5, independently re-confirmed by
+      TEST-DESIGN-VALIDATOR during REQ-024's Step 3b, and reproduced again here on seed 0.
+      Unrelated to REQ-024's own code (test/letflow/event_store/) — not re-filed, not
+      routed to ELIXIR-DEV, not treated as blocking this step's PASS verdict.
+    note: >
+      Raw output (2948 lines) saved to scratch log and grepped programmatically for
+      failure markers rather than eyeballed. The single failure found matches
+      ISS-0011's documented signature verbatim (same test name, same file:line, same
+      assertion, same stacktrace shape).
+
+  test_suite_full_run2:
+    command_run: "mix test --seed 12345"
+    result: PASS
+    exit_code: 0
+    summary_line_verbatim: "Result: 234 passed (4 properties, 230 tests)"
+    finished_line_verbatim: "Finished in 7.1 seconds (1.1s async, 5.9s sync)"
+    failures: 0
+    excluded: 0
+    skipped: 0
+    doctests: 0
+    note: >
+      Second independent invocation with a different seed (12345, chosen arbitrarily,
+      different from run 1's seed 0 and from TEST-DESIGN-VALIDATOR's own prior seeds) —
+      did not hit ISS-0011's race window this time (consistent with ISS-0011's own
+      documentation describing it as intermittent, ~1 of 5 runs in TEST-DESIGN-VALIDATOR's
+      own Step 3b session). Full 234/234 clean, zero failures, grepped programmatically
+      for failure markers (regex covering "Failures:", numbered failure headers,
+      "refute_received", "FAILED") — zero matches.
+
+  test_dir_isolated_req024:
+    dir: test/letflow/event_store/
+    command_run: "mix test test/letflow/event_store/ --seed 0"
+    summary_line_verbatim: "Result: 73 passed"
+    exit_code: 0
+    failures: 0
+    note: >
+      REQ-024's own directory run in isolation (separate invocation from the two
+      full-suite runs above), confirming it is clean and reproducible regardless of
+      whether ISS-0011 fires elsewhere in the full suite. 73/73 = 28
+      (registry_test.exs, counted directly from source `test "..."` declarations) + 45
+      (registry/json_schema_test.exs, same counting method). Matches
+      TEST-DESIGNER's and TEST-DESIGN-VALIDATOR's own independently reported 73/73.
+
+  compile_warnings_as_errors:
+    command_run: "mix compile --warnings-as-errors"
+    result: PASS
+    note: "Clean, zero output, zero warnings promoted to errors (covers lib/ and priv/, not test/ — the test/-only type-checker note TEST-DESIGN-VALIDATOR flagged on registry_test.exs:654 is out of this check's scope by design and remains non-blocking)."
+
+  postgres_cleanup_independently_reverified:
+    method: >
+      Queried letflow-postgres-1 directly via `docker exec ... psql -U letflow -d
+      letflow_test` (not trusting TEST-DESIGN-VALIDATOR's prior quote of the same
+      checks) after all three test invocations above completed.
+    results:
+      - query: "SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname LIKE 'tenant_%';"
+        result: "0 rows"
+      - query: "SELECT count(*) FROM public.tenant_schemas;"
+        result: 0
+      - query: "SELECT count(*) FROM public.tenants WHERE slug LIKE 'req024-%';"
+        result: 0
+    conclusion: >
+      No orphan tenant schemas, tenant_schemas rows, or req024-* tenant rows persist
+      after any of the three runs (including the run that hit ISS-0011's failure —
+      the failing test's own on_exit cleanup still ran since ExUnit runs on_exit
+      regardless of assertion outcome, and this failure is unrelated to any
+      REQ-024 fixture entirely).
+
+  known_noise_not_a_failure:
+    - >
+      [error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in NNNN ms.
+      — REQ-016's Ueberauth OIDC worker attempting to reach a deliberately
+      unreachable placeholder issuer configured in config/test.exs. Pre-existing
+      since REQ-016, already documented as expected noise in every prior WF-02 test
+      report. Does not fail, skip, or affect any test.
+    - >
+      Pre-existing ExUnit.Case.register_test/4 deprecation warnings for the property
+      tests (process_instance_test.exs, parallel_approval_test.exs,
+      oidc/claim_mapping_property_test.exs) — unrelated to REQ-024, non-blocking
+      compiler warnings, not promoted to errors (confirmed separately via the
+      warnings-as-errors compile check above).
+    - >
+      Verbose SQL query debug logging appears in raw mix test output
+      (config/test.exs's default test log level) — expected, not indicative of any
+      problem. This is why the full-suite logs are ~2900+ lines for 234 tests.
+
+pre_existing_failures_found:
+  - issue_id: ISS-0011
+    status: "already open, re-observed only, not re-filed"
+    reproduced_this_run: true
+    reproduced_in: "test_suite_full_run1 (seed 0)"
+    not_reproduced_in: "test_suite_full_run2 (seed 12345)"
+issues_filed: none
+
+test_file_breakdown:
+  new_req_024:
+    items:
+      - file: test/letflow/event_store/registry_test.exs
+        count: 28
+        detail: >
+          Covers AC1 (event_type_registry migration applies cleanly, schema-per-tenant)
+          and AC2 (register_type/2's duplicate-(name,schema_version) rejection with a
+          distinct error, including monotonicity checks and a genuine concurrent-race
+          test via Task against the DB unique-index backstop) and AC4 (get_type/1's
+          explicit :unknown_event_type-shaped error for an unregistered name, not nil
+          or an exception).
+      - file: test/letflow/event_store/registry/json_schema_test.exs
+        count: 45
+        detail: >
+          Covers AC3 (validate_payload/2 against a payload missing a required field
+          returns a failure result whose detail names the specific field_path in JSON
+          Pointer form and the constraint, not just a boolean false) across the full
+          supported JSON Schema keyword subset (type, minimum/maximum,
+          minLength/maxLength, enum, required, properties, items,
+          additionalProperties), including a "reports every violation, not just the
+          first" describe block.
+    subtotal: 73
+  pre_existing_baseline: 161
+  full_suite_grand_total: 234
+  cross_check: >
+    234 total (4 properties, 230 example tests) = 161 pre-existing (REQ-022/023's own
+    baseline, per TEST-DESIGN-VALIDATOR's Step 3b report) + 73 new REQ-024 tests
+    (28 + 45). 161 + 73 = 234, matching run2's clean summary line exactly and run1's
+    233/234 (234 total, 1 of them — an unrelated pre-existing test — failing). Also
+    matches TEST-DESIGNER's and TEST-DESIGN-VALIDATOR's own independently reported
+    73/73 for the new directory. This Step 4 run is the independent, formal
+    re-verification of that number on the current HEAD (e4cc9e3, the
+    TEST-DESIGN-VALIDATOR PASS commit), run twice with different seeds, output saved
+    to log files and grepped programmatically for failure markers rather than
+    eyeballed, plus a live Postgres query re-check of the cleanup claim rather than
+    trusting the prior report's quote of the same checks.
+
+acceptance_criteria_test_coverage_observed:
+  # Cross-referenced against test/specs/REQ-024.md and docs/requirements.yaml's
+  # REQ-024 acceptance_criteria list (lines 1035-1039).
+  criterion_1_migration_applies_cleanly_schema_per_tenant: "PASS — covered in registry_test.exs's migration/schema describe block, part of the 28-test file; confirmed applying cleanly against a provisioned tenant schema (schema-per-tenant per REQ-022's mechanism), reconfirmed by this run's own successful ecto.create + ecto.migrate --quiet (the test alias's automatic setup) across all three invocations."
+  criterion_2_register_type_rejects_duplicate_name_schema_version_distinctly: "PASS — register_type/2 describe block in registry_test.exs, including the concurrent-race test (Task-based, two concurrent registration attempts for the same (name, schema_version)) that TEST-DESIGN-VALIDATOR independently reproduced 15/15 clean with query-log evidence distinguishing the pre-check path from the DB-unique-index-backstop path. Returns a distinct {:error, :duplicate_event_type_version}, not a generic changeset failure."
+  criterion_3_validate_payload_missing_required_field_names_field_path_and_constraint: "PASS — 45 tests in registry/json_schema_test.exs across the full supported keyword subset, including a dedicated 'reports every violation, not just the first' describe block asserting the full violation set (field_path in JSON Pointer form + constraint) via order-independent MapSet comparison, not just a boolean."
+  criterion_4_get_type_unregistered_name_returns_explicit_error_not_nil_or_exception: "PASS — get_type/1 describe block in registry_test.exs (part of the 28), asserts an explicit :unknown_event_type-shaped error tuple for an unregistered name."
+  criterion_5_moduledoc_states_json_schema_library_choice_as_open_question_for_code_designer: "Not test-covered by design (a doc-content assertion has no runtime behavior to fail against, matching this project's established policy against grep-a-markdown-style busywork tests — same treatment as REQ-020 AC5, REQ-021 AC5, REQ-022 AC4) — independently re-verified by direct source inspection in this run (not trusting TEST-DESIGN-VALIDATOR's prior quote): lib/letflow/event_store/registry.ex's moduledoc (lines 33-55 per TEST-DESIGN-VALIDATOR's Step 3b report) states the JSON Schema validation library choice as an explicit open question, matching the requirement's text verbatim."
+
+diagnosis: >
+  Run 1 (seed 0) failed exactly 1 test: Letflow.Plugs.TenantStatusTest's method
+  short-circuit test, matching ISS-0011's documented signature (file, line, assertion
+  text, stacktrace shape) exactly. This is a pre-existing REQ-021 test-isolation defect
+  (global, non-pid-scoped :telemetry.attach racing against concurrently running
+  async:true tests), already filed, already root-caused, already independently
+  reproduced by both RELEASE-VALIDATOR (REQ-022) and TEST-DESIGN-VALIDATOR (REQ-024
+  Step 3b). Not caused by, or related to, REQ-024's own code or tests. Not routed back
+  to ELIXIR-DEV or TEST-DESIGNER — no action taken beyond identifying it as the known
+  issue, per the handoff's explicit instruction and core-directives.md's
+  Unblock-Everything scope boundary. Run 2 (seed 12345) did not hit the race window and
+  came back fully clean (234/234), consistent with ISS-0011's own documented
+  intermittency.
+
+regression_check_vs_baseline: >
+  Pre-REQ-024 baseline (per TEST-DESIGN-VALIDATOR's Step 3b report, itself tracing back
+  to REQ-022/023's own formally re-verified totals) was 161 tests. This run reproduces
+  161 + 73 = 234 passed (4 properties, 230 tests) on a clean seed (run 2, seed 12345),
+  and 233/234 on a seed that incidentally triggers the pre-existing, unrelated
+  ISS-0011 race (run 1, seed 0) — both independently on the current HEAD commit
+  (e4cc9e3, the TEST-DESIGN-VALIDATOR PASS commit), with output captured to log files
+  and programmatically grepped for failure markers rather than eyeballed, plus a live
+  Postgres re-query to independently reconfirm the no-orphan-state cleanup claim.
+  Zero regressions in REQ-024's own scope confirmed; zero new issues found.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-16-WF02-REQ024-20260816.yaml
+  next_action: "Route to RELEASE-VALIDATOR (Step 5)"

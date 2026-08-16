@@ -1599,3 +1599,41 @@ history:
       WF-04 stage-gate run can be scheduled. No lib/, test/, or priv/ file was touched
       by this DOC-UPDATER pass — those were already correct and gated by the prior
       steps in this run.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-16T07:31:45Z
+    note: >
+      Reconciled letflow-queue with reality for REQ-018..021. Each of these four
+      requirements' WF-02 runs completed and merged (PRs #38-#41) while
+      $QUEUE_AUTH_TOKEN was unavailable in-session, so each correctly used
+      docs/agents/protocols/TASK_QUEUE.md's single-host fallback path (read
+      docs/requirements.yaml directly) rather than calling get_next_task/release_lock
+      — but their already-registered queue tasks (impl_order 31, 32, 33, 34, per the
+      REQ-015..021 registration in commit c2b4922) were left status: "open", unlocked,
+      silently out of sync with docs/requirements.yaml's status: done. This also left
+      their mirrored GitHub Issues (#25, #26, #27, #28) open, which a human noticed and
+      flagged. Retrieved QUEUE_AUTH_TOKEN from its actual storage location
+      (/opt/apps/letflow-queue-test/.env on hetzner-prod, per ai-dala-infra's
+      secrets-inventory.md — never stored on the workstation itself) via SSH using the
+      pre-provisioned ai-dala-infra key, with the user's explicit go-ahead. Verified via
+      get_next_task before touching anything: task 31 (REQ-018) was indeed status:
+      "open" as suspected, confirming the drift diagnosis rather than assuming it.
+      Reconciled all four by claiming (get_next_task) then immediately releasing
+      (release_lock, status: "done") one at a time in impl_order sequence — 31, 32, 33,
+      34 — since letflow-queue deliberately exposes no direct status-write endpoint
+      (README's "Design" section: exactly four endpoints, on purpose). Confirmed
+      no_eligible_task afterward, meaning S1's full registered batch (28-34) is now
+      genuinely drained in the queue, matching docs/requirements.yaml. Each release
+      re-closed its linked GitHub Issue via release_lock's documented sync (harmless
+      no-op — a human had already closed #25-28 by hand before this reconciliation
+      ran). Also fixed two documentation bugs found while doing this: (1)
+      TASK_QUEUE.md named the auth env var LETFLOW_QUEUE_TOKEN throughout, which does
+      not match letflow-queue's actual QUEUE_AUTH_TOKEN (per its own README.md and
+      deploy/.env.example) — corrected every occurrence; (2) TASK_QUEUE.md's fallback
+      clause said only "fall back to single-host behavior," with no instruction to
+      reconcile the queue once reachable again — added a concrete reconciliation
+      procedure (claim-then-release in impl_order order) plus a note on where the real
+      token value lives and that it must never be guessed/invented, so a future
+      fallback episode doesn't require rediscovering this same recovery path from
+      scratch.

@@ -56,13 +56,53 @@ with no multi-host risk), ORCH may fall back to the pre-queue single-host behavi
 in its report, per `core-directives.md`'s No Speculation rule, rather than silently
 switching modes.
 
+**A requirement completed in fallback mode still has a real, already-registered queue
+task sitting `open`/unlocked** if it was registered before the fallback session (check
+its `impl_order:` comment in `docs/requirements.yaml` — that's the queue task id). Do
+not leave the queue silently out of sync indefinitely: once `$QUEUE_AUTH_TOKEN` becomes
+available again (a later session, a different host, a human supplying it), reconcile
+by claiming and releasing each affected task —
+
+```bash
+# Claiming and immediately releasing (rather than a hypothetical direct-status-write
+# endpoint) because letflow-queue deliberately exposes no generic update operation —
+# see its README's "Design" section, exactly four endpoints, on purpose.
+curl "https://queue-test.ai-dala.com/tasks/next?agent_id=orch-reconcile" \
+  -H "Authorization: Bearer $QUEUE_AUTH_TOKEN"
+# confirm the returned id matches the REQ's impl_order before releasing
+curl -X POST "https://queue-test.ai-dala.com/tasks/<id>/release" \
+  -H "Authorization: Bearer $QUEUE_AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id": "orch-reconcile", "status": "done"}'
+```
+
+— one task at a time, lowest `impl_order` first, same as normal `get_next_task`
+sequencing (this doubles as a live confirmation of *which* task id each REQ actually
+mapped to, since `get_next_task` always returns the true lowest-open one — don't assume
+`impl_order:`'s comment is correct without this check). This also re-closes each task's
+linked GitHub Issue via `release_lock`'s sync (harmless no-op if already closed by
+hand). Record the reconciliation in `docs/status/requirement_status.yaml` as a
+`SCOPE-CHANGE` event, same as any other manual queue bookkeeping.
+
 ---
 
 ## The four functions
 
 All calls are HTTP requests to the deployed `letflow-queue` instance, bearer-token
-authenticated (`Authorization: Bearer $LETFLOW_QUEUE_TOKEN`, token supplied via
-environment — never hardcoded, same convention as REQ-103's dev bootstrap token).
+authenticated (`Authorization: Bearer $QUEUE_AUTH_TOKEN`, token supplied via
+environment — never hardcoded, same convention as REQ-103's dev bootstrap token). This
+env var name must match `letflow-queue`'s own `QUEUE_AUTH_TOKEN` exactly (see its
+`README.md`'s "Auth" section and `deploy/.env.example`) — an earlier draft of this doc
+called it `LETFLOW_QUEUE_TOKEN`, which doesn't match anything the service reads.
+
+If `$QUEUE_AUTH_TOKEN` isn't set in the current environment, that's the fallback
+trigger below, not something to guess or invent a substitute value for. The real value
+is deliberately not stored on any developer workstation, per `ai-dala-infra`'s
+secrets-inventory policy — it lives only in `/opt/apps/letflow-queue-test/.env` on the
+host running the service (`landscape/secrets-inventory.md` in `ai-dala-infra`, entry
+`letflow-queue-test:QUEUE_AUTH_TOKEN`). Retrieving it requires host access ORCH does
+not have by default in a normal Letflow session — do not attempt to derive, guess, or
+hardcode a token; fall back exactly as documented below instead.
 
 ### 1. `register_task` — create a new claimable work item
 
@@ -77,7 +117,7 @@ environment — never hardcoded, same convention as REQ-103's dev bootstrap toke
 
 ```bash
 curl -X POST https://queue.ai-dala.com/tasks \
-  -H "Authorization: Bearer $LETFLOW_QUEUE_TOKEN" \
+  -H "Authorization: Bearer $QUEUE_AUTH_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "REQ-011: OIDC/Keycloak integration decision",
@@ -109,7 +149,7 @@ the service now does that filtering, atomically, across every host.
 
 ```bash
 curl -X GET "https://queue.ai-dala.com/tasks/next?agent_id=$HOSTNAME-orch" \
-  -H "Authorization: Bearer $LETFLOW_QUEUE_TOKEN"
+  -H "Authorization: Bearer $QUEUE_AUTH_TOKEN"
 ```
 
 - `agent_id` should be stable per host (e.g. hostname or a configured identifier) so a
@@ -129,7 +169,7 @@ host already held before a crash/restart, using the same `agent_id`.
 
 ```bash
 curl -X POST https://queue.ai-dala.com/tasks/42/lock \
-  -H "Authorization: Bearer $LETFLOW_QUEUE_TOKEN" \
+  -H "Authorization: Bearer $QUEUE_AUTH_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"agent_id": "'"$HOSTNAME"'-orch"}'
 ```
@@ -152,7 +192,7 @@ below).
 
 ```bash
 curl -X POST https://queue.ai-dala.com/tasks/42/release \
-  -H "Authorization: Bearer $LETFLOW_QUEUE_TOKEN" \
+  -H "Authorization: Bearer $QUEUE_AUTH_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"agent_id": "'"$HOSTNAME"'-orch", "status": "done"}'
 ```
@@ -160,7 +200,7 @@ curl -X POST https://queue.ai-dala.com/tasks/42/release \
 ```bash
 # Force-release a task stuck locked by a dead host:
 curl -X POST https://queue.ai-dala.com/tasks/42/release \
-  -H "Authorization: Bearer $LETFLOW_QUEUE_TOKEN" \
+  -H "Authorization: Bearer $QUEUE_AUTH_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"force": true}'
 ```

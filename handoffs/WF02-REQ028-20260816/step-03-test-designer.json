@@ -1,0 +1,48 @@
+{
+  "handoff_id": "7720e756-1d5f-4f8e-9fa7-f01366e34320",
+  "run_id": "WF02-REQ028-20260816",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ028-20260816/step-03-test-designer.json",
+  "created_at": "2026-08-16T11:32:25Z",
+  "started_at": "2026-08-16T11:32:25Z",
+  "completed_at": "2026-08-16T11:43:43Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-028"],
+    "related_handoff_ids": ["5176c79a-c6ad-4bd3-8c60-e6e3e2fe948d", "bd7368bd-d9bb-43b4-9ec9-6e2aadd365f7"],
+    "artifacts_in": ["lib/letflow/definitions/graph.ex", "lib/letflow/design/req028-graph-structural-validator.md"],
+    "owned_modules": ["test/letflow", "test/specs"]
+  },
+  "task": {
+    "description": "Write test/specs/REQ-028.md and ExUnit tests under test/letflow/ for Letflow.Definitions.Graph, covering all 5 acceptance criteria. This is a pure module (no DB/Sandbox needed) -- tests should be fast and simple compared to REQ-022's. REVIEWER's Step 2d review filed a non-blocking suggestion: add an explicit test case where a node's only edge is dangling on the far end, asserting it produces BOTH dangling_edge (CHK-03) and isolated_node (CHK-04) in the same call -- locks in a traced-but-implicit behavior. Not a new acceptance criterion, but worth including since it directly documents a real design decision.",
+    "acceptance_criteria": [
+      "a graph satisfying all 8 checks returns {valid: true, violations: []}",
+      "each of the 8 named checks (CHK-01 through CHK-08) has at least one explicit failing-example test demonstrating its specific violation code is returned, not just a generic invalid-graph test",
+      "a graph violating 3 of the 8 checks simultaneously returns all 3 violations in one call, not just the first encountered (Key invariant 5)",
+      "a cycle that passes through an EXCLUSIVE_GATEWAY or PARALLEL_GATEWAY node is explicitly permitted (not flagged as CYCLE_WITHOUT_GATEWAY), and a self-loop is explicitly rejected, each with its own test",
+      "the function signature and its call sites confirm zero Repo/database calls anywhere in its call graph"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote test/specs/REQ-028.md and test/letflow/definitions/graph_test.exs for Letflow.Definitions.Graph (pure module, no Repo/Sandbox -- ExUnit.Case async: true). 15 tests covering all 5 acceptance criteria: AC1 -- one clean 5-node/5-edge graph (START->HUMAN_TASK->EXCLUSIVE_GATEWAY->{SERVICE_TASK->END, gateway-permitted cycle back to HUMAN_TASK}) asserts exactly {valid: true, violations: []}. AC2 -- 9 tests, one per violation code (CHK-01 produces 2: missing_start_node, multiple_start_nodes), each a hand-DFS-traced minimal fixture violating ONLY that code; CHK-05's fixture required explicit reasoning (documented in the spec's 'CHK-05 fixture-design exploration' section) since a bare duplicate-id-only violation is structurally impossible under this algorithm's first-match-wins node_index semantics -- every duplicate always co-triggers :isolated_node on the higher-index copy, so the fixture asserts the true minimal 2-code set instead of pretending isolation otherwise. AC3 -- a 2-node non-gateway cycle graph with no START/END returns all 3 violation codes in one call, asserted via exact ordered list, a redundant MapSet equality, and length == 3. AC4 -- 3 tests: a cycle through PARALLEL_GATEWAY is permitted (full {valid:true, violations:[]} result, not just 'no cycle code present'), a self-loop on HUMAN_TASK is rejected, and a self-loop ON an EXCLUSIVE_GATEWAY is accepted -- locking in design doc Sec6.4's explicitly-flagged non-obvious corollary as a standing regression test. AC5 -- verified by direct inspection + real command output (grep for I/O primitives: only match is moduledoc prose, zero in code; mix xref callers Letflow.Repo: graph.ex absent from the caller list), not a runtime test, matching REQ-020 AC5 / REQ-022 AC4 precedent for documentation/structural criteria. Also added REVIEWER's Step 2d non-blocking suggestion: a node whose only edge is dangling on the far end produces BOTH :dangling_edge and :isolated_node in one call. Mutation test (required by task): temporarily changed validate_graph/1's Enum.flat_map composition to Enum.reduce_while that halts at the first check returning violations (simulating the exact 'first encountered, not all' bug Key invariant 5 guards against). Re-ran test/letflow/definitions/graph_test.exs: 12/15 passed -- exactly the 3 tests asserting 2+ simultaneous violation codes failed (AC3's test, CHK-05's companion-violation test, and REVIEWER's dangling+isolated test), each with the expected truncated-list symptom; the other 12 single-violation tests were unaffected. Reverted the mutation; git diff --stat lib/letflow/definitions/graph.ex showed an empty diff (clean revert); re-ran test/letflow/definitions/graph_test.exs (15/15 passed) and the full suite (mix test: 161 passed -- 4 properties, 157 tests -- 0 failures, 0 regressions). mix format --check-formatted (both new and touched-then-reverted files) and mix compile --warnings-as-errors both exit clean.",
+    "artifacts_out": ["test/specs/REQ-028.md", "test/letflow/definitions/graph_test.exs"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ028-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ028-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

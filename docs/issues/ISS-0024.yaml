@@ -1,0 +1,72 @@
+id: ISS-0024
+title: "REQ-033's acceptance criterion 4 is undemonstrable as worded: under PD-08's no-ON-DELETE-CASCADE FK, NO delete of a referenced process_definitions row succeeds, so there is no 'where FK rules permit' case to test"
+discovered_by: CODE-DESIGNER
+discovered_in_run: WF02-REQ027-20260816
+discovered_at: 2026-08-16T19:44:38Z
+severity: MAJOR
+description: >
+  REQ-033's fourth acceptance criterion reads, verbatim from
+  docs/requirements.yaml:
+
+    "deleting the source process_definitions row (where FK rules permit,
+    e.g. a DRAFT definition) does not remove or invalidate an existing
+    snapshot row, per PD-08's no-ON-DELETE-CASCADE design (REQ-027)"
+
+  The parenthetical is the problem. It presumes there exists some class of
+  process_definitions row whose deletion the FK permits while a snapshot
+  referencing it still exists -- and offers "a DRAFT definition" as the
+  example. No such class exists.
+
+  REQ-027 (this run) implements PD-08's FK as
+  `references(:process_definitions, on_delete: :nothing)`, which Ecto emits
+  as no ON DELETE clause at all, i.e. Postgres NO ACTION (confirmed by
+  CODE-DESIGNER against deps/ecto_sql's connection.ex, and independently
+  consistent with R-Co's own 004_definitions.sql). Under NO ACTION, Postgres
+  rejects the DELETE outright with a foreign_key_violation whenever a
+  referencing row exists. The definition's *status* is irrelevant to that --
+  the constraint does not read the status column. So there is no DRAFT
+  carve-out, and no delete that both succeeds and leaves the snapshot
+  standing.
+
+  This matters because it is a criterion an agent must demonstrate. A
+  TEST-DESIGNER reading it literally would try to construct the
+  "FK rules permit" case, fail to find one, and then face a bad choice:
+  write a test that deletes a definition with NO snapshot (which passes
+  trivially and proves nothing about PD-08), quietly weaken the criterion,
+  or -- worst -- "fix" the schema by adding ON DELETE CASCADE so the delete
+  succeeds, which would invert PD-08 entirely and cause exactly the snapshot
+  data loss the design exists to prevent. That last path is not
+  hypothetical: R-Co's own live schema went that way (see ISS-0025's note on
+  1106_iss0125), so an agent cross-checking against R-Co would find apparent
+  support for it.
+
+  What the criterion should assert instead is the actual PD-08 guarantee,
+  which IS demonstrable and IS worth a test: attempting to delete a
+  process_definitions row that a snapshot references is REJECTED by the
+  database, and the snapshot row survives unchanged. That is a stronger
+  property than the current wording and requires no FK carve-out. Suggested
+  rewording for whoever picks this up (a WF-01 amendment, before REQ-033 is
+  claimed):
+
+    "deleting a process_definitions row that an instance_definition_snapshots
+    row references is rejected by the database (foreign_key_violation), and
+    the snapshot row remains present and unmodified -- per PD-08's
+    no-ON-DELETE-CASCADE design (REQ-027); a snapshot is never removed as a
+    side effect of deleting its source definition"
+
+  Note this does NOT block REQ-027, which is the requirement actually
+  shipping the FK. REQ-027's own acceptance criterion 4 is worded correctly
+  ("references process_definitions.id with no ON DELETE CASCADE, and the
+  moduledoc states this is deliberate per PD-08") and is fully satisfiable
+  and testable as written. The defect is confined to REQ-033's criterion.
+
+  Discovered by CODE-DESIGNER while designing REQ-027's FK and checking
+  which downstream requirement would exercise it. Blocks nothing in REQ-027,
+  so per docs/agents/protocols/ISSUE_QUEUE.md filed and forwarded rather
+  than fixed in this run -- but it should be resolved BEFORE REQ-033 is
+  claimed, so its implementer is not forced to choose among the three bad
+  options above mid-run.
+affected_files:
+  - docs/requirements.yaml
+github_issue: https://github.com/tvolodi/letflow/issues/82
+status: open

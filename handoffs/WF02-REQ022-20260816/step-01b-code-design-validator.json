@@ -1,0 +1,47 @@
+{
+  "handoff_id": "eb328156-0413-4be0-b0e7-5de26857841e",
+  "run_id": "WF02-REQ022-20260816",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ022-20260816/step-01b-code-design-validator.json",
+  "created_at": "2026-08-16T08:53:30Z",
+  "started_at": "2026-08-16T08:53:30Z",
+  "completed_at": "2026-08-16T08:56:27Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-022"],
+    "related_handoff_ids": ["c3fd5c6f-c93c-4c19-9c53-4fb52ca5b727"],
+    "artifacts_in": ["lib/letflow/design/req022-tenant-schema-provisioning.md"],
+    "owned_modules": ["lib/letflow/tenant_provisioning", "priv/repo/migrations"]
+  },
+  "task": {
+    "description": "HARD GATE. Independently validate lib/letflow/design/req022-tenant-schema-provisioning.md (commit 104d2bf) on branch feature/WF02-REQ022-20260816 against REQ-022's 4 acceptance criteria and WF-02 Step 1b's checklist. Read the design artefact directly -- do not read CODE-DESIGNER's handoff result.summary as a substitute.",
+    "acceptance_criteria": [
+      "priv/repo/migrations gains a tenant_schemas migration (public/default schema) that applies cleanly via mix ecto.migrate, with columns for at minimum tenant_id and schema_name",
+      "a provision_tenant_schema/1-equivalent function exists that issues a real CREATE SCHEMA and records the mapping in tenant_schemas, demonstrated against at least one non-default tenant schema name",
+      "a migration-replay function exists that re-applies priv/repo/migrations/ against a specific tenant schema via Ecto's prefix: option, demonstrated by confirming at least one table exists under the provisioned schema's own information_schema, not just under public",
+      "the moduledoc/description explicitly states, as an open question rather than a silent decision, whether REQ-015's users/groups/tenant_role migrations are retrofitted to use :prefix now or remain in public schema"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently read lib/letflow/design/req022-tenant-schema-provisioning.md in full (not CODE-DESIGNER's handoff summary) against REQ-022's 4 acceptance criteria (docs/requirements.yaml lines 842-896, grepped directly) and WF-02 Step 1b's a-e checklist. All 4 ACs map to concrete design elements (AC1: section 2 full migration spec -- columns/types/constraints/indexes/header comment; AC2: section 3.1 provision_tenant_schema/1 full behavior + section 5 demonstration method; AC3: section 3.2 replay_migrations/2 + section 3.4 tenant_scoped_migrations/0 + section 4 guard pattern + section 5 demonstration method; AC4: section 7, stated as open, not resolved). Grepped the doc for TBD/'to be implemented'/TODO -- only one hit (line 333), which is the design explicitly disclaiming that tenant_scoped_migrations/0 returning [] is a deliberate design commitment, not a TBD -- no genuine deferral found. All 3 public function specs (provision_tenant_schema/1, replay_migrations/2, schema_name_for_tenant/1) carry full @spec with explicit {:ok,_}|{:error,_} tags and named error atoms (section 3.1, 3.2, 3.3). Cross-module dependencies listed explicitly in section 6 (Letflow.Repo, Ecto.Migrator, Letflow.Identity.Tenant, priv/repo/migrations/, forward dependency on REQ-023+, sandbox test caveat). Grepped the whole .md file for '^\\s*def \\w|^\\s*defmodule' -- zero matches; every code fence is either an @spec-only block, an explicitly-labeled-as-pseudocode guard shape (section 4: 'not literal code, ELIXIR-DEV writes the real version'), or a #-comment-only migration header (no defmodule/def body) -- confirms no implementation code present. Independently verified the design's central technical claim (literal whole-directory migration replay is unsafe/insufficient against this project's real priv/repo/migrations/ contents) two ways: (1) Glob'd priv/repo/migrations/ directly -- 6 files exist (transition_events, approvals, tenants, groups, tenant_role, users), zero are tenant-scoped yet, confirming section 3.4's 'REQ-022 itself contributes zero entries' claim; (2) grepped all 6 files for 'prefix' -- zero use `create table(..., prefix: prefix())`, meaning a literal whole-directory replay against a real tenant prefix today would create ZERO tables under that tenant's schema (all 6 default to prefix: nil / public regardless of the Migrator run's :prefix), which is exactly why AC3 cannot be satisfied by a literal whole-directory replay and why the tenant_scoped_migrations/0 subset + guard-pattern + test-fixture demonstration (section 5) is necessary, not decorative. Verified the Ecto-source claims underlying section 0/4 directly against deps/ecto_sql (not trusted from the design doc's own assertion): Migrator.run/4's @spec returns bare [integer] and raises rather than returning {:error,_} (migrator.ex lines 425-426, matches design's wrapping rationale in section 3.2 step 2); Ecto.Migration.Table struct defaults prefix: nil (migration.ex lines 484-485); Runner.prefix/0 reads Process.get(:ecto_migration) (runner.ex lines 97-101); ensure_schema_migrations_table!/3 scopes the tracking table by opts[:prefix] (schema_migration.ex lines 26-29, confirms 'each distinct :prefix gets its own schema_migrations table' claim); migrator.ex's own moduledoc states the Sandbox-incompatibility claim verbatim (lines 406-409, matches section 6's TEST-DESIGNER caveat). Verified REQ-022's own open question (REQ-015 users/groups/tenant_role retrofit to :prefix) is stated as open in section 7 and the traceability table (section 8), not silently resolved either way -- matches AC4's exact wording. Verified consistency with docs/migration/decisions/0003-ecto-schema-strategy.md: Decision B's own text explicitly names 'a tenant_schemas-equivalent registry and a provisioning path... are needed at S2/S3 execution time' as deferred out of 0003's own scope -- this design is exactly that deferred build-out, not a re-litigation; Decision C's 'event-store tables get no special-cased tenant-isolation treatment' is honored by this design providing one generic mechanism (tenant_scoped_migrations/0 + guard pattern) rather than an event-store-specific path. Verified the claimed reuse of lib/letflow/identity.ex's insert/on_conflict/re-select idiom by reading identity.ex directly (lines 152-205): insert_or_fetch/3 (3 args, matches design's citation) uses Repo.insert with on_conflict: :nothing, conflict_target, returning: true, then a Repo.get existence check, falling back to re_select_on_conflict/2 (2 args, matches) -- the design's section 3.1 step 4 citation is accurate, not a hallucinated reference. Checked docs/anti-patterns.md in full -- no entries this design walks into. No check failed; no partial-credit situation arose.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ022-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ022-20260816",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (Step 2a)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

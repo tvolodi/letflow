@@ -96,6 +96,22 @@
         "PR #41 (merged)"
       ],
       "note": "This is the only run of the four with a complete on-disk handoff trail (step-01 through step-06), though registry.json itself was still never updated live during the run -- the gap ISS-0010 describes. This entry is the first live-accurate backfill; future runs should update this file directly per HANDOFF_PROTOCOL.md §4 step 4 rather than requiring another backfill."
+    },
+    {
+      "run_id": "WF02-REQ022-20260816",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-022"],
+      "stage": "S2",
+      "status": "ACTIVE",
+      "owned_modules": ["lib/letflow/tenant_provisioning", "priv/repo/migrations"],
+      "lock_acquired_at": "2026-08-16T08:37:43Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00",
+      "backfilled": false,
+      "queue_task_id": 36,
+      "queue_agent_id": "tvolodi-orch",
+      "note": "Claimed live via letflow-queue get_next_task (not the requirements.yaml fallback) -- first run since the queue's S2 backlog was registered this session. Updated live per HANDOFF_PROTOCOL.md §4 step 4, not backfilled."
     }
   ]
 }

@@ -1688,3 +1688,12 @@ history:
       kept only in a local, gitignored-by-nature path outside the repo
       (`$HOME/.qat_letflow_queue`) for the duration of this reconciliation and removed
       afterward — never written to any tracked file.
+  - req: REQ-022
+    event: started
+    agent: ORCH
+    at: 2026-08-16T08:38:17Z
+    note: >
+      Claimed from letflow-queue via a real get_next_task call (task id 36,
+      locked_by: tvolodi-orch) — not the requirements.yaml fallback. WF-02 Step 00
+      (git setup) complete: feature/WF02-REQ022-20260816 branched from main and
+      pushed. Routing to CODE-DESIGNER (Step 1).

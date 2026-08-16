@@ -44,4 +44,34 @@ affected_files:
   - docs/agents/shared/HANDOFF_PROTOCOL.md
   - docs/agents/AGENT_SYSTEM.md
 github_issue: https://github.com/tvolodi/letflow/issues/42
-status: open
+status: resolved
+resolution:
+  resolved_at: 2026-08-16T07:09:47Z
+  resolved_by: ORCH
+  summary: >
+    Created handoffs/registry.json, backfilled with one entry per completed WF-02 run
+    found under handoffs/ (REQ-018 through REQ-021), each reconstructed from that run's
+    own on-disk handoff files, docs/status/requirement_status.yaml's done events, and
+    its merged PR — not live-recorded at the time, so each entry is explicitly flagged
+    backfilled: true with its reconstruction sources listed, rather than presented as
+    though it had been maintained contemporaneously.
+
+    This also surfaced two related, more severe instances of the same class of gap
+    while backfilling, both noted inline in the new registry entries rather than fixed
+    here (out of this fix's scope, each is its own pre-existing condition on an
+    already-merged, already-done requirement):
+      - WF02-REQ018-20260816's handoff directory contains only step00-git-setup.json —
+        no handoff files exist for any step from CODE-DESIGNER through Step Final,
+        despite the requirement being done and merged (PR #38).
+      - WF02-REQ020-20260816's handoff directory exists but is completely empty — zero
+        handoff files for any step, despite the requirement being done and merged
+        (PR #40) with a reported CODE-DESIGN-VALIDATOR rework cycle along the way.
+
+    The registry file existing now does not by itself guarantee future runs keep it
+    updated — HANDOFF_PROTOCOL.md §4 step 4 and ORCHESTRATOR.md §7 already documented
+    the requirement correctly before this fix; the gap was non-compliance, not missing
+    documentation. Per HANDOFF_PROTOCOL.md's own "Enforcement note", no mechanical
+    linter (mix letflow.lint_handoffs or equivalent) exists yet to catch a future
+    recurrence — building one remains open, unclaimed follow-up work, not resolved by
+    this fix.
+  new_issues_filed: []

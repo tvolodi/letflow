@@ -1309,3 +1309,22 @@ history:
       core-directives.md claims scratch/ is git-ignored but .gitignore had no
       such entry) — bundled into the same commit/PR per instruction, not
       touched or altered by this DOC-UPDATER pass.
+  - req: REQ-018
+    event: started
+    agent: ORCH
+    at: 2026-08-16T00:26:10Z
+    note: >
+      WF-02 Step 00 (git setup) PASSed via ELIXIR-DEV: created and pushed
+      feature/WF02-REQ018-20260816 from up-to-date main. Both dependencies
+      (REQ-015 users/tenants schema, REQ-017 pure claim-mapping module) are
+      status: done. Scope: port src/oidc/jit_provisioning.zig's orchestration
+      plus src/identity/registry.zig's createOrGetJitOidcUser (lines ~843-912)
+      into a new Letflow.Identity context module -- idempotent
+      select-first/insert-ON-CONFLICT/re-select-fallback upsert keyed on
+      (tenant_id, external_realm, external_id), password_hash fixed to
+      "__OIDC_ONLY__", auth_source: :oidc on JIT-created rows, config-sourced
+      per-realm JIT config (enabled/default_status/default_roles->VIEWER
+      fallback), hard-failure error return (no swallowing). Flipped
+      docs/requirements.yaml REQ-018 status to in_progress. Routing to
+      CODE-DESIGNER next (WF-02 Step 1) since this is real implementation
+      surface on a tenant-data path (SECURITY-REVIEWER gate applies).

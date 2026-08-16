@@ -34,3 +34,16 @@ config :letflow, :oidc_claim_mapping, %{
     display_name_claim: "name"
   }
 }
+
+# Duplicated from config/dev.exs (this repo's config files don't cascade —
+# see the :oidc key's comment above for the same note). Per-realm JIT
+# user-provisioning configuration for Letflow.Identity.provision_oidc_user/3,
+# distinct from the :oidc and :oidc_claim_mapping keys. A realm with no entry
+# here falls back to Letflow.Oidc.JitProvisioningConfig.default/1.
+config :letflow, :oidc_jit_provisioning, %{
+  "bpm-default" => %{
+    enabled: true,
+    default_status: :active,
+    default_roles: []
+  }
+}

@@ -643,7 +643,7 @@ requirements:
   - id: REQ-018
     title: JIT user provisioning (createOrGetJitOidcUser equivalent)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S1
     impl_order: 31  # letflow-queue task id
     description: >

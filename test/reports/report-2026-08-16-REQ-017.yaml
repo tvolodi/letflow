@@ -1,0 +1,147 @@
+# Test run report — WF-02 Step 4
+# Written by ORCH directly (the originally-dispatched TEST-RUNNER agent's
+# completion notification was lost to a session interruption — its transcript
+# is preserved on disk but its result never landed; rather than trust an
+# unconfirmed claim, ORCH re-ran every check below itself, independently,
+# before writing this report). RELEASE-VALIDATOR still independently re-runs
+# the suite rather than trusting this report alone (core-directives.md).
+
+req_id: REQ-017
+workflow: WF-02
+step: 4
+agent: ORCH
+run_id: REQ-017
+date_utc: 2026-08-16
+git:
+  branch: feature/WF02-REQ017
+  commit: c5623c6
+  working_tree_note: >
+    Working tree has unstaged/untracked changes on top of the commit above
+    (config/dev.exs, config/test.exs modified; lib/letflow/design/
+    req017-claim-mapping.md, lib/letflow/oidc/, test/letflow/oidc/,
+    test/specs/REQ-017.md untracked) — this is REQ-017's design +
+    implementation + test artefacts, not yet committed. All checks below ran
+    against this working tree exactly as it stands.
+
+environment:
+  toolchain: local (not Docker fallback)
+  elixir: "Erlang/OTP 29 [erts-17.0.5] ... Elixir 1.20.3 (compiled with Erlang/OTP 29)"
+  postgres_container: letflow-postgres-1 (already running, port 5462)
+  command_run: "mix letflow.check  (== format --check-formatted, compile --warnings-as-errors, test)"
+  note: >
+    Ran mix letflow.check end-to-end (exit 0), then independently re-ran
+    mix test and mix test --trace to cross-check the per-file breakdown below.
+    No code changes made in the course of producing this report.
+
+verdict: PASS
+
+checks:
+  format_check:
+    result: PASS
+    exit_code: 0
+    output: "(no output — mix format --check-formatted printed nothing, meaning no file needs reformatting)"
+
+  compile_warnings_as_errors:
+    result: PASS
+    exit_code: 0
+    note: >
+      Implied clean by mix letflow.check's own alias ordering (format-check,
+      then compile --warnings-as-errors, then test — a compile failure or
+      warning would have halted the alias before test ran). 62/62 test pass
+      below is only reachable if this step succeeded.
+
+  test_suite:
+    result: PASS
+    exit_code: 0
+    summary_line_verbatim: "Result: 62 passed (4 properties, 58 tests)"
+    finished_line_verbatim: "Finished in 0.7 seconds (0.3s async, 0.3s sync)"
+    failures: 0
+    excluded: 0
+    skipped: 0
+    doctests: 0
+    note: >
+      Confirmed by two independent full-suite runs (mix letflow.check's own
+      test step, and a standalone mix test / mix test --trace pass). Both
+      produced "62 passed (4 properties, 58 tests)" with no Failures: section
+      and exit code 0. This matches exactly what TEST-DESIGN-VALIDATOR
+      independently reported during its own gate (which additionally
+      performed mutation testing — deliberately breaking claim_mapping.ex's
+      defaulting/short-circuit logic and confirming the relevant tests failed,
+      then restoring the original and re-confirming 62/62 — a stronger check
+      than this report alone provides).
+    known_noise_not_a_failure: >
+      Two pre-existing ExUnit.Case.register_test/4 deprecation warnings
+      (process_instance_test.exs, parallel_approval_test.exs property tests)
+      and the expected REQ-016 OIDC-worker retry log line against the
+      unreachable placeholder issuer — both unrelated to REQ-017, present in
+      REQ-016's own report too. Full SQL query debug logging also appears in
+      raw output (config/test.exs default test log level) — verbose but not
+      indicative of any problem.
+
+test_file_breakdown:
+  # Cross-checked via mix test --trace listing every file, and per-file
+  # mix test runs for the two new REQ-017 files specifically.
+  pre_existing_35_confirmed_no_regressions:
+    items:
+      - file: test/letflow/process_instance_test.exs
+        count: 5
+      - file: test/letflow/parallel_approval_test.exs
+        count: 8
+      - file: test/letflow/row_approval_test.exs
+        count: 5
+      - file: test/letflow/identity/tenant_test.exs
+        count: 4
+      - file: test/letflow/identity/user_test.exs
+        count: 6
+      - file: test/letflow/identity/group_test.exs
+        count: 1
+      - file: test/letflow/identity/tenant_role_test.exs
+        count: 3
+      - file: test/letflow/application_test.exs
+        count: 3
+    subtotal: 35
+  new_req_017_27:
+    items:
+      - file: test/letflow/oidc/claim_mapping_test.exs
+        count: 25
+        detail: >
+          Example-based tests covering defaulting behavior for all five
+          optional fields (email, preferred_username, roles, display_name,
+          tenant_id), the roles_claim_paths short-circuit/skip-wrong-type
+          rules, resolve_claim_path/2 nested-path resolution (including
+          non-map-partway-through and completely-absent-path cases), and both
+          nil/"" subject error cases plus the "never over-fires" converse case.
+        independent_run: "Result: 25 passed"
+      - file: test/letflow/oidc/claim_mapping_property_test.exs
+        count: 2
+        detail: >
+          StreamData property tests. TEST-DESIGN-VALIDATOR independently
+          confirmed (via a 20,000-sample empirical probe of the generator, and
+          a deliberate Map.fetch!/2 mutation that the property caught with a
+          KeyError) that this generator produces real adversarial variety
+          (non-map values, wrong types, deep nesting) rather than only
+          well-formed claims maps.
+        independent_run: "Result: 2 passed"
+    subtotal: 27
+  grand_total: 62
+  cross_check: >
+    35 pre-existing (32 pre-REQ-016 + 3 REQ-016, confirmed unchanged) + 27
+    new REQ-017 = 62, matching the suite's own "62 passed (4 properties, 58
+    tests)" summary line exactly (4 properties = 2 pre-existing
+    process_instance/parallel_approval properties + 2 new claim_mapping
+    properties; 58 example tests = 33 pre-existing + 25 REQ-017 examples).
+
+acceptance_criteria_test_coverage_observed:
+  # Cross-referenced against test/specs/REQ-017.md.
+  criterion_1_zero_io: "PASS (by inspection, per spec's own reasoning, already independently confirmed by SECURITY-REVIEWER and REVIEWER during their gates) — not a dedicated ExUnit test; every test in claim_mapping_test.exs/claim_mapping_property_test.exs calls the pure function with no DB/HTTP setup as corroborating evidence."
+  criterion_2_defaulting_behavior: "PASS — TEST-DESIGN-VALIDATOR mutation-tested this directly: mutating preferred_username's default from subject to \"\" broke 4 tests including the one pinning the exact expected value; mutating the roles_claim_paths short-circuit logic broke exactly 1 test (case 9) with a precise expected-vs-actual mismatch."
+  criterion_3_sub_missing_error: "PASS — both nil and \"\" subject tested independently against fully-populated claims (ruling out sparse-claims as a confound), plus the converse case (empty claims, real subject -> {:ok, ...}) confirming the error path doesn't over-fire."
+  criterion_4_moduledoc_citation: "PASS (by direct inspection) — all three new modules' @moduledoc cite src/oidc/claim_mapping.zig explicitly."
+
+diagnosis: "N/A — no failures observed, nothing routed to ELIXIR-DEV or TEST-DESIGNER"
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-16-REQ-017.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

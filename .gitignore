@@ -28,3 +28,7 @@ letflow-*.tar
 # Local environment / secrets — never commit
 .env
 .env.*
+
+# Scratch space for one-off scripts, debug dumps, logs — see
+# docs/agents/instructions/core-directives.md's file-placement rules
+/scratch/

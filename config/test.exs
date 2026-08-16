@@ -19,3 +19,18 @@ config :letflow, Letflow.Repo,
 config :letflow, :oidc,
   issuer: "https://placeholder-keycloak.invalid/realms/bpm-default",
   provider_name: Letflow.Oidc.DefaultProvider
+
+# Duplicated from config/dev.exs (this repo's config files don't cascade —
+# see the :oidc key's comment above for the same note). Per-realm
+# claim-path configuration for Letflow.Oidc.ClaimMapping, distinct from the
+# :oidc key. A realm with no entry here falls back to
+# Letflow.Oidc.ClaimMappingConfig.default/1.
+config :letflow, :oidc_claim_mapping, %{
+  "bpm-default" => %{
+    tenant_id_claim: "tenant_id",
+    roles_claim_paths: ["realm_access.roles", "roles"],
+    email_claim: "email",
+    preferred_username_claim: "preferred_username",
+    display_name_claim: "name"
+  }
+}

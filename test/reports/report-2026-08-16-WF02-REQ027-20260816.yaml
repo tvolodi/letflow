@@ -1,0 +1,347 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-027
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ027-20260816
+date_utc: 2026-08-16T22:33:13Z
+
+git:
+  branch: feature/WF02-REQ027-20260816
+  branch_confirmed: true
+  branch_check_command: "git branch --show-current"
+  branch_check_output_verbatim: "feature/WF02-REQ027-20260816"
+  commit: 29abd0c8b4c638a6666a606f0117c14d18884d0a
+  commit_subject: "chore(WF02-REQ027): step 3b gate PASS, forward ISS-0029 [WF02-REQ027-20260816]"
+  worktree: c:\Users\tvolo\dev\ai-dala\letflow-wt2
+  note: >
+    Secondary worktree. The sibling worktree c:\Users\tvolo\dev\ai-dala\letflow was
+    never read from or written to by this step, and `main` was never checked out.
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5] [source] [64-bit] [smp:16:16] [ds:16:16:10] [async-threads:1] [jit:ns] / Elixir 1.20.3 (compiled with Erlang/OTP 29)"
+  postgres_container: >
+    letflow-postgres-1, "Up 29 hours (healthy)", 0.0.0.0:5462->5432/tcp — confirmed
+    already running via `docker ps` before any test command. NO `docker compose up`
+    was issued: port 5462 is bound by the sibling worktree's Postgres, which this
+    worktree shares.
+  database_isolation:
+    partition_env: "MIX_TEST_PARTITION=2 exported for every command in this run"
+    resolved_database_verbatim: "DB=letflow_test2 PORT=5462"
+    resolved_via: "MIX_TEST_PARTITION=2 MIX_ENV=test mix run --no-start -e '...Application.get_env(:letflow, Letflow.Repo)...'"
+    note: >
+      config/test.exs line 5 interpolates System.get_env("MIX_TEST_PARTITION") onto the
+      literal prefix `letflow_test` to build the database name, so the variable is only
+      honoured under MIX_ENV=test. `mix test` forces MIX_ENV=test; the one non-`mix test`
+      invocation used here (`mix run --no-start`, above) had MIX_ENV=test set explicitly
+      for exactly that reason. letflow_test and letflow_dev were never targeted — both
+      still exist untouched alongside letflow_test2 (`select datname from pg_database
+      where datname like 'letflow%'` returns letflow_dev, letflow_test, letflow_test2).
+    post_run_state:
+      public_tables: 8
+      max_schema_migrations_version: 20260816193002
+      note: >
+        REQ-027's two migrations (20260816193001_create_process_definitions,
+        20260816193002_create_instance_definition_snapshots) are recorded in
+        schema_migrations, yet public still holds exactly the same 8 tables as before
+        (approvals, groups, schema_migrations, tenant_role, tenant_schemas, tenants,
+        transition_events, users). Neither process_definitions nor
+        instance_definition_snapshots appears in public. This is the tenant-scoping
+        design working as intended and is incidental corroboration of the `:prefix`
+        guard, observed directly via psql rather than inferred.
+  max_cases_verbatim: "Running ExUnit with seed: 0, max_cases: 32"
+  port_4000_collisions_iss_0015: >
+    None observed. All 12 run logs were grepped for "eaddrinuse": zero hits in every
+    run (verified per-file, all 12 reported count 0). No run aborted environmentally;
+    all 12 produced a real ExUnit Result line.
+
+verdict: PASS
+
+# ---------------------------------------------------------------------------
+# Methodology
+# ---------------------------------------------------------------------------
+methodology:
+  deviation_from_pre_req_023_practice: >
+    Pre-REQ-023 Step 4 practice was a single `mix test --seed 0` treated as proof the
+    suite was deterministically green. That assumption is falsified and must not be
+    used: per docs/issues/ISS-0011.yaml's UPDATE blocks, the flake reproduces UNDER
+    `--seed 0`, because ExUnit's seed controls test *ordering*, not the concurrent
+    BEAM scheduling that actually decides the race. This report therefore does NOT
+    rest on a single seed-0 run.
+  design: >
+    12 independent full-suite runs (the whole suite, not just REQ-027's new tests) on
+    the current HEAD, split evenly 6 pinned (`mix test --seed 0`) / 6 unpinned
+    (`mix test`, ExUnit picking a fresh random seed). Modes were INTERLEAVED
+    (p,p,u,p,u,p,u,u,p,u,p,u) rather than run as two contiguous blocks, so the
+    distribution is not an artefact of ordering or of machine state drifting over the
+    session. Each run's stdout+stderr went to its own log file; the shell exit code
+    was captured explicitly; and the seed, Result line, Finished line, eaddrinuse count
+    and any failure block were extracted programmatically from the log rather than
+    eyeballed.
+  run_count_rationale: >
+    12 runs, not 40. REQ-023's Step 4 already characterised ISS-0011 on a 40-run
+    sample; the purpose here is to establish REQ-027's own suite status and to detect
+    any NEW failure mode, not to re-characterise a defect that already has a larger
+    sample on record. 12 runs across both modes is enough to do that and to report a
+    real distribution.
+  runner_script: scratch/req027/run_suite.sh   # git-ignored scratch (.gitignore line 38)
+  logs: scratch/req027/run01-pinned.log … run12-unpinned.log   # git-ignored scratch
+
+# ---------------------------------------------------------------------------
+# Per-run distribution — the actual observed data
+# ---------------------------------------------------------------------------
+run_distribution:
+  total_runs: 12
+  clean_runs: 10
+  runs_with_failure: 2
+  distinct_failure_modes: 1   # every failure was the same single test — see attribution
+  expected_clean_result_line: "Result: 307 passed (4 properties, 303 tests)"
+
+  by_mode:
+    pinned_seed_0:
+      runs: 6
+      clean: 5
+      failed: 1
+      failing_runs: [4]
+      observed_failure_rate: "1/6 = 16.7%"
+    unpinned_random_seed:
+      runs: 6
+      clean: 5
+      failed: 1
+      failing_runs: [10]
+      observed_failure_rate: "1/6 = 16.7%"
+    overall:
+      observed_failure_rate: "2/12 = 16.7%"
+
+  failing_seeds: [0, 446139]
+
+  table:
+    # run | mode | seed | exit_code | Result line verbatim | Finished line verbatim
+    - {run: 01, mode: pinned,   seed: 0,      exit_code: 0, result: "307 passed (4 properties, 303 tests)", finished: "Finished in 29.0 seconds (0.8s async, 28.1s sync)"}
+    - {run: 02, mode: pinned,   seed: 0,      exit_code: 0, result: "307 passed (4 properties, 303 tests)", finished: "Finished in 23.2 seconds (1.0s async, 22.1s sync)"}
+    - {run: 03, mode: unpinned, seed: 206393, exit_code: 0, result: "307 passed (4 properties, 303 tests)", finished: "Finished in 21.7 seconds (0.8s async, 20.8s sync)"}
+    - {run: 04, mode: pinned,   seed: 0,      exit_code: 2, result: "306/307 passed (4/4 properties, 302/303 tests)", finished: "Finished in 24.9 seconds (0.8s async, 24.0s sync)", failed: "1 test", failing_test: "test/letflow/plugs/tenant_status_test.exs:121", attribution: ISS-0011, note: "REPRODUCED UNDER --seed 0 — third independent confirmation that seed pinning is not a deterministic baseline"}
+    - {run: 05, mode: unpinned, seed: 46166,  exit_code: 0, result: "307 passed (4 properties, 303 tests)", finished: "Finished in 23.7 seconds (0.9s async, 22.8s sync)"}
+    - {run: 06, mode: pinned,   seed: 0,      exit_code: 0, result: "307 passed (4 properties, 303 tests)", finished: "Finished in 24.0 seconds (1.1s async, 22.8s sync)"}
+    - {run: 07, mode: unpinned, seed: 380198, exit_code: 0, result: "307 passed (4 properties, 303 tests)", finished: "Finished in 23.1 seconds (0.9s async, 22.2s sync)"}
+    - {run: 08, mode: unpinned, seed: 305425, exit_code: 0, result: "307 passed (4 properties, 303 tests)", finished: "Finished in 26.4 seconds (0.8s async, 25.5s sync)"}
+    - {run: 09, mode: pinned,   seed: 0,      exit_code: 0, result: "307 passed (4 properties, 303 tests)", finished: "Finished in 23.7 seconds (0.8s async, 22.9s sync)"}
+    - {run: 10, mode: unpinned, seed: 446139, exit_code: 2, result: "306/307 passed (4/4 properties, 302/303 tests)", finished: "Finished in 25.0 seconds (0.9s async, 24.1s sync)", failed: "1 test", failing_test: "test/letflow/plugs/tenant_status_test.exs:121", attribution: ISS-0011}
+    - {run: 11, mode: pinned,   seed: 0,      exit_code: 0, result: "307 passed (4 properties, 303 tests)", finished: "Finished in 31.8 seconds (0.8s async, 31.0s sync)"}
+    - {run: 12, mode: unpinned, seed: 753555, exit_code: 0, result: "307 passed (4 properties, 303 tests)", finished: "Finished in 40.7 seconds (0.9s async, 39.7s sync)"}
+
+# ---------------------------------------------------------------------------
+# Failure attribution — every failure read, none waved through
+# ---------------------------------------------------------------------------
+failure_attribution:
+  distinct_failing_tests_across_all_12_runs: 1
+  method: >
+    All 12 logs were grepped together for ExUnit's failure-header pattern
+    (`^ +[0-9]+\) test `) and the unique results sorted. Exactly ONE distinct failure
+    header exists across the entire 12-run corpus — quoted verbatim below. A per-log
+    header count was also produced: 10 logs contain 0 headers, and runs 04 and 10
+    contain exactly 1 each, each with a "Failed: 1 test" trailer. Nothing was
+    dismissed as "probably flaky"; both failing runs' blocks were read in full.
+
+  failure_1:
+    occurrences: 2
+    occurred_in_runs: [4, 10]
+    seeds: [0, 446139]
+    exit_code_each_time: 2
+    verbatim_output: |
+      1) test method short-circuit — no DB query at all for a non-write method a GET request issues no Ecto query at all (method short-circuit, no DB round-trip) (Letflow.Plugs.TenantStatusTest)
+         test/letflow/plugs/tenant_status_test.exs:121
+         expected no Ecto query for a GET request
+         code: refute_received :query_fired, "expected no Ecto query for a GET request"
+         stacktrace:
+           test/letflow/plugs/tenant_status_test.exs:136: (test)
+    attributed_root_cause: "ISS-0011 / GitHub issue #65 — open, pre-existing, introduced by REQ-021"
+    attribution_evidence:
+      - >
+        Signature matches ISS-0011 character-for-character in both failing runs: same
+        module (Letflow.Plugs.TenantStatusTest), same file:line
+        (tenant_status_test.exs:121), same assertion (`refute_received :query_fired`),
+        same stacktrace line (:136), same "Failed: 1 test" trailer.
+      - >
+        Mechanism as recorded in ISS-0011: the module is `async: true` and the test
+        attaches a GLOBAL `:telemetry` handler on [:letflow, :repo, :query] rather than
+        one scoped to its own sandboxed connection, so any concurrently running async
+        test's Letflow.Repo query delivers :query_fired into this test's mailbox and
+        `refute_received` fails on an event this test never caused.
+      - >
+        Run 04's log captures the race in the act, read directly rather than inferred.
+        The debug lines IMMEDIATELY BEFORE the failure block are foreign queries from
+        other modules' tests — `SELECT ... FROM "approvals"`, `INSERT INTO "tenants"`
+        for slug "bpm-default-tenant-40", `INSERT INTO "users"` for "someone-6599" —
+        and the lines IMMEDIATELY AFTER it are more foreign queries (`SELECT ... FROM
+        "groups"`, `SELECT count(*) FROM "users"`, `INSERT INTO "tenant_role"`,
+        `INSERT INTO "tenants"`). Other async tests were actively issuing Repo queries
+        inside the exact window between this test's attach and its refute_received.
+    caused_by_req_027: false
+    not_caused_by_req_027_evidence: >
+      Re-verified structurally in this step rather than taken on trust from Step 3b.
+      REQ-027's only new `async: true` module is test/letflow/definitions/schemas_test.exs
+      (line 28: `use ExUnit.Case, async: true`). Grepping it for
+      `telemetry|attach|Repo\.|DataCase` yields exactly three hits, ALL of them prose:
+      lines 12 and 14 are moduledoc text stating the module attaches no global
+      `:telemetry` handler and does not use Letflow.DataCase, and line 205 is a code
+      comment inside a test mentioning `Repo.preload/2` (the test body itself is
+      `assert InstanceDefinitionSnapshot.__schema__(:associations) == []`, pure
+      reflection, no I/O). There are zero real Repo calls and zero telemetry attaches
+      in it. REQ-027's other new module,
+      test/letflow/definitions/migrations_test.exs, is `use Letflow.DataCase,
+      async: false` for the whole module (line 37). So REQ-027 emits none of the query
+      telemetry this flake trips on, and its DB-touching tests cannot run concurrently
+      with the flaky test at all.
+    action_taken: >
+      Forwarded, NOT fixed. Per WF-02 Step 4's own rule ("Failures unrelated to this
+      run's own acceptance criteria (pre-existing) are filed and forwarded per
+      ISSUE_QUEUE.md — not fixed here, don't block this step's own PASS verdict") and
+      core-directives.md's Unblock-Everything scope boundary. ISS-0011 already exists
+      and is already filed on GitHub as #65, so it was NOT re-filed. No test code,
+      application code, migration or design artefact was modified by this step.
+    blocks_this_step: false
+
+  no_other_failures: >
+    Zero other failing tests across 12 runs. No new failure, no regression, no
+    unattributed failure. The only failure mode observed was read in full in both
+    occurrences and matched to a named, pre-existing, already-registered root cause
+    with source-level and log-level evidence.
+
+# ---------------------------------------------------------------------------
+# Static gates
+# ---------------------------------------------------------------------------
+checks:
+  compile_warnings_as_errors:
+    command_run: "MIX_TEST_PARTITION=2 MIX_ENV=test mix compile --warnings-as-errors"
+    exit_code: 0
+    stdout_stderr: "(empty — zero output)"
+    result: PASS
+
+  format_check:
+    command_run: "MIX_TEST_PARTITION=2 MIX_ENV=test mix format --check-formatted"
+    exit_code: 0
+    stdout_stderr: "(empty — zero output)"
+    result: PASS
+
+  full_suite:
+    command_run_pinned: "MIX_TEST_PARTITION=2 mix test --seed 0"
+    command_run_unpinned: "MIX_TEST_PARTITION=2 mix test"
+    note: >
+      The `test` alias in mix.exs runs `ecto.create --quiet` and `ecto.migrate --quiet`
+      first automatically, so every run began against a created+migrated letflow_test2.
+    clean_result_line_verbatim: "Result: 307 passed (4 properties, 303 tests)"
+    clean_runs: "10 of 12"
+    result: PASS
+
+# ---------------------------------------------------------------------------
+# Count reconciliation
+# ---------------------------------------------------------------------------
+count_reconciliation:
+  baseline_before_req_027: 271 passed
+  observed_after_req_027: "307 passed (4 properties, 303 tests)"
+  delta: 36
+  new_tests_counted_by_running_each_file_alone:
+    test/letflow/definitions/schemas_test.exs: 22    # "Result: 22 passed"
+    test/letflow/definitions/migrations_test.exs: 14 # "Result: 14 passed"
+    subtotal: 36
+  arithmetic: "271 + 22 + 14 = 307 — matches the suite's own Result line exactly."
+  matches_expected_reference: true
+  method_note: >
+    Per-file counts were obtained by actually running each new file alone
+    (`mix test <file> --seed 0`) and quoting its Result line, not by counting `test`
+    macros in source.
+
+# ---------------------------------------------------------------------------
+# Known noise (not failures)
+# ---------------------------------------------------------------------------
+known_noise_not_a_failure:
+  - >
+    "[error] Metadata load failed for issuer
+    https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in NNNN ms." —
+    REQ-016's Ueberauth OIDC worker reaching for a deliberately unreachable placeholder
+    issuer configured in config/test.exs. Pre-existing since REQ-016, documented as
+    expected noise in every prior WF-02 test report (REQ-018 through REQ-023). Appears
+    ~3x per run. Fails, skips and affects nothing.
+  - >
+    Verbose SQL query debug logging in raw `mix test` output (config/test.exs's default
+    test log level) — expected.
+  - >
+    Suite wall-clock rose from ~4.7s (REQ-023) to ~21-41s. This is REQ-027's
+    migrations_test.exs: running that file alone reports "Finished in 10.8 seconds
+    (0.00s async, 10.8s sync)" for 14 tests, because each test does real CREATE/DROP
+    SCHEMA work against Postgres. Expected cost of the tenant-schema replay coverage,
+    not a hang or a failure.
+
+pre_existing_failures_found:
+  - id: ISS-0011
+    github_issue: https://github.com/tvolodi/letflow/issues/65
+    status: open — forwarded, not fixed here
+    summary: "test/letflow/plugs/tenant_status_test.exs:121 flake, 2/12 runs this session"
+
+issues_filed_by_this_step: none
+# ISS-0011 already exists (GitHub #65). ISS-0012 through ISS-0029 are already filed by
+# ORCH. Nothing new was discovered by this step that is not already covered.
+
+# ---------------------------------------------------------------------------
+# Findings that refine ISS-0011 (data only — record NOT edited by this step)
+# ---------------------------------------------------------------------------
+observations_for_iss_0011:
+  - >
+    THIRD independent seed-0 reproduction. Run 04 of this session failed under
+    `mix test --seed 0` (exit code 2). ISS-0011's seed-0 claim has now been confirmed
+    by three different agents across three different run sets: TEST-DESIGN-VALIDATOR
+    at REQ-023 Step 3b, TEST-RUNNER at REQ-023 Step 4 (run 30), and TEST-RUNNER at
+    REQ-027 Step 4 (run 04, this report). `--seed 0` is definitively not a
+    deterministic baseline for this suite.
+  - >
+    THE PINNED-VS-UNPINNED SPLIT DID NOT REPRODUCE. REQ-023's 40-run sample observed
+    3.8% pinned vs 14.3% unpinned and recorded that direction as "directionally
+    consistent" with the root cause. This session observed 1/6 pinned and 1/6
+    unpinned — identical rates, no split at all. Stated as an observation, not a
+    claim: with 2 events here and 3 events there, neither sample can establish a real
+    difference between the modes, and this session is evidence that the earlier
+    directional split was most likely sampling noise rather than a property of the
+    defect. The practical guidance is unchanged and if anything reinforced: pinning
+    the seed buys nothing.
+  - >
+    Observed rate this session was 2/12 = 16.7%, versus REQ-023's better-supported
+    3/40 = 7.5%. Explicitly NOT proposed as a new headline rate — 2 events in 12 runs
+    is exactly the small-sample situation ISS-0011's own UPDATE block cautions about,
+    where one occurrence swings the percentage enormously. Recorded so a later run has
+    the raw numbers. One mechanism that could genuinely raise the rate is worth noting
+    without asserting it: REQ-027 adds 22 async tests, and the async phase grew from
+    0.7s (REQ-023) to 0.8-1.1s here, so there is modestly more concurrent async work
+    in flight per run — more opportunity for a foreign query to interleave. That would
+    be further exposure of the existing defect, not a new one. This step did not run
+    enough trials to test that hypothesis and does not claim it.
+  - >
+    Suggested to ORCH: append these three observations to docs/issues/ISS-0011.yaml.
+    This step deliberately did not edit that record, because its handoff scoped it to
+    running and reporting and to committing only its report plus its handoff file.
+
+# ---------------------------------------------------------------------------
+handoff:
+  verdict: PASS
+  rationale: >
+    307/307 on 10 of 12 full-suite runs, matching the expected post-REQ-027 reference
+    exactly. The 2 non-clean runs each failed exactly one test, and in both cases it
+    was the same pre-existing ISS-0011 flake in test/letflow/plugs/tenant_status_test.exs
+    — a module REQ-027 does not touch — attributed with source-level and log-level
+    evidence. Zero failures attributable to REQ-027. `mix compile --warnings-as-errors`
+    exit 0 (no output) and `mix format --check-formatted` exit 0 (no output). Per
+    WF-02 Step 4's forwarding rule, the pre-existing failure does not block this PASS.
+  artifacts_out:
+    - test/reports/report-2026-08-16-WF02-REQ027-20260816.yaml
+  next_action: "Route to RELEASE-VALIDATOR (5)"
+  note_for_release_validator: >
+    RELEASE-VALIDATOR independently re-runs the suite and must not trust this report
+    alone. Be aware that a SINGLE re-run has a material chance of hitting ISS-0011 on
+    this branch (2/12 observed here, 3/40 observed at REQ-023). A single red run whose
+    ONLY failure is test/letflow/plugs/tenant_status_test.exs:121 with
+    `refute_received :query_fired` is ISS-0011, not a REQ-027 regression — re-run
+    before concluding otherwise. Any OTHER failing test would be a genuine new signal.
+    Note also that `--seed 0` will NOT protect against it; run 04 of this session
+    failed under seed 0.

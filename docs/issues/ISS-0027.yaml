@@ -1,0 +1,55 @@
+id: ISS-0027
+title: "TenantProvisioning.Registration.changeset/2 has no validate_format on schema_name, so the DDL-identifier safety guarantee lives only in the call graph rather than in the data"
+discovered_by: SECURITY-REVIEWER
+discovered_in_run: WF02-REQ027-20260816
+discovered_at: 2026-08-16T20:32:46Z
+severity: MINOR
+description: >
+  Letflow.TenantProvisioning holds the project's single raw-DDL identifier
+  interpolation site: `CREATE SCHEMA IF NOT EXISTS "#{schema_name}"`.
+  Postgres cannot parameterise an identifier, so an interpolation is
+  genuinely unavoidable there, and the safety argument has been verified
+  repeatedly -- most recently at REQ-027's Step 2c, which re-fired
+  quote/semicolon/comment/space injection payloads at
+  schema_name_for_tenant/1 and confirmed every one returns
+  {:error, :invalid_tenant_id} while all survivors match
+  ^tenant_[0-9a-f]{32}$.
+
+  That guarantee is real, but it is positional rather than intrinsic: it
+  holds because the ONLY value ever reaching the interpolation is the output
+  of schema_name_for_tenant/1, which derives it from Ecto.UUID.cast/1. The
+  Registration schema that persists schema_name applies no validate_format
+  of its own. So the invariant is enforced by the shape of the call graph,
+  not by the data or the schema module.
+
+  Not exploitable today, and this is explicitly not a claim that it is: the
+  only writer is a private function inside the same module, there is no
+  API surface that accepts a schema_name, and REQ-027 adds no new call site
+  into schema_name_for_tenant/1 (verified: filtering this run's diff for any
+  changed line touching Repo.query, CREATE SCHEMA, schema_name_for_tenant,
+  Ecto.UUID, Migrator.run or prefix: returns empty).
+
+  Why it is still worth closing. Every future requirement that adds a
+  provisioning path has to re-derive the same call-graph argument to know it
+  is safe, and the argument gets weaker each time the graph grows -- S3's
+  instance engine, S4's API surface and any future admin tooling are all
+  plausible sources of a second writer. A one-line
+  validate_format(:schema_name, ~r/^tenant_[0-9a-f]{32}$/) on
+  Registration.changeset/2 converts a property that currently must be
+  re-argued into one the data enforces on every write, and it would fail
+  loudly at the changeset rather than at the DDL. This is defence in depth
+  against a future mistake, not a fix for a present defect.
+
+  Deliberately not added inside REQ-027's run: Registration is REQ-022's
+  shipped schema module, none of REQ-027's five acceptance criteria concern
+  it, and adding a validation to another requirement's module is the kind of
+  quiet scope expansion the pipeline's gates exist to catch rather than
+  perform. It is a small, self-contained change that wants its own run.
+
+  Discovered by SECURITY-REVIEWER during REQ-027's Step 2c, which PASSed --
+  INV-7 was assessed and passed on the call-graph evidence above. Filed and
+  forwarded per docs/agents/protocols/ISSUE_QUEUE.md.
+affected_files:
+  - lib/letflow/tenant_provisioning/registration.ex
+github_issue: https://github.com/tvolodi/letflow/issues/85
+status: open

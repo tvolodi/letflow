@@ -74,6 +74,45 @@ description: >
   acceptance criteria are fully satisfiable -- so per
   docs/agents/protocols/ISSUE_QUEUE.md filed and forwarded rather than fixed
   in this run. It should be resolved BEFORE REQ-030 or REQ-025 is claimed.
+  UPDATE 2026-08-16T20:32:46Z (SECURITY-REVIEWER, same run, Step 2c) -- A NEW EVALUATION AXIS
+  THIS RECORD'S THREE OPTIONS DO NOT WEIGH.
+
+  Step 2c answered ORCH's question about whether an unsatisfiable NOT NULL
+  tenant_id has any tenant-ISOLATION consequence, and concluded it does not
+  (see below). But in reaching that verdict it surfaced a dimension the three
+  candidate resolutions above are not currently compared on:
+  **attribution integrity**.
+
+  Option (a) -- add tenant_id to REQ-030's create/1 parameters -- makes the
+  column CALLER-CONTROLLED. A caller writing into tenant A's schema could
+  supply tenant_id = B. Nothing in the shipped schema would reject it: no
+  index or constraint references tenant_id, so the row would sit inside
+  tenant A's physical schema while claiming to belong to B. That is not an
+  isolation breach (the Postgres schema still bounds who can read it) but it
+  IS an attribution defect, and it corrupts precisely the cross-schema
+  reporting use case 0003 Decision B retains the column FOR.
+
+  Option (c) -- derive it inside the context module from the already-known
+  tenant prefix -- is therefore structurally the strongest of the three on
+  this axis, because a derived value cannot disagree with the schema it is
+  written into. Option (b)'s session-GUC approach sits in between: correct
+  when the GUC is set correctly, silently wrong when it is stale.
+
+  Recommendation added to this record rather than deciding it here: if option
+  (a) is chosen anyway (it has real advantages -- explicitness, and no
+  coupling to REQ-022's naming scheme), pair it with a cross-check that the
+  supplied tenant_id agrees with the prefix being written to, so a mismatch
+  fails loudly instead of being persisted.
+
+  Also recorded from the same review, because it cuts the other way and
+  should not be lost: the currently-shipped NOT NULL column is strictly
+  SAFER than R-Co's own arrangement. An omitted insert here produces a hard
+  not_null_violation, whereas R-Co's session-GUC DEFAULT silently stamps
+  whatever tenant UUID the connection last had -- which under a stale or
+  unset GUC misattributes the row rather than rejecting it. So the current
+  state is a loud failure, not a silent one; that lowers this issue's
+  urgency slightly while leaving it genuinely blocking for REQ-030.
+
 affected_files:
   - docs/requirements.yaml
   - lib/letflow/design/req027-definition-core-schema.md

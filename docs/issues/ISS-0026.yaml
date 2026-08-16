@@ -1,0 +1,58 @@
+id: ISS-0026
+title: ".claude/agents/security-reviewer.md is stale on INV-1's applicability, telling the reviewer it is 'almost always NOT-APPLICABLE' when the authoritative security-invariants.md now makes it checkable"
+discovered_by: SECURITY-REVIEWER
+discovered_in_run: WF02-REQ027-20260816
+discovered_at: 2026-08-16T20:32:46Z
+severity: MAJOR
+description: >
+  .claude/agents/security-reviewer.md -- the canonical role file a
+  SECURITY-REVIEWER reads first -- characterises INV-1 (tenant data
+  isolation) as almost always NOT-APPLICABLE. That was true when written:
+  before schema-per-tenant existed there was nothing to check.
+
+  It is no longer true. docs/agents/instructions/security-invariants.md,
+  which core-directives.md makes authoritative over role files, states that
+  INV-1 becomes checkable "once 0003 lands and S2/S3 migrations exist".
+  Decision record 0003 is status decided, and S2 migrations have existed
+  since REQ-022. Both preconditions have been met since before REQ-023.
+
+  So the two documents now disagree about the single most important
+  invariant this project has, and they disagree in the dangerous direction:
+  the role file tells the reviewer to skip the check that the authoritative
+  file says to run.
+
+  Why MAJOR rather than MINOR. This project's stated design constraint is
+  weak-model tolerance -- core-directives.md's Humanless Operation section
+  says every role file must be "explicit and mechanical enough that an agent
+  with limited judgement still produces correct, in-scope work by following
+  the steps literally". An agent following security-reviewer.md literally
+  would mark INV-1 NOT-APPLICABLE and move on. INV-1 is the invariant
+  guarding cross-tenant data leakage on a multi-tenant BPM platform; it is
+  the last one that should be skippable by reading the wrong file first.
+  There is no human backstop to notice the omission.
+
+  It has not caused a miss yet, but only because three consecutive reviewers
+  independently reasoned past their own role file: REQ-023's, REQ-024's and
+  REQ-027's Step 2c each determined INV-1 APPLIES by consulting
+  security-invariants.md's own precondition wording rather than deferring to
+  the role file's summary. REQ-027's reviewer stated explicitly that it
+  derived the verdict before checking the earlier runs' precedent. That is
+  three agents doing extra work to route around a stale sentence -- exactly
+  the cost the weak-model-tolerance constraint exists to avoid, and a
+  reminder that it worked three times by judgement rather than by design.
+
+  Suggested fix: update .claude/agents/security-reviewer.md's INV-1
+  guidance to match security-invariants.md -- INV-1 APPLIES to any diff
+  touching a tenant-scoped table, schema, or migration, which is now the
+  common case for S2/S3 work rather than the exception. While there, audit
+  the file for any other invariant whose applicability note was written
+  against a pre-S2 codebase.
+
+  Discovered by SECURITY-REVIEWER during REQ-027's Step 2c. Blocks nothing
+  -- that gate PASSed, having correctly determined INV-1 APPLIES -- so per
+  docs/agents/protocols/ISSUE_QUEUE.md filed and forwarded rather than fixed
+  in this run.
+affected_files:
+  - .claude/agents/security-reviewer.md
+github_issue: https://github.com/tvolodi/letflow/issues/84
+status: open

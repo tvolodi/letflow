@@ -68,6 +68,34 @@ description: >
   Unrelated to REQ-023's acceptance criteria and blocking none of them, so
   per docs/agents/protocols/ISSUE_QUEUE.md filed and forwarded rather than
   fixed in this run.
+  UPDATE 2026-08-16T20:32:46Z (SECURITY-REVIEWER, run WF02-REQ027-20260816, Step 2c) --
+  THE FIX DESCRIBED ABOVE IS NECESSARY BUT NOT SUFFICIENT.
+
+  A second reviewer, compensating for this issue as instructed, found that
+  even after the --include=*.exs correction the INV-4 grep would STILL have
+  a blind spot. The pattern is anchored on '=' assignment:
+
+      (password|secret|client_secret|token)\s*=\s*"[^"]{8,}"
+
+  Elixir config does not generally use '=' for this. config/*.exs sets values
+  in keyword form -- `password: "..."`, `secret_key_base: "..."` -- which the
+  pattern cannot match no matter which --include flags it carries. So the
+  repaired check would run against the right files and still see nothing.
+
+  Whoever fixes this should therefore correct BOTH the file-glob and the
+  pattern, e.g. by accepting either separator ((=|:)\s*) so the keyword form
+  is covered. Fixing only the --include, as this record originally proposed,
+  would produce a check that looks repaired and remains blind -- arguably
+  worse than the current obviously-broken state, because the next reviewer
+  would have no reason to compensate.
+
+  Separately noted and deliberately NOT actioned: the {8,} length floor
+  hides `password: "letflow"` in config/test.exs (7 characters). That is the
+  throwaway local docker credential already assessed in this record's
+  original text; it is called out again only because it is a concrete
+  demonstration that the floor is doing real filtering, not because the
+  credential itself needs changing.
+
 affected_files:
   - docs/agents/instructions/security-invariants.md
 github_issue: https://github.com/tvolodi/letflow/issues/74

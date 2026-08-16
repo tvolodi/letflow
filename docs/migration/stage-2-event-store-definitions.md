@@ -5,11 +5,17 @@ Status: not started. Depends on: S1. Requirements: none expanded yet.
 ## Scope
 
 Port `src/event_store/` (3 files: `store.zig`, `platform.zig`,
-`registry.zig`) and `src/definition/` (12 files: `graph.zig`,
-`promotion.zig`, `promotion_plan.zig`, `rollback.zig`,
+`registry.zig`) and `src/definition/` (16 files, corrected from an
+earlier stale 12-file count — confirmed directly against
+`C:\Users\tvolo\dev\ai-dala\R-Co\src\definition\`: `graph.zig`,
+`promotion.zig`, `promotion_conflict.zig`, `promotion_digest.zig`,
+`promotion_plan.zig`, `promotion_review.zig`, `rollback.zig`,
 `sandbox_pool.zig`, `export_import.zig`,
 `service_scope_validator.zig`, `snapshot.zig`, `store.zig`,
-`fixture_loader.zig`, `assertion_rerun.zig`, `pack_update.zig`).
+`fixture_loader.zig`, `assertion_rerun.zig`, `pack_update.zig`,
+`sub_process_interface.zig`). The prior list omitted
+`promotion_conflict.zig`, `promotion_digest.zig`,
+`promotion_review.zig`, and `sub_process_interface.zig`.
 
 ## Early findings to keep in mind while designing
 

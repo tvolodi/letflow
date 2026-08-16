@@ -786,3 +786,1184 @@ requirements:
       - "a request whose token's realm does not match the resolved tenant's bound realm is rejected, not silently JIT-provisioned under the wrong tenant"
       - "moduledoc explicitly states this plug supersedes REQ-103 (never built) as Letflow's first real auth plug, and names which router.ex routes (if any) it is mounted in front of"
     depends_on: [REQ-016, REQ-017, REQ-018, REQ-019, REQ-020]
+
+  # ---------------------------------------------------------------
+  # S2 — event-store-and-definitions
+  # Expanded once S1 (identity-and-multi-tenancy) was fully done --
+  # REQ-015..021 all `done`, docs/migration/stage-1-identity.md's
+  # header confirms it. Inherits docs/migration/decisions/
+  # 0003-ecto-schema-strategy.md Decision B (schema-per-tenant via
+  # Ecto :prefix/dynamic-repo, tenant_id retained intra-schema) AND
+  # Decision C (event-store tables use the SAME schema-per-tenant
+  # mechanism, no special-casing; primary key (event_id, created_at)
+  # from the first migration even though partitioning itself is
+  # deferred; a dedicated idempotency sidecar table built from day
+  # one; derived/projection tables use the same Ecto.Migration DSL as
+  # any regular CRUD table).
+  #
+  # REQ-015 (S1's first requirement) explicitly DEFERRED building the
+  # real Ecto :prefix/dynamic-repo multi-schema provisioning mechanism
+  # itself -- see lib/letflow/design/identity-schema.md section 1.
+  # 0003 itself names S2/S3 execution time as when that mechanism must
+  # actually get built, so REQ-022 below builds it first -- every
+  # later requirement in this batch that adds a schema-per-tenant
+  # table depends on it.
+  #
+  # Real R-Co source ported: src/event_store/ (3 files: store.zig,
+  # platform.zig, registry.zig) and src/definition/ (16 files -- see
+  # docs/migration/stage-2-event-store-definitions.md's Scope section,
+  # corrected by this batch from a stale 12-file count).
+  #
+  # Scope deliberately excludes (flagged as future work inside the
+  # relevant requirement's own description below, not silently
+  # dropped): SPC-01 (sub_process_interface.zig's runtime
+  # activation/completion half -- S3, src/engine/instance.zig), the
+  # EE-01 engine call into SnapshotStore.create() at instance-start
+  # (S3), the HTTP/Plug route layer for the promotion pipeline (POST
+  # /api/v1/promotions and friends -- S4 api-surface; this batch ports
+  # the underlying domain logic only, as context-module functions, not
+  # route handlers), and SOL-01/02/03's solution-pack export/install
+  # module (src/solution/, a different directory not among this
+  # stage's 16 src/definition/ files -- unscoped to any stage yet).
+  #
+  # Several requirements below name a genuine open question no
+  # existing docs/migration/decisions/*.md record settles: JSON Schema
+  # validation library choice (REQ-024); process-per-instance vs.
+  # row-based state for sandbox claim tracking and guaranteed
+  # teardown-on-crash (REQ-039/REQ-040 -- the two files
+  # stage-2-event-store-definitions.md's Early findings section names
+  # as most likely to actually need a supervised process); and GLOBAL
+  # vs. PER_TENANT table classification beyond Decision B's general
+  # rule (REQ-041). These are deliberately left for
+  # CODE-DESIGNER/REVIEWER to resolve at WF-02 design time, not
+  # silently decided here.
+  # ---------------------------------------------------------------
+
+  - id: REQ-022
+    title: Schema-per-tenant provisioning mechanism (tenant_schemas registry + provisioning function)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Build the multi-schema provisioning mechanism docs/migration/decisions/
+      0003-ecto-schema-strategy.md Decision B named but explicitly deferred out
+      of REQ-015's scope (see lib/letflow/design/identity-schema.md section 1's
+      "Follow-up work this creates," and 0003's own Dimension B Reasoning: "a
+      tenant_schemas-equivalent registry and a provisioning path... are needed
+      at S2/S3 execution time"). Confirmed by inspection: priv/repo/migrations/
+      currently has zero tenant_schemas/provisioning migrations as of REQ-021
+      (all S1 tables live in Ecto's single default public schema). Add:
+      (a) a tenant_schemas registry table/migration (public/default schema --
+      this table, like REQ-015's tenants table, is a global lookup that must be
+      queryable before a tenant's own schema context is known, so it does not
+      itself live inside a tenant schema) recording at minimum tenant_id,
+      schema_name, and a provisioned-at timestamp;
+      (b) a schema-provisioning function (Letflow.TenantProvisioning.provision_tenant_schema/1
+      or similar), mirroring R-Co's public.bpm_provision_tenant_schema(p_tenant_id UUID)
+      from migrations/060_schema_per_tenant_bootstrap.sql (cited in 0003's
+      Reasoning), that issues CREATE SCHEMA for a real Postgres schema and
+      records the mapping in tenant_schemas;
+      (c) a migration-replay mechanism mirroring R-Co's src/db/migrations.zig's
+      runForSchema, which re-applies priv/repo/migrations/ (or a designated
+      per-tenant subset of it) against a specific tenant schema using Ecto's
+      :prefix option on Ecto.Migration's create table (0003's "Concrete
+      Ecto/Postgres mechanics" paragraph names this as the relevant primitive)
+      -- demonstrated by provisioning at least one non-default tenant schema
+      and confirming its tables exist under that schema's own search_path.
+      Every S2 requirement building an event-store or definition table
+      (REQ-023 onward) depends on this requirement and uses :prefix-based
+      schema-per-tenant from its first migration, per 0003 Decision C's
+      explicit statement that event-store tables get no special-cased
+      tenant-isolation treatment.
+      OPEN QUESTION (flag, do not silently resolve): REQ-015's users/groups/
+      tenant_role tables currently live in the public default schema (per
+      identity-schema.md section 1's deferral). This requirement does not
+      retrofit those three tables to live under each tenant's own schema --
+      only tenants and this requirement's own tenant_schemas registry are
+      structurally global (a realm->tenant lookup must run before any tenant
+      schema is known, so they cannot live inside a tenant schema). Whether
+      users/groups/tenant_role should eventually be retrofitted behind
+      :prefix (matching R-Co's own migration history, where identity tables
+      also moved behind schema-per-tenant post-migration-060) is left open
+      for a future requirement to decide explicitly, not assumed here either
+      way.
+    acceptance_criteria:
+      - "priv/repo/migrations gains a tenant_schemas migration (public/default schema) that applies cleanly via mix ecto.migrate, with columns for at minimum tenant_id and schema_name"
+      - "a provision_tenant_schema/1-equivalent function exists that issues a real CREATE SCHEMA and records the mapping in tenant_schemas, demonstrated against at least one non-default tenant schema name"
+      - "a migration-replay function exists that re-applies priv/repo/migrations/ against a specific tenant schema via Ecto's prefix: option, demonstrated by confirming at least one table exists under the provisioned schema's own information_schema, not just under public"
+      - "the moduledoc/description explicitly states, as an open question rather than a silent decision, whether REQ-015's users/groups/tenant_role migrations are retrofitted to use :prefix now or remain in public schema"
+    depends_on: [REQ-015]
+
+  - id: REQ-023
+    title: Event-store schema/migrations (events, instance_sequence, event_payload_store, events_archive, idempotency sidecar, instance_projections)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Add priv/repo/migrations and corresponding Ecto.Schema modules for the
+      event-store tables R-Co's src/design/event_store.md documents (Covers:
+      ES-01..ES-08), following docs/migration/decisions/0003-ecto-schema-strategy.md
+      Decision C exactly (read in full before starting) and REQ-022's
+      schema-per-tenant provisioning mechanism (every table below uses Ecto's
+      :prefix option, none targets the public default schema):
+      - events: event_id (binary_id), instance_id (binary_id, indexed),
+      event_type (string), payload (text/jsonb -- inline; per event_store.md's
+      Payload size boundary, values over 4096 bytes get a {"$ref": "<uuid>"}
+      pointer into event_payload_store instead of raw storage, enforced at the
+      append logic layer in REQ-025, not the migration layer), actor_id
+      (binary_id, not null), created_at (utc_datetime_usec -- microsecond
+      precision per ES-01), sequence_number (bigint), idempotency_key (string),
+      metadata (jsonb, default "{}"), global_seq (bigint). Per 0003 Decision C
+      point 2(a) (the partitioning point's first lettered sub-point): primary
+      key is (event_id, created_at), NOT a bare event_id PK, even though
+      partitioning itself is deferred -- this is so a future partitioning
+      retrofit (mirroring R-Co's 1147_par01_events_partitioning.sql) never
+      forces a breaking PK-shape change. No update path is exposed on the
+      Ecto.Schema module for this table (no update_changeset/2) -- state this
+      explicitly in the schema moduledoc per Decision C point 1
+      (append-only/immutability, the decision's first top-level numbered
+      point); this is an application/schema-module-layer invariant, not
+      something the migration file can enforce.
+      - instance_sequence: instance_id (binary_id, primary key), next_seq
+      (bigint, default 1) -- the per-instance sequence-lock row event_store.md's
+      Concurrency design section describes (SELECT ... FOR UPDATE / increment
+      protocol, implemented in REQ-025).
+      - event_payload_store: event_id (binary_id, unique), payload
+      (text/bytea), byte_size (integer) -- the side table for payloads over
+      4096 bytes (event_store.md's Payload size boundary invariant).
+      - events_archive: same column shape as events, plus archived_at
+      (utc_datetime_usec) -- destination table for Store.archive() (REQ-026).
+      - a dedicated idempotency sidecar table (naming: event_idempotency, or
+      preserve R-Co's own plat_event_idempotency name -- ELIXIR-DEV's choice,
+      cite either), keyed on idempotency_key with a unique index, built from
+      day one per 0003 Decision C point 2(b) (the partitioning point's second
+      lettered sub-point, distinct from 2(a)'s PK-shape concern above):
+      "Letflow adopts the sidecar-table approach for idempotency from the
+      start (not deferred to partitioning time)." This sidecar table is
+      itself schema-per-tenant too (0003's own
+      closing paragraph: "a cross-tenant-shared sidecar table would
+      reintroduce exactly the shared-table blast-radius risk Decision B
+      rejected"). Note explicitly in the moduledoc that this sidecar supersedes
+      event_store.md's own "Open Question #1" recommendation (a two-phase
+      events-then-events_archive check) -- 0003 already resolved that open
+      question in favor of the sidecar table, so REQ-025/REQ-026's
+      append/archive logic checks/writes this sidecar table for idempotency,
+      not a raw unique index scattered across events and events_archive
+      separately.
+      - instance_projections: instance_id (binary_id, primary key), status
+      (string/Ecto.Enum -- at minimum ACTIVE/CANCELLED/COMPLETED per
+      event_store.md's Store.append() active-instance guard), last_event_seq
+      (bigint), updated_at. Note explicitly in the moduledoc: this table's
+      *schema* is event-store's own responsibility (event_store.md's DB
+      tables per operation section shows Store.append() reads/writes it
+      directly for the ES-01 active-instance guard), but *populating it
+      meaningfully at instance-start* is EE-01/S3 territory (src/engine/, not
+      built yet) -- do not read this migration as instance-engine work
+      landing early.
+      All tables use binary_id primary keys per Decision A except where noted
+      above (events' composite PK, instance_sequence/instance_projections'
+      natural PK).
+    acceptance_criteria:
+      - "priv/repo/migrations gains migrations for events, instance_sequence, event_payload_store, events_archive, the idempotency sidecar table, and instance_projections, all using Ecto's :prefix option and applying cleanly against at least one provisioned tenant schema via REQ-022's migration-replay mechanism"
+      - "events' migration defines the primary key as (event_id, created_at), not a bare event_id, per 0003 Decision C point 2(a)"
+      - "the events Ecto.Schema module has no update_changeset/2 or any function that issues an UPDATE against a committed row; the moduledoc states this is a deliberate immutability invariant per 0003 Decision C point 1"
+      - "the idempotency sidecar table has a unique index on idempotency_key and its own moduledoc states it supersedes event_store.md's Open Question #1 two-phase-check recommendation per 0003's resolution"
+      - "instance_projections' moduledoc explicitly states its schema is event-store scope (this requirement) while its meaningful population is EE-01/S3 scope, not built here"
+    depends_on: [REQ-022]
+
+  - id: REQ-024
+    title: Event type registry (registry.zig, ES-05 -- schema + registerType/validatePayload/getType)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Port src/event_store/registry.zig (ES-05) as a Letflow.EventStore.Registry
+      context module, per R-Co's src/design/event_store.md's registry.zig
+      section. Add:
+      - event_type_registry migration/schema (:prefix schema-per-tenant, per
+      REQ-022's mechanism): id (binary_id), name (string, 1..128 chars),
+      schema_version (integer), json_schema (text/jsonb), description (text,
+      nullable), created_at, updated_at.
+      - register_type/2 (or /3): validates name (non-empty, <=128 chars) and
+      schema_version (integer > all existing versions for this name; 0
+      invalid) before insert; returns {:error, :duplicate_event_type_version}
+      on a (name, schema_version) collision (event_store.md's
+      DuplicateEventTypeVersion).
+      - validate_payload/2: fetches the named event type's most recent (or
+      exact, per ELIXIR-DEV's interface choice -- state which in the
+      moduledoc) json_schema and validates payload bytes against it; on
+      failure, records field-level ValidationFailure detail (field_path as a
+      JSON Pointer, constraint, actual value) retrievable via a
+      last_validation_failures/1-equivalent, matching event_store.md's
+      lastValidationFailures() contract (owned by the Registry
+      process/struct, valid until the next Registry call -- port this
+      ownership contract faithfully, e.g. via a struct returned alongside the
+      error rather than hidden mutable state, since Elixir has no implicit
+      "valid until next call" memory model the way Zig's slice-ownership
+      does).
+      - get_type/1: returns the most recent schema_version record for a name;
+      error tuple if unregistered.
+      OPEN QUESTION (flag, do not silently pick): no docs/migration/decisions/*.md
+      record covers JSON Schema validation library choice for Elixir. R-Co
+      hand-rolls its own validator (src/tools/json_schema.zig). Candidates for
+      Letflow include the ex_json_schema hex package (draft-04/06/07 support)
+      or a hand-rolled minimal validator matching R-Co's own supported
+      keyword subset (per src/design/spc-01-sub-process-interface-contract.md's
+      "JSON Schema well-formedness rule" table, which documents R-Co's actual
+      supported keyword set: type, minimum/maximum, minLength/maxLength,
+      enum, required, properties, items, additionalProperties). This
+      requirement does not pick one -- CODE-DESIGNER decides at WF-02 design
+      time and records the choice, escalating to a new
+      docs/migration/decisions/ record if it's a genuinely new library
+      dependency (matching 0002/0003's own precedent of recording library
+      adoptions).
+      OPEN QUESTION (flag): is event_type_registry itself a per-tenant table
+      (each tenant defines its own event vocabulary) or a platform-wide
+      global catalog shared across tenants? Neither 0003 nor event_store.md
+      states this explicitly (event_store.md documents the table's
+      columns/behavior but not its tenant-schema classification, unlike
+      1147_par01's explicit PER_TENANT classification of events/events_archive
+      cited in 0003). This requirement defaults to schema-per-tenant
+      (matching Decision B's general rule for business tables, absent a
+      stated exception), but flags this as worth CODE-DESIGNER/REVIEWER
+      re-confirming rather than treating as definitively settled by this
+      requirement alone.
+    acceptance_criteria:
+      - "priv/repo/migrations gains an event_type_registry migration (schema-per-tenant per REQ-022) applying cleanly"
+      - "register_type/2 rejects a second registration with the same (name, schema_version) with a distinct, testable error, not a generic changeset failure"
+      - "validate_payload/2 against a payload missing a required field returns a failure result whose detail names the specific field_path (JSON Pointer form) and constraint, not just a boolean false"
+      - "get_type/1 against an unregistered name returns an explicit :unknown_event_type-shaped error rather than nil or an exception"
+      - "the moduledoc names the JSON Schema validation library choice as an explicit open question for CODE-DESIGNER, not a silently made decision"
+    depends_on: [REQ-022]
+
+  - id: REQ-025
+    title: Event append (store.zig's append, ES-01/02/03/05/08/DB-03)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Port src/event_store/store.zig's Store.append() (per
+      src/design/event_store.md's full "append" section: Key invariants 1-2,
+      4, 6-10; DB tables per operation's "append" row) as
+      Letflow.EventStore.append/1 (or /2), operating on REQ-023's
+      events/instance_sequence/event_payload_store/instance_projections/
+      idempotency-sidecar tables and REQ-024's Registry. One atomic operation
+      (Ecto.Multi or Repo.transaction) performs, in order:
+      1. Active-instance guard: read instance_projections.status for the
+      target instance; if CANCELLED or COMPLETED, abort with no rows written
+      (event_store.md invariant 10).
+      2. Per-instance sequence assignment: lock instance_sequence's row for
+      the instance (or insert-if-absent per event_store.md's "First append to
+      a new instance" SQL pattern) and assign sequence_number from the locked
+      value, incrementing atomically (invariant 2).
+      3. Registry-first validation: call REQ-024's validate_payload/2 before
+      any write; zero rows written on failure (invariant 8).
+      4. Idempotency: check/insert into REQ-023's idempotency sidecar table
+      keyed on idempotency_key; a pre-existing key returns the original
+      record with is_duplicate: true (the HTTP layer, S4, maps this to 200 vs
+      201 -- this requirement returns the boolean, it does not decide the
+      HTTP status) rather than a fresh insert (invariant 4, using the sidecar
+      table per REQ-023's note, not events' own uniqueness alone).
+      5. Payload side-table: payloads over 4096 bytes get inserted into
+      event_payload_store, with events.payload storing the {"$ref":
+      "<uuid>"} pointer form (invariant 7).
+      6. Metadata validation pre-DB: reject (no DB round-trip) metadata with
+      >50 entries, any key >128 chars, any value >1024 chars, or any
+      non-string value, before the transaction opens (invariant 9, ES-08).
+      7. instance_projections update: last_event_seq and updated_at updated
+      in the same transaction (invariant 6, DB-03).
+      Validation-error cases (unknown event type, payload schema failure,
+      metadata invalid, missing/too-long idempotency key, invalid/missing
+      payload, missing actor_id) each need a distinct, pattern-matchable
+      error return per event_store.md's StoreError enum -- port the full
+      error set as Elixir tagged tuples/exceptions, not a single generic
+      :error.
+    acceptance_criteria:
+      - "appending to a terminated instance (status CANCELLED or COMPLETED in instance_projections) returns an error and writes zero rows across all five involved tables, demonstrated by an actual test or iex session against a real Postgres, not just described"
+      - "two concurrent appends to the same instance_id never receive the same sequence_number -- demonstrated with an actual concurrent test (e.g. Task.async_stream racing two appends) or, if concurrency can't be exercised in this environment, the FOR UPDATE-equivalent locking code path is cited explicitly"
+      - "appending twice with the same idempotency_key returns is_duplicate: true on the second call and does not insert a second events row, verified against the idempotency sidecar table REQ-023 defines"
+      - "a payload that fails REQ-024's validate_payload/2 results in zero rows written to events, instance_sequence, or instance_projections -- no partial state"
+      - "a payload over 4096 bytes is split into events.payload's $ref pointer form plus an event_payload_store row, verified by reading both rows back after append"
+    depends_on: [REQ-023, REQ-024]
+
+  - id: REQ-026
+    title: Event read paths, archive, and platform sentinels (store.zig's read/readGlobal/pointInTime/archive + platform.zig)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Port src/event_store/store.zig's Store.read(), Store.readGlobal(),
+      Store.pointInTime(), and Store.archive() (per
+      src/design/event_store.md's respective sections: ES-02/06 for
+      read/pointInTime, ES-04 for readGlobal, ES-07 for archive), plus
+      src/event_store/platform.zig's three sentinel constants
+      (PLATFORM_INSTANCE_ID, PLATFORM_ACTOR_ID, PLATFORM_TENANT_ID -- a
+      12-line file; port as module attributes/constants on the same context
+      module, no separate file needed unless ELIXIR-DEV judges otherwise)
+      verbatim, since platform.zig's own header states "no LLM, HTTP, or
+      external service dependencies in this file" -- these are just fixed
+      UUID-shaped strings used by non-instance-scoped scheduler events (a
+      later stage's concern to actually emit; this requirement only needs the
+      constants to exist).
+      - read/2: events for an instance_id in ascending sequence_number order;
+      supports up_to_sequence/up_to_timestamp filters (up_to_sequence takes
+      precedence if both given, per ES-06); transparently resolves any $ref
+      payload pointer via event_payload_store before returning; returns an
+      explicit not-found error (not an empty list) when instance_id has no
+      instance_sequence row, matching event_store.md's InstanceNotFound.
+      - read_global/1: cursor-based pagination via after_global_seq (null =
+      from the beginning), limit clamped to 1..1000 (0 treated as default 100
+      per GlobalReadOpts), ordered by global_seq ascending across all
+      instances.
+      - point_in_time/3: convenience wrapper over read/2 with up_to_timestamp
+      set.
+      - archive/1: moves events past retention_days (a global fallback;
+      per-event-type policies from event_retention_policies take precedence,
+      0 retention_days means only explicit policies apply) into REQ-023's
+      events_archive via an idempotent insert-then-delete-confirmed pattern
+      (event_store.md invariant 11: running twice produces the same final
+      state), without locking instance_projections or instance_sequence
+      (invariant 12 -- archival must not block active instances). Returns the
+      count of rows moved.
+    acceptance_criteria:
+      - "read/2 against an instance with N appended events (via REQ-025) returns exactly those N events in ascending sequence_number order, with any large payload transparently resolved from event_payload_store"
+      - "read/2 against an instance_id with no events returns an explicit not-found error, not an empty list"
+      - "read_global/1 with after_global_seq set returns only events with a strictly greater global_seq, demonstrated across at least two instances' interleaved events"
+      - "calling archive/1 twice in a row moves the same rows the first time and zero additional rows the second time (idempotent), verified by row counts before/after each call"
+      - "the three platform sentinel constants exist and are accessible from the context module, each documented as citing src/event_store/platform.zig"
+    depends_on: [REQ-025]
+
+  - id: REQ-027
+    title: Definition core schema (process_definitions + instance_definition_snapshots)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Add priv/repo/migrations and Ecto.Schema modules for the two core
+      definition tables R-Co's src/design/definition.md documents (module
+      purpose section: "store.zig owns all DB-backed CRUD... against
+      process_definitions and instance_definition_snapshots"), using
+      REQ-022's schema-per-tenant :prefix mechanism (process_definitions is a
+      business table under Decision B's general rule, same as every other
+      tenant-owned table this stage adds):
+      - process_definitions: id (binary_id), name (string, <=255 chars),
+      version (string), description (text, nullable), status (Ecto.Enum:
+      draft/active/deprecated/archived, default draft -- PD-04's
+      DefinitionStatus), stage (string, nullable -- PD-07's free-text stage
+      label column, per definition.md's PD-07 section and its
+      migrations/014_definition_stage.sql: "The process_definitions table has
+      no stage column... The column is nullable so that existing rows are
+      unaffected (no back-fill required)"; no enum validation, stage labels
+      are open-ended text per PD-07), graph (jsonb, default
+      {"nodes":[],"edges":[]} -- definition.md's DefinitionGraph shape:
+      {"nodes": [...], "edges": [...]}), created_by (binary_id), archived_at
+      (utc_datetime_usec, nullable), timestamps(). Indexes: a unique index on
+      (name, version) (definition.md's uq_definition_version), a partial
+      unique index on name WHERE status = 'active' (uq_active_definition,
+      PD-03's single-active-per-name invariant -- needed even though
+      activate() itself is REQ-030's job, since the index is a
+      migration-level constraint), and a partial index on stage WHERE stage
+      IS NOT NULL (definition.md's idx_def_stage, PD-07 -- keeps the index
+      compact by not indexing NULL entries).
+      - instance_definition_snapshots: instance_id (binary_id, primary key),
+      definition_id (binary_id, references process_definitions -- NO ON
+      DELETE CASCADE, per PD-08's explicit "FK without ON DELETE CASCADE"
+      design: a hard-deleted DRAFT definition must not take its snapshot rows
+      with it), definition_name (string), definition_ver (string), graph
+      (jsonb), snapshotted_at (utc_datetime_usec). No updated_at/timestamps()
+      beyond snapshotted_at -- the table is write-once per PD-08 (no UPDATE
+      path is exposed at the schema-module layer, enforced in REQ-033, not
+      this migration).
+      Note explicitly in both moduledocs: this requirement builds schema
+      only. graph/node/edge structural validation (REQ-028/029), CRUD
+      operations (REQ-030), and the snapshot create/retrieve functions
+      (REQ-033) are separate requirements building on these tables.
+    acceptance_criteria:
+      - "priv/repo/migrations gains process_definitions and instance_definition_snapshots migrations, both schema-per-tenant via REQ-022's :prefix mechanism, applying cleanly"
+      - "process_definitions has a unique index on (name, version) and a partial unique index on name WHERE status = 'active'"
+      - "process_definitions has a nullable stage column and a partial index on stage WHERE stage IS NOT NULL, per definition.md's PD-07 section (migrations/014_definition_stage.sql)"
+      - "instance_definition_snapshots.definition_id references process_definitions.id with no ON DELETE CASCADE, and the moduledoc states this is deliberate per PD-08"
+      - "both Ecto.Schema modules' @moduledoc cite R-Co src/design/definition.md (PD-01/PD-07/PD-08 sections) as the ported source"
+    depends_on: [REQ-022]
+
+  - id: REQ-028
+    title: Graph structural validator (graph.zig, PD-02)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Port src/definition/graph.zig's validateGraph() (per
+      src/design/definition.md's graph.zig section, "Named validation checks
+      (PD-02)" table) as a pure Letflow function -- no Ecto.Repo call, no I/O
+      of any kind, matching graph.zig's own documented purity ("no I/O, no DB
+      calls, no logging, no clock reads"). Implement the shared types
+      (GraphNode: id/node_type/label/attributes; GraphEdge:
+      id/source/target/condition/is_default; DefinitionGraph: nodes+edges) as
+      plain structs/maps, and NodeType as the 7-variant set definition.md's
+      PD-05 section documents as authoritative (START, END, HUMAN_TASK,
+      SERVICE_TASK, EXCLUSIVE_GATEWAY, PARALLEL_GATEWAY, TIMER -- NOT the
+      superseded USER_TASK/SCRIPT_TASK names definition.md explicitly flags
+      as wrong). Implement all 8 named checks (CHK-01 through CHK-08 in
+      definition.md's table): exactly one START node; at least one END node;
+      no dangling edges; no isolated nodes; no duplicate node IDs; no cycles
+      outside a gateway node (DFS-based, per the algorithm outline in
+      definition.md); node count <=500; edge count <=2000. ALL checks run and
+      ALL violations collect before returning -- never short-circuit on the
+      first failure (Key invariant 5). Each violation carries a
+      machine-readable code (one of the CHK-XX codes) and a human-readable
+      message naming the offending node/edge ID.
+      Per stage-2-event-store-definitions.md's "Static-typing gap" finding,
+      this is exactly the kind of larger validation surface where a single
+      property test is not sufficient coverage on its own -- the acceptance
+      criteria below require explicit example coverage of every named check,
+      not just a generic property test.
+    acceptance_criteria:
+      - "a graph satisfying all 8 checks returns {valid: true, violations: []}"
+      - "each of the 8 named checks (CHK-01 through CHK-08) has at least one explicit failing-example test demonstrating its specific violation code is returned, not just a generic invalid-graph test"
+      - "a graph violating 3 of the 8 checks simultaneously returns all 3 violations in one call, not just the first encountered (Key invariant 5)"
+      - "a cycle that passes through an EXCLUSIVE_GATEWAY or PARALLEL_GATEWAY node is explicitly permitted (not flagged as CYCLE_WITHOUT_GATEWAY), and a self-loop is explicitly rejected, each with its own test"
+      - "the function signature and its call sites confirm zero Repo/database calls anywhere in its call graph"
+    depends_on: []
+
+  - id: REQ-029
+    title: Node-attribute and edge-condition validators (graph.zig, PD-05/PD-06)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Extend REQ-028's graph module with src/definition/graph.zig's
+      validateNodeAttributes() (PD-05) and the edge-condition rules (PD-06),
+      per src/design/definition.md's respective sections. Both are pure
+      functions, same purity contract as REQ-028 (no I/O), and run only after
+      REQ-028's validateGraph() passes (definition.md: "If validateGraph()
+      fails, validateNodeAttributes() is NOT called").
+      - validateNodeAttributes/1: per-node-type required-attribute rules from
+      definition.md's "Attribute validation rules (all 7 node types)" table
+      -- HUMAN_TASK requires non-empty role; SERVICE_TASK requires non-empty
+      endpoint plus timeout_ms in [1, 300000]; TIMER requires a valid ISO
+      8601 duration_iso8601 (P0D explicitly permitted as a zero-delay timer;
+      fractional components rejected; the scan-forward parser
+      definition.md's "Implementation guidance" describes is sufficient, no
+      external library needed); START/END/EXCLUSIVE_GATEWAY/PARALLEL_GATEWAY
+      require nothing. Undeclared extra attributes on any node are silently
+      ignored (forward-compatibility, PD-05 edge case). All violations
+      across all nodes collect before returning, same never-short-circuit
+      contract as PD-02.
+      - Edge condition rules (PD-06, no separate function name given in
+      definition.md beyond the validateGraph() extension -- ELIXIR-DEV folds
+      this into REQ-028/029's check set, noting which function owns it in the
+      moduledoc): condition MUST be present (non-null, non-empty) on every
+      non-default outgoing edge from an EXCLUSIVE_GATEWAY, MUST be null on
+      every other edge; is_default MUST NOT coexist with a non-null
+      condition; at most one outgoing edge per EXCLUSIVE_GATEWAY may be
+      default. Also port isValidCelSyntax's minimal structural CEL check
+      (definition.md's "CEL syntax validation" section) as a pure
+      syntax-only validator (no evaluation) -- R-Co's own comment notes
+      vendor/cel/cel.zig is a stub, so this is a minimal subset check, not a
+      full CEL implementation; do not attempt to build a real CEL evaluator
+      here.
+      Both validateNodeAttributes and the edge-condition checks reuse
+      GraphError.OutOfMemory's Elixir-idiomatic equivalent only where
+      genuinely relevant (Elixir doesn't need an explicit allocator-failure
+      error the way Zig does -- note this divergence explicitly in the
+      moduledoc rather than silently dropping or silently keeping an
+      inapplicable error case).
+    acceptance_criteria:
+      - "each of the 7 node types has at least one explicit test: HUMAN_TASK missing role, SERVICE_TASK missing endpoint, SERVICE_TASK invalid timeout (0 and >300000), TIMER missing/invalid duration, TIMER P0D explicitly accepted, and START/END/gateway types accepting no attributes"
+      - "an EXCLUSIVE_GATEWAY edge with both a non-null condition and is_default: true is rejected"
+      - "an EXCLUSIVE_GATEWAY with two edges both marked is_default: true is rejected"
+      - "isValidCelSyntax-equivalent rejects at least one structurally invalid expression and accepts at least one structurally valid one, with an explicit test noting it performs no evaluation"
+      - "extra undeclared attributes on a node do not cause a violation, demonstrated by an explicit test"
+    depends_on: [REQ-028]
+
+  - id: REQ-030
+    title: Definition store CRUD (store.zig, PD-01/PD-03/PD-04/PD-07)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Port src/definition/store.zig's core Store operations (per
+      src/design/definition.md's respective PD sections) as a
+      Letflow.Definitions context module, operating on REQ-027's
+      process_definitions table and calling REQ-028/029's validators before
+      every write that touches the graph column (Key invariant 1: "no bypass
+      path exists"):
+      - create/1 (PD-01): validates name (non-empty, <=255 chars) and
+      version (non-empty) before calling REQ-028's validateGraph() then
+      REQ-029's validateNodeAttributes(); on either failure, returns the
+      violations (GraphValidationFailed-equivalent) without writing;
+      hard-codes status: draft (caller cannot override, no status field on
+      the create params); ON CONFLICT (name, version) DO NOTHING semantics
+      for the (name, version) race (definition.md's Concurrency safety note
+      -- exactly one of two concurrent identical creates succeeds, the other
+      gets a duplicate error, neither leaks which one "won").
+      - get_by_id/1: not-found error if id is absent.
+      - get_active_by_name/1 (PD-07, per definition.md's PD-07 section "New
+      public function: Store.getActiveByName"): retrieves the single
+      definition whose status = active and name matches exactly; returns a
+      not-found error if none exists. Because REQ-027's uq_active_definition
+      partial unique index guarantees at most one active row per name, this
+      query always returns exactly zero or one row -- if the DB somehow ever
+      returned more than one row, definition.md's own defensive behaviour
+      (return the first row) should be ported rather than raising, since the
+      index already makes that case structurally impossible in practice.
+      - list/1: filters by name/status/stage (stage per PD-07's `?stage=`
+      filter, definition.md's ListOpts.stage -- an exact-match filter against
+      REQ-027's nullable stage column, combinable with the name/status
+      filters via AND, null stage = no stage filtering), cursor-based
+      pagination via after_created + limit (default 50, max 200), returns an
+      empty list (not an error) when nothing matches.
+      - activate/1 (PD-03): atomic two-step swap in one transaction --
+      deprecate any existing ACTIVE version for the same name, then activate
+      the target (Step-3-before-Step-4 ordering is load-bearing per
+      definition.md's "Ordering rationale," it prevents transiently
+      violating the partial unique index REQ-027 defines). DRAFT->activate
+      succeeds; ACTIVE->activate is an idempotent no-op (AlreadyActive-equivalent,
+      not an error the caller should treat as failure); DEPRECATED/ARCHIVED->activate
+      is rejected (NotDraft-equivalent); not-found is its own case. Use
+      row-level locking (SELECT ... FOR UPDATE, matching definition.md's SQL
+      transaction outline) to serialize concurrent activations of the same
+      definition and of different definitions sharing a name.
+      - deprecate/1, archive/1 (PD-04): enforce the authoritative state
+      transition table (definition.md: DRAFT->ACTIVE, ACTIVE->DEPRECATED,
+      DEPRECATED->ARCHIVED are the only permitted edges; every other
+      transition, including the ACTIVE->ARCHIVED shortcut and any
+      self-transition, is rejected as an invalid-transition error).
+      archive/1 sets archived_at.
+      This requirement does NOT include the SVC-03 service-scope-validation
+      hook inside activate() (REQ-031's job -- R-Co's own design makes this
+      hook an injectable optional field, `service_scope_validator:
+      ?*ServiceScopeValidator = null`, so activate/1 here should accept an
+      equivalent optional/nil-able hook parameter or module callback that
+      REQ-031 later wires in, rather than activate/1 needing to be rewritten
+      once REQ-031 lands).
+    acceptance_criteria:
+      - "create/1 with a graph that fails REQ-028's validateGraph() writes zero rows and returns the collected violations, not a generic error"
+      - "two concurrent create/1 calls with identical (name, version) result in exactly one success and one duplicate-error, demonstrated with an actual concurrent test or the ON CONFLICT code path cited explicitly if concurrency can't be exercised"
+      - "activate/1 on a DRAFT definition atomically deprecates any prior ACTIVE version of the same name in the same transaction, verified by reading both rows after the call"
+      - "activate/1 called twice on the same already-ACTIVE definition returns the no-op/AlreadyActive result both times, never an error"
+      - "every one of the 4 forbidden-transition cells in definition.md's authoritative state transition table (e.g. ACTIVE->ARCHIVED directly, DRAFT->ARCHIVED directly) is tested and rejected"
+      - "activate/1's signature includes a nil-able/optional service-scope-validation hook parameter that REQ-031 wires in, documented explicitly in the moduledoc as the SVC-03 integration point"
+      - "get_active_by_name/1 against a name with an ACTIVE version returns that definition; against a name with only DRAFT/DEPRECATED/ARCHIVED versions (no ACTIVE row) returns a not-found error, not the most recent non-active row"
+      - "list/1 with a stage filter returns only rows whose stage column exactly matches the filter value, combinable with a simultaneous name and/or status filter in the same call (verified with an explicit test using all three filters together)"
+    depends_on: [REQ-027, REQ-028, REQ-029]
+
+  - id: REQ-031
+    title: Service scope activation validator (service_scope_validator.zig, SVC-03)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Port src/definition/service_scope_validator.zig's ServiceScopeValidator
+      (per src/design/svc-01-04-service-scope.md section 2.5's public
+      interface and section 3.3's data flow) as the hook REQ-030's
+      activate/1 calls after graph/attribute validation passes and before
+      the SQL transition transaction opens (svc-01-04-service-scope.md
+      section 3.3): walk every SERVICE_TASK node in the graph, and for each
+      service_id / plugin_handler attribute reference, check whether the
+      activating tenant is permitted to use it (global scope always passes;
+      tenant scope passes only if owner_tenant_id matches the activating
+      tenant; unregistered references fail). Return on the first violation
+      (atomic rejection per svc-01-04-service-scope.md), with enough detail
+      (node_id, kind: service|plugin, ref_id, reason) for a future S4 HTTP
+      layer to render a 422 body.
+      IMPORTANT SCOPE GAP (flag, do not silently paper over):
+      svc-01-04-service-scope.md's own design depends on two lookups this
+      validator needs -- a ServiceCatalog (src/repository/service_catalog.zig,
+      tenant-scoped service registry) and a PluginRegistry
+      (src/engine/plugin_registry.zig, in-process plugin dispatch table) --
+      NEITHER of which exists in Letflow yet: service_catalog.zig belongs to
+      the repository layer (not yet ported, likely S6
+      operational-cross-cutting) and plugin_registry.zig belongs to
+      src/engine/ (S3 instance-engine, not yet ported). This requirement
+      therefore scopes ServiceScopeValidator's OWN logic (the graph-walk +
+      scope-comparison algorithm) against an injectable lookup interface
+      (e.g. two behaviour callbacks or a struct of functions the validator
+      calls rather than a concrete ServiceCatalog/PluginRegistry module) so
+      the validator is testable and correct in isolation now, with real
+      catalog/registry wiring deferred explicitly to whichever later stage
+      actually builds those two dependencies -- this mirrors R-Co's own
+      design, which already makes the validator an optional injectable field
+      on Store (service_scope_validator: ?*ServiceScopeValidator = null), so
+      nothing about this deferral is a new invention, just carrying R-Co's
+      own optionality pattern through.
+    acceptance_criteria:
+      - "given an injected lookup returning a global-scope service, a SERVICE_TASK referencing it passes validation for any tenant_id"
+      - "given an injected lookup returning a tenant-scoped service owned by tenant A, a SERVICE_TASK referencing it fails validation when activated by tenant B, with a violation detail naming the node_id and the service ref_id"
+      - "given an injected lookup returning 'not registered' for a service_id, validation fails with a distinct not-registered violation reason, distinguishable from the owned-by-another-tenant case"
+      - "REQ-030's activate/1 is demonstrated calling this validator via its nil-able hook when a lookup implementation is supplied, and skipping the check entirely when the hook is nil (matching R-Co's own optional-field default)"
+      - "the moduledoc explicitly names the ServiceCatalog/PluginRegistry dependency gap and which future stage each belongs to, rather than implying real catalog integration exists today"
+    depends_on: [REQ-030]
+
+  - id: REQ-032
+    title: Sub-process interface contract, definition-time half only (sub_process_interface.zig, SPC-02)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Port ONLY the SPC-02 (definition-time) half of
+      src/definition/sub_process_interface.zig, per
+      src/design/spc-01-sub-process-interface-contract.md -- the file's own
+      header documents TWO halves (SPC-02: definition-time
+      parsing/validation invoked from graph.zig's checkSubProcess, PD-05;
+      and SPC-01: runtime activation/completion helpers invoked from
+      src/engine/instance.zig). SPC-01 is explicitly OUT of this
+      requirement's scope -- it belongs to S3 (src/engine/ port) since it
+      requires a running instance/token model that doesn't exist yet; name
+      this boundary explicitly in the moduledoc rather than porting it now
+      or silently dropping it from the file list.
+      This requirement ports, as pure functions (no I/O, matching graph.zig's
+      own purity contract, hooked into REQ-029's PD-05 node-attribute
+      validation pass since spc-01's own "Hook point" section states
+      checkSubProcess "executes as part of the PD-05 node-type attribute
+      validation"):
+      - parseInterface/1: parses a SUB_PROCESS node's optional interface
+      attribute into inputs/outputs entry lists ({name, json_schema,
+      required} per entry, required defaulting to false when absent per
+      spc-01's field semantics table).
+      - validateSchemaShape/2: schema-of-schemas well-formedness check per
+      spc-01's "JSON Schema well-formedness rule" table (supported keyword
+      set: type, minimum/maximum, minLength/maxLength, enum, required,
+      properties, items, additionalProperties; unknown keywords like
+      $ref/allOf/pattern are permitted-and-inert, not rejected; recursion
+      depth capped at 32).
+      All 6 named violation codes from spc-01's error taxonomy
+      (definition-time table) must be distinguishable:
+      SUB_PROCESS_INTERFACE_NOT_OBJECT, _INPUTS_NOT_ARRAY, _OUTPUTS_NOT_ARRAY,
+      _ENTRY_INVALID, _SCHEMA_INVALID, _DUPLICATE_NAME (duplicate name
+      within inputs or within outputs).
+    acceptance_criteria:
+      - "a SUB_PROCESS node with a well-formed interface (valid inputs/outputs, well-formed json_schema on each entry) passes validation and is persisted unchanged as part of the node's attributes"
+      - "each of the 6 named violation codes has at least one explicit failing-example test"
+      - "an interface entry's json_schema containing an unsupported-but-recognized-as-inert keyword (e.g. $ref or pattern) is accepted, not rejected, per spc-01's 'permitted and inert' rule"
+      - "a json_schema nested beyond the 32-level recursion cap is rejected as malformed"
+      - "the moduledoc explicitly states SPC-01 (runtime activation/completion helpers) is out of this requirement's scope and belongs to S3, naming src/engine/instance.zig as SPC-01's future integration point"
+    depends_on: [REQ-029]
+
+  - id: REQ-033
+    title: Definition snapshot store (snapshot.zig, PD-08)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Port src/definition/snapshot.zig's SnapshotStore (per
+      src/design/definition.md's PD-08 section) as a
+      Letflow.Definitions.SnapshotStore module operating on REQ-027's
+      instance_definition_snapshots and process_definitions tables:
+      - create/2 (instance_id, definition_id): reads the definition row
+      under a shared lock (SELECT ... FOR SHARE, per definition.md's
+      "Atomicity guarantee" -- prevents a concurrent delete or
+      exclusive-lock write from racing the snapshot capture) and inserts the
+      snapshot row, both in one transaction; ON CONFLICT (instance_id) DO
+      NOTHING semantics for idempotency (a retry of the same instance_id's
+      snapshot creation is a no-op, not a second row); not-found error if
+      definition_id doesn't exist; SnapshotAlreadyExists-equivalent (not a
+      generic conflict) if instance_id already has a snapshot.
+      - get_by_instance_id/1: reads the snapshot row for an instance_id;
+      not-found error if absent.
+      No update path is exposed anywhere on this module -- snapshots are
+      immutable after creation (definition.md: "Snapshots read-only after
+      creation; no API endpoint permits modification").
+      BOUNDARY NOTE (name explicitly, do not silently assume): per
+      definition.md's PD-08 section and stage-2-event-store-definitions.md's
+      own grounding for this file, the engine calling create/2 "at
+      instance-start time (EE-01), BEFORE any event is appended" is S3's job
+      (the engine doesn't exist in Letflow yet) -- this requirement builds
+      only the store's create/retrieve operations in isolation, fully
+      testable without any engine code, per definition.md's own "Stage 2
+      boundary" rationale for why this file lives in the definition module
+      rather than src/engine/.
+    acceptance_criteria:
+      - "create/2 against a valid definition_id inserts a snapshot row whose graph matches the source process_definitions row's graph at the moment of the call"
+      - "create/2 called twice with the same instance_id is idempotent (no error, no second row) OR returns a distinct SnapshotAlreadyExists-equivalent error -- pick one behavior and state which in the moduledoc, since definition.md's own text supports the idempotent reading for an EE-01 retry"
+      - "get_by_instance_id/1 against an instance_id with no snapshot returns a not-found error, not nil silently"
+      - "deleting the source process_definitions row (where FK rules permit, e.g. a DRAFT definition) does not remove or invalidate an existing snapshot row, per PD-08's no-ON-DELETE-CASCADE design (REQ-027)"
+      - "the moduledoc explicitly states the EE-01 instance-start integration point is S3 scope, not built here"
+    depends_on: [REQ-027]
+
+  - id: REQ-034
+    title: Definition export/import (export_import.zig, PD-09)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Port src/definition/export_import.zig's ExportImportStore (per
+      src/design/definition.md's PD-09 section) as a
+      Letflow.Definitions.ExportImport module, calling REQ-030's Store
+      functions (definition.md: "export/import logic ... belongs alongside
+      store.zig, graph.zig, and snapshot.zig ... imports store.zig and
+      graph.zig"):
+      - EXPORT_SCHEMA_VERSION constant: "bpm/definition/v1" (stable
+      identifier embedded in every exported document, checked on import --
+      enables future forward-compatible version detection without
+      misinterpreting an incompatible future document).
+      - export/1: serializes a process_definitions row into an
+      ExportDocument (per definition.md's struct: bpm_export_schema_version,
+      id [informational only, NOT reused as the imported row's primary key],
+      name, version, description, graph [full DefinitionGraph], exported_at
+      [ISO8601 UTC]) -- name/version/description preserved exactly.
+      - import/1: given an ExportDocument, generates a NEW id for the
+      imported definition (never reuses the source id), preserves
+      name/version/description/graph exactly, and re-runs REQ-028/029's
+      validators via REQ-030's create/1 path (an imported graph is not
+      exempt from structural/attribute validation just because it
+      previously passed on its source system). Rejects a document whose
+      bpm_export_schema_version doesn't match EXPORT_SCHEMA_VERSION with an
+      explicit unknown-schema-version error, not a generic parse failure.
+    acceptance_criteria:
+      - "export/1 on an existing definition produces a document whose graph field round-trips byte-for-byte comparable back through import/1's graph field"
+      - "import/1 always assigns a new id distinct from the source document's id field, even when the source id happens to already exist as a definition in the target tenant"
+      - "import/1 on a document with a graph that fails REQ-028's validateGraph() is rejected the same way REQ-030's create/1 rejects an invalid graph directly -- no bypass path"
+      - "import/1 on a document whose bpm_export_schema_version is not \"bpm/definition/v1\" is rejected with a distinct unknown-schema-version error"
+    depends_on: [REQ-030]
+
+  - id: REQ-035
+    title: Promotion reviews schema (promotion_reviews table, PRM-04 Type C part)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Add priv/repo/migrations and an Ecto.Schema module for
+      promotion_reviews, per
+      src/design/prm-04-promotion-review-state-machine.md's "Database schema
+      (Type C parameter)" section, using REQ-022's schema-per-tenant
+      :prefix mechanism (this table carries a tenant_id-shaped scope per its
+      own schema below, consistent with Decision B's general rule for
+      business tables -- flagged as worth REVIEWER re-confirming since
+      neither 0003 nor this design doc states PER_TENANT/GLOBAL explicitly
+      for this specific table, unlike events' explicit 1147_par01
+      classification cited in 0003):
+      - id (binary_id), tenant_id (binary_id, NOT NULL -- no DB FK per this
+      batch's established no-cross-schema-FK convention,
+      REQ-015/identity-schema.md section 2.2's rationale), plan_digest
+      (string, 64-char lowercase hex), def_type (string, default "process" --
+      extensible per prm-04's Open Question 1, no CHECK constraint
+      restricting the value set for now, note this explicitly as an open
+      question in the moduledoc), def_id (string -- process_key),
+      serialised_plan (text, full canonical JSON per PRM-03), status
+      (Ecto.Enum: pending_review/approved/rejected/applied/failed/superseded,
+      default pending_review), requested_by (binary_id), approved_by
+      (binary_id, nullable), approved_at (utc_datetime_usec, nullable),
+      superseded_by (binary_id, nullable), row_version (integer, default 1
+      -- optimistic lock), timestamps().
+      Indexes: a partial unique index on (tenant_id, plan_digest) WHERE
+      status IN ('pending_review', 'approved') (prm-04's "one live review
+      per digest per tenant" invariant -- the idempotency anchor for
+      PRM-03's digest), and an index on (tenant_id, status) WHERE status IN
+      ('applied', 'superseded') (for PRM-08 rollback's superseded-lookup
+      queries).
+      This requirement builds SCHEMA ONLY -- the state machine's transition
+      functions (approveReview/rejectReview/etc.) are REQ-037's job, not
+      this one.
+    acceptance_criteria:
+      - "priv/repo/migrations gains a promotion_reviews migration (schema-per-tenant per REQ-022) applying cleanly, with status as an Ecto.Enum over exactly the 6 named values"
+      - "the partial unique index on (tenant_id, plan_digest) WHERE status IN ('pending_review', 'approved') exists and is demonstrated to reject a second pending_review insert with the same (tenant_id, plan_digest) while a first is still pending_review or approved"
+      - "row_version defaults to 1 and the schema module documents it as an optimistic-locking column, not a plain counter"
+      - "the moduledoc flags def_type's open-ended text-vs-CHECK-constraint choice and the PER_TENANT-vs-GLOBAL classification as explicit open questions, per prm-04's own Open Question 1 and this requirement's description"
+    depends_on: [REQ-022]
+
+  - id: REQ-036
+    title: Promotion plan computation, conflict preflight, and plan digest (promotion_plan.zig PRM-01 + promotion_conflict.zig PRM-02 + promotion_digest.zig PRM-03)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Port three tightly-coupled, read-only computation modules as one
+      requirement (they share the same PlanEntry/PromotionPlan types and are
+      consumed together by REQ-037's review insert), operating on REQ-027's
+      process_definitions table. NOTE: this requirement is domain logic
+      only -- the HTTP endpoint (POST /api/v1/promotions and friends) that
+      will eventually call this logic is S4 (api-surface) scope, not built
+      here; the functions below are Elixir context-module functions, not
+      Plug route handlers.
+      - compute_promotion_plan/5 (src/definition/promotion_plan.zig, PRM-01,
+      per src/design/prm-01-promotion-plan-and-diff-report.md): given
+      (actor_id, source_tenant_id, target_tenant_id, process_key), diffs the
+      source's ACTIVE definition against the target's ACTIVE definition (or
+      the empty set, if the target has none -- every entry then forced to
+      change_kind: added) across 5 dimensions -- graph nodes/edges (by id:
+      added/modified/removed), variable_schema, service-catalog bindings (a
+      raw service_id string-value diff on SERVICE_TASK nodes, NOT a catalog
+      version lookup -- prm-01's Scoping note explains why this doesn't need
+      REPO-07/PLC-01 to exist), module_ref VALUES (a raw string diff on
+      SUB_PROCESS nodes, same non-resolving treatment, flagged as Open
+      question 2 in prm-01 itself for a future PRM-02 revisit if resolved
+      module identity later turns out to be required) -- producing one
+      PlanEntry per changed unit: {type, id, change_kind
+      (added|modified|removed), before, after}. Returns an explicit
+      forbidden error if the caller lacks a promotion.submit-equivalent
+      permission (port the check SHAPE from src/definition/promotion.zig's
+      existing role-check pattern, since Letflow doesn't have a permission
+      system beyond REQ-020's role registry yet -- flag explicitly if
+      promotion.submit doesn't map cleanly onto REQ-020's TenantRole model,
+      rather than silently inventing a new permission mechanism), an
+      explicit invalid-promotion-source error if source_tenant_id is itself
+      a production tenant (not a test tenant), and an explicit empty-plan
+      error (not a PromotionPlan with 0 entries) if every dimension produces
+      zero entries after canonicalization.
+      - reject_if_conflicts/4 (src/definition/promotion_conflict.zig, PRM-02,
+      per src/design/prm-02-conflict-preflight-rejection.md): reads the
+      target tenant's active version of process_key with NO lock (a plain
+      read, no FOR UPDATE); conflict = target_active_version > base_version.
+      On conflict, returns a rejection detail (naming each conflicting
+      definition, per prm-02's Open question 2: support multiple process_key
+      conflicts as a list, not just one) -- this requirement does NOT append
+      an event on conflict (event-store event-type registration for
+      DEFINITION_PROMOTION_REJECTED is left for whichever later requirement
+      wires this into the real event store call site, since REQ-024/025
+      exist but this function's own design doc leaves the exact event
+      schema as an open question per prm-02's Open question 1 -- flag,
+      don't silently invent the event payload shape).
+      - compute_plan_digest/1 and verify_digest/2
+      (src/definition/promotion_digest.zig, PRM-03, per
+      src/design/prm-03-plan-digest.md): SHA-256 over the CANONICAL JSON
+      serialization of a PromotionPlan's entries (object keys sorted
+      lexicographically at every level, no insignificant whitespace, null
+      values included not omitted), returned as a 64-char lowercase hex
+      string. verify_digest/2 is a constant-time comparison (note
+      explicitly: Elixir's :crypto.hash_equals/2 or an equivalent
+      constant-time compare, not a bare ==, matching prm-03's own "avoid
+      timing attacks" note). CRITICAL: Elixir's default JSON encoders do not
+      guarantee sorted keys the way this needs -- the canonicalization step
+      must explicitly sort keys before encoding (prm-03's Open question 2
+      flags this exact pitfall for Zig's std.json.stringify; the Elixir
+      equivalent risk is the same for Jason/JSON encoders that preserve map
+      insertion order).
+    acceptance_criteria:
+      - "compute_promotion_plan/5 against a target tenant with no existing version of process_key marks every produced entry change_kind: added"
+      - "compute_promotion_plan/5 against byte-identical source and target definitions returns the empty-plan error, not a PromotionPlan with an empty entries list"
+      - "compute_promotion_plan/5 against a source_tenant_id that is itself a production tenant returns the invalid-promotion-source error before reading any process_definitions row"
+      - "reject_if_conflicts/4 with target_active_version > base_version returns a rejection detail naming the conflicting definition; with target_active_version <= base_version (including the target having zero rows) returns no conflict"
+      - "compute_plan_digest/1 called twice on plans with identical content but differently-ordered map keys produces the identical digest, demonstrated by an explicit test constructing the same entries in two different key orders"
+      - "verify_digest/2 uses a constant-time comparison, not Kernel.==/2 or :erlang.=:=/2 directly on the two strings, and this choice is stated in the moduledoc"
+    depends_on: [REQ-027, REQ-028]
+
+  - id: REQ-037
+    title: Promotion review state machine and base promote (promotion_review.zig PRM-04 + promotion.zig ENV-03)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Port the promotion_reviews state-machine transition functions
+      (src/definition/promotion_review.zig, PRM-04, per
+      src/design/prm-04-promotion-review-state-machine.md's "Public
+      interface"/"State machine diagram" sections) operating on REQ-035's
+      promotion_reviews table, plus src/definition/promotion.zig's
+      underlying promoteDefinition() (ENV-03) which the apply transition
+      wraps (per prm-batch1's "Files NOT to change" table: "promoteDefinition()
+      unchanged; apply pipeline wraps it" -- port promoteDefinition() itself
+      here since nothing in this S2 batch has ported it yet, then have the
+      apply transition call it):
+      - insert_review/1: creates a pending_review row from REQ-036's
+      PromotionPlan + digest (serialised_plan, plan_digest, requested_by,
+      row_version: 1); the partial unique index (REQ-035) rejects a
+      duplicate (tenant_id, plan_digest) while one is still
+      pending_review/approved -- surface this as a distinct duplicate-review
+      error.
+      - approve_review/4 (review_id, actor_id, plan_digest, ...):
+      pending_review -> approved. Gates (per prm-05's
+      non-skippable-approval-gate design, read alongside prm-04 since PRM-05
+      enforces these same gates): reviewer != requested_by (self-approval
+      forbidden), status == pending_review, plan_digest matches the stored
+      value exactly. Every UPDATE includes WHERE row_version = $expected --
+      zero rows affected means the transition failed (invalid-transition
+      error), not a silent no-op.
+      - reject_review/2: pending_review -> rejected. No digest check, no
+      self-rejection restriction (prm-05: "Reject does NOT have the same
+      restriction" as approve).
+      - mark_review_applied/1, mark_review_failed/1: approved -> applied /
+      approved -> failed (driven by REQ-040's assertion re-run outcome,
+      called from there, not invoked directly by an HTTP layer in this
+      batch).
+      - supersede_review/2: applied|failed|rejected -> superseded (the 3
+      supersession edges named in prm-04's permitted-edges table, including
+      the "NEW" rejected->superseded edge prm-04 explicitly adds to fix a
+      prior BLOCKER-vs-RELEASED conflict -- port this edge, don't silently
+      drop it as if rejected were terminal).
+      - promote_definition/N (src/definition/promotion.zig, ENV-03): the
+      underlying version-pointer-move + event-append operation
+      mark_review_applied's caller invokes; port its existing role-check
+      pattern (reused by REQ-036's compute_promotion_plan/5, cited above)
+      and its tenant-type check (reused by REQ-036 as the
+      invalid-promotion-source check).
+      Exactly 7 permitted state edges total (prm-04's table) -- no other
+      transition is reachable; every non-edge attempt returns the same
+      invalid-transition error regardless of which specific illegal edge was
+      attempted.
+    acceptance_criteria:
+      - "insert_review/1 followed by a second insert_review/1 with the identical (tenant_id, plan_digest) while the first is still pending_review returns the duplicate-review error, not a second row"
+      - "approve_review/4 called by the same principal recorded as requested_by is rejected with a self-approval error before any row is updated"
+      - "approve_review/4 with a plan_digest not matching the stored value is rejected with a digest-mismatch error, distinct from the self-approval and invalid-transition errors"
+      - "two concurrent approve_review/4 calls on the same review_id: exactly one succeeds (row_version optimistic-lock check), the other gets the invalid-transition error from the zero-rows-affected WHERE row_version = $expected clause"
+      - "a rejected review can be transitioned to superseded via supersede_review/2 (the NEW edge prm-04 adds), demonstrated explicitly, not left untested as if rejected were terminal"
+      - "every one of the 7 permitted edges in prm-04's table has an explicit passing test, and at least 2 non-edges (e.g. rejected -> approved, pending_review -> applied) have explicit rejecting tests"
+    depends_on: [REQ-035, REQ-036]
+
+  - id: REQ-038
+    title: Promotion rollback (rollback.zig, PRM-08)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Port src/definition/rollback.zig's rollbackDefinitionVersion() (per
+      prm-batch1's "PRM-08 design" section) as
+      Letflow.Definitions.rollback_definition_version/4, operating on
+      REQ-027's process_definitions and REQ-035/037's promotion_reviews
+      tables:
+      - Permission guard: caller must hold a platform.admin-equivalent
+      permission (port the check SHAPE, same open-question note as REQ-036
+      about mapping onto REQ-020's role registry if it doesn't fit cleanly
+      -- flag rather than invent a new permission model silently).
+      - Single serializable transaction: lock process_definitions rows for
+      the process_key (FOR UPDATE); identify the current ACTIVE row and the
+      target row (status must be ACTIVE or SUPERSEDED -- prm-batch1's "Why
+      status IN ('ACTIVE','SUPERSEDED') proves prior activation" reasoning:
+      SUPERSEDED necessarily passed through ACTIVE at some prior point, no
+      separate history table needed). Guard cases: process_key not found at
+      all (not-found error); target_version not in {ACTIVE, SUPERSEDED} for
+      this process_key (version-never-active error); target_version equals
+      the current ACTIVE version (already-active error, nothing to do).
+      - Version pointer swap: current ACTIVE -> SUPERSEDED, target row ->
+      ACTIVE, both in the same transaction.
+      - Append a DEFINITION_VERSION_ROLLED_BACK event via REQ-025's append
+      (payload: process_key, from_version, to_version, actor_id) -- capture
+      the resulting event_id.
+      - Update any promotion_reviews row for the now-former-active
+      definition whose status is applied or approved to superseded, with
+      superseded_by set to the rollback's event_id (zero matching rows is
+      acceptable, not an error).
+      Returns definition_id (of the now-active version), version,
+      rolled_back_from_version, superseded_review_id (nullable), event_id.
+    acceptance_criteria:
+      - "rolling back to a version with status SUPERSEDED (that was previously ACTIVE) succeeds and flips the pointer: the target becomes ACTIVE and the former ACTIVE becomes SUPERSEDED"
+      - "rolling back to a version whose status has never been ACTIVE or SUPERSEDED for this process_key returns the version-never-active error, no rows changed"
+      - "rolling back to the currently-ACTIVE version returns the already-active error, no rows changed, no event appended"
+      - "a successful rollback appends exactly one DEFINITION_VERSION_ROLLED_BACK event and updates any applied/approved promotion_reviews row for the former-active definition to superseded"
+      - "a caller lacking the platform.admin-equivalent permission is rejected before any row is read or locked"
+    depends_on: [REQ-030, REQ-037]
+
+  - id: REQ-039
+    title: Sandbox pool and fixture loader (sandbox_pool.zig + fixture_loader.zig, PRM-06 section 3)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Port src/definition/sandbox_pool.zig's SandboxPool (claim/release,
+      on-demand Postgres-schema provisioning) and
+      src/definition/fixture_loader.zig's loadFixturesOnly (per
+      prm-batch1's "PRM-06 design" sections 1/3), reusing REQ-022's CREATE
+      SCHEMA/DROP SCHEMA provisioning primitive:
+      - claim/1 (max_wait_ms): provisions a fresh ephemeral Postgres schema
+      (CREATE SCHEMA), enforcing a configurable max_concurrent_sandboxes
+      quota; returns SandboxUnavailable if no slot frees within the wait
+      window (60s per prm-batch1 PRM-06 AC5). Records every active claim so
+      a later release/reaper pass can find it.
+      - release/1: drops the schema (DROP SCHEMA CASCADE) and removes the
+      active-claim record.
+      - load_fixtures_only/3 (sandbox_schema, fixtures): validates each
+      fixture's target table name against a hardcoded allowlist BEFORE
+      issuing any SQL (prm-batch1: "This is the SQL-injection boundary -- no
+      string interpolation on table names reaches the DB" -- an unlisted
+      table name returns InvalidTableName, never reaches a query); TRUNCATEs
+      each distinct target table (schema-qualified) before inserting;
+      inserts rows via a parameterized jsonb_populate_record-equivalent
+      pattern, never string-interpolating the row content.
+      OPEN QUESTION -- flagged explicitly per this stage's own
+      "process-per-instance vs row-based state" finding
+      (docs/migration/stage-2-event-store-definitions.md's Early findings
+      section): sandbox_pool.zig's own header states "The pool records
+      every active claim in a process-local table" -- in-memory claim
+      tracking plus a hard concurrency quota (max_concurrent_sandboxes) is
+      exactly the kind of state stage-2-event-store-definitions.md flags as
+      "plausibly needing a supervised process" rather than a plain Ecto row
+      (no expensive-to-reconstruct state here, but the in-memory claim
+      tracking + quota-enforcement shape leans toward a GenServer or
+      DynamicSupervisor-backed pool rather than a bare DB table or a
+      stateless module). Do NOT silently assume either a
+      GenServer/DynamicSupervisor design or a plain-row design here -- this
+      requirement ports the claim/release/load_fixtures_only CONTRACT
+      (function signatures + behavior), and leaves the concrete
+      process-vs-row implementation choice as an explicit open question for
+      CODE-DESIGNER to resolve at WF-02 design time, citing this note.
+    acceptance_criteria:
+      - "claim/1 against an empty pool immediately succeeds and returns a sandbox_id + schema_name for a real, freshly-created Postgres schema"
+      - "claim/1 when max_concurrent_sandboxes slots are all in use blocks until either a slot frees or the wait window elapses, returning SandboxUnavailable in the latter case"
+      - "release/1 on a claimed sandbox drops its schema (verified: the schema no longer appears in information_schema.schemata after release) and frees its quota slot for a subsequent claim/1"
+      - "load_fixtures_only/3 with a table_name not in the allowlist returns InvalidTableName without issuing any SQL against that table name"
+      - "load_fixtures_only/3 loading the same fixtures twice against the same sandbox_schema (simulating a retry) leaves the same final row set both times, via the TRUNCATE-before-insert step"
+      - "the moduledoc names the process-per-instance-vs-row-based-state open question explicitly and states it is left for CODE-DESIGNER, per this requirement's description and stage-2-event-store-definitions.md's Early findings"
+    depends_on: [REQ-022]
+
+  - id: REQ-040
+    title: Promotion assertion re-run orchestration (assertion_rerun.zig, PRM-06/07 + promotion_assertion_runs schema)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Port src/definition/assertion_rerun.zig's applyPromotionAssertionRerun()
+      (per prm-batch1's "PRM-06 design" section 2 and "PRM-07 design"
+      sections in full) as
+      Letflow.Definitions.apply_promotion_assertion_rerun/6, plus the
+      promotion_assertion_runs migration (prm-batch1's "1.
+      promotion_assertion_runs table schema" -- schema-per-tenant, per
+      REQ-022, with an FK to REQ-035/037's promotion_reviews). Depends on
+      REQ-039's SandboxPool + fixture loader.
+      - Idempotency: compute key = "promotion_rerun:<review_id>:<plan_digest>";
+      INSERT ... ON CONFLICT (tenant_id, idempotency_key) DO NOTHING; on
+      conflict, return the cached row's outcome (AlreadyRecorded-equivalent)
+      without claiming a new sandbox.
+      - On a fresh insert: claim a sandbox (REQ-039), load ONLY the
+      artifact's fixtures[] into it (REQ-039's load_fixtures_only, never
+      organic tenant data), replay the artifact's assertions under a frozen
+      clock (derived from the upper 32 bits of rng_seed per prm-batch1's
+      FrozenClockProvider note -- flagged there as Open question 1, an
+      artifact could later carry an explicit frozen_clock_ms field instead;
+      keep the injection interface stable regardless) and a seeded RNG
+      (wraps the RNG with rng_seed), stripping non_deterministic_fields
+      dot-paths from both expected/actual results before byte-level
+      comparison.
+      - Record the outcome (passed/failed/teardown_failed,
+      assertions_passed/failed counts, failing_assertion_ids) in
+      promotion_assertion_runs.
+      - The apply pipeline (REQ-037's mark_review_applied path) evaluates
+      assertions_failed == 0 to decide whether to proceed, NOT status ==
+      "passed" -- a teardown_failed row with assertions_failed == 0 is a
+      green gate per prm-batch1's explicit note; state this distinction
+      explicitly in the moduledoc since it's easy to get backwards.
+      OPEN QUESTION -- flagged explicitly (this is the second of the two
+      files stage-2-event-store-definitions.md's Early findings section
+      names as most likely to need a supervised process rather than a plain
+      row): sandbox teardown must run on EVERY exit path -- normal
+      completion, assertion failure, infrastructure failure, AND
+      panic/crash (assertion_rerun.zig's own header: "Teardown ... runs
+      through a single defer so it covers every exit path ... including
+      panic unwind"). Elixir has no direct defer-on-panic equivalent the
+      way Zig does; the closest idiomatic mechanisms are try/after (covers
+      normal and raised-exception exits, not a hard process kill) or a
+      supervised process whose terminate/2 callback fires on more exit
+      conditions including certain crashes. Do NOT silently assume
+      try/after is sufficient, and do NOT silently assume a GenServer is
+      required -- this requirement ports the guaranteed-teardown CONTRACT (a
+      teardown failure records PROMOTION_ASSERTION_TEARDOWN_FAILED and sets
+      status = teardown_failed, but never converts a passing run into a
+      failure) and leaves the concrete crash-safety mechanism as an
+      explicit open question for CODE-DESIGNER, same as REQ-039's note.
+    acceptance_criteria:
+      - "calling apply_promotion_assertion_rerun/6 twice with the same (review_id, plan_digest) returns the cached outcome on the second call and claims no second sandbox, verified by sandbox claim count"
+      - "a sandbox loaded via REQ-039 receives ONLY the artifact's fixtures[] rows, demonstrated by confirming no pre-existing tenant data appears in the sandbox schema"
+      - "an assertion replay that fails records status = failed with a non-empty failing_assertion_ids list; a passing replay whose teardown itself fails records status = teardown_failed with assertions_failed = 0 -- both distinct outcomes tested explicitly"
+      - "the moduledoc explicitly states the apply pipeline gate condition is assertions_failed == 0, not status == passed, citing the teardown_failed green-gate case"
+      - "a simulated teardown failure appends a PROMOTION_ASSERTION_TEARDOWN_FAILED event via REQ-025's append and does not change a passing run's outcome from green to failed"
+      - "the moduledoc names the crash-safety/guaranteed-teardown open question explicitly, per this requirement's description and stage-2-event-store-definitions.md's Early findings"
+    depends_on: [REQ-039, REQ-037]
+
+  - id: REQ-041
+    title: Solution-pack update three-way diff (pack_update.zig, PRM-09)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Port src/definition/pack_update.zig's computePackUpdatePlan() (per
+      prm-batch1's "PRM-09 design" section) as
+      Letflow.Definitions.compute_pack_update_plan/5, plus its three
+      migration tables (prm-batch1's "4. solution_pack_* table schemas" --
+      solution_pack_installs, solution_pack_artefact_bases,
+      pack_update_resolutions; PRM-09's own migration creates all three
+      itself, so this does NOT depend on the separate SOL-01/02/03
+      solution-pack export/install module (src/solution/, a different
+      directory not among this stage's 16 src/definition/ files -- SOL-01/02/03
+      isn't scoped to any stage yet; note explicitly that this requirement's
+      tables have no real installs to compare against until whichever
+      future requirement builds SOL-01/02/03's install path, but the diff
+      algorithm itself is fully testable today via directly-inserted
+      fixture rows). Unlike every other table this S2 batch adds,
+      prm-batch1 explicitly classifies these three tables as GLOBAL
+      (public/default schema, no :prefix) -- "install records are
+      cross-tenant infrastructure" -- so this requirement does NOT use
+      REQ-022's schema-per-tenant mechanism; since both these tables and
+      REQ-015's tenants table live in the same public/default schema, a
+      real DB-level FK from solution_pack_installs.tenant_id to tenants.id
+      (matching R-Co's own `REFERENCES tenant(id)`) is possible here, unlike
+      the deliberate no-cross-schema-FK omission this batch's other
+      per-tenant tables use.
+      - Classification algorithm (byte-level canonical-JSON comparison,
+      same normalization as REQ-036's plan digest): for each artefact,
+      compare base (installed-at-Vb content, from
+      solution_pack_artefact_bases), theirs (current tenant content), and
+      incoming (offered Vn content) -- unchanged (all three match),
+      clean_update (base==theirs, base!=incoming), local_only
+      (base==incoming, base!=theirs), or conflict (both sides changed, OR
+      base is NULL/no install record -- prm-batch1 PRM-09 AC5: "cannot
+      prove no modification" is itself a conflict case, not an error).
+      - has_unresolved_conflicts on the returned plan is true iff any
+      conflict-classified artefact lacks a resolution; a plan with
+      unresolved conflicts is rejected at apply time (a later requirement's
+      job to enforce -- this requirement computes and exposes the flag).
+      OPEN QUESTION (flag, do not silently resolve): neither 0003 nor any
+      other Letflow decision record states a general rule for when a table
+      gets this GLOBAL exception versus Decision B's schema-per-tenant
+      default (the same kind of R-Co-internal GLOBAL classification
+      service_catalog carries, per svc-01-04-service-scope.md: "service_catalog
+      is a public-schema routing/registry table (TNT-01 confirmed)"). This
+      requirement follows prm-batch1's stated classification for these
+      three tables specifically, but flags the underlying general question
+      as unresolved and worth a REVIEWER/decision-record follow-up rather
+      than something each future requirement re-derives ad hoc.
+    acceptance_criteria:
+      - "priv/repo/migrations gains solution_pack_installs, solution_pack_artefact_bases, and pack_update_resolutions migrations in the public/default schema (not :prefix-scoped), applying cleanly"
+      - "compute_pack_update_plan/5 against an artefact with no matching solution_pack_artefact_bases row classifies it as conflict, not unchanged or an error, per PRM-09 AC5"
+      - "compute_pack_update_plan/5 against base==theirs!=incoming classifies clean_update; base==incoming!=theirs classifies local_only; base==theirs==incoming classifies unchanged -- each with an explicit test"
+      - "has_unresolved_conflicts is true when at least one conflict-classified artefact has no matching pack_update_resolutions row, and false once every conflict artefact has one"
+      - "the moduledoc explicitly flags the GLOBAL-vs-PER_TENANT classification question as unresolved beyond this requirement's own scope, per this requirement's description"
+    depends_on: [REQ-015]
+
+  - id: REQ-042
+    title: Definition full-text search (store.zig's search, PD-10)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    description: >
+      Port src/definition/store.zig's Store.search() (per
+      src/design/definition.md's PD-10 section) as
+      Letflow.Definitions.search/1, operating on REQ-027's process_definitions
+      table (including its stage column, since PD-10's own SQL SELECT list
+      includes it). definition.md is explicit that "Search lives inside the
+      existing store.zig... No new Zig source file or SQL migration is
+      required" -- this requirement adds no new table, reusing REQ-027's
+      schema as-is.
+      - SearchOptions-equivalent input: query (string, non-empty and <=512
+      chars -- QueryEmpty/QueryTooLong errors, validated both here as
+      belt-and-suspenders and, later, at the S4 HTTP handler layer per
+      PD-10's own validation-rules table), limit (default 20, max 100 --
+      values above 100 are the HTTP handler's job to reject with a 422
+      before calling this function, per definition.md's handleSearch step
+      3; this function itself does not need to reject an out-of-range
+      limit, only apply the default), offset (default 0).
+      - Matching: ILIKE against name and description (definition.md's
+      "Why ILIKE instead of tsvector/to_tsquery" rationale: no dictionary
+      config dependency, no GIN index required, sufficient for a COULD-priority
+      requirement, satisfies the partial-word-matching SHOULD criterion via
+      a '%query%' pattern) -- bound as pg/Ecto parameters, the '%' wildcard
+      characters composed into the bound parameter value itself, never
+      string-interpolated into the query text (definition.md's explicit
+      SQL-injection-safety note).
+      - Ranking: exact name match (case-insensitive) scores 3.0; partial
+      name match scores 2.0; description-only match scores 1.0 (definition.md's
+      CASE expression); results ordered by rank DESC, then created_at DESC
+      for deterministic sub-ordering among equal ranks.
+      - Returns an empty list (not an error) when nothing matches
+      (definition.md: "no-match -> HTTP 200 with empty array" -- this
+      function returns the empty list, the S4 HTTP layer owns the 200
+      mapping).
+      This requirement is domain logic only -- the HTTP endpoint (GET
+      /api/v1/definitions/search) is S4 (api-surface) scope, not built here,
+      matching REQ-036's own established boundary note for the promotion
+      pipeline (context-module function, not a Plug route handler).
+    acceptance_criteria:
+      - "search/1 with query \"invoice\" returns a definition named exactly \"invoice\" ranked above one named \"invoice-approval\" (partial name match), which in turn ranks above one matched only via its description containing \"invoice\""
+      - "search/1 with an empty query string returns a QueryEmpty-equivalent error, not an empty result list"
+      - "search/1 with a query longer than 512 characters returns a QueryTooLong-equivalent error"
+      - "search/1 against a query with no matching name or description anywhere returns an empty list, not an error"
+      - "search/1 respects limit (default 20) and offset for pagination, demonstrated with more matching rows than fit in one page across two successive calls"
+      - "the moduledoc states no new migration/table was added, explicitly citing definition.md's PD-10 section for that boundary"
+    depends_on: [REQ-030]

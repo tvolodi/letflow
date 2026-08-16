@@ -1,0 +1,162 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-021
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ021-20260816
+date_utc: 2026-08-16T06:52:04Z
+
+git:
+  branch: feature/WF02-REQ021-20260816
+  branch_confirmed: true
+  commit: 13fec92f10f4e590d488580797a6dc7c5d358a14
+  commit_subject: "fix(REQ-021): record actual commit SHA in TEST-DESIGN-VALIDATOR handoff git_evidence"
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH, no fallback needed
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5] ... Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  postgres_container: letflow-postgres-1 (already running via docker compose, port 5462 -> 5432, healthy — confirmed via docker ps before running, no compose up needed)
+  command_run: "mix test  (full suite — the test alias runs ecto.create + ecto.migrate --quiet first automatically)"
+
+verdict: PASS
+
+checks:
+  test_suite_full:
+    result: PASS
+    exit_code: 0
+    summary_line_verbatim: "Result: 132 passed (4 properties, 128 tests)"
+    finished_line_verbatim: "Finished in 1.5 seconds (0.9s async, 0.5s sync)"
+    failures: 0
+    excluded: 0
+    skipped: 0
+    doctests: 0
+    note: >
+      Full mix test run (mix test --seed 0), not just the new REQ-021 test files, per
+      Unblock-Everything. Output saved to scratch/req021_full_test_run.log (1316
+      lines) and grepped for failure/assertion/error markers (regex covering
+      "Failures:", "Failure", "failure:", "** (", "Assertion", "Excluded:",
+      "Skipped:", "Doctests:"): zero matches anywhere. No "Failures:" section
+      present. Exit code 0.
+
+  test_suite_plugs_isolated:
+    result: PASS
+    command_run: "mix test test/letflow/plugs/ --seed 0"
+    summary_line_verbatim: "Result: 22 passed"
+    exit_code: 0
+    note: >
+      Ran the entire test/letflow/plugs/ directory in isolation (separate mix test
+      invocation, not a subset of the full-suite run above), specifically to catch
+      any hidden cross-test ordering dependency the full-suite run could mask.
+      22/22, exit code 0, zero failure markers in the saved log
+      (scratch/req021_plugs_isolated_run.log). Matches the 22 tests TEST-DESIGNER
+      and TEST-DESIGN-VALIDATOR both reported (10 + 3 + 9).
+
+  test_files_individual:
+    - file: test/letflow/plugs/auth_pipeline_test.exs
+      command_run: "mix test test/letflow/plugs/auth_pipeline_test.exs --seed 0"
+      result: "10 passed"
+      exit_code: 0
+    - file: test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs
+      command_run: "mix test test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs --seed 0"
+      result: "3 passed"
+      exit_code: 0
+    - file: test/letflow/plugs/tenant_status_test.exs
+      command_run: "mix test test/letflow/plugs/tenant_status_test.exs --seed 0"
+      result: "9 passed"
+      exit_code: 0
+    cross_check: "10 + 3 + 9 = 22, matching both the isolated-directory run and the full-suite delta (132 - 110 baseline = 22 new)."
+
+  known_noise_not_a_failure:
+    - >
+      [error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in NNNN ms.
+      — REQ-016's Ueberauth OIDC worker attempting to reach a deliberately
+      unreachable placeholder issuer configured in config/test.exs. Pre-existing
+      since REQ-016, already documented as expected noise in every prior WF-02 test
+      report (REQ-018, REQ-019, REQ-020). Does not fail, skip, or affect any test.
+    - >
+      Pre-existing ExUnit.Case.register_test/4 deprecation warnings for the three
+      property tests (process_instance_test.exs, parallel_approval_test.exs,
+      oidc/claim_mapping_property_test.exs) — unrelated to REQ-021, non-blocking
+      compiler warnings, not promoted to errors.
+    - >
+      Verbose SQL query debug logging appears in raw mix test output
+      (config/test.exs's default test log level) — expected, not indicative of any
+      problem. This is why the full-suite log is ~1316 lines for 132 tests.
+
+pre_existing_failures_found: none
+issues_filed: none
+
+test_file_breakdown:
+  new_req_021:
+    items:
+      - file: test/letflow/plugs/auth_pipeline_test.exs
+        detail: >
+          10 tests covering AC1 (valid token flows through full pipeline to
+          auth_context with user_id/tenant_id/roles, idempotent re-provisioning on a
+          second request), AC2 (missing header, malformed scheme prefix, empty
+          token, lowercase "bearer", unverifiable token — all 401 before any
+          DB/JIT work), AC4 (realm-ownership guard rejects a provably mismatched
+          tenant/realm pairing via Identity.verify_realm_ownership/2 called with the
+          plug's exact argument shape, no user row created under the wrong tenant,
+          and the full plug never reaches provisioning when resolution itself
+          fails), plus two beyond-the-bare-ACs cases (sub_claim_missing -> 401,
+          jit_disabled -> 403).
+      - file: test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs
+        detail: >
+          3 tests, async: false (Application.put_env/3 swap of :letflow, :oidc's
+          token_verifier to ConfigurableTokenVerifierDouble, restored via on_exit
+          even on failure) — end-to-end plug-level coverage of the
+          sub_claim_missing and jit_disabled branches actually reaching the real
+          plug's Application.fetch_env!-resolved verifier, not just the double
+          called directly.
+      - file: test/letflow/plugs/tenant_status_test.exs
+        detail: >
+          9 tests covering AC3: POST against a :migrating tenant -> 503 + exact
+          Retry-After: 30 header + JSON body; PUT/PATCH/DELETE against the same
+          tenant each independently rejected; GET and HEAD both pass through
+          unchanged (conn.halted == false, conn.status == nil); POST against an
+          :active tenant passes through (proves status-conditional, not
+          reject-all-writes); a GET issues zero Ecto query telemetry events
+          (method short-circuit before any DB round-trip); an undefined
+          auth_context edge case.
+    subtotal: 22
+  full_suite_grand_total: 132
+  cross_check: >
+    132 total (4 properties, 128 example tests) = 110 pre-existing (REQ-020's own
+    baseline) + 22 new REQ-021 tests. 110 + 22 = 132, matching the suite's own
+    summary line exactly. Also matches TEST-DESIGNER's own informal sanity-check
+    number (132 passed, 4 properties/128 tests) reported in
+    handoffs/WF02-REQ021-20260816/step-03-test-designer.json — this Step 4 run is
+    the independent, formal re-verification of that number, not a substitute for
+    it: run separately, on the current HEAD (13fec92), with output saved and
+    grepped for failure markers.
+
+acceptance_criteria_test_coverage_observed:
+  # Cross-referenced against test/specs/REQ-021.md and docs/requirements.yaml's
+  # REQ-021 acceptance_criteria list.
+  criterion_1_valid_token_full_pipeline_to_auth_context: "PASS — 2 tests (auth_pipeline_test.exs), happy path plus idempotent-reuse-on-second-request case; user_id re-queried directly from Postgres, not trusted from the in-memory assign."
+  criterion_2_missing_or_malformed_token_401_before_db_jit_work: "PASS — 6 tests (auth_pipeline_test.exs), covering no-header, wrong scheme, empty token, wrong-case scheme, unverifiable token, each independently confirming no row was written."
+  criterion_3_write_pause_migrating_tenant_503_retry_after_get_head_pass: "PASS — 9 tests (tenant_status_test.exs), all 4 write methods rejected individually, GET/HEAD pass through unchanged, :active tenant unaffected, method short-circuit confirmed via zero DB telemetry events on GET."
+  criterion_4_realm_mismatch_rejected_no_jit_under_wrong_tenant: "PASS — 3 tests (auth_pipeline_test.exs, cases 15-17), backed by a structural proof (documented in test/specs/REQ-021.md's 'AC4 test strategy' section) of why direct guard-function invocation with the plug's exact argument shape is the strongest deterministic coverage achievable without instrumenting production code for a synthetic race; independently corroborated by ELIXIR-DEV's own scratch/req021_demo.exs reaching the identical structural conclusion."
+  criterion_5_moduledoc_supersedes_req103_names_mounted_routes: "Not test-covered by design (a doc-content assertion has no runtime behavior to fail against, matching this project's stated policy against grep-a-markdown-style busywork tests, same treatment as REQ-020's AC5) — verified by direct source inspection: lib/letflow/plugs/auth_pipeline.ex lines 3-5 name REQ-103 as never-built/cancelled, lines 23-31 state the plug is not mounted in front of any route today and name all 3 existing router.ex routes by pattern; lib/letflow/plugs/tenant_status.ex lines 1-28 carry the equivalent statement. Independently re-confirmed present in this run by reading the file directly (not trusting TEST-DESIGN-VALIDATOR's prior quote of the same lines)."
+
+diagnosis: "N/A — no failures observed in this run. Nothing routed back to ELIXIR-DEV or TEST-DESIGNER."
+
+regression_check_vs_baseline: >
+  TEST-DESIGNER's own informal sanity check (Step 3, not a substitute for this
+  formal Step 4 run) reported 132/132 passed (4 properties, 128 tests) with no
+  regressions against a 131/132 pre-REQ-021 baseline anomaly it identified as a
+  git-stash artifact rather than a real number. This run reproduces the identical
+  132/132 (4 properties, 128 tests) result independently, on the current HEAD
+  commit (13fec92, one commit later than TEST-DESIGNER's own run — the
+  TEST-DESIGN-VALIDATOR PASS commit), with output captured to a log and
+  programmatically grepped for failure markers rather than eyeballed. Zero
+  regressions confirmed.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-16-WF02-REQ021-20260816.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

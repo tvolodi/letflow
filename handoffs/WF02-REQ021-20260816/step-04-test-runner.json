@@ -1,0 +1,64 @@
+{
+  "handoff_id": "a41b097a-abfd-4b9b-b620-c087649c8ba5",
+  "run_id": "WF02-REQ021-20260816",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ021-20260816/step-04-test-runner.json",
+  "created_at": "2026-08-16T06:52:52Z",
+  "started_at": "2026-08-16T06:52:52Z",
+  "completed_at": "2026-08-16T06:52:52Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S1",
+    "requirement_ids": ["REQ-021"],
+    "related_handoff_ids": ["8b0e5b2c-2a2f-4b3e-9e2b-2a6a6a2e6d31"],
+    "artifacts_in": [
+      "test/specs/REQ-021.md",
+      "test/letflow/plugs/auth_pipeline_test.exs",
+      "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs",
+      "test/letflow/plugs/tenant_status_test.exs",
+      "test/support/configurable_token_verifier_double.ex",
+      "docs/requirements.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 4 (TEST-RUNNER) for run-id WF02-REQ021-20260816: run the full mix test suite (not just the new REQ-021 tests, per Unblock-Everything), pay particular scrutiny to the 22 new tests under test/letflow/plugs/ (both as part of the full suite and in isolation, to catch any hidden cross-test ordering dependency), write the formal test/reports/ artifact, and complete this handoff.",
+    "acceptance_criteria": [
+      "mix test run against real Postgres (letflow-postgres-1), not mocked",
+      "Full suite run, not just the new test files",
+      "test/letflow/plugs/ run additionally in isolation as its own mix test invocation",
+      "Actual pass/fail counts and command output quoted, not speculated",
+      "test/reports/report-<date>-WF02-REQ021-20260816.yaml written with real output",
+      "Any real failure routed to the responsible agent (ELIXIR-DEV/TEST-DESIGNER), not papered over"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Ran the full mix test suite twice (once as the complete suite, once as an isolated test/letflow/plugs/ directory run) directly against the already-running letflow-postgres-1 container (docker ps confirmed healthy, port 5462) using the local toolchain (Erlang/OTP 29, Mix 1.20.3) -- no Docker fallback needed. Full suite: mix test --seed 0 -> exit code 0, 'Result: 132 passed (4 properties, 128 tests)', 0 failures/excluded/skipped/doctests. Output saved to scratch/req021_full_test_run.log (1316 lines) and grepped for failure/assertion/error markers -- zero matches, no 'Failures:' section. Isolated test/letflow/plugs/ directory: mix test test/letflow/plugs/ --seed 0 -> exit code 0, 'Result: 22 passed', zero failure markers in the saved log (scratch/req021_plugs_isolated_run.log). Additionally ran each of the 3 new files individually to confirm the per-file breakdown TEST-DESIGNER and TEST-DESIGN-VALIDATOR both reported: auth_pipeline_test.exs 10 passed, auth_pipeline_configurable_verifier_test.exs 3 passed, tenant_status_test.exs 9 passed (10+3+9=22, matching the isolated-directory total and the full-suite delta of 132-110=22). No hidden cross-test ordering dependency found -- identical pass counts whether run as part of the full suite, as the isolated plugs/ directory, or as individual files. Zero regressions against the 110-test pre-REQ-021 baseline (REQ-020's own full-suite total) and zero regressions against TEST-DESIGNER's own informal 132/132 (4 properties, 128 tests) sanity check from Step 3 -- this run independently reproduces that exact number on the current HEAD commit (13fec92, one commit later than TEST-DESIGNER's own run) with output captured to a log and programmatically grepped rather than eyeballed, which is what makes this the real Step 4 verification rather than a restatement of Step 3's claim. Known pre-existing noise (placeholder Keycloak issuer connection-refused retries from REQ-016's OIDC worker, ExUnit.Case.register_test/4 deprecation warnings on the 3 property tests) present and unchanged from prior WF-02 runs (REQ-018/019/020), does not affect any test outcome. Wrote test/reports/report-2026-08-16-WF02-REQ021-20260816.yaml with full detail: environment, both full-suite and isolated-run verbatim summary lines, per-file breakdown, per-acceptance-criterion coverage cross-reference, and the regression check against TEST-DESIGNER's baseline.",
+    "artifacts_out": [
+      "test/reports/report-2026-08-16-WF02-REQ021-20260816.yaml"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "handoffs/registry.json still does not exist in this repo (same pre-existing gap already flagged by SECURITY-REVIEWER at Step 2c, TEST-DESIGNER at Step 3, and TEST-DESIGN-VALIDATOR at Step 3b) -- not created by this handoff either; belongs to the future mix letflow.lint_handoffs tooling requirement HANDOFF_PROTOCOL.md's Enforcement note already describes.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ021-20260816",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ021-20260816",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to RELEASE-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

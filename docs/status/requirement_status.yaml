@@ -1237,3 +1237,75 @@ history:
       identity.md's header line updated from "Requirements: REQ-015 (done); REQ-016
       through REQ-021 (docs/requirements.yaml) pending." to "Requirements: REQ-015,
       REQ-016 (done); REQ-017 through REQ-021 (docs/requirements.yaml) pending."
+  - req: REQ-017
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-16T00:18:56Z
+    note: >
+      Built a new lib/letflow/oidc/ namespace: Letflow.Oidc.IdentityContext (the
+      target struct — external_user_id, tenant_id, realm, roles, email,
+      preferred_username, display_name), Letflow.Oidc.ClaimMappingConfig (the
+      per-realm configurable claim-path config: tenant_id_claim,
+      roles_claim_paths, email_claim, preferred_username_claim,
+      display_name_claim), and Letflow.Oidc.ClaimMapping, porting
+      src/oidc/claim_mapping.zig's mapVerifiedClaims as a pure, zero-I/O function
+      (no Repo call, no HTTP call anywhere in its call graph, confirmed by
+      inspection and independently re-confirmed by SECURITY-REVIEWER and REVIEWER
+      during their gates). Two real discrepancies versus a literal Zig port were
+      found and both independently verified by CODE-DESIGN-VALIDATOR against the
+      actual R-Co source rather than taken on ELIXIR-DEV's word: (1) claims arrive
+      pre-parsed as a map from ueberauth_oidcc's callback, not as a JSON string
+      claim_mapping.zig itself had to parse, so there is no JSON-decode step in
+      the Elixir port; (2) of claim_mapping.zig's MappingError variants, only
+      SubClaimMissing is reachable from this function's actual call graph — the
+      others are either JSON-parse-specific (moot per discrepancy 1) or dead code
+      in the R-Co source itself, not just unreachable in the port. Matches Key
+      Invariant 3's defaulting rules exactly: missing optional claims default
+      rather than error (email->"", preferred_username->subject value,
+      roles->[], display_name->nil, tenant_id->nil), and sub/subject missing is
+      the sole error case (:sub_claim_missing), both empirically verified by
+      RELEASE-VALIDATOR calling the function directly and confirming exact
+      return values for both the full-defaulting case and the sub-missing error
+      case, not just by reading the test suite's assertions. Verification on
+      this requirement was unusually strong: TEST-DESIGN-VALIDATOR performed
+      genuine mutation testing (breaking claim_mapping.ex's defaulting/
+      short-circuit logic and confirming the exact expected tests failed, then
+      restoring and re-confirming green) plus a 20,000-sample empirical probe of
+      the StreamData property-test generator to confirm it produces real
+      adversarial variety rather than only well-formed claims maps. Test
+      execution: 62/62 passing (4 properties, 58 examples — 35 pre-existing
+      unaffected + 27 new: 25 example-based in
+      test/letflow/oidc/claim_mapping_test.exs, 2 property-based in
+      test/letflow/oidc/claim_mapping_property_test.exs), confirmed
+      independently twice — once by ORCH directly (the originally-dispatched
+      TEST-RUNNER agent's Step 4 dispatch was interrupted by a session issue
+      before its result landed; rather than trust an unconfirmed claim, ORCH
+      re-ran mix letflow.check plus a standalone mix test/mix test --trace pass
+      itself, transparently documented in
+      test/reports/report-2026-08-16-REQ-017.yaml's own header note rather than
+      silently presented as a normal TEST-RUNNER pass), and again by
+      RELEASE-VALIDATOR, which additionally exercised the actual function calls
+      itself rather than relying on the test suite's assertions alone. All
+      gates PASSed on first attempt: CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER,
+      REVIEWER, TEST-DESIGN-VALIDATOR. Flipped docs/requirements.yaml REQ-017
+      status to done. README.md checked and deliberately left untouched: no
+      OIDC functionality is user-observable or runnable yet (no route touches
+      it, no real Keycloak issuer exists), same reasoning already applied at
+      REQ-011/012/015/016's DOC-UPDATER passes.
+      docs/guides/backend_developer_guide.md checked and deliberately left
+      untouched for the same reason — it already describes the ueberauth_oidcc
+      decision and names REQ-015 through REQ-021 collectively rather than
+      enumerating per-requirement mechanics, so adding REQ-017-specific detail
+      would break that established pattern rather than follow it.
+      docs/migration/stage-1-identity.md's header line updated from
+      "Requirements: REQ-015, REQ-016 (done); REQ-017 through REQ-021
+      (docs/requirements.yaml) pending." to "Requirements: REQ-015, REQ-016,
+      REQ-017 (done); REQ-018 through REQ-021 (docs/requirements.yaml)
+      pending." No REVIEWER sign-off section added to stage-1-identity.md yet —
+      that lands once all of S1's requirements (REQ-015..021) are done, same
+      precedent as REQ-015/016's DOC-UPDATER passes. This branch
+      (feature/WF02-REQ017) also carries an unrelated .gitignore fix (adds
+      /scratch/ to the ignore list, per a RELEASE-VALIDATOR finding that
+      core-directives.md claims scratch/ is git-ignored but .gitignore had no
+      such entry) — bundled into the same commit/PR per instruction, not
+      touched or altered by this DOC-UPDATER pass.

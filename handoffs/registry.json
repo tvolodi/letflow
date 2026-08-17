@@ -388,6 +388,23 @@
       "queue_agent_id": "hetzner-orch",
       "worktree": "/home/tvolodi/letflow (Hetzner host ubuntu-16gb-nbg1-1)",
       "note": "Solution-pack update three-way diff (pack_update.zig, PRM-09) -- the first GLOBAL/non-tenant-scoped table added since REQ-015's identity tables, unlike every other S2 table so far. Full producer/validator chain via background subagents, all PASS on first attempt, no rework: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> ELIXIR-DEV -> SECURITY-REVIEWER -> REVIEWER -> TEST-DESIGNER -> TEST-DESIGN-VALIDATOR -> TEST-RUNNER -> RELEASE-VALIDATOR -> DOC-UPDATER. Given this table's structural novelty, both SECURITY-REVIEWER and RELEASE-VALIDATOR independently re-derived (not just trusted) that fetch_base/4 and resolution_exists?/5 filter by tenant_id as part of a full composite-key lookup, so isolation genuinely holds at the query level with no schema-per-tenant boundary to lean on. ELIXIR-DEV self-flagged two honest deviations from the design's assumptions (a missing context module it had to create; one schema module's design reasoning extended from a sibling's) rather than silently patching over them -- REVIEWER judged both sound against real codebase precedent. DOC-UPDATER correctly followed the corrected protocol this run (per REQ-035's own process-note) -- flagged an incidental finding (orchestrator session-launch scratch files in the project root) in its handoff text instead of acting on it directly; ORCH moved them to scratch/ per core-directives.md's File Placement Rules. No rebase needed (main unchanged since Step 00). mix compile --warnings-as-errors clean, mix test 363/363 (up from 333 pre-run) both pre-merge and re-verified on main's actual merged tip."
+    },
+    {
+      "run_id": "WF02-REQ029-20260817",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-029"],
+      "stage": "S2",
+      "status": "COMPLETED",
+      "owned_modules": ["lib/letflow/definitions", "test/letflow/definitions"],
+      "lock_acquired_at": "2026-08-17T10:14:25Z",
+      "lock_released_at": "2026-08-17T10:56:45Z",
+      "released_lock": true,
+      "last_known_step": "PR #100 squash-merged into main as 4029205, queue task 44 released done, GH#52 closed.",
+      "backfilled": false,
+      "queue_task_id": 44,
+      "queue_agent_id": "hetzner-orch",
+      "worktree": "/home/tvolodi/letflow (Hetzner host ubuntu-16gb-nbg1-1)",
+      "note": "Node-attribute and edge-condition validators (graph.zig, PD-05/PD-06) -- extends REQ-028's Letflow.Definitions.Graph module in place with validate_node_attributes/1, validate_edge_conditions/1, and valid_cel_syntax?/1. Full producer/validator chain via independent Agent-tool-dispatched subagents, all PASS on first attempt, no rework: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> ELIXIR-DEV -> SECURITY-REVIEWER (out of scope, pure functions) -> REVIEWER -> TEST-DESIGNER -> TEST-DESIGN-VALIDATOR -> TEST-RUNNER -> RELEASE-VALIDATOR -> DOC-UPDATER. Notable environment finding: R-Co source (graph.zig/definition.md) is genuinely unreachable on this Hetzner host (confirmed via filesystem search) -- CODE-DESIGNER reconstructed the ISO-8601 duration parser and CEL syntax algorithm from docs/requirements.yaml's own detailed quoted paraphrase instead, flagged the gap explicitly rather than silently porting, and every downstream gate (CODE-DESIGN-VALIDATOR, ELIXIR-DEV, REVIEWER, RELEASE-VALIDATOR) independently re-traced the reconstructed algorithms against worked examples rather than waving the gap through. Incidentally also filed ISS-0033 (handoffs/registry.json's WF03-ISS0030-20260817 entry stuck BLOCKED despite that run having merged) as GH#98/queue task 79 before starting this run. No rebase needed (main unchanged since Step 00 aside from ORCH's own ISS-0033 commit). mix compile --warnings-as-errors clean, mix test 401/401 (up from 376 pre-run) both pre-merge and re-verified on main's actual merged tip."
     }
   ]
 }

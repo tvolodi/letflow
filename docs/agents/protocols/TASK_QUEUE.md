@@ -124,21 +124,28 @@ curl -X POST https://queue.ai-dala.com/tasks \
     "description": "<full requirement description, or a pointer to it>",
     "acceptance_criteria": ["...", "..."],
     "depends_on": [],
-    "stage": "S0"
+    "stage": "S0",
+    "task_type": "requirement"
   }'
 ```
 
+`task_type` is **required** — `"requirement"` for planned WF-01 output, `"issue"` for
+an `ISSUE_QUEUE.md`-sourced incidental discovery. It drives `get_next_task`'s claim
+priority (below); there is no reliable way for the service to infer it after the fact,
+so ORCH must state it explicitly on every `register_task` call.
+
 Returns the created task including its `impl_order` (the implementation sequence
-number — this is what get_next_task sorts by). Record the returned `impl_order` back
-into the requirement's entry in `docs/requirements.yaml` (a new `impl_order:` field, or
-a comment — see the migration note below) so a human/agent reading the file can
-cross-reference which queue task a REQ-ID maps to.
+number — this is what get_next_task sorts by within a `task_type`). Record the returned
+`impl_order` back into the requirement's entry in `docs/requirements.yaml` (a new
+`impl_order:` field, or a comment — see the migration note below) so a human/agent
+reading the file can cross-reference which queue task a REQ-ID maps to.
 
 **A new issue discovered mid-run still gets a number** — this is the literal
 requirement from the design brief. `register_task` is the only source of `impl_order`
 values; nothing else assigns them. This applies uniformly whether the new work came
-from WF-01 (a planned requirement) or `ISSUE_QUEUE.md` (an incidental discovery) — both
-funnel through the same `register_task` call.
+from WF-01 (a planned requirement, `task_type: "requirement"`) or `ISSUE_QUEUE.md` (an
+incidental discovery, `task_type: "issue"`) — both funnel through the same
+`register_task` call, tagged accordingly.
 
 ### 2. `get_next_task` — claim the next eligible task
 
@@ -151,6 +158,16 @@ the service now does that filtering, atomically, across every host.
 curl -X GET "https://queue.ai-dala.com/tasks/next?agent_id=$HOSTNAME-orch" \
   -H "Authorization: Bearer $QUEUE_AUTH_TOKEN"
 ```
+
+Claim priority is **two-tier**, by `task_type`:
+1. If any eligible (`open`, unlocked, `depends_on` satisfied) `task_type: "issue"` task
+   exists, the **newest** one (highest `impl_order`) is claimed — issues jump the line,
+   most recently discovered first.
+2. Only once no eligible issue remains does it fall through to `task_type:
+   "requirement"`, claimed in the original **lowest-`impl_order`** (oldest-first) order.
+
+In other words: drain issues LIFO before touching the requirement backlog, then work
+the requirement backlog FIFO exactly as before this priority split existed.
 
 - `agent_id` should be stable per host (e.g. hostname or a configured identifier) so a
   lock is attributable and `set_lock`/`release_lock`'s re-lock-by-same-agent semantics
@@ -256,6 +273,11 @@ REQ-101..108) is registered — see `docs/status/requirement_status.yaml`'s
 `SCOPE-CHANGE` entry for the full REQ-ID ↔ queue-task-id mapping. A prod deployment
 (`queue.ai-dala.com`) is not yet planned — test only, per T-0107's notes.
 
+The `task_type` field and its two-tier `get_next_task` claim priority (issue-vs-
+requirement, above) shipped 2026-08-17 (`letflow-queue` PR #1) and are live on
+`queue-test.ai-dala.com`; every pre-existing row was backfilled by that migration
+(`stage IS NOT NULL` → `"requirement"`, else `"issue"`).
+
 ## GitHub Issues visibility (not a control path)
 
 `letflow-queue` mirrors tasks to GitHub Issues on `tvolodi/letflow` for human visibility
@@ -271,8 +293,10 @@ select or lock work.
   tracked (by issue number) as new tasks, before running its claim query — so an issue
   opened directly on GitHub becomes claimable without anyone calling `register_task`
   by hand. Imported tasks get `depends_on: []` (GitHub issues have no queue-native way
-  to express a dependency yet — a known limitation, not solved here) and a generic
-  single-item `acceptance_criteria` pointing at the issue body (no markdown parsing).
+  to express a dependency yet — a known limitation, not solved here), a generic
+  single-item `acceptance_criteria` pointing at the issue body (no markdown parsing),
+  and `task_type: "issue"` (a raw GitHub Issue is always incidental — it jumps ahead of
+  the requirement backlog per `get_next_task`'s priority above).
 - `release_lock` with `status: "done"` best-effort closes the linked GitHub Issue.
 
 **As of this writing, nothing files issues directly against `tvolodi/letflow` for

@@ -56,4 +56,36 @@ description: >
 affected_files:
   - test/letflow/event_store/migrations_test.exs
 github_issue: https://github.com/tvolodi/letflow/issues/86
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0028-20260817
+resolved_at: 2026-08-17T06:55:00Z
+resolution: >
+  Took the issue's own "more simply" alternative rather than deriving table
+  names from the migration manifest (which would need an extra
+  module-name-to-table-name mapping -- itself another hand-maintained,
+  driftable list): removed the allowlist filter entirely. The §4 guard
+  test's on_exit now drops every table found in `strays`
+  (MapSet.difference(public_tables(), tables_before)) directly, with no
+  name-list gate at all. This is sound, not looser, because the describe
+  block is already async: false with no other test touching Postgres in
+  that window (an invariant this file already documents and relies on
+  elsewhere) -- anything appearing in public between the before/after
+  snapshots can only be something one of the migrations just run under a
+  probe version created. Deleted the now-fully-unused
+  @later_tenant_scoped_tables attribute (was read only by the old filter);
+  @event_store_tables is untouched since other tests in the file still use
+  it for schema/table-mapping assertions unrelated to this cleanup.
+
+  This structurally closes the drift for good -- no future tenant-scoped
+  migration ever needs to update a table-name list again, unlike the
+  manifest-derivation alternative which would still require a per-migration
+  module-to-table mapping.
+
+  mix compile clean (no unused-attribute warning). Full suite: 13/13 in the
+  target file; three full-suite runs at 309, 308 (1 transient failure not
+  reproduced), 309 -- the single failure did not reproduce on immediate
+  retry and is consistent with this project's own documented real-Postgres
+  cross-run state sharing (the exact class of flakiness this issue itself
+  is about), not a regression from this change; two consecutive clean
+  309/309 runs after it.

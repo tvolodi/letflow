@@ -47,19 +47,6 @@ defmodule Letflow.EventStore.MigrationsTest do
     "instance_sequence" => Letflow.EventStore.InstanceSequence
   }
 
-  # Tables created by tenant-scoped migrations registered AFTER REQ-023's six. The §4
-  # guard test below already ASSERTS against these -- it iterates
-  # tenant_scoped_migrations/0, which now returns nine entries including REQ-027's two,
-  # so no assertion needed changing. This list exists purely so that test's `on_exit`
-  # defensive cleanup can drop a stray one if the guard pattern ever regresses: without
-  # it, a REQ-027 guard failure would leave a stray `public.process_definitions` behind
-  # in a database shared with a concurrently running worktree. In the passing case it is
-  # a no-op, because a correctly-guarded migration creates nothing in public at all.
-  @later_tenant_scoped_tables [
-    "process_definitions",
-    "instance_definition_snapshots"
-  ]
-
   @req023_migration_modules [
     Letflow.Repo.Migrations.CreateEvents,
     Letflow.Repo.Migrations.CreateInstanceSequence,
@@ -473,16 +460,20 @@ defmodule Letflow.EventStore.MigrationsTest do
           Repo.query!(~s(DELETE FROM "schema_migrations" WHERE version = $1), [version])
         end
 
-        # Defensive cleanup that can never touch pre-existing state: drops a table only
-        # if its name is one this project's tenant-scoped migrations create AND it was
-        # absent from the snapshot taken before this test ran. In the passing case this is
-        # a no-op, because a correctly-guarded migration creates nothing in public at all
-        # -- which is exactly what this test proves.
+        # Defensive cleanup that can never touch pre-existing state: drops every table
+        # that appeared in public during this test (ISS-0028/GH#86 -- previously
+        # filtered through a hand-maintained allowlist that drifted behind
+        # tenant_scoped_migrations/0's manifest twice; that allowlist is gone, this
+        # drops the actual stray set directly, so it can never drift behind the
+        # manifest again). Sound because this describe block is async: false (module-
+        # wide) with no other test touching Postgres in this window, so anything new in
+        # `strays` can only be something one of the migrations just run under a probe
+        # version created -- exactly what this test asserts never happens in the
+        # passing case, making this a no-op then and only firing when the guard pattern
+        # it's testing has actually regressed.
         strays = MapSet.difference(public_tables(), tables_before)
 
-        cleanable = Map.keys(@event_store_tables) ++ @later_tenant_scoped_tables
-
-        for table <- cleanable, MapSet.member?(strays, table) do
+        for table <- strays do
           Repo.query!(~s(DROP TABLE IF EXISTS "public"."#{table}" CASCADE))
         end
       end)

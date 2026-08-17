@@ -2163,3 +2163,34 @@ history:
       (explicitly "not exploitable today" per the issue's own text), no new
       call site or behavior change for any existing caller. Released queue
       task 72 as done via the per-client API key, closing GitHub issue #85.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-17T06:55:00Z
+    note: >
+      Resolved ISS-0028 (GitHub #86, MINOR, filed by TEST-DESIGNER during
+      WF02-REQ027-20260816 Step 3 -- queue task 71, again a GitHub-imported
+      issue claimed ahead of the S2 requirement backlog). The §4 guard
+      test's (test/letflow/event_store/migrations_test.exs) stray-table
+      on_exit cleanup used a hand-maintained table-name allowlist that had
+      drifted behind tenant_scoped_migrations/0's manifest twice, missing
+      REQ-024's event_type_registry -- a guard regression on that migration
+      would fail the test correctly but then leave a stray public table
+      behind in the Postgres instance shared across concurrent worktrees.
+      Rather than the issue's manifest-derivation suggestion (which would
+      need a new module-to-table-name mapping, itself another driftable
+      list), took its "more simply" alternative: removed the allowlist
+      filter entirely and drop every table in the before/after `strays`
+      diff directly, sound because the describe block is already
+      async: false with nothing else touching Postgres in that window.
+      Deleted the now-unused @later_tenant_scoped_tables attribute;
+      @event_store_tables kept, still used by unrelated assertions in the
+      same file. mix compile clean, target file 13/13. Full suite: 309,
+      308 (one transient failure, did not reproduce on retry -- consistent
+      with this project's own documented real-Postgres cross-run flakiness,
+      not a regression), 309 -- two clean runs bracketing the one flake.
+      Treated as small enough for ORCH to implement directly, same sizing
+      judgment as ISS-0027: single test file, no application behavior
+      change, hardens a cleanup path that was silent exactly when needed.
+      Released queue task 71 as done via the per-client API key, closing
+      GitHub issue #86.

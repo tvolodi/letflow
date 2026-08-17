@@ -3005,3 +3005,16 @@ history:
       docs/migration/decisions/ file is named in REQ-032's acceptance
       criteria -- confirmed by re-reading the requirements.yaml entry
       directly, none applicable here.
+  - req: REQ-026
+    event: started
+    agent: ORCH
+    at: 2026-08-17T17:50:32Z
+    note: >
+      Event read paths, archive, and platform sentinels
+      (store.zig's read/readGlobal/pointInTime/archive + platform.zig).
+      Also creates event_retention_policies (its own migration, per
+      ISS-0013/GH#69) and resolves archive/1's row-level-move sourcing
+      per ISS-0014/GH#70 (Letflow's deliberate unpartitioned-first
+      architecture per 0003 Decision C, not an oversight of R-Co's
+      PAR-03 retirement of Store.archive()). Branched
+      feature/WF02-REQ026-20260817 from main (3735769).

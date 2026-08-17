@@ -23,6 +23,17 @@ defmodule Letflow.Definitions.GraphTest do
   defp edge(id, source, target), do: %Edge{id: id, source: source, target: target}
   defp graph(nodes, edges), do: %Graph{nodes: nodes, edges: edges}
 
+  # REQ-029 fixture builders -- a Node carrying `attributes`, and an Edge
+  # carrying `condition`/`is_default`. Kept as separate helpers rather than
+  # adding optional args to `node/2`/`edge/3` above, so every existing
+  # REQ-028 test line (which never sets attributes/condition/is_default) is
+  # untouched by this extension.
+  defp attr_node(id, type, attributes), do: %Node{id: id, node_type: type, attributes: attributes}
+
+  defp cond_edge(id, source, target, condition, is_default) do
+    %Edge{id: id, source: source, target: target, condition: condition, is_default: is_default}
+  end
+
   # The list of violation codes, in the exact order validate_graph/1 returned
   # them — order is deterministic (fixed check order, design doc §7.1), so
   # asserting on it (not just a Set) is a strictly stronger check.
@@ -397,6 +408,432 @@ defmodule Letflow.Definitions.GraphTest do
       [dangling, isolated] = result.violations
       assert dangling.message =~ "e2"
       assert isolated.message =~ "'h'"
+    end
+  end
+
+  # =====================================================================
+  # REQ-029 — validate_node_attributes/1, validate_edge_conditions/1, and
+  # valid_cel_syntax?/1 (PD-05/PD-06). See test/specs/REQ-029.md for the full
+  # rationale and the design-doc traces behind each fixture below
+  # (lib/letflow/design/req029-node-attribute-edge-condition-validators.md).
+  # =====================================================================
+
+  # ---------------------------------------------------------------------
+  # validate_node_attributes/1 — AC1: HUMAN_TASK role
+  # ---------------------------------------------------------------------
+
+  describe "validate_node_attributes/1 — acceptance criterion 1: HUMAN_TASK role" do
+    test "attributes: nil -> :missing_role" do
+      g = graph([attr_node("h1", :HUMAN_TASK, nil)], [])
+      result = Graph.validate_node_attributes(g)
+      assert result.valid == false
+      assert codes(result) == [:missing_role]
+
+      [violation] = result.violations
+      assert violation.message =~ "h1"
+    end
+
+    test "role absent, blank, whitespace-only, or non-string all trigger the same single code" do
+      # CHK-09 detail (design doc §4.1): "there is exactly one trigger
+      # condition, not a separate code per sub-case" -- this locks that in
+      # rather than assuming it from the table alone.
+      for attributes <- [%{}, %{"role" => ""}, %{"role" => "   "}, %{"role" => 42}] do
+        g = graph([attr_node("h1", :HUMAN_TASK, attributes)], [])
+        result = Graph.validate_node_attributes(g)
+
+        assert codes(result) == [:missing_role],
+               "expected :missing_role for #{inspect(attributes)}, got #{inspect(codes(result))}"
+      end
+    end
+
+    test "a non-empty, non-whitespace role -> valid: true, violations: []" do
+      g = graph([attr_node("h1", :HUMAN_TASK, %{"role" => "manager"})], [])
+      assert Graph.validate_node_attributes(g) == %{valid: true, violations: []}
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # validate_node_attributes/1 — AC1: SERVICE_TASK endpoint
+  # ---------------------------------------------------------------------
+
+  describe "validate_node_attributes/1 — acceptance criterion 1: SERVICE_TASK endpoint" do
+    test "attributes: nil -> :missing_endpoint (alongside the unavoidable companion :invalid_timeout, since timeout_ms is absent too)" do
+      # attributes: nil means every SERVICE_TASK-applicable key is absent at
+      # once -- both CHK-10 (endpoint) and CHK-11 (timeout_ms) fire, same
+      # never-short-circuit shape as the graph_test.exs CHK-05 precedent
+      # above. The isolated single-code case is covered by the next test,
+      # which supplies a valid timeout_ms to isolate CHK-10 alone.
+      g = graph([attr_node("st1", :SERVICE_TASK, nil)], [])
+      result = Graph.validate_node_attributes(g)
+      assert result.valid == false
+      assert codes(result) == [:missing_endpoint, :invalid_timeout]
+
+      [endpoint_violation, _timeout_violation] = result.violations
+      assert endpoint_violation.message =~ "st1"
+    end
+
+    test "endpoint absent, blank, or whitespace-only -> :missing_endpoint (a valid timeout_ms alongside it does not mask this)" do
+      for endpoint_attrs <- [%{}, %{"endpoint" => ""}, %{"endpoint" => "   "}] do
+        attributes = Map.put(endpoint_attrs, "timeout_ms", 1000)
+        g = graph([attr_node("st1", :SERVICE_TASK, attributes)], [])
+        result = Graph.validate_node_attributes(g)
+
+        assert codes(result) == [:missing_endpoint],
+               "expected exactly :missing_endpoint for #{inspect(attributes)}, got #{inspect(codes(result))}"
+      end
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # validate_node_attributes/1 — AC1: SERVICE_TASK timeout_ms
+  # ---------------------------------------------------------------------
+
+  describe "validate_node_attributes/1 — acceptance criterion 1: SERVICE_TASK timeout_ms" do
+    test "timeout_ms: 0 -> :invalid_timeout (below the 1..300000 range)" do
+      g =
+        graph(
+          [attr_node("st1", :SERVICE_TASK, %{"endpoint" => "http://svc", "timeout_ms" => 0})],
+          []
+        )
+
+      result = Graph.validate_node_attributes(g)
+      assert result.valid == false
+      assert codes(result) == [:invalid_timeout]
+
+      [violation] = result.violations
+      assert violation.message =~ "st1"
+    end
+
+    test "timeout_ms: 300001 -> :invalid_timeout (above the 1..300000 range)" do
+      g =
+        graph(
+          [
+            attr_node("st1", :SERVICE_TASK, %{
+              "endpoint" => "http://svc",
+              "timeout_ms" => 300_001
+            })
+          ],
+          []
+        )
+
+      result = Graph.validate_node_attributes(g)
+      assert result.valid == false
+      assert codes(result) == [:invalid_timeout]
+    end
+
+    test "timeout_ms: 1 and 300000 (the inclusive boundaries) are both valid" do
+      for boundary <- [1, 300_000] do
+        g =
+          graph(
+            [
+              attr_node("st1", :SERVICE_TASK, %{
+                "endpoint" => "http://svc",
+                "timeout_ms" => boundary
+              })
+            ],
+            []
+          )
+
+        assert Graph.validate_node_attributes(g) == %{valid: true, violations: []},
+               "expected timeout_ms #{boundary} to be valid"
+      end
+    end
+
+    test "timeout_ms missing, or a float/numeric-string instead of an integer -> :invalid_timeout (no coercion, design doc §2)" do
+      # Design doc §2's value-type table pins this as a deliberate
+      # no-coercion contract, not an oversight -- a naive `is_number/1`
+      # guard or a `String.to_integer/1` fallback would silently accept
+      # these, and this test exists specifically to catch that regression.
+      for attributes <- [
+            %{"endpoint" => "http://svc"},
+            %{"endpoint" => "http://svc", "timeout_ms" => 1000.0},
+            %{"endpoint" => "http://svc", "timeout_ms" => "1000"}
+          ] do
+        g = graph([attr_node("st1", :SERVICE_TASK, attributes)], [])
+        result = Graph.validate_node_attributes(g)
+
+        assert codes(result) == [:invalid_timeout],
+               "expected :invalid_timeout for #{inspect(attributes)}, got #{inspect(codes(result))}"
+      end
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # validate_node_attributes/1 — AC1: TIMER duration_iso8601
+  # ---------------------------------------------------------------------
+
+  describe "validate_node_attributes/1 — acceptance criterion 1: TIMER duration_iso8601" do
+    test "attributes: nil, or a missing duration_iso8601 key -> :invalid_duration" do
+      for attributes <- [nil, %{}] do
+        g = graph([attr_node("t1", :TIMER, attributes)], [])
+        result = Graph.validate_node_attributes(g)
+        assert result.valid == false
+
+        assert codes(result) == [:invalid_duration],
+               "expected :invalid_duration for #{inspect(attributes)}"
+      end
+    end
+
+    test "P0D is explicitly accepted as a zero-delay timer (design doc §4.3)" do
+      g = graph([attr_node("t1", :TIMER, %{"duration_iso8601" => "P0D"})], [])
+      assert Graph.validate_node_attributes(g) == %{valid: true, violations: []}
+    end
+
+    test "other well-formed durations are accepted: P1Y2M3D, PT1H30M, P1DT12H" do
+      for duration <- ["P1Y2M3D", "PT1H30M", "P1DT12H"] do
+        g = graph([attr_node("t1", :TIMER, %{"duration_iso8601" => duration})], [])
+
+        assert Graph.validate_node_attributes(g) == %{valid: true, violations: []},
+               "expected #{duration} to be valid"
+      end
+    end
+
+    test "malformed durations are rejected: no leading P, zero tokens, empty time part, fractional (. and ,), wrong unit order, missing digits" do
+      # Each string exercises a distinct branch of the scan-forward parser
+      # (design doc §4.3's "Examples for TEST-DESIGNER") -- one collective
+      # test rather than 7 near-duplicate ones, but every branch is
+      # represented so a regression in any one of them fails this test.
+      invalid_durations = [
+        # missing leading "P"
+        "1D",
+        # "P" with nothing after it at all -- zero tokens
+        "P",
+        # "T" present but time_part is empty
+        "PT",
+        # fractional component via "."
+        "P1.5D",
+        # fractional component via "," (comma variant)
+        "PT1,5S",
+        # date units out of order (D before Y)
+        "P3D2Y",
+        # unit letter with no leading digits
+        "PXD"
+      ]
+
+      for duration <- invalid_durations do
+        g = graph([attr_node("t1", :TIMER, %{"duration_iso8601" => duration})], [])
+        result = Graph.validate_node_attributes(g)
+
+        assert codes(result) == [:invalid_duration],
+               "expected #{inspect(duration)} to be invalid, got #{inspect(codes(result))}"
+      end
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # validate_node_attributes/1 — AC1: START/END/EXCLUSIVE_GATEWAY/
+  # PARALLEL_GATEWAY require nothing
+  # ---------------------------------------------------------------------
+
+  describe "validate_node_attributes/1 — acceptance criterion 1: START/END/EXCLUSIVE_GATEWAY/PARALLEL_GATEWAY require nothing" do
+    test "nil, empty-map, or arbitrary-content attributes never produce a violation for these 4 types" do
+      types = [:START, :END, :EXCLUSIVE_GATEWAY, :PARALLEL_GATEWAY]
+      attribute_variants = [nil, %{}, %{"role" => "", "anything" => "goes"}]
+
+      for type <- types, attributes <- attribute_variants do
+        g = graph([attr_node("n1", type, attributes)], [])
+
+        assert Graph.validate_node_attributes(g) == %{valid: true, violations: []},
+               "expected #{type} with #{inspect(attributes)} to be valid"
+      end
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # validate_node_attributes/1 — never short-circuits across checks
+  # (design doc §3), and a fully-valid graph returns valid: true
+  # ---------------------------------------------------------------------
+
+  describe "validate_node_attributes/1 — never short-circuits (design doc §3)" do
+    test "a SERVICE_TASK missing both endpoint and a valid timeout_ms produces both violations, in fixed check order" do
+      g = graph([attr_node("st1", :SERVICE_TASK, %{})], [])
+      result = Graph.validate_node_attributes(g)
+      assert result.valid == false
+      assert codes(result) == [:missing_endpoint, :invalid_timeout]
+    end
+
+    test "a realistic multi-node graph with one valid node per applicable type returns valid: true, violations: []" do
+      g =
+        graph(
+          [
+            attr_node("s", :START, nil),
+            attr_node("h", :HUMAN_TASK, %{"role" => "reviewer"}),
+            attr_node("st", :SERVICE_TASK, %{"endpoint" => "http://svc", "timeout_ms" => 5000}),
+            attr_node("t", :TIMER, %{"duration_iso8601" => "PT30M"}),
+            attr_node("gw", :EXCLUSIVE_GATEWAY, nil),
+            attr_node("pg", :PARALLEL_GATEWAY, %{}),
+            attr_node("e", :END, nil)
+          ],
+          []
+        )
+
+      assert Graph.validate_node_attributes(g) == %{valid: true, violations: []}
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # validate_node_attributes/1 — AC5: undeclared extra attributes ignored
+  # ---------------------------------------------------------------------
+
+  describe "validate_node_attributes/1 — acceptance criterion 5: undeclared extra attributes" do
+    test "extra keys alongside a valid role/endpoint/timeout never cause a violation" do
+      # Design doc §2: "Any other key present in the map, on any node type,
+      # is never read by any check below -- this is exactly what makes
+      # 'undeclared extra attributes are silently ignored' true by
+      # construction, not by an explicit allow-list/ignore-list
+      # mechanism." This test is the demonstration AC5 explicitly asks for.
+      g =
+        graph(
+          [
+            attr_node("h1", :HUMAN_TASK, %{
+              "role" => "manager",
+              "unexpected_key" => "value",
+              "another" => 123
+            }),
+            attr_node("st1", :SERVICE_TASK, %{
+              "endpoint" => "http://svc",
+              "timeout_ms" => 1000,
+              "retry_count" => 3,
+              "nested" => %{"a" => 1}
+            })
+          ],
+          []
+        )
+
+      assert Graph.validate_node_attributes(g) == %{valid: true, violations: []}
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # validate_edge_conditions/1 — AC2: default + condition co-firing rejection
+  # ---------------------------------------------------------------------
+
+  describe "validate_edge_conditions/1 — acceptance criterion 2: EXCLUSIVE_GATEWAY default edge with a condition" do
+    test "is_default: true with a non-null condition is rejected -- CHK-14 and CHK-15 both fire (design doc §5.1, deliberate)" do
+      g =
+        graph(
+          [node("gw", :EXCLUSIVE_GATEWAY), node("t", :END)],
+          [cond_edge("e1", "gw", "t", "status == \"approved\"", true)]
+        )
+
+      result = Graph.validate_edge_conditions(g)
+      assert result.valid == false
+      # Deterministic order (fixed check order, same construction as
+      # validate_graph/1) -- this is exactly REQ-029 AC2's scenario, and
+      # the design doc is explicit that both codes should fire, not just
+      # one code covering both facts.
+      assert codes(result) == [:unexpected_edge_condition, :default_with_condition]
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # validate_edge_conditions/1 — AC3: two default edges on one gateway
+  # ---------------------------------------------------------------------
+
+  describe "validate_edge_conditions/1 — acceptance criterion 3: multiple default edges on one EXCLUSIVE_GATEWAY" do
+    test "two edges from the same gateway both marked is_default: true -> exactly one :multiple_default_edges violation (the 2nd)" do
+      g =
+        graph(
+          [node("gw", :EXCLUSIVE_GATEWAY), node("a", :END), node("b", :END)],
+          [
+            cond_edge("e1", "gw", "a", nil, true),
+            cond_edge("e2", "gw", "b", nil, true)
+          ]
+        )
+
+      result = Graph.validate_edge_conditions(g)
+      assert result.valid == false
+      assert codes(result) == [:multiple_default_edges]
+
+      [violation] = result.violations
+      assert violation.message =~ "e2"
+      assert violation.message =~ "gw"
+    end
+
+    test "three default edges from the same gateway -> two violations (N occurrences -> N-1, mirrors CHK-05's convention)" do
+      g =
+        graph(
+          [node("gw", :EXCLUSIVE_GATEWAY), node("a", :END), node("b", :END), node("c", :END)],
+          [
+            cond_edge("e1", "gw", "a", nil, true),
+            cond_edge("e2", "gw", "b", nil, true),
+            cond_edge("e3", "gw", "c", nil, true)
+          ]
+        )
+
+      result = Graph.validate_edge_conditions(g)
+      assert codes(result) == [:multiple_default_edges, :multiple_default_edges]
+      assert length(result.violations) == 2
+      assert Enum.at(result.violations, 0).message =~ "e2"
+      assert Enum.at(result.violations, 1).message =~ "e3"
+    end
+
+    test "exactly one default edge among several non-default (conditioned) edges on a gateway is legal" do
+      g =
+        graph(
+          [node("s", :START), node("gw", :EXCLUSIVE_GATEWAY), node("a", :END), node("b", :END)],
+          [
+            edge("e0", "s", "gw"),
+            cond_edge("e1", "gw", "a", "amount > 100", false),
+            cond_edge("e2", "gw", "b", nil, true)
+          ]
+        )
+
+      assert Graph.validate_edge_conditions(g) == %{valid: true, violations: []}
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # validate_edge_conditions/1 — CHK-17 wiring: valid_cel_syntax?/1 is
+  # actually consulted for edges carrying a present condition (not just
+  # exercised standalone in the describe block below).
+  # ---------------------------------------------------------------------
+
+  describe "validate_edge_conditions/1 — CHK-17: invalid CEL syntax on a present condition" do
+    test "a syntactically invalid condition (trailing bare operator) on a non-default gateway edge -> :invalid_cel_syntax, and only that code" do
+      g =
+        graph(
+          [node("gw", :EXCLUSIVE_GATEWAY), node("t", :END)],
+          [cond_edge("e1", "gw", "t", "amount >", false)]
+        )
+
+      result = Graph.validate_edge_conditions(g)
+      assert result.valid == false
+      assert codes(result) == [:invalid_cel_syntax]
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # valid_cel_syntax?/1 — AC4: rejects invalid, accepts valid, no evaluation
+  # ---------------------------------------------------------------------
+
+  describe "valid_cel_syntax?/1 — acceptance criterion 4" do
+    test "accepts structurally well-formed expressions" do
+      assert Graph.valid_cel_syntax?("status == \"approved\"") == true
+      assert Graph.valid_cel_syntax?("amount > 100 && region in [\"US\", \"EU\"]") == true
+    end
+
+    test "rejects structurally invalid expressions" do
+      # One example per distinct failure mode named in design doc §6, not
+      # just one lone example -- an unclosed bracket, an unterminated
+      # string literal, and a trailing/leading bare operator are
+      # independent code paths in the algorithm (steps 2 and 4).
+      assert Graph.valid_cel_syntax?("status == ") == false
+      assert Graph.valid_cel_syntax?("(status == \"approved\"") == false
+      assert Graph.valid_cel_syntax?("\"unterminated") == false
+      assert Graph.valid_cel_syntax?("&& status") == false
+      assert Graph.valid_cel_syntax?("") == false
+      assert Graph.valid_cel_syntax?("   ") == false
+    end
+
+    test "performs no evaluation -- a well-formed expression referencing a variable that could never exist is still accepted" do
+      # Design doc §6's own explicit demonstration case: "this function
+      # never attempts to identify variable names, look up a value...
+      # A nonsense-but-well-formed expression... returns true." This is
+      # the exact test AC4 asks TEST-DESIGNER to write -- it proves the
+      # function is purely lexical/structural, not that it understands
+      # what the expression means.
+      assert Graph.valid_cel_syntax?("this_variable_does_not_exist_anywhere == 42") == true
     end
   end
 end

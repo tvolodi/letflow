@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ036-20260817/step-final-git-merge.json",
   "created_at": "2026-08-17T18:51:36Z",
   "started_at": "2026-08-17T18:51:36Z",
-  "completed_at": "PENDING",
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-17T18:56:30Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S2",
@@ -37,21 +37,24 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "PENDING -- filled in after merge completes.",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Worktree variant of GIT_MERGE.md applied end-to-end (this checkout is a secondary git worktree per `git worktree list`, alongside /home/tvolodi/letflow which holds local main). Staged this handoff file itself as a pre-merge commit so it would ride along in the PR/squash-merge. `git fetch origin main` + `git rebase origin/main`: 39 commits replayed; 4 distinct files conflicted across two rounds (docs/status/requirement_status.yaml, handoffs/orchestrator.log, handoffs/registry.json -- all append-only logs, resolved by composing/concatenating both sides rather than picking one, no content lost; docs/migration/stage-2-event-store-definitions.md -- a semantic conflict on the Stage 2 header's done/pending requirement lists, HEAD already had REQ-026 done while MINE already had REQ-036 done, composed into one line listing both REQ-026 and REQ-036 as done and removing both from pending). All 4 files within the <=5 limit, none under the excluded paths (process_instance.ex/instance_supervisor.ex/migrations). Verified no leftover conflict markers via grep and validated registry.json as JSON / requirement_status.yaml as YAML before continuing. Post-rebase: mix compile --warnings-as-errors clean, MIX_TEST_PARTITION=2 mix test 4 properties/536 tests/0 failures. Force-pushed (with lease) the rebased branch, opened PR #105, and ran `gh pr merge 105 --squash --delete-branch` -- this partially failed by design per the Worktree variant (GitHub-side merge succeeded via API; the local checkout-switch side effect errored with \"'main' is already used by worktree at /home/tvolodi/letflow\", so --delete-branch never ran). Verified actual merge success via `gh pr view 105 --json state,mergedAt,mergeCommit` (state MERGED, mergedAt 2026-08-17T18:54:27Z, merge commit a1e1ad7a3cfad14f5b42442acb225d9aeaa73225) before treating the local error as anything other than expected. Explicitly deleted the remote branch ref via `gh api -X DELETE repos/tvolodi/letflow/git/refs/heads/feature/WF02-REQ036-20260817` and, once off the branch via `git checkout --detach origin/main`, deleted the local branch via `git branch -d`. Verified: git rev-parse HEAD == git rev-parse origin/main == a1e1ad7a3cfad14f5b42442acb225d9aeaa73225, git log --oneline -1 shows the squash-merge commit (#105), git status shows a clean working tree with HEAD detached at origin/main (expected under the worktree variant, not a failure). Re-verified green on the actual merged tip: mix compile --warnings-as-errors exited clean, MIX_TEST_PARTITION=2 mix test: 4 properties, 536 tests, 0 failures (536 vs the run's earlier 500 reflects tests added by REQ-026, which landed on main concurrently and was picked up by this rebase -- not a regression or scope change in this run's own work). This final handoff file's PR-URL/merge-commit-sha fields were necessarily filled in via a follow-up commit pushed directly to origin/main after the merge landed (they could not be known at PR-creation time); no branch/PR was reopened for this, it is a small direct commit on main per this step's own instructions.",
+    "artifacts_out": [
+      "PR #105: https://github.com/tvolodi/letflow/pull/105 (squash-merged)",
+      "handoffs/WF02-REQ036-20260817/step-final-git-merge.json"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ036-20260817",
-      "commit_sha_list": [],
-      "remote_branch": "origin/feature/WF02-REQ036-20260817",
-      "push_status": "pending",
-      "pr_url": null,
+      "commit_sha_list": ["5128e7c", "297a7e7", "64e7e2e"],
+      "remote_branch": "deleted (feature/WF02-REQ036-20260817, both remote and local refs removed post-merge)",
+      "push_status": "pushed (force-with-lease, post-rebase)",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/105",
       "pr_create_error": null,
-      "merge_commit_sha": null,
-      "merge_state": "pending"
+      "merge_commit_sha": "a1e1ad7a3cfad14f5b42442acb225d9aeaa73225",
+      "merge_state": "MERGED"
     },
-    "next_action": "PENDING"
+    "next_action": "ORCH marks run WF02-REQ036-20260817 COMPLETED and releases owned_modules lock"
   },
   "rework_count": 0,
   "max_rework": 3

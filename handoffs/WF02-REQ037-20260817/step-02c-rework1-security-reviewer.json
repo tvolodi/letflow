@@ -1,0 +1,51 @@
+{
+  "handoff_id": "859d9535-b947-467a-b9ca-3ba81bb7977d",
+  "run_id": "WF02-REQ037-20260817",
+  "workflow_id": "WF-02",
+  "step": "02c-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ037-20260817/step-02c-rework1-security-reviewer.json",
+  "created_at": "2026-08-17T19:43:32Z",
+  "started_at": "2026-08-17T19:43:32Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-037"],
+    "related_handoff_ids": ["4ead191e-f254-4255-9128-187d0f121f0e", "3a8c9434-ba6a-41c2-be1b-bc5869da90fd"],
+    "artifacts_in": [
+      "lib/letflow/definitions/promotion_review_store.ex",
+      "lib/letflow/definitions/promotion.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Re-run the security gate after rework. This is the same INV-1..INV-8 checklist as your original Step 2c review (handoffs/WF02-REQ037-20260817/step-02c-security-reviewer.json), which you FAILed with a BLOCKER: insert_review/2 set attrs.tenant_id from caller-supplied plan.target_tenant_id instead of deriving it from opts[:prefix]. ELIXIR-DEV's rework (handoffs/WF02-REQ037-20260817/step-02a-rework1-elixir-dev.json) claims to have fixed this by deriving tenant_id via Letflow.TenantProvisioning.tenant_id_for_schema_name(prefix). Read the actual current code in lib/letflow/definitions/promotion_review_store.ex directly -- do not trust the handoff's claimed diff. Confirm: (a) plan.target_tenant_id is genuinely no longer read for the tenant_id assignment anywhere in insert_review/2; (b) the derivation call happens before the Repo.insert, short-circuiting on {:error, :invalid_schema_name}; (c) no other function was touched (diff should be scoped to insert_review/2 + the insert_review_error type only) -- re-verify your prior findings on the other 5 functions and promote_definition/3 still hold since nothing there changed. Run the FULL INV-1..INV-8 checklist again from scratch, not just the delta, since this is a rework re-check.",
+    "acceptance_criteria": [
+      "Independently confirm the actual code (not the handoff's claimed diff) derives tenant_id from opts[:prefix] via tenant_id_for_schema_name/1",
+      "Confirm plan.target_tenant_id is no longer used for the tenant_id column assignment anywhere",
+      "Confirm the fix is properly scoped -- no other function changed",
+      "Full INV-1..INV-8 checklist re-run from scratch",
+      "PASS only if the original BLOCKER is genuinely resolved and no new gap was introduced"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ037-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ037-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

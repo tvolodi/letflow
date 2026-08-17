@@ -320,6 +320,23 @@
       "queue_agent_id": "hetzner-orch",
       "worktree": "/home/tvolodi/letflow (Hetzner host ubuntu-16gb-nbg1-1)",
       "note": "Doc-only rationale-gap fix (ISS-0020, GH#76): three non-blocking gaps REVIEWER filed during REQ-023's Step 2d gate (which PASSED). Handled directly by ORCH under ORCHESTRATOR.md \u00a710's sizing exception (scoped, low-ambiguity, exact required content specified by the issue's own description), but still obtained independent REVIEWER sign-off before committing rather than skipping validation -- REVIEWER PASSed after independently re-verifying all three claims against actual schema/migration code and empirically re-testing the corrected \u00a72.4 mechanism claim in this environment, flagging one non-blocking phrasing tightening applied before commit. Zero implementation code changed. mix compile --warnings-as-errors clean, mix format --check-formatted clean, mix test 4 properties + 306 tests 0 failures, both pre-merge and re-verified again on main's actual merged tip (985ef74) post-merge."
+    },
+    {
+      "run_id": "WF03-ISS0011-20260817",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "stage": null,
+      "status": "COMPLETED",
+      "owned_modules": [],
+      "lock_acquired_at": "2026-08-17T07:49:16Z",
+      "lock_released_at": "2026-08-17T07:50:38Z",
+      "released_lock": true,
+      "last_known_step": "Closed as duplicate of ISS-0031 (already fixed on main via commit 40d6bf5); no new commit. Queue task 57 released done, GH#65 closed.",
+      "backfilled": false,
+      "queue_task_id": 57,
+      "queue_agent_id": "hetzner-orch",
+      "worktree": "/home/tvolodi/letflow (Hetzner host ubuntu-16gb-nbg1-1)",
+      "note": "ISS-0011 (GH#65) is the same flaky tenant_status_test.exs telemetry-race defect as ISS-0031 (GH#90), independently fixed by a different host on main (commit 40d6bf5) before this host claimed task 57. Rather than re-implement an identical fix, independently re-verified the existing fix resolves this record's own reproduction: 6 consecutive clean runs (4 unpinned, 1 --seed 0 -- a historically failure-prone seed per this record's own multi-round diagnostic history, 1 isolated-file run at 10/10). docs/issues/ISS-0011.yaml updated to resolved/duplicate with its full prior diagnostic history left intact. No code change, no commit -- this run only updates docs/issues/, requirement_status.yaml, and releases the queue task."
     }
   ]
 }

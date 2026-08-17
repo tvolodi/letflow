@@ -2559,3 +2559,24 @@ history:
       test 4 properties + 306 tests 0 failures both pre- and post-merge.
       PR #92 squash-merged into main as 985ef74. Released queue task 59 as
       done via hetzner-orch, closing GitHub issue #76.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-17T07:51:00Z
+    note: >
+      Resolved ISS-0011 (GH#65, MINOR, filed by RELEASE-VALIDATOR during
+      WF02-REQ022-20260816 Step 5, with three subsequent UPDATE entries from
+      TEST-DESIGN-VALIDATOR/TEST-RUNNER across REQ-023/027 refining the flake
+      rate to ~7.5% -- queue task 57) as a DUPLICATE, not a fresh fix: this
+      is the exact same test/root cause as ISS-0031 (GH#90), independently
+      rediscovered and actually fixed by a different host on main (commit
+      40d6bf5) before this host claimed task 57. Did not re-implement an
+      identical fix -- instead independently re-verified the existing fix
+      resolves this record's own reproduction: 6 consecutive clean local
+      runs (4 unpinned, 1 --seed 0 -- historically one of this record's own
+      documented failure-prone seeds, 1 isolated file run at 10/10 matching
+      the ISS-0031 fix commit's own count). ISS-0011.yaml's full multi-round
+      diagnostic history left intact, only a closing resolution block added.
+      Released queue task 57 as done via hetzner-orch, closing GitHub issue
+      #65 (no new commit -- the fix commit is 40d6bf5, already on main via
+      ISS-0031/PR merge, not authored in this run).

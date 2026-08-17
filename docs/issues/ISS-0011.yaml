@@ -209,4 +209,38 @@ description: >
 affected_files:
   - test/letflow/plugs/tenant_status_test.exs
 github_issue: https://github.com/tvolodi/letflow/issues/65
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0011-20260817
+resolved_at: 2026-08-17T07:50:30Z
+resolution: >
+  Resolved as a DUPLICATE, not a fresh fix: this is the exact same defect as
+  ISS-0031 (GH#90, same file, same root cause -- node-global
+  :telemetry.attach with no per-process scoping), independently rediscovered
+  and actually fixed by a different host during this same session window,
+  commit 40d6bf5 on main. That fix filters the telemetry handler's forwarded
+  message on self() == test_pid (the pid captured at attach time), so a real
+  query from this test's own call_plug/2 (same process throughout) is still
+  observed exactly as before, while a stray query from a different
+  concurrently-running async test process now fails the check in ITS OWN
+  process and never reaches this test's mailbox. Also adds a deterministic
+  regression test proving the filter mechanism directly rather than relying
+  on statistical confidence.
+
+  This queue task (57, GH#65) predates ISS-0031 by about a day and was
+  claimed by this host after ISS-0031 had already landed on main -- rather
+  than re-implement an identical fix, independently re-verified the existing
+  fix actually resolves this record's own reproduction: 6 consecutive full
+  local runs clean (4 unpinned/random seed, 1 --seed 0 -- historically this
+  record's own data showed seed 0 as one of the more failure-prone seeds
+  across multiple prior UPDATE entries -- and 1 isolated run of just this
+  file, target file 10/10 matching the ISS-0031 fix commit's own stated
+  count). No new commit needed; queue task 57 released done, referencing the
+  same GH#90/commit 40d6bf5 fix that already closed ISS-0031.
+
+  This record's long UPDATE history (five independent measurement rounds
+  across REQ-022/023/027, refining the flake rate from an initial ~20%
+  guess down to a well-supported ~7.5%, and retracting an earlier
+  pinned-vs-unpinned causal claim that didn't survive a second sample) is
+  left completely intact above, unedited, as the actual diagnostic record
+  that led to the eventual fix -- only this closing block is new.

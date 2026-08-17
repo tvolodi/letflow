@@ -52,4 +52,35 @@ description: >
 affected_files:
   - lib/letflow/tenant_provisioning/registration.ex
 github_issue: https://github.com/tvolodi/letflow/issues/85
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0027-20260817
+resolved_at: 2026-08-17T06:49:32Z
+resolution: >
+  Applied the issue's own suggested fix verbatim: added
+  validate_format(:schema_name, ~r/^tenant_[0-9a-f]{32}$/) to
+  Registration.changeset/2, mirroring schema_name_for_tenant/1's own
+  derivation shape. The DDL-identifier safety guarantee for `CREATE SCHEMA
+  IF NOT EXISTS "#{schema_name}"` is now enforced by the changeset on every
+  write, not only by the call graph.
+
+  Two existing tests (unique_constraint coverage for tenant_id and
+  schema_name) built Registration changesets directly with ad hoc
+  non-hex schema_name values via a unique_schema_name/1 test helper --
+  these would have started failing changeset validation with the new
+  format check, so updated the helper to generate values in the real
+  tenant_<32-hex> shape (derived from a fresh UUID, same encoding
+  schema_name_for_tenant/1 uses) rather than weakening the validation to
+  accommodate the test fixture.
+
+  Added two new regression tests: one pinning that a battery of malformed
+  schema_name values (wrong length, uppercase hex, non-hex, "public", and
+  two injection-shaped payloads with a semicolon/trailing space) are all
+  rejected with a schema_name error even when tenant_id is well-formed,
+  and one confirming a real schema_name_for_tenant/1 output is accepted.
+
+  Ran the full suite: mix compile clean, 309/309 passed (4 properties, 305
+  tests) -- zero regressions, existing tenant_provisioning_test.exs
+  coverage (16 tests: migration/changeset, provision_tenant_schema,
+  replay_migrations, migration-guard-pattern) all still green after the
+  helper fix.

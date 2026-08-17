@@ -32,20 +32,31 @@ defmodule Letflow.TenantProvisioning.Registration do
 
   @type t :: %__MODULE__{}
 
+  # Mirrors Letflow.TenantProvisioning.schema_name_for_tenant/1's own derivation
+  # (tenant_id -> "tenant_" <> 32 lowercase hex chars, no hyphens). Not called from
+  # there -- this is the data-level half of the same guarantee, added per ISS-0027
+  # (GH#85) so the DDL-identifier safety argument for
+  # `CREATE SCHEMA IF NOT EXISTS "#{schema_name}"` is enforced by this changeset on
+  # every write, not just by the call graph (today, schema_name_for_tenant/1 is the
+  # only writer -- this is defence in depth against a future second writer, e.g. S3's
+  # instance engine or S4's API surface, ever bypassing that derivation).
+  @schema_name_format ~r/^tenant_[0-9a-f]{32}$/
+
   @doc """
   Defensive structural changeset for insert/upsert. Casts and requires
-  `tenant_id`/`schema_name`, and declares `unique_constraint/2` for both
-  (typed fallbacks for `tenant_schemas`'s two DB-level unique indexes) plus
+  `tenant_id`/`schema_name`, validates `schema_name` against the exact shape
+  `Letflow.TenantProvisioning.schema_name_for_tenant/1` produces (ISS-0027/GH#85),
+  and declares `unique_constraint/2` for both `tenant_id`/`schema_name` (typed
+  fallbacks for `tenant_schemas`'s two DB-level unique indexes) plus
   `foreign_key_constraint(:tenant_id)` (typed fallback for the DB-level FK to
-  `tenants.id`) — not a re-implementation of
-  `Letflow.TenantProvisioning.schema_name_for_tenant/1`'s own derivation/
-  validation logic, which runs before this changeset is ever built.
+  `tenants.id`).
   """
   @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(registration, attrs) do
     registration
     |> cast(attrs, [:tenant_id, :schema_name, :migrations_applied_at])
     |> validate_required([:tenant_id, :schema_name])
+    |> validate_format(:schema_name, @schema_name_format)
     |> unique_constraint(:tenant_id)
     |> unique_constraint(:schema_name)
     |> foreign_key_constraint(:tenant_id)

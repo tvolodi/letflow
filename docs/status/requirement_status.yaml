@@ -2136,3 +2136,30 @@ history:
       what was actually stale. No lib/, priv/, or test/ file touched.
       Released queue task 73 as done via the per-client API key, closing
       GitHub issue #84.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-17T06:49:32Z
+    note: >
+      Resolved ISS-0027 (GitHub #85, MINOR, filed by SECURITY-REVIEWER during
+      WF02-REQ027-20260816 Step 2c -- queue task 72, again a GitHub-imported
+      issue). Unlike ISS-0024/0025/0026 (docs/requirement-content fixes),
+      this one was a real lib/ change: Registration.changeset/2 had no
+      validate_format on schema_name, so the DDL-identifier safety guarantee
+      for TenantProvisioning's one raw-DDL interpolation site
+      (`CREATE SCHEMA IF NOT EXISTS "#{schema_name}"`) lived only in the
+      call graph (the sole writer being schema_name_for_tenant/1's own
+      derivation), not in the data. Applied the issue's own suggested fix:
+      validate_format(:schema_name, ~r/^tenant_[0-9a-f]{32}$/). Two existing
+      tests built changesets directly with non-hex ad hoc schema_name values
+      via a test helper; fixed the helper to generate real tenant_<32-hex>
+      values instead of weakening the new validation. Added two regression
+      tests (a battery of malformed/injection-shaped values all rejected;
+      a real schema_name_for_tenant/1 output accepted). mix compile clean;
+      full suite 309/309 passed (4 properties, 305 tests), zero regressions.
+      Treated as small enough for ORCH to implement directly (per CLAUDE.md's
+      sizing note) rather than dispatching the full WF-02 role chain --
+      single file plus its test file, hardening an already-safe path
+      (explicitly "not exploitable today" per the issue's own text), no new
+      call site or behavior change for any existing caller. Released queue
+      task 72 as done via the per-client API key, closing GitHub issue #85.

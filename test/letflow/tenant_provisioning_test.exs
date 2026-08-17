@@ -51,8 +51,12 @@ defmodule Letflow.TenantProvisioningTest do
     |> Repo.insert!()
   end
 
-  defp unique_schema_name(prefix \\ "tenant_req022_test") do
-    "#{prefix}_#{System.unique_integer([:positive, :monotonic])}"
+  # Must match Registration.changeset/2's @schema_name_format (ISS-0027/GH#85) --
+  # "tenant_" <> 32 lowercase hex chars, the same shape schema_name_for_tenant/1
+  # produces -- since these tests build changesets directly rather than going
+  # through schema_name_for_tenant/1.
+  defp unique_schema_name do
+    "tenant_" <> (Ecto.UUID.generate() |> String.replace("-", ""))
   end
 
   defp schema_exists?(schema_name) do
@@ -145,6 +149,41 @@ defmodule Letflow.TenantProvisioningTest do
       assert %{tenant_id: [_ | _], schema_name: [_ | _]} = errors_on(changeset)
     end
 
+    # ISS-0027 (GH#85): the DDL-identifier safety argument for
+    # `CREATE SCHEMA IF NOT EXISTS "#{schema_name}"` previously lived only in the
+    # call graph (the only writer is schema_name_for_tenant/1's own derivation) --
+    # these pin that the changeset itself now rejects anything that derivation
+    # could never produce, so the guarantee holds even if a future second writer
+    # bypasses schema_name_for_tenant/1.
+    test "changeset/2 rejects a schema_name that doesn't match tenant_<32 lowercase hex>, even with a well-formed tenant_id" do
+      tenant_id = Ecto.UUID.generate()
+
+      for bad_name <- [
+            "tenant_not-hex-at-all",
+            "tenant_" <> String.duplicate("a", 31),
+            "tenant_" <> String.duplicate("A", 32),
+            "public",
+            "tenant_" <> String.duplicate("a", 32) <> "; DROP SCHEMA public CASCADE;",
+            "tenant_" <> String.duplicate("a", 32) <> " "
+          ] do
+        changeset =
+          Registration.changeset(%Registration{}, %{tenant_id: tenant_id, schema_name: bad_name})
+
+        refute changeset.valid?, "expected #{inspect(bad_name)} to be rejected"
+        assert %{schema_name: [_ | _]} = errors_on(changeset)
+      end
+    end
+
+    test "changeset/2 accepts a schema_name in exactly the shape schema_name_for_tenant/1 produces" do
+      tenant_id = Ecto.UUID.generate()
+      {:ok, schema_name} = TenantProvisioning.schema_name_for_tenant(tenant_id)
+
+      changeset =
+        Registration.changeset(%Registration{}, %{tenant_id: tenant_id, schema_name: schema_name})
+
+      assert changeset.valid?
+    end
+
     test "a second row for the same tenant_id violates the unique_constraint on tenant_id" do
       tenant = insert_tenant!()
 
@@ -170,7 +209,7 @@ defmodule Letflow.TenantProvisioningTest do
     test "a schema_name already used by a different tenant violates the unique_constraint on schema_name" do
       tenant_a = insert_tenant!()
       tenant_b = insert_tenant!()
-      shared_schema_name = unique_schema_name("tenant_req022_shared")
+      shared_schema_name = unique_schema_name()
 
       assert {:ok, _} =
                %Registration{}

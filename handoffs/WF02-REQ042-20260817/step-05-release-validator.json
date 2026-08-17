@@ -1,0 +1,47 @@
+{
+  "handoff_id": "c4f2b3d5-000c-4f1a-9a10-req042step05",
+  "run_id": "WF02-REQ042-20260817",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ042-20260817/step-05-release-validator.json",
+  "created_at": "2026-08-17T21:54:20Z",
+  "started_at": "2026-08-17T21:54:20Z",
+  "completed_at": "2026-08-17T21:55:52Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-042"],
+    "related_handoff_ids": ["step-04-test-runner.json"],
+    "artifacts_in": ["lib/letflow/definitions.ex", "test/letflow/definitions/search_test.exs", "test/reports/report-2026-08-17-WF02-REQ042-20260817.yaml"],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 5: independently re-verify REQ-042's acceptance criteria are actually met before it is marked done. Do not trust TEST-RUNNER's report alone -- re-run the suite yourself. Note this run had one rework cycle (Step 2d, rank CASE SQL literal dedup, already re-verified by both SECURITY-REVIEWER and REVIEWER) -- confirm the current shipped code reflects the post-rework state, not the original.",
+    "acceptance_criteria": [
+      "Independently re-run MIX_TEST_PARTITION=2 mix test yourself, quote real output",
+      "Confirm each of REQ-042's 6 acceptance_criteria is satisfied against the actual shipped code/tests",
+      "Confirm the rework fix (@rank_case_sql module attribute, not duplicated) is present in the current code",
+      "Check docs/status/requirement_status.yaml and docs/requirements.yaml for staleness relative to what actually shipped"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-ran `git branch --show-current` (confirmed feature/WF02-REQ042-20260817), `mix compile --warnings-as-errors` (exit 0, no output), and `MIX_TEST_PARTITION=2 mix test` myself (not copied from TEST-RUNNER's report). Real output tail: 'Finished in 29.0 seconds (1.6s async, 27.4s sync)' / '4 properties, 608 tests, 0 failures'. This matches TEST-RUNNER's report-2026-08-17-WF02-REQ042-20260817.yaml's two independent runs (both '4 properties, 608 tests, 0 failures') -- independently corroborated, not just trusted. Also ran a targeted `MIX_TEST_PARTITION=2 mix test test/letflow/definitions/search_test.exs test/letflow/definitions_test.exs` in isolation: '23 tests, 0 failures'.\n\nAC-by-AC against docs/requirements.yaml's REQ-042 entry (requirements.yaml:2043-2048) checked directly against lib/letflow/definitions.ex (search/2, lines 510-551, 682-749) and test/letflow/definitions/search_test.exs:\n\nAC1 (exact name > partial name > description-only ranking): satisfied by @rank_case_sql's 'CASE WHEN lower(?) = lower(?) THEN 3.0 WHEN ? ILIKE ? THEN 2.0 ELSE 1.0 END' (definitions.ex:719) used in both select_with_rank/3 and order_by_rank/3, order_by rank DESC, created_at DESC. search_test.exs's AC1 describe block asserts rank_by_id 3.0/2.0/1.0 and index ordering. PASS.\nAC2 (empty query -> :query_empty, not empty list): check_query_not_empty/1 (byte_size==0) runs before any DB access. Test asserts Definitions.search(\"\", ...) == {:error, :query_empty}. PASS.\nAC3 (>512 chars -> :query_too_long): check_query_not_too_long/1 (byte_size>512). Test covers 513-byte (:error, :query_too_long, distinct from :query_empty) and exact 512-byte boundary (no error) -- correct '> 512, not >= 512' boundary. PASS.\nAC4 (no match -> empty list, not error): where_search_match/2 filters, Repo.all wrapped in {:ok, ...}, no special-case error path for zero rows. Test confirms {:ok, []}. PASS.\nAC5 (limit/offset pagination, default 20, demonstrated across two pages with more rows than fit one page): effective_limit = opts[:limit] || 20, effective_offset = opts[:offset] || 0, applied via Ecto limit/offset. Two tests: default-limit 25-row split (20+5, disjoint, union covers all) and explicit limit:10 15-row split (10+5). PASS.\nAC6 (moduledoc states no new migration/table, citing PD-10): moduledoc's '## `search/2` -- full-text search...' section (definitions.ex:52-60) contains the verbatim string test/letflow/definitions_test.exs's AC6 test asserts on: 'PD-10 states explicitly that search lives inside the existing store -- no new Zig source file or SQL migration is required', plus cites 'definition.md' and 'PD-10' and 'zero new priv/repo/migrations/ files and zero new indexes'. Confirmed test/letflow/definitions_test.exs:225-241's AC6 describe block checks exactly these substrings. PASS.\n\nRework-fix re-verification (Step 2d): grepped definitions.ex directly -- '@rank_case_sql \"CASE WHEN lower(?) = lower(?) THEN 3.0 WHEN ? ILIKE ? THEN 2.0 ELSE 1.0 END\"' appears exactly once, at line 719. Both call sites (select_with_rank/3 line 726, order_by_rank/3 line 741) reference `fragment(@rank_case_sql, d.name, ^search_query, d.name, ^pattern)` -- no duplicated literal remains anywhere in the file (confirmed via grep count = 1 for the literal string, 3 total hits for @rank_case_sql: 1 definition + 2 usages). This matches step-02d-reverify-reviewer.json's own re-verification note describing the identical post-rework state, independently reproduced here rather than taken on trust.\n\nAlso independently noted (not a REQ-042 acceptance criterion, but worth confirming was handled correctly): the requirement's own text/title says 'search/1' but the shipped function is search/2 -- lib/letflow/design/search.md section 3 explicitly names and resolves this exact naming tension (Zig's single-struct-arg naming vs. this module's established (primary_arg, opts) two-arg convention used by every sibling function), a reasoned, documented decision rather than a silent deviation. Not a defect.\n\nStaleness check: docs/requirements.yaml's REQ-042 entry still reads `status: in_progress` (requirements.yaml:2003) -- accurate, not stale. docs/status/requirement_status.yaml has exactly one REQ-042 event (a 'started' event at line 3350, 2026-08-17T21:15:44Z) and no 'done' event yet -- accurate, no premature completion logged. Both correctly still say 'in progress,' consistent with DOC-UPDATER (Step 6) not having run yet.\n\nAlso confirmed docs/issues/ISS-0038.yaml (rank field Decimal vs. float() typespec mismatch, filed by TEST-DESIGNER during Step 3) is filed as non-blocking MINOR, correctly not gating this PASS -- AC1's ranking-order behavior is unaffected (values still compare 3.0 > 2.0 > 1.0 after Decimal.to_float/1 normalization), and the issue is about a documented @type vs. runtime-type mismatch, not a REQ-042 acceptance-criterion failure.\n\nVerdict: PASS. All 6 acceptance criteria independently confirmed against actual shipped code and tests. Full suite re-run by me personally: 4 properties, 608 tests, 0 failures.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ042-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ042-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER (Step 6)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

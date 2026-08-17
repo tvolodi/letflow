@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ042-20260817/step-02a-elixir-dev.json",
   "created_at": "2026-08-17T21:25:57Z",
   "started_at": "2026-08-17T21:25:57Z",
-  "completed_at": "2026-08-17T21:28:46Z",
-  "status": "PENDING",
+  "completed_at": "2026-08-17T21:37:27Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S2",
@@ -34,20 +34,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "Implemented Letflow.Definitions.search/2 in lib/letflow/definitions.ex exactly per lib/letflow/design/search.md: search_opts()/search_result()/search_error() types added; validation order is check_query_not_empty/1 (byte_size==0 -> {:error, :query_empty}) then check_query_not_too_long/1 (byte_size>512 -> {:error, :query_too_long}) then TenantProvisioning.tenant_id_for_schema_name/1 on opts[:prefix] -> {:error, :invalid_schema_name} on failure, all before any Repo call. WHERE clause: where_search_match/2 builds fragment(\"? ILIKE ? OR ? ILIKE ?\", d.name, ^pattern, d.description, ^pattern) with pattern = \"%\" <> query <> \"%\" computed once in Elixir and pinned (^pattern) -- never spliced into the fragment's SQL text. Ranking: select_with_rank/3 and order_by_rank/3 both use the identical fragment(\"CASE WHEN lower(?) = lower(?) THEN 3.0 WHEN ? ILIKE ? THEN 2.0 ELSE 1.0 END\", d.name, ^query, d.name, ^pattern) CASE expression (3.0 exact name / 2.0 partial name / 2.0->else 1.0 description-only), ORDER BY rank DESC, created_at DESC. Pagination: effective_limit = Keyword.get(opts,:limit) || 20, effective_offset = Keyword.get(opts,:offset) || 0, applied via limit/2+offset/2 with NO clamp (deliberate divergence from list/2's effective_limit/1 clamp-to-200, per design SS7). No-match falls through naturally to {:ok, Repo.all(ecto_query, prefix: prefix)} returning []. No new migration/table/index. Moduledoc gained the required SS10 paragraph (module moduledoc + Scope section) citing PD-10 and definition.md explicitly. Note: attempted to share the CASE SQL string via a `rank_case_sql/0` helper pinned into fragment/1 (`fragment(^rank_case_sql(), ...)`) -- Ecto raised Ecto.Query.CompileError ('to prevent SQL injection attacks, fragment(...) does not allow strings to be interpolated as the first argument via the ^ operator') at compile time, so the literal CASE string is duplicated verbatim in select_with_rank/3 and order_by_rank/3 instead (both are fixed compile-time string literals, not a security issue, just a minor duplication) -- flagging for REVIEWER in case a cleaner shared-literal approach (e.g. a module attribute) is preferred. Verification commands run directly (mix and elixir present locally, no Docker fallback needed): `mix compile --warnings-as-errors` -> 'Compiling 1 file (.ex)' / 'Generated letflow app', exit 0. `mix format --check-formatted lib/letflow/definitions.ex` -> no output, exit 0. Self-review: grep confirms every fragment/1 call's SQL-text argument is a fixed string literal (no interpolation/concatenation into fragment text); no bare {:ok, _} = match added; search/2 has a @doc.",
+    "summary": "REWORK ITERATION 1 fix applied: the ranking CASE SQL literal, previously duplicated verbatim in select_with_rank/3 and order_by_rank/3, is now defined exactly once as a module attribute `@rank_case_sql \"CASE WHEN lower(?) = lower(?) THEN 3.0 WHEN ? ILIKE ? THEN 2.0 ELSE 1.0 END\"` placed immediately above select_with_rank/3 in the search/2 helpers section (lib/letflow/definitions.ex ~line 719), and both call sites now reference it unchanged via `fragment(@rank_case_sql, d.name, ^search_query, d.name, ^pattern)` -- no other behavior, validation order, pagination, or moduledoc text changed from the prior PASSed implementation. `grep -n \"CASE WHEN\\|@rank_case_sql\"` confirms the literal string now appears exactly once in the file (line 719) with two references (lines 726, 741); no duplication remains. Verification commands run directly: `mix compile --warnings-as-errors` -> 'Compiling 1 file (.ex)' / 'Generated letflow app', exit 0. `mix format --check-formatted lib/letflow/definitions.ex` -> no output, exit 0. Self-review: fragment/1's first argument is a compile-time-literal module attribute at both call sites (matches REVIEWER's confirmed-safe pattern, not the rejected `fragment(^helper_fn(), ...)` form); no SQL string interpolation; no unresolved {:ok,_} matches added; search/2 retains its @doc.",
     "artifacts_out": ["lib/letflow/definitions.ex"],
-    "issues": [
-      "Minor: the rank CASE SQL literal is duplicated (once in select_with_rank/3, once in order_by_rank/3) rather than shared via a helper, because Ecto's fragment/1 rejects a pinned/dynamic first argument (Ecto.Query.CompileError, SQL-injection guard) -- not a defect, just noted for REVIEWER."
-    ],
+    "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ042-20260817",
-      "commit_sha_list": ["5b5dea4e1afa8c0fdfbbdf641fad4cc3c857132c"],
+      "commit_sha_list": ["5b5dea4e1afa8c0fdfbbdf641fad4cc3c857132c", "c1a4c2ecfcea576f0713bd5f0608254f7f590f6f"],
       "remote_branch": "origin/feature/WF02-REQ042-20260817",
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Route to SECURITY-REVIEWER (Step 2c)"
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c) -- rework re-verification"
   },
   "rework_count": 1,
   "max_rework": 3

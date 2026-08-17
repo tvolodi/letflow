@@ -2607,3 +2607,19 @@ history:
       queue task 58 as done via the per-client API key, closing GitHub
       issue #68 (GitHub issue #65 was already closed by the other host's
       run by the time this one reached it).
+  - req: REQ-039
+    event: started
+    agent: ORCH
+    at: 2026-08-17T08:03:14Z
+    note: >
+      Started WF02-REQ039-20260817 -- Sandbox pool and fixture loader
+      (sandbox_pool.zig + fixture_loader.zig, PRM-06 section 3). First
+      requirement (not issue) picked up this session; the letflow-queue
+      issue backlog fully drained (18 issues resolved). Claimed queue task
+      42, depends_on REQ-022 (done) satisfied. Step 00 complete: branched
+      feature/WF02-REQ039-20260817 from main (5e167e8), pushed, baseline
+      verified (mix compile clean, mix test 310/310). Routing to
+      CODE-DESIGNER for Step 1 -- the requirement's own text flags an
+      explicit open question (process-per-instance vs. row-based state
+      for the sandbox pool's in-memory claim tracking + quota
+      enforcement) for CODE-DESIGNER to resolve, not silently assume.

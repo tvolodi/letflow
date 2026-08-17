@@ -59,6 +59,14 @@ defmodule Letflow.EventStore.Event do
   `idempotency_key` is stored here but carries **no** unique index on this
   table. The ES-03 global-uniqueness invariant is enforced solely by
   `Letflow.EventStore.IdempotencyRecord`'s `uq_event_idempotency_key`.
+
+  ## `tenant_id` (design §2.5)
+
+  This table is one of three (with `events_archive` and `instance_projections`)
+  that carry `tenant_id`, matching R-Co's own settled `adp-0x` state exactly —
+  not every event-store table needs it, since every table here already lives
+  inside one tenant's own Postgres schema. See the design doc §2.5 for the
+  full asymmetry rationale before "completing" it on another table.
   """
 
   use Ecto.Schema

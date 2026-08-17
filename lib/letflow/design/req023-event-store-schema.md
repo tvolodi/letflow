@@ -262,18 +262,41 @@ keeps REQ-022's shipped `@spec` for both `tenant_scoped_migrations/0` and
 files to `priv/repo/migrations/tenant/` and have `tenant_scoped_migrations/0` return
 `["<priv>/repo/migrations/tenant"]`), which `migrations_for/1` would expand with
 `Code.compile_file/1` and no loading problem
-(`deps/ecto_sql/lib/ecto/migrator.ex:660–673, 733–742`). Rejected for three reasons:
+(`deps/ecto_sql/lib/ecto/migrator.ex:660–673, 733–742`). Rejected for two reasons, either
+of which carries the decision alone:
 (a) it changes the `@spec` of two shipped REQ-022 functions, which REQ-023 has no mandate
 to redesign; (b) the directory wildcard is `**`, so a nested `tenant/` subdirectory is
 *still* picked up by a plain `mix ecto.migrate`, meaning the §2.2 guard is required either
-way — the subdirectory buys no isolation; (c) `Code.compile_file/1` re-defines the modules
-on every fresh-tenant replay, emitting "redefining module" warnings that
-`mix compile --warnings-as-errors` discipline makes noisy. Recorded here so the road not
-taken is visible rather than silently absent.
+way — the subdirectory buys no isolation. (A third reason considered — that
+`Code.compile_file/1` re-defining the modules on every fresh-tenant replay would trip
+`mix compile --warnings-as-errors` — does not actually hold: "redefining module" is a
+real compiler warning, emitted by `Code.compile_file/1` itself at `mix ecto.migrate`
+time, but outside `mix compile`'s own diagnostic-collection pass — a separate mix task
+entirely — so it would not affect that flag's exit status; corrected here per ISS-0020
+rather than left to mislead a future reader citing this section, since (a) and (b) are
+sufficient on their own.) Recorded here so the road not taken is visible rather than
+silently absent.
 
 This gap is also reported as a MINOR issue against `req022-tenant-schema-provisioning.md`
 §3.4/§4 in this step's handoff — the shipped design named the mechanism but did not
 account for migration modules being uncompiled.
+
+### 2.5 Why only three of the six new tables carry `tenant_id` (ISS-0020)
+
+`events`, `events_archive`, and `instance_projections` carry a `tenant_id` column;
+`instance_sequence`, `event_payload_store`, and the idempotency sidecar do not. This is
+not an oversight against 0003 Decision B's "`tenant_id` retained inside each schema"
+rule — it is that rule applied correctly, because Decision B scopes to "the tables the
+adp-0x docs describe" (`0003:37–45`), and R-Co's own `adp-0x` migrations only ever add
+`tenant_id` to `events`/`events_archive` (`027_adp01_event_store_tenant.sql:4–6`) and
+`instance_projections` (`028_adp02_tenant_scope_persistence.sql:18–19`) — R-Co never adds
+it to the other three, and actively **drops** it from `instance_sequence` in four later
+migrations (`GBL-116:117`, `GBL-123:91`, `GBL-130:121`, `GBL-131:90`). Every table in this
+schema already lives inside one tenant's own Postgres schema (§2.2's guard), so
+`tenant_id` here is redundant defense-in-depth for the three tables R-Co decided it was
+worth keeping on, not a universal per-row requirement — a future requirement touching
+these files should preserve the asymmetry rather than "complete" it by adding the column
+to the other three.
 
 ---
 
@@ -488,6 +511,17 @@ carries a foreign key to `events`).
 | `payload` | `:map` | `jsonb` | `NOT NULL` | `012:19`, `1147:219`. REQ-023 offers "text/bytea" (`requirements.yaml:934`); `jsonb` is chosen to match R-Co's actual type in both revisions and to keep read-time splicing (`event_store.md:286`) type-uniform with `events.payload`. |
 | `byte_size` | `:integer` | `integer` | `NOT NULL` | `012:20`, `1147:220`. **Semantics stated explicitly:** this is the byte length of the *original* payload as measured by REQ-025 at append time — the value the 4096 boundary was applied to — not `octet_length(payload::text)` after storage, because `jsonb` normalizes whitespace and key order and can therefore round-trip to a different length. |
 | `inserted_at` | via `timestamps(updated_at: false)` | `timestamp(0)` | `NOT NULL` | This row's own creation time — the meaning `012:21`'s `created_at` originally had, kept under an unambiguous name. `updated_at: false` matches `transition_events`' precedent for insert-only rows. |
+
+**`jsonb` is not byte-transparent (ISS-0020).** Beyond `byte_size`'s measurement caveat
+above, `jsonb` normalizes its input on write — it cannot round-trip an opaque binary blob
+byte-for-byte the way `bytea` could, and key order/whitespace/duplicate keys are not
+preserved. Nothing today needs byte-transparency (the payload is documented as JSON
+object bytes throughout `event_store.md`), so this is not a defect in the `jsonb` choice
+above, only an unrecorded consequence of it. Recorded so that if a future requirement
+needs an opaque blob or a hash-stable payload representation — R-Co's
+`adp-05-instance-artifact-hash.md` and `adp-09-tamper-evident-audit-chain.md` are the
+plausible candidates — the constraint is findable here rather than rediscovered via a
+failing hash comparison.
 
 **Foreign key:** composite,
 `(event_id, event_created_at) → events(event_id, created_at)`, expressed as

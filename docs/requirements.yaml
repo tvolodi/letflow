@@ -1939,7 +1939,7 @@ requirements:
   - id: REQ-041
     title: Solution-pack update three-way diff (pack_update.zig, PRM-09)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S2
     impl_order: 43  # letflow-queue task id
     description: >

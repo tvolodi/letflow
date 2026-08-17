@@ -2661,3 +2661,20 @@ history:
       REQ-035 status flipped in_progress -> done;
       docs/migration/stage-2-event-store-definitions.md header updated
       to reflect current S2 progress.
+  - req: REQ-041
+    event: started
+    agent: ORCH
+    at: 2026-08-17T08:28:00Z
+    note: >
+      WF02-REQ041-20260817 started (hetzner-orch, queue task 43, GH#51,
+      depends_on REQ-015 done). Branch feature/WF02-REQ041-20260817
+      created and pushed from freshly pulled main (ec9422f). Solution-pack
+      update three-way diff (pack_update.zig, PRM-09): compute_pack_
+      update_plan/5 plus three GLOBAL (public-schema, no :prefix)
+      migrations -- solution_pack_installs, solution_pack_artefact_bases,
+      pack_update_resolutions -- the first S2 requirement in this batch to
+      deviate from the schema-per-tenant default, with a real DB FK to
+      tenants.id. Open question flagged in the requirement text itself:
+      no decision record states a general GLOBAL-vs-PER_TENANT rule; this
+      requirement follows prm-batch1's stated classification for these
+      three tables specifically without resolving the general question.

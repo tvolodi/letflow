@@ -20,11 +20,12 @@ defmodule Letflow.Definitions do
 
   ## Scope
 
-  `compute_pack_update_plan/5` and `classify_artefact/3` (REQ-041) and `create/2`,
+  `compute_pack_update_plan/5` and `classify_artefact/3` (REQ-041), `create/2`,
   `get_by_id/2`, `get_active_by_name/2`, `list/2`, `activate/2`, `deprecate/2`,
-  `archive/2` (REQ-030) together make up this module's current public API. See
-  `lib/letflow/design/req030-definition-store-crud.md` for the full design the
-  REQ-030 functions implement.
+  `archive/2` (REQ-030), and `search/2` (REQ-042) together make up this module's
+  current public API. See `lib/letflow/design/req030-definition-store-crud.md` for
+  the full design the REQ-030 functions implement, and
+  `lib/letflow/design/search.md` for `search/2`'s.
 
   ## `tenant_id` is always derived, never accepted (REQ-030)
 
@@ -47,6 +48,16 @@ defmodule Letflow.Definitions do
   `{:error, {:service_scope_violation, reason}}` and writes nothing. **This module builds
   only the injection point** -- the hook's own logic (walking SERVICE_TASK nodes, checking
   tenant/service/plugin scope) is REQ-031's job, not implemented here.
+
+  ## `search/2` -- full-text search over `name`/`description` (REQ-042)
+
+  `search/2` (REQ-042) adds definition full-text search over `process_definitions`'
+  `name`/`description` columns via `ILIKE` ranking, ported from `store.zig`'s
+  `Store.search()` per `src/design/definition.md`'s PD-10 section. **PD-10 states
+  explicitly that search lives inside the existing store -- no new Zig source file or SQL
+  migration is required**, and this port adds zero new `priv/repo/migrations/` files and
+  zero new indexes (no `idx_def_name`, no GIN/`tsvector` index) -- the query runs against
+  `process_definitions` exactly as REQ-027 shipped it.
   """
 
   import Ecto.Query
@@ -139,6 +150,28 @@ defmodule Letflow.Definitions do
           optional(:after_created) => DateTime.t() | nil,
           optional(:limit) => pos_integer() | nil
         }
+
+  # ---------------------------------------------------------------------------------
+  # REQ-042 types -- lib/letflow/design/search.md §3
+  # ---------------------------------------------------------------------------------
+
+  @type search_opts :: [
+          prefix: String.t(),
+          limit: pos_integer() | nil,
+          offset: non_neg_integer() | nil
+        ]
+
+  @type search_result :: %{
+          definition: ProcessDefinition.t(),
+          # 3.0 (exact name match), 2.0 (partial name match) or 1.0
+          # (description-only match) -- see search/2's @doc, never any other value.
+          rank: float()
+        }
+
+  @type search_error ::
+          {:error, :query_empty}
+          | {:error, :query_too_long}
+          | common_error()
 
   @doc """
   Computes a solution-pack update three-way diff plan for one tenant's
@@ -474,6 +507,49 @@ defmodule Letflow.Definitions do
     transition(id, opts, :deprecated, :archived)
   end
 
+  @doc """
+  Searches process definitions by `name`/`description` substring, ranked, per PD-10 --
+  see `lib/letflow/design/search.md`. A row matches iff `name` or `description`
+  case-insensitively contains `query` (`ILIKE '%query%'`, `%` composed into the bound
+  parameter value, never spliced into the query text -- INV-SR-2). Ranked `3.0` for an
+  exact case-insensitive `name` match, `2.0` for a partial `name` match, `1.0` for a
+  match found only via `description`; ordered `rank DESC, created_at DESC`.
+
+  `query` is validated before any DB access: an empty string is `{:error, :query_empty}`
+  (no trimming -- a whitespace-only query is not treated as empty, it simply matches
+  nothing), and a query longer than 512 bytes is `{:error, :query_too_long}` (byte
+  length, matching this module's other manual checks -- design §4/OQ-1).
+
+  `limit` (default 20) / `offset` (default 0) paginate the ranked result, applied
+  unclamped -- unlike `list/2`'s `effective_limit/1`, this function does not cap
+  `:limit` to any maximum; rejecting an out-of-range `limit` is the S4 HTTP handler's
+  job (design §7). Always `{:ok, list}`, an empty list on no match, never an error for
+  that case.
+  """
+  @spec search(query :: String.t(), opts :: search_opts()) ::
+          {:ok, [search_result()]} | search_error()
+  def search(query, opts) when is_binary(query) and is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+
+    with :ok <- check_query_not_empty(query),
+         :ok <- check_query_not_too_long(query),
+         {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      pattern = "%" <> query <> "%"
+      effective_limit = Keyword.get(opts, :limit) || 20
+      effective_offset = Keyword.get(opts, :offset) || 0
+
+      ecto_query =
+        ProcessDefinition
+        |> where_search_match(pattern)
+        |> select_with_rank(query, pattern)
+        |> order_by_rank(query, pattern)
+        |> limit(^effective_limit)
+        |> offset(^effective_offset)
+
+      {:ok, Repo.all(ecto_query, prefix: prefix)}
+    end
+  end
+
   # -----------------------------------------------------------------------------------
   # create/2 helpers (design §4.1)
   # -----------------------------------------------------------------------------------
@@ -597,6 +673,71 @@ defmodule Letflow.Definitions do
 
   defp where_after_created(query, after_created) do
     where(query, [d], d.created_at > ^after_created)
+  end
+
+  # -----------------------------------------------------------------------------------
+  # search/2 helpers (design §4/§5/§7)
+  # -----------------------------------------------------------------------------------
+
+  defp check_query_not_empty(query) do
+    if byte_size(query) == 0, do: {:error, :query_empty}, else: :ok
+  end
+
+  defp check_query_not_too_long(query) do
+    if byte_size(query) > 512, do: {:error, :query_too_long}, else: :ok
+  end
+
+  # `pattern` (the "%query%" value) matches on `name` OR `description`, both
+  # ILIKE'd against the same bound value (design §5/§6, INV-SR-2). `description` is
+  # nullable; a NULL ILIKE comparison evaluates to NULL, which the surrounding OR
+  # simply doesn't treat as a match -- no explicit `IS NOT NULL` guard needed.
+  defp where_search_match(queryable, pattern) do
+    where(
+      queryable,
+      [d],
+      fragment("? ILIKE ? OR ? ILIKE ?", d.name, ^pattern, d.description, ^pattern)
+    )
+  end
+
+  # `search_query` and `pattern` are the same two bound values used in the WHERE
+  # clause above, reused unchanged here so the ranking CASE and the matching WHERE
+  # can never disagree about what counts as a "name match" (design §5). The CASE
+  # expression's SQL shape is a fixed compile-time string literal in both places
+  # below -- only the `?`-placeholder values (d.name, ^search_query, d.name,
+  # ^pattern) vary per call, each compiled by Ecto to a genuine bound Postgres
+  # parameter (design §6). WHEN branches evaluated in order: exact case-insensitive
+  # name match (3.0), else partial name ILIKE match (2.0), else -- since the
+  # surrounding WHERE clause already restricts every row here to a
+  # name-or-description match -- the row matched via description alone (1.0), per
+  # design §5's "safe unconditional ELSE" rationale.
+  defp select_with_rank(queryable, search_query, pattern) do
+    select(queryable, [d], %{
+      definition: d,
+      rank:
+        fragment(
+          "CASE WHEN lower(?) = lower(?) THEN 3.0 WHEN ? ILIKE ? THEN 2.0 ELSE 1.0 END",
+          d.name,
+          ^search_query,
+          d.name,
+          ^pattern
+        )
+    })
+  end
+
+  defp order_by_rank(queryable, search_query, pattern) do
+    order_by(
+      queryable,
+      [d],
+      desc:
+        fragment(
+          "CASE WHEN lower(?) = lower(?) THEN 3.0 WHEN ? ILIKE ? THEN 2.0 ELSE 1.0 END",
+          d.name,
+          ^search_query,
+          d.name,
+          ^pattern
+        ),
+      desc: d.created_at
+    )
   end
 
   # -----------------------------------------------------------------------------------

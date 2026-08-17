@@ -1,0 +1,57 @@
+{
+  "handoff_id": "4ebdc2f4-bebc-4528-8102-9e28279b8bca",
+  "run_id": "WF02-REQ039-20260817",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ039-20260817/step-02c-security-reviewer.json",
+  "created_at": "2026-08-17T08:46:52Z",
+  "started_at": "2026-08-17T08:46:52Z",
+  "completed_at": "2026-08-17T08:50:02Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-039"],
+    "related_handoff_ids": ["d67f0ade-c646-4bf6-a5f6-d51d2a40728b"],
+    "artifacts_in": [
+      "lib/letflow/sandbox_pool.ex",
+      "lib/letflow/sandbox_pool/fixture_loader.ex",
+      "lib/letflow/application.ex",
+      "config/dev.exs",
+      "config/prod.exs",
+      "config/test.exs"
+    ],
+    "owned_modules": ["lib/letflow/definitions", "priv/repo/migrations"]
+  },
+  "task": {
+    "description": "Security gate on REQ-039's implementation (branch feature/WF02-REQ039-20260817, git diff main...HEAD). This is explicitly a tenant-data-path change: dynamic Postgres schema creation/drop, raw SQL table-name interpolation guarded by an allowlist, and parameterized fixture inserts -- exactly INV-7's (No SQL string interpolation) and INV-1's (Tenant data isolation, though sandbox schemas are not tenant schemas -- assess whether that distinction changes applicability) territory. ELIXIR-DEV's own handoff (handoffs/WF02-REQ039-20260817/step-02a-elixir-dev.json) flagged two toolchain-specific mechanical fixes it made beyond the design's literal text (a jsonb cast fix, a GenServer.call timeout buffer) -- read them and assess whether either has a security-relevant angle, not just a correctness one.",
+    "acceptance_criteria": [
+      "Scope test correctly determines this diff touches a tenant-data path",
+      "INV-1 through INV-8 each assessed APPLIES or NOT-APPLICABLE against the actual diff, with reasoning",
+      "Every APPLIES invariant's 'How to verify' procedure actually run, not asserted",
+      "Table-name allowlist and schema-name validation independently verified to actually close the injection surface (read the code, don't trust the design doc's description of what it does)",
+      "Sandbox schema naming/lifecycle assessed for any tenant-isolation-adjacent risk (e.g. could a sandbox schema ever collide with or be confused for a real tenant schema?)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: IN-SCOPE. Diff (git diff main...HEAD) adds Letflow.SandboxPool (dynamic CREATE/DROP SCHEMA via raw Repo.query!) and Letflow.SandboxPool.FixtureLoader (raw TRUNCATE/INSERT with table-name allowlist and schema-name regex validation as the injection boundary) -- raw SQL with identifier interpolation and schemas built from TenantProvisioning.tenant_scoped_migrations() bring this within INV-1's applicability-note language ('any diff touching a tenant-scoped table, schema, or migration') even though sandbox schemas are explicitly not tenant schemas. INV-1 (Tenant data isolation): APPLIES, PASS. Verified by reading tenant_provisioning.ex:75 (real tenant schemas: \"tenant_\" <> hex) against sandbox_pool.ex:239 (sandbox schemas: \"sandbox_\" <> hex) -- structurally disjoint prefixes, no naming collision possible. schema_name is never caller-supplied in claim/1 (minted internally from Ecto.UUID.generate/0) or release/1 (looked up from internal state.active by sandbox_id, never taken directly from the argument). provision_sandbox/0 uses no IF NOT EXISTS, so a UUID collision would raise and hit provision_failed rather than silently attaching to/overwriting an existing schema. FixtureLoader's @schema_name_pattern (^sandbox_[0-9a-f]{32}$) structurally rejects any tenant_-prefixed name before any SQL runs. No live tenant-scoped query path can ever resolve to a sandbox schema, since tenant schema resolution goes exclusively through Repo.get_by(Registration, tenant_id: ...) (tenant_provisioning.ex:174) and sandbox schemas never get a Registration row -- confirmed no leak path exists in either direction. INV-2 (server-side field auth): NOT-APPLICABLE, no API response-shaping code in this diff, S4 not started. INV-3 (untrusted runtime sandboxing): NOT-APPLICABLE, 'SandboxPool' here is an ephemeral DB-schema pool, unrelated to S5 tenant-script sandboxing. INV-4 (secrets by reference): NOT-APPLICABLE, config/dev.exs, config/prod.exs, config/test.exs diffs read in full -- only add a plain integer (max_concurrent_sandboxes: 5/5/1), no secret material. INV-5 (not-found/forbidden indistinguishability): NOT-APPLICABLE, release/1's {:error, :not_found} is an internal GenServer reply against pool-local state, not a network-facing tenant-resource lookup; no lookup-by-ID HTTP endpoint exists in this diff. INV-6 (new data-access paths prove scoping): APPLIES, satisfied by this handoff itself. INV-7 (no SQL string interpolation): APPLIES, PASS. Ran grep -rn \"Repo.query\" lib/ priv/repo/migrations/ --include=*.ex --include=*.exs; the 5 hits in the two new files were each read by hand: sandbox_pool.ex:247 (CREATE SCHEMA) and :270 (DROP SCHEMA) interpolate only the internally-minted UUID-derived schema_name (verified provision_sandbox/0 and the release/1 call path both never accept a caller-supplied schema_name). fixture_loader.ex:118 (TRUNCATE) and the INSERT built at :146-148 interpolate sandbox_schema/table_name only after load_fixtures_only/3's `with :ok <- validate_schema_name(sandbox_schema), :ok <- validate_table_names(table_names) do apply_fixtures(...)` -- confirmed by direct read that apply_fixtures/3 (the only place issuing TRUNCATE/INSERT) is unreachable unless both validations return :ok, i.e. the allowlist check genuinely runs before any SQL touches a given table name (AC4). row_json is bound as $1 in Repo.query!(sql, [row_json]) at fixture_loader.ex:150, never interpolated, in both the design doc's original $1::jsonb form and ELIXIR-DEV's shipped ($1::text)::jsonb form. INV-8 (no unhandled crashes on realistic failure paths): APPLIES, PASS. Ran grep -rn \"^\\s*{:ok, .*} = \" lib/letflow/ --include=*.ex; the 2 hits in sandbox_pool.ex (lines 171, 204) are case-clause struct-pattern bindings (`{:ok, %SandboxClaim{} = claim} ->`) inside case statements that also handle the {:error, :provision_failed} branch explicitly -- not bare crashing assignments, confirmed a false-positive on the heuristic by reading the surrounding case block. Every raising Repo.query!/Ecto.Migrator.run call in the diff is wrapped in try/rescue (provision_sandbox/0, drop_schema/1) or Repo.transaction/1 plus a function-level rescue (apply_fixtures/3), converting to typed {:error, atom} results per INV-8. Assessed ELIXIR-DEV's two flagged toolchain fixes (step-02a handoff) for a security angle: (1) the +5s GenServer.call timeout buffer is purely client/server call-timeout correctness, touches no SQL/data/tenant-scoping, no security angle. (2) the $1::jsonb -> ($1::text)::jsonb cast change was independently re-verified in the actual committed code (not trusted from the description) -- row_json remains bound as the second element of Repo.query!'s params list either way; the change only alters which side (Postgrex client vs. Postgres server) performs the jsonb parse, it does not introduce string interpolation of row_json anywhere, so no injection surface is reopened.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ039-20260817/step-02c-security-reviewer.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ039-20260817",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (Step 2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

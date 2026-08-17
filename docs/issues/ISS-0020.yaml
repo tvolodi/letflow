@@ -89,4 +89,44 @@ affected_files:
   - lib/letflow/event_store/instance_projection.ex
   - lib/letflow/event_store/stored_payload.ex
 github_issue: https://github.com/tvolodi/letflow/issues/76
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0020-20260817
+resolved_at: 2026-08-17T07:47:00Z
+resolution: >
+  All three gaps closed as doc-only additions/corrections, per ORCHESTRATOR.md
+  §10's sizing exception (scoped, low-ambiguity, exact content specified by
+  this issue's own description) with independent REVIEWER sign-off before
+  commit rather than skipping validation.
+
+  (1) Added a new §2.5 "Why only three of the six new tables carry tenant_id"
+  to lib/letflow/design/req023-event-store-schema.md, plus a short `##
+  tenant_id (design §2.5)` moduledoc subsection on event.ex/archived_event.ex/
+  instance_projection.ex and a `## No tenant_id (design §2.5)` subsection on
+  stored_payload.ex, explaining the asymmetry matches R-Co's own settled
+  adp-0x state and should not be "completed" by a future requirement.
+
+  (2) Corrected §2.4 reason (c): "redefining module" is a real compiler
+  warning, but one emitted by Code.compile_file/1 at mix ecto.migrate time,
+  outside mix compile's own diagnostic-collection pass -- a separate mix task
+  entirely -- so it never affects mix compile --warnings-as-errors's exit
+  status. Reasons (a) and (b) alone now carry the rejection, as REVIEWER
+  independently confirmed at the original Step 2d gate.
+
+  (3) Added a paragraph after the event_payload_store column table (§3.4)
+  and expanded stored_payload.ex's byte_size moduledoc section, recording
+  that jsonb is not byte-transparent (normalizes whitespace/key order,
+  cannot round-trip an opaque blob byte-for-byte) as an unrecorded
+  consequence of an already-correct type choice, findable for a future
+  requirement needing a hash-stable or opaque-blob representation.
+
+  Verified: mix compile --warnings-as-errors clean, mix format
+  --check-formatted clean, mix test 4 properties + 306 tests 0 failures.
+  REVIEWER independently verified all three additions against actual schema
+  code (grepped tenant_id presence/absence across all six event-store
+  migrations/schemas) and empirically re-tested the §2.4 mechanism claim in
+  this environment (Elixir 1.18.3/OTP 27) before passing, flagging one
+  non-blocking phrasing imprecision ("code server" vs "compiler warning
+  emitted outside mix compile's scope") which was tightened before commit.
+  Zero implementation code changed -- git diff --stat confirms all five
+  touched files are moduledoc/markdown prose only.

@@ -17,6 +17,13 @@ defmodule Letflow.EventStore.StoredPayload do
   whitespace and key order, so a stored payload can round-trip to a different
   length than the bytes the boundary decision was made on.
 
+  This is one symptom of a broader fact worth stating on its own (design
+  §3.4, ISS-0020): `jsonb` is not byte-transparent. It cannot round-trip an
+  opaque binary blob byte-for-byte the way `bytea` could. Nothing today needs
+  that — see the design doc for where a future opaque-blob or hash-stable
+  payload requirement would need to revisit this table's `:map`/`jsonb`
+  choice.
+
   ## Large-payload split is invisible below the append/read layer (INV-EV-6)
 
   `events.payload` holds a `{"$ref": "<uuid>"}` pointer when the real bytes live
@@ -57,6 +64,15 @@ defmodule Letflow.EventStore.StoredPayload do
   schemas — one per tenant — so every read and write must pass
   `prefix: schema_name` explicitly at call time rather than relying on a
   compile-time prefix.
+
+  ## No `tenant_id` (design §2.5)
+
+  Unlike `Letflow.EventStore.Event`/`ArchivedEvent`/`InstanceProjection`, this
+  table carries no `tenant_id` column — matching R-Co's own `adp-0x`
+  migrations, which never add one here. This table's own Postgres schema is
+  already tenant-scoped, and every row is reached only via the composite FK
+  to a specific `events` row, so a redundant `tenant_id` column would add no
+  real guarantee. See the design doc §2.5 for the full asymmetry rationale.
   """
 
   use Ecto.Schema

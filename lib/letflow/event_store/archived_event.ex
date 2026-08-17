@@ -44,6 +44,14 @@ defmodule Letflow.EventStore.ArchivedEvent do
   schemas — one per tenant — so every read and write must pass
   `prefix: schema_name` explicitly at call time rather than relying on a
   compile-time prefix.
+
+  ## `tenant_id` (design §2.5)
+
+  This table is one of three (with `events` and `instance_projections`) that
+  carry `tenant_id`, matching R-Co's own settled `adp-0x` state exactly — not
+  every event-store table needs it, since every table here already lives
+  inside one tenant's own Postgres schema. See the design doc §2.5 for the
+  full asymmetry rationale before "completing" it on another table.
   """
 
   use Ecto.Schema

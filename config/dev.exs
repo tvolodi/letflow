@@ -34,7 +34,12 @@ config :letflow, Letflow.Repo,
   port: 5462,
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
-  pool_size: 10
+  pool_size: 10,
+  # See Letflow.Repo.init/2 -- letflow_dev is shared across every
+  # concurrent workspace/host, unlike the partitioned test database.
+  # Absent (and therefore false) in config/test.exs and config/prod.exs,
+  # so this guard only ever applies here.
+  require_dev_db_confirmation: true
 
 # Placeholder — no real Keycloak instance exists yet. Replace with a real
 # per-environment issuer URL once realm provisioning (deferred past S1, see

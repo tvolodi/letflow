@@ -58,9 +58,21 @@ draft --submit--> submitted --approve--> approved (terminal)
 ```
 docker compose up -d
 mix deps.get
-mix ecto.setup
-mix run --no-halt
+LETFLOW_DEV_DB_CONFIRMED=1 mix ecto.setup
+LETFLOW_DEV_DB_CONFIRMED=1 mix run --no-halt
 ```
+
+`LETFLOW_DEV_DB_CONFIRMED=1` is required for anything that connects to
+`letflow_dev` — see `Letflow.Repo.init/2`. Unlike the test database
+(isolated per workspace via `MIX_TEST_PARTITION`), `letflow_dev` is a
+single database shared across every concurrent workspace/host in this
+project's multi-workspace setup; the confirmation requirement exists so a
+bare/accidental `mix ecto.migrate` or `mix run` from one workspace can't
+silently write to state another workspace is relying on. For
+throwaway/scratch verification (provisioning a tenant, checking a
+migration by hand), use the already-isolated test database instead:
+`MIX_ENV=test MIX_TEST_PARTITION=<N> mix ecto.migrate` /
+`MIX_ENV=test MIX_TEST_PARTITION=<N> mix run -e '...'`.
 
 ```
 curl -s -X POST localhost:4000/instances | tee /tmp/inst.json

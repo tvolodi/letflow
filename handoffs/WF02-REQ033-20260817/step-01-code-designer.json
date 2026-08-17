@@ -1,0 +1,53 @@
+{
+  "handoff_id": "c8f31faf-5437-40f4-a484-7b9f8cbe29ad",
+  "run_id": "WF02-REQ033-20260817",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ033-20260817/step-01-code-designer.json",
+  "created_at": "2026-08-17T13:25:42Z",
+  "started_at": "2026-08-17T13:25:42Z",
+  "completed_at": "2026-08-17T13:30:33Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-033"],
+    "related_handoff_ids": ["3e315df9-5c86-43ff-8134-8bf122aa4ac7"],
+    "artifacts_in": [
+      "docs/requirements.yaml (REQ-033 entry in full, and REQ-027 for context)",
+      "lib/letflow/definitions/instance_definition_snapshot.ex",
+      "lib/letflow/definitions/process_definition.ex",
+      "priv/repo/migrations/20260816193002_create_instance_definition_snapshots.exs",
+      "docs/migration/decisions/0003-ecto-schema-strategy.md",
+      "lib/letflow/design/req025-event-append.md (recent precedent for tenant_id-derivation-from-:prefix style and prose-only Section 6 algorithm convention)"
+    ],
+    "owned_modules": ["lib/letflow/definitions/snapshot_store.ex", "test/letflow/definitions/snapshot_store_test.exs"]
+  },
+  "task": {
+    "description": "Design lib/letflow/design/req033-snapshot-store.md for REQ-033 (Definition snapshot store, snapshot.zig PD-08). Read docs/requirements.yaml's REQ-033 entry in full (around line 1514) and REQ-027's entry for the schema/context it builds on. This is a smaller requirement than REQ-025 (no new migration, no multi-table Ecto.Multi) -- a new context module Letflow.Definitions.SnapshotStore with two functions: create/2(instance_id, definition_id) and get_by_instance_id/1. Read lib/letflow/definitions/instance_definition_snapshot.ex and process_definition.ex directly (not assumed) to confirm actual field names/types before specifying signatures. Specify: (1) create/2's transaction shape -- a SELECT ... FOR SHARE-equivalent lock on the source process_definitions row (Ecto's lock(\"FOR SHARE\") query composition, per INV-7 -- never raw SQL) held for the duration of the insert, both inside one Repo.transaction; (2) the not-found case when definition_id doesn't exist; (3) idempotency semantics for create/2 called twice with the same instance_id -- the requirement's own description text leans toward ON CONFLICT (instance_id) DO NOTHING (silently idempotent, no error, no second row) and AC2 explicitly says 'definition.md's own text supports the idempotent reading for an EE-01 retry' -- pick this reading unless you find a concrete reason not to, and state the choice explicitly in the moduledoc per AC2's own instruction; (4) get_by_instance_id/1's not-found error shape (never nil); (5) the full StoreError-equivalent tagged-tuple error set, one distinct pattern-matchable case per named failure mode; (6) explicit moduledoc language stating the EE-01/S3 instance-start integration point ('create/2 called at instance-start time, before any event is appended') is out of scope for this module -- it only builds the store operations in isolation (AC5). No tenant_id derivation needed if instance_definition_snapshots/process_definitions are tenant-scoped via the same :prefix mechanism REQ-025 established -- confirm by reading the migration file directly whether these tables carry a tenant_id column and/or live in the tenant schema, and specify tenant_id handling accordingly (don't assume it's identical to REQ-025's derivation without checking). Follow the same 'no implementation code, prose algorithm shape' convention already validator-approved in req024-event-type-registry.md Section 4.4 and req025-event-append.md Section 6 (after its own rework) -- CODE-DESIGN-VALIDATOR will FAIL literal Elixir/Ecto code blocks.",
+    "acceptance_criteria": [
+      "create/2 against a valid definition_id inserts a snapshot row whose graph matches the source process_definitions row's graph at the moment of the call",
+      "create/2 called twice with the same instance_id is idempotent (no error, no second row) OR returns a distinct SnapshotAlreadyExists-equivalent error -- pick one behavior and state which in the moduledoc, since definition.md's own text supports the idempotent reading for an EE-01 retry",
+      "get_by_instance_id/1 against an instance_id with no snapshot returns a not-found error, not nil silently",
+      "deleting a process_definitions row that an instance_definition_snapshots row references is rejected by the database (foreign_key_violation), and the snapshot row remains present and unmodified -- per PD-08's no-ON-DELETE-CASCADE design (REQ-027); a snapshot is never removed as a side effect of deleting its source definition",
+      "the moduledoc explicitly states the EE-01 instance-start integration point is S3 scope, not built here"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req033-snapshot-store.md. Confirmed directly (not assumed) against instance_definition_snapshot.ex, process_definition.ex, and the 20260816193002 migration: instance_definition_snapshots is a tenant-scoped table (if prefix() do) but carries NO tenant_id column at all (migration header states this explicitly, citing ADP-02's table mapping); process_definitions IS tenant-scoped AND does carry a tenant_id column, but this module only reads process_definitions (locked SELECT), never writes it -- so, unlike REQ-025's EventStore.append/2, SnapshotStore needs no tenant_id-derivation-from-:prefix mechanism at all (no Letflow.TenantProvisioning.tenant_id_for_schema_name/1 equivalent required). Both tables are reached purely via opts[:prefix] threaded through every Repo call. Designed Letflow.Definitions.SnapshotStore.create/3(instance_id, definition_id, opts) and get_by_instance_id/2(instance_id, opts) -- one more positional arg each than the requirement text's 'create/2'/'get_by_instance_id/1' shorthand, because opts[:prefix] must be threaded through explicitly (same convention req025-event-append.md established for EventStore.append/2); this arity gap is stated explicitly in design section 2.1 so ELIXIR-DEV doesn't read the requirement text literally. create/3's transaction: one Repo.transaction/2 (not Ecto.Multi -- only two dependent steps, no need for Multi's step-naming machinery) containing (L1) a locked SELECT...FOR SHARE against process_definitions via Ecto query composition (lock: option / Ecto.Query.lock/2, never raw SQL per INV-7), (L2) an on_conflict: :nothing insert into instance_definition_snapshots keyed on instance_id via the schema's existing create_changeset/2, (L3) a re-select by instance_id to get the authoritative row regardless of whether L2 really inserted or was suppressed (a simplified variant of req025's insert-then-re-select idiom, simpler here because instance_id IS the table's own primary key). Idempotency: chose the idempotent no-op reading per AC2's own explicit invitation and REQ-033's literal 'ON CONFLICT DO NOTHING' text -- create/3 retried with the same instance_id returns {:ok, snapshot} both times, zero additional rows, no error, no SnapshotAlreadyExists-equivalent error case built; reasoning given in design section 5, including why no created:boolean() flag was added (unlike append_result()'s is_duplicate -- AC2 has no equivalent literal requirement). Full create_error() taxonomy: :missing_prefix, :definition_not_found, %Ecto.Changeset{}, term() -- explicitly states what's NOT in the union (no SnapshotAlreadyExists tag, no instance_id-conflict-on-mismatched-definition_id tag) and why. get_by_instance_id/2 never returns nil -- always {:error, :snapshot_not_found} on a miss. AC4 (delete-rejection) is satisfied entirely by REQ-027's already-shipped on_delete: :nothing; design section 7 states explicitly that no SnapshotStore code participates since the module exposes no delete path onto either table. Moduledoc requirements (design section 8) explicitly require the AC5 EE-01/S3-scope-boundary statement, the idempotency-choice statement, the write-once/no-update-delete statement, and the no-tenant_id-derivation-anywhere statement. No implementation code anywhere in the doc -- pseudocode blocks (L1/L2/L3, P0) describe algorithm shape only, matching req025's post-rework Section 6 convention.",
+    "artifacts_out": ["lib/letflow/design/req033-snapshot-store.md"],
+    "issues": [
+      "OQ-1 (MINOR): a definition_id belonging to a different tenant's process_definitions row is indistinguishable from a nonexistent definition_id -- both produce :definition_not_found, since the locked read is scoped to opts[:prefix]'s physical schema. Very likely correct/secure (leaks no cross-tenant info) but not independently confirmed against PD-08's actual text (unreachable on this host). Flagged for SECURITY-REVIEWER to confirm.",
+      "OQ-2 (MINOR): create/3's idempotency check keys purely on instance_id and does not detect/reject a second call supplying a different definition_id than the first call's snapshot recorded -- matches REQ-033's literal 'ON CONFLICT (instance_id) DO NOTHING' wording, but flagged for REVIEWER given its structural similarity to the silent-attribution-disagreement failure shape req025-event-append.md treated as unacceptable for tenant_id specifically (there resolved by hard rejection, not silent reconciliation).",
+      "OQ-3 (MINOR): the FOR SHARE lock mode is taken directly from REQ-033's own requirement text, not independently verified against PD-08's primary source (unreachable on this host, R-Co directory absent). Re-verify if the primary source becomes reachable."
+    ],
+    "started_at": "2026-08-17T13:25:42Z",
+    "completed_at": "2026-08-17T13:30:33Z"
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b)"
+}

@@ -1,0 +1,51 @@
+{
+  "handoff_id": "1f7d6f50-547c-43bc-a13a-269349a7c4a4",
+  "run_id": "WF02-REQ033-20260817",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ033-20260817/step-03b-test-design-validator.json",
+  "created_at": "2026-08-17T13:53:07Z",
+  "started_at": "2026-08-17T13:53:15Z",
+  "completed_at": "2026-08-17T13:55:05Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-033"],
+    "related_handoff_ids": ["f4a1c4e9-4f4d-44f5-b41d-812e0250ebeb"],
+    "artifacts_in": [
+      "test/specs/REQ-033.md",
+      "test/letflow/definitions/snapshot_store_test.exs",
+      "lib/letflow/design/req033-snapshot-store.md"
+    ],
+    "owned_modules": ["lib/letflow/definitions/snapshot_store.ex", "test/letflow/definitions/snapshot_store_test.exs", "test/specs/REQ-033.md"]
+  },
+  "task": {
+    "description": "Independently validate test/specs/REQ-033.md and test/letflow/definitions/snapshot_store_test.exs -- read both files yourself, do not trust TEST-DESIGNER's handoff summary. TEST-DESIGNER reports 16 tests, 0 failures (isolated) and 427/427 full suite. For each of REQ-033's 5 acceptance criteria plus the REVIEWER-recommended differing-definition_id-on-retry pin (Step 2d, handoffs/WF02-REQ033-20260817/step-02d-reviewer.json) plus the 8 INV-8 UUID-cast guard cases, verify: at least one runnable test targets it, no skip/TODO, per-test unique fixtures (no shared hardcoded instance_id/definition_id), self-sufficient tests, no hardcoded secrets. Run mix test test/letflow/definitions/snapshot_store_test.exs yourself and quote actual output rather than trusting the reported 16/0.",
+    "acceptance_criteria": [
+      "every one of REQ-033's 5 acceptance criteria, the REVIEWER-recommended differing-definition_id pin, and the INV-8 guard cases has at least one runnable, passing test",
+      "no TODO/skip left in spec or test file",
+      "fixtures use per-test unique data, no cross-test pollution",
+      "tests are self-sufficient and independently runnable",
+      "no hardcoded secrets/connection strings"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read test/specs/REQ-033.md (165 lines), test/letflow/definitions/snapshot_store_test.exs (427 lines) and lib/letflow/definitions/snapshot_store.ex (216 lines) in full myself -- not just the TEST-DESIGNER handoff summary. Cross-checked docs/requirements.yaml:1514-1553's verbatim REQ-033 entry (not the spec's paraphrase) and handoffs/WF02-REQ033-20260817/step-02d-reviewer.json's exact OQ-2 pin recommendation.\n\nRan `MIX_ENV=test mix test test/letflow/definitions/snapshot_store_test.exs --seed 0` myself against this host's real docker-compose Postgres (letflow-postgres-1, healthy, port 5462). Actual output: `16 tests, 0 failures`. Matches TEST-DESIGNER's reported 16/0 exactly -- independently confirmed, not trusted.\n\nRan `MIX_ENV=test mix test --seed 0` (full suite). Actual output: `4 properties, 427 tests, 0 failures`. Matches the reported 427/427 claim.\n\nCoverage per criterion, each independently traced to a specific test:\n- AC1 (create/3 copies source graph at call time) -- describe \"create/3 (AC1)\", test at snapshot_store_test.exs:120-154. Asserts both the in-memory reply and a fresh Repo re-select match the distinctive source graph/name/version. Runnable, passing, not skipped.\n- AC2 (same-instance_id retry is idempotent, no error, no second row) -- describe \"create/3 idempotency (AC2)\", test at lines 177-193. Two create/3 calls with identical args; asserts identical snapshotted_at (proves no re-insert) and row count stays 1.\n- REVIEWER Step-2d pin (differing-definition_id retry is silently discarded, first-writer-wins) -- same describe block, test at lines 195-239. Inserts two distinct process_definitions rows, calls create/3 twice with the same instance_id but different definition_id, asserts the second call returns {:ok, _} (not an error), that definition_id/name/ver/graph all still match the FIRST definition, and that only one row exists -- exactly what REVIEWER's step-02d handoff asked for (\"a test pinning this exact behavior... distinct from the same-definition_id retry case AC2 already covers\"). This is the only sibling handoff I checked for a course-correction and it was correctly incorporated, not silently dropped.\n- AC3 (get_by_instance_id/2 miss returns typed error, never nil) -- describe \"get_by_instance_id/2 (AC3)\", test at lines 248-257, asserts the literal {:error, :snapshot_not_found} tuple and explicitly `refute is_nil(result)`.\n- AC4 (deleting a referenced process_definitions row is DB-rejected, snapshot survives unmodified) -- describe \"AC4\", test at lines 284-315. Exercises Repo.delete/2 directly (correctly -- no SnapshotStore delete function exists to call), assert_raise Ecto.ConstraintError, asserts the raised exception names `instance_definition_snapshots_definition_id_fkey`, then re-selects the snapshot and asserts byte-for-byte equality (`snapshot_after == snapshot_before`) plus unchanged row count.\n- AC5 (moduledoc states EE-01 integration point is S3 scope, not built here) -- describe \"AC5\", test at lines 326-338, reads Code.fetch_docs/1 on the real compiled module and asserts the normalized moduledoc text contains \"EE-01\", \"S3 scope, not built here\", and \"instance-start\". Verified against the actual moduledoc text in snapshot_store.ex:11-14 (\"is **S3 scope, not built here**\") -- the asserted plain-text substring is contained within the markdown-bolded source text, so the substring match is correct, not a false green.\n- INV-8 UUID-cast/prefix guards (8 test functions in the \"INV-8 UUID-cast and prefix guards\" describe block, lines 349-425): create/3 non-UUID-string instance_id -> :invalid_instance_id; create/3 non-UUID-string definition_id -> :invalid_definition_id; create/3 struct-shaped (~D[2026-01-01]) instance_id -> :invalid_instance_id, no raise; create/3 struct-shaped definition_id -> :invalid_definition_id, no raise; create/3 with opts missing :prefix / prefix: \"\" / prefix: nil (3 sub-assertions in one test) -> :missing_prefix; get_by_instance_id/2 malformed instance_id -> :invalid_instance_id; get_by_instance_id/2 struct-shaped instance_id -> :invalid_instance_id, no raise; get_by_instance_id/2 missing :prefix (2 sub-assertions) -> :missing_prefix. All 8 present, all passing (confirmed in the 16/0 isolated run), each asserting a typed {:error, _} tuple rather than allowing a raise to propagate uncaught, and where applicable (create/3 cases) asserting snapshot_count(schema_name) == 0 to confirm the guard fired pre-transaction with zero writes -- matches the task brief's 'each case additionally asserts... zero rows' requirement. Cross-checked cast_uuid/2 and fetch_prefix/1 in snapshot_store.ex:154-166 -- the guard implementation matches what the tests assert (Ecto.UUID.cast/1, never raises).\n\nNo TODO/skip: `grep -n 'skip\\|TODO\\|FIXME\\|pending' test/specs/REQ-033.md test/letflow/definitions/snapshot_store_test.exs` returned zero hits. No `@tag :skip` anywhere in the test file.\n\nNo hardcoded secrets: `grep -n 'password\\|secret\\|postgres://\\|ecto://\\|connection string\\|API_KEY\\|SECRET'` against both files returned zero hits. Config/connection comes entirely through Letflow.DataCase / Letflow.Repo, no inline connection strings.\n\nFixture discipline: every test calls its own `provisioned_tenant()` (fresh CREATE SCHEMA, fresh tenant row with a unique_integer-suffixed slug, on_exit DROP SCHEMA CASCADE + row cleanup) and every instance_id/definition_id is a fresh `Ecto.UUID.generate()` call local to that test -- grepped for any literal UUID string or shared module-attribute constant used as a fixture id: none found. `insert_definition!/2` generates a unique name via `System.unique_integer([:positive, :monotonic])` per call. No test reads state left by another test; the isolated 16/0 run and the full-suite 427/0 run both used --seed 0 with ExUnit's default randomized ordering within async:false serialization, and both passed, which is itself evidence against order-dependency. async: false is correctly justified (Sandbox :auto mode + real second DB connection for Ecto.Migrator, same rationale as event_store_test.exs/migrations_test.exs).\n\nOne non-blocking documentation nit (not a coverage gap -- both cases ARE actually implemented as passing tests, just under-enumerated in the spec's prose): test/specs/REQ-033.md's case-7 bullet list (lines 134-144) names 6 bullets, but the actual test file has 8 INV-8 test functions -- the spec's bullets omit explicit mention of 'create/3 with a struct-shaped definition_id' (test at snapshot_store_test.exs:382-391) and 'get_by_instance_id/2 with a struct-shaped instance_id' (test at lines 413-418), even though both tests exist, run, and pass. This does not block PASS since real test coverage for all 8 guard cases is present and verified -- it is purely the spec markdown's enumeration being terser than the test file's actual coverage, not a missing test. Flagging for TEST-DESIGNER's awareness, not as rework.\n\nOverall: all 5 numbered ACs, the REVIEWER Step-2d differing-definition_id pin, and all 8 INV-8 guard cases have real, passing, independently-run coverage. No skip/TODO, no hardcoded secrets, fixtures are per-test unique and self-sufficient. VERDICT: PASS.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "id": "spec-bullet-list-under-enumerates-inv8-cases",
+        "severity": "note",
+        "summary": "test/specs/REQ-033.md's INV-8 case-7 bullet list (lines 134-144) names 6 bullets but the test file implements and passes 8 INV-8 guard tests -- the spec omits explicit prose mention of the struct-shaped definition_id (create/3) and struct-shaped instance_id (get_by_instance_id/2) cases, even though both are actually tested and passing.",
+        "recommendation": "Non-blocking. TEST-DESIGNER may optionally expand the spec's bullet list to name all 8 cases explicitly for future readers, but no test is missing and no rework is required for this run."
+      }
+    ],
+    "next_action": "Route to TEST-RUNNER (Step 4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

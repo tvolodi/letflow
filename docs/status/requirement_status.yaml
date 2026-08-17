@@ -2894,3 +2894,41 @@ history:
       per-requirement capability at this granularity (S2's event-store
       internals aren't reflected there at all yet, consistent with
       REQ-023/024/026's own DOC-UPDATER precedent).
+  - req: REQ-033
+    event: started
+    agent: ORCH
+    at: "2026-08-17T13:24:35Z"
+    note: >
+      Definition snapshot store (snapshot.zig, PD-08) -- claimed from
+      letflow-queue task 46 (agent_id hetzner-orch), depends_on REQ-027
+      satisfied. Letflow.Definitions.SnapshotStore.create/2 +
+      get_by_instance_id/1 against REQ-027's already-shipped
+      instance_definition_snapshots/process_definitions tables -- no new
+      migration needed.
+  - req: REQ-033
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-17T14:02:54Z"
+    note: >
+      RELEASE-VALIDATOR PASSed REQ-033 (Letflow.Definitions.SnapshotStore,
+      snapshot.zig PD-08) -- create/2 (SELECT ... FOR SHARE + insert in one
+      transaction, ON CONFLICT (instance_id) DO NOTHING idempotency,
+      not-found on missing definition_id) and get_by_instance_id/1
+      (not-found on absent snapshot) verified against REQ-027's
+      instance_definition_snapshots/process_definitions tables, including
+      the no-ON-DELETE-CASCADE foreign_key_violation acceptance criterion
+      and the moduledoc's explicit EE-01/S3 boundary note. Flipped
+      docs/requirements.yaml REQ-033 status: in_progress -> done.
+      docs/migration/stage-2-event-store-definitions.md header's
+      Requirements line updated to move REQ-033 from the pending list to
+      the done list (same bulk-refresh-at-stage-gate pattern as
+      REQ-025/REQ-029/REQ-039's DOC-UPDATER runs; not named in REQ-033's
+      own acceptance criteria). README.md checked and left untouched:
+      still explicitly states (per its "Migration status" section) that
+      it doesn't track per-requirement S2 status at this granularity, and
+      SnapshotStore is an internal context module with no new HTTP
+      route -- nothing in the documented "What's here today"/"Running it"
+      curl/mix flow changed, consistent with REQ-025's DOC-UPDATER
+      precedent. No docs/migration/decisions/ file is named in REQ-033's
+      acceptance criteria -- confirmed by re-reading the requirements.yaml
+      entry directly, none applicable here.

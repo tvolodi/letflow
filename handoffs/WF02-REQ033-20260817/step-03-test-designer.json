@@ -1,0 +1,56 @@
+{
+  "handoff_id": "f4a1c4e9-4f4d-44f5-b41d-812e0250ebeb",
+  "run_id": "WF02-REQ033-20260817",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ033-20260817/step-03-test-designer.json",
+  "created_at": "2026-08-17T13:47:33Z",
+  "started_at": "2026-08-17T13:47:33Z",
+  "completed_at": "2026-08-17T13:51:34Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-033"],
+    "related_handoff_ids": ["c5a2d955-e2e0-4b68-b44d-1f9bfb9fba94", "67a4b8e4-f469-42c4-bcd9-6b8cedba3049"],
+    "artifacts_in": [
+      "lib/letflow/definitions/snapshot_store.ex",
+      "lib/letflow/design/req033-snapshot-store.md",
+      "docs/requirements.yaml (REQ-033 entry)"
+    ],
+    "owned_modules": ["lib/letflow/definitions/snapshot_store.ex", "test/letflow/definitions/snapshot_store_test.exs", "test/specs/REQ-033.md"]
+  },
+  "task": {
+    "description": "Write test/specs/REQ-033.md and test/letflow/definitions/snapshot_store_test.exs for Letflow.Definitions.SnapshotStore (create/3, get_by_instance_id/2). Read lib/letflow/design/req033-snapshot-store.md in full first. Cover REQ-033's 5 acceptance criteria (docs/requirements.yaml ~1548-1553): (1) create/3 against a valid definition_id inserts a snapshot row whose graph matches the source process_definitions row's graph at the moment of the call. (2) create/3 called twice with the same instance_id is idempotent (no error, no second row) -- REVIEWER confirmed this design choice at Step 2d, including confirming that a SECOND call with a DIFFERENT definition_id than the original is silently discarded (first-writer-wins) rather than erroring -- write an explicit test pinning this exact behavior (REVIEWER's own recommendation), not just the same-definition_id retry case. (3) get_by_instance_id/2 against an instance_id with no snapshot returns a not-found error, not nil. (4) deleting a process_definitions row referenced by a snapshot is rejected by the database (foreign_key_violation) and the snapshot row remains present/unmodified. (5) the moduledoc explicitly states EE-01/S3 instance-start integration is out of scope (a doc-content check, not a runtime test -- verify by reading the actual moduledoc text). Also test the INV-8 UUID-cast guards (malformed/struct-shaped instance_id/definition_id/opts[:prefix] each return typed {:error, _}).",
+    "acceptance_criteria": [
+      "create/2 against a valid definition_id inserts a snapshot row whose graph matches the source process_definitions row's graph at the moment of the call",
+      "create/2 called twice with the same instance_id is idempotent (no error, no second row) OR returns a distinct SnapshotAlreadyExists-equivalent error -- pick one behavior and state which in the moduledoc, since definition.md's own text supports the idempotent reading for an EE-01 retry",
+      "get_by_instance_id/1 against an instance_id with no snapshot returns a not-found error, not nil silently",
+      "deleting a process_definitions row that an instance_definition_snapshots row references is rejected by the database (foreign_key_violation), and the snapshot row remains present and unmodified -- per PD-08's no-ON-DELETE-CASCADE design (REQ-027); a snapshot is never removed as a side effect of deleting its source definition",
+      "the moduledoc explicitly states the EE-01 instance-start integration point is S3 scope, not built here",
+      "REVIEWER-recommended: a test pinning that a create/3 retry with a DIFFERING definition_id than the original is silently discarded (first-writer-wins), not an error"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote test/specs/REQ-033.md (7 test cases, one per AC plus the REVIEWER-recommended differing-definition_id pin plus INV-8 guard coverage) and test/letflow/definitions/snapshot_store_test.exs (16 ExUnit tests) for Letflow.Definitions.SnapshotStore. Fixture strategy mirrors test/letflow/event_store_test.exs's and test/letflow/definitions/migrations_test.exs's established provisioned_tenant/1 pattern: real CREATE SCHEMA + real TenantProvisioning.replay_migrations/1 per test, Sandbox :auto mode (Ecto.Migrator needs its own DB connection), async: false for the module. Every test provisions its own process_definitions row(s) via ProcessDefinition.create_changeset/2 + Repo.insert!/2 (REQ-030 CRUD doesn't exist yet) and fresh Ecto.UUID.generate() ids -- no shared/hard-coded identifiers, no ordering dependence. Coverage: AC1 (graph/name/version copy verified both from create/3's reply and a fresh Repo re-select, plus a :definition_not_found negative case), AC2 (same-instance_id retry returns the identical snapshotted_at, zero additional rows), the REVIEWER-recommended case (a retry with a DIFFERENT definition_id is silently discarded -- the original definition_id/name/version/graph survive unchanged, second call still returns {:ok, _}, table stays at 1 row -- pinning design doc SS9 OQ-2 / S4.3's decision), AC3 (get_by_instance_id/2 miss returns the literal {:error, :snapshot_not_found}, never nil), AC4 (Repo.delete/2 directly against a referenced process_definitions row raises Ecto.ConstraintError naming instance_definition_snapshots_definition_id_fkey, and the snapshot re-selects byte-for-byte identical afterward), AC5 (Code.fetch_docs/1-based moduledoc check for 'EE-01', 'S3 scope, not built here', 'instance-start', matching schemas_test.exs's own normalized_moduledoc convention), and 8 INV-8 guard cases (malformed-string and struct-shaped instance_id/definition_id on both create/3 and get_by_instance_id/2, plus missing/empty/nil opts[:prefix] on both functions) -- each asserting a typed {:error, _} tuple, never a raise, with zero rows written where applicable.\n\nRan `mix compile --warnings-as-errors`: clean, no output/warnings. Ran `mix format --check-formatted` on both new files: clean after one `mix format` pass (fixed by the formatter, not manually). Ran `mix test test/letflow/definitions/snapshot_store_test.exs`: '16 tests, 0 failures' (confirmed on two separate runs, one with --seed 0). Ran the full suite (`mix test`) to check for regressions: '4 properties, 427 tests, 0 failures'.",
+    "artifacts_out": [
+      "test/specs/REQ-033.md",
+      "test/letflow/definitions/snapshot_store_test.exs"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ033-20260817",
+      "commit_sha_list": ["cf9e788", "ff49113"],
+      "remote_branch": "origin/feature/WF02-REQ033-20260817",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

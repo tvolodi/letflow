@@ -1,0 +1,159 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-033
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ033-20260817
+date_utc: 2026-08-17T13:57:34Z
+
+git:
+  branch: feature/WF02-REQ033-20260817
+  branch_confirmed: true
+  commit: f12d634
+  commit_subject: "chore(WF02-REQ033): TEST-DESIGN-VALIDATOR gate -- PASS"
+  note: >
+    Confirmed via `git rev-parse --short HEAD` and `git log -1` at start of this
+    run. Prior gates (CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER,
+    TEST-DESIGN-VALIDATOR) already passed on this commit per the dispatching
+    handoff. TEST-DESIGNER and TEST-DESIGN-VALIDATOR both already reported
+    16/0 for the new file in isolation and 427/427 for the full suite; this
+    step is the independent, formal re-verification of that claim (ORCH does
+    not merge on a stale or single-witness result).
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir/erl reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 27 [erts-15.2.7.4] ... Mix 1.18.3 / Elixir 1.18.3 (compiled with Erlang/OTP 27)"
+  postgres_container: letflow-postgres-1 (confirmed Up 6h/healthy via `docker compose ps`, port 5462 -> 5432)
+  deps: "mix deps.get — all dependencies already up to date, no network issue this run"
+  command_run: >
+    `mix test` (full suite, default/unpinned random seed) and `mix test --seed 0`
+    (full suite, second independent run) — the `test` alias runs ecto.create +
+    ecto.migrate --quiet first automatically. Plus a targeted isolated re-run of
+    this run's own new file, `mix test test/letflow/definitions/snapshot_store_test.exs`.
+
+verdict: PASS
+
+checks:
+  test_suite_full_run1:
+    result: PASS
+    exit_code: 0
+    seed: 10070 (unpinned/random — ExUnit's own default)
+    summary_line_verbatim: "4 properties, 427 tests, 0 failures"
+    finished_line_verbatim: "Finished in 13.6 seconds (1.1s async, 12.5s sync)"
+    failures: 0
+    log_saved_to: /tmp/mix_test_output.log (6579 lines, grepped for failure markers)
+    grep_check: >
+      Regex covering "Failures:", "Failure:", "failure:", "** (", "Excluded:",
+      "Skipped:", "Doctests:" across both full-suite logs — zero matches beyond
+      the "0 failures" summary line itself.
+
+  test_suite_full_run2:
+    result: PASS
+    exit_code: 0
+    seed: 0 (pinned, second independent run per this project's established
+      double-run practice)
+    summary_line_verbatim: "4 properties, 427 tests, 0 failures"
+    finished_line_verbatim: "Finished in 13.9 seconds (1.0s async, 12.8s sync)"
+    failures: 0
+    log_saved_to: /tmp/mix_test_run2.log (6568 lines)
+
+  req033_own_test_file_isolated:
+    file: test/letflow/definitions/snapshot_store_test.exs
+    command_run: "mix test test/letflow/definitions/snapshot_store_test.exs"
+    summary_line_verbatim: "16 tests, 0 failures"
+    exit_code: 0
+    finished_line_verbatim: "Finished in 2.1 seconds (0.00s async, 2.1s sync)"
+    note: >
+      Matches TEST-DESIGNER's and TEST-DESIGN-VALIDATOR's own prior isolated
+      runs (16/0 both times, per the dispatching handoff).
+
+  count_arithmetic_cross_check:
+    baseline_cited_in_task: "411 tests, 4 properties, 0 failures (REQ-025, merged earlier this session)"
+    new_tests_added: "test/letflow/definitions/snapshot_store_test.exs -- 16 tests"
+    expected: "411 + 16 = 427 tests, 4 properties (unchanged)"
+    actual_full_suite: "427 tests, 4 properties, 0 failures"
+    result: MATCHES — verified via actual run, not assumed from arithmetic.
+
+  global_row_pollution_check:
+    concern: >
+      test/letflow/definitions/snapshot_store_test.exs (via Letflow.DataCase)
+      provisions/reads real Postgres state during the full run, same pattern
+      already established by other tenant-schema tests in the suite.
+    independent_postgres_reverification: >
+      Queried letflow-postgres-1 directly via `docker exec ... psql -U letflow
+      -d letflow_test` after both full-suite runs completed:
+        SELECT count(*) FROM public.tenants;         -> 0
+        SELECT count(*) FROM public.tenant_schemas;  -> 0
+    conclusion: >
+      No orphan rows in either global table after the runs.
+
+  known_noise_not_a_failure:
+    - >
+      [error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in NNNN ms.
+      — REQ-016's Ueberauth OIDC worker attempting to reach a deliberately
+      unreachable placeholder issuer configured in config/test.exs. Pre-existing
+      since REQ-016, already documented as expected noise in every prior WF-02
+      test report (e.g. REQ-025's, REQ-041's). Does not fail, skip, or affect
+      any test.
+    - >
+      Verbose SQL query debug logging appears in raw mix test output
+      (config/test.exs's default test log level), including QUERY ERROR lines
+      interleaved with passing tests across the full suite — these are
+      deliberate constraint-violation / uniqueness assertions
+      (assert_raise Ecto.ConstraintError / similar) elsewhere in the suite,
+      established pattern per prior reports. None originate from a test that
+      itself failed — confirmed via the zero-match failure-marker grep above.
+    - >
+      "warning: ExUnit.Case.register_test/4 is deprecated" and "warning:
+      default values for the optional arguments ... are never used", and one
+      "warning: redefining module Letflow.Repo.Migrations.CreateEventTypeRegistry
+      (current version defined in memory)" — pre-existing compiler warnings
+      unrelated to REQ-033, not errors, do not affect pass/fail.
+
+pre_existing_failures_found: none
+issues_filed: none
+issues_referenced_not_refiled: none
+
+test_file_breakdown:
+  new_req_033:
+    items:
+      - file: test/letflow/definitions/snapshot_store_test.exs
+        detail: >
+          Coverage of Letflow.Definitions.SnapshotStore (REQ-033) per
+          the corresponding test spec — exercises
+          lib/letflow/definitions/snapshot_store.ex against real sandboxed
+          Postgres per docs/guides/test_developer_guide.md DIRECTIVE T-1 —
+          no mocked database.
+    subtotal: 16
+  full_suite_grand_total: 427
+  cross_check: >
+    427 total (4 properties, 423 example tests) reproduced identically
+    across both full-suite runs (unpinned seed 10070, and pinned seed 0),
+    matching the task's cited baseline of 411 tests / 4 properties /
+    0 failures (REQ-025) plus this run's own 16 new tests. This Step 4 run
+    is the independent, formal re-verification of TEST-DESIGNER's and
+    TEST-DESIGN-VALIDATOR's identical prior claims — run separately twice,
+    output saved to log files and programmatically grepped for failure
+    markers rather than eyeballed, plus an isolated re-run of REQ-033's own
+    new file, plus a live Postgres re-check confirming no orphan rows in the
+    global tenants/tenant_schemas tables.
+
+diagnosis: "N/A — no failures observed in this run. Nothing routed back to ELIXIR-DEV or TEST-DESIGNER."
+
+regression_check_vs_baseline: >
+  Task-cited baseline: 411 tests, 4 properties, 0 failures (REQ-025, merged
+  earlier this session). This run adds test/letflow/definitions/
+  snapshot_store_test.exs (16 tests) and reproduces 427 tests / 4 properties /
+  0 failures identically across two independent full-suite runs (unpinned
+  default seed 10070 and pinned seed 0), plus an isolated 16/0 re-run of
+  the new file alone. Zero regressions confirmed. No pre-existing failure
+  was found anywhere in the suite this run (Unblock-Everything rule: N/A,
+  nothing to unblock; ISSUE_QUEUE protocol: N/A, nothing to file).
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-17-WF02-REQ033-20260817.yaml
+  next_action: "Route to RELEASE-VALIDATOR (WF-02 Step 5) — no rework needed."

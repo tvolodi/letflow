@@ -422,3 +422,6 @@
 2026-08-17T20:41:01Z | DISPATCH | WF-02 | WF02-REQ034-20260817 | ORCH -> ELIXIR-DEV | Step 2a: implement export_import.ex.
 2026-08-17T20:42:44Z | PASS | WF-02 | WF02-REQ034-20260817 | ELIXIR-DEV -> ORCH | Step 2a: lib/letflow/definitions/export_import.ex implemented per design. mix compile --warnings-as-errors exit 0. mix format clean on new file (full-repo formatter failures pre-existing, diffed unchanged via git stash). No Graph bypass, no id in create_attrs, schema-version gate first. Committed 7b13d6a, pushed.
 2026-08-17T20:43:19Z | DISPATCH | WF-02 | WF02-REQ034-20260817 | ORCH -> SECURITY-REVIEWER | Step 2c hard gate: export_import.ex touches process_definitions (tenant-scoped data) via create/2 and get_by_id/2 -- in scope, not skip.
+2026-08-17T20:43:19Z | DISPATCH | WF-02 | WF02-REQ034-20260817 | ORCH -> SECURITY-REVIEWER | Step 2c hard gate.
+2026-08-17T20:44:42Z | PASS | WF-02 | WF02-REQ034-20260817 | SECURITY-REVIEWER -> ORCH | Step 2c: INV-1/4/6/7/8 APPLIES all PASS, INV-2/3/5 NOT-APPLICABLE (no S4 API surface, no S5 sandbox yet). Zero tenant_id references in export_import.ex, tenant_id derivation delegated entirely to create/2. No cross-tenant leak via get_by_id/2's prefix-scoped lookup. No BLOCKERs. Committed 084db64, pushed.
+2026-08-17T20:45:36Z | DISPATCH | WF-02 | WF02-REQ034-20260817 | ORCH -> REVIEWER | Step 2d idiom gate.

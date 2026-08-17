@@ -2815,3 +2815,22 @@ history:
       README.md checked and left untouched: REQ-029 is a pure in-memory
       extension to lib/letflow/definitions/graph.ex, no new HTTP route, and
       nothing in the documented curl/mix run flow changed.
+  - req: REQ-025
+    event: started
+    agent: ORCH
+    at: 2026-08-17T10:58:58Z
+    note: >
+      Started WF02-REQ025-20260817 -- Event append (store.zig's append,
+      ES-01/02/03/05/08/DB-03). Claimed via letflow-queue task 45
+      (agent_id hetzner-orch), depends_on REQ-023 (done) and REQ-024
+      (done) satisfied. Step 00 complete: branched feature/WF02-REQ025-20260817
+      from main (7123ecf), pushed, baseline verified (mix compile clean,
+      mix test 401/401). Routing to CODE-DESIGNER for Step 1 -- this is a
+      substantially more complex requirement than recent S2 work: one
+      atomic Ecto.Multi/transaction spanning five tables (active-instance
+      guard, per-instance sequence locking, registry-first payload
+      validation, idempotency-sidecar check, payload side-table split,
+      instance_projections update), plus the 0003 2026-08-17 addendum's
+      tenant_id-derived-from-:prefix requirement (must not accept a
+      caller-supplied tenant_id). No lib/letflow/event_store.ex context
+      module exists yet -- this requirement creates it.

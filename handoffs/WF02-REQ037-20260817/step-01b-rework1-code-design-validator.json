@@ -1,0 +1,48 @@
+{
+  "handoff_id": "cce077c1-3bfa-4021-907f-f59084e72fc6",
+  "run_id": "WF02-REQ037-20260817",
+  "workflow_id": "WF-02",
+  "step": "01b-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ037-20260817/step-01b-rework1-code-design-validator.json",
+  "created_at": "2026-08-17T19:37:07Z",
+  "started_at": "2026-08-17T19:37:07Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-037"],
+    "related_handoff_ids": ["c23beb39-6534-4f0f-b0c2-c054f5b6efc3"],
+    "artifacts_in": ["lib/letflow/design/promotion_review_state_machine.md"],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Re-validate the reworked design (rework iteration 1) after SECURITY-REVIEWER's INV-1 BLOCKER. Read handoffs/WF02-REQ037-20260817/step-02c-security-reviewer.json (the original finding) and handoffs/WF02-REQ037-20260817/step-01-rework1-code-designer.json (the fix CODE-DESIGNER claims to have applied) first, then independently read the revised lib/letflow/design/promotion_review_state_machine.md sections 2.3 and 2.8. Independently verify: (a) insert_review/2's design now derives tenant_id from opts[:prefix] via Letflow.TenantProvisioning.tenant_id_for_schema_name/1 rather than trusting the caller-supplied plan.target_tenant_id -- read tenant_id_for_schema_name/1's actual code yourself to confirm the claimed signature/behavior; (b) this genuinely satisfies docs/migration/decisions/0003-ecto-schema-strategy.md's 2026-08-17 addendum -- read the addendum yourself, don't trust CODE-DESIGNER's citation of which option it adopted; (c) the new Sec 2.8 table's claim that the other 5 transition functions never assign to tenant_id is actually true by re-checking each function's own algorithm section. Also re-run the FULL standard gate checklist from scratch (not just the delta) since this is a rework re-check, not an incremental diff review.",
+    "acceptance_criteria": [
+      "Independently confirm tenant_id_for_schema_name/1's real signature/behavior matches what the revised design assumes",
+      "Independently confirm the revised insert_review/2 design genuinely satisfies Decision 0003's 2026-08-17 addendum (read the addendum directly)",
+      "Independently re-verify the Sec 2.8 claim that the other 5 functions never touch tenant_id",
+      "Full standard gate checklist re-run (all 6 ACs mapped, signatures complete, no implementation code, cross-module deps listed)",
+      "FAIL again if the fix is incomplete or introduces a new gap -- do not pass on partial credit"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ037-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ037-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

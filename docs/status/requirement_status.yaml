@@ -2580,6 +2580,14 @@ history:
       Released queue task 57 as done via hetzner-orch, closing GitHub issue
       #65 (no new commit -- the fix commit is 40d6bf5, already on main via
       ISS-0031/PR merge, not authored in this run).
+  - req: REQ-035
+    event: started
+    agent: ORCH
+    at: 2026-08-17T07:52:00Z
+    note: >
+      WF02-REQ035-20260817 started (hetzner-orch, queue task 41, GH#49).
+      Branch feature/WF02-REQ035-20260817 created and pushed from freshly
+      pulled main (6dd6776).
   - req: SCOPE-CHANGE
     event: done
     agent: ORCH
@@ -2623,3 +2631,33 @@ history:
       explicit open question (process-per-instance vs. row-based state
       for the sandbox pool's in-memory claim tracking + quota
       enforcement) for CODE-DESIGNER to resolve, not silently assume.
+  - req: REQ-035
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-17T08:21:25Z
+    note: >
+      WF02-REQ035-20260817 complete. Shipped: a promotion_reviews
+      migration (schema-per-tenant per REQ-022) with status as an
+      Ecto.Enum over exactly the 6 named values
+      (pending_review/approved/rejected/applied/failed/superseded,
+      default pending_review); the corresponding Ecto.Schema module
+      (id/tenant_id/plan_digest/def_type/def_id/serialised_plan/status/
+      requested_by/approved_by/approved_at/superseded_by/row_version,
+      timestamps()); a partial unique index on (tenant_id, plan_digest)
+      WHERE status IN ('pending_review','approved') enforcing prm-04's
+      one-live-review-per-digest-per-tenant invariant, and an index on
+      (tenant_id, status) WHERE status IN ('applied','superseded') for
+      PRM-08 rollback lookups; row_version defaults to 1 and is
+      documented in the schema moduledoc as an optimistic-locking
+      column; the moduledoc flags def_type's text-vs-CHECK-constraint
+      choice and the PER_TENANT-vs-GLOBAL classification as explicit
+      open questions per prm-04's own Open Question 1. All 4 acceptance
+      criteria independently re-confirmed by RELEASE-VALIDATOR at Step
+      5. Full gate sequence PASS: CODE-DESIGN-VALIDATOR -> SECURITY-
+      REVIEWER -> REVIEWER -> TEST-DESIGN-VALIDATOR -> TEST-RUNNER ->
+      RELEASE-VALIDATOR. Full suite green: 333 tests, 0 failures.
+      Schema only -- transition functions (approve_review/reject_review/
+      etc.) are REQ-037's job, not this one. docs/requirements.yaml's
+      REQ-035 status flipped in_progress -> done;
+      docs/migration/stage-2-event-store-definitions.md header updated
+      to reflect current S2 progress.

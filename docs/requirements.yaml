@@ -1593,7 +1593,7 @@ requirements:
   - id: REQ-035
     title: Promotion reviews schema (promotion_reviews table, PRM-04 Type C part)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S2
     impl_order: 41  # letflow-queue task id
     description: >

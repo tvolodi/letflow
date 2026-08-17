@@ -1,0 +1,205 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-041
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ041-20260817
+date_utc: 2026-08-17T08:57:00Z
+
+git:
+  branch: feature/WF02-REQ041-20260817
+  branch_confirmed: true
+  commit: 2e6908c
+  commit_subject: "test(REQ-041): cover pack-update three-way diff acceptance criteria"
+  note: >
+    Confirmed via `git branch --show-current` and `git log -1` at start of this run.
+    Prior gates (CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER,
+    TEST-DESIGN-VALIDATOR) already passed on this commit per dispatching handoff.
+    This session had independently confirmed the suite was at 363 tests, 0 failures
+    at this same commit via TEST-DESIGN-VALIDATOR's own reproduction, prior to this
+    Step 4 run.
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 27 [erts-15.2.7.4] ... Mix 1.18.3 / Elixir 1.18.3 (compiled with Erlang/OTP 27)"
+  postgres_container: letflow-postgres-1 (confirmed Up/healthy via `docker compose ps`, port 5462 -> 5432)
+  command_run: >
+    `mix test` (full suite, default/unpinned random seed) and `mix test --seed 0`
+    (full suite, second independent run) — the `test` alias runs ecto.create +
+    ecto.migrate --quiet first automatically. Plus three targeted isolated re-runs:
+    REQ-041's own two new test files together, the historically flaky
+    test/letflow/plugs/tenant_status_test.exs alone, and a direct Postgres query
+    of the new GLOBAL tables after the isolated new-test run.
+
+verdict: PASS
+
+checks:
+  test_suite_full_run1:
+    result: PASS
+    exit_code: 0
+    seed: 211135 (unpinned/random — ExUnit's own default)
+    summary_line_verbatim: "4 properties, 363 tests, 0 failures"
+    finished_line_verbatim: "Finished in 9.6 seconds (0.9s async, 8.6s sync)"
+    failures: 0
+    log_saved_to: /tmp/req041_run1.log (4801 lines, grepped for failure markers)
+    grep_check: >
+      Regex covering "Failures:", "Failure:", "failure:", "** (", "Excluded:",
+      "Skipped:", "Doctests:" — zero matches after excluding known SQL-debug-log
+      and "0 failures" noise.
+
+  test_suite_full_run2:
+    result: PASS
+    exit_code: 0
+    seed: 0 (pinned, second independent run per this project's own established
+      double-run practice given its flaky-test history)
+    summary_line_verbatim: "4 properties, 363 tests, 0 failures"
+    finished_line_verbatim: "Finished in 9.4 seconds (1.0s async, 8.3s sync)"
+    failures: 0
+    log_saved_to: /tmp/req041_run2.log (4742 lines)
+    grep_check: "Same regex as run1 — zero matches beyond known noise."
+
+  historically_flaky_file_isolated_rerun:
+    file: test/letflow/plugs/tenant_status_test.exs
+    command_run: "mix test test/letflow/plugs/tenant_status_test.exs"
+    summary_line_verbatim: "10 tests, 0 failures"
+    exit_code: 0
+    note: >
+      Explicitly checked against ISS-0011 and ISS-0031 (both status: resolved in
+      docs/issues/) before attributing anything to them. Both issues concern this
+      exact file's telemetry-race under async: true full-suite concurrency, fixed
+      on main via commit 40d6bf5 ("fix(test): tenant_status_test's query-telemetry
+      handler filters by process (ISS-0031, GH#90)"). Independently confirmed
+      40d6bf5 is an ancestor of this branch's HEAD (2e6908c) via
+      `git merge-base --is-ancestor 40d6bf5 HEAD`. Did not resurface in either
+      full-suite run (run1 used an unpinned/random seed, 211135, specifically the
+      condition class under which this flake previously appeared) nor in this
+      isolated re-run. Not applicable — no failure of any kind seen this run.
+
+  req041_own_test_files_isolated:
+    files:
+      - test/letflow/definitions_test.exs
+      - test/letflow/definitions/pack_update_migration_test.exs
+    command_run: >
+      mix test test/letflow/definitions_test.exs
+      test/letflow/definitions/pack_update_migration_test.exs
+    summary_line_verbatim: "30 tests, 0 failures"
+    exit_code: 0
+    note: >
+      Log shows several `[debug] QUERY ERROR` lines interleaved with the passing
+      run (e.g. INSERT into solution_pack_installs / solution_pack_artefact_bases /
+      pack_update_resolutions failing on a repeat key). Verified these are not
+      silent failures: cross-checked test/letflow/definitions/pack_update_migration_test.exs
+      lines 555 and 563, both `assert_raise Ecto.ConstraintError, fn -> ... end` —
+      deliberate unique/FK-constraint-violation assertions covering REQ-041's
+      constraint acceptance criteria. Ecto logs the underlying failed INSERT at
+      [debug] level before the exception propagates to the assertion; this is
+      expected, matches the existing project pattern for constraint tests
+      elsewhere in the suite, and does not indicate a real failure.
+
+  global_table_pollution_check:
+    concern: >
+      REQ-041 adds the first GLOBAL/non-tenant-scoped tables since REQ-015
+      (solution_pack_installs, solution_pack_artefact_bases,
+      pack_update_resolutions) — these have no tenant-schema isolation, so
+      cross-test/cross-run pollution risk is structurally different from prior
+      schema-per-tenant requirements.
+    mechanism_verified: >
+      Read test/support/data_case.ex directly (not assumed): `setup` calls
+      `Ecto.Adapters.SQL.Sandbox.checkout(Letflow.Repo)` unconditionally, and only
+      switches to `{:shared, self()}` mode when NOT async. pack_update_migration_test.exs
+      uses `use Letflow.DataCase, async: true` (line 36) — each test gets its own
+      checked-out sandboxed connection/transaction that Ecto's sandbox rolls back
+      automatically at test end. This is the real rollback mechanism at play, not
+      manual cleanup code in the tests themselves.
+    independent_postgres_reverification: >
+      Queried letflow-postgres-1 directly via `docker exec ... psql -U letflow
+      -d letflow_test` immediately after the isolated new-test run (not the full
+      suite, to isolate REQ-041's own tables specifically):
+        SELECT count(*) FROM public.solution_pack_installs;          -> 0
+        SELECT count(*) FROM public.solution_pack_artefact_bases;    -> 0
+        SELECT count(*) FROM public.pack_update_resolutions;         -> 0
+        SELECT count(*) FROM public.tenants;                         -> 0
+        SELECT count(*) FROM public.tenant_schemas;                  -> 0
+    conclusion: >
+      No orphan rows in any of the four GLOBAL tables (or tenants/tenant_schemas)
+      after the isolated run. Sandbox-transaction rollback is confirmed as the
+      operative mechanism, not incidental luck — this is a non-issue by design.
+
+  known_noise_not_a_failure:
+    - >
+      [error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in NNNN ms.
+      — REQ-016's Ueberauth OIDC worker attempting to reach a deliberately
+      unreachable placeholder issuer configured in config/test.exs. Pre-existing
+      since REQ-016, already documented as expected noise in every prior WF-02
+      test report. Does not fail, skip, or affect any test. Appears in both
+      full-suite run logs.
+    - >
+      Verbose SQL query debug logging appears in raw mix test output
+      (config/test.exs's default test log level) — expected, not indicative of
+      any problem, including the QUERY ERROR lines addressed above under
+      req041_own_test_files_isolated.
+
+pre_existing_failures_found: none
+issues_filed: none
+issues_referenced_not_refiled:
+  - id: ISS-0011
+    status: resolved
+  - id: ISS-0031
+    status: resolved
+  note: >
+    Both are the same underlying flake class (tenant_status_test.exs telemetry
+    race), fixed on main via commit 40d6bf5, confirmed an ancestor of this
+    branch's HEAD. Watched for specifically (unpinned-seed full run plus an
+    isolated re-run of the exact file) and did not resurface. Not re-filed —
+    nothing to file.
+
+test_file_breakdown:
+  new_req_041:
+    items:
+      - file: test/letflow/definitions_test.exs
+        detail: >
+          Pure-function coverage of the pack-update three-way diff artefact
+          classification logic (classify_artefact/3) — no DB I/O, async: true
+          for that reason.
+      - file: test/letflow/definitions/pack_update_migration_test.exs
+        detail: >
+          Migration/schema-level coverage of the three new GLOBAL tables:
+          solution_pack_installs, solution_pack_artefact_bases,
+          pack_update_resolutions — insert/query paths, constraint-violation
+          paths (assert_raise Ecto.ConstraintError), uses Letflow.DataCase for
+          sandboxed real-Postgres access.
+    subtotal: 30
+  full_suite_grand_total: 363
+  cross_check: >
+    363 total (4 properties, 359 example tests) reproduced identically across
+    both full-suite runs (unpinned seed 211135, and pinned seed 0), matching
+    this session's independently-confirmed pre-existing baseline of 363 tests /
+    0 failures at commit 2e6908c (per TEST-DESIGN-VALIDATOR's own reproduction,
+    stated in the dispatching handoff). This Step 4 run is the independent,
+    formal re-verification of that number — run separately, twice, output saved
+    to log files and programmatically grepped for failure markers rather than
+    eyeballed, plus a live Postgres cleanup re-check specific to the new GLOBAL
+    tables, plus two additional targeted isolated re-runs (the historically-flaky
+    file, and REQ-041's own new files).
+
+diagnosis: "N/A — no failures observed in this run. Nothing routed back to ELIXIR-DEV or TEST-DESIGNER."
+
+regression_check_vs_baseline: >
+  This session's own independently-confirmed baseline (TEST-DESIGN-VALIDATOR's
+  reproduction) was 363 tests, 0 failures at commit 2e6908c. This run reproduces
+  that exact count identically, twice (unpinned default seed 211135 and pinned
+  seed 0), on the same HEAD commit, with output captured to log files and
+  programmatically grepped for failure markers rather than eyeballed, plus a live
+  re-query of Postgres to independently confirm no orphan rows exist in the new
+  GLOBAL tables, plus two additional targeted isolated re-runs. Zero regressions
+  confirmed. ISS-0011/ISS-0031's known flaky condition was specifically watched
+  for (unpinned-seed run, plus isolated re-run of the exact file) and did not
+  resurface.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-17-WF02-REQ041-20260817.yaml
+  next_action: "Route to RELEASE-VALIDATOR (WF-02 Step 5) — no rework needed."

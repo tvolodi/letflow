@@ -2963,3 +2963,46 @@ history:
       resolution): REQ-030's create/1 must reuse this same helper for its
       own tenant_id derivation rather than reimplementing it. Routing to
       CODE-DESIGNER for Step 1.
+  - req: REQ-032
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-17T17:43:30Z"
+    note: >
+      RELEASE-VALIDATOR PASSed REQ-032 (Sub-process interface contract,
+      definition-time half only, sub_process_interface.zig SPC-02) -- new
+      SUB_PROCESS node_type plus CHK-18
+      (Letflow.Definitions.Graph.check_sub_process_interface/1) hooked into
+      REQ-029's PD-05 node-attribute validation pass, and the sibling
+      module Letflow.Definitions.SubProcessInterface with
+      parse_interface/2 (inputs/outputs entry lists, required defaulting
+      to false when absent) and validate_schema_shape/2 (schema-of-schemas
+      well-formedness: type, minimum/maximum, minLength/maxLength, enum,
+      required, properties, items, additionalProperties; unknown keywords
+      like $ref/pattern permitted-and-inert) both verified. All 6 named
+      violation codes (SUB_PROCESS_INTERFACE_NOT_OBJECT, _INPUTS_NOT_ARRAY,
+      _OUTPUTS_NOT_ARRAY, _ENTRY_INVALID, _SCHEMA_INVALID, _DUPLICATE_NAME)
+      have an explicit failing-example test, and the 32-level recursion
+      depth cap is enforced. Moduledoc explicitly names the SPC-01/S3
+      boundary (runtime activation/completion helpers, src/engine/instance.zig
+      as SPC-01's future integration point) as out of this requirement's
+      scope. CODE-DESIGN-VALIDATOR needed one scoped rework during this run
+      (design doc misattributed a citation to REQ-028 instead of REQ-029's
+      PD-05 hook point; corrected and re-validated, PASS on the second
+      pass) -- no other rework needed across SECURITY-REVIEWER, REVIEWER,
+      TEST-DESIGN-VALIDATOR, TEST-RUNNER. Full suite: 467 tests, 4
+      properties, 0 failures. Flipped docs/requirements.yaml REQ-032
+      status: in_progress -> done.
+      docs/migration/stage-2-event-store-definitions.md header's
+      Requirements line updated to move REQ-032 from the pending list to
+      the done list (same bulk-refresh-at-stage-gate pattern as
+      REQ-025/REQ-029/REQ-033's DOC-UPDATER runs; not named in REQ-032's
+      own acceptance criteria). README.md checked and left untouched: it
+      doesn't track per-requirement S2 status at this granularity (per its
+      "Migration status" section), and SubProcessInterface/CHK-18 are
+      internal validator additions with no new HTTP route -- nothing in
+      the documented "What's here today"/"Running it" curl/mix flow
+      changed, consistent with REQ-025/REQ-033's DOC-UPDATER precedent. No
+      docs/migration/decisions/ file is named in REQ-032's acceptance
+      criteria -- confirmed by re-reading the requirements.yaml entry
+      directly, none applicable here.
+>>>>>>> 7efe0ad (chore(WF02-REQ032): Step 6 -- flip status done, log completion)

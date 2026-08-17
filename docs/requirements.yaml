@@ -1468,7 +1468,7 @@ requirements:
   - id: REQ-032
     title: Sub-process interface contract, definition-time half only (sub_process_interface.zig, SPC-02)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S2
     impl_order: 47  # letflow-queue task id
     description: >

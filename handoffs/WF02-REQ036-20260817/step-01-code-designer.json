@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ036-20260817/step-01-code-designer.json",
   "created_at": "2026-08-17T18:03:05Z",
   "started_at": "2026-08-17T18:03:05Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-17T18:14:51Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S2",
@@ -39,9 +39,9 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Produced lib/letflow/design/promotion_plan.md covering Letflow.Definitions.PromotionPlan (compute_promotion_plan/5), Letflow.Definitions.PromotionConflict (reject_if_conflicts/4), and Letflow.Definitions.PromotionDigest (compute_plan_digest/1 + verify_digest/2). All 6 REQ-036 acceptance criteria mapped to concrete design elements (see doc section 10). Design confirms via direct source inspection that REQ-020's TenantRole model has no permission-string or user-role-assignment concept at all (not just an inconvenient mapping) -- flagged as Open Question 9.1 with no invented default, an injectable opts[:permission_checker] hook with no built-in default instead. Also flagged two additional data-model gaps found during research, not previously called out in the task: (9.2) Identity.Tenant has no production/test kind column, so the invalid-promotion-source check is given a flagged placeholder default (classify everything :test) via opts[:tenant_classifier]; (9.3) variable_schemas has never been ported to Letflow (confirmed via req039's own design doc), so that diff dimension defaults to always-empty via opts[:variable_schema_fetcher]. Also flagged (9.4) process_definitions.version is free-form text with no numeric/semver constraint anywhere, so PRM-02's '>' comparison semantics for reject_if_conflicts/4 needed an explicit stated default (numeric-if-both-parse, else lexicographic fallback). No implementation code included -- signatures, type shapes, and algorithm prose only.",
+    "artifacts_out": ["lib/letflow/design/promotion_plan.md"],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ036-20260817",
@@ -51,7 +51,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

@@ -1,8 +1,8 @@
 defmodule Letflow.Definitions.PromotionReviewStore do
   @moduledoc """
   Context module for `promotion_reviews`' state-machine transition functions
-  (`insert_review/1`, `approve_review/4`, `reject_review/2`,
-  `mark_review_applied/1`, `mark_review_failed/1`, `supersede_review/2`), ported
+  (`insert_review/2`, `approve_review/4`, `reject_review/3`,
+  `mark_review_applied/2`, `mark_review_failed/2`, `supersede_review/3`), ported
   from R-Co's `src/definition/promotion_review.zig` (PRM-04). See
   `lib/letflow/design/promotion_review_state_machine.md` §2 for the full
   gate-approved design this module implements; this moduledoc restates the

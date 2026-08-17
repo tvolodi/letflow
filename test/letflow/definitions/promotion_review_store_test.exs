@@ -226,7 +226,9 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
 
       rows =
         Repo.all(
-          from(p in PromotionReview, where: p.tenant_id == ^tenant_id and p.plan_digest == ^digest),
+          from(p in PromotionReview,
+            where: p.tenant_id == ^tenant_id and p.plan_digest == ^digest
+          ),
           prefix: schema_name
         )
 
@@ -248,7 +250,9 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
                )
 
       assert {:ok, _rejected} =
-               PromotionReviewStore.reject_review(first.id, Ecto.UUID.generate(), prefix: schema_name)
+               PromotionReviewStore.reject_review(first.id, Ecto.UUID.generate(),
+                 prefix: schema_name
+               )
 
       # The partial unique index only covers status IN ('pending_review',
       # 'approved') -- once the first row is rejected, an identical
@@ -354,7 +358,9 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
         insert_review_fixture!(schema_name, tenant_id, requested_by: requested_by)
 
       assert {:error, :self_approval_forbidden} =
-               PromotionReviewStore.approve_review(review.id, requested_by, digest, prefix: schema_name)
+               PromotionReviewStore.approve_review(review.id, requested_by, digest,
+                 prefix: schema_name
+               )
 
       # Re-read from Postgres -- proves the guarded UPDATE was never even
       # attempted, not just that the in-memory reply looked right.
@@ -392,14 +398,19 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
     test "a plan_digest not matching the stored value -> {:error, :digest_mismatch}, a different actor than requested_by" do
       %{tenant_id: tenant_id, schema_name: schema_name} = provisioned_tenant()
 
-      %{review: review, requested_by: requested_by} = insert_review_fixture!(schema_name, tenant_id)
+      %{review: review, requested_by: requested_by} =
+        insert_review_fixture!(schema_name, tenant_id)
+
       actor_id = Ecto.UUID.generate()
       refute actor_id == requested_by
 
       wrong_digest = digest_for(differing_plan(tenant_id))
       refute wrong_digest == review.plan_digest
 
-      result = PromotionReviewStore.approve_review(review.id, actor_id, wrong_digest, prefix: schema_name)
+      result =
+        PromotionReviewStore.approve_review(review.id, actor_id, wrong_digest,
+          prefix: schema_name
+        )
 
       assert result == {:error, :digest_mismatch}
       # Explicit, side-by-side distinctness -- per AC3's own "distinct from the
@@ -493,7 +504,9 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
       actor_id = Ecto.UUID.generate()
 
       assert {:ok, approved} =
-               PromotionReviewStore.approve_review(review.id, actor_id, digest, prefix: schema_name)
+               PromotionReviewStore.approve_review(review.id, actor_id, digest,
+                 prefix: schema_name
+               )
 
       assert approved.status == :approved
       assert approved.approved_by == actor_id
@@ -516,7 +529,8 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
       %{tenant_id: tenant_id, schema_name: schema_name} = provisioned_tenant()
       approved = approved_review!(schema_name, tenant_id)
 
-      assert {:ok, applied} = PromotionReviewStore.mark_review_applied(approved.id, prefix: schema_name)
+      assert {:ok, applied} =
+               PromotionReviewStore.mark_review_applied(approved.id, prefix: schema_name)
 
       assert applied.status == :applied
       assert applied.row_version == approved.row_version + 1
@@ -526,7 +540,8 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
       %{tenant_id: tenant_id, schema_name: schema_name} = provisioned_tenant()
       approved = approved_review!(schema_name, tenant_id)
 
-      assert {:ok, failed} = PromotionReviewStore.mark_review_failed(approved.id, prefix: schema_name)
+      assert {:ok, failed} =
+               PromotionReviewStore.mark_review_failed(approved.id, prefix: schema_name)
 
       assert failed.status == :failed
       assert failed.row_version == approved.row_version + 1
@@ -535,7 +550,9 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
     test "edge 5/7: applied -> superseded, via supersede_review/3" do
       %{tenant_id: tenant_id, schema_name: schema_name} = provisioned_tenant()
       approved = approved_review!(schema_name, tenant_id)
-      assert {:ok, applied} = PromotionReviewStore.mark_review_applied(approved.id, prefix: schema_name)
+
+      assert {:ok, applied} =
+               PromotionReviewStore.mark_review_applied(approved.id, prefix: schema_name)
 
       superseded_by_event_id = Ecto.UUID.generate()
 
@@ -552,7 +569,9 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
     test "edge 6/7: failed -> superseded, via supersede_review/3" do
       %{tenant_id: tenant_id, schema_name: schema_name} = provisioned_tenant()
       approved = approved_review!(schema_name, tenant_id)
-      assert {:ok, failed} = PromotionReviewStore.mark_review_failed(approved.id, prefix: schema_name)
+
+      assert {:ok, failed} =
+               PromotionReviewStore.mark_review_failed(approved.id, prefix: schema_name)
 
       superseded_by_event_id = Ecto.UUID.generate()
 
@@ -641,7 +660,10 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
                  prefix: schema_name
                )
 
-      result = PromotionReviewStore.supersede_review(superseded.id, Ecto.UUID.generate(), prefix: schema_name)
+      result =
+        PromotionReviewStore.supersede_review(superseded.id, Ecto.UUID.generate(),
+          prefix: schema_name
+        )
 
       assert result == {:error, :invalid_transition}
     end
@@ -658,10 +680,14 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
       %{schema_name: schema_name} = provisioned_tenant()
       missing_id = Ecto.UUID.generate()
 
-      assert PromotionReviewStore.approve_review(missing_id, Ecto.UUID.generate(), "x", prefix: schema_name) ==
+      assert PromotionReviewStore.approve_review(missing_id, Ecto.UUID.generate(), "x",
+               prefix: schema_name
+             ) ==
                {:error, :review_not_found}
 
-      assert PromotionReviewStore.reject_review(missing_id, Ecto.UUID.generate(), prefix: schema_name) ==
+      assert PromotionReviewStore.reject_review(missing_id, Ecto.UUID.generate(),
+               prefix: schema_name
+             ) ==
                {:error, :review_not_found}
 
       assert PromotionReviewStore.mark_review_applied(missing_id, prefix: schema_name) ==
@@ -670,7 +696,9 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
       assert PromotionReviewStore.mark_review_failed(missing_id, prefix: schema_name) ==
                {:error, :review_not_found}
 
-      assert PromotionReviewStore.supersede_review(missing_id, Ecto.UUID.generate(), prefix: schema_name) ==
+      assert PromotionReviewStore.supersede_review(missing_id, Ecto.UUID.generate(),
+               prefix: schema_name
+             ) ==
                {:error, :review_not_found}
     end
   end

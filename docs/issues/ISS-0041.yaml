@@ -46,4 +46,29 @@ description: >
 affected_files:
   - lib/letflow/definitions/promotion_review_store.ex
 github_issue: https://github.com/tvolodi/letflow/issues/127
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0041-20260817
+resolved_at: "2026-08-17T23:42:00Z"
+resolution: >
+  Corrected lib/letflow/definitions/promotion_review_store.ex's moduledoc
+  opening paragraph (lines 3-5) to state the actual arities
+  (insert_review/2, approve_review/4, reject_review/3,
+  mark_review_applied/2, mark_review_failed/2, supersede_review/3),
+  verified directly against each function's real definition in the same
+  file. REVIEWER's independent sign-off pass additionally caught
+  pre-existing `mix format --check-formatted` drift in two unrelated
+  test files (test/letflow/definitions/promotion_review_store_test.exs,
+  test/letflow/definitions/promotion_test.exs) -- confirmed via zero
+  diff against main and reproduced on a bare main checkout that this
+  drift predates and is unrelated to this fix. Fixed in the same commit
+  (same trivial mechanical class as ISS-0035 earlier this session)
+  rather than filed separately, since splitting identical-cause
+  formatting fixes adds bookkeeping with no safety benefit. All three
+  files' changes confirmed whitespace/line-break only. mix compile
+  --warnings-as-errors clean, mix format --check-formatted clean
+  repo-wide, mix test 657/657 (4 properties, 653 tests) unaffected.
+  Independent REVIEWER sign-off obtained before merge per
+  core-directives.md's producer/validator principle, even though ORCH
+  applied the fix directly under ORCHESTRATOR.md's sizing exception
+  (single-bug-class, mechanical, zero design ambiguity).

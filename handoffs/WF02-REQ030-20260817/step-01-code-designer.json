@@ -1,0 +1,59 @@
+{
+  "handoff_id": "0e49456a-8558-44aa-9710-331ecd04cf55",
+  "run_id": "WF02-REQ030-20260817",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ030-20260817/step-01-code-designer.json",
+  "created_at": "2026-08-17T17:43:36Z",
+  "started_at": "2026-08-17T17:43:36Z",
+  "completed_at": "2026-08-17T17:58:20Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-030"],
+    "related_handoff_ids": ["9e5e3a2f-e6ae-4763-b296-81c859434abd"],
+    "artifacts_in": [
+      "docs/requirements.yaml (REQ-030 entry)",
+      "R-Co/src/definition/store.zig",
+      "R-Co/src/design/definition.md",
+      "lib/letflow/design/req027-definition-core-schema.md",
+      "lib/letflow/design/req029-node-attribute-edge-condition-validators.md",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/definitions/graph.ex"
+    ],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "Design lib/letflow/design/req030-definition-store-crud.md for REQ-030 (Definition store CRUD). Branch feature/WF02-REQ030-20260817 already exists and is checked out.",
+    "acceptance_criteria": [
+      "create/1 with a graph that fails REQ-028's validateGraph() writes zero rows and returns the collected violations, not a generic error",
+      "two concurrent create/1 calls with identical (name, version) result in exactly one success and one duplicate-error, demonstrated with an actual concurrent test or the ON CONFLICT code path cited explicitly if concurrency can't be exercised",
+      "activate/1 on a DRAFT definition atomically deprecates any prior ACTIVE version of the same name in the same transaction, verified by reading both rows after the call",
+      "activate/1 called twice on the same already-ACTIVE definition returns the no-op/AlreadyActive result both times, never an error",
+      "every one of the 4 forbidden-transition cells in definition.md's authoritative state transition table (e.g. ACTIVE->ARCHIVED directly, DRAFT->ARCHIVED directly) is tested and rejected",
+      "activate/1's signature includes a nil-able/optional service-scope-validation hook parameter that REQ-031 wires in, documented explicitly in the moduledoc as the SVC-03 integration point",
+      "get_active_by_name/1 against a name with an ACTIVE version returns that definition; against a name with only DRAFT/DEPRECATED/ARCHIVED versions (no ACTIVE row) returns a not-found error, not the most recent non-active row",
+      "list/1 with a stage filter returns only rows whose stage column exactly matches the filter value, combinable with a simultaneous name and/or status filter in the same call (verified with an explicit test using all three filters together)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req030-definition-store-crud.md, extending the existing Letflow.Definitions context module (created by REQ-041) with 7 new public functions (create/2, get_by_id/2, get_active_by_name/2, list/2, activate/2, deprecate/2, archive/2) plus a private graph_struct_from_map/1 helper that resolves req027-definition-core-schema.md's OQ-3 (the jsonb-map-to-Graph.t()-struct conversion boundary). tenant_id is derived from opts[:prefix] via the already-shipped Letflow.TenantProvisioning.tenant_id_for_schema_name/1, mirroring Letflow.EventStore.append/2's shipped contract exactly (attrs never accepts a caller-supplied tenant_id key; supplying one is a hard {:error, :tenant_id_not_accepted}). create/2's pipeline calls Graph.validate_graph/1 then BOTH Graph.validate_node_attributes/1 AND Graph.validate_edge_conditions/1 (closing a gap req029's own design flagged: REQ-030's requirement text names only the first of the two REQ-029 functions). activate/2's transition algorithm (row FOR UPDATE lock, deprecate-prior-active strictly before activate-target, both in one Repo.transaction/1) and deprecate/2's and archive/2's guarded-UPDATE-with-select fallback pattern were built from R-Co's src/definition/store.zig and the authoritative PD-04 state-transition table read directly from src/design/definition.md:558-570 (both reachable this session, unlike a prior REQ-029 run). All 9 of REQ-030's acceptance criteria (docs/requirements.yaml lists 9 bullets, not 8 as this run's task briefing said) are mapped to concrete design elements in section 11's traceability table. Two genuine open questions are flagged explicitly rather than silently resolved: OQ-1 reconciles AC5's '4 forbidden-transition cells' phrasing against the authoritative table's actual 9 forbidden cells (design enforces all 9 regardless); OQ-3 flags an interpretation choice about exactly where REQ-031's future service-scope-validator hook fires relative to 'the SQL transition transaction', for REQ-031's own designer to confirm against its own source access. No implementation code (.ex bodies) included -- signatures, algorithm pseudocode, and type shapes only, matching req025-event-append.md's established rigor level.",
+    "artifacts_out": ["lib/letflow/design/req030-definition-store-crud.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ030-20260817",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

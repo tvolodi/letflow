@@ -474,6 +474,23 @@
       "queue_agent_id": "tvolodi-orch",
       "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
       "note": "Definition store CRUD (store.zig, PD-01/PD-03/PD-04/PD-07): create/1, get_by_id/1, get_active_by_name/1 (PD-07), list/1 (filters + cursor pagination), activate/1 (PD-03 atomic deprecate-then-activate, FOR UPDATE, nil-able SVC-03 hook for REQ-031), deprecate/1, archive/1 (PD-04 authoritative transition table). depends_on REQ-027/028/029 all done. Must reuse Letflow.TenantProvisioning.tenant_id_for_schema_name/1 (shipped by REQ-025, implementing this session's own 0003 addendum) for create/1's tenant_id derivation -- not reimplement it. NOTE (added by hetzner-orch during WF02-REQ032-20260817's Step Final rebase, 2026-08-17T18:00Z): owned_modules here (\"lib/letflow/definitions\", directory-level) nominally overlaps REQ-032's file-level claims on the same directory -- REQ-032 started and is completing first (17:08:06Z vs 17:40:14Z); REQ-030 had not yet touched any files as of this note (still routing to CODE-DESIGNER), so no actual content conflict exists yet. Flagging per ORCHESTRATOR.md Sec7 for whichever ORCH instance next advances REQ-030 to check its design doesn't land conflicting changes in graph.ex/sub_process_interface.ex."
+    },
+    {
+      "run_id": "WF02-REQ026-20260817",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-026"],
+      "stage": "S2",
+      "status": "IN_PROGRESS",
+      "owned_modules": ["lib/letflow/event_store.ex", "lib/letflow/event_store", "priv/repo/migrations", "test/letflow/event_store_test.exs"],
+      "lock_acquired_at": "2026-08-17T17:50:32Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 complete, branched feature/WF02-REQ026-20260817 from main (3735769), pushed. REQ-026 flipped in_progress.",
+      "backfilled": false,
+      "queue_task_id": 49,
+      "queue_agent_id": "hetzner-orch",
+      "worktree": "/home/tvolodi/letflow (Hetzner host ubuntu-16gb-nbg1-1)",
+      "note": "Event read paths, archive, and platform sentinels (store.zig's read/readGlobal/pointInTime/archive + platform.zig). Also creates event_retention_policies (own migration, ISS-0013/GH#69) and resolves archive/1's row-level-move sourcing per ISS-0014/GH#70 (deliberate unpartitioned-first architecture, not an oversight of R-Co's PAR-03 retirement)."
     }
   ]
 }

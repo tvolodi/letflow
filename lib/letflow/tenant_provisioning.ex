@@ -149,23 +149,38 @@ defmodule Letflow.TenantProvisioning do
   into `{:error, {:migration_failed, exception}}`, to produce this project's
   established `{:ok, _} | {:error, _}` convention
   (`backend_developer_guide.md` §3.5) at this module's public boundary.
+
+  `migration_source` defaults to `nil`, resolved to `tenant_scoped_migrations/0`
+  *inside* the `try` below rather than as the parameter's own default
+  expression (ISS-0019/GH#75) — an Elixir default argument is evaluated by a
+  compiler-generated lower-arity clause that runs *before* the full-arity
+  body, so `tenant_scoped_migrations()` used to run outside this function's
+  own `try/rescue` and any raise it produced (e.g. `Code.LoadError` from a
+  manifest-named migration file missing at deploy time, since
+  `tenant_scoped_migrations/0` now does real `Code.require_file` work per
+  ISS-0017) escaped as a raw exception instead of the `{:error,
+  {:migration_failed, _}}` this `@spec` promises. Resolving the default
+  inside the `try` puts it under the same guard as `Ecto.Migrator.run/4`
+  itself, so both failure sources produce the identical tagged error.
   """
   @spec replay_migrations(
           tenant_id :: Ecto.UUID.t(),
-          migration_source :: [{version :: pos_integer(), module()}]
+          migration_source :: [{version :: pos_integer(), module()}] | nil
         ) ::
           {:ok, applied_versions :: [pos_integer()]}
           | {:error, :tenant_not_provisioned}
           | {:error, {:migration_failed, Exception.t()}}
-  def replay_migrations(tenant_id, migration_source \\ tenant_scoped_migrations()) do
+  def replay_migrations(tenant_id, migration_source \\ nil) do
     case Repo.get_by(Registration, tenant_id: tenant_id) do
       nil ->
         {:error, :tenant_not_provisioned}
 
       %Registration{schema_name: schema_name} ->
         try do
+          migrations = migration_source || tenant_scoped_migrations()
+
           applied_versions =
-            Ecto.Migrator.run(Repo, migration_source, :up,
+            Ecto.Migrator.run(Repo, migrations, :up,
               all: true,
               prefix: schema_name,
               log: false

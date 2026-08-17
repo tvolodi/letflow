@@ -73,4 +73,46 @@ description: >
 affected_files:
   - lib/letflow/tenant_provisioning.ex
 github_issue: https://github.com/tvolodi/letflow/issues/75
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0019-20260817
+resolved_at: 2026-08-17T07:42:00Z
+resolution: >
+  Chose option 1 of the two the issue recorded (default the parameter to
+  nil, resolve `migration_source || tenant_scoped_migrations()` inside
+  the existing try) over option 2 (a new `:migration_source_unavailable`
+  error tag). Reasoning for the pick, since the issue deliberately left
+  it as a design decision rather than an implementer's default: option 2
+  would widen the @spec's error union for no real gain -- the wrapped
+  `exception` value already carries full type/message information (a
+  caller wanting to distinguish "load failed" from "migration itself
+  failed" can already pattern-match on the exception struct type inside
+  the existing {:migration_failed, exception} tuple), so a second outer
+  tag would be a purely cosmetic distinction. Option 1 also only touches
+  the parameter type (list | nil), not the return/error contract, making
+  it the smaller, more conservative change consistent with this
+  project's general preference.
+
+  Moved the default-resolution inside the try block so it's guarded by
+  the same rescue as Ecto.Migrator.run/4 -- both failure sources (a
+  missing/unloadable migration module, and the migration itself failing)
+  now produce the identical {:error, {:migration_failed, exception}}
+  tagged error, matching the @doc/@spec's existing promise. Updated the
+  @doc to explain the Elixir default-argument-evaluation-order pitfall
+  this fixes, for future readers of this exact pattern elsewhere.
+
+  Did not add a synthetic failure-injection test (deliberately, recorded
+  rather than silently skipped): forcing tenant_scoped_migrations/0 to
+  raise would require either deleting/renaming a real migration file at
+  test time (invasive, risks corrupting shared test-DB state across the
+  two-worktree setup) or mocking a pure internal function this project's
+  test culture doesn't otherwise do. Instead relied on the three
+  existing real callers of the 1-arity default-arg form
+  (test/letflow/definitions/migrations_test.exs,
+  test/letflow/event_store/migrations_test.exs,
+  test/letflow/event_store/registry_test.exs) continuing to pass --
+  they exercise the actual refactored resolution path end-to-end against
+  real Code.require_file calls, proving the happy path (which is the
+  actual risk surface of this specific change) works correctly.
+
+  mix compile --warnings-as-errors clean; full suite 310/310.

@@ -2499,3 +2499,33 @@ history:
       tests now, 0 failures) before squash-merging PR #91 into main as
       00f6e7a. Released queue task 76 as done via hetzner-orch, closing
       GitHub issue #89.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-17T07:42:00Z
+    note: >
+      Resolved ISS-0019 (GH#75, MINOR, filed by SECURITY-REVIEWER during
+      WF02-REQ023-20260816 Step 2c -- queue task 60). replay_migrations/2's
+      default argument (\\ tenant_scoped_migrations()) was evaluated by a
+      compiler-generated lower-arity clause BEFORE the function's own
+      try/rescue existed -- became reachable once REQ-023 gave
+      tenant_scoped_migrations/0 real Code.require_file work (ISS-0017)
+      that can raise Code.LoadError on a deployment-integrity fault (a
+      manifest-named migration file missing from a release). Chose option
+      1 of the two the issue recorded (default to nil, resolve inside the
+      try) over option 2 (a new distinct error tag) -- reasoning: the
+      wrapped exception struct already carries full type info for anyone
+      wanting to distinguish failure kinds, so a second tag would be
+      cosmetic while widening the @spec's error union for no real gain;
+      option 1 only touches the parameter type, the smaller change.
+      Updated the @doc to explain the Elixir default-argument-evaluation-
+      order pitfall for future readers of the same pattern. Deliberately
+      did not add a synthetic failure-injection test (recorded why, not
+      silently skipped: forcing a raise would need deleting/renaming a
+      real migration file at test time or mocking a pure internal
+      function, neither fitting this project's test culture) -- relied
+      instead on the three existing real callers of the 1-arity default
+      form continuing to pass, which exercise the actual refactored
+      resolution path end-to-end. mix compile --warnings-as-errors clean;
+      full suite 310/310. Released queue task 60 as done via the
+      per-client API key, closing GitHub issue #75.

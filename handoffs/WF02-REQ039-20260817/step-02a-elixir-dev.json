@@ -1,0 +1,69 @@
+{
+  "handoff_id": "d67f0ade-c646-4bf6-a5f6-d51d2a40728b",
+  "run_id": "WF02-REQ039-20260817",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ039-20260817/step-02a-elixir-dev.json",
+  "created_at": "2026-08-17T08:24:11Z",
+  "started_at": "2026-08-17T08:24:11Z",
+  "completed_at": "2026-08-17T08:45:32Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-039"],
+    "related_handoff_ids": ["7f3da8a7-77ca-4162-bf68-c4069fbfb07f"],
+    "artifacts_in": [
+      "lib/letflow/design/req039-sandbox-pool-fixture-loader.md"
+    ],
+    "owned_modules": ["lib/letflow/definitions", "priv/repo/migrations"]
+  },
+  "task": {
+    "description": "Implement REQ-039 (Sandbox pool and fixture loader) per lib/letflow/design/req039-sandbox-pool-fixture-loader.md, PASSed by CODE-DESIGN-VALIDATOR. Branch feature/WF02-REQ039-20260817 already checked out.",
+    "acceptance_criteria": [
+      "claim/1 against an empty pool immediately succeeds and returns a sandbox_id + schema_name for a real, freshly-created Postgres schema",
+      "claim/1 when max_concurrent_sandboxes slots are all in use blocks until either a slot frees or the wait window elapses, returning SandboxUnavailable in the latter case",
+      "release/1 on a claimed sandbox drops its schema (verified: the schema no longer appears in information_schema.schemata after release) and frees its quota slot for a subsequent claim/1",
+      "load_fixtures_only/3 with a table_name not in the allowlist returns InvalidTableName without issuing any SQL against that table name",
+      "load_fixtures_only/3 loading the same fixtures twice against the same sandbox_schema (simulating a retry) leaves the same final row set both times, via the TRUNCATE-before-insert step",
+      "the moduledoc names the process-per-instance-vs-row-based-state open question explicitly and states it is left for CODE-DESIGNER, per this requirement's description and stage-2-event-store-definitions.md's Early findings"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented Letflow.SandboxPool (lib/letflow/sandbox_pool.ex) as a singleton GenServer -- claim/1,2 (blocking-with-timeout, quota-limited, monitors waiting callers so a dead caller never strands a provisioned slot) and release/1,2 (drops the schema, services the oldest queued waiter) -- and Letflow.SandboxPool.FixtureLoader (lib/letflow/sandbox_pool/fixture_loader.ex) -- load_fixtures_only/3 with the allowlist checked before any SQL, TRUNCATE-before-insert inside one transaction, parameterized inserts. Both built exactly per the design doc's algorithm/state-shape/error-taxonomy/moduledoc text, including the process-vs-row open question resolution copied into SandboxPool's moduledoc verbatim (AC6). Wired {Letflow.SandboxPool, []} into Letflow.Application's supervision tree after Letflow.ApprovalSupervisor, and added config :letflow, :sandbox_pool, max_concurrent_sandboxes (5 dev/prod, 1 test, per design doc SS9/SS11 OQ-4). No migrations added -- zero new DB objects, matching design doc SS6. mix compile --warnings-as-errors and mix format --check-formatted both clean; full mix test suite stayed at 310 passed (4 properties, 306 tests), the same baseline as before this change, with no REQ-039-specific tests yet (TEST-DESIGNER's job). Beyond running the suite, I additionally wrote and ran a throwaway ExUnit smoke test (not committed, deleted after use) exercising all 6 acceptance criteria end-to-end against real Postgres via Docker, since the GenServer's timer/monitor/waiting-queue logic and the raw-SQL fixture loader were both non-trivial enough to warrant direct verification before handoff -- all 6 passed. That verification surfaced and fixed two mechanical issues neither the design doc nor R-Co's Zig source anticipated (both are Elixir/Ecto-toolchain-specific, not semantic deviations from the design): (1) claim/2's GenServer.call/3 timeout now adds a 5s buffer on top of max_wait_ms -- the design only reasons about the pool's own internal timer, not GenServer.call's separate 5s default call-timeout, which would otherwise raise a caller-side :timeout exit before the pool could reply for any max_wait_ms over ~5s (the requirement text's own 60s example). (2) the fixture INSERT binds row_json via ($1::text)::jsonb instead of the design's literal $1::jsonb -- verified empirically that Postgrex's jsonb type extension double-JSON-encodes an already-JSON-text Elixir string when the parameter is cast directly to ::jsonb, which Postgres then rejects from jsonb_populate_record with 'cannot call populate_composite on a scalar'; casting to ::text first makes Postgrex send the text verbatim and lets Postgres perform the ::jsonb cast server-side. row_json remains bound as a parameter either way, never interpolated -- INV-FL-3/INV-7 unaffected. Also worth flagging forward (not fixed here, not this role's scope, but load-bearing for TEST-DESIGNER): claim/1's provisioning sequence calls Ecto.Migrator.run/4 internally (per design doc SS4.6, reusing TenantProvisioning's own mechanism), which Ecto's own documentation states cannot run under Ecto.Adapters.SQL.Sandbox's normal single-shared-connection mode -- confirmed empirically (DBConnection.ConnectionError, :queue_timeout) and confirmed fixed by switching to Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto) + manual on_exit/1 cleanup, the exact same pattern test/letflow/tenant_provisioning_test.exs's replay_migrations/2 describe block already established for the identical reason. Any REQ-039 test exercising claim/1 will need that same :auto-mode treatment, not DataCase's default sandboxed transaction.",
+    "artifacts_out": [
+      "lib/letflow/sandbox_pool.ex",
+      "lib/letflow/sandbox_pool/fixture_loader.ex",
+      "lib/letflow/application.ex",
+      "config/dev.exs",
+      "config/prod.exs",
+      "config/test.exs"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Design doc SS4.2/SS5.4 literal SQL text (claim/2's implicit GenServer.call timeout; the fixture INSERT's $1::jsonb parameter cast) needed two toolchain-specific mechanical fixes to actually run against real Postgrex/Postgres -- both documented inline at the point of change and in this summary. Neither is a semantic deviation from the design's decisions (process-vs-row resolution, error taxonomy, allowlist, transactionality all implemented exactly as specified); both are implementation-level gaps the design's own Sources-read section could not have caught without executing the SQL. No design re-review requested -- flagging for REVIEWER/SECURITY-REVIEWER awareness per this role's 'say so explicitly rather than silently improvising' instruction.",
+        "affected_requirement": "REQ-039"
+      },
+      {
+        "severity": "MINOR",
+        "description": "TEST-DESIGNER will need Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto) + manual on_exit/1 cleanup (not DataCase's default sandboxed transaction) for any test exercising SandboxPool.claim/1, because claim/1's provisioning sequence calls Ecto.Migrator.run/4 internally, which Ecto's own documentation states needs two genuinely independent DB connections and cannot run under Sandbox's single-shared-connection mode. test/letflow/tenant_provisioning_test.exs's replay_migrations/2 describe block already establishes this exact pattern for the identical underlying reason -- worth citing directly at test-design time.",
+        "affected_requirement": "REQ-039"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ039-20260817",
+      "commit_sha_list": ["d499247"],
+      "remote_branch": "origin/feature/WF02-REQ039-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

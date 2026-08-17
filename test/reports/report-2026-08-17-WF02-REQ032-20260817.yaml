@@ -1,0 +1,206 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-032
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ032-20260817
+date_utc: 2026-08-17T17:40:15Z
+
+git:
+  branch: feature/WF02-REQ032-20260817
+  branch_confirmed: true
+  commit: 6d3584e
+  commit_subject: "chore(WF02-REQ032): log Step 3/3b (both PASS)"
+  note: >
+    Confirmed via `git branch --show-current` and `git rev-parse --short HEAD`
+    at start of this run. Prior gates (CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER,
+    REVIEWER, TEST-DESIGN-VALIDATOR) already passed on this commit per the
+    dispatching handoff (handoffs/orchestrator.log lines 320-324). TEST-DESIGNER
+    and TEST-DESIGN-VALIDATOR both already reported 467/4/0 for the full suite;
+    this step is the independent, formal re-verification of that claim (ORCH
+    does not merge on a stale or single-witness result).
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir/erl reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 27 [erts-15.2.7.4] ... Mix 1.18.3 / Elixir 1.18.3 (compiled with Erlang/OTP 27)"
+  postgres_container: letflow-postgres-1 (confirmed Up 9h/healthy via `docker compose ps`, port 5462 -> 5432)
+  deps: "mix deps.get — all dependencies already up to date, no network issue this run"
+  command_run: >
+    `mix test` (full suite, default/unpinned random seed) and `mix test --seed 0`
+    (full suite, second independent run) — the `test` alias runs ecto.create +
+    ecto.migrate --quiet first automatically. Plus targeted isolated re-runs of
+    this run's own new/changed files:
+    `mix test test/letflow/definitions/sub_process_interface_test.exs
+    test/letflow/definitions/graph_test.exs` (combined), and each file
+    individually.
+
+verdict: PASS
+
+checks:
+  test_suite_full_run1:
+    result: PASS
+    exit_code: 0
+    seed: 403552 (unpinned/random — ExUnit's own default)
+    summary_line_verbatim: "4 properties, 467 tests, 0 failures"
+    finished_line_verbatim: "Finished in 14.2 seconds (1.0s async, 13.1s sync)"
+    failures: 0
+    log_saved_to: /tmp/mix_test_run1.log (6647 lines, grepped for failure markers)
+    grep_check: >
+      Regex covering "Failures:", "Failure:", "failure:", "** (", "Excluded:",
+      "Skipped:", "Doctests:" across both full-suite logs — zero matches beyond
+      the "0 failures" summary line itself.
+
+  test_suite_full_run2:
+    result: PASS
+    exit_code: 0
+    seed: 0 (pinned, second independent run per this project's established
+      double-run practice)
+    summary_line_verbatim: "4 properties, 467 tests, 0 failures"
+    finished_line_verbatim: "Finished in 13.8 seconds (1.1s async, 12.7s sync)"
+    failures: 0
+    log_saved_to: /tmp/mix_test_run2.log
+
+  req032_own_test_files_isolated_combined:
+    files:
+      - test/letflow/definitions/sub_process_interface_test.exs
+      - test/letflow/definitions/graph_test.exs
+    command_run: >
+      mix test test/letflow/definitions/sub_process_interface_test.exs
+      test/letflow/definitions/graph_test.exs
+    summary_line_verbatim: "80 tests, 0 failures"
+    exit_code: 0
+    finished_line_verbatim: "Finished in 0.3 seconds (0.3s async, 0.00s sync)"
+    note: >
+      Matches TEST-DESIGNER's and TEST-DESIGN-VALIDATOR's cited figure of 80
+      tests covering all 5 ACs, all 6 violation codes, the 32/33-deep depth-cap
+      boundary pair, inert-keyword acceptance, and the SPC-01 moduledoc
+      boundary (handoffs/orchestrator.log lines 323-324).
+
+  req032_own_test_files_isolated_individual:
+    sub_process_interface_test.exs:
+      command_run: "mix test test/letflow/definitions/sub_process_interface_test.exs"
+      summary_line_verbatim: "34 tests, 0 failures"
+      exit_code: 0
+    graph_test.exs:
+      command_run: "mix test test/letflow/definitions/graph_test.exs"
+      summary_line_verbatim: "46 tests, 0 failures"
+      exit_code: 0
+    note: >
+      graph_test.exs is a pre-existing file extended by this requirement (+6
+      new SUB_PROCESS-node tests per the diff, git diff --stat shows +102/-0
+      against main); its total (46) includes tests pre-dating this requirement,
+      not just the 6 newly added. sub_process_interface_test.exs is the wholly
+      new file (34 tests). 34 (new file) + 6 (extension) = 40 of the 80 tests
+      cited as "new" in the Step 3 handoff refer to net-new assertions; the
+      remaining 40 in the combined isolated run were pre-existing graph_test.exs
+      coverage re-exercised alongside them. Full breakdown not further
+      decomposed here since the isolated-combined run (80/0) and full-suite
+      arithmetic cross-check below are the load-bearing verifications.
+
+  count_arithmetic_cross_check:
+    baseline_cited_in_task: "427 tests, 4 properties, 0 failures (REQ-033, merged earlier this session, commit 0cc6638)"
+    new_tests_added: >
+      test/letflow/definitions/sub_process_interface_test.exs -- 34 new tests
+      (wholly new file); test/letflow/definitions/graph_test.exs -- +6 tests
+      (extension of existing file, confirmed via git diff --stat: +102/-0 lines)
+    expected: "427 + 34 + 6 = 467 tests, 4 properties (unchanged)"
+    actual_full_suite: "467 tests, 4 properties, 0 failures"
+    result: MATCHES — verified via actual run, not assumed from arithmetic.
+
+  global_row_pollution_check:
+    concern: >
+      This requirement's tests are pure-function unit tests over
+      Letflow.Definitions.SubProcessInterface and Letflow.Definitions.Graph
+      (no I/O, per the design's stated purity contract) — lower pollution risk
+      than a Postgres-backed test file, but the full suite as a whole still
+      provisions/reads real Postgres state via other tests in the same run.
+    independent_postgres_reverification: >
+      Queried letflow-postgres-1 directly via `docker exec ... psql -U letflow
+      -d letflow_test` after both full-suite runs completed:
+        SELECT count(*) FROM public.tenants;         -> 0
+        SELECT count(*) FROM public.tenant_schemas;  -> 0
+    conclusion: >
+      No orphan rows in either global table after the runs.
+
+  known_noise_not_a_failure:
+    - >
+      [error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in NNNN ms.
+      — REQ-016's Ueberauth OIDC worker attempting to reach a deliberately
+      unreachable placeholder issuer configured in config/test.exs. Pre-existing
+      since REQ-016, already documented as expected noise in every prior WF-02
+      test report (e.g. REQ-025's, REQ-033's, REQ-041's). Does not fail, skip,
+      or affect any test.
+    - >
+      Verbose SQL query debug logging appears in raw mix test output
+      (config/test.exs's default test log level), including QUERY OK/DELETE/
+      CREATE SCHEMA/DROP SCHEMA lines interleaved with passing tests across
+      the full suite — sandbox schema setup/teardown from Ecto.Adapters.SQL.Sandbox
+      and tenant-schema tests, established pattern per prior reports. None
+      originate from a test that itself failed — confirmed via the zero-match
+      failure-marker grep above.
+    - >
+      "warning: ExUnit.Case.register_test/4 is deprecated" and "warning:
+      default values for the optional arguments ... are never used" (in
+      valid_review_attrs/1 and start_pool!/1), and one "warning: redefining
+      module Letflow.Repo.Migrations.CreateEventTypeRegistry (current version
+      defined in memory)" — pre-existing compiler warnings unrelated to
+      REQ-032, not errors, do not affect pass/fail. Same warnings as REQ-033's
+      report noted.
+
+pre_existing_failures_found: none
+issues_filed: none
+issues_referenced_not_refiled: none
+
+test_file_breakdown:
+  new_req_032:
+    items:
+      - file: test/letflow/definitions/sub_process_interface_test.exs
+        detail: >
+          Coverage of Letflow.Definitions.SubProcessInterface (REQ-032,
+          SPC-02 definition-time half) per test/specs/REQ-032.md — parse_interface/2,
+          validate_schema_shape/2, all 6 named violation codes, and the
+          32-level depth cap, exercised as pure-function unit tests (no I/O,
+          matching the module's own purity contract) — no mocked database.
+        subtotal: 34
+      - file: test/letflow/definitions/graph_test.exs
+        detail: >
+          Extension of the pre-existing graph_test.exs with SUB_PROCESS-node
+          tests covering CHK-18's new delegation to SubProcessInterface.
+        subtotal_new: 6
+        subtotal_full_file: 46
+  full_suite_grand_total: 467
+  cross_check: >
+    467 total (4 properties, 463 example tests) reproduced identically across
+    both full-suite runs (unpinned seed 403552, and pinned seed 0), matching
+    the task's cited baseline of 427 tests / 4 properties / 0 failures
+    (REQ-033) plus this run's own 34 new tests (sub_process_interface_test.exs)
+    plus 6 new tests (graph_test.exs extension). This Step 4 run is the
+    independent, formal re-verification of TEST-DESIGNER's and
+    TEST-DESIGN-VALIDATOR's identical prior claims (handoffs/orchestrator.log
+    lines 323-324) — run separately twice, output saved to log files and
+    programmatically grepped for failure markers rather than eyeballed, plus
+    isolated re-runs of REQ-032's own new/changed files (combined and
+    individually), plus a live Postgres re-check confirming no orphan rows in
+    the global tenants/tenant_schemas tables.
+
+diagnosis: "N/A — no failures observed in this run. Nothing routed back to ELIXIR-DEV or TEST-DESIGNER."
+
+regression_check_vs_baseline: >
+  Task-cited baseline: 427 tests, 4 properties, 0 failures (REQ-033, merged
+  earlier this session, commit 0cc6638). This run adds
+  test/letflow/definitions/sub_process_interface_test.exs (34 new tests) and
+  extends test/letflow/definitions/graph_test.exs (+6 tests), reproducing 467
+  tests / 4 properties / 0 failures identically across two independent
+  full-suite runs (unpinned default seed 403552 and pinned seed 0), plus an
+  isolated 80/0 re-run of the two new/changed files together (34/0 and 46/0
+  individually). Zero regressions confirmed. No pre-existing failure was
+  found anywhere in the suite this run (Unblock-Everything rule: N/A, nothing
+  to unblock; ISSUE_QUEUE protocol: N/A, nothing to file).
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-17-WF02-REQ032-20260817.yaml
+  next_action: "Route to RELEASE-VALIDATOR (WF-02 Step 5) — no rework needed."

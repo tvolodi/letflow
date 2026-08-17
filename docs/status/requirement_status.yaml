@@ -2223,3 +2223,39 @@ history:
       (TASK_QUEUE.md, core-directives.md) -- both neutral, no further
       edits needed. No lib/, priv/, or test/ file touched. Released queue
       task 69 as done via the per-client API key, closing GitHub issue #78.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-17T07:05:06Z
+    note: >
+      Resolved ISS-0031 (GitHub #90, MINOR -- queue task 77, registered
+      directly via register_task by another host mid-session, discovered
+      live: its description pointed at docs/issues/ISS-0031.yaml "for full
+      diagnosis" but that file had never been pushed to origin/main --
+      git pull --ff-only confirmed already up to date. Rather than release
+      the task back to the pool (which would just hand the same
+      already-locked-by-this-host task nowhere useful) or block waiting
+      for the other host, investigated independently: the short
+      description already named the precise root cause
+      ([:letflow, :repo, :query] telemetry is node-global/unfiltered under
+      test/letflow/plugs/tenant_status_test.exs's async: true), confirmed
+      by reading the test file and cross-checking :telemetry's documented
+      same-process synchronous dispatch semantics. Fixed by filtering the
+      handler on self() == test_pid (the query-firing process's PID at the
+      moment telemetry invokes the handler, vs. the PID captured at attach
+      time) -- a stray concurrent test's query now fails that check in its
+      own process and never reaches this test's mailbox, while a real
+      GET-path query (same process throughout, no spawning) is still
+      observed exactly as before. Applied to both telemetry-attaching
+      tests in the describe block, not just the flaky one. Added a
+      deterministic regression test proving the filter mechanism directly
+      (spawn a process, fire the handler from it, synchronize on its exit,
+      assert nothing received) rather than relying on statistical
+      confidence alone. Verified: target file 10/10; full suite run four
+      consecutive times, 310/310 every time, zero flakes. Backfilled the
+      missing docs/issues/ISS-0031.yaml with the full diagnosis and
+      resolution (discovered_by/discovered_in_run left "unknown" --
+      neither the queue task nor its mirrored GitHub issue carries an
+      agent/run id, so the registering host's identity isn't recoverable).
+      Released queue task 77 as done via the per-client API key, closing
+      GitHub issue #90.

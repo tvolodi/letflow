@@ -46,8 +46,24 @@ defmodule Letflow.Plugs.TenantStatusTest do
   # Named (not anonymous) telemetry handler function — :telemetry.attach/4 logs a
   # performance-penalty info message for anonymous-function/local-capture handlers,
   # per its own docs (see the "method short-circuit" tests below).
+  #
+  # ISS-0031 (GH#90): [:letflow, :repo, :query] is a single node-global event name --
+  # :telemetry.attach/4 has no per-process scoping, so once attached, this handler
+  # fires for EVERY query any process in the VM issues against Letflow.Repo, not just
+  # this test's own call_plug/2. Under this module's `async: true`, many other test
+  # processes are genuinely issuing real queries concurrently, so an unfiltered
+  # send/2 could deliver a stray :query_fired from an unrelated test and flake the
+  # `refute_received` assertion below. Fixed by exploiting that :telemetry.execute/3
+  # invokes every attached handler synchronously IN THE CALLING PROCESS (no message
+  # passing, no process hop -- this is exactly why :telemetry is hot-path-safe) --
+  # self/0 here is therefore the PID of whatever process actually issued the query
+  # that fired this event. Only forward the message when that's this test's own
+  # process, so a concurrent test's query is silently ignored instead of polluting
+  # this test's mailbox.
   def handle_query_telemetry(_event, _measurements, _metadata, test_pid) do
-    send(test_pid, :query_fired)
+    if self() == test_pid do
+      send(test_pid, :query_fired)
+    end
   end
 
   describe "acceptance criterion 3 — write methods against a :migrating tenant" do
@@ -158,6 +174,34 @@ defmodule Letflow.Plugs.TenantStatusTest do
       after
         :telemetry.detach(handler_id)
       end
+    end
+
+    # ISS-0031 (GH#90) regression: deterministically proves the self()-filter itself,
+    # rather than relying on statistical confidence from repeated full-suite runs.
+    # [:letflow, :repo, :query] is node-global, so a query genuinely fired by a
+    # DIFFERENT process (simulating a concurrently running async test under this
+    # module's `async: true`) must not reach this test's mailbox.
+    test "handle_query_telemetry/4 ignores an event fired from a different process than the one it was attached for" do
+      test_pid = self()
+
+      {:ok, other_pid} =
+        Task.start(fn ->
+          receive do
+            :fire -> handle_query_telemetry([:letflow, :repo, :query], %{}, %{}, test_pid)
+          end
+        end)
+
+      send(other_pid, :fire)
+
+      # Prove the other process really did run the handler (so a "the Task never ran"
+      # false negative can't masquerade as this test's fix working) before asserting
+      # the mailbox stayed empty -- Task.start/1's own process exits right after
+      # handling :fire, so awaiting that exit is a reliable synchronization point.
+      ref = Process.monitor(other_pid)
+      assert_receive {:DOWN, ^ref, :process, ^other_pid, :normal}, 1000
+
+      refute_received :query_fired,
+                       "expected a query event fired from a different process to be filtered out"
     end
   end
 

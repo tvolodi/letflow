@@ -1,0 +1,84 @@
+id: ISS-0031
+title: "tenant_status_test.exs's no-query-on-GET assertion is flaky under full-suite async concurrency"
+discovered_by: unknown
+discovered_in_run: unknown
+discovered_at: 2026-08-17T07:00:03Z
+severity: MINOR
+description: >
+  This queue task (letflow-queue task 71, GitHub #90) was registered directly via
+  register_task with a short description pointing at "docs/issues/ISS-0031.yaml for
+  full diagnosis" -- but that file was never actually committed to the shared repo, so
+  the host that claimed the task (this one) had no local record to read, only the short
+  description and acceptance criteria carried on the queue task/mirrored GitHub issue
+  itself. This file is written now, by the claiming host, from an independent
+  investigation of the actual test file, to backfill the missing record with the same
+  rigor every other issue in this project gets (see the "How discovered" note below for
+  what could and could not be reconstructed).
+
+  The short description available at claim time: "telemetry handler for
+  [:letflow, :repo, :query] is node-global and unfiltered, so a concurrently running
+  async test's real query can land a stray :query_fired message."
+
+  Independently confirmed against test/letflow/plugs/tenant_status_test.exs: the module
+  is `async: true` (moduledoc: "every test seeds its own tenant row... inside its own
+  sandboxed transaction"). Two tests in the "method short-circuit" describe block call
+  `:telemetry.attach(handler_id, [:letflow, :repo, :query], &__MODULE__.handle_query_telemetry/4, test_pid)`
+  and the handler unconditionally ran `send(test_pid, :query_fired)`.
+  `[:telemetry, :attach/4]` has no per-process scoping -- once attached, the handler
+  fires for every matching event any process in the VM emits, not just this test's own
+  `call_plug/2` call. Under `async: true`, many other test processes are genuinely
+  issuing real Ecto queries against the same `Letflow.Repo` concurrently, so the
+  `refute_received :query_fired` assertion in "a GET request issues no Ecto query at
+  all" could intermittently see a stray message from an unrelated test and fail --
+  exactly the flakiness class the short description names.
+
+  Root-cause mechanism confirmed from `:telemetry`'s own documented behavior:
+  `:telemetry.execute/3` invokes every attached handler synchronously IN THE CALLING
+  PROCESS (no message passing, no process hop -- the documented reason it's safe on a
+  hot path). So inside `handle_query_telemetry/4`, `self()` at the moment it runs is
+  the PID of whatever process actually issued the query that fired the event -- not
+  necessarily the test that attached the handler.
+resolution: >
+  Filtered the handler: only forward the message when `self() == test_pid` (the PID
+  captured at attach time, i.e. this specific test's own process). A query genuinely
+  issued by this test's own `call_plug/2` call still runs in the same process
+  throughout (no spawning inside the Plug pipeline or the Sandbox-mode Repo call), so
+  the property under test is fully preserved -- a real GET-path query would still be
+  observed and still fail the test. A stray query from a different, concurrently
+  running async test process now runs its copy of the handler in ITS OWN process,
+  fails the `self() == test_pid` check there, and is silently dropped instead of
+  reaching this test's mailbox.
+
+  Applied to both telemetry-attaching tests in the "method short-circuit" describe
+  block (the GET no-query test and the POST does-query test), not just the flaky one --
+  the POST test could have accumulated stray extra messages in its mailbox too, which
+  wouldn't have failed `assert_received` (it only needs one matching message) but is
+  the same latent hazard.
+
+  Added a new regression test that deterministically proves the filter mechanism
+  itself, rather than relying on statistical confidence from repeated full-suite runs:
+  spawns a separate process, has it fire `handle_query_telemetry/4` directly with this
+  test's PID as the target, synchronizes on that process's exit via `Process.monitor/1`
+  (so a "the spawned process never actually ran" false negative can't masquerade as the
+  fix working), then asserts nothing was received.
+
+  Verified: target file 10/10 (previously 9, now 10 with the new regression test).
+  Full suite run four consecutive times: 310/310, 310/310, 310/310, 310/310 -- zero
+  flakes (test count is +1 over the pre-existing 309 baseline, matching the one new
+  test added).
+
+  How discovered (for this backfilled record): the registering host's short
+  description already named the correct root cause precisely enough to locate and fix
+  without needing the missing file -- independently confirmed by reading
+  tenant_status_test.exs directly and cross-checking :telemetry's own synchronous,
+  same-process dispatch semantics, rather than trusting the description at face value.
+  `discovered_by`/`discovered_in_run` above are left `unknown` because the registering
+  host's identity isn't recoverable from the queue task or GitHub issue alone --
+  neither carries an agent/run id, only title/description/acceptance_criteria.
+affected_files:
+  - test/letflow/plugs/tenant_status_test.exs
+github_issue: https://github.com/tvolodi/letflow/issues/90
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0031-20260817
+resolved_at: 2026-08-17T07:05:06Z

@@ -3527,3 +3527,49 @@ history:
       ILIKE-based name/description search against REQ-027's
       process_definitions table, no new migration, ranked results,
       QueryEmpty/QueryTooLong validation, pagination via limit/offset.
+  - req: REQ-042
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-17T21:57:46Z"
+    note: >
+      RELEASE-VALIDATOR PASSed REQ-042 (Definition full-text search --
+      store.zig's Store.search(), PD-10): Letflow.Definitions.search/2
+      (lib/letflow/definitions.ex, ranked ILIKE full-text search against
+      REQ-027's process_definitions table, no new migration), all 6
+      acceptance criteria independently re-verified against the actual
+      shipped code and tests (not sourced from any agent's own summary),
+      23 new tests across test/letflow/definitions/search_test.exs and
+      test/letflow/definitions_test.exs, full suite
+      MIX_TEST_PARTITION=2 mix test 608/608 (4 properties, 0 failures) --
+      re-run independently by RELEASE-VALIDATOR itself, matching
+      TEST-RUNNER's Step 4 report. One rework cycle at Step 2d: the rank
+      CASE SQL literal ('CASE WHEN lower(?) = lower(?) THEN 3.0 WHEN ?
+      ILIKE ? THEN 2.0 ELSE 1.0 END') was duplicated across
+      select_with_rank/3 and order_by_rank/3; fixed via a single
+      @rank_case_sql module attribute referenced by both call sites,
+      re-verified as present and non-duplicated by both SECURITY-REVIEWER
+      and REVIEWER's re-verification passes and again independently by
+      RELEASE-VALIDATOR (grep count: 1 definition + 2 usages). Incidental
+      finding during Step 3 (TEST-DESIGNER): search/2's rank field is
+      typed float() in @type search_result but Postgres/Ecto decode the
+      CASE expression's numeric result as %Decimal{} at runtime -- not a
+      REQ-042 acceptance-criterion defect (ranking order is unaffected;
+      the new tests normalize via Decimal.to_float/1), but a
+      typespec/runtime-type mismatch any future caller relying on the
+      documented float() type would hit. Filed as docs/issues/ISS-0038.yaml
+      (MINOR, also GitHub #120), not fixed as part of this requirement's
+      scope. Flipped docs/requirements.yaml REQ-042 status: in_progress ->
+      done. docs/migration/stage-2-event-store-definitions.md header's
+      Requirements line updated to move REQ-042 from the pending list to
+      the done list (same bulk-refresh-at-stage-gate pattern as
+      REQ-025/REQ-029/REQ-032/REQ-033/REQ-034/REQ-036/REQ-037's
+      DOC-UPDATER runs; not named in REQ-042's own acceptance criteria).
+      README.md checked and left untouched: read "Migration status" and
+      "What's here today"/"Running it" directly -- both describe only the
+      original ProcessInstance/InstanceSupervisor/TransitionEvent/Router
+      slice (3-endpoint Plug router, 4-state ASCII diagram); REQ-042 is
+      domain-logic only (a new function in the existing
+      Letflow.Definitions module, no new HTTP endpoint, no new curl-able
+      command, no change to the ASCII state diagram), consistent with
+      REQ-025/REQ-032/REQ-033/REQ-034/REQ-036/REQ-037's DOC-UPDATER
+      precedent for domain-logic-only requirements.

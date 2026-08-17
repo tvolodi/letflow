@@ -482,3 +482,5 @@
 2026-08-17T21:50:27Z | DISPATCH | WF-02 | WF02-REQ042-20260817 | ORCH -> TEST-RUNNER | Step 4: full suite run.
 2026-08-17T21:54:10Z | PASS | WF-02 | WF02-REQ042-20260817 | TEST-RUNNER -> ORCH | Step 4: full suite run twice (unpinned + seed 0), 4 properties, 608 tests, 0 failures both times. Isolated re-run 23/23 matching Step 3b. No issues found. report-2026-08-17-WF02-REQ042-20260817.yaml written. Committed 6b8158d, pushed.
 2026-08-17T21:54:20Z | DISPATCH | WF-02 | WF02-REQ042-20260817 | ORCH -> RELEASE-VALIDATOR | Step 5: independent re-verification.
+2026-08-17T21:55:52Z | PASS | WF-02 | WF02-REQ042-20260817 | RELEASE-VALIDATOR -> ORCH | Step 5: independently re-ran full suite (608/608) and isolated tests (23/23). All 6 REQ-042 ACs confirmed against shipped code directly. Rework fix re-verified present (literal appears once, both call sites reference @rank_case_sql). requirements.yaml/requirement_status.yaml confirmed accurately still in_progress. Committed a44d5a2, pushed.
+2026-08-17T21:56:48Z | DISPATCH | WF-02 | WF02-REQ042-20260817 | ORCH -> DOC-UPDATER | Step 6: flip REQ-042 in_progress -> done, log rework cycle, check stage-2 doc/README.

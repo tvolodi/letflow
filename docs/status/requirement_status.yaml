@@ -2194,3 +2194,32 @@ history:
       change, hardens a cleanup path that was silent exactly when needed.
       Released queue task 71 as done via the per-client API key, closing
       GitHub issue #86.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-17T06:58:11Z
+    note: >
+      Resolved ISS-0021 (GitHub #78, MINOR, filed independently by
+      ELIXIR-DEV and RELEASE-VALIDATOR during WF02-REQ023-20260816 -- queue
+      task 69, an older GitHub-imported issue; the LIFO issue priority
+      correctly moved to this once the REQ027-run batch, 71-75, drained).
+      HANDOFF_PROTOCOL.md section 4 step 4 told the completing agent to
+      write handoffs/registry.json directly; ORCHESTRATOR.md's "ORCH MUST"
+      list said ORCH maintains it; AGENT_SYSTEM.md's capability matrix
+      resolved neither. Two agents in one run had each followed their
+      dispatch instruction (leave registry.json alone) over their own
+      protocol's literal text and flagged the drift rather than picking a
+      side. Adopted the issue's own recommendation (ORCH-owned, matching
+      actual practice and the concurrent-write-hazard reasoning already in
+      the issue) rather than the alternative (narrowing ORCH and solving
+      concurrent writes). Removed HANDOFF_PROTOCOL.md's step 4 registry
+      instruction, replaced with an explicit "ORCH does this on your
+      behalf" note. Added a clarifying line under AGENT_SYSTEM.md's
+      capability matrix: "handoffs" write-scope means each agent's own
+      handoff file only, registry.json is ORCH-exclusive regardless of
+      that column's per-row wording. ORCHESTRATOR.md's own text was already
+      correct; added a one-line cross-reference for discoverability.
+      Grepped the rest of docs/agents/ for other registry.json mentions
+      (TASK_QUEUE.md, core-directives.md) -- both neutral, no further
+      edits needed. No lib/, priv/, or test/ file touched. Released queue
+      task 69 as done via the per-client API key, closing GitHub issue #78.

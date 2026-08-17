@@ -124,11 +124,22 @@ never precede `started_at`.
 1. Set handoff["status"] = "COMPLETED" (or "FAILED")
 2. Fill handoff["result"] per the schema above
 3. Set handoff["completed_at"] to the real clock output from step 3
-4. Update the matching entry's status in handoffs/registry.json
-5. Commit handoffs/, and any other files this step produced, to git
+4. Commit handoffs/, and any other files this step produced, to git
    (see core-directives.md's "File Placement Rules" — workflow artefacts are
    committed, not left staged)
 ```
+
+**Do not write to `handoffs/registry.json` yourself** (updated 2026-08-17,
+ISS-0021/GH#78 — step 4 above previously instructed the completing agent to update it
+directly, contradicting `ORCHESTRATOR.md`'s "ORCH MUST... maintain
+`handoffs/registry.json`", and cost two agents a stop-and-flag decision point across
+one run before this was fixed at the source). ORCH updates the matching entry's status
+in `registry.json` on your behalf once it receives your completed handoff —
+`registry.json` is a single append-only document carrying run-level lock fields
+(`owned_modules`, `lock_acquired_at`/`lock_released_at`) only ORCH has the context to
+set correctly, and every completing agent writing it directly would be a concurrent-write
+hazard across this project's multi-worktree/multi-host setup. Your own handoff file
+(steps 1-3 above) is the only file this section asks you to write.
 
 **Before marking PASS, ask: did I independently verify this, or am I trusting a claim?**
 If your role is a validator (see the producer/validator table in `core-directives.md`),

@@ -14,7 +14,11 @@
   producing step has a validating step"
 
 **ORCH MUST:**
-- Create and update handoff files; maintain `handoffs/registry.json`
+- Create and update handoff files; maintain `handoffs/registry.json` — this is the
+  ORCH-exclusive reading `docs/agents/shared/HANDOFF_PROTOCOL.md` §4 and
+  `docs/agents/AGENT_SYSTEM.md` §3.1 now state explicitly too (2026-08-17,
+  ISS-0021/GH#78 resolved a prior contradiction between the three documents; no other
+  role writes `registry.json` directly)
 - Spawn the correct agent for each workflow step
 - Route PASS results to the next step, FAIL results back for rework
 - Escalate when `rework_count >= max_rework`

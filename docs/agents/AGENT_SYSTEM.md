@@ -74,6 +74,15 @@ before S7 starts would be scope creep against a stage that hasn't been reached.
 | `DOC-UPDATER` | ✓ | ✓ | ✗ | ✗ |
 | `UAT-RUNNER` | ✓ | uat-reports | ✓ (HTTP calls against a running instance) | ✗ |
 
+**`handoffs` in the Writes column means the agent's own handoff file only** (updated
+2026-08-17, ISS-0021/GH#78 — this table previously left `handoffs/registry.json`
+ownership unresolved, contradicting `docs/agents/ORCHESTRATOR.md`'s explicit "ORCH
+MUST... maintain `handoffs/registry.json`"). `handoffs/registry.json` itself is
+ORCH-exclusive: ORCH updates it on every other agent's behalf when it processes that
+agent's completed handoff, per `docs/agents/shared/HANDOFF_PROTOCOL.md` §4. No role
+other than `ORCH` writes to `registry.json` directly, regardless of what this table's
+`Writes` column otherwise says for that row.
+
 ---
 
 ## 4. Handoff system

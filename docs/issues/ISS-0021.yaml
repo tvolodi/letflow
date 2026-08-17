@@ -71,4 +71,37 @@ affected_files:
   - docs/agents/ORCHESTRATOR.md
   - docs/agents/AGENT_SYSTEM.md
 github_issue: https://github.com/tvolodi/letflow/issues/78
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0021-20260817
+resolved_at: 2026-08-17T06:58:11Z
+resolution: >
+  Applied the issue's own suggested fix: ORCH owns handoffs/registry.json
+  exclusively, matching actual practice (every run REQ-018..REQ-023) and
+  ORCHESTRATOR.md's original text, rather than narrowing ORCHESTRATOR.md
+  and solving the concurrent-write hazard the other direction would need.
+
+  HANDOFF_PROTOCOL.md section 4 step 4 (previously "Update the matching
+  entry's status in handoffs/registry.json", addressed to the completing
+  agent) removed and replaced with an explicit "do not write registry.json
+  yourself -- ORCH does it on your behalf" note, naming the concurrent-
+  write hazard and the run-level lock fields only ORCH has context for.
+
+  AGENT_SYSTEM.md section 3.1's capability matrix left "handoffs" as each
+  role's write-scope ambiguous between "own handoff file" and "including
+  registry.json" -- added an explicit note under the table: "handoffs"
+  means the agent's own handoff file only, registry.json is ORCH-exclusive
+  regardless of what the table's Writes column says per row.
+
+  ORCHESTRATOR.md's own text was already correct (ORCH MUST maintain
+  registry.json) and needed no substantive change; added a one-line
+  cross-reference to the now-resolved contradiction for discoverability.
+
+  Grepped docs/agents/ for every other registry.json mention
+  (TASK_QUEUE.md, core-directives.md) -- both are neutral references (a
+  file-location table entry, a JSON-vs-YAML format note), neither
+  instructs a non-ORCH agent to write it, so no further edits needed.
+
+  No lib/, priv/, or test/ file touched -- documentation-contradiction fix
+  only. All three canonical instruction surfaces (HANDOFF_PROTOCOL.md,
+  ORCHESTRATOR.md, AGENT_SYSTEM.md) now agree.

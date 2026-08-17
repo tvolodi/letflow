@@ -1,0 +1,54 @@
+{
+  "handoff_id": "61cefbac-2880-4ecc-818b-e6362cab9a69",
+  "run_id": "WF02-REQ039-20260817",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ039-20260817/step-05-release-validator.json",
+  "created_at": "2026-08-17T09:23:07Z",
+  "started_at": "2026-08-17T09:23:07Z",
+  "completed_at": "2026-08-17T09:26:13Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-039"],
+    "related_handoff_ids": ["8ca4972e-53fc-4921-b169-7b9ab258d19d"],
+    "artifacts_in": [
+      "lib/letflow/sandbox_pool.ex",
+      "lib/letflow/sandbox_pool/fixture_loader.ex",
+      "test/letflow/sandbox_pool_test.exs",
+      "test/letflow/sandbox_pool/fixture_loader_test.exs",
+      "test/reports/report-2026-08-17-WF02-REQ039-20260817.yaml"
+    ],
+    "owned_modules": ["lib/letflow/definitions", "priv/repo/migrations"]
+  },
+  "task": {
+    "description": "Independently re-verify REQ-039 (Sandbox pool and fixture loader) is genuinely done before DOC-UPDATER flips its status. Do not trust TEST-RUNNER's report alone -- re-run the suite yourself.",
+    "acceptance_criteria": [
+      "Independently re-run mix test (full suite)",
+      "Each of REQ-039's 6 acceptance criteria checked explicitly against the actual code/test, not against any prior agent's summary",
+      "docs/status/requirement_status.yaml and docs/requirements.yaml checked for staleness relative to what actually shipped (REQ-039 currently status: in_progress, not yet done)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independent re-verification, branch feature/WF02-REQ039-20260817 (commit 5a4a5a7). (1) mix test run fresh twice myself: unpinned seed -> 'Result: 323 passed (4 properties, 319 tests)', exit 0; second run with --seed 12345 -> identical '323 passed (4 properties, 319 tests)', exit 0. Matches TEST-RUNNER's step-04 report exactly, independently reproduced rather than trusted. Also queried Postgres directly after both runs (mix run -e against pg_catalog.pg_namespace for 'sandbox_%') and found zero orphaned sandbox schemas -- cleanup is real, not just claimed. (2) Read docs/requirements.yaml's REQ-039 entry (lines 1822-1873) and checked each of its 6 acceptance_criteria directly against the shipped code/tests myself: AC1 (empty-pool immediate claim, real schema) -- confirmed in sandbox_pool.ex's handle_provision_now/provision_sandbox (CREATE SCHEMA, no IF NOT EXISTS) and sandbox_pool_test.exs's 'empty pool' describe block, which asserts against information_schema.schemata directly (not just the return value). AC2 (blocking on exhausted quota, timeout -> :sandbox_unavailable) -- confirmed in handle_queue_or_reject/Process.send_after/handle_info({:claim_timeout,...}) and the 3 tests covering release-driven hand-off, real-timeout path, and max_wait_ms<=0 immediate-reject. AC3 (release drops schema for real, frees slot) -- confirmed in handle_call({:release,...})/drop_schema/service_next_waiter and the test asserting schema_exists? is false post-release plus a subsequent claim succeeds. AC4 (allowlist rejection before any SQL) -- confirmed in FixtureLoader.load_fixtures_only/3's with-chain (validate_schema_name, then validate_table_names, both complete before apply_fixtures/3 is ever called) and the test proving zero rows land even for an allowlisted table when batched with a non-allowlisted one. AC5 (TRUNCATE-before-insert idempotent retry) -- confirmed in apply_fixtures/3 (TRUNCATE each distinct table inside the same transaction, then INSERT) and the 3 fixture_loader_test.exs tests (identical retry, changed retry replaces, empty-list no-op). AC6 (moduledoc names the process-per-instance-vs-row open question, left for CODE-DESIGNER) -- read sandbox_pool.ex lines 13-30 directly: the moduledoc has an explicit '## Process-per-instance vs. row-based state (REQ-039's open question, resolved here)' section that names stage-2-event-store-definitions.md's 'Early findings' section by name (verified that section header exists at stage-2-event-store-definitions.md:20) and states CODE-DESIGNER resolved it in the design doc -- matches AC6's text exactly. All 6 confirmed by direct inspection of the actual shipped .ex/.exs files, not by re-reading CODE-DESIGN-VALIDATOR's or TEST-DESIGN-VALIDATOR's summaries (though my independent reading agrees with both). (3) Staleness check: docs/requirements.yaml REQ-039 status is still 'in_progress' as expected (DOC-UPDATER, Step 6, hasn't run) -- not staleness. docs/status/requirement_status.yaml has exactly one REQ-039 entry (line 2610, event: started, 2026-08-17T08:03:14Z) and no 'done' event yet -- consistent, not stale. REQ-039's own text explicitly leaves the process-vs-row choice open for CODE-DESIGNER 'at WF-02 design time' rather than asserting an answer, so the shipped GenServer-singleton design is a resolution of an explicitly-deferred question, not a drift from the requirement text. Checked REQ-039's depends_on: [REQ-022] is genuinely status: done in docs/requirements.yaml (line 845). Checked git diff main...HEAD --stat: 19 files changed, scope is exactly config wiring (dev/prod/test.exs), lib/letflow/application.ex supervision wiring, the two new lib/ modules, the two new test files, the design doc, the test spec, handoff files, and the test report -- no stray or out-of-scope files. (4) Sanity-checked the gate sequence is real, not just claimed: step-01b (CODE-DESIGN-VALIDATOR), step-02c (SECURITY-REVIEWER), step-02d (REVIEWER), step-03b (TEST-DESIGN-VALIDATOR), step-04 (TEST-RUNNER) all show status: COMPLETED and result.status: PASS, each with substantive independent-verification summaries (not rubber-stamps) -- read all 5 in full. REQ-039 is genuinely done.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ039-20260817/step-05-release-validator.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ039-20260817",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER (Step 6)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

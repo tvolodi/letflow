@@ -202,10 +202,12 @@ defmodule Letflow.TenantProvisioning do
   #
   # REQ-023's six event-store migrations (lib/letflow/design/req023-event-store-schema.md
   # §4) followed by REQ-024's event_type_registry migration
-  # (lib/letflow/design/req024-event-type-registry.md §3) and REQ-027's two
+  # (lib/letflow/design/req024-event-type-registry.md §3), REQ-027's two
   # definition-core migrations (lib/letflow/design/req027-definition-core-schema.md §4)
-  # — nine entries in total. Each of these files carries the §4 guard pattern;
-  # registration here is the other mandatory half.
+  # and REQ-035's promotion_reviews migration
+  # (lib/letflow/design/req035-promotion-reviews-schema.md §4) — ten entries in
+  # total. Each of these files carries the §4 guard pattern; registration here is
+  # the other mandatory half.
   @tenant_scoped_migration_manifest [
     {20_260_816_120_001, Letflow.Repo.Migrations.CreateEvents,
      "20260816120001_create_events.exs"},
@@ -224,7 +226,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_816_193_001, Letflow.Repo.Migrations.CreateProcessDefinitions,
      "20260816193001_create_process_definitions.exs"},
     {20_260_816_193_002, Letflow.Repo.Migrations.CreateInstanceDefinitionSnapshots,
-     "20260816193002_create_instance_definition_snapshots.exs"}
+     "20260816193002_create_instance_definition_snapshots.exs"},
+    {20_260_816_200_001, Letflow.Repo.Migrations.CreatePromotionReviews,
+     "20260816200001_create_promotion_reviews.exs"}
   ]
 
   @doc """
@@ -234,10 +238,12 @@ defmodule Letflow.TenantProvisioning do
   global-only, see the migration's header comment); REQ-023 contributes the six
   event-store migrations (`lib/letflow/design/req023-event-store-schema.md` §4),
   REQ-024 the `event_type_registry` migration
-  (`lib/letflow/design/req024-event-type-registry.md` §3) and REQ-027 the two
+  (`lib/letflow/design/req024-event-type-registry.md` §3), REQ-027 the two
   definition-core migrations, `process_definitions` and
   `instance_definition_snapshots`
-  (`lib/letflow/design/req027-definition-core-schema.md` §4) — nine entries in
+  (`lib/letflow/design/req027-definition-core-schema.md` §4), and REQ-035 the
+  `promotion_reviews` migration
+  (`lib/letflow/design/req035-promotion-reviews-schema.md` §4) — ten entries in
   total, ordered by version. Every future tenant-scoped migration must append its
   own entry to `@tenant_scoped_migration_manifest`, in addition to following the
   required guard pattern in its own migration file (see this module's design doc

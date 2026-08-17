@@ -2580,6 +2580,14 @@ history:
       Released queue task 57 as done via hetzner-orch, closing GitHub issue
       #65 (no new commit -- the fix commit is 40d6bf5, already on main via
       ISS-0031/PR merge, not authored in this run).
+  - req: REQ-035
+    event: started
+    agent: ORCH
+    at: 2026-08-17T07:52:00Z
+    note: >
+      WF02-REQ035-20260817 started (hetzner-orch, queue task 41, GH#49).
+      Branch feature/WF02-REQ035-20260817 created and pushed from freshly
+      pulled main (6dd6776).
   - req: SCOPE-CHANGE
     event: done
     agent: ORCH

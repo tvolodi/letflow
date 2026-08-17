@@ -1,0 +1,57 @@
+id: ISS-0037
+title: "Future S4 SVC-03 422 renderer must not turn Violation.reason into a service-existence oracle (INV-5 tension)"
+discovered_by: SECURITY-REVIEWER
+discovered_in_run: WF02-REQ031-20260817
+discovered_at: "2026-08-17T21:09:16Z"
+severity: MINOR
+description: >
+  Found during REQ-031's SECURITY-REVIEWER gate (Step 2c) on
+  lib/letflow/definitions/service_scope_validator.ex.
+
+  REQ-031's AC3 requires the not-registered case to be
+  "distinguishable... not just a different string" from the
+  owned-by-another-tenant case -- satisfied via two distinct closed-set
+  atoms on Violation.reason: :service_not_registered (the referenced
+  service_id does not exist anywhere) vs.
+  :service_not_available_to_tenant (it exists, scoped to a different
+  tenant). This is correct and required for REQ-031 itself.
+
+  The tension: docs/agents/instructions/security-invariants.md's INV-5
+  ("Not-found/forbidden indistinguishability") will require, once S4
+  builds an HTTP layer, that a cross-tenant probe against a resource
+  that exists but belongs to another tenant return a response
+  indistinguishable from probing a resource that never existed. If a
+  future S4 handler renders activate/2's
+  {:error, {:service_scope_violation, %Violation{reason: ...}}} into an
+  HTTP 422 body by naively exposing reason (or message, which also
+  differs) verbatim, an external caller could use a process-definition
+  activation call as an oracle to learn whether an arbitrary
+  service_id/plugin_handler string is registered anywhere in the system
+  at all.
+
+  Not a defect in REQ-031 itself -- no HTTP layer exists yet (S4 not
+  started), AC3 explicitly requires the distinction at the validate/3
+  API level, and INV-5 is correctly NOT-APPLICABLE to this diff. Filed
+  so the tension is not lost by the time S4 builds the renderer: that
+  future requirement must either (a) collapse both violation reasons
+  into one generic response body for external callers while keeping the
+  distinct internal reason for logging, or (b) make an explicit,
+  reviewed decision that this oracle is acceptable -- not silently
+  render reason/message as-is.
+
+  Renumbering note: originally filed by the discovering run
+  (WF02-REQ031-20260817, still in progress on a separate host at the
+  time of this filing) as its own local ISS-0036.yaml. That number
+  collided with this checkout's own concurrently-merged ISS-0036.yaml
+  (an unrelated finding from WF02-REQ034-20260817, already on main by
+  the time this task was claimed) -- the same class of cross-host
+  numbering collision documented for ISS-0034/ISS-0035. Filed here as
+  ISS-0037 instead, ported verbatim from the queue task's registered
+  description and the already-created GitHub issue (#112) rather than
+  re-authored. The discovering run's own local ISS-0036.yaml (not yet
+  merged as of this writing) is now redundant with this file and should
+  be dropped, not merged, when that run reaches its own Step Final.
+affected_files:
+  - lib/letflow/definitions/service_scope_validator.ex
+github_issue: https://github.com/tvolodi/letflow/issues/112
+status: open

@@ -1,0 +1,189 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-038
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ038-20260817
+date_utc: 2026-08-17T23:13:35Z
+
+git:
+  branch: feature/WF02-REQ038-20260817
+  branch_confirmed: true
+  commit: da3a3bd
+  commit_subject: "chore(WF02-REQ038): record own commit sha in step-03b handoff git_evidence"
+  note: >
+    Confirmed via `git branch --show-current` and `git log --oneline -5` at
+    start of this run; working tree clean, branch up to date with origin.
+    This run picked up immediately after TEST-DESIGN-VALIDATOR's Step 3b PASS
+    (handoffs/WF02-REQ038-20260817/step-03b-test-design-validator.json), which
+    independently confirmed 18 passed (isolated) / 647 passed (4 properties,
+    643 tests, full suite) plus real mutation-testing evidence (two
+    deliberate break-and-revert cycles against rollback_definition_version/4's
+    cardinality-branching lookup and guard-ordering logic) against the
+    implementation. This Step 4 run reproduces those counts itself from a
+    cold start rather than trusting the prior claim, per Unblock-Everything /
+    "every producing step has a validating step."
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir/erl reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5] ... Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  postgres_container: letflow-postgres-1 (confirmed Up 2 days/healthy via `docker compose ps`, port 5462 -> 5432)
+  command_run: >
+    `mix test` (full suite, default/unpinned random seed) and
+    `mix test --seed 0` (full suite, second independent run, pinned seed) —
+    the `test` alias runs ecto.create + ecto.migrate --quiet first
+    automatically. Plus one isolated run of
+    `mix test test/letflow/definitions/rollback_test.exs` targeting REQ-038's
+    new file specifically, per this step's task instructions.
+
+verdict: PASS
+
+checks:
+  test_suite_full_run1:
+    result: PASS
+    exit_code: 0
+    seed: 746756 (unpinned/random — ExUnit's own default)
+    summary_line_verbatim: "Result: 647 passed (4 properties, 643 tests)"
+    finished_line_verbatim: "Finished in 58.2 seconds (1.5s async, 56.7s sync)"
+    failures: 0
+    grep_check: >
+      Regex covering "Failures:", "Failure:", "** (", "Excluded:", "Skipped:"
+      and " failure[s]?," / "failed)" (excluding the "0 failures" summary
+      phrasing itself and the pre-existing OIDC placeholder-issuer error log
+      line) over the full raw log (14,806 lines, captured to a scratchpad
+      file, not just the tail) — zero matches.
+
+  test_suite_full_run2:
+    result: PASS
+    exit_code: 0
+    seed: 0 (pinned, second independent run per this project's established
+      double-run practice)
+    summary_line_verbatim: "Result: 647 passed (4 properties, 643 tests)"
+    finished_line_verbatim: "Finished in 58.9 seconds (1.4s async, 57.5s sync)"
+    failures: 0
+    grep_check: "Same failure-marker regex over the full raw log (14,760 lines), zero matches."
+
+  new_file_isolated_run:
+    command_run: "mix test test/letflow/definitions/rollback_test.exs"
+    result: PASS
+    exit_code: 0
+    seed: 751292 (unpinned)
+    summary_line_verbatim: "Result: 18 passed"
+    finished_line_verbatim: "Finished in 5.0 seconds (0.00s async, 5.0s sync)"
+    failures: 0
+    matches_claimed: >
+      Exactly matches the 18-test count independently confirmed by both
+      TEST-DESIGNER (Step 3) and TEST-DESIGN-VALIDATOR (Step 3b).
+
+  count_arithmetic_cross_check:
+    baseline_cited_in_task: "629 passed (4 properties, 625 tests) on main"
+    new_tests_added:
+      - "test/letflow/definitions/rollback_test.exs -- new file, 18 tests covering rollback_definition_version/4's AC1-AC5 (counted directly: matches TEST-DESIGNER's and TEST-DESIGN-VALIDATOR's independently-confirmed 18-test count, and this run's own isolated-file run above)"
+    expected: "625 + 18 = 643 tests, 629 + 18 = 647 total, 4 properties (unchanged)"
+    actual_full_suite: "643 tests, 4 properties, 647 total passed, 0 failures"
+    result: MATCHES — verified via actual runs (both full-suite runs identical), not assumed from arithmetic alone.
+
+  known_noise_not_a_failure:
+    - >
+      [error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in
+      NNNN ms. — REQ-016's Ueberauth OIDC worker attempting to reach a
+      deliberately unreachable placeholder issuer configured in
+      config/test.exs. Pre-existing since REQ-016, already documented as
+      expected noise in every prior WF-02 test report (e.g. REQ-030's,
+      REQ-031's). Present in both full-suite runs; does not fail, skip, or
+      affect any test.
+    - >
+      Verbose SQL query debug logging appears in raw mix test output
+      (config/test.exs's default test log level) for every DB-backed test,
+      including several intentional constraint-violation "QUERY ERROR" lines
+      from tests that assert on DB constraint rejection (e.g. tenant_role
+      unique-constraint tests) — established pattern, not itself evidence of
+      failure (confirmed by the zero-match failure-marker grep above and by
+      each full-suite run's own "0 failures" summary).
+    - >
+      Pre-existing compiler warnings — 10 total across run1's log: 4x
+      ExUnit.Case.register_test/4 deprecated, 1x unused default-value
+      optional arg in test/letflow/definitions/service_scope_validator_test.exs:32,
+      2x unused default-value optional args for start_pool!/1 in
+      test/letflow/sandbox_pool/fixture_loader_test.exs:44 and
+      test/letflow/sandbox_pool_test.exs:70, 1x redefined-module warning for
+      an old migration (Letflow.Repo.Migrations.CreateEventTypeRegistry), and
+      2 set-theoretic-type-checker warnings: "the following clause will never
+      match" in test/letflow/event_store/registry_test.exs:654 and
+      "comparison between distinct types found" (immediately preceding a
+      snapshot_store_test.exs query in the log). Investigated before
+      dismissing: `git diff main...HEAD --stat` shows this branch's 16-file
+      diff touches only docs/issues/ISS-0038.yaml,
+      handoffs/WF02-REQ038-20260817/*, lib/letflow/definitions.ex,
+      lib/letflow/definitions/promotion_review_store.ex,
+      lib/letflow/design/req038-promotion-rollback.md,
+      test/letflow/definitions/rollback_test.exs, test/specs/REQ-038.md —
+      none of the five warning-source files above. `git log --oneline -1`
+      on each of test/letflow/event_store/registry_test.exs and
+      test/letflow/definitions/snapshot_store_test.exs confirms both were
+      last touched by unrelated prior commits (REQ-024's event-type-registry
+      merge and REQ-033's snapshot-store merge respectively), not this
+      branch. These are compiler-time diagnostics local to each file's own
+      pre-existing code, not affected by anything REQ-038 changed, and none
+      is an error, skip, or failure (0 failures confirmed in both full runs).
+      Not filed to ISSUE_QUEUE — no failure occurred and these are unchanged
+      from prior reports' documented baseline noise. Noted here in full for
+      audit-trail honesty.
+
+pre_existing_failures_found: none
+issues_filed: none
+issues_referenced_not_refiled:
+  - "ISS-0038 (docs/issues/ISS-0038.yaml) — already filed by REVIEWER during this same run's Step 2d, not by this step. MINOR severity, pre-existing stale-arity moduledoc drift in promotion_review_store.ex's opening paragraph (predates REQ-038; REQ-038 only added an 8th edge, didn't introduce the drift). Not a test failure, not actionable by TEST-RUNNER; referenced here for completeness only."
+
+test_file_breakdown:
+  new_req_038:
+    items:
+      - file: test/letflow/definitions/rollback_test.exs
+        detail: >
+          New file. Real-Postgres (Letflow.DataCase, sandboxed, no mocking)
+          coverage of Letflow.Definitions.rollback_definition_version/4
+          against AC1-AC5: full success path (event-append proof via
+          refute_receive, get_active_by_name/2 state parity), draft-never-
+          activated / no-row / archived-excluded rejection paths, already-
+          active guard (proven via an exploding event_appender to show
+          non-invocation, not just result shape), cardinality-branching
+          promotion_reviews lookup (zero/exactly-one/more-than-one, the
+          more-than-one case proven to mutate zero rows via a genuinely
+          separate connection re-read), guard-ordering (permission-check-
+          before-any-read, proven via an unprovisioned-but-decodable schema
+          name that would raise if checked late), and status-enum reuse via
+          double-rollback exercising the :deprecated-via-rollback eligibility
+          path.
+        subtotal: 18
+  full_suite_grand_total: 647 (643 example tests + 4 properties)
+  cross_check: >
+    647 total (4 properties, 643 example tests) reproduced identically
+    across both full-suite runs (unpinned seed 746756, and pinned seed 0),
+    matching the task's cited baseline of 629 passed / 625 tests / 4
+    properties on main plus this run's 18 new tests. This Step 4 run is the
+    independent, formal re-verification of TEST-DESIGNER's and
+    TEST-DESIGN-VALIDATOR's prior claims — run separately three times total
+    (two full-suite runs plus one isolated run of the new file).
+
+diagnosis: "N/A — no failures observed in this run. Nothing routed back to ELIXIR-DEV or TEST-DESIGNER."
+
+regression_check_vs_baseline: >
+  Task-cited baseline: 629 passed (4 properties, 625 tests) on main, before
+  this branch's changes. This run adds
+  test/letflow/definitions/rollback_test.exs (18 new tests, new file) and
+  reproduces 647 passed (4 properties, 643 tests) / 0 failures identically
+  across two independent full-suite runs (unpinned seed 746756 and pinned
+  seed 0), plus 18 passed / 0 failures on the isolated new-file run. Zero
+  regressions confirmed. No pre-existing failure was found anywhere in the
+  suite this run (Unblock-Everything rule: N/A, nothing to unblock;
+  ISSUE_QUEUE protocol: N/A, nothing new to file — ISS-0038 was already
+  filed upstream of this step, and is a moduledoc doc-drift note, not a test
+  failure).
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-18-WF02-REQ038-20260817.yaml
+  next_action: "Route to RELEASE-VALIDATOR (WF-02 Step 5) — no rework needed."

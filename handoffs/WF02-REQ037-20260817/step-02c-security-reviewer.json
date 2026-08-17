@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ037-20260817/step-02c-security-reviewer.json",
   "created_at": "2026-08-17T19:26:47Z",
   "started_at": "2026-08-17T19:26:47Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-17T19:30:50Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S2",
@@ -33,10 +33,19 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": null,
+    "status": "FAIL",
+    "summary": "INV-1 FAIL (BLOCKER). Scope test: YES -- diff writes to promotion_reviews (tenant_id column) and process_definitions (tenant_id column), a tenant-data path. INV-1 (a)/(b) satisfied everywhere checked (all reads/writes go through Repo with an explicit prefix: opts[:prefix]/Keyword.fetch! or a derived target_prefix, never the default/public schema; no migration in this diff). INV-1 (c) -- the 2026-08-17 write-time tenant_id-derivation addendum to 0003-ecto-schema-strategy.md -- FAILS for PromotionReviewStore.insert_review/2 (lib/letflow/definitions/promotion_review_store.ex): its INSERT builds attrs with tenant_id: plan.target_tenant_id (a field read out of the caller-supplied `plan` map) while opts[:prefix] is taken as a totally separate, independently-trusted caller-supplied value -- nothing in the function (no changeset validation, no constraint) ties the two together. This is exactly rejected-option (a) from the addendum's own reasoning section ('a call writing into tenant A's schema could pass tenant_id = B, and nothing... rejects it'). The reverse-derivation helper the addendum names for exactly this purpose, Letflow.TenantProvisioning.tenant_id_for_schema_name/1, already exists in the codebase (built for REQ-025) and is not called anywhere in this diff. This is not an implementation slip -- lib/letflow/design/promotion_review_state_machine.md:337-339 explicitly designed it this way ('opts[:prefix] is accepted (not re-derived from args.plan.target_tenant_id internally) so the caller controls exactly which schema is written to, matching every other function in this module'), which mis-analogizes insert_review/2 (the only function in the module that assigns tenant_id at all, on INSERT) to the other five transition functions (which never touch the tenant_id column, only read an existing row via prefix-scoped Repo.get). The design rationale never engages with the addendum's actual attribution-integrity concern. Downstream consequence, not a separate invariant but showing this is a real exploitable chain, not just a cosmetic audit-column mismatch: Promotion.promote_definition/3 (lib/letflow/definitions/promotion.ex) treats review.tenant_id as trusted ('already a trusted, typed value on the struct', moduledoc line 52) and forward-derives target_prefix = TenantProvisioning.schema_name_for_tenant(review.tenant_id) from it, then writes/activates the promoted process_definitions row into that derived schema. A promotion_reviews row written via insert_review/2 with a tenant_id that disagrees with the schema it physically lives in therefore causes promote_definition/3 to write the promoted definition into an arbitrary target tenant's schema -- a genuine cross-tenant write, not merely a stale audit column. All other checks in scope passed: INV-1(a)/(b) fine elsewhere; the 6 PromotionReviewStore transition functions all route through transition/6, which does Repo.get(PromotionReview, review_id, prefix: prefix) with opts[:prefix] Keyword.fetch!'d (no default) -- a review_id from a different tenant's schema simply does not exist in the queried schema's table, so no cross-tenant read/mutate via review_id. PromotionDigest.verify_digest/2 is called correctly in both insert_review/2 and approve_review/4 (correct argument order, :crypto.hash_equals/2 constant-time comparator, confirmed by reading promotion_digest.ex directly). promote_definition/3's permission_checker (Keyword.fetch!, no default, fail-closed) and tenant_classifier (Keyword.get default delegating to PromotionPlan.default_tenant_classifier/1, not a duplicated copy) genuinely match PromotionPlan.compute_promotion_plan/5's already-reviewed pattern -- not weakened. INV-2/INV-3/INV-5: NOT-APPLICABLE (S4/S5 not started, per security-invariants.md and no lookup-by-ID API endpoint is added in this diff -- these are context-module functions, not API handlers). INV-4: APPLIES, PASS (grep for hardcoded secret patterns in both new files: no hits). INV-6: this handoff itself is the proof-of-scoping artifact; FAIL blocks merge per its own rule. INV-7: APPLIES, PASS (no Repo.query/raw SQL in either file; both use Ecto.Query/Repo.insert/Repo.update_all, parameterized by construction). INV-8: APPLIES, PASS (no bare {:ok, _} = external-call pattern in either file; the one bare-tuple match, {1, [activated_row]} = Repo.update_all(...) in promotion.ex's activate_new_definition/2, matches INV-8's own stated carve-out -- it operates on a row this same function's enclosing transaction just inserted with a freshly-generated UUID, under the same Repo.transaction/1, so no concurrent process can have touched it first; not reachable-with-divergent-outcome from external/tenant input).",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      {
+        "invariant": "INV-1",
+        "severity": "BLOCKER",
+        "file": "lib/letflow/definitions/promotion_review_store.ex",
+        "function": "insert_review/2",
+        "description": "attrs.tenant_id is set from plan.target_tenant_id (caller-supplied, via the `plan` argument) instead of being derived from opts[:prefix] via Letflow.TenantProvisioning.tenant_id_for_schema_name/1 (or equivalently validated against it before insert). Violates the 2026-08-17 write-time tenant_id-derivation addendum to docs/migration/decisions/0003-ecto-schema-strategy.md, decision (c) -- rejected option (a) is exactly what is implemented. Root cause is in the design: lib/letflow/design/promotion_review_state_machine.md lines 337-339 explicitly chose this shape and its rationale does not address the addendum's attribution-integrity concern.",
+        "chained_consequence": "Letflow.Definitions.Promotion.promote_definition/3 (lib/letflow/definitions/promotion.ex) trusts review.tenant_id as the source of truth and forward-derives target_prefix from it, so a mismatched tenant_id written by insert_review/2 propagates into an actual cross-tenant write of the promoted process_definitions row, not just a stale audit column."
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ037-20260817",
       "commit_sha_list": [],
@@ -45,7 +54,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Rework ELIXIR-DEV (and likely CODE-DESIGNER first, since lib/letflow/design/promotion_review_state_machine.md:337-339 designed the non-compliant shape explicitly -- the implementation faithfully followed a design that itself contradicts the 2026-08-17 addendum): fix insert_review/2 to derive tenant_id from opts[:prefix] via Letflow.TenantProvisioning.tenant_id_for_schema_name/1 (dropping args.plan.target_tenant_id as the tenant_id source, or at minimum validating it matches the reverse-derived value and erroring otherwise), then re-submit to SECURITY-REVIEWER (Step 2c) before proceeding to REVIEWER (Step 2d)."
   },
   "rework_count": 0,
   "max_rework": 3

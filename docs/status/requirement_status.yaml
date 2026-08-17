@@ -2894,3 +2894,14 @@ history:
       per-requirement capability at this granularity (S2's event-store
       internals aren't reflected there at all yet, consistent with
       REQ-023/024/026's own DOC-UPDATER precedent).
+  - req: REQ-033
+    event: started
+    agent: ORCH
+    at: "2026-08-17T13:24:35Z"
+    note: >
+      Definition snapshot store (snapshot.zig, PD-08) -- claimed from
+      letflow-queue task 46 (agent_id hetzner-orch), depends_on REQ-027
+      satisfied. Letflow.Definitions.SnapshotStore.create/2 +
+      get_by_instance_id/1 against REQ-027's already-shipped
+      instance_definition_snapshots/process_definitions tables -- no new
+      migration needed.

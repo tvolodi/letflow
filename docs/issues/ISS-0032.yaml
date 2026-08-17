@@ -1,0 +1,64 @@
+id: ISS-0032
+title: "stage-2-event-store-definitions.md's header was never updated per-requirement, unlike stage-1-identity.md's established convention"
+discovered_by: DOC-UPDATER
+discovered_in_run: WF02-REQ035-20260817
+discovered_at: 2026-08-17T08:21:25Z
+severity: MINOR
+description: >
+  While doing REQ-035's WF-02 Step 6 doc update, found that
+  docs/migration/stage-2-event-store-definitions.md's header still read
+  "Status: not started... Requirements: none expanded yet" and its
+  "REVIEWER sign-off" section still read "(None yet -- this stage hasn't
+  started.)" -- despite S2 having 21 requirements already expanded in
+  docs/requirements.yaml (REQ-022 through REQ-042) and 5 of them
+  (REQ-022, REQ-023, REQ-024, REQ-027, REQ-028) already done before this
+  run started.
+
+  docs/migration/stage-1-identity.md established a clear precedent for
+  this: its header was updated incrementally by DOC-UPDATER as each S1
+  requirement finished (confirmed via git history -- e.g. commit a1c4ab9's
+  "docs(REQ-020): flip status to done, update stage-1 header" updated the
+  header's done/pending requirement lists in the same commit that flipped
+  REQ-020's status). That same incremental-header-update step appears to
+  have been silently skipped for every S2 requirement's DOC-UPDATER run so
+  far (REQ-022, REQ-023, REQ-024, REQ-027, REQ-028), leaving the file
+  stuck at its pre-expansion "not started" state for an extended period.
+
+  Not a code defect and not blocking any acceptance criterion -- fixed
+  directly as part of this run's own Step 6 (stage-2 header now reflects
+  REQ-035 and all other current S2 requirement statuses). Filed so future
+  DOC-UPDATER runs don't repeat the omission, and so anyone auditing S2
+  progress via the stage doc alone (rather than docs/requirements.yaml
+  directly) isn't misled by a stale "not started" status.
+resolution: >
+  Resolved as part of WF02-REQ035-20260817's own Step 6: this run's
+  DOC-UPDATER pass corrected docs/migration/stage-2-event-store-definitions.md's
+  header to list all 21 S2 requirements' actual current status (6 done
+  including REQ-035, 15 pending) and softened the stale "this stage hasn't
+  started" REVIEWER sign-off placeholder to reflect that S2 is in progress
+  with its stage gate still pending. No code change needed. Future
+  DOC-UPDATER runs for S2 requirements should keep maintaining this header
+  incrementally, matching stage-1-identity.md's convention, so this doesn't
+  drift stale again.
+affected_files:
+  - docs/migration/stage-2-event-store-definitions.md
+github_issue: https://github.com/tvolodi/letflow/issues/93
+queue_task_id: 78 # backfilled by ORCH after the fact -- see process note below
+process_note: >
+  DOC-UPDATER filed this issue and created/closed GitHub issue #93 directly
+  via `gh` during WF02-REQ035-20260817's Step 6, rather than reporting the
+  discovery to ORCH for ORCH to call letflow-queue's register_task as
+  docs/agents/protocols/TASK_QUEUE.md requires ("Who calls this: ORCH
+  only... an individual agent never calls register_task directly"). Since
+  the issue was discovered AND resolved within the same run (no window for
+  another host to duplicate the fix), the practical harm is nil, but ORCH
+  backfilled queue task 78 (registered then immediately released done) so
+  this record has a queue_task_id like every other ISS-NNNN entry, and so
+  the deviation itself is on record for future DOC-UPDATER runs. This
+  incidentally created a second, redundant GitHub issue (#94, the queue's
+  own server-side mirror) alongside #93 -- both now closed, no action
+  needed, but noted so a future audit isn't confused by the duplicate.
+status: resolved
+resolved_by: DOC-UPDATER
+resolved_in_run: WF02-REQ035-20260817
+resolved_at: 2026-08-17T08:21:25Z

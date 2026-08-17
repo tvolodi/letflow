@@ -1,6 +1,9 @@
 # Stage 2 — Event store & workflow definitions
 
-Status: not started. Depends on: S1. Requirements: none expanded yet.
+Status: in progress. Depends on: S1. Requirements: REQ-022, REQ-023,
+REQ-024, REQ-027, REQ-028, REQ-035 (done); REQ-025, REQ-026, REQ-029,
+REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-036, REQ-037, REQ-038,
+REQ-039, REQ-040, REQ-041, REQ-042 (`docs/requirements.yaml`) pending.
 
 ## Scope
 
@@ -57,4 +60,6 @@ choice 0003 didn't cover.
 
 ## REVIEWER sign-off
 
-(None yet — this stage hasn't started.)
+(None yet — S2 is in progress; the full per-requirement REVIEWER sign-off
+section is populated at the S2 stage gate (WF-04), same as
+`stage-1-identity.md`'s was for S1, not incrementally per requirement.)

@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ037-20260817/step-03-test-designer.json",
   "created_at": "2026-08-17T19:49:38Z",
   "started_at": "2026-08-17T19:49:38Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-17T19:59:45Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S2",
@@ -40,19 +40,23 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Wrote test/specs/REQ-037.md plus test/letflow/definitions/promotion_review_store_test.exs (19 tests) and test/letflow/definitions/promotion_test.exs (8 tests), 27 tests total, all passing against the real implementation (MIX_TEST_PARTITION=2 mix test: 27 tests, 0 failures, re-run twice with different seeds, no flakiness, no compile warnings under --warnings-as-errors). Coverage per AC: AC1 (duplicate-review) 2 tests; AC2 (self-approval-before-any-update, row_version verified unchanged) 2 tests; AC3 (digest-mismatch, distinct atom asserted side-by-side against self_approval_forbidden/invalid_transition) 1 test; AC4 (concurrency) 1 test using the exact Task.async + {:ready,pid}/:go barrier idiom from test/letflow/event_store_test.exs's concurrent-appends test, reused verbatim per the design's own §4 recipe -- asserts exactly one :ok/one :invalid_transition and row_version==2 afterwards; AC5 (rejected->superseded, the NEW edge) 1 dedicated test labeled for both AC5 and edge 7/7; AC6 (all 7 edges + >=2 non-edges) 7 explicit per-edge passing tests plus 2 required non-edge tests (rejected->approved, pending_review->applied) asserting Enum.uniq([result_a,result_b]) == [{:error,:invalid_transition}] to prove the identical atom, plus a 3rd bonus non-edge (superseded->superseded). insert_review/2's post-rework tenant_id-from-opts[:prefix] behavior is covered by a dedicated test with a deliberately disagreeing plan.target_tenant_id, proving the stored row's tenant_id is the prefix-derived value and the plan's own copy is ignored for attribution (re-read fresh from Postgres, not just the in-memory reply). promote_definition/3's basic success path is covered (version-pointer swap + event-append via an injected recording event_appender, plus a second test proving the deprecate-before-activate ordering against a pre-existing active target row), with opts[:permission_checker] supplied explicitly on every one of promotion_test.exs's 8 calls (2 tests specifically exercise the KeyError no-default path for permission_checker/event_appender). All fixtures use per-test unique tenant schemas (real CREATE SCHEMA + TenantProvisioning.replay_migrations/1) and Ecto.UUID.generate()/System.unique_integer/1 for uniqueness; no wall-clock or unseeded-randomness dependency anywhere. Two bugs found and fixed during self-verification before this handoff: (1) two 'wrong digest' fixtures had accidentally computed the SAME digest as the real one, since PromotionDigest.compute_plan_digest/1 hashes only plan.entries and the initial fixture always used identical default entries -- fixed via a differing_plan/1 helper with genuinely different entries; (2) the deprecate-before-activate test had a previous_target_def row with a random (non-matching) tenant_id, causing deprecate_previous_active/3's tenant_id-scoped WHERE clause to match zero rows and a real uq_active_definition unique-constraint violation on activation -- fixed by passing tenant_id: target_tenant_id explicitly.",
+    "artifacts_out": [
+      "test/specs/REQ-037.md",
+      "test/letflow/definitions/promotion_review_store_test.exs",
+      "test/letflow/definitions/promotion_test.exs"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ037-20260817",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF02-REQ037-20260817",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

@@ -429,17 +429,17 @@
       "workflow_id": "WF-02",
       "requirement_ids": ["REQ-033"],
       "stage": "S2",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": ["lib/letflow/definitions/snapshot_store.ex", "test/letflow/definitions/snapshot_store_test.exs"],
       "lock_acquired_at": "2026-08-17T13:24:35Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 (git setup) PASS -- routing to Step 1 (CODE-DESIGNER) next.",
+      "lock_released_at": "2026-08-17T14:06:59Z",
+      "released_lock": true,
+      "last_known_step": "PR #102 squash-merged into main as 0cc6638, queue task 46 released done, GH#54 closed.",
       "backfilled": false,
       "queue_task_id": 46,
       "queue_agent_id": "hetzner-orch",
       "worktree": "/home/tvolodi/letflow (Hetzner host ubuntu-16gb-nbg1-1)",
-      "note": "Definition snapshot store (snapshot.zig, PD-08) -- Letflow.Definitions.SnapshotStore.create/2 (SELECT ... FOR SHARE guard + insert, ON CONFLICT (instance_id) DO NOTHING idempotency) and get_by_instance_id/1, against REQ-027's already-shipped instance_definition_snapshots/process_definitions tables. No new migration. In progress."
+      "note": "Definition snapshot store (snapshot.zig, PD-08) -- Letflow.Definitions.SnapshotStore.create/3(instance_id, definition_id, opts) (FOR SHARE-locked read of process_definitions + on_conflict: :nothing insert + re-select, all in one Repo.transaction) and get_by_instance_id/2(instance_id, opts), against REQ-027's already-shipped instance_definition_snapshots/process_definitions tables. No new migration. Full producer/validator chain via independent Agent-tool-dispatched subagents, all PASS on first attempt, no rework: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> ELIXIR-DEV (self-caught and fixed an INV-8-class UUID-cast crash risk not in the original design) -> SECURITY-REVIEWER -> REVIEWER (explicit, reasoned judgment on two open questions -- OQ-2 idempotency/definition_id-mismatch-on-retry accepted as first-writer-wins with a pinned test required, OQ-3 FOR SHARE lock mode confirmed correct) -> TEST-DESIGNER (16 new tests) -> TEST-DESIGN-VALIDATOR -> TEST-RUNNER (427 tests/4 properties/0 failures) -> RELEASE-VALIDATOR (independent re-verification) -> DOC-UPDATER (status: done) -> Step Final, all PASS. No rebase conflicts. mix compile --warnings-as-errors clean, mix test 427/427 both pre-merge and re-verified post-merge on main's actual tip."
     }
   ]
 }

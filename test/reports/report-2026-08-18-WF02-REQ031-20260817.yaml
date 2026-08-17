@@ -1,0 +1,190 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-031
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ031-20260817
+date_utc: 2026-08-17T21:10:58Z
+
+git:
+  branch: feature/WF02-REQ031-20260817
+  branch_confirmed: true
+  commit: 672314e42b6d9ca2f6595498d66940db1f8426d9
+  commit_subject: "test(WF02-REQ031): TEST-DESIGN-VALIDATOR PASS on ServiceScopeValidator coverage"
+  note: >
+    Confirmed via `git branch --show-current` and `git log -1` at start of this
+    run; working tree clean, branch up to date with origin. This run picked up
+    immediately after TEST-DESIGN-VALIDATOR's Step 3b PASS (handoffs/
+    WF02-REQ031-20260817/step-03b-test-design-validator.json), which itself
+    independently confirmed 67 passed (isolated) / 597 passed (4 properties,
+    593 tests, full suite) plus real mutation-testing evidence against the
+    ServiceScopeValidator implementation. This Step 4 run reproduces those
+    counts from a cold start rather than trusting the prior claim.
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir/erl reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5] ... Elixir 1.20.3 (compiled with Erlang/OTP 29)"
+  postgres_container: letflow-postgres-1 (confirmed Up 2 days/healthy via `docker compose ps`, port 5462 -> 5432)
+  command_run: >
+    `mix test` (full suite, default/unpinned random seed) and
+    `mix test --seed 0` (full suite, second independent run, pinned seed) —
+    the `test` alias runs ecto.create + ecto.migrate --quiet first
+    automatically. Plus one isolated run of `mix test
+    test/letflow/definitions/service_scope_validator_test.exs
+    test/letflow/definitions/store_test.exs test/letflow/definitions_test.exs`
+    targeting REQ-031's new/changed files specifically, per this step's task
+    instructions.
+
+verdict: PASS
+
+checks:
+  test_suite_full_run1:
+    result: PASS
+    exit_code: 0
+    seed: 426923 (unpinned/random — ExUnit's own default)
+    summary_line_verbatim: "Result: 597 passed (4 properties, 593 tests)"
+    finished_line_verbatim: "Finished in 62.0 seconds (1.5s async, 60.5s sync)"
+    failures: 0
+    grep_check: >
+      Regex covering "Failures:", "Failure:", "** (", "Excluded:", "Skipped:"
+      and " failure[s]?," (excluding the "0 failures" summary phrasing itself)
+      over the full raw log (11,729 lines, captured to a scratchpad file, not
+      just the tail) — zero matches.
+
+  test_suite_full_run2:
+    result: PASS
+    exit_code: 0
+    seed: 0 (pinned, second independent run per this project's established
+      double-run practice)
+    summary_line_verbatim: "Result: 597 passed (4 properties, 593 tests)"
+    finished_line_verbatim: "Finished in 68.4 seconds (1.8s async, 66.6s sync)"
+    failures: 0
+    grep_check: "Same failure-marker regex over the full raw log, zero matches."
+
+  new_files_isolated_run:
+    command_run: >
+      mix test test/letflow/definitions/service_scope_validator_test.exs
+      test/letflow/definitions/store_test.exs test/letflow/definitions_test.exs
+    result: PASS
+    exit_code: 0
+    seed: 30323 (unpinned)
+    summary_line_verbatim: "Result: 67 passed"
+    finished_line_verbatim: "Finished in 12.3 seconds (0.6s async, 11.7s sync)"
+    failures: 0
+    matches_claimed: >
+      Exactly matches the 67-test count independently confirmed by both
+      TEST-DESIGNER (Step 3) and TEST-DESIGN-VALIDATOR (Step 3b).
+
+  count_arithmetic_cross_check:
+    baseline_cited_in_task: "570 passed (4 properties, 566 tests) on main"
+    new_tests_added:
+      - "test/letflow/definitions/service_scope_validator_test.exs -- new file, 24 tests (counted directly via `grep -cE '^\\s+test \"'` against the file, all under Letflow.Definitions.ServiceScopeValidatorTest)"
+      - "test/letflow/definitions/store_test.exs -- 3 new tests added (counted via `git diff main...HEAD -- test/letflow/definitions/store_test.exs | grep -cE '^\\+\\s*test \"'`)"
+    expected: "566 + 24 + 3 = 593 tests, 570 + 27 = 597 total, 4 properties (unchanged)"
+    actual_full_suite: "593 tests, 4 properties, 597 total passed, 0 failures"
+    result: MATCHES — verified via actual runs (both full-suite runs identical), not assumed from arithmetic alone.
+
+  known_noise_not_a_failure:
+    - >
+      [error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in
+      NNNN ms. — REQ-016's Ueberauth OIDC worker attempting to reach a
+      deliberately unreachable placeholder issuer configured in
+      config/test.exs. Pre-existing since REQ-016, already documented as
+      expected noise in every prior WF-02 test report (e.g. REQ-030's).
+      Present identically in both full-suite runs (run1 line ~39, run2
+      likewise); does not fail, skip, or affect any test.
+    - >
+      Verbose SQL query debug logging appears in raw mix test output
+      (config/test.exs's default test log level) for every DB-backed test,
+      including this run's service_scope_validator_test.exs (pure, no DB)
+      and store_test.exs's real-Postgres AC4 integration tests — established
+      pattern, not itself evidence of failure (confirmed by the zero-match
+      failure-marker grep above).
+    - >
+      Pre-existing compiler warnings — 11 total across run1's log:
+      3x ExUnit.Case.register_test/4 deprecated, 3x unused default-value
+      optional args, 1x redefined-module warning for an old migration
+      (same set present in prior reports, e.g. REQ-030's), PLUS two Elixir
+      set-theoretic-type-checker warnings not previously called out by name
+      in a report: "the following clause will never match" in
+      test/letflow/event_store/registry_test.exs:654 and "comparison
+      between distinct types found" in
+      test/letflow/definitions/snapshot_store_test.exs:253. Investigated
+      before dismissing: `git diff main...HEAD --stat` shows neither file
+      is touched by this branch (this branch's 16-file diff only adds
+      docs/issues/ISS-0036.yaml, handoffs/WF02-REQ031-20260817/*,
+      lib/letflow/definitions/service_scope_validator.ex,
+      lib/letflow/design/req031-service-scope-validator.md,
+      test/letflow/definitions/service_scope_validator_test.exs,
+      test/letflow/definitions/store_test.exs, test/specs/REQ-031.md) — both
+      warning-source files last touched by the unrelated REQ-033 snapshot-
+      store commit on main. These are compiler-time type-inference
+      diagnostics local to each file's own code, not affected by anything
+      REQ-031 changed, and neither is an error, skip, or failure (0 failures
+      confirmed in both full runs). Not filed to ISSUE_QUEUE — no failure
+      occurred, and warnings-without-failures on files outside this run's
+      scope are not a defect this run discovered in the sense the protocol
+      targets (nothing broke; only pre-existing compiler chatter this run
+      happened to read past). Noted here in full for audit-trail honesty.
+
+pre_existing_failures_found: none
+issues_filed: none
+issues_referenced_not_refiled:
+  - "ISS-0036 (docs/issues/ISS-0036.yaml) — already filed by SECURITY-REVIEWER during this same run's Step 2c, not by this step. MINOR severity, future-S4 design-tension note about not turning Violation.reason into a not-found/forbidden oracle once an HTTP renderer exists. Not a test failure, not actionable by TEST-RUNNER; referenced here for completeness only."
+
+test_file_breakdown:
+  new_req_031:
+    items:
+      - file: test/letflow/definitions/service_scope_validator_test.exs
+        detail: >
+          New file. Pure, async: true, DB-free coverage of
+          Letflow.Definitions.ServiceScopeValidator.validate/3 and build/1
+          against AC1-AC5 (global-scope pass, tenant-owned cross-tenant
+          fail, distinct-reason atoms, real activate/2 hook wiring exercised
+          separately in store_test.exs, moduledoc content), the two
+          deliberate R-Co asymmetries (INV-SSV-5, INV-SSV-9), first-
+          violation-wins short-circuiting, and fail-closed behavior on
+          malformed lookup results.
+        subtotal: 24
+      - file: test/letflow/definitions/store_test.exs
+        detail: >
+          3 new tests added to the existing file, exercising
+          Definitions.activate/2 wired to the real
+          ServiceScopeValidator.build/1 output via the service_scope_validator:
+          hook, against real sandboxed Postgres per Letflow.DataCase — no
+          mocked database. Covers violation-blocks-with-zero-writes, hook-
+          omitted-is-a-genuine-skip (same graph succeeds), and a permitting
+          Lookup succeeding end-to-end.
+        subtotal: 3
+  full_suite_grand_total: 597 (593 example tests + 4 properties)
+  cross_check: >
+    597 total (4 properties, 593 example tests) reproduced identically
+    across both full-suite runs (unpinned seed 426923, and pinned seed 0),
+    matching the task's cited baseline of 570 passed / 566 tests / 4
+    properties on main plus this run's 27 new tests (24 + 3). This Step 4
+    run is the independent, formal re-verification of TEST-DESIGNER's and
+    TEST-DESIGN-VALIDATOR's prior claims — run separately three times total
+    (two full-suite runs plus one isolated run of the new/changed files).
+
+diagnosis: "N/A — no failures observed in this run. Nothing routed back to ELIXIR-DEV or TEST-DESIGNER."
+
+regression_check_vs_baseline: >
+  Task-cited baseline: 570 passed (4 properties, 566 tests) on main, before
+  this branch's changes. This run adds
+  test/letflow/definitions/service_scope_validator_test.exs (24 new tests,
+  new file) and 3 new tests in test/letflow/definitions/store_test.exs, and
+  reproduces 597 passed (4 properties, 593 tests) / 0 failures identically
+  across two independent full-suite runs (unpinned seed 426923 and pinned
+  seed 0), plus 67 passed / 0 failures on the isolated new/changed-file run.
+  Zero regressions confirmed. No pre-existing failure was found anywhere in
+  the suite this run (Unblock-Everything rule: N/A, nothing to unblock;
+  ISSUE_QUEUE protocol: N/A, nothing new to file — ISS-0036 was already
+  filed upstream of this step).
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-18-WF02-REQ031-20260817.yaml
+  next_action: "Route to RELEASE-VALIDATOR (WF-02 Step 5) — no rework needed."

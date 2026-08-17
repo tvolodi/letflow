@@ -164,21 +164,25 @@ defmodule Letflow.Definitions.PromotionReviewStore do
   alias Letflow.Definitions.PromotionPlan
   alias Letflow.Definitions.PromotionReview
   alias Letflow.Repo
+  alias Letflow.TenantProvisioning
 
   @type insert_review_error ::
           :duplicate_review
           | :digest_mismatch
-          | :invalid_tenant_id
+          | :invalid_schema_name
           | Ecto.Changeset.t()
 
   @doc """
   Creates a `:pending_review` row from a `PromotionPlan.t()` + its digest.
   Re-verifies `digest` actually matches `plan` before writing (this module's
   own defense of `PromotionDigest`'s INV-PRM-5 — no comparator against a
-  `plan_digest`-shaped value is ever bypassed). A duplicate `(tenant_id,
-  plan_digest)` while an earlier review is still `pending_review`/`approved`
-  (the partial unique index, REQ-035) surfaces as `{:error, :duplicate_review}`
-  — never a leaked changeset for that one case.
+  `plan_digest`-shaped value is ever bypassed). `tenant_id` is always derived
+  from `opts[:prefix]` via `Letflow.TenantProvisioning.tenant_id_for_schema_name/1`
+  — never read from `args.plan.target_tenant_id` (design §2.3, addendum
+  resolution (c) of `docs/migration/decisions/0003-ecto-schema-strategy.md`).
+  A duplicate `(tenant_id, plan_digest)` while an earlier review is still
+  `pending_review`/`approved` (the partial unique index, REQ-035) surfaces as
+  `{:error, :duplicate_review}` — never a leaked changeset for that one case.
   """
   @spec insert_review(
           args :: %{
@@ -192,18 +196,20 @@ defmodule Letflow.Definitions.PromotionReviewStore do
     if PromotionDigest.verify_digest(digest, plan) do
       prefix = Keyword.fetch!(opts, :prefix)
 
-      attrs = %{
-        tenant_id: plan.target_tenant_id,
-        plan_digest: digest,
-        def_id: plan.process_key,
-        serialised_plan: Jason.encode!(plan),
-        requested_by: requested_by
-      }
+      with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+        attrs = %{
+          tenant_id: tenant_id,
+          plan_digest: digest,
+          def_id: plan.process_key,
+          serialised_plan: Jason.encode!(plan),
+          requested_by: requested_by
+        }
 
-      %PromotionReview{}
-      |> PromotionReview.insert_changeset(attrs)
-      |> Repo.insert(prefix: prefix)
-      |> handle_insert_result()
+        %PromotionReview{}
+        |> PromotionReview.insert_changeset(attrs)
+        |> Repo.insert(prefix: prefix)
+        |> handle_insert_result()
+      end
     else
       {:error, :digest_mismatch}
     end

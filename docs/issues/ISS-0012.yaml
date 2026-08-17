@@ -55,4 +55,32 @@ description: >
 affected_files:
   - README.md
 github_issue: https://github.com/tvolodi/letflow/issues/68
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0012-20260817
+resolved_at: 2026-08-17T07:49:27Z
+resolution: >
+  Replaced the blockquote entirely rather than retargeting it at ISS-0011
+  as this record's own suggested fallback proposed -- reading ISS-0011 in
+  full while preparing this fix found it was ALSO already resolved. So
+  there is no live caveat left to word carefully; the accurate statement
+  is simply that the check runs clean.
+
+  Verified before writing the new text, not assumed: ran `mix
+  letflow.check` for real (exit 0) and three additional full `mix test`
+  runs, all 310/310 (4 properties, 306 tests), zero flakes across four
+  consecutive runs -- substantiates the README's own new "showed zero
+  flakes" claim rather than asserting it unverified.
+
+  Went to mark ISS-0011 (GH#65) resolved in the same pass, cross-
+  referencing this session's earlier ISS-0031 fix (commit 40d6bf5) --
+  found on `git fetch` that another concurrently running host had
+  already done exactly that (queue task 57, its own independent
+  re-verification: 6 more clean runs against ISS-0011's own historically
+  failure-prone seeds), landed on origin/main moments before this commit.
+  Deferred to that record rather than pushing a duplicate/conflicting
+  resolution -- discarded this session's own draft edit to
+  docs/issues/ISS-0011.yaml and kept the other host's version as
+  authoritative. No lib/ or test/ file touched by this issue itself
+  (README.md only); the underlying code fix was ISS-0031's, already
+  shipped.

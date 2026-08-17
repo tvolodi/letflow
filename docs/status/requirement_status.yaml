@@ -2580,3 +2580,30 @@ history:
       Released queue task 57 as done via hetzner-orch, closing GitHub issue
       #65 (no new commit -- the fix commit is 40d6bf5, already on main via
       ISS-0031/PR merge, not authored in this run).
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-17T07:52:40Z
+    note: >
+      Resolved ISS-0012 (GH#68, MINOR, filed by ORCH during
+      WF02-REQ023-20260816 -- queue task 58). README's "Running it"
+      section still called ISS-0008 an open BLOCKER after it was resolved
+      2026-08-15, and suggested retargeting the caveat at ISS-0011's
+      seed-dependent tenant_status_test.exs flake if still live. Read
+      ISS-0011 in full before retargeting and found it was ALSO already
+      resolved (this session's earlier ISS-0031 fix, commit 40d6bf5) --
+      then, on `git fetch`, found a concurrently running host had already
+      formally closed ISS-0011's own record moments earlier (queue task
+      57), with its own independent re-verification. Deferred to that
+      record entirely: discarded this run's own draft edit to
+      docs/issues/ISS-0011.yaml rather than push a duplicate/conflicting
+      resolution, and credited it correctly (not claimed) in ISS-0012's
+      own resolution text. Replaced README's stale blockquote with a
+      statement that the check runs clean, verified for real rather than
+      asserted: `mix letflow.check` (exit 0) plus three additional full
+      `mix test` runs, 310/310 each time, zero flakes across four
+      consecutive runs. No lib/ or test/ file touched -- README.md only;
+      the underlying code fix was ISS-0031's, already shipped. Released
+      queue task 58 as done via the per-client API key, closing GitHub
+      issue #68 (GitHub issue #65 was already closed by the other host's
+      run by the time this one reached it).

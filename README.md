@@ -84,13 +84,14 @@ single fail-fast gate (equivalent to R-Co's `zig build check`):
 mix letflow.check
 ```
 
-> As of this writing, `mix letflow.check` correctly exits 1 at the
-> `mix format --check-formatted` step: 5 pre-existing files fail
-> formatting under a recent Elixir/Mix toolchain, unrelated to whatever
-> you're working on — see `docs/issues/ISS-0008.yaml` (BLOCKER, open).
-> This is the gate working as designed, not a bug in the gate itself.
-> A genuinely clean end-to-end run isn't reproducible until ISS-0008 is
-> resolved.
+`mix letflow.check` runs clean end-to-end as of 2026-08-17 (ISS-0012). Two
+prior caveats recorded here no longer apply: the formatting failure
+(`ISS-0008`) was resolved 2026-08-15, and a since-fixed test-isolation flake
+in `test/letflow/plugs/tenant_status_test.exs` (`ISS-0011`, a global
+`:telemetry.attach` racing other concurrently running `async: true` tests)
+could occasionally fail an unrelated run — both are `status: resolved`, and
+running the full suite four times in a row while verifying this note showed
+zero flakes.
 
 To also capture compile/test timing, run the suite via the timing
 script instead — it appends one row to `docs/eval/dev-loop-timings.csv`

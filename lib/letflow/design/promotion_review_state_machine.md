@@ -12,6 +12,15 @@ already validator-approved in `lib/letflow/design/promotion_plan.md` (REQ-036) a
 
 Domain logic only. No HTTP/Plug layer here (S4 scope, same carve-out REQ-036 used).
 
+**REWORK ITERATION 1 (2026-08-17):** SECURITY-REVIEWER FAILed the original version of
+this design at Step 2c (BLOCKER, INV-1/2026-08-17 addendum to Decision 0003 —
+`handoffs/WF02-REQ037-20260817/step-02c-security-reviewer.json`) because §2.3
+(`insert_review/2`) sourced `tenant_id` from caller-supplied `args.plan.target_tenant_id`
+instead of deriving it from `opts[:prefix]`. §2.3 and §2.8 below are revised to fix
+this; every other section is unchanged from the original design except two small
+downstream corrections (§3.2 step 1's rationale, §8's dependency list) needed to keep
+the doc internally consistent with the §2.3 fix.
+
 ---
 
 ## 0. Sources read for this design
@@ -317,11 +326,49 @@ shape exactly this way and explicitly rules out `Ecto.Schema.optimistic_lock/2,3
 
 ### 2.3 `insert_review/2`
 
+**REWORK ITERATION 1 (this section revised — see `handoffs/WF02-REQ037-20260817/
+step-02c-security-reviewer.json`):** the version of this section SECURITY-REVIEWER
+FAILed built `attrs.tenant_id` from `args.plan.target_tenant_id` — a field read out of
+the caller-supplied `plan` map — while treating `opts[:prefix]` as an independently
+trusted, separate value, with nothing tying the two together. That is precisely
+rejected option (a) from `docs/migration/decisions/0003-ecto-schema-strategy.md`'s
+2026-08-17 addendum ("Caller supplies `tenant_id` as an explicit parameter" —
+"a call writing into tenant A's schema could pass `tenant_id = B`, and nothing ...
+rejects it"). The addendum's own **adopted** resolution is option (c), "Derive it from
+the resolved schema at write time" — not a validate-and-reject variant (that would be a
+fourth, never-proposed option; the addendum names exactly three, and only (c) was
+accepted). This revision applies (c) directly: `attrs.tenant_id` is now derived from
+`opts[:prefix]` via `Letflow.TenantProvisioning.tenant_id_for_schema_name/1`, the exact
+reverse-mapping function the addendum names for this purpose (already shipped for
+REQ-025; confirmed directly against `lib/letflow/tenant_provisioning.ex:100-115` this
+session — pure, no I/O, returns `{:ok, tenant_id}` for a schema name shaped like
+`"tenant_" <> <32 lowercase hex>`, `{:error, :invalid_schema_name}` for anything else).
+`args.plan.target_tenant_id` is **no longer read for this purpose at all** — not
+cross-validated against the derived value either, since the addendum's adopted
+resolution is derivation, not validation of a caller-supplied value (validating a value
+this design then discards would just be dead code). `args.plan.target_tenant_id`
+remains part of the JSON envelope persisted into `serialised_plan` (step 4 below,
+unchanged) for `promote_definition/N`'s own use of the plan — see §3.2 step 1, which
+already reads `target_tenant_id` from `review.tenant_id` (the schema column), not from
+the JSON blob, so that downstream trust point is anchored on this section's now-correct
+derivation, not on the plan's copy.
+
+This exactly mirrors the shipped precedent the addendum itself produced:
+`Letflow.EventStore.append/2`'s moduledoc (`lib/letflow/event_store.ex:9-18`) states
+"`tenant_id` is always derived from `opts[:prefix]` via
+`Letflow.TenantProvisioning.tenant_id_for_schema_name/1`, never accepted from
+`attrs`." `insert_review/2` now follows the identical shape — the only difference is
+that `attrs.tenant_id` here is populated by this design's own derivation step rather
+than being forbidden from `args` outright (there is no bare `tenant_id` key in
+`insert_review/2`'s `args` shape to reject in the first place; `args.plan` is a
+`PromotionPlan.t()` struct with `target_tenant_id` as one of several load-bearing
+fields the plan needs for its own purposes, not a pass-through attrs map).
+
 ```
 @type insert_review_error ::
         :duplicate_review
         | :digest_mismatch
-        | :invalid_tenant_id
+        | :invalid_schema_name
         | Ecto.Changeset.t()
 
 @spec insert_review(
@@ -333,10 +380,6 @@ shape exactly this way and explicitly rules out `Ecto.Schema.optimistic_lock/2,3
         opts :: [prefix: String.t()]
       ) :: {:ok, PromotionReview.t()} | {:error, insert_review_error()}
 ```
-
-`opts[:prefix]` is accepted (not re-derived from `args.plan.target_tenant_id`
-internally) so the caller controls exactly which schema is written to, matching every
-other function in this module — see §2.2's generic shape, which also takes `opts`.
 
 **Algorithm:**
 
@@ -350,9 +393,17 @@ other function in this module — see §2.2's generic shape, which also takes `o
    catching it. Cheap, and closes that gap.
 2. Resolve `prefix` from `opts` (`Keyword.fetch!/2` — no default; matches
    `PromotionPlan`'s own no-default stance on required config).
-3. Build changeset attrs: `%{tenant_id: args.plan.target_tenant_id, plan_digest:
+3. **Derive `tenant_id` from `prefix`, not from `args.plan` (the fix this rework
+   iteration adds):** `TenantProvisioning.tenant_id_for_schema_name(prefix)` —
+   `{:error, :invalid_schema_name}` → return `{:error, :invalid_schema_name}`
+   immediately, before any changeset is built or any DB call is attempted (same
+   short-circuit-before-I/O placement `promote_definition/N` already uses for its own
+   `schema_name_for_tenant/1` calls, §3.2 step 4). `{:ok, tenant_id}` → continue to
+   step 4 with this `tenant_id`, not `args.plan.target_tenant_id`.
+4. Build changeset attrs: `%{tenant_id: tenant_id, plan_digest:
    args.digest, def_id: args.plan.process_key, serialised_plan: Jason.encode!(args.plan),
-   requested_by: args.requested_by}`. **`def_type` is deliberately omitted** — falls
+   requested_by: args.requested_by}` — `tenant_id` here is step 3's derived value.
+   **`def_type` is deliberately omitted** — falls
    through to `PromotionReview`'s own struct default (`"process"`), since
    `PromotionPlan.t()` has no `def_type`-equivalent field (§5 OQ-2 restates this).
    **`serialised_plan` is `Jason.encode!/1` of the FULL `PromotionPlan.t()` envelope
@@ -362,10 +413,14 @@ other function in this module — see §2.2's generic shape, which also takes `o
    says "serialised_plan"): `promote_definition/N` (§3.2 step 1) must recover
    `source_tenant_id` and `base_version` from this column later, and neither survives
    if only `entries` is stored. Stated here explicitly, not left for ELIXIR-DEV to
-   guess narrower.
-4. `PromotionReview.insert_changeset(%PromotionReview{}, attrs) |> Repo.insert(prefix:
+   guess narrower. `target_tenant_id` is stored here as part of the full envelope (for
+   any future consumer that needs the plan's own record of its intended target) but is
+   never again treated as an attribution-bearing value by this module or by
+   `promote_definition/N` (§3.2 step 1) — only `review.tenant_id`, this step's derived
+   column, is.
+5. `PromotionReview.insert_changeset(%PromotionReview{}, attrs) |> Repo.insert(prefix:
    prefix)`.
-5. On `{:error, changeset}`: inspect `changeset.errors` for a `:unique` constraint
+6. On `{:error, changeset}`: inspect `changeset.errors` for a `:unique` constraint
    error tagged `constraint_name: "uq_promotion_review_active_digest"` (Ecto's
    `unique_constraint/3` already declares this mapping in `insert_changeset/2` — see
    §0 — so this is a `changeset.errors` pattern match, not a raw
@@ -498,6 +553,41 @@ corresponds to an existing `events` row — no cross-table read-before-write, ma
 validation beyond what's named" precedent (promotion_plan.md §4.2). Flagged as a
 resolved decision, not a silent guess.
 
+### 2.8 2026-08-17 addendum compliance — explicit re-verification, all 6 functions
+
+**Added in this rework iteration**, at the task's explicit request, so this document's
+own reasoning is complete and self-contained rather than relying on
+SECURITY-REVIEWER's handoff as the only place the "why" is recorded. The addendum to
+`docs/migration/decisions/0003-ecto-schema-strategy.md` governs **who computes the
+value written into a `tenant_id` column** — it has nothing to say about a function that
+never writes that column at all. Checked individually below, against each function's
+own `set:`/attrs list stated in its section above:
+
+| Function | Writes `tenant_id`? | `set:`/attrs list (from its own section) | Addendum applies? |
+|---|---|---|---|
+| `insert_review/2` (§2.3) | **Yes** — the only INSERT in this module, originates the row | `tenant_id, plan_digest, def_id, serialised_plan, requested_by` | **Yes — this is the function the addendum governs.** Fixed in §2.3 above: `tenant_id` is now derived from `opts[:prefix]` via `tenant_id_for_schema_name/1` (addendum resolution (c)), never read from `args.plan.target_tenant_id`. |
+| `approve_review/4` (§2.4) | No | `status, approved_by, approved_at, row_version` | Not applicable. `tenant_id` is not in the `set:` list — the column keeps whatever value `insert_review/2` wrote at row-creation time; this function only ever reads it implicitly via the `prefix:`-scoped `Repo.get`/`Repo.update_all` (INV-1(a)/(b) territory, not the addendum). |
+| `reject_review/3` (§2.5) | No | `status, row_version` | Not applicable, same reasoning. |
+| `mark_review_applied/2` (§2.6) | No | `status, row_version` | Not applicable, same reasoning. |
+| `mark_review_failed/2` (§2.6) | No | `status, row_version` | Not applicable, same reasoning. |
+| `supersede_review/3` (§2.7) | No | `status, superseded_by, row_version` | Not applicable, same reasoning. |
+
+**Why this table is exhaustive:** §2.2's generic transition algorithm (shared by all
+five non-`insert_review/2` functions) issues exactly one `Repo.update_all/3` per call,
+with a hardcoded `set:` keyword list stated in full in each function's own section —
+none of the five lists includes `tenant_id`, and §2.2 itself never appends a computed
+`tenant_id` to any function's `set:` list. There is no code path in any of the five
+functions that assigns to the `tenant_id` column, so there is no write-time value for
+the addendum to have an opinion about — the addendum's scope ("who computes the value
+written into a table's `tenant_id` column") is structurally empty for these five.
+This is the same conclusion SECURITY-REVIEWER's Step 2c handoff reached ("the 6
+`PromotionReviewStore` transition functions all route through `transition/6` ... a
+`review_id` from a different tenant's schema simply does not exist in the queried
+schema's table, so no cross-tenant read/mutate via `review_id`") — restated here in
+this document's own terms (addendum scope, not INV-1(a)/(b) scope) so a future reader
+does not have to cross-reference the handoff to see why the other five were left
+unchanged.
+
 ---
 
 ## 3. Module 2 — `Letflow.Definitions.Promotion`
@@ -570,7 +660,12 @@ as `permission_checker`).
    `source_tenant_id = plan["source_tenant_id"]`, `process_key = plan["process_key"]`,
    `base_version = plan["base_version"]`. `target_tenant_id` is read from
    `review.tenant_id` directly (the schema column), not re-parsed from the JSON blob,
-   since it is already a trusted, typed value on the struct passed in.
+   since it is a trusted, typed value on the struct passed in — trusted specifically
+   because §2.3 (revised, this rework iteration) derives it from `opts[:prefix]` via
+   `TenantProvisioning.tenant_id_for_schema_name/1` at `insert_review/2` time rather
+   than accepting it from caller-supplied `plan.target_tenant_id`; this step never
+   reads `plan["target_tenant_id"]` for that reason — the JSON envelope's own copy of
+   that field is not attribution-bearing (§2.3 step 4's note).
 2. `opts[:permission_checker].(actor_id, source_tenant_id)` — `false` →
    `{:error, :forbidden}`. Decoding step 1's JSON is pure, in-memory, not I/O — running
    the permission check right after it (before any DB read) still satisfies
@@ -806,6 +901,17 @@ know it's still open.
   `PromotionPlan.default_tenant_classifier/1`, not a duplicated copy — grep-checkable:
   `Letflow.Definitions.Promotion` should contain no second `default_tenant_classifier`
   function body, only a reference to `PromotionPlan`'s.
+- **INV-PRM04-6 (`tenant_id` is always derived, never accepted — added this rework
+  iteration, closes the SECURITY-REVIEWER BLOCKER):** `insert_review/2` (§2.3, the
+  only function in this module that writes the `tenant_id` column) derives it from
+  `opts[:prefix]` via `Letflow.TenantProvisioning.tenant_id_for_schema_name/1`;
+  `args.plan.target_tenant_id` is never read for this purpose. The other five
+  transition functions never assign to `tenant_id` at all (§2.8's table), so this
+  invariant is `insert_review/2`-specific by construction, not something the other
+  five need to separately satisfy. Matches the project-wide rule
+  `docs/migration/decisions/0003-ecto-schema-strategy.md`'s 2026-08-17 addendum
+  states and `Letflow.EventStore.append/2` already implements
+  (`lib/letflow/event_store.ex:9-18`).
 
 ---
 
@@ -856,10 +962,17 @@ PromotionReviewStore.insert_review/2 (Jason.encode!/1 of the FULL plan envelope,
 ```
 
 `PromotionReviewStore` depends on `Letflow.Definitions.PromotionReview` (schema),
-`Letflow.Definitions.PromotionDigest` (`verify_digest/2`), and
-`Letflow.TenantProvisioning` is NOT a direct dependency (opts always supply `:prefix`
-directly here, unlike `Promotion`, which derives prefixes from tenant UUIDs — §3.2
-step 4).
+`Letflow.Definitions.PromotionDigest` (`verify_digest/2`), **and, as of this rework
+iteration, `Letflow.TenantProvisioning` (`tenant_id_for_schema_name/1`, §2.3 step 3) —
+superseding this doc's earlier claim that it had no direct dependency on
+`TenantProvisioning`.** `insert_review/2` derives `tenant_id` from `opts[:prefix]` via
+that function (INV-PRM04-6); the other five transition functions still only consume
+`opts[:prefix]` directly (never `tenant_id_for_schema_name/1` — they never write the
+`tenant_id` column, §2.8), so the dependency is real but confined to `insert_review/2`.
+`Promotion` derives prefixes from tenant UUIDs the *opposite* direction
+(`schema_name_for_tenant/1`, tenant_id → prefix, §3.2 step 4) — the two modules use
+`TenantProvisioning`'s two reverse/forward functions for their respective, non-
+overlapping needs.
 
 `Promotion` depends on `Letflow.Definitions.ProcessDefinition` (schema),
 `Letflow.Definitions.PromotionConflict` (`reject_if_conflicts/4`),

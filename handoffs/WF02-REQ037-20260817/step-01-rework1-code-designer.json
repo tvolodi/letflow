@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ037-20260817/step-01-rework1-code-designer.json",
   "created_at": "2026-08-17T19:31:51Z",
   "started_at": "2026-08-17T19:31:51Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-17T19:36:13Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S2",
@@ -33,19 +33,19 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Revised lib/letflow/design/promotion_review_state_machine.md §2.3 (insert_review/2) to close the SECURITY-REVIEWER BLOCKER. Read docs/migration/decisions/0003-ecto-schema-strategy.md's 2026-08-17 addendum in full: it names three candidate mechanisms for populating a write-time tenant_id column and adopts exactly one -- option (c), 'Derive it from the resolved schema at write time' -- rejecting option (a) 'caller supplies tenant_id as an explicit parameter' (the shape the failed design used) for its attribution-integrity gap, and deferring option (b) session-GUC context as out of scope. Applied (c), not a validate-and-reject hybrid (that is not one of the addendum's three named options): insert_review/2's algorithm now has a new step 3 that calls Letflow.TenantProvisioning.tenant_id_for_schema_name(prefix) (read directly at lib/letflow/tenant_provisioning.ex:100-115 -- pure, no I/O, {:ok, tenant_id} | {:error, :invalid_schema_name}) and uses that derived value for attrs.tenant_id at step 4; args.plan.target_tenant_id is no longer read for this purpose at all (not even for a mismatch check, since the adopted resolution is derivation, not validation of a caller-supplied value). insert_review_error's type gained :invalid_schema_name (the function's actual error atom) and dropped the unused :invalid_tenant_id placeholder. This exactly mirrors Letflow.EventStore.append/2's already-shipped precedent for the same addendum (lib/letflow/event_store.ex:9-18, 'tenant_id is always derived from opts[:prefix] ... never accepted from attrs'). Added new §2.8 ('2026-08-17 addendum compliance -- explicit re-verification, all 6 functions') with a table showing each of the other 5 transition functions' exact set:/attrs list from its own section, confirming none assigns to the tenant_id column at all (they only ever set status/approved_by/approved_at/superseded_by/row_version), so the addendum -- which governs who computes a written tenant_id value -- is structurally not-applicable to them, not merely 'checked and found safe' by assertion. Also corrected two downstream inconsistencies the fix created: §3.2 step 1's note on review.tenant_id being 'a trusted, typed value' now explains why it's trustworthy (derived at insert_review/2 time, not caller-supplied), and §8's cross-module dependency list, which previously stated PromotionReviewStore has no direct dependency on Letflow.TenantProvisioning, now records the new tenant_id_for_schema_name/1 dependency insert_review/2 introduces. Added INV-PRM04-6 to §6 restating the derived-not-accepted rule as a standing invariant. No implementation files touched -- design doc only. No function other than insert_review/2 had its algorithm changed; promote_definition/3's own algorithm is unchanged (only its rationale comment for step 1 was clarified to explain why review.tenant_id is now genuinely trustworthy).",
+    "artifacts_out": ["lib/letflow/design/promotion_review_state_machine.md"],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ037-20260817",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF02-REQ037-20260817",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (rework re-check)"
   },
   "rework_count": 1,
   "max_rework": 3

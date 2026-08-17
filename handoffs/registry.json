@@ -405,6 +405,24 @@
       "queue_agent_id": "hetzner-orch",
       "worktree": "/home/tvolodi/letflow (Hetzner host ubuntu-16gb-nbg1-1)",
       "note": "Node-attribute and edge-condition validators (graph.zig, PD-05/PD-06) -- extends REQ-028's Letflow.Definitions.Graph module in place with validate_node_attributes/1, validate_edge_conditions/1, and valid_cel_syntax?/1. Full producer/validator chain via independent Agent-tool-dispatched subagents, all PASS on first attempt, no rework: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> ELIXIR-DEV -> SECURITY-REVIEWER (out of scope, pure functions) -> REVIEWER -> TEST-DESIGNER -> TEST-DESIGN-VALIDATOR -> TEST-RUNNER -> RELEASE-VALIDATOR -> DOC-UPDATER. Notable environment finding: R-Co source (graph.zig/definition.md) is genuinely unreachable on this Hetzner host (confirmed via filesystem search) -- CODE-DESIGNER reconstructed the ISO-8601 duration parser and CEL syntax algorithm from docs/requirements.yaml's own detailed quoted paraphrase instead, flagged the gap explicitly rather than silently porting, and every downstream gate (CODE-DESIGN-VALIDATOR, ELIXIR-DEV, REVIEWER, RELEASE-VALIDATOR) independently re-traced the reconstructed algorithms against worked examples rather than waving the gap through. Incidentally also filed ISS-0033 (handoffs/registry.json's WF03-ISS0030-20260817 entry stuck BLOCKED despite that run having merged) as GH#98/queue task 79 before starting this run. No rebase needed (main unchanged since Step 00 aside from ORCH's own ISS-0033 commit). mix compile --warnings-as-errors clean, mix test 401/401 (up from 376 pre-run) both pre-merge and re-verified on main's actual merged tip."
+    },
+    {
+      "run_id": "WF02-REQ025-20260817",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-025"],
+      "stage": "S2",
+      "status": "IN_PROGRESS",
+      "owned_modules": ["lib/letflow/event_store.ex", "priv/repo/migrations", "test/letflow/event_store_test.exs", "lib/letflow/tenant_provisioning.ex"],
+      "lock_acquired_at": "2026-08-17T10:58:58Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 2d (REVIEWER) PASS -- routing to Step 3 (TEST-DESIGNER) next.",
+      "backfilled": true,
+      "backfilled_at": "2026-08-17T12:55:00Z",
+      "queue_task_id": 45,
+      "queue_agent_id": "hetzner-orch",
+      "worktree": "/home/tvolodi/letflow (Hetzner host ubuntu-16gb-nbg1-1)",
+      "note": "Event append (Store.append, ES-01/02/03/05/08/DB-03) -- Letflow's first multi-table Ecto.Multi atomic transaction and first requirement deriving tenant_id from the Ecto :prefix rather than a caller-supplied field. This registry entry itself is a backfill: the run started and progressed through Step 00-02d entirely via handoffs/WF02-REQ025-20260817/step-*.json without a registry.json entry ever being written (a prior session's gap, not caught until an ORCH session resuming after an abnormal mid-run termination noticed it missing while verifying state). Run history to date: 2 SECURITY-REVIEWER FAILs and re-PASSes on INV-8 (struct-shaped metadata crashing validate_metadata/1 -- is_map/1 alone doesn't exclude structs in Elixir), then a REVIEWER FAIL on OQ-5 (M6's insert-if-absent creation of an instance_projections row overstepping into EE-01/S3's deferred instance-start-population scope) -- resolved via CODE-DESIGNER redesigning M1/M6 to an update-only contract (M1 fails with {:error, :instance_not_started} on a missing row; M6 uses InstanceProjection.update_changeset/2, never insert/upsert), re-validated PASS through CODE-DESIGN-VALIDATOR, ELIXIR-DEV, SECURITY-REVIEWER, and REVIEWER in turn. Not yet complete -- TEST-DESIGNER/TEST-DESIGN-VALIDATOR/TEST-RUNNER/RELEASE-VALIDATOR/DOC-UPDATER/Step Final still ahead. This entry will be updated to COMPLETED/released_lock:true once merged."
     }
   ]
 }

@@ -1,0 +1,46 @@
+{
+  "handoff_id": "c4f2b3d5-0008-4f1a-9a10-req042step02d-reverify",
+  "run_id": "WF02-REQ042-20260817",
+  "workflow_id": "WF-02",
+  "step": "02d-reverify",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ042-20260817/step-02d-reverify-reviewer.json",
+  "created_at": "2026-08-17T21:39:43Z",
+  "started_at": "2026-08-17T21:39:43Z",
+  "completed_at": "2026-08-17T21:40:33Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-042"],
+    "related_handoff_ids": ["step-02a-elixir-dev.json", "step-02d-reviewer.json"],
+    "artifacts_in": ["lib/letflow/definitions.ex"],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "WF-02 Step 2d re-verification: confirm the exact rework item you FAILed on (rank CASE SQL literal duplicated across select_with_rank/3 and order_by_rank/3) is now genuinely fixed via the @rank_case_sql module attribute you recommended. This is a re-check of that one item, not a full re-review -- everything else already passed in the original Step 2d.",
+    "acceptance_criteria": [
+      "Confirm the CASE SQL literal now appears exactly once in the file (as the @rank_case_sql module attribute), not duplicated",
+      "Confirm both call sites reference it unchanged",
+      "Confirm no new idiom/scope/supervision issue was introduced by this small change"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Confirmed the rework item is genuinely fixed. `grep` of lib/letflow/definitions.ex shows the CASE SQL literal 'CASE WHEN lower(?) = lower(?) THEN 3.0 WHEN ? ILIKE ? THEN 2.0 ELSE 1.0 END' now appears exactly once, at line 719, as the `@rank_case_sql` module attribute. Both call sites (`select_with_rank/3` at line 726 and `order_by_rank/3` at line 741) reference it via `fragment(@rank_case_sql, d.name, ^search_query, d.name, ^pattern)` with identical, unchanged argument order/values -- no drift between them. The surrounding comment (lines 702-718) correctly explains why a module attribute works here (inlined as a literal before Ecto's fragment/1 SQL-injection macro guard runs) versus why a helper-function call would not. `mix compile --warnings-as-errors` passes clean after touching the file. This is a minimal, idiomatic use of a module attribute for a compile-time-constant string shared between two private functions -- not scope creep, and it touches no supervision or process code (this is Ecto query-building logic in definitions.ex, not process_instance.ex or the supervision tree), so no new idiom/scope/supervision issue was introduced.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ042-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ042-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (Step 3)"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

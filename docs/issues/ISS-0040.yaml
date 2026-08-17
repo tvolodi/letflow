@@ -1,0 +1,62 @@
+id: ISS-0040
+title: "test/letflow/definitions/service_scope_validator_test.exs had 3 test names exceeding ExUnit's 255-char SystemLimitError threshold, blocking the entire suite's compilation (same class as ISS-0030)"
+discovered_by: ORCH
+discovered_in_run: WF02-REQ042-20260817
+discovered_at: "2026-08-17T22:00:00Z"
+severity: MAJOR
+description: >
+  After rebasing WF02-REQ042-20260817 onto the latest origin/main (which
+  now includes WF02-REQ031-20260817's merged service_scope_validator.ex
+  and its test file), `MIX_TEST_PARTITION=2 mix test` failed to compile
+  the entire suite (not just this file -- ExUnit's parallel compiler
+  aborts the whole run) with:
+
+      == Compilation error in file
+      test/letflow/definitions/service_scope_validator_test.exs ==
+      ** (SystemLimitError) the computed name of a test (which includes
+      its type, the name of its parent describe block if present, and the
+      test name itself) must be shorter than 255 characters
+
+  Same root cause and same failure shape as ISS-0030 (already resolved
+  once, in test/letflow/tenant_provisioning_test.exs) -- ExUnit computes
+  a test's full identity as "test <describe block name> <test name>",
+  and this project's habit of writing long, self-explaining describe/test
+  names (a real strength for readability) occasionally produces a
+  combined string over the 255-char limit. ISS-0030's resolution didn't
+  generalize into a lint/CI check, so the same class of defect recurred
+  in a different file, introduced by a different (concurrent) run.
+
+  Three offending test names in this file, all inside long-named describe
+  blocks documenting R-Co asymmetry invariants (INV-SSV-5, INV-SSV-7,
+  INV-SSV-9):
+    - line 197 (pre-fix): "the identical not-registered condition on the
+      service side (not plugin) still fails -- confirms the asymmetry is
+      real, not a validator that just never fails on 'not registered'"
+    - line 197 (pre-fix, second occurrence after the first compile error
+      was fixed): "a tenant-scoped service lookup with owner_tenant_id:
+      nil is a violation (:service_not_available_to_tenant, 'scope data
+      is inconsistent')"
+    - "the identically-shaped tenant-scoped PLUGIN lookup with
+      owner_tenant_id: nil is a PASS -- the exact inverse of the
+      service-side case above"
+
+  Blocked WF02-REQ042-20260817's own Step Final full-suite re-verification
+  (a genuine build blocker on the merged tip, not an unrelated finding to
+  merely forward) -- fixed inline per core-directives.md's
+  Unblock-Everything directive by shortening all three test names while
+  preserving their meaning (the describe block names, which carry the
+  bulk of the context, were left untouched). Verified: mix compile
+  --warnings-as-errors clean, full suite MIX_TEST_PARTITION=2 mix test
+  4 properties/635 tests/0 failures on the merged tip.
+
+  Suggested follow-up (its own future requirement, not done here): a
+  `mix letflow.check`-integrated lint (or a simple grep-based CI step)
+  that flags any `describe "..." do` + `test "..." do` pair whose
+  combined length approaches the 255-char ExUnit limit, so this stops
+  being caught only when it happens to block a full suite run.
+affected_files:
+  - test/letflow/definitions/service_scope_validator_test.exs
+github_issue: https://github.com/tvolodi/letflow/issues/122
+status: resolved
+resolved_in_run: WF02-REQ042-20260817
+resolved_at: "2026-08-17T22:00:00Z"

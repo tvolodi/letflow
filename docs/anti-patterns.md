@@ -158,3 +158,91 @@ server). If a docker-based re-verification is ever genuinely needed
 from a secondary worktree, use `docker ps`/`docker inspect` to confirm
 the existing shared container is healthy and reachable first, never
 `docker compose up`.
+
+## Duplicating an `Ecto.Query.fragment/1` SQL literal instead of sharing it via a module attribute
+
+During REQ-042's `search/2` (`lib/letflow/definitions.ex`), ELIXIR-DEV needed the
+same ranking `CASE WHEN ... END` SQL text in two places (`select_with_rank/3` and
+`order_by_rank/3`) and first tried to share it via a helper function pinned into
+`fragment/1` (`fragment(^rank_case_sql(), ...)`). Ecto rejects this at compile time
+with `Ecto.Query.CompileError`: "to prevent SQL injection attacks, fragment(...)
+does not allow strings to be interpolated as the first argument via the `^`
+operator" -- `fragment/1`'s first argument must macro-expand to a literal binary
+known at compile time (`Ecto.Query.Builder.expand_and_split_fragment/2` calls
+`Macro.expand/2` and requires the result to already be a binary), not a runtime
+value produced by calling a function. ELIXIR-DEV correctly concluded this was a
+real Ecto constraint (not a workaround for a mistake) and fell back to duplicating
+the literal verbatim in both functions, flagging it for REVIEWER.
+
+REVIEWER (WF-02 Step 2d) verified the constraint empirically (a throwaway
+`Mix.install` script reproducing both the failing pinned-helper call and a passing
+module-attribute call against real Ecto) and found a third option that satisfies
+both the SQL-injection guard and DRY: a module attribute. `@rank_case_sql
+"CASE WHEN ... END"` referenced as `fragment(@rank_case_sql, ...)` compiles
+cleanly, because `@attr` is inlined as a literal binary at compile time -- it is
+not a runtime-pinned value -- so `Macro.expand/2` sees the same kind of literal it
+would see from a string written directly in the call. This was ruled FAIL/rework
+grounds precisely because it was a real, low-risk, mechanical fix (verified before
+requesting it, not assumed) rather than gold-plating: the duplicated literal, left
+as-is, would have created a silent-drift risk if a future edit updated the ranking
+rule in one call site and not the other.
+
+**Correct alternative:** when the exact same `fragment/1` SQL-text literal is
+needed at more than one call site, hoist it to a `@module_attribute` and reference
+the attribute at each `fragment/1` call -- never a function call pinned with `^`,
+which Ecto rejects outright, and never silent duplication when the attribute
+approach is available and its call sites are simple enough that one shared source
+of truth is a strict improvement.
+
+## `git checkout --ours`/`--theirs` means the opposite thing during `git rebase` vs. `git merge`
+
+During WF02-REQ031-20260817's Step Final, ORCH hit an add/add conflict on
+`docs/issues/ISS-0036.yaml` (a genuine cross-host numbering collision, already a
+known class per the ISS-0034/ISS-0035 precedent) and resolved it with
+`git checkout --theirs docs/issues/ISS-0036.yaml`, intending to keep `main`'s
+version and drop the run's own now-redundant local copy. The run's own
+`orchestrator.log`/`registry.json`/`requirement_status.yaml` entries all explicitly
+documented this intent ("resolved by keeping main's version via `git checkout
+--theirs`" / "this run's local ISS-0036.yaml was NOT merged; main's ISS-0036.yaml
+... was kept as-is").
+
+That is backwards. `git checkout --ours`/`--theirs` swaps meaning between the two
+commands:
+- During `git merge`, `--ours` = the branch you're on (HEAD), `--theirs` = the
+  branch being merged in.
+- During `git rebase`, this is **inverted**: `--ours` = the commit you are
+  rebasing *onto* (the target, typically `main`), `--theirs` = the commit
+  currently being replayed (your own feature branch's content) -- because a
+  rebase internally does its work as a sequence of cherry-picks of your commits
+  onto the new base, and from that internal perspective your own commit is the
+  "other" side being applied.
+
+So `git checkout --theirs` during that rebase actually kept the **run's own**
+`ISS-0036.yaml` (its SVC-03/INV-5 finding) and silently overwrote `main`'s actual
+content -- a different, already-independently-resolved `ISS-0036.yaml` from a
+concurrent run (a `valid_review_attrs/1` unused-default-arg fix) -- with it. The
+squash-merge then carried that wrong content into `main` permanently. Discovered
+only because a *third*, later run (WF02-REQ042-20260817) hit its own conflict on
+the same file during its own rebase and, per this project's "never satisfy a gate
+by editing what it measures" / independent-verification discipline, ran `git show
+origin/main:docs/issues/ISS-0036.yaml` to check the actual content on disk rather
+than trusting the prior run's own log narrative -- which is what caught the
+mismatch. See `docs/issues/ISS-0039.yaml` for the full incident and fix (no
+permanent data loss: git history retained the original resolved content, so it
+could be recovered from the commit that first wrote it).
+
+**Why this is easy to miss:** the git command runs cleanly, produces no error, and
+the rebase/merge completes -- there is no signal at the time that the flag picked
+the wrong side. It only surfaces later, and only if something re-derives the
+actual file content independently rather than trusting the resolving run's own
+narration of what it did.
+
+**Correct alternative:** during a `git rebase` conflict, don't reach for
+`--ours`/`--theirs` from merge-trained muscle memory -- either reason explicitly
+about which side each flag means *in a rebase specifically* (or just avoid the
+ambiguity: read both versions with `git show :2:<path>` / `git show :3:<path>`,
+or open the file and look at the `<<<<<<<`/`=======`/`>>>>>>>` markers directly,
+and hand-edit to the intended result). After resolving any conflict this way on a
+shared/audited file, independently re-read the resulting file's actual content
+before writing a log/status entry that claims what was kept -- don't narrate
+intent as if it were the verified outcome.

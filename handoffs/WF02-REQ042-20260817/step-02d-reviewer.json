@@ -1,0 +1,52 @@
+{
+  "handoff_id": "c4f2b3d5-0006-4f1a-9a10-req042step02d",
+  "run_id": "WF02-REQ042-20260817",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ042-20260817/step-02d-reviewer.json",
+  "created_at": "2026-08-17T21:32:57Z",
+  "started_at": "2026-08-17T21:32:57Z",
+  "completed_at": "2026-08-17T21:35:20Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-042"],
+    "related_handoff_ids": ["step-02a-elixir-dev.json", "step-02c-security-reviewer.json"],
+    "artifacts_in": ["lib/letflow/definitions.ex"],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "WF-02 Step 2d HARD GATE: idiom review of search/2 added to lib/letflow/definitions.ex (branch feature/WF02-REQ042-20260817, diff against origin/main -- local main is stale, belongs to the primary ~/letflow checkout). Use .claude/agents/reviewer.md's four questions and docs/anti-patterns.md. ELIXIR-DEV flagged one item for your attention: the rank CASE SQL literal is duplicated verbatim across select_with_rank/3 and order_by_rank/3 because Ecto's fragment/1 rejects a pinned/dynamic first argument -- assess whether this duplication is acceptable or whether a cleaner shared-literal approach (e.g. a module attribute) should be requested.",
+    "acceptance_criteria": [
+      "Idiomatic vs. crutch assessment",
+      "Supervision integrity (N/A expected -- no process/GenServer surface, confirm)",
+      "Type-safety gaps checked",
+      "Scope creep checked against REQ-042's acceptance criteria and the approved design",
+      "Checked against docs/anti-patterns.md for known mistakes",
+      "Checked against docs/migration/decisions/ for consistency",
+      "Explicit verdict on the flagged CASE-literal duplication: acceptable as-is, or rework to share via a module attribute?"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Reviewed git diff origin/main...HEAD -- lib/letflow/definitions.ex (149 lines) against lib/letflow/design/search.md, REQ-042's requirements.yaml entry (id: REQ-042, requirements.yaml:2000-2050), docs/anti-patterns.md, and docs/migration/decisions/. Idiomatic: search/2 follows the module's established (primary_arg, opts) convention, the TenantProvisioning.tenant_id_for_schema_name/1 tenant-resolution-first pattern every sibling function uses, and returns {:ok, list} | {:error, _} uniformly (INV-8) with no bare match on external input. No process/GenServer/supervision surface introduced or touched -- Supervision question is N/A as expected, confirmed by grep (no GenServer/gen_statem/spawn/Supervisor references in definitions.ex). Type-safety gap worth noting per the standing question: search_result is a plain map (%{definition: ..., rank: float()}) with rank documented as a closed 3-valued domain (3.0/2.0/1.0) enforced only by the CASE expression's own structure, not by any type -- a stricter type system (or even an Elixir custom type/guard) could catch a future edit that adds a fourth WHEN branch producing an out-of-domain value at compile time instead of relying on a doc comment; not a defect, this matches the module's existing 'plain map bundling schema struct + computed field' idiom (activate/2 precedent) and the design doc explicitly chose this over a virtual schema field, so not grounds for rework, just flagged per the reviewer's standing mandate. Scope: matches REQ-042 exactly -- one function, zero new migrations/tables/indexes (confirmed: git diff touches zero priv/repo/migrations/ files), no HTTP endpoint, moduledoc states the no-new-migration boundary citing PD-10 (AC6). No scope creep. No conflict with docs/migration/decisions/0001-0004 (checked all four; 0003-ecto-schema-strategy.md's schema-per-tenant/:prefix convention is followed via Repo.all(query, prefix: schema_name), unchanged). anti-patterns.md checked, no prior entry directly applicable before this review (one now added, see below). CASE-literal duplication item: verified ELIXIR-DEV's claim is a real Ecto constraint, not a workaround for a mistake -- read deps/ecto/lib/ecto/query/builder.ex's expand_and_split_fragment/2 (line 630-638): fragment/1's first argument is macro-expanded via Macro.expand/2 and must already be a literal binary at that point, else Ecto.Query.CompileError raises with 'to prevent SQL injection attacks, fragment(...) does not allow strings to be interpolated as the first argument via the ^ operator' (builder.ex:640-643). Reproduced empirically with a throwaway Mix.install script: fragment(^rank_sql(), ...) (pinned function-call result) raises exactly that CompileError; fragment(@rank_sql, ...) (module attribute reference) compiles cleanly, because @attr is inlined as a literal binary by the compiler before Macro.expand/2 ever runs, unlike a runtime-pinned function call. Verdict: REWORK requested. A @rank_case_sql module attribute (defined once near the top of definitions.ex, referenced unchanged as fragment(@rank_case_sql, ...) in both select_with_rank/3 and order_by_rank/3) satisfies DRY without triggering the pin restriction -- this is a straightforward, verified, low-risk mechanical change (not gold-plating): it removes a real silent-drift risk (a future edit to the ranking rule updating one call site's literal and not the other, which the current code only guards against via a hand-maintained code comment asking the reader to keep both in sync) and changes zero runtime/compiled-SQL behavior, since a module attribute is still a compile-time literal by the time Ecto sees it. Added an anti-patterns.md entry documenting the Ecto fragment/1 compile-time-literal-first-arg constraint and the module-attribute resolution, since this exact 'fragment/1 rejects a pinned helper' surprise is likely to recur wherever this codebase needs to share fragment SQL text across call sites.",
+    "artifacts_out": ["docs/anti-patterns.md"],
+    "issues": [
+      "Rework: extract the ranking CASE SQL text (currently duplicated verbatim in select_with_rank/3 and order_by_rank/3, lib/letflow/definitions.ex) to a single @rank_case_sql module attribute and reference it via fragment(@rank_case_sql, ...) at both call sites. Verified this compiles (a module attribute is inlined as a compile-time literal, unlike the already-rejected fragment(^rank_case_sql(), ...) pinned-function-call form) and is a straightforward, low-risk DRY fix, not gold-plating -- see docs/anti-patterns.md's new 'Duplicating an Ecto.Query.fragment/1 SQL literal instead of sharing it via a module attribute' entry for the full reasoning and verification. Everything else in the diff passes (idiom, supervision N/A, scope, decision-record consistency) -- this is the only rework item."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ042-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ042-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Rework ELIXIR-DEV: extract the duplicated rank CASE SQL literal in lib/letflow/definitions.ex (select_with_rank/3, order_by_rank/3) to a @rank_case_sql module attribute referenced at both call sites, then re-run mix compile --warnings-as-errors / mix format --check-formatted, then re-route through Step 2c/2d."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

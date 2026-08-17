@@ -194,7 +194,7 @@ defmodule Letflow.Definitions.ServiceScopeValidatorTest do
       assert ServiceScopeValidator.validate(g, @tenant_a, lu) == :ok
     end
 
-    test "the identical not-registered condition on the service side (not plugin) still fails -- confirms the asymmetry is real, not a validator that just never fails on 'not registered'" do
+    test "the identical not-registered condition fails on the service side (confirms the asymmetry is real)" do
       plugin_graph = graph([service_task("n1", %{"plugin_handler" => "ghost-plugin"})])
       plugin_lookup = plugin_result_lookup({:error, :not_registered})
 
@@ -217,7 +217,7 @@ defmodule Letflow.Definitions.ServiceScopeValidatorTest do
   # ---------------------------------------------------------------------------------
 
   describe "validate/3 -- asymmetry 2 (INV-SSV-7 vs INV-SSV-9): nil owner_tenant_id is a violation for service, a pass for plugin" do
-    test "a tenant-scoped service lookup with owner_tenant_id: nil is a violation (:service_not_available_to_tenant, 'scope data is inconsistent')" do
+    test "a tenant-scoped service lookup with owner_tenant_id: nil is a violation" do
       g = graph([service_task("n1", %{"service_id" => "inconsistent-svc"})])
 
       lu = service_result_lookup({:ok, %{scope: :tenant, owner_tenant_id: nil}})
@@ -230,7 +230,7 @@ defmodule Letflow.Definitions.ServiceScopeValidatorTest do
               }} = ServiceScopeValidator.validate(g, @tenant_a, lu)
     end
 
-    test "the identically-shaped tenant-scoped PLUGIN lookup with owner_tenant_id: nil is a PASS -- the exact inverse of the service-side case above" do
+    test "the identically-shaped tenant-scoped plugin lookup with owner_tenant_id: nil is a pass (inverse of the service-side case)" do
       g = graph([service_task("n1", %{"plugin_handler" => "inconsistent-plugin"})])
 
       lu = plugin_result_lookup({:ok, %{scope: :tenant, owner_tenant_id: nil}})

@@ -1,0 +1,50 @@
+id: ISS-0038
+title: "Letflow.Definitions.search/2's rank field is a Decimal at runtime, not the float() its @type search_result declares"
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF02-REQ042-20260817
+discovered_at: "2026-08-17T21:45:30Z"
+severity: MINOR
+description: >
+  Found while writing test/letflow/definitions/search_test.exs's AC1 test
+  (WF-02 Step 3 for REQ-042). lib/letflow/definitions.ex declares
+  @type search_result :: %{definition: ProcessDefinition.t(), rank: float()}
+  and search/2's own @doc says "Ranked 3.0 for an exact case-insensitive name
+  match, 2.0 for a partial name match, 1.0 for a match found only via
+  description" -- but the shipped query computes rank via a raw SQL fragment
+  CASE expression whose branches are the untyped numeric literals 3.0/2.0/1.0
+  (select_with_rank/3, @rank_case_sql). Postgres infers this CASE
+  expression's result type as `numeric`, not `double precision`/`float8`, and
+  Postgrex/Ecto decode `numeric` as Decimal.t() by default when no explicit
+  Ecto type annotation is given to select/3's fragment/1 call.
+
+  Confirmed directly, not assumed: running the new AC1 test with
+  `assert rank_by_id[exact.id] == 3.0` failed with
+  `left: Decimal.new("3.0"), right: 3.0` -- i.e. the runtime value returned
+  by search/2 for a caller matching this project's own documented @type is
+  a %Decimal{}, which does not satisfy Elixir's float() type and does not
+  compare equal to a literal float via ==.
+
+  Not a defect in the *behavior* REQ-042's acceptance criteria describe --
+  the three ranking tiers are still numerically 3.0 > 2.0 > 1.0 and order
+  correctly either way, so AC1 is unaffected and the test suite this run
+  adds passes (using Decimal.to_float/1 to normalize before comparing,
+  documented inline in search_test.exs). It IS a typespec/runtime-type
+  mismatch: any caller pattern-matching or doing arithmetic against
+  search/2's rank field expecting a bare float() (per the published @type)
+  will get a %Decimal{} struct instead, which silently fails `==` against a
+  float literal and requires Decimal-aware handling the current @spec gives
+  no indication is necessary.
+
+  Fix is ELIXIR-DEV's, not filed as blocking here per the ISSUE_QUEUE
+  protocol's "adjacent, not blocking this run's own acceptance criteria"
+  category -- two options: (a) cast the CASE expression's result to float8
+  in the fragment/1 SQL text (e.g. wrap literals as 3.0::float8 or the whole
+  expression as (...)::float8), or (b) change @type search_result's rank
+  field to Decimal.t() and update the @doc/@spec to match reality, whichever
+  REVIEWER/ELIXIR-DEV judge more consistent with this module's existing
+  conventions (no other function in Letflow.Definitions currently returns a
+  Decimal-typed field to check against).
+affected_files:
+  - lib/letflow/definitions.ex
+github_issue: https://github.com/tvolodi/letflow/issues/120
+status: open

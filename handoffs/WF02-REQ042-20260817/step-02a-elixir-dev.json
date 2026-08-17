@@ -1,0 +1,52 @@
+{
+  "handoff_id": "c4f2b3d5-0004-4f1a-9a10-req042step02a",
+  "run_id": "WF02-REQ042-20260817",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ042-20260817/step-02a-elixir-dev.json",
+  "created_at": "2026-08-17T21:25:57Z",
+  "started_at": "2026-08-17T21:25:57Z",
+  "completed_at": "2026-08-17T21:37:27Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-042"],
+    "related_handoff_ids": ["step-01-code-designer.json", "step-01b-code-design-validator.json"],
+    "artifacts_in": ["lib/letflow/design/search.md"],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "WF-02 Step 2a: implement search/2 in lib/letflow/definitions.ex per lib/letflow/design/search.md (PASSed CODE-DESIGN-VALIDATOR). Verify branch feature/WF02-REQ042-20260817 first. No new migrations (design confirms this). REWORK ITERATION 1: REVIEWER (Step 2d) FAILed on one item -- the ranking CASE SQL literal is duplicated verbatim in select_with_rank/3 and order_by_rank/3. REVIEWER independently verified (read Ecto's builder.ex source + reproduced empirically via Mix.install) that fragment(^helper_fn(), ...) is rejected by Ecto's SQL-injection compile-time-literal guard, but fragment(@module_attribute, ...) compiles cleanly since a module attribute is inlined as a literal before Ecto's macro-expansion check runs. Fix: extract the CASE SQL text to a single @rank_case_sql module attribute defined once near the top of the search/2 section, reference it unchanged via fragment(@rank_case_sql, ...) at both call sites. Re-run mix compile --warnings-as-errors and mix format --check-formatted after the change.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "mix format --check-formatted exits 0 on the changed file",
+      "search/2 implemented exactly per the design's signature and error shapes ({:error, :query_empty}, {:error, :query_too_long}, {:ok, [search_result]})",
+      "Ranking: single fragment/1 CASE (exact name match 3.0, partial name ILIKE match 2.0, else 1.0), ORDER BY rank DESC, created_at DESC",
+      "SQL-injection safety: '%' wildcard composed into the bound ^pattern value in Elixir, never string-interpolated into fragment SQL text",
+      "Tenant-scoped via the same opts()/:prefix pattern as create/2, get_by_id/2, list/2 (prefix resolved via TenantProvisioning.tenant_id_for_schema_name/1)",
+      "No new migration/table/index added -- moduledoc updated per the design's SS10 required text citing PD-10",
+      "Pagination: limit default 20, offset default 0, NOT clamped to a max (per design's explicit divergence from list/2's clamp-to-200)",
+      "self-review checklist per WF-02 Step 2a: no SQL string interpolation, no unresolved {:ok,_} = match on external I/O, new public function has @doc"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REWORK ITERATION 1 fix applied: the ranking CASE SQL literal, previously duplicated verbatim in select_with_rank/3 and order_by_rank/3, is now defined exactly once as a module attribute `@rank_case_sql \"CASE WHEN lower(?) = lower(?) THEN 3.0 WHEN ? ILIKE ? THEN 2.0 ELSE 1.0 END\"` placed immediately above select_with_rank/3 in the search/2 helpers section (lib/letflow/definitions.ex ~line 719), and both call sites now reference it unchanged via `fragment(@rank_case_sql, d.name, ^search_query, d.name, ^pattern)` -- no other behavior, validation order, pagination, or moduledoc text changed from the prior PASSed implementation. `grep -n \"CASE WHEN\\|@rank_case_sql\"` confirms the literal string now appears exactly once in the file (line 719) with two references (lines 726, 741); no duplication remains. Verification commands run directly: `mix compile --warnings-as-errors` -> 'Compiling 1 file (.ex)' / 'Generated letflow app', exit 0. `mix format --check-formatted lib/letflow/definitions.ex` -> no output, exit 0. Self-review: fragment/1's first argument is a compile-time-literal module attribute at both call sites (matches REVIEWER's confirmed-safe pattern, not the rejected `fragment(^helper_fn(), ...)` form); no SQL string interpolation; no unresolved {:ok,_} matches added; search/2 retains its @doc.",
+    "artifacts_out": ["lib/letflow/definitions.ex"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ042-20260817",
+      "commit_sha_list": ["5b5dea4e1afa8c0fdfbbdf641fad4cc3c857132c", "c1a4c2ecfcea576f0713bd5f0608254f7f590f6f"],
+      "remote_branch": "origin/feature/WF02-REQ042-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c) -- rework re-verification"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

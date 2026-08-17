@@ -1,0 +1,71 @@
+id: ISS-0039
+title: "WF02-REQ031-20260817's Step Final silently overwrote the already-resolved ISS-0036.yaml with unrelated content, despite its own log claiming the opposite outcome"
+discovered_by: ORCH
+discovered_in_run: WF02-REQ042-20260817
+discovered_at: "2026-08-17T22:00:00Z"
+severity: MAJOR
+description: >
+  While rebasing WF02-REQ042-20260817 onto origin/main for Step Final, an
+  add/add conflict on docs/issues/ISS-0036.yaml revealed that the
+  WF02-REQ031-20260817 run's own already-merged Step Final had actually
+  overwritten docs/issues/ISS-0036.yaml on main with WF02-REQ031-20260817's
+  own SVC-03/INV-5 finding -- clobbering this session's earlier,
+  independently-resolved ISS-0036 entry (the valid_review_attrs/1 unused
+  default arg fix, ADHOC-20260817-002, PR #117, status: resolved).
+
+  This is NOT what that run's own bookkeeping claims happened.
+  handoffs/orchestrator.log's WF02-REQ031-20260817 MERGE entry and
+  handoffs/registry.json's WF02-REQ031-20260817 note both explicitly state
+  the conflict was "resolved by keeping main's version via
+  `git checkout --theirs`" -- but `git checkout --theirs` means something
+  different during `git rebase` than during `git merge`:
+
+    - During `git merge`, --ours = the branch you're on (HEAD),
+      --theirs = the branch being merged in.
+    - During `git rebase`, this is INVERTED: --ours = the commit you are
+      rebasing ONTO (i.e. the target, main), --theirs = the commit
+      currently being replayed (i.e. your own feature branch's content).
+
+  So `git checkout --theirs` during a rebase, intended to "keep main's
+  version," actually kept the REBASING BRANCH's own version --
+  WF02-REQ031-20260817's own local ISS-0036.yaml (the SVC-03 finding),
+  overwriting main's actual content (this session's resolved
+  valid_review_attrs finding) with it. The run's own explicit intent
+  (documented in requirement_status.yaml's SCOPE-CHANGE postscript note:
+  "this run's local ISS-0036.yaml was NOT merged; main's ISS-0036.yaml ...
+  was kept as-is") was the OPPOSITE of what the git command it ran actually
+  did -- a genuine execution/documentation mismatch, not a lie, but exactly
+  the kind of silent corruption docs/anti-patterns.md's existing entries
+  warn about (a false claim of success is indistinguishable from a true one
+  without independent re-verification, which is why this pipeline's
+  producer/validator principle exists).
+
+  Confirmed via `git show origin/main:docs/issues/ISS-0036.yaml` before
+  fixing: the file on main did contain WF02-REQ031-20260817's SVC-03/INV-5
+  content, not the resolved valid_review_attrs content. The actual code
+  fix itself (test/letflow/definitions/promotion_review_migration_test.exs's
+  valid_review_attrs(overrides), no default) was unaffected -- only the
+  docs/issues/ISS-0036.yaml bookkeeping record was clobbered. GitHub issue
+  #113 (the correct, valid_review_attrs finding) remained correctly closed
+  throughout -- only the local YAML record was affected.
+
+  Fixed as part of WF02-REQ042-20260817's own Step Final rebase (this was
+  a genuine blocker discovered while resolving that run's own add/add
+  conflict against the same file, per core-directives.md's
+  Unblock-Everything directive): restored docs/issues/ISS-0036.yaml to its
+  correct resolved content (recovered from commit 256fc06). No data was
+  permanently lost -- git history retained the original resolved content,
+  it was only the working-tree/main-branch pointer that was wrong.
+  docs/issues/ISS-0037.yaml (WF02-REQ031-20260817's correctly-renumbered
+  SVC-03 finding) was left untouched -- it already carries the SVC-03
+  content under its own correct number, so no information is lost by
+  restoring ISS-0036 to its rightful content.
+affected_files:
+  - docs/issues/ISS-0036.yaml
+  - handoffs/orchestrator.log
+  - handoffs/registry.json
+  - docs/status/requirement_status.yaml
+github_issue: https://github.com/tvolodi/letflow/issues/121
+status: resolved
+resolved_in_run: WF02-REQ042-20260817
+resolved_at: "2026-08-17T22:00:00Z"

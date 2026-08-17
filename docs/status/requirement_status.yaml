@@ -3515,3 +3515,106 @@ history:
       for any future reader following the ISS-0036 references above.
       Same class of cross-host numbering collision as ISS-0034/ISS-0035
       earlier this session.
+  - req: REQ-042
+    event: started
+    agent: ORCH
+    at: "2026-08-17T21:15:44Z"
+    note: >
+      WF02-REQ042-20260817 started (letflow-queue task 53, claimed by
+      hetzner-wt2-orch). Branch feature/WF02-REQ042-20260817 created from
+      freshly-fetched origin/main (worktree variant) and pushed. Scope:
+      Letflow.Definitions.search/1 (store.zig's Store.search(), PD-10) --
+      ILIKE-based name/description search against REQ-027's
+      process_definitions table, no new migration, ranked results,
+      QueryEmpty/QueryTooLong validation, pagination via limit/offset.
+  - req: REQ-042
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-17T21:57:46Z"
+    note: >
+      RELEASE-VALIDATOR PASSed REQ-042 (Definition full-text search --
+      store.zig's Store.search(), PD-10): Letflow.Definitions.search/2
+      (lib/letflow/definitions.ex, ranked ILIKE full-text search against
+      REQ-027's process_definitions table, no new migration), all 6
+      acceptance criteria independently re-verified against the actual
+      shipped code and tests (not sourced from any agent's own summary),
+      23 new tests across test/letflow/definitions/search_test.exs and
+      test/letflow/definitions_test.exs, full suite
+      MIX_TEST_PARTITION=2 mix test 608/608 (4 properties, 0 failures) --
+      re-run independently by RELEASE-VALIDATOR itself, matching
+      TEST-RUNNER's Step 4 report. One rework cycle at Step 2d: the rank
+      CASE SQL literal ('CASE WHEN lower(?) = lower(?) THEN 3.0 WHEN ?
+      ILIKE ? THEN 2.0 ELSE 1.0 END') was duplicated across
+      select_with_rank/3 and order_by_rank/3; fixed via a single
+      @rank_case_sql module attribute referenced by both call sites,
+      re-verified as present and non-duplicated by both SECURITY-REVIEWER
+      and REVIEWER's re-verification passes and again independently by
+      RELEASE-VALIDATOR (grep count: 1 definition + 2 usages). Incidental
+      finding during Step 3 (TEST-DESIGNER): search/2's rank field is
+      typed float() in @type search_result but Postgres/Ecto decode the
+      CASE expression's numeric result as %Decimal{} at runtime -- not a
+      REQ-042 acceptance-criterion defect (ranking order is unaffected;
+      the new tests normalize via Decimal.to_float/1), but a
+      typespec/runtime-type mismatch any future caller relying on the
+      documented float() type would hit. Filed as docs/issues/ISS-0038.yaml
+      (MINOR, also GitHub #120), not fixed as part of this requirement's
+      scope. Flipped docs/requirements.yaml REQ-042 status: in_progress ->
+      done. docs/migration/stage-2-event-store-definitions.md header's
+      Requirements line updated to move REQ-042 from the pending list to
+      the done list (same bulk-refresh-at-stage-gate pattern as
+      REQ-025/REQ-029/REQ-032/REQ-033/REQ-034/REQ-036/REQ-037's
+      DOC-UPDATER runs; not named in REQ-042's own acceptance criteria).
+      README.md checked and left untouched: read "Migration status" and
+      "What's here today"/"Running it" directly -- both describe only the
+      original ProcessInstance/InstanceSupervisor/TransitionEvent/Router
+      slice (3-endpoint Plug router, 4-state ASCII diagram); REQ-042 is
+      domain-logic only (a new function in the existing
+      Letflow.Definitions module, no new HTTP endpoint, no new curl-able
+      command, no change to the ASCII state diagram), consistent with
+      REQ-025/REQ-032/REQ-033/REQ-034/REQ-036/REQ-037's DOC-UPDATER
+      precedent for domain-logic-only requirements.
+  - req: REQ-042
+    event: SCOPE-CHANGE
+    agent: ORCH
+    at: "2026-08-17T22:06:04Z"
+    note: >
+      Step Final (git merge) rebase postscript, two genuine blockers found
+      and fixed inline (Unblock-Everything), not merely forwarded:
+
+      1. docs/issues/ISS-0036.yaml corruption (ISS-0039, GH#121, resolved).
+      WF02-REQ031-20260817's own already-merged Step Final resolved an
+      add/add conflict on this file via `git checkout --theirs`, intending
+      (per its own log/registry/status entries) to keep main's version --
+      but `--theirs` means the opposite thing during `git rebase` vs
+      `git merge` (during rebase, --theirs = the commit being replayed,
+      i.e. that run's OWN branch, not main). The command actually kept
+      WF02-REQ031-20260817's own local ISS-0036.yaml (its SVC-03/INV-5
+      finding), silently overwriting main's real content -- this session's
+      earlier, independently-resolved ISS-0036 entry (the
+      valid_review_attrs/1 fix, ADHOC-20260817-002). Discovered via
+      `git show origin/main:docs/issues/ISS-0036.yaml` while resolving
+      this run's own add/add conflict on the same file rather than trusting
+      the prior run's log narrative. Restored to the correct resolved
+      content (recovered from commit 256fc06, no permanent data loss --
+      git history retained it). docs/issues/ISS-0037.yaml (the
+      correctly-renumbered SVC-03 finding) was untouched and remains
+      correct. Added a docs/anti-patterns.md entry and a GIT_MERGE.md
+      warning so this specific gotcha (rebase --ours/--theirs inversion)
+      doesn't recur.
+
+      2. Recurring SystemLimitError (ISS-0040, GH#122, resolved).
+      test/letflow/definitions/service_scope_validator_test.exs (shipped
+      by WF02-REQ031-20260817) had 3 test names whose combined
+      describe+test length exceeded ExUnit's 255-char limit, blocking the
+      entire suite's compilation on the merged tip -- same class of defect
+      as ISS-0030 (a different file, already fixed once), recurred because
+      that fix never became a generalized lint check. Shortened all 3 test
+      names, preserving their meaning; describe blocks (which carry most
+      context) left untouched.
+
+      Both were genuine blockers to this run's own Step Final full-suite
+      re-verification, not incidental/unrelated findings -- fixed here per
+      core-directives.md's Unblock-Everything directive rather than merely
+      filed and forwarded. Re-verified after both fixes: mix compile
+      --warnings-as-errors clean, MIX_TEST_PARTITION=2 mix test 4
+      properties/635 tests/0 failures on the rebased tip.

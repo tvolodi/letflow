@@ -3128,3 +3128,114 @@ history:
       DOC-UPDATER precedent. No docs/migration/decisions/ file is named in
       REQ-036's acceptance criteria -- confirmed by re-reading the
       requirements.yaml entry directly, none applicable here.
+  - req: REQ-030
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-17T19:38:36Z
+    note: >
+      WF02-REQ030-20260817 complete, RELEASE-VALIDATOR PASSed (handoff
+      eee9b754-47ef-4326-93ee-7d91784a1542). Shipped: 7 new
+      Letflow.Definitions functions (lib/letflow/definitions.ex) porting
+      store.zig's PD-01/PD-03/PD-04/PD-07 Store operations --
+      create/2, get_by_id/2, get_active_by_name/2, list/2, activate/2,
+      deprecate/2, archive/2 (all arity 2: params/id first, an opts
+      keyword list second). create/2 runs REQ-028's validate_graph/1 and
+      REQ-029's validate_node_attributes/1 + validate_edge_conditions/1
+      before ever reaching insert_definition/3, writing zero rows on any
+      violation; concurrent identical (name, version) creates resolve via
+      a real ON CONFLICT DO NOTHING path (definitions.ex:542-547).
+      activate/2 runs deprecate-then-activate atomically inside one
+      Repo.transaction with SELECT ... FOR UPDATE row locking, is an
+      idempotent no-op on an already-ACTIVE definition, and carries a
+      nil-able service_scope_validator hook (the SVC-03/REQ-031
+      integration point, documented in the moduledoc). deprecate/2 and
+      archive/2 enforce the authoritative DRAFT->ACTIVE->DEPRECATED->
+      ARCHIVED transition table; all 9 off-diagonal forbidden-transition
+      cells are each covered by their own named test, not a generic loop.
+      tenant_id is never caller-suppliable: create/2 hard-rejects a
+      supplied :tenant_id/"tenant_id" key (reject_key/4, definitions.ex:
+      481-487) before deriving the real value internally via
+      Letflow.TenantProvisioning.tenant_id_for_schema_name/1 (REQ-022's
+      already-shipped Ecto :prefix reverse-mapping, reused rather than
+      reimplemented, per the 0003 2026-08-17 addendum / ISS-0025's
+      resolution). All 9 of REQ-030's actual acceptance criteria (not the
+      8 CODE-DESIGNER's own handoff had counted) were independently
+      re-verified by RELEASE-VALIDATOR directly against the shipped code
+      and tests, line-cited per criterion, not taken from any prior
+      agent's summary.
+
+      Real rework cycle at Step 3 (TEST-DESIGN-VALIDATOR is a hard gate,
+      not a rubber stamp): TEST-DESIGNER's first test/specs/REQ-030.md
+      draft stated as established fact that its activate/2 cross-row
+      TOCTOU regression test (covering a SECURITY-REVIEWER-filed finding)
+      had, in this run's own execution, genuinely triggered the real
+      Postgres unique-violation race rather than merely passing
+      vacuously. TEST-DESIGN-VALIDATOR (handoff
+      654f732d-b7b3-4cbd-8e17-035abec330fe) independently re-ran that
+      exact test 10 times across 10 fresh seeds and observed zero
+      unique-violation/transaction_failed occurrences -- every run took
+      the safe non-racing branch the spec explicitly disclaimed -- and
+      FAILed the gate on that one MAJOR issue (a core-directives.md No
+      Speculation violation), while explicitly passing everything else
+      (all 9 ACs covered, all 9 forbidden-transition cells individually
+      tested, genuine Task.async concurrency for AC2, no TODOs, isolated
+      fixtures, 40/40 passing twice). TEST-DESIGNER's rework (handoff
+      001a9c49-f53f-4a61-bfa4-262bad4b8130) took the preferred path --
+      rather than just softening the spec's wording, it made the race
+      deterministic: a test-only :telemetry.attach/4 handler rendezvous
+      on Ecto's own [:letflow, :repo, :query] event pauses both
+      Task.async'd activate/2 calls (via plain `receive`) right after
+      each one's deprecate-step query and right before its self-activate-
+      step query, guaranteeing both self-activate UPDATEs collide on the
+      same uq_active_definition partial-unique-index key every run.
+      Zero production code (lib/letflow/definitions.ex) was touched --
+      commit ba676cf changed only test/letflow/definitions/store_test.exs
+      and test/specs/REQ-030.md. TEST-DESIGN-VALIDATOR's re-review
+      (handoff 4536401c-7836-4b75-8ae8-639bff892086) independently
+      re-verified the mechanism from scratch (traced the actual query
+      sequence against definitions.ex, confirmed via git diff that only
+      the two test-only files changed, re-ran the isolated test 6 times
+      on 6 never-before-used seeds -- 6/6 exactly one success + one
+      {:error, {:transaction_failed, _}} -- and independently grepped a
+      captured debug query log for one seed, finding exactly one real
+      Postgres QUERY ERROR at the targeted statement) before PASSing.
+      RELEASE-VALIDATOR then re-verified the rework a third time,
+      independently, on 5 more never-used seeds plus 3 unseeded runs (8
+      additional executions, 8/8 exactly one QUERY ERROR at the same
+      statement) rather than trusting either prior PASS.
+
+      Final full-suite count, independently reproduced by
+      RELEASE-VALIDATOR on a fresh `mix test` run (not copied from
+      TEST-RUNNER's report): 461 passed (4 properties, 457 tests), 0
+      failures, exit 0; `mix compile --warnings-as-errors` clean.
+
+      Flipped docs/requirements.yaml REQ-030 status: in_progress -> done.
+      docs/migration/stage-2-event-store-definitions.md header's
+      Requirements line updated to move REQ-030 from the pending list to
+      the done list (only that line touched -- REQ-030's own acceptance
+      criteria name no docs/migration/*.md or docs/migration/decisions/*
+      file, and this follows the same bulk-refresh-at-stage-gate
+      precedent already established by REQ-025/REQ-029/REQ-033/REQ-039's
+      own DOC-UPDATER passes, i.e. the rest of the file is refreshed in
+      bulk at WF-04 stage-gate closure, not per-requirement). While
+      editing that line, noticed REQ-039 -- status: done in
+      docs/requirements.yaml since 2026-08-17T09:28:45Z, per its own
+      DOC-UPDATER entry above -- is still listed in the header's pending
+      half, a pre-existing staleness this run did not introduce (REQ-039's
+      own DOC-UPDATER pass deliberately left the stage doc untouched, and
+      no later pass happened to touch REQ-039's position since each only
+      moves its own ID). Left as-is rather than silently corrected in the
+      same edit, per this role's scope (REQ-030 only) and
+      core-directives.md's Unblock-Everything scope boundary (notice,
+      don't silently fix unrelated drift); filed as
+      docs/issues/ISS-0034.yaml and, since `gh` is authenticated and
+      origin is reachable, also as a real GitHub issue. README.md checked
+      directly (not assumed): REQ-030 adds only internal
+      Letflow.Definitions context-module functions, no new HTTP route,
+      and nothing in the documented "What's here today"/"Running it"
+      curl/mix flow changed -- left untouched, consistent with
+      REQ-025/033's own DOC-UPDATER precedent. No docs/migration/
+      decisions/*.md file is named in REQ-030's acceptance criteria and
+      none needed editing (0003's 2026-08-17 addendum, which REQ-030
+      implements against, was already recorded by the ISS-0025
+      resolution prior to this run).

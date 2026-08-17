@@ -669,7 +669,7 @@
         "REQ-042"
       ],
       "stage": "S2",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/definitions",
         "test/letflow/definitions",
@@ -677,9 +677,9 @@
         "test/reports"
       ],
       "lock_acquired_at": "2026-08-17T21:15:44Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 (git-setup) COMPLETED -- branched feature/WF02-REQ042-20260817 from origin/main, pushed.",
+      "lock_released_at": "2026-08-17T22:07:46Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (git-merge) COMPLETED -- PR #123 squash-merged as 84a0dab. One rework cycle (rank CASE SQL dedup). Rebase found and fixed 2 real blockers from concurrently-merged REQ-031: ISS-0036 corruption (rebase --ours/--theirs inversion, ISS-0039/GH#121) and a recurring SystemLimitError test-name-length bug (ISS-0040/GH#122). Full suite re-verified green on merged tip (635/635, 4 properties).",
       "backfilled": false,
       "queue_task_id": 53,
       "queue_agent_id": "hetzner-wt2-orch",

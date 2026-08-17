@@ -1,0 +1,50 @@
+{
+  "handoff_id": "c4f2b3d5-000a-4f1a-9a10-req042step03b",
+  "run_id": "WF02-REQ042-20260817",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ042-20260817/step-03b-test-design-validator.json",
+  "created_at": "2026-08-17T21:47:54Z",
+  "started_at": "2026-08-17T21:47:54Z",
+  "completed_at": "2026-08-17T21:49:37Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-042"],
+    "related_handoff_ids": ["step-03-test-designer.json"],
+    "artifacts_in": ["test/specs/REQ-042.md", "test/letflow/definitions/search_test.exs", "test/letflow/definitions_test.exs"],
+    "owned_modules": ["test/letflow/definitions", "test/specs"]
+  },
+  "task": {
+    "description": "WF-02 Step 3b HARD GATE: independently validate test/specs/REQ-042.md, test/letflow/definitions/search_test.exs, and the 3 new doc-content tests in test/letflow/definitions_test.exs against REQ-042's 6 acceptance criteria. Read all files directly.",
+    "acceptance_criteria": [
+      "Each of REQ-042's 6 acceptance criteria has at least one runnable test targeting it",
+      "No 'TODO: implement test' left in the spec",
+      "Test fixtures use per-test unique data, no shared hardcoded IDs, no cross-test pollution",
+      "Tests are self-sufficient, no dependency on other tests running first",
+      "No hardcoded secrets/connection strings in test files",
+      "Mutation-verify the ranking-order test (AC1) and at least one validation-error test (AC2 or AC3) actually detect a real regression",
+      "Independently assess ISS-0038's filing (rank: float() vs runtime Decimal) -- confirm it's genuinely non-blocking for AC1's own ranking-order assertions (i.e. the test correctly normalizes/compares) rather than a symptom of a deeper test-design gap"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-read test/specs/REQ-042.md, test/letflow/definitions/search_test.exs, the 3 new AC6 doc-content tests in test/letflow/definitions_test.exs, docs/requirements.yaml's REQ-042 entry (6 literal ACs), and lib/letflow/definitions.ex's search/2 + helpers. All 6 ACs map to at least one runnable test: AC1 -> search_test.exs:130-163 (ranking order, both rank values and ORDER BY position asserted), AC2 -> :170-176 (empty query -> {:error, :query_empty}), AC3 -> :183-201 (513-byte -> :query_too_long, distinct from :query_empty via refute, plus 512-byte boundary case), AC4 -> :209-223 (no-match -> {:ok, []}), AC5 -> :232-285 (default-limit-20 and explicit-limit pagination, disjoint-union coverage proof), AC6 -> definitions_test.exs:225-256 (Code.fetch_docs-backed doc-content assertions on PD-10 citation, no-new-migration claim, zero-new-indexes claim) plus REQ-042.md's own direct quote. No '@tag :skip', no 'TODO: implement test' anywhere in the spec or test files (grep-verified). Fixtures: every test calls provisioned_tenant() independently (fresh CREATE SCHEMA per test, unique tenant slug via System.unique_integer), AC1's literal 'invoice' name is isolated to its own schema, all other identifiers use unique_name/1 or Ecto.UUID.generate() -- no shared hardcoded IDs, no cross-test pollution, no test depends on another test's execution or data. No hardcoded secrets/connection strings (grep-verified; only hit was the spec's own prose 'secrets/connection strings'). Ran `MIX_TEST_PARTITION=2 mix test test/letflow/definitions/search_test.exs test/letflow/definitions_test.exs`: 23 tests, 0 failures. Mutation test 1 (AC1): edited @rank_case_sql (lib/letflow/definitions.ex:719) to swap exact-match/partial-match scores (3.0<->2.0), ran `mix test test/letflow/definitions/search_test.exs:131` -> failed as expected (`assert rank_by_id[exact.id] == 3.0` got `left: 2.0, right: 3.0`), reverted via backup, `diff` confirmed byte-identical restore. Mutation test 2 (AC2): edited check_query_not_empty/1 (lib/letflow/definitions.ex:682) to always return :ok, ran `mix test test/letflow/definitions/search_test.exs:171` -> failed as expected (`assert ... == {:error, :query_empty}` got `left: {:ok, []}, right: {:error, :query_empty}`), reverted via backup, diff-confirmed identical. Post-revert full re-run: 23 tests, 0 failures. Both mutations prove the tests detect real regressions, not just exercising happy paths. ISS-0038 assessment: read docs/issues/ISS-0038.yaml directly -- legitimately filed (severity MINOR, github_issue https://github.com/tvolodi/letflow/issues/120, status open), correctly attributes root cause (Postgres CASE-expression literals infer `numeric`, Postgrex decodes as Decimal.t() not float()), and is genuinely non-blocking: search_test.exs's rank_to_float/1 helper (lines 120-121) explicitly pattern-matches both %Decimal{} (via Decimal.to_float/1) and is_float(rank), so AC1's rank-value assertions (rank_by_id[exact.id] == 3.0 etc.) compare against real, correctly-normalized numeric values rather than silently passing/failing on struct-vs-float mismatch. This is deliberate, documented normalization (comment at search_test.exs:112-119 explains the Decimal/float discrepancy and cites the issue), not an accidental workaround masking a gap -- confirmed no other assertion in the file relies on an unnormalized Decimal comparison. Not a symptom of a deeper test-design problem.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ042-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ042-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (Step 4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

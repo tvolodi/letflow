@@ -3005,4 +3005,3 @@ history:
       docs/migration/decisions/ file is named in REQ-032's acceptance
       criteria -- confirmed by re-reading the requirements.yaml entry
       directly, none applicable here.
->>>>>>> 7efe0ad (chore(WF02-REQ032): Step 6 -- flip status done, log completion)

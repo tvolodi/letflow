@@ -3347,3 +3347,171 @@ history:
       introduced by REQ-034, does not fail plain mix test) -- filed as
       docs/issues/ISS-0036.yaml (MINOR, also GitHub #113), not fixed as
       part of this requirement's scope.
+  - req: REQ-031
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-17T21:25:31Z
+    note: >
+      WF02-REQ031-20260817 complete, RELEASE-VALIDATOR independently
+      re-verified and PASSed (handoff
+      handoffs/WF02-REQ031-20260817/step-05-release-validator.json,
+      handoff_id a1e5c8f2-4d9b-4a7e-8c1f-3b6d9e2a5f74). Shipped:
+      Letflow.Definitions.ServiceScopeValidator
+      (lib/letflow/definitions/service_scope_validator.ex), the SVC-03
+      port of service_scope_validator.zig -- walks every SERVICE_TASK
+      node in a definition's graph at activation time and checks the
+      activating tenant's permission to use each referenced
+      service_id/plugin_handler via an injectable lookup interface
+      (ServiceCatalog/PluginRegistry don't exist in Letflow yet --
+      S6/S3 respectively -- so this scopes the validator's own
+      graph-walk + scope-comparison algorithm against caller-supplied
+      lookup functions, mirroring R-Co's own optional
+      service_scope_validator field on Store). Wired into REQ-030's
+      already-shipped activate/2 via its nil-able hook -- skips
+      entirely when no lookup is supplied, matching R-Co's default.
+
+      Real rework cycle at Step 1b (CODE-DESIGN-VALIDATOR is a hard
+      gate, not a rubber stamp): the first design draft's plugin-scope
+      branch table incorrectly reused the service-side rule ("nil
+      owner_tenant_id -> violation") for the plugin side. R-Co's real
+      checkPluginHandler does the opposite for a nil-owner tenant-scoped
+      plugin entry -- `const owner = reg.owner_tenant_id orelse return;`
+      is a bare `return` inside a `ServiceScopeError!void` function,
+      i.e. a silent pass, not a violation. CODE-DESIGN-VALIDATOR caught
+      this via direct .zig line citation and FAILed the gate; CODE-
+      DESIGNER's rework split the collapsed branch-table row into two
+      (adding INV-SSV-9 alongside the existing INV-SSV-7, plus OQ-4),
+      and the re-review independently re-verified against R-Co source
+      directly (not against the prior draft's own claim) before
+      PASSing. RELEASE-VALIDATOR re-confirmed the same asymmetry a
+      third time against the live .zig file during Step 5.
+
+      Real mutation-testing evidence at Step 3b: TEST-DESIGN-VALIDATOR
+      didn't just read the test files -- it deliberately broke the
+      implementation 3 separate ways (one mutation per targeted
+      invariant) and confirmed each mutation broke exactly the test
+      case aimed at it and nothing else, then reverted all 3 and
+      confirmed a clean `git diff` before PASSing. This is the
+      strongest form of test-adequacy evidence this pipeline produces
+      short of a property test.
+
+      Two deliberate R-Co asymmetries preserved end-to-end (verified
+      independently at Step 1b re-review, Step 2c, Step 2d, and Step 5
+      -- four separate agents reading the same two .zig branches and
+      reaching the same conclusion each time): (1) a not-registered
+      service_id is always a violation
+      (:service_not_registered, service_scope_validator.ex:246-255)
+      but a not-registered plugin_handler is NOT a violation unless a
+      tenant-scoped entry exists for it under some OTHER tenant
+      somewhere in the registry (service_scope_validator.ex:307-309 vs
+      checkPluginHandler's scan-loop fallthrough, .zig:203-222) -- PD-05
+      already owns handler-existence checking elsewhere, so this
+      validator silently skips the true not-found-anywhere case rather
+      than duplicating that check. (2) a nil owner_tenant_id on a
+      service-scoped row is always a violation
+      (service_scope_validator.ex:271-285, "malformed DB row -- treat
+      as unavailable") but the structurally identical nil-owner case on
+      the plugin side is a silent pass (service_scope_validator.ex:
+      329-336) -- this is the exact bug the Step 1b rework fixed, now
+      shipped correctly and covered by dedicated contrastive tests
+      (service_scope_validator_test.exs:219-240) asserting the opposite
+      outcomes for identically-shaped input on each side.
+
+      SECURITY-REVIEWER PASSed Step 2c (INV-1..INV-8 each explicitly
+      determined APPLIES/NOT-APPLICABLE with reasoning) and filed a
+      genuine forward-looking finding rather than blocking on it:
+      ISS-0036 (also GitHub #112) flags that AC3's required
+      distinguishable not-registered-vs-owned-elsewhere violation
+      reasons, if a future S4 HTTP layer naively renders
+      Violation.reason/message verbatim into a 422 body, would let an
+      external caller use definition activation as an existence oracle
+      for arbitrary service_id/plugin_handler strings -- an INV-5
+      ("not-found/forbidden indistinguishability") tension. Correctly
+      NOT-APPLICABLE to this diff today (no HTTP layer exists before
+      S4, and AC3 explicitly requires the distinction at the validate/3
+      API level) -- filed open/tracked-for-S4 rather than resolved or
+      blocked on here, and left open as-is by this DOC-UPDATER pass;
+      not something this run resolves.
+
+      Final full-suite count, independently reproduced by
+      RELEASE-VALIDATOR on two separate fresh `mix test` runs (unpinned
+      and a second pinned-seed run) plus an isolated-scope run, not
+      copied from TEST-RUNNER's report: 597 passed (4 properties, 593
+      tests), 0 failures, exit 0 on every run; `mix compile
+      --warnings-as-errors` clean. `git diff main...HEAD -- lib/letflow/
+      definitions.ex lib/letflow/definitions/graph.ex` confirmed empty
+      -- REQ-030's activate/2 integration point itself was never
+      touched, purely additive new module. `git diff main...HEAD --stat`
+      confirmed exactly 18 files changed, all within REQ-031's declared
+      scope (the new validator module, its design doc, test spec + 2
+      test files, docs/issues/ISS-0036.yaml, the test report, and this
+      run's own handoff files) -- no scope creep.
+
+      Flipped docs/requirements.yaml REQ-031 status: pending -> done.
+      docs/migration/stage-2-event-store-definitions.md header's
+      Requirements line updated to move REQ-031 from the pending half
+      to the done half -- read the CURRENT line first and moved ONLY
+      REQ-031's own token, per the explicit warning that this exact
+      line caused a real merge conflict during REQ-030's own Step Final
+      (concurrent hosts each moving only their own requirement's
+      token). No other requirement's position touched (REQ-039's
+      pre-existing staleness, flagged by REQ-030's DOC-UPDATER pass as
+      ISS-0034, is still there and still not this run's to fix).
+      README.md checked directly (not assumed): read both "What's here
+      today" and "Running it" in full -- REQ-031 adds one new internal
+      module plugging into REQ-030's already-shipped activate/2 hook,
+      no new HTTP route, no change to the documented curl/mix flow or
+      the ASCII state diagram -- left untouched, consistent with
+      REQ-025/030/033's own DOC-UPDATER precedent. No docs/migration/
+      decisions/*.md file is named in REQ-031's acceptance criteria.
+      docs/issues/ISS-0036.yaml confirmed in a consistent state
+      (status: open, correctly filed as a real future-S4 concern by
+      SECURITY-REVIEWER) -- not touched, not closed, not this run's to
+      resolve.
+
+      Bookkeeping gap noticed, not fixed here: this file had no prior
+      REQ-031 entry at all (no "started" event from Step 00 -- only 3
+      incidental cross-references from other requirements' prose/queue
+      table), confirmed via direct grep before writing this entry, so
+      this "done" event is REQ-031's first own entry in this file's
+      history. Also noting a real timestamp inconsistency rather than
+      silently smoothing it over, per docs/anti-patterns.md's
+      "Extrapolating handoff timestamps instead of reading the clock"
+      entry: this event's `at` was read fresh from the clock
+      (`date -u`, cross-checked against PowerShell's
+      `(Get-Date).ToUniversalTime()`, both agreeing at 21:24-21:25Z)
+      immediately before writing, not extrapolated -- but that real
+      reading is earlier than RELEASE-VALIDATOR's own step-05 handoff
+      `completed_at` (2026-08-17T21:38:52Z) recorded upstream of this
+      step. Reported here as-is rather than bumped forward to look
+      sequential; flagged to ORCH in this run's Step 6 handoff for
+      awareness.
+  - req: REQ-031
+    event: SCOPE-CHANGE
+    agent: ORCH
+    at: "2026-08-17T21:48:00Z"
+    note: >
+      Step Final (git merge) postscript. All of this entry's own
+      references above to "docs/issues/ISS-0036.yaml" / "ISS-0036" were
+      accurate at the time they were written (this run's own local file,
+      GitHub issue #112), but a rebase-time add/add conflict against
+      origin/main revealed that a different, concurrently-merged run
+      (WF02-REQ034-20260817) had independently claimed the same
+      ISS-0036 number for an unrelated finding (already on main first).
+      That run's own DOC-UPDATER had already resolved the collision on
+      main's side by renumbering THIS run's finding to
+      docs/issues/ISS-0037.yaml (content ported verbatim, same GitHub
+      issue #112, with its own explicit renumbering note), and left an
+      instruction for this run to drop its now-redundant local
+      ISS-0036.yaml at Step Final rather than merge it -- done: this
+      run's local ISS-0036.yaml was NOT merged; main's ISS-0036.yaml
+      (the WF02-REQ034-20260817 finding, GitHub #113) was kept as-is.
+      The correct file for this run's SECURITY-REVIEWER finding is now
+      docs/issues/ISS-0037.yaml, not ISS-0036 as every reference above
+      literally states -- left the above prose unedited (it's an
+      accurate historical record of this run's own state before the
+      collision was discovered) rather than silently rewritten, per
+      this file's append-only discipline; this note is the correction
+      for any future reader following the ISS-0036 references above.
+      Same class of cross-host numbering collision as ISS-0034/ISS-0035
+      earlier this session.

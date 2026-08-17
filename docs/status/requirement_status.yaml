@@ -2471,3 +2471,31 @@ history:
       for other instances of the same mismatch class -- none found. No
       lib/, priv/, or test/ file touched. Released queue task 61 as done
       via the per-client API key, closing GitHub issue #74.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-17T07:40:00Z
+    note: >
+      Resolved ISS-0030 (GH#89, BLOCKER, filed 2026-08-17 by this same host
+      during an earlier WF03-ISS0030-20260817 run -- queue task 76). The
+      describe+test computed name in test/letflow/tenant_provisioning_test.exs
+      exceeded ExUnit's 255-char BEAM atom-name ceiling, aborting the whole
+      suite's compile. That earlier run produced and verified the correct
+      fix (shortened both names to a combined 162 chars, no coverage lost)
+      but could not complete Step Final: the host had no GitHub push
+      credentials of any kind, so the fix branch sat pushed-but-unmerged and
+      queue task 76 was deliberately left locked rather than released, to
+      avoid another host silently duplicating the already-completed fix.
+      This run picks up exactly there once gh auth was fixed for this host:
+      re-verified mix compile --warnings-as-errors and mix test green on the
+      existing branch (305 tests, matching the prior run's count), opened
+      PR #91, then rebased onto main's tip before merging and hit one real
+      add/add conflict on docs/issues/ISS-0031.yaml -- another host had
+      independently discovered and, unlike this host, actually fixed that
+      same flaky-test issue in the interim (commit 40d6bf5, resolved status,
+      306th test added as a regression test). Resolved the conflict by
+      keeping main's authoritative resolved record over this branch's
+      stale open/diagnosis-only one. Re-verified green post-rebase (306
+      tests now, 0 failures) before squash-merging PR #91 into main as
+      00f6e7a. Released queue task 76 as done via hetzner-orch, closing
+      GitHub issue #89.

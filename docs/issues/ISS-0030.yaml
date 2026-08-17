@@ -61,4 +61,25 @@ affected_files:
   - test/letflow/tenant_provisioning_test.exs
 github_issue: https://github.com/tvolodi/letflow/issues/89 # created by letflow-queue's own register_task GitHub mirror (server-side token), not by this host's gh CLI -- gh itself is not installed/authenticated on ubuntu-16gb-nbg1-1, see run report
 queue_task_id: 76
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0030-20260817
+resolved_at: 2026-08-17T07:37:31Z
+resolution: >
+  Shortened the describe block name and the test name in
+  test/letflow/tenant_provisioning_test.exs to a combined 162 chars (PR #91,
+  commit e48942b/27d0221 after rebase), no coverage or assertions changed --
+  the dropped phrasing is fully preserved via a NOTE(ISS-0030) comment and
+  existing references to test/specs/REQ-022.md / the MigrationFixture alias.
+  Verified on the merge commit: `mix compile --warnings-as-errors` clean,
+  `mix test` 4 properties + 306 tests, 0 failures (rebased onto main's tip,
+  which had independently gained ISS-0031's regression test in the interim,
+  hence 306 not 305). PR #91 squash-merged into main as 00f6e7a. Queue task
+  76 released done via `hetzner-orch`, closing GitHub issue #89.
+
+  This host had previously completed the fix but was blocked at Step Final
+  with no GitHub push credentials of any kind (see handoffs/orchestrator.log
+  for that earlier BLOCKED run) -- `gh` auth was fixed for this host in the
+  interim, and this run completed Step Final (rebase onto main, resolve the
+  docs/issues/ISS-0031.yaml add/add conflict by keeping main's already-
+  resolved record, PR, merge, queue release) that the earlier run could not.

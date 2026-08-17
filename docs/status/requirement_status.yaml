@@ -2314,3 +2314,45 @@ history:
       detached HEAD). No lib/, priv/, or test/ file touched -- matches the
       issue's own affected_files list exactly. Released queue task 67 as
       done via the per-client API key, closing GitHub issue #81.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-17T07:18:39Z
+    note: >
+      Resolved ISS-0013 (GH#69, MAJOR, queue task 66) together with its
+      companion ISS-0014 (GH#70, MAJOR, no separate queue task claimed
+      this run) -- both filed by CODE-DESIGNER during WF02-REQ023-20260816
+      and both concern REQ-026's archive/1 scope, so fixing one without
+      the other risked scoping event_retention_policies against a design
+      ISS-0014 might supersede. ISS-0013: event_retention_policies has no
+      owning requirement -- REQ-026's archive/1 reads a table nothing
+      creates. ISS-0014: REQ-026 ports Store.archive(), which R-Co retired
+      under PAR-03 in favor of whole-partition retention Letflow
+      deliberately doesn't have yet (0003 Decision C defers partitioning).
+      Read R-Co's actual current migrations directly (003_event_archive,
+      037_adp11_replay_safe_retention_policy, 1149_par03_retention_class)
+      rather than trusting either issue's summary -- confirmed 1149 does
+      NOT touch event_retention_policies at all (it modifies the unrelated
+      event_type_registry and adds events_ephemeral, a distinct
+      partition-routing mechanism). Folded event_retention_policies'
+      migration+schema into REQ-026 itself (its only consumer), scoped to
+      the original 003 shape only -- deliberately not porting 037's
+      hard_delete_* extension, since those values need PAR-03's
+      partition-routing mechanism Letflow doesn't have. Adopted ISS-0014's
+      option (a) (port archive/1 as a row-level move, matching REQ-026's
+      existing acceptance criteria, unchanged) over (b) (defer it, leaving
+      events_archive with nothing writing to it) and (c) (port
+      partition-granularity retention now, contradicting 0003 Decision C).
+      Reasoning: 0003 Decision C already established exactly this
+      build-for-the-current-unpartitioned-architecture pattern elsewhere
+      in the same stage; applying it here is consistent, not a new
+      precedent. Added two new demonstrable acceptance criteria to REQ-026
+      (table/constraint shape; per-event-type policy precedence --
+      previously only described, not tested). Deliberately left
+      docs/migration/stage-2-event-store-definitions.md untouched, per
+      this project's own repeated precedent (REQ-022/023/028) that stage
+      docs refresh in bulk at WF-04 closure. No lib/, priv/, or test/ file
+      touched; REQ-026 remains pending/unclaimed. Released queue task 66
+      as done via the per-client API key, closing GitHub issue #69;
+      closed GitHub issue #70 directly (gh issue close) since no queue
+      task for it was held this run.

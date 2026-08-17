@@ -1139,11 +1139,54 @@ requirements:
       state), without locking instance_projections or instance_sequence
       (invariant 12 -- archival must not block active instances). Returns the
       count of rows moved.
+      EVENT_RETENTION_POLICIES (per ISS-0013/GH#69, resolved 2026-08-17):
+      this requirement ALSO creates event_retention_policies via its own
+      migration + Ecto schema module -- no earlier requirement creates it
+      (REQ-023's acceptance criteria enumerate exactly six other tables, this
+      is deliberately not a seventh). Columns/constraints match R-Co's
+      current 003_event_archive.sql shape: id (uuid pk), event_type
+      (unique), policy (default "keep_forever", one of "keep_forever" |
+      "keep_days" | "keep_count"), keep_days, keep_count, created_at,
+      updated_at, plus chk_retention_policy/chk_keep_days/chk_keep_count
+      CHECK constraints. Deliberately NOT porting 037_adp11_replay_safe_
+      retention_policy.sql's later hard_delete_days/hard_delete_count
+      extension: those policy values exist to interact with PAR-03's
+      partition-routing mechanism (event_type_registry.retention_class,
+      events_ephemeral -- confirmed by reading 1149_par03_retention_class.sql
+      directly), which Letflow does not have per 0003 Decision C's deliberate
+      partitioning deferral -- porting them now would add policy values with
+      no consuming mechanism.
+      ARCHIVE/1 SOURCING (per ISS-0014/GH#70, resolved 2026-08-17): R-Co
+      retired Store.archive() under PAR-03 (src/event_store/store.zig
+      ~line 1288: "REMOVED... superseded by
+      PartitionRetention.runArchivalAging()/runEphemeralDrop(), which operate
+      at whole-PARTITION granularity via DETACH/ATTACH/DROP rather than
+      row-level DELETE"). That replacement mechanism only works on a
+      partitioned table, which Letflow deliberately does not have yet (0003
+      Decision C point 2: "unpartitioned first... rather than speculatively
+      partitioning a table with no rows yet"). Porting archive/1 as a
+      row-level move (this requirement's existing acceptance criteria below,
+      unchanged) is therefore the deliberately CHOSEN resolution (option (a)
+      of the three ISS-0014 recorded), not an oversight of the retirement --
+      it is correct for Letflow's current unpartitioned architecture, mirrors
+      what R-Co itself ran before PAR-03 existed, and is the same
+      build-for-the-current-architecture pattern 0003 Decision C already
+      established elsewhere in this stage. It is expected to need reworking
+      if/when Letflow ever partitions events, exactly as it did in R-Co --
+      that is an accepted, documented future cost, not a defect now. Options
+      (b) (defer archive/1 entirely) and (c) (port partition-granularity
+      retention now) were considered and rejected: (b) would leave REQ-023's
+      already-shipped events_archive table with nothing writing to it
+      indefinitely; (c) would force partitioning early, contradicting 0003
+      Decision C and requiring REVIEWER sign-off/a new decision record this
+      is not.
     acceptance_criteria:
       - "read/2 against an instance with N appended events (via REQ-025) returns exactly those N events in ascending sequence_number order, with any large payload transparently resolved from event_payload_store"
       - "read/2 against an instance_id with no events returns an explicit not-found error, not an empty list"
       - "read_global/1 with after_global_seq set returns only events with a strictly greater global_seq, demonstrated across at least two instances' interleaved events"
       - "calling archive/1 twice in a row moves the same rows the first time and zero additional rows the second time (idempotent), verified by row counts before/after each call"
+      - "event_retention_policies exists (via this requirement's own migration) with columns id/event_type(unique)/policy(default keep_forever)/keep_days/keep_count/created_at/updated_at and the chk_retention_policy/chk_keep_days/chk_keep_count CHECK constraints, matching R-Co's 003_event_archive.sql shape"
+      - "archive/1 against an event_type with an explicit event_retention_policies row uses that policy's keep_days/keep_count instead of the global retention_days fallback, demonstrated with a policy row that would move a different set of rows than the global default would"
       - "the three platform sentinel constants exist and are accessible from the context module, each documented as citing src/event_store/platform.zig"
     depends_on: [REQ-025]
 

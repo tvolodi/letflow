@@ -100,4 +100,56 @@ affected_files:
   - docs/requirements.yaml
   - docs/migration/stage-2-event-store-definitions.md
 github_issue: https://github.com/tvolodi/letflow/issues/70
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0013-20260817
+resolved_at: 2026-08-17T07:18:39Z
+resolution: >
+  Resolved together with its companion ISS-0013 (GH#69, whose queue task
+  this run actually claimed) -- both concern REQ-026's archive/1 scope.
+  This issue had no separate queue task claimed in this run; if
+  letflow-queue's best-effort GitHub-issue import already picked up
+  GH#70 as its own task (likely, given every get_next_task call in this
+  session ran the import step), that task will find this issue already
+  resolved when it's eventually claimed -- release it done with a
+  pointer back to this record rather than redoing the analysis.
+
+  Adopted option (a) from this record's own three candidates: port
+  archive/1 as a row-level move, matching REQ-026's acceptance criteria
+  as already written (they were unaffected -- correctly derived from
+  event_store.md's still-accurate ES-07 invariants, they just needed the
+  sourcing context made explicit, not a rewrite). Rejected (b) (defer
+  archive/1 entirely) because it would leave REQ-023's already-shipped
+  events_archive table with nothing writing to it indefinitely. Rejected
+  (c) (port PAR-03's whole-partition retention now) because it would
+  force partitioning early, contradicting 0003 Decision C's deliberate
+  deferral, and would need REVIEWER sign-off / a new decision record this
+  fix is not.
+
+  Reasoning for (a) over (b)/(c), beyond what this record's own SECURITY-
+  adjacent analysis already covered: 0003 Decision C already established
+  the "build for the current unpartitioned architecture, accept future
+  rework when partitioning eventually lands" pattern elsewhere in this
+  same stage (the (event_id, created_at) PK, the idempotency sidecar
+  chosen up front specifically to ease that future retrofit). Porting
+  row-level archive/1 now is the same pattern applied consistently, not a
+  new precedent -- and mirrors what R-Co itself ran during its own
+  pre-partitioned phase. It is expected to need reworking if/when Letflow
+  ever partitions events, exactly as it did in R-Co -- an accepted,
+  documented future cost, not a defect now.
+
+  Verified directly against R-Co source before writing this: confirmed
+  1149_par03_retention_class.sql does not touch event_retention_policies
+  (it modifies event_type_registry and creates events_ephemeral instead,
+  a related-but-distinct partition-routing mechanism -- see ISS-0013's own
+  resolution for the full read).
+
+  Full resolution applied to docs/requirements.yaml's REQ-026 entry (see
+  ISS-0013's resolution note for the exact text added). Deliberately did
+  NOT touch docs/migration/stage-2-event-store-definitions.md, per this
+  project's own established and repeatedly-applied precedent (REQ-022,
+  REQ-023, REQ-028) that stage-N doc headers/content are refreshed in
+  bulk at WF-04 stage-gate closure, not incrementally per issue --
+  recording the full rationale in REQ-026's own requirements.yaml entry
+  instead, since that is the file its future implementer actually reads
+  first. No lib/, priv/, or test/ file touched.

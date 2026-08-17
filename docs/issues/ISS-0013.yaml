@@ -66,4 +66,41 @@ description: >
 affected_files:
   - docs/requirements.yaml
 github_issue: https://github.com/tvolodi/letflow/issues/69
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0013-20260817
+resolved_at: 2026-08-17T07:18:39Z
+resolution: >
+  Resolved together with its companion ISS-0014 (GH#70) -- both concern
+  REQ-026's archive/1 scope and are two views of the same gap, so fixing
+  one without the other risked scoping event_retention_policies against a
+  design (row-level archive/1) that ISS-0014 might have superseded.
+
+  Read R-Co's actual current retention shape directly rather than trusting
+  the issue's own summary: migrations/003_event_archive.sql (original
+  table), 037_adp11_replay_safe_retention_policy.sql (still-live extension
+  adding hard_delete_days/hard_delete_count + a protected-family CHECK),
+  and 1149_par03_retention_class.sql (confirmed this does NOT touch
+  event_retention_policies at all -- it adds a retention_class column to
+  the unrelated event_type_registry table plus a new events_ephemeral
+  partitioned table; that is PAR-03's partition-routing mechanism, a
+  separate concept from the older per-event-type policy table this issue
+  is about).
+
+  Folded event_retention_policies' migration + schema creation into
+  REQ-026 itself (rather than a new standalone requirement) since REQ-026
+  is its only consumer -- keeps a two-function retention feature cohesive
+  in one requirement rather than an artificial split. Scoped to the
+  ORIGINAL 003 shape only (keep_forever/keep_days/keep_count) --
+  deliberately NOT porting 037's hard_delete_days/hard_delete_count
+  extension, since those values exist specifically to interact with
+  PAR-03's partition-routing mechanism, which Letflow does not have per
+  0003 Decision C's deliberate partitioning deferral; porting them now
+  would add policy values with no consuming mechanism. Added two new
+  demonstrable acceptance criteria (table/constraint shape; per-event-type
+  policy taking precedence over the global fallback -- previously only
+  described, not tested).
+
+  Full ISS-0014 resolution recorded in that issue's own file. No lib/,
+  priv/, or test/ file touched -- requirement-content amendment only,
+  REQ-026 still pending/unclaimed.

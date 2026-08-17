@@ -371,6 +371,23 @@
       "queue_agent_id": "hetzner-orch",
       "worktree": "/home/tvolodi/letflow (Hetzner host ubuntu-16gb-nbg1-1)",
       "note": "First full WF-02 run this session -- promotion_reviews schema (PRM-04 Type C part), schema-only per REQ-035's own scope boundary (transition functions are REQ-037). Full producer/validator chain run via background subagents, all PASS on first attempt, no rework: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> ELIXIR-DEV -> SECURITY-REVIEWER -> REVIEWER -> TEST-DESIGNER -> TEST-DESIGN-VALIDATOR -> TEST-RUNNER -> RELEASE-VALIDATOR -> DOC-UPDATER. REVIEWER independently confirmed the PER_TENANT classification on the merits rather than deferring to what the acceptance criteria demanded. One process deviation caught and reconciled: DOC-UPDATER filed docs/issues/ISS-0032.yaml and closed a GitHub issue directly via gh instead of routing through ORCH's register_task -- ORCH backfilled a queue task for it after the fact. Rebase onto main hit two conflicts on the append-only requirement_status.yaml against a concurrently active host's WF02-REQ039-20260817 run -- both resolved by interleaving entries in timestamp order, no content lost. mix compile --warnings-as-errors clean, mix test 333/333 (up from 306 pre-run) both pre-merge and re-verified on main's actual merged tip."
+    },
+    {
+      "run_id": "WF02-REQ041-20260817",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-041"],
+      "stage": "S2",
+      "status": "COMPLETED",
+      "owned_modules": ["lib/letflow/definitions.ex", "lib/letflow/definitions/solution_pack_install.ex", "lib/letflow/definitions/solution_pack_artefact_base.ex", "lib/letflow/definitions/pack_update_resolution.ex", "priv/repo/migrations/20260817083801_create_solution_pack_installs.exs", "priv/repo/migrations/20260817083802_create_solution_pack_artefact_bases.exs", "priv/repo/migrations/20260817083803_create_pack_update_resolutions.exs"],
+      "lock_acquired_at": "2026-08-17T08:27:40Z",
+      "lock_released_at": "2026-08-17T09:03:54Z",
+      "released_lock": true,
+      "last_known_step": "PR #96 squash-merged into main as 286fab6, queue task 43 released done, GH#51 closed.",
+      "backfilled": false,
+      "queue_task_id": 43,
+      "queue_agent_id": "hetzner-orch",
+      "worktree": "/home/tvolodi/letflow (Hetzner host ubuntu-16gb-nbg1-1)",
+      "note": "Solution-pack update three-way diff (pack_update.zig, PRM-09) -- the first GLOBAL/non-tenant-scoped table added since REQ-015's identity tables, unlike every other S2 table so far. Full producer/validator chain via background subagents, all PASS on first attempt, no rework: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> ELIXIR-DEV -> SECURITY-REVIEWER -> REVIEWER -> TEST-DESIGNER -> TEST-DESIGN-VALIDATOR -> TEST-RUNNER -> RELEASE-VALIDATOR -> DOC-UPDATER. Given this table's structural novelty, both SECURITY-REVIEWER and RELEASE-VALIDATOR independently re-derived (not just trusted) that fetch_base/4 and resolution_exists?/5 filter by tenant_id as part of a full composite-key lookup, so isolation genuinely holds at the query level with no schema-per-tenant boundary to lean on. ELIXIR-DEV self-flagged two honest deviations from the design's assumptions (a missing context module it had to create; one schema module's design reasoning extended from a sibling's) rather than silently patching over them -- REVIEWER judged both sound against real codebase precedent. DOC-UPDATER correctly followed the corrected protocol this run (per REQ-035's own process-note) -- flagged an incidental finding (orchestrator session-launch scratch files in the project root) in its handoff text instead of acting on it directly; ORCH moved them to scratch/ per core-directives.md's File Placement Rules. No rebase needed (main unchanged since Step 00). mix compile --warnings-as-errors clean, mix test 363/363 (up from 333 pre-run) both pre-merge and re-verified on main's actual merged tip."
     }
   ]
 }

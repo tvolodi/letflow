@@ -1,0 +1,70 @@
+{
+  "handoff_id": "a5e4d7e9-d1b8-4d16-bcbc-201804c143cb",
+  "run_id": "WF02-REQ025-20260817",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ025-20260817/step-05-release-validator.json",
+  "created_at": "2026-08-17T13:12:09Z",
+  "started_at": "2026-08-17T13:12:09Z",
+  "completed_at": "2026-08-17T13:16:10Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-025"],
+    "related_handoff_ids": ["952d80a4-2ca4-456a-9b14-d641ba362542"],
+    "artifacts_in": [
+      "docs/requirements.yaml (REQ-025 entry)",
+      "lib/letflow/event_store.ex",
+      "test/letflow/event_store_test.exs",
+      "test/reports/report-2026-08-17-WF02-REQ025-20260817.yaml",
+      "docs/status/requirement_status.yaml"
+    ],
+    "owned_modules": ["lib/letflow/event_store.ex", "test/letflow/event_store_test.exs"]
+  },
+  "task": {
+    "description": "Independently re-verify REQ-025 (Event append) is genuinely done before it's marked so -- do not trust TEST-RUNNER's PASS report alone. Re-run mix test independently against the real docker-compose Postgres. Check each of REQ-025's 6 acceptance_criteria against the actual current code/tests, confirm AC6's substitution (instance_sequence/event_idempotency have no tenant_id column, isolation via :prefix schema boundary instead) is a legitimate, REVIEWER-flagged resolution rather than a silent scope-narrowing, and check docs/requirements.yaml / docs/status/requirement_status.yaml for staleness.",
+    "acceptance_criteria": [
+      "mix test independently re-run, not trusted from TEST-RUNNER's report",
+      "each of REQ-025's 6 acceptance criteria checked individually against actual code/tests",
+      "docs/requirements.yaml and docs/status/requirement_status.yaml checked for staleness"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-derived this verdict from the artefacts themselves -- did not read TEST-RUNNER's or any other agent's result.summary as a substitute.\n\n1. INDEPENDENT TEST RE-RUN. Confirmed docker-compose Postgres running (letflow-postgres-1, healthy, port 5462). Ran `MIX_ENV=test mix ecto.migrate` (already up to date) then `MIX_ENV=test mix test` myself, full suite: '4 properties, 411 tests, 0 failures' (Finished in 12.6 seconds) -- matches TEST-RUNNER's report/report-2026-08-17-WF02-REQ025-20260817.yaml exactly, independently reproduced, not copied. Also ran `mix test test/letflow/event_store_test.exs --trace` in isolation: all 10 named tests pass (2x AC1, 1x instance_not_started, 1x AC2 concurrent, 1x AC3 idempotency, 1x AC4 invalid payload, 1x AC5 oversized payload, 3x AC6 sub-cases), 'Finished in 1.9 seconds', 0 failures. Also ran `mix compile --warnings-as-errors`: clean, exit 0.\n\n2. EACH OF REQ-025's 6 ACCEPTANCE CRITERIA, CHECKED AGAINST ACTUAL CODE/TESTS (docs/requirements.yaml lines 1093-1099):\n\nAC1 (terminated instance -> error, zero rows across all five tables): lib/letflow/event_store.ex's active_instance_guard/3 (M1, ~line 325) reads instance_projections, returns {:error, {:instance_terminated, status}} on a terminal row BEFORE any Multi write step runs, aborting the whole Ecto.Multi atomically. Verified directly in test/letflow/event_store_test.exs lines 185-222: both :completed and :cancelled sub-cases assert zero writes to events/instance_sequence/idempotency/payload_store via assert_no_writes_to_append_only_tables/1 AND assert the pre-seeded instance_projections row is byte-for-byte untouched (`Repo.get(...) == projection_before`). PASS, tests green.\n\nAC2 (two concurrent appends never receive the same sequence_number, or the locking path is cited): lock_and_increment_sequence/3 (event_store.ex ~line 359) uses Ecto's `lock(\"FOR UPDATE\")` query composition (not raw SQL) on instance_sequence, holding the row lock from the read through the increment inside one DB transaction. test/letflow/event_store_test.exs lines 250-303 exercises this with a REAL Task.async-based race (send/receive barrier forcing genuine overlap, sandbox :auto mode giving each Task its own Postgres connection) -- confirmed passing against real Postgres lock contention, not a citation-only fallback. PASS, test green (132.1ms, genuinely exercised).\n\nAC3 (duplicate idempotency_key -> is_duplicate: true, no second events row): claim_idempotency/3 (M3) + resolve_duplicate/3 implement the 'insert, re-select by own id to disambiguate' idiom against event_idempotency; a duplicate aborts the whole Multi (rolling back M2's sequence increment too) and interpret_transaction_result/1 converts that specific abort into a success carrying is_duplicate: true and the ORIGINAL event. test lines 310-336 confirms event_id/sequence_number identity across both calls and that Event/IdempotencyRecord table counts stay at 1 after the second call (a stronger property than AC3's literal 'no second events row'). PASS, test green.\n\nAC4 (failing payload validation -> zero rows written to events/instance_sequence/instance_projections): Registry.validate_payload/3 is called in append/2's `with` chain (event_store.ex line 154) entirely BEFORE ctx is built and before Repo.transaction/2 is ever invoked -- a literal zero-writes-attempted guarantee, not merely a rolled-back one. test lines 344-366 deliberately does NOT seed instance_projections to prove this failure is reported on its own terms without ever reaching the M1 guard, and asserts zero rows everywhere including instance_projections. PASS, test green.\n\nAC5 (payload >4096 bytes -> $ref pointer + event_payload_store row): insert_event/3 (M4) branches on payload_bytes vs @payload_inline_max_bytes (4096), storing %{\"$ref\" => event_id} in events.payload when oversized; maybe_store_oversized_payload/2 conditionally adds M5 (store_oversized_payload/3) only when payload_bytes > 4096, inserting into StoredPayload after M4 (FK ordering respected). test lines 374-401 builds a >4096-byte payload, asserts the returned event's payload is the $ref form, AND re-reads both the StoredPayload row (payload/byte_size) and the Event row directly from Postgres. PASS, test green.\n\nAC6 (every row append/2 writes has tenant_id derived internally, never caller-supplied, disagreement fails loudly): reject_tenant_id/1 (P0, event_store.ex line 183) hard-rejects any attrs map containing an atom or string `tenant_id` key with {:error, :tenant_id_not_accepted} BEFORE any other processing. TenantProvisioning.tenant_id_for_schema_name/1 (new function, lib/letflow/tenant_provisioning.ex) derives tenant_id from opts[:prefix] as the sole channel; insert_event/3 (M4) and update_projection/3 (M6) both source tenant_id exclusively from this derived ctx value, never from attrs. Independently confirmed against the migration DDL that AC6's literal wording ('events, instance_sequence, instance_projections, the idempotency sidecar' all carry tenant_id) does not match the shipped schema: `grep tenant_id priv/repo/migrations/20260816120002_create_instance_sequence.exs priv/repo/migrations/20260816120006_create_event_idempotency.exs` -- zero hits in either file (no `add :tenant_id` line); `grep tenant_id .../20260816120001_create_events.exs .../20260816120003_create_instance_projections.exs` -- one hit each (`add :tenant_id, :binary_id, null: false`). This is exactly the substitution flagged in lib/letflow/design/req025-event-append.md's OQ-1 (MAJOR) and restated in event_store.ex's own moduledoc: for the two columned tables, tenant_id equality is asserted directly; for the two column-less tables, isolation is asserted via cross-tenant schema-prefix unreachability instead. Checked this substitution's legitimacy against docs/migration/decisions/0003-ecto-schema-strategy.md's 2026-08-17 addendum (lines 326-396) directly: the addendum settles the DERIVATION MECHANISM (derive tenant_id from :prefix, reject a caller-supplied value -- option (c), chosen over (a)/(b) on attribution-integrity grounds during REQ-027's SECURITY-REVIEWER pass) but says nothing about which tables carry the column at all -- that's REQ-023's own, earlier, separately-documented schema decision (req023-event-store-schema.md §2.5/§9), not something REQ-025's design silently re-decided. The design doc explicitly reports OQ-1 'to REVIEWER, not resolved unilaterally by silently editing docs/requirements.yaml' -- and REVIEWER's step-02d handoff (re-validation, PASS) reviewed the current diff and design doc in full without objecting to this framing. This is a legitimate, flagged, cross-checked substitution, not a silent scope-narrowing. test lines 412-486 (3 sub-cases: column-check for events/instance_projections against an independently-computed tenant_id, cross-tenant-prefix-unreachability check for instance_sequence/event_idempotency against a second genuinely-provisioned tenant, and the caller-supplied-tenant_id-must-fail-loudly case) all pass. PASS.\n\n3. STALENESS CHECK. docs/requirements.yaml REQ-025 entry (line 1045): `status: in_progress` -- correct, not prematurely 'done'. docs/status/requirement_status.yaml: grepped for `req: REQ-025` -- exactly one event present, `event: started` at 2026-08-17T10:58:58Z (agent ORCH); no `done` event yet. Matches expectation exactly -- DOC-UPDATER (Step 6) has not run, nothing marked done prematurely.\n\n4. DECISION-RECORD CONSISTENCY. Re-read 0003-ecto-schema-strategy.md's 2026-08-17 addendum in full: shipped code (tenant_id_for_schema_name/1's pure reverse-mapping, append/2's reject-rather-than-strip handling of a caller-supplied tenant_id) matches the addendum's adopted option (c) exactly, including the specific attribution-integrity reasoning cited (a derived value cannot disagree with the schema it's written into). No contradiction found.\n\n5. GATE-SEQUENCE SANITY CHECK (reviewed, not re-litigated). REVIEWER's step-02d handoff shows a genuine FAIL (commit c552a21, OQ-5 instance_projections scope overstep) followed by a real design rework (CODE-DESIGNER redesigned M1/M6 to update-only) and re-validation PASS -- not a rubber-stamp. SECURITY-REVIEWER's step-02c handoff (4th pass on this run, 1st pass on the OQ-5 rework specifically) independently re-verified INV-1 (tenant isolation) and INV-8 (Multi step-ordering pattern-match safety) against the reworked code, citing Ecto's own vendored source rather than assuming Multi semantics. TEST-DESIGN-VALIDATOR's step-03b handoff independently re-ran the isolated test file (10/0, matching) and verified fixture discipline (every success-path test pre-seeds instance_projections via direct Repo.insert, never via append/2, since append/2 is structurally incapable of originating that row). Full gate sequence for this run: CODE-DESIGN-VALIDATOR PASS -> ELIXIR-DEV -> SECURITY-REVIEWER PASS -> REVIEWER FAIL(OQ-5) -> CODE-DESIGNER rework -> CODE-DESIGN-VALIDATOR PASS -> ELIXIR-DEV rework -> SECURITY-REVIEWER PASS -> REVIEWER PASS -> TEST-DESIGNER -> TEST-DESIGN-VALIDATOR PASS -> TEST-RUNNER PASS -> RELEASE-VALIDATOR (this handoff) PASS.\n\n6. MINOR, NON-BLOCKING OBSERVATION (not a REQ-025 acceptance-criteria matter, noted per standing 'report even if not asked' practice): an untracked `orch-run.log` (18 bytes, content `ORCH_RUN_EXITED:1`) exists at the project root, violating core-directives.md's File Placement Rules (scratch/one-off files belong in `scratch/`, not project root). Not created by this validation step, not part of REQ-025's owned_modules or artifacts, and does not affect any acceptance criterion -- flagged for whichever process is generating it to relocate, not fixed here since it's outside this handoff's scope.\n\nOverall verdict: PASS. All 6 acceptance criteria independently confirmed against current code and passing tests; full-suite and isolated test runs independently reproduced with identical results to TEST-RUNNER's report; AC6's table-substitution is a legitimate, flagged, cross-checked resolution consistent with decision record 0003's addendum; docs/requirements.yaml and requirement_status.yaml are both correctly still in_progress/started-only, no premature done marking found.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "id": "stray-orch-run-log",
+        "severity": "note",
+        "summary": "Untracked orch-run.log (18 bytes) sits at the project root, violating core-directives.md's scratch-file placement rule. Not related to REQ-025's own artifacts.",
+        "recommendation": "Relocate to scratch/ or delete -- not blocking this requirement's release validation, flagged for whichever process is writing it."
+      }
+    ],
+    "test_run_evidence": {
+      "full_suite_command": "MIX_ENV=test mix test",
+      "full_suite_result": "4 properties, 411 tests, 0 failures",
+      "full_suite_duration": "Finished in 12.6 seconds (1.0s async, 11.5s sync)",
+      "isolated_command": "mix test test/letflow/event_store_test.exs --trace",
+      "isolated_result": "10 tests, 0 failures",
+      "isolated_duration": "Finished in 1.9 seconds (0.00s async, 1.9s sync)",
+      "compile_command": "mix compile --warnings-as-errors",
+      "compile_result": "exit 0, no output",
+      "postgres_container": "letflow-postgres-1 (postgres:16), confirmed Up/healthy via docker compose ps before running"
+    },
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ025-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ025-20260817",
+      "push_status": "not_applicable",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER (Step 6)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

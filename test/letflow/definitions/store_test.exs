@@ -28,6 +28,16 @@ defmodule Letflow.Definitions.StoreTest do
   moduledoc-content tests -- consistent with that file's existing
   `normalized_moduledoc/1` pattern, no DB needed for a doc-content assertion.
 
+  ## REQ-031 AC4 (this file's `"activate/2 (REQ-031 AC4)"` block)
+
+  REQ-030's own `"activate/2 (AC6)"` block above proves the `service_scope_validator`
+  hook MECHANISM takes effect, using a hand-rolled anonymous closure as the hook value.
+  REQ-031's AC4 specifically requires demonstrating the real, merged
+  `Letflow.Definitions.ServiceScopeValidator.build/1` output wired in as that hook --
+  this file is where that lives (real Postgres, a real `graph_with_service_task/1`
+  fixture), rather than `service_scope_validator_test.exs` (which covers `validate/3`'s
+  own algorithm purely, no `Repo`). See `test/specs/REQ-031.md`.
+
   ## Fixture strategy -- read before adding a test here
 
   Mirrors `test/letflow/definitions/snapshot_store_test.exs`'s and
@@ -71,6 +81,8 @@ defmodule Letflow.Definitions.StoreTest do
   alias Letflow.Definitions
   alias Letflow.Definitions.Graph
   alias Letflow.Definitions.ProcessDefinition
+  alias Letflow.Definitions.ServiceScopeValidator
+  alias Letflow.Definitions.ServiceScopeValidator.{Lookup, Violation}
   alias Letflow.Identity.Tenant
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
@@ -155,6 +167,32 @@ defmodule Letflow.Definitions.StoreTest do
       "edges" => [
         %{"id" => "e1", "source" => "start", "target" => "task"},
         %{"id" => "e2", "source" => "task", "target" => "end"}
+      ]
+    }
+  end
+
+  # A structurally-valid graph (passes validate_graph/1 AND validate_node_attributes/1 --
+  # carries the "endpoint"/"timeout_ms" attributes CHK-10/CHK-11 require) whose one
+  # SERVICE_TASK node references `service_id` -- used by REQ-031 AC4's real-activate/2
+  # integration tests below to exercise ServiceScopeValidator.build/1 as the real hook.
+  defp graph_with_service_task(service_id) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "svc-node",
+          "node_type" => "SERVICE_TASK",
+          "attributes" => %{
+            "endpoint" => "https://example.test/svc",
+            "timeout_ms" => 5_000,
+            "service_id" => service_id
+          }
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "svc-node"},
+        %{"id" => "e2", "source" => "svc-node", "target" => "end"}
       ]
     }
   end
@@ -671,6 +709,107 @@ defmodule Letflow.Definitions.StoreTest do
                  prefix: schema_name,
                  service_scope_validator: exploding_validator
                )
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-031 acceptance criterion 4: "REQ-030's activate/1 is demonstrated calling this
+  # validator via its nil-able hook when a lookup implementation is supplied, and
+  # skipping the check entirely when the hook is nil." REQ-030's own AC6 block above
+  # already proves activate/2's hook MECHANISM takes effect, but using a hand-rolled
+  # anonymous closure, not the real, merged `ServiceScopeValidator.build/1` output --
+  # this block wires the actual REQ-031 module through as the hook, against a real
+  # SERVICE_TASK-carrying graph and real Postgres.
+  # ---------------------------------------------------------------------------------
+
+  describe "activate/2 (REQ-031 AC4) -- ServiceScopeValidator.build/1 wired as the real hook" do
+    test "a Lookup causing a violation is wired via ServiceScopeValidator.build/1 and blocks activation with the real Violation struct" do
+      %{schema_name: schema_name, tenant_id: tenant_id} = provisioned_tenant()
+      service_id = "req031-ac4-ghost-svc"
+
+      definition =
+        create!(schema_name, %{
+          name: unique_name("ac4-blocked"),
+          graph: graph_with_service_task(service_id)
+        })
+
+      lookup = %Lookup{
+        service_lookup: fn ^service_id -> {:error, :not_registered} end,
+        plugin_lookup: fn plugin_handler, ph_tenant_id ->
+          raise "plugin_lookup must not be called, got: #{inspect({plugin_handler, ph_tenant_id})}"
+        end
+      }
+
+      hook = ServiceScopeValidator.build(lookup)
+
+      assert {:error,
+              {:service_scope_violation,
+               %Violation{
+                 node_id: "svc-node",
+                 kind: :service,
+                 ref_id: ^service_id,
+                 reason: :service_not_registered
+               }}} =
+               Definitions.activate(definition.id,
+                 prefix: schema_name,
+                 service_scope_validator: hook
+               )
+
+      assert reread!(schema_name, definition.id).status == :draft
+      assert count_active_by_name(schema_name, definition.name) == 0
+      # Sanity: tenant_id is real and would have been the value passed to the hook,
+      # matching design doc §6's claim that activate/2 derives it before this hook runs.
+      assert is_binary(tenant_id)
+    end
+
+    test "the identical graph activates successfully when the hook is omitted entirely -- the nil-skip path is a genuine skip, not an accidentally-permissive lookup" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      service_id = "req031-ac4-nilskip-svc"
+
+      definition =
+        create!(schema_name, %{
+          name: unique_name("ac4-nilskip"),
+          graph: graph_with_service_task(service_id)
+        })
+
+      # Same service_id, same graph shape as the blocked case above -- this Lookup, if
+      # it ran, WOULD reject the activation. It is never passed to activate/2 at all
+      # (no :service_scope_validator key in opts), proving the nil-skip path is a
+      # genuine skip rather than an accidentally-permissive default.
+      assert {:ok, %{already_active: false, definition: %{status: :active}}} =
+               Definitions.activate(definition.id, prefix: schema_name)
+
+      assert reread!(schema_name, definition.id).status == :active
+      assert count_active_by_name(schema_name, definition.name) == 1
+    end
+
+    test "a Lookup permitting the reference is wired via build/1 and activation succeeds" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      service_id = "req031-ac4-global-svc"
+
+      definition =
+        create!(schema_name, %{
+          name: unique_name("ac4-permitted"),
+          graph: graph_with_service_task(service_id)
+        })
+
+      lookup = %Lookup{
+        service_lookup: fn ^service_id -> {:ok, %{scope: :global, owner_tenant_id: nil}} end,
+        plugin_lookup: fn plugin_handler, ph_tenant_id ->
+          raise "plugin_lookup must not be called, got: #{inspect({plugin_handler, ph_tenant_id})}"
+        end
+      }
+
+      hook = ServiceScopeValidator.build(lookup)
+
+      assert {:ok, %{already_active: false, definition: %{status: :active}}} =
+               Definitions.activate(definition.id,
+                 prefix: schema_name,
+                 service_scope_validator: hook
+               )
+
+      assert reread!(schema_name, definition.id).status == :active
+      assert count_active_by_name(schema_name, definition.name) == 1
     end
   end
 

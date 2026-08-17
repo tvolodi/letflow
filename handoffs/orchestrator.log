@@ -480,3 +480,5 @@
 2026-08-17T21:47:54Z | DISPATCH | WF-02 | WF02-REQ042-20260817 | ORCH -> TEST-DESIGN-VALIDATOR | Step 3b hard gate with mutation-verification.
 2026-08-17T21:49:37Z | PASS | WF-02 | WF02-REQ042-20260817 | TEST-DESIGN-VALIDATOR -> ORCH | Step 3b: all standard checks PASS, ran suite directly (23/23). Mutation check 1 (AC1 ranking score swap) confirmed real detection. Mutation check 2 (AC2 empty-query bypass) confirmed real detection. ISS-0038 assessed as legitimate and correctly, deliberately normalized in the test (Decimal.to_float/1), not masking a gap. Tree clean after revert. Committed 9effa12, pushed.
 2026-08-17T21:50:27Z | DISPATCH | WF-02 | WF02-REQ042-20260817 | ORCH -> TEST-RUNNER | Step 4: full suite run.
+2026-08-17T21:54:10Z | PASS | WF-02 | WF02-REQ042-20260817 | TEST-RUNNER -> ORCH | Step 4: full suite run twice (unpinned + seed 0), 4 properties, 608 tests, 0 failures both times. Isolated re-run 23/23 matching Step 3b. No issues found. report-2026-08-17-WF02-REQ042-20260817.yaml written. Committed 6b8158d, pushed.
+2026-08-17T21:54:20Z | DISPATCH | WF-02 | WF02-REQ042-20260817 | ORCH -> RELEASE-VALIDATOR | Step 5: independent re-verification.

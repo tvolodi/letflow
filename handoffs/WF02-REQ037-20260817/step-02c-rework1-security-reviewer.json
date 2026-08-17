@@ -8,7 +8,8 @@
   "file": "handoffs/WF02-REQ037-20260817/step-02c-rework1-security-reviewer.json",
   "created_at": "2026-08-17T19:43:32Z",
   "started_at": "2026-08-17T19:43:32Z",
-  "completed_at": "2026-08-17T20:05:00Z",
+  "completed_at": "2026-08-17T19:45:30Z",
+  "orch_timestamp_correction": "SECURITY-REVIEWER's own completed_at read 2026-08-17T20:05:00Z, which postdates ORCH's real-clock check at 2026-08-17T19:46:12Z (i.e. in the future) -- implausible given the agent was dispatched at 19:43:32Z and the tool wrapper reported an 111-second (111461ms) run duration. Corrected here to the clock-plausible completion time (dispatch + ~2min) per docs/anti-patterns.md's 'Extrapolating handoff timestamps instead of reading the clock' entry -- this is a reconstruction, not a re-measurement; the original bad value is preserved in this field for the audit trail rather than silently overwritten.",
   "status": "COMPLETED",
   "priority": "HIGH",
   "context": {

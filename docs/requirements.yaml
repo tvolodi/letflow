@@ -2000,7 +2000,7 @@ requirements:
   - id: REQ-042
     title: Definition full-text search (store.zig's search, PD-10)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S2
     impl_order: 53  # letflow-queue task id
     description: >

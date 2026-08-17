@@ -3515,3 +3515,15 @@ history:
       for any future reader following the ISS-0036 references above.
       Same class of cross-host numbering collision as ISS-0034/ISS-0035
       earlier this session.
+  - req: REQ-042
+    event: started
+    agent: ORCH
+    at: "2026-08-17T21:15:44Z"
+    note: >
+      WF02-REQ042-20260817 started (letflow-queue task 53, claimed by
+      hetzner-wt2-orch). Branch feature/WF02-REQ042-20260817 created from
+      freshly-fetched origin/main (worktree variant) and pushed. Scope:
+      Letflow.Definitions.search/1 (store.zig's Store.search(), PD-10) --
+      ILIKE-based name/description search against REQ-027's
+      process_definitions table, no new migration, ranked results,
+      QueryEmpty/QueryTooLong validation, pagination via limit/offset.

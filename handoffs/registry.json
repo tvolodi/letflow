@@ -640,6 +640,27 @@
       "queue_agent_id": "hetzner-wt2-orch",
       "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
       "note": "No other run active in registry at claim time (all prior entries COMPLETED). owned_modules directory-level lock on lib/letflow/definitions -- will narrow to the specific export_import.ex file once CODE-DESIGNER names it, same pattern as REQ-037 note."
+    },
+    {
+      "run_id": "WF02-REQ031-20260817",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-031"
+      ],
+      "stage": "S2",
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/definitions/service_scope_validator.ex"
+      ],
+      "lock_acquired_at": "2026-08-17T19:52:16Z",
+      "lock_released_at": "2026-08-17T21:35:21Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (git merge) COMPLETED -- PR #119 squash-merged into main as 9d61dc6 (fast-forward), queue task 51 released done, GH#59 closed.",
+      "backfilled": false,
+      "queue_task_id": 51,
+      "queue_agent_id": "tvolodi-orch",
+      "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
+      "note": "Service scope activation validator (service_scope_validator.zig, SVC-03) -- the hook REQ-030's activate/2 already carried a nil-able integration point for. Purely additive new file, zero changes to already-merged lib/letflow/definitions.ex or graph.ex (independently confirmed empty diff at every downstream gate). Full producer/validator chain via genuinely independent dispatched agents, all PASS with one real rework cycle: CODE-DESIGN-VALIDATOR FAILed the design once at Step 1b on a genuine R-Co-fidelity bug (the plugin-scope branch table incorrectly applied the service-side nil-owner-is-a-violation rule to the plugin side, when R-Co's real checkPluginHandler silently passes a nil-owner tenant-scoped plugin -- ORCH independently re-verified this against R-Co source before routing the rework); CODE-DESIGNER's rework fixed it faithfully and CODE-DESIGN-VALIDATOR's re-review PASSed. TEST-DESIGN-VALIDATOR (Step 3b) performed real mutation testing -- temporarily broke the implementation 3 separate ways (both asymmetries + short-circuit logic) and confirmed each mutation broke exactly its targeted test, nothing else, then reverted byte-for-byte. SECURITY-REVIEWER PASSed and filed one forward-looking non-blocking finding (future S4 violation-detail-leakage risk). Step Final hit a real ISS-numbering collision: this run's own local docs/issues/ISS-0036.yaml (the SECURITY-REVIEWER finding) collided at rebase with an unrelated, already-merged ISS-0036.yaml from a concurrent WF02-REQ034-20260817 run on the other worktree -- that run's own DOC-UPDATER had already resolved the collision on main's side by renumbering this run's finding to docs/issues/ISS-0037.yaml (content ported verbatim, same GitHub issue #112) and left an explicit instruction to drop the redundant local copy at Step Final, which this run did (checked out main's ISS-0036.yaml via `git checkout --theirs`, did not merge its own). Added a merge-time postscript note to docs/status/requirement_status.yaml correcting the now-stale ISS-0036 references in this run's own earlier prose (left the original prose unedited per append-only discipline, added a correction instead) -- same class of cross-host numbering collision as ISS-0034/ISS-0035 earlier this session. Also resolved a second expected append-only conflict on docs/migration/stage-2-event-store-definitions.md's header line by reconciling against docs/requirements.yaml's actual per-requirement status (brought REQ-034/REQ-037's concurrently-merged done status into the header alongside REQ-031's own). mix compile --warnings-as-errors clean, mix test 629/629 (4 properties, 625 tests) on the actual merged tip (597 from this run's own work + 32 from concurrently-merged REQ-034/REQ-037/ISS-0036-fix activity), re-verified by ORCH directly both pre- and post-merge."
     }
   ]
 }

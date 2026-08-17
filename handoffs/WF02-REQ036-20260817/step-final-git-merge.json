@@ -1,0 +1,58 @@
+{
+  "handoff_id": "b172521c-3b98-42dd-bdf0-6ae3220982e3",
+  "run_id": "WF02-REQ036-20260817",
+  "workflow_id": "WF-02",
+  "step": "final",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ036-20260817/step-final-git-merge.json",
+  "created_at": "2026-08-17T18:51:36Z",
+  "started_at": "2026-08-17T18:51:36Z",
+  "completed_at": "PENDING",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-036"],
+    "related_handoff_ids": ["b3557057-bbeb-4051-b64c-03339ff62f39"],
+    "artifacts_in": [
+      "lib/letflow/definitions/promotion_plan.ex",
+      "lib/letflow/definitions/promotion_conflict.ex",
+      "lib/letflow/definitions/promotion_digest.ex",
+      "test/letflow/definitions/promotion_plan_test.exs",
+      "test/letflow/definitions/promotion_conflict_test.exs",
+      "test/letflow/definitions/promotion_digest_test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step Final for run WF02-REQ036-20260817 (REQ-036: Promotion plan computation, conflict preflight, and plan digest). All prior gates PASSed (design, design-gate, implementation, security review, idiom review, test design, test-design-gate, full test run 500/500, release validation, doc update). Apply GIT_MERGE.md's Worktree variant: rebase feature/WF02-REQ036-20260817 onto origin/main, open PR, merge --squash, delete branch, return to detached HEAD at origin/main (this checkout is a secondary worktree; local main lives in /home/tvolodi/letflow), re-verify green on the merged tip.",
+    "acceptance_criteria": [
+      "git rebase origin/main completes cleanly (or conflicts resolved inline within limits)",
+      "mix compile --warnings-as-errors and MIX_TEST_PARTITION=2 mix test pass post-rebase",
+      "PR created and merged (gh pr view shows state MERGED)",
+      "remote and local feature branch refs deleted",
+      "detached HEAD lands exactly at origin/main tip post-merge",
+      "mix compile --warnings-as-errors and MIX_TEST_PARTITION=2 mix test re-verified green on the merged tip"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "PENDING -- filled in after merge completes.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ036-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ036-20260817",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null,
+      "merge_commit_sha": null,
+      "merge_state": "pending"
+    },
+    "next_action": "PENDING"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

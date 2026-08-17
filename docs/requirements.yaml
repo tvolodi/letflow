@@ -1639,7 +1639,7 @@ requirements:
   - id: REQ-036
     title: Promotion plan computation, conflict preflight, and plan digest (promotion_plan.zig PRM-01 + promotion_conflict.zig PRM-02 + promotion_digest.zig PRM-03)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S2
     impl_order: 50  # letflow-queue task id
     description: >

@@ -1,0 +1,52 @@
+{
+  "handoff_id": "63f9f1cd-8c87-4e1d-9993-9b342a6baaab",
+  "run_id": "WF02-REQ036-20260817",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ036-20260817/step-00-git-setup.json",
+  "created_at": "2026-08-17T17:59:32Z",
+  "started_at": "2026-08-17T17:59:32Z",
+  "completed_at": "2026-08-17T18:01:34Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-036"],
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/definitions/promotion_plan.ex",
+      "lib/letflow/definitions/promotion_conflict.ex",
+      "lib/letflow/definitions/promotion_digest.ex",
+      "test/letflow/definitions"
+    ]
+  },
+  "task": {
+    "description": "Git setup for REQ-036 (Promotion plan computation, conflict preflight, and plan digest -- promotion_plan.zig PRM-01 + promotion_conflict.zig PRM-02 + promotion_digest.zig PRM-03). This session is running from ~/letflow-wt2, a secondary git worktree sharing one .git with a primary checkout that holds local main -- use GIT_SETUP.md's Worktree variant (docs/agents/protocols/GIT_SETUP.md): git fetch origin main, then git checkout -b feature/WF02-REQ036-20260817 origin/main -- never git checkout main. Push immediately: git push -u origin feature/WF02-REQ036-20260817. Verify baseline before handing back: mix compile --warnings-as-errors, and MIX_TEST_PARTITION=2 mix test (this worktree's dedicated test DB, letflow_test2 -- always use this env var here, never bare mix test). Note: owned_modules above overlaps directory-wise with WF02-REQ030-20260817's broad directory-level claim on lib/letflow/definitions (still IN_PROGRESS, held by tvolodi-orch, per handoffs/registry.json) -- this was already checked by ORCH: REQ-030 is porting store.zig CRUD (create/get_by_id/get_active_by_name/list/activate/deprecate/archive) into presumably a new store.ex-shaped module, while REQ-036 creates three entirely new files (promotion_plan.ex/promotion_conflict.ex/promotion_digest.ex) that REQ-030's own scope never touches. No actual file-level conflict expected, same judgment call already made and recorded for REQ-032 vs REQ-030 in registry.json. If mid-run you observe REQ-030 (or any other concurrent run) has actually modified/added a file this run also needs to touch, STOP and escalate to ORCH rather than resolving it unilaterally.",
+    "acceptance_criteria": [
+      "git branch --show-current outputs feature/WF02-REQ036-20260817 (via origin/main, not local main)",
+      "git push -u origin feature/WF02-REQ036-20260817 exits 0",
+      "mix compile --warnings-as-errors exits 0 on the fresh branch",
+      "MIX_TEST_PARTITION=2 mix test passes (baseline, before any new code)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Worktree variant of GIT_SETUP.md applied (this checkout is a secondary git worktree per `git worktree list`, alongside /home/tvolodi/letflow). Branched feature/WF02-REQ036-20260817 from freshly fetched origin/main (never checked out local main) and pushed with upstream tracking. Baseline verified on the fresh branch: `mix compile --warnings-as-errors` exited 0 with no warnings; `MIX_TEST_PARTITION=2 mix test` (dedicated letflow_test2 DB) exited 0 -- 4 properties, 467 tests, 0 failures, finished in 13.9s. No owned_modules conflict observed with the concurrent REQ-030 run during setup.",
+    "artifacts_out": ["branch: feature/WF02-REQ036-20260817"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ036-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ036-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH routes to WF-02 Step 1 (CODE-DESIGNER) for REQ-036"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

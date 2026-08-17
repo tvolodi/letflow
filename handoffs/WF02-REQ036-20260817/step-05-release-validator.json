@@ -1,0 +1,57 @@
+{
+  "handoff_id": "9000e4d9-9a49-43af-b574-117d95336c00",
+  "run_id": "WF02-REQ036-20260817",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ036-20260817/step-05-release-validator.json",
+  "created_at": "2026-08-17T18:46:56Z",
+  "started_at": "2026-08-17T18:46:56Z",
+  "completed_at": "2026-08-17T18:48:17Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-036"],
+    "related_handoff_ids": ["b9fd427d-ae2b-4675-8d1f-dbc84a3f090d"],
+    "artifacts_in": [
+      "lib/letflow/definitions/promotion_plan.ex",
+      "lib/letflow/definitions/promotion_conflict.ex",
+      "lib/letflow/definitions/promotion_digest.ex",
+      "test/letflow/definitions/promotion_plan_test.exs",
+      "test/letflow/definitions/promotion_conflict_test.exs",
+      "test/letflow/definitions/promotion_digest_test.exs",
+      "test/reports/report-2026-08-17-WF02-REQ036-20260817.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently re-verify REQ-036 is actually done before it's marked done. Do not trust TEST-RUNNER's report alone -- re-run the suite yourself. Read every one of REQ-036's 6 acceptance_criteria in docs/requirements.yaml and check each one explicitly against the actual code/tests (not against any agent's summary). Check docs/status/requirement_status.yaml and docs/requirements.yaml for staleness relative to what actually shipped -- REQ-036 was flipped to in_progress at Step 00 (2026-08-17T18:01:34Z), should still read in_progress right now (DOC-UPDATER flips it to done in Step 6, after you PASS).",
+    "acceptance_criteria": [
+      "Independently re-run MIX_TEST_PARTITION=2 mix test (full suite) -- do not trust the Step 4 report alone",
+      "Each of REQ-036's 6 acceptance_criteria explicitly checked against actual code (cite file:line), not against a summary",
+      "No status staleness found (or found and flagged) in docs/requirements.yaml / docs/status/requirement_status.yaml",
+      "Confirm no rework was silently skipped across the run's own handoff chain (spot-check that Step 1b/2c/2d/3b all show genuine independent verification, not rubber-stamps)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-ran MIX_TEST_PARTITION=2 mix test (full suite, this worktree) myself rather than trusting Step 4's report: 4 properties, 500 tests, 0 failures, exit code 0 -- matches TEST-RUNNER's Step 4 numbers exactly, confirmed by my own invocation, not by reading their report. Read REQ-036's full docs/requirements.yaml entry (lines 1639-1714) and checked all 6 acceptance_criteria against actual code/tests directly, cite file:line: AC1 (target has no existing version -> every entry :added) -- lib/letflow/definitions/promotion_plan.ex entry/4 (lines 304-319, is_nil(before) branch -> :added) exercised by test/letflow/definitions/promotion_plan_test.exs:141-263 (asserts Enum.all?(plan.entries, &(&1.change_kind == :added)) at line 197, each dimension's entry checked explicitly lines 207-261). AC2 (byte-identical source/target -> empty-plan error, not empty entries list) -- promotion_plan.ex:152-153 (`if entries == [] -> {:error, :empty_plan}`) exercised by promotion_plan_test.exs:306-342 (asserts `result == {:error, :empty_plan}` at line 342). AC3 (production-tenant source -> invalid-promotion-source before any process_definitions read) -- promotion_plan.ex:129-134 (cond clause 2, `tenant_classifier.(source_tenant_id) == :production -> {:error, :invalid_promotion_source}`, fires before the `with` block at line 137 that performs the first DB read) exercised by promotion_plan_test.exs:352-371 (malformed target_tenant_id in the same call proves the classifier check short-circuited before any tenant-prefix resolution/DB read). AC4 (reject_if_conflicts/4: > base_version -> rejection detail naming the conflict; <=, including zero rows, -> no conflict) -- lib/letflow/definitions/promotion_conflict.ex conflict_for_pair/3 (lines 101-121) + version_greater?/2 (lines 127-135) exercised by test/letflow/definitions/promotion_conflict_test.exs:132-263 (covers >, ==, <, and zero-rows cases plus multi-pair variants). AC5 (compute_plan_digest/1 identical content, differently-ordered keys -> identical digest, explicit two-key-order test) -- lib/letflow/definitions/promotion_digest.ex canonicalize/1 (lines 87-94, sorts Map.keys/1 via Enum.sort/1 before rebuilding as Jason.OrderedObject) exercised by test/letflow/definitions/promotion_digest_test.exs:32-108 (two independent reordered-key examples, single-entry and multi-entry/deeply-nested). AC6 (verify_digest/2 constant-time comparison, stated in moduledoc) -- promotion_digest.ex:77-83 (`:crypto.hash_equals/2` in both verify_digest/2 clauses, no Kernel.==/2 or :erlang.=:=/2) and moduledoc lines 14-21 state this explicitly; exercised by promotion_digest_test.exs:159-215 including a test (208-214) that asserts the moduledoc text itself names :crypto.hash_equals/2. All 6 ACs hold. No staleness: docs/requirements.yaml REQ-036 reads status: in_progress (correct pre-DOC-UPDATER state) and docs/status/requirement_status.yaml's only REQ-036 event is the Step 00 'started' entry at 2026-08-17T18:01:34Z, consistent with in_progress. Spot-checked the run's own handoff chain for rubber-stamping: step-01b-code-design-validator.json, step-02c-security-reviewer.json, step-02d-reviewer.json, and step-03b-test-design-validator.json all show genuine independent verification -- specific file:line citations against real source files (role_registry.ex, tenant.ex, process_definition.ex), actual greps run and their results stated (e.g. zero Repo.insert/update/delete/update_all hits, zero GenServer/gen_statem/spawn hits, zero TODO/skip-tag hits), and TEST-DESIGN-VALIDATOR independently re-ran the 3 new test files twice (plain and --seed 0) and got 33/33 both times before reporting PASS -- not one of the four echoes the producer's claim without its own check. No docs/migration/decisions/ record contradicted (Decision B schema-per-tenant :prefix strategy confirmed consistent by both SECURITY-REVIEWER and REVIEWER independently). This is a WF-02 requirement-level run, not a WF-04 stage-gate, so no docs/migration/stage-N REVIEWER sign-off section applies here. VERDICT: PASS.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ036-20260817/step-05-release-validator.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ036-20260817",
+      "commit_sha_list": ["8c82d06"],
+      "remote_branch": "origin/feature/WF02-REQ036-20260817",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER (WF-02 Step 6) to flip REQ-036 status: in_progress -> done in docs/requirements.yaml and append the done event to docs/status/requirement_status.yaml."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

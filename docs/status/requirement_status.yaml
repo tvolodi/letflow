@@ -3082,3 +3082,49 @@ history:
       prior WF-03 run that folded their resolution directly into REQ-026's
       requirements.yaml entry before this run claimed it. No further
       status update needed on either issue file.
+  - req: REQ-036
+    event: started
+    agent: ORCH
+    at: "2026-08-17T18:01:34Z"
+    note: >
+      Started WF02-REQ036-20260817 -- Promotion plan computation, conflict
+      preflight, and plan digest (promotion_plan.zig PRM-01 +
+      promotion_conflict.zig PRM-02 + promotion_digest.zig PRM-03):
+      compute_promotion_plan/5, reject_if_conflicts/4, compute_plan_digest/1
+      + verify_digest/2. Domain logic only, no HTTP layer (that's S4).
+      Claimed queue task 50 (agent_id hetzner-wt2-orch), depends_on
+      REQ-027/REQ-028 both done. Step 00 complete (worktree variant):
+      branched feature/WF02-REQ036-20260817 from freshly fetched
+      origin/main (this session runs from the secondary ~/letflow-wt2
+      worktree), pushed. Baseline verified: mix compile clean,
+      MIX_TEST_PARTITION=2 mix test 467/467 (4 properties, 0 failures).
+      Checked owned_modules against WF02-REQ030-20260817 (concurrent,
+      directory-level lib/letflow/definitions lock, held by tvolodi-orch)
+      -- no actual file-level conflict, REQ-030 targets store.zig CRUD,
+      REQ-036 targets three new files (promotion_plan/conflict/digest.ex)
+      that don't exist yet. Routing to CODE-DESIGNER for Step 1.
+  - req: REQ-036
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-17T18:50:04Z"
+    note: >
+      RELEASE-VALIDATOR PASSed REQ-036 (Promotion plan computation, conflict
+      preflight, and plan digest -- promotion_plan.zig PRM-01 +
+      promotion_conflict.zig PRM-02 + promotion_digest.zig PRM-03): 3 new
+      modules (Letflow.Definitions.PromotionPlan, PromotionConflict,
+      PromotionDigest), all 6 acceptance criteria met, 33 new tests, full
+      suite 500/500. Domain logic only -- no HTTP layer (S4 scope), operates
+      on REQ-027's process_definitions table. Flipped docs/requirements.yaml
+      REQ-036 status: in_progress -> done.
+      docs/migration/stage-2-event-store-definitions.md header's
+      Requirements line updated to move REQ-036 from the pending list to the
+      done list (same bulk-refresh-at-stage-gate pattern as
+      REQ-025/REQ-029/REQ-032/REQ-033's DOC-UPDATER runs; not named in
+      REQ-036's own acceptance criteria). README.md checked and left
+      untouched: REQ-036 is domain-logic only with no new HTTP endpoint, no
+      new curl-able command, and no change to the ASCII state diagram or
+      "Running it" section -- confirmed by reading "Migration status" and
+      "What's here today" directly, consistent with REQ-025/REQ-032/REQ-033's
+      DOC-UPDATER precedent. No docs/migration/decisions/ file is named in
+      REQ-036's acceptance criteria -- confirmed by re-reading the
+      requirements.yaml entry directly, none applicable here.

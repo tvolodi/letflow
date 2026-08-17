@@ -1,0 +1,55 @@
+{
+  "handoff_id": "a92a14c9-03e1-4278-8dc6-31d7f6c58750",
+  "run_id": "WF02-REQ036-20260817",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ036-20260817/step-02c-security-reviewer.json",
+  "created_at": "2026-08-17T18:25:12Z",
+  "started_at": "2026-08-17T18:25:12Z",
+  "completed_at": "2026-08-17T18:26:50Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-036"],
+    "related_handoff_ids": ["9b5ef0e9-841d-44a5-a0e7-b41c94e39b2a"],
+    "artifacts_in": [
+      "lib/letflow/definitions/promotion_plan.ex",
+      "lib/letflow/definitions/promotion_conflict.ex",
+      "lib/letflow/definitions/promotion_digest.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Security gate for REQ-036's implementation. Read docs/agents/instructions/security-invariants.md first, then git diff main...HEAD (or diff against origin/main) to see the actual change. This diff reads process_definitions (a tenant-scoped table, isolated via :prefix per Decision B / INV-1) across two tenants (source_tenant_id, target_tenant_id) in the same call -- pay particular attention to whether tenant isolation is actually correctly enforced when a single function reads from two different tenant schemas at once (compute_promotion_plan/5 derives two separate :prefix values, one per tenant, via Letflow.TenantProvisioning.schema_name_for_tenant/1 -- confirm this derivation is not attacker-influenced/injectable, and that no cross-tenant data ever gets attributed to the wrong tenant in the returned PlanEntry list). Also note (do not treat as a NEW finding, it's already flagged by CODE-DESIGNER and independently verified by CODE-DESIGN-VALIDATOR, but re-confirm from a security lens): the default permission_checker performs no real enforcement (fails closed via Keyword.fetch! if omitted, per ELIXIR-DEV's Step 2a divergence) -- confirm this fail-closed behavior is genuinely fail-closed (raises, does not silently allow) and that no code path bypasses it.",
+    "acceptance_criteria": [
+      "Scope test: confirm this diff touches a tenant-data path (process_definitions, cross-tenant read) -- expected: YES, continue to full invariant check",
+      "For each of INV-1..INV-8, determine APPLIES or NOT-APPLICABLE against this diff, and run the 'How to verify' check for each APPLIES invariant",
+      "Confirm schema_name_for_tenant/1's prefix derivation is not injectable/attacker-controlled (pure function of a UUID, not raw string interpolation)",
+      "Confirm no PlanEntry ever mixes data from the wrong tenant (before=target, after=source convention correctly and consistently applied)",
+      "Confirm the default permission_checker's absence of enforcement is genuinely fail-closed (raises KeyError on omission) not fail-open (silently allows)",
+      "FAIL immediately on any applicable invariant failing -- all BLOCKER, no partial credit"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: YES (process_definitions is a tenant-scoped table per INV-1; compute_promotion_plan/5 and reject_if_conflicts/4 read it across two tenant schemas in one call). Full INV-1..INV-8 checklist run against lib/letflow/definitions/{promotion_plan,promotion_conflict,promotion_digest}.ex. INV-1 (tenant data isolation) APPLIES, PASS: (a) both Repo.get_by/3 reads in promotion_plan.ex and the one in promotion_conflict.ex pass prefix: <schema> derived per-tenant via Letflow.TenantProvisioning.schema_name_for_tenant/1, never the default/public schema; ProcessDefinition carries no @schema_prefix override so the runtime :prefix option is load-bearing. (b) N/A -- no migration in this diff. (c) N/A -- diff is entirely read-only (grep confirms zero Repo.insert/update/delete/update_all in all 3 files), so no tenant_id-at-write-time concern applies. schema_name_for_tenant/1 read directly: gated by Ecto.UUID.cast/1 (rejects anything not a well-formed UUID) before deriving \"tenant_\" <> hex; the result is passed only as Ecto's :prefix option (adapter-quoted identifier), never string-concatenated into SQL by these 3 modules -- not injectable. Traced before/after attribution across all 5 diff dimensions (graph_node, graph_edge, variable_schema, service_binding, module_ref) in build_entries/6: every call site passes target_graph/target_tenant_id-derived data as 'before' and source_graph/source_tenant_id-derived data as 'after', consistently, with no swap; source_definition_id/target_definition_id/base_version are likewise read from source_row/target_row respectively with no mixing. No cross-tenant misattribution found. permission_checker re-verified directly from code (not taken on the handoff's claim): compute_promotion_plan/5's first line is `permission_checker = Keyword.fetch!(opts, :permission_checker)` -- raises KeyError if omitted, genuinely fail-closed, not fail-open; default_permission_checker/2 (always-true) exists only as an explicitly-named opt-in a caller must pass deliberately, is never referenced as a default anywhere in the module, and no caller in the codebase currently invokes compute_promotion_plan/5 at all (grep confirms zero call sites outside this module and its own moduledoc/prose references), so there is no live bypass today. reject_if_conflicts/4 (promotion_conflict.ex) does the same safe prefix derivation against target_tenant_id only (single-tenant read, no cross-tenant mixing possible there); its documented absence of its own permission check is an explicit, already-validated design decision (design doc §4.2: preflight helper called by an already-gated caller, not a fresh entry point) -- noted, not a new finding, consistent with the task's framing. INV-2 NOT-APPLICABLE (no API/controller response-shaping in this diff; pure library module; S4 not started). INV-3 NOT-APPLICABLE (no Lua/WASM scripting touched; S5 not started). INV-4 APPLIES, PASS: both heuristic greps (env-sourced check, hardcoded-secret heuristic) run against the 3 new files, zero hits. INV-5 NOT-APPLICABLE (no HTTP lookup-by-ID endpoint in this diff; S4 not started) -- observational note only: {:error, :forbidden} vs {:error, :invalid_tenant_id} vs {:error, :empty_plan} are distinguishable return values today, worth re-checking under INV-5 once this is wired behind an actual API endpoint, but not a finding against this diff. INV-6 APPLIES, PASS (this handoff itself is the proof-of-scoping artifact). INV-7 APPLIES, PASS: grep for Repo.query/Ecto.Adapters.SQL across the 3 files found zero hits (only prose mentions in moduledocs); all reads go through Ecto.Query/Repo.get_by with prefix: option, fully parameterized. INV-8 APPLIES, PASS: grep for bare `{:ok, x} = external_call()` patterns found zero hits in the 3 files; the one Keyword.fetch! raise is a deliberate fail-closed contract violation on missing caller configuration (not tenant-controlled input), matching the design's stated intent and not a violation of INV-8's external-I/O/tenant-input framing. No applicable invariant failed. Verdict: PASS.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ036-20260817/step-02c-security-reviewer.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ036-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ036-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

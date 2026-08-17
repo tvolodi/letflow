@@ -1,0 +1,57 @@
+{
+  "handoff_id": "b3557057-bbeb-4051-b64c-03339ff62f39",
+  "run_id": "WF02-REQ036-20260817",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ036-20260817/step-06-doc-updater.json",
+  "created_at": "2026-08-17T18:49:16Z",
+  "started_at": "2026-08-17T18:49:16Z",
+  "completed_at": "2026-08-17T18:50:18Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-036"],
+    "related_handoff_ids": ["9000e4d9-9a49-43af-b574-117d95336c00"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "docs/migration/stage-2-event-store-definitions.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Flip REQ-036's status in_progress -> done in docs/requirements.yaml. Append a 'done' event to docs/status/requirement_status.yaml (real UTC timestamp, append -- read the existing file in full first, never rewrite). docs/migration/stage-2-event-store-definitions.md's header (line 5) currently lists REQ-036 among the pending requirements ('REQ-026, REQ-030, REQ-031, REQ-034, REQ-036, REQ-037, ...') -- move REQ-036 to this doc's done list, same bulk-refresh-at-stage-gate pattern used by REQ-025/029/032/033's DOC-UPDATER runs (read the file in full to see its exact current structure/done-list location before editing). Check README.md: REQ-036 is domain-logic-only (no HTTP layer, no new curl-able endpoint, no change to the ASCII state diagram or 'Running it' section) -- almost certainly leave untouched, but confirm by actually reading README.md's 'Migration status'/'What's here today' sections rather than assuming. No docs/migration/decisions/ file is named in REQ-036's acceptance_criteria -- confirm by re-reading the requirements.yaml entry directly.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-036 status flipped in_progress -> done",
+      "docs/status/requirement_status.yaml has a new 'done' event for REQ-036 appended (not rewriting prior entries)",
+      "docs/migration/stage-2-event-store-definitions.md's REQ-036 reference moved from pending to done list",
+      "README.md checked explicitly and left untouched (or updated, with a stated reason) -- not silently skipped without checking",
+      "artifacts_out names every file actually touched explicitly, not just 'docs updated'"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Flipped REQ-036 status in_progress -> done in docs/requirements.yaml. Appended a 'done' event for REQ-036 to docs/status/requirement_status.yaml (append-only, prior entries untouched) summarizing the 3 new modules (Letflow.Definitions.PromotionPlan/PromotionConflict/PromotionDigest), all 6 ACs met, 33 new tests, full suite 500/500. Moved REQ-036 from the pending list to the done list in docs/migration/stage-2-event-store-definitions.md's header (same bulk-refresh pattern as REQ-025/029/032/033). Checked README.md's 'Migration status' and 'What's here today' sections directly and left it untouched: REQ-036 is domain-logic only, no new HTTP endpoint/curl command, no ASCII state-diagram change. Confirmed no docs/migration/decisions/ file is named in REQ-036's acceptance_criteria by re-reading the requirements.yaml entry directly.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "docs/migration/stage-2-event-store-definitions.md",
+      "handoffs/WF02-REQ036-20260817/step-06-doc-updater.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ036-20260817",
+      "commit_sha_list": ["58e38ec"],
+      "remote_branch": "origin/feature/WF02-REQ036-20260817",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV for Step Final"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -9,7 +9,7 @@
   "created_at": "2026-08-17T21:25:57Z",
   "started_at": "2026-08-17T21:25:57Z",
   "completed_at": "2026-08-17T21:28:46Z",
-  "status": "COMPLETED",
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": "S2",
@@ -19,7 +19,7 @@
     "owned_modules": ["lib/letflow/definitions"]
   },
   "task": {
-    "description": "WF-02 Step 2a: implement search/2 in lib/letflow/definitions.ex per lib/letflow/design/search.md (PASSed CODE-DESIGN-VALIDATOR). Verify branch feature/WF02-REQ042-20260817 first. No new migrations (design confirms this).",
+    "description": "WF-02 Step 2a: implement search/2 in lib/letflow/definitions.ex per lib/letflow/design/search.md (PASSed CODE-DESIGN-VALIDATOR). Verify branch feature/WF02-REQ042-20260817 first. No new migrations (design confirms this). REWORK ITERATION 1: REVIEWER (Step 2d) FAILed on one item -- the ranking CASE SQL literal is duplicated verbatim in select_with_rank/3 and order_by_rank/3. REVIEWER independently verified (read Ecto's builder.ex source + reproduced empirically via Mix.install) that fragment(^helper_fn(), ...) is rejected by Ecto's SQL-injection compile-time-literal guard, but fragment(@module_attribute, ...) compiles cleanly since a module attribute is inlined as a literal before Ecto's macro-expansion check runs. Fix: extract the CASE SQL text to a single @rank_case_sql module attribute defined once near the top of the search/2 section, reference it unchanged via fragment(@rank_case_sql, ...) at both call sites. Re-run mix compile --warnings-as-errors and mix format --check-formatted after the change.",
     "acceptance_criteria": [
       "mix compile --warnings-as-errors exits 0",
       "mix format --check-formatted exits 0 on the changed file",
@@ -49,6 +49,6 @@
     },
     "next_action": "Route to SECURITY-REVIEWER (Step 2c)"
   },
-  "rework_count": 0,
+  "rework_count": 1,
   "max_rework": 3
 }

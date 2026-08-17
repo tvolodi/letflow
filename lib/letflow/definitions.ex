@@ -702,20 +702,28 @@ defmodule Letflow.Definitions do
   # `search_query` and `pattern` are the same two bound values used in the WHERE
   # clause above, reused unchanged here so the ranking CASE and the matching WHERE
   # can never disagree about what counts as a "name match" (design §5). The CASE
-  # expression's SQL shape is a fixed compile-time string literal in both places
-  # below -- only the `?`-placeholder values (d.name, ^search_query, d.name,
+  # expression's SQL shape is a fixed compile-time string literal, shared via the
+  # `@rank_case_sql` module attribute below so both call sites can never drift out
+  # of sync -- only the `?`-placeholder values (d.name, ^search_query, d.name,
   # ^pattern) vary per call, each compiled by Ecto to a genuine bound Postgres
-  # parameter (design §6). WHEN branches evaluated in order: exact case-insensitive
-  # name match (3.0), else partial name ILIKE match (2.0), else -- since the
-  # surrounding WHERE clause already restricts every row here to a
-  # name-or-description match -- the row matched via description alone (1.0), per
-  # design §5's "safe unconditional ELSE" rationale.
+  # parameter (design §6). A module attribute is inlined as a literal at
+  # compile time before Ecto's fragment/1 macro-expansion SQL-injection guard
+  # runs, so `fragment(@rank_case_sql, ...)` compiles cleanly here, unlike
+  # `fragment(^helper_fun(), ...)` which Ecto's guard rejects even when the
+  # helper always returns the same fixed string (confirmed against
+  # deps/ecto/lib/ecto/query/builder.ex). WHEN branches evaluated in order:
+  # exact case-insensitive name match (3.0), else partial name ILIKE match
+  # (2.0), else -- since the surrounding WHERE clause already restricts every
+  # row here to a name-or-description match -- the row matched via description
+  # alone (1.0), per design §5's "safe unconditional ELSE" rationale.
+  @rank_case_sql "CASE WHEN lower(?) = lower(?) THEN 3.0 WHEN ? ILIKE ? THEN 2.0 ELSE 1.0 END"
+
   defp select_with_rank(queryable, search_query, pattern) do
     select(queryable, [d], %{
       definition: d,
       rank:
         fragment(
-          "CASE WHEN lower(?) = lower(?) THEN 3.0 WHEN ? ILIKE ? THEN 2.0 ELSE 1.0 END",
+          @rank_case_sql,
           d.name,
           ^search_query,
           d.name,
@@ -730,7 +738,7 @@ defmodule Letflow.Definitions do
       [d],
       desc:
         fragment(
-          "CASE WHEN lower(?) = lower(?) THEN 3.0 WHEN ? ILIKE ? THEN 2.0 ELSE 1.0 END",
+          @rank_case_sql,
           d.name,
           ^search_query,
           d.name,

@@ -16,6 +16,17 @@ defmodule Letflow.DefinitionsTest do
   (moduledoc assertions via the compiled `Docs` chunk, whitespace-normalised so
   re-wrapping a paragraph isn't a failure while deleting or weakening a claim is)
   rather than inventing a parallel style.
+
+  ## REQ-030 moduledoc-content checks (AC6 and part of AC9)
+
+  Two of REQ-030's describe blocks below reuse this same `normalized_moduledoc/1`
+  helper against `Letflow.Definitions` itself (not `SolutionPackInstall`) to check
+  AC6's "documented explicitly in the moduledoc" requirement and AC9's tenant_id
+  contract statement -- pure doc-content assertions, no database needed. The rest
+  of REQ-030's coverage (all database-backed: `create/2`, `activate/2`, etc.) lives
+  in `test/letflow/definitions/store_test.exs`, which uses `Letflow.DataCase` -- see
+  that file's moduledoc for why the split follows this module's established
+  pure-vs-DB-backed convention.
   """
 
   use ExUnit.Case, async: true
@@ -140,6 +151,66 @@ defmodule Letflow.DefinitionsTest do
       # classification of these three tables, which the moduledoc must not muddy.
       assert doc =~ "that part is settled",
              "moduledoc does not distinguish REQ-041's own settled classification from the still-open general question"
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-030 acceptance criterion 6: "activate/1's signature includes a nil-able/
+  # optional service-scope-validation hook parameter that REQ-031 wires in,
+  # documented explicitly in the moduledoc as the SVC-03 integration point." The
+  # hook's *behavioral* effect (both :ok and {:error, reason} outcomes) is tested
+  # against real Postgres in `test/letflow/definitions/store_test.exs`; this is the
+  # doc-content half of AC6 specifically -- a pure, database-free assertion.
+  # ---------------------------------------------------------------------------------
+
+  describe "moduledoc -- AC6: activate/2's service_scope_validator hook is documented as the SVC-03 integration point (REQ-030)" do
+    test "the moduledoc documents the :service_scope_validator option and names the SVC-03/REQ-031 integration point" do
+      doc = normalized_moduledoc(Definitions)
+
+      assert doc =~ "service_scope_validator",
+             "moduledoc does not mention the :service_scope_validator option"
+
+      assert doc =~ "SVC-03",
+             "moduledoc does not name the SVC-03 integration point"
+
+      assert doc =~ "REQ-031",
+             "moduledoc does not attribute the hook's own logic to REQ-031"
+
+      assert doc =~ "This module builds only the injection point",
+             "moduledoc does not state that REQ-030 builds only the injection point, not the hook's logic"
+    end
+
+    test "the moduledoc documents the hook's 2-arity :ok | {:error, term()} contract" do
+      doc = normalized_moduledoc(Definitions)
+
+      assert doc =~ "2-arity function",
+             "moduledoc does not describe the hook as a 2-arity function"
+
+      assert doc =~ ":ok | {:error, term()}",
+             "moduledoc does not document the hook's :ok | {:error, term()} return contract"
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-030 acceptance criterion 9 (doc-content half): the moduledoc states the
+  # tenant_id-derivation contract create/2's own rejection behavior implements. The
+  # behavioral half (an actual create/2 call with a disagreeing tenant_id, and a
+  # positive check that a written row's tenant_id matches the real tenant) is
+  # tested against real Postgres in `store_test.exs`'s "create/2 (AC9)" block.
+  # ---------------------------------------------------------------------------------
+
+  describe "moduledoc -- AC9 (doc-content half): tenant_id is always derived, never accepted (REQ-030)" do
+    test "the moduledoc states create/2 never accepts a caller-supplied tenant_id and names the rejection error" do
+      doc = normalized_moduledoc(Definitions)
+
+      assert doc =~ "tenant_id_not_accepted",
+             "moduledoc does not name the :tenant_id_not_accepted rejection error"
+
+      assert doc =~ "never accepts a `:tenant_id`",
+             "moduledoc does not state that create/2's attrs never accepts a :tenant_id key"
+
+      assert doc =~ "tenant_id_for_schema_name",
+             "moduledoc does not name the derivation function tenant_id is sourced from"
     end
   end
 end

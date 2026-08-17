@@ -18,16 +18,45 @@ defmodule Letflow.Definitions do
   module name, namespace and this function's placement all match the design
   exactly, only the file's prior existence was assumed incorrectly.
 
-  ## Scope — REQ-041 only
+  ## Scope
 
-  `compute_pack_update_plan/5` and `classify_artefact/3` are this module's
-  only functions today. Both are read-only / pure — see each function's own
-  `@doc` for its scope boundary.
+  `compute_pack_update_plan/5` and `classify_artefact/3` (REQ-041) and `create/2`,
+  `get_by_id/2`, `get_active_by_name/2`, `list/2`, `activate/2`, `deprecate/2`,
+  `archive/2` (REQ-030) together make up this module's current public API. See
+  `lib/letflow/design/req030-definition-store-crud.md` for the full design the
+  REQ-030 functions implement.
+
+  ## `tenant_id` is always derived, never accepted (REQ-030)
+
+  `create/2`'s `attrs` never accepts a `:tenant_id` (or `"tenant_id"`) key -- a caller
+  supplying one gets `{:error, :tenant_id_not_accepted}`, not a silently-overridden value.
+  `tenant_id` is always derived from `opts[:prefix]` via
+  `Letflow.TenantProvisioning.tenant_id_for_schema_name/1`, mirroring
+  `Letflow.EventStore.append/2`'s identical contract (see
+  `lib/letflow/design/req025-event-append.md` and
+  `docs/migration/decisions/0003-ecto-schema-strategy.md`'s 2026-08-17 addendum).
+
+  ## `activate/2`'s `service_scope_validator` option -- the SVC-03 integration point (REQ-031)
+
+  `activate/2` accepts an optional `:service_scope_validator` key in its `opts`, a 2-arity
+  function `(Letflow.Definitions.Graph.t(), tenant_id) -> :ok | {:error, term()}` or `nil`
+  (the default). When present, it is called once, only when the target definition's current
+  status is `:draft` (never on the already-active no-op path, never on a rejected
+  non-draft transition), after the row lock is acquired and before either of the two
+  transition UPDATEs run. A `{:error, reason}` return aborts the whole activation with
+  `{:error, {:service_scope_violation, reason}}` and writes nothing. **This module builds
+  only the injection point** -- the hook's own logic (walking SERVICE_TASK nodes, checking
+  tenant/service/plugin scope) is REQ-031's job, not implemented here.
   """
 
+  import Ecto.Query
+
+  alias Letflow.Definitions.Graph
   alias Letflow.Definitions.PackUpdateResolution
+  alias Letflow.Definitions.ProcessDefinition
   alias Letflow.Definitions.SolutionPackArtefactBase
   alias Letflow.Repo
+  alias Letflow.TenantProvisioning
 
   @type artefact_key :: %{artefact_type: String.t(), artefact_id: String.t()}
   @type artefact_input :: %{
@@ -61,6 +90,54 @@ defmodule Letflow.Definitions do
           incoming_version: String.t(),
           entries: [plan_entry()],
           has_unresolved_conflicts: boolean()
+        }
+
+  # ---------------------------------------------------------------------------------
+  # REQ-030 types -- lib/letflow/design/req030-definition-store-crud.md §4.0
+  # ---------------------------------------------------------------------------------
+
+  @type opts :: [prefix: String.t()]
+
+  @type status :: ProcessDefinition.status()
+
+  @type service_scope_validator_fun ::
+          (Graph.t(), tenant_id :: Ecto.UUID.t() -> :ok | {:error, term()})
+
+  @type activate_opts :: [
+          prefix: String.t(),
+          service_scope_validator: service_scope_validator_fun() | nil
+        ]
+
+  @type common_error ::
+          {:error, :invalid_schema_name}
+          | {:error, {:transaction_failed, term()}}
+
+  @type create_attrs :: %{
+          required(:name) => String.t(),
+          required(:version) => String.t(),
+          optional(:description) => String.t() | nil,
+          required(:graph) => map(),
+          required(:created_by) => Ecto.UUID.t(),
+          optional(:stage) => String.t() | nil
+        }
+
+  @type create_error ::
+          {:error, :tenant_id_not_accepted}
+          | {:error, :initial_status_not_draft}
+          | {:error, :name_invalid}
+          | {:error, :version_empty}
+          | {:error, :graph_structure_invalid}
+          | {:error, {:graph_validation_failed, [Graph.Violation.t()]}}
+          | {:error, :duplicate_name_version}
+          | {:error, Ecto.Changeset.t()}
+          | common_error()
+
+  @type list_filters :: %{
+          optional(:name) => String.t() | nil,
+          optional(:status) => status() | nil,
+          optional(:stage) => String.t() | nil,
+          optional(:after_created) => DateTime.t() | nil,
+          optional(:limit) => pos_integer() | nil
         }
 
   @doc """
@@ -229,4 +306,514 @@ defmodule Letflow.Definitions do
       )
     )
   end
+
+  # ===================================================================================
+  # REQ-030 -- Definition store CRUD
+  # lib/letflow/design/req030-definition-store-crud.md
+  # ===================================================================================
+
+  @doc """
+  Creates a new DRAFT process definition, per PD-01/PD-02/PD-05/PD-06.
+
+  `tenant_id` is never accepted in `attrs` -- it is always derived from
+  `opts[:prefix]` (see this module's moduledoc). `attrs[:graph]` must pass all three
+  of `Letflow.Definitions.Graph.validate_graph/1`, `validate_node_attributes/1` and
+  `validate_edge_conditions/1` before anything is written (INV-DS-3): on the first
+  failing phase, returns `{:error, {:graph_validation_failed, violations}}` and writes
+  zero rows.
+
+  Two concurrent calls with an identical `(name, version)` never both succeed: the
+  `uq_definition_version` unique index is the targeted `ON CONFLICT` arbiter, and the
+  loser gets `{:error, :duplicate_name_version}` -- neither caller is told which one
+  "won" (design §4.1 P11/P12).
+  """
+  @spec create(attrs :: create_attrs(), opts :: opts()) ::
+          {:ok, ProcessDefinition.t()} | create_error()
+  def create(attrs, opts) when is_map(attrs) and is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+
+    with :ok <- reject_key(attrs, :tenant_id, "tenant_id", :tenant_id_not_accepted),
+         :ok <- reject_key(attrs, :status, "status", :initial_status_not_draft),
+         {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, _name} <- fetch_name(attrs),
+         {:ok, _version} <- fetch_version(attrs),
+         {:ok, graph_map} <- fetch_graph_map(attrs),
+         {:ok, graph} <- convert_graph(graph_map),
+         :ok <- check_graph_result(Graph.validate_graph(graph)),
+         :ok <- check_graph_result(Graph.validate_node_attributes(graph)),
+         :ok <- check_graph_result(Graph.validate_edge_conditions(graph)) do
+      insert_definition(attrs, tenant_id, prefix)
+    end
+  end
+
+  @doc """
+  Fetches one process definition by `id`, within the tenant schema named by
+  `opts[:prefix]`. `{:error, :not_found}` both for a missing row and for an `id` that
+  isn't a well-formed UUID (design §4.2 step 2).
+  """
+  @spec get_by_id(id :: Ecto.UUID.t(), opts :: opts()) ::
+          {:ok, ProcessDefinition.t()} | {:error, :not_found} | common_error()
+  def get_by_id(id, opts) when is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+
+    with {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, uuid} <- cast_uuid(id) do
+      case Repo.get(ProcessDefinition, uuid, prefix: prefix) do
+        nil -> {:error, :not_found}
+        %ProcessDefinition{} = found -> {:ok, found}
+      end
+    end
+  end
+
+  @doc """
+  Fetches the single ACTIVE process definition for `name`, per PD-07. A `name` whose
+  only rows are DRAFT/DEPRECATED/ARCHIVED returns `{:error, :not_found}` -- there is no
+  fallback to "the most recent non-active row" (design §4.3, AC7).
+  """
+  @spec get_active_by_name(name :: String.t(), opts :: opts()) ::
+          {:ok, ProcessDefinition.t()} | {:error, :not_found} | common_error()
+  def get_active_by_name(name, opts) when is_binary(name) and is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+
+    with {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      ProcessDefinition
+      |> where([d], d.name == ^name and d.status == :active)
+      |> Repo.all(prefix: prefix)
+      |> case do
+        [] -> {:error, :not_found}
+        [found | _rest] -> {:ok, found}
+      end
+    end
+  end
+
+  @doc """
+  Lists process definitions, newest first, filtered by any combination of `:name`
+  (substring, `ILIKE`), `:status` (exact), `:stage` (exact -- AC8) and `:after_created`
+  (strictly-after cursor, ported skip-risk and all -- design §4.4/§9 OQ-2), each an
+  independent `AND`-joined predicate. Always `{:ok, list}`, an empty list on no matches,
+  never an error.
+  """
+  @spec list(filters :: list_filters(), opts :: opts()) ::
+          {:ok, [ProcessDefinition.t()]} | common_error()
+  def list(filters, opts) when is_map(filters) and is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+
+    with {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      effective_limit = effective_limit(Map.get(filters, :limit))
+
+      query =
+        ProcessDefinition
+        |> where_name(Map.get(filters, :name))
+        |> where_status(Map.get(filters, :status))
+        |> where_stage(Map.get(filters, :stage))
+        |> where_after_created(Map.get(filters, :after_created))
+        |> order_by([d], desc: d.created_at)
+        |> limit(^effective_limit)
+
+      {:ok, Repo.all(query, prefix: prefix)}
+    end
+  end
+
+  @doc """
+  Activates a DRAFT process definition (PD-03), atomically deprecating any prior
+  ACTIVE definition sharing the same `name` in the same transaction (AC3). Called on
+  an already-ACTIVE definition, this is a no-op that returns
+  `{:ok, %{definition: ..., already_active: true}}` -- never an error, on every call
+  (AC4). Rejects every other current status as `{:error, :not_draft}` (PD-04).
+
+  `opts[:service_scope_validator]` is the SVC-03 integration point -- see this
+  module's moduledoc.
+  """
+  @spec activate(id :: Ecto.UUID.t(), opts :: activate_opts()) ::
+          {:ok, %{definition: ProcessDefinition.t(), already_active: boolean()}}
+          | {:error, :not_found}
+          | {:error, :not_draft}
+          | {:error, :graph_structure_invalid}
+          | {:error, {:service_scope_violation, reason :: term()}}
+          | common_error()
+  def activate(id, opts) when is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+    validator = Keyword.get(opts, :service_scope_validator)
+
+    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      try do
+        id
+        |> run_activate_transaction(prefix, tenant_id, validator)
+        |> interpret_activate_result()
+      rescue
+        exception -> {:error, {:transaction_failed, exception}}
+      end
+    end
+  end
+
+  @doc """
+  Transitions an ACTIVE process definition to DEPRECATED (PD-04). Every other current
+  status is rejected as `{:error, :invalid_status_transition}`; a missing `id` is
+  `{:error, :not_found}`.
+  """
+  @spec deprecate(id :: Ecto.UUID.t(), opts :: opts()) ::
+          {:ok, ProcessDefinition.t()}
+          | {:error, :not_found}
+          | {:error, :invalid_status_transition}
+          | common_error()
+  def deprecate(id, opts) when is_list(opts) do
+    transition(id, opts, :active, :deprecated)
+  end
+
+  @doc """
+  Transitions a DEPRECATED process definition to ARCHIVED (PD-04), stamping
+  `archived_at`. Every other current status is rejected as
+  `{:error, :invalid_status_transition}`; a missing `id` is `{:error, :not_found}`.
+  """
+  @spec archive(id :: Ecto.UUID.t(), opts :: opts()) ::
+          {:ok, ProcessDefinition.t()}
+          | {:error, :not_found}
+          | {:error, :invalid_status_transition}
+          | common_error()
+  def archive(id, opts) when is_list(opts) do
+    transition(id, opts, :deprecated, :archived)
+  end
+
+  # -----------------------------------------------------------------------------------
+  # create/2 helpers (design §4.1)
+  # -----------------------------------------------------------------------------------
+
+  defp reject_key(attrs, atom_key, string_key, error) do
+    if Map.has_key?(attrs, atom_key) or Map.has_key?(attrs, string_key) do
+      {:error, error}
+    else
+      :ok
+    end
+  end
+
+  defp fetch_name(attrs) do
+    case Map.get(attrs, :name) do
+      name when is_binary(name) and byte_size(name) > 0 and byte_size(name) <= 255 ->
+        {:ok, name}
+
+      _ ->
+        {:error, :name_invalid}
+    end
+  end
+
+  defp fetch_version(attrs) do
+    case Map.get(attrs, :version) do
+      version when is_binary(version) and byte_size(version) > 0 -> {:ok, version}
+      _ -> {:error, :version_empty}
+    end
+  end
+
+  defp fetch_graph_map(attrs) do
+    case Map.get(attrs, :graph) do
+      graph when is_map(graph) and not is_struct(graph) -> {:ok, graph}
+      _ -> {:error, :graph_structure_invalid}
+    end
+  end
+
+  defp convert_graph(graph_map) do
+    case graph_struct_from_map(graph_map) do
+      {:ok, graph} -> {:ok, graph}
+      :error -> {:error, :graph_structure_invalid}
+    end
+  end
+
+  defp check_graph_result(%{valid: true}), do: :ok
+
+  defp check_graph_result(%{valid: false, violations: violations}) do
+    {:error, {:graph_validation_failed, violations}}
+  end
+
+  # `attrs` is deliberately accessed by atom key only here (not the design's literal
+  # "attrs[:name] (or attrs[\"name\"])" phrasing) -- matching create_attrs()'s own
+  # atom-keyed @type and the EventStore.append/2 precedent this design cites, whose
+  # own field fetchers (fetch_uuid/3, fetch_payload/1, ...) are atom-only; only the
+  # tenant_id/status *rejection* checks (reject_key/4 above) check both forms, mirroring
+  # EventStore's reject_tenant_id/1 exactly. Merging a string-keyed attrs map with the
+  # atom-keyed :tenant_id (insert_definition/3 below) would otherwise raise
+  # Ecto.CastError via Ecto.Changeset.convert_params/1's mixed-key guard (confirmed
+  # directly: deps/ecto/lib/ecto/changeset.ex:949-964) -- flagged here as a deliberate,
+  # reasoned divergence from the design's literal fallback text, not a silent one.
+  defp insert_definition(attrs, tenant_id, prefix) do
+    merged_attrs = Map.put(attrs, :tenant_id, tenant_id)
+    changeset = ProcessDefinition.create_changeset(%ProcessDefinition{}, merged_attrs)
+
+    try do
+      changeset
+      |> Repo.insert(
+        on_conflict: :nothing,
+        conflict_target: [:name, :version],
+        returning: true,
+        prefix: prefix
+      )
+      |> case do
+        {:ok, %ProcessDefinition{id: id}} ->
+          case Repo.get(ProcessDefinition, id, prefix: prefix) do
+            %ProcessDefinition{} = found -> {:ok, found}
+            nil -> {:error, :duplicate_name_version}
+          end
+
+        {:error, %Ecto.Changeset{}} = error ->
+          error
+      end
+    rescue
+      exception -> {:error, {:transaction_failed, exception}}
+    end
+  end
+
+  # -----------------------------------------------------------------------------------
+  # get_by_id/2 helper
+  # -----------------------------------------------------------------------------------
+
+  defp cast_uuid(id) do
+    case Ecto.UUID.cast(id) do
+      {:ok, uuid} -> {:ok, uuid}
+      :error -> {:error, :not_found}
+    end
+  end
+
+  # -----------------------------------------------------------------------------------
+  # list/2 helpers (design §4.4)
+  # -----------------------------------------------------------------------------------
+
+  defp effective_limit(nil), do: 50
+  defp effective_limit(0), do: 50
+  defp effective_limit(limit) when is_integer(limit) and limit > 200, do: 200
+  defp effective_limit(limit) when is_integer(limit) and limit > 0, do: limit
+
+  defp where_name(query, nil), do: query
+
+  defp where_name(query, name) when is_binary(name) do
+    pattern = "%" <> name <> "%"
+    where(query, [d], fragment("? ILIKE ?", d.name, ^pattern))
+  end
+
+  defp where_status(query, nil), do: query
+  defp where_status(query, status), do: where(query, [d], d.status == ^status)
+
+  defp where_stage(query, nil), do: query
+  defp where_stage(query, stage), do: where(query, [d], d.stage == ^stage)
+
+  defp where_after_created(query, nil), do: query
+
+  defp where_after_created(query, after_created) do
+    where(query, [d], d.created_at > ^after_created)
+  end
+
+  # -----------------------------------------------------------------------------------
+  # activate/2 helpers (design §6.2)
+  # -----------------------------------------------------------------------------------
+
+  defp run_activate_transaction(id, prefix, tenant_id, validator) do
+    Repo.transaction(fn ->
+      ProcessDefinition
+      |> where([d], d.id == ^id)
+      |> lock("FOR UPDATE")
+      |> Repo.one(prefix: prefix)
+      |> case do
+        nil ->
+          Repo.rollback(:not_found)
+
+        %ProcessDefinition{status: :active} = definition ->
+          {:already_active, definition}
+
+        %ProcessDefinition{status: status} when status in [:deprecated, :archived] ->
+          Repo.rollback(:not_draft)
+
+        %ProcessDefinition{status: :draft} = definition ->
+          case run_service_scope_validator(definition, tenant_id, validator) do
+            :ok -> activate_draft(definition, prefix)
+            {:error, reason} -> Repo.rollback(reason)
+          end
+      end
+    end)
+  end
+
+  defp run_service_scope_validator(_definition, _tenant_id, nil), do: :ok
+
+  defp run_service_scope_validator(%ProcessDefinition{graph: graph_map}, tenant_id, validator)
+       when is_function(validator, 2) do
+    case graph_struct_from_map(graph_map) do
+      {:ok, graph} ->
+        case validator.(graph, tenant_id) do
+          :ok -> :ok
+          {:error, reason} -> {:error, {:service_scope_violation, reason}}
+        end
+
+      :error ->
+        {:error, :graph_structure_invalid}
+    end
+  end
+
+  defp activate_draft(%ProcessDefinition{id: id, name: name}, prefix) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    ProcessDefinition
+    |> where([d], d.name == ^name and d.status == :active)
+    |> select([d], d)
+    |> Repo.update_all([set: [status: :deprecated, updated_at: now]], prefix: prefix)
+
+    {1, [updated]} =
+      ProcessDefinition
+      |> where([d], d.id == ^id and d.status == :draft)
+      |> select([d], d)
+      |> Repo.update_all([set: [status: :active, updated_at: now]], prefix: prefix)
+
+    {:activated, updated}
+  end
+
+  defp interpret_activate_result({:ok, {:already_active, definition}}) do
+    {:ok, %{definition: definition, already_active: true}}
+  end
+
+  defp interpret_activate_result({:ok, {:activated, definition}}) do
+    {:ok, %{definition: definition, already_active: false}}
+  end
+
+  defp interpret_activate_result({:error, :not_found}), do: {:error, :not_found}
+  defp interpret_activate_result({:error, :not_draft}), do: {:error, :not_draft}
+
+  defp interpret_activate_result({:error, :graph_structure_invalid}) do
+    {:error, :graph_structure_invalid}
+  end
+
+  defp interpret_activate_result({:error, {:service_scope_violation, _reason}} = error), do: error
+
+  # -----------------------------------------------------------------------------------
+  # deprecate/2 & archive/2 helpers (design §6.3) -- identical shape, different
+  # from-status/to-status pair; archive/2 additionally stamps archived_at.
+  # -----------------------------------------------------------------------------------
+
+  defp transition(id, opts, from_status, to_status) do
+    prefix = Keyword.get(opts, :prefix)
+
+    with {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      try do
+        run_transition(id, prefix, from_status, to_status)
+      rescue
+        exception -> {:error, {:transaction_failed, exception}}
+      end
+    end
+  end
+
+  defp run_transition(id, prefix, from_status, to_status) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+    set = transition_set(to_status, now)
+
+    Repo.transaction(fn ->
+      ProcessDefinition
+      |> where([d], d.id == ^id and d.status == ^from_status)
+      |> select([d], d)
+      |> Repo.update_all([set: set], prefix: prefix)
+      |> case do
+        {1, [updated]} -> updated
+        {0, _count_and_rows} -> fallback_lookup(id, prefix)
+      end
+    end)
+  end
+
+  defp transition_set(:archived, now), do: [status: :archived, updated_at: now, archived_at: now]
+  defp transition_set(status, now), do: [status: status, updated_at: now]
+
+  defp fallback_lookup(id, prefix) do
+    case Repo.get(ProcessDefinition, id, prefix: prefix) do
+      nil -> Repo.rollback(:not_found)
+      %ProcessDefinition{} -> Repo.rollback(:invalid_status_transition)
+    end
+  end
+
+  # -----------------------------------------------------------------------------------
+  # graph_struct_from_map/1 -- resolves req027-…md OQ-3 (design §5). Used by both
+  # create/2 (via convert_graph/1) and activate/2 (via run_service_scope_validator/3,
+  # only when a service_scope_validator hook is supplied).
+  # -----------------------------------------------------------------------------------
+
+  @node_type_map %{
+    "START" => :START,
+    "END" => :END,
+    "HUMAN_TASK" => :HUMAN_TASK,
+    "SERVICE_TASK" => :SERVICE_TASK,
+    "EXCLUSIVE_GATEWAY" => :EXCLUSIVE_GATEWAY,
+    "PARALLEL_GATEWAY" => :PARALLEL_GATEWAY,
+    "TIMER" => :TIMER
+  }
+
+  @spec graph_struct_from_map(graph_map :: map()) :: {:ok, Graph.t()} | :error
+  defp graph_struct_from_map(graph_map) do
+    with {:ok, nodes_raw} <- fetch_list(graph_map, "nodes"),
+         {:ok, edges_raw} <- fetch_list(graph_map, "edges"),
+         {:ok, nodes} <- build_nodes(nodes_raw),
+         {:ok, edges} <- build_edges(edges_raw) do
+      {:ok, %Graph{nodes: nodes, edges: edges}}
+    else
+      _ -> :error
+    end
+  end
+
+  defp fetch_list(map, key) do
+    case Map.get(map, key) do
+      list when is_list(list) -> {:ok, list}
+      _ -> :error
+    end
+  end
+
+  defp build_nodes(nodes_raw) do
+    nodes_raw
+    |> Enum.reduce_while({:ok, []}, fn node, {:ok, acc} ->
+      case build_node(node) do
+        {:ok, built} -> {:cont, {:ok, [built | acc]}}
+        :error -> {:halt, :error}
+      end
+    end)
+    |> finish_build()
+  end
+
+  defp build_node(%{} = node) when not is_struct(node) do
+    with id when is_binary(id) <- Map.get(node, "id"),
+         node_type_str when is_binary(node_type_str) <- Map.get(node, "node_type") do
+      {:ok,
+       %Graph.Node{
+         id: id,
+         node_type: Map.get(@node_type_map, node_type_str, :unknown_node_type),
+         label: Map.get(node, "label"),
+         attributes: Map.get(node, "attributes")
+       }}
+    else
+      _ -> :error
+    end
+  end
+
+  defp build_node(_not_a_map), do: :error
+
+  defp build_edges(edges_raw) do
+    edges_raw
+    |> Enum.reduce_while({:ok, []}, fn edge, {:ok, acc} ->
+      case build_edge(edge) do
+        {:ok, built} -> {:cont, {:ok, [built | acc]}}
+        :error -> {:halt, :error}
+      end
+    end)
+    |> finish_build()
+  end
+
+  defp build_edge(%{} = edge) when not is_struct(edge) do
+    with id when is_binary(id) <- Map.get(edge, "id"),
+         source when is_binary(source) <- Map.get(edge, "source"),
+         target when is_binary(target) <- Map.get(edge, "target") do
+      {:ok,
+       %Graph.Edge{
+         id: id,
+         source: source,
+         target: target,
+         condition: Map.get(edge, "condition"),
+         is_default: Map.get(edge, "is_default", false)
+       }}
+    else
+      _ -> :error
+    end
+  end
+
+  defp build_edge(_not_a_map), do: :error
+
+  defp finish_build({:ok, reversed_acc}), do: {:ok, Enum.reverse(reversed_acc)}
+  defp finish_build(:error), do: :error
 end

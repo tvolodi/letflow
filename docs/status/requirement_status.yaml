@@ -2761,3 +2761,18 @@ history:
       027/028 (stage-N docs are refreshed in bulk at WF-04 stage-gate
       closure, not per-requirement). Flipped docs/requirements.yaml
       REQ-039 status: in_progress -> done.
+  - req: REQ-029
+    event: started
+    agent: ORCH
+    at: 2026-08-17T10:14:25Z
+    note: >
+      Started WF02-REQ029-20260817 -- Node-attribute and edge-condition
+      validators (graph.zig, PD-05/PD-06), extending REQ-028's
+      Letflow.Definitions.Graph module in place. Claimed via letflow-queue
+      task 44 (agent_id hetzner-orch), depends_on REQ-028 (done) satisfied.
+      Step 00 complete: branched feature/WF02-REQ029-20260817 from main
+      (bd46e17), pushed, baseline verified (mix compile clean). Routing to
+      CODE-DESIGNER for Step 1 -- REQ-028's own design doc (section 9.1)
+      left Node.attributes' typing provisional and explicitly flagged it
+      for REQ-029's CODE-DESIGNER to confirm or override, not silently
+      inherit.

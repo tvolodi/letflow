@@ -1287,7 +1287,7 @@ requirements:
   - id: REQ-029
     title: Node-attribute and edge-condition validators (graph.zig, PD-05/PD-06)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S2
     impl_order: 44  # letflow-queue task id
     description: >

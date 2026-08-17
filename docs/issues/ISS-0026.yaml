@@ -55,4 +55,35 @@ description: >
 affected_files:
   - .claude/agents/security-reviewer.md
 github_issue: https://github.com/tvolodi/letflow/issues/84
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0026-20260817
+resolved_at: 2026-08-17T06:20:51Z
+resolution: >
+  Updated .claude/agents/security-reviewer.md's INV-1 guidance: moved INV-1
+  out of the "almost always NOT-APPLICABLE" group into "live now" alongside
+  INV-4/7/8, with an explicit anti-regression note (do not revert) and the
+  concrete reasoning (S1 done, S2 migrations exist, 0003 decided).
+
+  While there, per the issue's own "audit for other invariants whose
+  applicability note was written against a pre-S2 codebase" suggestion,
+  found that docs/agents/instructions/security-invariants.md -- the
+  authoritative file the role file is supposed to summarize -- was itself
+  stale on INV-1, more so than the role file: its "Provisional status of
+  INV-1's mechanism" paragraph still described 0003 as pending and left the
+  scoping mechanism unnamed, its Reference said "S1 has not started," its
+  How-to-verify said "not yet checkable... once REQ-012 lands," and its
+  Severity line said "not yet applicable to MVP-1-scoped or S0 work" -- all
+  false as of REQ-012 (0003) being decided and REQ-021 (S1's close) landing.
+  Rewrote all of INV-1's Reference/How-to-verify/Severity with the actual
+  decided mechanism (schema-per-tenant via :prefix, tenant_id derived from
+  the resolved prefix per 0003's 2026-08-17 addendum) and a concrete,
+  checkable verification procedure, and updated the file's bottom
+  "Applicability note" to move INV-1 out of the not-yet-started group.
+  INV-2/3/5 (S4/S5) were checked and are still correctly NOT-APPLICABLE --
+  those stages genuinely haven't started -- so left untouched, keeping this
+  fix scoped to INV-1 only rather than rewriting invariants that aren't
+  actually stale.
+
+  No lib/, priv/, or test/ file touched -- role-file and authoritative-doc
+  correction only. Both files now agree.

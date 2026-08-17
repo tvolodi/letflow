@@ -2109,3 +2109,30 @@ history:
       decision-record amendment, not an implementation change; REQ-025 and
       REQ-030 remain unimplemented and unclaimed. Released queue task 74 as
       done via the per-client API key, closing GitHub issue #83.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-17T06:20:51Z
+    note: >
+      Resolved ISS-0026 (GitHub #84, MAJOR, filed by SECURITY-REVIEWER during
+      WF02-REQ027-20260816 Step 2c -- queue task 73, again a GitHub-imported
+      issue claimed ahead of the S2 requirement backlog by the priority
+      logic). .claude/agents/security-reviewer.md characterised INV-1
+      (tenant data isolation) as almost always NOT-APPLICABLE, but its own
+      preconditions (0003 decided, S2 migrations existing) had been met
+      since before REQ-023 -- three consecutive SECURITY-REVIEWER runs
+      (REQ-023, REQ-024, REQ-027) had been reasoning past the stale
+      guidance rather than the file being fixed. Updated the role file's
+      INV-1 section (moved out of the NOT-APPLICABLE group, explicit
+      anti-regression note). Per the issue's own suggestion to audit for
+      other stale applicability notes while there, also found and fixed
+      staleness in the authoritative docs/agents/instructions/
+      security-invariants.md itself (more stale than the role file it's
+      supposed to govern): its INV-1 Reference/How-to-verify/Severity/
+      Applicability-note text still described 0003 as pending and the
+      mechanism as unnamed. Rewrote those with the actual decided mechanism
+      and a concrete verification procedure. Checked INV-2/3/5 (S4/S5) --
+      genuinely still not-started, left untouched, keeping the fix scoped to
+      what was actually stale. No lib/, priv/, or test/ file touched.
+      Released queue task 73 as done via the per-client API key, closing
+      GitHub issue #84.

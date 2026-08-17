@@ -38,10 +38,18 @@ invariant, run its "How to verify" procedure and record PASS/FAIL. A single FAIL
 applicable invariant terminates validation with status FAIL — every invariant is
 BLOCKER severity, there is no partial credit.
 
-Several invariants (INV-1, INV-2, INV-3, INV-5) are written for stages that haven't
-started yet (S1/S4/S5) — for those, the correct verdict today is almost always
-NOT-APPLICABLE, not a forced check against code that doesn't exist. INV-4, INV-7, INV-8
-are live now.
+Some invariants (INV-2, INV-3, INV-5) are written for stages that haven't started yet
+(S4/S5) — for those, the correct verdict today is almost always NOT-APPLICABLE, not a
+forced check against code that doesn't exist. INV-1, INV-4, INV-7, INV-8 are live now.
+
+**INV-1 specifically (updated 2026-08-17, ISS-0026/GH#84 — do not revert this to
+"almost always NOT-APPLICABLE").** S1 (identity/tenancy) is done and S2 migrations
+exist (`docs/migration/decisions/0003-ecto-schema-strategy.md` is `decided`), so INV-1
+APPLIES to any diff touching a tenant-scoped table, schema, or migration — the common
+case for S2/S3 work, not the exception. Three prior SECURITY-REVIEWER runs (REQ-023,
+REQ-024, REQ-027) each independently reasoned past an earlier version of this file's
+stale guidance to reach that same conclusion by consulting `security-invariants.md`
+directly; this file is now corrected so that reasoning isn't required every time.
 
 ## Forbidden
 

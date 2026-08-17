@@ -16,13 +16,18 @@ incidents GH #335/#338). Identity and multi-tenancy (S1) is the next stage after
 this file is written now, ahead of S1 requirements being expanded, rather than bolted on
 after the first incident.
 
-**Provisional status of INV-1's mechanism.** Letflow has not yet decided *how*
-multi-tenancy is represented at the schema level —
-`docs/migration/decisions/0003-ecto-schema-strategy.md` (REQ-012) is still pending, and
-it may choose schema-per-tenant (R-Co's approach), a `tenant_id` row predicate on shared
-tables, or database-per-tenant. INV-1 below is written to hold under any of the three;
-its "How to verify" section names the concrete check to write once REQ-012 lands and the
-mechanism is chosen, without assuming which one wins in advance.
+**Status of INV-1's mechanism (updated 2026-08-17, ISS-0026/GH#84): decided, not
+provisional.** `docs/migration/decisions/0003-ecto-schema-strategy.md` (REQ-012) is
+`decided` — Dimension B chose schema-per-tenant (Ecto `:prefix`/dynamic-repo
+query-prefixing) with `tenant_id` retained inside each schema as an intra-schema
+invariant, not a `tenant_id`-predicate-on-shared-tables or database-per-tenant
+approach. S1 (identity/tenancy) is done and S2 migrations exist (REQ-022's
+`Letflow.TenantProvisioning`, REQ-023's event-store tables, REQ-027's
+`process_definitions`) — INV-1's preconditions are met and it is checkable today. This
+paragraph previously described 0003 as pending and left the mechanism unnamed; both
+were stale by the time REQ-023 landed (three consecutive SECURITY-REVIEWER passes —
+REQ-023, REQ-024, REQ-027 — caught the staleness themselves and applied INV-1 anyway;
+see ISS-0026 for the full history of that gap).
 
 ---
 
@@ -38,25 +43,33 @@ platform).
 ## INV-1 — Tenant data isolation
 
 **Rule.** Every access to tenant business data is scoped to exactly one tenant, with no
-exception for internal, admin, or system-worker paths. Regardless of which mechanism
-`docs/migration/decisions/0003-ecto-schema-strategy.md` settles on (schema-per-tenant,
-`tenant_id` predicate, or database-per-tenant), a query that reaches business data
-without going through that mechanism's scoping is a cross-tenant leak.
+exception for internal, admin, or system-worker paths. Per
+`docs/migration/decisions/0003-ecto-schema-strategy.md` Dimension B, the scoping
+mechanism is schema-per-tenant (Ecto `:prefix`); a query that reaches business data
+without going through `:prefix`-scoping is a cross-tenant leak.
 
-**Reference.** None yet — S1 (identity/tenancy) has not started; MVP-1's schema
-(REQ-102) is explicitly single-tenant and out of scope for this invariant per its own
+**Reference.** `docs/migration/decisions/0003-ecto-schema-strategy.md` Dimension B
+(schema-per-tenant via Ecto `:prefix`, `tenant_id` retained intra-schema) and its
+2026-08-17 addendum (who populates `tenant_id` at write time). `Letflow.TenantProvisioning`
+(REQ-022) is the concrete provisioning/schema-name mechanism. MVP-1's schema (REQ-102)
+remains explicitly single-tenant and out of scope for this invariant per its own
 moduledoc.
 
-**How to verify.** Not yet checkable — becomes checkable once 0003 lands and S2/S3
-migrations exist. When it does: SECURITY-REVIEWER must confirm every new Ecto schema
-module either (a) scopes its queries through the chosen tenancy mechanism (a Postgres
-`search_path` set per-connection, a `tenant_id` clause enforced via an Ecto query
-prefix/callback, or a distinct Repo per tenant), and (b) that no migration creates a
-business table reachable outside that mechanism. Until an automated check exists, this
-is a manual per-migration review — note explicitly in the SECURITY-REVIEWER handoff
-whether one was possible or not.
+**How to verify.** Checkable now (0003 decided, S2 migrations exist). For every new or
+changed Ecto schema module or migration touching a business table: (a) confirm queries
+against it are scoped through `:prefix` (a `Repo.*(query, prefix: schema_name)` call, a
+`prefix/1` callback, or equivalent dynamic-repo wiring) rather than the default/public
+schema; (b) confirm the migration doesn't create the table reachable outside that
+mechanism (i.e. not silently left in `public` when it should be tenant-scoped); (c) if
+the table carries a `tenant_id` column, confirm it is derived from the resolved
+`:prefix` at write time (per 0003's addendum), not accepted as a separate
+caller-supplied field — a caller-supplied value can disagree with the schema it's
+written into, which is the attribution defect 0003's addendum exists to close. Until an
+automated check exists, this is a manual per-migration/per-module review — note
+explicitly in the SECURITY-REVIEWER handoff which of (a)/(b)/(c) applied and how each
+was confirmed.
 
-**Severity.** BLOCKER (once S1/S2 land — not yet applicable to MVP-1-scoped or S0 work).
+**Severity.** BLOCKER (applies now — S1 is done, S2 migrations exist).
 
 ---
 
@@ -221,8 +234,12 @@ validated).
 
 ## Applicability note
 
-INV-1, INV-2, INV-3, INV-5 are written for stages (S1, S4, S5) that have not started —
-they exist now so the language is settled before the first requirement that needs them,
-per this file's opening rationale. SECURITY-REVIEWER's scope test (see its role file)
-determines which invariants apply to a given diff; an invariant whose stage hasn't
-started is automatically NOT-APPLICABLE, not a blocker. INV-4, INV-7, INV-8 apply today.
+**Updated 2026-08-17 (ISS-0026/GH#84) — INV-1 moved from "not yet applicable" to "live
+now."** INV-2, INV-3, INV-5 are still written for stages (S4, S5) that have not
+started — they exist now so the language is settled before the first requirement that
+needs them, per this file's opening rationale, and remain automatically NOT-APPLICABLE
+until those stages begin. INV-1 no longer belongs in that group: S1 is done and S2
+migrations exist, so it is checkable on any diff touching a tenant-scoped table,
+schema, or migration — SECURITY-REVIEWER's scope test (see its role file) determines
+applicability per diff, same mechanism as always, but INV-1 is now a live invariant to
+run that test against, not a default skip. INV-1, INV-4, INV-7, INV-8 apply today.

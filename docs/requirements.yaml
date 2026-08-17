@@ -1339,7 +1339,7 @@ requirements:
   - id: REQ-030
     title: Definition store CRUD (store.zig, PD-01/PD-03/PD-04/PD-07)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S2
     impl_order: 48  # letflow-queue task id
     description: >

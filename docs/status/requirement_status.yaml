@@ -2932,3 +2932,23 @@ history:
       precedent. No docs/migration/decisions/ file is named in REQ-033's
       acceptance criteria -- confirmed by re-reading the requirements.yaml
       entry directly, none applicable here.
+  - req: REQ-030
+    event: started
+    agent: ORCH
+    at: 2026-08-17T17:40:14Z
+    note: >
+      Started WF02-REQ030-20260817 -- Definition store CRUD
+      (store.zig, PD-01/PD-03/PD-04/PD-07): create/1, get_by_id/1,
+      get_active_by_name/1, list/1, activate/1 (atomic deprecate-then-
+      activate with FOR UPDATE locking, nil-able SVC-03 hook param for
+      REQ-031), deprecate/1, archive/1. Claimed queue task 48,
+      depends_on REQ-027/REQ-028/REQ-029 all done. Step 00 complete:
+      branched feature/WF02-REQ030-20260817 from main (8e5e144), pushed,
+      baseline verified (mix compile clean, mix test 431/431). Pulled in
+      12 new commits from the concurrent worktree since REQ-039 closed
+      (REQ-025/029/033 merged) -- notably lib/letflow/tenant_provisioning.ex
+      gained tenant_id_for_schema_name/1, the concrete implementation of
+      0003's 2026-08-17 addendum (this session's own ISS-0013/0014/0025
+      resolution): REQ-030's create/1 must reuse this same helper for its
+      own tenant_id derivation rather than reimplementing it. Routing to
+      CODE-DESIGNER for Step 1.

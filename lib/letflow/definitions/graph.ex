@@ -35,6 +35,22 @@ defmodule Letflow.Definitions.Graph do
   design doc §5 for the exact trigger/message table, §6 for the DFS-based
   cycle check (CHK-06), and §7 for the never-short-circuit / check-independence
   proof.
+
+  ## Node-attribute and edge-condition checks (CHK-09..CHK-17, REQ-029)
+
+  `validate_node_attributes/1` (PD-05) and `validate_edge_conditions/1`
+  (PD-06) are separate public functions, not folded into `validate_graph/1`
+  — see `lib/letflow/design/req029-node-attribute-edge-condition-validators.md`
+  §1 for the full rationale. **Ordering contract, enforced entirely by the
+  caller, not by this module:** both functions assume — but do not verify —
+  that `validate_graph/1` has already been called and returned
+  `valid: true` on the same graph value. Neither function calls
+  `validate_graph/1` internally or checks structural validity as a
+  precondition; calling either out of order, or against a structurally
+  invalid graph, will not crash but may produce misleading or redundant
+  violations. Enforcing the actual "run PD-05/PD-06 only after
+  `validate_graph/1` succeeds" ordering is the caller's job (intended to be
+  `Letflow.Definitions.create/1`, REQ-030, once it exists).
   """
 
   @type node_type ::
@@ -104,6 +120,15 @@ defmodule Letflow.Definitions.Graph do
             | :cycle_without_gateway
             | :node_limit_exceeded
             | :edge_limit_exceeded
+            | :missing_role
+            | :missing_endpoint
+            | :invalid_timeout
+            | :invalid_duration
+            | :missing_edge_condition
+            | :unexpected_edge_condition
+            | :default_with_condition
+            | :multiple_default_edges
+            | :invalid_cel_syntax
 
     @type t :: %__MODULE__{
             code: code(),
@@ -149,6 +174,72 @@ defmodule Letflow.Definitions.Graph do
       |> Enum.flat_map(& &1.(graph))
 
     %{valid: violations == [], violations: violations}
+  end
+
+  @doc """
+  Runs the 4 per-node-type attribute checks (CHK-09..CHK-12, PD-05) against
+  every node in `graph` and returns every violation found — never
+  short-circuits, same unconditional-concatenation construction as
+  `validate_graph/1`. Does not call `validate_graph/1` and does not verify
+  structural validity as a precondition — see the moduledoc's "Ordering
+  contract" note.
+  """
+  @spec validate_node_attributes(t()) :: result()
+  def validate_node_attributes(%__MODULE__{} = graph) do
+    violations =
+      [
+        &check_human_task_role/1,
+        &check_service_task_endpoint/1,
+        &check_service_task_timeout/1,
+        &check_timer_duration/1
+      ]
+      |> Enum.flat_map(& &1.(graph))
+
+    %{valid: violations == [], violations: violations}
+  end
+
+  @doc """
+  Runs the 5 edge-condition/CEL checks (CHK-13..CHK-17, PD-06) against every
+  edge in `graph` and returns every violation found — never short-circuits,
+  same unconditional-concatenation construction as `validate_graph/1`. Does
+  not call `validate_graph/1` and does not verify structural validity as a
+  precondition — see the moduledoc's "Ordering contract" note. Total and
+  defensive: an edge whose `source` doesn't resolve to any node (a dangling
+  edge) is treated as not sourced from an `EXCLUSIVE_GATEWAY` rather than
+  raising (design doc §5.2).
+  """
+  @spec validate_edge_conditions(t()) :: result()
+  def validate_edge_conditions(%__MODULE__{} = graph) do
+    violations =
+      [
+        &check_gateway_condition_presence/1,
+        &check_non_gateway_condition_absence/1,
+        &check_default_condition_conflict/1,
+        &check_single_default_edge/1,
+        &check_cel_syntax/1
+      ]
+      |> Enum.flat_map(& &1.(graph))
+
+    %{valid: violations == [], violations: violations}
+  end
+
+  @doc """
+  Minimal *structural* CEL syntax check (design doc §6) — balanced brackets,
+  balanced/terminated string literals, and no bare leading/trailing
+  operator. Performs no evaluation: it never resolves variable names or
+  determines what the expression would evaluate to, only whether it is
+  lexically well-formed.
+  """
+  @spec valid_cel_syntax?(String.t()) :: boolean()
+  def valid_cel_syntax?(condition) when is_binary(condition) do
+    trimmed = String.trim(condition)
+
+    cond do
+      trimmed == "" -> false
+      not cel_brackets_and_strings_balanced?(trimmed) -> false
+      cel_starts_or_ends_with_bare_operator?(trimmed) -> false
+      true -> true
+    end
   end
 
   # CHK-07: node count must not exceed @max_nodes.
@@ -449,5 +540,440 @@ defmodule Letflow.Definitions.Graph do
           {new_visited, violations ++ new_violations}
       end
     end)
+  end
+
+  # --- CHK-09..CHK-12: per-node-type attribute checks (PD-05, REQ-029) ------
+
+  # CHK-09: a HUMAN_TASK node must carry a non-empty (after trim) "role"
+  # string attribute (design doc §4, §4.1).
+  @spec check_human_task_role(t()) :: [Violation.t()]
+  defp check_human_task_role(%__MODULE__{nodes: nodes}) do
+    nodes
+    |> Enum.filter(&(&1.node_type == :HUMAN_TASK))
+    |> Enum.filter(&blank_or_missing_string?(&1.attributes, "role"))
+    |> Enum.map(fn node ->
+      %Violation{
+        code: :missing_role,
+        message: "Node '#{node.id}' (HUMAN_TASK) is missing a non-empty 'role' attribute"
+      }
+    end)
+  end
+
+  # CHK-10: a SERVICE_TASK node must carry a non-empty (after trim)
+  # "endpoint" string attribute (design doc §4, §4.1).
+  @spec check_service_task_endpoint(t()) :: [Violation.t()]
+  defp check_service_task_endpoint(%__MODULE__{nodes: nodes}) do
+    nodes
+    |> Enum.filter(&(&1.node_type == :SERVICE_TASK))
+    |> Enum.filter(&blank_or_missing_string?(&1.attributes, "endpoint"))
+    |> Enum.map(fn node ->
+      %Violation{
+        code: :missing_endpoint,
+        message: "Node '#{node.id}' (SERVICE_TASK) is missing a non-empty 'endpoint' attribute"
+      }
+    end)
+  end
+
+  # CHK-11: a SERVICE_TASK node's "timeout_ms" attribute must be an integer
+  # (no numeric-string/float coercion, design doc §2's pinned value-type
+  # table) in the inclusive range 1..300_000 (design doc §4.2).
+  @spec check_service_task_timeout(t()) :: [Violation.t()]
+  defp check_service_task_timeout(%__MODULE__{nodes: nodes}) do
+    nodes
+    |> Enum.filter(&(&1.node_type == :SERVICE_TASK))
+    |> Enum.filter(&invalid_timeout?(&1.attributes))
+    |> Enum.map(fn node ->
+      value = attribute_value(node.attributes, "timeout_ms")
+
+      %Violation{
+        code: :invalid_timeout,
+        message:
+          "Node '#{node.id}' (SERVICE_TASK) has an invalid 'timeout_ms' attribute " <>
+            "(#{inspect(value)}); must be an integer in 1..300000"
+      }
+    end)
+  end
+
+  # CHK-12: a TIMER node's "duration_iso8601" attribute must be a string
+  # accepted by the ISO-8601 duration scan-forward parser (design doc §4.3).
+  @spec check_timer_duration(t()) :: [Violation.t()]
+  defp check_timer_duration(%__MODULE__{nodes: nodes}) do
+    nodes
+    |> Enum.filter(&(&1.node_type == :TIMER))
+    |> Enum.filter(&invalid_duration?(&1.attributes))
+    |> Enum.map(fn node ->
+      value = attribute_value(node.attributes, "duration_iso8601")
+
+      %Violation{
+        code: :invalid_duration,
+        message:
+          "Node '#{node.id}' (TIMER) has an invalid 'duration_iso8601' attribute (#{inspect(value)})"
+      }
+    end)
+  end
+
+  # `attributes` is documented as `map() | nil` with string keys (design doc
+  # §2) -- the `is_map/1` guard is a defensive belt-and-suspenders check so
+  # these helpers stay total (never raise) even if a caller ever hands in
+  # something else, rather than relying solely on the documented contract.
+  @spec blank_or_missing_string?(map() | nil, String.t()) :: boolean()
+  defp blank_or_missing_string?(attributes, key) when is_map(attributes) do
+    case Map.get(attributes, key) do
+      value when is_binary(value) -> String.trim(value) == ""
+      _other -> true
+    end
+  end
+
+  defp blank_or_missing_string?(_attributes, _key), do: true
+
+  @spec invalid_timeout?(map() | nil) :: boolean()
+  defp invalid_timeout?(attributes) when is_map(attributes) do
+    case Map.get(attributes, "timeout_ms") do
+      value when is_integer(value) -> value < 1 or value > 300_000
+      _other -> true
+    end
+  end
+
+  defp invalid_timeout?(_attributes), do: true
+
+  @spec invalid_duration?(map() | nil) :: boolean()
+  defp invalid_duration?(attributes) when is_map(attributes) do
+    case Map.get(attributes, "duration_iso8601") do
+      value when is_binary(value) -> not valid_iso8601_duration?(value)
+      _other -> true
+    end
+  end
+
+  defp invalid_duration?(_attributes), do: true
+
+  @spec attribute_value(map() | nil, String.t()) :: term()
+  defp attribute_value(attributes, key) when is_map(attributes), do: Map.get(attributes, key)
+  defp attribute_value(_attributes, _key), do: nil
+
+  # --- ISO-8601 duration scan-forward parser (design doc §4.3) --------------
+
+  @duration_date_units ["Y", "M", "W", "D"]
+  @duration_time_units ["H", "M", "S"]
+
+  # A duration string is valid iff: it contains no fractional ('.'/',')
+  # character anywhere; it starts with literal 'P'; the remainder splits on
+  # the first 'T' (if any) into a date_part and, only if 'T' was present, a
+  # non-empty time_part; date_part scans as zero-or-more ordered
+  # <digits><unit> tokens from Y,M,W,D with no leftover characters;
+  # time_part (if 'T' was present) scans the same way against H,M,S and must
+  # contain at least one token; if no 'T' was present, date_part itself must
+  # contain at least one token. `P0D` is explicitly valid (design doc §4.3).
+  @spec valid_iso8601_duration?(String.t()) :: boolean()
+  defp valid_iso8601_duration?(str) do
+    cond do
+      String.contains?(str, ".") or String.contains?(str, ",") ->
+        false
+
+      not String.starts_with?(str, "P") ->
+        false
+
+      true ->
+        str
+        |> String.slice(1, String.length(str) - 1)
+        |> valid_duration_remainder?()
+    end
+  end
+
+  @spec valid_duration_remainder?(String.t()) :: boolean()
+  defp valid_duration_remainder?(remainder) do
+    case String.split(remainder, "T", parts: 2) do
+      [date_part] ->
+        case scan_duration_tokens(date_part, @duration_date_units) do
+          :error -> false
+          count -> count > 0
+        end
+
+      [date_part, time_part] ->
+        time_part != "" and valid_duration_date_and_time?(date_part, time_part)
+    end
+  end
+
+  @spec valid_duration_date_and_time?(String.t(), String.t()) :: boolean()
+  defp valid_duration_date_and_time?(date_part, time_part) do
+    date_ok? =
+      case scan_duration_tokens(date_part, @duration_date_units) do
+        :error -> false
+        _count -> true
+      end
+
+    time_ok? =
+      case scan_duration_tokens(time_part, @duration_time_units) do
+        :error -> false
+        count -> count > 0
+      end
+
+    date_ok? and time_ok?
+  end
+
+  # Scans `str` left to right for zero or more <digits><unit> tokens against
+  # `remaining_units` (an ordered list of single-character unit strings, e.g.
+  # `["Y", "M", "W", "D"]`), where units present must appear in that relative
+  # order with no repeats and any not present are simply skipped (they're
+  # optional). Returns the number of tokens matched once `str` is fully
+  # consumed, or `:error` if `str` contains any leftover/unrecognized
+  # characters, an out-of-order unit, or a repeated unit.
+  @spec scan_duration_tokens(String.t(), [String.t()]) :: non_neg_integer() | :error
+  defp scan_duration_tokens(str, remaining_units),
+    do: scan_duration_tokens(str, remaining_units, 0)
+
+  @spec scan_duration_tokens(String.t(), [String.t()], non_neg_integer()) ::
+          non_neg_integer() | :error
+  defp scan_duration_tokens("", _remaining_units, count), do: count
+
+  defp scan_duration_tokens(str, remaining_units, count) do
+    case Regex.run(~r/^([0-9]+)([A-Za-z])/, str) do
+      [match, _digits, unit] ->
+        case Enum.split_while(remaining_units, &(&1 != unit)) do
+          {_before, [^unit | rest_units]} ->
+            rest_str =
+              String.slice(str, String.length(match), String.length(str) - String.length(match))
+
+            scan_duration_tokens(rest_str, rest_units, count + 1)
+
+          {_before, []} ->
+            :error
+        end
+
+      nil ->
+        :error
+    end
+  end
+
+  # --- CHK-13..CHK-17: edge-condition/CEL checks (PD-06, REQ-029) -----------
+
+  # CHK-13: a non-default outgoing edge from an EXCLUSIVE_GATEWAY must have a
+  # non-empty (after trim) condition (design doc §5.1).
+  @spec check_gateway_condition_presence(t()) :: [Violation.t()]
+  defp check_gateway_condition_presence(%__MODULE__{nodes: nodes, edges: edges}) do
+    node_index = build_node_index(nodes)
+
+    edges
+    |> Enum.filter(fn edge ->
+      exclusive_gateway_source?(nodes, node_index, edge) and edge.is_default != true and
+        blank_condition?(edge.condition)
+    end)
+    |> Enum.map(fn edge ->
+      %Violation{
+        code: :missing_edge_condition,
+        message:
+          "Edge '#{edge.id}' is a non-default outgoing edge from an EXCLUSIVE_GATEWAY and requires a non-empty condition"
+      }
+    end)
+  end
+
+  # CHK-14: every edge that is NOT a non-default EXCLUSIVE_GATEWAY outgoing
+  # edge (a non-gateway-sourced edge, or the gateway's own default edge) must
+  # have a null condition (design doc §5.1).
+  @spec check_non_gateway_condition_absence(t()) :: [Violation.t()]
+  defp check_non_gateway_condition_absence(%__MODULE__{nodes: nodes, edges: edges}) do
+    node_index = build_node_index(nodes)
+
+    edges
+    |> Enum.filter(fn edge ->
+      not (exclusive_gateway_source?(nodes, node_index, edge) and edge.is_default != true) and
+        edge.condition != nil
+    end)
+    |> Enum.map(fn edge ->
+      %Violation{
+        code: :unexpected_edge_condition,
+        message:
+          "Edge '#{edge.id}' is not a non-default EXCLUSIVE_GATEWAY outgoing edge and must not have a condition"
+      }
+    end)
+  end
+
+  # CHK-15: is_default and a non-null condition must never coexist, on any
+  # edge regardless of source node type -- deliberately unscoped, checked
+  # independently of (and able to co-fire with) CHK-14 (design doc §5.1).
+  @spec check_default_condition_conflict(t()) :: [Violation.t()]
+  defp check_default_condition_conflict(%__MODULE__{edges: edges}) do
+    edges
+    |> Enum.filter(&(&1.is_default == true and &1.condition != nil))
+    |> Enum.map(fn edge ->
+      %Violation{
+        code: :default_with_condition,
+        message: "Edge '#{edge.id}' is marked is_default but also has a non-null condition"
+      }
+    end)
+  end
+
+  # CHK-16: at most one default outgoing edge per EXCLUSIVE_GATEWAY source
+  # node -- the first default edge in declaration order is legal, every
+  # subsequent one from the same gateway is a violation (mirrors CHK-05's "N
+  # occurrences -> N-1 violations" convention, design doc §5.3).
+  @spec check_single_default_edge(t()) :: [Violation.t()]
+  defp check_single_default_edge(%__MODULE__{nodes: nodes, edges: edges}) do
+    node_index = build_node_index(nodes)
+
+    edges
+    |> Enum.filter(&exclusive_gateway_source?(nodes, node_index, &1))
+    |> Enum.group_by(&Map.fetch!(node_index, &1.source))
+    |> Enum.flat_map(fn {gateway_idx, gateway_edges} ->
+      gateway_edges
+      |> Enum.filter(&(&1.is_default == true))
+      |> Enum.drop(1)
+      |> Enum.map(fn edge ->
+        gateway_id = Enum.at(nodes, gateway_idx).id
+
+        %Violation{
+          code: :multiple_default_edges,
+          message:
+            "Edge '#{edge.id}' is an additional default edge from EXCLUSIVE_GATEWAY node " <>
+              "'#{gateway_id}'; only one default edge is permitted per gateway"
+        }
+      end)
+    end)
+  end
+
+  # CHK-17: every edge with a present (non-nil, non-blank) condition must be
+  # syntactically valid CEL, checked unconditionally regardless of whether
+  # the edge was "allowed" to have a condition at all (design doc §5.1).
+  @spec check_cel_syntax(t()) :: [Violation.t()]
+  defp check_cel_syntax(%__MODULE__{edges: edges}) do
+    edges
+    |> Enum.filter(fn edge ->
+      not blank_condition?(edge.condition) and not valid_cel_syntax?(edge.condition)
+    end)
+    |> Enum.map(fn edge ->
+      %Violation{
+        code: :invalid_cel_syntax,
+        message:
+          "Edge '#{edge.id}' has a condition that is not syntactically valid CEL: #{inspect(edge.condition)}"
+      }
+    end)
+  end
+
+  @spec blank_condition?(String.t() | nil) :: boolean()
+  defp blank_condition?(nil), do: true
+  defp blank_condition?(condition) when is_binary(condition), do: String.trim(condition) == ""
+  defp blank_condition?(_condition), do: true
+
+  # Resolves `edge.source` via `node_index` (§5.2) and reports whether the
+  # resolved node is an EXCLUSIVE_GATEWAY. An unresolvable (dangling) source
+  # is defensively treated as "not a gateway" rather than raising -- CHK-03
+  # (validate_graph/1) is the function responsible for reporting the dangling
+  # reference itself.
+  @spec exclusive_gateway_source?(
+          [Node.t()],
+          %{String.t() => non_neg_integer()},
+          Edge.t()
+        ) :: boolean()
+  defp exclusive_gateway_source?(nodes, node_index, edge) do
+    case Map.fetch(node_index, edge.source) do
+      {:ok, idx} -> Enum.at(nodes, idx).node_type == :EXCLUSIVE_GATEWAY
+      :error -> false
+    end
+  end
+
+  # --- valid_cel_syntax?/1 helpers (design doc §6) ---------------------------
+
+  @cel_matching_open %{")" => "(", "]" => "[", "}" => "{"}
+  @cel_open_brackets MapSet.new(["(", "[", "{"])
+  @cel_close_brackets MapSet.new([")", "]", "}"])
+  @cel_quote_chars MapSet.new(["'", "\""])
+  @cel_bare_operators MapSet.new([
+                        "&&",
+                        "||",
+                        "==",
+                        "!=",
+                        "<=",
+                        ">=",
+                        "<",
+                        ">",
+                        "+",
+                        "-",
+                        "*",
+                        "/",
+                        "."
+                      ])
+
+  # Scans `str` (already trimmed) left to right tracking a bracket stack and
+  # whether the scan is currently inside a string literal (honoring a `\`
+  # escape so `\"` inside a `"`-delimited literal does not close it, design
+  # doc §6 step 2). Returns `true` iff every bracket is matched/closed and no
+  # string literal is left unterminated at the end of the scan.
+  @spec cel_brackets_and_strings_balanced?(String.t()) :: boolean()
+  defp cel_brackets_and_strings_balanced?(str) do
+    str
+    |> String.graphemes()
+    |> Enum.reduce_while({[], nil, false}, &cel_scan_char/2)
+    |> case do
+      {[], nil, false} -> true
+      _other -> false
+    end
+  end
+
+  # Inside a string literal, the char immediately after an unescaped `\` is
+  # consumed literally and never closes the literal or is itself treated as
+  # a new escape.
+  defp cel_scan_char(_ch, {stack, quote, true}) when not is_nil(quote) do
+    {:cont, {stack, quote, false}}
+  end
+
+  # Inside a string literal (not currently escaped): `\` starts an escape,
+  # the matching quote char closes the literal, anything else is literal
+  # text -- bracket characters are not pushed/popped/matched while inside a
+  # string literal.
+  defp cel_scan_char(ch, {stack, quote, false}) when not is_nil(quote) do
+    cond do
+      ch == "\\" -> {:cont, {stack, quote, true}}
+      ch == quote -> {:cont, {stack, nil, false}}
+      true -> {:cont, {stack, quote, false}}
+    end
+  end
+
+  # Outside a string literal: a quote char opens one; an open bracket
+  # pushes; a close bracket must match the top of the stack (halting with
+  # `:error` on a mismatch or an empty stack); anything else is ordinary
+  # text.
+  defp cel_scan_char(ch, {stack, nil, false}) do
+    cond do
+      MapSet.member?(@cel_quote_chars, ch) ->
+        {:cont, {stack, ch, false}}
+
+      MapSet.member?(@cel_open_brackets, ch) ->
+        {:cont, {[ch | stack], nil, false}}
+
+      MapSet.member?(@cel_close_brackets, ch) ->
+        case stack do
+          [top | tail] ->
+            if @cel_matching_open[ch] == top do
+              {:cont, {tail, nil, false}}
+            else
+              {:halt, :error}
+            end
+
+          [] ->
+            {:halt, :error}
+        end
+
+      true ->
+        {:cont, {stack, nil, false}}
+    end
+  end
+
+  # `str`'s first or last whitespace-/bracket-delimited token is one of the
+  # fixed bare operator spellings that requires an operand on the (missing)
+  # other side (design doc §6 step 4).
+  @spec cel_starts_or_ends_with_bare_operator?(String.t()) :: boolean()
+  defp cel_starts_or_ends_with_bare_operator?(str) do
+    case cel_tokens(str) do
+      [] ->
+        false
+
+      tokens ->
+        MapSet.member?(@cel_bare_operators, List.first(tokens)) or
+          MapSet.member?(@cel_bare_operators, List.last(tokens))
+    end
+  end
+
+  @spec cel_tokens(String.t()) :: [String.t()]
+  defp cel_tokens(str) do
+    Regex.split(~r/[\s\(\)\[\]\{\}]+/, str, trim: true)
   end
 end

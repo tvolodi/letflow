@@ -1514,7 +1514,7 @@ requirements:
   - id: REQ-033
     title: Definition snapshot store (snapshot.zig, PD-08)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S2
     impl_order: 46  # letflow-queue task id
     description: >

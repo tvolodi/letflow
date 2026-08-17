@@ -1,0 +1,59 @@
+{
+  "handoff_id": "c4f2b3d5-0009-4f1a-9a10-req042step03",
+  "run_id": "WF02-REQ042-20260817",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ042-20260817/step-03-test-designer.json",
+  "created_at": "2026-08-17T21:41:05Z",
+  "started_at": "2026-08-17T21:41:05Z",
+  "completed_at": "2026-08-17T21:46:41Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-042"],
+    "related_handoff_ids": ["step-02a-elixir-dev.json", "step-02d-reverify-reviewer.json"],
+    "artifacts_in": ["lib/letflow/definitions.ex", "lib/letflow/design/search.md"],
+    "owned_modules": ["test/letflow/definitions", "test/specs"]
+  },
+  "task": {
+    "description": "WF-02 Step 3: write test/specs/REQ-042.md and test code under test/letflow/definitions/ for Letflow.Definitions.search/2. Scope test: real executable surface -- continue to full procedure, do not skip.",
+    "acceptance_criteria": [
+      "search/1 with query \"invoice\" returns a definition named exactly \"invoice\" ranked above one named \"invoice-approval\" (partial name match), which in turn ranks above one matched only via its description containing \"invoice\" -- has a runnable test",
+      "search/1 with an empty query string returns a QueryEmpty-equivalent error, not an empty result list -- has a runnable test",
+      "search/1 with a query longer than 512 characters returns a QueryTooLong-equivalent error -- has a runnable test",
+      "search/1 against a query with no matching name or description anywhere returns an empty list, not an error -- has a runnable test",
+      "search/1 respects limit (default 20) and offset for pagination, demonstrated with more matching rows than fit in one page across two successive calls -- has a runnable test",
+      "the moduledoc states no new migration/table was added, explicitly citing definition.md's PD-10 section for that boundary -- verify by reading the moduledoc directly, not necessarily an ExUnit assertion",
+      "test fixtures use per-test unique data, no cross-test pollution",
+      "tests are self-sufficient, no dependency on execution order",
+      "no hardcoded secrets/connection strings"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote test/specs/REQ-042.md and test/letflow/definitions/search_test.exs (DB-backed, real Postgres per DIRECTIVE T-1, provisioned_tenant/1 fixture pattern mirrored from store_test.exs), covering all 6 REQ-042 acceptance criteria: AC1 -- ranking order (exact name match rank 3.0 ranks above partial name match rank 2.0 ranks above description-only match rank 1.0, both rank values and returned-list order asserted); AC2 -- empty query returns {:error, :query_empty}, distinct from an empty list; AC3 -- a 513-byte query returns {:error, :query_too_long} (asserted distinct from :query_empty), plus a 512-byte boundary case proving the '> 512, not >= 512' comparison; AC4 -- a query matching nothing returns {:ok, []}, not an error; AC5 -- limit/offset pagination, two test cases (25 rows across the default 20-row limit + offset:20; 15 rows across an explicit limit:10/offset:0 then limit:10/offset:10), each asserting the two successive pages are disjoint and their union covers every matching row exactly once. AC6 (moduledoc states no new migration/table, citing PD-10) got a 3-test doc-content addition to test/letflow/definitions_test.exs, mirroring that file's existing normalized_moduledoc/1 pattern for REQ-030/REQ-041, plus direct confirmation by reading lib/letflow/definitions.ex's moduledoc text (quoted verbatim in the spec doc). All fixtures use per-test unique tenant schemas (real CREATE SCHEMA + TenantProvisioning.replay_migrations/1) and System.unique_integer/1-suffixed names/tokens or fresh Ecto.UUID.generate() values; no test depends on another test's data or execution order; no hardcoded secrets/connection strings. 23 tests added/changed across the two files, 0 failures (MIX_ENV=test mix test test/letflow/definitions/search_test.exs test/letflow/definitions_test.exs: '23 tests, 0 failures'). Full project suite re-run after the change: 'mix test' -> '4 properties, 608 tests, 0 failures' (the Keycloak metadata-load error lines in the output are pre-existing placeholder-OIDC-issuer noise, unrelated to this change). mix format --check-formatted passes on both files. Found and filed docs/issues/ISS-0038.yaml (GitHub issue #120) while writing AC1's test: Letflow.Definitions.search/2's @type search_result declares rank: float(), but the shipped CASE-expression fragment returns a %Decimal{} at runtime (confirmed directly -- assert rank_by_id[exact.id] == 3.0 failed with left: Decimal.new(\"3.0\"), right: 3.0 before the fix). Not blocking AC1's own ranking-order behavior (the three tiers still order 3.0 > 2.0 > 1.0 numerically either way), so filed as an adjacent, non-blocking finding per the ISSUE_QUEUE protocol rather than reworked in this run; search_test.exs normalizes via Decimal.to_float/1 with an inline comment pointing at the filed issue.",
+    "artifacts_out": [
+      "test/specs/REQ-042.md",
+      "test/letflow/definitions/search_test.exs",
+      "test/letflow/definitions_test.exs",
+      "docs/issues/ISS-0038.yaml"
+    ],
+    "issues": ["ISS-0038"],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ042-20260817",
+      "commit_sha_list": [
+        "80f66a2"
+      ],
+      "remote_branch": "origin/feature/WF02-REQ042-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

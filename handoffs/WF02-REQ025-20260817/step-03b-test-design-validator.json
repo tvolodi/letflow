@@ -1,0 +1,72 @@
+{
+  "handoff_id": "350d7daf-e281-4c11-bcfb-a04b6b93d793",
+  "run_id": "WF02-REQ025-20260817",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ025-20260817/step-03b-test-design-validator.json",
+  "created_at": "2026-08-17T13:05:44Z",
+  "started_at": "2026-08-17T13:07:05Z",
+  "completed_at": "2026-08-17T13:09:30Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-025"],
+    "related_handoff_ids": ["449613b2-374d-47d0-9730-3b5372f4b0cd"],
+    "artifacts_in": [
+      "test/specs/REQ-025.md",
+      "test/letflow/event_store_test.exs",
+      "lib/letflow/design/req025-event-append.md",
+      "docs/requirements.yaml (REQ-025 entry)"
+    ],
+    "owned_modules": ["lib/letflow/event_store.ex", "test/letflow/event_store_test.exs", "test/specs/REQ-025.md"]
+  },
+  "task": {
+    "description": "Independently validate test/specs/REQ-025.md and test/letflow/event_store_test.exs -- read both files yourself, do not trust TEST-DESIGNER's handoff summary. TEST-DESIGNER reports 10 tests across 8 describe blocks, mix test test/letflow/event_store_test.exs passing 10/0 against the real docker-compose Postgres. For each of REQ-025's 6 acceptance criteria (docs/requirements.yaml ~1094-1099) plus the 7th load-bearing case (append against an instance_id with no pre-existing instance_projections row returns {:error, :instance_not_started} and writes zero rows -- introduced by REVIEWER's Step 2d ruling on OQ-5, not literally in the original AC list but required per the design doc's §11 traceability table and REVIEWER's own expectation), verify: (a) at least one runnable test targets it, no @tag :skip without a passing counterpart; (b) no 'TODO: implement test' left in the spec; (c) test fixtures use per-test unique data (unique instance_id/tenant per test, not shared hardcoded IDs); (d) tests are self-sufficient, no dependency on execution order; (e) no hardcoded secrets/connection strings. ALSO specifically verify the fixture discipline the design doc mandates: every test exercising append/2's success path or the terminated-instance path pre-seeds instance_projections via a direct Repo.insert in test setup, never by calling append/2 itself to create the row (since append/2 structurally cannot create one anymore) -- grep the test file yourself for this pattern, don't take TEST-DESIGNER's word for it. Run mix test test/letflow/event_store_test.exs yourself and quote the actual output rather than trusting TEST-DESIGNER's reported 10/0.",
+    "acceptance_criteria": [
+      "every one of REQ-025's 6 acceptance criteria plus the 7th (:instance_not_started) has at least one runnable, passing test",
+      "no TODO/skip left in spec or test file",
+      "fixtures use per-test unique data, no cross-test pollution, no dependency on append/2 to originate an instance_projections row",
+      "tests are self-sufficient and independently runnable",
+      "no hardcoded secrets/connection strings"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-derived this verdict from the artefacts themselves, not from TEST-DESIGNER's self-report. Read test/specs/REQ-025.md (136 lines) and test/letflow/event_store_test.exs (487 lines) in full, cross-checked both against lib/letflow/design/req025-event-append.md's §9 OQ-5 resolution and §11 traceability table, and ran mix test myself.\n\nACTUAL mix test output (mix test test/letflow/event_store_test.exs --seed 0, run against docker-compose's real Postgres, letflow-postgres-1 container confirmed healthy beforehand): '10 tests, 0 failures' (Finished in 2.0 seconds). Matches TEST-DESIGNER's claim of 10/0 -- independently confirmed, not trusted.\n\nCriterion (a) coverage per AC, all runnable and passing: AC1 (terminated instance) -- 2 tests, both :completed and :cancelled sub-cases, describe 'terminated instance (AC1)' lines 185-222. AC2 (concurrent sequence assignment) -- 1 test, a real Task.async-based race with a send/receive barrier forcing genuine overlap against real Postgres lock contention (not a citation-only fallback), describe 'concurrent appends (AC2)' lines 250-303. AC3 (idempotency) -- 1 test, describe 'idempotency (AC3)' lines 310-336, checks event_id/sequence_number identity across both calls plus zero net row growth (stronger than AC3's literal wording). AC4 (payload validation failure) -- 1 test, describe 'invalid payload (AC4)' lines 344-366, deliberately does NOT seed instance_projections to prove the pre-transaction-phase failure never even reaches the M1 guard. AC5 (oversized payload) -- 1 test, describe 'oversized payload (AC5)' lines 374-401, reads both the events row and event_payload_store row back directly from Postgres. AC6 (tenant_id derivation/isolation) -- 3 sub-tests, describe 'tenant_id (AC6)' lines 412-486: (a) events/instance_projections tenant_id column checked against an independently-computed TenantProvisioning.tenant_id_for_schema_name/1 value, not a tautological re-check of the fixture's own value; (b) instance_sequence/event_idempotency (no tenant_id column, per design doc OQ-1) checked via genuine cross-tenant schema-prefix reachability against a second, really-provisioned tenant; (c) a caller-supplied :tenant_id key rejected with {:error, :tenant_id_not_accepted}, zero rows written. 7th case (:instance_not_started) -- 1 test, describe 'instance_not_started (new failure mode, REVIEWER Step 2d OQ-5 ruling)' lines 231-243, no instance_projections row exists, distinct error tag confirmed, zero rows written.\n\nCriterion (b): grepped both files for 'TODO' and '@tag :skip' -- zero matches in either. No deferred/skipped coverage anywhere.\n\nCriterion (c): every test calls provisioned_tenant() (a fresh real CREATE SCHEMA + tenant_scoped_migrations/0 replay per test, unique tenant slug via System.unique_integer). instance_id via Ecto.UUID.generate() per test. idempotency_key via unique_idempotency_key() (System.unique_integer-suffixed). event_type name via unique_type_name() (System.unique_integer-suffixed). No shared hardcoded tenant/instance/idempotency-key/event-type constant anywhere in the file -- confirmed by reading every test body, not just the helper definitions.\n\nCriterion (d): each test is a fully self-contained unit -- provisions its own tenant/schema at the top, does its own seeding, and on_exit/1 (registered inside provisioned_tenant/1) drops the schema and deletes the tenant/registration rows afterward. Module is async: false (required because Sandbox :auto mode is process-wide, not per-test -- same justification already established in registry_test.exs/tenant_provisioning_test.exs, cited in this file's own moduledoc), but async: false constrains execution to serial, not to a specific order -- no test reads state left behind by a previous test; each starts from a genuinely empty, newly created schema. No shared module-level mutable state, no reliance on ExUnit test ordering.\n\nCriterion (e): grepped for password/secret/postgres:\\/\\/|ecto:\\/\\/ across both files -- zero matches. No connection strings; DB connectivity comes entirely from Letflow.Repo/DataCase's existing test config, never inlined here.\n\nFixture discipline (the specifically-flagged check): grepped the test file for every call site of EventStore.append and every call site of seed_projection!/Repo.insert against InstanceProjection. Confirmed: seed_projection!/4 (lines 154-163) is the ONLY code path that creates an instance_projections row anywhere in this file, and it calls InstanceProjection.insert_changeset/2 + Repo.insert!/2 directly -- never routes through EventStore.append. Every test whose append/2 call is meant to reach the transactional phase (both AC1 sub-tests, AC2, AC3, AC5, AC6a, AC6b) calls seed_projection!/4 in its own setup, before calling EventStore.append. The three tests that deliberately do NOT seed (AC4, AC6c, and the :instance_not_started test) are exactly the three whose point is to exercise a pre-transaction-phase failure (P0/P4) that must never reach M1's guard at all -- correctly reasoned, not an oversight, and each test's own comment states this explicitly. No test anywhere uses append/2's return value or a first append/2 call to originate a row for a later append/2 call to build on.\n\nMinor, non-blocking observations (not gating, noted per the standing 'report even if not asked' practice): (1) TEST-DESIGNER's own handoff summary claims '8 describe blocks' -- actual count is 7 (terminated instance AC1, instance_not_started, concurrent appends AC2, idempotency AC3, invalid payload AC4, oversized payload AC5, tenant_id AC6). The test count (10) is accurate; only the describe-block count in the self-report is off by one. Does not affect coverage. (2) The design doc's P0 rejection text says attrs containing ':tenant_id (or \"tenant_id\")' should be rejected, but AC6c's test only exercises the atom-key form, not a string-key 'tenant_id' variant. AC6's literal acceptance-criterion text only names the atom-shaped scenario TEST-DESIGNER covered, so this doesn't block the gate, but ELIXIR-DEV/REVIEWER may want a follow-up unit test for the string-key form if it's meant to be part of this requirement's permanent regression coverage.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "id": "describe-block-count-off-by-one",
+        "severity": "note",
+        "summary": "TEST-DESIGNER's handoff summary claims 10 tests across 8 describe blocks; actual file has 10 tests across 7 describe blocks.",
+        "recommendation": "No action required -- test count and coverage are both correct, only the self-reported describe-block count was inaccurate. Flagging per the standing instruction not to silently pass over a self-report discrepancy even when non-blocking."
+      },
+      {
+        "id": "string-key-tenant_id-untested",
+        "severity": "note",
+        "summary": "Design doc §6.1 P0 states append/2 must reject attrs containing :tenant_id 'or \"tenant_id\"' (string form). AC6c's test only exercises the atom-key form.",
+        "recommendation": "Optional follow-up: add a second AC6c-style test for the string-keyed 'tenant_id' variant if this codebase's attrs-shape convention allows string keys to reach append/2 in practice. Not blocking -- AC6's literal text only requires the disagreement scenario TEST-DESIGNER already covers."
+      }
+    ],
+    "test_run_evidence": {
+      "command": "mix test test/letflow/event_store_test.exs --seed 0",
+      "result": "10 tests, 0 failures",
+      "duration": "Finished in 2.0 seconds (0.00s async, 2.0s sync)",
+      "postgres_container": "letflow-postgres-1 (postgres:16), confirmed healthy via docker compose ps before running"
+    },
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ025-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ025-20260817",
+      "push_status": "not_applicable",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (Step 4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,153 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-030
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ030-20260817
+date_utc: 2026-08-17T19:23:28Z
+
+git:
+  branch: feature/WF02-REQ030-20260817
+  branch_confirmed: true
+  commit: eb26c0d
+  commit_subject: "chore(WF02-REQ030): TEST-DESIGN-VALIDATOR re-review -- PASS, TOCTOU race genuinely forced"
+  note: >
+    Confirmed via `git status` / `git log -1` at start of this run. This run
+    dispatched after a Step 3 rework cycle: the original TOCTOU regression test
+    was rewritten (commit ba676cf) to use a telemetry-based rendezvous
+    (`[:letflow, :repo, :query]` handler pausing both racing tasks mid-transaction)
+    to deterministically force the activate/2 cross-row race instead of relying
+    on unsynchronized `Task.async` timing. TEST-DESIGN-VALIDATOR re-reviewed and
+    passed that rework (commit eb26c0d) before this step started.
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir/erl reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5] ... Elixir 1.20.3 (compiled with Erlang/OTP 29)"
+  postgres_container: letflow-postgres-1 (confirmed Up 2 days/healthy via `docker compose ps`, port 5462 -> 5432)
+  command_run: >
+    `mix test` (full suite, default/unpinned random seed) and `mix test --seed 0`
+    (full suite, second independent run) — the `test` alias runs ecto.create +
+    ecto.migrate --quiet first automatically. Plus 5 additional isolated re-runs
+    of `mix test test/letflow/definitions/store_test.exs --seed 0` specifically
+    targeting the "Regression -- activate/2 cross-row TOCTOU" describe block,
+    per the mid-task flake-sensitivity note about that test's telemetry
+    attach/detach needing to settle cleanly between runs.
+
+verdict: PASS
+
+checks:
+  test_suite_full_run1:
+    result: PASS
+    exit_code: 0
+    seed: 733283 (unpinned/random — ExUnit's own default)
+    summary_line_verbatim: "Result: 461 passed (4 properties, 457 tests)"
+    finished_line_verbatim: "Finished in 41.0 seconds (1.5s async, 39.4s sync)"
+    failures: 0
+    grep_check: >
+      Regex covering "[Ff]ailures:", "[Ff]ailure:", "** (", "Excluded:",
+      "Skipped:" over the full raw log — zero matches beyond the passing
+      summary line itself.
+
+  test_suite_full_run2:
+    result: PASS
+    exit_code: 0
+    seed: 0 (pinned, second independent run per this project's established
+      double-run practice)
+    summary_line_verbatim: "Result: 461 passed (4 properties, 457 tests)"
+    finished_line_verbatim: "Finished in 51.7 seconds (1.7s async, 49.9s sync)"
+    failures: 0
+    grep_check: "Same failure-marker regex, zero matches."
+
+  toctou_regression_isolated_5x:
+    file: test/letflow/definitions/store_test.exs
+    command_run: "mix test test/letflow/definitions/store_test.exs --seed 0 (x5, sequential)"
+    reason: >
+      This run's own mid-task note flagged the TOCTOU regression test as more
+      timing-sensitive than most (it forces a real Postgres cross-row race via
+      a telemetry rendezvous) and asked for a few extra isolated re-runs before
+      concluding pass/fail, rather than trusting one pass.
+    results: "27 passed / 0 failures, exit_code 0 — identical on all 5 runs"
+    conclusion: >
+      No flake observed across 5 consecutive isolated runs. The telemetry
+      handler attach/detach (via `handler_id = \"req030-toctou-#{System.unique_integer(...)}\"`,
+      a fresh unique ID per test) settled cleanly between runs with no
+      cross-run interference.
+
+  count_arithmetic_cross_check:
+    baseline_cited_in_task: "431 passed (4 properties, 427 tests) on main"
+    new_tests_added:
+      - "test/letflow/definitions/store_test.exs -- new file, 27 tests (verified via `git show main:test/letflow/definitions/store_test.exs` failing, i.e. file did not exist on main)"
+      - "test/letflow/definitions_test.exs -- 3 new tests added (2 new describe blocks: AC6 moduledoc-doc-content, AC9 moduledoc-doc-content, confirmed via `git diff main...HEAD`)"
+    expected: "427 + 27 + 3 = 457 tests, 4 properties (unchanged)"
+    actual_full_suite: "457 tests, 4 properties, 0 failures"
+    result: MATCHES — verified via actual run, not assumed from arithmetic.
+
+  known_noise_not_a_failure:
+    - >
+      [error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in NNNN ms.
+      — REQ-016's Ueberauth OIDC worker attempting to reach a deliberately
+      unreachable placeholder issuer configured in config/test.exs. Pre-existing
+      since REQ-016, already documented as expected noise in every prior WF-02
+      test report. Does not fail, skip, or affect any test.
+    - >
+      Verbose SQL query debug logging appears in raw mix test output
+      (config/test.exs's default test log level) for every DB-backed test,
+      including this run's new store_test.exs and its cross-row TOCTOU
+      transactions — established pattern, not itself evidence of failure
+      (confirmed by the zero-match failure-marker grep above).
+    - >
+      Pre-existing compiler warnings (ExUnit.Case.register_test/4 deprecated,
+      unused default-value optional args, a redefined-module warning for an
+      old migration) — unrelated to REQ-030, not errors, do not affect
+      pass/fail. Same warnings present in prior reports (e.g. REQ-033's).
+
+pre_existing_failures_found: none
+issues_filed: none
+issues_referenced_not_refiled: none
+
+test_file_breakdown:
+  new_req_030:
+    items:
+      - file: test/letflow/definitions/store_test.exs
+        detail: >
+          New file. Coverage of Letflow.Definitions' database-backed behavior
+          (create/2, activate/2, and the deterministically-forced activate/2
+          cross-row TOCTOU regression per design doc §6.2) against real
+          sandboxed Postgres per Letflow.DataCase — no mocked database.
+        subtotal: 27
+      - file: test/letflow/definitions_test.exs
+        detail: >
+          2 new describe blocks (AC6 and AC9 moduledoc-content checks) added
+          to the existing pure/database-free moduledoc-assertion file.
+        subtotal: 3
+  full_suite_grand_total: 457
+  cross_check: >
+    457 total (4 properties, 453 example tests) reproduced identically across
+    both full-suite runs (unpinned seed 733283, and pinned seed 0), matching
+    the task's cited baseline of 427 tests / 4 properties / 0 failures plus
+    this run's own 30 new tests (27 + 3). This Step 4 run is the independent,
+    formal re-verification of TEST-DESIGNER's and TEST-DESIGN-VALIDATOR's
+    prior claims for this rework cycle — run separately twice, plus 5
+    additional isolated re-runs specifically targeting the flake-flagged
+    TOCTOU regression test.
+
+diagnosis: "N/A — no failures observed in this run. Nothing routed back to ELIXIR-DEV or TEST-DESIGNER."
+
+regression_check_vs_baseline: >
+  Task-cited baseline: 431 passed (4 properties, 427 tests) on main, before
+  this branch's changes. This run adds test/letflow/definitions/store_test.exs
+  (27 new tests, new file) and 3 new describe-block tests in
+  test/letflow/definitions_test.exs, and reproduces 461 passed (4 properties,
+  457 tests) / 0 failures identically across two independent full-suite runs
+  (unpinned seed 733283 and pinned seed 0). Zero regressions confirmed. No
+  pre-existing failure was found anywhere in the suite this run
+  (Unblock-Everything rule: N/A, nothing to unblock; ISSUE_QUEUE protocol:
+  N/A, nothing to file).
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-17-WF02-REQ030-20260817.yaml
+  next_action: "Route to RELEASE-VALIDATOR (WF-02 Step 5) — no rework needed."

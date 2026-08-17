@@ -1,9 +1,10 @@
 # Stage 2 — Event store & workflow definitions
 
 Status: in progress. Depends on: S1. Requirements: REQ-022, REQ-023,
-REQ-024, REQ-025, REQ-026, REQ-027, REQ-028, REQ-029, REQ-032, REQ-033, REQ-035, REQ-036, REQ-041 (done);
-REQ-030, REQ-031, REQ-034, REQ-037,
-REQ-038, REQ-039, REQ-040, REQ-042 (`docs/requirements.yaml`) pending.
+REQ-024, REQ-025, REQ-026, REQ-027, REQ-028, REQ-029, REQ-030, REQ-032,
+REQ-033, REQ-035, REQ-036, REQ-039, REQ-041 (done);
+REQ-031, REQ-034, REQ-037, REQ-038, REQ-040, REQ-042
+(`docs/requirements.yaml`) pending.
 
 ## Scope
 

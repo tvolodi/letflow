@@ -1,0 +1,37 @@
+id: ISS-0034
+title: "docs/migration/stage-2-event-store-definitions.md header still lists REQ-039 as pending, though docs/requirements.yaml has shown it status: done since 2026-08-17T09:28:45Z"
+discovered_by: DOC-UPDATER
+discovered_in_run: WF02-REQ030-20260817
+discovered_at: 2026-08-17T19:38:36Z
+severity: MINOR
+description: >
+  While flipping REQ-030's status and updating
+  docs/migration/stage-2-event-store-definitions.md's header Requirements
+  line to move REQ-030 from the pending half to the done half (per the
+  established per-requirement precedent from REQ-025/REQ-029/REQ-033's own
+  DOC-UPDATER passes -- move only the just-completed requirement's own ID,
+  leave the rest of the file for WF-04 stage-gate bulk refresh), noticed
+  REQ-039 is still listed in that same line's pending half even though
+  docs/requirements.yaml has recorded REQ-039 as status: done since
+  2026-08-17T09:28:45Z (see docs/status/requirement_status.yaml's REQ-039
+  done entry, agent DOC-UPDATER).
+
+  Root cause: REQ-039's own DOC-UPDATER pass deliberately left the stage
+  doc completely untouched (explicit note in its requirement_status.yaml
+  entry: "stage-2-event-store-definitions.md checked and deliberately left
+  untouched... same established precedent as REQ-022/023/026/027/028").
+  That precedent (full bulk refresh only at WF-04 stage-gate closure) is
+  legitimate on its own, but it means REQ-039's position in the header line
+  was never updated by anyone, and no later per-requirement DOC-UPDATER
+  pass (REQ-025/029/033/030) had reason to touch REQ-039's own token while
+  moving its own. The header has been quietly wrong since 2026-08-17T09:28Z.
+
+  Not fixed in place during REQ-030's DOC-UPDATER pass: out of REQ-030's
+  own declared scope (its acceptance criteria don't name this file), and
+  core-directives.md's Unblock-Everything scope boundary treats an
+  unrelated, non-blocking defect merely noticed while working as something
+  to file and forward, not silently correct inline.
+affected_files:
+  - docs/migration/stage-2-event-store-definitions.md
+github_issue: https://github.com/tvolodi/letflow/issues/107
+status: open

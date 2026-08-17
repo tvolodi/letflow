@@ -1,0 +1,56 @@
+{
+  "handoff_id": "60e87f0a-1626-4804-9fd3-4f9aa24db1be",
+  "run_id": "WF02-REQ030-20260817",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ030-20260817/step-02c-security-reviewer.json",
+  "created_at": "2026-08-17T18:18:34Z",
+  "started_at": "2026-08-17T18:18:34Z",
+  "completed_at": "2026-08-17T18:23:04Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-030"],
+    "related_handoff_ids": ["06a0a641-8a16-41b7-afcc-6bbc4cdb82f4"],
+    "artifacts_in": ["lib/letflow/definitions.ex"],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "Security gate on REQ-030's implementation (branch feature/WF02-REQ030-20260817, git diff main...HEAD -- diff against lib/letflow/definitions.ex specifically, since main already has REQ-041's version of this file). This is explicitly a tenant-data path: create/2 derives and writes tenant_id, all CRUD operates on process_definitions (a tenant-scoped table), activate/2 runs a FOR UPDATE-locked transaction. INV-1 (tenant data isolation) and INV-7 (no SQL string interpolation) both plausible APPLIES. Pay particular attention to: (1) create/2's tenant_id rejection -- confirm a caller genuinely cannot smuggle a tenant_id/status value into the insert by any key-casing trick; (2) whether create/2's field-extraction deviation from the design (atom-key-only, per ELIXIR-DEV's own flagged deviation in handoffs/WF02-REQ030-20260817/step-02a-elixir-dev.json) has any security angle, not just a correctness one.",
+    "acceptance_criteria": [
+      "Scope test correctly determines this diff touches a tenant-data path",
+      "INV-1 through INV-8 each assessed APPLIES or NOT-APPLICABLE against the actual diff, with reasoning",
+      "Every APPLIES invariant's 'How to verify' procedure actually run",
+      "tenant_id rejection in create/2 independently verified to actually block a caller-supplied tenant_id/status under every key-casing form, by reading the real code",
+      "activate/2's FOR UPDATE locking assessed for any TOCTOU-style race that could let two concurrent activations both succeed against the same name"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: APPLIES (this is a tenant-data path) -- REQ-030's create/2 derives and writes tenant_id, all 7 functions (create/2, get_by_id/2, get_active_by_name/2, list/2, activate/2, deprecate/2, archive/2) operate on process_definitions (tenant-scoped table, REQ-027), activate/2 runs a FOR UPDATE-locked transaction. Diff = git diff main...HEAD -- lib/letflow/definitions.ex (591 insertions, REQ-030's addition only; REQ-041's compute_pack_update_plan/5 and classify_artefact/3 predate this branch and are unchanged). No migration touched (confirmed: git diff main...HEAD --stat -- priv/repo/migrations/ is empty) -- table's own migration was reviewed at REQ-027. INV-1 (tenant data isolation) -- APPLIES, PASS. (a) Every Repo call in the diff (Repo.insert, Repo.get x2, Repo.all x2, Repo.one, Repo.update_all x3) passes prefix: prefix -- no default-schema access. (b) No new migration in this diff; the table's REQ-027 migration already places it correctly outside the public schema. (c) tenant_id is derived via TenantProvisioning.tenant_id_for_schema_name(prefix) -- read that function directly (lib/letflow/tenant_provisioning.ex:102-115): it parses the validated 'tenant_<32hex>' schema-name string back into a canonical UUID with no DB lookup of caller data, so the tenant_id written is cryptographically tied to the same prefix used for the query's own :prefix option. Read create/2's actual code (lib/letflow/definitions.ex:332-347) and insert_definition/3 (:536-561): reject_key/4 checks Map.has_key?(attrs, :tenant_id) OR Map.has_key?(attrs, \"tenant_id\") -- both key forms -- before tenant_id is even derived, and the same for :status/\"status\"; if either is present in any form the function short-circuits with {:error, :tenant_id_not_accepted} / {:error, :initial_status_not_draft} and insert_definition/3 (the only place :tenant_id is set) is never reached. insert_definition/3 then does Map.put(attrs, :tenant_id, tenant_id) on attrs already proven key-free of both forms -- a caller-supplied value cannot reach the insert under any casing. status is doubly defended: create_changeset/2 (lib/letflow/definitions/process_definition.ex:112-117) does not include :status in its cast/3 allow-list at all, so even a status value that somehow survived would be silently dropped by Ecto; the column's schema default (:draft) is the only source. ELIXIR-DEV's flagged deviation (atom-key-only field extraction for name/version/graph, vs. the design's atom-or-string fallback) was traced for a security angle, not just correctness: reject_key/4 (the security-relevant check) is unaffected by the deviation since it independently checks both key forms regardless of how extraction reads other fields; a caller sending an all-string-keyed attrs map (no tenant_id/status keys) passes reject_key cleanly (correctly, nothing to reject) then fails at fetch_name/1 with {:error, :name_invalid} before ever reaching insert_definition/3 -- it cannot reach the Ecto.Changeset.convert_params/1 mixed-key crash the deviation was designed to avoid, and cannot bypass the tenant_id/status rejection either. No inconsistency found; the deviation is correctness-only, verified safe. INV-4 (secrets by reference only) -- NOT-APPLICABLE to this diff. grep -n \"System.get_env\" lib/letflow/definitions.ex and the hardcoded-secret heuristic grep both returned zero hits -- this diff resolves no secret material. INV-7 (no SQL string interpolation) -- APPLIES, PASS. grep -n \"Repo.query\" lib/letflow/definitions.ex: zero hits. All queries go through Ecto.Query composition (where/order_by/limit/lock/select), Repo.insert/get/all/one/update_all, and one fragment(\"? ILIKE ?\", d.name, ^pattern) using bound placeholders, not string interpolation. lock(\"FOR UPDATE\") is a hardcoded literal, not built from tenant input. prefix itself is validated as a strict tenant_<32hex> pattern by TenantProvisioning before use (defense in depth beyond Ecto's own parameterization of the :prefix option). INV-8 (no unhandled crashes on realistic failure paths) -- APPLIES, PASS. grep -n \"{:ok, .*} = \" lib/letflow/definitions.ex: zero hits, but the heuristic is incomplete by the invariant's own admission, so I broadened the search and manually reviewed the one bare pattern match the file actually contains: activate_draft/2's {1, [updated]} = Repo.update_all(...) (lib/letflow/definitions.ex:655-659). Traced this is safe under the 'immediately after a value the same function already validated' carve-out: it executes only inside run_activate_transaction's %ProcessDefinition{status: :draft} branch, on a row already SELECT ... FOR UPDATE-locked within the same transaction at the top of the same function -- no concurrent transaction can change that row's status between the lock and this UPDATE, so the WHERE id = ^id AND status = :draft predicate is guaranteed to match exactly the locked row. Every write function (create/2 via insert_definition/3, activate/2, deprecate/2, archive/2 via transition/4) wraps its DB body in try/rescue -> {:error, {:transaction_failed, exception}}, so even an unanticipated raise (e.g. a unique-constraint violation, see TOCTOU analysis below) is caught, not left to crash a shared process. deprecate/2 and archive/2's run_transition/4 uses a case (not a bare match) on the {count, rows} result of a guarded single-statement UPDATE, correctly handling the 0-rows case via fallback_lookup/2 instead of assuming success. activate/2 TOCTOU analysis (explicitly requested, task item 6): traced run_activate_transaction/4 and activate_draft/2 (lib/letflow/definitions.ex:606-662). The FOR UPDATE lock covers only the target row (id == ^id), not the set of rows sharing the activated definition's name -- so two concurrent activate/2 calls against two different DRAFT rows with the same name do NOT block each other at the application-lock level, and both could independently observe zero prior-active rows for that name in their own snapshot before committing. However this does not produce two coexisting ACTIVE rows: the uq_active_definition partial unique index (WHERE status = 'active', from REQ-027's migration, cited in process_definition.ex's own moduledoc) is the actual final arbiter -- Postgres's unique-index insert protocol makes the second transaction's activating UPDATE wait for the first to resolve, then fails it with a unique_violation once the first commits, since the second transaction's row would now genuinely conflict. That raised exception is caught by activate/2's try/rescue exactly as described above, surfacing as {:error, {:transaction_failed, exception}} for the loser -- never a silent double-success, never an unhandled crash, never a cross-tenant leak. This is a real finding but non-blocking for SECURITY-REVIEWER: no invariant is violated (data integrity holds, INV-8 crash-safety holds), it is a code-quality/idiom concern (the losing caller gets a raw {:transaction_failed, %Postgrex.Error{}} instead of a clean domain error the way create/2's duplicate_name_version path provides) -- flagging it in this summary for REVIEWER's Step 2d attention rather than treating it as a security gate failure. INV-2, INV-3, INV-5 -- NOT-APPLICABLE: no multi-tenant API surface exists yet (S4 not started, per their own 'Reference: None yet' entries in security-invariants.md); this diff is a context-module (lib/letflow/) change only, no controller/plug/lookup-by-ID HTTP endpoint. INV-6 -- satisfied by this review itself (this handoff explicitly lists every invariant's applicability and verification). All applicable invariants (INV-1, INV-7, INV-8) PASS; none FAIL. No BLOCKER issues found.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ030-20260817/step-02c-security-reviewer.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "activate/2's concurrent-activation race (two DRAFT rows, same name, concurrent activate/2 calls) is correctly prevented from producing two ACTIVE rows by the uq_active_definition DB-level unique index, but the losing transaction surfaces as a raw {:error, {:transaction_failed, %Postgrex.Error{}}} rather than a clean domain error like create/2's {:error, :duplicate_name_version}. Not a security defect (no cross-tenant leak, no data-integrity violation, no unhandled crash -- caught by activate/2's own try/rescue) -- forwarding to REVIEWER (Step 2d) as an idiom/error-contract cleanliness observation, not a gate failure.",
+        "affected_requirement": "REQ-030"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ030-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ030-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (Step 2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

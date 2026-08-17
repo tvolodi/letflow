@@ -42,9 +42,9 @@
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ030-20260817",
-      "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "commit_sha_list": ["f3ee92c37df295618a5a9a23b0fe9bb10f35f177"],
+      "remote_branch": "origin/feature/WF02-REQ030-20260817",
+      "push_status": "ok",
       "pr_url": null,
       "pr_create_error": null
     },

@@ -595,6 +595,26 @@
       "queue_agent_id": "hetzner-wt2-orch",
       "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
       "note": "Checked against WF02-REQ030-20260817 (concurrent, directory-level lib/letflow/definitions lock, still at Step 00 per its own registry entry) -- no actual overlap, REQ-030 targets store.zig CRUD, REQ-037 modifies promotion_review.ex (REQ-035-created) and creates promotion.ex, neither touched by REQ-030 scope."
+    },
+    {
+      "run_id": "WF03-ISS0035-20260817",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "stage": null,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "test/letflow/definitions/promotion_digest_test.exs",
+        "test/letflow/definitions/store_test.exs"
+      ],
+      "lock_acquired_at": "2026-08-17T19:52:16Z",
+      "lock_released_at": "2026-08-17T19:59:40Z",
+      "released_lock": true,
+      "last_known_step": "PR #110 squash-merged into main as 80e39e7 (fast-forward), queue task 81 released done, GH#108 closed.",
+      "backfilled": false,
+      "queue_task_id": 81,
+      "queue_agent_id": "tvolodi-orch",
+      "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
+      "note": "letflow-queue task 81 (GH#108): mix format --check-formatted failure in test/letflow/definitions/promotion_digest_test.exs, discovered by ELIXIR-DEV during WF02-REQ037-20260817's Step 2a rework on the other worktree. The queue task's own description mislabeled its local record as docs/issues/ISS-0034.yaml (an unrelated, already-resolved issue about stage-2 doc header staleness) -- filed the correct record as docs/issues/ISS-0035.yaml instead. Handled directly by ORCH under ORCHESTRATOR.md's sizing exception (single-bug-class, mechanical, zero design ambiguity) rather than the full ISSUE-FIXER/CODE-DESIGNER chain, but still obtained independent REVIEWER sign-off before merging per core-directives.md's producer/validator principle. Running `mix format` repo-wide (rather than scoped to just the one named file) to fix the reported failure incidentally surfaced a second, previously-undetected drift in test/letflow/definitions/store_test.exs (REQ-030's own TOCTOU regression test file, merged earlier this session) -- same root cause (long assert/refute lines), same trivial fix; included in the same commit rather than filed separately since splitting identical-cause mechanical fixes would only add bookkeeping overhead. REVIEWER independently verified: diff scope limited to exactly the two test files plus the new issue record, every changed line whitespace/line-break only (no assertion/logic/expected-value changes), mix format --check-formatted clean, mix compile --warnings-as-errors clean, mix test 570/570 (4 properties, 566 tests) matching pre-fix baseline exactly. PR #110 merge was a true fast-forward (0c05901..80e39e7), no CI configured for this repo -- merged on local + independent-REVIEWER verification alone, per GIT_MERGE.md's documented interim behavior."
     }
   ]
 }

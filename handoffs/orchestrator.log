@@ -436,3 +436,6 @@
 2026-08-17T20:59:28Z | DISPATCH | WF-02 | WF02-REQ034-20260817 | ORCH -> TEST-RUNNER | Step 4 full suite run.
 2026-08-17T21:02:15Z | PASS | WF-02 | WF02-REQ034-20260817 | TEST-RUNNER -> ORCH | Step 4: MIX_TEST_PARTITION=2 mix test run twice (unpinned + seed 0), 4 properties, 598 tests, 0 failures both times. New file isolated: 5/5. No pre-existing failures found, nothing to file. report-2026-08-17-WF02-REQ034-20260817.yaml written. Committed b838c5f, pushed.
 2026-08-17T21:02:17Z | DISPATCH | WF-02 | WF02-REQ034-20260817 | ORCH -> RELEASE-VALIDATOR | Step 5: independent re-verification.
+2026-08-17T21:02:17Z | DISPATCH | WF-02 | WF02-REQ034-20260817 | ORCH -> RELEASE-VALIDATOR | Step 5 independent re-verification.
+2026-08-17T21:04:08Z | PASS | WF-02 | WF02-REQ034-20260817 | RELEASE-VALIDATOR -> ORCH | Step 5: independently re-ran full suite (4 properties, 598 tests, 0 failures) and isolated file (5/5), matched Step 4's report without trusting it. All 4 REQ-034 ACs confirmed against actual shipped code/tests directly. requirements.yaml/requirement_status.yaml confirmed accurately still in_progress, not prematurely flipped. Committed ac8feb0, pushed.
+2026-08-17T21:05:01Z | DISPATCH | WF-02 | WF02-REQ034-20260817 | ORCH -> DOC-UPDATER | Step 6: flip REQ-034 in_progress -> done, append done event, check stage-2 doc/README for needed updates.

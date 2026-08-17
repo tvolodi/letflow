@@ -1,0 +1,81 @@
+{
+  "handoff_id": "b3e1a2c4-0003-4f1a-9a10-req034step01b",
+  "run_id": "WF02-REQ034-20260817",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ034-20260817/step-01b-code-design-validator.json",
+  "created_at": "2026-08-17T20:38:30Z",
+  "started_at": "2026-08-17T20:38:30Z",
+  "completed_at": "2026-08-17T20:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-034"],
+    "related_handoff_ids": ["step-01-code-designer.json"],
+    "artifacts_in": ["lib/letflow/design/export_import.md", "docs/requirements.yaml"],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "WF-02 Step 1b HARD GATE: independently validate lib/letflow/design/export_import.md against REQ-034's 4 acceptance criteria. Read the design doc directly -- do not trust CODE-DESIGNER's handoff summary. Branch feature/WF02-REQ034-20260817 is current.",
+    "acceptance_criteria": [
+      "Every REQ-034 acceptance criterion has a corresponding design element, no TBD/deferral",
+      "Function signatures fully specified (name, inputs, outputs, error cases) for export/2 and import/3",
+      "Error handling shape stated as {:ok,_}|{:error,_} tags, not left implicit",
+      "Cross-module dependencies listed (REQ-030's create/2 and get_by_id/2)",
+      "No implementation code present (no .ex code bodies, signatures/types only)",
+      "The added imported_by parameter and other design decisions not literally named in REQ-034's text are reasoned/flagged, not silently invented"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-read lib/letflow/design/export_import.md in full (not CODE-DESIGNER's handoff summary), REQ-034's entry in docs/requirements.yaml (4 acceptance criteria), and re-derived lib/letflow/definitions.ex's create/2 (spec at line 330, def at 332) and get_by_id/2 (spec at line 354, def at 356) plus process_definition.ex's schema/changesets directly from shipped code. All 6 gate checks pass; no rework required.",
+    "artifacts_out": [],
+    "issues": [],
+    "checks": [
+      {
+        "criterion": "Every REQ-034 acceptance criterion has a corresponding design element, no TBD/deferral",
+        "result": "PASS",
+        "evidence": "Design §10 traceability table maps all 4 REQ-034 acceptance criteria (byte-for-byte graph round trip; new-id-always-assigned; no-bypass validator rejection; distinct unknown-schema-version rejection) to concrete design elements (§4.2 E1, §4.3 I1/INV-EI-1, §4.3 I2/INV-EI-2, §4.3 I0/INV-EI-4). grep for 'TBD' in the file matches only the closing disclaimer line 485 ('no \"TBD\"'), no actual deferral language found anywhere else."
+      },
+      {
+        "criterion": "Function signatures fully specified (name, inputs, outputs, error cases) for export/2 and import/3",
+        "result": "PASS",
+        "evidence": "§4.2: @spec export(id :: Ecto.UUID.t(), opts :: opts()) :: {:ok, ExportDocument.t()} | export_error(), export_error fully enumerated. §4.3: @spec import(document :: ExportDocument.t(), imported_by :: Ecto.UUID.t(), opts :: opts()) :: {:ok, ProcessDefinition.t()} | import_error(), import_error fully enumerated including the passed-through create_error() union."
+      },
+      {
+        "criterion": "Error handling shape stated as {:ok,_}|{:error,_} tags, not left implicit",
+        "result": "PASS",
+        "evidence": "export_error and import_error types both explicit tagged-tuple unions; every branch (E0 fetch, I0 schema-version gate, I2 create delegation) documented as propagating a typed {:error, _} or returning {:ok, _}, no unresolved match anywhere in the doc."
+      },
+      {
+        "criterion": "Cross-module dependencies listed (REQ-030's create/2 and get_by_id/2)",
+        "result": "PASS",
+        "evidence": "§7 explicitly lists Letflow.Definitions.get_by_id/2 and create/2 (both cited as shipped, REQ-030), ProcessDefinition (REQ-027), and explicitly notes TenantProvisioning.tenant_id_for_schema_name/1 is NOT called directly (forwarded via opts only) and Graph is not depended on directly (INV-EI-2) -- confirmed by independently reading lib/letflow/definitions.ex in full: create/2 (spec line 330, def line 332) requires create_attrs with required(:created_by) => Ecto.UUID.t() (lines 115-122), matching the design's §4.0 claim verbatim; get_by_id/2 (spec line 354, def line 356) returns {:ok, ProcessDefinition.t()} | {:error, :not_found} | common_error(), matching the design's export_error type exactly."
+      },
+      {
+        "criterion": "No implementation code present (no .ex code bodies, signatures/types only)",
+        "result": "PASS",
+        "evidence": "grep for 'def ', 'case ... do', 'with ... do' inside the doc found none -- the only 'end' tokens (lines 121, 124) close the §2 module-layout skeleton, which contains a comment placeholder ('# export/2, import/3, and their private pipeline helpers') with no real body. The ExportDocument defstruct/@enforce_keys/@type block (§4.1) is a struct type-shape declaration, not a function body -- this exact pattern (defstruct + @enforce_keys + @type t inside a design doc) is the established project convention, confirmed present in lib/letflow/definitions/graph.ex's own shipped Node/Edge/Violation struct defs (lines 79-101, 118-119) that this design explicitly cites as its precedent. Pipeline steps (E0/E1, I0/I1/I2) are prose + illustrative map/struct literals describing what gets built, not compilable function bodies."
+      },
+      {
+        "criterion": "The imported_by parameter (not literally named in REQ-034's text) is explicitly reasoned/flagged rather than silently invented",
+        "result": "PASS",
+        "evidence": "§4.3 explicitly states 'imported_by is this design's own addition -- not named anywhere in REQ-034's text' and justifies it: create/2's create_attrs() type requires required(:created_by) => Ecto.UUID.t() -- independently re-confirmed directly against lib/letflow/definitions.ex lines 115-122, this requirement is real, not fabricated. ExportDocument (§4.1, REQ-034's own enumerated 7-field list) carries no creator-identity field, so import/3 has no other source for the required key. OQ-3 (§8) further flags the open question of who supplies imported_by at the eventual call site. This is genuine reasoning traced to a real, re-verified shipped-code constraint, not an invented parameter."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ034-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ034-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (Step 2a)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

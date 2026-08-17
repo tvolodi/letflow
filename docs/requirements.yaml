@@ -1556,7 +1556,7 @@ requirements:
   - id: REQ-034
     title: Definition export/import (export_import.zig, PD-09)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S2
     impl_order: 52  # letflow-queue task id
     description: >

@@ -1,0 +1,50 @@
+{
+  "handoff_id": "b3e1a2c4-0007-4f1a-9a10-req034step03",
+  "run_id": "WF02-REQ034-20260817",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ034-20260817/step-03-test-designer.json",
+  "created_at": "2026-08-17T20:47:27Z",
+  "started_at": "2026-08-17T20:47:27Z",
+  "completed_at": "2026-08-17T20:54:33Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-034"],
+    "related_handoff_ids": ["step-02a-elixir-dev.json", "step-02d-reviewer.json"],
+    "artifacts_in": ["lib/letflow/definitions/export_import.ex", "lib/letflow/design/export_import.md"],
+    "owned_modules": ["test/letflow/definitions", "test/specs"]
+  },
+  "task": {
+    "description": "WF-02 Step 3: write test/specs/REQ-034.md and test code under test/letflow/definitions/ for lib/letflow/definitions/export_import.ex. Scope test: this module has real executable surface (export/2, import/3) -- continue to full procedure, do not skip.",
+    "acceptance_criteria": [
+      "export/1 on an existing definition produces a document whose graph field round-trips byte-for-byte comparable back through import/1's graph field -- has a runnable test",
+      "import/1 always assigns a new id distinct from the source document's id field, even when the source id happens to already exist as a definition in the target tenant -- has a runnable test",
+      "import/1 on a document with a graph that fails REQ-028's validateGraph() is rejected the same way REQ-030's create/1 rejects an invalid graph directly -- no bypass path -- has a runnable test",
+      "import/1 on a document whose bpm_export_schema_version is not 'bpm/definition/v1' is rejected with a distinct unknown-schema-version error -- has a runnable test",
+      "test fixtures use per-test unique data, no cross-test pollution",
+      "tests are self-sufficient, no dependency on execution order",
+      "no hardcoded secrets/connection strings"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: real executable surface (export/2, import/3) -- full procedure, not skipped. Wrote test/specs/REQ-034.md (4 ACs, each with rationale beyond restating the criterion) and test/letflow/definitions/export_import_test.exs (5 tests, real Postgres via Letflow.DataCase, async: false, per-test provisioned tenants, unique_name/1 + Ecto.UUID.generate() identifiers, no shared fixtures). AC1: 1 test, chains source-row graph == export/2's document.graph == import/3's returned imported.graph == the imported row re-read directly from Postgres, using a graph with a nested attributes map plus an unrelated extra key to catch shallow-copy bugs. AC2: 2 tests -- baseline (different-tenant import gets a fresh id) plus the literal edge case: a real pre-existing row is inserted directly (via a pre-set non-nil :id on the struct, since create/2's changeset never casts :id) under document.id in the target tenant before import, then import/3 is proven to assign a distinct id and leave the pre-existing collision row unmodified (count_by_id unchanged, name/version unchanged). AC3: 1 test -- import/3 vs. a direct Definitions.create/2 call built from the exact attrs import/3's own design (doc doc Sec4.3 step I1) constructs, asserting the two returned {:error, {:graph_validation_failed, violations}} values are identical (not just both-error), proving no separate/diverging validation path. AC4: 1 test -- an otherwise-fully-valid document (valid graph/name/version) with bpm_export_schema_version != 'bpm/definition/v1' is rejected with the exact {:error, {:unknown_schema_version, actual}} tuple, with an explicit refute against the graph_validation_failed shape it would need if the gate were bypassed. Per REVIEWER's Step 2d non-blocking note, :tenant_id_not_accepted and :initial_status_not_draft (create_error() variants structurally unreachable through import/3's own attrs builder) are deliberately not covered. Verified: MIX_ENV=test mix do compile --warnings-as-errors + test --warnings-as-errors test/letflow/definitions/export_import_test.exs -> 5 tests, 0 failures, 0 warnings. Full test/letflow/definitions/ directory (271 tests) also passes with 0 failures -- no regression. One pre-existing, unrelated warning (valid_review_attrs/1 in promotion_review_migration_test.exs, confirmed present with export_import_test.exs removed) blocks --warnings-as-errors only at the whole-directory level, not attributable to this change. mix format --check-formatted clean on both new files.",
+    "artifacts_out": ["test/specs/REQ-034.md", "test/letflow/definitions/export_import_test.exs"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ034-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ034-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

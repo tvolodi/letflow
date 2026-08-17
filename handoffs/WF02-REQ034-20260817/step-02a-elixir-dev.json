@@ -1,0 +1,51 @@
+{
+  "handoff_id": "b3e1a2c4-0004-4f1a-9a10-req034step02a",
+  "run_id": "WF02-REQ034-20260817",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ034-20260817/step-02a-elixir-dev.json",
+  "created_at": "2026-08-17T20:41:01Z",
+  "started_at": "2026-08-17T20:41:01Z",
+  "completed_at": "2026-08-17T20:42:44Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-034"],
+    "related_handoff_ids": ["step-01-code-designer.json", "step-01b-code-design-validator.json"],
+    "artifacts_in": ["lib/letflow/design/export_import.md"],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "WF-02 Step 2a: implement lib/letflow/definitions/export_import.ex per lib/letflow/design/export_import.md (PASSed CODE-DESIGN-VALIDATOR). Verify branch feature/WF02-REQ034-20260817 first. No new migrations needed (design confirms this reuses REQ-027's process_definitions table via REQ-030's create/2 and get_by_id/2 -- no direct DB access from this module).",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "mix format --check-formatted exits 0 (fix formatting if it fails)",
+      "export/2 and import/3 implemented exactly per the design's signatures and error shapes",
+      "import/3 never includes :id in create_attrs passed to create/2 (design INV-EI-1)",
+      "import/3 checks bpm_export_schema_version before calling create/2 and returns the distinct {:error, {:unknown_schema_version, actual}} on mismatch (design INV-EI-4)",
+      "import/3 delegates 100% of graph/attribute validation to create/2 -- no direct Graph module calls (design INV-EI-2, no bypass)",
+      "graph field passed through unmodified end to end (design INV-EI-3, byte-for-byte round trip)",
+      "self-review checklist per WF-02 Step 2a: no SQL string interpolation, no unresolved {:ok,_} = match on external I/O, new public functions have @doc"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented lib/letflow/definitions/export_import.ex (Letflow.Definitions.ExportImport) exactly per lib/letflow/design/export_import.md: @export_schema_version \"bpm/definition/v1\", nested ExportDocument struct (7 fields per §4.1), export/2 (delegates to Definitions.get_by_id/2, copies name/version/description/graph verbatim, read-only), import/3 (imported_by param added per design §4.3 OQ-3 reasoning; I0 schema-version gate runs first and returns {:error, {:unknown_schema_version, actual}} before any tenant/DB touch; I1 builds create_attrs with no :id/:stage/:tenant_id/:status keys; I2 delegates unconditionally to Definitions.create/2 with the return passed through unchanged, no Graph module calls anywhere in this file). `mix compile --warnings-as-errors` exit 0: 'Compiling 1 file (.ex)\\nGenerated letflow app'. `mix format --check-formatted lib/letflow/definitions/export_import.ex` exit 0 (silent, no diff) confirming my new file itself is correctly formatted; a full-repo `mix format --check-formatted` still exits 1, but diffing its output before vs. after adding this file (via git stash) showed the failure list is byte-identical -- all pre-existing issues in unrelated files (e.g. test/letflow/definitions_test.exs), none introduced by this change. Self-review: no direct Letflow.Definitions.Graph calls (grep confirmed), no unresolved `{:ok, _} =` match on external I/O, no SQL string interpolation (no direct DB access in this module), both export/2 and import/3 carry @doc, document.id never appears in the create_attrs map built by import/3 (grep confirmed only referenced in moduledoc/struct-field context).",
+    "artifacts_out": ["lib/letflow/definitions/export_import.ex"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ034-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ034-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

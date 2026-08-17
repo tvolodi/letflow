@@ -1,0 +1,51 @@
+{
+  "handoff_id": "b3e1a2c4-0008-4f1a-9a10-req034step03b",
+  "run_id": "WF02-REQ034-20260817",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ034-20260817/step-03b-test-design-validator.json",
+  "created_at": "2026-08-17T20:56:01Z",
+  "started_at": "2026-08-17T20:56:01Z",
+  "completed_at": "2026-08-17T20:58:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-034"],
+    "related_handoff_ids": ["step-03-test-designer.json"],
+    "artifacts_in": ["test/specs/REQ-034.md", "test/letflow/definitions/export_import_test.exs"],
+    "owned_modules": ["test/letflow/definitions", "test/specs"]
+  },
+  "task": {
+    "description": "WF-02 Step 3b HARD GATE: independently validate test/specs/REQ-034.md and test/letflow/definitions/export_import_test.exs against REQ-034's 4 acceptance criteria. Read both files directly.",
+    "acceptance_criteria": [
+      "Each of REQ-034's 4 acceptance criteria has at least one runnable test targeting it, no @tag :skip without a passing counterpart",
+      "No 'TODO: implement test' left in the spec",
+      "Test fixtures use per-test unique data, no shared hardcoded IDs, no cross-test pollution",
+      "Tests are self-sufficient, no dependency on other tests running first",
+      "No hardcoded secrets/connection strings in test files",
+      "Mutation-verify at least the id-collision edge case (AC2) and the no-bypass claim (AC3) actually detect a real regression, not just happen to pass"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently read docs/requirements.yaml's REQ-034 entry (4 literal ACs), test/specs/REQ-034.md, test/letflow/definitions/export_import_test.exs, and lib/letflow/definitions/export_import.ex. All 4 ACs have real, runnable coverage against the shipped Letflow.Definitions.ExportImport module (real Postgres via DataCase, no mocks): AC1 (round-trip test, describe block at line 204), AC2 (2 tests at 240 and 255, including the literal id-collision-in-target-tenant edge case), AC3 (no-bypass test at 305, asserting import/3 vs a direct create/2 call return byte-identical results), AC4 (schema-version-mismatch test at 355). No @tag :skip anywhere in the file. No 'TODO: implement test' in the spec (grep clean). No hardcoded secrets/connection strings (grep clean; only the spec's own checklist line mentions 'secrets'). Fixtures: every test calls provisioned_tenant() independently (own CREATE SCHEMA), unique_name/1 (System.unique_integer-suffixed) for every definition name, fresh Ecto.UUID.generate() for every created_by/imported_by -- no shared/hardcoded IDs, no execution-order dependency, confirmed by direct reading of every test body. Ran `MIX_TEST_PARTITION=2 mix test test/letflow/definitions/export_import_test.exs` myself: 5 tests, 0 failures (matches spec's claim).\n\nMUTATION CHECK 1 (AC3, no-bypass): edited import/3 to skip Definitions.create/2 entirely and return {:ok, %ProcessDefinition{...}} unconditionally built from document fields. Re-ran the suite: 3 failures, including the AC3 test (line 305) and AC1 (collateral, since nothing was persisted for the reread) and one AC2 test (collateral, same reason). Confirms the AC3 no-bypass test genuinely detects a bypass regression. Reverted; `git diff` on the file empty after revert.\n\nMUTATION CHECK 2 (AC2, id-collision) -- IMPORTANT NUANCE, not a gap: the literal mutation instructed (add `id: document.id` to import/3's attrs builder) was applied, recompiled (`mix compile` confirmed 1 file recompiled), and re-run: still 5 tests, 0 failures -- the mutation is a NO-OP. Root cause confirmed by direct reading of lib/letflow/definitions/process_definition.ex line 114: create_changeset/2's cast list is `[:tenant_id, :name, :version, :description, :stage, :graph, :created_by]` -- `:id` is never cast, so an `:id` key in the attrs map passed to create/2 is silently ignored regardless of which caller supplies it. This exactly matches test/specs/REQ-034.md's own stated reasoning (AC2 section, 'Why a direct Repo.insert! fixture, not create/2') for why the id-collision fixture had to use insert_row_with_id!/4 instead of create/2 -- the spec already documents this cast-list behavior, so this is not a previously-unknown gap, just independent confirmation. Since the literal instructed mutation could never have produced a real regression (id is architecturally protected two layers deep: import/3 never builds an :id key, AND create_changeset would ignore it even if it did), I substituted an equivalent mutation that DOES produce real id-reuse in observable behavior: changed import/3's success branch to `{:ok, %{definition | id: document.id}}` after a real create/2 call. Re-ran: 3 failures, including BOTH AC2 tests (lines 240 and 255, the basic case and the literal collision-precondition edge case) and AC1 (collateral, reread-by-imported.id now targets the wrong/colliding id). This confirms the AC2 tests do fail under a genuine id-reuse regression. Reverted; `git diff` on the file empty after revert.\n\nFinal `git status --short`: only the untracked handoff JSON this step is writing -- no leftover diff from either mutation.",
+    "artifacts_out": [],
+    "issues": [
+      "Non-blocking note for TEST-DESIGNER/design record: the naive 'reintroduce id: document.id in import/3's attrs' mutation is structurally inert (create_changeset/2 never casts :id), so it cannot serve as a meaningful mutation-test vector for AC2 in future regression drills -- a mutation on the returned struct's id (or on process_definition.ex's cast list) is needed to actually exercise the AC2 tests' failure path. No spec/test change required now; flagging for whoever next runs a mutation-check pass on this file."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ034-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ034-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (Step 4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

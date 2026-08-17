@@ -615,6 +615,31 @@
       "queue_agent_id": "tvolodi-orch",
       "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
       "note": "letflow-queue task 81 (GH#108): mix format --check-formatted failure in test/letflow/definitions/promotion_digest_test.exs, discovered by ELIXIR-DEV during WF02-REQ037-20260817's Step 2a rework on the other worktree. The queue task's own description mislabeled its local record as docs/issues/ISS-0034.yaml (an unrelated, already-resolved issue about stage-2 doc header staleness) -- filed the correct record as docs/issues/ISS-0035.yaml instead. Handled directly by ORCH under ORCHESTRATOR.md's sizing exception (single-bug-class, mechanical, zero design ambiguity) rather than the full ISSUE-FIXER/CODE-DESIGNER chain, but still obtained independent REVIEWER sign-off before merging per core-directives.md's producer/validator principle. Running `mix format` repo-wide (rather than scoped to just the one named file) to fix the reported failure incidentally surfaced a second, previously-undetected drift in test/letflow/definitions/store_test.exs (REQ-030's own TOCTOU regression test file, merged earlier this session) -- same root cause (long assert/refute lines), same trivial fix; included in the same commit rather than filed separately since splitting identical-cause mechanical fixes would only add bookkeeping overhead. REVIEWER independently verified: diff scope limited to exactly the two test files plus the new issue record, every changed line whitespace/line-break only (no assertion/logic/expected-value changes), mix format --check-formatted clean, mix compile --warnings-as-errors clean, mix test 570/570 (4 properties, 566 tests) matching pre-fix baseline exactly. PR #110 merge was a true fast-forward (0c05901..80e39e7), no CI configured for this repo -- merged on local + independent-REVIEWER verification alone, per GIT_MERGE.md's documented interim behavior."
+    },
+    {
+      "run_id": "WF02-REQ034-20260817",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-034"
+      ],
+      "stage": "S2",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/definitions",
+        "priv/repo/migrations",
+        "test/letflow/definitions",
+        "test/specs",
+        "test/reports"
+      ],
+      "lock_acquired_at": "2026-08-17T20:30:32Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (git-setup) COMPLETED -- branched feature/WF02-REQ034-20260817 from origin/main, pushed.",
+      "backfilled": false,
+      "queue_task_id": 52,
+      "queue_agent_id": "hetzner-wt2-orch",
+      "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
+      "note": "No other run active in registry at claim time (all prior entries COMPLETED). owned_modules directory-level lock on lib/letflow/definitions -- will narrow to the specific export_import.ex file once CODE-DESIGNER names it, same pattern as REQ-037 note."
     }
   ]
 }

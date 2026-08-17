@@ -3299,3 +3299,51 @@ history:
       that same already-general rule (REQ-037's insert_review/2 write path),
       not a new case the decision record needs to additionally describe, so
       no edit made to the decision record itself.
+  - req: REQ-034
+    event: started
+    agent: ORCH
+    at: "2026-08-17T20:30:32Z"
+    note: >
+      WF02-REQ034-20260817 started (letflow-queue task 52, claimed by
+      hetzner-wt2-orch). Branch feature/WF02-REQ034-20260817 created from
+      freshly-fetched origin/main (worktree variant, this checkout is
+      secondary to ~/letflow) and pushed. Scope: Letflow.Definitions.ExportImport
+      module (export_import.zig PD-09) -- EXPORT_SCHEMA_VERSION constant,
+      export/1, import/1, per REQ-034's four acceptance criteria.
+  - req: REQ-034
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-17T21:06:08Z"
+    note: >
+      RELEASE-VALIDATOR PASSed REQ-034 (Definition export/import --
+      export_import.zig PD-09): 1 new module
+      (Letflow.Definitions.ExportImport, export/2 + import/3) in
+      lib/letflow/definitions/export_import.ex, all 4 acceptance criteria
+      independently re-verified against the actual shipped code and tests
+      (not sourced from any agent's own summary), 5 new tests in
+      test/letflow/definitions/export_import_test.exs, full suite
+      MIX_TEST_PARTITION=2 mix test 598/598 (4 properties, 0 failures) --
+      re-run independently by RELEASE-VALIDATOR itself, matching
+      TEST-RUNNER's Step 4 report line-for-line. Flipped
+      docs/requirements.yaml REQ-034 status: in_progress -> done.
+      docs/migration/stage-2-event-store-definitions.md header's
+      Requirements line updated to move REQ-034 from the pending list to
+      the done list (same bulk-refresh-at-stage-gate pattern as
+      REQ-025/REQ-029/REQ-032/REQ-033/REQ-036/REQ-037's DOC-UPDATER runs;
+      not named in REQ-034's own acceptance criteria). README.md checked
+      and left untouched: read "Migration status" (intentionally states no
+      per-stage snapshot count, per ISS-0022) and "What's here today"/
+      "Running it" directly -- both describe only the original
+      ProcessInstance/InstanceSupervisor/TransitionEvent/Router slice
+      (3-endpoint Plug router, 4-state ASCII diagram); REQ-034 is
+      domain-logic only (a new lib/letflow/definitions/ module with no new
+      HTTP endpoint, no new curl-able command, no change to the ASCII
+      state diagram), consistent with REQ-025/REQ-032/REQ-033/REQ-036/
+      REQ-037's DOC-UPDATER precedent for domain-logic-only requirements.
+      Incidental finding during this run: TEST-DESIGNER discovered
+      test/letflow/definitions/promotion_review_migration_test.exs's
+      valid_review_attrs/1 has an unused default argument, tripping
+      --warnings-as-errors at the directory level (pre-existing, not
+      introduced by REQ-034, does not fail plain mix test) -- filed as
+      docs/issues/ISS-0036.yaml (MINOR, also GitHub #113), not fixed as
+      part of this requirement's scope.

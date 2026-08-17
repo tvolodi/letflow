@@ -1,39 +1,51 @@
 id: ISS-0036
-title: "test/letflow/definitions/promotion_review_migration_test.exs's valid_review_attrs/1 has an unused default argument, tripping --warnings-as-errors at the whole-directory level"
-discovered_by: TEST-DESIGNER
-discovered_in_run: WF02-REQ034-20260817
-discovered_at: "2026-08-17T20:55:32Z"
+title: "Future S4 SVC-03 422 renderer must not turn Violation.reason into a service-existence oracle (INV-5 tension)"
+discovered_by: SECURITY-REVIEWER
+discovered_in_run: WF02-REQ031-20260817
+discovered_at: 2026-08-17T20:37:45Z
 severity: MINOR
 description: >
-  `mix test --warnings-as-errors test/letflow/definitions/promotion_review_migration_test.exs`
-  emits:
+  Found during REQ-031's SECURITY-REVIEWER gate (Step 2c) on
+  lib/letflow/definitions/service_scope_validator.ex. REQ-031's AC3 requires
+  Letflow.Definitions.ServiceScopeValidator's not-registered case to be
+  "distinguishable... not just a different string" from the
+  owned-by-another-tenant case -- satisfied via two distinct closed-set
+  atoms on Violation.reason: :service_not_registered (the referenced
+  service_id does not exist anywhere) vs. :service_not_available_to_tenant
+  (it exists, scoped to a different tenant). This is correct and required
+  for REQ-031 itself; validate/3's caller (currently only test code) needs
+  that distinction.
 
-      warning: default values for the optional arguments in valid_review_attrs/1 are never used
-      test/letflow/definitions/promotion_review_migration_test.exs:125:8
+  The tension: docs/agents/instructions/security-invariants.md's INV-5
+  ("Not-found/forbidden indistinguishability") will require, once S4 builds
+  an HTTP layer, that a cross-tenant probe against a resource that exists
+  but belongs to another tenant return a response indistinguishable from
+  probing a resource that never existed. If a future S4 handler renders
+  activate/2's {:error, {:service_scope_violation, %Violation{reason: ...}}}
+  into an HTTP 422 body by naively exposing `reason` (or `message`, which
+  also differs: "is not registered" vs. "is not available to this tenant")
+  verbatim, an external caller could use a process-definition activation
+  call as an oracle to learn whether an arbitrary service_id/plugin_handler
+  string is registered anywhere in the system at all -- even one it has no
+  claim to and never should be able to confirm/deny the existence of. That
+  is exactly the kind of existence-vs-ownership signal INV-5 exists to
+  close off for lookup-by-ID endpoints.
 
-  `valid_review_attrs(overrides \\ %{})` (line 125) declares a default
-  value for `overrides`, but every call site in the file
-  (test/letflow/definitions/promotion_review_migration_test.exs:354,
-  364, 387, 395, 407, 420, 429, 434) passes an explicit map -- the
-  zero-arity call the default exists for never actually happens, so the
-  compiler correctly flags the default as dead.
-
-  This does not fail plain `mix test` (warnings aren't errors by
-  default) and did not block WF02-REQ034-20260817's own Step 3/4/5 --
-  discovered incidentally while TEST-DESIGNER ran
-  `mix test --warnings-as-errors` scoped to the new
-  export_import_test.exs file, then widened the check to confirm no
-  regression across the whole test/letflow/definitions/ directory
-  (271 tests, 0 failures) and noticed this pre-existing warning was
-  present with or without the new file.
-
-  Suggested fix (small, its own change): either drop the default
-  (`defp valid_review_attrs(overrides)`) since no call site relies on
-  it, or add a zero-arg call site if a default-attrs case is actually
-  meant to be exercised.
+  Not a defect in REQ-031 itself: no HTTP layer exists yet (S4 not started),
+  AC3 explicitly requires the distinction at the validate/3 API level, and
+  INV-5 is correctly NOT-APPLICABLE to this diff per SECURITY-REVIEWER's
+  Step 2c handoff (handoffs/WF02-REQ031-20260817/step-02c-security-reviewer.json).
+  Filed so the tension is not lost by the time S4 actually builds the
+  renderer: whichever future requirement builds the SVC-03 HTTP 422 body
+  must either (a) collapse both violation reasons into one generic
+  "service unavailable" response body for external callers while keeping
+  the distinct internal reason for logging/telemetry, or (b) make an
+  explicit, reviewed decision that this particular oracle is acceptable
+  (e.g. because service/plugin identifiers are not treated as sensitive
+  in Letflow's threat model) -- not silently render `reason`/`message`
+  as-is without that decision being made consciously.
 affected_files:
-  - test/letflow/definitions/promotion_review_migration_test.exs
-github_issue: https://github.com/tvolodi/letflow/issues/113
-status: resolved
-resolved_in_run: ADHOC-20260817-002
-resolved_at: "2026-08-17T21:14:13Z"
+  - lib/letflow/definitions/service_scope_validator.ex
+  - docs/agents/instructions/security-invariants.md
+github_issue: https://github.com/tvolodi/letflow/issues/112
+status: open

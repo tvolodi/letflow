@@ -1,0 +1,50 @@
+{
+  "handoff_id": "b07163a0-eb0a-4855-8a8e-88eef60bf7cf",
+  "run_id": "WF02-REQ036-20260817",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ036-20260817/step-01b-code-design-validator.json",
+  "created_at": "2026-08-17T18:15:46Z",
+  "started_at": "2026-08-17T18:15:46Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-036"],
+    "related_handoff_ids": ["aa4d6306-c8ef-4244-8612-e0ef677565b0"],
+    "artifacts_in": ["lib/letflow/design/promotion_plan.md"],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard gate on CODE-DESIGNER's output for REQ-036. Read lib/letflow/design/promotion_plan.md independently (not CODE-DESIGNER's handoff summary). Read REQ-036's full entry in docs/requirements.yaml first. Pay particular attention to Section 9 (Open questions) -- CODE-DESIGNER flagged 4 real data-model gaps: no permission-string concept in REQ-020's model (9.1, no built-in default for opts[:permission_checker]), no tenant production/test classification column (9.2, flagged default: classify-all-as-:test via opts[:tenant_classifier]), variable_schemas never ported (9.3, safe always-nil default), process_definitions.version free-form text with unconfirmed > semantics (9.4, flagged numeric-else-lexicographic fallback). Independently judge whether each of these is a legitimate flagged default (stated, reasoned, not scope creep) versus a silent guess or an unacceptable resolution -- do not just accept CODE-DESIGNER's own framing without checking the actual source files it cites (lib/letflow/identity/role_registry.ex, tenant_role.ex, group.ex, tenant.ex, lib/letflow/definitions/process_definition.ex).",
+    "acceptance_criteria": [
+      "Every one of REQ-036's 6 acceptance criteria maps to a concrete design element with no TBD/deferral",
+      "All 3 modules' function signatures fully specified (name, inputs, outputs, error cases)",
+      "Error handling shape stated explicitly ({:ok,_}|{:error,_} tags, not left implicit)",
+      "Cross-module dependencies listed",
+      "No implementation code present (no .ex code bodies -- signatures and type shapes only)",
+      "Independently verify the 4 open-question defaults in Section 9 against the actual source files cited, not just CODE-DESIGNER's summary of them",
+      "Independently verify the permission_checker default (9.1) is genuinely NOT a silently-invented enforcement mechanism -- it must have no built-in default per the design"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ036-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ036-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

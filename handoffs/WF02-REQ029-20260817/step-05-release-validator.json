@@ -1,0 +1,53 @@
+{
+  "handoff_id": "91165341-d44c-496d-a559-f2c7362dae87",
+  "run_id": "WF02-REQ029-20260817",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ029-20260817/step-05-release-validator.json",
+  "created_at": "2026-08-17T10:50:02Z",
+  "started_at": "2026-08-17T10:50:02Z",
+  "completed_at": "2026-08-17T10:52:30Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-029"],
+    "related_handoff_ids": ["40813fd8-d181-44f0-b053-2e4be531ac47"],
+    "artifacts_in": [
+      "lib/letflow/definitions/graph.ex",
+      "test/letflow/definitions/graph_test.exs",
+      "docs/requirements.yaml (REQ-029 entry)",
+      "docs/status/requirement_status.yaml"
+    ],
+    "owned_modules": ["lib/letflow/definitions", "test/letflow/definitions"]
+  },
+  "task": {
+    "description": "Independently re-verify REQ-029 is actually done on branch feature/WF02-REQ029-20260817. Re-run mix test yourself (do not trust TEST-RUNNER's report). Re-check each of REQ-029's 5 acceptance criteria against the actual current code/tests directly.",
+    "acceptance_criteria": [
+      "each of the 7 node types has at least one explicit test: HUMAN_TASK missing role, SERVICE_TASK missing endpoint, SERVICE_TASK invalid timeout (0 and >300000), TIMER missing/invalid duration, TIMER P0D explicitly accepted, and START/END/gateway types accepting no attributes",
+      "an EXCLUSIVE_GATEWAY edge with both a non-null condition and is_default: true is rejected",
+      "an EXCLUSIVE_GATEWAY with two edges both marked is_default: true is rejected",
+      "isValidCelSyntax-equivalent rejects at least one structurally invalid expression and accepts at least one structurally valid one, with an explicit test noting it performs no evaluation",
+      "extra undeclared attributes on a node do not cause a violation, demonstrated by an explicit test"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-ran mix test on branch feature/WF02-REQ029-20260817 (commit 6dc0c77, verified via `git branch --show-current`): full suite -> 4 properties, 401 tests, 0 failures, exit 0 (matches TEST-RUNNER's report but re-derived, not copied from it). Isolated run of test/letflow/definitions/graph_test.exs -> 40 tests, 0 failures. Re-checked each of REQ-029's 5 acceptance_criteria directly against lib/letflow/definitions/graph.ex and test/letflow/definitions/graph_test.exs (read both files in full, not summaries): (1) all 7 node types have explicit tests -- HUMAN_TASK missing role (lines 426-452, incl. absent/blank/whitespace/non-string sub-cases), SERVICE_TASK missing endpoint (460-484), SERVICE_TASK invalid timeout 0 and >300000 (492-522, plus boundary-acceptance test for 1/300000), TIMER missing/invalid duration (566-620, 7 distinct malformed-string branches), TIMER P0D explicitly accepted (577-580), START/END/EXCLUSIVE_GATEWAY/PARALLEL_GATEWAY accepting no attributes (629-639) -- confirmed against check_human_task_role/check_service_task_endpoint/check_service_task_timeout/check_timer_duration in graph.ex (lines 549-613) and their invalid_timeout?/invalid_duration?/blank_or_missing_string? helpers (619-651) -- PASS. (2) EXCLUSIVE_GATEWAY edge with non-null condition AND is_default:true rejected -- test lines 711-727 asserts valid:false with both :unexpected_edge_condition and :default_with_condition firing; matches check_non_gateway_condition_absence (772-788) and check_default_condition_conflict (793-803) in graph.ex -- PASS. (3) EXCLUSIVE_GATEWAY with two edges both is_default:true rejected -- test lines 733-751 (2 edges -> 1 :multiple_default_edges violation) and 753-769 (3 edges -> 2 violations, N-1 convention); matches check_single_default_edge (809-831) which groups by gateway source and drops the first default edge -- PASS. (4) valid_cel_syntax?/1 rejects >=1 invalid and accepts >=1 valid expression with an explicit no-evaluation test -- test lines 810-837: accepts well-formed exprs (812-814), rejects unclosed bracket/unterminated string/leading-trailing bare operator/empty/whitespace-only (821-826), and an explicit 'performs no evaluation' test (829-836) asserting a nonsense-but-well-formed variable reference still returns true; matches valid_cel_syntax?/1 (234-243) and its cel_brackets_and_strings_balanced?/cel_starts_or_ends_with_bare_operator? helpers (900-973), which never resolve identifiers -- PASS. (5) extra undeclared attributes on a node never cause a violation -- test lines 679-704 puts unrelated extra keys alongside a valid HUMAN_TASK role and a valid SERVICE_TASK endpoint/timeout_ms and asserts valid:true, violations:[]; matches graph.ex's design (each check helper only ever reads its own specific key via Map.get, no allow/deny-list mechanism) -- PASS. Staleness check: docs/requirements.yaml REQ-029 entry (line 1290) still reads status: in_progress (not yet flipped to done -- correct, DOC-UPDATER has not run); docs/status/requirement_status.yaml's only REQ-029 event so far is the 'started' entry at line 2764 (no premature 'done' event present). REQ-029's sole dependency, REQ-028, is status: done (docs/requirements.yaml line 1250) -- dependency satisfied. This is a WF-02 Step 5 run, not a WF-04 stage-gate check, so no docs/migration/stage-N-*.md REVIEWER sign-off section applies here. No docs/migration/decisions/ record found that shipped code contradicts. Verdict: PASS, all 5 acceptance criteria independently confirmed against actual current code and tests.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ029-20260817",
+      "commit_sha_list": ["6dc0c77"],
+      "remote_branch": "origin/feature/WF02-REQ029-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER (Step 6)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

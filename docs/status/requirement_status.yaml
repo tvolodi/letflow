@@ -2761,3 +2761,57 @@ history:
       027/028 (stage-N docs are refreshed in bulk at WF-04 stage-gate
       closure, not per-requirement). Flipped docs/requirements.yaml
       REQ-039 status: in_progress -> done.
+  - req: REQ-029
+    event: started
+    agent: ORCH
+    at: 2026-08-17T10:14:25Z
+    note: >
+      Started WF02-REQ029-20260817 -- Node-attribute and edge-condition
+      validators (graph.zig, PD-05/PD-06), extending REQ-028's
+      Letflow.Definitions.Graph module in place. Claimed via letflow-queue
+      task 44 (agent_id hetzner-orch), depends_on REQ-028 (done) satisfied.
+      Step 00 complete: branched feature/WF02-REQ029-20260817 from main
+      (bd46e17), pushed, baseline verified (mix compile clean). Routing to
+      CODE-DESIGNER for Step 1 -- REQ-028's own design doc (section 9.1)
+      left Node.attributes' typing provisional and explicitly flagged it
+      for REQ-029's CODE-DESIGNER to confirm or override, not silently
+      inherit.
+  - req: REQ-029
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-17T10:53:37Z
+    note: >
+      WF02-REQ029-20260817 complete. Shipped: validate_node_attributes/1
+      and the edge-condition checks (CHK-09..CHK-16ish, per
+      lib/letflow/design/req029-node-attribute-edge-condition-validators.md)
+      added to lib/letflow/definitions/graph.ex, extending REQ-028's module
+      in place -- per-node-type attribute rules (HUMAN_TASK role,
+      SERVICE_TASK endpoint/timeout_ms, TIMER duration_iso8601 incl. P0D
+      zero-delay and fractional-component rejection, START/END/gateways
+      requiring nothing, undeclared extra attributes silently ignored),
+      EXCLUSIVE_GATEWAY edge-condition rules (condition required on every
+      non-default outgoing edge, forbidden elsewhere, is_default/condition
+      mutual exclusion, at most one default edge per gateway), and a pure
+      syntax-only valid_cel_syntax?/1 (no evaluation, vendor/cel/cel.zig
+      being a stub per R-Co's own comment). Also resolved REQ-028's design
+      doc (req028-graph-structural-validator.md) section 9.1 open question
+      -- Node.attributes' provisional map() | nil typing -- confirmed as
+      final in req029-node-attribute-edge-condition-validators.md section 2
+      ("Resolving REQ-028 design doc section 9.1"), with one further pin
+      this design adds (see that section for detail); section 9.1 itself
+      was left as historical record, not rewritten. RELEASE-VALIDATOR
+      independently re-verified all 5 acceptance criteria directly against
+      lib/letflow/definitions/graph.ex and test/letflow/definitions/graph_test.exs
+      (not from TEST-RUNNER's report) and independently re-ran the suite:
+      full suite 4 properties, 401 tests, 0 failures; isolated
+      test/letflow/definitions/graph_test.exs run 40 tests, 0 failures.
+      Full gate sequence PASS: CODE-DESIGN-VALIDATOR -> SECURITY-REVIEWER ->
+      REVIEWER -> TEST-DESIGN-VALIDATOR -> TEST-RUNNER -> RELEASE-VALIDATOR.
+      Flipped docs/requirements.yaml REQ-029 status: in_progress -> done.
+      docs/migration/stage-2-event-store-definitions.md header's
+      Requirements line updated to move REQ-029 from the pending list to
+      the done list (only that line touched, per established
+      bulk-refresh-at-stage-gate precedent for the rest of the file).
+      README.md checked and left untouched: REQ-029 is a pure in-memory
+      extension to lib/letflow/definitions/graph.ex, no new HTTP route, and
+      nothing in the documented curl/mix run flow changed.

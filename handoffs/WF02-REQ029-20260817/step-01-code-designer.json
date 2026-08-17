@@ -1,0 +1,54 @@
+{
+  "handoff_id": "677c5330-b513-4f76-9489-463ae023b571",
+  "run_id": "WF02-REQ029-20260817",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ029-20260817/step-01-code-designer.json",
+  "created_at": "2026-08-17T10:14:59Z",
+  "started_at": "2026-08-17T10:14:59Z",
+  "completed_at": "2026-08-17T10:21:56Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-029"],
+    "related_handoff_ids": ["70ab8cf2-841d-42f3-8a5e-316bb53fa694"],
+    "artifacts_in": [
+      "docs/requirements.yaml (REQ-029 entry, and REQ-028/REQ-030 for context)",
+      "lib/letflow/design/req028-graph-structural-validator.md",
+      "lib/letflow/definitions/graph.ex",
+      "R-Co/src/definition/graph.zig",
+      "R-Co/src/design/definition.md"
+    ],
+    "owned_modules": ["lib/letflow/definitions", "test/letflow/definitions"]
+  },
+  "task": {
+    "description": "Design the extension to lib/letflow/definitions/graph.ex for REQ-029: validate_node_attributes/1 (PD-05 per-node-type required-attribute rules) and the edge-condition rules (PD-06) folded into validate_graph/1 or a sibling function, plus isValidCelSyntax's minimal structural CEL check. Branch feature/WF02-REQ029-20260817 already exists and is checked out. Must explicitly confirm or override REQ-028's design doc section 9.1 (Node.attributes typing: map() | nil vs raw JSON string) rather than silently inheriting it -- REQ-028's own design flagged this exact question for REQ-029 to resolve. Also state explicitly which function/module owns the edge-condition checks (definition.md gives no separate function name beyond 'the validateGraph() extension') per REQ-029's own text.",
+    "acceptance_criteria": [
+      "each of the 7 node types has at least one explicit test: HUMAN_TASK missing role, SERVICE_TASK missing endpoint, SERVICE_TASK invalid timeout (0 and >300000), TIMER missing/invalid duration, TIMER P0D explicitly accepted, and START/END/gateway types accepting no attributes",
+      "an EXCLUSIVE_GATEWAY edge with both a non-null condition and is_default: true is rejected",
+      "an EXCLUSIVE_GATEWAY with two edges both marked is_default: true is rejected",
+      "isValidCelSyntax-equivalent rejects at least one structurally invalid expression and accepts at least one structurally valid one, with an explicit test noting it performs no evaluation",
+      "extra undeclared attributes on a node do not cause a violation, demonstrated by an explicit test"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req029-node-attribute-edge-condition-validators.md, extending REQ-028's Letflow.Definitions.Graph (lib/letflow/definitions/graph.ex) with two new sibling public functions -- validate_node_attributes/1 (PD-05, CHK-09..CHK-12: HUMAN_TASK role, SERVICE_TASK endpoint+timeout_ms range, TIMER duration_iso8601) and validate_edge_conditions/1 (PD-06, CHK-13..CHK-17: gateway condition presence/absence, default+condition conflict, at-most-one-default-per-gateway, CEL syntax) -- plus a new public valid_cel_syntax?/1 minimal structural (no-evaluation) CEL check. Decided and documented explicitly: PD-06 gets its own sibling function rather than folding into validate_graph/1 (which is already merged/gate-approved and has no notion of conditional ordering), flagged that REQ-030's current text only names validateNodeAttributes() so its CODE-DESIGNER must also call validate_edge_conditions/1; ordering ('run only after validate_graph/1 passes') is caller-enforced (REQ-030's future create/1), not enforced inside this module -- both new functions are total/defensive and never call validate_graph/1 themselves. Resolved REQ-028 design doc section 9.1 explicitly: Node.attributes stays map() | nil, with a new pinned sub-decision that keys must be String.t() (not atoms, to avoid atom-table exhaustion from decoding untrusted JSON keys) and the exact key names/value types each check reads. R-Co's graph.zig/definition.md source was not reachable in this environment (searched the filesystem, no R-Co checkout present) -- the ISO-8601 duration scan-forward parser (section 4.3) and the CEL syntax algorithm (section 6) are therefore reconstructed from REQ-029's own requirement text rather than verified against source, and this gap is flagged explicitly in the design doc's section 0 and section 9.1 rather than presented as a verified port. All 5 acceptance criteria are mapped to concrete design elements in the doc's section 11 traceability table. No implementation code written -- signatures, type shapes, and prose algorithm steps only.",
+    "artifacts_out": ["lib/letflow/design/req029-node-attribute-edge-condition-validators.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ029-20260817",
+      "commit_sha_list": ["be1e5700f17906698ad0c196d8aa3bd2721ba0d4"],
+      "remote_branch": "origin/feature/WF02-REQ029-20260817",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

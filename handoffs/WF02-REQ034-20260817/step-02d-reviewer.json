@@ -1,0 +1,49 @@
+{
+  "handoff_id": "b3e1a2c4-0006-4f1a-9a10-req034step02d",
+  "run_id": "WF02-REQ034-20260817",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ034-20260817/step-02d-reviewer.json",
+  "created_at": "2026-08-17T20:45:36Z",
+  "started_at": "2026-08-17T20:45:36Z",
+  "completed_at": "2026-08-17T20:46:25Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-034"],
+    "related_handoff_ids": ["step-02a-elixir-dev.json", "step-02c-security-reviewer.json"],
+    "artifacts_in": ["lib/letflow/definitions/export_import.ex"],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "WF-02 Step 2d HARD GATE: idiom review of lib/letflow/definitions/export_import.ex (branch feature/WF02-REQ034-20260817). Use .claude/agents/reviewer.md's four questions and docs/anti-patterns.md.",
+    "acceptance_criteria": [
+      "Idiomatic vs. crutch assessment",
+      "Supervision integrity (N/A expected -- this module has no process/GenServer surface, confirm)",
+      "Type-safety gaps checked",
+      "Scope creep checked against REQ-034's acceptance criteria and the approved design",
+      "Checked against docs/anti-patterns.md for known mistakes",
+      "Checked against docs/migration/decisions/ for consistency (no framework/library choice silently re-decided)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed lib/letflow/definitions/export_import.ex against .claude/agents/reviewer.md's four questions, lib/letflow/design/export_import.md, REQ-034's 4 acceptance criteria, docs/anti-patterns.md, and docs/migration/decisions/. (1) Idiomatic vs. crutch: pure functional delegation module -- export/2 is a single `with` clause over get_by_id/2, import/3 is a `case` on the schema-version literal followed by an unconditional delegation to create/2. No hand-rolled state machine, no case-on-state masquerading as gen_statem -- appropriate, since this module has no state to manage. (2) Supervision: confirmed N/A -- grep for gen_statem/GenServer/InstanceSupervisor/spawn in the file returns zero matches; nothing here needs supervision, consistent with the design doc's explicit scope boundary (no process, no HTTP route). (3) Type-safety gaps: import_error()'s create_error() branch retains :tenant_id_not_accepted/:initial_status_not_draft variants that are structurally unreachable via this function's own attrs builder (design doc §4.3 flags this explicitly as deliberate, to avoid re-implementing create/2's branch-reachability reasoning here -- a real INV-EI-2 tradeoff, not an oversight). A stricter type system could express the narrower reachable-error set at compile time, but doing so here would require duplicating create/2's own validation logic, which is exactly what INV-EI-2 exists to avoid -- correct call, noted per REVIEWER's standing instruction to flag type-safety gaps even when not blocking. The schema-version check is a runtime string-equality case match rather than a compile-time-exhaustive tag comparison -- standard for a single literal constant, not a gap. (4) Scope creep: every element in the diff traces 1:1 to REQ-034's 4 acceptance criteria via the approved design doc's traceability table (§10) -- EXPORT_SCHEMA_VERSION constant, export/2, import/3, ExportDocument struct, all present and nothing extra. The one addition beyond REQ-034's literal text -- import/3's third parameter `imported_by` -- is necessary plumbing (satisfies create/2's required :created_by key, which ExportDocument has no field for) and is explicitly flagged in both the design doc (§4.3, OQ-3) and the shipped moduledoc, not silently invented. No behaviours, macros, or generic plumbing added ahead of need; INV-EI-2 keeps this module from duplicating REQ-028/029's validators, avoiding the exact kind of premature abstraction/duplication this gate exists to catch. docs/anti-patterns.md: no entry applies (all current entries concern process/tooling bookkeeping, not domain code). docs/migration/decisions/: 0003-ecto-schema-strategy.md's tenant_id-derivation rule is respected -- this module never accepts or derives tenant_id itself, only forwards opts to get_by_id/2 and create/2 which already own that derivation; 0001/0002/0004 don't apply (no HTTP/OIDC/pipeline surface touched). No framework or library choice was silently re-decided. Non-blocking note for TEST-DESIGNER: since :tenant_id_not_accepted/:initial_status_not_draft are unreachable through import/3's own attrs builder, coverage of those two create_error() variants isn't expected for import/3 specifically (design doc's own OQ-2/OQ-3 on exported_at precision and imported_by's eventual caller are pre-flagged open questions, not this module's defects).",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ034-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ034-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (Step 3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

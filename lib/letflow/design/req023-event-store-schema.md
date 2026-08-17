@@ -43,7 +43,10 @@ asserted from memory.
 
 - `lib/letflow/tenant_provisioning.ex` (250 lines) — `schema_name_for_tenant/1` (73–78),
   `provision_tenant_schema/1` (99–137), `replay_migrations/2` (160–181),
-  `tenant_scoped_migrations/0` (196–198, currently returns `[]`).
+  `tenant_scoped_migrations/0` (196–198, returned `[]` at the time this reading list was
+  compiled — §5.2 below is this same requirement's own edit that changes that; see
+  ISS-0017/GH#73, 2026-08-17, for why this snapshot line needed a note rather than being
+  read as still-current).
 - `lib/letflow/tenant_provisioning/registration.ex`, `lib/letflow/events/transition_event.ex`,
   `lib/letflow/identity/tenant.ex`, `lib/letflow/identity/user.ex`,
   `lib/letflow/identity/group.ex`, `lib/letflow/identity/tenant_role.ex`.

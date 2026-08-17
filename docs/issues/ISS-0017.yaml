@@ -110,4 +110,46 @@ affected_files:
   - test/specs/REQ-022.md
   - test/support/req022_migration_fixture.ex
 github_issue: https://github.com/tvolodi/letflow/issues/73
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0017-20260817
+resolved_at: 2026-08-17T07:32:58Z
+resolution: >
+  The test-surface half was already closed within REQ-023's own run per
+  this record's own UPDATE note -- verified independently: grepped
+  test/specs/REQ-022.md and test/support/req022_migration_fixture.ex for
+  "returns []", zero hits. The "Forward note" guard test (REVIEWER's
+  REQ-022 suggestion, iterate tenant_scoped_migrations/0 and assert every
+  entry follows §4's prefix() guard) also already exists --
+  test/letflow/event_store/migrations_test.exs's "§4 guard pattern"
+  describe block, explicitly labeled "Carry-forward 1 (REVIEWER, REQ-022
+  Step 2d)" in its own comment. No action needed for either.
+
+  What remained was the two design-doc mentions, fixed now (a dedicated
+  run, not smuggled into an unrelated requirement's run, so no design
+  gate is sidestepped by correcting them post-hoc):
+
+  1. lib/letflow/design/req022-tenant-schema-provisioning.md §3.4: added
+     a dated correction note after the original spec block, rather than
+     rewriting history -- the original bare {version, module} @spec is
+     still correct (verified byte-identical, per this issue's own
+     finding), what was missing was the module-loading step
+     (Code.ensure_loaded?/Code.require_file) REQ-023 discovered was
+     required. Framed as "the contract didn't change, an implementation
+     note was missing," not "the design was wrong."
+
+  2. lib/letflow/design/req023-event-store-schema.md: re-read both cited
+     locations before editing rather than trusting the issue's blanket
+     claim that both are equally stale. Line 46 (a "mandatory reading,
+     current shipped code" snapshot list with no before/after framing)
+     genuinely reads as a live claim today -- annotated with a pointer to
+     §5.2. Line 883, on inspection, sits inside "5.2 The one edit to
+     Letflow.TenantProvisioning" -- a before/after narrative where
+     "currently returns []" is the explicit BEFORE state the very next
+     paragraph describes fixing, in the same section. Left unedited:
+     correcting it would have removed context a reader needs, not fixed
+     a misleading claim -- it was never misleading in place.
+
+  No lib/, priv/, or test/ file touched -- design-doc correction only,
+  applied as dated addenda rather than silent rewrites, matching this
+  session's established pattern for gated artefacts.

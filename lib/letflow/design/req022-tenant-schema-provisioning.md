@@ -337,6 +337,23 @@ together, not one: (a) write its migration file following §4's required guard p
 and (b) append its own `{version, ModuleName}` tuple to this function's body. See §4 for
 why both halves are mandatory and what happens if either is skipped.
 
+**Correction (2026-08-17, ISS-0017/GH#73 -- read before implementing against this
+section): a module-loading step is required and this section didn't anticipate it.**
+REQ-023 (the first real contributor of entries) found that
+`Ecto.Migrator.load_migration!/1` requires `Code.ensure_loaded?(module)`, but
+`priv/repo/migrations/*.exs` is never compiled (`mix.exs`'s `elixirc_paths` is
+`["lib"]` only) -- so returning bare `{version, module}` tuples, as this section
+originally specified with no further step, raises `Ecto.MigrationError` in any VM
+where those modules aren't already loaded (masked in `mix test` by the `test:`
+alias's own `ecto.migrate` side-compiling them; would fail on a warm test DB or in
+`iex -S mix`). The shipped fix (`ensure_migration_module_loaded!/2`, backed by an
+internal `{version, module, filename}` manifest whose third element never escapes the
+function) explicitly does **not** change the `@spec` above -- it stays exactly
+`[{version, module}]`, verified byte-identical against pre-fix `main` at the time.
+So the public contract this section documents is still correct; what's missing is the
+implementation note that a conforming implementation must also resolve/load each
+module before use, not just hold its name.
+
 ## 4. Required pattern for every tenant-scoped migration file (REQ-023 onward)
 
 **This section is the load-bearing part of this design** — the task that dispatched this

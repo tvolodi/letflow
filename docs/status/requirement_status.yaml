@@ -2415,3 +2415,29 @@ history:
       ls. mix compile --warnings-as-errors clean; full suite 310/310.
       Released queue task 63 as done via the per-client API key, closing
       GitHub issue #72.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-17T07:32:58Z
+    note: >
+      Resolved ISS-0017 (GH#73, MINOR, filed by ELIXIR-DEV during
+      WF02-REQ023-20260816 -- queue task 62). Verified the test-surface
+      half was already closed within REQ-023's own run (per this
+      record's own UPDATE note) -- confirmed by grep, zero remaining
+      "returns []" claims in test/specs/REQ-022.md or
+      test/support/req022_migration_fixture.ex; also confirmed the
+      "Forward note" guard test REVIEWER suggested already exists
+      (migrations_test.exs's §4 guard pattern describe block). Fixed the
+      remaining design-doc half in this dedicated run (correcting a
+      gated artefact post-hoc, not smuggled into another requirement's
+      run): req022-tenant-schema-provisioning.md §3.4 got a dated
+      correction note (the @spec didn't change, an implementation note
+      about required module-loading was missing) rather than a rewrite.
+      For req023-event-store-schema.md, re-read both locations the issue
+      named rather than trusting its blanket claim -- line 46 (a
+      no-context "current state" snapshot) genuinely needed annotating;
+      line 883, on inspection, is the explicit BEFORE half of a
+      before/after narrative in its own section and was never misleading
+      in place, so left untouched. No lib/, priv/, or test/ file
+      touched. Released queue task 62 as done via the per-client API
+      key, closing GitHub issue #73.

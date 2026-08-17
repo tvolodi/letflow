@@ -1,0 +1,88 @@
+{
+  "handoff_id": "d978f29d-9208-4d93-852d-343e6c650484",
+  "run_id": "WF02-REQ038-20260817",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ038-20260817/step-02a-elixir-dev.json",
+  "created_at": "2026-08-17T22:24:25Z",
+  "started_at": "2026-08-17T22:24:25Z",
+  "completed_at": "2026-08-17T22:41:10Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-038"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ038-20260817/step-01-code-designer.json",
+      "handoffs/WF02-REQ038-20260817/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ038-20260817/step-01-code-designer-rework.json",
+      "handoffs/WF02-REQ038-20260817/step-01b-code-design-validator-rereview.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req038-promotion-rollback.md",
+      "docs/requirements.yaml",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/definitions/promotion_review_store.ex",
+      "lib/letflow/definitions/process_definition.ex",
+      "lib/letflow/definitions/promotion_review.ex",
+      "docs/guides/backend_developer_guide.md",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "Implement lib/letflow/design/req038-promotion-rollback.md (PASSed after Rework 1) exactly: add Letflow.Definitions.rollback_definition_version/4 to lib/letflow/definitions.ex, and make the one small, explicitly-flagged widening edit to lib/letflow/definitions/promotion_review_store.ex's supersede_review/3 (allowed_source_statuses gains :approved) plus its moduledoc's 'Exactly 7 permitted edges' text. No other files in scope. No test code (TEST-DESIGNER's job at Step 3). No migration (design §1 states none needed).",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "mix format --check-formatted exits 0 on the two files in scope",
+      "rollback_definition_version/4 matches the design's exact signature, opts shape, error atoms, and result shape (§2)",
+      "Permission guard runs before any Repo call of any kind (AC5 / INV-RB-1)",
+      "Guard-case ordering matches the design exactly: process_key_not_found, then already_active, then version_never_active (§5 step 2)",
+      "Pointer swap uses FOR UPDATE row locking and the SUPERSEDED->:deprecated mapping (§3, §5 step 2e)",
+      "event_appender is called exactly once, after TX1 commits, never nested inside it (INV-RB-6, INV-RB-7)",
+      "promotion_reviews supersede-lookup preserves the cardinality branching exactly (zero->nil, exactly-one->supersede, more-than-one->nil, never blanket-supersede) (§6, INV-RB-10)",
+      "supersede_review/3's allowed_source_statuses widened to include :approved, with the moduledoc's edge-count text updated to match (§7)",
+      "All callers of any changed function signature still compile"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented both files named in the design's scope boundary (§1), nothing else. lib/letflow/definitions.ex: added rollback_definition_version/4 (public function at line 572, @spec/@type block for rollback_opts/rollback_result/rollback_error/permission_checker_fun/event_appender_fun immediately above it) plus five private helpers appended after the module's existing finish_build/1 helper: do_rollback/6 (line 938, wraps only the TX1 Repo.transaction call in try/rescue -> {:transaction_failed, exception}, mirroring activate/2's exact shape per design §5's 'Exception safety' note -- NOT steps 3/4, which run outside the try block and own their own errors), run_rollback_transaction/4 (line 967, locks every process_definitions row for (tenant_id, process_key) FOR UPDATE via Repo.all, then the three guard cases in the design's literal order: current_active == nil -> Repo.rollback(:process_key_not_found); current_active.version == target_version -> Repo.rollback(:already_active), checked before the target-row lookup exactly as design §5 step 2c specifies; target_row (status in [:active, :deprecated], :archived deliberately excluded per INV-RB-4) == nil -> Repo.rollback(:version_never_active)), swap_active_pointer/3 (line 1008, the guarded two-Repo.update_all deprecate-then-activate swap keyed on the already-locked row ids, mirroring activate_draft/2's shape), finish_rollback/8 (line 1029, calls opts[:event_appender] with the exact DEFINITION_VERSION_ROLLED_BACK payload shape design §4.2 specifies, outside TX1, propagating {:error, reason} unchanged on failure), and supersede_matching_review/4 (line 1074, the §6/§7 cardinality-branched promotion_reviews lookup: case matching_reviews do [] -> nil; [single_review] -> call PromotionReviewStore.supersede_review/3, absorb {:error, :invalid_transition} to nil per §6/OQ-6; [_, _ | _] -> nil end -- the ambiguous-match branch contains zero Repo calls and never reaches supersede_review/3, matching the exact shape CODE-DESIGN-VALIDATOR's Rework-1 re-review verified structurally in the design doc itself).\n\nlib/letflow/definitions/promotion_review_store.ex: widened supersede_review/3's allowed_source_statuses from [:applied, :failed, :rejected] to [:applied, :approved, :failed, :rejected] (call site now at line 333-340) -- no other line in that function changed, matching design §7 item 1's stated minimal scope exactly. Also updated the moduledoc per design §7 item 2: 'Exactly 7 permitted edges' -> 'Exactly 8 permitted edges' (line 11), redrew the ASCII diagram to show the new approved->superseded edge as a middle diagonal out of [approved] converging into the same supersede_review/3 bar, updated the allowed_source_statuses bullet list, and added an explanatory paragraph naming the promote_definition/3-vs-mark_review_applied/2 window this edge exists to close, citing rollback_definition_version/4 by name. supersede_review/3's own @doc was also updated (3 supersession edges -> 4). No change to supersede_review/3's @spec, its superseded_by_event_id parameter, or its own superseded_by discussion, matching design §7 item 3's explicit constraint.\n\nVerification: mix compile --warnings-as-errors exits 0 (ran twice, once before and once after a formatting fix -- both clean, no warnings). mix format --check-formatted exits 0 when scoped to the two files in scope (lib/letflow/definitions.ex lib/letflow/definitions/promotion_review_store.ex) -- the unscoped full-repo mix format --check-formatted also reported 3 pre-existing unformatted test files (test/letflow/definitions/promotion_review_store_test.exs, test/letflow/definitions/promotion_test.exs) that this handoff did not touch and is explicitly out of scope for (TEST-DESIGNER's domain); fixed the one genuine formatting issue this diff introduced (a >120-char `with` pattern-match line in the new do_rollback/6) and left those two pre-existing test files untouched. git diff --stat confirms exactly 2 files changed (287 insertions in definitions.ex, 69 changed lines in promotion_review_store.ex), matching the design's declared scope boundary with zero drift.\n\nNo migration was written -- design §1 states explicitly 'no new migration,' this design writes only to already-existing columns on already-shipped tables.",
+    "artifacts_out": [
+      "lib/letflow/definitions.ex",
+      "lib/letflow/definitions/promotion_review_store.ex"
+    ],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "lib/letflow/definitions/promotion_review_store.ex is an already-merged, previously REVIEWER/CODE-DESIGN-VALIDATOR-approved module (REQ-035/037) whose moduledoc stated a structural invariant ('Exactly 7 permitted edges, no 8th possible', INV-PRM04-1) as a settled, gate-approved fact about that module's own code shape -- not about this requirement's own new module surface. This handoff widens supersede_review/3's allowed_source_statuses to add the approved -> superseded edge (now 8 edges) per the design's §7, which itself flags this exact edit for 'REVIEWER sign-off, per core-directives.md's don't silently re-decide what a decision record already settled.' Calling this out explicitly for SECURITY-REVIEWER/REVIEWER's particular attention at Steps 2c/2d: this is a real behavioral widening of an already-shipped state machine (a promotion_reviews row that is :approved -- not yet :applied/:failed/:rejected -- can now be moved directly to :superseded), not merely a new-module addition, and REVIEWER should independently confirm the design's own justification (the promote_definition/3-vs-mark_review_applied/2 orchestrator-call window, design §7) is sound before treating this as settled.",
+        "affected_requirement": "REQ-038"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Carried forward from CODE-DESIGN-VALIDATOR's Rework-1 re-review (handoffs/WF02-REQ038-20260817/step-01b-code-design-validator-rereview.json issues[0]), not introduced or resolved by this implementation: rollback_result().superseded_review_id is nil for both the zero-match case and the ambiguous multi-match case (supersede_matching_review/4's [] and [_, _ | _] branches both return nil). This is implemented exactly as the design specifies (§6) and is disclosed in this function's own @doc, not something ELIXIR-DEV attempted to 'fix' -- flagged again here per the task briefing's explicit instruction not to silently improvise on disclosed tradeoffs. RELEASE-VALIDATOR's Step 5 scrutiny list already carries this forward.",
+        "affected_requirement": "REQ-038"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Carried forward from the same source: AC4's promotion_reviews-update clause is only fully satisfied when exactly one applied/approved review exists for the process_key at rollback time (the ordinary state for a process_key promoted more than once leaves this clause partially unsatisfied by design, per §6/OQ-5's disclosed schema limitation -- def_id is process-key-scoped, not version-scoped, in Letflow's shipped schema). Implemented exactly as designed; not something this handoff attempted to resolve. RELEASE-VALIDATOR's Step 5 scrutiny list already carries this forward.",
+        "affected_requirement": "REQ-038"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ038-20260817",
+      "commit_sha_list": ["300dc67aec8b75fcab13f5560ba1c44c229564ef"],
+      "remote_branch": "origin/feature/WF02-REQ038-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c) -- this diff touches tenant-scoped tables (process_definitions, promotion_reviews) via existing :prefix-scoped Repo calls only (no new query path bypassing :prefix), so INV-1 applies and should be checked; INV-7/INV-8 also apply (all queries go through Ecto.Query/Repo.update_all with bound params, no raw SQL; every I/O path returns a typed {:ok,_}|{:error,_} result, no bare {:ok, x} = match introduced). SECURITY-REVIEWER and REVIEWER should both pay particular attention to issues[0] above (the promotion_review_store.ex allowed_source_statuses widening) before Step 2d PASS."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

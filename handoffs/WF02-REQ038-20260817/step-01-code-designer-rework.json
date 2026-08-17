@@ -1,0 +1,64 @@
+{
+  "handoff_id": "cb1c6ff2-4e65-4505-8b6f-0bbd8eeaafb7",
+  "run_id": "WF02-REQ038-20260817",
+  "workflow_id": "WF-02",
+  "step": "01-rework",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ038-20260817/step-01-code-designer-rework.json",
+  "created_at": "2026-08-17T22:02:59Z",
+  "started_at": "2026-08-17T22:02:59Z",
+  "completed_at": "2026-08-17T22:12:01Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-038"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ038-20260817/step-01-code-designer.json",
+      "handoffs/WF02-REQ038-20260817/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req038-promotion-rollback.md",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/definitions/process_definition.ex",
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/definitions/promotion_review_store.ex",
+      "lib/letflow/definitions/promotion_review.ex",
+      "lib/letflow/definitions/promotion_plan.ex",
+      "priv/repo/migrations/20260816200001_create_promotion_reviews.exs"
+    ],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "REWORK 1 of lib/letflow/design/req038-promotion-rollback.md, forced by CODE-DESIGN-VALIDATOR's Step 1b BLOCKER (handoffs/WF02-REQ038-20260817/step-01b-code-design-validator.json issues[0]), independently re-confirmed by ORCH before routing: the original design's AC4 promotion_reviews supersede-lookup (Sec 6/7) filtered only on (tenant_id, def_id == process_key, status in [:applied, :approved]) and, on more than one match, blanket-superseded every matched row. Because promotion_reviews.def_id stores plan.process_key (not a version-scoped id) and nothing in the shipped codebase ever moves an :applied review out of :applied except supersede_review/3 itself, a process_key promoted N times over its life leaves N permanently-:applied rows sharing the same def_id -- the design's own 'at most one row matches in the common flow' framing was empirically false for the ordinary multi-promotion lifecycle, and the stated fallback (supersede every match) would corrupt unrelated, already-settled review rows with a false superseded_by causal link. Task: actually inspect promotion_review.ex's schema, promotion_plan.ex's PromotionPlan.t(), and promotion.ex's write path (not guess) for a genuine version-scoped correlation; if none exists, adopt a materially safer default (never blanket-supersede, never heuristically guess) or escalate with a concretely-specified schema addition -- per the rework briefing's three named resolution paths -- and make one concrete choice rather than re-listing options.",
+    "acceptance_criteria": [
+      "Re-verify against the actual shipped source (not the original design's own claims) whether promotion_reviews or PromotionPlan.t()/serialised_plan carries any field correlating a review to the specific process_definitions row/version its promotion activated",
+      "If no such correlation exists, replace the blanket-supersede-on-multiple-match resolution with one that never mutates an unrelated review row -- no heuristic guessing among multiple candidates either",
+      "State plainly whether AC4 as literally written ('for the former-active definition') is fully satisfiable given the chosen resolution, and for which cases it is not",
+      "If a schema addition is proposed as the real fix, specify it concretely (column, type, populating call site, resulting query) and flag it explicitly as widening REQ-038's declared file scope, not built in this design",
+      "Do not regress the 5 already-PASSed scrutiny items (status-enum mapping Sec 3, transaction-boundary divergence OQ-3, the supersede_review/3 :approved widening Sec 7, permission-guard ordering AC5, the index-predicate MINOR finding)",
+      "No implementation code introduced anywhere in the revised sections (signatures/types/pseudocode only, consistent with the rest of the document's existing style)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Investigated Path 1 exhaustively before choosing a resolution: read lib/letflow/definitions/promotion_plan.ex (full file) and lib/letflow/definitions/promotion.ex (full file, specifically write_target_definition/5 and append_promotion_event/9). Confirmed no genuine version-scoped correlation exists anywhere in the current schema or plan payload: PromotionPlan.t()'s target_definition_id/base_version identify the row a promotion DEPRECATES (the pre-promotion active row), not the row it ACTIVATES; source_definition_id belongs to a different tenant's schema entirely; the row a review's promotion actually activates (new_row) is a freshly Repo.insert'ed row whose id doesn't exist at plan-compute time and is never written back onto the promotion_reviews row (mark_review_applied/2 sets only status: :applied). append_promotion_event/9 does compute review_id + target_definition_id together in the DEFINITION_PROMOTED event payload, but DEFINITION_PROMOTED is confirmed (grepped lib/letflow/event_store/registry* and lib/letflow/design/req024-*) to not be a registered event_type_registry entry anywhere in shipped code, so nothing persists it today -- that alternate correlation path is blocked on a separate, larger, unowned gap. Documented this full trace as a new Rework-1 evidence bullet in Sec 0. Given Path 1 is conclusively unavailable, rewrote Sec 6 to adopt Path 2 (the rework briefing's safer-default option): the lookup now branches on match cardinality -- zero matches -> superseded_review_id: nil (AC4's own already-accepted outcome); exactly one match -> supersede it (unambiguous, safe); more than one match -> mutate nothing, superseded_review_id: nil, explicitly refusing to heuristically guess among candidates (a 'most recent' guess would carry the same silent-corruption failure mode CODE-DESIGN-VALIDATOR blocked on, just rarer, so it was explicitly rejected rather than adopted). Added INV-RB-10 codifying 'at most one supersede_review/3 call, only on an unambiguous match, never a guess.' Updated Sec 7's call site from a per-match loop to a single call in the [single_review] branch only (the :approved widening itself, Sec 7's core resolution, is unchanged). Updated Sec 5 Step 4, the rollback_result() type comment (Sec 2), and Sec 11's AC4 traceability row to reflect the new branching. Rewrote OQ-5 (Sec 10) from 'open question' to 'RESOLVED in Rework 1' -- states plainly that AC4 is satisfied exactly in the unambiguous case and is honestly not fully realized for a process_key with more than one accumulated applied/approved review, a disclosed schema limitation, not a papered-over gap. Added a concrete 'Recommended follow-up' subsection in Sec 6 (Path 3, escalation): a nullable promotion_reviews.definition_id :: Ecto.UUID.t() column, populated with new_row.id via a new PromotionReviewStore.mark_review_applied/3 arity, which would make rollback_definition_version/4's lookup filter on definition_id == current_active.id directly -- genuinely unambiguous, no cardinality question. Explicitly flagged as NOT built here (widens scope beyond lib/letflow/definitions.ex + promotion_review_store.ex, requires a new migration and a signature change to REQ-037's already gate-approved mark_review_applied/2, needs its own REVIEWER sign-off) and low-blast-radius if picked up later since no orchestrator caller of mark_review_applied/2 exists yet. Updated Sec 1's scope table row and 'DB schema: no new migration' line to point at this follow-up without contradicting REQ-038's own no-new-migration decision. Did not touch Sec 3 (status mapping), OQ-3 (transaction boundary), Sec 7's :approved widening rationale, Sec 4.1/Sec 5 Step 1 (permission-guard ordering), or the index-predicate MINOR finding -- all five confirmed-sound items are untouched. No implementation code introduced; the case-branch pseudocode in the revised Sec 6 matches the density/style CODE-DESIGN-VALIDATOR already passed elsewhere in this same document (Sec 5's Repo.update_all/Enum.find pseudocode blocks).",
+    "artifacts_out": [
+      "lib/letflow/design/req038-promotion-rollback.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ038-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ038-20260817",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b, re-review)"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

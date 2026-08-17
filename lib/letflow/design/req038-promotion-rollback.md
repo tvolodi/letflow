@@ -3,6 +3,12 @@
 **Requirement:** REQ-038 (`docs/requirements.yaml`, stage S2, `depends_on: [REQ-030, REQ-037]`)
 **Owner (implementer):** ELIXIR-DEV
 **Run:** `WF02-REQ038-20260817`, WF-02 Step 1
+**Rework 1:** CODE-DESIGN-VALIDATOR BLOCKER on the original §6/§7 (promotion_reviews
+supersede-lookup could blanket-supersede unrelated audit rows for a process_key with
+more than one accumulated applied/approved review) —
+`handoffs/WF02-REQ038-20260817/step-01b-code-design-validator.json` `issues[0]`.
+Resolved by replacing the blanket-supersede with an exactly-one-match safe default;
+see §0's Rework-1 evidence bullet, the rewritten §6, and OQ-5.
 **This document produces:** the exact function signature, `@spec`s, the transaction/
 locking strategy, the injectable `permission_checker`/`event_appender` shapes, the
 `promotion_reviews` supersession mechanism, invariants, cross-module dependencies, and
@@ -100,6 +106,48 @@ ELIXIR-DEV writes the real version at Step 2a.
   a `:superseded` value** (unlike `process_definitions.status`) — this is the value
   REQ-038 sets on the matched review row (§7), a completely separate enum from §3's
   `process_definitions.status` discussion; the two must not be conflated.
+- **Rework 1 evidence (CODE-DESIGN-VALIDATOR's BLOCKER on the original §6/§7,
+  `handoffs/WF02-REQ038-20260817/step-01b-code-design-validator.json`
+  `issues[0]`):** re-read `lib/letflow/definitions/promotion_plan.ex` (full file)
+  and `lib/letflow/definitions/promotion.ex` (full file, specifically
+  `write_target_definition/5` and `append_promotion_event/9`) to look for any
+  genuine version/definition-scoped correlation between a `promotion_reviews`
+  row and the specific `process_definitions` row its own promotion activated.
+  **None exists.** Traced precisely:
+  - `PromotionPlan.t()`'s `target_definition_id`/`base_version` (`promotion_plan.ex`
+    lines 54-62, populated at lines 160-162) are computed from `fetch_active/2`
+    called at **plan-compute time**, i.e. they identify the row that is
+    currently active in the *target* tenant **before** this plan's promotion
+    runs — the row `deprecate_previous_active/3` (`promotion.ex` line 260) later
+    deprecates *as a result of* this promotion, not the row the promotion
+    *activates*. `source_definition_id` identifies a row in the *source*
+    tenant's schema, a different `(tenant_id, table)` scope entirely.
+  - The row a review's promotion actually activates (`new_row`,
+    `write_target_definition/5`, `promotion.ex` lines 227-255) is a **freshly
+    `Repo.insert`ed row** — its `id` is a new UUID minted at promote time, does
+    not exist at plan-compute time, and is never written back onto the
+    `promotion_reviews` row: `PromotionReviewStore.mark_review_applied/2`
+    (`promotion_review_store.ex` lines 284-290) sets only `status: :applied`,
+    no `definition_id`-shaped column exists to write it to even if it wanted to.
+  - `append_promotion_event/9` (`promotion.ex` lines 289-323) *does* compute
+    `target_definition_id: new_row.id` together with `review_id: review.id` in
+    the same `event_attrs` map (lines 303-309) — the one place in this codebase
+    this correlation is ever computed — but it is handed only to the injected
+    `opts[:event_appender]` closure. `DEFINITION_PROMOTED` is confirmed (grep
+    across `lib/letflow/event_store/registry*`, `lib/letflow/design/req024-*`)
+    to not be a registered `event_type_registry` entry anywhere in shipped
+    code — the identical, independently-reconfirmed gap this design's own §4.2
+    already names for `DEFINITION_VERSION_ROLLED_BACK`. Nothing persists a
+    `DEFINITION_PROMOTED` event today, so this correlation is not queryable
+    even in principle without first closing that separate, larger gap.
+  Conclusion: **Path 1 (a genuine version-scoped correlation) is not available
+  within REQ-038's current scope.** §6 below adopts Path 2 (a materially safer
+  default that never mutates an unrelated row) as the change actually made
+  within REQ-038's existing file scope, and documents a concrete Path 3
+  schema addition as an explicit, out-of-scope recommendation for a future
+  requirement (§6's "Recommended follow-up" subsection) rather than either
+  silently shipping the corrupting behavior or blocking REQ-038 entirely on
+  an unrequested migration.
 - `priv/repo/migrations/20260816200001_create_promotion_reviews.exs` +
   `lib/letflow/design/req035-promotion-reviews-schema.md` — confirmed the two indexes:
   `uq_promotion_review_active_digest` on `(tenant_id, plan_digest) WHERE status IN
@@ -179,11 +227,13 @@ Also in scope: one small, explicitly-flagged edit to
 | A real, working `event_appender` that actually calls `Letflow.EventStore.append/2` | Whichever future requirement wires a definition-level (non-instance-scoped) event stream into `EventStore` — same gap `promotion.ex`'s OQ-1 already names, not resolved here either (§4.2) |
 | Widening `process_definitions.status`'s `Ecto.Enum` to add a literal `:superseded` value, or any migration touching that column | Not requested by REQ-038's acceptance criteria; §3 states the mapping this design uses instead onto the already-shipped 4-value enum |
 | REQ-020's role registry → real `platform.admin` permission resolution | Deferred, per REQ-038's own text — §4.1 states the injectable shape only |
-| Any change to `Letflow.Definitions.PromotionReview`'s schema | None needed — `status`, `superseded_by` (already `Ecto.UUID`, nullable) already fit §7's needs |
+| Any change to `Letflow.Definitions.PromotionReview`'s schema | Not made here — `status`, `superseded_by` (already `Ecto.UUID`, nullable) fit §7's supersede mechanism as-is. §6's "Recommended follow-up" subsection specifies a concrete `definition_id` column addition that would let a *future* requirement close the OQ-5 ambiguous-match gap completely — explicitly not attempted in this design |
 
 **DB schema:** no new migration. This design writes only to already-existing columns on
 already-shipped tables (`process_definitions.status`/`updated_at`,
-`promotion_reviews.status`/`superseded_by`/`row_version`).
+`promotion_reviews.status`/`superseded_by`/`row_version`). (§6's follow-up
+recommendation, if ever picked up by a later requirement, would need one — not this
+one.)
 
 ---
 
@@ -201,7 +251,10 @@ already-shipped tables (`process_definitions.status`/`updated_at`,
   definition_id: Ecto.UUID.t(),          # the now-active (target) row's id
   version: String.t(),                    # = target_version, echoed back
   rolled_back_from_version: String.t(),   # the version that WAS active before this call
-  superseded_review_id: Ecto.UUID.t() | nil,
+  superseded_review_id: Ecto.UUID.t() | nil,   # nil covers BOTH "zero matching
+                                                # reviews" and "more than one
+                                                # matched, ambiguous, none
+                                                # touched" -- see §6
   event_id: Ecto.UUID.t()
 }
 
@@ -462,10 +515,13 @@ theoretically-possible, if practically-impossible-under-`FOR UPDATE`, TOCTOU gap
 `{:error, reason}` here returns `{:error, reason}` as this function's own result — TX1's
 swap has already committed (§4.2, §8 OQ-3). On `{:ok, %{event_id: event_id}}`, continue.
 
-**Step 4 — outside TX1, after the event-append succeeds.** Supersede any matching
-`promotion_reviews` row(s) per §7, using `event_id` from Step 3. This step's own outcome
-(§7) never turns an otherwise-successful rollback into an error — "zero matching rows
-is acceptable, not an error" (REQ-038's own text, AC4).
+**Step 4 — outside TX1, after the event-append succeeds.** Look up `promotion_reviews`
+rows matching `(tenant_id, process_key)` per §6, and supersede the match **only when
+exactly one row matches** — never more, never a guess among several (§6). Uses
+`event_id` from Step 3. This step's own outcome (§6/§7) never turns an otherwise-
+successful rollback into an error, whether zero rows matched ("zero matching rows is
+acceptable, not an error" — REQ-038's own text, AC4) or more than one row matched
+(§6's own safe-default resolution).
 
 **Step 5 — assemble the result:**
 
@@ -486,7 +542,8 @@ exactly, no new error shape invented for this case.
 
 ---
 
-## 6. `promotion_reviews` lookup — the `def_id = process_key` consequence
+## 6. `promotion_reviews` lookup — the `def_id = process_key` consequence, and the
+exactly-one-match safe default (resolves the CODE-DESIGN-VALIDATOR BLOCKER on Rework 1)
 
 **Confirmed fact, not assumed (§0):** `promotion_reviews.def_id` stores
 `plan.process_key` — a **string equal to the process key**, not a
@@ -495,46 +552,131 @@ bound to `current_active.id` (a definition UUID, under R-Co's schema where `def_
 really does mean "definition id"). **Letflow's schema does not support that same
 filter** — there is no column on `promotion_reviews` correlating a review to one
 *specific* `process_definitions` row/version; the only available correlation is to the
-process_key as a whole.
+process_key as a whole, and §0's Rework-1 evidence confirms exhaustively (via
+`PromotionPlan.t()` and `promotion.ex`'s own write path) that no such correlation is
+recoverable from `serialised_plan` either — see §0 for the full trace.
 
-**This design's lookup, given that constraint:**
+**This is not a rare edge case — it is the ordinary state of the table.** Nothing in
+this codebase ever moves an `:applied` `promotion_reviews` row out of `:applied` except
+`supersede_review/3` itself; `promote_definition/3` never touches `promotion_reviews`
+at all. A process_key promoted 3 times over its life (R1 → v1, R2 → v2, R3 → v3, each
+via a separate `mark_review_applied/2` call) leaves **all three** of R1/R2/R3
+permanently `:applied` unless something later supersedes them — this is the normal
+multi-promotion lifecycle of any process_key, not an edge case requiring a race.
+`uq_promotion_review_active_digest` does not prevent this either — it scopes
+uniqueness to `(tenant_id, plan_digest)`, not `(tenant_id, def_id)`.
+
+**Consequence for a naive `def_id`-only lookup, stated plainly:** a query filtering
+only on `(tenant_id, def_id == process_key, status in [:applied, :approved])` has
+**no way** to distinguish the review for the specific former-active definition (the
+one AC4's own text names) from reviews belonging to any *other* version of the same
+process_key. Blanket-superseding every match (this design's original, now-rejected
+resolution) would stamp `superseded_by` on R1/R2's already-settled rows with an
+event_id from a rollback that has nothing to do with either of them — corrupting audit
+history, not merely leaving ambiguity unresolved. This is the defect
+CODE-DESIGN-VALIDATOR blocked on; the resolution below replaces it.
+
+**This design's lookup:**
 
 ```
 matching_reviews =
   PromotionReview
   |> where([r], r.tenant_id == ^tenant_id and r.def_id == ^process_key and
                 r.status in [:applied, :approved])
-  |> order_by([r], desc: r.inserted_at)
   |> Repo.all(prefix: prefix)
 ```
 
-**Practical expectation vs. structural guarantee, stated honestly:** in the common,
-expected flow, at most one row matches at any given time (a process_key normally has
-at most one "live" applied/approved review). **No DB constraint enforces this** —
-`uq_promotion_review_active_digest` scopes its uniqueness to `(tenant_id, plan_digest)`,
-not `(tenant_id, def_id)` — so two different promotion plans for the same process_key
-(e.g. an approved-but-never-applied review left over from an earlier promotion attempt,
-plus the applied review for the version actually rolled back from) could in principle
-both match. §8 OQ-5 states this explicitly as an open question this design does not
-consider fully closed, rather than asserting a guarantee this codebase's schema does
-not actually provide.
+**Resolution this design adopts — a safe default, not a guess (Path 2 of the rework
+briefing, chosen over Path 1 because §0 confirms no genuine correlation exists, and
+over an unconditional Path 3 because it is not required to satisfy AC4 correctly and
+safely within REQ-038's existing "no new migration" scope decision, §1):**
 
-**Resolution this design adopts (stated, not left to ELIXIR-DEV to invent):** call §7's
-supersede mechanism once **per** matched row, in the `order_by desc: inserted_at` order
-above — every matched row ends up `:superseded`, honoring AC4's literal "any
-applied/approved... row" wording for however many rows actually match. This function's
-own `superseded_review_id` field (§2, singular per REQ-038's own named return shape)
-is set to the **first** row processed (i.e. the most-recently-inserted match) if the
-list is non-empty, `nil` otherwise. If a specific matched row's `supersede_review/3`
-call itself fails with `{:error, :invalid_transition}` (a genuine optimistic-lock race
-against some other concurrent caller touching that same review row — not the "zero
-matching rows" case AC4 already excuses), this design treats that single row's failure
-as **non-fatal to the overall rollback** — TX1's pointer swap and Step 3's event-append
-have already durably committed by this point, so aborting the whole
+```
+case matching_reviews do
+  [] ->
+    # AC4's own text: "zero matching rows is acceptable, not an error."
+    superseded_review_id = nil
+
+  [single_review] ->
+    # Unambiguous -- exactly one candidate, safe to supersede. See §7 for
+    # the PromotionReviewStore.supersede_review/3 call site + its own
+    # {:error, :invalid_transition} absorption.
+    superseded_review_id = <result of §7's supersede_review/3 call, or nil>
+
+  [_, _ | _] ->
+    # AMBIGUOUS -- more than one applied/approved review exists for this
+    # process_key, and (per §0's Rework-1 evidence) this design has no way
+    # to determine which one, if any, corresponds to the specific
+    # former-active definition. Superseding an arbitrary member of this
+    # set (e.g. "most recent by inserted_at") would not be a genuine
+    # correlation either -- it would be a plausible-looking guess with the
+    # same silent-corruption failure mode CODE-DESIGN-VALIDATOR blocked on,
+    # just rarer. This design does not guess: no row is mutated, and
+    # superseded_review_id is nil, exactly as the zero-match case is.
+    superseded_review_id = nil
+end
+```
+
+**Why this does not silently weaken AC4, but does narrow when it fires:** AC4's own
+text is satisfied exactly in the unambiguous case (the common case for a process_key
+with a short promotion history, or the first-ever rollback for a given process_key).
+For a process_key with a longer promotion history where more than one applied/approved
+review has accumulated, this design's honest position is that AC4 *as literally
+written* ("for the former-active definition") cannot be satisfied correctly against
+`promotion_reviews`' current schema — and REQ-038's own acceptance-criteria framing
+already treats "no row updated" as a legitimate, non-error outcome (the zero-match
+case), so extending that same non-error outcome to the ambiguous case is the minimal,
+non-inventive extension of an interpretation REQ-038 already commits to, not a new one
+this design invents unilaterally. This is stated here explicitly for REVIEWER, not
+silently assumed.
+
+**Recommended follow-up (NOT built here — flagged for REQ-ANALYST/REVIEWER, widens
+scope beyond REQ-038's declared file list if ever picked up):** the only way to close
+this gap *correctly* (make the ambiguous case resolve to the right row rather than to
+`nil`) is a genuine version-scoped correlation, which requires a schema addition:
+
+  * Add a nullable `promotion_reviews.definition_id :: Ecto.UUID.t()` column (a new
+    migration) — populated with the *resulting* `process_definitions.id` (`new_row.id`
+    in `promotion.ex`'s `write_target_definition/5`/`append_promotion_event/9`, §0),
+    not the plan's pre-promotion `target_definition_id`.
+  * The only call site that could populate it is
+    `PromotionReviewStore.mark_review_applied/2` (`promotion_review_store.ex`), which
+    would need a new arity (e.g. `mark_review_applied/3(review_id, definition_id,
+    opts)`) to accept and persist it — a real signature change to an already-merged,
+    gate-approved function (REQ-037). Low blast radius today: per that module's own
+    moduledoc, no orchestrator caller exists yet ("some future orchestrator, REQ-040 or
+    later"), so no current caller breaks.
+  * With that column in place, `rollback_definition_version/4`'s lookup becomes
+    `where(r.definition_id == ^current_active.id and r.status in [:applied,
+    :approved])` — genuinely unambiguous, no cardinality question at all.
+  * A discarded alternative, noted for completeness: `append_promotion_event/9`
+    already computes `review_id` and `target_definition_id` together in one
+    `DEFINITION_PROMOTED` event payload (§0) — in principle a real, queryable
+    `EventStore`-backed correlation. Not adopted as the recommendation because it is
+    strictly weaker today: `DEFINITION_PROMOTED` is not a registered
+    `event_type_registry` entry and no `event_appender` implementation persists it
+    (§0, §4.2's independently-confirmed identical gap) — this path is blocked on a
+    separate, larger gap this design does not own, whereas the `definition_id` column
+    is buildable immediately.
+
+This recommendation is deliberately **not** implemented in this design: REQ-038's own
+§1 scope decision states no new migration, and a signature change to REQ-037's already
+gate-approved `mark_review_applied/2` is a real, separate piece of work needing its own
+REVIEWER sign-off — bundling it into this rework would be exactly the kind of
+unrequested scope-widening `core-directives.md` warns against. It is recorded here in
+full, concrete detail (column, type, populating call site, resulting query) so a future
+requirement can act on it without re-deriving this analysis.
+
+If a per-row `supersede_review/3` call in the unambiguous-match branch itself fails
+with `{:error, :invalid_transition}` (a genuine optimistic-lock race against some other
+concurrent caller touching that same review row — a different case from "ambiguous
+match," which never reaches a `supersede_review/3` call at all), this design treats
+that failure as **non-fatal to the overall rollback** — TX1's pointer swap and Step 3's
+event-append have already durably committed by this point, so aborting the whole
 `rollback_definition_version/4` call over a review-bookkeeping race would not undo
-either of those; the race is silently absorbed (that specific row is left as-is,
-still `:applied`/`:approved`, not retried). Flagged for REVIEWER (§8 OQ-6) since no
-acceptance criterion states this specific sub-case's desired behavior.
+either of those; the race is silently absorbed (`superseded_review_id` is `nil`, the
+row is left as-is, not retried). Flagged for REVIEWER (§10 OQ-6) since no acceptance
+criterion states this specific sub-case's desired behavior.
 
 ---
 
@@ -587,17 +729,18 @@ edit's own scope is deliberately minimal:
    or its own moduledoc discussion of what `superseded_by` references (`promotion_review_store.ex`'s
    OQ-4-equivalent discussion, §0) — the widening is purely to the status guard.
 
-**Call site in `rollback_definition_version/4`** (§6's loop, once per matched review):
+**Call site in `rollback_definition_version/4`** (§6's `[single_review]` branch only —
+the `[]` and `[_, _ | _]` branches never reach this call at all, per §6's safe default):
 
 ```
-PromotionReviewStore.supersede_review(review.id, event_id, prefix: prefix)
+PromotionReviewStore.supersede_review(single_review.id, event_id, prefix: prefix)
 ```
 
-A `{:ok, updated_review}` result contributes `updated_review.id` as (candidate)
+A `{:ok, updated_review}` result contributes `updated_review.id` as
 `superseded_review_id`; an `{:error, :invalid_transition}` result is absorbed per §6's
-stated resolution; `{:error, :review_not_found}` should not occur in practice (the row
-was just read at §6, in the same overall call) but is not treated as fatal either —
-same absorption.
+stated resolution (`superseded_review_id` falls back to `nil`);
+`{:error, :review_not_found}` should not occur in practice (the row was just read at
+§6, in the same overall call) but is not treated as fatal either — same absorption.
 
 ---
 
@@ -614,6 +757,7 @@ same absorption.
 | INV-RB-7 | The pointer-swap transaction (TX1) commits **before** `opts[:event_appender]` is ever called — this function does not assume anything about the injected function's own transactionality, matching `promote_definition/3`'s identical stance. | §4.2, §5 Step 2/3, §8 OQ-3 |
 | INV-RB-8 | Every `promotion_reviews` write goes through `PromotionReviewStore.supersede_review/3` — no ad-hoc `Repo.update_all` against `promotion_reviews` inside `rollback_definition_version/4` itself. | §7 |
 | INV-RB-9 | `tenant_id` is always derived from `opts[:prefix]`, never accepted as a separate argument or attrs key — matches every other function in this module (§0). | §2, §5 Step 0 |
+| INV-RB-10 | `supersede_review/3` is called **at most once** per `rollback_definition_version/4` invocation, and only when the §6 lookup returns **exactly one** matching `promotion_reviews` row — never on zero matches, never on more than one, never on a heuristically-chosen "best guess" among several. `superseded_review_id` is `nil` for both the zero-match and the ambiguous-match case. | §6 |
 
 ---
 
@@ -676,16 +820,30 @@ to_version, actor_id`) names no idempotency-key field, and this design's
 `req025-event-append.md` §5.2). Not built here; flagged so a future implementer does
 not have to rediscover R-Co's own key-shape convention from scratch.
 
-**OQ-5 (MAJOR — a genuine schema-shape gap, not a hypothetical):** §6 states plainly
-that `promotion_reviews.def_id == process_key` gives this design no way to scope a
-lookup to "the review that specifically produced the now-former-active *version*" —
-only to "the process_key as a whole." No DB constraint prevents more than one
-`applied`/`approved` row from matching at once for a given `(tenant_id, process_key)`.
-§6's resolution (process every match, name only the most-recently-inserted one as
-`superseded_review_id`) is this design's own choice, not a fact derived from any
-source. If REVIEWER or a later requirement decides `promotion_reviews` needs a real
-`process_definitions.id`-scoped column to close this gap properly, that is a schema
-change outside REQ-038's own scope (§1) — not attempted here.
+**OQ-5 — RESOLVED in Rework 1 (was MAJOR, blocked CODE-DESIGN-VALIDATOR; now a named,
+accepted limitation, not an open question about *what* to do):** §0's Rework-1 evidence
+confirms exhaustively (checked `PromotionPlan.t()`'s full field set and `promotion.ex`'s
+full write path, not merely `promotion_reviews`' own columns) that no genuine
+version/definition-scoped correlation exists anywhere in this codebase's current
+schema or plan payload between a `promotion_reviews` row and the specific
+`process_definitions` row/version its promotion activated — `def_id == process_key` is
+the only correlation available, and no DB constraint prevents more than one
+`applied`/`approved` row from matching at once for a given `(tenant_id, process_key)`;
+this is in fact the *ordinary* state of the table for any process_key promoted more
+than once (§6). **Resolution actually adopted (§6, INV-RB-10):** supersede only on an
+unambiguous, exactly-one-row match; on zero or more-than-one match, mutate nothing and
+return `superseded_review_id: nil` — never blanket-supersede, never heuristically guess
+among several candidates. This means AC4 is satisfied exactly for the unambiguous case
+and is honestly *not* fully realized for a process_key with more than one accumulated
+applied/approved review — a real, disclosed limitation of the current schema, not a gap
+this design papers over. §6's "Recommended follow-up" subsection specifies a concrete,
+buildable schema addition (a `promotion_reviews.definition_id` column, populated by a
+new `mark_review_applied/3` arity) that would close this completely; it is explicitly
+NOT attempted here — REQ-038's own §1 scope decision states no new migration, and
+widening REQ-037's already gate-approved `mark_review_applied/2` is real, separate work
+needing its own REVIEWER sign-off. REVIEWER should confirm this tradeoff (safety over
+completeness, within REQ-038's declared scope) is acceptable, or route the follow-up to
+REQ-ANALYST if not.
 
 **OQ-6 (MINOR):** §6/§7's stance that a per-row `supersede_review/3` race
 (`{:error, :invalid_transition}`) is absorbed rather than propagated as this whole
@@ -703,5 +861,5 @@ specific sub-case explicitly; flagged for REVIEWER.
 | 1. "rolling back to a version with status SUPERSEDED (previously ACTIVE) succeeds and flips the pointer" | §3 (the `:deprecated` mapping) + §5 Step 2d/2e (the swap) + §5 Step 5 (result assembly) |
 | 2. "rolling back to a version never ACTIVE/SUPERSEDED... returns version-never-active, no rows changed" | §5 Step 2d (`target_row == nil → Repo.rollback(:version_never_active)`) + INV-RB-5 |
 | 3. "rolling back to the currently-ACTIVE version returns already-active, no rows changed, no event appended" | §5 Step 2c (checked before any write, before the event-append step is ever reached) + INV-RB-5 |
-| 4. "a successful rollback appends exactly one DEFINITION_VERSION_ROLLED_BACK event and updates any applied/approved promotion_reviews row... to superseded" | §4.2 (event payload + call site) + INV-RB-6 + §6 (the lookup, given `def_id == process_key`) + §7 (the `supersede_review/3` widening this design proposes) |
+| 4. "a successful rollback appends exactly one DEFINITION_VERSION_ROLLED_BACK event and updates any applied/approved promotion_reviews row... to superseded" | §4.2 (event payload + call site) + INV-RB-6 + §6 (the lookup, given `def_id == process_key`, and the exactly-one-match safe default — satisfied exactly when unambiguous, disclosed limitation otherwise, OQ-5) + §7 (the `supersede_review/3` widening this design proposes) + INV-RB-10 |
 | 5. "a caller lacking the platform.admin-equivalent permission is rejected before any row is read or locked" | §4.1 (call site ordering) + §5 Step 1 + INV-RB-1 |

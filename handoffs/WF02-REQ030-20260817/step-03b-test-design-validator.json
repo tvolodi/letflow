@@ -1,0 +1,60 @@
+{
+  "handoff_id": "654f732d-b7b3-4cbd-8e17-035abec330fe",
+  "run_id": "WF02-REQ030-20260817",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ030-20260817/step-03b-test-design-validator.json",
+  "created_at": "2026-08-17T18:48:26Z",
+  "started_at": "2026-08-17T18:48:26Z",
+  "completed_at": "2026-08-17T18:54:18Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-030"],
+    "related_handoff_ids": ["1de66e80-95ed-4a1f-a99a-fa70e3ff6759"],
+    "artifacts_in": [
+      "test/specs/REQ-030.md",
+      "test/letflow/definitions/store_test.exs",
+      "test/letflow/definitions_test.exs"
+    ],
+    "owned_modules": ["lib/letflow/definitions", "test/letflow/definitions_test.exs", "test/specs/REQ-030.md"]
+  },
+  "task": {
+    "description": "Hard gate on TEST-DESIGNER's REQ-030 test spec + test code (branch feature/WF02-REQ030-20260817). TEST-DESIGNER's own handoff claims all 9 acceptance criteria are covered, all 9 forbidden-transition cells individually tested, and a genuine (not theoretical) empirically-triggered TOCTOU regression test -- verify these specific claims, don't just accept them.",
+    "acceptance_criteria": [
+      "Every one of REQ-030's ACTUAL 9 acceptance criteria has at least one runnable test targeting it",
+      "All 9 forbidden-transition cells individually tested, not a generic loop that could silently skip one -- confirm by reading the actual test names/assertions",
+      "No TODO: implement test left anywhere",
+      "Test fixtures use per-test unique data, no cross-test pollution",
+      "Tests are self-sufficient",
+      "No hardcoded secrets/connection strings",
+      "The AC2 concurrency test is genuinely concurrent (Task.async), not degraded to the code-path-citation fallback despite the handoff's claim"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Independently re-verified against docs/requirements.yaml lines 1408-1417 (9 acceptance criteria, confirmed 1:1 positional+content match with the spec's AC1-AC9 numbering) and lib/letflow/design/req030-definition-store-crud.md SS6.1-6.3. Six of seven required checks PASS cleanly: (1) every AC has >=1 real test, including AC5's all-9-forbidden-cells table -- read each of the 9 named test cases individually in test/letflow/definitions/store_test.exs lines 467-590, confirmed each is a distinct 'test' block with its own {:error,_} or never-yields-:draft assertion, not a loop (the 3 X->DRAFT cells each independently drive 3 separate fixture rows -- active_1/2/3, deprecated_1/2/3, archived_1/2/3 -- through all three mutating functions and assert status != :draft after each, which is the strongest obtainable proof given no function ever attempts that transition directly); (2) no TODO/@tag :skip anywhere across the 3 artifacts; (3) fixtures are per-test-unique (unique_name/1 + System.unique_integer + fresh Ecto.UUID.generate() every test, every test calls provisioned_tenant() independently); (4) tests are self-sufficient, no ordering dependency; (5) no hardcoded secrets/connection strings (grepped clean); (6) AC2's concurrency test (store_test.exs:330-353) is genuinely Task.async-based -- two real Task.async processes calling Definitions.create/2 simultaneously against real, separate Postgres connections (Sandbox :auto mode, pool_size >= 2 confirmed), NOT the citation fallback. Independently ran `mix test test/letflow/definitions/store_test.exs test/letflow/definitions_test.exs` twice with different seeds (--seed 1, --seed 2) after a clean `MIX_ENV=test mix compile --warnings-as-errors` (0 warnings): both runs report 'Result: 40 passed', 0 failures. FAILING CHECK: the TOCTOU regression test claim. test/specs/REQ-030.md's 'Regression' section states as fact that 'this run's actual execution... did trigger the real race: the second transaction's UPDATE genuinely raised a Postgres unique-violation, caught and converted to {:error, {:transaction_failed, exception}}... not merely a theoretical possibility this test happens to pass vacuously against.' I could not corroborate this. I ran the TOCTOU test (store_test.exs:770, describe 'Regression -- activate/2 cross-row TOCTOU') in isolation 8 additional times (seeds 1-8) plus twice more inside the full 2-file run (10 total executions) and grepped every run's full debug log for 'unique_violation'/'uq_active_definition'/'transaction_failed': zero hits across all 10 runs. Direct inspection of one run's SQL log (toctou_1.log) shows both Task.async'd activate/2 calls completing as ordinary sequential successes each time (the second transaction's own deprecate-prior-active step catches the first transaction's already-committed row before racing it) -- i.e. in every reproduction attempt the test passed via the safe, non-racing branch the spec explicitly claims it is NOT merely doing. The test itself is legitimate (real Task.async concurrency, real separate Postgres connections, correctly asserts the true safety invariant count_active_by_name==1 regardless of interleaving, and never fails/is not flaky in the pass/fail sense), and the design doc's own SS6.2 correctly frames this as inherently timing-dependent -- but the spec's specific factual claim that THIS test empirically triggered the unique-violation path, stated as established fact rather than a possibly-lucky one-off, is not reproducible and is therefore unverified per core-directives.md's No Speculation rule, which binds TEST-DESIGNER's spec-writing the same as any other agent's factual claims.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "test/specs/REQ-030.md's 'Regression' section (activate/2 cross-row TOCTOU) states as verified fact that the run's mix test execution 'did trigger the real race... not merely a theoretical possibility this test happens to pass vacuously against.' TEST-DESIGN-VALIDATOR ran the identical test 10 times (8 standalone at store_test.exs:770 with seeds 1-8, plus 2 more inside the full 2-file run with seeds 1-2) and observed zero occurrences of the unique-violation/transaction_failed path -- every run passed via the safe sequential-interleaving branch the spec explicitly disclaims. Rework: either (a) correct the spec's overclaiming sentence to accurately state the race is timing-dependent and was not reliably reproduced under independent re-verification (remove the 'not merely theoretical/vacuous' framing since it wasn't corroborated), or preferably (b) strengthen the test to deterministically force the interleaving (e.g. two manually-driven transactions/connections with an explicit rendezvous/pause between the row-lock and the UPDATE pair) so the {:error, {:transaction_failed, _}} path is reliably exercised on every run rather than left to scheduler luck -- this is a regression test for a SECURITY-REVIEWER-filed finding and should provide real assurance the fix holds, not a disjunctive assertion that in practice only ever takes the non-racing branch.",
+        "affected_requirement": "REQ-030"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ030-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ030-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Rework TEST-DESIGNER: fix test/specs/REQ-030.md's TOCTOU regression section per the MAJOR issue above (correct the unreproduced empirical claim, or strengthen the test to deterministically force the race). All other checks (AC coverage incl. all 9 forbidden-transition cells individually, AC2 genuine concurrency, no TODOs, fixture isolation, self-sufficiency, no secrets, 40/40 passing twice independently) PASSED and do not need rework."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

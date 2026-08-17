@@ -3299,3 +3299,14 @@ history:
       that same already-general rule (REQ-037's insert_review/2 write path),
       not a new case the decision record needs to additionally describe, so
       no edit made to the decision record itself.
+  - req: REQ-034
+    event: started
+    agent: ORCH
+    at: "2026-08-17T20:30:32Z"
+    note: >
+      WF02-REQ034-20260817 started (letflow-queue task 52, claimed by
+      hetzner-wt2-orch). Branch feature/WF02-REQ034-20260817 created from
+      freshly-fetched origin/main (worktree variant, this checkout is
+      secondary to ~/letflow) and pushed. Scope: Letflow.Definitions.ExportImport
+      module (export_import.zig PD-09) -- EXPORT_SCHEMA_VERSION constant,
+      export/1, import/1, per REQ-034's four acceptance criteria.

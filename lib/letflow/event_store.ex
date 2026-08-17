@@ -54,20 +54,52 @@ defmodule Letflow.EventStore do
 
   ## Scope
 
-  Only `append/2` is built here. `read/2`, `read_global/1`, `point_in_time/3`,
-  `archive/1` belong to REQ-026. Meaningful, engine-driven population of
-  `instance_projections`' engine-owned columns (`definition_id`,
+  `append/2` (REQ-025) and `read/2`/`read_global/1`/`point_in_time/3`/
+  `archive/1` plus the three platform sentinel accessors (REQ-026) all live
+  here — see `lib/letflow/design/req026-event-read-archive-platform-sentinels.md`
+  for the design the latter group implements. Meaningful, engine-driven
+  population of `instance_projections`' engine-owned columns (`definition_id`,
   `current_nodes`, ...) belongs to EE-01/S3 — `append/2` never originates an
   `instance_projections` row; it only ever advances the `last_event_seq` of a
   row that already exists (REVIEWER's Step 2d OQ-5 ruling; design doc §6.2.1,
   §6.2.6, §9 OQ-5). A missing row fails the whole call with
   `{:error, :instance_not_started}` instead.
+
+  ## `tenant_id_for_schema_name/1`'s actual error shape (REQ-026 note)
+
+  REQ-026's own design doc (§4.1/§7) describes `read/2`/`read_global/1`/
+  `archive/1`'s tenant-resolution step as producing
+  `{:error, :tenant_not_provisioned}` on an invalid `prefix`. That is not
+  what `Letflow.TenantProvisioning.tenant_id_for_schema_name/1` actually
+  returns — confirmed directly against its shipped `@spec` and body
+  (`lib/letflow/tenant_provisioning.ex:100-115`): it is a pure,
+  no-I/O reversal of `schema_name_for_tenant/1`'s string encoding, and its
+  own moduledoc states it "deliberately does **not** confirm the tenant is
+  actually provisioned." Its only failure case is
+  `{:error, :invalid_schema_name}`, for any input not shaped like
+  `"tenant_" <> <32 lowercase hex>`. `append/2`'s own `@type append_error`
+  already carries this same latent mismatch (`:tenant_not_provisioned` is
+  declared but never produced by its one call to this function). REQ-026's
+  functions below match the function's *actual* behavior —
+  `{:error, :invalid_schema_name}` — rather than the design doc's stated
+  atom, the same "flagged, not silently patched over" divergence this
+  project's convention requires (see REQ-026's implementation handoff).
   """
 
   import Ecto.Query
 
   alias Ecto.Multi
-  alias Letflow.EventStore.{Event, IdempotencyRecord, InstanceProjection, InstanceSequence}
+
+  alias Letflow.EventStore.{
+    ArchivedEvent,
+    Event,
+    IdempotencyRecord,
+    InstanceProjection,
+    InstanceSequence,
+    RetentionPolicy,
+    StoredPayload
+  }
+
   alias Letflow.EventStore.Registry
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
@@ -577,6 +609,533 @@ defmodule Letflow.EventStore do
     Enum.any?(errors, fn {_field, {_message, opts}} ->
       Keyword.get(opts, :constraint) == :unique and
         Keyword.get(opts, :constraint_name) == "uq_event_sequence"
+    end)
+  end
+
+  # =========================================================================
+  # REQ-026 -- read/2, read_global/1, point_in_time/3, archive/1, and the
+  # three platform sentinel accessors. See
+  # lib/letflow/design/req026-event-read-archive-platform-sentinels.md for
+  # the full design this section implements.
+  # =========================================================================
+
+  # Platform sentinel constants (design doc §3, platform.zig port).
+  #
+  # VALUES FLAGGED, per the design doc's own §3/§12 OQ-1: `platform.zig` is
+  # unreachable from this host (confirmed fresh for this run, same result as
+  # the design doc's own §0 check). These are placeholder UUIDs -- pairwise
+  # distinct, syntactically valid (Ecto.UUID.cast/1 accepts them) -- NOT a
+  # verified port of R-Co's literal values. Substitute the real values if/when
+  # platform.zig becomes reachable; nothing in this codebase reads these back
+  # yet (requirements.yaml:1119-1121: "this requirement only needs the
+  # constants to exist"), so the placeholder values carry no behavioral risk
+  # today.
+  @platform_instance_id "00000000-0000-0000-0000-000000000001"
+  @platform_actor_id "00000000-0000-0000-0000-000000000002"
+  @platform_tenant_id "00000000-0000-0000-0000-000000000003"
+
+  @doc """
+  PLATFORM_INSTANCE_ID sentinel -- ported from `src/event_store/platform.zig`
+  (value unverified, see this module's source comment above these three
+  accessors). Never inserted into `instance_projections`, per
+  `req023-event-store-schema.md` §3.1.3's citation of `platform.zig:5`.
+  """
+  @spec platform_instance_id() :: Ecto.UUID.t()
+  def platform_instance_id, do: @platform_instance_id
+
+  @doc """
+  PLATFORM_ACTOR_ID sentinel -- ported from `src/event_store/platform.zig`
+  (value unverified, see this module's source comment above these three
+  accessors). Identifies the platform itself as the acting party for
+  non-instance-scoped scheduler events (a later stage's concern to actually
+  emit).
+  """
+  @spec platform_actor_id() :: Ecto.UUID.t()
+  def platform_actor_id, do: @platform_actor_id
+
+  @doc """
+  PLATFORM_TENANT_ID sentinel -- ported from `src/event_store/platform.zig`
+  (value unverified, see this module's source comment above these three
+  accessors). Identifies the platform itself as the tenant for
+  non-instance-scoped scheduler events (a later stage's concern to actually
+  emit).
+  """
+  @spec platform_tenant_id() :: Ecto.UUID.t()
+  def platform_tenant_id, do: @platform_tenant_id
+
+  @type read_opts :: [
+          prefix: String.t(),
+          up_to_sequence: pos_integer() | nil,
+          up_to_timestamp: DateTime.t() | nil
+        ]
+
+  @type read_error ::
+          {:error, :invalid_instance_id}
+          | {:error, :invalid_schema_name}
+          | {:error, :instance_not_found}
+          | {:error, {:payload_resolution_failed, event_id :: Ecto.UUID.t()}}
+          | {:error, term()}
+
+  @doc """
+  Reads `instance_id`'s events in ascending `sequence_number` order, inside
+  the tenant schema named by `opts[:prefix]`. `opts[:up_to_sequence]`/
+  `opts[:up_to_timestamp]` filter the result -- `up_to_sequence` wins
+  outright if both are given (ES-06, design doc §4.3), never a conjunction
+  of the two. Any `$ref` payload pointer is transparently resolved via
+  `event_payload_store` before returning.
+
+  Returns `{:error, :instance_not_found}` -- never `{:ok, []}` -- when
+  `instance_id` has never had a successful append (no `instance_sequence`
+  row). `{:ok, []}` is reserved for an instance that exists but currently
+  has zero matching `events` rows (e.g. fully archived, or filtered past) --
+  see design doc §4.2's two-step lookup order, INV-RD-1.
+  """
+  @spec read(instance_id :: Ecto.UUID.t(), opts :: read_opts()) ::
+          {:ok, [Event.t()]} | read_error()
+  def read(instance_id, opts) when is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+
+    with {:ok, instance_id} <- cast_instance_id(instance_id),
+         {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         :ok <- ensure_instance_started(instance_id, prefix) do
+      instance_id
+      |> query_instance_events(prefix, read_filter(opts))
+      |> resolve_payloads(prefix)
+    end
+  end
+
+  @doc """
+  Convenience wrapper over `read/2` with `opts[:up_to_timestamp]` set to
+  `timestamp` (design doc §4.5). `opts[:up_to_sequence]`, if also supplied,
+  is not stripped -- `read/2`'s ordinary precedence rule (`up_to_sequence`
+  wins) applies unchanged.
+  """
+  @spec point_in_time(
+          instance_id :: Ecto.UUID.t(),
+          timestamp :: DateTime.t(),
+          opts :: read_opts()
+        ) :: {:ok, [Event.t()]} | read_error()
+  def point_in_time(instance_id, %DateTime{} = timestamp, opts) when is_list(opts) do
+    read(instance_id, Keyword.put(opts, :up_to_timestamp, timestamp))
+  end
+
+  @type read_global_opts :: [
+          prefix: String.t(),
+          after_global_seq: pos_integer() | nil,
+          limit: non_neg_integer() | nil
+        ]
+
+  @type read_global_result :: %{
+          events: [Event.t()],
+          next_after_global_seq: pos_integer() | nil,
+          has_more: boolean()
+        }
+
+  @type read_global_error ::
+          {:error, :invalid_schema_name}
+          | {:error, {:payload_resolution_failed, event_id :: Ecto.UUID.t()}}
+          | {:error, term()}
+
+  @doc """
+  Cursor-paginated read across every instance's events in one tenant schema
+  (named by `opts[:prefix]`), ordered by `global_seq` ascending. "Global"
+  here means global within one tenant's own schema, across that tenant's
+  instances -- not a cross-tenant stream (design doc §5's scope note).
+
+  `opts[:after_global_seq]` (`nil` = from the beginning) is a strict lower
+  bound (`global_seq > N`). `opts[:limit]` is clamped to `1..1000`; `nil` or
+  `0` default to `100` (design doc §5.2, GlobalReadOpts semantics). `$ref`
+  payloads are transparently resolved, same as `read/2`.
+
+  `has_more` is a heuristic, not a proof (design doc §5.4): if exactly
+  `limit` more rows exist and no others, `has_more` reports `true` but the
+  very next call returns zero new rows -- the ordinary cursor-pagination
+  boundary case.
+  """
+  @spec read_global(opts :: read_global_opts()) ::
+          {:ok, read_global_result()} | read_global_error()
+  def read_global(opts) when is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+    after_global_seq = Keyword.get(opts, :after_global_seq)
+    effective_limit = clamp_read_global_limit(Keyword.get(opts, :limit))
+
+    with {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      raw_events =
+        Event
+        |> apply_after_global_seq(after_global_seq)
+        |> order_by([e], asc: e.global_seq)
+        |> limit(^effective_limit)
+        |> Repo.all(prefix: prefix)
+
+      case resolve_payloads(raw_events, prefix) do
+        {:ok, events} ->
+          {:ok,
+           %{
+             events: events,
+             next_after_global_seq: next_after_global_seq(events, after_global_seq),
+             has_more: length(events) == effective_limit
+           }}
+
+        {:error, _reason} = error ->
+          error
+      end
+    end
+  end
+
+  @type archive_opts :: [prefix: String.t(), retention_days: non_neg_integer()]
+  @type archive_result :: %{moved_count: non_neg_integer()}
+
+  @doc """
+  Moves events past `opts[:retention_days]` (a global fallback) into
+  `events_archive`, honoring any per-`event_type` `event_retention_policies`
+  row over the global fallback (design doc §7.1's precedence:
+  `keep_forever` > `keep_days` > `keep_count` > the global fallback for any
+  `event_type` with no policy row). `retention_days: 0` archives nothing for
+  event types with no explicit policy row -- `0` is a valid, meaningful
+  value ("only explicit policies apply"), never conflated with "absent".
+  `opts[:retention_days]` is required -- `{:error, :missing_retention_days}`
+  if absent or not a non-negative integer.
+
+  Idempotent (design doc §7.3/INV-AR-1): calling this twice in a row with
+  the same `retention_days` moves the eligible set once, then zero rows the
+  second time -- the target set is computed once per call from `events` as
+  it currently stands, so a row already moved to `events_archive` (and
+  deleted from `events`) can never be re-selected by a later call. Never
+  queries, joins, or locks `instance_projections`/`instance_sequence`
+  (INV-AR-2). `events_archive.payload` always holds the fully-resolved
+  payload, never a `$ref` pointer (design doc §7.4, INV-AR-3) -- this
+  resolves REQ-023 §9 OQ-2.
+  """
+  @spec archive(opts :: archive_opts()) ::
+          {:ok, archive_result()}
+          | {:error, :missing_retention_days}
+          | {:error, :invalid_schema_name}
+          | {:error, term()}
+  def archive(opts) when is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+
+    with {:ok, retention_days} <- fetch_retention_days(opts),
+         {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      event_ids = compute_archive_target_event_ids(prefix, retention_days)
+
+      with :ok <- archive_phase1_insert(prefix, event_ids),
+           {:ok, moved_count} <- archive_phase2_delete(prefix, event_ids) do
+        {:ok, %{moved_count: moved_count}}
+      end
+    end
+  end
+
+  # -------------------------------------------------------------------------
+  # read/2 / point_in_time/3 private helpers
+  # -------------------------------------------------------------------------
+
+  defp cast_instance_id(instance_id) do
+    case Ecto.UUID.cast(instance_id) do
+      {:ok, uuid} -> {:ok, uuid}
+      :error -> {:error, :invalid_instance_id}
+    end
+  end
+
+  # Design doc §4.2 STEP 1 -- existence check via instance_sequence. A
+  # committed row here is proof this instance has had at least one
+  # successful append: assign_sequence/3 (append/2's own Multi, above) only
+  # ever creates this row inside that same atomic transaction as the
+  # matching `events` insert -- so its absence means instance_id has never
+  # had one (InstanceNotFound), and its presence means STEP 2 may legitimately
+  # return an empty list (e.g. every event since archived).
+  defp ensure_instance_started(instance_id, schema_name) do
+    InstanceSequence
+    |> where([s], s.instance_id == ^instance_id)
+    |> Repo.exists?(prefix: schema_name)
+    |> case do
+      true -> :ok
+      false -> {:error, :instance_not_found}
+    end
+  end
+
+  # Design doc §4.2 STEP 2 -- the real read, filters applied, ordered by
+  # sequence_number ASC. May legitimately return [].
+  defp query_instance_events(instance_id, schema_name, filter) do
+    Event
+    |> where([e], e.instance_id == ^instance_id)
+    |> apply_read_filter(filter)
+    |> order_by([e], asc: e.sequence_number)
+    |> Repo.all(prefix: schema_name)
+  end
+
+  # Design doc §4.3 -- up_to_sequence wins outright over up_to_timestamp if
+  # both are given (never ANDed together).
+  defp read_filter(opts) do
+    cond do
+      not is_nil(Keyword.get(opts, :up_to_sequence)) ->
+        {:sequence_number, Keyword.get(opts, :up_to_sequence)}
+
+      not is_nil(Keyword.get(opts, :up_to_timestamp)) ->
+        {:created_at, Keyword.get(opts, :up_to_timestamp)}
+
+      true ->
+        :none
+    end
+  end
+
+  defp apply_read_filter(query, {:sequence_number, value}),
+    do: where(query, [e], e.sequence_number <= ^value)
+
+  defp apply_read_filter(query, {:created_at, value}),
+    do: where(query, [e], e.created_at <= ^value)
+
+  defp apply_read_filter(query, :none), do: query
+
+  # -------------------------------------------------------------------------
+  # read_global/1 private helpers
+  # -------------------------------------------------------------------------
+
+  defp apply_after_global_seq(query, nil), do: query
+
+  defp apply_after_global_seq(query, after_global_seq),
+    do: where(query, [e], e.global_seq > ^after_global_seq)
+
+  # Design doc §5.2 -- GlobalReadOpts limit clamping.
+  defp clamp_read_global_limit(nil), do: 100
+  defp clamp_read_global_limit(0), do: 100
+  defp clamp_read_global_limit(limit) when is_integer(limit) and limit < 0, do: 1
+  defp clamp_read_global_limit(limit) when is_integer(limit) and limit > 1000, do: 1000
+  defp clamp_read_global_limit(limit) when is_integer(limit), do: limit
+
+  # Design doc §5.4 -- ASC order, so the last row (if any) carries the max
+  # global_seq seen this call.
+  defp next_after_global_seq([], after_global_seq), do: after_global_seq
+  defp next_after_global_seq(events, _after_global_seq), do: List.last(events).global_seq
+
+  # -------------------------------------------------------------------------
+  # $ref payload resolution -- shared by read/2, read_global/1, and
+  # archive/1's phase 1 (design doc §9). Never N+1: one batched query per
+  # call, keyed on StoredPayload's own single-column uq_event_payload_event
+  # index.
+  # -------------------------------------------------------------------------
+
+  defp resolve_payloads(events, schema_name) do
+    ref_ids =
+      for %{payload: %{"$ref" => ref_id}} <- events, do: ref_id
+
+    case ref_ids do
+      [] ->
+        {:ok, events}
+
+      _ref_ids ->
+        resolved_map =
+          StoredPayload
+          |> where([sp], sp.event_id in ^ref_ids)
+          |> select([sp], {sp.event_id, sp.payload})
+          |> Repo.all(prefix: schema_name)
+          |> Map.new()
+
+        substitute_resolved_payloads(events, resolved_map)
+    end
+  end
+
+  defp substitute_resolved_payloads(events, resolved_map) do
+    events
+    |> Enum.reduce_while({:ok, []}, fn event, {:ok, acc} ->
+      case event.payload do
+        %{"$ref" => ref_id} ->
+          case Map.fetch(resolved_map, ref_id) do
+            {:ok, payload} -> {:cont, {:ok, [%{event | payload: payload} | acc]}}
+            :error -> {:halt, {:error, {:payload_resolution_failed, ref_id}}}
+          end
+
+        _payload ->
+          {:cont, {:ok, [event | acc]}}
+      end
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  # -------------------------------------------------------------------------
+  # archive/1 private helpers
+  # -------------------------------------------------------------------------
+
+  # `0` is a valid, meaningful value distinct from "absent" -- matches
+  # fetch_uuid/3's own idiom above (a malformed/absent value collapses to
+  # the same typed error) rather than adding a second, undeclared error atom
+  # for "present but wrong shape".
+  defp fetch_retention_days(opts) do
+    case Keyword.fetch(opts, :retention_days) do
+      {:ok, retention_days} when is_integer(retention_days) and retention_days >= 0 ->
+        {:ok, retention_days}
+
+      _ ->
+        {:error, :missing_retention_days}
+    end
+  end
+
+  # Design doc §7.1's classification predicate, computed as a set of
+  # `event_id`s rather than a single SQL statement with a window function --
+  # an explicitly-authorized equivalent per the design doc's own §7.1 callout
+  # ("ELIXIR-DEV may express it as ... a multi-query Elixir-side computation
+  # ... that produces the identical eligible set"). `event_id` alone (rather
+  # than the full `(event_id, created_at)` composite PK) is a sufficient
+  # target-set key: every `event_id` is minted exactly once via
+  # `Ecto.UUID.generate()` (append/2's own INV-EV-5), so it is already
+  # globally unique within a tenant schema -- no two rows in `events` ever
+  # share one.
+  #
+  # rule 3 (keep_count) uses `OFFSET keep_count` after `ORDER BY created_at
+  # DESC, event_id DESC` -- every row after the top-`keep_count` most recent
+  # is exactly the eligible set design doc §7.1 rule 3 describes, with no
+  # window function needed at all.
+  defp compute_archive_target_event_ids(schema_name, retention_days) do
+    policies_by_type = retention_policies_by_type()
+    now = DateTime.utc_now()
+
+    keep_days_ids =
+      for {event_type, %RetentionPolicy{policy: :keep_days, keep_days: keep_days}} <-
+            policies_by_type,
+          reduce: [] do
+        acc ->
+          cutoff = DateTime.add(now, -keep_days * 86_400, :second)
+          acc ++ eligible_by_cutoff(schema_name, event_type, cutoff)
+      end
+
+    keep_count_ids =
+      for {event_type, %RetentionPolicy{policy: :keep_count, keep_count: keep_count}} <-
+            policies_by_type,
+          reduce: [] do
+        acc -> acc ++ eligible_beyond_count(schema_name, event_type, keep_count)
+      end
+
+    fallback_ids =
+      if retention_days > 0 do
+        excluded_types = Map.keys(policies_by_type)
+        cutoff = DateTime.add(now, -retention_days * 86_400, :second)
+        eligible_by_cutoff_excluding_types(schema_name, excluded_types, cutoff)
+      else
+        []
+      end
+
+    Enum.uniq(keep_days_ids ++ keep_count_ids ++ fallback_ids)
+  end
+
+  # GLOBAL table (design doc §6) -- no prefix: at all.
+  defp retention_policies_by_type do
+    RetentionPolicy
+    |> Repo.all()
+    |> Map.new(&{&1.event_type, &1})
+  end
+
+  defp eligible_by_cutoff(schema_name, event_type, cutoff) do
+    Event
+    |> where([e], e.event_type == ^event_type and e.created_at < ^cutoff)
+    |> select([e], e.event_id)
+    |> Repo.all(prefix: schema_name)
+  end
+
+  defp eligible_beyond_count(schema_name, event_type, keep_count) do
+    Event
+    |> where([e], e.event_type == ^event_type)
+    |> order_by([e], desc: e.created_at, desc: e.event_id)
+    |> offset(^keep_count)
+    |> select([e], e.event_id)
+    |> Repo.all(prefix: schema_name)
+  end
+
+  defp eligible_by_cutoff_excluding_types(schema_name, excluded_types, cutoff) do
+    Event
+    |> where([e], e.created_at < ^cutoff and e.event_type not in ^excluded_types)
+    |> select([e], e.event_id)
+    |> Repo.all(prefix: schema_name)
+  end
+
+  # Design doc §7.3 phase 1 -- idempotent archive-insert. `Repo.insert_all/3`
+  # with `on_conflict: :nothing` keyed on events_archive's own composite PK
+  # is this implementation's translation of the design's illustrative
+  # `INSERT ... SELECT ... ON CONFLICT DO NOTHING` -- same idempotency
+  # property (a re-run after every target row is already archived is a true
+  # no-op), expressed via Ecto's bulk-insert primitive instead of a raw SQL
+  # string, matching this project's general no-raw-SQL preference (INV-7)
+  # where an idiomatic equivalent exists. Wrapped in its own
+  # `Repo.transaction/1` (not the caller's `with`) so its lock duration is
+  # bounded to this one statement, per design doc §7.3's stated reason for
+  # the two-phase split.
+  defp archive_phase1_insert(_schema_name, []), do: :ok
+
+  defp archive_phase1_insert(schema_name, event_ids) do
+    result =
+      Repo.transaction(fn ->
+        events = Event |> where([e], e.event_id in ^event_ids) |> Repo.all(prefix: schema_name)
+
+        case resolve_payloads(events, schema_name) do
+          {:ok, resolved_events} ->
+            archived_at = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+            entries = Enum.map(resolved_events, &archived_event_entry(&1, archived_at))
+
+            Repo.insert_all(ArchivedEvent, entries,
+              on_conflict: :nothing,
+              conflict_target: [:event_id, :created_at],
+              prefix: schema_name
+            )
+
+            :ok
+
+          {:error, reason} ->
+            Repo.rollback(reason)
+        end
+      end)
+
+    case result do
+      {:ok, :ok} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp archived_event_entry(%Event{} = event, archived_at) do
+    %{
+      event_id: event.event_id,
+      created_at: event.created_at,
+      instance_id: event.instance_id,
+      event_type: event.event_type,
+      payload: event.payload,
+      actor_id: event.actor_id,
+      sequence_number: event.sequence_number,
+      idempotency_key: event.idempotency_key,
+      metadata: event.metadata,
+      global_seq: event.global_seq,
+      tenant_id: event.tenant_id,
+      archived_at: archived_at
+    }
+  end
+
+  # Design doc §7.3 phase 2 -- payload-sidecar cleanup + confirmed delete, in
+  # ONE transaction (event_payload_store's FK to events is ON DELETE
+  # RESTRICT, so the sidecar delete must precede the events delete in the
+  # same transaction). "Confirmed": the events delete only ever targets
+  # event_ids re-verified present in events_archive by this same call --
+  # never event_ids alone from T -- so a crash between phase 1 and phase 2
+  # (or a second concurrent archive/1 call) can never delete an `events` row
+  # this call hasn't itself just confirmed was durably copied.
+  defp archive_phase2_delete(_schema_name, []), do: {:ok, 0}
+
+  defp archive_phase2_delete(schema_name, event_ids) do
+    Repo.transaction(fn ->
+      StoredPayload
+      |> where([sp], sp.event_id in ^event_ids)
+      |> Repo.delete_all(prefix: schema_name)
+
+      archived_ids =
+        ArchivedEvent
+        |> where([a], a.event_id in ^event_ids)
+        |> select([a], a.event_id)
+        |> Repo.all(prefix: schema_name)
+
+      {deleted_count, _} =
+        Event
+        |> where([e], e.event_id in ^archived_ids)
+        |> Repo.delete_all(prefix: schema_name)
+
+      deleted_count
     end)
   end
 end

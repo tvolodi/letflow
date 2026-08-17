@@ -1102,7 +1102,7 @@ requirements:
   - id: REQ-026
     title: Event read paths, archive, and platform sentinels (store.zig's read/readGlobal/pointInTime/archive + platform.zig)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S2
     impl_order: 49  # letflow-queue task id
     description: >

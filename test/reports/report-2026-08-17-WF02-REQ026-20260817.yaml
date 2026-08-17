@@ -1,0 +1,151 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-026
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ026-20260817
+date_utc: 2026-08-17T18:39:02Z
+
+git:
+  branch: feature/WF02-REQ026-20260817
+  branch_confirmed: true
+  commit: 76d320f
+  commit_subject: "chore(WF02-REQ026): log Step 3/3b (both PASS)"
+  note: >
+    Confirmed via `git branch --show-current` (feature/WF02-REQ026-20260817) and
+    `git log -1` at start of this run. Prior gates (CODE-DESIGN-VALIDATOR,
+    SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR) already passed on this
+    commit per dispatching handoff; test code itself was added in commit
+    896c20d ("feat(WF02-REQ026): Step 3 -- test spec + test code").
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 27 [erts-15.2.7.4] ... Mix 1.18.3 / Elixir 1.18.3 (compiled with Erlang/OTP 27)"
+  postgres_container: letflow-postgres-1 (confirmed Up 10 hours (healthy) via `docker compose ps`, port 5462 -> 5432)
+  command_run: >
+    `mix test` (full suite, default/unpinned random seed) and `mix test --seed 0`
+    (full suite, second independent run) — the `test` alias runs ecto.create +
+    ecto.migrate --quiet first automatically. Plus one targeted isolated re-run
+    of REQ-026's own two test files together.
+
+verdict: PASS
+
+checks:
+  test_suite_full_run1:
+    result: PASS
+    exit_code: 0
+    seed: unpinned/random — ExUnit's own default
+    summary_line_verbatim: "4 properties, 503 tests, 0 failures"
+    finished_line_verbatim: "Finished in 16.4 seconds (1.1s async, 15.3s sync)"
+    failures: 0
+    log_saved_to: /tmp/req026_run1.log (8583 lines, grepped for failure markers)
+    grep_check: >
+      Regex covering "Failures:", "Failure:", numbered failure blocks ("N) "),
+      "Excluded:", "Skipped:", "** (" — zero matches after excluding known
+      QUERY ERROR debug noise and "0 failures" summary-line noise.
+
+  test_suite_full_run2:
+    result: PASS
+    exit_code: 0
+    seed: 0 (pinned, second independent run per this project's own established
+      double-run practice given its flaky-test history)
+    summary_line_verbatim: "4 properties, 503 tests, 0 failures"
+    finished_line_verbatim: "Finished in 15.9 seconds (1.1s async, 14.7s sync)"
+    failures: 0
+    log_saved_to: /tmp/req026_run2.log
+
+  req026_own_test_files_isolated:
+    files:
+      - test/letflow/event_store_test.exs
+      - test/letflow/event_store/retention_policy_test.exs
+    command_run: >
+      mix test test/letflow/event_store_test.exs
+      test/letflow/event_store/retention_policy_test.exs
+    summary_line_verbatim: "46 tests, 0 failures"
+    exit_code: 0
+    note: >
+      46 = pre-existing event_store_test.exs tests plus the 18 tests added there
+      (read/2, read_global/1, point_in_time/3, archive/1, platform sentinels)
+      plus the 18 new tests in retention_policy_test.exs (event_retention_policies
+      table/schema/CHECK constraints), per commit 896c20d's own stated breakdown.
+
+  historically_flaky_file_check:
+    file: test/letflow/plugs/tenant_status_test.exs
+    note: >
+      ISS-0011 and ISS-0031 (tenant_status_test.exs telemetry race under
+      async: true full-suite concurrency) are both status: resolved in
+      docs/issues/, fixed on main via commit 40d6bf5. Confirmed 40d6bf5 is an
+      ancestor of this branch's HEAD (76d320f) via
+      `git merge-base --is-ancestor 40d6bf5 HEAD`. Did not resurface in either
+      full-suite run (run1 used an unpinned/random seed, the condition class
+      under which this flake previously appeared).
+
+  known_noise_not_a_failure:
+    - >
+      [error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in NNNN ms.
+      — REQ-016's Ueberauth OIDC worker attempting to reach a deliberately
+      unreachable placeholder issuer configured in config/test.exs. Pre-existing
+      since REQ-016, already documented as expected noise in every prior WF-02
+      test report. Does not fail, skip, or affect any test.
+    - >
+      Verbose SQL query debug logging appears in raw mix test output
+      (config/test.exs's default test log level) — expected, not indicative of
+      any problem.
+
+pre_existing_failures_found: none
+issues_filed: none
+issues_referenced_not_refiled:
+  - id: ISS-0011
+    status: resolved
+  - id: ISS-0031
+    status: resolved
+  note: >
+    Same underlying flake class (tenant_status_test.exs telemetry race), fixed
+    on main via commit 40d6bf5, confirmed an ancestor of this branch's HEAD.
+    Watched for specifically (unpinned-seed full run) and did not resurface.
+    Not re-filed — nothing to file.
+
+test_file_breakdown:
+  new_req_026:
+    items:
+      - file: test/letflow/event_store_test.exs
+        detail: >
+          18 tests added covering Store.read/2, read_global/1, point_in_time/3,
+          archive/1, and the platform sentinel event types — not-found-vs-empty-list
+          distinction, archive idempotency, ON DELETE RESTRICT ordering, and
+          limit-clamping edge cases, per test/specs/REQ-026.md's 7 acceptance
+          criteria.
+      - file: test/letflow/event_store/retention_policy_test.exs
+        detail: >
+          18 new tests covering the event_retention_policies table/schema and
+          its CHECK constraints, using Letflow.DataCase for sandboxed real-Postgres
+          access.
+    subtotal: 36
+  full_suite_grand_total: 503
+  cross_check: >
+    503 total (4 properties, 499 example tests) reproduced identically across
+    both full-suite runs (unpinned random seed, and pinned seed 0), matching
+    commit 896c20d's own stated count ("Full suite: 503 tests, 0 failures").
+    This Step 4 run is the independent, formal re-verification of that number
+    — run separately twice, output saved to log files and grepped for failure
+    markers rather than eyeballed, plus a targeted isolated re-run of REQ-026's
+    own two test files.
+
+diagnosis: "N/A — no failures observed in this run. Nothing routed back to ELIXIR-DEV or TEST-DESIGNER."
+
+regression_check_vs_baseline: >
+  Commit 896c20d's own stated baseline was 503 tests, 0 failures at the point
+  test code was added. This run reproduces that exact count identically, twice
+  (unpinned default seed and pinned seed 0), on the current branch HEAD
+  (76d320f), with output captured to log files and grepped for failure markers,
+  plus a targeted isolated re-run of the two new test files. Zero regressions
+  confirmed. ISS-0011/ISS-0031's known flaky condition was specifically watched
+  for (unpinned-seed run) and did not resurface.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-17-WF02-REQ026-20260817.yaml
+  next_action: "Route to RELEASE-VALIDATOR (WF-02 Step 5) — no rework needed."

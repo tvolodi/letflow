@@ -3005,3 +3005,80 @@ history:
       docs/migration/decisions/ file is named in REQ-032's acceptance
       criteria -- confirmed by re-reading the requirements.yaml entry
       directly, none applicable here.
+  - req: REQ-026
+    event: started
+    agent: ORCH
+    at: 2026-08-17T17:50:32Z
+    note: >
+      Event read paths, archive, and platform sentinels
+      (store.zig's read/readGlobal/pointInTime/archive + platform.zig).
+      Also creates event_retention_policies (its own migration, per
+      ISS-0013/GH#69) and resolves archive/1's row-level-move sourcing
+      per ISS-0014/GH#70 (Letflow's deliberate unpartitioned-first
+      architecture per 0003 Decision C, not an oversight of R-Co's
+      PAR-03 retirement of Store.archive()). Branched
+      feature/WF02-REQ026-20260817 from main (3735769).
+  - req: REQ-026
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-17T18:42:44Z"
+    note: >
+      RELEASE-VALIDATOR PASSed REQ-026 (Event read paths, archive, and
+      platform sentinels -- store.zig's read/readGlobal/pointInTime/archive
+      plus platform.zig's three sentinels) -- read/2 returns an instance's
+      events in ascending sequence_number order with up_to_sequence/
+      up_to_timestamp filters (up_to_sequence taking precedence per ES-06),
+      transparently resolving any $ref payload pointer via
+      event_payload_store, and returns an explicit not-found error (not an
+      empty list) for an instance_id with no instance_sequence row;
+      read_global/1 does cursor-based pagination via after_global_seq with
+      limit clamped to 1..1000 (0 treated as default 100); point_in_time/3
+      wraps read/2 with up_to_timestamp set; archive/1 moves events past
+      retention_days (global fallback, per-event-type
+      event_retention_policies rows taking precedence) into REQ-023's
+      events_archive via an idempotent insert-then-delete-confirmed
+      two-phase transaction that respects event_payload_store's ON DELETE
+      RESTRICT FK, without locking instance_projections/instance_sequence,
+      and returns the row-move count; running archive/1 twice moves the
+      same rows once and zero rows the second time. The three platform
+      sentinel constants (PLATFORM_INSTANCE_ID, PLATFORM_ACTOR_ID,
+      PLATFORM_TENANT_ID) are ported verbatim from platform.zig. Also
+      shipped the new GLOBAL event_retention_policies table (its own
+      migration + Ecto schema, per ISS-0013/GH#69 -- id/event_type(unique)/
+      policy(default keep_forever)/keep_days/keep_count/created_at/
+      updated_at) with its three CHECK constraints
+      (chk_retention_policy/chk_keep_days/chk_keep_count), matching R-Co's
+      003_event_archive.sql shape, deliberately not porting 037's later
+      hard_delete_days/hard_delete_count extension (no consuming mechanism
+      without PAR-03 partitioning). archive/1's row-level-move sourcing
+      follows ISS-0014/GH#70's resolution (option (a): Letflow's
+      deliberate unpartitioned-first architecture per 0003 Decision C, not
+      an oversight of R-Co's own PAR-03 retirement of Store.archive()).
+      Clean, first-attempt run through every gate this session --
+      CODE-DESIGNER/CODE-DESIGN-VALIDATOR, ELIXIR-DEV, SECURITY-REVIEWER,
+      REVIEWER, TEST-DESIGNER/TEST-DESIGN-VALIDATOR, TEST-RUNNER,
+      RELEASE-VALIDATOR all PASS with no rework needed. Full suite: 503
+      tests, 4 properties, 0 failures. Flipped docs/requirements.yaml
+      REQ-026 status: in_progress -> done.
+      docs/migration/stage-2-event-store-definitions.md header's
+      Requirements line updated to move REQ-026 from the pending list to
+      the done list (same bulk-refresh-at-stage-gate pattern as
+      REQ-025/REQ-029/REQ-032/REQ-033's DOC-UPDATER runs; not named in
+      REQ-026's own acceptance criteria). README.md checked and left
+      untouched: it doesn't track per-requirement S2 status at this
+      granularity (per its "Migration status" section), and this
+      requirement's read/archive functions plus the new
+      event_retention_policies table are internal context-module/schema
+      additions with no new HTTP route -- nothing in the documented "What's
+      here today"/"Running it" curl/mix flow changed, consistent with
+      REQ-025/REQ-032/REQ-033's DOC-UPDATER precedent. No
+      docs/migration/decisions/ file is named in REQ-026's acceptance
+      criteria -- confirmed by re-reading the requirements.yaml entry
+      directly, none applicable here. Checked docs/issues/ISS-0013.yaml and
+      docs/issues/ISS-0014.yaml (both cited in REQ-026's description as
+      ISS-0013/GH#69 and ISS-0014/GH#70): both already carry
+      status: resolved, resolved_by: ORCH, resolved_in_run:
+      WF03-ISS0013-20260817, resolved_at: 2026-08-17T07:18:39Z -- from a
+      prior WF-03 run that folded their resolution directly into REQ-026's
+      requirements.yaml entry before this run claimed it. No further
+      status update needed on either issue file.

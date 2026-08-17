@@ -411,18 +411,18 @@
       "workflow_id": "WF-02",
       "requirement_ids": ["REQ-025"],
       "stage": "S2",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": ["lib/letflow/event_store.ex", "priv/repo/migrations", "test/letflow/event_store_test.exs", "lib/letflow/tenant_provisioning.ex"],
       "lock_acquired_at": "2026-08-17T10:58:58Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 2d (REVIEWER) PASS -- routing to Step 3 (TEST-DESIGNER) next.",
+      "lock_released_at": "2026-08-17T13:22:48Z",
+      "released_lock": true,
+      "last_known_step": "PR #101 squash-merged into main as 7e7b7c7, queue task 45 released done, GH#53 closed.",
       "backfilled": true,
       "backfilled_at": "2026-08-17T12:55:00Z",
       "queue_task_id": 45,
       "queue_agent_id": "hetzner-orch",
       "worktree": "/home/tvolodi/letflow (Hetzner host ubuntu-16gb-nbg1-1)",
-      "note": "Event append (Store.append, ES-01/02/03/05/08/DB-03) -- Letflow's first multi-table Ecto.Multi atomic transaction and first requirement deriving tenant_id from the Ecto :prefix rather than a caller-supplied field. This registry entry itself is a backfill: the run started and progressed through Step 00-02d entirely via handoffs/WF02-REQ025-20260817/step-*.json without a registry.json entry ever being written (a prior session's gap, not caught until an ORCH session resuming after an abnormal mid-run termination noticed it missing while verifying state). Run history to date: 2 SECURITY-REVIEWER FAILs and re-PASSes on INV-8 (struct-shaped metadata crashing validate_metadata/1 -- is_map/1 alone doesn't exclude structs in Elixir), then a REVIEWER FAIL on OQ-5 (M6's insert-if-absent creation of an instance_projections row overstepping into EE-01/S3's deferred instance-start-population scope) -- resolved via CODE-DESIGNER redesigning M1/M6 to an update-only contract (M1 fails with {:error, :instance_not_started} on a missing row; M6 uses InstanceProjection.update_changeset/2, never insert/upsert), re-validated PASS through CODE-DESIGN-VALIDATOR, ELIXIR-DEV, SECURITY-REVIEWER, and REVIEWER in turn. Not yet complete -- TEST-DESIGNER/TEST-DESIGN-VALIDATOR/TEST-RUNNER/RELEASE-VALIDATOR/DOC-UPDATER/Step Final still ahead. This entry will be updated to COMPLETED/released_lock:true once merged."
+      "note": "Event append (Store.append, ES-01/02/03/05/08/DB-03) -- Letflow's first multi-table Ecto.Multi atomic transaction and first requirement deriving tenant_id from the Ecto :prefix rather than a caller-supplied field. This registry entry itself is a backfill: the run started and progressed through Step 00-02d entirely via handoffs/WF02-REQ025-20260817/step-*.json without a registry.json entry ever being written (a prior session's gap, not caught until an ORCH session resuming after an abnormal mid-run termination noticed it missing while verifying state) -- backfilled mid-run rather than at completion. Run history: 2 SECURITY-REVIEWER FAILs and re-PASSes on INV-8 (struct-shaped metadata crashing validate_metadata/1 -- is_map/1 alone doesn't exclude structs in Elixir), then a REVIEWER FAIL on OQ-5 (M6's insert-if-absent creation of an instance_projections row overstepping into EE-01/S3's deferred instance-start-population scope) -- resolved via CODE-DESIGNER redesigning M1/M6 to an update-only contract (M1 fails with {:error, :instance_not_started} on a missing row; M6 uses InstanceProjection.update_changeset/2, never insert/upsert), re-validated PASS through CODE-DESIGN-VALIDATOR, ELIXIR-DEV, SECURITY-REVIEWER (4th pass), and REVIEWER (2nd pass) in turn, then TEST-DESIGNER (10 new tests covering all 6 ACs plus the new :instance_not_started case) -> TEST-DESIGN-VALIDATOR -> TEST-RUNNER (411 tests/4 properties/0 failures) -> RELEASE-VALIDATOR (independent re-verification) -> DOC-UPDATER (status: done) -> Step Final, all PASS. No rebase conflicts (origin/main unchanged since Step 00). mix compile --warnings-as-errors clean, mix test 411/411 both pre-merge and re-verified post-merge on main's actual tip."
     }
   ]
 }

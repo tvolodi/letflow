@@ -442,6 +442,23 @@
       "note": "Definition snapshot store (snapshot.zig, PD-08) -- Letflow.Definitions.SnapshotStore.create/3(instance_id, definition_id, opts) (FOR SHARE-locked read of process_definitions + on_conflict: :nothing insert + re-select, all in one Repo.transaction) and get_by_instance_id/2(instance_id, opts), against REQ-027's already-shipped instance_definition_snapshots/process_definitions tables. No new migration. Full producer/validator chain via independent Agent-tool-dispatched subagents, all PASS on first attempt, no rework: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> ELIXIR-DEV (self-caught and fixed an INV-8-class UUID-cast crash risk not in the original design) -> SECURITY-REVIEWER -> REVIEWER (explicit, reasoned judgment on two open questions -- OQ-2 idempotency/definition_id-mismatch-on-retry accepted as first-writer-wins with a pinned test required, OQ-3 FOR SHARE lock mode confirmed correct) -> TEST-DESIGNER (16 new tests) -> TEST-DESIGN-VALIDATOR -> TEST-RUNNER (427 tests/4 properties/0 failures) -> RELEASE-VALIDATOR (independent re-verification) -> DOC-UPDATER (status: done) -> Step Final, all PASS. No rebase conflicts. mix compile --warnings-as-errors clean, mix test 427/427 both pre-merge and re-verified post-merge on main's actual tip."
     },
     {
+      "run_id": "WF02-REQ032-20260817",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-032"],
+      "stage": "S2",
+      "status": "IN_PROGRESS",
+      "owned_modules": ["lib/letflow/definitions/graph.ex", "lib/letflow/definitions/sub_process_interface.ex", "test/letflow/definitions"],
+      "lock_acquired_at": "2026-08-17T17:08:06Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 complete, branched feature/WF02-REQ032-20260817 from main (8e5e144), pushed. REQ-032 flipped in_progress.",
+      "backfilled": false,
+      "queue_task_id": 47,
+      "queue_agent_id": "hetzner-orch",
+      "worktree": "/home/tvolodi/letflow (Hetzner host ubuntu-16gb-nbg1-1)",
+      "note": "Sub-process interface contract, definition-time half only (sub_process_interface.zig, SPC-02) -- parseInterface/1 and validateSchemaShape/2, hooked into REQ-029's PD-05 node-attribute validation pass. SPC-01 (runtime activation/completion) explicitly out of scope, belongs to S3."
+    },
+    {
       "run_id": "WF02-REQ030-20260817",
       "workflow_id": "WF-02",
       "requirement_ids": ["REQ-030"],
@@ -456,7 +473,7 @@
       "queue_task_id": 48,
       "queue_agent_id": "tvolodi-orch",
       "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
-      "note": "Definition store CRUD (store.zig, PD-01/PD-03/PD-04/PD-07): create/1, get_by_id/1, get_active_by_name/1 (PD-07), list/1 (filters + cursor pagination), activate/1 (PD-03 atomic deprecate-then-activate, FOR UPDATE, nil-able SVC-03 hook for REQ-031), deprecate/1, archive/1 (PD-04 authoritative transition table). depends_on REQ-027/028/029 all done. Must reuse Letflow.TenantProvisioning.tenant_id_for_schema_name/1 (shipped by REQ-025, implementing this session's own 0003 addendum) for create/1's tenant_id derivation -- not reimplement it."
+      "note": "Definition store CRUD (store.zig, PD-01/PD-03/PD-04/PD-07): create/1, get_by_id/1, get_active_by_name/1 (PD-07), list/1 (filters + cursor pagination), activate/1 (PD-03 atomic deprecate-then-activate, FOR UPDATE, nil-able SVC-03 hook for REQ-031), deprecate/1, archive/1 (PD-04 authoritative transition table). depends_on REQ-027/028/029 all done. Must reuse Letflow.TenantProvisioning.tenant_id_for_schema_name/1 (shipped by REQ-025, implementing this session's own 0003 addendum) for create/1's tenant_id derivation -- not reimplement it. NOTE (added by hetzner-orch during WF02-REQ032-20260817's Step Final rebase, 2026-08-17T18:00Z): owned_modules here (\"lib/letflow/definitions\", directory-level) nominally overlaps REQ-032's file-level claims on the same directory -- REQ-032 started and is completing first (17:08:06Z vs 17:40:14Z); REQ-030 had not yet touched any files as of this note (still routing to CODE-DESIGNER), so no actual content conflict exists yet. Flagging per ORCHESTRATOR.md Sec7 for whichever ORCH instance next advances REQ-030 to check its design doesn't land conflicting changes in graph.ex/sub_process_interface.ex."
     }
   ]
 }

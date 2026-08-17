@@ -43,9 +43,9 @@
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ031-20260817",
-      "commit_sha_list": [],
+      "commit_sha_list": ["820e7e8b29965e952ef157ff64bb36f480b32b51"],
       "remote_branch": "origin/feature/WF02-REQ031-20260817",
-      "push_status": "pending",
+      "push_status": "ok",
       "pr_url": null,
       "pr_create_error": null
     },

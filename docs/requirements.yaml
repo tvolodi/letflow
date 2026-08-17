@@ -1489,7 +1489,7 @@ requirements:
       - "create/2 against a valid definition_id inserts a snapshot row whose graph matches the source process_definitions row's graph at the moment of the call"
       - "create/2 called twice with the same instance_id is idempotent (no error, no second row) OR returns a distinct SnapshotAlreadyExists-equivalent error -- pick one behavior and state which in the moduledoc, since definition.md's own text supports the idempotent reading for an EE-01 retry"
       - "get_by_instance_id/1 against an instance_id with no snapshot returns a not-found error, not nil silently"
-      - "deleting the source process_definitions row (where FK rules permit, e.g. a DRAFT definition) does not remove or invalidate an existing snapshot row, per PD-08's no-ON-DELETE-CASCADE design (REQ-027)"
+      - "deleting a process_definitions row that an instance_definition_snapshots row references is rejected by the database (foreign_key_violation), and the snapshot row remains present and unmodified -- per PD-08's no-ON-DELETE-CASCADE design (REQ-027); a snapshot is never removed as a side effect of deleting its source definition"
       - "the moduledoc explicitly states the EE-01 instance-start integration point is S3 scope, not built here"
     depends_on: [REQ-027]
 

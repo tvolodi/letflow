@@ -69,4 +69,16 @@ description: >
 affected_files:
   - docs/requirements.yaml
 github_issue: https://github.com/tvolodi/letflow/issues/82
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0024-20260817
+resolved_at: 2026-08-17T05:16:54Z
+resolution: >
+  Applied the suggested rewording verbatim to REQ-033's fourth
+  acceptance criterion in docs/requirements.yaml, before REQ-033 was
+  claimed (status was still pending). REQ-033's implementer will now be
+  asked to demonstrate the actual PD-08 guarantee (delete rejected by
+  foreign_key_violation, snapshot survives unchanged) rather than a
+  non-existent "FK rules permit" case. No code change needed --
+  REQ-027's own FK implementation was already correct per this issue's
+  own finding; only REQ-033's not-yet-built criterion was wrong.

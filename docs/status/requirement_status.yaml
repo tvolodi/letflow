@@ -2051,3 +2051,31 @@ history:
       moduledocs were confirmed to carry that citation. No lib/, priv/, test/
       or design file was touched by this DOC-UPDATER pass -- all of those had
       already passed hard gates earlier in this run.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-17T05:16:54Z
+    note: >
+      Resolved ISS-0024 (GitHub #82, MAJOR, filed by CODE-DESIGNER during
+      WF02-REQ027-20260816): REQ-033's fourth acceptance criterion presumed
+      a "where FK rules permit" delete case that PD-08's NO ACTION FK makes
+      impossible -- no process_definitions row with an existing snapshot can
+      ever be deleted, regardless of status, so the DRAFT carve-out named in
+      the original wording does not exist. Applied the issue's own suggested
+      rewording verbatim to docs/requirements.yaml's REQ-033 criterion 4,
+      asserting the actual (stronger, demonstrable) PD-08 guarantee: the
+      delete is rejected with foreign_key_violation and the snapshot survives
+      unchanged. Verified REQ-033 was still status: pending (not yet claimed)
+      before editing, per the issue's own "resolve before REQ-033 is claimed"
+      condition. Validated docs/requirements.yaml still parses via
+      `npx js-yaml`. Marked ISS-0024.yaml status: resolved with the same
+      reasoning recorded there. No lib/, priv/, or test/ file touched --
+      REQ-027's own FK implementation was already correct per the issue's own
+      finding (confirmed against the live Postgres catalog in REQ-027's own
+      RELEASE-VALIDATOR pass); only REQ-033's not-yet-built criterion needed
+      correcting. This turn also exercised letflow-queue end-to-end for the
+      first time via a per-client API key (see letflow-queue PRs #1-#2):
+      get_next_task's new issue-vs-requirement priority correctly returned
+      this GitHub-imported issue task (queue task 75, github_issue_number 82)
+      ahead of the entire open S2 requirement backlog, then released
+      (status: done) via the same key after this fix landed.

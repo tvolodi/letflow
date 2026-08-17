@@ -758,41 +758,183 @@ defmodule Letflow.Definitions.StoreTest do
   # Regression coverage (not one of the 9 numbered acceptance criteria): design doc
   # §6.2's documented "genuine cross-row race" and SECURITY-REVIEWER's filed,
   # REVIEWER-accepted, non-blocking finding -- activate/2's TOCTOU between two
-  # DIFFERENT DRAFT rows sharing the same `name`, activated concurrently. Cheap to
-  # demonstrate given AC2's test already exercises the same Task.async machinery.
+  # DIFFERENT DRAFT rows sharing the same `name`, activated concurrently.
+  #
+  # REWORK NOTE (this run): an earlier version of this test relied on plain
+  # `Task.async` with no synchronization and asserted the race "did trigger" as
+  # verified fact. TEST-DESIGN-VALIDATOR re-ran it 10 times independently and got
+  # zero occurrences of the race path -- every run took the safe sequential branch
+  # instead, because un-synchronized BEAM/Postgres scheduling essentially never
+  # produces the precise interleaving §6.2 describes (one task's whole activate/2
+  # call, lock-to-commit, is fast enough to usually finish before the other task
+  # even starts). That was a real No Speculation violation: the spec stated a fact
+  # that wasn't reproducible. Fixed here by DETERMINISTICALLY forcing the
+  # interleaving instead of hoping for it -- see below.
   # ---------------------------------------------------------------------------------
 
   describe "Regression -- activate/2 cross-row TOCTOU (design doc §6.2)" do
+    # -------------------------------------------------------------------------------
+    # How the forcing works, read this before the test below.
+    #
+    # activate/2 (lib/letflow/definitions.ex, run_activate_transaction/4 +
+    # activate_draft/2) does, per row, inside one DB transaction:
+    #   (1) SELECT ... FOR UPDATE       -- locks only THIS row (different ids never
+    #                                      block each other -- design doc §6.2)
+    #   (2) UPDATE ... WHERE name = ^name AND status = 'active'   -- deprecate-step
+    #   (3) UPDATE ... WHERE id = ^id AND status = 'draft'        -- self-activate
+    #   (4) COMMIT
+    #
+    # The race design doc §6.2 documents requires BOTH tasks' step (2) to run (and
+    # find nothing, since both rows start DRAFT) BEFORE EITHER task's step (3)
+    # commits -- only then does step (3) become a genuine fight over the same
+    # `uq_active_definition` partial-unique-index key, which Postgres resolves by
+    # raising a unique_violation on whichever transaction's step (3) loses. If
+    # instead one task fully finishes (steps 1-4) before the other even reaches
+    # step (2), the second task's own step (2) sees the first's committed ACTIVE
+    # row and correctly deprecates it -- the safe branch, no race, exactly what
+    # every unsynchronized run above observed.
+    #
+    # activate/2's only public extension point, `service_scope_validator`, fires
+    # too early to use as a rendezvous here (before step 2, not between steps 2 and
+    # 3 -- see the moduledoc). Rather than add a test-only hook to production code
+    # (disproportionate surgery on a security-relevant transaction, for a need this
+    # test alone has), this uses Ecto's own built-in, already-there query telemetry
+    # (`[:letflow, :repo, :query]`, emitted automatically for every query by
+    # `Ecto.Repo`/`ecto_sql` -- `deps/ecto_sql/lib/ecto/adapters/sql.ex`'s `log/5`,
+    # confirmed by direct reading, not guessed) as the rendezvous instead: a
+    # telemetry handler fires SYNCHRONOUSLY in the same process that issued the
+    # query, immediately after that query completes and before the calling code
+    # (activate_draft/2) moves on to the next one. That is exactly the window
+    # between step (2) and step (3). Attaching a handler that blocks (via a plain
+    # `receive`) the first time it observes each task's SECOND
+    # `source: "process_definitions"` query event (event #1 is step (1)'s SELECT
+    # FOR UPDATE, event #2 is step (2)'s deprecate UPDATE) pins each task's process
+    # at precisely that window. Once BOTH tasks have signalled they are paused
+    # there, we know both step (2)s have already run and found nothing -- so
+    # releasing both guarantees the fight over the unique index at step (3) is
+    # real, not a maybe. No production code (lib/letflow/definitions.ex) is
+    # touched by any of this -- telemetry is a standard, already-present Ecto
+    # extension point, not a new test hook threaded into the transaction.
+    # -------------------------------------------------------------------------------
+
+    @toctou_query_event [:letflow, :repo, :query]
+
+    defp attach_toctou_pause(handler_id, task_pids, test_pid) do
+      :telemetry.attach(
+        handler_id,
+        @toctou_query_event,
+        fn _event, _measurements, metadata, _config ->
+          if metadata[:source] == "process_definitions" and MapSet.member?(task_pids, self()) do
+            count = Process.get(:req030_toctou_pd_query_count, 0) + 1
+            Process.put(:req030_toctou_pd_query_count, count)
+
+            # 2nd process_definitions-sourced query on this task's own connection
+            # == the deprecate-step UPDATE (step 2 above) has just completed and
+            # the self-activate UPDATE (step 3) has not yet been sent -- pause
+            # exactly there, once, and tell the test process we're parked.
+            if count == 2 do
+              send(test_pid, {:toctou_paused, self()})
+
+              receive do
+                :toctou_go -> :ok
+              end
+            end
+          end
+        end,
+        nil
+      )
+    end
+
+    defp assert_toctou_task_started(tag) do
+      assert_receive {:toctou_task_started, ^tag, pid}, 5_000
+      pid
+    end
+
     # Note: kept short deliberately -- ExUnit derives a compiled function name
     # (atom) from "test " <> describe-name <> " " <> test-name, and Erlang atoms
     # are capped at 255 bytes. The full rationale lives in the comments above
     # and in test/specs/REQ-030.md, not in this string.
-    test "concurrent activation of two DRAFT rows sharing a name never yields a double-ACTIVE state" do
+    test "concurrent activation of two DRAFT rows sharing a name deterministically forces the race, never a double-ACTIVE state" do
       %{schema_name: schema_name} = provisioned_tenant()
       name = unique_name("toctou")
 
       definition_1 = create!(schema_name, %{name: name, version: "1.0.0"})
       definition_2 = create!(schema_name, %{name: name, version: "2.0.0"})
 
-      task1 = Task.async(fn -> Definitions.activate(definition_1.id, prefix: schema_name) end)
-      task2 = Task.async(fn -> Definitions.activate(definition_2.id, prefix: schema_name) end)
+      test_pid = self()
+
+      task1 =
+        Task.async(fn ->
+          send(test_pid, {:toctou_task_started, :task1, self()})
+
+          receive do
+            :toctou_run -> :ok
+          end
+
+          Definitions.activate(definition_1.id, prefix: schema_name)
+        end)
+
+      task2 =
+        Task.async(fn ->
+          send(test_pid, {:toctou_task_started, :task2, self()})
+
+          receive do
+            :toctou_run -> :ok
+          end
+
+          Definitions.activate(definition_2.id, prefix: schema_name)
+        end)
+
+      task1_pid = assert_toctou_task_started(:task1)
+      task2_pid = assert_toctou_task_started(:task2)
+
+      handler_id = "req030-toctou-#{System.unique_integer([:positive, :monotonic])}"
+      on_exit(fn -> :telemetry.detach(handler_id) end)
+      assert :ok = attach_toctou_pause(handler_id, MapSet.new([task1_pid, task2_pid]), test_pid)
+
+      send(task1_pid, :toctou_run)
+      send(task2_pid, :toctou_run)
+
+      # Both tasks are now guaranteed to reach, and block at, the window between
+      # their own deprecate-step and self-activate-step -- confirmed by receiving
+      # both pause signals below, not assumed.
+      assert_receive {:toctou_paused, ^task1_pid}, 5_000
+      assert_receive {:toctou_paused, ^task2_pid}, 5_000
+
+      # Release both. Both now attempt to write the same uq_active_definition
+      # partial-unique-index key (name, active) with neither having deprecated the
+      # other (impossible -- both deprecate-steps already ran and found nothing,
+      # confirmed above) -- Postgres's unique index deterministically makes exactly
+      # one of the two writes win and raises unique_violation on the other,
+      # exercising the real {:error, {:transaction_failed, _}} fallback path design
+      # doc §6.2 documents, not merely citing it as a theoretical possibility.
+      send(task1_pid, :toctou_go)
+      send(task2_pid, :toctou_go)
 
       [result1, result2] = Task.await_many([task1, task2], 15_000)
+      results = [result1, result2]
 
-      # Every outcome must be either a real success or the documented
-      # {:transaction_failed, _} fallback (design doc §6.2's "genuine cross-row
-      # race" note and §4.0's TransactionFailed catch-all) -- never a silent,
-      # differently-shaped error, and never a raised exception escaping the test.
-      for result <- [result1, result2] do
-        assert match?({:ok, %{already_active: false}}, result) or
-                 match?({:error, {:transaction_failed, _reason}}, result),
-               "unexpected activate/2 outcome under the race: #{inspect(result)}"
-      end
+      successes = Enum.filter(results, &match?({:ok, %{already_active: false}}, &1))
+      race_errors = Enum.filter(results, &match?({:error, {:transaction_failed, _reason}}, &1))
 
-      # The core safety invariant, regardless of exactly which interleaving occurred
-      # (inherently timing-dependent, per the design doc's own note that this
-      # ports R-Co's identical unhandled-race fallback): at most one row is ever
-      # ACTIVE for this name -- never a corrupted double-ACTIVE state.
+      assert results -- (successes ++ race_errors) == [],
+             "unexpected activate/2 outcome under the forced race -- expected only a real " <>
+               "success or {:error, {:transaction_failed, _}}, got: #{inspect(results)}"
+
+      assert length(successes) == 1,
+             "expected exactly one real activation to win the deterministically-forced race, " <>
+               "got: #{inspect(results)}"
+
+      assert length(race_errors) == 1,
+             "expected exactly one {:error, {:transaction_failed, _}} from the deterministically-" <>
+               "forced race -- the synchronization guarantees both self-activate UPDATEs fight " <>
+               "over the same uq_active_definition key with neither having deprecated the other " <>
+               "first, so a real Postgres unique_violation on the loser is guaranteed, not merely " <>
+               "possible, got: #{inspect(results)}"
+
+      # The core safety invariant, regardless of which task happened to win the
+      # forced race: exactly one row is ever ACTIVE for this name -- never a
+      # corrupted double-ACTIVE state.
       assert count_active_by_name(schema_name, name) == 1
     end
   end

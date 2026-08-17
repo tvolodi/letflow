@@ -579,7 +579,7 @@
         "REQ-037"
       ],
       "stage": "S2",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/definitions/promotion_review.ex",
         "lib/letflow/definitions/promotion.ex",
@@ -587,9 +587,9 @@
         "test/letflow/definitions/promotion_test.exs"
       ],
       "lock_acquired_at": "2026-08-17T18:57:34Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 (git-setup) COMPLETED -- feature/WF02-REQ037-20260817 branched from origin/main, pushed. Baseline: mix compile clean, MIX_TEST_PARTITION=2 mix test 536/536.",
+      "lock_released_at": "2026-08-17T20:21:08Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (git-merge) COMPLETED -- PR #111 squash-merged as 84a5c32, handoff SHA patch-up 09aaaef. One rework cycle (INV-1 BLOCKER, fixed and re-verified). Full suite re-verified green on merged tip (593/593, 4 properties -- REQ-030 landed concurrently).",
       "backfilled": false,
       "queue_task_id": 54,
       "queue_agent_id": "hetzner-wt2-orch",

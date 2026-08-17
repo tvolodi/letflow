@@ -836,4 +836,106 @@ defmodule Letflow.Definitions.GraphTest do
       assert Graph.valid_cel_syntax?("this_variable_does_not_exist_anywhere == 42") == true
     end
   end
+
+  # ---------------------------------------------------------------------
+  # validate_node_attributes/1 -- CHK-18 (REQ-032): SUB_PROCESS interface,
+  # delegated to Letflow.Definitions.SubProcessInterface. Full coverage of
+  # the delegate's own algorithm (all 6 violation codes, the 32-level depth
+  # cap, the inert-unknown-keyword rule) lives in
+  # test/letflow/definitions/sub_process_interface_test.exs, per the design
+  # doc §1's stated testability rationale (standalone-testable without a
+  # Graph.t()) -- this describe block proves the wiring itself: that CHK-18
+  # actually calls the delegate from inside validate_node_attributes/1, and
+  # that a SUB_PROCESS node is otherwise an ordinary graph node.
+  # ---------------------------------------------------------------------
+
+  describe "validate_node_attributes/1 -- CHK-18: SUB_PROCESS interface, acceptance criterion 1" do
+    test "a SUB_PROCESS node with a well-formed interface passes validation, and its attributes are returned/persisted unchanged" do
+      attributes = %{
+        "interface" => %{
+          "inputs" => [%{"name" => "amount", "json_schema" => %{"type" => "number"}}],
+          "outputs" => [%{"name" => "result", "json_schema" => %{"type" => "boolean"}}]
+        }
+      }
+
+      node = attr_node("sp1", :SUB_PROCESS, attributes)
+      g = graph([node], [])
+
+      assert Graph.validate_node_attributes(g) == %{valid: true, violations: []}
+
+      # AC1's "persisted unchanged as part of the node's attributes": CHK-18
+      # (like every other check in this module) returns violations only --
+      # never a transformed graph/node/attributes value (design doc §5.4).
+      # The node handed to validate_node_attributes/1 above still carries
+      # its original, untouched attributes map.
+      assert node.attributes == attributes
+    end
+
+    test "a SUB_PROCESS node with no 'interface' attribute at all is valid ('interface' is optional)" do
+      g = graph([attr_node("sp1", :SUB_PROCESS, nil)], [])
+      assert Graph.validate_node_attributes(g) == %{valid: true, violations: []}
+    end
+  end
+
+  describe "validate_node_attributes/1 -- CHK-18: wiring proof (a malformed interface actually surfaces through the full check list)" do
+    test "a SUB_PROCESS node with a malformed interface -> the delegate's violation appears in validate_node_attributes/1's result" do
+      # Proves check_sub_process_interface/1 actually calls
+      # Letflow.Definitions.SubProcessInterface.validate_node_interface/2 and
+      # concatenates its result -- a caller that forgot to wire CHK-18 into
+      # the check list (or called the delegate but discarded the result)
+      # would pass every sub_process_interface_test.exs test yet fail this
+      # one. Same "wiring" test shape as REQ-029's CHK-17 test above.
+      g = graph([attr_node("sp1", :SUB_PROCESS, %{"interface" => "not-an-object"})], [])
+
+      result = Graph.validate_node_attributes(g)
+      assert result.valid == false
+      assert codes(result) == [:sub_process_interface_not_object]
+
+      [violation] = result.violations
+      assert violation.message =~ "sp1"
+    end
+
+    test "two SUB_PROCESS nodes, each with a distinct violation -> both surface, never-short-circuit, node ids attributed correctly" do
+      g =
+        graph(
+          [
+            attr_node("sp1", :SUB_PROCESS, %{"interface" => "not-an-object"}),
+            attr_node("sp2", :SUB_PROCESS, %{"interface" => %{"inputs" => "not-a-list"}})
+          ],
+          []
+        )
+
+      result = Graph.validate_node_attributes(g)
+      assert result.valid == false
+
+      assert codes(result) == [
+               :sub_process_interface_not_object,
+               :sub_process_interface_inputs_not_array
+             ]
+
+      [v1, v2] = result.violations
+      assert v1.message =~ "sp1"
+      assert v2.message =~ "sp2"
+    end
+
+    test "a non-SUB_PROCESS node carrying an 'interface'-shaped attribute is never checked by CHK-18 (no-op on other types)" do
+      g =
+        graph(
+          [attr_node("h1", :HUMAN_TASK, %{"role" => "manager", "interface" => "not-an-object"})],
+          []
+        )
+
+      assert Graph.validate_node_attributes(g) == %{valid: true, violations: []}
+    end
+  end
+
+  describe "SUB_PROCESS nodes are otherwise ordinary graph nodes (design doc §2/§9)" do
+    test "a SUB_PROCESS node with zero edges is still rejected by CHK-04 (isolated node) -- unaffected by CHK-18" do
+      g = graph([node("start", :START), node("sp1", :SUB_PROCESS), node("end", :END)], [])
+
+      result = Graph.validate_graph(g)
+      assert result.valid == false
+      assert :isolated_node in codes(result)
+    end
+  end
 end

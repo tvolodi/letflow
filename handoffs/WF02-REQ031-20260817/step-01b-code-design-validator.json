@@ -1,0 +1,63 @@
+{
+  "handoff_id": "f3a1b2c4-9d3e-4b7a-8c2f-6e0a1d5b9c73",
+  "run_id": "WF02-REQ031-20260817",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ031-20260817/step-01b-code-design-validator.json",
+  "created_at": "2026-08-17T20:17:40Z",
+  "started_at": "2026-08-17T20:17:40Z",
+  "completed_at": "2026-08-17T20:17:40Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-031"],
+    "related_handoff_ids": ["8ba85850-fe2f-4c1f-8336-c4a4aae3588e"],
+    "artifacts_in": [
+      "lib/letflow/design/req031-service-scope-validator.md",
+      "docs/requirements.yaml (REQ-031 entry)",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/definitions/graph.ex",
+      "C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\definition\\service_scope_validator.zig",
+      "C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\design\\svc-01-04-service-scope.md"
+    ],
+    "owned_modules": ["lib/letflow/design/req031-service-scope-validator.md"]
+  },
+  "task": {
+    "description": "WF-02 Step 1b hard gate on CODE-DESIGNER's req031-service-scope-validator.md design for REQ-031 (Service scope activation validator, SVC-03). Independently verify: no implementation code, exact fidelity to REQ-030's already-shipped activate/2 hook contract, faithful port of R-Co's real algorithm, all 5 acceptance criteria mapped to concrete design elements, AC3's reason distinctness, AC5's moduledoc text, spot-checked factual/line-number claims, and overall buildability without ELIXIR-DEV judgment calls.",
+    "acceptance_criteria": [
+      "No .ex/.exs implementation code (function bodies) present, only @type/@spec/struct shapes",
+      "build/1's output type-matches Letflow.Definitions.service_scope_validator_fun() with zero changes needed to definitions.ex",
+      "Algorithm faithfully ports service_scope_validator.zig's real logic, not a plausible approximation",
+      "Every REQ-031 acceptance criterion maps to a concrete, unambiguous design element",
+      "AC3's not-registered reason is structurally (not just textually) distinct from owned-by-another-tenant",
+      "AC5's required moduledoc text names ServiceCatalog/PluginRegistry gaps and their target stages",
+      "Cited factual claims about definitions.ex/graph.ex/R-Co source spot-checked against the real files"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "FAIL on R-Co fidelity (check 3). Six of seven checks pass cleanly: (1) no implementation code -- the design's two defmodule blocks (Lookup, Violation) are plain defstruct/@enforce_keys/@type shapes with zero def/defp function bodies, confirmed by grep. (2) Hook contract fidelity -- direct read of lib/letflow/definitions.ex confirms @type service_scope_validator_fun (line 103-104), activate_opts (106-109), run_activate_transaction's :draft-only branch (606-629, draft case at 622), run_service_scope_validator's nil-skip and non-nil clauses (631-645), and interpret_activate_result's pass-through clause (679) all match the design's citations verbatim, including exact line numbers -- the design proposes zero changes to definitions.ex or graph.ex, confirmed correct. (4) All 5 ACs map to a concrete design element (service branch table for AC1/2, closed reason() union for AC3, section 6 for AC4, section 7's verbatim moduledoc text for AC5). (5) AC3's reason field is a closed-set atom union (:service_not_registered | :service_not_available_to_tenant | :plugin_not_available_to_tenant), structurally distinguishable, not just different message strings -- satisfies AC3's literal wording. (6) AC5's moduledoc text (section 7) explicitly names ServiceCatalog->S6 and PluginRegistry->S3 near-verbatim, not a vague future intention. (7) Spot-checked 5 of the design's factual citations against the real files (graph.ex Violation @enforce_keys line 118-119, Node @enforce_keys line 79, Node.attributes type line 86, definitions.ex @node_type_map line 730-738, Map.get(node, \"attributes\") line 778) -- all accurate. BUT check 3 (R-Co algorithm fidelity) fails: design section 5's 'Plugin branch table' collapses two behaviorally distinct R-Co cases into one 'Violation' outcome. In service_scope_validator.zig's checkPluginHandler (lines 185-201), when a resolved plugin registry entry has scope == .tenant, the code is `const owner = reg.owner_tenant_id orelse return;` (line 187) -- in Zig, `orelse return` on a null owner_tenant_id returns SUCCESSFULLY (void, no error) i.e. a SILENT PASS with no violation recorded. This is structurally different from checkServiceId's handling of the same null-owner case (lines 141-151): `const owner = rec.owner_tenant_id orelse { self._last_violation = ...; return ServiceScopeError.ServiceNotAvailableToTenant; };` -- an explicit VIOLATION. R-Co therefore treats a tenant-scoped record with a null owner_tenant_id oppositely for service vs. plugin: fail-closed (violation) for service, fail-open (silent pass) for plugin. The design's own service branch table (row 3, correctly) treats the service nil-owner case as a violation, matching R-Co. But the design's plugin branch table's row 4 reads '`{:ok, %{scope: :tenant, owner_tenant_id: owner}}` where `owner != tenant_id` (nil or mismatched) | Violation' -- this incorrectly folds the nil-owner sub-case into the violation outcome, when R-Co's real source treats nil-owner-with-tenant-scope as a pass for plugins. INV-SSV-7 (design section 8) states the nil-owner-is-a-violation rule but scopes it explicitly to 'section 5's service branch table, row 3' only -- it does not claim this for the plugin table, yet the plugin table applies the same (wrong, for plugins) rule anyway, and section 5's own 'why the asymmetry is preserved' note discusses only the not-registered/skip asymmetry (INV-SSV-5), never mentioning this second, orthogonal nil-owner asymmetry -- indicating it was missed, not deliberately and explicitly deferred/flagged the way this design otherwise flags every other divergence (OQ-1/2/3). If ELIXIR-DEV builds section 5's plugin branch table as written, a future PluginRegistry adapter returning {:ok, %{scope: :tenant, owner_tenant_id: nil}} for a plugin lookup would incorrectly raise a violation where R-Co's real, in-production logic silently passes. This is not a hypothetical edge case bar -- it is a directly cited, load-bearing branch of the exact function (checkPluginHandler) this design claims to port, and the design's own AC-traceability table (section 11) and demonstration-shape guidance for TEST-DESIGNER (section 6) would lead a test suite to assert the WRONG behavior as correct with no other check catching the divergence downstream.",
+    "artifacts_out": ["handoffs/WF02-REQ031-20260817/step-01b-code-design-validator.json"],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "Design section 5's plugin branch table (row: 'owner != tenant_id (nil or mismatched) -> Violation') does not match R-Co's real service_scope_validator.zig checkPluginHandler (lines 185-201). R-Co's `const owner = reg.owner_tenant_id orelse return;` (line 187) treats a tenant-scoped plugin lookup result with a null owner_tenant_id as a SILENT PASS (bare `return;` in a `ServiceScopeError!void` function is a successful return, not an error) -- structurally opposite to checkServiceId's identical-shaped null-owner case (lines 141-151), which explicitly constructs a violation and returns ServiceScopeError.ServiceNotAvailableToTenant. The design must split the plugin branch table's nil-owner and mismatched-owner sub-cases into two distinct rows with two distinct outcomes (nil owner -> Pass, matching R-Co line 187; non-nil mismatched owner -> Violation, matching R-Co lines 188-200), or explicitly justify and flag a deliberate deviation from R-Co's real behavior (the way OQ-1/2/3 flag every other divergence) rather than silently applying the service table's rule to the plugin table where R-Co itself does not.",
+        "affected_requirement": "REQ-031"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ031-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ031-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Rework CODE-DESIGNER: fix section 5's plugin branch table (and any consequent update needed to INV-SSV-7 or a new invariant covering the plugin-side nil-owner case) to faithfully port service_scope_validator.zig's checkPluginHandler null-owner-is-a-pass behavior, then resubmit to CODE-DESIGN-VALIDATOR for re-validation. All other checks (1,2,4,5,6,7) passed and do not need rework."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

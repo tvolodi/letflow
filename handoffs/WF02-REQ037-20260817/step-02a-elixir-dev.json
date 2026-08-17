@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ037-20260817/step-02a-elixir-dev.json",
   "created_at": "2026-08-17T19:17:06Z",
   "started_at": "2026-08-17T19:17:06Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-17T19:25:43Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S2",
@@ -34,19 +34,31 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": null,
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "Implemented REQ-037 exactly per the validated design (lib/letflow/design/promotion_review_state_machine.md): Letflow.Definitions.PromotionReviewStore (new file, lib/letflow/definitions/promotion_review_store.ex) with insert_review/2, approve_review/4 (4-gate order: self-approval -> status -> digest -> row_version-guarded update, 3 distinct error atoms plus review_not_found), reject_review/3, mark_review_applied/2, mark_review_failed/2, supersede_review/3 -- all six routed through one private transition/6 helper (pre_gate/status-check/post_gate/guarded-UPDATE) so 'exactly 7 permitted edges, no 8th' is structural: each function supplies only its own fixed allowed_source_statuses list. Letflow.Definitions.PromotionReview (schema, REQ-035) left untouched. Letflow.Definitions.Promotion (new file, lib/letflow/definitions/promotion.ex) with promote_definition/3: reuses PromotionPlan's permission_checker (Keyword.fetch!, no default) / tenant_classifier (defaults via direct &PromotionPlan.default_tenant_classifier/1 reference, no duplicated copy) opts shape, adds opts[:event_appender] with no built-in default per design OQ-1; runs the design's 10-step algorithm (JSON-decode plan, permission gate, tenant-classifier gate, prefix resolution, source-definition read, PromotionConflict.reject_if_conflicts/4 re-check, insert+deprecate+activate inside one Repo.transaction/1, event-append after commit). Both moduledocs restate INV-PRM04-1..5 and the approve_review/4 gate contract verbatim per the design's own requirement. Self-review: ran a throwaway ExUnit sanity test (provisioned two real tenant schemas, exercised all 7 edges including the NEW rejected->superseded edge, 3 non-edges rejected with :invalid_transition, gate-order/atom checks, duplicate-review guard, and a promote_definition/3 smoke run with a stub event_appender) -- all assertions passed, then deleted the file before commit (not part of committed suite; TEST-DESIGNER owns real coverage in Step 3).",
+    "artifacts_out": [
+      "lib/letflow/definitions/promotion_review_store.ex",
+      "lib/letflow/definitions/promotion.ex"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Handoff's own owned_modules/task text said 'extend lib/letflow/definitions/promotion_review.ex ... likely Letflow.Definitions.PromotionReviewStore as a sibling context'. The validated design (§1.2, an explicit file/module table) resolves this more precisely than the handoff's own hedge: PromotionReview (schema, REQ-035) stays untouched in its own file, and the new transition functions live in a NEW file, lib/letflow/definitions/promotion_review_store.ex, module Letflow.Definitions.PromotionReviewStore -- mirroring the InstanceDefinitionSnapshot/SnapshotStore schema-vs-context split precedent the design cites. Followed the design literally rather than the handoff's own softer phrasing; lib/letflow/definitions/promotion_review.ex was not modified. Not a design divergence -- the design itself made this call and CODE-DESIGN-VALIDATOR already passed it."
+      },
+      {
+        "severity": "MINOR",
+        "description": "insert_review/2's @type insert_review_error includes :invalid_tenant_id per the design's literal @spec (design §2.3), but the design's own algorithm text (steps 1-5) never produces that error -- insert_review/2 takes opts[:prefix] directly rather than deriving it from a tenant_id via TenantProvisioning, so there is no code path that returns it. Implemented the @type exactly as the design states (per the task's 'follow the design's ... type shapes ... exactly' instruction) rather than narrowing it to only what the algorithm can actually produce. Flagging for REVIEWER rather than silently narrowing or silently leaving unexplained."
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ037-20260817",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF02-REQ037-20260817",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to SECURITY-REVIEWER (2c)"
   },
   "rework_count": 0,
   "max_rework": 3

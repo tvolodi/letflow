@@ -99,4 +99,38 @@ description: >
 affected_files:
   - docs/agents/instructions/security-invariants.md
 github_issue: https://github.com/tvolodi/letflow/issues/74
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0018-20260817
+resolved_at: 2026-08-17T07:36:18Z
+resolution: >
+  Fixed both defects the record's own history identified, not just the
+  originally-filed one: added --include=*.exs to both INV-4 greps
+  (matching INV-7's already-correct shape), AND fixed the second
+  reviewer's later finding that the secret-pattern regex was anchored on
+  '=' while Elixir config uses keyword form (`password: "..."`) --
+  changed `\s*=\s*` to `\s*(=|:)\s*`.
+
+  Verified both fixes actually work against the real repo rather than
+  trusting the edit: ran the corrected System.get_env grep, confirmed it
+  now finds real hits under config/ (config/dev.exs, config/runtime.exs,
+  config/test.exs) that the broken version structurally could not see.
+  Ran the corrected secret-heuristic grep against the real repo: zero
+  hits, which is the CORRECT result today (dev.exs/test.exs's
+  password: "letflow" is 7 chars, below the {8,} threshold, the same
+  throwaway credential already assessed in this record). Proved the
+  regex isn't just coincidentally clean by testing it standalone: a
+  synthetic `password: "supersecretvalue123"` (>=8 chars, keyword form)
+  matches; a synthetic `password: "letflow"` (7 chars) correctly does
+  not.
+
+  Per the issue's own suggested audit, explicitly confirmed (not
+  assumed) that INV-8's grep is correctly .ex-only (scoped to
+  lib/letflow/ compiled code, where .exs files don't exist) -- no change
+  needed there. Grepped the whole file for every --include= occurrence
+  to check for other instances of the same file-glob/search-root
+  mismatch class -- none found; all four grep-based checks are now
+  internally consistent.
+
+  No lib/, priv/, or test/ file touched -- security-invariants.md
+  verification-procedure correction only.

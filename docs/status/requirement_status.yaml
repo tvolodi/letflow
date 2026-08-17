@@ -2441,3 +2441,33 @@ history:
       in place, so left untouched. No lib/, priv/, or test/ file
       touched. Released queue task 62 as done via the per-client API
       key, closing GitHub issue #73.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-17T07:36:18Z
+    note: >
+      Resolved ISS-0018 (GH#74, MINOR, filed by SECURITY-REVIEWER during
+      WF02-REQ023-20260816 Step 2c, with a follow-up UPDATE from a second
+      SECURITY-REVIEWER pass during WF02-REQ027-20260816 -- queue task
+      61). INV-4's verification greps used --include=*.ex, which cannot
+      match anything under config/ (all .exs) -- the invariant's own
+      cited Reference (config/dev.exs's bearer token, config/runtime.exs's
+      DATABASE_URL) was invisible to its own check. The follow-up UPDATE
+      found that fix alone insufficient: the secret-heuristic regex was
+      anchored on '=' while Elixir config uses keyword form
+      (`password: "..."`), so even a file-glob fix would still see
+      nothing. Fixed both: added --include=*.exs to both greps (matching
+      INV-7's already-correct shape); changed the regex separator from
+      `\s*=\s*` to `\s*(=|:)\s*`. Verified against the real repo rather
+      than trusting the edit: the corrected System.get_env grep now
+      finds real config/ hits; the corrected secret grep returns zero
+      hits, which is the correct result today (the only candidate,
+      password: "letflow", is 7 chars, below the {8,} threshold) --
+      proved this isn't coincidental by testing the regex standalone
+      against a synthetic >=8-char keyword-form secret (matches) and a
+      7-char one (doesn't). Per the issue's own suggested audit,
+      confirmed (not assumed) INV-8's grep is correctly .ex-only.
+      Grepped the whole file for every --include= occurrence to check
+      for other instances of the same mismatch class -- none found. No
+      lib/, priv/, or test/ file touched. Released queue task 61 as done
+      via the per-client API key, closing GitHub issue #74.

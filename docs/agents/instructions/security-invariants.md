@@ -122,10 +122,15 @@ through a return value, log call, or struct field that could be serialised.
 instance — the token is read from config/env per its own acceptance criteria, not
 hardcoded as a literal.
 
-**How to verify.**
+**How to verify.** (Both commands fixed 2026-08-17, ISS-0018/GH#74 — the file-glob fix
+alone was found necessary but not sufficient by a second reviewer pass; see that issue's
+UPDATE for the full history. Two independent defects, both now fixed: `--include=*.ex`
+alone cannot match anything under `config/`, since every file there is `.exs`; and the
+pattern was anchored on `=` assignment while Elixir config sets values in keyword form
+(`password: "..."`), which `=` can never match regardless of which files are searched.)
 ```bash
-grep -rn "System.get_env" config/ lib/ --include=*.ex   # confirms env-sourced, not hardcoded
-grep -rniE "(password|secret|client_secret|token)\s*=\s*\"[^\"]{8,}" lib/ config/ --include=*.ex
+grep -rn "System.get_env" config/ lib/ --include=*.ex --include=*.exs   # confirms env-sourced, not hardcoded
+grep -rniE "(password|secret|client_secret|token)\s*(=|:)\s*\"[^\"]{8,}" lib/ config/ --include=*.ex --include=*.exs
 ```
 The second grep is a heuristic, not a complete check — SECURITY-REVIEWER must manually
 confirm any hit is genuinely a hardcoded secret vs. a config key name or test fixture.

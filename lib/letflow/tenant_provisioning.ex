@@ -78,6 +78,43 @@ defmodule Letflow.TenantProvisioning do
   end
 
   @doc """
+  The reverse of `schema_name_for_tenant/1`: derives `tenant_id` back out of an
+  already-resolved physical schema name. Pure, no I/O — deliberately does
+  **not** confirm the tenant is actually provisioned (no `Registration`
+  query); that existence check happens downstream, for free, wherever the
+  caller's own flow needs it (e.g. `Letflow.EventStore.Registry.validate_payload/3`'s
+  `resolve_schema_name/1`).
+
+  This is the mechanism `docs/migration/decisions/0003-ecto-schema-strategy.md`'s
+  2026-08-17 addendum names: a context module about to write a tenant-scoped
+  row reverses `schema_name_for_tenant/1`'s encoding to obtain the `tenant_id`
+  it stamps on the row, rather than accepting `tenant_id` as an independently
+  -trusted caller-supplied field. See `lib/letflow/design/req025-event-append.md`
+  §4 for the full design.
+
+  Total and deterministic for any `schema_name` shaped like
+  `"tenant_" <> <32 lowercase hex chars>` — `schema_name_for_tenant/1` has no
+  special-cased default-tenant UUID, so there is no lossy branch to invert
+  incorrectly. Returns `{:error, :invalid_schema_name}` for anything else.
+  """
+  @spec tenant_id_for_schema_name(schema_name :: String.t()) ::
+          {:ok, tenant_id :: Ecto.UUID.t()} | {:error, :invalid_schema_name}
+  def tenant_id_for_schema_name(schema_name) when is_binary(schema_name) do
+    with "tenant_" <> hex <- schema_name,
+         true <- String.match?(hex, ~r/^[0-9a-f]{32}$/),
+         <<a::binary-size(8), b::binary-size(4), c::binary-size(4), d::binary-size(4),
+           e::binary-size(12)>> <- hex,
+         canonical = Enum.join([a, b, c, d, e], "-"),
+         {:ok, _} <- Ecto.UUID.cast(canonical) do
+      {:ok, canonical}
+    else
+      _ -> {:error, :invalid_schema_name}
+    end
+  end
+
+  def tenant_id_for_schema_name(_schema_name), do: {:error, :invalid_schema_name}
+
+  @doc """
   Idempotently provisions a tenant's physical Postgres schema: derives the
   schema name, serializes concurrent calls for the same tenant via a
   transaction-scoped advisory lock, issues `CREATE SCHEMA IF NOT EXISTS`, and

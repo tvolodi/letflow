@@ -1,0 +1,172 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-025
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ025-20260817
+date_utc: 2026-08-17T13:09:22Z
+
+git:
+  branch: feature/WF02-REQ025-20260817
+  branch_confirmed: true
+  commit: 46dce47
+  commit_subject: "chore(WF02-REQ025): TEST-DESIGN-VALIDATOR gate -- PASS"
+  note: >
+    Confirmed via `git rev-parse --short HEAD` and `git log -1` at start of this
+    run. Prior gates (CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER,
+    TEST-DESIGN-VALIDATOR) already passed on this commit per the dispatching
+    handoff. Also independently confirmed commit aac8f256 (cited in the handoff
+    as ELIXIR-DEV's own M1/M6 rework baseline of 401 tests / 4 properties /
+    0 failures) is an ancestor of this branch's current HEAD via
+    `git merge-base --is-ancestor aac8f256 HEAD`.
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir/erl reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 27 [erts-15.2.7.4] ... Mix 1.18.3 / Elixir 1.18.3 (compiled with Erlang/OTP 27)"
+  postgres_container: letflow-postgres-1 (confirmed Up 5h/healthy via `docker compose ps`, port 5462 -> 5432)
+  deps: "mix deps.get — all dependencies already resolved/up to date, no network issue this run"
+  command_run: >
+    `mix test` (full suite, default/unpinned random seed) and `mix test --seed 0`
+    (full suite, second independent run) — the `test` alias runs ecto.create +
+    ecto.migrate --quiet first automatically. Plus a targeted isolated re-run of
+    this run's own new file, `mix test test/letflow/event_store_test.exs`.
+
+verdict: PASS
+
+checks:
+  test_suite_full_run1:
+    result: PASS
+    exit_code: 0
+    seed: 275600 (unpinned/random — ExUnit's own default)
+    summary_line_verbatim: "4 properties, 411 tests, 0 failures"
+    finished_line_verbatim: "Finished in 12.2 seconds (1.0s async, 11.2s sync)"
+    failures: 0
+    log_saved_to: /tmp/mix_test_output.log (5982 lines, grepped for failure markers)
+    grep_check: >
+      Regex covering "Failures:", "Failure:", "failure:", "** (", "Excluded:",
+      "Skipped:", "Doctests:" across both full-suite logs — zero matches beyond
+      the "0 failures" summary line itself.
+
+  test_suite_full_run2:
+    result: PASS
+    exit_code: 0
+    seed: 0 (pinned, second independent run per this project's established
+      double-run practice)
+    summary_line_verbatim: "4 properties, 411 tests, 0 failures"
+    finished_line_verbatim: "Finished in 13.4 seconds (0.9s async, 12.4s sync)"
+    failures: 0
+    log_saved_to: /tmp/mix_test_run2.log
+
+  req025_own_test_file_isolated:
+    file: test/letflow/event_store_test.exs
+    command_run: "mix test test/letflow/event_store_test.exs"
+    summary_line_verbatim: "10 tests, 0 failures"
+    exit_code: 0
+    finished_line_verbatim: "Finished in 1.8 seconds (0.00s async, 1.8s sync)"
+    log_saved_to: /tmp/mix_test_event_store_isolated.log
+    note: >
+      Matches TEST-DESIGNER's and TEST-DESIGN-VALIDATOR's own prior isolated
+      runs (10/0 both times, per the dispatching handoff). `async: false` for
+      this module by design (documented in the module's own moduledoc):
+      Ecto.Migrator needs a second real DB connection the DataCase sandbox
+      can't hand out, so it uses Sandbox `:auto` mode plus manual `on_exit/1`
+      cleanup rather than the normal rolled-back-transaction pattern used
+      elsewhere.
+
+  count_arithmetic_cross_check:
+    baseline_cited_in_handoff: "401 tests, 4 properties, 0 failures (commit aac8f256)"
+    new_tests_added: "test/letflow/event_store_test.exs -- 10 tests"
+    expected: "401 + 10 = 411 tests, 4 properties (unchanged)"
+    actual_full_suite: "411 tests, 4 properties, 0 failures"
+    result: MATCHES — verified via actual run, not assumed from arithmetic.
+
+  global_row_pollution_check:
+    concern: >
+      test/letflow/event_store_test.exs provisions a real tenant/schema per
+      test (CREATE SCHEMA + migration replay) directly against the shared
+      global `tenants`/`tenant_schemas` tables, same pattern already
+      established by test/letflow/tenant_provisioning_test.exs and
+      test/letflow/event_store/registry_test.exs.
+    independent_postgres_reverification: >
+      Queried letflow-postgres-1 directly via `docker exec ... psql -U letflow
+      -d letflow_test` after both full-suite runs completed:
+        SELECT count(*) FROM public.tenants;         -> 0
+        SELECT count(*) FROM public.tenant_schemas;  -> 0
+    conclusion: >
+      No orphan rows in either global table after the runs. Each test's
+      manual `on_exit/1` cleanup (DROP SCHEMA + DELETE from tenants/
+      tenant_schemas, visible throughout the raw log output) is confirmed as
+      the operative mechanism, not incidental luck.
+
+  known_noise_not_a_failure:
+    - >
+      [error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in NNNN ms.
+      — REQ-016's Ueberauth OIDC worker attempting to reach a deliberately
+      unreachable placeholder issuer configured in config/test.exs. Pre-existing
+      since REQ-016, already documented as expected noise in every prior WF-02
+      test report (e.g. REQ-041's). Appeared twice in the run1 log; does not
+      fail, skip, or affect any test.
+    - >
+      Verbose SQL query debug logging appears in raw mix test output
+      (config/test.exs's default test log level), including 27
+      `[debug] QUERY ERROR` lines interleaved with passing tests across the
+      full suite (run1) — these are deliberate constraint-violation /
+      uniqueness assertions (assert_raise Ecto.ConstraintError / similar)
+      elsewhere in the suite (established pattern, same as documented in
+      prior reports e.g. REQ-041's). None originate from a test that itself
+      failed — confirmed via the zero-match failure-marker grep above.
+    - >
+      "warning: ExUnit.Case.register_test/4 is deprecated" and "warning:
+      default values for the optional arguments ... are never used" —
+      pre-existing compiler warnings unrelated to REQ-025, not errors, do not
+      affect pass/fail.
+
+pre_existing_failures_found: none
+issues_filed: none
+issues_referenced_not_refiled: none
+
+test_file_breakdown:
+  new_req_025:
+    items:
+      - file: test/letflow/event_store_test.exs
+        detail: >
+          Coverage of Letflow.EventStore.append/2 (REQ-025) per
+          test/specs/REQ-025.md — instance-not-started rejection,
+          idempotency-record insert path, projection update-only invariant
+          (never creates instance_projections), transactional append
+          behavior. Uses Letflow.DataCase (real sandboxed Postgres) per
+          docs/guides/test_developer_guide.md DIRECTIVE T-1 — no mocked
+          database.
+    subtotal: 10
+  full_suite_grand_total: 411
+  cross_check: >
+    411 total (4 properties, 407 example tests) reproduced identically
+    across both full-suite runs (unpinned seed 275600, and pinned seed 0),
+    matching the handoff's cited baseline of 401 tests / 4 properties /
+    0 failures at commit aac8f256 plus this run's own 10 new tests. This
+    Step 4 run is the independent, formal re-verification of that number —
+    run separately twice, output saved to log files and programmatically
+    grepped for failure markers rather than eyeballed, plus an isolated
+    re-run of REQ-025's own new file, plus a live Postgres re-check
+    confirming no orphan rows in the global tenants/tenant_schemas tables.
+
+diagnosis: "N/A — no failures observed in this run. Nothing routed back to ELIXIR-DEV or TEST-DESIGNER."
+
+regression_check_vs_baseline: >
+  Handoff-cited baseline: 401 tests, 4 properties, 0 failures at commit
+  aac8f256 (confirmed an ancestor of this branch's current HEAD, 46dce47,
+  via `git merge-base --is-ancestor`). This run adds test/letflow/
+  event_store_test.exs (10 tests) and reproduces 411 tests / 4 properties /
+  0 failures identically across two independent full-suite runs (unpinned
+  default seed 275600 and pinned seed 0), plus an isolated 10/0 re-run of
+  the new file alone. Zero regressions confirmed. No pre-existing failure
+  was found anywhere in the suite this run (Unblock-Everything rule: N/A,
+  nothing to unblock).
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-17-WF02-REQ025-20260817.yaml
+  next_action: "Route to RELEASE-VALIDATOR (WF-02 Step 5) — no rework needed."

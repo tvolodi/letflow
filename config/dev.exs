@@ -1,5 +1,27 @@
 import Config
 
+# ISS-0015 (GH#71): MIX_TEST_PARTITION only takes effect under
+# config/test.exs -- a bare `mix run` (MIX_ENV=dev by default) would
+# silently ignore it and connect to the shared letflow_dev database below,
+# defeating the isolation MIX_TEST_PARTITION exists for in this project's
+# two-worktree setup. Fail loudly instead.
+if System.get_env("MIX_TEST_PARTITION") do
+  raise """
+  MIX_TEST_PARTITION=#{System.get_env("MIX_TEST_PARTITION")} is set, but MIX_ENV is
+  "dev" -- only config/test.exs reads this variable, so this run would silently
+  target the shared letflow_dev database instead of a partitioned test database.
+
+  If you meant to run tests: set MIX_ENV=test.
+  If you're intentionally running dev tooling: unset MIX_TEST_PARTITION first.
+  """
+end
+
+# HTTP listener: on by default (see lib/letflow/application.ex's http_child/0),
+# port 4000. config/test.exs turns this off entirely (ISS-0015/GH#71); prod's
+# port comes from config/runtime.exs's PORT env var instead of this file, per
+# config/prod.exs's own comment that runtime-dependent values belong there.
+config :letflow, start_http: true, http_port: 4000
+
 # Deliberately on port 5462, not 5432 — R-Co's own docker-compose stack
 # already uses 5432 (dev) and 5433 (test), so Letflow gets its own
 # ports and can run alongside R-Co without colliding. (Previously

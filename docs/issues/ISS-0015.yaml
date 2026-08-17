@@ -88,4 +88,42 @@ affected_files:
   - config/test.exs
   - config/dev.exs
 github_issue: https://github.com/tvolodi/letflow/issues/71
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0015-20260817
+resolved_at: 2026-08-17T07:25:32Z
+resolution: >
+  Made the CODE-DESIGNER-flagged call: don't start Bandit under test at
+  all (config/test.exs: start_http: false), rather than deriving a
+  per-partition port. Sidesteps the collision class entirely rather than
+  relocating it, and matches the issue's own observation that no test
+  drives the router over a real socket -- independently verified (grepped
+  test/ for localhost:4000/Req/Finch/httpc/HTTPoison; only a .md spec file
+  mentions the port, no test code hits it). dev/prod still start it
+  (start_http defaults to true in the new http_child/0), with the port
+  now read from config instead of hardcoded: config/dev.exs sets 4000
+  directly (compile-time, single long-running dev instance, no
+  partitioning need); config/runtime.exs reads PORT env var for prod
+  (matching config/prod.exs's own pre-existing comment that
+  runtime-dependent values belong there -- that comment already described
+  the intended design, application.ex just never implemented it).
+
+  Also fixed the second gap the issue recorded alongside the port one:
+  config/dev.exs now raises immediately if MIX_TEST_PARTITION is set
+  (only config/test.exs reads it, so a bare `mix run` would otherwise
+  silently target the shared letflow_dev database) -- fail loudly instead
+  of silently mistargeting, matching this project's own established
+  preference elsewhere (NOT NULL-no-default over silent defaults, etc.).
+  No canonical guide currently prescribes "always run with
+  MIX_TEST_PARTITION=2" (grepped for the phrase -- only handoff/status
+  artifacts and config/test.exs's own comment reference it, no
+  docs/guides/*.md), so there was no existing prescriptive text to
+  correct; the runtime guard covers the actual hazard directly instead.
+
+  Verified directly rather than trusting the fix in isolation: `mix
+  compile --warnings-as-errors` clean; full suite 310/310; confirmed via
+  a real `mix run` under MIX_ENV=test that Letflow.Supervisor's children
+  exclude Bandit entirely; confirmed via a real `mix run` under
+  MIX_ENV=dev that Bandit still starts and a real TCP connect to
+  localhost:4000 succeeds; confirmed MIX_TEST_PARTITION=2 under
+  MIX_ENV=dev raises the new guard with its intended message.

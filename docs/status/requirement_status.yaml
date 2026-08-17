@@ -2356,3 +2356,38 @@ history:
       as done via the per-client API key, closing GitHub issue #69;
       closed GitHub issue #70 directly (gh issue close) since no queue
       task for it was held this run.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-17T07:25:32Z
+    note: >
+      Resolved ISS-0015 (GH#71, MAJOR, filed by ELIXIR-DEV during
+      WF02-REQ023-20260816 Step 2a, independently reproduced by
+      TEST-DESIGNER same run -- queue task 64, no separate task for
+      ISS-0014-style companion since this one stood alone). Bandit's port
+      4000 was hardcoded in lib/letflow/application.ex, not partitioned
+      by MIX_TEST_PARTITION the way config/test.exs's database name is,
+      so two concurrent `mix test` runs (this project's two-worktree
+      setup) could collide with :eaddrinuse -- confirmed as a real,
+      reproducible failure during the discovering run, not hypothetical.
+      Made the CODE-DESIGNER-flagged call explicitly deferred by the
+      issue: don't start Bandit under test at all (config/test.exs
+      start_http: false) rather than derive a per-partition port --
+      independently verified no test drives the router over a real socket
+      before choosing this. dev/prod still start it (start_http defaults
+      true), port now read from config instead of hardcoded: 4000 in
+      config/dev.exs (compile-time), PORT env var via config/runtime.exs
+      for prod (matching config/prod.exs's own pre-existing comment that
+      already described this intended design but was never wired up).
+      Also fixed the second gap the issue recorded: config/dev.exs now
+      raises immediately if MIX_TEST_PARTITION is set (only test.exs
+      reads it, so a bare `mix run` would otherwise silently target the
+      shared dev database) -- fail loudly, matching this project's
+      established preference elsewhere. Verified directly: mix compile
+      --warnings-as-errors clean; full suite 310/310; a real `mix run`
+      under MIX_ENV=test confirmed Bandit absent from the supervision
+      tree; a real `mix run` under MIX_ENV=dev confirmed Bandit still
+      starts and a real TCP connect to localhost:4000 succeeds;
+      MIX_TEST_PARTITION=2 under MIX_ENV=dev confirmed to raise the new
+      guard. Released queue task 64 as done via the per-client API key,
+      closing GitHub issue #71.

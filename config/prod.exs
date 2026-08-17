@@ -3,7 +3,9 @@ import Config
 # Compile-time prod config — baked into the release at `mix release` time
 # (MIX_ENV=prod). Runtime-environment-dependent values (DB connection,
 # port) live in config/runtime.exs instead, per standard Elixir release
-# convention.
+# convention. (start_http itself defaults to true in
+# lib/letflow/application.ex's http_child/0 — no override needed here;
+# only http_port, the runtime-dependent value, is set, in runtime.exs.)
 
 # Same placeholder as config/dev.exs — no real Keycloak instance exists
 # yet for any environment, deployed or local (see that file's comment and

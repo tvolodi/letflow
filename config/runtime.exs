@@ -17,4 +17,10 @@ if config_env() == :prod do
   config :letflow, Letflow.Repo,
     url: database_url,
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
+
+  # ISS-0015 (GH#71): the port was previously hardcoded in
+  # lib/letflow/application.ex, despite config/prod.exs's own comment
+  # already stating runtime-dependent values (DB connection, port) belong
+  # here. Fixed alongside the port-collision fix for config/test.exs.
+  config :letflow, http_port: String.to_integer(System.get_env("PORT") || "4000")
 end

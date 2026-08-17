@@ -1,5 +1,16 @@
 import Config
 
+# ISS-0015 (GH#71): don't start the HTTP listener under test at all -- no
+# test drives Letflow.Router over a real socket (it's exercised via
+# Plug.Test conn structs throughout this suite), so there is nothing to
+# gain from binding a port here and a real collision risk to lose: two
+# concurrent `mix test` runs (this project's two-worktree setup) previously
+# both tried to bind the same hardcoded port 4000. Sidesteps the collision
+# entirely rather than just relocating it (e.g. deriving a per-partition
+# port), and shaves the listener's startup cost off every run. See
+# lib/letflow/application.ex's http_child/0.
+config :letflow, start_http: false
+
 config :letflow, Letflow.Repo,
   username: "letflow",
   password: "letflow",

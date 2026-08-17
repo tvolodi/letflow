@@ -685,6 +685,28 @@
       "queue_agent_id": "hetzner-wt2-orch",
       "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
       "note": "No other run active in registry at claim time."
+    },
+    {
+      "run_id": "WF02-REQ038-20260817",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-038"
+      ],
+      "stage": "S2",
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/definitions.ex",
+        "lib/letflow/definitions/promotion_review_store.ex"
+      ],
+      "lock_acquired_at": "2026-08-17T21:37:24Z",
+      "lock_released_at": "2026-08-17T23:38:39Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (git merge) COMPLETED -- PR #128 squash-merged into main as 3a3b236 (fast-forward), queue task 55 released done, GH#63 closed.",
+      "backfilled": false,
+      "queue_task_id": 55,
+      "queue_agent_id": "tvolodi-orch",
+      "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
+      "note": "Promotion rollback (rollback.zig, PRM-08). Full producer/validator chain via genuinely independent dispatched agents (all on Sonnet), all PASS with one real rework cycle: CODE-DESIGN-VALIDATOR FAILed the design once at Step 1b on a genuine data-integrity defect -- promotion_reviews.def_id only stores process_key, not a per-version identifier, so the original supersede-lookup could have corrupted audit history by superseding review rows belonging to a DIFFERENT version of the same process_key. ORCH independently re-verified this against the actual schema before routing the rework. CODE-DESIGNER's rework investigated whether any genuine version-scoped correlation existed (confirmed: none does in shipped code) and adopted a cardinality-branching safe default (zero matches -> nil; exactly one -> supersede; more than one -> nil, refuse to guess) plus a disclosed, out-of-scope schema-fix recommendation for a future requirement. TEST-DESIGN-VALIDATOR (Step 3b) performed real mutation testing -- twice broke the actual implementation (reordered guard clauses; reverted the cardinality fix to blanket-supersede) and confirmed each break was caught by exactly its targeted test, then reverted cleanly. Also made a real, REVIEWER/SECURITY-REVIEWER-scrutinized edit to an already-merged module (promotion_review_store.ex's supersede_review/3, widened from 7 to 8 permitted edges). One infra-terminated CODE-DESIGN-VALIDATOR dispatch (connection error mid-work, zero commits, cleanly re-dispatched from scratch without incrementing rework_count -- matching the WF02-REQ027-20260816 step_2d_infra_restart precedent). Step Final hit two real issues: (1) a genuine CONTENT conflict in lib/letflow/definitions.ex against concurrently-merged REQ-042 (both added a new function -- search/2 and rollback_definition_version/4 -- at the identical insertion point), resolved by manually interleaving both functions with correct closings, re-verified via clean compile; (2) a repeat of the ISS-numbering-collision class (this run's own SECURITY-REVIEWER/REVIEWER finding, filed as local ISS-0038.yaml, collided with a concurrently-merged REQ-042 finding that had already claimed the real ISS-0038 on main) -- this time resolved via direct file-content inspection and explicit git rm/Write rather than any --ours/--theirs flag, specifically because a PRIOR run this session (WF02-REQ031-20260817) had gotten `git checkout --theirs` backwards during a rebase (its meaning inverts relative to merge) and silently clobbered main's already-resolved ISS-0036.yaml -- caught independently by WF02-REQ042-20260817's own ORCH instance and filed as ISS-0039/GH#121 (already fixed on main before this run's own rebase). Re-filed this run's finding as docs/issues/ISS-0041.yaml (content ported verbatim, same GitHub issue #127), added a correction postscript to requirement_status.yaml rather than silently rewriting this run's own earlier prose. mix compile --warnings-as-errors clean, mix test 657/657 (4 properties, 653 tests) on the actual merged tip, re-verified by ORCH directly both pre- and post-merge."
     }
   ]
 }

@@ -158,3 +158,38 @@ server). If a docker-based re-verification is ever genuinely needed
 from a secondary worktree, use `docker ps`/`docker inspect` to confirm
 the existing shared container is healthy and reachable first, never
 `docker compose up`.
+
+## Duplicating an `Ecto.Query.fragment/1` SQL literal instead of sharing it via a module attribute
+
+During REQ-042's `search/2` (`lib/letflow/definitions.ex`), ELIXIR-DEV needed the
+same ranking `CASE WHEN ... END` SQL text in two places (`select_with_rank/3` and
+`order_by_rank/3`) and first tried to share it via a helper function pinned into
+`fragment/1` (`fragment(^rank_case_sql(), ...)`). Ecto rejects this at compile time
+with `Ecto.Query.CompileError`: "to prevent SQL injection attacks, fragment(...)
+does not allow strings to be interpolated as the first argument via the `^`
+operator" -- `fragment/1`'s first argument must macro-expand to a literal binary
+known at compile time (`Ecto.Query.Builder.expand_and_split_fragment/2` calls
+`Macro.expand/2` and requires the result to already be a binary), not a runtime
+value produced by calling a function. ELIXIR-DEV correctly concluded this was a
+real Ecto constraint (not a workaround for a mistake) and fell back to duplicating
+the literal verbatim in both functions, flagging it for REVIEWER.
+
+REVIEWER (WF-02 Step 2d) verified the constraint empirically (a throwaway
+`Mix.install` script reproducing both the failing pinned-helper call and a passing
+module-attribute call against real Ecto) and found a third option that satisfies
+both the SQL-injection guard and DRY: a module attribute. `@rank_case_sql
+"CASE WHEN ... END"` referenced as `fragment(@rank_case_sql, ...)` compiles
+cleanly, because `@attr` is inlined as a literal binary at compile time -- it is
+not a runtime-pinned value -- so `Macro.expand/2` sees the same kind of literal it
+would see from a string written directly in the call. This was ruled FAIL/rework
+grounds precisely because it was a real, low-risk, mechanical fix (verified before
+requesting it, not assumed) rather than gold-plating: the duplicated literal, left
+as-is, would have created a silent-drift risk if a future edit updated the ranking
+rule in one call site and not the other.
+
+**Correct alternative:** when the exact same `fragment/1` SQL-text literal is
+needed at more than one call site, hoist it to a `@module_attribute` and reference
+the attribute at each `fragment/1` call -- never a function call pinned with `^`,
+which Ecto rejects outright, and never silent duplication when the attribute
+approach is available and its call sites are simple enough that one shared source
+of truth is a strict improvement.

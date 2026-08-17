@@ -1,0 +1,62 @@
+{
+  "handoff_id": "052d8189-50d9-4470-b31c-c5e368da5ebc",
+  "run_id": "WF02-REQ025-20260817",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ025-20260817/step-01b-code-design-validator.json",
+  "created_at": "2026-08-17T11:12:03Z",
+  "started_at": "2026-08-17T11:12:03Z",
+  "completed_at": "2026-08-17T11:14:09Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-025"],
+    "related_handoff_ids": ["50120290-d66d-4615-a259-fab7d7b33be0"],
+    "artifacts_in": [
+      "lib/letflow/design/req025-event-append.md",
+      "docs/requirements.yaml (REQ-025 entry)",
+      "docs/migration/decisions/0003-ecto-schema-strategy.md (Addendum 2026-08-17 in full)",
+      "lib/letflow/event_store/instance_sequence.ex",
+      "lib/letflow/event_store/idempotency_record.ex"
+    ],
+    "owned_modules": ["lib/letflow/event_store.ex", "priv/repo/migrations", "test/letflow/event_store_test.exs"]
+  },
+  "task": {
+    "description": "Independently validate lib/letflow/design/req025-event-append.md. CODE-DESIGNER flagged two open questions (OQ-1, OQ-5) as issues in its handoff -- ORCH already independently checked OQ-1 against docs/migration/decisions/0003-ecto-schema-strategy.md's Addendum (2026-08-17): the addendum's own text explicitly scopes the tenant_id-derivation requirement to 'events/events_archive/instance_projections (REQ-023's schema, REQ-025's writer) and process_definitions (REQ-027's schema, REQ-030's writer)' -- instance_sequence and event_idempotency are not named and, confirmed directly against lib/letflow/event_store/instance_sequence.ex and idempotency_record.ex, genuinely have no tenant_id column at all. Verify this independently yourself (read the addendum and both schema files directly) and confirm the design's OQ-1 resolution (isolation for those two tables via :prefix schema boundary, not a column; REQ-025's AC6 wording read in light of the decision record rather than literally) is correct -- this is not a design gap, it's the design correctly reconciling an imprecisely-worded acceptance criterion against an already-settled decision record. OQ-5 (instance_projections insert-if-absent at first append) is a genuine scope-interpretation judgment call against REQ-023's EE-01/S3 deferral language -- confirm the design states it explicitly (not silently) and flag it prominently for REVIEWER's Step 2d attention (do not resolve it yourself, that's not this gate's job, but do not let it pass as if unremarkable either).",
+    "acceptance_criteria": [
+      "appending to a terminated instance (status CANCELLED or COMPLETED in instance_projections) returns an error and writes zero rows across all five involved tables, demonstrated by an actual test or iex session against a real Postgres, not just described",
+      "two concurrent appends to the same instance_id never receive the same sequence_number -- demonstrated with an actual concurrent test (e.g. Task.async_stream racing two appends) or, if concurrency can't be exercised in this environment, the FOR UPDATE-equivalent locking code path is cited explicitly",
+      "appending twice with the same idempotency_key returns is_duplicate: true on the second call and does not insert a second events row, verified against the idempotency sidecar table REQ-023 defines",
+      "a payload that fails REQ-024's validate_payload/2 results in zero rows written to events, instance_sequence, or instance_projections -- no partial state",
+      "a payload over 4096 bytes is split into events.payload's $ref pointer form plus an event_payload_store row, verified by reading both rows back after append",
+      "every row append/1(2) writes (events, instance_sequence, instance_projections, the idempotency sidecar) has tenant_id equal to the tenant whose schema the write targeted, derived internally -- not equal to a caller-supplied tenant_id when the two are deliberately made to disagree in a test, which must fail loudly (not silently attribute to the wrong tenant) rather than succeed"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "FAIL. Independently read lib/letflow/design/req025-event-append.md in full (not CODE-DESIGNER's summary), docs/requirements.yaml's REQ-025 entry (1042-1100), the 0003 addendum (2026-08-17, lines 326-396), and both lib/letflow/event_store/instance_sequence.ex and idempotency_record.ex directly. Two of the six checklist items in .claude/agents/code-design-validator.md pass cleanly; one fails outright, which is dispositive per 'FAIL immediately and completely on any single failed check -- no partial credit.'\n\nFAILED CHECK -- 'no implementation code present' (WF-02 Step 1b item 2e; .claude/agents/code-designer.md's own Forbidden section: 'no function bodies, no actual .ex/.exs code blocks... CODE-DESIGN-VALIDATOR will FAIL a design that contains real implementation code'). Sections 6.1-6.3 are not algorithm-shape pseudocode -- they are near-literal, copy-pasteable Elixir/Ecto function bodies using real syntax, real stdlib/Ecto calls, and real control flow:\n  - Section 6.2.2 (M2): `repo.insert(InstanceSequence.insert_changeset(%InstanceSequence{}, %{instance_id: attrs.instance_id}), on_conflict: :nothing, conflict_target: :instance_id, prefix: schema_name)` followed by `from(s in InstanceSequence, where: s.instance_id == ^attrs.instance_id, lock: \"FOR UPDATE\") |> repo.one(prefix: schema_name)` and `|> repo.update_all([inc: [next_seq: 1]], prefix: schema_name)` -- this is a real Ecto.Query/Ecto.Repo pipeline, not a type shape.\n  - Section 6.2.3 (M3), 6.2.4 (M4), 6.2.5 (M5), 6.2.6 (M6): each is a literal `repo.insert(Schema.insert_changeset(%Schema{}, %{...}), on_conflict: ..., prefix: schema_name)` call with real map literals and real option keywords.\n  - Section 6.1 P5/P6: literal executable lines -- `payload_bytes = byte_size(attrs[:payload])`, `decoded_payload = Jason.decode!(attrs[:payload])`, `event_id = Ecto.UUID.generate()`, `created_at = DateTime.utc_now() |> DateTime.truncate(:microsecond)`.\n  - Section 6.3: a complete real Elixir `with/do/else` function body (`with :ok <- check_no_tenant_id(attrs), {:ok, tenant_id} <- tenant_id_for_schema_name(opts[:prefix]), ... do case Repo.transaction(build_multi(...)) do {:ok, %{insert_event: event, assign_sequence: seq}} -> ... end else {:error, _reason} = error -> error end`) -- this is `append/2`'s actual implementation, not its signature.\nContrast with the cited precedent this design claims to match, req024-event-type-registry.md Section 4.4: that document's algorithm sketch uses English-prose conditionals ('if schema has \"type\": if value's runtime shape doesn't match...') with no real Elixir syntax, no real function calls, no real module/option names -- genuinely shape-only. req025's Section 6 blocks are categorically different: real `with`/`case` syntax, real `Ecto.Multi`/`Ecto.Query`/`Ecto.Repo` calls, real option keywords (`on_conflict:`, `conflict_target:`, `prefix:`, `lock:`), real map/struct literals. This is implementation code that happens to live in a .md file, which is exactly the failure mode .claude/agents/code-designer.md names: 'a sign the design step was skipped in substance even if the file exists.'\n\nCHECKS THAT PASS (recorded so CODE-DESIGNER doesn't re-litigate them on rework):\n  - No TBD/deferral language anywhere in the file (grep -in 'TBD|to be determined|to be decided|to be implemented later' -> no matches).\n  - Every AC has a concrete design element and full function-signature/error-shape coverage (Section 5.3's append_error() union, Section 4's tenant_id_for_schema_name/1 spec, Section 11's AC traceability table) -- the SHAPE of the design (types, error tags, invariants, cross-module deps in Section 10) is sound; only the Section 6 pseudocode-as-real-code is the problem.\n  - OQ-1 independently re-verified against source, not trusted from ORCH's or CODE-DESIGNER's characterization: read the 0003 addendum's 2026-08-17 section directly (lines 339-341) -- it names exactly 'events/events_archive/instance_projections (REQ-023's schema, REQ-025's writer) and process_definitions (REQ-027's schema, REQ-030's writer)' as the tables the tenant_id-derivation decision covers; instance_sequence and event_idempotency are not named. Read lib/letflow/event_store/instance_sequence.ex directly: schema fields are only :next_seq (plus :instance_id primary key) -- no tenant_id. Read lib/letflow/event_store/idempotency_record.ex directly: schema fields are :idempotency_key, :event_id, :event_created_at, timestamps -- no tenant_id. Both confirmed genuinely absent at the Ecto-schema level, consistent with the design's own migration-DDL claim. REQ-025's own requirement description (docs/requirements.yaml 1085-1087) inaccurately asserts all four tables carry a NOT NULL tenant_id column with no default -- that is the imprecise wording the addendum and shipped schema override. The design's resolution (INV-AP-9: isolation for the two column-less tables is enforced by the :prefix schema boundary, not a column; OQ-1 flagged prominently to REVIEWER with a concrete adapted-test instruction for TEST-DESIGNER) is correct and is not itself a design gap.\n  - OQ-5 confirmed stated explicitly, not silently resolved or silently dropped: Section 9 labels it 'MAJOR -- a real scope-boundary judgment call, not a minor detail,' explains the interpretive reasoning (M6 creating the bare instance_projections row vs. REQ-023's EE-01/S3 deferral of 'meaningful population'), and explicitly requests 'REVIEWER should explicitly confirm this reading rather than this design's own judgment call standing unchallenged.' This satisfies the task's requirement to confirm it is flagged for REVIEWER's Step 2d attention, not resolved unilaterally here.\n\nNet: reject on the implementation-code check alone, per 'FAIL immediately and completely on any single failed check -- no partial credit' and the Forbidden section's 'Don't approve a design because it's close enough.'",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "check": "no implementation code present (WF-02 Step 1b item 2e)",
+        "location": "lib/letflow/design/req025-event-append.md Sections 6.1 (P5, P6), 6.2.2-6.2.6 (M2-M6), 6.3",
+        "detail": "These sections are real, near-literal Elixir/Ecto function bodies (real with/case/do/else syntax, real Ecto.Multi/Ecto.Query/Ecto.Repo calls, real option keywords on_conflict:/conflict_target:/prefix:/lock:, real map/struct literals) rather than algorithm-shape pseudocode. Rewrite Section 6 to describe behavior in prose/structured steps (matching req024-event-type-registry.md Section 4.4's English-conditional style: 'if schema has X, do Y' -- no real function calls, no real Elixir control-flow keywords, no real Ecto option syntax) while keeping the locking protocol, error-mapping, and ordering rationale that make Section 6 valuable to ELIXIR-DEV. The @spec-level signatures (Sections 4, 5.1-5.4) and the invariants/traceability tables (Sections 7, 8, 10, 11) do not need to change."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ025-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ025-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Rework CODE-DESIGNER: rewrite lib/letflow/design/req025-event-append.md Section 6 (6.1's P5/P6 steps, and M2 through M6 in 6.2, and 6.3's top-level append/2 assembly) as algorithm-shape prose/structured description, not real Elixir/Ecto syntax -- see result.issues[0] for the specific style to match (req024-event-type-registry.md Section 4.4). OQ-1 and OQ-5 handling do not need rework; do not silently re-decide them differently on the next pass."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

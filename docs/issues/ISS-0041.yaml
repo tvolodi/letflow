@@ -1,0 +1,49 @@
+id: ISS-0041
+title: "PromotionReviewStore moduledoc's opening function-list cites stale arities (pre-existing, not introduced by REQ-038)"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ038-20260817
+discovered_at: "2026-08-17T22:39:02Z"
+severity: MINOR
+description: >
+  Found during REQ-038's REVIEWER gate (Step 2d) on
+  lib/letflow/definitions/promotion_review_store.ex while checking the
+  moduledoc's "7->8 permitted edges" update (REQ-038 §7) for internal
+  consistency. The moduledoc's very first paragraph (line 5-6, untouched
+  by REQ-038's diff -- confirmed via `git diff main...HEAD -- lib/letflow/
+  definitions/promotion_review_store.ex`) lists the module's six transition
+  functions with arities that do not match any function actually defined in
+  the file:
+
+    stated: insert_review/1, approve_review/4, reject_review/2,
+            mark_review_applied/1, mark_review_failed/1, supersede_review/2
+    actual: insert_review/2, approve_review/4, reject_review/3,
+            mark_review_applied/2, mark_review_failed/2, supersede_review/3
+
+  Only approve_review/4 is correct. This predates REQ-038 (likely stale
+  since REQ-035/REQ-037, whichever last touched this opening paragraph) --
+  not a defect REQ-038's diff introduces, and not blocking REQ-038's own
+  REVIEWER PASS. Filed per core-directives.md's "No Issue Left Local-Only"
+  so a future pass (DOC-UPDATER or the next agent editing this file) fixes
+  the six arities in that opening paragraph to match the real function
+  signatures, rather than the drift compounding further as more edges get
+  added to this module (REQ-038 already added an 8th).
+
+  Renumbering note: originally filed by this run (WF02-REQ038-20260817,
+  running on a separate host at the time) as its own local
+  docs/issues/ISS-0038.yaml. That number collided with a different,
+  concurrently-merged finding from WF02-REQ042-20260817 (already on main
+  by the time this run reached its own Step Final) -- the same class of
+  cross-host numbering collision as ISS-0034/ISS-0035 and ISS-0036/ISS-0037
+  earlier this session. Filed here as ISS-0041 instead (the next number
+  free on main at rebase time), content ported verbatim, same GitHub issue
+  #127. This run's own local ISS-0038.yaml was dropped (not merged) at
+  Step Final rather than overwriting main's actual ISS-0038 (the
+  WF02-REQ042-20260817 rank/float8 finding) -- resolved by direct file
+  content inspection and an explicit `git rm`/rewrite of this branch's
+  stale copy, NOT via `git checkout --ours`/`--theirs` (that flag's meaning
+  inverts between merge and rebase and was the root cause of a real,
+  since-fixed mistake earlier this session -- see docs/issues/ISS-0039.yaml).
+affected_files:
+  - lib/letflow/definitions/promotion_review_store.ex
+github_issue: https://github.com/tvolodi/letflow/issues/127
+status: open

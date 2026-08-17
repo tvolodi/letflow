@@ -3740,3 +3740,47 @@ history:
       a gap instead, per RELEASE-VALIDATOR's own recommendation that
       DOC-UPDATER's Step 6 note the gap plainly rather than silently
       paper over it.
+  - req: REQ-038
+    event: SCOPE-CHANGE
+    agent: ORCH
+    at: "2026-08-17T22:15:00Z"
+    note: >
+      Step Final (git merge) postscript. All of this entry's own
+      references above to "docs/issues/ISS-0038.yaml" / "ISS-0038" were
+      accurate at the time they were written (this run's own local file,
+      GitHub issue #127), but this run's own Step Final rebase against
+      origin/main discovered TWO separate things while resolving an
+      add/add conflict on that same file:
+
+      (1) A cross-host ISS-numbering collision, same class as
+      ISS-0034/ISS-0035 and ISS-0036/ISS-0037 earlier this session: a
+      concurrently-merged WF02-REQ042-20260817 run had independently
+      claimed ISS-0038 for an unrelated finding (a rank/float8 casting
+      defect in Letflow.Definitions.search/2), already on main first.
+      This run's REVIEWER finding was re-filed as docs/issues/ISS-0041.yaml
+      (content ported verbatim, same GitHub issue #127) and this run's
+      own local ISS-0038.yaml was dropped via explicit `git rm`, not
+      merged.
+
+      (2) Learned from, not repeated: an EARLIER run this session
+      (WF02-REQ031-20260817) hit this exact same class of collision on
+      docs/issues/ISS-0036.yaml and resolved it via `git checkout --theirs`,
+      intending to keep main's version -- but `git checkout --theirs`
+      means something different during `git rebase` than during
+      `git merge` (during rebase, --theirs is the branch BEING REPLAYED,
+      i.e. the rebasing branch's own content, the inverse of merge
+      semantics). That command actually kept WF02-REQ031-20260817's OWN
+      content, silently overwriting main's already-resolved ISS-0036
+      entry -- caught independently by WF02-REQ042-20260817's own ORCH
+      instance, filed as docs/issues/ISS-0039.yaml (GitHub #121,
+      status: resolved), and fixed on main before this run's own rebase
+      ever ran (confirmed: this run's fetch of origin/main already
+      contains the fix). This run's OWN resolution of the identical
+      collision class (above) deliberately used direct file content
+      inspection plus explicit `git rm`/`Write` rather than any
+      `--ours`/`--theirs` flag, specifically to avoid repeating
+      ISS-0039's exact mistake. No data was lost in either case (git
+      history retained the original content throughout; ISS-0037 and
+      ISS-0041 both correctly carry their respective run's real findings
+      under their corrected numbers) -- flagging this for the historical
+      record, not because anything is currently broken.

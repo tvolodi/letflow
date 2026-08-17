@@ -3618,3 +3618,169 @@ history:
       filed and forwarded. Re-verified after both fixes: mix compile
       --warnings-as-errors clean, MIX_TEST_PARTITION=2 mix test 4
       properties/635 tests/0 failures on the rebased tip.
+  - req: REQ-038
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-17T23:24:23Z"
+    note: >
+      Promotion rollback (rollback.zig, PRM-08) shipped:
+      Letflow.Definitions.rollback_definition_version/4 plus helpers
+      (do_rollback/6, run_rollback_transaction/4, swap_active_pointer/3,
+      finish_rollback/8, supersede_matching_review/4) in
+      lib/letflow/definitions.ex, and an 8th permitted edge
+      (:approved -> :superseded) added to
+      lib/letflow/definitions/promotion_review_store.ex's
+      supersede_review/3 (widened from 7 to 8). RELEASE-VALIDATOR
+      (handoffs/WF02-REQ038-20260817/step-05-release-validator.json)
+      independently re-verified all 5 acceptance criteria against the
+      actual code/tests with line citations and PASSed; this entry
+      flips docs/requirements.yaml REQ-038 status: pending -> done and
+      records the real story of the run, not just the happy path.
+
+      Real rework cycle at Step 1b: CODE-DESIGN-VALIDATOR FAILed the
+      original design on a genuine data-integrity defect, not a
+      nitpick -- the original promotion_reviews supersede-lookup could
+      have corrupted audit history by superseding review rows
+      belonging to a DIFFERENT version of the same process_key, since
+      promotion_reviews.def_id only stores process_key, not a
+      per-version identifier. CODE-DESIGNER's rework adopted a
+      cardinality-branching safe default in
+      supersede_matching_review/4: zero matches -> nil (no-op, not an
+      error, per the requirement's own text), exactly one match ->
+      supersede it, more than one match -> nil (refuse to guess rather
+      than silently pick one and risk mislabeling an unrelated row).
+      CODE-DESIGN-VALIDATOR's re-review independently re-derived the
+      "no version-scoped correlation exists in the shipped schema"
+      claim from promotion_plan.ex/promotion.ex/promotion_review_store.ex
+      directly before PASSing the rework, rather than trusting
+      CODE-DESIGNER's own summary of it.
+
+      Real mutation-testing evidence at Step 3b: TEST-DESIGN-VALIDATOR
+      deliberately broke the implementation twice to confirm the test
+      suite actually catches each defect it claims to guard, not just
+      exercises the code. (1) Reordered run_rollback_transaction/4's
+      guard `cond` -- exactly 2 of 18 tests failed, precisely the two
+      guard-order tests. (2) Reverted supersede_matching_review/4's
+      cardinality branch back to blanket-supersede-on-ambiguous-match
+      (the exact defect Step 1b's rework fixed) -- exactly 1 of 18
+      tests failed, precisely the "MORE THAN ONE matching row" test,
+      which re-reads both rows from Postgres after the call to prove
+      literally zero mutation occurred, not just "the first" or "the
+      most recent" was picked. Both breaks were cleanly reverted
+      afterward (git diff --stat produced no output).
+
+      Deliberate edit to an already-merged module: promotion_review_
+      store.ex's supersede_review/3 allowed_source_statuses list widened
+      from 7 to 8 edges (adding :approved as a legal predecessor of
+      :superseded). Scrutinized independently by both SECURITY-REVIEWER
+      (Step 2c PASS) and REVIEWER (Step 2d PASS), and re-confirmed a
+      third time by RELEASE-VALIDATOR at Step 5: :superseded appears in
+      no function's allowed_source_statuses list anywhere in the file,
+      so a row already :superseded cannot be re-transitioned by any
+      path, old or new -- no unintended edge created.
+
+      AC4 partial-satisfaction tradeoff: AC4's promotion_reviews-update
+      clause ("updates any applied/approved promotion_reviews row for
+      the former-active definition to superseded") is only fully
+      satisfied when exactly one applied/approved review exists for the
+      process_key at rollback time. For a process_key with more than
+      one such review (an ordinary state once a process_key has been
+      promoted more than once), rollback_definition_version/4 correctly
+      declines to supersede any review rather than guessing, leaving
+      that clause of AC4 unfired even though the event-append half of
+      AC4 still fires. RELEASE-VALIDATOR explicitly judged this
+      acceptable, not a shortfall that should hold up "done": the
+      rejected alternative (blanket-supersede on ambiguous match) is
+      strictly worse (silent audit-history corruption via a false
+      superseded_by causal link on unrelated rows), the limitation is
+      honestly disclosed at every gate in this run's history rather
+      than hidden, and a concrete scoped follow-up (a nullable
+      promotion_reviews.definition_id column, per the design doc's
+      lib/letflow/design/req038-promotion-rollback.md §6) is already
+      named for whoever picks up the real fix.
+
+      Final test count: mix test (full suite) -- 647 passed (4
+      properties, 643 tests), exit 0, independently reproduced by
+      RELEASE-VALIDATOR from a cold start, matching TEST-RUNNER's and
+      TEST-DESIGN-VALIDATOR's figures exactly rather than being copied
+      from either.
+
+      README.md checked directly (not assumed): read both "What's here
+      today" and "Running it" in full -- REQ-038 adds one new internal
+      function (rollback_definition_version/4 plus private helpers) and
+      an edit to an existing internal module, no new HTTP route, no
+      change to the documented curl/mix "Running it" flow or the ASCII
+      state diagram -- left untouched, consistent with REQ-025/030/031/
+      033's own DOC-UPDATER precedent.
+
+      docs/migration/stage-2-event-store-definitions.md header's
+      Requirements line updated to move REQ-038 from the pending half
+      to the done half -- read the CURRENT line first and moved ONLY
+      REQ-038's own token, per the explicit warning that this exact
+      line has already caused real merge conflicts twice this session
+      (REQ-030's and REQ-031's own Step Finals, both against concurrent
+      hosts). No other requirement's position touched.
+
+      docs/issues/ISS-0038.yaml (filed by REVIEWER at Step 2d,
+      promotion_review_store.ex moduledoc's opening function-list
+      citing stale arities, pre-existing not introduced by this run)
+      confirmed in a consistent state (status: open, GitHub issue #127)
+      -- not touched, not resolved, not this run's to fix.
+
+      Bookkeeping gap noticed, not fixed here, same convention as
+      REQ-031's own DOC-UPDATER pass for an identical gap: this file
+      had zero prior REQ-038 events of any kind before this entry --
+      no "started" event was ever logged by ORCH at Step 00, confirmed
+      via direct read of the full file before writing this entry (also
+      independently confirmed missing by RELEASE-VALIDATOR's own Step 5
+      handoff, which filed it as a MINOR issue). This "done" event is
+      REQ-038's first-ever entry in this file's history. Not backfilled
+      retroactively with an invented "started" timestamp, since that
+      would misrepresent when Step 00 actually happened -- reported as
+      a gap instead, per RELEASE-VALIDATOR's own recommendation that
+      DOC-UPDATER's Step 6 note the gap plainly rather than silently
+      paper over it.
+  - req: REQ-038
+    event: SCOPE-CHANGE
+    agent: ORCH
+    at: "2026-08-17T22:15:00Z"
+    note: >
+      Step Final (git merge) postscript. All of this entry's own
+      references above to "docs/issues/ISS-0038.yaml" / "ISS-0038" were
+      accurate at the time they were written (this run's own local file,
+      GitHub issue #127), but this run's own Step Final rebase against
+      origin/main discovered TWO separate things while resolving an
+      add/add conflict on that same file:
+
+      (1) A cross-host ISS-numbering collision, same class as
+      ISS-0034/ISS-0035 and ISS-0036/ISS-0037 earlier this session: a
+      concurrently-merged WF02-REQ042-20260817 run had independently
+      claimed ISS-0038 for an unrelated finding (a rank/float8 casting
+      defect in Letflow.Definitions.search/2), already on main first.
+      This run's REVIEWER finding was re-filed as docs/issues/ISS-0041.yaml
+      (content ported verbatim, same GitHub issue #127) and this run's
+      own local ISS-0038.yaml was dropped via explicit `git rm`, not
+      merged.
+
+      (2) Learned from, not repeated: an EARLIER run this session
+      (WF02-REQ031-20260817) hit this exact same class of collision on
+      docs/issues/ISS-0036.yaml and resolved it via `git checkout --theirs`,
+      intending to keep main's version -- but `git checkout --theirs`
+      means something different during `git rebase` than during
+      `git merge` (during rebase, --theirs is the branch BEING REPLAYED,
+      i.e. the rebasing branch's own content, the inverse of merge
+      semantics). That command actually kept WF02-REQ031-20260817's OWN
+      content, silently overwriting main's already-resolved ISS-0036
+      entry -- caught independently by WF02-REQ042-20260817's own ORCH
+      instance, filed as docs/issues/ISS-0039.yaml (GitHub #121,
+      status: resolved), and fixed on main before this run's own rebase
+      ever ran (confirmed: this run's fetch of origin/main already
+      contains the fix). This run's OWN resolution of the identical
+      collision class (above) deliberately used direct file content
+      inspection plus explicit `git rm`/`Write` rather than any
+      `--ours`/`--theirs` flag, specifically to avoid repeating
+      ISS-0039's exact mistake. No data was lost in either case (git
+      history retained the original content throughout; ISS-0037 and
+      ISS-0041 both correctly carry their respective run's real findings
+      under their corrected numbers) -- flagging this for the historical
+      record, not because anything is currently broken.

@@ -1,0 +1,85 @@
+{
+  "handoff_id": "c8e6a2f1-3d47-4b90-9a5c-7e1f0b6d2c84",
+  "run_id": "WF02-REQ038-20260817",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ038-20260817/step-05-release-validator.json",
+  "created_at": "2026-08-17T23:15:00Z",
+  "started_at": "2026-08-17T23:15:00Z",
+  "completed_at": "2026-08-17T23:21:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-038"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ038-20260817/step-01-code-designer.json",
+      "handoffs/WF02-REQ038-20260817/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ038-20260817/step-01-code-designer-rework.json",
+      "handoffs/WF02-REQ038-20260817/step-01b-code-design-validator-rereview.json",
+      "handoffs/WF02-REQ038-20260817/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ038-20260817/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ038-20260817/step-02d-reviewer.json",
+      "handoffs/WF02-REQ038-20260817/step-03-test-designer.json",
+      "handoffs/WF02-REQ038-20260817/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ038-20260817/step-04-test-runner.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/definitions/promotion_review_store.ex",
+      "lib/letflow/design/req038-promotion-rollback.md",
+      "test/specs/REQ-038.md",
+      "test/letflow/definitions/rollback_test.exs",
+      "docs/issues/ISS-0038.yaml",
+      "test/reports/report-2026-08-18-WF02-REQ038-20260817.yaml"
+    ],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "WF-02 Step 5: independently re-verify REQ-038 (Promotion rollback, PRM-08) is genuinely done before DOC-UPDATER flips its status -- re-run the full suite from a cold start (not trust TEST-RUNNER's report), re-check all 5 acceptance_criteria against the actual shipped code and tests with own line citations, re-verify the cardinality-branching fix in supersede_matching_review/4 by reading it directly, independently confirm the promotion_review_store.ex allowed_source_statuses widening is sound, check docs/status/requirement_status.yaml and docs/requirements.yaml for staleness, sanity-check the full gate sequence (all 10 handoff files including the deliberate 01b FAIL/rework/re-PASS cycle), and check for scope creep via git diff main...HEAD --stat.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0, independently run",
+      "mix test (full suite) independently run and shows 647 passed (4 properties, 643 tests), exit 0",
+      "All 5 REQ-038 acceptance criteria checked explicitly against lib/letflow/definitions.ex's rollback_definition_version/4 + helpers and test/letflow/definitions/rollback_test.exs, with line citations",
+      "supersede_matching_review/4's [_, _ | _] -> nil branch independently confirmed to make zero Repo calls",
+      "promotion_review_store.ex's widening independently confirmed sound: :superseded remains unreachable as a source status everywhere in the file",
+      "docs/status/requirement_status.yaml and docs/requirements.yaml checked for staleness -- REQ-038 expected to still read status: pending",
+      "All 10 run handoffs (00, 01, 01b FAIL, 01-rework, 01b-rereview PASS, 02a, 02c, 02d, 03, 03b, 04) read directly and cross-checked for COMPLETED status, PASS verdicts (except the deliberate 01b FAIL), and consistent cross-references",
+      "git diff main...HEAD --stat confirms no scope creep beyond the declared file set"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified REQ-038 end-to-end rather than trusting any prior gate's self-report. Build/test: ran `mix compile --force --warnings-as-errors` myself -- exit 0, 57 files, no warnings. Ran `mix test` (full suite) myself from a cold start -- 'Result: 647 passed (4 properties, 643 tests)', exit 0, confirmed via explicit grep for Result:/Finished in/failure markers on the raw log, no failures anywhere. Ran `mix test test/letflow/definitions/rollback_test.exs` in isolation -- 'Result: 18 passed', exit 0. Both counts match TEST-RUNNER's and TEST-DESIGN-VALIDATOR's independently-claimed figures exactly, reproduced from a fresh run, not copied.\n\nAll 5 acceptance criteria (docs/requirements.yaml lines 1814-1819) checked directly against lib/letflow/definitions.ex (read in full: rollback_definition_version/4 lines 566-585, do_rollback/6 lines 938-960, run_rollback_transaction/4 lines 967-1000, swap_active_pointer/3 lines 1008-1023, finish_rollback/8 lines 1029-1063, supersede_matching_review/4 lines 1074-1105) and test/letflow/definitions/rollback_test.exs (read in full, 820 lines, 18 tests / 9 describe blocks): AC1 (pointer-flip on rollback to a :deprecated version previously active) -- code: run_rollback_transaction/4's cond + swap_active_pointer/3; tests: lines 316-377 (2 tests, including an exactly-one-event proof via refute_receive). AC2 (version-never-active guard, :archived deliberately excluded per INV-RB-4) -- code: line 987-991's status in [:active, :deprecated] filter; tests: lines 385-452 (3 tests: draft-never-activated, no-row-at-all, archived-excluded). AC3 (already-active guard, no event appended) -- code: line 981-982's Repo.rollback(:already_active), checked before the target-row lookup; test: lines 510-533 (1 test using exploding_event_appender to prove, not assert, non-invocation). AC4 (exactly one event + supersede any applied/approved review for the former-active definition) -- code: finish_rollback/8 calls event_appender exactly once (line 1047), then supersede_matching_review/4's cardinality branch; tests: lines 591-769 (4 cardinality tests + event-append-after-commit + error-propagation). AC5 (permission guard before any read/lock) -- code: line 578-584, permission_checker checked strictly before do_rollback (the sole entry point to every Repo call); tests: lines 540-582 (3 tests, including an unprovisioned-but-decodable-schema-name mechanism that would raise rather than cleanly error if the guard ran late -- independently confirmed TenantProvisioning.tenant_id_for_schema_name/1 (lib/letflow/tenant_provisioning.ex lines 102-115) is a pure regex/UUID.cast string transform with zero I/O, which is load-bearing for this proof's validity).\n\nCardinality-branching fix (item 3): read supersede_matching_review/4 directly (lines 1074-1105). Confirmed the `[_, _ | _] -> nil` branch (line 1098-1103) is a bare literal `nil` with a comment -- zero Repo calls, zero calls into PromotionReviewStore.supersede_review/3, which appears only inside the `[single_review]` branch (line 1088-1096). This structurally matches what CODE-DESIGN-VALIDATOR's Rework-1 re-review and TEST-DESIGN-VALIDATOR's mutation test (reverting this exact branch to blanket-supersede, confirming the 'MORE THAN ONE matching row' test catches it) both already verified -- confirmed again independently here, not taken on their word.\n\npromotion_review_store.ex widening (item 4): read the full file (432 lines). allowed_source_statuses lists, by function: approve_review/4 [:pending_review], reject_review/3 [:pending_review], mark_review_applied/2 [:approved], mark_review_failed/2 [:approved], supersede_review/3 [:applied, :approved, :failed, :rejected] (line 337, confirmed 8 edges as the moduledoc now states). :superseded appears in NO function's allowed_source_statuses list anywhere in the file -- confirmed by reading every list -- so a row already :superseded cannot be re-transitioned by any path, old or new; the new :approved->superseded edge only adds a legal successor to a state (:approved) that was already non-terminal (already transitions to :applied/:failed via existing functions) before this diff. No unintended edge created. The generic transition/6 mechanism (lines 360-374) plus execute_update/3's row_version+status-guarded UPDATE (lines 393-408) is the sole mutation path for every function, unchanged in shape by this diff.\n\nAC4 partial-satisfaction interpretation -- explicitly scrutinized as multiple upstream gates asked: AC4's literal text ('updates any applied/approved promotion_reviews row for the former-active definition to superseded') is only fully satisfied when exactly one applied/approved review exists per process_key at rollback time; the design's own, thoroughly-investigated conclusion (re-verified independently by CODE-DESIGN-VALIDATOR's rereview and not re-litigated from scratch here since the underlying schema fact -- promotion_reviews.def_id is process-key-scoped, not version-scoped -- was independently confirmed by three separate gates already) is that no genuine version-scoped correlation exists in Letflow's shipped schema to disambiguate further. My own judgment: this is an acceptable, non-blocking interpretation of AC4, not a shortfall that should hold up 'done' -- the rejected alternative (blanket-supersede on ambiguous match) is a strictly worse outcome (silent audit-history corruption via a false superseded_by causal link on unrelated rows), the limitation is honestly disclosed at every single gate in this run's own history rather than hidden, REQ-038's own description text already establishes 'zero matching rows is acceptable, not an error' as a legitimate non-error outcome (extending that same non-distinguishing treatment to the ambiguous case is a consistent, not novel, reading), no orchestrator caller of this function exists yet to be materially affected, and a concrete, scoped follow-up (a nullable promotion_reviews.definition_id column, specified in design doc §6) is already named for whoever picks up the real fix. Test coverage of this exact tradeoff is thorough: 4 dedicated cardinality tests including one that re-reads BOTH rows from Postgres after an ambiguous match to prove literally zero mutation (not 'the first' or 'the most recent').\n\nStaleness check (item 5): docs/requirements.yaml's REQ-038 entry (line 1781) still reads `status: pending`, as expected -- DOC-UPDATER (Step 6) has not run yet. Grepped docs/status/requirement_status.yaml for any REQ-038 event -- found none at all (no started/done/blocked entry exists for REQ-038 anywhere in the file's 3517 lines). This is a genuine WF-02 Step 00 gap worth flagging (Step 00's own spec says ORCH should flip status to in_progress and append a 'started' event on PASS; neither happened for this run), but it does not block this PASS -- it does not misrepresent the requirement's current state (pending is honest, not falsely 'done'), and DOC-UPDATER's Step 6 will still correctly flip pending -> done. Filed as a MINOR issue below for ORCH's own bookkeeping, not a defect in the shipped code/tests.\n\nGate-sequence sanity check (item 6): read all 10 run handoffs directly (step-00 through step-04, including both 01b attempts and the 01-rework). All show status: COMPLETED. result.status sequence: 00 PASS, 01 PASS, 01b FAIL (genuine BLOCKER: the original blanket-supersede-on-ambiguous-match design could corrupt unrelated promotion_reviews audit rows for any process_key promoted more than once -- confirmed this is a real, well-reasoned defect finding, not a nitpick), 01-rework PASS, 01b-rereview PASS (independently re-derived the 'no version-scoped correlation exists' claim from promotion_plan.ex/promotion.ex/promotion_review_store.ex directly rather than trusting CODE-DESIGNER's rework summary -- confirmed thorough), 02a PASS, 02c PASS, 02d PASS, 03 PASS, 03b PASS (performed real mutation testing: reordered run_rollback_transaction/4's guard cond -- 2/18 tests failed, precisely the 2 guard-order tests; reverted supersede_matching_review/4's ambiguous branch to blanket-supersede -- 1/18 failed, precisely the 'MORE THAN ONE matching row' test; both cleanly reverted, confirmed via git diff --stat producing no output afterward), 04 PASS. Cross-references consistent throughout: REVIEWER's ISS-0038 filing (docs/issues/ISS-0038.yaml, GitHub issue #127) matches what step-02d claims verbatim; the promotion_review_store.ex widening is carried forward and independently re-scrutinized at every subsequent gate (02a's own MAJOR issue flag, 02c's SECURITY-REVIEWER pass, 02d's REVIEWER pass) rather than silently inherited.\n\nScope check (item 7): `git diff main...HEAD --stat` shows exactly 18 files changed: docs/issues/ISS-0038.yaml, 12 handoffs/WF02-REQ038-20260817/*.json (including this step's own), lib/letflow/definitions.ex, lib/letflow/definitions/promotion_review_store.ex, lib/letflow/design/req038-promotion-rollback.md, test/letflow/definitions/rollback_test.exs, test/reports/report-2026-08-18-WF02-REQ038-20260817.yaml, test/specs/REQ-038.md. No file outside this declared set touched. `git status --short` on the working tree shows no stray/untracked files. No scope creep found.\n\nOverall verdict: PASS. REQ-038 is genuinely done -- all 5 acceptance criteria are met (AC4 to the extent Letflow's actual schema allows, an honestly-disclosed and independently-judged-acceptable limitation, not a silently-swallowed gap), the code compiles clean, the full suite passes with zero regressions (647 passed / 4 properties / 643 tests, reproduced independently), the highest-risk logic (cardinality branching, permission-guard ordering) was independently re-read and matches what every upstream gate already verified, and the one already-merged-module edit (promotion_review_store.ex's 7->8 edge widening) is sound with no unintended edge created.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ038-20260817/step-05-release-validator.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "WF-02 Step 00's own spec (docs/agents/workflows/WF-02_requirement_implementation.md) states that on PASS, ORCH flips the requirement's status to in_progress in docs/requirements.yaml and appends a 'started' event to docs/status/requirement_status.yaml. Neither happened for this run: docs/requirements.yaml's REQ-038 entry still reads status: pending (not in_progress, though this happens to be harmless since DOC-UPDATER's Step 6 will flip pending -> done directly), and docs/status/requirement_status.yaml has zero events of any kind for REQ-038 across its full 3517 lines. Not a blocker for this PASS (the current state is honest, not falsely advanced), but a real process gap worth ORCH's attention -- DOC-UPDATER's Step 6 should append both the missing 'started'-equivalent context and the 'done' event, or ORCH should independently backfill the 'started' event, so the audit trail in requirement_status.yaml isn't silently missing this run's start.",
+        "affected_requirement": "REQ-038"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Carried forward from every upstream gate (CODE-DESIGN-VALIDATOR's Rework-1 rereview, ELIXIR-DEV, REVIEWER): AC4's promotion_reviews-update clause is only fully satisfied when exactly one applied/approved review exists for the process_key at rollback time; for a process_key with more than one accumulated applied/approved review (an ordinary, expected state once a process_key has been promoted more than once), rollback_definition_version/4 correctly declines to supersede any review rather than guessing, leaving that clause of AC4 unfired even though the event-append half still fires. Independently judged acceptable in this handoff's own summary above -- the rejected alternative (blanket-supersede) would silently corrupt unrelated audit rows, which is strictly worse than an honestly-disclosed partial no-op. Recommend REQ-ANALYST pick up the design doc's own named follow-up (a nullable promotion_reviews.definition_id column + a new mark_review_applied/3 arity, lib/letflow/design/req038-promotion-rollback.md §6) as a future requirement so AC4 can eventually be fully satisfied rather than this limitation persisting indefinitely.",
+        "affected_requirement": "REQ-038"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ038-20260817",
+      "commit_sha_list": ["d67fd96"],
+      "remote_branch": "origin/feature/WF02-REQ038-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER (Step 6)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

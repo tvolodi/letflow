@@ -1,0 +1,68 @@
+{
+  "handoff_id": "f3a9c2e7-6b18-4d5a-9c72-1e4f8a0d3b56",
+  "run_id": "WF02-REQ038-20260817",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ038-20260817/step-06-doc-updater.json",
+  "created_at": "2026-08-17T23:25:33Z",
+  "started_at": "2026-08-17T23:25:33Z",
+  "completed_at": "2026-08-17T23:29:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-038"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ038-20260817/step-05-release-validator.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "docs/migration/stage-2-event-store-definitions.md",
+      "docs/issues/ISS-0038.yaml",
+      "README.md",
+      "handoffs/WF02-REQ038-20260817/step-05-release-validator.json"
+    ],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "WF-02 Step 6: flip REQ-038's status to done in docs/requirements.yaml, append a 'done' event to docs/status/requirement_status.yaml (append-only, real UTC timestamp), update README.md if documented current behavior changed, confirm the docs/migration/stage-2 header line and docs/issues/ISS-0038.yaml are in a consistent state, and record the run's real story (Step 1b rework, Step 3b mutation testing, the already-merged-module edit, AC4's judged-acceptable partial satisfaction, and the pre-existing Step 00 bookkeeping gap RELEASE-VALIDATOR flagged).",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-038 status: pending -> done",
+      "docs/status/requirement_status.yaml gains exactly one new appended 'done' event for REQ-038, no prior entries rewritten, real UTC timestamp from the clock",
+      "README.md checked directly and left untouched only if genuinely no documented current behavior changed",
+      "docs/migration/stage-2-event-store-definitions.md header's Requirements line moves only REQ-038's own token from pending to done, no other requirement's token touched",
+      "docs/issues/ISS-0038.yaml confirmed consistent, not resolved or edited by this run",
+      "Both docs/requirements.yaml and docs/status/requirement_status.yaml parse cleanly as YAML after the edits"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Flipped docs/requirements.yaml's REQ-038 entry (line 1781) status: pending -> done. Appended one new 'done' event to docs/status/requirement_status.yaml (after the prior REQ-031 SCOPE-CHANGE entry, file's existing tail) using the file's established req/event/agent/at/note schema -- read the full file first (3517 lines), did not rewrite or reorder any prior entry. Timestamp (2026-08-17T23:24:23Z) read fresh from the clock and cross-checked between `date -u` (bash) and PowerShell's `(Get-Date).ToUniversalTime()`, both agreeing. The note records the real story of the run: the Step 1b CODE-DESIGN-VALIDATOR FAIL on a genuine data-integrity defect (the original design could have superseded promotion_reviews rows belonging to a different version of the same process_key, since def_id is process-key-scoped not version-scoped) and CODE-DESIGNER's rework adopting a cardinality-branching safe default in supersede_matching_review/4 (0 matches -> nil, 1 match -> supersede, >1 match -> nil/refuse-to-guess); the Step 3b TEST-DESIGN-VALIDATOR mutation-testing evidence (reordering run_rollback_transaction/4's guard cond broke exactly the 2 guard-order tests, reverting the cardinality branch to blanket-supersede broke exactly the 1 ambiguous-match test, both cleanly reverted); the deliberate edit to the already-merged promotion_review_store.ex (supersede_review/3's allowed_source_statuses widened 7 -> 8 edges, independently scrutinized by SECURITY-REVIEWER, REVIEWER, and RELEASE-VALIDATOR, with :superseded confirmed reachable from no function's source-status list); RELEASE-VALIDATOR's explicit judgment that AC4's partial satisfaction (ambiguous-cardinality case correctly declines to supersede rather than guessing) is an acceptable, honestly-disclosed tradeoff, not a shortfall; and the final test count (647 passed: 4 properties, 643 tests, exit 0). Also plainly noted, not silently fixed, the pre-existing Step 00 bookkeeping gap: this file had zero prior REQ-038 events before this entry (no 'started' event was ever logged by ORCH), the same convention REQ-031's own DOC-UPDATER pass used for an identical gap -- not backfilled with an invented timestamp, since that would misrepresent when Step 00 actually happened.\n\nREADME.md: read both 'What's here today' (lines 32-54) and 'Running it' (lines 56-121) in full before deciding. REQ-038 adds one new internal function (Letflow.Definitions.rollback_definition_version/4 plus private helpers) and an edit to an existing internal module (promotion_review_store.ex) -- no new HTTP route, no change to the documented curl/mix flow, no change to the ASCII state diagram (which describes the original 4-state ProcessInstance workflow, unrelated to promotion/rollback). Left untouched, consistent with REQ-025/030/031/033's own DOC-UPDATER precedent for internal-only changes.\n\ndocs/migration/stage-2-event-store-definitions.md: read the CURRENT header line (line 3-8) before editing, per the explicit warning that this exact line caused real merge conflicts twice already this session (REQ-030's and REQ-031's own Step Finals). Moved only REQ-038's own token: added it to the done list in numeric order (...REQ-037, REQ-038, REQ-039, REQ-041...) and removed it from the pending list (was 'REQ-038, REQ-040, REQ-042', now 'REQ-040, REQ-042'). No other requirement's token touched -- verified via git diff, which shows exactly this line changed and nothing else in the file.\n\ndocs/issues/ISS-0038.yaml (REVIEWER's Step 2d finding: promotion_review_store.ex's moduledoc opening function-list cites stale arities, pre-existing not introduced by REQ-038) read and confirmed in a consistent state: status: open, github_issue set (https://github.com/tvolodi/letflow/issues/127), affected_files correctly scoped. Not touched, not resolved -- confirmed not this run's to fix.\n\nBoth YAML files validated via `npx -y js-yaml docs/requirements.yaml` and `npx -y js-yaml docs/status/requirement_status.yaml` -- both parsed cleanly, no errors.\n\ngit diff --stat confirms exactly the 3 intended files changed: docs/migration/stage-2-event-store-definitions.md (+3/-2), docs/requirements.yaml (+1/-1), docs/status/requirement_status.yaml (+122 new lines, pure append). README.md and docs/issues/ISS-0038.yaml correctly show no diff.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "docs/migration/stage-2-event-store-definitions.md"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Reaffirming RELEASE-VALIDATOR's Step 5 finding (not new): docs/status/requirement_status.yaml had zero events of any kind for REQ-038 prior to this Step 6 entry -- WF-02 Step 00's own spec says ORCH should flip status to in_progress and append a 'started' event on PASS, and neither happened for this run. This Step 6 'done' entry is REQ-038's first-ever entry in the file's history. Not backfilled retroactively (would misrepresent when Step 00 actually happened) -- left as an honest gap in the audit trail, same convention as REQ-031's identical gap.",
+        "affected_requirement": "REQ-038"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ038-20260817",
+      "commit_sha_list": ["d144b9f"],
+      "remote_branch": "origin/feature/WF02-REQ038-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV for Step Final (git merge)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

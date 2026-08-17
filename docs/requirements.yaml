@@ -1778,7 +1778,7 @@ requirements:
   - id: REQ-038
     title: Promotion rollback (rollback.zig, PRM-08)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S2
     impl_order: 55  # letflow-queue task id
     description: >

@@ -213,4 +213,45 @@ defmodule Letflow.DefinitionsTest do
              "moduledoc does not name the derivation function tenant_id is sourced from"
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-042 acceptance criterion 6: "the moduledoc states no new migration/table was
+  # added, explicitly citing definition.md's PD-10 section for that boundary." A pure
+  # doc-content assertion, no database needed -- the behavioral half of REQ-042
+  # (search/2's ranking, error, and pagination behavior) lives in
+  # test/letflow/definitions/search_test.exs, which uses Letflow.DataCase.
+  # ---------------------------------------------------------------------------------
+
+  describe "moduledoc -- AC6: search/2 states no new migration/table was added, citing PD-10 (REQ-042)" do
+    test "the moduledoc cites PD-10 and definition.md as search/2's source" do
+      doc = normalized_moduledoc(Definitions)
+
+      assert doc =~ "PD-10",
+             "moduledoc does not cite PD-10 for search/2's boundary"
+
+      assert doc =~ "src/design/definition.md",
+             "moduledoc does not cite definition.md as search/2's ported source"
+    end
+
+    test "the moduledoc states no new Zig source file or SQL migration is required" do
+      doc = normalized_moduledoc(Definitions)
+
+      assert doc =~
+               "PD-10 states explicitly that search lives inside the existing store -- no new Zig source file or SQL migration is required",
+             "moduledoc does not state that PD-10 requires no new Zig source file or SQL migration"
+    end
+
+    test "the moduledoc states zero new migrations and zero new indexes were added" do
+      doc = normalized_moduledoc(Definitions)
+
+      assert doc =~ "zero new `priv/repo/migrations/` files",
+             "moduledoc does not state that zero new migration files were added"
+
+      assert doc =~ "zero new indexes",
+             "moduledoc does not state that zero new indexes were added"
+
+      assert doc =~ "REQ-027 shipped it",
+             "moduledoc does not state the query runs against process_definitions exactly as REQ-027 shipped it"
+    end
+  end
 end

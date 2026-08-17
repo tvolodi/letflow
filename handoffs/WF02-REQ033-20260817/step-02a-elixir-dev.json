@@ -1,0 +1,61 @@
+{
+  "handoff_id": "c5a2d955-e2e0-4b68-b44d-1f9bfb9fba94",
+  "run_id": "WF02-REQ033-20260817",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ033-20260817/step-02a-elixir-dev.json",
+  "created_at": "2026-08-17T13:34:32Z",
+  "started_at": "2026-08-17T13:34:47Z",
+  "completed_at": "2026-08-17T13:38:38Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-033"],
+    "related_handoff_ids": ["c8f31faf-5437-40f4-a484-7b9f8cbe29ad", "79175c6c-119a-453a-b1a9-021246ae1dd3"],
+    "artifacts_in": [
+      "lib/letflow/design/req033-snapshot-store.md",
+      "lib/letflow/definitions/instance_definition_snapshot.ex",
+      "lib/letflow/definitions/process_definition.ex",
+      "docs/requirements.yaml (REQ-033 entry)",
+      "docs/guides/backend_developer_guide.md"
+    ],
+    "owned_modules": ["lib/letflow/definitions/snapshot_store.ex", "test/letflow/definitions/snapshot_store_test.exs"]
+  },
+  "task": {
+    "description": "Implement lib/letflow/design/req033-snapshot-store.md's design: a new lib/letflow/definitions/snapshot_store.ex context module (Letflow.Definitions.SnapshotStore) with create/3(instance_id, definition_id, opts) and get_by_instance_id/2(instance_id, opts), per the design's full algorithm. No new migration needed -- REQ-027 already created instance_definition_snapshots/process_definitions. Design flagged three open questions (OQ-1/OQ-2/OQ-3) that need REVIEWER's explicit confirmation at Step 2d, not resolved unilaterally by you -- implement per the design's stated resolution but flag them again in your own handoff so they aren't missed. Self-review checklist per WF-02 Step 2a: no string interpolation of tenant/user input into raw SQL (INV-7 -- use lock(\"FOR SHARE\") query composition, not Repo.query!); no unresolved {:ok, _} = match on a path reachable from external I/O (INV-8 -- guard every field the way REQ-025's rework had to learn the hard way, is_map/1 alone doesn't exclude structs); new public functions have a one-line @doc.",
+    "acceptance_criteria": [
+      "create/2 against a valid definition_id inserts a snapshot row whose graph matches the source process_definitions row's graph at the moment of the call",
+      "create/2 called twice with the same instance_id is idempotent (no error, no second row) OR returns a distinct SnapshotAlreadyExists-equivalent error -- pick one behavior and state which in the moduledoc, since definition.md's own text supports the idempotent reading for an EE-01 retry",
+      "get_by_instance_id/1 against an instance_id with no snapshot returns a not-found error, not nil silently",
+      "deleting a process_definitions row that an instance_definition_snapshots row references is rejected by the database (foreign_key_violation), and the snapshot row remains present and unmodified -- per PD-08's no-ON-DELETE-CASCADE design (REQ-027); a snapshot is never removed as a side effect of deleting its source definition",
+      "the moduledoc explicitly states the EE-01 instance-start integration point is S3 scope, not built here",
+      "mix compile --warnings-as-errors exits 0",
+      "mix format --check-formatted passes"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented lib/letflow/definitions/snapshot_store.ex (Letflow.Definitions.SnapshotStore) exactly per lib/letflow/design/req033-snapshot-store.md, with one deliberate, documented divergence (below). `create/3(instance_id, definition_id, opts)`: validates opts[:prefix] present/non-empty (design §6.1 P0), then a single Repo.transaction/2 closure (not Ecto.Multi, per the design's own stated rationale) does a FOR SHARE-locked read of the source process_definitions row (Ecto.Query.lock/2 composition, never a raw SQL string -- INV-7), and on a hit builds InstanceDefinitionSnapshot.create_changeset/2's attrs from the locked row and inserts with on_conflict: :nothing/conflict_target: :instance_id, then re-selects the row by instance_id (its own primary key) inside the same transaction to get the authoritative struct regardless of whether the insert really happened or was suppressed by a concurrent/earlier call (design §6.2 L1-L3). A miss on the locked read rolls the transaction back with {:error, :definition_not_found}; nothing is written. `get_by_instance_id/2`: prefix check, then a single scoped Repo.get/3, returning {:error, :snapshot_not_found} on a miss -- never nil (design §6.4).\n\nIdempotency (AC2): chosen and documented in the moduledoc as the idempotent-no-op reading, matching design §5 -- a retry for an already-snapshotted instance_id returns {:ok, snapshot} (the pre-existing row), zero additional rows, no error.\n\nDeliberate divergence from the design's literal §4.3 text, documented in the moduledoc's own dedicated section and flagged here for REVIEWER: the design assumed a malformed instance_id/definition_id would surface via InstanceDefinitionSnapshot.create_changeset/2's own Ecto.UUID cast (its Ecto.Changeset.t() catch-all clause's stated rationale). That assumption doesn't hold -- create/3's locked read queries process_definitions by definition_id, and get_by_instance_id/2 queries by instance_id, both via plain Ecto.Query/Repo.get/3 lookups that run before any changeset is ever built. Confirmed empirically against this host's real Postgres (mix run, both paths, a malformed id): both raised Ecto.Query.CastError, not a typed error -- the same INV-8 class of bug lib/letflow/event_store.ex's fetch_event_type/1 comment documents for event_type from REQ-025's own rework history. Fixed by adding an Ecto.UUID.cast/1 guard (same primitive Letflow.EventStore.append/2 already uses for instance_id/actor_id; confirmed via a throwaway mix run that it safely returns :error -- never raises -- for nil, non-binary values, maps, and structs alike) before any query runs: create/3 now returns {:error, :invalid_instance_id} / {:error, :invalid_definition_id}; get_by_instance_id/2 returns {:error, :invalid_instance_id}. Both new tags added to the create_error()/get_by_instance_id spec's error union alongside the design's original :missing_prefix/:definition_not_found/:snapshot_not_found/Ecto.Changeset.t()/term() tags -- nothing from the design's own taxonomy was removed.\n\nVerification actually run (not predicted):\n- `mix compile --warnings-as-errors` -- exits 0: `Compiling 1 file (.ex)` / `Generated letflow app`, no warnings.\n- `mix format --check-formatted` -- exits 0, no output.\n- `mix test` (real docker-compose Postgres, confirmed `letflow-postgres-1 ... Up 5 hours (healthy)` on port 5462 via `docker ps` before running) -- `4 properties, 411 tests, 0 failures`. No migration was added or needed, so no `mix ecto.migrate` step was applicable (confirmed: `priv/repo/migrations/` unchanged, REQ-027's two migrations already shipped and already applied by the existing suite's tenant-provisioning fixtures).\n- End-to-end smoke run against real Postgres (throwaway mix run script, not committed, per the same convention REQ-025's rework used for its own regression checks): provisioned a real tenant schema via Letflow.TenantProvisioning, inserted a real process_definitions row, then exercised every AC directly: (1) create/3 first call -> {:ok, snapshot} with snapshot.graph == source_definition.graph read under the same call's lock (AC1); (2) create/3 second call, same instance_id -> {:ok, snapshot} again, identical snapshotted_at, confirming zero second insert (AC2); (3) get_by_instance_id/2 on that instance_id -> {:ok, snapshot}; on a fresh random instance_id -> {:error, :snapshot_not_found}, never nil (AC3); (4) create/3 with a definition_id no process_definitions row matches -> {:error, :definition_not_found}; (5) create/3 with opts == [] -> {:error, :missing_prefix}; (6) create/3 with instance_id = \"not-a-uuid\" -> {:error, :invalid_instance_id} (no crash, confirming the INV-8 fix); (7) create/3 with definition_id = %{} (a bare map) -> {:error, :invalid_definition_id} (no crash); (8) Repo.delete!/1 against the referenced process_definitions row raised Ecto.ConstraintError citing `instance_definition_snapshots_definition_id_fkey` (foreign_key_constraint) -- the delete was rejected, not silently succeeded; (9) get_by_instance_id/2 immediately after the failed delete still returned {:ok, snapshot} with every field unchanged, confirming AC4's \"snapshot never removed as a side effect\" end to end against the real DB, not just read off the migration's DDL.",
+    "artifacts_out": ["lib/letflow/definitions/snapshot_store.ex"],
+    "issues": [
+      "OQ-1 (design doc §9, MINOR, carried forward unresolved): a definition_id belonging to a different tenant's process_definitions row is indistinguishable from create/3's own vantage point from a definition_id that doesn't exist at all -- both produce :definition_not_found, because the locked read is scoped to opts[:prefix]'s physical schema. Reasoned as the correct, secure default (leaks no cross-tenant information) but not independently confirmed against PD-08's primary text (unreachable on this host). Flagged for SECURITY-REVIEWER to confirm as correct, not merely unobjectionable.",
+      "OQ-2 (design doc §9, MINOR, carried forward unresolved): create/3's idempotency check keys purely on instance_id, per REQ-033's own literal 'ON CONFLICT (instance_id) DO NOTHING' wording -- it does not compare a retry's definition_id against the first call's stored definition_id. A caller bug that retries create/3 with the wrong definition_id would silently succeed, returning the original (different-definition) snapshot with no signal the two calls disagreed. Flagged for REVIEWER's explicit sign-off given its shape-similarity to the cross-tenant-attribution failure mode REQ-025's design treated as unacceptable there (though this case is about which of two legitimate definition_ids wins, not cross-tenant attribution).",
+      "OQ-3 (design doc §9, MINOR, carried forward unresolved): L1's lock mode is FOR SHARE per REQ-033's own requirement text ('prevents a concurrent delete or exclusive-lock write from racing the snapshot capture'), implemented exactly as specified. Not independently verified against PD-08's primary text (unreachable on this host) that FOR SHARE, rather than FOR UPDATE, is the exact lock mode PD-08 specifies. Re-verify against the primary source if it ever becomes reachable.",
+      "New deviation surfaced during this implementation, not present in the design doc's own open-questions list: instance_id/definition_id are now validated via Ecto.UUID.cast/1 before any query runs, adding :invalid_instance_id/:invalid_definition_id to the error taxonomy -- the design's §4.3 assumed a malformed id would be caught by InstanceDefinitionSnapshot.create_changeset/2's own cast, which does not hold since both this module's read paths run before any changeset is built (confirmed empirically, see summary). Documented in the moduledoc's own dedicated section; flagged here per this run's instructions so REVIEWER evaluates it explicitly at Step 2d rather than discovering an undocumented taxonomy addition."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ033-20260817",
+      "commit_sha_list": ["5ee1d924810ea0e4cee81e415eb40b36be03da01"],
+      "remote_branch": "origin/feature/WF02-REQ033-20260817",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

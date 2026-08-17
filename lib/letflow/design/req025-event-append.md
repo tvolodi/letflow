@@ -299,8 +299,17 @@ design's own tenant-derivation mechanism requires:
         # REQ-025's named "payload schema failure" case -- propagated from Registry,
         # covers both a real JSON-Schema mismatch and Registry's own root-type-mismatch
         # shortcut (payload decodes to a non-object).
+        | {:error, :instance_not_started}
+        # No instance_projections row exists yet for this instance_id -- REVIEWER's
+        # Step 2d ruling on OQ-5 (§9 OQ-5): append/2 cannot originate a new instance's
+        # projection row; some future EE-01/S3 mechanism (or, for this requirement's own
+        # tests, a test fixture's direct Repo.insert) must create the row first. A
+        # DISTINCT case from :instance_terminated below -- a missing row is never folded
+        # into the terminal-instance path. §6.2 M1.
         | {:error, {:instance_terminated, :completed | :cancelled}}
-        # REQ-025's named "terminated instance" case -- invariant 10. §6.2 M1.
+        # REQ-025's named "terminated instance" case -- invariant 10. §6.2 M1. Only
+        # reachable when an instance_projections row DOES exist and its status is
+        # terminal; a missing row is always :instance_not_started above instead.
         | {:error, {:sequence_conflict, term()}}
         # Race-condition backstop only -- see §6.2 M2's own note on why this should be
         # unreachable under the locking protocol, and why it is still named rather than
@@ -477,16 +486,22 @@ attrs.instance_id, targeting the derived tenant schema. A plain, unlocked read; 
 lock is taken here (see the paragraph below for why that's an acceptable gap).
 
   no row found for this instance_id
-    -> succeed, recording :new_instance
-       (a brand-new instance's first-ever append -- not terminated by definition. See
-       §6.2.6 and §9 OQ-5 for why M6 must therefore be able to CREATE this row, not only
-       update one that already exists.)
+    -> fail the step with {:error, :instance_not_started} -- a DISTINCT error case from
+       :instance_terminated below, not an implicitly-new/active instance and not folded
+       into the terminal-instance branch. append/2 cannot originate a new instance's
+       instance_projections row under this requirement's scope; some other mechanism
+       (EE-01/S3's future instance-start population, or -- for this requirement's own
+       tests -- a test fixture's direct Repo.insert against instance_projections,
+       bypassing append/2 entirely) must create the row first. This aborts the whole
+       Multi before any write happens anywhere. See §9 OQ-5 for the REVIEWER ruling this
+       resolves.
 
   row found, and its status is terminal (CANCELLED or COMPLETED, per
   InstanceProjection.terminal?/1 as REQ-023's schema design defines it)
     -> fail the step with {:error, {:instance_terminated, status}}, where status is the
        terminal status found -- this aborts the whole Multi before any write happens
-       anywhere (AC1)
+       anywhere (AC1). Only reachable when a row DOES exist -- a missing row is always
+       :instance_not_started above, never treated as an implicit terminal state.
 
   row found, and its status is not terminal
     -> succeed, recording :existing_instance
@@ -656,35 +671,27 @@ size recomputed from the stored representation.
 
 #### 6.2.6 M6 — `instance_projections` update (invariant 6, DB-03)
 
-**This step must both create the row (a brand-new instance's first append, M1 found no
-row) and update it (every subsequent append to the same instance) — a genuine
-`insert-if-absent-else-update` (UPSERT), not a bare `UPDATE`.** REQ-025's own text says
-only "update" (1077–1078), but nothing else in this project's current scope (§1's table:
-EE-01/S3 owns only the *engine-driven columns*, not row creation) creates this row
-before the first event of a new instance is appended — see §9 OQ-5 for why this design
-resolves the gap this way rather than leaving `append/2` unable to record the very first
-event of any instance. `InstanceProjection.insert_changeset/2` already exists in
-REQ-023's shipped schema specifically to make this possible (confirmed §0).
+**This step is update-only — it never creates an `instance_projections` row.** REVIEWER's
+Step 2d ruling on OQ-5 (§9) held that row creation is EE-01/S3's "meaningful population
+at instance-start" territory, not this requirement's to originate; M1 (§6.2.1) already
+guarantees, by the time M6 runs, that a row exists and is non-terminal (M1 fails the
+whole `Multi` with `{:error, :instance_not_started}` or `{:error, {:instance_terminated,
+status}}` before M6 is ever reached otherwise). M6 therefore uses
+`InstanceProjection.update_changeset/2` — the changeset REQ-023 built specifically for
+this — never `insert_changeset/2` and never an `on_conflict:`-based upsert.
 
 ```
-M6 (:update_projection) -- an upsert against instance_projections, via the schema
-module's own insert changeset, keyed on instance_id:
+M6 (:update_projection) -- updates the instance_projections row for this instance_id
+(guaranteed present and non-terminal by M1), via InstanceProjection.update_changeset/2:
 
-  row does not yet exist for this instance_id (M1 found none)
-    -> create it: instance_id, tenant_id (from P1 -- derived, never attrs-supplied),
-       status set to :active, last_event_seq set to assigned_sequence_number (M2)
+  update last_event_seq (to assigned_sequence_number, M2) and the row's updated-at
+  timestamp (to created_at, P6). status and tenant_id are left untouched -- an existing
+  row's status must never be overwritten by an ordinary append (status transitions
+  belong to EE-01/S3, out of this requirement's scope) and its tenant_id never changes
+  for an existing instance.
 
-  row already exists for this instance_id
-    -> instead of the above insert taking effect, update only last_event_seq (to
-       assigned_sequence_number, M2) and the row's updated-at timestamp (to created_at,
-       P6). status and tenant_id are deliberately left untouched on this path -- an
-       existing row's status must never be overwritten by an ordinary append (status
-       transitions belong to EE-01/S3, out of this requirement's scope) and its
-       tenant_id never changes for an existing instance.
-
-  Both branches are expressed as a single atomic upsert (one statement covering both
-  outcomes, not a separate existence check followed by a conditional insert or update,
-  which would itself race against a concurrent first-append to the same instance).
+  This is a plain UPDATE keyed on instance_id, not an upsert -- there is no
+  "row absent" branch here; that case was already exhausted by M1.
 ```
 
 ### 6.3 Assembling the top-level result
@@ -823,20 +830,27 @@ atom (unlike `actor_id`, `payload`, `idempotency_key`). This design lets a missi
 (§6.1 P2's own note) rather than inventing an unnamed atom. Flagged in case REVIEWER
 judges this inconsistent with how the other three structural fields are handled.
 
-**OQ-5 (MAJOR — a real scope-boundary judgment call, not a minor detail).** REQ-025's
+**OQ-5 — RESOLVED per REVIEWER's Step 2d ruling
+(`handoffs/WF02-REQ025-20260817/step-02d-reviewer.json`), no longer open.** REQ-025's
 text says M6 "updates" `instance_projections`; REQ-023's own moduledoc (§7.3 there)
 says `instance_projections`' *meaningful population* is EE-01/S3 territory and warns
-"do not read this migration as instance-engine work landing early." This design reads
-that warning as applying to the migration/engine-owned-columns boundary specifically
-(`definition_id`, `current_nodes`, etc. — REQ-023's own §3.3 list), **not** as forbidding
-`append/2` from creating the bare row (`instance_id`, `tenant_id`, `status: :active`,
-`last_event_seq`) that its own writes need to exist. Without this, no instance could
-ever receive its first event at all under current scope, since nothing else creates
-this row. **REVIEWER should explicitly confirm this reading** rather than this design's
-own judgment call standing unchallenged — if REVIEWER disagrees, `append/2` would need
-an entirely different contract (e.g. refusing to append to an instance with no
-pre-existing projection row), which is a materially different, not incrementally
-different, design.
+"do not read this migration as instance-engine work landing early." This design's first
+draft read that warning as applying only to the migration/engine-owned-columns boundary
+(`definition_id`, `current_nodes`, etc.), and had `append/2` create the bare row
+(`instance_id`, `tenant_id`, `status: :active`, `last_event_seq`) on an instance's first
+append. **REVIEWER rejected that reading**: REQ-025's own acceptance-criteria text names
+"update" only for this table (unlike `instance_sequence`'s explicit insert-if-absent
+callout), `InstanceProjection` is the only event-store schema module REQ-023 gave an
+`update_changeset/2` (a strong signal REQ-023 anticipated `append/2` only ever updating
+this table), and "at instance start" population is explicitly EE-01/S3's job, not a
+storage mechanic incidental to appending an event. Resolution, now built into §6.2.1
+(M1) and §6.2.6 (M6): `append/2` never originates an `instance_projections` row. A
+missing row is a distinct M1 failure, `{:error, :instance_not_started}`, and M6 is
+update-only via `InstanceProjection.update_changeset/2`. Some future EE-01/S3 mechanism
+(or, for this requirement's own tests, a test fixture's direct `Repo.insert` against
+`instance_projections`, bypassing `append/2` entirely — REVIEWER confirmed this is the
+correct test strategy) must create the row before any `append/2` call can succeed
+against that instance.
 
 **OQ-6 (MINOR).** M1's active-instance guard is a plain (unlocked) read. A stronger
 guarantee (locking `instance_projections` for the append's duration, so a concurrent
@@ -851,7 +865,7 @@ design can verify and is not built here.
 |---|---|---|
 | `Letflow.TenantProvisioning.tenant_id_for_schema_name/1` | `EventStore` → `TenantProvisioning` | **New function this requirement adds** (§4) — a forward edit to a sibling, already-merged module, same shape as REQ-023/024/027/035's edits to `tenant_scoped_migrations/0`. |
 | `Letflow.EventStore.Registry.validate_payload/3` | `EventStore` → `Registry` (REQ-024) | Read-only, pre-transaction (§6.1 P4). Consumes `Registry`'s exact shipped error union unchanged. |
-| `Letflow.EventStore.{Event, InstanceSequence, InstanceProjection, IdempotencyRecord, StoredPayload}` | `EventStore` → REQ-023's schema modules | Consumes every `insert_changeset/2` (and `InstanceProjection.update_changeset/2` is deliberately **not** used — M6 uses `insert_changeset/2` plus `on_conflict:`, not a separate update path) exactly as shipped; adds no new function to any of the six. |
+| `Letflow.EventStore.{Event, InstanceSequence, InstanceProjection, IdempotencyRecord, StoredPayload}` | `EventStore` → REQ-023's schema modules | Consumes each schema's `insert_changeset/2` for the rows this requirement creates (`Event`, and conditionally `StoredPayload`), plus upsert-via-`insert_changeset/2` + `on_conflict:` for `InstanceSequence`/`IdempotencyRecord` (§6.2.2, §6.2.3) — but `InstanceProjection.update_changeset/2` **is** used for M6 (§6.2.6), per OQ-5's resolution (§9): M6 only ever updates an existing row, never creates one. Adds no new function to any of the six. |
 | `Letflow.Repo` | `EventStore` → `Repo` | Every operation passes `prefix: schema_name` explicitly (INV-EV-8); no `@schema_prefix` anywhere. |
 | REQ-026 (`read/2`, `archive/1`, not yet built) | REQ-026 → REQ-025 | Consumes `append/2`'s row shapes as its own read/archive targets. Not built or anticipated here. |
 | REQ-030 (`process_definitions`'s writer, not yet built) | REQ-030 → this design | Should reuse `tenant_id_for_schema_name/1` (§4's forward note) rather than re-deriving an equivalent. |
@@ -868,3 +882,11 @@ design can verify and is not built here.
 | 4. "a payload that fails REQ-024's validate_payload/2 results in zero rows written to events, instance_sequence, or instance_projections" | §6.1 P4 — runs entirely before the `Multi`/transaction opens, so literally zero writes are ever attempted, not merely rolled back; INV-AP-4 |
 | 5. "a payload over 4096 bytes is split into events.payload's $ref pointer form plus an event_payload_store row" | §6.1 P5 (measurement) + §6.2.4 (M4, `$ref` form) + §6.2.5 (M5, the side row); INV-AP-8 |
 | 6. "every row append/1(2) writes ... has tenant_id equal to the tenant whose schema the write targeted, derived internally ... which must fail loudly ... rather than succeed" | §3 (the no-`:tenant_id`-accepted design), §4 (the derivation function), §6.1 P0/P1, §6.2.4 (M4), §6.2.6 (M6); INV-AP-1, INV-AP-2, INV-AP-9; **§9 OQ-1 flags the requirement-text/shipped-schema mismatch for the two tables that carry no tenant_id column at all**, with a concrete adapted-test resolution stated, not left ambiguous |
+
+Per OQ-5's resolution (§9), `append/2` never creates an `instance_projections` row —
+M1 (§6.2.1) requires one to already exist and be non-terminal before M6 (§6.2.6) can
+run. **Every test exercising AC1–AC6 above must therefore pre-seed the target
+instance's `instance_projections` row via a direct `Repo.insert` in test setup**
+(REVIEWER-confirmed strategy, `step-02d-reviewer.json`), not rely on `append/2` itself
+to originate it — TEST-DESIGNER's fixtures are the "some other mechanism" §9/§6.2.1
+refer to for this requirement's own coverage.

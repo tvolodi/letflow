@@ -1,0 +1,55 @@
+{
+  "handoff_id": "9000e4d9-9a49-43af-b574-117d95336c00",
+  "run_id": "WF02-REQ036-20260817",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ036-20260817/step-05-release-validator.json",
+  "created_at": "2026-08-17T18:46:56Z",
+  "started_at": "2026-08-17T18:46:56Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-036"],
+    "related_handoff_ids": ["b9fd427d-ae2b-4675-8d1f-dbc84a3f090d"],
+    "artifacts_in": [
+      "lib/letflow/definitions/promotion_plan.ex",
+      "lib/letflow/definitions/promotion_conflict.ex",
+      "lib/letflow/definitions/promotion_digest.ex",
+      "test/letflow/definitions/promotion_plan_test.exs",
+      "test/letflow/definitions/promotion_conflict_test.exs",
+      "test/letflow/definitions/promotion_digest_test.exs",
+      "test/reports/report-2026-08-17-WF02-REQ036-20260817.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently re-verify REQ-036 is actually done before it's marked done. Do not trust TEST-RUNNER's report alone -- re-run the suite yourself. Read every one of REQ-036's 6 acceptance_criteria in docs/requirements.yaml and check each one explicitly against the actual code/tests (not against any agent's summary). Check docs/status/requirement_status.yaml and docs/requirements.yaml for staleness relative to what actually shipped -- REQ-036 was flipped to in_progress at Step 00 (2026-08-17T18:01:34Z), should still read in_progress right now (DOC-UPDATER flips it to done in Step 6, after you PASS).",
+    "acceptance_criteria": [
+      "Independently re-run MIX_TEST_PARTITION=2 mix test (full suite) -- do not trust the Step 4 report alone",
+      "Each of REQ-036's 6 acceptance_criteria explicitly checked against actual code (cite file:line), not against a summary",
+      "No status staleness found (or found and flagged) in docs/requirements.yaml / docs/status/requirement_status.yaml",
+      "Confirm no rework was silently skipped across the run's own handoff chain (spot-check that Step 1b/2c/2d/3b all show genuine independent verification, not rubber-stamps)"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ036-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ036-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

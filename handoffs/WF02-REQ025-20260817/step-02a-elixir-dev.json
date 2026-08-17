@@ -1,0 +1,65 @@
+{
+  "handoff_id": "67cbb824-4d69-420e-a482-fa662cdea4bc",
+  "run_id": "WF02-REQ025-20260817",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ025-20260817/step-02a-elixir-dev.json",
+  "created_at": "2026-08-17T11:25:01Z",
+  "started_at": "2026-08-17T11:25:01Z",
+  "completed_at": "2026-08-17T11:31:53Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-025"],
+    "related_handoff_ids": ["b0bf5097-618c-4f52-a813-3572f8f498e7"],
+    "artifacts_in": [
+      "lib/letflow/design/req025-event-append.md",
+      "lib/letflow/event_store/event.ex",
+      "lib/letflow/event_store/instance_sequence.ex",
+      "lib/letflow/event_store/instance_projection.ex",
+      "lib/letflow/event_store/idempotency_record.ex",
+      "lib/letflow/event_store/stored_payload.ex",
+      "lib/letflow/event_store/registry.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "docs/requirements.yaml (REQ-025 entry)",
+      "docs/guides/backend_developer_guide.md"
+    ],
+    "owned_modules": ["lib/letflow/event_store.ex", "lib/letflow/tenant_provisioning.ex", "test/letflow/event_store_test.exs"]
+  },
+  "task": {
+    "description": "Implement lib/letflow/design/req025-event-append.md's design: a new lib/letflow/event_store.ex context module (Letflow.EventStore) with append/2, per the design's Section 6 algorithm (now prose, not code -- your job is to turn that prose into real, correct Elixir/Ecto). Also add Letflow.TenantProvisioning.tenant_id_for_schema_name/1 (the reverse of schema_name_for_tenant/1) to lib/letflow/tenant_provisioning.ex, per the design's Section 4. No new migrations needed -- REQ-023 already created every table this touches. The design's OQ-5 (instance_projections insert-if-absent at first append) needs REVIEWER's explicit confirmation at Step 2d -- implement per the design's stated resolution but flag it again in your own handoff so it isn't missed.",
+    "acceptance_criteria": [
+      "appending to a terminated instance (status CANCELLED or COMPLETED in instance_projections) returns an error and writes zero rows across all five involved tables, demonstrated by an actual test or iex session against a real Postgres, not just described",
+      "two concurrent appends to the same instance_id never receive the same sequence_number -- demonstrated with an actual concurrent test (e.g. Task.async_stream racing two appends) or, if concurrency can't be exercised in this environment, the FOR UPDATE-equivalent locking code path is cited explicitly",
+      "appending twice with the same idempotency_key returns is_duplicate: true on the second call and does not insert a second events row, verified against the idempotency sidecar table REQ-023 defines",
+      "a payload that fails REQ-024's validate_payload/2 results in zero rows written to events, instance_sequence, or instance_projections -- no partial state",
+      "a payload over 4096 bytes is split into events.payload's $ref pointer form plus an event_payload_store row, verified by reading both rows back after append",
+      "every row append/1(2) writes (events, instance_sequence, instance_projections, the idempotency sidecar) has tenant_id equal to the tenant whose schema the write targeted, derived internally -- not equal to a caller-supplied tenant_id when the two are deliberately made to disagree in a test, which must fail loudly (not silently attribute to the wrong tenant) rather than succeed",
+      "mix compile --warnings-as-errors exits 0",
+      "mix format --check-formatted passes"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented Letflow.TenantProvisioning.tenant_id_for_schema_name/1 (pure inverse of schema_name_for_tenant/1, regex-anchored on 'tenant_' <> 32 lowercase hex chars, re-validated via Ecto.UUID.cast/1) and the new Letflow.EventStore context module (lib/letflow/event_store.ex) with append/2, built strictly from lib/letflow/design/req025-event-append.md's Section 6 prose algorithm: pre-transaction phase (P0-P6, reject :tenant_id/\"tenant_id\", derive tenant_id from opts[:prefix], structural UUID/payload/idempotency-key checks, metadata validation, Registry.validate_payload/3 -- all before Repo.transaction/2 is ever called, zero writes attempted on any pre-transaction failure) followed by one Ecto.Multi with six steps (M1 active_instance_guard via InstanceProjection.terminal?/1, M2 assign_sequence via insert-if-absent on_conflict:nothing + Ecto lock(\"FOR UPDATE\") query composition + repo.update_all increment, M3 idempotency via the same 'insert then re-select by surrogate id' idiom TenantProvisioning.insert_or_fetch_registration/2 already established, M4 insert_event with the >4096-byte $ref split, M5 conditional store_oversized_payload, M6 instance_projections upsert via on_conflict: [set: [last_event_seq, updated_at]] leaving status/tenant_id untouched on an existing row). Full Section 5.3 error taxonomy implemented as tagged tuples, including the sequence_conflict DB-level backstop detected via the uq_event_sequence constraint name on M4's changeset. Design decisions made where the design left room: (1) attrs field access is atom-keyed only per the @type append_attrs spec, except the :tenant_id/\"tenant_id\" dual-key rejection the design explicitly calls out; (2) the public @spec is `{:ok, append_result()} | append_error()`, not the design doc's literal `{:ok, append_result()} | {:error, append_error()}` -- the latter would double-wrap every variant, since append_error() already tags each member with :error; (3) M3's duplicate-lookup path added two unnamed-in-the-design catch-all error tuples ({:idempotency_lookup_failed, :sidecar_row_missing | :original_event_missing}) for the theoretically-unreachable case where the sidecar/events row can't be found after a suppressed insert, routed through the design's own generic {:error, term()} catch-all rather than left as a possible crash. OQ-5 (instance_projections insert-if-absent at first append) implemented exactly per the design's stated resolution (M6 upsert) -- per the task briefing this still needs REVIEWER's explicit confirmation at Step 2d, flagged again here so it isn't missed. OQ-1 (instance_sequence/event_idempotency have no tenant_id column, contra REQ-025's literal AC6 text) is restated in the moduledoc exactly as the design instructs, not silently resolved.\n\nVerification actually run (not predicted): `mix compile --warnings-as-errors` exits 0 (clean, no warnings). `mix format --check-formatted` exits 0 after `mix format`ting both changed files (it initially flagged 3 line-length issues in event_store.ex, now fixed). `mix test` (401 tests, 4 properties, 0 failures) -- full existing suite still green, this run's own event_store_test.exs does not exist yet (owned by TEST-DESIGNER next). Ran a throwaway iex/mix-run sanity script (tmp_req025_sanity.exs, deleted after use, not committed) against the real docker-compose Postgres (letflow_dev, port 5462) exercising a freshly provisioned+migrated tenant schema and a registered event type: (1) normal append -- events/instance_sequence/instance_projections/event_idempotency rows all present, events.tenant_id and instance_projections.tenant_id both equal to the tenant's own tenant_id, sequence_number=1, global_seq=1; (2) append to a manually-terminated (:completed) instance -- returned {:error, {:instance_terminated, :completed}}, events/instance_sequence/event_idempotency row counts unchanged before vs after; (3) duplicate idempotency_key -- second call returned {:ok, %{is_duplicate: true, event: <original event>, sequence_number: 1, ...}}, events row count unchanged across the duplicate call; (4) 5008-byte JSON payload -- events.payload came back as %{\"$ref\" => \"f1bc5389-52df-4a1c-9fd5-a3575b921b3d\"} (matching the inserted event_id) and event_payload_store held byte_size: 5008 with the full original payload; (5) attrs carrying a deliberately-disagreeing :tenant_id key -- returned {:error, :tenant_id_not_accepted} rather than silently succeeding or silently overriding; (6) 10 concurrent Task.async_stream appends to the same instance_id -- all 10 succeeded, sequence_numbers came back as the exact set [1,2,3,4,5,6,7,8,9,10] with zero duplicates, demonstrating the FOR-UPDATE-equivalent locking protocol under real concurrent load, not just cited.",
+    "artifacts_out": ["lib/letflow/event_store.ex", "lib/letflow/tenant_provisioning.ex"],
+    "issues": [
+      "OQ-5 (design doc §9): instance_projections insert-if-absent at first append (M6's upsert) is a real scope-boundary judgment call per the design's own framing, implemented exactly as designed -- needs REVIEWER's explicit confirmation at Step 2d, not just SECURITY-REVIEWER's tenant-isolation check.",
+      "OQ-1 (design doc §9): REQ-025's own acceptance criterion 6 names instance_sequence and event_idempotency as tables needing a correctly-derived tenant_id, but neither table carries a tenant_id column in REQ-023's shipped schema -- restated in Letflow.EventStore's moduledoc per the design's instruction; TEST-DESIGNER will need to adapt that acceptance criterion's test to a prefix-reachability check for those two tables rather than a column-value check."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ025-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ025-20260817",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

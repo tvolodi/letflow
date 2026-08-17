@@ -2678,3 +2678,37 @@ history:
       no decision record states a general GLOBAL-vs-PER_TENANT rule; this
       requirement follows prm-batch1's stated classification for these
       three tables specifically without resolving the general question.
+  - req: REQ-041
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-17T09:01:55Z
+    note: >
+      WF02-REQ041-20260817 complete. Shipped: three GLOBAL (public/
+      default-schema, no :prefix) migrations -- solution_pack_installs
+      (with a real DB FK to tenants.id, since both live in the public
+      schema), solution_pack_artefact_bases, pack_update_resolutions --
+      plus a new Letflow.Definitions context module (did not exist
+      before this requirement) with compute_pack_update_plan/5 and
+      classify_artefact/3, and the three corresponding Ecto.Schema
+      modules (SolutionPackInstall, SolutionPackArtefactBase,
+      PackUpdateResolution). Classification algorithm: unchanged
+      (base==theirs==incoming), clean_update (base==theirs!=incoming),
+      local_only (base==incoming!=theirs), conflict (both sides
+      changed, or no base row -- PRM-09 AC5); has_unresolved_conflicts
+      true iff any conflict entry lacks a matching pack_update_resolutions
+      row. This is the first GLOBAL/non-tenant-scoped table added since
+      REQ-015's tenants table -- every other S2 table so far has used
+      REQ-022's schema-per-tenant :prefix mechanism. The moduledocs
+      (definitions.ex, solution_pack_install.ex, and others) explicitly
+      flag, per the requirement's own text, that no decision record
+      states a general rule for when a table earns this GLOBAL
+      exception vs. Decision B's schema-per-tenant default -- left open
+      for a future REVIEWER/decision-record follow-up, not resolved
+      here. All 5 acceptance criteria independently re-confirmed by
+      RELEASE-VALIDATOR at Step 5. Full gate sequence PASS:
+      CODE-DESIGN-VALIDATOR -> SECURITY-REVIEWER -> REVIEWER ->
+      TEST-DESIGN-VALIDATOR -> TEST-RUNNER -> RELEASE-VALIDATOR. Full
+      suite green: 363 tests, 0 failures. docs/requirements.yaml's
+      REQ-041 status flipped in_progress -> done;
+      docs/migration/stage-2-event-store-definitions.md header updated
+      to add REQ-041 to the done list and remove it from pending.

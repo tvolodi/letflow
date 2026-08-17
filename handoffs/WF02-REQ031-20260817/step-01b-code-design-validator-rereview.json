@@ -1,0 +1,59 @@
+{
+  "handoff_id": "d6c9a2e7-1b4f-4a8d-9e3c-7f2b0a5d8c14",
+  "run_id": "WF02-REQ031-20260817",
+  "workflow_id": "WF-02",
+  "step": "01b-rereview",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ031-20260817/step-01b-code-design-validator-rereview.json",
+  "created_at": "2026-08-17T20:26:05Z",
+  "started_at": "2026-08-17T20:26:05Z",
+  "completed_at": "2026-08-17T20:26:50Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-031"],
+    "related_handoff_ids": [
+      "8ba85850-fe2f-4c1f-8336-c4a4aae3588e",
+      "f3a1b2c4-9d3e-4b7a-8c2f-6e0a1d5b9c73",
+      "b7e4c8a1-3f5d-4e2a-9c71-1a8d5f60e9b2"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req031-service-scope-validator.md",
+      "handoffs/WF02-REQ031-20260817/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ031-20260817/step-01-code-designer-rework.json",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/definitions/graph.ex",
+      "docs/requirements.yaml (REQ-031 entry)",
+      "C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\definition\\service_scope_validator.zig"
+    ],
+    "owned_modules": ["lib/letflow/design/req031-service-scope-validator.md"]
+  },
+  "task": {
+    "description": "Re-review (rework_count 1) of req031-service-scope-validator.md after CODE-DESIGNER's rework addressing the sole prior BLOCKER: §5's plugin branch table incorrectly folded a nil-owner tenant-scoped plugin lookup into the same Violation outcome as a mismatched-owner plugin, when R-Co's real checkPluginHandler (.zig line 187, `orelse return`) treats nil-owner as a silent pass. Independently re-verify the fix against R-Co source directly (not the rework's citation), confirm the service-side table is unchanged and still correct, confirm no regression on the six previously-passed checks, and spot-check the new/changed citations (INV-SSV-9, the row 3->4 fix, OQ-4).",
+    "acceptance_criteria": [
+      "Plugin branch table's nil-owner_tenant_id row is now a separate row from the mismatched-owner row, with outcome Pass, matching .zig line 187's bare `orelse return`",
+      "Service branch table unchanged and still treats nil-owner_tenant_id as Violation, matching checkServiceId .zig lines 141-151",
+      "No regression on: hook contract fidelity to REQ-030's activate/2 (definitions.ex citations), all 5 AC mappings, AC3's closed-set reason atoms, AC5's moduledoc gap text, no implementation code, previously-spot-checked line-number citations (graph.ex)",
+      "New/changed citations (INV-SSV-9, INV-SSV-7's row 3->4 fix, OQ-4) are individually accurate against the real .zig file and the design's own table"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified against R-Co source directly (full re-read of service_scope_validator.zig, lines 109-224) rather than trusting either the prior FAIL or the rework's claim. (1) Plugin branch table (current §5) now has the nil-owner case as its own row: '{:ok, %{scope: :tenant, owner_tenant_id: nil}} -> Pass -- no violation', citing .zig line 187 (`const owner = reg.owner_tenant_id orelse return;`) -- confirmed line 187 is exactly that statement in the real file, and a bare `return` inside a `ServiceScopeError!void` fn is a successful return, matching the design's claim. The mismatched-owner row is now scoped 'non-nil' explicitly and cites .zig lines 188-200, confirmed accurate (line 200 is the `return ServiceScopeError.PluginNotAvailableToTenant;` statement; line 201 is only the closing brace). The two outcomes are no longer folded together. (2) Service branch table is byte-for-byte unchanged by the rework commit (confirmed via `git diff 820e7e8 679b129` -- zero lines touched in that table) and still correctly treats nil-owner_tenant_id as Violation (row 4), matching checkServiceId's `owner orelse { ...; return ServiceScopeError.ServiceNotAvailableToTenant; }` at .zig lines 142-151 (confirmed by direct re-read: line 142 is exactly that `orelse {` open, line 151 the closing `};`). (3) No regression found on any of the six previously-passed checks: hook contract fidelity re-confirmed directly against lib/letflow/definitions.ex -- @type service_scope_validator_fun (103-104), activate_opts (106-109), run_activate_transaction's :draft-only branch calling run_service_scope_validator (606-629, draft case 622), the nil-skip clause (631) and non-nil clause (633-645), interpret_activate_result's pass-through (679) -- all match the design's citations exactly, file untouched by the rework. All 5 REQ-031 acceptance criteria (docs/requirements.yaml lines 1461-1465) still map cleanly to §5's tables / §3.2's closed reason() union / §6 / §7, none of which the rework touched (confirmed via the commit diff: only §3.1's comment, §5's plugin table+prose, §8's INV-SSV-5/7/9, and §9's new OQ-4 changed -- 0/1/2/3.2/4/6/7/10/11 are byte-identical to the already-passed prior version). AC3's reason atoms unchanged (§3.2). AC5's moduledoc text unchanged (§7). No implementation code: still only defstruct/@enforce_keys/@type/@spec blocks in the two nested modules plus §7's plain prose moduledoc text -- zero def/defp bodies anywhere in the document, confirmed by re-reading the full file. graph.ex citations re-spot-checked directly and still accurate: Node @enforce_keys (line 79), Node.attributes type (line 86), Violation @enforce_keys (line 118-119), CHK-10 (579-592), CHK-11 (594). (4) New/changed citations verified individually: INV-SSV-9 cites '§5's plugin branch table, row 4' -- correct, that table's 4th row is the nil-owner-pass case. INV-SSV-7's citation fix from 'row 3' to 'row 4' is correct -- the service table's 4th row (not 3rd) is the nil-owner-violation case (row 1: not_registered, row 2: global, row 3: owner==tenant_id pass, row 4: nil-owner violation, row 5: mismatched-owner violation). OQ-4's text accurately restates the asymmetry, correctly notes (unlike OQ-3) no source document states a deliberate policy reason for it, and correctly flags it for REVIEWER/SECURITY-REVIEWER rather than silently resolving it either direction. All checks pass. Genuinely holds up -- PASS.",
+    "artifacts_out": ["handoffs/WF02-REQ031-20260817/step-01b-code-design-validator-rereview.json"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ031-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ031-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (Step 2a) to implement lib/letflow/definitions/service_scope_validator.ex per the design."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

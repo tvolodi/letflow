@@ -242,7 +242,18 @@ defmodule Letflow.EventStore do
     end
   end
 
-  defp validate_metadata(metadata) when not is_map(metadata) do
+  # `is_map/1` alone is never sufficient to mean "plain map" -- a struct IS a
+  # map under the hood (`is_map/1` returns `true` for e.g. `DateTime.utc_now()`,
+  # `URI.parse/1`'s result, `MapSet.new/1`, or a `Range` literal like `1..5`),
+  # so the guard must explicitly reject `is_struct/1` too. Structs either have
+  # no `Enumerable` impl at all (raising `Protocol.UndefinedError` from the
+  # `Enum.find_value/3` below) or iterate as bare elements rather than
+  # `{key, value}` tuples (raising `FunctionClauseError` inside this
+  # function's own anonymous function) -- both are the same INV-8 class of
+  # bug as a non-map value, just a shape the first rework iteration's guard
+  # didn't anticipate. Confirmed empirically for all four cases -- see this
+  # handoff's regression check.
+  defp validate_metadata(metadata) when not is_map(metadata) or is_struct(metadata) do
     {:error, {:invalid_metadata, :not_a_map}}
   end
 

@@ -1,0 +1,107 @@
+{
+  "handoff_id": "c4f2b3d5-0005-4f1a-9a10-req042step02c",
+  "run_id": "WF02-REQ042-20260817",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ042-20260817/step-02c-security-reviewer.json",
+  "created_at": "2026-08-17T21:29:36Z",
+  "started_at": "2026-08-17T21:29:36Z",
+  "completed_at": "2026-08-17T21:31:41Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-042"],
+    "related_handoff_ids": ["step-02a-elixir-dev.json"],
+    "artifacts_in": ["lib/letflow/definitions.ex", "lib/letflow/design/search.md"],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "WF-02 Step 2c HARD GATE: security review of the new search/2 function added to lib/letflow/definitions.ex (branch feature/WF02-REQ042-20260817, diff git diff main...HEAD -- lib/letflow/definitions.ex). This is a tenant-scoped free-text read query built with fragment/1 CASE and ILIKE expressions -- the highest-risk surface for SQL injection this project has shipped so far. Verify the '%' wildcard composition and every fragment SQL-text argument extremely carefully.",
+    "acceptance_criteria": [
+      "Scope test performed: confirm this diff touches a tenant-data path",
+      "For each of INV-1..INV-8: determine APPLIES or NOT-APPLICABLE with reasoning",
+      "For each APPLIES invariant, the verification check actually run (not asserted)",
+      "INV-7 (no SQL string interpolation) gets the deepest scrutiny: every fragment/1 call's first argument must be a fixed compile-time string literal, with only bound ^-pinned values or column references as placeholders -- confirm the query string itself never reaches raw SQL text (including the '%' wildcard composition: pattern = \"%\" <> query <> \"%\" must be composed into the bound VALUE, not the fragment SQL text)",
+      "Specific check: search/2 never accepts or trusts a caller-supplied tenant_id -- tenant scoping comes entirely from opts[:prefix] -> TenantProvisioning.tenant_id_for_schema_name/1, same pattern as create/2, get_by_id/2, list/2",
+      "Specific check: no cross-tenant data leak -- confirm the Ecto query is scoped via prefix: prefix on the Repo.all/2 call, same as the rest of this module"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: APPLIES (tenant-data path) -- search/2 is a new read query against process_definitions, a tenant-scoped table, added in lib/letflow/definitions.ex. Diff verified against the correct base (local `main` ref was stale vs origin/main -- REQ-042's actual own diff, `git diff origin/main...HEAD -- lib/letflow/`, is 149 lines in definitions.ex plus the new search.md design doc; zero migrations touched, confirming the moduledoc's 'zero new priv/repo/migrations/ files' claim). `mix compile --force --warnings-as-errors` succeeds (exit 0). Every fragment/1 call added by this diff (where_search_match/2 line 698, select_with_rank/3 line 717-724, order_by_rank/3 line 732-739) has a first argument that is a fixed compile-time string literal written directly in source -- confirmed by direct read, not just grep: \"? ILIKE ? OR ? ILIKE ?\" and \"CASE WHEN lower(?) = lower(?) THEN 3.0 WHEN ? ILIKE ? THEN 2.0 ELSE 1.0 END\". Every ? placeholder in those literals binds to either a column reference (d.name, d.description) or a ^-pinned Elixir value (^pattern, ^search_query) -- confirmed no <> or #{} construction feeds any fragment SQL-text argument (grep -B3 fragment( shows only `pattern = \"%\" <> query <> \"%\"` above where_name/2, an unrelated sibling helper for list/2, and no concatenation adjacent to search/2's three fragment calls). The '%' wildcard composition happens entirely in Elixir (line 537, `pattern = \"%\" <> query <> \"%\"`) and pattern is passed only as the bound value ^pattern -- the wildcard characters never appear inside any fragment SQL-text literal. grep -rn \"Repo.query\" lib/ priv/repo/migrations/ shows 5 existing hits, none touched by this diff, none in definitions.ex, and all pre-existing schema-name-interpolation patterns already covered by prior security reviews outside this scope. search/2's opts type (search_opts :: [prefix, limit, offset]) has no tenant_id key at all -- tenant scoping is derived exclusively via TenantProvisioning.tenant_id_for_schema_name(prefix) (called only for validation, matching create/2/get_by_id/2/get_active_by_name/2/list/2's identical pattern) and the query itself is scoped via `Repo.all(ecto_query, prefix: prefix)` -- same schema-per-tenant mechanism as every other function in this module, no tenant_id column filter used (consistent with list/2, which relies on schema-prefix isolation alone per decision 0003 Dimension B). No bare `{:ok, _} = ` pattern matches introduced (grep clean); search/2 uses a `with` chain throughout, same idiom as create/2 and list/2. INV-4 heuristic secret greps produced no hits attributable to this diff. All INV-1/4/6/7/8 checks pass; INV-2/3/5 remain correctly NOT-APPLICABLE (S4/S5 not started, and search/2 is a context-module function, not an HTTP lookup-by-ID or response-serialisation surface).",
+    "invariant_table": [
+      {
+        "invariant": "INV-1",
+        "verdict": "APPLIES",
+        "reasoning": "search/2 is a new query against process_definitions, a tenant-scoped business table (S1 done, S2 migrations exist per 0003-ecto-schema-strategy.md decided status).",
+        "verification": "(a) Query scoped via Repo.all(ecto_query, prefix: prefix) at definitions.ex:549, prefix resolved from opts[:prefix] exactly as create/2 (368-378), get_by_id/2 (390-398), get_active_by_name/2 (409-419), list/2 (432-448) already do. (b) No priv/repo/migrations/ file touched by this diff (confirmed via git diff origin/main...HEAD --stat -- lib/letflow/ priv/repo/migrations/ -- only lib/letflow/definitions.ex and lib/letflow/design/search.md changed), so no table is newly left reachable outside the prefix mechanism. (c) N/A for this function specifically -- search/2 performs no INSERT/UPDATE and never touches a tenant_id column at all; it does not accept :tenant_id in opts (search_opts type has only prefix/limit/offset) so there is no caller-supplied value that could disagree with the resolved schema.",
+        "result": "PASS"
+      },
+      {
+        "invariant": "INV-2",
+        "verdict": "NOT-APPLICABLE",
+        "reasoning": "No multi-tenant HTTP API surface exists yet (S4 not started, per the invariant's own Reference note). search/2 is a context-module function returning full ProcessDefinition structs plus a rank float -- field selection/redaction for an eventual API response is explicitly deferred to the S4 HTTP layer, same as list/2's existing precedent.",
+        "verification": "N/A -- deferred per invariant text.",
+        "result": "N/A"
+      },
+      {
+        "invariant": "INV-3",
+        "verdict": "NOT-APPLICABLE",
+        "reasoning": "No Lua/WASM tenant-scripting surface touched; S5 has not started and this diff adds no scripting/plugin code.",
+        "verification": "N/A -- deferred per invariant text.",
+        "result": "N/A"
+      },
+      {
+        "invariant": "INV-4",
+        "verdict": "APPLIES",
+        "reasoning": "Live invariant (always checked). This diff touches no config/secret-resolution code, but the check was run in full regardless.",
+        "verification": "grep -rn \"System.get_env\" config/ lib/ --include=*.ex --include=*.exs -- all hits pre-existing, none introduced by this diff (search/2 resolves no secrets). grep -rniE \"(password|secret|client_secret|token)\\s*(=|:)\\s*\\\"[^\\\"]{8,}\" lib/letflow/definitions.ex -- zero hits.",
+        "result": "PASS"
+      },
+      {
+        "invariant": "INV-5",
+        "verdict": "NOT-APPLICABLE",
+        "reasoning": "No lookup-by-ID endpoint exists (S4 not started); search/2 is a substring full-text search, not a lookup-by-ID handler, and returns {:ok, []} uniformly on zero matches rather than any not-found/forbidden branching that could carry a distinguishing signal.",
+        "verification": "N/A -- deferred per invariant text.",
+        "result": "N/A"
+      },
+      {
+        "invariant": "INV-6",
+        "verdict": "APPLIES",
+        "reasoning": "Meta-invariant -- always applies to a new data-access path. Satisfied by this handoff itself: a SECURITY-REVIEWER review exists, status PASS, explicitly listing INV-1..INV-8 applicability and verification for search/2.",
+        "verification": "This document.",
+        "result": "PASS"
+      },
+      {
+        "invariant": "INV-7",
+        "verdict": "APPLIES",
+        "reasoning": "Ecto is in use; search/2 introduces three new fragment/1 calls carrying user-controlled query text -- the highest-scrutiny check for this review.",
+        "verification": "Direct read of all three fragment/1 call sites (definitions.ex:698, 717-724, 732-739): first argument in every case is a fixed compile-time string literal (\"? ILIKE ? OR ? ILIKE ?\" and \"CASE WHEN lower(?) = lower(?) THEN 3.0 WHEN ? ILIKE ? THEN 2.0 ELSE 1.0 END\"), never built via <> or #{}. Every ? placeholder binds to a column reference (d.name, d.description) or a ^-pinned value (^pattern, ^search_query) -- Ecto compiles these to genuine bound Postgres parameters. The '%' wildcard composition (pattern = \"%\" <> query <> \"%\", line 537) happens entirely in Elixir and produces a bound VALUE passed as ^pattern -- confirmed the wildcard characters never appear inside any fragment SQL-text literal. grep -rn \"Repo.query\" lib/ priv/repo/migrations/ --include=*.ex --include=*.exs shows 5 hits, all pre-existing (sandbox_pool.ex, tenant_provisioning.ex, sandbox_pool/fixture_loader.ex) and none touched by this diff or reachable from search/2.",
+        "result": "PASS"
+      },
+      {
+        "invariant": "INV-8",
+        "verdict": "APPLIES",
+        "reasoning": "search/2 touches tenant-controlled input (query, limit, offset) and DB I/O.",
+        "verification": "grep -rn \"^\\s*{:ok, .*} = \" lib/letflow/definitions.ex -- zero hits. search/2 uses a `with` chain (check_query_not_empty/1, check_query_not_too_long/1, TenantProvisioning.tenant_id_for_schema_name/1) with every clause returning a typed :ok/:error tuple, same idiom as create/2, get_by_id/2, list/2. No bare pattern match that can raise on realistic (including malformed/oversized/adversarial) query input.",
+        "result": "PASS"
+      }
+    ],
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ042-20260817",
+      "commit_sha_list": ["5b5dea4"],
+      "remote_branch": "origin/feature/WF02-REQ042-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (Step 2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -57,9 +57,11 @@ defmodule Letflow.EventStore do
   Only `append/2` is built here. `read/2`, `read_global/1`, `point_in_time/3`,
   `archive/1` belong to REQ-026. Meaningful, engine-driven population of
   `instance_projections`' engine-owned columns (`definition_id`,
-  `current_nodes`, ...) belongs to EE-01/S3 — `append/2` only ever creates or
-  advances the bare row its own writes need to exist (design doc §6.2.6, §9
-  OQ-5).
+  `current_nodes`, ...) belongs to EE-01/S3 — `append/2` never originates an
+  `instance_projections` row; it only ever advances the `last_event_seq` of a
+  row that already exists (REVIEWER's Step 2d OQ-5 ruling; design doc §6.2.1,
+  §6.2.6, §9 OQ-5). A missing row fails the whole call with
+  `{:error, :instance_not_started}` instead.
   """
 
   import Ecto.Query
@@ -107,6 +109,7 @@ defmodule Letflow.EventStore do
           | {:error, :tenant_not_provisioned}
           | {:error, :unknown_event_type}
           | {:error, {:payload_validation_failed, [Registry.ValidationFailure.t()]}}
+          | {:error, :instance_not_started}
           | {:error, {:instance_terminated, :completed | :cancelled}}
           | {:error, {:sequence_conflict, term()}}
           | {:error, Ecto.Changeset.t()}
@@ -311,17 +314,24 @@ defmodule Letflow.EventStore do
   # M1 -- active-instance guard (invariant 10, ES-01). A plain, unlocked read
   # (design doc §6.2.1 -- a stronger guarantee, e.g. locking
   # instance_projections for the append's duration, is design doc OQ-6, not
-  # built here).
+  # built here). Update-only per REVIEWER's Step 2d OQ-5 ruling: append/2
+  # never originates an instance_projections row. No row found is a hard
+  # failure, {:error, :instance_not_started} -- a DISTINCT case from
+  # :instance_terminated below, not an implicit new/active instance. On
+  # success, the actual %InstanceProjection{} struct is returned (not a bare
+  # atom) so M6 (update_projection/3) can read its current `status` back via
+  # `changes.active_instance_guard` and thread it, unchanged, into
+  # InstanceProjection.update_changeset/2 without a second DB read.
   defp active_instance_guard(repo, _changes, %{instance_id: instance_id, schema_name: schema_name}) do
     case repo.get(InstanceProjection, instance_id, prefix: schema_name) do
       nil ->
-        {:ok, :new_instance}
+        {:error, :instance_not_started}
 
-      %InstanceProjection{status: status} ->
+      %InstanceProjection{status: status} = projection ->
         if InstanceProjection.terminal?(status) do
           {:error, {:instance_terminated, status}}
         else
-          {:ok, :existing_instance}
+          {:ok, projection}
         end
     end
   end
@@ -483,32 +493,32 @@ defmodule Letflow.EventStore do
     |> repo.insert(prefix: schema_name)
   end
 
-  # M6 -- instance_projections upsert (invariant 6, DB-03, design doc
-  # §6.2.6). A genuine insert-if-absent-else-update, expressed as one atomic
-  # on_conflict statement: creates the row on a brand-new instance's first
-  # append (M1 found none), or on conflict updates only last_event_seq and
-  # the row's updated_at -- status/tenant_id are deliberately left untouched
-  # on an existing row.
-  defp update_projection(repo, %{assign_sequence: assigned_sequence_number}, %{
-         instance_id: instance_id,
-         tenant_id: tenant_id,
-         created_at: created_at,
-         schema_name: schema_name
-       }) do
-    attrs = %{
-      instance_id: instance_id,
-      tenant_id: tenant_id,
-      status: :active,
-      last_event_seq: assigned_sequence_number
-    }
+  # M6 -- instance_projections update (invariant 6, DB-03, design doc
+  # §6.2.6). Update-only per REVIEWER's Step 2d OQ-5 ruling -- this step
+  # never creates a row. M1 (active_instance_guard/3) already guarantees, by
+  # the time this step runs, that a row exists and is non-terminal (a
+  # missing or terminal row aborts the whole Multi before M6 is ever
+  # reached). Uses InstanceProjection.update_changeset/2 -- never
+  # insert_changeset/2, never an on_conflict:-based upsert. Only
+  # last_event_seq (and, via update_changeset/2's touch of updated_at,
+  # the timestamp) actually changes; status is passed through unchanged
+  # from the struct M1 already read back, purely to satisfy
+  # update_changeset/2's validate_required([:status, :last_event_seq]) --
+  # an ordinary append must never itself overwrite status (that belongs to
+  # EE-01/S3), and tenant_id is not castable by update_changeset/2 at all.
+  defp update_projection(
+         repo,
+         %{
+           assign_sequence: assigned_sequence_number,
+           active_instance_guard: %InstanceProjection{} = projection
+         },
+         %{schema_name: schema_name}
+       ) do
+    attrs = %{status: projection.status, last_event_seq: assigned_sequence_number}
 
-    %InstanceProjection{}
-    |> InstanceProjection.insert_changeset(attrs)
-    |> repo.insert(
-      prefix: schema_name,
-      on_conflict: [set: [last_event_seq: assigned_sequence_number, updated_at: created_at]],
-      conflict_target: :instance_id
-    )
+    projection
+    |> InstanceProjection.update_changeset(attrs)
+    |> repo.update(prefix: schema_name)
   end
 
   # ---------------------------------------------------------------------
@@ -555,6 +565,10 @@ defmodule Letflow.EventStore do
     end
   end
 
+  # Catch-all -- also where {:error, :active_instance_guard, :instance_not_started,
+  # _changes} (M1's no-row case) lands: no dedicated clause needed above since
+  # this generic pass-through already re-surfaces the reason unchanged as
+  # {:error, :instance_not_started}, matching append_error()'s explicit tag.
   defp interpret_transaction_result({:error, _failed_operation, reason, _changes}) do
     {:error, reason}
   end

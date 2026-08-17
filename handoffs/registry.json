@@ -571,6 +571,30 @@
       "queue_agent_id": "hetzner-wt2-orch",
       "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
       "note": "owned_modules is file-level, not directory-level, specifically to avoid compounding the nominal directory-level overlap already flagged against WF02-REQ030-20260817 (lib/letflow/definitions, still IN_PROGRESS as of this entry). Checked: REQ-030 scope (store.zig CRUD) and REQ-036 scope (promotion_plan/conflict/digest, three new files) do not target the same files. Same judgment precedent as REQ-032 vs REQ-030 noted earlier in this file."
+    },
+    {
+      "run_id": "WF02-REQ037-20260817",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-037"
+      ],
+      "stage": "S2",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/definitions/promotion_review.ex",
+        "lib/letflow/definitions/promotion.ex",
+        "test/letflow/definitions/promotion_review_test.exs",
+        "test/letflow/definitions/promotion_test.exs"
+      ],
+      "lock_acquired_at": "2026-08-17T18:57:34Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (git-setup) dispatched to ELIXIR-DEV",
+      "backfilled": false,
+      "queue_task_id": 54,
+      "queue_agent_id": "hetzner-wt2-orch",
+      "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
+      "note": "Checked against WF02-REQ030-20260817 (concurrent, directory-level lib/letflow/definitions lock, still at Step 00 per its own registry entry) -- no actual overlap, REQ-030 targets store.zig CRUD, REQ-037 modifies promotion_review.ex (REQ-035-created) and creates promotion.ex, neither touched by REQ-030 scope."
     }
   ]
 }

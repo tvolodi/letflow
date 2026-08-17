@@ -354,6 +354,23 @@
       "queue_agent_id": "tvolodi-orch",
       "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
       "note": "First requirement (not issue) picked up this session -- the letflow-queue issue backlog fully drained (18 issues resolved across this session and a concurrent parallel session). REQ-039: Sandbox pool and fixture loader (sandbox_pool.zig + fixture_loader.zig, PRM-06 section 3), depends_on REQ-022 (done). Explicit open question for CODE-DESIGNER per the requirement's own text: process-per-instance (GenServer/DynamicSupervisor) vs. row-based state for the in-memory claim tracking + quota enforcement -- not to be silently assumed either way."
+    },
+    {
+      "run_id": "WF02-REQ035-20260817",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-035"],
+      "stage": "S2",
+      "status": "COMPLETED",
+      "owned_modules": ["lib/letflow/definitions/promotion_review.ex", "priv/repo/migrations/20260816200001_create_promotion_reviews.exs", "lib/letflow/tenant_provisioning.ex"],
+      "lock_acquired_at": "2026-08-17T07:51:12Z",
+      "lock_released_at": "2026-08-17T08:26:24Z",
+      "released_lock": true,
+      "last_known_step": "PR #95 squash-merged into main as 3443c96, queue task 41 released done, GH#49 closed.",
+      "backfilled": false,
+      "queue_task_id": 41,
+      "queue_agent_id": "hetzner-orch",
+      "worktree": "/home/tvolodi/letflow (Hetzner host ubuntu-16gb-nbg1-1)",
+      "note": "First full WF-02 run this session -- promotion_reviews schema (PRM-04 Type C part), schema-only per REQ-035's own scope boundary (transition functions are REQ-037). Full producer/validator chain run via background subagents, all PASS on first attempt, no rework: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> ELIXIR-DEV -> SECURITY-REVIEWER -> REVIEWER -> TEST-DESIGNER -> TEST-DESIGN-VALIDATOR -> TEST-RUNNER -> RELEASE-VALIDATOR -> DOC-UPDATER. REVIEWER independently confirmed the PER_TENANT classification on the merits rather than deferring to what the acceptance criteria demanded. One process deviation caught and reconciled: DOC-UPDATER filed docs/issues/ISS-0032.yaml and closed a GitHub issue directly via gh instead of routing through ORCH's register_task -- ORCH backfilled a queue task for it after the fact. Rebase onto main hit two conflicts on the append-only requirement_status.yaml against a concurrently active host's WF02-REQ039-20260817 run -- both resolved by interleaving entries in timestamp order, no content lost. mix compile --warnings-as-errors clean, mix test 333/333 (up from 306 pre-run) both pre-merge and re-verified on main's actual merged tip."
     }
   ]
 }

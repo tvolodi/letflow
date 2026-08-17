@@ -77,3 +77,10 @@ config :letflow, :oidc_jit_provisioning, %{
     default_roles: []
   }
 }
+
+# Small on purpose (REQ-039): fast, deterministic exercising of the
+# quota-exhausted/blocking-wait acceptance criterion against the application's
+# own singleton pool. A test needing its own independent quota starts a
+# separately-named Letflow.SandboxPool instance instead (design doc §4.7
+# INV-SP-7) rather than mutating this global default.
+config :letflow, :sandbox_pool, max_concurrent_sandboxes: 1

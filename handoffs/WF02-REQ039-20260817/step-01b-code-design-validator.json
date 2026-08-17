@@ -1,0 +1,42 @@
+{
+  "handoff_id": "7f3da8a7-77ca-4162-bf68-c4069fbfb07f",
+  "run_id": "WF02-REQ039-20260817",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ039-20260817/step-01b-code-design-validator.json",
+  "created_at": "2026-08-17T08:21:16Z",
+  "started_at": "2026-08-17T08:21:16Z",
+  "completed_at": "2026-08-17T08:23:25Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-039"],
+    "related_handoff_ids": ["a5d7bf73-5e31-4f2d-be1e-5d19aba79129"],
+    "artifacts_in": [
+      "lib/letflow/design/req039-sandbox-pool-fixture-loader.md",
+      "docs/requirements.yaml (REQ-039 entry)"
+    ],
+    "owned_modules": ["lib/letflow/definitions", "priv/repo/migrations"]
+  },
+  "task": {
+    "description": "Hard gate on CODE-DESIGNER's lib/letflow/design/req039-sandbox-pool-fixture-loader.md (Step 1) for REQ-039. Branch feature/WF02-REQ039-20260817 already checked out, includes the design commit.",
+    "acceptance_criteria": [
+      "Every one of REQ-039's 6 acceptance criteria maps to a concrete design element, no TBD/deferral",
+      "All function signatures fully specified: name, inputs, outputs, every error case as a tagged atom/tuple",
+      "Error handling shape stated ({:ok,_}|{:error,_} tags), not left implicit",
+      "Cross-module dependencies listed",
+      "No implementation code present (no .ex code blocks with real function bodies -- signatures/types only)",
+      "The process-per-instance-vs-row-based-state open question is explicitly and soundly resolved, not silently assumed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently read lib/letflow/design/req039-sandbox-pool-fixture-loader.md in full against docs/requirements.yaml's REQ-039 entry (1822-1873) and cross-checked citations. (1) All 6 acceptance criteria map to concrete design elements in the §8 traceability table -- AC1: §4.4 step 2 immediate-provisioning path; AC2: §4.4 steps 3/5/6 (queue + monitor + Process.send_after timer) plus INV-SP-7 test-isolation mechanism; AC3: §4.5 steps 3-4 (DROP SCHEMA + active-map removal) plus INV-SP-2; AC4: §5.4 step 4 (allowlist check completes before any SQL, {:error, :invalid_table_name}); AC5: §5.4 step 5a (TRUNCATE-immediately-before-insert, INV-FL-4); AC6: §2's full resolution plus §10.1's verbatim moduledoc text. No 'TBD'/deferral language found (grepped) -- the four Open Questions (OQ-1..4) are explicitly-scoped forward-looking notes on items none of the 6 ACs require, not gaps in required coverage; OQ-4's 'placeholder' default value is an arbitrary tuning number with no correctness weight, not a missing design element. (2) Function signatures fully specified: start_link/1, claim/1,2, release/1,2, load_fixtures_only/3 -- every signature names inputs, outputs, and every error case as a tagged atom (:sandbox_unavailable, :provision_failed, :not_found, :release_failed, :invalid_table_name, :invalid_schema_name, :insert_failed). (3) Error handling shape stated throughout as {:ok,_}|{:error,_} tags (§7's full error taxonomy table), never left implicit. (4) Cross-module dependencies listed explicitly in §9 (TenantProvisioning.tenant_scoped_migrations/0, Ecto.Migrator.run/4, Letflow.Repo, Letflow.Application supervision-tree addition, ProcessDefinition/InstanceDefinitionSnapshot by table-name reference only, and the REQ-040 forward dependency). (5) No implementation code present -- §4.1/§5.1's struct blocks are @enforce_keys/defstruct/@type shape declarations only (no function bodies), consistent with WF-02 Step 1's 'key data structures' allowance; all algorithms (§4.4, §4.5, §5.4) are written as numbered prose steps, not Elixir code. (6) The process-per-instance-vs-row-based-state open question (§2) is resolved with real, checkable reasoning, not hand-waved: applies stage-2-event-store-definitions.md's own decision framework property-by-property (verified that doc's actual text matches the design's quotes), correctly identifies AC2's blocking-quota-wait semantics as the deciding factor (backpressure/arbitration, not resource ownership or reconstruction cost), and distinguishes SandboxPool's singleton-GenServer shape from InstanceSupervisor/ApprovalSupervisor's DynamicSupervisor-per-instance shape on a real, verified basis -- read lib/letflow/instance_supervisor.ex, lib/letflow/process_instance.ex, and backend_developer_guide.md §3.3 directly: the design's claim that per-instance processes exist for crash isolation between autonomous, long-lived actors ('Killing one instance's process must never affect a sibling instance') is a near-verbatim, accurate citation of that guide's actual text, and the design's argument that a claimed sandbox is inert data (no messages, no timers, no independent state transitions) rather than an autonomous actor holds up against ProcessInstance's actual :gen_statem shape. (7) Spot-checked R-Co citations directly: read src/definition/sandbox_pool.zig (300 lines) and src/definition/fixture_loader.zig (124 lines) in full -- every cited line range (claim 74-150, release 155-191, reclaimLeakedSandboxes 200-266 correctly excluded as REQ-040 scope, ALLOWLIST 30-34, loadFixturesOnly 45-123, SET search_path 65-69, dedup 71-85, TRUNCATE loop 99-105, jsonb_populate_record INSERT 107-122) matches the actual file content precisely, including the subtle claim that sandbox_pool.zig's 'process-local table' is an in-memory std.ArrayList with zero persisted SQL claim-tracking (confirmed: the file's only SQL is CREATE SCHEMA/DROP SCHEMA/the DO-block table scaffolding). Also verified lib/letflow/tenant_provisioning.ex's cited line ranges and the 9-entry migration manifest (process_definitions/instance_definition_snapshots as entries 8-9) directly against the source -- accurate. No gaps found; no fabricated or misleading citation found in the spot-checks performed.",
+    "next_action": "Route to ELIXIR-DEV (Step 2a)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

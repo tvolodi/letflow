@@ -1,0 +1,57 @@
+{
+  "handoff_id": "a5d7bf73-5e31-4f2d-be1e-5d19aba79129",
+  "run_id": "WF02-REQ039-20260817",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ039-20260817/step-01-code-designer.json",
+  "created_at": "2026-08-17T08:07:14Z",
+  "started_at": "2026-08-17T08:07:14Z",
+  "completed_at": "2026-08-17T08:19:16Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-039"],
+    "related_handoff_ids": ["0bf79b6d-bf65-48a0-80da-6786c71212e0"],
+    "artifacts_in": [
+      "docs/requirements.yaml (REQ-039 entry)",
+      "R-Co/src/definition/sandbox_pool.zig",
+      "R-Co/src/definition/fixture_loader.zig",
+      "R-Co/src/design/prm-batch1-promotion-assertion-rerun.md",
+      "docs/migration/stage-2-event-store-definitions.md",
+      "docs/migration/decisions/0003-ecto-schema-strategy.md",
+      "lib/letflow/tenant_provisioning.ex"
+    ],
+    "owned_modules": ["lib/letflow/definitions", "priv/repo/migrations"]
+  },
+  "task": {
+    "description": "Design lib/letflow/design/req039-sandbox-pool-fixture-loader.md for REQ-039 (Sandbox pool and fixture loader). Branch feature/WF02-REQ039-20260817 already exists and is checked out. Must explicitly resolve the process-per-instance-vs-row-based-state open question the requirement names -- do not silently assume either way.",
+    "acceptance_criteria": [
+      "claim/1 against an empty pool immediately succeeds and returns a sandbox_id + schema_name for a real, freshly-created Postgres schema",
+      "claim/1 when max_concurrent_sandboxes slots are all in use blocks until either a slot frees or the wait window elapses, returning SandboxUnavailable in the latter case",
+      "release/1 on a claimed sandbox drops its schema (verified: the schema no longer appears in information_schema.schemata after release) and frees its quota slot for a subsequent claim/1",
+      "load_fixtures_only/3 with a table_name not in the allowlist returns InvalidTableName without issuing any SQL against that table name",
+      "load_fixtures_only/3 loading the same fixtures twice against the same sandbox_schema (simulating a retry) leaves the same final row set both times, via the TRUNCATE-before-insert step",
+      "the moduledoc names the process-per-instance-vs-row-based-state open question explicitly and states it is left for CODE-DESIGNER, per this requirement's description and stage-2-event-store-definitions.md's Early findings"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design doc lib/letflow/design/req039-sandbox-pool-fixture-loader.md written for REQ-039. Process-vs-row open question resolved explicitly in section 2: Letflow.SandboxPool is one singleton GenServer (no DynamicSupervisor, no plain Ecto row/table) started under Letflow.Supervisor -- not one process-per-claim like InstanceSupervisor/ApprovalSupervisor, because a claimed sandbox is inert data with no autonomous lifecycle, unlike a workflow instance. The deciding factor is AC2's blocking-quota-wait requirement: two callers racing for the last free slot must never both win, and a losing caller must park until a slot frees or its own wait window elapses -- a single process's mailbox gives 'at most one winner' arbitration natively (INV-SP-1), which a row-based design would need to re-derive via an extra DB lock (advisory lock or SELECT FOR UPDATE SKIP LOCKED) for no offsetting durability benefit, since REQ-039's own text confirms there is no expensive-to-reconstruct state here. Accepted trade-off named explicitly as OQ-3 (not glossed over): pool state does not survive a SandboxPool process restart, so a crash mid-claim can strand an orphaned Postgres schema untracked -- acceptable pre-S8 (no production deployment yet) given sandboxes are meant to be claimed-and-released within one short-lived call, but flagged as a real gap a future reaper would need to close. Design also resolves a scaffolding gap the Zig source doesn't map cleanly onto Letflow: claim/1 provisions each sandbox's tables by replaying Letflow.TenantProvisioning.tenant_scoped_migrations/0 via Ecto.Migrator.run/4 with prefix: schema_name (calling the migrator directly, not TenantProvisioning.replay_migrations/2, since that requires a Registration row a sandbox deliberately never gets), rather than porting Zig's CREATE TABLE ... LIKE tenant_default.<table> pattern, because Letflow has no reserved tenant_default schema to copy from -- this also means zero new migrations are needed (DB objects section states this precisely: the only DB objects are the dynamically-created/dropped sandbox schemas themselves). load_fixtures_only/3's allowlist is resolved to [process_definitions, instance_definition_snapshots] (the two tables that actually exist in a Letflow tenant schema today), diverging from Zig's [process_definitions, variable_schemas, instances] since two of those three have no Letflow equivalent yet -- flagged as OQ-1 for extension once a real consumer (REQ-040) names its concrete fixture needs. Design also adds one hardening invariant beyond Zig's own source (INV-FL-1): sandbox_schema is validated against the exact ^sandbox_[0-9a-f]{32}$ shape before any interpolation, closing the same SQL-injection class (INV-7) on the schema-name dimension that the table-name allowlist already closes, since Zig's implicit same-caller-trust assumption doesn't carry over to a public Elixir function. All 6 acceptance criteria traced to concrete design elements in section 8, verbatim moduledoc text supplied in section 10 satisfying AC6, and no implementation code (.ex bodies) written -- only struct/type shapes and prose algorithm steps, per CODE-DESIGNER's constraints.",
+    "artifacts_out": ["lib/letflow/design/req039-sandbox-pool-fixture-loader.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ039-20260817",
+      "commit_sha_list": ["2b59e83"],
+      "remote_branch": "origin/feature/WF02-REQ039-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

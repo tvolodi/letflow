@@ -1,0 +1,195 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-039
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ039-20260817
+date_utc: 2026-08-17T09:20:19Z
+
+git:
+  branch: feature/WF02-REQ039-20260817
+  branch_confirmed: true
+  branch_check_command: "git branch --show-current"
+  branch_check_output_verbatim: "feature/WF02-REQ039-20260817"
+  commit: 7e5c9e4bdf038c19e6e958a5440096df9ca48657
+  commit_subject: "chore(WF02-REQ039): record step 03b TEST-DESIGN-VALIDATOR PASS handoff [WF02-REQ039-20260817]"
+  worktree: c:\Users\tvolo\dev\ai-dala\letflow
+  note: >
+    Primary worktree. A sibling worktree (c:\Users\tvolo\dev\ai-dala\letflow-wt2,
+    detached HEAD) exists but `tasklist` showed zero erl/beam/elixir processes running
+    before this step started, and it was never touched by this step. No
+    MIX_TEST_PARTITION was set — target database was the default `letflow_test`.
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5] [source] [64-bit] [smp:16:16] [ds:16:16:10] [async-threads:1] [jit:ns] / Elixir 1.20.3 (compiled with Erlang/OTP 29) / Mix 1.20.3"
+  postgres_container: >
+    letflow-postgres-1, "Up 40 hours (healthy)", 0.0.0.0:5462->5432/tcp — confirmed
+    already running via `docker ps` before any test command; no `docker compose up`
+    was needed.
+  deps: "`mix deps.get` (MIX_ENV=test) ran clean — all 20 deps already resolved/fetched, no network access needed this run."
+  max_cases_verbatim: "Running ExUnit with seed: 791313, max_cases: 32"
+  port_4000_collisions_iss_0015: "N/A — config/test.exs sets start_http: false (ISS-0015), no listener bound, no eaddrinuse possible."
+  eaddrinuse_grep: "0 hits in run 1's full log"
+
+verdict: PASS
+
+# ---------------------------------------------------------------------------
+# Static gates
+# ---------------------------------------------------------------------------
+checks:
+  compile_warnings_as_errors:
+    command_run: "MIX_ENV=test mix compile --warnings-as-errors"
+    exit_code: 0
+    stdout_stderr: "(empty — zero output)"
+    result: PASS
+
+  format_check:
+    command_run: "MIX_ENV=test mix format --check-formatted"
+    exit_code: 0
+    stdout_stderr: "(empty — zero output)"
+    result: PASS
+
+# ---------------------------------------------------------------------------
+# Full-suite runs
+# ---------------------------------------------------------------------------
+  full_suite_run1:
+    command_run: "mix test"
+    seed: 791313 (unpinned, ExUnit-chosen)
+    exit_code: 0
+    result_line_verbatim: "Result: 323 passed (4 properties, 319 tests)"
+    finished_line_verbatim: "Finished in 24.7 seconds (0.9s async, 23.8s sync)"
+    failures: 0
+    result: PASS
+
+  full_suite_run2:
+    command_run: "mix test --seed 0"
+    seed: 0 (pinned, second independent invocation per this step's re-run rule)
+    exit_code: 0
+    result_line_verbatim: "Result: 323 passed (4 properties, 319 tests)"
+    finished_line_verbatim: "Finished in 23.7 seconds (0.9s async, 22.8s sync)"
+    failures: 0
+    result: PASS
+
+  re_run_rationale: >
+    The handoff's own instruction was: re-run only if a failure is seen, since this
+    suite has documented rare cross-run flakiness (ISS-0028, since resolved; ISS-0011,
+    since resolved via ISS-0031 earlier today in run WF03-ISS0031-20260817). Run 1 was
+    already fully clean (0 failures), so a re-run was not strictly required by that
+    rule. It was still performed as a second independent confirmation, given this is
+    the first full-suite run on this branch since ISS-0031's fix landed and the branch
+    adds two new async: true-adjacent test files. Both runs — one unpinned-seed, one
+    pinned-seed-0 (the seed ISS-0011 most reliably reproduced under, per
+    report-2026-08-16-WF02-REQ027-20260816.yaml's run 04/10) — came back identically
+    clean. No failure occurred in either run, so no third run was performed and no
+    issue was filed or forwarded.
+
+  test_files_new_req039_isolated:
+    command_run: "mix test test/letflow/sandbox_pool_test.exs test/letflow/sandbox_pool/fixture_loader_test.exs"
+    exit_code: 0
+    result_line_verbatim: "Result: 13 passed"
+    finished_line_verbatim: "Finished in 5.0 seconds (0.00s async, 5.0s sync)"
+    note: >
+      Both new REQ-039 files run alone, isolated from the rest of the suite, to
+      cross-check the count delta below independently rather than trusting arithmetic
+      alone.
+
+# ---------------------------------------------------------------------------
+# Count reconciliation
+# ---------------------------------------------------------------------------
+count_reconciliation:
+  baseline_before_req_039: "310 passed (4 properties, 306 tests)"
+  baseline_source: >
+    Per this step's own handoff (handoffs/WF02-REQ039-20260817/step-04-test-runner.json)
+    and docs/issues/ISS-0031.yaml's resolution note ("310/310, 310/310, 310/310,
+    310/310" observed after that fix landed, immediately before REQ-039's branch was
+    cut).
+  observed_after_req_039: "323 passed (4 properties, 319 tests)"
+  delta: 13
+  delta_breakdown_by_property_vs_example: "0 new properties (4 -> 4), 13 new example tests (306 -> 319)"
+  new_tests_counted_by_running_new_files_alone: 13
+  arithmetic: "310 + 13 = 323 — matches the full suite's own Result line exactly, and matches the isolated 2-file run's own Result line (13) exactly."
+  matches_expected_reference: true
+  method_note: >
+    Per-file count obtained by actually running both new files together, alone
+    (`mix test test/letflow/sandbox_pool_test.exs test/letflow/sandbox_pool/fixture_loader_test.exs`)
+    and quoting the Result line, not by counting `test`/`property` macros in source.
+
+# ---------------------------------------------------------------------------
+# Acceptance-criteria cross-check (docs/requirements.yaml REQ-039, lines 1866-1872)
+# ---------------------------------------------------------------------------
+acceptance_criteria_test_coverage_observed:
+  criterion_1_claim_on_empty_pool_immediate_success_real_schema: "Exercised — test/letflow/sandbox_pool_test.exs (full suite run, both invocations, 0 failures)."
+  criterion_2_claim_blocks_at_quota_then_unavailable_or_frees: "Exercised — test/letflow/sandbox_pool_test.exs; config/test.exs sets max_concurrent_sandboxes: 1 specifically so this path is fast/deterministic against the app's own singleton pool, per that config's own REQ-039 comment."
+  criterion_3_release_drops_schema_frees_slot: "Exercised — test/letflow/sandbox_pool_test.exs."
+  criterion_4_load_fixtures_only_allowlist_rejects_unlisted_table_no_sql: "Exercised — test/letflow/sandbox_pool/fixture_loader_test.exs."
+  criterion_5_load_fixtures_only_idempotent_under_truncate_before_insert: "Exercised — test/letflow/sandbox_pool/fixture_loader_test.exs."
+  criterion_6_moduledoc_states_process_vs_row_open_question: "Not test-covered by design (doc-content assertion, no runtime behavior — same established policy as REQ-020 AC5/REQ-021 AC5/REQ-022 AC4/REQ-024 AC5) — not independently re-verified by this step beyond what TEST-DESIGN-VALIDATOR already confirmed at Step 3b; this step's scope was running the suite, not re-auditing doc content."
+  note: >
+    This step ran the tests; it did not re-derive per-criterion mapping from scratch.
+    TEST-DESIGN-VALIDATOR's Step 3b PASS already confirmed every criterion has a
+    runnable test before this step began (per WF-02's gate ordering) — see
+    handoffs/WF02-REQ039-20260817/ for that record. Listed here only to confirm all
+    13 new tests actually passed when run, which they did (0 failures in 3
+    independent invocations: 2 full-suite + 1 isolated).
+
+# ---------------------------------------------------------------------------
+# Known noise (not failures)
+# ---------------------------------------------------------------------------
+known_noise_not_a_failure:
+  - >
+    "[error] Metadata load failed for issuer
+    https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in NNNN ms." —
+    REQ-016's Ueberauth OIDC worker reaching for a deliberately unreachable placeholder
+    issuer configured in config/test.exs. Pre-existing since REQ-016, documented as
+    expected noise in every prior WF-02 test report. 5 occurrences in run 1's log,
+    grepped and counted, not eyeballed.
+  - >
+    ExUnit.Case.register_test/4 deprecation warnings for the property tests
+    (process_instance_test.exs, parallel_approval_test.exs,
+    oidc/claim_mapping_property_test.exs) — pre-existing, non-blocking compiler
+    warnings, not promoted to errors (the separate warnings-as-errors compile check
+    above ran clean with zero output, confirming these are not silently gated on).
+  - >
+    Verbose SQL query debug logging in raw `mix test` output (config/test.exs's
+    default test log level) — expected.
+
+# ---------------------------------------------------------------------------
+# Pre-existing / unrelated failures
+# ---------------------------------------------------------------------------
+pre_existing_failures_found: none
+# ISS-0011 (the tenant_status_test.exs telemetry-flake this project's Unblock-Everything
+# history references) was already resolved earlier today, before this branch was cut,
+# via docs/issues/ISS-0031.yaml / run WF03-ISS0031-20260817 (self() == test_pid filter
+# on the telemetry handler). Consistent with that fix: zero occurrences of that failure
+# signature, or any other failure, in either full-suite run this step performed.
+
+issues_filed_by_this_step: none
+# Zero failures observed in 3 independent invocations (2 full-suite + 1 isolated), so
+# there was nothing to file or forward per docs/agents/protocols/ISSUE_QUEUE.md.
+
+# ---------------------------------------------------------------------------
+handoff:
+  verdict: PASS
+  rationale: >
+    323/323 on both full-suite runs performed (run 1 unpinned seed 791313, run 2
+    pinned seed 0 — the seed most likely to expose the now-resolved ISS-0011 flake per
+    prior reports). Zero failures in either run. New REQ-039 files (sandbox_pool_test.exs
+    + fixture_loader_test.exs) also verified in isolation: 13/13. Count reconciles
+    exactly: 310 (pre-REQ-039 baseline) + 13 (new) = 323, matching the full suite's own
+    Result line. `mix compile --warnings-as-errors` exit 0 (no output) and
+    `mix format --check-formatted` exit 0 (no output). No pre-existing or unrelated
+    failure was encountered, so nothing was filed or forwarded to the issue queue.
+  artifacts_out:
+    - test/reports/report-2026-08-17-WF02-REQ039-20260817.yaml
+  next_action: "Route to RELEASE-VALIDATOR"
+  note_for_release_validator: >
+    Both runs this step performed were fully clean (323/323), including a pinned
+    seed-0 run — the seed that most reliably reproduced the now-resolved ISS-0011
+    flake in prior sessions (report-2026-08-16-WF02-REQ027-20260816.yaml's run 04).
+    That flake was fixed earlier today (ISS-0031, run WF03-ISS0031-20260817) before
+    this branch was cut, so its absence here is expected, not a coincidence to be
+    suspicious of. If RELEASE-VALIDATOR's own independent re-run hits any failure at
+    all, it is new signal, not a known/pre-existing issue — this step found nothing to
+    pre-attribute it to.

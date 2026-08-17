@@ -1,0 +1,62 @@
+{
+  "handoff_id": "ef0a6c5b-89ae-4bf2-920c-22e60c0567e7",
+  "run_id": "WF02-REQ039-20260817",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ039-20260817/step-02d-reviewer.json",
+  "created_at": "2026-08-17T08:51:28Z",
+  "started_at": "2026-08-17T08:51:28Z",
+  "completed_at": "2026-08-17T08:54:49Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-039"],
+    "related_handoff_ids": ["4ebdc2f4-bebc-4528-8102-9e28279b8bca"],
+    "artifacts_in": [
+      "lib/letflow/sandbox_pool.ex",
+      "lib/letflow/sandbox_pool/fixture_loader.ex",
+      "lib/letflow/application.ex",
+      "lib/letflow/design/req039-sandbox-pool-fixture-loader.md"
+    ],
+    "owned_modules": ["lib/letflow/definitions", "priv/repo/migrations"]
+  },
+  "task": {
+    "description": "Idiom review gate on REQ-039's implementation (branch feature/WF02-REQ039-20260817, git diff main...HEAD). This introduces the project's first singleton GenServer with a blocking-call-with-timeout + waiter-queue + monitor pattern -- pay particular attention to OTP correctness here (is the blocking/deferred-reply mechanism idiomatic, does a crashed/dead waiter genuinely never strand a slot, is the singleton correctly supervised) since this is a new pattern for this codebase (existing precedent is DynamicSupervisor-per-instance, not a singleton pool GenServer). Also check consistency with docs/migration/decisions/0003-ecto-schema-strategy.md (schema-per-tenant pattern) even though sandbox schemas are deliberately NOT tenant schemas -- confirm that divergence is justified and doesn't quietly contradict the decision record.",
+    "acceptance_criteria": [
+      "Idiomatic OTP vs. crutch assessment of the GenServer's blocking-wait/queue/monitor implementation",
+      "Supervision integrity: correctly wired into Letflow.Application, correct restart semantics for a singleton pool",
+      "Type-safety gaps checked",
+      "Scope creep check against REQ-039's actual 6 acceptance criteria",
+      "Consistency with docs/migration/decisions/ (0003 in particular) and docs/anti-patterns.md",
+      "ELIXIR-DEV's two flagged toolchain-specific fixes (jsonb cast, GenServer.call timeout buffer) assessed for idiom/correctness, not just security"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Idiom review of REQ-039 (Letflow.SandboxPool + Letflow.SandboxPool.FixtureLoader), git diff main...HEAD. 1) Idiomatic vs. crutch: the blocking-wait/queue/monitor pattern in sandbox_pool.ex is genuine, correct OTP -- handle_call returns {:noreply, state} to defer the reply, GenServer.reply/2 fires later from handle_info({:claim_timeout,...}) or from service_next_waiter/1 after a release; every queued waiter is Process.monitor/1'd on its pid, and both timeout-then-DOWN and DOWN-then-timeout race orderings are handled correctly (Process.demonitor(ref, [:flush]) on the timeout path so a stray :DOWN can't arrive after cleanup; Process.cancel_timer/1 on the DOWN path, and the now-absent waiter entry makes a late {:claim_timeout,...} message a harmless no-op via find_waiter/2 returning nil). A dead waiter is dropped without ever attempting GenServer.reply/2 against it (INV-SP-6) -- no stranded slot, no reply-to-dead-process. No polling, no Process.sleep, no busy-wait anywhere in the diff. This is the project's first singleton-pool GenServer and it earns that shape on its own merits (§2.3 of the design doc): a claimed sandbox is inert data between claim/release, not an autonomous long-lived actor, so it correctly does NOT reach for the InstanceSupervisor/ApprovalSupervisor DynamicSupervisor-per-instance pattern -- that would be the crutch here (copying a precedent that doesn't fit), and the code avoids it. 2) Supervision: {Letflow.SandboxPool, []} is wired into Letflow.Application's existing :one_for_one Supervisor.start_link after Letflow.InstanceSupervisor/Letflow.ApprovalSupervisor -- correct placement (infrastructure services register once at boot). Default GenServer child_spec (restart: :permanent) under :one_for_one is appropriate: a crash restarts only the pool, losing in-flight claims -- an explicitly named and accepted trade-off (design doc §11 OQ-3), not an oversight, and reasonable given no production deployment exists yet. 3) @specs on start_link/1, claim/2, release/2, load_fixtures_only/3 all match their implementations' actual return values exactly (claim/2's catch-all {:error, term()} branch is unreachable in the current code, but that's copied verbatim from the design doc's own spec, not an ELIXIR-DEV-introduced looseness). Type-safety note (worth watching, not blocking): table_name (FixtureLoader) and schema_name (both modules) are raw strings validated at runtime against an allowlist/regex rather than a closed sum type -- a Rust/OCaml enum for the allowlisted tables would move that check to compile time; noted per this role's standing instruction to flag this even when not requested, not a defect in this diff. 4) Scope: implementation maps 1:1 onto REQ-039's 6 acceptance criteria (docs/requirements.yaml id: REQ-039) with no extra abstractions -- no behaviour, no macro, no speculative extension beyond the allowlist/opts hooks the requirement's own /3 arity and design doc already called for (explicitly deferred per OQ-1/OQ-2/OQ-4, not built). No anti-patterns.md entries apply to this diff. Consistency with docs/migration/decisions/0003-ecto-schema-strategy.md: sandbox schemas deliberately have no Registration row and use a disjoint 'sandbox_' (never 'tenant_') prefix, reusing TenantProvisioning.tenant_scoped_migrations/0 only for its migration-manifest content (avoiding DDL duplication/drift) while explicitly bypassing the registry-coupled provision_tenant_schema/1 and replay_migrations/2 -- this is a justified, explicitly-reasoned divergence (design doc §4.6) that doesn't quietly contradict 0003's schema-per-tenant intent, since sandboxes were never tenant data 0003 was modeling in the first place; SECURITY-REVIEWER independently confirmed no live tenant-resolution path can ever reach a sandbox schema. ELIXIR-DEV's two flagged toolchain fixes both hold up on idiom/correctness grounds, not just security: the +5s GenServer.call timeout buffer over max_wait_ms is the standard, correct OTP pattern for a client-side call timeout that must exceed a known longer server-side wait; the ($1::text)::jsonb bind (vs. the design's literal $1::jsonb) is a verified, well-commented workaround for genuine Postgrex jsonb-parameter double-encoding behavior given row_json is deliberately kept as pre-serialized text rather than decoded into an Elixir term -- reasonable given that constraint, not a crutch.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ039-20260817/step-02d-reviewer.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "table_name (FixtureLoader's @allowlist) and schema_name (both modules) are raw String.t() validated at runtime (list membership / regex) rather than represented as a closed type. Not a defect -- Elixir has no cheap closed-sum-type primitive to reach for here -- but flagged per this role's standing instruction to note type-safety gaps a stricter type system would catch at compile time: a Rust/OCaml enum for the allowlisted tables would make an unlisted table name a compile error instead of a runtime {:error, :invalid_table_name}. Worth watching as the allowlist grows (OQ-1) or if a third module starts constructing schema_name/table_name values independently.",
+        "affected_requirement": "REQ-039"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ039-20260817",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (Step 3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

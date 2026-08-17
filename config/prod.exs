@@ -38,3 +38,6 @@ config :letflow, :oidc_jit_provisioning, %{
     default_roles: []
   }
 }
+
+# Same default as config/dev.exs -- see that file's comment (REQ-039).
+config :letflow, :sandbox_pool, max_concurrent_sandboxes: 5

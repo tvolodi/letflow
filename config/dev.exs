@@ -83,3 +83,9 @@ config :letflow, :oidc_jit_provisioning, %{
     default_roles: []
   }
 }
+
+# Letflow.SandboxPool's hard concurrency ceiling (REQ-039). 5 is an arbitrary
+# but reasonable operational default -- no functional correctness depends on
+# the exact number, see lib/letflow/design/req039-sandbox-pool-fixture-loader.md
+# §9/§11 OQ-4.
+config :letflow, :sandbox_pool, max_concurrent_sandboxes: 5

@@ -2712,3 +2712,52 @@ history:
       REQ-041 status flipped in_progress -> done;
       docs/migration/stage-2-event-store-definitions.md header updated
       to add REQ-041 to the done list and remove it from pending.
+  - req: REQ-039
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-17T09:28:45Z
+    note: >
+      Sandbox pool and fixture loader shipped as two new modules:
+      lib/letflow/sandbox_pool.ex (GenServer-singleton pool -- claim/1
+      provisions a fresh Postgres schema via CREATE SCHEMA against a
+      configurable max_concurrent_sandboxes quota, blocking callers via
+      Process.send_after/handle_info({:claim_timeout,...}) until either a
+      slot frees or the wait window elapses returning :sandbox_unavailable;
+      release/1 drops the schema via DROP SCHEMA CASCADE and services the
+      next waiter) and lib/letflow/sandbox_pool/fixture_loader.ex
+      (load_fixtures_only/3 -- validates schema name and every target table
+      name against a hardcoded allowlist before any SQL is issued, then
+      TRUNCATEs each distinct table before inserting, making retries
+      idempotent). CODE-DESIGNER resolved the requirement's explicit open
+      question (process-per-instance vs. row-based state for the pool's
+      in-memory claim tracking + quota enforcement) in favor of a
+      GenServer-singleton design, documented in sandbox_pool.ex's moduledoc
+      alongside a named citation of stage-2-event-store-definitions.md's
+      Early findings section -- CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER,
+      and REVIEWER all gated this before test design. All 6 acceptance
+      criteria independently re-verified against the shipped code/tests by
+      RELEASE-VALIDATOR (not just TEST-RUNNER's report): empty-pool
+      immediate claim of a real schema; blocking-then-timeout returning
+      :sandbox_unavailable; release actually dropping the schema
+      (information_schema.schemata checked directly) and freeing the slot;
+      allowlist rejection before any SQL runs; TRUNCATE-before-insert
+      idempotent retry; and the moduledoc naming the open question and its
+      resolution. Test suite: mix test run twice independently by
+      RELEASE-VALIDATOR (unpinned seed and --seed 12345), both "323 passed
+      (4 properties, 319 tests)", exit 0 -- up from 310 at REQ-039's start,
+      confirming test/letflow/sandbox_pool_test.exs and
+      test/letflow/sandbox_pool/fixture_loader_test.exs both landed and
+      passed; zero orphaned sandbox_% schemas found in Postgres after both
+      runs. README.md checked and left untouched: REQ-039 adds an internal
+      GenServer + fixture-loading module with no new HTTP route and nothing
+      exercised via the documented curl/mix run flow in "What's here
+      today"/"Running it" -- neither section describes anything this
+      requirement changed. docs/migration/stage-2-event-store-definitions.md
+      checked and deliberately left untouched: REQ-039's own acceptance
+      criteria only require the moduledoc to *cite* that file's Early
+      findings section (already done, verified directly by
+      RELEASE-VALIDATOR at sandbox_pool.ex lines 13-30), not to edit the
+      stage doc itself -- same established precedent as REQ-022/023/026/
+      027/028 (stage-N docs are refreshed in bulk at WF-04 stage-gate
+      closure, not per-requirement). Flipped docs/requirements.yaml
+      REQ-039 status: in_progress -> done.

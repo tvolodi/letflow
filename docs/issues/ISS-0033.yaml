@@ -22,4 +22,25 @@ affected_files:
   - handoffs/registry.json
 github_issue: 98 # manually filed by ORCH; letflow-queue register_task also auto-created GH#99 as its mirror (task_type issue) -- both point at this same finding
 queue_task_id: 79
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF02-REQ029-20260817 (self-correction, immediately after the WF-02 run closed out)
+resolved_at: "2026-08-17T10:59:00Z"
+resolution: >
+  False positive -- not a defect. Re-checked handoffs/registry.json in full
+  (rather than trusting this issue's own earlier one-entry grep) and found a
+  second entry, run_id "WF03-ISS0030-20260817-resume", status: COMPLETED,
+  released_lock: true, appended by commit 0a34f79 exactly as that commit's own
+  message states ("records the resume run in orchestrator.log/registry.json
+  -- original BLOCKED entry left untouched, append-only"). The original
+  WF03-ISS0030-20260817 entry staying BLOCKED forever is deliberate, correct
+  append-only history (the run really was blocked at that point in time,
+  on that specific attempt) -- not a bookkeeping gap. ORCHESTRATOR.md §7's
+  owned_modules collision check reads live/active locks; a later COMPLETED
+  entry for the same owned_modules with a later lock_acquired_at supersedes
+  an earlier BLOCKED one for that purpose, so no false-collision risk
+  actually exists. Filed by ORCH after checking for an entry literally named
+  "WF03-ISS0030-20260817" and stopping there instead of searching for every
+  entry whose owned_modules/note referenced ISS-0030 -- the shallower check
+  missed the resume entry. No code or docs change needed.
+

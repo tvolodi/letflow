@@ -211,7 +211,9 @@ defmodule Letflow.Definitions.PromotionTest do
       assert is_binary(result.target_definition_id)
       refute result.target_definition_id == source_def.id
 
-      target_row = Repo.get!(ProcessDefinition, result.target_definition_id, prefix: target_schema)
+      target_row =
+        Repo.get!(ProcessDefinition, result.target_definition_id, prefix: target_schema)
+
       assert target_row.status == :active
       assert target_row.tenant_id == target_tenant_id
       assert target_row.name == process_key
@@ -281,11 +283,15 @@ defmodule Letflow.Definitions.PromotionTest do
                  event_appender: recording_event_appender(test_pid)
                )
 
-      new_target_row = Repo.get!(ProcessDefinition, result.target_definition_id, prefix: target_schema)
+      new_target_row =
+        Repo.get!(ProcessDefinition, result.target_definition_id, prefix: target_schema)
+
       assert new_target_row.status == :active
       assert new_target_row.version == "3.0.0"
 
-      reloaded_previous = Repo.get!(ProcessDefinition, previous_target_def.id, prefix: target_schema)
+      reloaded_previous =
+        Repo.get!(ProcessDefinition, previous_target_def.id, prefix: target_schema)
+
       assert reloaded_previous.status == :deprecated
 
       assert_received {:event_appended, _event_attrs, _prefix}
@@ -327,15 +333,16 @@ defmodule Letflow.Definitions.PromotionTest do
     end
 
     test "omitting opts[:permission_checker] entirely raises KeyError -- no silent allow-everything default" do
-      review = review_for(%{
-        source_tenant_id: Ecto.UUID.generate(),
-        target_tenant_id: Ecto.UUID.generate(),
-        process_key: unique_process_key(),
-        source_definition_id: nil,
-        target_definition_id: nil,
-        base_version: nil,
-        entries: []
-      })
+      review =
+        review_for(%{
+          source_tenant_id: Ecto.UUID.generate(),
+          target_tenant_id: Ecto.UUID.generate(),
+          process_key: unique_process_key(),
+          source_definition_id: nil,
+          target_definition_id: nil,
+          base_version: nil,
+          entries: []
+        })
 
       assert_raise KeyError, fn ->
         Promotion.promote_definition(Ecto.UUID.generate(), review,
@@ -353,15 +360,16 @@ defmodule Letflow.Definitions.PromotionTest do
 
   describe "promote_definition/3 -- opts[:event_appender]" do
     test "omitting opts[:event_appender] entirely raises KeyError -- no silent no-op default" do
-      review = review_for(%{
-        source_tenant_id: Ecto.UUID.generate(),
-        target_tenant_id: Ecto.UUID.generate(),
-        process_key: unique_process_key(),
-        source_definition_id: nil,
-        target_definition_id: nil,
-        base_version: nil,
-        entries: []
-      })
+      review =
+        review_for(%{
+          source_tenant_id: Ecto.UUID.generate(),
+          target_tenant_id: Ecto.UUID.generate(),
+          process_key: unique_process_key(),
+          source_definition_id: nil,
+          target_definition_id: nil,
+          base_version: nil,
+          entries: []
+        })
 
       assert_raise KeyError, fn ->
         Promotion.promote_definition(Ecto.UUID.generate(), review, permission_checker: allow())
@@ -407,7 +415,9 @@ defmodule Letflow.Definitions.PromotionTest do
       # design does not paper over; this test pins that it stays that way
       # rather than silently changing shape.
       assert Repo.aggregate(
-               from(d in ProcessDefinition, where: d.tenant_id == ^target_tenant_id and d.status == :active),
+               from(d in ProcessDefinition,
+                 where: d.tenant_id == ^target_tenant_id and d.status == :active
+               ),
                :count,
                prefix: target_schema
              ) == 1

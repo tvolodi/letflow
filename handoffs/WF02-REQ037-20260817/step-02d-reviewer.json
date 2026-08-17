@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ037-20260817/step-02d-reviewer.json",
   "created_at": "2026-08-17T19:46:35Z",
   "started_at": "2026-08-17T19:46:35Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-17T19:48:43Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S2",
@@ -34,8 +34,8 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": null,
+    "status": "PASS",
+    "summary": "PASS. Read both files in full (promotion_review_store.ex 409 lines, promotion.ex 324 lines) plus the full, rework-revised design doc (lib/letflow/design/promotion_review_state_machine.md, all 1004 lines) and docs/anti-patterns.md. (1) transition/6: genuinely clean abstraction, not a crutch. It is private, has exactly 6 call sites (all within this module), takes closures for gates rather than hiding branching in a case-on-atom, and every public function reads as self-documenting from its own body alone (allowed_source_statuses list + inline gate closures + a one-line set_fn) without needing to trace into the helper to understand *which* edge a given function implements -- only to confirm the shared mechanical shape (read -> pre_gate -> status pre-check -> post_gate -> guarded UPDATE), which the moduledoc also restates step-by-step so a reader never has to reverse-engineer it from code alone. It is scoped tightly to this module's fixed 6 functions (no plugin/registration mechanism, no dynamic dispatch, no macro), so this is DRY for a genuinely repeated shape, not speculative generality -- the 'exactly 7 edges, no 8th' invariant is structural because each function can only ever supply its own literal allowed_source_statuses list, never a computed one. (2a) File-organization MINOR issue: confirmed resolved, not an ELIXIR-DEV improvisation -- design doc Section 1.2 contains an explicit file/module table putting promotion_review_store.ex/PromotionReviewStore as a NEW sibling file, explicitly citing the InstanceDefinitionSnapshot/SnapshotStore schema-vs-context precedent, and explicitly states PromotionReview (REQ-035 schema) 'stays schema + changesets only -- untouched by this design.' ELIXIR-DEV followed the design's own literal, validated choice. (2b) insert_review_error() type-shape MINOR issue: confirmed cleanly resolved by the rework. Code's @type (lines 169-173) now reads :duplicate_review | :digest_mismatch | :invalid_schema_name | Ecto.Changeset.t() -- matches design doc's revised §2.3 verbatim, and :invalid_schema_name is now genuinely reachable (TenantProvisioning.tenant_id_for_schema_name/1's error branch, short-circuited via a bare `with` before any changeset/Repo.insert call, confirmed by reading the control flow directly) where the previously-flagged :invalid_tenant_id was not producible by any code path. (3) REQ-030 conflict: git fetch origin main ran clean (91eb51b, only a dev-db safety fix and REQ037's own Step-00 commits landed since REQ-036 merged); origin/feature/WF02-REQ030-20260817 (a6330d9) is still at Step 00/in_progress, has not touched lib/letflow/definitions/process_definition.ex or any promotion-family file -- no fresh conflict. Standard checks: idiomatic vs. crutch -- plain Ecto context module (no gen_statem) is the design's own reasoned, precedented choice (row_approval.ex, ProcessDefinition's own status column), correctly not a long-lived process; supervision -- N/A confirmed, both files read in full contain zero GenServer/gen_statem/spawn/process code, pure Ecto.Query/Repo calls only; scope creep -- none found, implementation matches the design's exact 3-module surface (PromotionReview schema untouched, 2 new context modules, no extra public functions), both intentionally-deferred gaps (event_appender injection point, no permission_checker gate on approve_review/4) are explicitly flagged as open questions in both the design and the moduledocs rather than silently built ahead of need or silently dropped; type-safety gaps (noted, not blocking) -- Keyword.fetch!/2 for required opts is a runtime-only check (a stricter type system would enforce required args at compile time), gate closures are typed PromotionReview.t() -> :ok | {:error, term()} with an untyped term() reason, and insert_review_error()/promote_error() both retain a catch-all Ecto.Changeset.t()/term() variant a sum-type language would force to be narrowed -- all pre-existing codebase convention (matches PromotionPlan/PromotionDigest), not newly introduced by this diff. Decision-record consistency: insert_review/2 satisfies docs/migration/decisions/0003-ecto-schema-strategy.md's 2026-08-17 addendum (option (c), derive tenant_id from opts[:prefix] via tenant_id_for_schema_name/1) -- independently re-confirmed by reading the actual code, not trusting the handoff chain; promote_definition/3's process_definitions write uses the now-trustworthy target_tenant_id (review.tenant_id) and forward-derives target_prefix from it via schema_name_for_tenant/1, so tenant_id and prefix cannot disagree at that write site either -- internally consistent with the addendum's own reasoning. Verification run directly: mix compile --warnings-as-errors exits 0; mix format --check-formatted on the two files in scope exits 0 (the one mix format failure on this branch, test/letflow/definitions/promotion_digest_test.exs, is a pre-existing REQ-036 file already unformatted on origin/main, not touched by this diff and out of this review's scope).",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
@@ -46,7 +46,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to TEST-DESIGNER (3)"
   },
   "rework_count": 0,
   "max_rework": 3

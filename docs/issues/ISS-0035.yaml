@@ -1,0 +1,53 @@
+id: ISS-0035
+title: "test/letflow/definitions/promotion_digest_test.exs fails mix format --check-formatted"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ037-20260817
+discovered_at: 2026-08-17T19:52:16Z
+severity: MINOR
+description: >
+  During WF02-REQ037-20260817's Step 2a rework, a full-repo
+  `mix format --check-formatted` run surfaced formatting drift in
+  test/letflow/definitions/promotion_digest_test.exs (created by REQ-036's
+  TEST-DESIGNER; REQ-036's own pipeline reported `mix format --check-formatted`
+  clean at every step it ran). Confirmed unrelated to REQ-037's own diff, not
+  blocking REQ-037's own gates. Filed as letflow-queue task 81 / GitHub #108.
+
+  Note: the queue task's description text cited "Local record:
+  docs/issues/ISS-0034.yaml" -- this was a mislabeling by whoever filed the
+  queue task; ISS-0034 is an unrelated, already-resolved issue (stage-2
+  migration doc header staleness). This file (ISS-0035) is the correct local
+  record for GH#108.
+
+  Root cause, confirmed directly (not assumed): `mix format --check-formatted`
+  run fresh against this file shows 4 lines exceeding the configured line
+  length that `mix format` wants wrapped (lines 58, 106, 124, 216 -- one more
+  than the queue task's description mentioned, likely because that
+  description was written against a partial diff or an earlier .formatter.exs
+  state). All four are long `assert`/`refute` comparison lines. Formatting-only,
+  zero logic change needed.
+affected_files:
+  - test/letflow/definitions/promotion_digest_test.exs
+  - test/letflow/definitions/store_test.exs
+github_issue: https://github.com/tvolodi/letflow/issues/108
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0035-20260817
+resolved_at: 2026-08-17T19:56:00Z
+resolution: >
+  Ran `mix format` repo-wide rather than scoping to just the one named file,
+  because a fresh `mix format --check-formatted` (run to confirm the fix)
+  surfaced a second, previously-undetected drift in
+  test/letflow/definitions/store_test.exs (REQ-030's own TOCTOU regression
+  test file, merged earlier the same session) -- identical bug class
+  (long assert/refute lines needing a wrap), same zero-risk mechanical fix.
+  Included it in this same run rather than filing a separate issue: both are
+  the same root cause (long single-line assertions exceeding the configured
+  line length) and the same trivial fix, so splitting them would only have
+  added bookkeeping overhead with no safety benefit. Confirmed via git diff
+  that both files' changes are whitespace/line-break only, zero
+  assertion/logic changes. `mix format --check-formatted` now clean
+  repo-wide (exit 0). Full suite re-run post-fix: no change in pass count,
+  0 failures. Independent REVIEWER sign-off obtained before merge per
+  core-directives.md's producer/validator principle, even though ORCH
+  applied the fix directly under ORCHESTRATOR.md's sizing exception
+  (mechanical, zero design ambiguity).

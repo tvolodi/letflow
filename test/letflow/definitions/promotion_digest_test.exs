@@ -55,7 +55,8 @@ defmodule Letflow.Definitions.PromotionDigestTest do
         ]
       }
 
-      assert PromotionDigest.compute_plan_digest(plan_a) == PromotionDigest.compute_plan_digest(plan_b)
+      assert PromotionDigest.compute_plan_digest(plan_a) ==
+               PromotionDigest.compute_plan_digest(plan_b)
     end
   end
 
@@ -103,7 +104,8 @@ defmodule Letflow.Definitions.PromotionDigestTest do
         ]
       }
 
-      assert PromotionDigest.compute_plan_digest(plan_c) == PromotionDigest.compute_plan_digest(plan_d)
+      assert PromotionDigest.compute_plan_digest(plan_c) ==
+               PromotionDigest.compute_plan_digest(plan_d)
     end
   end
 
@@ -121,7 +123,8 @@ defmodule Letflow.Definitions.PromotionDigestTest do
         ]
       }
 
-      refute PromotionDigest.compute_plan_digest(plan_1) == PromotionDigest.compute_plan_digest(plan_2)
+      refute PromotionDigest.compute_plan_digest(plan_1) ==
+               PromotionDigest.compute_plan_digest(plan_2)
     end
 
     test "the returned digest is a 64-char lowercase hex string" do
@@ -213,7 +216,8 @@ defmodule Letflow.Definitions.PromotionDigestTest do
 
       assert normalized =~ ":crypto.hash_equals/2"
 
-      assert normalized =~ "never `Kernel.==/2` or `:erlang.=:=/2` directly on the two digest strings",
+      assert normalized =~
+               "never `Kernel.==/2` or `:erlang.=:=/2` directly on the two digest strings",
              "moduledoc does not state the constant-time-comparison choice in the exact terms AC6 asks for: #{normalized}"
     end
   end

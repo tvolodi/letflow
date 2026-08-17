@@ -493,11 +493,15 @@ defmodule Letflow.Definitions.StoreTest do
       active_3 = active!(schema_name)
 
       # activate/2 on ACTIVE: AC4 no-op, stays :active.
-      assert {:ok, %{already_active: true}} = Definitions.activate(active_1.id, prefix: schema_name)
+      assert {:ok, %{already_active: true}} =
+               Definitions.activate(active_1.id, prefix: schema_name)
+
       assert reread!(schema_name, active_1.id).status != :draft
 
       # deprecate/2 on ACTIVE: the one legal edge from ACTIVE, becomes :deprecated.
-      assert {:ok, %{status: :deprecated}} = Definitions.deprecate(active_2.id, prefix: schema_name)
+      assert {:ok, %{status: :deprecated}} =
+               Definitions.deprecate(active_2.id, prefix: schema_name)
+
       assert reread!(schema_name, active_2.id).status != :draft
 
       # archive/2 on ACTIVE: forbidden (cell ACTIVE -> ARCHIVED, tested below too).
@@ -536,7 +540,9 @@ defmodule Letflow.Definitions.StoreTest do
       assert reread!(schema_name, deprecated_2.id).status != :draft
 
       # archive/2 on DEPRECATED: the one legal edge from DEPRECATED, becomes :archived.
-      assert {:ok, %{status: :archived}} = Definitions.archive(deprecated_3.id, prefix: schema_name)
+      assert {:ok, %{status: :archived}} =
+               Definitions.archive(deprecated_3.id, prefix: schema_name)
+
       assert reread!(schema_name, deprecated_3.id).status != :draft
     end
 
@@ -637,7 +643,9 @@ defmodule Letflow.Definitions.StoreTest do
     test "the hook is never called on the already-ACTIVE no-op path" do
       %{schema_name: schema_name} = provisioned_tenant()
       definition = create!(schema_name)
-      assert {:ok, %{already_active: false}} = Definitions.activate(definition.id, prefix: schema_name)
+
+      assert {:ok, %{already_active: false}} =
+               Definitions.activate(definition.id, prefix: schema_name)
 
       exploding_validator = fn _graph, _tenant_id ->
         raise "hook must not be called on the already-active no-op path"
@@ -722,7 +730,10 @@ defmodule Letflow.Definitions.StoreTest do
       prod_draft = create!(schema_name, %{name: base_name <> "-prod-draft", stage: "prod"})
       prod_active = create!(schema_name, %{name: base_name <> "-prod-active", stage: "prod"})
       activate!(schema_name, prod_active.id)
-      production_draft = create!(schema_name, %{name: base_name <> "-production-draft", stage: "production"})
+
+      production_draft =
+        create!(schema_name, %{name: base_name <> "-production-draft", stage: "production"})
+
       no_stage_draft = create!(schema_name, %{name: base_name <> "-no-stage"})
 
       # stage alone: exact match. "prod" must not also match "production" -- if it
@@ -740,7 +751,9 @@ defmodule Letflow.Definitions.StoreTest do
       refute MapSet.member?(result_ids, no_stage_draft.id)
 
       # stage + status combined in the same call (AND).
-      assert {:ok, [only]} = Definitions.list(%{stage: "prod", status: :active}, prefix: schema_name)
+      assert {:ok, [only]} =
+               Definitions.list(%{stage: "prod", status: :active}, prefix: schema_name)
+
       assert only.id == prod_active.id
 
       # stage + name + status combined in the same call (AND, all three at once).

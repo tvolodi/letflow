@@ -1,0 +1,55 @@
+{
+  "handoff_id": "f2fbda18-f56d-4e8b-9aac-90a69f87fc5d",
+  "run_id": "WF02-REQ029-20260817",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ029-20260817/step-06-doc-updater.json",
+  "created_at": "2026-08-17T10:52:23Z",
+  "started_at": "2026-08-17T10:52:23Z",
+  "completed_at": "2026-08-17T10:54:38Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-029"],
+    "related_handoff_ids": ["91165341-d44c-496d-a559-f2c7362dae87"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "docs/migration/stage-2-event-store-definitions.md"
+    ],
+    "owned_modules": ["lib/letflow/definitions", "test/letflow/definitions"]
+  },
+  "task": {
+    "description": "Flip REQ-029 status in_progress -> done in docs/requirements.yaml. Append a 'done' event to docs/status/requirement_status.yaml (append only, existing req/event/agent/at/note schema). Check docs/migration/stage-2-event-store-definitions.md's requirement-count header/summary for staleness (same established precedent as REQ-022/023/026/027/028/039/041 -- update the count if it names a specific number, but the stage doc's own body is NOT refreshed per-requirement, only at WF-04 stage-gate closure). REQ-029 named no other docs/migration/decisions/ file in its acceptance criteria. README.md: this is an internal pure-function extension with no new HTTP route and nothing in the documented curl/mix run flow -- confirm that and leave untouched if so, don't touch it speculatively.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-029 status flipped to done",
+      "docs/status/requirement_status.yaml has a new done event for REQ-029, prior entries unchanged",
+      "every touched file listed explicitly in artifacts_out"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-029 (Node-attribute and edge-condition validators, graph.zig PD-05/PD-06) closed out. Flipped docs/requirements.yaml REQ-029 status: in_progress -> done (line 1290). Appended a `done` event to docs/status/requirement_status.yaml (real UTC timestamp 2026-08-17T10:53:37Z, appended after the existing `started` entry, prior history untouched) summarizing what shipped: validate_node_attributes/1 and the edge-condition checks added to lib/letflow/definitions/graph.ex extending REQ-028's module in place (per-node-type attribute rules, EXCLUSIVE_GATEWAY edge-condition rules, and a pure syntax-only valid_cel_syntax?/1), RELEASE-VALIDATOR's independent re-verification of all 5 acceptance criteria, and the test counts (401 tests full suite / 40 in graph_test.exs, 0 failures). Also recorded that REQ-028's design doc (req028-graph-structural-validator.md) section 9.1 open question -- Node.attributes' provisional map()|nil typing -- was confirmed resolved by REQ-029's design doc (req029-node-attribute-edge-condition-validators.md section 2), verified directly by reading both files rather than trusting a summary. Updated docs/migration/stage-2-event-store-definitions.md's Requirements header line, moving REQ-029 from the pending list to the done list -- only that line touched, per the established REQ-022/023/026/027/028/039/041 precedent that the rest of the stage doc refreshes in bulk at WF-04 stage-gate closure, not per-requirement. Checked README.md directly (grepped for graph/Definitions/validate -- no relevant hits): REQ-029 is a pure in-memory extension to lib/letflow/definitions/graph.ex with no new HTTP route and nothing in the documented curl/mix run flow, so left untouched, confirmed rather than assumed. Both docs/requirements.yaml and docs/status/requirement_status.yaml validated as parseable YAML via `python3 -c \"import yaml; yaml.safe_load(...)\"` after edits (no local js-yaml/npx network access in this environment; both printed OK, no errors).",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "docs/migration/stage-2-event-store-definitions.md",
+      "handoffs/WF02-REQ029-20260817/step-06-doc-updater.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ029-20260817",
+      "commit_sha_list": ["8eaaa6f"],
+      "remote_branch": "origin/feature/WF02-REQ029-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ORCH for independent confirmation, then Step Final git-merge"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

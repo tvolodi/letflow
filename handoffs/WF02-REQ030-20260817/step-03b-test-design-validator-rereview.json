@@ -1,0 +1,52 @@
+{
+  "handoff_id": "4536401c-7836-4b75-8ae8-639bff892086",
+  "run_id": "WF02-REQ030-20260817",
+  "workflow_id": "WF-02",
+  "step": "03b-rereview",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ030-20260817/step-03b-test-design-validator-rereview.json",
+  "created_at": "2026-08-17T19:09:31Z",
+  "started_at": "2026-08-17T19:09:31Z",
+  "completed_at": "2026-08-17T19:16:35Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-030"],
+    "related_handoff_ids": ["001a9c49-f53f-4a61-bfa4-262bad4b8130"],
+    "artifacts_in": [
+      "test/letflow/definitions/store_test.exs",
+      "test/specs/REQ-030.md",
+      "handoffs/WF02-REQ030-20260817/step-03-test-designer-rework.json"
+    ],
+    "owned_modules": ["lib/letflow/definitions", "test/letflow/definitions_test.exs", "test/specs/REQ-030.md"]
+  },
+  "task": {
+    "description": "Re-review after rework (rework_count 1). Your prior FAIL (handoffs/WF02-REQ030-20260817/step-03b-test-design-validator.json) flagged exactly one MAJOR issue: the TOCTOU regression test's spec claimed an unreproduced fact. TEST-DESIGNER's rework (handoffs/WF02-REQ030-20260817/step-03-test-designer-rework.json) claims to have deterministically forced the race using Ecto's own [:letflow, :repo, :query] telemetry event as a rendezvous point (zero production code changes), and reports 18/18 clean runs with real Postgres unique-violation errors observed in the query log. Independently verify this claim the same way you verified the original one -- don't accept it just because it sounds more rigorous this time.",
+    "acceptance_criteria": [
+      "Read the actual rewritten TOCTOU test code and confirm the telemetry-based rendezvous mechanism genuinely forces both tasks to pause between the deprecate-step and self-activate-step before either proceeds",
+      "Independently re-run the fixed test yourself at least 5 times across different seeds and confirm it reliably produces exactly one success and one {:error, {:transaction_failed, _}} every time, not just sometimes",
+      "Confirm zero production code (lib/letflow/definitions.ex) was touched by this rework -- the fix should be test-only",
+      "Confirm test/specs/REQ-030.md's claims now accurately match what you actually observe, no overclaiming",
+      "Confirm nothing else regressed: re-run the full test/letflow/definitions/store_test.exs + test/letflow/definitions_test.exs suite and confirm still 40/40 (or explain any count change)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified TEST-DESIGNER's rework claim from scratch, not accepted on trust. (1) Read test/letflow/definitions/store_test.exs lines 758-940 (the rewritten 'Regression -- activate/2 cross-row TOCTOU' describe block) directly and traced the mechanism against lib/letflow/definitions.ex's actual query sequence (run_activate_transaction/4, activate_draft/2): step 1 SELECT...FOR UPDATE (per-row lock, no cross-row contention), step 2 deprecate-step UPDATE (WHERE name=^name AND status='active'), step 3 self-activate UPDATE (WHERE id=^id AND status='draft'). The telemetry handler counts process_definitions-sourced [:letflow, :repo, :query] events per-process via the process dictionary (correctly isolated, since :telemetry.execute runs synchronously in the emitting process, not a separate logger process -- confirmed myself by reading deps/ecto_sql/lib/ecto/adapters/sql.ex lines 1271-1316's log/5, which is invoked as DBConnection's :log callback in the calling process immediately after each query completes and before the caller's code proceeds) and blocks via a plain receive on the 2nd such event per task -- i.e. exactly after step 2 completes and before step 3 is issued. Handler attachment happens strictly before either task is released past its own :toctou_run gate, so there is no register-vs-fire race. Traced the actual Postgres semantics of the forced window: both self-activate UPDATEs (step 3) target different rows but the same uq_active_definition partial-unique-index key; Postgres makes the second (loser) UPDATE block server-side on the first (winner)'s uncommitted index entry, then raises a real unique_violation once the winner commits -- which propagates as a raised exception out of Repo.transaction and is caught by activate/2's own try/rescue, converting to {:error, {:transaction_failed, exception}} exactly as asserted. No gap found -- this is a sound, not merely lucky, forcing mechanism. (2) Confirmed via `git show --stat ba676cf` that the rework commit touched only test/letflow/definitions/store_test.exs and test/specs/REQ-030.md -- lib/letflow/definitions.ex is absent from the commit, and `git diff f3ee92c ba676cf -- test/letflow/definitions/store_test.exs` shows exactly one hunk (lines 758+), confirming no other test case (AC1-AC9, all 9 forbidden-transition cells, AC2 concurrency) was touched by this rework. (3) Independently ran the isolated file (test/letflow/definitions/store_test.exs, 27 tests) 6 times across 6 fresh seeds never used by TEST-DESIGNER (31337, 900123, 55501, 2026081, 610, 848484): all 6 report 'Result: 27 passed', 0 failures -- the TOCTOU test's own assertions (exactly one success, exactly one {:error, {:transaction_failed, _}}, count_active_by_name==1) held on every run, not just some. For seed 848484 I captured the full debug query log directly (not the test's own report) and independently grepped it myself: exactly one 'QUERY ERROR' in the entire 27-test run, on the exact self-activate UPDATE statement (`WHERE ((p0.\"id\" = $3) AND (p0.\"status\" = 'draft'))`) -- a real Postgres-level failure at precisely the targeted window, corroborating the mechanism independent of trusting the assertion alone. (4) Re-read test/specs/REQ-030.md's rewritten Regression section end-to-end: it now states the mechanism (telemetry rendezvous, why service_scope_validator and a new test-only hook were both rejected as the pause point) and cites this run's own reproduction evidence rather than an unverified claim -- matches what I independently observed, no overclaiming found, the prior MAJOR issue's root cause is also honestly named in both the spec and the test file's own comments. (5) Ran the full test/letflow/definitions/store_test.exs + test/letflow/definitions_test.exs suite twice more with fresh seeds (424242, 99887): both report 'Result: 40 passed', 0 failures, matching the pre-rework baseline exactly, no count change. (6) Light regression pass on everything checked in the original (non-reworked) PASS-track items: grepped both files for TODO/@tag :skip/@tag :pending (zero hits), confirmed 27 top-level `test` blocks still present in store_test.exs (matches the 27-passed count, nothing silently dropped), grepped for hardcoded secrets/connection strings (zero hits) -- all consistent with no regression outside the single targeted describe block.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ030-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ030-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (Step 4)"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

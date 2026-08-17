@@ -1822,7 +1822,7 @@ requirements:
   - id: REQ-039
     title: Sandbox pool and fixture loader (sandbox_pool.zig + fixture_loader.zig, PRM-06 section 3)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S2
     impl_order: 42  # letflow-queue task id
     description: >

@@ -3082,3 +3082,24 @@ history:
       prior WF-03 run that folded their resolution directly into REQ-026's
       requirements.yaml entry before this run claimed it. No further
       status update needed on either issue file.
+  - req: REQ-036
+    event: started
+    agent: ORCH
+    at: "2026-08-17T18:01:34Z"
+    note: >
+      Started WF02-REQ036-20260817 -- Promotion plan computation, conflict
+      preflight, and plan digest (promotion_plan.zig PRM-01 +
+      promotion_conflict.zig PRM-02 + promotion_digest.zig PRM-03):
+      compute_promotion_plan/5, reject_if_conflicts/4, compute_plan_digest/1
+      + verify_digest/2. Domain logic only, no HTTP layer (that's S4).
+      Claimed queue task 50 (agent_id hetzner-wt2-orch), depends_on
+      REQ-027/REQ-028 both done. Step 00 complete (worktree variant):
+      branched feature/WF02-REQ036-20260817 from freshly fetched
+      origin/main (this session runs from the secondary ~/letflow-wt2
+      worktree), pushed. Baseline verified: mix compile clean,
+      MIX_TEST_PARTITION=2 mix test 467/467 (4 properties, 0 failures).
+      Checked owned_modules against WF02-REQ030-20260817 (concurrent,
+      directory-level lib/letflow/definitions lock, held by tvolodi-orch)
+      -- no actual file-level conflict, REQ-030 targets store.zig CRUD,
+      REQ-036 targets three new files (promotion_plan/conflict/digest.ex)
+      that don't exist yet. Routing to CODE-DESIGNER for Step 1.

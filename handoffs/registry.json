@@ -341,10 +341,16 @@
     {
       "run_id": "WF02-REQ039-20260817",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-039"],
+      "requirement_ids": [
+        "REQ-039"
+      ],
       "stage": "S2",
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/sandbox_pool.ex", "lib/letflow/sandbox_pool/fixture_loader.ex", "lib/letflow/application.ex"],
+      "owned_modules": [
+        "lib/letflow/sandbox_pool.ex",
+        "lib/letflow/sandbox_pool/fixture_loader.ex",
+        "lib/letflow/application.ex"
+      ],
       "lock_acquired_at": "2026-08-17T08:03:14Z",
       "lock_released_at": "2026-08-17T09:36:41Z",
       "released_lock": true,
@@ -358,10 +364,16 @@
     {
       "run_id": "WF02-REQ035-20260817",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-035"],
+      "requirement_ids": [
+        "REQ-035"
+      ],
       "stage": "S2",
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/definitions/promotion_review.ex", "priv/repo/migrations/20260816200001_create_promotion_reviews.exs", "lib/letflow/tenant_provisioning.ex"],
+      "owned_modules": [
+        "lib/letflow/definitions/promotion_review.ex",
+        "priv/repo/migrations/20260816200001_create_promotion_reviews.exs",
+        "lib/letflow/tenant_provisioning.ex"
+      ],
       "lock_acquired_at": "2026-08-17T07:51:12Z",
       "lock_released_at": "2026-08-17T08:26:24Z",
       "released_lock": true,
@@ -375,10 +387,20 @@
     {
       "run_id": "WF02-REQ041-20260817",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-041"],
+      "requirement_ids": [
+        "REQ-041"
+      ],
       "stage": "S2",
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/definitions.ex", "lib/letflow/definitions/solution_pack_install.ex", "lib/letflow/definitions/solution_pack_artefact_base.ex", "lib/letflow/definitions/pack_update_resolution.ex", "priv/repo/migrations/20260817083801_create_solution_pack_installs.exs", "priv/repo/migrations/20260817083802_create_solution_pack_artefact_bases.exs", "priv/repo/migrations/20260817083803_create_pack_update_resolutions.exs"],
+      "owned_modules": [
+        "lib/letflow/definitions.ex",
+        "lib/letflow/definitions/solution_pack_install.ex",
+        "lib/letflow/definitions/solution_pack_artefact_base.ex",
+        "lib/letflow/definitions/pack_update_resolution.ex",
+        "priv/repo/migrations/20260817083801_create_solution_pack_installs.exs",
+        "priv/repo/migrations/20260817083802_create_solution_pack_artefact_bases.exs",
+        "priv/repo/migrations/20260817083803_create_pack_update_resolutions.exs"
+      ],
       "lock_acquired_at": "2026-08-17T08:27:40Z",
       "lock_released_at": "2026-08-17T09:03:54Z",
       "released_lock": true,
@@ -392,10 +414,15 @@
     {
       "run_id": "WF02-REQ029-20260817",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-029"],
+      "requirement_ids": [
+        "REQ-029"
+      ],
       "stage": "S2",
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/definitions", "test/letflow/definitions"],
+      "owned_modules": [
+        "lib/letflow/definitions",
+        "test/letflow/definitions"
+      ],
       "lock_acquired_at": "2026-08-17T10:14:25Z",
       "lock_released_at": "2026-08-17T10:56:45Z",
       "released_lock": true,
@@ -409,10 +436,17 @@
     {
       "run_id": "WF02-REQ025-20260817",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-025"],
+      "requirement_ids": [
+        "REQ-025"
+      ],
       "stage": "S2",
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/event_store.ex", "priv/repo/migrations", "test/letflow/event_store_test.exs", "lib/letflow/tenant_provisioning.ex"],
+      "owned_modules": [
+        "lib/letflow/event_store.ex",
+        "priv/repo/migrations",
+        "test/letflow/event_store_test.exs",
+        "lib/letflow/tenant_provisioning.ex"
+      ],
       "lock_acquired_at": "2026-08-17T10:58:58Z",
       "lock_released_at": "2026-08-17T13:22:48Z",
       "released_lock": true,
@@ -427,10 +461,15 @@
     {
       "run_id": "WF02-REQ033-20260817",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-033"],
+      "requirement_ids": [
+        "REQ-033"
+      ],
       "stage": "S2",
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/definitions/snapshot_store.ex", "test/letflow/definitions/snapshot_store_test.exs"],
+      "owned_modules": [
+        "lib/letflow/definitions/snapshot_store.ex",
+        "test/letflow/definitions/snapshot_store_test.exs"
+      ],
       "lock_acquired_at": "2026-08-17T13:24:35Z",
       "lock_released_at": "2026-08-17T14:06:59Z",
       "released_lock": true,
@@ -444,10 +483,16 @@
     {
       "run_id": "WF02-REQ032-20260817",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-032"],
+      "requirement_ids": [
+        "REQ-032"
+      ],
       "stage": "S2",
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/definitions/graph.ex", "lib/letflow/definitions/sub_process_interface.ex", "test/letflow/definitions"],
+      "owned_modules": [
+        "lib/letflow/definitions/graph.ex",
+        "lib/letflow/definitions/sub_process_interface.ex",
+        "test/letflow/definitions"
+      ],
       "lock_acquired_at": "2026-08-17T17:08:06Z",
       "lock_released_at": "2026-08-17T17:49:44Z",
       "released_lock": true,
@@ -461,10 +506,14 @@
     {
       "run_id": "WF02-REQ030-20260817",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-030"],
+      "requirement_ids": [
+        "REQ-030"
+      ],
       "stage": "S2",
       "status": "IN_PROGRESS",
-      "owned_modules": ["lib/letflow/definitions"],
+      "owned_modules": [
+        "lib/letflow/definitions"
+      ],
       "lock_acquired_at": "2026-08-17T17:40:14Z",
       "lock_released_at": null,
       "released_lock": false,
@@ -491,6 +540,30 @@
       "queue_agent_id": "hetzner-orch",
       "worktree": "/home/tvolodi/letflow (Hetzner host ubuntu-16gb-nbg1-1)",
       "note": "Event read paths, archive, and platform sentinels (store.zig's read/readGlobal/pointInTime/archive + platform.zig). Also creates event_retention_policies (own migration, ISS-0013/GH#69) and resolves archive/1's row-level-move sourcing per ISS-0014/GH#70 (deliberate unpartitioned-first architecture, not an oversight of R-Co's PAR-03 retirement)."
+    },
+    {
+      "run_id": "WF02-REQ036-20260817",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-036"
+      ],
+      "stage": "S2",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/definitions/promotion_plan.ex",
+        "lib/letflow/definitions/promotion_conflict.ex",
+        "lib/letflow/definitions/promotion_digest.ex",
+        "test/letflow/definitions"
+      ],
+      "lock_acquired_at": "2026-08-17T17:59:32Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (git-setup) COMPLETED -- feature/WF02-REQ036-20260817 branched from origin/main, pushed. Baseline: mix compile clean, MIX_TEST_PARTITION=2 mix test 467/467.",
+      "backfilled": false,
+      "queue_task_id": 50,
+      "queue_agent_id": "hetzner-wt2-orch",
+      "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
+      "note": "owned_modules is file-level, not directory-level, specifically to avoid compounding the nominal directory-level overlap already flagged against WF02-REQ030-20260817 (lib/letflow/definitions, still IN_PROGRESS as of this entry). Checked: REQ-030 scope (store.zig CRUD) and REQ-036 scope (promotion_plan/conflict/digest, three new files) do not target the same files. Same judgment precedent as REQ-032 vs REQ-030 noted earlier in this file."
     }
   ]
 }

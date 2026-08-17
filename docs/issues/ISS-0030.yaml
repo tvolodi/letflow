@@ -1,0 +1,64 @@
+id: ISS-0030
+title: "test/letflow/tenant_provisioning_test.exs fails to compile: describe+test name exceeds ExUnit's 255-char SystemLimitError"
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0030-20260817
+discovered_at: 2026-08-17T06:57:11Z
+severity: BLOCKER
+description: >
+  `mix test` fails to compile the entire suite (not just this file -- ExUnit's
+  parallel compiler aborts the whole run) with:
+
+      == Compilation error in file test/letflow/tenant_provisioning_test.exs ==
+      ** (SystemLimitError) the computed name of a test (which includes its
+      type, the name of its parent describe block if present, and the test
+      name itself) must be shorter than 255 characters, got: "test
+      tenant-scoped migration guard pattern -- nil prefix is a real no-op
+      (beyond REQ-022's bare acceptance criteria, REVIEWER Step 2d
+      non-blocking note) running test/support/req022_migration_fixture.ex
+      with no :prefix option at all (a plain mix ecto.migrate-style run)
+      leaves public untouched"
+
+  Root cause: the single test at (then) line 412/451 lives inside a describe
+  block whose name is itself a long sentence, and the test's own name is
+  also a long sentence. ExUnit builds a test's *computed name* as
+  `"test " <> describe_name <> " " <> test_name` and registers it as an atom
+  via ExUnit.Case.register_test/6, which enforces a 255-char ceiling (a hard
+  BEAM constraint on atom/function name length, not an ExUnit policy choice
+  -- see lib/ex_unit/case.ex:887's validate_test_name/1 in the installed
+  ex_unit 1.18.3). The combined string measured 292 characters.
+
+  This is a real, version-independent defect, not something specific to
+  this host's toolchain: the 255-char ceiling comes from the BEAM's atom
+  table (an atom's external representation is capped), which every
+  Elixir/OTP version enforces identically. Confirmed reproducing against
+  current origin/main (commit 96f5f55) after a fresh `git pull --ff-only`,
+  so this will reproduce identically on any other host once it runs `mix
+  test` against this same commit with a matching ex_unit version that
+  performs this validation (ex_unit added explicit pre-flight validation of
+  computed test-name length in an ex_unit ~1.15+ era release; older ex_unit
+  releases would instead fail later, at atom-creation, with a less specific
+  error -- either way this is not new/host-specific).
+
+  This blocks `mix test` from running AT ALL (compile-time failure aborts
+  the whole suite, not just this file), so it is filed as BLOCKER and fixed
+  ahead of any other backlog work, per the session's own instructions and
+  core-directives.md's Unblock-Everything directive.
+
+  Fix: shorten the describe block name and the test name so the combined
+  computed name comfortably clears 255 chars, without losing any of the
+  documentation the long names carried. Both dropped phrases are already
+  fully present elsewhere: the "(beyond REQ-022's bare acceptance criteria,
+  REVIEWER Step 2d non-blocking note)" context is restated verbatim in the
+  comment block directly above the describe (lines 376-386), and the
+  "test/support/req022_migration_fixture.ex" fixture path is documented in
+  test/specs/REQ-022.md (the canonical spec for this file) and appears
+  in-body via the `MigrationFixture` alias and a sibling test's own name at
+  line 400. So trimming the describe/test strings themselves loses no
+  unique information -- it only removes duplication that happened to push
+  the atom over the BEAM's length ceiling. No test coverage or assertions
+  change.
+affected_files:
+  - test/letflow/tenant_provisioning_test.exs
+github_issue: https://github.com/tvolodi/letflow/issues/89 # created by letflow-queue's own register_task GitHub mirror (server-side token), not by this host's gh CLI -- gh itself is not installed/authenticated on ubuntu-16gb-nbg1-1, see run report
+queue_task_id: 76
+status: open

@@ -34,4 +34,23 @@ description: >
 affected_files:
   - docs/migration/stage-2-event-store-definitions.md
 github_issue: https://github.com/tvolodi/letflow/issues/107
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF02-REQ030-20260817-merge
+resolved_at: 2026-08-17T19:50:20Z
+resolution: >
+  Fixed as an incidental byproduct of WF02-REQ030-20260817's own Step Final
+  rebase: origin/main had advanced past this run's branch point (REQ-026,
+  REQ-036 merged from the other worktree; REQ-037 Step 00 dispatched since),
+  producing a real conflict on this same header line between two prose
+  lists that had each only ever had one requirement's token moved at a
+  time. Rather than mechanically pick one side, resolved by reading
+  docs/requirements.yaml's actual per-requirement status directly and
+  writing the header to match ground truth -- which naturally included
+  moving REQ-039's token to the done half along with everything else that
+  had drifted (REQ-026, REQ-036 as well). Verified on the merged main tip
+  (commit f98f829): header now reads "REQ-022, REQ-023, REQ-024, REQ-025,
+  REQ-026, REQ-027, REQ-028, REQ-029, REQ-030, REQ-032, REQ-033, REQ-035,
+  REQ-036, REQ-039, REQ-041 (done); REQ-031, REQ-034, REQ-037, REQ-038,
+  REQ-040, REQ-042 pending" -- matching docs/requirements.yaml exactly.
+  GitHub issue #107 closed via `gh issue close`.

@@ -1,0 +1,79 @@
+{
+  "handoff_id": "7d1db982-df1b-49f3-8092-6a1e32e17502",
+  "run_id": "WF02-REQ031-20260817",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ031-20260817/step-02c-security-reviewer.json",
+  "created_at": "2026-08-17T20:33:00Z",
+  "started_at": "2026-08-17T20:33:00Z",
+  "completed_at": "2026-08-17T20:38:33Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-031"],
+    "related_handoff_ids": [
+      "814f8e34-e086-4ed7-9691-dd88622c3286"
+    ],
+    "artifacts_in": [
+      "lib/letflow/definitions/service_scope_validator.ex",
+      "lib/letflow/design/req031-service-scope-validator.md",
+      "handoffs/WF02-REQ031-20260817/step-02a-elixir-dev.json",
+      "docs/requirements.yaml (REQ-031 entry, lines 1420-1466)",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/agents/instructions/core-directives.md",
+      "lib/letflow/definitions.ex"
+    ],
+    "owned_modules": ["lib/letflow/definitions/service_scope_validator.ex"]
+  },
+  "task": {
+    "description": "Hard-gate REQ-031's new module Letflow.Definitions.ServiceScopeValidator (SVC-03 tenant-scope enforcement hook for REQ-030's activate/2) against docs/agents/instructions/security-invariants.md INV-1..INV-8, verifying the tenant-isolation logic is genuine and not bypassable, confirming no new DB/SQL access exists in the file, checking the two deliberate R-Co asymmetries for security implications (not re-litigating their fidelity), checking Violation-struct fields for cross-tenant information leakage, and checking the injectable-Lookup trust boundary fails safe on malformed input.",
+    "acceptance_criteria": [
+      "Every applicable invariant (INV-1..INV-8) explicitly determined APPLIES or NOT-APPLICABLE against the actual diff, with reasoning",
+      "For each APPLIES invariant, its How-to-verify procedure actually run and result recorded",
+      "Tenant_id equality check independently confirmed genuine (exact value comparison, not bypassable/defaulted/short-circuited)",
+      "Confirmed no Repo/SQL access anywhere in the new file",
+      "Both deliberate asymmetries assessed for security implications, not re-litigated for R-Co fidelity",
+      "Violation struct fields checked for cross-tenant information leakage",
+      "Malformed-Lookup-result behavior (fail-safe vs. fail-open) independently verified against actual code, not trusted from the design doc"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed lib/letflow/definitions/service_scope_validator.ex (369 lines, new file) directly against docs/agents/instructions/security-invariants.md INV-1..INV-8, plus the six specific verification points in this step's task briefing. Scope test: this diff DOES touch a tenant-data path (tenant-isolation enforcement decision logic comparing owner_tenant_id against the activating tenant_id) even though it adds no migration, Ecto schema, or HTTP route -- correctly routed to SECURITY-REVIEWER rather than auto-PASS-by-scope-test. INV-1 (tenant data isolation): NOT-APPLICABLE to this specific diff -- confirmed by grep (`grep -n \"Repo\\.\\|Ecto.Adapters.SQL\" lib/letflow/definitions/service_scope_validator.ex` -> only a moduledoc prose mention of 'no Letflow.Repo', zero actual calls) that this module adds zero Ecto schema modules, zero migrations, and zero Repo/query calls; it is a pure comparison function over a caller-injected Lookup (struct of 2 functions), with the real DB-backed ServiceCatalog (S6)/PluginRegistry (S3) lookups explicitly deferred (moduledoc's required 'Scope gap' section, present verbatim per AC5) -- those future adapters will need their own INV-1 review when they land with real queries. Independently verified (not trusted from the design doc) that the tenant_id equality check itself is genuine: read evaluate_service_lookup/4 and evaluate_plugin_lookup/4 directly -- `owner == tenant_id` is exact Elixir term equality on two UUID strings, no substring/prefix/case-insensitive comparison, and the nil-owner clauses are separate, explicit clause heads (never a fallthrough that could coincide with a nil tenant_id) -- and confirmed at lib/letflow/definitions.ex:438 that tenant_id reaching this module is always `{:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix)`, never caller-supplied raw, with the `with` short-circuiting before the hook is ever invoked if that resolution fails. INV-2/INV-3/INV-5: NOT-APPLICABLE -- no API surface (S4), no script/plugin execution (S5), no lookup-by-ID HTTP endpoint (S4) exist yet. INV-5 forward-tension flagged as a new, non-blocking finding (not previously tracked in the design doc's OQs): AC3 requires Violation.reason to distinguish 'not registered' from 'owned by another tenant' via two atoms, which is correct today, but a future S4 handler naively rendering that reason (or the equally distinct message text) into an HTTP 422 body would create a service/plugin-existence oracle for external callers -- exactly what INV-5 exists to prevent for lookup-by-ID endpoints. Filed as docs/issues/ISS-0036.yaml / GitHub #112 so it is not lost by the time S4 builds the renderer; NOT-APPLICABLE verdict for the current diff stands since no HTTP layer exists. INV-4: NOT-APPLICABLE -- full file read directly, resolves no secret material, no System.get_env, no hardcoded-secret-shaped literal. INV-6: APPLIES, satisfied by this handoff's own explicit per-invariant determination. INV-7: APPLIES (Ecto in use project-wide) and PASS for this diff specifically -- `grep -rn \"Repo.query\" lib/ priv/repo/migrations/` found 3 pre-existing hits (fixture_loader.ex, sandbox_pool.ex, tenant_provisioning.ex), none in files this diff touches (`git diff main...HEAD --stat` confirms the only lib/ file changed is service_scope_validator.ex, containing zero Repo.query/raw SQL calls) -- out of scope, already covered by prior reviews of those files. INV-8: APPLIES, PASS -- independently verified (not trusted from design doc OQ-1's claim) that a malformed Lookup return value not matching any of evaluate_service_lookup/4's or evaluate_plugin_lookup/4's pattern-matched clause heads raises FunctionClauseError inside validate/3; traced this exception's actual path by reading lib/letflow/definitions.ex directly -- it propagates through run_service_scope_validator/3, inside Repo.transaction/1's function body (definitions.ex:606-629, so Ecto rolls the transaction back and re-raises), and is caught by activate/2's own try/rescue (definitions.ex:434-447, `rescue exception -> {:error, {:transaction_failed, exception}}`) -- confirmed fail-closed (crash-and-rollback, never a silent pass) for any malformed lookup shape, not an unhandled crash reaching a shared/supervised process. No real Lookup is wired into production today (explicit scope gap), so this path is not currently reachable from genuine external I/O. Checked all 6 task-specific points: (1) tenant_id comparison genuine, confirmed above; (2) no Repo/SQL anywhere in file, confirmed by grep and full read; (3) both deliberate asymmetries (service/plugin not-registered, service/plugin nil-owner) assessed for security implication rather than fidelity -- the plugin nil-owner 'pass' (INV-SSV-9) is a genuine fail-open pattern IF a future PluginRegistry adapter ever returns a :tenant-scoped record with nil owner_tenant_id, but has zero live exposure today (no real Lookup wired in); this reaffirms design doc OQ-4's existing flag for REVIEWER at Step 2d rather than surfacing a new blocker -- recorded as a non-blocking issue below, not re-litigated as an R-Co-fidelity question (already independently confirmed twice per the design doc); (4) Violation struct fields (node_id, kind, ref_id, reason, message) read directly -- no owner_tenant_id field, no message template interpolates any OTHER tenant's identity, only the ref_id and generic phrasing ('is not available to this tenant', 'scope data is inconsistent') -- no cross-tenant information leak found; (5) malformed-Lookup trust boundary fails safe (crash, caught, transaction rolled back, typed error surfaces to caller) rather than fail-open, confirmed above for INV-8; (6) full INV-1..INV-8 pass recorded above. No BLOCKER found on any applicable invariant.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ031-20260817/step-02c-security-reviewer.json",
+      "docs/issues/ISS-0036.yaml"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "INV-SSV-9 (plugin-side nil owner_tenant_id on a resolved :tenant-scope lookup passes silently, the inverse of the service side's INV-SSV-7 which fails) is a genuine fail-open pattern that would matter once a real S3 PluginRegistry adapter is wired in via build/1 -- confirmed no live exposure today since no production Lookup implementation exists yet (explicit scope gap in the moduledoc). Reaffirms design doc req031-service-scope-validator.md section 9 OQ-4's existing flag for REVIEWER at Step 2d; not a new blocker, but recommend whoever designs the real PluginRegistry adapter (S3) either guarantee owner_tenant_id is never nil for :tenant-scoped rows at the data layer, or revisit OQ-4's asymmetry before that adapter ships.",
+        "affected_requirement": "REQ-031"
+      },
+      {
+        "severity": "MINOR",
+        "description": "New forward-looking finding, filed as docs/issues/ISS-0036.yaml / GitHub #112: AC3's requirement that Violation.reason distinguish 'not registered' from 'owned by another tenant' (correct and required for REQ-031 today) will tension against INV-5 once S4 builds an HTTP 422 renderer for this violation -- naively exposing reason/message verbatim to an external caller would let process-definition activation be used as a service/plugin-existence oracle. NOT-APPLICABLE to the current diff (no HTTP layer exists), tracked so it isn't lost by the time S4 lands.",
+        "affected_requirement": "REQ-031"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Confirms design doc OQ-1's claim, independently verified against lib/letflow/definitions.ex rather than trusted: a malformed Lookup result crashes validate/3 (FunctionClauseError) rather than returning a typed error, caught generically by activate/2's try/rescue as {:error, {:transaction_failed, exception}}. Fail-safe today (transaction rolls back, no silent pass, no unhandled crash escaping to a shared process) -- but the raw exception struct inside that generic error tuple should not be naively serialized by a future S4 error handler (ties to the ISS-0036 finding above). Recommend REVIEWER (Step 2d) weigh in on OQ-1's own suggestion of a more specific typed error for this case.",
+        "affected_requirement": "REQ-031"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ031-20260817",
+      "commit_sha_list": ["a362768"],
+      "remote_branch": "origin/feature/WF02-REQ031-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (Step 2d) -- idiomatic-OTP/scope-creep review, with design doc OQ-1 and OQ-4 (both reaffirmed by this gate, see issues above) specifically flagged for REVIEWER's attention."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

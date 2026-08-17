@@ -1,0 +1,66 @@
+{
+  "handoff_id": "a1e5c8f2-4d9b-4a7e-8c1f-3b6d9e2a5f74",
+  "run_id": "WF02-REQ031-20260817",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ031-20260817/step-05-release-validator.json",
+  "created_at": "2026-08-17T21:21:14Z",
+  "started_at": "2026-08-17T21:21:14Z",
+  "completed_at": "2026-08-17T21:38:52Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-031"],
+    "related_handoff_ids": [
+      "f3a1b2c4-9d3e-4b7a-8c2f-6e0a1d5b9c73",
+      "d6c9a2e7-1b4f-4a8d-9e3c-7f2b0a5d8c14",
+      "9d3e5a41-2f6b-4c8a-9e17-6b0d4f2a7c53",
+      "17a078d0-9cdc-4ddd-a599-f6ccea4ce34f"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml (REQ-031 entry, lines 1420-1466)",
+      "docs/status/requirement_status.yaml",
+      "lib/letflow/definitions/service_scope_validator.ex",
+      "test/letflow/definitions/service_scope_validator_test.exs",
+      "test/letflow/definitions/store_test.exs",
+      "C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\definition\\service_scope_validator.zig",
+      "C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\design\\svc-01-04-service-scope.md",
+      "all handoffs/WF02-REQ031-20260817/step-*.json files"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 5 independent re-verification of REQ-031 (Service scope activation validator, SVC-03) before DOC-UPDATER flips its status. Re-run the full test suite independently rather than trusting TEST-RUNNER's report; re-check all 5 acceptance criteria against actual shipped code/tests; confirm REQ-030 integration untouched; re-verify both deliberate R-Co asymmetries against R-Co ground truth directly; check requirement/status files for staleness; sanity-check the full gate sequence including the one genuine FAIL/rework/PASS cycle at Step 1b; confirm no scope creep.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors and mix test independently re-run, real quoted output, exit codes captured",
+      "All 5 REQ-031 acceptance criteria checked explicitly against actual code/tests with line citations",
+      "git diff main...HEAD -- lib/letflow/definitions.ex lib/letflow/definitions/graph.ex confirmed empty",
+      "Both R-Co asymmetries (INV-SSV-5, INV-SSV-7/9) re-verified against service_scope_validator.zig directly, not against any prior agent's citation",
+      "docs/requirements.yaml and docs/status/requirement_status.yaml checked for premature 'done' staleness",
+      "Full gate sequence (all step-*.json files) read directly and cross-referenced for consistency",
+      "git diff main...HEAD --stat checked for scope creep"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified REQ-031 end-to-end; genuinely holds up. (1) Fresh test runs, not copied from TEST-RUNNER: `mix compile --warnings-as-errors` exit 0, zero warnings. `mix test` (unpinned, seed 426923-equivalent fresh run): 'Result: 597 passed (4 properties, 593 tests)', exit 0. `mix test --seed 12345` (second independent pinned run): identical 'Result: 597 passed (4 properties, 593 tests)', exit 0. `mix test test/letflow/definitions/service_scope_validator_test.exs test/letflow/definitions/store_test.exs test/letflow/definitions_test.exs` (isolated scope): 'Result: 67 passed', exit 0. All three runs used explicit grep/exit-code checks, not inference from absence of a failures line. (2) All 5 REQ-031 acceptance criteria (docs/requirements.yaml lines 1461-1465, re-read directly) verified against the actual shipped code and tests: AC1 (global-scope passes any tenant) -> service_scope_validator.ex lines 257-259 (evaluate_service_lookup({:ok,%{scope: :global}},...) -> :ok), tested at service_scope_validator_test.exs lines 83-100. AC2 (tenant-owned service fails for different tenant, violation names node_id+ref_id) -> lines 287-301, tested at lines 108-130. AC3 (not-registered is a distinct atom from owned-elsewhere) -> lines 246-255 (reason: :service_not_registered, a separate atom from :service_not_available_to_tenant), tested explicitly with is_atom/refute-equal assertions at lines 138-180. AC4 (activate/2 calls the validator via the nil-able hook when supplied, skips when nil) -> build/1 (lines 161-164) plus REQ-030's already-shipped, untouched run_service_scope_validator/3 in definitions.ex, demonstrated with REAL Postgres + REAL Definitions.activate/2 + REAL ServiceScopeValidator.build/1 output (not a hand-rolled stand-in, confirmed by reading store_test.exs's new 'activate/2 (REQ-031 AC4)' describe block, 3 tests: blocked case, nil-skip case using the identical service_id/graph the blocked case shows WOULD have failed, and a permitted case). AC5 (moduledoc names ServiceCatalog->S6, PluginRegistry->S3 gap) -> moduledoc lines 53-71, tested via Code.fetch_docs/1 assertions at lines 435-464. Every criterion has >=1 test that would fail if violated. (3) REQ-030 integration confirmed untouched: `git diff main...HEAD -- lib/letflow/definitions.ex lib/letflow/definitions/graph.ex` returned zero lines. This is a purely additive new module. (4) Both deliberate R-Co asymmetries re-verified directly against C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\definition\\service_scope_validator.zig (full file read, lines 1-224), not against any prior agent's citation: asymmetry 1 (INV-SSV-5) -- checkPluginHandler's 'else' branch (lines 203-222) only denies on a not-registered plugin_handler if a tenant-scoped entry exists for ANY other tenant somewhere in the registry (the scan loop, lines 206-219); truly not-found-anywhere falls through to a silent skip (line 220-222 comment: 'No tenant-scoped entry at all: PD-05 already validates; skip'), confirmed against checkServiceId's ServiceNotFound branch (lines 116-133) which is unconditionally a violation -- the asymmetry is real and correctly ported (service_scope_validator.ex lines 246-255 vs 307-309). Verified the Elixir module's single-call plugin_lookup_fun abstraction (which collapses R-Co's two-tier resolve-then-scan into one caller-supplied function, documented explicitly at service_scope_validator.ex lines 95-101 and the design doc's Dependencies table) is architecturally sound: a real future adapter can return {:ok,%{scope: :tenant, owner_tenant_id: other}} for BOTH the direct-mismatch (.zig lines 188-200) and scan-found-for-other-tenant (.zig lines 206-219) cases, since R-Co itself produces the identical PluginNotAvailableToTenant outcome and identical message text for both -- {:error, :not_registered} is reserved correctly for the true not-found-anywhere terminal case only. This is a legitimate, explicitly-documented scope delegation consistent with REQ-031's own 'injectable lookup interface' framing, not a fidelity gap. Asymmetry 2 (INV-SSV-7 vs INV-SSV-9) -- checkServiceId's nil-owner branch (.zig lines 142-151, 'Malformed DB row -- treat as unavailable' -> ServiceScopeError.ServiceNotAvailableToTenant) vs checkPluginHandler's nil-owner branch (.zig line 187, `const owner = reg.owner_tenant_id orelse return;`, a bare `return` inside a `ServiceScopeError!void` fn = successful return = silent pass) are structurally opposite, confirmed by direct line read -- exactly the bug CODE-DESIGN-VALIDATOR caught at Step 1b's first pass (design initially collapsed both into 'Violation') and the rework (commit 679b129) correctly split into two distinct rows, re-verified PASS at the rereview. The shipped code (service_scope_validator.ex lines 271-285 service-side violation, lines 329-336 plugin-side pass) matches this exactly, and both have dedicated contrastive tests (service_scope_validator_test.exs lines 219-240) that assert the opposite outcomes for the identically-shaped input. (5) Staleness check: docs/requirements.yaml's REQ-031 entry, read directly via awk at the actual entry (not a stale grep elsewhere in the file), still reads `status: pending` -- correct, no step-ordering violation (DOC-UPDATER, Step 6, has not run). docs/status/requirement_status.yaml has no REQ-031 'done' event -- only 3 incidental cross-references from other requirements' entries (queue-id table row, and two other requirements' prose mentioning REQ-031's hook). docs/migration/*.md and docs/migration/decisions/*.md diff against main is empty for this branch -- no migration-stage doc or decision record was touched or contradicted. (6) Full gate sequence read directly: step-00 (git setup, PASS), step-01 (CODE-DESIGNER, PASS), step-01b (CODE-DESIGN-VALIDATOR, FAIL -- genuine R-Co-fidelity BLOCKER on the plugin branch table's nil-owner row, correctly identified via direct .zig line citation), step-01-rework (CODE-DESIGNER, PASS -- fixed by splitting the row, adding INV-SSV-9 and OQ-4), step-01b-rereview (CODE-DESIGN-VALIDATOR, PASS -- independently re-verified against R-Co source directly, confirmed service table byte-for-byte unchanged via git diff), step-02a (ELIXIR-DEV, PASS), step-02c (SECURITY-REVIEWER, PASS -- INV-1..INV-8 each explicitly determined APPLIES/NOT-APPLICABLE with reasoning, filed ISS-0036/GH#112 for a genuine forward-looking INV-5 tension, reaffirmed OQ-1/OQ-4 for REVIEWER), step-02d (REVIEWER, PASS -- explicitly addressed OQ-1 and OQ-4 with its own opinion, confirmed REQ-030 files untouched independently, confirmed branch tables clause-by-clause against the design doc), step-03 (TEST-DESIGNER, PASS), step-03b (TEST-DESIGN-VALIDATOR, PASS -- performed real mutation testing: 3 targeted mutations, each broke exactly the tests it should have and nothing else, all reverted and confirmed clean via git diff), step-04 (TEST-RUNNER, PASS -- reproduced counts from cold start, investigated and correctly dismissed two pre-existing unrelated compiler warnings). All statuses COMPLETED, all result.status PASS except the one deliberate, correctly-resolved FAIL at 01b. Every step's issue is consistently referenced downstream: SECURITY-REVIEWER's OQ-1/OQ-4 forwarding is explicitly answered by REVIEWER (not just relayed); ISS-0036 is referenced (not re-filed) by TEST-RUNNER. No hallucinated completion found anywhere in the chain. (7) Scope creep check: `git diff main...HEAD --stat` shows exactly 18 files -- the new validator module (lib/letflow/definitions/service_scope_validator.ex), its design doc, test spec + 2 test files, docs/issues/ISS-0036.yaml, the test report, and this run's own handoff files. Nothing outside REQ-031's declared scope was touched. This is a genuinely thorough, well-evidenced PASS -- the single rework cycle at Step 1b is exactly the pipeline working as designed (a real gate caught a real R-Co-fidelity bug before it reached implementation), not a red flag.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ031-20260817/step-05-release-validator.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ031-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ031-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER (Step 6)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

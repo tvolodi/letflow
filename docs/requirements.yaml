@@ -1420,7 +1420,7 @@ requirements:
   - id: REQ-031
     title: Service scope activation validator (service_scope_validator.zig, SVC-03)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S2
     impl_order: 51  # letflow-queue task id
     description: >

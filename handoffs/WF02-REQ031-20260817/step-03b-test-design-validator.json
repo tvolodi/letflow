@@ -1,0 +1,70 @@
+{
+  "handoff_id": "9d3e5a41-2f6b-4c8a-9e17-6b0d4f2a7c53",
+  "run_id": "WF02-REQ031-20260817",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ031-20260817/step-03b-test-design-validator.json",
+  "created_at": "2026-08-17T21:02:38Z",
+  "started_at": "2026-08-17T21:02:38Z",
+  "completed_at": "2026-08-17T21:03:27Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-031"],
+    "related_handoff_ids": [
+      "6f4a2b8e-9c31-4d5a-8e02-7b1f3c9a4d6e"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req031-service-scope-validator.md",
+      "lib/letflow/definitions/service_scope_validator.ex",
+      "test/specs/REQ-031.md",
+      "test/letflow/definitions/service_scope_validator_test.exs",
+      "test/letflow/definitions/store_test.exs",
+      "docs/guides/test_developer_guide.md",
+      "handoffs/WF02-REQ031-20260817/step-03-test-designer.json"
+    ],
+    "owned_modules": [
+      "test/specs/REQ-031.md",
+      "test/letflow/definitions/service_scope_validator_test.exs",
+      "test/letflow/definitions/store_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Hard gate on TEST-DESIGNER's Step 3 output for REQ-031. Independently verify all 5 acceptance criteria have runnable, unambiguous tests; AC3's 'distinct reason' claim is a genuine atom comparison; AC4 is a real Postgres integration test with the real Definitions.activate/2 and the real ServiceScopeValidator.build/1 output (no hand-rolled stand-in); both deliberate R-Co asymmetries (INV-SSV-5, INV-SSV-9) each have their own named test tight enough to catch a reversal; first-violation-wins is proven via raise-if-called-again lookups, not merely asserted; malformed-lookup fail-closed is proven for both service and plugin sides; skip-path tests use a mechanism that would catch misclassification; no TODOs/skips; fixtures are isolated and self-sufficient; run the tests and independently confirm claimed counts; mutation-test the two asymmetry tests and the short-circuit test against the real implementation.",
+    "acceptance_criteria": [
+      "Every REQ-031 acceptance criterion (re-derived from docs/requirements.yaml directly) has >=1 runnable test that would fail if violated",
+      "AC3's reason-distinctness test asserts genuinely comparable atom values, not just different message strings",
+      "AC4 test in store_test.exs is real Postgres + real Definitions.activate/2 + real ServiceScopeValidator.build/1, confirmed by reading the actual test code",
+      "Both R-Co asymmetries (INV-SSV-5, INV-SSV-9) have their own named tests, and each is proven tight via a mutation check against the real implementation",
+      "Short-circuit semantics proven via a raise-if-called-again mechanism, verified real via a mutation check",
+      "Malformed/garbage lookup results proven to fail closed (raise) for both service and plugin sides",
+      "Skip-path tests (non-SERVICE_TASK, missing service_id/plugin_handler) use raise-if-called guards, not vacuous no-violation assertions",
+      "No @tag :skip, @tag :pending, or TODO left in spec or test files",
+      "Fixtures are isolated (async-safe pure tests, real per-test tenant provisioning + cleanup for the integration test) and self-sufficient",
+      "mix test run independently on the isolated scope and the full suite, claimed counts (67 isolated; 597 full suite: 4 properties, 593 tests) confirmed by actual output"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently validated TEST-DESIGNER's REQ-031 output by reading docs/requirements.yaml's REQ-031 entry (lines 1420-1466, 5 acceptance criteria verbatim), the design doc (lib/letflow/design/req031-service-scope-validator.md), the implementation (lib/letflow/definitions/service_scope_validator.ex, 353 lines), test/specs/REQ-031.md, test/letflow/definitions/service_scope_validator_test.exs (24 tests), and the store_test.exs diff (+3 tests, +1 graph_with_service_task/1 fixture) directly -- not from the TEST-DESIGNER handoff summary alone. All 5 acceptance criteria re-derived independently from requirements.yaml's own text have unambiguous, runnable test coverage: AC1 (global-scope passes for any tenant, 2 tests), AC2 (tenant-owned service fails for a different tenant naming node_id+ref_id exactly via pattern-match, plus a positive owning-tenant control, 2 tests), AC3 (not-registered vs owned-elsewhere reasons pinned via is_atom/2 checks, exact atom equality assertions, and an explicit refute reason_1 == reason_2 -- genuinely comparable atom values, not string comparison, 2 tests), AC4 (real Letflow.DataCase/Postgres, real Definitions.activate/2, real ServiceScopeValidator.build/1 output wired as service_scope_validator: hook -- confirmed by reading the actual store_test.exs code, no hand-rolled closure standing in for build/1's output, satisfies DIRECTIVE T-1; 3 tests: violation-blocks-with-real-Violation-struct-and-zero-writes, nil-skip-is-genuine-since-same-graph-succeeds-when-hook-omitted, permitting-Lookup-succeeds), AC5 (moduledoc names ServiceCatalog/S6 and PluginRegistry/S3 and explicitly states neither is implemented today, read via Code.fetch_docs/1, 3 tests). Both deliberate R-Co asymmetries have their own named, contrastive tests (asymmetry 1: plugin not-registered passes AND the identical service-side condition still fails, in the same test; asymmetry 2: nil owner_tenant_id is a violation for service with the exact reason/message pinned, and the identically-shaped plugin case is a pass, in a separate contrastive test). First-violation-wins is proven via a :counters-backed lookup that raises if called a second time (cross-node) and a plugin_lookup that raises if called at all (within-node, proving the service-before-plugin with-chain halts). Malformed-lookup fail-closed is proven via assert_raise FunctionClauseError for both service_lookup and plugin_lookup independently returning an out-of-contract atom. Skip-path tests (nil attributes, missing/empty/non-string service_id, non-SERVICE_TASK node) all use a raise-if-called Lookup so a pass is a genuine proof, not a vacuous no-violation result. Grepped both test files and the spec for @tag :skip, @tag :pending, TODO, and hardcoded secrets/connection strings -- zero matches. Ran mix test test/letflow/definitions/service_scope_validator_test.exs test/letflow/definitions/store_test.exs test/letflow/definitions_test.exs directly: Result: 67 passed -- matches the claimed count exactly. Ran the full mix test suite directly: Result: 597 passed (4 properties, 593 tests) -- matches the claimed count exactly, zero failures, zero skips. Performed real mutation testing against the actual implementation (not reasoned about hypothetically): (1) flipped evaluate_plugin_lookup's {:error, :not_registered} clause from :ok to a Violation (undoing asymmetry 1) -- exactly the 2 asymmetry-1 tests failed, 22/24 passed, all other tests including asymmetry 2/skip/short-circuit tests stayed green; reverted. (2) flipped evaluate_plugin_lookup's {:ok, %{scope: :tenant, owner_tenant_id: nil}} clause from :ok to a Violation (undoing asymmetry 2/INV-SSV-9) -- exactly the 1 targeted asymmetry-2 test failed, 23/24 passed; reverted. (3) rewrote validate/3's Enum.reduce_while/3 wrapper to always {:cont, ...} regardless of check_node/3's {:halt, ...} result (breaking short-circuiting across nodes while leaving the within-node with-chain in check_node/3 untouched) -- the cross-node first-violation-wins test failed with the raised RuntimeError ('service_lookup must not be called a second time') propagating out and failing the test as designed, 23/24 passed, and the within-node short-circuit test correctly stayed green since that mutation didn't touch check_node/3's own with-chain; reverted. All three mutations confirmed byte-for-byte reverted via git diff (clean, no diff) after restoration, and mix compile --warnings-as-errors plus a re-run of the isolated 67-test scope confirmed a clean return to green post-revert. Fixture isolation: service_scope_validator_test.exs is async: true, pure (no Repo/Sandbox), every test builds its own Graph/Node/Lookup fixtures inline with no shared mutable state (the @tenant_a/@tenant_b module attributes are inert literal constants, not shared external state); store_test.exs's 3 new tests each call provisioned_tenant/1 (real CREATE SCHEMA per test, real on_exit cleanup dropping the schema) and unique_name/1, consistent with the rest of that file's already-established, already-reviewed pattern -- no cross-test pollution, no execution-order dependency. Verified graph_with_service_task/1's SERVICE_TASK node attributes (endpoint: non-empty string, timeout_ms: 5_000) against graph.ex's actual CHK-10/CHK-11 implementations (check_service_task_endpoint/1, check_service_task_timeout/1) directly -- the fixture is confirmed structurally valid, not merely claimed to be. No WF-03 regression-test applicability here (this is a WF-02 new-requirement run, not an issue-fix run) -- item 11 of the validation charter does not apply. This is a genuinely thorough, well-evidenced test-design deliverable; no gaps found.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ031-20260817/step-03b-test-design-validator.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ031-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ031-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (Step 4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

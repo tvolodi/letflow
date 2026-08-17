@@ -1,0 +1,76 @@
+{
+  "handoff_id": "f02cce1a-713f-4617-9252-18f387305af6",
+  "run_id": "WF02-REQ031-20260817",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ031-20260817/step-02d-reviewer.json",
+  "created_at": "2026-08-17T20:43:15Z",
+  "started_at": "2026-08-17T20:43:15Z",
+  "completed_at": "2026-08-17T20:45:10Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-031"],
+    "related_handoff_ids": [
+      "814f8e34-e086-4ed7-9691-dd88622c3286",
+      "7d1db982-df1b-49f3-8092-6a1e32e17502"
+    ],
+    "artifacts_in": [
+      "lib/letflow/definitions/service_scope_validator.ex",
+      "lib/letflow/design/req031-service-scope-validator.md",
+      "handoffs/WF02-REQ031-20260817/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ031-20260817/step-02c-security-reviewer.json",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/definitions/graph.ex",
+      "docs/migration/decisions/0003-ecto-schema-strategy.md",
+      "docs/anti-patterns.md",
+      "docs/agents/instructions/core-directives.md"
+    ],
+    "owned_modules": ["lib/letflow/definitions/service_scope_validator.ex"]
+  },
+  "task": {
+    "description": "Idiomatic-OTP/Elixir and migration-decision-record gate on Letflow.Definitions.ServiceScopeValidator (REQ-031, SVC-03 hook for REQ-030's activate/2) before TEST-DESIGNER may start. Independently verify: idiomatic use of structs/reduce_while/pattern-matching consistent with lib/letflow/definitions/graph.ex; the implementation genuinely matches the design doc's Lookup/Violation shapes, build/1's and validate/3's signatures, and both branch tables; REQ-030 integration (definitions.ex, graph.ex) is untouched; no conflict with docs/migration/decisions/; both R-Co asymmetries preserved correctly in the actual code, not just claimed; no scope creep. Also weigh in on design doc OQ-1 (malformed-lookup crash surfacing as generic transaction_failed) and OQ-4 (plugin nil-owner asymmetry), both reaffirmed non-blocking by SECURITY-REVIEWER at Step 2c and explicitly handed to this gate.",
+    "acceptance_criteria": [
+      "Idiomatic-vs-crutch determination made against actual code, not the producer's summary",
+      "Lookup/Violation struct shapes, build/1 and validate/3 signatures, and both branch tables spot-checked against the design doc directly",
+      "git diff main...HEAD -- lib/letflow/definitions.ex lib/letflow/definitions/graph.ex independently confirmed empty",
+      "tenant_id handling checked against docs/migration/decisions/0003-ecto-schema-strategy.md's addendum for re-derivation/second-guessing",
+      "Both branch tables' private clause functions re-read directly and confirmed to implement design doc §5 exactly, row by row",
+      "Scope-creep determination made against REQ-031's declared scope",
+      "OQ-1 and OQ-4 given an explicit REVIEWER opinion, not just relayed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed lib/letflow/definitions/service_scope_validator.ex (353 lines, new file) directly, independent of ELIXIR-DEV's and SECURITY-REVIEWER's summaries. Idiomatic Elixir/OTP: this is correctly a pure function module, not a process -- REQ-030's activate/2 calls it synchronously inside an already-open Repo.transaction/1, so no GenServer/gen_statem is warranted and none was reached for; no supervision concern applies (nothing here needs its own supervised process, so InstanceSupervisor isolation is not at stake). Enum.reduce_while/3 genuinely short-circuits: check_node/3 returns {:cont, :ok} or {:halt, {:error, violation}}, verified by reading the actual reduce_while call site (validate/3, lines 184-188) and check_node's with/else (lines 194-201) rather than trusting the design doc's or ELIXIR-DEV's claim of first-violation-wins -- on the first {:error, violation} the walk stops; it does not accumulate or keep scanning. @enforce_keys is used on both Lookup and Violation (mirrors Graph.Node/Graph.Violation's own convention exactly). @spec/@type coverage is complete on every public function and both nested structs. Pattern-matching style (nested modules, moduledoc source citations with exact .zig line numbers, defp helper chains, string-keyed attribute reads via Map.get with an is_map/1 defensive guard) is consistent with lib/letflow/definitions/graph.ex, read in full for comparison -- ref_id/2 is structurally identical in shape and intent to graph.ex's blank_or_missing_string?/2. No unnecessary complexity: build/1 is exactly a one-line closure with no extra logic, matching design doc §4's instruction verbatim. Design-doc conformance, checked directly rather than assumed: Lookup (@enforce_keys [:service_lookup, :plugin_lookup]) and Violation (@enforce_keys [:node_id, :kind, :ref_id, :reason, :message], closed reason() union of exactly the 3 atoms specified) match design doc §3.1/§3.2 exactly; build/1's and validate/3's @spec lines match design doc §4 verbatim, including validate/3 staying public (not defp) for direct testability per the design's own stated reason. Both branch tables re-read clause-by-clause against design doc §5's tables (not re-derived from the design doc's prose, from the actual evaluate_service_lookup/4 and evaluate_plugin_lookup/4 clause heads, lines 246-352): service table's 5 rows (not-registered->violation :service_not_registered, global->pass, tenant+matching-owner->pass, tenant+nil-owner->violation :service_not_available_to_tenant \"scope data is inconsistent\", tenant+mismatched-owner->violation :service_not_available_to_tenant \"is not available to this tenant\") match exactly; plugin table's 5 rows (not-registered->PASS [asymmetry 1, INV-SSV-5], global->pass, tenant+matching-owner->pass, tenant+nil-owner->PASS [asymmetry 2, INV-SSV-9, the deliberate inverse of the service table's row 4], tenant+mismatched-owner->violation :plugin_not_available_to_tenant) match exactly, including both R-Co asymmetries preserved as separate, explicit clause heads (never a shared fallthrough that could accidentally couple the two sides). Clause ordering was checked for a subtle correctness question the design doc doesn't explicitly call out: the tenant+matching-owner clause (guard `when owner == tenant_id`) is listed before the tenant+nil-owner clause on both branch tables -- confirmed this ordering cannot mask the nil-owner case, since tenant_id is documented (design doc §4, moduledoc) as always non-nil, so a nil owner can never satisfy `owner == tenant_id` and always falls through to the nil-owner clause correctly regardless of clause order. git diff main...HEAD -- lib/letflow/definitions.ex lib/letflow/definitions/graph.ex is independently confirmed empty (ran directly, not trusted from either producer's or SECURITY-REVIEWER's summary) -- this is a purely additive new file; REQ-030 integration is untouched. git diff --stat for the whole branch shows only the new .ex file, its design doc, handoff files, and docs/issues/ISS-0036.yaml -- nothing beyond REQ-031's declared scope was touched, and the Lookup struct-of-functions choice (over a @behaviour) is exactly what the design doc's own §3.1 decided and CODE-DESIGN-VALIDATOR already gated; no framework/abstraction machinery appears ahead of what this requirement needs. tenant_id handling checked against docs/migration/decisions/0003-ecto-schema-strategy.md's 2026-08-17 addendum (population-mechanism decision: tenant_id is derived by the writing context module from the resolved :prefix, never accepted as an independently-trusted caller-supplied field) -- that addendum governs writing a tenant_id column value, which this module never does (it is a pure comparison function with no Repo/write path at all, confirmed by the moduledoc's Purity section and independently by grep). validate/3 receives tenant_id as a plain parameter and only ever compares it via exact equality (owner == tenant_id) against a value returned by an injected lookup -- it does not write, derive, default, or second-guess it in any way, consistent with the design doc's own framing that activate/2 (REQ-030) already derives tenant_id server-side before this hook is reachable (definitions.ex:438, confirmed by direct read). No conflict with Decision 0003 or its addendum. Independently re-ran mix compile --warnings-as-errors (clean, no output/warnings) and mix format --check-formatted (clean) against the current working tree rather than trusting ELIXIR-DEV's reported results. OQ-1 (REVIEWER opinion, per design doc §9 and SECURITY-REVIEWER's reaffirmation): agree the current generic {:error, {:transaction_failed, exception}} fallback is acceptable for now -- a more specific typed error for 'malformed Lookup result' would be a real improvement in a system with a stricter type system (a Rust/OCaml enum return type on the Lookup functions would make this class of bug impossible to construct at all, not just crash-safely at runtime), but building a bespoke typed-error path today would mean designing error handling for a Lookup failure mode that has zero live callers (no real ServiceCatalog/PluginRegistry wiring exists yet, confirmed scope gap) -- that is exactly the kind of ahead-of-need machinery the scope-creep check in this role's charter watches for. Not deferred silently: recommend this be revisited when S3/S6 wire a real Lookup adapter, at which point a malformed-result failure mode becomes reachable from genuine I/O and is worth a typed error. OQ-4 (REVIEWER opinion): agree with the design doc's and SECURITY-REVIEWER's characterization -- the plugin-side nil-owner-passes asymmetry (INV-SSV-9) is a faithful, deliberate port of R-Co's real checkPluginHandler behavior (.zig line 187) and not a bug to fix unilaterally at this requirement's scope, since neither R-Co source states a policy reason to harmonize it with the service side's opposite behavior and REQ-031's acceptance criteria don't ask for that harmonization. Flagging one type-safety observation per this role's charter item 3 (not a blocker): the closed reason()/kind() atom unions here are a reasonable Elixir approximation of a discriminated union, but nothing in Elixir's type system enforces exhaustive matching on them the way an ML-family match statement would -- a future S4 handler pattern-matching on Violation.reason without an exhaustive/else clause could silently miss a new reason atom added later; worth a note for whoever builds that handler, not an action item now.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ031-20260817/step-02d-reviewer.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Type-safety gap (REVIEWER charter item 3, noted even though not a blocker): Violation.reason and .kind are closed-set atom unions, which is good practice for this codebase, but Elixir gives no compile-time exhaustiveness check when a future consumer (most likely S4's HTTP 422 renderer) pattern-matches on reason -- a new reason atom added later could silently fall through an non-exhaustive case/cond in that future handler with no compiler warning, unlike a Rust/OCaml match expression which would fail to compile until every variant is handled. No action needed now (no such consumer exists yet); worth flagging to whoever builds the S4 renderer.",
+        "affected_requirement": "REQ-031"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Concur with design doc OQ-1 and SECURITY-REVIEWER's reaffirmation: a malformed Lookup return value currently crashes validate/3 with FunctionClauseError, caught generically by activate/2's try/rescue as {:error, {:transaction_failed, exception}}. This is fail-closed and acceptable today since no real Lookup implementation is wired into production (explicit scope gap), but a more specific typed error would be a stronger contract once S3/S6 wire a real adapter -- building that now would be speculative error-handling machinery for a failure mode with no live caller, which is itself a form of scope creep this gate watches for, so deferring it is the correct call, not an oversight.",
+        "affected_requirement": "REQ-031"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ031-20260817",
+      "commit_sha_list": ["a362768"],
+      "remote_branch": "origin/feature/WF02-REQ031-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (Step 3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

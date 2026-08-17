@@ -589,7 +589,7 @@
       "lock_acquired_at": "2026-08-17T18:57:34Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 00 (git-setup) dispatched to ELIXIR-DEV",
+      "last_known_step": "Step 00 (git-setup) COMPLETED -- feature/WF02-REQ037-20260817 branched from origin/main, pushed. Baseline: mix compile clean, MIX_TEST_PARTITION=2 mix test 536/536.",
       "backfilled": false,
       "queue_task_id": 54,
       "queue_agent_id": "hetzner-wt2-orch",

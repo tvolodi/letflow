@@ -182,9 +182,14 @@ names two options — "two behaviour callbacks or a struct of functions." This d
   # owner_tenant_id is nil iff scope == :global; expected non-nil iff scope == :tenant
   # (mirrors R-Co's ServiceCatalogRecord.owner_tenant_id: ?[16]u8, "null when scope =
   # global" -- src/design/svc-01-04-service-scope.md §2.1). A :tenant record whose
-  # owner_tenant_id is nil is a malformed-lookup-result case, handled defensively --
-  # see §5 step 3's inconsistency branch, ported from service_scope_validator.zig's own
-  # `owner orelse { ... "service scope data is inconsistent" ... }` branch (line 142-151).
+  # owner_tenant_id is nil is a malformed-lookup-result case -- handled DIFFERENTLY per
+  # side, faithfully porting a real R-Co asymmetry (see §5's "second asymmetry" note):
+  # service side treats it as a violation (§5 service table row 4, ported from
+  # checkServiceId's `owner orelse { ... "service scope data is inconsistent" ... }`,
+  # .zig line 142-151); plugin side treats it as a silent pass (§5 plugin table row 4,
+  # ported from checkPluginHandler's `owner = reg.owner_tenant_id orelse return;`,
+  # .zig line 187 -- a bare `return` in a `ServiceScopeError!void` fn is success, not
+  # an error). Do not assume both sides resolve the same way -- they deliberately don't.
 
 @type service_lookup_result :: {:ok, lookup_record()} | {:error, :not_registered}
 @type plugin_lookup_result :: {:ok, lookup_record()} | {:error, :not_registered}
@@ -350,19 +355,37 @@ original order — no re-sorting, no collected list of violations.
 
 | Lookup result | Outcome |
 |---|---|
-| `{:error, :not_registered}` | **Pass — no violation.** Asymmetric with the service table above by design (§5's own header, INV-SSV-5 below) — ports `.zig`'s `checkPluginHandler`'s "no tenant-scoped entry at all: PD-05 already validates; skip" branch (line 220-222) verbatim. |
+| `{:error, :not_registered}` | **Pass — no violation.** First asymmetry with the service table above, by design (see note below, INV-SSV-5) — ports `.zig`'s `checkPluginHandler`'s "no tenant-scoped entry at all: PD-05 already validates; skip" branch (line 220-222) verbatim. |
 | `{:ok, %{scope: :global}}` | **Pass.** |
 | `{:ok, %{scope: :tenant, owner_tenant_id: owner}}` where `owner == tenant_id` | **Pass.** |
-| `{:ok, %{scope: :tenant, owner_tenant_id: owner}}` where `owner != tenant_id` (nil or mismatched) | **Violation.** `reason: :plugin_not_available_to_tenant`, `message: "plugin #{plugin_handler} is not available to this tenant"` (verbatim template). |
+| `{:ok, %{scope: :tenant, owner_tenant_id: nil}}` | **Pass — no violation.** Second asymmetry with the service table above, by design (see note below, INV-SSV-9) — ports `.zig`'s `checkPluginHandler`'s `const owner = reg.owner_tenant_id orelse return;` (line 187) **verbatim**: a bare `return` inside a `ServiceScopeError!void` function is a *successful* return, not an error — R-Co does not raise a violation here. This is the exact inverse of the service table's row 4 above (`{:ok, %{scope: :tenant, owner_tenant_id: nil}}` → Violation for services), which ports `checkServiceId`'s structurally identical-shaped null-owner case (`.zig` line 142-151) the *opposite* way. Do not fold this row into the mismatched-owner row below — they are different R-Co source branches with different outcomes. |
+| `{:ok, %{scope: :tenant, owner_tenant_id: owner}}` where `owner != tenant_id` **and non-nil** | **Violation** (ports `.zig` lines 188-200). `reason: :plugin_not_available_to_tenant`, `message: "plugin #{plugin_handler} is not available to this tenant"` (verbatim template). |
 
-**Why the asymmetry is preserved, not "fixed":** this is not a Letflow simplification or an
-oversight — it is R-Co's own, deliberate design (§0's citation of both the `.zig` source and
-`svc-01-04-service-scope.md` §3.3's data-flow diagram, whose plugin branch independently
-confirms "not found → skip"). The stated reason in both sources is that handler
-**existence** (as opposed to tenant **scope**) is validated by a different check (PD-05,
-node-attribute validation) that this validator does not duplicate. Whether Letflow's own
-future PD-05 port (REQ-029, already shipped) will ever actually validate `plugin_handler`
+**Why the first asymmetry (not-registered → skip) is preserved, not "fixed":** this is not a
+Letflow simplification or an oversight — it is R-Co's own, deliberate design (§0's citation of
+both the `.zig` source and `svc-01-04-service-scope.md` §3.3's data-flow diagram, whose plugin
+branch independently confirms "not found → skip"). The stated reason in both sources is that
+handler **existence** (as opposed to tenant **scope**) is validated by a different check
+(PD-05, node-attribute validation) that this validator does not duplicate. Whether Letflow's
+own future PD-05 port (REQ-029, already shipped) will ever actually validate `plugin_handler`
 existence is unconfirmed — flagged as §9 OQ-3, not silently assumed.
+
+**Why the second asymmetry (nil `owner_tenant_id` → pass) is preserved, not "fixed":** this is
+a distinct, orthogonal asymmetry from the one above — it concerns a *resolved* tenant-scoped
+entry with malformed owner data, not an unresolved lookup. R-Co's `checkServiceId` (line
+142-151) and `checkPluginHandler` (line 187) each handle the identically-shaped `{scope:
+.tenant, owner_tenant_id: null}` case, but oppositely: the service path treats it as
+inconsistent data and fails closed; the plugin path's `orelse return` falls straight through
+and passes. Nothing in either `.zig` source or `svc-01-04-service-scope.md` explains this
+particular difference (unlike the first asymmetry, which both sources justify via PD-05) — it
+reads as an incidental consequence of `checkServiceId` and `checkPluginHandler` being written
+independently, not a stated policy. This design ports it faithfully anyway, for methodological
+consistency with how the first asymmetry above is handled: this design's own stance (§0, §5)
+is to preserve R-Co's real branch-level behavior and flag anything questionable via an open
+question, not to silently "improve" logic that looks inconsistent. Deviating here (treating
+nil-owner-with-tenant-scope as a violation for plugins too, unlike R-Co) is a legitimate
+alternative — flagged for REVIEWER/SECURITY-REVIEWER attention as §9 OQ-4, not silently
+foreclosed.
 
 ---
 
@@ -445,10 +468,11 @@ optionality through, not inventing new complexity.
 | INV-SSV-2 | Returns on the first violation found; never collects or merges multiple violations. | §5 step 2 (`reduce_while`, `{:halt, ...}` on first failure) |
 | INV-SSV-3 | `"service_id"`/`"plugin_handler"` are read only when present as non-empty strings; a missing key, `nil`, non-string, or empty-string value performs no lookup call and produces no violation for that key. | §5 steps 2b/2c |
 | INV-SSV-4 | Pure function — no `Letflow.Repo`, no `Ecto.Changeset`, no `Logger.*`, no clock read, no HTTP/file/process-mailbox call anywhere in this module. All I/O is delegated entirely to the two injected `Lookup` functions, treated as opaque. | Whole module — mirrors `Graph`'s own "Purity" moduledoc section (§0) |
-| INV-SSV-5 | `plugin_handler`'s "not registered" lookup result is explicitly **not** a violation — asymmetric with `service_id`'s identical result, which **is** a violation. | §5's plugin branch table + its "why the asymmetry is preserved" note |
+| INV-SSV-5 | `plugin_handler`'s "not registered" lookup result is explicitly **not** a violation — asymmetric with `service_id`'s identical result, which **is** a violation. | §5's plugin branch table + its "why the first asymmetry is preserved" note |
 | INV-SSV-6 | Node walk order is `graph.nodes`' own order — never re-sorted, never filtered by anything other than `node_type == :SERVICE_TASK`. | §5 step 1 |
-| INV-SSV-7 | `owner_tenant_id` comparison against `tenant_id` is exact value equality on the `Ecto.UUID.t()` string form — never a prefix/substring/case-insensitive comparison. A `:tenant`-scoped lookup result with a `nil` `owner_tenant_id` is treated as a violation (data inconsistency), never raises. | §5's service branch table, row 3 |
+| INV-SSV-7 | `owner_tenant_id` comparison against `tenant_id` is exact value equality on the `Ecto.UUID.t()` string form — never a prefix/substring/case-insensitive comparison. On the **service** side only, a `:tenant`-scoped lookup result with a `nil` `owner_tenant_id` is treated as a violation (data inconsistency), never raises. This rule does **not** carry over to the plugin side — see INV-SSV-9, its exact inverse. | §5's service branch table, row 4 |
 | INV-SSV-8 | `build/1`'s output has exactly the shape `Letflow.Definitions.service_scope_validator_fun()` requires — reused, not redefined. | §4 |
+| INV-SSV-9 | On the **plugin** side only, a `:tenant`-scoped lookup result with a `nil` `owner_tenant_id` is treated as a **pass** (no violation) — the exact inverse of INV-SSV-7's service-side rule for the identically-shaped case. Faithfully ports `checkPluginHandler`'s `owner = reg.owner_tenant_id orelse return;` (`.zig` line 187); not a Letflow invention. Flagged for possible reconsideration at §9 OQ-4. | §5's plugin branch table, row 4 |
 
 ---
 
@@ -483,6 +507,21 @@ skip may not fully hold in Letflow yet — the asymmetry is still ported faithfu
 inventing a new existence check here would be scope creep against this requirement's own
 acceptance criteria (none of which mention plugin-handler existence), but the gap is worth a
 future requirement's attention rather than being silently assumed closed.
+
+**OQ-4 (MINOR, flag for REVIEWER/SECURITY-REVIEWER):** §5's plugin branch table treats a
+resolved tenant-scoped plugin lookup with a `nil` `owner_tenant_id` as a **pass** (INV-SSV-9),
+the exact inverse of the service table's identically-shaped case, which is a **violation**
+(INV-SSV-7). This design ports R-Co's real `checkPluginHandler`/`checkServiceId` behavior
+faithfully (`.zig` lines 187 vs. 142-151) rather than silently harmonizing the two — but unlike
+the not-registered/skip asymmetry (OQ-3's subject), neither `.zig` nor
+`svc-01-04-service-scope.md` states a deliberate policy reason for *this* difference; it reads
+as incidental. Both `owner_tenant_id: nil` cases represent the same kind of malformed lookup
+data (a `:tenant`-scoped record with no recorded owner) — reasonable engineering judgment could
+go either way on whether a future `PluginRegistry` adapter (§1, S3) should be allowed to
+silently pass this shape through once it's a real, DB-backed source of tenant-isolation
+decisions rather than R-Co's original in-memory table. Not resolved here — flagged for
+REVIEWER/SECURITY-REVIEWER to weigh in at Step 2d/Step 2b's tenant-data-path gate, since this
+is tenant-scope-enforcement logic even though this specific module has no DB path yet.
 
 ---
 

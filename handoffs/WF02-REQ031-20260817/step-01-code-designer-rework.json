@@ -1,0 +1,55 @@
+{
+  "handoff_id": "b7e4c8a1-3f5d-4e2a-9c71-1a8d5f60e9b2",
+  "run_id": "WF02-REQ031-20260817",
+  "workflow_id": "WF-02",
+  "step": "01-rework",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ031-20260817/step-01-code-designer-rework.json",
+  "created_at": "2026-08-17T20:22:18Z",
+  "started_at": "2026-08-17T20:22:18Z",
+  "completed_at": "2026-08-17T20:22:18Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-031"],
+    "related_handoff_ids": [
+      "8ba85850-fe2f-4c1f-8336-c4a4aae3588e",
+      "f3a1b2c4-9d3e-4b7a-8c2f-6e0a1d5b9c73"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req031-service-scope-validator.md",
+      "handoffs/WF02-REQ031-20260817/step-01b-code-design-validator.json",
+      "C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\definition\\service_scope_validator.zig"
+    ],
+    "owned_modules": ["lib/letflow/design/req031-service-scope-validator.md"]
+  },
+  "task": {
+    "description": "Rework CODE-DESIGNER's req031-service-scope-validator.md design after CODE-DESIGN-VALIDATOR FAILed it on exactly one BLOCKER: §5's plugin branch table incorrectly folded a tenant-scoped plugin lookup with a nil owner_tenant_id into the same Violation outcome as a mismatched-owner plugin, silently applying the service-side nil-owner-is-a-violation rule to the plugin side. Independently re-verified against R-Co's real service_scope_validator.zig (checkPluginHandler, line 187: `const owner = reg.owner_tenant_id orelse return;` -- a bare `return` inside a `ServiceScopeError!void` fn is a successful return, i.e. a silent PASS -- structurally opposite to checkServiceId's line 142-151 explicit violation on the identically-shaped null-owner case). Fix required: split the plugin table's nil-owner and mismatched-owner sub-cases into two distinct rows with two distinct outcomes, either porting R-Co's real behavior faithfully or explicitly flagging a deliberate, justified deviation -- not silently applying the wrong rule.",
+    "acceptance_criteria": [
+      "Plugin branch table's nil-owner_tenant_id row is a separate row from the mismatched-owner row, with the outcome R-Co actually produces (or an explicitly justified deviation)",
+      "The choice (faithful port vs. deliberate deviation) is visible and reasoned, not silently applied",
+      "No regression to the 6 checks CODE-DESIGN-VALIDATOR already passed: hook contract fidelity to REQ-030's activate/2, all 5 AC mappings, AC3's closed-set reason atoms, AC5's moduledoc gap text, cited line-number accuracy",
+      "No implementation code introduced (specs/types/tables only)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-verified R-Co's service_scope_validator.zig directly (full file read, both checkServiceId lines 109-167 and checkPluginHandler lines 169-223) before editing -- confirmed the validator's finding exactly: checkPluginHandler line 187 (`const owner = reg.owner_tenant_id orelse return;`) is a silent successful pass on nil owner_tenant_id for a resolved tenant-scoped plugin, structurally opposite to checkServiceId's line 142-151 explicit-violation handling of the identically-shaped service case. Decision made: FAITHFULLY PORT (nil owner_tenant_id on tenant-scoped plugin -> Pass), not deviate -- reasoned explicitly in the design (new paragraph, section 5) that this design's own established methodology already preserves R-Co's deliberate-looking service/plugin asymmetries rather than silently 'fixing' them (precedent: INV-SSV-5's not-registered/skip asymmetry, OQ-3), so treating this second, structurally parallel null-owner asymmetry differently within the same function pair would be an inconsistent porting methodology, not a principled improvement. Concretely: (1) split section 5's plugin branch table row 4 ('owner != tenant_id (nil or mismatched) -> Violation') into two distinct rows -- '{owner_tenant_id: nil} -> Pass, no violation' (ports .zig line 187 verbatim, with the bare-return-is-success explanation spelled out) and '{owner != tenant_id, non-nil} -> Violation' (ports .zig lines 188-200, unchanged from before); (2) added a second 'why this asymmetry is preserved' explanatory paragraph immediately after the existing one (renamed to 'first asymmetry' for clarity), citing both .zig line citations and noting -- honestly -- that unlike the first asymmetry, no source document states a deliberate policy reason for this one, so it reads as incidental rather than designed, which is itself surfaced rather than hidden; (3) added new invariant INV-SSV-9 stating the plugin-side pass rule as the explicit inverse of INV-SSV-7, and tightened INV-SSV-7's own wording to scope it explicitly to the service side only with a forward cross-reference to INV-SSV-9 (also corrected a pre-existing minor row-number citation in INV-SSV-7, 'row 3' -> the correct 'row 4', found while editing the same line); (4) added new OQ-4 flagging this specific asymmetry (unlike OQ-3's, unjustified in any source doc) for REVIEWER/SECURITY-REVIEWER attention at the next gate, since it is tenant-isolation-relevant logic even though this module itself has no DB path; (5) updated the shared lookup_record type comment in section 3.1 to describe both sides' opposite resolutions instead of only citing the service-side branch, so a reader hitting that comment first isn't misled into assuming one shared resolution. All other sections (0, 1, 2, 3.2, 4, 6, 7, 10, 11) are untouched -- confirmed by diff (54 insertions/15 deletions, all within sections 3.1, 5, 8, 9). No .ex/.exs code, no def/defp bodies added -- only markdown prose and table rows.",
+    "artifacts_out": [
+      "lib/letflow/design/req031-service-scope-validator.md",
+      "handoffs/WF02-REQ031-20260817/step-01-code-designer-rework.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ031-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ031-20260817",
+      "push_status": "pending"
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b, re-review)"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

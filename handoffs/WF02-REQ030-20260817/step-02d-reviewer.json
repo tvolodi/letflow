@@ -1,0 +1,54 @@
+{
+  "handoff_id": "0f8c6a9f-e9a8-440d-ab42-474d009272fd",
+  "run_id": "WF02-REQ030-20260817",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ030-20260817/step-02d-reviewer.json",
+  "created_at": "2026-08-17T18:24:41Z",
+  "started_at": "2026-08-17T18:24:41Z",
+  "completed_at": "2026-08-17T18:27:03Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-030"],
+    "related_handoff_ids": ["60e87f0a-1626-4804-9fd3-4f9aa24db1be"],
+    "artifacts_in": ["lib/letflow/definitions.ex", "lib/letflow/design/req030-definition-store-crud.md"],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "Idiom review gate on REQ-030's implementation (branch feature/WF02-REQ030-20260817, git diff main...HEAD -- lib/letflow/definitions.ex specifically). SECURITY-REVIEWER PASSed but filed a non-blocking MINOR issue for your consideration: activate/2's TOCTOU race loser (two concurrent activate/2 calls on different DRAFT rows of the same name) gets a raw {:transaction_failed, %Postgrex.Error{}} instead of a clean domain error, since the FOR UPDATE lock only covers the target row, not all rows sharing a name -- the uq_active_definition partial unique index is the real arbiter, catching it at commit time. Decide whether this needs fixing now or is acceptable as-is, and say why either way -- don't silently drop it.",
+    "acceptance_criteria": [
+      "Idiomatic Ecto/OTP vs. crutch assessment",
+      "Type-safety gaps checked",
+      "Scope creep check against REQ-030's actual 9 acceptance criteria",
+      "Consistency with docs/migration/decisions/ and docs/anti-patterns.md",
+      "SECURITY-REVIEWER's filed TOCTOU/raw-Postgrex-error finding explicitly addressed (fix or justified accept, not silently dropped)",
+      "ELIXIR-DEV's flagged deviation (atom-key-only field extraction vs. design's atom-or-string fallback) assessed for idiom/correctness"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Idiom review of lib/letflow/definitions.ex's REQ-030 additions (create/2, get_by_id/2, get_active_by_name/2, list/2, activate/2, deprecate/2, archive/2) against docs/design/req030-definition-store-crud.md. (1) Idiomatic Ecto vs. crutch: activate/2's FOR UPDATE lock + branch-on-status + two guarded update_all/3 calls (each with an explicit select([d], d), required since update_all/3 has no :returning option on this Ecto version, confirmed by the design's own repo.ex citation) is standard, correct Ecto state-transition idiom -- not a hand-rolled state machine standing in for gen_statem (this is a stateless Ecto context module operating on rows, not a process, so gen_statem/supervision concerns don't apply here; no singleton/shared-state issue introduced). create/2's ON CONFLICT (name, version) DO NOTHING + re-select disambiguation matches two already-shipped precedents in this codebase (TenantProvisioning.insert_or_fetch_registration/2, EventStore.claim_idempotency/3) -- consistent, not invented. The shared deprecate/2 & archive/2 transition/4 -> run_transition/4 -> fallback_lookup/2 helper is a clean, appropriately-factored guarded-UPDATE-then-fallback-SELECT idiom, not forced. (2) Type-safety gaps (noting per role brief, not blocking): common_error()'s {:transaction_failed, term()} catch-all erases the actual exception shape (Postgrex.Error vs. Ecto.ConstraintError vs. others) into an opaque term -- a sum-typed error enum (Rust/OCaml) would force enumerating these at compile time; graph_struct_from_map/1 hand-re-validates a JSON blob's shape at runtime (is_binary/is_list checks) where a stricter deserialization layer would catch shape mismatches at the boundary. Neither is a defect given Elixir's dynamic-map-at-the-boundary reality and this module's own defensive-by-construction discipline (INV-DS-7 etc.), but both are genuine gaps worth naming per the role's standing brief. (3) Scope creep: none found. All 7 functions and their private helpers map directly onto REQ-030's 9 acceptance criteria (docs/requirements.yaml id: REQ-030) and the design's own §1 scope-boundary table; no behaviours, macros, or generic plumbing introduced ahead of need; the service_scope_validator opt is exactly AC6's required injection point with zero hook logic (correctly deferred to REQ-031, not built early); graph_struct_from_map/1 is precisely the boundary conversion REQ-027's own OQ-3 assigned to REQ-030, not an invented abstraction. git diff main...HEAD --stat confirms lib/letflow/definitions.ex is the only code file touched (595 insertions), no migration. (4) docs/anti-patterns.md: no entries apply to this code (all three existing entries are process/bookkeeping, not Elixir idiom). Decision-record consistency: tenant_id derivation (reject both :tenant_id/\"tenant_id\" key forms, then derive via TenantProvisioning.tenant_id_for_schema_name/1) matches docs/migration/decisions/0003-ecto-schema-strategy.md's 2026-08-17 addendum and mirrors EventStore.append/2's established contract exactly, as required -- no divergence.\n\nTOCTOU finding (SECURITY-REVIEWER, step-02c, MINOR) -- explicit decision: ACCEPT AS-IS, non-blocking, not fixed in this PR. Reasoning: this is not a silent gap -- the design document (req030-definition-store-crud.md §6.2, 'A genuine cross-row race is not specially handled, matching R-Co exactly') explicitly names this exact race and explicitly chooses the {:transaction_failed, exception} fallback, citing R-Co's own activateImpl using the identical TransactionFailed catch-all for the identical race (store.zig:698-708) and stating R-Co itself has no more specific error variant either. This was a design-time decision already carried through CODE-DESIGN-VALIDATOR's gate, not an implementation-time oversight for REVIEWER to catch fresh. No invariant is violated: uq_active_definition still guarantees at most one ACTIVE row (data integrity holds), and the raised exception is caught by activate/2's own try/rescue (INV-8/INV-DS-9 hold) -- the only cost is that the losing caller sees a less-clean error shape than create/2's analogous {:error, :duplicate_name_version}. The asymmetry with create/2 is structural, not sloppiness: create/2's ON CONFLICT clause lets Ecto avoid raising at all, while activate/2's race is a cross-row conflict on update_all/3 (which has no changeset to convert a constraint violation through), so cleanly catching it would require new exception-pattern-matching machinery (matching on %Postgrex.Error{postgres: %{code: :unique_violation, constraint: \"uq_active_definition\"}}) that doesn't exist yet anywhere in this codebase and would be better introduced deliberately at design time than improvised during a review gate. Recommend (non-blocking, forward note): if this proves a real pain point once activate/2 has real callers, a small follow-up could add that exception match inside activate/2's rescue clause to produce {:error, :concurrent_activation}, but nothing in REQ-030's 9 acceptance criteria requires it and SECURITY-REVIEWER independently confirmed no security defect.\n\nELIXIR-DEV's flagged deviation (atom-key-only attrs access vs. design's literal 'attrs[:name] (or attrs[\"name\"])' fallback text) -- assessed as a reasonable, idiomatic, and arguably more-correct fix, not a problematic narrowing. The design's own create_attrs() @type (§4.0) is atom-keyed only, so the atom-key-only implementation matches the type it's actually implementing; the prose fallback text was in tension with that same type. Ecto.Changeset.convert_params/1's mixed-key raise (confirmed directly against deps/ecto source) is a real crash risk the literal fallback text didn't anticipate. The alternative fix suggested in the task ('normalizing attrs to one key type up front') would be worse, not better: blanket-atomizing string keys via String.to_atom/1 reintroduces exactly the atom-table-exhaustion hazard this same design explicitly guards against elsewhere (INV-DS-7, graph_struct_from_map/1's fixed 7-entry node-type map, itself closing an identical hazard one level up per REQ-029 §2) -- and String.to_existing_atom/1 would crash on any unrecognized key. The security-relevant boundary (reject_key/4 for :tenant_id/:status) independently checks both key forms regardless of this deviation, so no bypass exists -- SECURITY-REVIEWER verified this directly. String-keyed input (e.g. from a future S4 HTTP/JSON layer) is correctly left to be normalized at that future boundary, consistent with this design's own layering (S4 is explicitly 'not built here' per §10's cross-module table). Only a minor forward note: the design doc's own §4.1 step P3 prose should eventually be corrected to match create_attrs()'s atom-keyed type rather than leave the contradiction in place for a future reader -- a design-doc wording nit, not a code defect, not blocking.\n\nNo crutch, no supervision issue (module is a stateless Ecto context, not a process), no scope creep, no unaddressed security finding, no anti-pattern/decision-record violation found. PASS.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ030-20260817/step-02d-reviewer.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "activate/2's cross-row uq_active_definition race (SECURITY-REVIEWER step-02c finding) surfaces as a raw {:error, {:transaction_failed, %Postgrex.Error{}}} for the losing concurrent caller rather than a clean domain error like create/2's {:error, :duplicate_name_version}. Explicitly accepted as-is: it is a documented design decision (req030-definition-store-crud.md §6.2), not a silent gap, no invariant is violated, and cleanly catching it would require new exception-pattern-matching machinery not yet established in this codebase. Non-blocking; a future follow-up could add a {:error, :concurrent_activation} translation in activate/2's rescue clause if this proves a real pain point.",
+        "affected_requirement": "REQ-030"
+      },
+      {
+        "severity": "MINOR",
+        "description": "req030-definition-store-crud.md §4.1 step P3's prose ('attrs[:name] (or attrs[\"name\"])') contradicts the same design's own atom-keyed-only create_attrs() @type (§4.0) -- ELIXIR-DEV correctly implemented against the type, not the prose, but the design doc itself should eventually be corrected so a future reader isn't misled. Documentation nit, not a code defect.",
+        "affected_requirement": "REQ-030"
+      }
+    ],
+    "next_action": "Route to TEST-DESIGNER (Step 3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

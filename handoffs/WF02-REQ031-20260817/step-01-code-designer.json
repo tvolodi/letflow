@@ -1,0 +1,56 @@
+{
+  "handoff_id": "8ba85850-fe2f-4c1f-8336-c4a4aae3588e",
+  "run_id": "WF02-REQ031-20260817",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ031-20260817/step-01-code-designer.json",
+  "created_at": "2026-08-17T20:12:27Z",
+  "started_at": "2026-08-17T20:12:27Z",
+  "completed_at": "2026-08-17T20:12:46Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-031"],
+    "related_handoff_ids": ["0e49456a-8558-44aa-9710-331ecd04cf55"],
+    "artifacts_in": [
+      "docs/requirements.yaml (REQ-031 entry)",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/definitions/graph.ex",
+      "lib/letflow/design/req030-definition-store-crud.md",
+      "lib/letflow/oidc/token_verifier.ex",
+      "R-Co/src/definition/service_scope_validator.zig",
+      "R-Co/src/design/svc-01-04-service-scope.md"
+    ],
+    "owned_modules": ["lib/letflow/definitions/service_scope_validator.ex"]
+  },
+  "task": {
+    "description": "Design lib/letflow/design/req031-service-scope-validator.md for REQ-031 (Service scope activation validator, SVC-03) -- the concrete implementation plugged into REQ-030's already-shipped, nil-able activate/2 hook (opts[:service_scope_validator]). Branch feature/WF02-REQ031-20260817 already exists and is checked out.",
+    "acceptance_criteria": [
+      "given an injected lookup returning a global-scope service, a SERVICE_TASK referencing it passes validation for any tenant_id",
+      "given an injected lookup returning a tenant-scoped service owned by tenant A, a SERVICE_TASK referencing it fails validation when activated by tenant B, with a violation detail naming the node_id and the service ref_id",
+      "given an injected lookup returning 'not registered' for a service_id, validation fails with a distinct not-registered violation reason, distinguishable from the owned-by-another-tenant case",
+      "REQ-030's activate/1 is demonstrated calling this validator via its nil-able hook when a lookup implementation is supplied, and skipping the check entirely when the hook is nil (matching R-Co's own optional-field default)",
+      "the moduledoc explicitly names the ServiceCatalog/PluginRegistry dependency gap and which future stage each belongs to, rather than implying real catalog integration exists today"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req031-service-scope-validator.md: a new module Letflow.Definitions.ServiceScopeValidator (lib/letflow/definitions/service_scope_validator.ex, new file, zero changes to definitions.ex or graph.ex) implementing SVC-03's graph-walk-and-scope-comparison algorithm against an injectable Lookup struct (service_lookup/1, plugin_lookup/2 -- two plain functions, chosen over a config-resolved @behaviour per an explicit rationale in §3.1: AC1-3 each need a distinct canned lookup result per test case, which a struct-of-functions value serves far more cheaply than a new module-per-scenario implementing a behaviour, and avoids Application.put_env/3 cross-test coupling under async: true). Public API: build/1 (Lookup.t() -> Letflow.Definitions.service_scope_validator_fun(), reusing REQ-030's own already-shipped type alias directly) and validate/3 (graph, tenant_id, lookup -> :ok | {:error, Violation.t()}), the latter unit-testable directly without going through build/1's closure or activate/2's transaction. Violation.t() splits a closed-set reason() atom from a human message() string (mirrors Graph.Violation's code/message precedent, confirmed by direct read) specifically so AC3's 'distinguishable, not just a different string' is satisfied structurally, not just by convention. Preserves R-Co's own deliberate service_id-vs-plugin_handler asymmetry verbatim (service 'not registered' -> violation; plugin 'not registered' -> pass, since PD-05 is R-Co's stated owner of handler-existence checking) -- confirmed directly against both service_scope_validator.zig and svc-01-04-service-scope.md's own data-flow diagram, not assumed from the paraphrase in requirements.yaml alone. §6 confirms, by direct citation of definitions.ex's actual shipped line numbers, that build/1's output plugs into run_service_scope_validator/3's already-shipped nil-skip and non-nil-call clauses with zero adapter code needed. §7 gives the required verbatim moduledoc text naming ServiceCatalog/S6 and PluginRegistry/S3 explicitly (AC5). §11 maps all 5 acceptance criteria to concrete design elements. Three MINOR open questions flagged, not silently resolved: OQ-1 (malformed-lookup-result defense relies on activate/2's outer try/rescue rather than a dedicated typed error -- flagged for REVIEWER), OQ-2 (no Letflow equivalent of R-Co's platform-admin tenant_id-null bypass), OQ-3 (Letflow's own REQ-029 graph.ex has no plugin_handler existence check at all as of this design -- confirmed by grep -- so R-Co's stated rationale for the plugin not-registered-skip asymmetry may not fully hold in Letflow yet; asymmetry ported faithfully regardless, since inventing a new existence check is outside this requirement's acceptance criteria). No implementation code (.ex bodies) included -- @type/@spec blocks, nested plain-struct shapes, and numbered algorithm/branch-table prose only, deliberately more conservative about avoiding fenced Ecto-pipeline-style snippets than req030's own precedent since this module needed none (pure, no Repo/Ecto calls at all).",
+    "artifacts_out": ["lib/letflow/design/req031-service-scope-validator.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ031-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ031-20260817",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for Step 1b"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

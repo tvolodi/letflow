@@ -1,0 +1,52 @@
+{
+  "handoff_id": "365202cc-a51b-4b9c-9ee4-e0ca91279a3a",
+  "run_id": "WF02-REQ029-20260817",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ029-20260817/step-03b-test-design-validator.json",
+  "created_at": "2026-08-17T10:46:10Z",
+  "started_at": "2026-08-17T10:46:10Z",
+  "completed_at": "2026-08-17T10:47:01Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-029"],
+    "related_handoff_ids": ["25ae21d3-3b89-493e-a056-81ca2b7a48a0"],
+    "artifacts_in": [
+      "test/specs/REQ-029.md",
+      "test/letflow/definitions/graph_test.exs",
+      "docs/requirements.yaml (REQ-029 entry)"
+    ],
+    "owned_modules": ["lib/letflow/definitions", "test/letflow/definitions"]
+  },
+  "task": {
+    "description": "Independently validate test/specs/REQ-029.md and the 25 new test cases in test/letflow/definitions/graph_test.exs against REQ-029's 5 acceptance criteria. Read both files directly. Re-run the test file yourself rather than trusting TEST-DESIGNER's reported 40/0.",
+    "acceptance_criteria": [
+      "each of the 7 node types has at least one explicit test: HUMAN_TASK missing role, SERVICE_TASK missing endpoint, SERVICE_TASK invalid timeout (0 and >300000), TIMER missing/invalid duration, TIMER P0D explicitly accepted, and START/END/gateway types accepting no attributes",
+      "an EXCLUSIVE_GATEWAY edge with both a non-null condition and is_default: true is rejected",
+      "an EXCLUSIVE_GATEWAY with two edges both marked is_default: true is rejected",
+      "isValidCelSyntax-equivalent rejects at least one structurally invalid expression and accepts at least one structurally valid one, with an explicit test noting it performs no evaluation",
+      "extra undeclared attributes on a node do not cause a violation, demonstrated by an explicit test"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently read test/specs/REQ-029.md and test/letflow/definitions/graph_test.exs directly (not TEST-DESIGNER's summary). Verified each of REQ-029's 5 acceptance criteria against docs/requirements.yaml's REQ-029 entry text (exact wording match confirmed) and against actual test code: AC1 (7 node types) -- HUMAN_TASK missing role (line 426), SERVICE_TASK missing endpoint (460), SERVICE_TASK invalid timeout 0 and 300001 (492, 507) plus boundary-valid 1/300000 (524), TIMER missing/invalid duration (566, 591) and P0D explicitly accepted (577), START/END/EXCLUSIVE_GATEWAY/PARALLEL_GATEWAY accepting no attributes (628-640) -- all present as runnable tests. AC2 -- is_default:true with non-null condition rejected, asserting exact 2-code list [:unexpected_edge_condition, :default_with_condition] (line 712-727). AC3 -- two/three is_default edges on one gateway rejected with N-1 violations, plus a legal one-default happy-path test (734-784). AC4 -- valid_cel_syntax?/1 accepts 2 well-formed expressions, rejects 6 distinct malformed ones, and has an explicit standalone test asserting no-evaluation behavior on a nonsense variable reference (810-838), plus a wiring/integration test proving it's actually called from validate_edge_conditions/1 (792-804). AC5 -- extra undeclared keys (including a nested-map value) on HUMAN_TASK and SERVICE_TASK nodes produce no violation (678-705). Ran grep across both files for @tag :skip / @tag :pending, TODO, and hardcoded secrets/connection-string patterns (password|secret|api_key|postgres://|mysql://|AKIA|token=) -- zero matches on all three. Fixture review: every test constructs its own literal %Graph{}/%Node{}/%Edge{} inline via local helper calls (attr_node/3, cond_edge/5, node/2, edge/3, graph/2) with test-local ids ('h1', 'st1', 'gw', etc. scoped to that test only) -- no module-level mutable state, no test reads another test's data, no ordering dependency; module uses `async: true` with no Ecto.Sandbox/Repo touch, consistent with the pure-function contract. This is a WF-02 requirement test (not a WF-03 regression test), so the pre-fix-failure-confirmation check does not apply. Independently re-ran (not trusting TEST-DESIGNER's reported 40/0): `mix test test/letflow/definitions/graph_test.exs` -> 'Finished in 0.3 seconds (0.3s async, 0.00s sync) / 40 tests, 0 failures'. One unrelated stderr line logged during the run ('Metadata load failed for issuer https://placeholder-keycloak.invalid...') is a pre-existing OIDC-client background retry warning unrelated to this test file's pure-function scope, not a test failure -- exit reflected 0 failures. All 5 checks (a-e) from WF-02 Step 3b pass. Verdict: PASS.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ029-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ029-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (Step 4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

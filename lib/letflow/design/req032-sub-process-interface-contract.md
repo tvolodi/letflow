@@ -28,13 +28,17 @@ only — no implementation code, no function bodies, no `.ex`/`.exs` code blocks
   algorithm this environment cannot read from R-Co source directly (§4.3/§6 of that
   document), and its own explicit open-question style (§9) — followed here rather than
   re-invented.
-- `lib/letflow/design/req028-graph-structural-validator.md` §0 and §9.2 — **directly
-  relevant and load-bearing for §2 below**: REQ-028's own design doc states it read
-  `graph.zig` directly and found `NodeType` already has **8** variants there, *including
-  `SUB_PROCESS`, "added later for SPC-02"* — and that REQ-028 deliberately scoped itself to
-  the 7-variant PD-05-authoritative set, "not resolved here — flagged for REQ-029 ... or a
-  future requirement to decide." REQ-029 did not add it either (its design doc inherits
-  the 7-variant type unchanged). This design is that "future requirement" — see §2.
+- `lib/letflow/design/req028-graph-structural-validator.md` §0 — **directly relevant and
+  load-bearing for §2 below**: REQ-028's own design doc states it read `graph.zig` directly
+  and found `NodeType` already has **8** variants there, *including `SUB_PROCESS`, "added
+  later for SPC-02"* — but that REQ-028's own description **explicitly overrides this**
+  with `definition.md`'s 7-variant PD-05-authoritative set (no `SUB_PROCESS`), "so this
+  design follows the requirement text, not the literal current `graph.zig` enum." That is a
+  **firm, explicit decision to exclude `SUB_PROCESS`**, not a deferral — REQ-028 does not
+  flag this as an open question anywhere in its own document. REQ-029 did not add it either
+  (its design doc inherits the 7-variant type unchanged). §2 below names REQ-032's addition
+  of `SUB_PROCESS` for what it is: an override of that prior decision, not the resolution of
+  a previously-flagged item.
 - `lib/letflow/definitions/graph.ex` (full, current `main`, post-REQ-029) — the actual
   module this design extends in place; confirms the exact current `node_type` union (7
   variants, line ~56), the `Violation.code` union (18 atoms post-REQ-029, line ~113), the
@@ -131,15 +135,27 @@ structurally required for the requirement to mean anything (a SUB_PROCESS node's
         | :SUB_PROCESS
 ```
 
-**This is not a new decision invented by this design — it is REQ-028's own explicitly
-deferred one, closing the loop.** `req028-graph-structural-validator.md` §0 states directly:
-`graph.zig`'s real `NodeType` enum already has 8 variants including `SUB_PROCESS`, "added
-later for SPC-02," and that REQ-028 deliberately scoped itself to the 7-variant
-PD-05-authoritative set from `definition.md`, "not resolved here — flagged for REQ-029 ...
-or a future requirement to decide." REQ-029 did not add it (confirmed by the current
-`graph.ex` union having exactly 7 variants). REQ-032 — the SPC-02 requirement `SUB_PROCESS`
-exists specifically for — is that future requirement. Adding it here, and only here, is
-therefore the intended resolution point, not scope creep.
+**This overrides REQ-028's own prior decision — named explicitly as an override, not a
+silent reversal, per `core-directives.md`'s "don't silently re-decide what a decision
+record already settled" concern.** `req028-graph-structural-validator.md` §0 states
+directly: `graph.zig`'s real `NodeType` enum already has 8 variants including
+`SUB_PROCESS`, "added later for SPC-02," but that REQ-028's own description "explicitly
+overrides this with definition.md's 7-variant PD-05-authoritative set (no `SUB_PROCESS`),
+so this design follows the requirement text, not the literal current `graph.zig` enum."
+That was a **firm, explicit decision to exclude `SUB_PROCESS`** — REQ-028 does not flag it
+as deferred, open, or left to a future requirement anywhere in its own document. (REQ-028's
+actual deferred/open item, §9.2, is a different, unrelated question — whether a 9th check
+should reject a bogus/unknown `node_type` atom like `:BOGUS`; it never mentions
+`SUB_PROCESS`.) REQ-029 inherited the 7-variant type unchanged, confirming REQ-028's
+exclusion stood through the next requirement too.
+
+REQ-032 overrides that decision by necessity, not by re-litigating it: a SUB_PROCESS node
+cannot be constructed at all, and this requirement cannot mean anything, without the
+variant existing in `node_type/0`'s union. This is a new, independent decision this design
+is making — the reason is stated in the paragraph above (structurally required for REQ-032
+to be meaningful), not an inherited resolution of something REQ-028 left open. Naming it
+this way — override, with a stated reason — rather than as REQ-028 "closing a loop" it
+never actually left open, is the point of this rework.
 
 **No other structural-check changes are needed for this addition, confirmed against every
 existing check that switches on `node_type`:**

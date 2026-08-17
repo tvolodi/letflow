@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ036-20260817/step-02d-reviewer.json",
   "created_at": "2026-08-17T18:28:02Z",
   "started_at": "2026-08-17T18:28:02Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-17T18:30:22Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S2",
@@ -35,10 +35,21 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": null,
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "Reviewed the 3-module diff (promotion_plan.ex, promotion_conflict.ex, promotion_digest.ex, 561 lines total) against lib/letflow/design/promotion_plan.md, docs/guides/backend_developer_guide.md sec 3.5, docs/anti-patterns.md, and docs/migration/decisions/0003-ecto-schema-strategy.md (Decision B). Idiomatic vs. crutch: pure functions + with/cond + Enum/MapSet, no crutch pattern found. Supervision: N/A confirmed -- grep for GenServer/gen_statem/spawn across all 3 files returns zero hits; this diff is pure computation + read-only Repo.get_by/3, no process introduced. Scope creep: implementation's public API matches the design's 3-module surface exactly (PromotionPlan.compute_promotion_plan/5 + default_permission_checker/2 + default_tenant_classifier/1, PromotionConflict.reject_if_conflicts/4, PromotionDigest.compute_plan_digest/1 + verify_digest/2) -- both default_* public functions are explicitly anticipated by design sec 9.1/9.2, not invented abstractions; no extra public functions, no behaviours/macros/generic plumbing. Decision B (schema-per-tenant via :prefix): both modules derive :prefix exclusively via TenantProvisioning.schema_name_for_tenant/1, no tenant_id-only filtering layered on top -- consistent, no divergence. anti-patterns.md: none of its 3 logged entries apply to this diff. REQ-030 concurrency check: git fetch origin main confirms REQ-030 is still status: in_progress in docs/requirements.yaml on origin/main; its only landed commit (a6330d9, Step 00 git-setup) touches only docs/handoffs bookkeeping files, zero lib/ changes; origin/main's history for lib/letflow/definitions/ has no promotion_plan/conflict/digest files at all -- this run's 3 new files have no overlap risk with REQ-030. Judgment 1 (Keyword.fetch!(opts, :permission_checker) raising KeyError instead of {:error, :permission_checker_required}): ACCEPTABLE divergence, not a crutch -- backend guide sec 3.5's {:ok,_}|{:error,_} convention governs failures arising from external I/O or tenant/user input reaching a well-formed call; an omitted required opt is a caller/programmer-configuration defect, a categorically different failure class, and Keyword.fetch! for a mandatory option with no safe default is standard Elixir idiom (mirrors OTP's own convention of crashing loudly on invalid start_link opts). Returning {:error, :permission_checker_required} would be strictly worse here: it would sit in the same tuple shape as the legitimate runtime outcomes (:forbidden, :invalid_tenant_id, :empty_plan) that callers are expected to pattern-match, making it silently swallowable by a generic {:error, _} catch-all -- exactly the failure mode that would make a missing permission gate look like a handled error instead of a crash. A raised KeyError cannot be caught by accident, surfaces on first invocation/test, and concurs with SECURITY-REVIEWER's independent INV-8 finding (step-02c) that this is 'a deliberate fail-closed contract violation on missing caller configuration, not tenant-controlled input.' Judgment 2 (reject_if_conflicts/4's mismatched-length check as a guarded function-head clause): CONFIRMED idiomatic and behaviorally identical to design sec 4.2 step 1 -- multi-clause dispatch with a guard is standard Elixir style, arguably clearer than embedding the same branch inside a single function body since the early-exit is visible in the function's shape. No divergence. Type-safety gaps noted (non-blocking, per REVIEWER's standing brief to flag even when not asked): (a) process_key/base_version as two separate index-aligned lists (rather than one list of {key, base} tuples/a struct) makes the length-mismatch case a runtime-checked invariant instead of structurally impossible -- design sec 4.2 states this was a deliberate tradeoff to preserve the task's literal 4-arity/4-name signature, so disclosed, not an oversight; (b) plan_entry()'s before/after :: map() | String.t() | nil is a single union shared across all 5 entry_type() variants rather than a tagged/dependent variant per dimension, so nothing statically prevents a :graph_node entry from carrying a String.t() value -- not exercised incorrectly anywhere in this diff, just the general 'loosely-correlated map fields' pattern worth watching as this shape grows (same category as PromotionPlan.t()/plan_entry() being structural maps rather than structs, itself already flagged as a considered default in design sec 9.7). No genuine crutch, no supervision issue, no scope creep -- PASS.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ036-20260817/step-02d-reviewer.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Keyword.fetch!(opts, :permission_checker) raises KeyError on a missing required opt rather than returning {:error, :permission_checker_required}. Judged acceptable: a missing required opt is a caller/programmer-configuration defect (not tenant/runtime input), Keyword.fetch! for a mandatory no-safe-default option is standard Elixir idiom, and a raised exception is strictly harder to silently swallow than an :error tuple sitting alongside legitimate runtime outcomes a caller is expected to pattern-match. Concurs with SECURITY-REVIEWER's independent step-02c finding. No rework required."
+      },
+      {
+        "severity": "MINOR",
+        "description": "Type-safety gap (non-blocking): process_key/base_version as two index-aligned lists rather than one list of pairs makes the mismatched-length case a runtime guard instead of structurally impossible; disclosed as a deliberate tradeoff in design sec 4.2 to preserve the task's fixed 4-arity signature. Worth reconsidering if a future requirement gives reject_if_conflicts/4 more callers."
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ036-20260817",
       "commit_sha_list": [],
@@ -47,7 +58,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to TEST-DESIGNER (3)"
   },
   "rework_count": 0,
   "max_rework": 3

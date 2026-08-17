@@ -201,7 +201,7 @@ defmodule Letflow.Plugs.TenantStatusTest do
       assert_receive {:DOWN, ^ref, :process, ^other_pid, :normal}, 1000
 
       refute_received :query_fired,
-                       "expected a query event fired from a different process to be filtered out"
+                      "expected a query event fired from a different process to be filtered out"
     end
   end
 

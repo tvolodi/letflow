@@ -57,4 +57,35 @@ description: >
 affected_files:
   - .formatter.exs
 github_issue: https://github.com/tvolodi/letflow/issues/72
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0016-20260817
+resolved_at: 2026-08-17T07:29:19Z
+resolution: >
+  Applied the issue's own suggested fix: added import_deps: [:ecto_sql]
+  and a "priv/repo/migrations/**/*.exs" input glob to .formatter.exs.
+
+  Better outcome than the issue anticipated: it expected running mix
+  format afterward to produce a repo-wide mechanical diff across all
+  (now 16, up from 13 at discovery time -- REQ-023/027 added more since)
+  migration files. It did not -- mix format changed zero migration
+  files. All 16 were already written in the ecto_sql-idiomatic
+  (unparenthesized create/add/timestamps) style; they were simply never
+  actually checked before, exactly as the issue described, but the gate
+  being blind to them had not let any actual drift accumulate. mix
+  format did fix one unrelated pre-existing formatting nit in
+  test/letflow/plugs/tenant_status_test.exs (a string-alignment leftover
+  from this session's earlier ISS-0031 edit), now caught because .exs
+  test files were already in scope regardless of this issue's fix.
+
+  Verified rigorously rather than trusting the clean run alone: `mix
+  format --check-formatted` exits 0 repo-wide; individually re-checked
+  a migration file directly by path to confirm it's actually recognized
+  by the new input glob (not silently unmatched); `ls
+  priv/repo/migrations/*.exs | wc -l` confirms 16 real files exist,
+  ruling out a suspiciously-empty match. mix compile
+  --warnings-as-errors clean; full suite 310/310.
+
+  No lib/, priv/, or test/ *behavior* change -- formatter-configuration
+  fix only (test file's one-line whitespace fix is incidental, caused by
+  running the formatter, not a deliberate edit).

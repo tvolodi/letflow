@@ -2391,3 +2391,27 @@ history:
       MIX_TEST_PARTITION=2 under MIX_ENV=dev confirmed to raise the new
       guard. Released queue task 64 as done via the per-client API key,
       closing GitHub issue #71.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-17T07:29:19Z
+    note: >
+      Resolved ISS-0016 (GH#72, MINOR, filed by ELIXIR-DEV during
+      WF02-REQ023-20260816 Step 2a -- queue task 63). .formatter.exs
+      excluded priv/repo/migrations/** and lacked import_deps:
+      [:ecto_sql], so no migration file had ever been format-checked by
+      the project's own gate. Applied the issue's own suggested fix
+      (add both). Better outcome than anticipated: the issue expected a
+      repo-wide mechanical reformat diff across all migrations once
+      fixed; there wasn't one -- all 16 (up from 13 at discovery, more
+      added by REQ-023/027 since) were already written in the
+      ecto_sql-idiomatic style, just never actually checked. mix format
+      did fix one unrelated pre-existing nit in
+      test/letflow/plugs/tenant_status_test.exs (incidental, from this
+      session's earlier ISS-0031 edit). Verified rigorously: mix format
+      --check-formatted exits 0 repo-wide; individually re-confirmed a
+      migration file is actually recognized by the new input glob (not
+      silently unmatched); confirmed 16 real migration files exist via
+      ls. mix compile --warnings-as-errors clean; full suite 310/310.
+      Released queue task 63 as done via the per-client API key, closing
+      GitHub issue #72.

@@ -47,4 +47,6 @@ description: >
 affected_files:
   - lib/letflow/definitions.ex
 github_issue: https://github.com/tvolodi/letflow/issues/120
-status: open
+status: resolved
+resolved_in_run: ADHOC-20260817-003
+resolved_at: "2026-08-17T22:09:36Z"

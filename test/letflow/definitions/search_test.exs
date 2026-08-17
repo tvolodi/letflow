@@ -109,17 +109,6 @@ defmodule Letflow.Definitions.SearchTest do
     definition
   end
 
-  # `search/2`'s @type declares `rank: float()`, but the shipped query's CASE-expression
-  # literals (3.0/2.0/1.0) come back from Postgrex as `Decimal.t()`, not `float()` --
-  # confirmed directly by running this suite (Decimal.new("3.0") != 3.0 under `==`).
-  # Filed as docs/issues/ISS-0038.yaml (typespec/runtime-type mismatch, not blocking
-  # AC1's own ranking-order behavior) rather than silently worked around. This helper
-  # normalizes either representation so the test asserts the real, documented ranking
-  # *values* (3.0/2.0/1.0) without asserting on the (currently inconsistent) Elixir term
-  # type, which is the separate concern the filed issue tracks.
-  defp rank_to_float(%Decimal{} = decimal), do: Decimal.to_float(decimal)
-  defp rank_to_float(rank) when is_float(rank), do: rank
-
   # ---------------------------------------------------------------------------------
   # AC1: "search/1 with query \"invoice\" returns a definition named exactly
   # \"invoice\" ranked above one named \"invoice-approval\" (partial name match),
@@ -143,7 +132,7 @@ defmodule Letflow.Definitions.SearchTest do
 
       assert {:ok, results} = Definitions.search("invoice", prefix: schema_name)
 
-      rank_by_id = Map.new(results, fn %{definition: d, rank: r} -> {d.id, rank_to_float(r)} end)
+      rank_by_id = Map.new(results, fn %{definition: d, rank: r} -> {d.id, r} end)
 
       assert rank_by_id[exact.id] == 3.0
       assert rank_by_id[partial.id] == 2.0

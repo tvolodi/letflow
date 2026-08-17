@@ -715,8 +715,12 @@ defmodule Letflow.Definitions do
   # exact case-insensitive name match (3.0), else partial name ILIKE match
   # (2.0), else -- since the surrounding WHERE clause already restricts every
   # row here to a name-or-description match -- the row matched via description
-  # alone (1.0), per design §5's "safe unconditional ELSE" rationale.
-  @rank_case_sql "CASE WHEN lower(?) = lower(?) THEN 3.0 WHEN ? ILIKE ? THEN 2.0 ELSE 1.0 END"
+  # alone (1.0), per design §5's "safe unconditional ELSE" rationale. Cast to
+  # float8 explicitly (ISS-0038/GH#120): Postgres infers an untyped numeric-literal
+  # CASE expression as `numeric`, which Postgrex/Ecto decode as `Decimal.t()`, not
+  # the `float()` this module's `@type search_result` and `search/2`'s @doc both
+  # promise -- the cast makes the wire type match the documented Elixir type.
+  @rank_case_sql "(CASE WHEN lower(?) = lower(?) THEN 3.0 WHEN ? ILIKE ? THEN 2.0 ELSE 1.0 END)::float8"
 
   defp select_with_rank(queryable, search_query, pattern) do
     select(queryable, [d], %{

@@ -1,0 +1,52 @@
+{
+  "handoff_id": "c23beb39-6534-4f0f-b0c2-c054f5b6efc3",
+  "run_id": "WF02-REQ037-20260817",
+  "workflow_id": "WF-02",
+  "step": "01-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ037-20260817/step-01-rework1-code-designer.json",
+  "created_at": "2026-08-17T19:31:51Z",
+  "started_at": "2026-08-17T19:31:51Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-037"],
+    "related_handoff_ids": ["4ead191e-f254-4255-9128-187d0f121f0e"],
+    "artifacts_in": [
+      "lib/letflow/design/promotion_review_state_machine.md",
+      "handoffs/WF02-REQ037-20260817/step-02c-security-reviewer.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/promotion_review_state_machine.md"
+    ]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1: SECURITY-REVIEWER FAILed Step 2c with a BLOCKER on INV-1 (docs/agents/instructions/security-invariants.md), root-caused in this design. Read handoffs/WF02-REQ037-20260817/step-02c-security-reviewer.json's full result.summary and result.issues[0] for the complete finding before touching the design doc. Summary: insert_review/2's design (lib/letflow/design/promotion_review_state_machine.md lines ~337-339) explicitly specifies that attrs.tenant_id is set from the caller-supplied plan.target_tenant_id while opts[:prefix] is taken as an independently-trusted value with nothing tying the two together -- this is exactly the rejected option (a) from docs/migration/decisions/0003-ecto-schema-strategy.md's 2026-08-17 write-time tenant_id-derivation addendum. The addendum's own accepted resolution is to derive/validate tenant_id from opts[:prefix] via Letflow.TenantProvisioning.tenant_id_for_schema_name/1 (already shipped, built for REQ-025 -- read that function's actual signature/behavior directly, don't assume). Read the addendum in docs/migration/decisions/0003-ecto-schema-strategy.md in full to understand exactly what it requires. Revise ONLY the insert_review/2 section of the design (§2.3) to close this gap: either (a) derive tenant_id internally from opts[:prefix] via tenant_id_for_schema_name/1 rather than trusting plan.target_tenant_id at all, or (b) validate that plan.target_tenant_id matches the tenant_id derived from opts[:prefix] and return an explicit error (name the atom) on mismatch before any insert -- pick whichever the addendum actually calls for (read it, don't guess), and state your reasoning. The other 5 transition functions were confirmed by SECURITY-REVIEWER to be safe (they never touch the tenant_id column, only read via prefix-scoped Repo.get) -- do not unnecessarily change them, but do double check them explicitly against the addendum for completeness in your revised doc. promote_definition/3's own design is otherwise unaffected -- do not revise it unless the insert_review/2 fix changes what it can trust from review.tenant_id.",
+    "acceptance_criteria": [
+      "Revised design's insert_review/2 satisfies the 2026-08-17 write-time tenant_id-derivation addendum to Decision 0003 -- explicitly cite which of the addendum's accepted resolutions you applied and why",
+      "No other function's design changed unless the insert_review/2 fix requires it, and any such change is called out explicitly",
+      "The revision is scoped to the design doc only -- do not touch implementation files (ELIXIR-DEV re-implements after this passes validation again)",
+      "Explicitly re-verify the other 5 transition functions against the addendum in the revised doc, even though SECURITY-REVIEWER already confirmed them safe, so the doc's own reasoning is complete and self-contained"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ037-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ037-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

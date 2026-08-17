@@ -1716,7 +1716,7 @@ requirements:
   - id: REQ-037
     title: Promotion review state machine and base promote (promotion_review.zig PRM-04 + promotion.zig ENV-03)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S2
     impl_order: 54  # letflow-queue task id
     description: >

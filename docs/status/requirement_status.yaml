@@ -3239,3 +3239,23 @@ history:
       none needed editing (0003's 2026-08-17 addendum, which REQ-030
       implements against, was already recorded by the ISS-0025
       resolution prior to this run).
+  - req: REQ-037
+    event: started
+    agent: ORCH
+    at: "2026-08-17T18:59:40Z"
+    note: >
+      Started WF02-REQ037-20260817 -- Promotion review state machine and
+      base promote (promotion_review.zig PRM-04 + promotion.zig ENV-03):
+      insert_review/1, approve_review/4 (self-approval/digest/row_version
+      gates), reject_review/2, mark_review_applied/1, mark_review_failed/1,
+      supersede_review/2 (including the NEW rejected->superseded edge),
+      plus promote_definition/N (ENV-03) which the apply transition wraps.
+      Exactly 7 permitted state edges total. Claimed queue task 54
+      (agent_id hetzner-wt2-orch), depends_on REQ-035/REQ-036 both done.
+      Step 00 complete (worktree variant): branched
+      feature/WF02-REQ037-20260817 from origin/main, pushed. Baseline
+      verified: mix compile clean, MIX_TEST_PARTITION=2 mix test 536/536
+      (4 properties, 0 failures). Checked owned_modules against
+      WF02-REQ030-20260817 (concurrent, directory-level
+      lib/letflow/definitions lock) -- no actual file-level conflict.
+      Routing to CODE-DESIGNER for Step 1.

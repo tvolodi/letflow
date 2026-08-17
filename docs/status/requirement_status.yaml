@@ -2259,3 +2259,29 @@ history:
       agent/run id, so the registering host's identity isn't recoverable).
       Released queue task 77 as done via the per-client API key, closing
       GitHub issue #90.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-17T07:09:08Z
+    note: >
+      Resolved ISS-0022 (GitHub #79, MAJOR, filed by DOC-UPDATER during
+      WF02-REQ023-20260816 Step 6 -- queue task 68, an older
+      GitHub-imported issue, LIFO priority correctly reaching further back
+      as newer issues drain). README.md's front-page "Migration status"
+      section claimed only Stage 0 was expanded (false -- S0/S1 done, S2
+      expanded and in progress) and promoted the user-cancelled MVP-1
+      milestone with a dead link to a deleted file. Rewrote both defects:
+      the stage claim now dated and pointing at docs/requirements.yaml for
+      live per-requirement status rather than a hardcoded count (avoiding
+      the same staleness class recurring); the MVP-1 paragraph removed
+      entirely rather than replaced with another snapshot. Also fixed
+      docs/migration/README.md's stale "REQ-022 is done, REQ-023..042
+      pending" one-liner, and, found while there (not named by the issue),
+      its separate "Milestones vs. stages" section's own two dead links to
+      the same deleted mvp-1-vertical-slice.md -- replaced with a factual
+      cancellation note that keeps the milestone concept documented for
+      future use. Deliberately left ISS-0012/GH#68 (a different README
+      staleness, "Running it" section) untouched -- separate issue, will
+      surface as its own task if still open. No lib/, priv/, or test/ file
+      touched. Released queue task 68 as done via the per-client API key,
+      closing GitHub issue #79.

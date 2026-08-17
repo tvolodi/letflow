@@ -79,4 +79,40 @@ affected_files:
   - README.md
   - docs/migration/README.md
 github_issue: https://github.com/tvolodi/letflow/issues/79
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0022-20260817
+resolved_at: 2026-08-17T07:09:08Z
+resolution: >
+  README.md's "Migration status" section rewritten: (1) replaced the
+  "only Stage 0 is broken into requirements" claim with an accurate,
+  dated (2026-08-17) statement that S0/S1 are done and S2 is expanded and
+  in progress -- deliberately without a hardcoded per-requirement count,
+  pointing instead at docs/requirements.yaml and docs/migration/README.md
+  as the live source of truth, so this exact staleness class can't recur
+  here; (2) removed the MVP-1 promotional paragraph entirely (cancelled
+  milestone, dead file link) rather than replacing it with another
+  snapshot that would itself go stale -- the authoritative cancellation
+  record already lives in REQ-101..108's docs/requirements.yaml entries.
+
+  Also fixed docs/migration/README.md, both regions the issue named: (a)
+  the "Requirement expansion" section's stale "REQ-022 is done,
+  REQ-023..042 are pending" one-liner, now pointing at requirements.yaml
+  per-requirement status instead of a hardcoded count for the same
+  stay-fresh reason; (b) while there, found and fixed an adjacent problem
+  the issue itself hadn't named: the "Milestones vs. stages" section
+  linked mvp-1-vertical-slice.md (the same deleted file) twice as its
+  worked example. Replaced with a factual note that MVP-1 was the first
+  milestone under this model, cancelled by the user, pointing at
+  REQ-101..108's status field -- keeps the general "milestone" concept
+  documented for whenever the next one is proposed, rather than either
+  leaving a dead link or deleting the concept's only explanation.
+
+  Deliberately did NOT fold in ISS-0012/GH#68 (the separate "Running it"
+  section staleness) -- different issue, different cause, will surface as
+  its own queue task if still open; the two are recorded separately per
+  this issue's own text ("neither subsumes the other").
+
+  Grepped both edited files for any remaining mvp-1-vertical-slice
+  reference after the edit -- none found. No lib/, priv/, or test/ file
+  touched -- documentation only.

@@ -16,18 +16,18 @@ drive each step.
 
 The migration is staged (S0–S8); see `docs/requirements.yaml`'s
 `stages:` list and `docs/migration/README.md` for the full breakdown
-and the R-Co source paths each stage ports. Only Stage 0
-(foundation-and-scaffolding) is broken into requirements today — later
-stages are expanded into requirements as the stage before them lands.
-Check `docs/requirements.yaml` for the next `pending` requirement
-before starting unscoped work, same as always.
-
-Alongside the staged migration, **MVP-1** (`REQ-101..108`) is a
-narrow, cross-stage milestone aimed at getting one workflow visibly
-running in R-Co's existing `web/` GUI against a real Elixir backend as
-fast as honestly possible — skipping real OIDC/Keycloak in favor of a
-dev-mode bootstrap token. It does not satisfy the stages it touches
-(S0/S1/S3/S4); see `docs/migration/mvp-1-vertical-slice.md`.
+and the R-Co source paths each stage ports. As of 2026-08-17: Stage 0
+(foundation-and-scaffolding) and Stage 1 (identity/multi-tenancy) are
+both fully expanded into requirements **and done** — S1's stage gate
+was formally cleared 2026-08-16. Stage 2 (event store + definitions)
+is expanded into requirements and in progress. Later stages are
+expanded as the stage before them lands. `docs/requirements.yaml` and
+`docs/migration/README.md`'s "Requirement expansion" section are the
+live source of truth for exact per-requirement status — this section
+intentionally doesn't restate a snapshot count here, since that's
+exactly the kind of number that goes stale (see `ISS-0022`). Check
+`docs/requirements.yaml` for the next `pending` requirement before
+starting unscoped work, same as always.
 
 ## What's here today
 

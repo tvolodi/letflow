@@ -53,19 +53,27 @@ different kind of thing: a thin, deliberately narrow slice cutting
 across several stages at reduced depth, aimed at a concrete visible
 outcome sooner than waiting for those stages to fully land would
 allow. Milestones don't get an `id` in the `stages:` table above or a
-slot in the dependency chain; they get their own detail file (e.g.
-[mvp-1-vertical-slice.md](mvp-1-vertical-slice.md)) and their
+slot in the dependency chain; they get their own detail file and their
 requirements carry both a `stage:` (the real stage each requirement
 narrowly front-runs) and a `milestone:` tag, so "the milestone's slice
-through S1 is done" is never confused with "S1 is done." See
-[mvp-1-vertical-slice.md](mvp-1-vertical-slice.md)'s "Relationship to
-S0-S8" section for what that distinction looks like in practice.
+through S1 is done" is never confused with "S1 is done."
+
+**MVP-1 (`REQ-101..108`) was the first milestone under this model —
+cancelled by the user (commit `d41beb0`) before completion, its own
+detail file deleted in the same commit; see `REQ-101..108`'s
+`status: cancelled` entries in `docs/requirements.yaml` for the
+authoritative record (updated 2026-08-17, `ISS-0022`).** No milestone
+is currently active; this section documents the concept for whenever
+the next one is proposed.
 
 ## Requirement expansion
 
 Stage 0 (REQ-010..014) and Stage 1 (REQ-015..021) are fully expanded and
-done. Stage 2 is expanded into requirements (REQ-022..042, 21 total);
-REQ-022 is done, REQ-023..042 are pending. Expand a later stage into
+done. Stage 2 is expanded into requirements (REQ-022..042, 21 total) and
+in progress — check each requirement's `status:` in `docs/requirements.yaml`
+directly for current per-requirement state rather than a snapshot count
+here, which goes stale between edits (see `ISS-0022`, 2026-08-17). Expand
+a later stage into
 requirements only once the stage(s) it `depends_on` are done — sizing a
 stage's requirements correctly generally requires the interfaces/decisions
 the prior stage produced. Follow the same schema and one-agent-turn sizing

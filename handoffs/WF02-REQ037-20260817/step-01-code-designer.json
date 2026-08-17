@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ037-20260817/step-01-code-designer.json",
   "created_at": "2026-08-17T19:00:29Z",
   "started_at": "2026-08-17T19:00:29Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-17T19:09:23Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S2",
@@ -39,9 +39,9 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Produced lib/letflow/design/promotion_review_state_machine.md covering: (1) the 7-edge state machine as a table + ASCII diagram, with an explicit invalid-transition catch-all invariant (INV-PRM04-1) driven by a per-function hardcoded allowed_source_statuses set; (2) insert_review/2, approve_review/4 (3 ordered gates -- self_approval_forbidden, then status pre-check, then digest_mismatch via PromotionDigest.verify_digest/2 -- plus the row_version-guarded UPDATE as the authoritative 4th step), reject_review/3, mark_review_applied/2, mark_review_failed/2, supersede_review/3 (one function for all 3 supersession edges) in a new Letflow.Definitions.PromotionReviewStore context module, following the InstanceDefinitionSnapshot/SnapshotStore schema-vs-context split precedent; (3) a new Letflow.Definitions.Promotion module for promote_definition/3, explicitly reusing PromotionPlan's permission_checker/tenant_classifier opts shape (tenant_classifier delegates to PromotionPlan.default_tenant_classifier/1 rather than duplicating it) and adding a new, no-default opts[:event_appender] injection point since EventStore.append/2 has no working non-instance-scoped path today (confirmed by direct inspection -- no DEFINITION_PROMOTED event type registered anywhere, and even platform_instance_id() doesn't resolve to a real instance_projections row); (4) a fully concrete AC4 concurrency-test recipe reusing test/letflow/event_store_test.exs's existing Task.async ready/go barrier idiom verbatim, with deterministic assertions that don't depend on wall-clock interleaving. Also resolved two real cross-requirement gaps explicitly rather than silently: REQ-035's own open question 3 (superseded_by's target -- resolved as the causing event's event_id, no FK), and REQ-036's design-doc forward-reference handing PromotionConflict.reject_if_conflicts/4's base_version check to REQ-037 (placed inside promote_definition/3, not approve_review/4, with reasoning). Six open questions listed explicitly (event-append's missing target and partial-failure window; def_type has no PromotionPlan source; approve_review/4 has no permission_checker gate, matching REQ-036's own flagged gap; reject_review's actor_id isn't persisted -- no column exists; promote_definition/N duplicates PD-03's two-step swap since REQ-030's activate/1 hasn't shipped; PromotionReview's PER_TENANT classification restated from REQ-035). All 6 acceptance criteria mapped in a closing table. No implementation code -- @spec/@type blocks and algorithm prose only, matching promotion_plan.md's validator-approved convention.",
+    "artifacts_out": ["lib/letflow/design/promotion_review_state_machine.md"],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ037-20260817",
@@ -51,7 +51,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

@@ -75,6 +75,20 @@ lands and a CI workflow exists:
       - Apply the correct resolution (preserve valid changes from both sides)
       - git add <file>
 
+      ⚠️ `git checkout --ours`/`--theirs` is INVERTED during `git rebase`
+      compared to `git merge` (added 2026-08-17, ISS-0039/GH#121 — this
+      inversion caused a real silent overwrite of a resolved issue record on
+      `main`, discovered only because a later run independently re-read the
+      file instead of trusting the resolving run's own log). During `git
+      rebase`, `--ours` = the commit you're rebasing ONTO (main), `--theirs` =
+      your own commit being replayed — the opposite of `git merge`'s meaning.
+      Don't use either flag from merge-trained habit during a rebase conflict;
+      read the actual `<<<<<<<`/`=======`/`>>>>>>>` content (or `git show
+      :2:<path>` / `git show :3:<path>`) and hand-resolve instead. After
+      resolving, independently re-read the resulting file's content before
+      writing a log/status entry claiming what was kept — see
+      `docs/anti-patterns.md`'s matching entry for the full incident.
+
       SEMANTIC conflicts (added 2026-08-17, ISS-0023/GH#81): a textual conflict
       marker means git couldn't merge two overlapping edits automatically. A
       semantic conflict is different in kind and easy to miss — both sides may

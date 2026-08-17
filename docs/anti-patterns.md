@@ -193,3 +193,56 @@ the attribute at each `fragment/1` call -- never a function call pinned with `^`
 which Ecto rejects outright, and never silent duplication when the attribute
 approach is available and its call sites are simple enough that one shared source
 of truth is a strict improvement.
+
+## `git checkout --ours`/`--theirs` means the opposite thing during `git rebase` vs. `git merge`
+
+During WF02-REQ031-20260817's Step Final, ORCH hit an add/add conflict on
+`docs/issues/ISS-0036.yaml` (a genuine cross-host numbering collision, already a
+known class per the ISS-0034/ISS-0035 precedent) and resolved it with
+`git checkout --theirs docs/issues/ISS-0036.yaml`, intending to keep `main`'s
+version and drop the run's own now-redundant local copy. The run's own
+`orchestrator.log`/`registry.json`/`requirement_status.yaml` entries all explicitly
+documented this intent ("resolved by keeping main's version via `git checkout
+--theirs`" / "this run's local ISS-0036.yaml was NOT merged; main's ISS-0036.yaml
+... was kept as-is").
+
+That is backwards. `git checkout --ours`/`--theirs` swaps meaning between the two
+commands:
+- During `git merge`, `--ours` = the branch you're on (HEAD), `--theirs` = the
+  branch being merged in.
+- During `git rebase`, this is **inverted**: `--ours` = the commit you are
+  rebasing *onto* (the target, typically `main`), `--theirs` = the commit
+  currently being replayed (your own feature branch's content) -- because a
+  rebase internally does its work as a sequence of cherry-picks of your commits
+  onto the new base, and from that internal perspective your own commit is the
+  "other" side being applied.
+
+So `git checkout --theirs` during that rebase actually kept the **run's own**
+`ISS-0036.yaml` (its SVC-03/INV-5 finding) and silently overwrote `main`'s actual
+content -- a different, already-independently-resolved `ISS-0036.yaml` from a
+concurrent run (a `valid_review_attrs/1` unused-default-arg fix) -- with it. The
+squash-merge then carried that wrong content into `main` permanently. Discovered
+only because a *third*, later run (WF02-REQ042-20260817) hit its own conflict on
+the same file during its own rebase and, per this project's "never satisfy a gate
+by editing what it measures" / independent-verification discipline, ran `git show
+origin/main:docs/issues/ISS-0036.yaml` to check the actual content on disk rather
+than trusting the prior run's own log narrative -- which is what caught the
+mismatch. See `docs/issues/ISS-0039.yaml` for the full incident and fix (no
+permanent data loss: git history retained the original resolved content, so it
+could be recovered from the commit that first wrote it).
+
+**Why this is easy to miss:** the git command runs cleanly, produces no error, and
+the rebase/merge completes -- there is no signal at the time that the flag picked
+the wrong side. It only surfaces later, and only if something re-derives the
+actual file content independently rather than trusting the resolving run's own
+narration of what it did.
+
+**Correct alternative:** during a `git rebase` conflict, don't reach for
+`--ours`/`--theirs` from merge-trained muscle memory -- either reason explicitly
+about which side each flag means *in a rebase specifically* (or just avoid the
+ambiguity: read both versions with `git show :2:<path>` / `git show :3:<path>`,
+or open the file and look at the `<<<<<<<`/`=======`/`>>>>>>>` markers directly,
+and hand-edit to the intended result). After resolving any conflict this way on a
+shared/audited file, independently re-read the resulting file's actual content
+before writing a log/status entry that claims what was kept -- don't narrate
+intent as if it were the verified outcome.

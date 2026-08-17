@@ -2079,3 +2079,33 @@ history:
       this GitHub-imported issue task (queue task 75, github_issue_number 82)
       ahead of the entire open S2 requirement backlog, then released
       (status: done) via the same key after this fix landed.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-17T06:09:15Z
+    note: >
+      Resolved ISS-0025 (GitHub #83, MAJOR, filed by CODE-DESIGNER during
+      WF02-REQ027-20260816, next task returned by letflow-queue after
+      ISS-0024/task-75 above -- queue task 74, also a GitHub-imported issue,
+      claimed ahead of the S2 requirement backlog by the same priority logic).
+      This one was a genuine architecture gap, not a wording defect: no
+      requirement said who populates a Decision-B tenant_id column at write
+      time, since Letflow has no session-GUC default the way R-Co does. The
+      issue record already contained a full CODE-DESIGNER + SECURITY-REVIEWER
+      analysis of three options with an explicit recommendation (option c,
+      on attribution-integrity grounds -- option (a)'s caller-supplied field
+      lets a row sit in tenant A's schema while claiming tenant_id = B, which
+      a derived value structurally cannot do); ORCH codified that existing
+      recommendation into docs/migration/decisions/0003-ecto-schema-strategy.md
+      as a new addendum rather than re-deriving or re-litigating it. Amended
+      REQ-025 and REQ-030 (both still status: pending, matching the issue's
+      own "resolve before claimed" condition) with a TENANT_ID description
+      note plus a new demonstrable acceptance criterion each, and updated
+      req027-definition-core-schema.md's OQ-1 to point at the resolution.
+      Option (b) (session-GUC tenant context) was deliberately deferred as
+      out of scope for this addendum, not ruled out. Validated
+      docs/requirements.yaml still parses via `npx js-yaml`. No lib/, priv/,
+      or test/ file touched -- this is a requirement-content and
+      decision-record amendment, not an implementation change; REQ-025 and
+      REQ-030 remain unimplemented and unclaimed. Released queue task 74 as
+      done via the per-client API key, closing GitHub issue #83.

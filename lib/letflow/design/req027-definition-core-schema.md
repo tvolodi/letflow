@@ -1038,19 +1038,24 @@ instance-start integration point that calls them is S3 scope, not built here.
 
 ## 9. Open questions — explicitly listed, not silently resolved
 
-**OQ-1 (MAJOR, addressed to REQ-030): nothing in REQ-030's text says who supplies
-`tenant_id`.** This design gives `process_definitions.tenant_id` `null: false` with **no
-DB default**, following 0003 Decision B (`0003:37–45`), adp-02's table mapping, and the
-precedent REQ-023 set for `events.tenant_id` (`req023-…md:314`). R-Co avoids the question
-entirely by defaulting the column to `bpm_effective_tenant_id()`, which reads a
-session GUC (`028_adp02:4–16, 33`) — a mechanism Letflow has no equivalent of, and
-`req022-…md`'s §3.3 already recorded that Letflow has no reserved default-tenant UUID.
-Consequence: **REQ-030's `create/1` must accept and bind a `tenant_id`**, but REQ-030's
-description (`requirements.yaml:1300–1308`) never mentions one, and R-Co's `CreateParams`
-(`definition.md:200–209`) has no such field to port. Either REQ-030's `create/1` params
-gain a `tenant_id`, or a request-context mechanism supplies it. This design does **not**
-pick one — it only guarantees the column will reject a write that omits it, loudly, at
-the first integration test rather than silently attributing rows to a wrong tenant.
+**OQ-1 (MAJOR, addressed to REQ-030) — RESOLVED 2026-08-17, see
+[0003's addendum](../../../docs/migration/decisions/0003-ecto-schema-strategy.md#addendum-2026-08-17--tenant_id-population-on-write).**
+Originally: nothing in REQ-030's text said who supplies `tenant_id`. This design gives
+`process_definitions.tenant_id` `null: false` with **no DB default**, following 0003
+Decision B (`0003:37–45`), adp-02's table mapping, and the precedent REQ-023 set for
+`events.tenant_id` (`req023-…md:314`). R-Co avoids the question entirely by defaulting
+the column to `bpm_effective_tenant_id()`, which reads a session GUC (`028_adp02:4–16,
+33`) — a mechanism Letflow has no equivalent of, and `req022-…md`'s §3.3 already recorded
+that Letflow has no reserved default-tenant UUID. Filed as
+[ISS-0025](../../../docs/issues/ISS-0025.yaml) (GitHub #83) rather than resolved here,
+since it is a schema-population *policy* question this design's own scope doesn't own.
+**Resolution:** `create/1` does **not** accept `tenant_id` as a plain caller-supplied
+field. It derives the value from the Ecto `:prefix` (tenant schema) the write already
+targets, reversing REQ-022's `Letflow.TenantProvisioning.schema_name_for_tenant/1`
+encoding — chosen over a caller-supplied field specifically because a derived value
+cannot disagree with the schema it's written into (a caller-supplied field can, which is
+an attribution defect the 0003 addendum's security analysis covers in full). REQ-030's
+`docs/requirements.yaml` entry and acceptance criteria were updated accordingly.
 
 **OQ-2 (MAJOR, addressed to REQ-033): its fourth acceptance criterion cannot be
 demonstrated the way it is worded.** REQ-033 AC 4 reads: "deleting the source

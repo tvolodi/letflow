@@ -322,3 +322,75 @@ rejected.
 - This decision does not include writing actual migrations, an `Ecto.Repo` `:prefix`
   wiring, or a `mix.exs` dependency change — that is S2 (event store) and S3 (instance
   engine) execution work, which inherit this strategy per their own stage docs.
+
+## Addendum (2026-08-17) — `tenant_id` population on write
+
+**Question left open by Dimension B:** Dimension B retains `tenant_id` columns
+"as an intra-schema invariant/query-predicate discipline" but does not say who
+computes the value written into them. REQ-027 shipped `process_definitions.tenant_id`
+`NOT NULL` with no DB default (correctly, per Dimension B and R-Co's adp-02 mapping —
+R-Co's own default comes from a session-GUC mechanism Letflow deliberately does not
+have, since Dimension B chose `:prefix`-based schema-per-tenant instead of a
+connection-level tenant context). CODE-DESIGNER flagged this gap during REQ-027
+(`lib/letflow/design/req027-definition-core-schema.md` OQ-1) and filed it as
+[ISS-0025](../../issues/ISS-0025.yaml) (GitHub #83) rather than resolving it
+unilaterally, since it is a schema-population *policy* question, not a REQ-027 schema
+defect — REQ-027's own five acceptance criteria are unaffected. The same gap applies
+to every S2 table carrying a Decision-B `tenant_id` column that isn't populated by
+REQ-027 itself: `events`/`events_archive`/`instance_projections` (REQ-023's schema,
+REQ-025's writer) and `process_definitions` (REQ-027's schema, REQ-030's writer).
+
+**Decision: the value written into a table's `tenant_id` column is derived by the
+writing context module from the Postgres schema (`:prefix`) it is already writing
+into for that call — never accepted as a separate, independently-trusted field from
+the caller.** Concretely: `Letflow.TenantProvisioning.schema_name_for_tenant/1`
+encodes `tenant_id -> "tenant_" <> hex(uuid)` deterministically; a context module
+about to write a tenant-scoped row reverses that same encoding from the resolved
+schema name to obtain the `tenant_id` it stamps on the row, rather than trusting a
+`tenant_id` value passed in alongside (and potentially disagreeing with) the schema
+it's about to write to. REQ-025 and REQ-030 (the two requirements this currently
+blocks) must build/use this derivation rather than adding a plain `tenant_id` field
+to their public create/append parameters.
+
+**Reasoning — this was not an arbitrary pick among the three options ISS-0025
+recorded; a security review already ranked them.** During REQ-027's own
+SECURITY-REVIEWER pass (WF02-REQ027-20260816 Step 2c), the three candidates were
+compared on an axis the original framing missed: attribution integrity.
+
+- *(a) Caller supplies `tenant_id` as an explicit parameter* — rejected. It makes the
+  column caller-controlled: a call writing into tenant A's schema could pass
+  `tenant_id = B`, and nothing in the shipped schema rejects it (no constraint
+  references `tenant_id`), so the row would physically sit in tenant A's schema while
+  claiming to belong to B. That is not a tenant-isolation breach (the Postgres schema
+  boundary still holds — a query scoped to tenant B's schema never sees the row), but
+  it is an attribution defect, and it corrupts exactly the cross-schema
+  reporting/audit use case Dimension B retains the column *for*.
+- *(b) Build an R-Co-style session-GUC tenant context so a DB default fills the
+  column* — rejected for this decision's purposes, not on correctness grounds but
+  scope: it is a new cross-cutting mechanism touching every tenant-scoped table, and
+  introducing a connection-level tenant context alongside `:prefix` is itself a
+  Dimension-B-adjacent architectural choice this addendum is not the place to make
+  unilaterally. Nothing rules it out for the future, but it is not needed to unblock
+  REQ-025/REQ-030 today.
+- *(c) Derive it from the resolved schema at write time* — **adopted**. A derived
+  value cannot disagree with the schema it is written into, by construction, which
+  structurally closes the attribution gap (a) leaves open, at no cost beyond a small
+  pure reverse-mapping function next to `schema_name_for_tenant/1`. The tradeoff
+  noted at the time — it couples the writing context module to REQ-022's
+  `"tenant_" <> hex` naming convention — is accepted: that convention is
+  `Letflow.TenantProvisioning`'s own public encoding (`schema_name_for_tenant/1`),
+  not a private implementation detail, so depending on it is depending on a stable
+  contract, not reaching into internals.
+
+Also recorded because it cuts the other way and matters for anyone re-litigating this:
+the currently-shipped `NOT NULL`-no-default column is strictly *safer* than R-Co's own
+arrangement even before this addendum, because an insert that omits `tenant_id`
+produces a loud `not_null_violation` rather than R-Co's session-GUC default silently
+stamping whatever tenant UUID the connection last had. This addendum improves
+attribution integrity further; it was not fixing a silent-corruption bug.
+
+**Scope:** this addendum settles the *population mechanism* only. It does not revisit
+Dimension B's choice of `:prefix`-based schema-per-tenant, and it does not build
+session-GUC tenant context (option (b)) — a future requirement remains free to add
+that mechanism later for other reasons without contradicting this addendum, since (b)
+was deferred on scope grounds, not ruled out as wrong.

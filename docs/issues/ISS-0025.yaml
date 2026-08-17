@@ -130,4 +130,28 @@ affected_files:
   - docs/requirements.yaml
   - lib/letflow/design/req027-definition-core-schema.md
 github_issue: https://github.com/tvolodi/letflow/issues/83
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0025-20260817
+resolved_at: 2026-08-17T06:09:15Z
+resolution: >
+  Adopted option (c), per this record's own SECURITY-REVIEWER recommendation
+  (not re-derived independently): tenant_id is derived by the writing context
+  module from the Ecto :prefix (tenant schema) already being written into --
+  reversing Letflow.TenantProvisioning.schema_name_for_tenant/1's encoding --
+  rather than accepted as a separate caller-supplied field, closing the
+  attribution-integrity gap option (a) leaves open. Recorded as a formal
+  addendum to docs/migration/decisions/0003-ecto-schema-strategy.md (Dimension
+  B left this open; the addendum fills it without revisiting Dimension B
+  itself). Applied to both blocked requirements: REQ-025 (events/
+  instance_sequence/instance_projections/idempotency sidecar) and REQ-030
+  (process_definitions) each got a TENANT_ID note in their description plus a
+  new, demonstrable acceptance criterion (derived tenant_id must win over a
+  deliberately-mismatched caller value in a test, not silently accept it).
+  Also updated lib/letflow/design/req027-definition-core-schema.md's OQ-1 to
+  point at the resolution. Option (b) (R-Co-style session-GUC tenant context)
+  was deliberately deferred, not ruled out -- out of scope for this addendum,
+  per the addendum's own "Scope" section. Both REQ-025 and REQ-030 were still
+  status: pending (unclaimed) before this edit, matching this issue's own
+  "resolve before claimed" condition. Validated docs/requirements.yaml still
+  parses via `npx js-yaml`.

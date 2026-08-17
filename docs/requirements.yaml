@@ -1042,7 +1042,7 @@ requirements:
   - id: REQ-025
     title: Event append (store.zig's append, ES-01/02/03/05/08/DB-03)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S2
     impl_order: 45  # letflow-queue task id
     description: >

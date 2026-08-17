@@ -2834,3 +2834,63 @@ history:
       tenant_id-derived-from-:prefix requirement (must not accept a
       caller-supplied tenant_id). No lib/letflow/event_store.ex context
       module exists yet -- this requirement creates it.
+  - req: REQ-025
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-17T13:17:54Z
+    note: >
+      WF02-REQ025-20260817 complete. Shipped: Letflow.EventStore.append/2
+      (new context module, lib/letflow/event_store.ex) -- store.zig's
+      Store.append() ported as one atomic Ecto.Multi spanning
+      instance_projections (active-instance guard + last_event_seq
+      update), instance_sequence (FOR UPDATE-locked per-instance
+      sequence assignment, insert-if-absent), REQ-024's Registry
+      (payload validation before any write), the idempotency sidecar
+      (event_idempotency, insert/re-select-by-own-id duplicate
+      handling), events, and event_payload_store (>4096-byte payload
+      side-table split with $ref pointer). tenant_id is derived
+      internally from the Ecto :prefix via a new
+      TenantProvisioning.tenant_id_for_schema_name/1 reverse-mapping
+      (0003's 2026-08-17 addendum, option (c)) -- a caller-supplied
+      tenant_id attrs key is hard-rejected, never silently
+      stripped/overwritten. Gate sequence for this run included one
+      genuine REVIEWER FAIL (commit c552a21, OQ-5: instance_projections
+      scope overstep) followed by a real CODE-DESIGNER/ELIXIR-DEV
+      rework (M1/M6 redesigned to update-only) and full re-validation:
+      CODE-DESIGN-VALIDATOR PASS -> ELIXIR-DEV -> SECURITY-REVIEWER
+      PASS -> REVIEWER FAIL(OQ-5) -> rework -> CODE-DESIGN-VALIDATOR
+      PASS -> ELIXIR-DEV rework -> SECURITY-REVIEWER PASS -> REVIEWER
+      PASS -> TEST-DESIGNER -> TEST-DESIGN-VALIDATOR PASS -> TEST-RUNNER
+      PASS -> RELEASE-VALIDATOR PASS. RELEASE-VALIDATOR independently
+      re-ran the suite (not trusting TEST-RUNNER's report alone): full
+      suite 4 properties, 411 tests, 0 failures; isolated
+      test/letflow/event_store_test.exs 10 tests, 0 failures; mix
+      compile --warnings-as-errors clean. RELEASE-VALIDATOR checked
+      all 6 acceptance criteria individually against the actual code
+      and tests (AC1 terminated-instance zero-write guard, AC2
+      concurrent-append sequence uniqueness via a real Task.async race,
+      AC3 idempotency-key duplicate handling, AC4 zero writes on
+      payload-validation failure, AC5 oversized-payload $ref split, AC6
+      tenant_id derivation/rejection) and confirmed AC6's literal
+      wording (all four tables carrying a tenant_id column) was
+      legitimately narrowed by REQ-023's own earlier schema decision
+      (instance_sequence/event_idempotency have no tenant_id column;
+      isolation there is via the :prefix schema boundary instead) --
+      flagged in the design doc's OQ-1 and reviewed by REVIEWER, not a
+      silent scope-narrowing. Flipped docs/requirements.yaml REQ-025
+      status: in_progress -> done.
+      docs/migration/stage-2-event-store-definitions.md header's
+      Requirements line updated to move REQ-025 from the pending list
+      to the done list (only that line touched, per established
+      bulk-refresh-at-stage-gate precedent from REQ-029/REQ-039's
+      DOC-UPDATER runs -- not named in REQ-025's own acceptance
+      criteria, confirmed by re-reading the requirements.yaml entry
+      directly). README.md checked and left untouched:
+      Letflow.EventStore.append/2 is an internal context module with no
+      new HTTP route (HTTP status mapping for the is_duplicate flag is
+      explicitly deferred to S4 per the requirement's own description)
+      -- nothing in the documented "What's here today"/"Running it"
+      curl/mix flow changed, and README.md does not track
+      per-requirement capability at this granularity (S2's event-store
+      internals aren't reflected there at all yet, consistent with
+      REQ-023/024/026's own DOC-UPDATER precedent).

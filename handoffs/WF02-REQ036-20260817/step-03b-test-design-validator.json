@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ036-20260817/step-03b-test-design-validator.json",
   "created_at": "2026-08-17T18:41:33Z",
   "started_at": "2026-08-17T18:41:33Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-17T18:43:03Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S2",
@@ -35,9 +35,14 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Independently re-verified all 6 checks against test/specs/REQ-036.md and the 3 test files (read directly, not from TEST-DESIGNER's handoff). (1) Every compute_promotion_plan/5 call site (9 total) supplies opts[:permission_checker] except the one deliberate KeyError test that omits it to prove there is no silent default -- verified by grep. (2) AC3's test at promotion_plan_test.exs:353-371 explicitly injects opts[:tenant_classifier] returning :production; the companion test at 373-395 correctly omits it to exercise the real default (:test), matching design section 9.2's stated limitation. (3) The 2 AC5 digest examples are genuinely independent: example 1 is a single graph_node entry with a 2-level nested `after` map; example 2 is a two-entry plan (service_binding + module_ref) with a 3-level-deep nested `before.meta.owner` map -- different shapes/content/depth, not a copy-pasted permutation. (4) Fixtures are per-test unique: every provisioned_tenant() call inserts a fresh Tenant with a System.unique_integer-suffixed slug, every process_key via unique_process_key()/System.unique_integer, no hardcoded tenant IDs or process keys shared across tests or files; on_exit/1 drops each schema and deletes tenant/registration rows. (5) grep for 'TODO: implement test', '@tag :skip', '@tag :pending' across the spec and all 3 test files: zero hits. (6) grep for password/secret/connection-string/api-key patterns across the 3 test files: zero hits. Independently re-ran `MIX_TEST_PARTITION=2 mix test test/letflow/definitions/promotion_plan_test.exs test/letflow/definitions/promotion_conflict_test.exs test/letflow/definitions/promotion_digest_test.exs` twice (once plain, once with --seed 0): both runs report '33 tests, 0 failures', confirming the reported 33/33 pass count is real, not fabricated. Not a WF-03 regression test, so the pre-fix-failure check does not apply. All 6 of REQ-036's acceptance criteria in docs/requirements.yaml map to concrete, independently-verified test coverage per the design's own section 10 mapping.",
+    "artifacts_out": [
+      "test/specs/REQ-036.md",
+      "test/letflow/definitions/promotion_plan_test.exs",
+      "test/letflow/definitions/promotion_conflict_test.exs",
+      "test/letflow/definitions/promotion_digest_test.exs"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ036-20260817",
@@ -47,7 +52,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to TEST-RUNNER (4)"
   },
   "rework_count": 0,
   "max_rework": 3

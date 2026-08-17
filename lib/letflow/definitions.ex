@@ -65,6 +65,8 @@ defmodule Letflow.Definitions do
   alias Letflow.Definitions.Graph
   alias Letflow.Definitions.PackUpdateResolution
   alias Letflow.Definitions.ProcessDefinition
+  alias Letflow.Definitions.PromotionReview
+  alias Letflow.Definitions.PromotionReviewStore
   alias Letflow.Definitions.SolutionPackArtefactBase
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
@@ -550,6 +552,114 @@ defmodule Letflow.Definitions do
     end
   end
 
+  # ---------------------------------------------------------------------------------
+  # REQ-038 types -- lib/letflow/design/req038-promotion-rollback.md §2
+  # ---------------------------------------------------------------------------------
+
+  @type permission_checker_fun ::
+          (actor_id :: Ecto.UUID.t(), tenant_id :: Ecto.UUID.t() -> boolean())
+
+  @type event_appender_fun ::
+          (event_attrs :: map(), prefix :: String.t() ->
+             {:ok, %{event_id: Ecto.UUID.t()}} | {:error, term()})
+
+  @type rollback_opts :: [
+          prefix: String.t(),
+          permission_checker: permission_checker_fun(),
+          event_appender: event_appender_fun()
+        ]
+
+  @type rollback_result :: %{
+          definition_id: Ecto.UUID.t(),
+          version: String.t(),
+          rolled_back_from_version: String.t(),
+          superseded_review_id: Ecto.UUID.t() | nil,
+          event_id: Ecto.UUID.t()
+        }
+
+  @type rollback_error ::
+          {:error, :forbidden}
+          | {:error, :process_key_not_found}
+          | {:error, :version_never_active}
+          | {:error, :already_active}
+          | {:error, term()}
+          | common_error()
+
+  @doc """
+  Rolls back `process_key` to `target_version`, per
+  `lib/letflow/design/req038-promotion-rollback.md` (ported from R-Co's
+  `src/definition/rollback.zig`, PRM-08).
+
+  `tenant_id` is never a separate argument -- derived from `opts[:prefix]`, same as
+  every other function in this module (design §2 arity note). `opts[:permission_checker]`
+  and `opts[:event_appender]` are both `Keyword.fetch!/2`'d -- no built-in default for
+  either, raises `KeyError` if omitted, same no-default stance `Promotion.promote_definition/3`
+  already established (design §4).
+
+  `opts[:permission_checker].(actor_id, tenant_id)` is checked before any row is read or
+  locked (AC5, INV-RB-1): a `false` result returns `{:error, :forbidden}` immediately, no
+  transaction opened.
+
+  The pointer swap runs inside one `Repo.transaction/1` that locks every
+  `process_definitions` row for `(tenant_id, process_key)` `FOR UPDATE` (design §5 step
+  2a). Three guard cases, checked in this order, each writing zero rows
+  (INV-RB-5):
+
+    * no row currently `:active` for this `process_key` -> `{:error, :process_key_not_found}`
+      (covers both "process_key never existed" and "every version already
+      deprecated/archived" -- design §5 step 2b, a faithful port of `rollback.zig`'s own
+      unification).
+    * `target_version` already the active version -> `{:error, :already_active}` (checked
+      before the target-row lookup, design §5 step 2c).
+    * no row matching `target_version` with status in `[:active, :deprecated]` (R-Co's
+      `SUPERSEDED` maps onto Letflow's `:deprecated` -- design §3) -> `{:error, :version_never_active}`.
+
+  On success, the previously-active row moves `:active -> :deprecated` and the target row
+  moves to `:active` (both `updated_at`-stamped), matching `activate_draft/2`'s own
+  deprecate-then-activate swap shape.
+
+  After the transaction commits, `opts[:event_appender]` is called exactly once
+  (INV-RB-6) with a `DEFINITION_VERSION_ROLLED_BACK`-shaped payload
+  (`process_key`/`from_version`/`to_version`/`actor_id`) -- deliberately outside the
+  transaction, same divergence from R-Co's literal "single serializable transaction"
+  framing that `promote_definition/3` already established (design §4.2/§8 OQ-3). A
+  `{:error, reason}` here propagates unchanged as this function's own result; the pointer
+  swap has already durably committed by this point.
+
+  On a successful event-append, any `promotion_reviews` row for `(tenant_id,
+  process_key)` with status `:applied` or `:approved` is looked up and, **only when
+  exactly one such row matches**, superseded via `PromotionReviewStore.supersede_review/3`
+  (INV-RB-10). Zero matches or more than one ambiguous match both resolve to
+  `superseded_review_id: nil`, never a guess among several candidates and never a
+  blanket-supersede of every match -- design §6 states in full why a naive `def_id`-only
+  lookup cannot disambiguate which review corresponds to the specific former-active
+  definition, and why guessing would risk corrupting unrelated audit rows (this was the
+  defect CODE-DESIGN-VALIDATOR's Rework 1 blocked on). A per-row `supersede_review/3` race
+  (`{:error, :invalid_transition}`) is absorbed the same way (design §6/§7, OQ-6) -- never
+  fatal to an otherwise-successful rollback, since the pointer swap and event-append have
+  already committed by that point.
+  """
+  @spec rollback_definition_version(
+          process_key :: String.t(),
+          target_version :: String.t(),
+          actor_id :: Ecto.UUID.t(),
+          opts :: rollback_opts()
+        ) :: {:ok, rollback_result()} | rollback_error()
+  def rollback_definition_version(process_key, target_version, actor_id, opts)
+      when is_binary(process_key) and is_binary(target_version) and is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+    permission_checker = Keyword.fetch!(opts, :permission_checker)
+    event_appender = Keyword.fetch!(opts, :event_appender)
+
+    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      if permission_checker.(actor_id, tenant_id) do
+        do_rollback(process_key, target_version, actor_id, tenant_id, prefix, event_appender)
+      else
+        {:error, :forbidden}
+      end
+    end
+  end
+
   # -----------------------------------------------------------------------------------
   # create/2 helpers (design §4.1)
   # -----------------------------------------------------------------------------------
@@ -969,4 +1079,181 @@ defmodule Letflow.Definitions do
 
   defp finish_build({:ok, reversed_acc}), do: {:ok, Enum.reverse(reversed_acc)}
   defp finish_build(:error), do: :error
+
+  # -----------------------------------------------------------------------------------
+  # rollback_definition_version/4 helpers (design §5, §6, §7)
+  # -----------------------------------------------------------------------------------
+
+  # Design §5, "Exception safety": the try/rescue wraps only the pointer-swap
+  # transaction (Step 2), mirroring activate/2's own try/rescue -> {:transaction_failed,
+  # _} shape. Steps 3/4 (event-append, promotion_reviews supersede) run afterward, own
+  # errors, and are never folded into :transaction_failed.
+  defp do_rollback(process_key, target_version, actor_id, tenant_id, prefix, event_appender) do
+    transaction_result =
+      try do
+        run_rollback_transaction(process_key, target_version, tenant_id, prefix)
+      rescue
+        exception -> {:error, {:transaction_failed, exception}}
+      end
+
+    with {:ok,
+          %{activated_row: activated_row, rolled_back_from_version: rolled_back_from_version}} <-
+           transaction_result do
+      finish_rollback(
+        process_key,
+        target_version,
+        actor_id,
+        tenant_id,
+        prefix,
+        event_appender,
+        activated_row,
+        rolled_back_from_version
+      )
+    end
+  end
+
+  # Design §5 step 2: locks every version row for (tenant_id, process_key) FOR UPDATE in
+  # one statement (generalizes run_activate_transaction/4's single-row lock to the whole
+  # set), then the three guard cases in R-Co's own literal order (already_active checked
+  # before the target-row lookup -- §5 step 2c's note on why this ordering can never
+  # disagree with checking version_never_active first).
+  defp run_rollback_transaction(process_key, target_version, tenant_id, prefix) do
+    Repo.transaction(fn ->
+      rows =
+        ProcessDefinition
+        |> where([d], d.tenant_id == ^tenant_id and d.name == ^process_key)
+        |> lock("FOR UPDATE")
+        |> Repo.all(prefix: prefix)
+
+      current_active = Enum.find(rows, &(&1.status == :active))
+
+      cond do
+        is_nil(current_active) ->
+          Repo.rollback(:process_key_not_found)
+
+        current_active.version == target_version ->
+          Repo.rollback(:already_active)
+
+        true ->
+          # :active | :deprecated per design §3's SUPERSEDED -> :deprecated mapping;
+          # :archived deliberately excluded (INV-RB-4).
+          target_row =
+            Enum.find(
+              rows,
+              &(&1.version == target_version and &1.status in [:active, :deprecated])
+            )
+
+          if is_nil(target_row) do
+            Repo.rollback(:version_never_active)
+          else
+            swap_active_pointer(current_active, target_row, prefix)
+          end
+      end
+    end)
+  end
+
+  # Design §5 step 2e -- mirrors activate_draft/2's exact two-Repo.update_all swap shape,
+  # generalized to the specific already-locked row ids (current_active.id/target_row.id)
+  # rather than a fresh WHERE name = ... AND status = :active re-match, avoiding a
+  # theoretically-possible TOCTOU gap between this transaction's own row-lock and the
+  # write. Both rows were locked at the FOR UPDATE read above, so both updates are
+  # guaranteed to affect exactly 1 row.
+  defp swap_active_pointer(current_active, target_row, prefix) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    ProcessDefinition
+    |> where([d], d.id == ^current_active.id)
+    |> select([d], d)
+    |> Repo.update_all([set: [status: :deprecated, updated_at: now]], prefix: prefix)
+
+    {1, [activated_row]} =
+      ProcessDefinition
+      |> where([d], d.id == ^target_row.id)
+      |> select([d], d)
+      |> Repo.update_all([set: [status: :active, updated_at: now]], prefix: prefix)
+
+    %{activated_row: activated_row, rolled_back_from_version: current_active.version}
+  end
+
+  # Design §5 step 3/4, §4.2: called after TX1 commits, never nested inside it -- this
+  # function does not assume anything about opts[:event_appender]'s own transactionality
+  # (same stance Promotion.promote_definition/3 already established). A {:error, reason}
+  # here propagates unchanged; the pointer swap has already durably committed.
+  defp finish_rollback(
+         process_key,
+         target_version,
+         actor_id,
+         tenant_id,
+         prefix,
+         event_appender,
+         activated_row,
+         rolled_back_from_version
+       ) do
+    event_attrs = %{
+      event_type: "DEFINITION_VERSION_ROLLED_BACK",
+      process_key: process_key,
+      from_version: rolled_back_from_version,
+      to_version: target_version,
+      actor_id: actor_id
+    }
+
+    case event_appender.(event_attrs, prefix) do
+      {:ok, %{event_id: event_id}} ->
+        superseded_review_id = supersede_matching_review(tenant_id, process_key, event_id, prefix)
+
+        {:ok,
+         %{
+           definition_id: activated_row.id,
+           version: target_version,
+           rolled_back_from_version: rolled_back_from_version,
+           superseded_review_id: superseded_review_id,
+           event_id: event_id
+         }}
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  # Design §6/§7 -- the cardinality-branched promotion_reviews supersede-lookup. Do not
+  # "simplify" this into blanket-superseding every match: promotion_reviews.def_id stores
+  # plan.process_key (a string), not a process_definitions.id, so there is no way to
+  # correlate a review to the *specific* former-active definition once more than one
+  # applied/approved review has accumulated for the same process_key (the ordinary state
+  # of the table for any process_key promoted more than once, not a rare edge case). This
+  # asymmetric handling -- zero matches -> nil, exactly one -> supersede it, more than one
+  # -> nil, mutate nothing -- is exactly the fix for the data-integrity defect
+  # CODE-DESIGN-VALIDATOR's Rework 1 blocked on (design §0, §6, INV-RB-10).
+  defp supersede_matching_review(tenant_id, process_key, event_id, prefix) do
+    matching_reviews =
+      PromotionReview
+      |> where(
+        [r],
+        r.tenant_id == ^tenant_id and r.def_id == ^process_key and
+          r.status in [:applied, :approved]
+      )
+      |> Repo.all(prefix: prefix)
+
+    case matching_reviews do
+      [] ->
+        nil
+
+      [single_review] ->
+        case PromotionReviewStore.supersede_review(single_review.id, event_id, prefix: prefix) do
+          {:ok, %PromotionReview{id: id}} -> id
+          # A genuine optimistic-lock race, or (in practice unreachable, since the row
+          # was just read above) a since-deleted row -- design §6's own resolution:
+          # non-fatal to the overall rollback, since TX1 and the event-append have
+          # already durably committed by this point (OQ-6).
+          {:error, _reason} -> nil
+        end
+
+      [_, _ | _] ->
+        # Ambiguous -- more than one applied/approved review exists for this
+        # process_key and no genuine version-scoped correlation is recoverable from
+        # this schema (design §0's Rework-1 evidence, §6). Mutate nothing rather than
+        # heuristically guess among several candidates.
+        nil
+    end
+  end
 end

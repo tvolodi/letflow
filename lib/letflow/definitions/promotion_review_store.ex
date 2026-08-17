@@ -8,8 +8,13 @@ defmodule Letflow.Definitions.PromotionReviewStore do
   gate-approved design this module implements; this moduledoc restates the
   invariants that design requires to be stated here verbatim in substance.
 
-  ## Exactly 7 permitted edges, no 8th possible — structural, not just documented
-  (design §2.1, INV-PRM04-1)
+  ## Exactly 8 permitted edges, no 9th possible — structural, not just documented
+  (design §2.1, INV-PRM04-1; widened from 7 to 8 by REQ-038
+  (`lib/letflow/design/req038-promotion-rollback.md` §7) — `supersede_review/3`
+  gained the `approved -> superseded` edge. This is a real, deliberate change to a
+  previously-true "exactly 7" claim about this already-merged, gate-approved module,
+  not a drive-by edit — flagged explicitly for REVIEWER's attention on the REQ-038
+  handoff.)
 
   ```
                    insert_review/2
@@ -21,18 +26,22 @@ defmodule Letflow.Definitions.PromotionReviewStore do
                    /                  \\
                   v                    v
             [approved]              [rejected]
-             /        \\                  \\
-  mark_review_applied/2  mark_review_failed/2   \\
-           /                    \\                \\
-          v                      v                 \\
-      [applied]              [failed]                \\
-          \\                      /                     |
-           \\                    /                      |
-            `--- supersede_review/3 (all 3 edges) ------'
-                          |
-                          v
-                    [superseded]
+             /    |    \\                  \\
+  mark_review_applied/2 |  mark_review_failed/2  \\
+           /       |          \\                   \\
+          v         \\          v                    \\
+      [applied]       \\    [failed]                   \\
+          \\             \\      /                        \\
+           \\              \\   /                          |
+            `----------- supersede_review/3 (all 4 edges) -'
+                                |
+                                v
+                          [superseded]
   ```
+
+  The middle diagonal out of `[approved]` (labeled implicitly above, since ASCII
+  space is tight) is `supersede_review/3` called directly on an `:approved` row —
+  see the REQ-038 note below for why this edge is real, not a shortcut.
 
   Every transition function has a hardcoded, closed `allowed_source_statuses`
   list (never computed, never "default allow"):
@@ -41,7 +50,7 @@ defmodule Letflow.Definitions.PromotionReviewStore do
     * `reject_review/3` — `[:pending_review]`
     * `mark_review_applied/2` — `[:approved]`
     * `mark_review_failed/2` — `[:approved]`
-    * `supersede_review/3` — `[:applied, :failed, :rejected]`
+    * `supersede_review/3` — `[:applied, :approved, :failed, :rejected]`
 
   Any call whose row's current `status` isn't a member of that function's own
   list — whether caught at the pre-check or only at the guarded `UPDATE`'s
@@ -51,8 +60,16 @@ defmodule Letflow.Definitions.PromotionReviewStore do
   `:pending_review` or `:superseded` in its own `allowed_source_statuses`, so no
   function can move a row backward into `pending_review` or out of
   `superseded` — this follows structurally from the fixed lists above, not from
-  a separate check. `supersede_review/3` includes `:rejected` — the NEW edge
-  PRM-04 adds; `rejected` is not terminal.
+  a separate check. `supersede_review/3` includes `:rejected` — the edge PRM-04
+  originally added; `rejected` is not terminal. It also includes `:approved` —
+  the edge REQ-038 adds (`lib/letflow/design/req038-promotion-rollback.md` §7):
+  `promote_definition/3` and `mark_review_applied/2` are two separate calls made
+  by some future orchestrator, which leaves a real window where the
+  `process_definitions` row is already `:active` but its originating review is
+  still `:approved` (the orchestrator's second call hasn't run yet, or failed
+  independently) — `Letflow.Definitions.rollback_definition_version/4` needs to
+  be able to supersede a review in that window, not only an already-`:applied`
+  one.
 
   ## The generic guarded-update pattern (design §2.2) — every transition shares it
 
@@ -302,10 +319,11 @@ defmodule Letflow.Definitions.PromotionReviewStore do
   end
 
   @doc """
-  `applied|failed|rejected -> superseded` — one function for all 3
-  supersession edges (including the NEW `rejected -> superseded` edge PRM-04
-  adds; `rejected` is not terminal). `superseded_by_event_id` is stored
-  verbatim, unvalidated against `events` — see moduledoc.
+  `applied|approved|failed|rejected -> superseded` — one function for all 4
+  supersession edges (`:rejected` is the edge PRM-04 originally added --
+  `rejected` is not terminal; `:approved` is the edge REQ-038 adds, see
+  moduledoc). `superseded_by_event_id` is stored verbatim, unvalidated against
+  `events` — see moduledoc.
   """
   @spec supersede_review(
           review_id :: Ecto.UUID.t(),
@@ -313,9 +331,14 @@ defmodule Letflow.Definitions.PromotionReviewStore do
           opts :: [prefix: String.t()]
         ) :: {:ok, PromotionReview.t()} | {:error, :review_not_found | :invalid_transition}
   def supersede_review(review_id, superseded_by_event_id, opts) do
-    transition(review_id, opts, [:applied, :failed, :rejected], &no_gate/1, &no_gate/1, fn _row ->
-      [status: :superseded, superseded_by: superseded_by_event_id]
-    end)
+    transition(
+      review_id,
+      opts,
+      [:applied, :approved, :failed, :rejected],
+      &no_gate/1,
+      &no_gate/1,
+      fn _row -> [status: :superseded, superseded_by: superseded_by_event_id] end
+    )
   end
 
   # ---------------------------------------------------------------------

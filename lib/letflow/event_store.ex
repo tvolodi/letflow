@@ -86,7 +86,9 @@ defmodule Letflow.EventStore do
         }
 
   @type metadata_violation ::
-          :too_many_entries
+          :not_a_map
+          | :too_many_entries
+          | {:non_string_key, key :: term()}
           | {:key_too_long, key :: String.t()}
           | {:value_too_long, key :: String.t()}
           | {:non_string_value, key :: String.t()}
@@ -98,6 +100,7 @@ defmodule Letflow.EventStore do
           | {:error, :missing_actor_id}
           | {:error, :missing_payload}
           | {:error, :invalid_payload}
+          | {:error, :missing_event_type}
           | {:error, :missing_idempotency_key}
           | {:error, :idempotency_key_too_long}
           | {:error, {:invalid_metadata, metadata_violation()}}
@@ -143,8 +146,8 @@ defmodule Letflow.EventStore do
          {:ok, actor_id} <- fetch_uuid(attrs, :actor_id, :missing_actor_id),
          {:ok, payload} <- fetch_payload(attrs),
          {:ok, idempotency_key} <- fetch_idempotency_key(attrs),
+         {:ok, event_type} <- fetch_event_type(attrs),
          {:ok, metadata} <- validate_metadata(Map.get(attrs, :metadata) || %{}),
-         event_type = Map.get(attrs, :event_type),
          :ok <- Registry.validate_payload(event_type, payload, tenant_id) do
       ctx = %{
         schema_name: prefix,
@@ -216,6 +219,33 @@ defmodule Letflow.EventStore do
     end
   end
 
+  # Design doc §6.1 P2/§9 OQ-4 deliberately leaves `event_type`'s structural check
+  # out of the pre-transaction phase, on the stated premise that a missing/malformed
+  # `event_type` would surface later via `Event.insert_changeset/2`'s ordinary
+  # `%Ecto.Changeset{}` path at Multi step M4. That premise doesn't hold: P4
+  # (`Registry.validate_payload/3`, right below) runs *before* the `Multi`/M4 ever
+  # starts and passes `event_type` straight into an `Ecto.Query` `where` comparison
+  # (`Letflow.EventStore.Registry.get_type/2`) — a non-binary value there raises
+  # `Ecto.Query.CastError` (or `ArgumentError` for `nil`), not a typed error, which is
+  # the exact INV-8 class of bug this rework iteration exists to close, confirmed
+  # empirically (a throwaway `mix run` against real Postgres: `event_type: nil` ->
+  # `ArgumentError`, `event_type: :an_atom` / `123` -> `Ecto.Query.CastError`). Guarded
+  # here instead, matching every other structural field's shape (`:missing_event_type`,
+  # symmetric with `:missing_instance_id`/`:missing_actor_id`/`:missing_payload`)
+  # rather than leaving OQ-4's now-disproven deferral in place. Flagged for REVIEWER at
+  # Step 2d as a deliberate, reasoned divergence from the design doc's literal OQ-4
+  # text, not a silent re-decision.
+  defp fetch_event_type(attrs) do
+    case Map.get(attrs, :event_type) do
+      event_type when is_binary(event_type) and byte_size(event_type) > 0 -> {:ok, event_type}
+      _ -> {:error, :missing_event_type}
+    end
+  end
+
+  defp validate_metadata(metadata) when not is_map(metadata) do
+    {:error, {:invalid_metadata, :not_a_map}}
+  end
+
   defp validate_metadata(metadata) when map_size(metadata) > @metadata_max_entries do
     {:error, {:invalid_metadata, :too_many_entries}}
   end
@@ -223,6 +253,9 @@ defmodule Letflow.EventStore do
   defp validate_metadata(metadata) do
     Enum.find_value(metadata, {:ok, metadata}, fn {key, value} ->
       cond do
+        not is_binary(key) ->
+          {:error, {:invalid_metadata, {:non_string_key, key}}}
+
         String.length(key) > @metadata_key_max_length ->
           {:error, {:invalid_metadata, {:key_too_long, key}}}
 

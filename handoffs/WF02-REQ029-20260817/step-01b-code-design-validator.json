@@ -1,0 +1,53 @@
+{
+  "handoff_id": "0a28bc9a-3625-4f58-b04a-466531330d27",
+  "run_id": "WF02-REQ029-20260817",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ029-20260817/step-01b-code-design-validator.json",
+  "created_at": "2026-08-17T10:23:13Z",
+  "started_at": "2026-08-17T10:23:13Z",
+  "completed_at": "2026-08-17T10:26:51Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-029"],
+    "related_handoff_ids": ["677c5330-b513-4f76-9489-463ae023b571"],
+    "artifacts_in": [
+      "lib/letflow/design/req029-node-attribute-edge-condition-validators.md",
+      "docs/requirements.yaml (REQ-029 entry)",
+      "lib/letflow/design/req028-graph-structural-validator.md",
+      "lib/letflow/definitions/graph.ex"
+    ],
+    "owned_modules": ["lib/letflow/definitions", "test/letflow/definitions"]
+  },
+  "task": {
+    "description": "Independently validate lib/letflow/design/req029-node-attribute-edge-condition-validators.md against REQ-029's acceptance criteria and CODE-DESIGN-VALIDATOR's standard checklist. CODE-DESIGNER flagged that R-Co/graph.zig and definition.md were not reachable on this host (genuinely absent -- confirmed by ORCH via filesystem search) and reconstructed the ISO-8601 duration parser and CEL syntax algorithm from docs/requirements.yaml's REQ-029 text instead. Judge explicitly whether that reconstruction is unambiguous/buildable and internally consistent, not just whether a citation exists -- this is a real gate question for this run, not something to wave through.",
+    "acceptance_criteria": [
+      "each of the 7 node types has at least one explicit test: HUMAN_TASK missing role, SERVICE_TASK missing endpoint, SERVICE_TASK invalid timeout (0 and >300000), TIMER missing/invalid duration, TIMER P0D explicitly accepted, and START/END/gateway types accepting no attributes",
+      "an EXCLUSIVE_GATEWAY edge with both a non-null condition and is_default: true is rejected",
+      "an EXCLUSIVE_GATEWAY with two edges both marked is_default: true is rejected",
+      "isValidCelSyntax-equivalent rejects at least one structurally invalid expression and accepts at least one structurally valid one, with an explicit test noting it performs no evaluation",
+      "extra undeclared attributes on a node do not cause a violation, demonstrated by an explicit test"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently read lib/letflow/design/req029-node-attribute-edge-condition-validators.md in full (not CODE-DESIGNER's handoff summary), plus REQ-029's full docs/requirements.yaml entry, req028-graph-structural-validator.md (already-approved precedent this doc extends), and lib/letflow/definitions/graph.ex (confirmed build_node_index/1 exists exactly as the design claims to reuse it, and Node/Edge/Violation defstructs match the field lists the design assumes unchanged). Checklist per each of REQ-029's 5 acceptance criteria: (1) 'each of the 7 node types...' -> concrete design element in Sec4's CHK-09..12 table + Sec4.2 explicit 0/300001 boundary cases + Sec4.3's full duration algorithm with P0D-valid worked rule + Sec4's explicit 'no check applies' statement for START/END/EXCLUSIVE_GATEWAY/PARALLEL_GATEWAY -- present, no TBD. (2) EXCLUSIVE_GATEWAY condition+is_default:true rejected -> CHK-15 (Sec5.1), explicitly documented as co-firing with CHK-14 (two violations by design, matching REQ-028's CHK-03 double-fire precedent) -- present. (3) two is_default:true edges on one gateway rejected -> CHK-16 + Sec5.3's full 'N defaults -> N-1 violations' algorithm mirroring REQ-028's CHK-05 -- present. (4) valid_cel_syntax?/1 rejects an invalid and accepts a valid expression, no-evaluation demonstrated -> Sec6's full algorithm plus ready-made valid/invalid fixture pairs plus an explicit no-evaluation paragraph with a nonsense-variable test case -- present. (5) extra undeclared attributes cause no violation -> Sec2's 'any other key is never read by any check' (true by construction, no allow-list needed) -- present. All 5 map to concrete design elements, none deferred with TBD/'to be implemented' language (Sec9's three open questions are explicitly out-of-scope items inherited from REQ-028 or forwarded to REQ-030, not gaps in REQ-029's own 5 ACs). Function signatures fully specified with error shape: validate_node_attributes/1 and validate_edge_conditions/1 both @spec t() :: result() reusing REQ-028's %{valid: boolean(), violations: [Violation.t()]} shape (never {:ok,_}|{:error,_} -- consistent, explicitly re-justified in Sec8 the same way REQ-028 Sec4 justified it for validate_graph/1, not silently inherited); valid_cel_syntax?/1 is @spec String.t() :: boolean(); every CHK-09..17 check function is @spec check_*(t()) :: [Violation.t()] with an explicit trigger condition and violation code in the Sec4/Sec5.1 tables. Cross-module dependencies listed: Sec10 states zero new lib/letflow/ dependencies, only intra-file reuse of the existing build_node_index/1 helper (verified present in graph.ex at line 363) and REQ-028's own Node/Edge/Violation/t() types; forward dependent on REQ-030 named explicitly. No implementation code: grepped the file's 8 fenced code blocks (lines 179-181, 297-299, 390-392, 452-456) -- all are @spec/type declarations only, zero `def`/`case`/pattern-matching bodies, matching REQ-028's own already-approved style. Specific focus per this run's task: judged whether the reconstructed ISO-8601 duration parser (Sec4.3) and CEL syntax algorithm (Sec6) are unambiguous/buildable given definition.md was genuinely unreachable (re-confirmed: no R-Co directory, no graph.zig, no definition.md anywhere on this host). Duration parser: traced all 6 rules against every worked example (P0D, P1Y2M3D, PT1H30M, P1DT12H valid; P, PT, 1D, P1.5D, PT1,5S, P3D2Y, PXD invalid) -- the scan-forward/order-tracking algorithm (unit index must strictly increase through Y,M,W,D or H,M,S) is fully mechanical and produces one deterministic implementation; no case found where the written rules admit two different correct readings. CEL check: Sec6 steps 1-3 (trim, bracket-stack, quote/escape tracking) are unambiguous. Step 4's 'first token or last token (whitespace-delimited, or immediately adjacent to a bracket)' was the one clause scrutinized hardest for a genuine two-implementations-diverge ambiguity -- worked through it against contrived inputs (leading unary minus with/without a space, an operator glued to an identifier with no separating whitespace) and found that under the one natural reading (a token is a maximal run of characters excluding whitespace and bracket characters), the algorithm is single-valued and mechanically implementable; its known imprecision on a few exotic inputs (e.g. '- 5 > 0' with a stray space) is a limitation of an intentionally 'minimal structural, no evaluation' check that REQ-029's own requirement text explicitly authorizes ('not a full CEL implementation'), not an unresolved ambiguity in the design's instructions -- both ready-made fixture pairs given (Sec6 'Concrete examples') resolve unambiguously under this reading and demonstrate the required accept/reject/no-evaluation behavior. Sec9.1 honestly flags the reconstruction as unverified against source (rather than presenting it as fact) and gives ELIXIR-DEV a concrete instruction (diff against real source if it ever becomes reachable, flag divergence to REVIEWER) rather than silently asserting correctness. Verdict: both reconstructed algorithms are concrete, internally consistent, and buildable as a single deterministic implementation without requiring ELIXIR-DEV to guess at a genuinely underspecified branch. No failing check found across the full CODE-DESIGN-VALIDATOR checklist.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ029-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ029-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (Step 2a)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

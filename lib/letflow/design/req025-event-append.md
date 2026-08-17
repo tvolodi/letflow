@@ -436,16 +436,20 @@ P4. Registry validation -- invariant 8, ES-05. The one DB round-trip in this pha
       {:error, {:payload_validation_failed, failures}} ->
         {:error, {:payload_validation_failed, failures}}
 
-P5. Measure payload size and pre-decode (pure).
-    payload_bytes = byte_size(attrs[:payload])       # INV-EV-7's "measured at append time"
-    decoded_payload = Jason.decode!(attrs[:payload])  # safe: P4 already proved this
-                                                       # decodes to a JSON object
+P5. Measure payload size and pre-decode (pure) -- INV-EV-7's "measured at append time."
+      payload_bytes: the byte length of the raw payload binary, measured directly from
+        the binary attrs supplied -- never derived from the decoded term.
+      decoded_payload: the payload binary parsed into its JSON term form. Safe to do
+        unconditionally here (no further validation needed) because P4 already proved
+        the payload parses to a JSON object.
 
 P6. Mint identity, once (pure) -- INV-EV-5.
-    event_id   = Ecto.UUID.generate()
-    created_at = DateTime.utc_now() |> DateTime.truncate(:microsecond)
-    # Bound identically into events, event_idempotency, and (if oversized)
-    # event_payload_store at M3/M4/M5 below -- never regenerated per statement.
+      event_id: a freshly generated UUID, minted exactly once per append attempt.
+      created_at: the current UTC timestamp, truncated to the column's declared
+        microsecond precision.
+      Both values are bound once here and reused unchanged everywhere they reappear
+      below (the events row, the idempotency-sidecar row, and -- only when the payload
+      is oversized -- the event_payload_store row) -- never re-minted per statement.
 ```
 
 ### 6.2 Transactional phase — one `Ecto.Multi`, `prefix: schema_name` on every operation
@@ -468,21 +472,24 @@ incremented" case (below) still honor "zero rows written."
 #### 6.2.1 M1 — Active-instance guard (invariant 10, ES-01)
 
 ```
-M1(repo, _changes):
-  projection = repo.get(InstanceProjection, attrs.instance_id, prefix: schema_name)
-  case projection do
-    nil ->
-      {:ok, :new_instance}
-      # No row yet -- a brand-new instance's first-ever append. Not terminated by
-      # definition. See §6.2.6 and §9 OQ-5 for why M6 must therefore be able to
-      # CREATE this row, not only update one that already exists.
-    %InstanceProjection{status: status} ->
-      if InstanceProjection.terminal?(status) do
-        {:error, {:instance_terminated, status}}
-      else
-        {:ok, :existing_instance}
-      end
-  end
+M1 (:active_instance_guard) -- reads the instance_projections row for
+attrs.instance_id, targeting the derived tenant schema. A plain, unlocked read; no row
+lock is taken here (see the paragraph below for why that's an acceptable gap).
+
+  no row found for this instance_id
+    -> succeed, recording :new_instance
+       (a brand-new instance's first-ever append -- not terminated by definition. See
+       §6.2.6 and §9 OQ-5 for why M6 must therefore be able to CREATE this row, not only
+       update one that already exists.)
+
+  row found, and its status is terminal (CANCELLED or COMPLETED, per
+  InstanceProjection.terminal?/1 as REQ-023's schema design defines it)
+    -> fail the step with {:error, {:instance_terminated, status}}, where status is the
+       terminal status found -- this aborts the whole Multi before any write happens
+       anywhere (AC1)
+
+  row found, and its status is not terminal
+    -> succeed, recording :existing_instance
 ```
 
 Plain `Repo.get/3` — no lock. A concurrent transition to `CANCELLED`/`COMPLETED`
@@ -492,47 +499,49 @@ source this design has access to and is left as OQ-6 (§9), not silently assumed
 
 #### 6.2.2 M2 — Sequence assignment: the FOR-UPDATE-equivalent locking protocol (invariant 2/4, ES-02)
 
-**Exact query shape**, three statements, all inside the same DB transaction and
-therefore sharing the same lock lifetime — this directly answers the task's request for
-"the exact query shape for the FOR UPDATE-equivalent lock, including the
-insert-if-absent first-append case," expressed via idiomatic `Ecto.Query` (favored over
-raw `Repo.query/3` per INV-7's guidance, §0) rather than hand-written SQL:
+**Locking protocol**, three sub-steps, all inside the same DB transaction and therefore
+sharing the same lock lifetime — this directly answers the task's request for "the exact
+query shape for the FOR UPDATE-equivalent lock, including the insert-if-absent
+first-append case." The read/lock step is expressed through Ecto's own query-composition
+API (favored over a raw, hand-written SQL string per INV-7's guidance, §0), described
+here by what it does rather than by its literal call form:
 
 ```
-M2(repo, _changes):
-  # (i) Insert-if-absent -- "First append to a new instance" (event_store.md's own
-  #     named case, quoted at req023's §3.2). Uses the schema module's own
-  #     insert_changeset/2 (never a bare Repo.insert_all bypassing changeset
-  #     validation), on_conflict: :nothing so a losing racer's insert is a silent no-op
-  #     rather than a unique_constraint exception.
-  repo.insert(
-    InstanceSequence.insert_changeset(%InstanceSequence{}, %{instance_id: attrs.instance_id}),
-    on_conflict: :nothing,
-    conflict_target: :instance_id,
-    prefix: schema_name
-  )
-  # next_seq's own column default (1) fires here since insert_changeset/2's attrs
-  # supply no :next_seq -- matches InstanceSequence's migration default exactly.
+M2 (:assign_sequence) -- three sub-steps, in order:
 
-  # (ii) Row-lock read -- Ecto.Query's `lock:` option, NOT Repo.query/3.
-  locked_row =
-    from(s in InstanceSequence, where: s.instance_id == ^attrs.instance_id, lock: "FOR UPDATE")
-    |> repo.one(prefix: schema_name)
-  assigned_sequence_number = locked_row.next_seq
+  (i) Insert-if-absent. Attempt to insert a fresh instance_sequence row for
+      attrs.instance_id, using the schema module's own insert changeset (never a bare
+      bulk-insert that bypasses changeset validation) -- this covers "first append to a
+      new instance" (event_store.md's own named case, quoted at req023's §3.2). The
+      insert is configured as an atomic insert-or-ignore keyed on instance_id: if a row
+      for this instance_id already exists (because a concurrent racer's own (i) got
+      there first, or because this is not the instance's first append), the conflicting
+      insert is silently suppressed rather than raising a unique-constraint exception --
+      one atomic statement, not a separate existence check followed by a conditional
+      insert (which would itself race). When this insert is the one that actually
+      creates the row, its next_seq column takes its declared column default of 1 --
+      the insert supplies no explicit value for it.
 
-  # (iii) Increment under the lock acquired by (ii) -- same transaction, same row,
-  #       lock held continuously from (ii) through (iii)'s commit.
-  from(s in InstanceSequence, where: s.instance_id == ^attrs.instance_id)
-  |> repo.update_all([inc: [next_seq: 1]], prefix: schema_name)
+  (ii) Row-lock read. Read the instance_sequence row for attrs.instance_id back,
+       acquiring an exclusive row lock (the SELECT ... FOR UPDATE-equivalent read) held
+       for the remainder of this DB transaction. This read is guaranteed to find a row,
+       because either this transaction's own (i) created it, or some transaction's (i)
+       already had. The row's next_seq value, as read here, becomes
+       assigned_sequence_number -- this event's sequence number.
 
-  {:ok, assigned_sequence_number}
+  (iii) Increment under the lock. While still holding the lock acquired at (ii), in the
+        same transaction, increment the row's stored next_seq column by one. The lock
+        is held continuously from (ii) through this step's own commit, so no other
+        transaction can read or modify this row in between.
+
+  Step succeeds with assigned_sequence_number.
 ```
 
 **Concurrency argument (AC2):** two concurrent appends to the same `instance_id`.
 Whichever transaction's step (i) commits (or finds the row already present) first is
 irrelevant to correctness — both converge on the same row existing before either
-reaches step (ii). Step (ii)'s `SELECT ... FOR UPDATE` (via `lock: "FOR UPDATE"`) is
-where the actual serialization happens: the second transaction's `(ii)` **blocks** at
+reaches step (ii). Step (ii)'s row-lock read is where the actual serialization happens:
+the second transaction's `(ii)` **blocks** at
 the database level until the first transaction's step (iii) commits (releasing the row
 lock) or the whole first transaction rolls back. Only after that does the second
 transaction's `(ii)` proceed, and it reads the **post-increment** value the first
@@ -560,33 +569,33 @@ client-generated `binary_id`, so `{:ok, struct}` from an `on_conflict: :nothing`
 is ambiguous between "really inserted" and "suppressed."
 
 ```
-M3(repo, changes):
-  attempted_id = Ecto.UUID.generate()   # the sidecar row's own surrogate id, distinct
-                                         # from event_id
-  {:ok, inserted_or_suppressed} =
-    repo.insert(
-      IdempotencyRecord.insert_changeset(%IdempotencyRecord{id: attempted_id}, %{
-        idempotency_key: attrs.idempotency_key,
-        event_id: event_id,            # minted at P6
-        event_created_at: created_at   # minted at P6
-      }),
-      on_conflict: :nothing,
-      conflict_target: :idempotency_key,
-      returning: true,
-      prefix: schema_name
-    )
+M3 (:idempotency) -- two sub-steps:
 
-  if repo.get(IdempotencyRecord, attempted_id, prefix: schema_name) do
-    {:ok, :claimed}   # really inserted -- this is a fresh append
-  else
-    # Suppressed: idempotency_key already claimed by an earlier append. Fetch the
-    # pre-existing record, then the event it points at -- both needed for
-    # append_result()'s is_duplicate: true shape.
-    existing = repo.get_by!(IdempotencyRecord, [idempotency_key: attrs.idempotency_key], prefix: schema_name)
-    original_event =
-      repo.get_by!(Event, [event_id: existing.event_id, created_at: existing.event_created_at], prefix: schema_name)
-    {:error, {:duplicate_idempotency_key, original_event}}
-  end
+  (i) Attempted claim. Mint attempted_id, a fresh UUID distinct from event_id, to serve
+      as the idempotency-sidecar row's own surrogate primary key. Attempt to insert a
+      sidecar row carrying attrs.idempotency_key, event_id (from P6), and created_at
+      (from P6), using the schema module's own insert changeset. The insert is
+      configured as an atomic insert-or-ignore keyed on idempotency_key, mirroring the
+      exact "attempt an insert, then re-select to disambiguate outcome" idiom already
+      shipped in Letflow.TenantProvisioning.insert_or_fetch_registration/2
+      (tenant_provisioning.ex:315-338) -- necessary here for the identical reason:
+      because attempted_id is client-generated rather than DB-assigned, a bare "insert
+      succeeded" signal can't by itself distinguish "this row was really inserted" from
+      "the insert was silently suppressed by a conflicting idempotency_key."
+
+  (ii) Disambiguate by re-selecting. Look up the sidecar row by attempted_id.
+
+    row found (by attempted_id)
+      -> this transaction's own insert really claimed the key -- succeed, recording
+         :claimed (a fresh append)
+
+    row not found (by attempted_id)
+      -> the key was already claimed by an earlier append; the insert at (i) was
+         suppressed. Look up the existing sidecar row by idempotency_key, then look up
+         the events row it points at (by that row's event_id/event_created_at) -- both
+         needed for append_result()'s is_duplicate: true shape. Fail the step with
+         {:error, {:duplicate_idempotency_key, original_event}}, where original_event is
+         the event row just looked up.
 ```
 
 **Why a `duplicate_idempotency_key` result is an `{:error, _}` at the `Multi.run` level,
@@ -595,9 +604,9 @@ roll back the whole transaction — including M2's already-executed sequence
 increment — so a duplicate call consumes **zero** durable rows anywhere, not just zero
 `events` rows (AC3's literal requirement: "does not insert a second events row" — this
 design satisfies a strictly stronger property: no row anywhere changes at all on a
-duplicate). `append/2`'s own top-level function (§6.3) pattern-matches this specific
-`Ecto.Multi.transaction/2` failure shape and converts it into a **successful**
-`{:ok, %{is_duplicate: true, ...}}` return — the `{:error, _}` at the `Multi` level and
+duplicate). `append/2`'s own top-level result assembly (§6.3) recognizes this specific
+transaction-failure shape and converts it into a **successful** return carrying
+`is_duplicate: true` — the `{:error, _}` at the `Multi` level and
 the `{:ok, _}` at `append/2`'s own boundary are not in tension: one is "did this
 database transaction commit," the other is "did the caller's idempotent request
 succeed," and they are legitimately different questions with different answers here.
@@ -605,33 +614,26 @@ succeed," and they are legitimately different questions with different answers h
 #### 6.2.4 M4 — Insert `events` row (invariant 5/7, ES-01/02/03/05/08)
 
 ```
-M4(repo, _changes):
-  payload_field =
-    if payload_bytes <= 4096 do
-      decoded_payload                          # inline storage
-    else
-      %{"$ref" => event_id}                    # pointer form, invariant 7
-    end
+M4 (:insert_event) -- inserts one events row, via the schema module's own insert
+changeset, populated as follows:
 
-  attrs_for_insert = %{
-    event_id: event_id,                # P6
-    created_at: created_at,            # P6
-    instance_id: attrs.instance_id,
-    event_type: attrs.event_type,
-    payload: payload_field,
-    actor_id: attrs.actor_id,
-    sequence_number: assigned_sequence_number,   # M2
-    idempotency_key: attrs.idempotency_key,
-    metadata: metadata,                # P3, defaulted to %{}
-    tenant_id: tenant_id               # P1 -- derived, never attrs-supplied (§3)
-  }
+  payload field: if payload_bytes (P5) is 4096 or fewer, store decoded_payload (P5)
+    inline. Otherwise, store the pointer form instead -- a small JSON object whose sole
+    key is "$ref" and whose value is event_id (P6) -- per invariant 7.
 
-  repo.insert(Event.insert_changeset(%Event{}, attrs_for_insert), prefix: schema_name)
+  every other field is a direct pass-through, with three exceptions: event_id and
+    created_at come from P6 (not freshly generated here), sequence_number comes from
+    assigned_sequence_number (M2), and tenant_id comes from the value derived at P1 --
+    never from anything attrs-supplied (§3). metadata comes from P3's already-defaulted
+    value (an empty object when the caller supplied none).
+
+  Step succeeds with the inserted events row.
 ```
 
-`global_seq` is never in `attrs_for_insert` — `Event.insert_changeset/2`'s own
-`@cast_fields` doesn't include it (confirmed §0), matching `read_after_writes: true`'s
-requirement that the DB assign it.
+`global_seq` is deliberately never among the fields this insert populates — it is a
+`read_after_writes: true` column (confirmed §0), so the DB assigns its value and Ecto
+reads it back automatically; the insert changeset's own cast-field list doesn't include
+it at all.
 
 #### 6.2.5 M5 — Store oversized payload (invariant 7, `event_payload_store`)
 
@@ -641,17 +643,15 @@ requirement that the DB assign it.
 `req023-event-store-schema.md` §3.4) requires the `events` row to exist first.
 
 ```
-M5(repo, _changes):
-  repo.insert(
-    StoredPayload.insert_changeset(%StoredPayload{}, %{
-      event_id: event_id,              # P6, same value as M4's events row
-      event_created_at: created_at,    # P6, same value as M4's events row
-      payload: decoded_payload,        # P5
-      byte_size: payload_bytes         # P5 -- the ORIGINAL measured size, INV-EV-7,
-                                        # not octet_length of the stored jsonb
-    }),
-    prefix: schema_name
-  )
+M5 (:store_oversized_payload) -- included in the step sequence at all only when
+payload_bytes (P5) exceeds 4096; skipped entirely otherwise. Inserts one
+event_payload_store row, via the schema module's own insert changeset, carrying:
+event_id and event_created_at (both from P6, matching M4's events row exactly, to
+satisfy the composite foreign key back to it), payload set to decoded_payload (P5), and
+byte_size set to payload_bytes (P5) -- the originally measured size (INV-EV-7), not a
+size recomputed from the stored representation.
+
+  Step succeeds with the inserted event_payload_store row.
 ```
 
 #### 6.2.6 M6 — `instance_projections` update (invariant 6, DB-03)
@@ -667,59 +667,73 @@ event of any instance. `InstanceProjection.insert_changeset/2` already exists in
 REQ-023's shipped schema specifically to make this possible (confirmed §0).
 
 ```
-M6(repo, changes):
-  repo.insert(
-    InstanceProjection.insert_changeset(%InstanceProjection{}, %{
-      instance_id: attrs.instance_id,
-      tenant_id: tenant_id,                        # P1 -- derived, never attrs-supplied
-      status: :active,
-      last_event_seq: assigned_sequence_number      # M2
-    }),
-    on_conflict: [set: [last_event_seq: assigned_sequence_number, updated_at: created_at]],
-    conflict_target: :instance_id,
-    prefix: schema_name
-  )
-  # on_conflict's :set list deliberately omits :status and :tenant_id -- an existing
-  # row's status/tenant_id must never be overwritten by an ordinary append (status
-  # transitions are EE-01/S3's concern; tenant_id never changes for an existing
-  # instance).
+M6 (:update_projection) -- an upsert against instance_projections, via the schema
+module's own insert changeset, keyed on instance_id:
+
+  row does not yet exist for this instance_id (M1 found none)
+    -> create it: instance_id, tenant_id (from P1 -- derived, never attrs-supplied),
+       status set to :active, last_event_seq set to assigned_sequence_number (M2)
+
+  row already exists for this instance_id
+    -> instead of the above insert taking effect, update only last_event_seq (to
+       assigned_sequence_number, M2) and the row's updated-at timestamp (to created_at,
+       P6). status and tenant_id are deliberately left untouched on this path -- an
+       existing row's status must never be overwritten by an ordinary append (status
+       transitions belong to EE-01/S3, out of this requirement's scope) and its
+       tenant_id never changes for an existing instance.
+
+  Both branches are expressed as a single atomic upsert (one statement covering both
+  outcomes, not a separate existence check followed by a conditional insert or update,
+  which would itself race against a concurrent first-append to the same instance).
 ```
 
 ### 6.3 Assembling the top-level result
 
 ```
-append(attrs, opts):
-  with :ok <- check_no_tenant_id(attrs),                                   # P0
-       {:ok, tenant_id} <- tenant_id_for_schema_name(opts[:prefix]),       # P1
-       :ok <- validate_structure(attrs),                                   # P2
-       :ok <- validate_metadata(attrs[:metadata] || %{}),                  # P3
-       :ok <- Registry.validate_payload(attrs.event_type, attrs.payload, tenant_id) do  # P4
-    # P5/P6 computed here (pure), then the Multi (§6.2) is built and run:
-    case Repo.transaction(build_multi(...)) do
-      {:ok, %{insert_event: event, assign_sequence: seq}} ->
-        {:ok, %{event: event, is_duplicate: false, sequence_number: seq, global_seq: event.global_seq}}
+append(attrs, opts) -- runs the pre-transaction phase (§6.1, P0-P6) first, in order,
+stopping at the first failure and returning its error immediately without opening a
+transaction:
 
-      {:error, :active_instance_guard, {:instance_terminated, status}, _changes} ->
-        {:error, {:instance_terminated, status}}
+  P0 fails -> return its error as-is
+  P1 fails -> return its error as-is
+  P2 fails -> return its error as-is
+  P3 fails -> return its error as-is
+  P4 fails -> return its error as-is
 
-      {:error, :idempotency, {:duplicate_idempotency_key, original_event}, _changes} ->
-        {:ok, %{event: original_event, is_duplicate: true,
-                sequence_number: original_event.sequence_number,
-                global_seq: original_event.global_seq}}
+  all of P0-P6 succeed
+    -> build the Multi (§6.2, steps M1-M6, conditionally including M5) and run it as one
+       database transaction. Then interpret the transaction's outcome:
 
-      {:error, _failed_step, %Ecto.Changeset{} = changeset, _changes} ->
-        if unique_violation?(changeset, :instance_id) or unique_violation?(changeset, :sequence_number) do
-          {:error, {:sequence_conflict, changeset}}
-        else
-          {:error, changeset}
-        end
+       every step committed, with M4 having produced an events row and M2 having
+       produced a sequence number
+         -> return a success carrying: the inserted event, is_duplicate: false, the
+            assigned sequence_number, and the event's global_seq
 
-      {:error, _failed_step, reason, _changes} ->
-        {:error, reason}
-    end
-  else
-    {:error, _reason} = error -> error
-  end
+       the transaction aborted specifically because M1 (:active_instance_guard) failed
+       with an instance-terminated reason
+         -> return {:error, {:instance_terminated, status}}, re-surfacing the status M1
+            found (AC1)
+
+       the transaction aborted specifically because M3 (:idempotency) failed with a
+       duplicate-idempotency-key reason
+         -> this is NOT surfaced as a failure to the caller. Return a success carrying:
+            the pre-existing original_event M3 looked up, is_duplicate: true, and that
+            event's own sequence_number/global_seq (AC3). (See §6.2.3's closing
+            paragraph for why an aborted transaction can still legitimately produce a
+            successful append/2 return -- "did this DB transaction commit" and "did the
+            caller's idempotent request succeed" are different questions here.)
+
+       the transaction aborted because some step's insert violated a DB constraint
+         -> if the violated constraint is instance_sequence's or events' own
+            uniqueness guarantee on (instance_id, sequence_number) (the DB-level
+            backstop to M2's locking protocol, §6.2.2's concurrency argument), return
+            {:error, {:sequence_conflict, <constraint-violation detail>}}. For any other
+            constraint violation, return {:error, <constraint-violation detail>}
+            unchanged.
+
+       the transaction aborted for any other reason (any step's own named failure not
+       covered above)
+         -> return that reason as the error, unchanged
 ```
 
 ---

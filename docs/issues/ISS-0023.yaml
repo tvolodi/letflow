@@ -91,4 +91,40 @@ affected_files:
   - docs/agents/protocols/GIT_MERGE.md
   - docs/agents/protocols/GIT_SETUP.md
 github_issue: https://github.com/tvolodi/letflow/issues/81
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF03-ISS0023-20260817
+resolved_at: 2026-08-17T07:12:44Z
+resolution: >
+  Applied both fixes essentially as the issue's own text specified,
+  including its worked example verbatim where it named one.
+
+  GIT_SETUP.md: added a "Worktree variant" section (applies when
+  `git worktree list` shows more than one entry) replacing steps 1-2
+  (`git checkout main` / `git pull --ff-only`) with
+  `git fetch origin main && git checkout -b feature/<run-id> origin/main`
+  -- branches from the fetched remote ref, never checks out local main.
+
+  GIT_MERGE.md, three changes:
+  (1) Step 2's `git add -A` replaced with explicit-filename staging
+  unconditionally (not just for the worktree case -- unsafe in any shared
+  checkout and already contradicted this project's own practice).
+  (2) New "SEMANTIC conflicts" guidance inside the section 5b conflict-
+  handling block: recognize by asking whether the other side also touched
+  a changed function's body/contract even without a textual marker;
+  resolve by composing both intents, then prove the composition
+  mechanically (byte-diff already-shipped @specs against origin/main;
+  exercise the merged result under the specific condition that would
+  expose a wrong resolution) rather than by inspection. Included the
+  issue's own REQ-023/REQ-024 tenant_scoped_migrations/0 worked example.
+  (3) New "Worktree variant" section covering steps 8-9: step 8's
+  partial-failure-by-design behavior (gh pr merge's GitHub-side success
+  vs. its local checkout-switch error) with the gh pr view verification
+  and explicit ref-deletion fallback; step 9 replaced with
+  git fetch --prune + git checkout --detach origin/main, plus adjusted
+  verification since git branch --show-current is empty (not "main")
+  under a detached HEAD by design.
+
+  No lib/, priv/, or test/ file touched -- pure protocol-documentation
+  fix, matching the issue's own affected_files list exactly (both files
+  named, no others).

@@ -55,3 +55,25 @@ One branch per run-id. ORCH ensures no two concurrent runs share `owned_modules`
 - [ ] `git pull --ff-only` exited 0
 - [ ] `git branch --show-current` outputs `feature/<run-id>`
 - [ ] `git push -u origin feature/<run-id>` exited 0
+
+## Worktree variant
+
+Added 2026-08-17 (ISS-0023/GH#81). **Applies whenever this checkout is a secondary
+`git worktree` sharing one `.git` with a primary checkout that holds local `main`** —
+check with `git worktree list` before starting: more than one entry means this
+applies. Steps 1-2 above are structurally impossible from a secondary worktree: `git
+checkout main` fails outright (git refuses to check out a branch already checked out
+in another worktree — forcing past it would corrupt the concurrently running primary
+session).
+
+Replace steps 1-2 with:
+
+```
+1w. git fetch origin main
+
+2w. git checkout -b feature/<run-id> origin/main
+    (branches directly from the freshly fetched remote ref — never checks out local
+    main at any point, so there is nothing to conflict with the primary checkout)
+```
+
+Steps 3-8 are unchanged (they operate on the new feature branch, not on `main`).

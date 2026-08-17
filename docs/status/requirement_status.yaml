@@ -2285,3 +2285,32 @@ history:
       surface as its own task if still open. No lib/, priv/, or test/ file
       touched. Released queue task 68 as done via the per-client API key,
       closing GitHub issue #79.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-17T07:12:44Z
+    note: >
+      Resolved ISS-0023 (GitHub #81, MINOR, filed by ELIXIR-DEV during
+      WF02-REQ023-20260816 Step Final -- queue task 67). GIT_MERGE.md/
+      GIT_SETUP.md had no worktree variant (several literal steps --
+      git checkout main, git add -A, gh pr merge's implicit checkout
+      switch -- are structurally impossible or unsafe from a secondary
+      worktree) and no guidance for semantic (same-function,
+      no-textual-marker) merge conflicts, both gaps the REQ-023 Step Final
+      run hit and had to depart from the protocol's literal text to
+      resolve. Applied the issue's own fully-specified fix: GIT_SETUP.md
+      gained a worktree variant replacing checkout-main-then-branch with
+      fetch-then-branch-from-origin/main; GIT_MERGE.md gained
+      explicit-filename staging (replacing git add -A unconditionally),
+      new semantic-conflict guidance in its section 5b (compose both
+      intents, then prove it mechanically via @spec byte-diff and
+      exercising the merged result under the specific failure condition --
+      included the issue's own REQ-023/REQ-024 tenant_scoped_migrations/0
+      worked example verbatim), and a worktree variant for steps 8-9
+      (gh pr view verification + explicit ref-deletion fallback for step
+      8's partial-failure-by-design behavior; detached-HEAD checkout
+      replacing step 9's git checkout main, with adjusted verification
+      criteria since git branch --show-current is empty by design under a
+      detached HEAD). No lib/, priv/, or test/ file touched -- matches the
+      issue's own affected_files list exactly. Released queue task 67 as
+      done via the per-client API key, closing GitHub issue #81.

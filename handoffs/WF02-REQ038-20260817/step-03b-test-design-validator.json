@@ -1,0 +1,69 @@
+{
+  "handoff_id": "f1a6c2d4-8b3e-4a7f-9c1d-6e2b5f0a7d34",
+  "run_id": "WF02-REQ038-20260817",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ038-20260817/step-03b-test-design-validator.json",
+  "created_at": "2026-08-17T23:06:35Z",
+  "started_at": "2026-08-17T23:06:35Z",
+  "completed_at": "2026-08-17T23:06:35Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-038"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ038-20260817/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ038-20260817/step-01b-code-design-validator-rereview.json",
+      "handoffs/WF02-REQ038-20260817/step-02d-reviewer.json",
+      "handoffs/WF02-REQ038-20260817/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req038-promotion-rollback.md",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/definitions/promotion_review_store.ex",
+      "test/specs/REQ-038.md",
+      "test/letflow/definitions/rollback_test.exs",
+      "handoffs/WF02-REQ038-20260817/step-03-test-designer.json"
+    ],
+    "owned_modules": ["test/letflow/definitions", "test/specs"]
+  },
+  "task": {
+    "description": "WF-02 Step 3b hard gate: independently verify TEST-DESIGNER's test/specs/REQ-038.md and test/letflow/definitions/rollback_test.exs against docs/requirements.yaml's REQ-038 entry (5 acceptance criteria), the gate-approved design (lib/letflow/design/req038-promotion-rollback.md, including the Rework-1 cardinality-branching fix), and the actual shipped implementation (lib/letflow/definitions.ex's rollback_definition_version/4 + helpers, promotion_review_store.ex's widened supersede_review/3). Re-derive coverage from the artefacts directly, run the tests, and mutation-test the two highest-risk tests (cardinality-branching lookup, guard ordering) by breaking the corresponding implementation logic and confirming the test fails, then reverting.",
+    "acceptance_criteria": [
+      "All 5 REQ-038 acceptance criteria re-derived from docs/requirements.yaml lines 1814-1819 and matched to a specific runnable test",
+      "Cardinality-branching promotion_reviews lookup: zero/exactly-one/more-than-one branches each independently verified, ambiguous-match case proven to mutate zero rows by re-reading both rows from Postgres",
+      "Guard-ordering test's fixture confirmed to genuinely disambiguate evaluation order (reasoned through and/or verified by swapping the guard clauses)",
+      "AC5 permission-guard-before-any-read mechanism confirmed to genuinely prove ordering (would raise rather than cleanly error if the guard ran late)",
+      "AC3 already-active proof via a raising event_appender confirmed to prove non-invocation, not just result shape",
+      "Event-append-after-commit window proof confirmed to use a genuinely separate connection under real Ecto Sandbox :auto semantics",
+      "Status-enum reuse / double-rollback test confirmed to exercise the :deprecated-via-rollback eligibility path",
+      "No TODOs/skipped tests/hardcoded secrets",
+      "Real-Postgres only, no mocking, all fixtures via real merged public functions",
+      "mix test on the new file and the full suite run independently, real output quoted",
+      "Mutation-style sanity check performed and reverted on at least the cardinality-branching and guard-ordering tests"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-read docs/requirements.yaml's REQ-038 entry (lines 1778-1820, 5 acceptance criteria verbatim), lib/letflow/design/req038-promotion-rollback.md in full (including §0's Rework-1 evidence and §6/§7's exactly-one-match safe default), lib/letflow/definitions.ex's rollback_definition_version/4 plus its 5 private helpers (do_rollback/6, run_rollback_transaction/4, swap_active_pointer/3, finish_rollback/8, supersede_matching_review/4) directly against the shipped code, and promotion_review_store.ex's widened supersede_review/3 (confirmed allowed_source_statuses is literally [:applied, :approved, :failed, :rejected], moduledoc updated to 'Exactly 8 permitted edges'). Read test/specs/REQ-038.md and test/letflow/definitions/rollback_test.exs in full, not just TEST-DESIGNER's summary.\n\nAll 5 acceptance criteria have unambiguous runnable coverage: AC1 (2 tests, full success-path incl. exactly-one-event proof via refute_receive, plus get_active_by_name/2 queryable-state parity), AC2 (3 tests: draft-never-activated with updated_at pinning, no-row-at-all, archived-excluded per INV-RB-4), AC3 (1 test, already-active proven via exploding_event_appender), AC4 (4 cardinality tests + event-append-after-commit + error-propagation), AC5 (3 tests: permission-denial-before-read + both Keyword.fetch!/2 KeyError cases). Code reading confirmed the top-level rollback_definition_version/4 checks permission_checker strictly before calling do_rollback (the sole entry point to every Repo call in this feature), so the AC5 unprovisioned-but-decodable-schema-name mechanism genuinely proves ordering: a late permission check would hit the nonexistent Postgres schema first and raise/return {:transaction_failed,_} instead of cleanly {:error,:forbidden}. Code reading also confirmed AC3's already-active guard fires via Repo.rollback/1 inside run_rollback_transaction, before do_rollback ever calls finish_rollback (the only caller of event_appender) -- exploding_event_appender genuinely proves non-invocation, not just result shape. Event-append-after-commit test's reread_statuses_via_separate_connection/3 uses Task.async (a genuinely separate BEAM process/connection) combined with provisioned_tenant/0's explicit Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto) -- real commits, no wrapping transaction, matching store_test.exs's/promotion_test.exs's already-established working pattern -- so this is a real independent re-read, not the same sandboxed connection silently reusing TX1's transaction.\n\nRan mix test test/letflow/definitions/rollback_test.exs: 18 passed (matches TEST-DESIGNER's claim exactly). Ran full mix test: 647 passed (4 properties, 643 tests) -- matches claimed baseline+18 exactly, zero regressions.\n\nMutation-style sanity checks (both reverted cleanly, confirmed via git diff --stat producing no output afterward): (1) Reordered run_rollback_transaction/4's cond so the target-row lookup ran unconditionally before the current_active nil-check (simulating the exact reordering defect the guard-order describe block claims to catch) -- reran the file: 16/18 passed, and the 2 failures were precisely the 2 guard-order tests ('process_key_not_found wins' test crashed with {:transaction_failed, %BadMapError{}} instead of returning {:error,:process_key_not_found}; the 'zero rows' test flipped to {:error,:version_never_active}), proving the fixture genuinely disambiguates evaluation order, not merely asserts around it. (2) Changed supersede_matching_review/4's [_,_|_] ambiguous branch to blanket-supersede the first match instead of returning nil (reproducing the exact defect CODE-DESIGN-VALIDATOR's Rework 1 blocked on) -- reran the file: 17/18 passed, and the single failure was precisely the 'MORE THAN ONE matching row' test, confirming it genuinely catches a regression to blanket-supersede.\n\nGrepped for @tag :skip, @tag :pending, TODO/FIXME, password/secret/connection-string patterns, Mox/mock/stub/meck in the test file: zero matches. Every fixture (two_version_history!/2, review_pending!/approved!/applied!/3) is built via real, already-merged public functions (Definitions.create/2/activate/2/deprecate/2/archive/2, PromotionReviewStore.insert_review/2/approve_review/4/mark_review_applied/2) -- no raw Repo.insert!/update_all bypassing a state machine anywhere in this file. Every test provisions its own tenant via provisioned_tenant/0 and uses unique_process_key/1 (System.unique_integer/1-suffixed) -- no shared/hardcoded identifiers, no cross-test dependency, no execution-order dependency, no wall-clock assertion. promotion_reviews fixtures use a fresh unique node id per sample_plan/2 call so plan_digest never collides on uq_promotion_review_active_digest even when two reviews target the same process_key (required for the ambiguous-match tests) -- confirmed correct by the passing 'MORE THAN ONE matching row' test itself. This is a WF-02 test-design gate, not a WF-03 regression test, so the pre-fix-failure confirmation requirement does not apply.\n\nAll 9 TEST-DESIGN-VALIDATOR checklist items (docs/agents/workflows/WF-02_requirement_implementation.md Step 3b) satisfied. No gaps found. PASS.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ038-20260817/step-03b-test-design-validator.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ038-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ038-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (Step 4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

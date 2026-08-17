@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ037-20260817/step-06-doc-updater.json",
   "created_at": "2026-08-17T20:09:44Z",
   "started_at": "2026-08-17T20:09:44Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-17T20:10:59Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S2",
@@ -34,19 +34,23 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Flipped docs/requirements.yaml REQ-037 status: in_progress -> done. Appended a 'done' event to docs/status/requirement_status.yaml (real UTC timestamp 2026-08-17T20:10:59Z) noting 2 new modules (Letflow.Definitions.PromotionReviewStore, Letflow.Definitions.Promotion), all 6 acceptance criteria met, 27 new tests, full suite 563/563, and the one real rework cycle this run had (SECURITY-REVIEWER's INV-1 BLOCKER on insert_review/2 trusting a caller-supplied tenant_id instead of deriving it from the resolved schema prefix, root-caused in the design, fixed, and independently re-verified by both SECURITY-REVIEWER and REVIEWER). Moved REQ-037 from the pending list to the done list in docs/migration/stage-2-event-store-definitions.md's header (line 4/5), same bulk-refresh pattern used by prior DOC-UPDATER runs this stage. README.md's 'Migration status' and 'What's here today'/'Running it' sections read in full and left untouched -- REQ-037 is domain-logic-only (no HTTP layer, no new curl-able endpoint, no change to the documented ASCII state diagram), consistent with REQ-025/REQ-032/REQ-033/REQ-036 precedent. docs/migration/decisions/0003-ecto-schema-strategy.md read in full: its 2026-08-17 write-time tenant_id addendum already states the general derivation policy this run's rework exercised: only REQ-025/REQ-030 are named as the two requirements it originally unblocked, but the stated rule itself is general ('a context module about to write a tenant-scoped row reverses that same encoding... rather than trusting a tenant_id value passed in'). This run's fix is a further confirmed application of that already-general rule, not a new case requiring an addendum edit, so the decision record was left unchanged.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "docs/migration/stage-2-event-store-definitions.md"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ037-20260817",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF02-REQ037-20260817",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to ELIXIR-DEV for Step Final"
   },
   "rework_count": 0,
   "max_rework": 3

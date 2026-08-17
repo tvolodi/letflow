@@ -3259,3 +3259,43 @@ history:
       WF02-REQ030-20260817 (concurrent, directory-level
       lib/letflow/definitions lock) -- no actual file-level conflict.
       Routing to CODE-DESIGNER for Step 1.
+  - req: REQ-037
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-17T20:10:59Z"
+    note: >
+      RELEASE-VALIDATOR PASSed REQ-037 (Promotion review state machine and
+      base promote -- promotion_review.zig PRM-04 + promotion.zig ENV-03):
+      2 new modules (Letflow.Definitions.PromotionReviewStore,
+      Letflow.Definitions.Promotion), all 6 acceptance criteria met, 27 new
+      tests, full suite 563/563. This run included one real rework cycle:
+      SECURITY-REVIEWER caught a genuine INV-1 BLOCKER at Step 2c --
+      insert_review/2 trusted a caller-supplied tenant_id instead of
+      deriving it from the resolved schema prefix, per
+      docs/migration/decisions/0003-ecto-schema-strategy.md's 2026-08-17
+      write-time tenant_id addendum. Root-caused in the design, fixed
+      (insert_review/2 now derives tenant_id from the resolved :prefix
+      schema name via Letflow.TenantProvisioning's reverse mapping, same
+      pattern as REQ-025/REQ-030), and independently re-verified by both
+      SECURITY-REVIEWER and REVIEWER on the corrected diff. Flipped
+      docs/requirements.yaml REQ-037 status: in_progress -> done.
+      docs/migration/stage-2-event-store-definitions.md header's
+      Requirements line updated to move REQ-037 from the pending list to
+      the done list (same bulk-refresh-at-stage-gate pattern as
+      REQ-025/REQ-029/REQ-032/REQ-033/REQ-036's DOC-UPDATER runs; not named
+      in REQ-037's own acceptance criteria). README.md checked and left
+      untouched: REQ-037 is domain-logic only with no new HTTP endpoint, no
+      new curl-able command, and no change to the ASCII state diagram or
+      "Running it" section -- confirmed by reading "Migration status" and
+      "What's here today" directly, consistent with REQ-025/REQ-032/
+      REQ-033/REQ-036's DOC-UPDATER precedent.
+      docs/migration/decisions/0003-ecto-schema-strategy.md checked in
+      full: its 2026-08-17 addendum already states the general write-time
+      tenant_id derivation policy ("a context module about to write a
+      tenant-scoped row reverses that same encoding... rather than
+      trusting a tenant_id value passed in") and only enumerates
+      REQ-025/REQ-030 by name as the two requirements it originally
+      unblocked -- this run's rework is a further confirmed application of
+      that same already-general rule (REQ-037's insert_review/2 write path),
+      not a new case the decision record needs to additionally describe, so
+      no edit made to the decision record itself.

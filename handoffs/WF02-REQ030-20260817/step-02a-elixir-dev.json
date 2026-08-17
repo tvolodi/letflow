@@ -1,0 +1,57 @@
+{
+  "handoff_id": "06a0a641-8a16-41b7-afcc-6bbc4cdb82f4",
+  "run_id": "WF02-REQ030-20260817",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ030-20260817/step-02a-elixir-dev.json",
+  "created_at": "2026-08-17T18:05:49Z",
+  "started_at": "2026-08-17T18:05:49Z",
+  "completed_at": "2026-08-17T18:16:18Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-030"],
+    "related_handoff_ids": ["08fa0d9c-fa35-4bc7-a01e-956921fec425"],
+    "artifacts_in": [
+      "lib/letflow/design/req030-definition-store-crud.md"
+    ],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "Implement REQ-030 (Definition store CRUD) per lib/letflow/design/req030-definition-store-crud.md, PASSed by CODE-DESIGN-VALIDATOR. Branch feature/WF02-REQ030-20260817 already checked out. Extends the existing lib/letflow/definitions.ex (created by REQ-041) -- do not create a new/duplicate context module.",
+    "acceptance_criteria": [
+      "create/1 with a graph that fails REQ-028's validateGraph() writes zero rows and returns the collected violations, not a generic error",
+      "two concurrent create/1 calls with identical (name, version) result in exactly one success and one duplicate-error, demonstrated with an actual concurrent test or the ON CONFLICT code path cited explicitly if concurrency can't be exercised",
+      "activate/1 on a DRAFT definition atomically deprecates any prior ACTIVE version of the same name in the same transaction, verified by reading both rows after the call",
+      "activate/1 called twice on the same already-ACTIVE definition returns the no-op/AlreadyActive result both times, never an error",
+      "every one of the 9 forbidden-transition cells in definition.md's authoritative state transition table is tested and rejected (REQ-030's own AC5 text says 4, but the real table has 9 -- CODE-DESIGN-VALIDATOR independently confirmed this; the design doc's section 6.1-6.3 covers all 9)",
+      "activate/1's signature includes a nil-able/optional service-scope-validation hook parameter that REQ-031 wires in, documented explicitly in the moduledoc as the SVC-03 integration point",
+      "get_active_by_name/1 against a name with an ACTIVE version returns that definition; against a name with only DRAFT/DEPRECATED/ARCHIVED versions returns a not-found error, not the most recent non-active row",
+      "list/1 with a stage filter returns only rows whose stage column exactly matches the filter value, combinable with a simultaneous name and/or status filter in the same call"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Extended lib/letflow/definitions.ex in place per the approved design doc -- no new module, no changes to graph.ex/process_definition.ex/tenant_provisioning.ex. Added the moduledoc's required 'Scope', 'tenant_id is always derived, never accepted', and 'service_scope_validator -- the SVC-03 integration point' sections verbatim per design §7, merged into (not replacing) the existing REQ-041 moduledoc content. Added 7 public functions -- create/2, get_by_id/2, get_active_by_name/2, list/2, activate/2, deprecate/2, archive/2 -- plus the private graph_struct_from_map/1 helper (resolving req027's OQ-3) and its supporting private helpers, following design §4-6 exactly: create/2's 12-phase gate (reject tenant_id/status -> derive tenant_id -> name/version/graph presence -> graph struct conversion -> validate_graph/1 AND validate_node_attributes/1 AND validate_edge_conditions/1, all three, closing the gap where REQ-030's own requirement text names only one -> targeted ON CONFLICT (name, version) DO NOTHING + re-select disambiguation, no app-level check-then-insert race); activate/2's FOR-UPDATE-locked transaction enforcing the full 9-cell PD-04 forbidden-transition table (not just the 4 named in REQ-030's own AC5 text -- design §6.1's reconciliation), atomic deprecate-prior-active-then-activate-target ordering, true no-op on already-ACTIVE, and the nil-able service_scope_validator hook (REQ-031's future SVC-03 injection point, called only on the :draft branch before either UPDATE); deprecate/2 and archive/2 sharing one guarded-UPDATE-then-fallback-SELECT transition/4 helper, archive/2 additionally stamping archived_at. Every write function (create/2, activate/2, deprecate/2, archive/2) wraps its DB-touching body in try/rescue -> {:error, {:transaction_failed, exception}} (INV-DS-9). No new migration -- confirmed against 20260816193001_create_process_definitions.exs directly: both uq_definition_version and uq_active_definition (WHERE status = 'active') already exist from REQ-027, exactly what this design relies on. One deliberate, flagged deviation from the design's literal text: name/version/graph field extraction reads attrs by atom key only (Map.get(attrs, :name), matching create_attrs()'s own atom-keyed @type and the EventStore.append/2 precedent this design cites by name, whose own fetch_uuid/3, fetch_payload/1 etc. are atom-only), not the design's literal 'attrs[:name] (or attrs[\"name\"])' string-key-fallback phrasing -- verified directly (deps/ecto/lib/ecto/changeset.ex:949-964) that Ecto.Changeset.convert_params/1 raises Ecto.CastError on a map with mixed atom/string keys, so merging a string-keyed attrs map with the atom-keyed :tenant_id (insert_definition/3) would crash; the tenant_id/status *rejection* checks still check both atom and string forms, matching design §4.1 P0/P1 and EventStore's identical reject_tenant_id/1 exactly. Nothing else diverges from the design; no ambiguity was found that needed independent resolution beyond what design §6.1/§9 already flags for TEST-DESIGNER. Verification: mix compile --warnings-as-errors -> clean (0 warnings). mix format --check-formatted -> exit 0. mix test (full suite) -> 431 passed (4 properties, 427 tests), 0 failures -- no regressions against the pre-existing baseline. Additionally wrote and ran a throwaway ExUnit smoke test (not committed, deleted immediately after) exercising real Postgres via a provisioned tenant schema: create -> get_by_id -> get_active_by_name (not-found while draft, found once active); tenant_id rejection; invalid-graph create (zero rows, violations returned, confirmed via a follow-up get_active_by_name not-found); duplicate (name, version) create; the full DRAFT->ACTIVE->DEPRECATED->ARCHIVED lifecycle plus every forbidden transition reachable from each of the 4 statuses (DRAFT->DEPRECATED, DRAFT->ARCHIVED, ACTIVE->ARCHIVED, DEPRECATED->ACTIVE, DEPRECATED->DEPRECATED, ARCHIVED->ACTIVATE/DEPRECATE/ARCHIVE); activate/2's atomic same-transaction deprecate-of-prior-active-version-of-the-same-name (verified by re-reading both rows after the call); list/2's exact-match stage filter combined with name/status filters in the same call; the service_scope_validator hook's both {:error, reason} (aborts, writes nothing, definition stays :draft) and :ok (activates, hook receives a real %Graph{} struct and the tenant_id) paths; get_by_id/2 on a malformed UUID string returning {:error, :not_found} rather than crashing. All 9 smoke-test cases passed on the first real run after one unrelated helper-ordering fix (import Ecto.Query needed to precede its first use in a private helper -- an artifact of the throwaway test file's own structure, not the library code).",
+    "artifacts_out": [
+      "lib/letflow/definitions.ex"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ030-20260817",
+      "commit_sha_list": [
+        "81b45fa59556299c49d1652966d47facfcd16b2a"
+      ],
+      "remote_branch": "origin/feature/WF02-REQ030-20260817",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

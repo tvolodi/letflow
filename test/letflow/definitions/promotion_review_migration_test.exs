@@ -122,7 +122,7 @@ defmodule Letflow.Definitions.PromotionReviewMigrationTest do
     |> Base.encode16(case: :lower)
   end
 
-  defp valid_review_attrs(overrides \\ %{}) do
+  defp valid_review_attrs(overrides) do
     Map.merge(
       %{
         tenant_id: Ecto.UUID.generate(),

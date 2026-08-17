@@ -22,7 +22,8 @@ defmodule Letflow.Application do
          }},
         {Registry, keys: :unique, name: Letflow.Registry},
         Letflow.InstanceSupervisor,
-        Letflow.ApprovalSupervisor
+        Letflow.ApprovalSupervisor,
+        {Letflow.SandboxPool, []}
       ] ++ http_child()
 
     # See https://hexdocs.pm/elixir/Supervisor.html

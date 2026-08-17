@@ -1,0 +1,156 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-037
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ037-20260817
+date_utc: 2026-08-17T20:06:29Z
+
+git:
+  branch: feature/WF02-REQ037-20260817
+  branch_confirmed: true
+  commit: b70c6c98a7557d27023253bc9d60a5cf81b53c8e
+  commit_subject: "chore(WF02-REQ037): dispatch Step 4 (TEST-RUNNER)"
+  note: >
+    Confirmed via `git branch --show-current` and `git log -1` at start of this run.
+    Prior gates (CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER,
+    TEST-DESIGN-VALIDATOR) already passed on this commit per dispatching handoff.
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 27 [erts-15.2.7.4] ... Elixir 1.18.3 (compiled with Erlang/OTP 27)"
+  postgres_container: letflow-postgres-1 (already running, shared with primary ~/letflow
+    checkout; confirmed healthy via `docker ps` only — `docker compose up`/`up -d` was
+    NEVER run in this worktree, per explicit standing instruction and the
+    docs/anti-patterns.md entry from this same run's earlier Step 3b incident)
+  partition: "MIX_TEST_PARTITION=2 (isolates onto letflow_test2, per this worktree's
+    shared-Postgres setup — used for every invocation in this run, never bare mix test)"
+  command_run: >
+    `MIX_TEST_PARTITION=2 mix test` (full suite, default/unpinned random seed, run
+    twice — once piped through `tee`, once with exit-code capture) and
+    `MIX_TEST_PARTITION=2 mix test --seed 0` (full suite, pinned-seed independent
+    run) — the `test` alias runs ecto.create + ecto.migrate --quiet first
+    automatically. Plus a targeted isolated re-run of REQ-037's own two new test
+    files.
+
+verdict: PASS
+
+checks:
+  test_suite_full_run1:
+    result: PASS
+    exit_code: 0
+    seed: unpinned/random — ExUnit's own default
+    summary_line_verbatim: "4 properties, 563 tests, 0 failures"
+    finished_line_verbatim: "Finished in 22.0 seconds (1.4s async, 20.5s sync)"
+    failures: 0
+
+  test_suite_full_run1_exit_code_capture:
+    result: PASS
+    exit_code: 0
+    summary_line_verbatim: "4 properties, 563 tests, 0 failures"
+    finished_line_verbatim: "Finished in 22.4 seconds (1.3s async, 21.1s sync)"
+    failures: 0
+
+  test_suite_full_run2:
+    result: PASS
+    exit_code: 0
+    seed: 0 (pinned, second independent run per this project's established
+      double-run practice given its flaky-test history)
+    summary_line_verbatim: "4 properties, 563 tests, 0 failures"
+    finished_line_verbatim: "Finished in 23.2 seconds (1.3s async, 21.9s sync)"
+    failures: 0
+
+  req037_own_test_files_isolated:
+    files:
+      - test/letflow/definitions/promotion_review_store_test.exs
+      - test/letflow/definitions/promotion_test.exs
+    command_run: >
+      MIX_TEST_PARTITION=2 mix test test/letflow/definitions/promotion_review_store_test.exs
+      test/letflow/definitions/promotion_test.exs --seed 0
+    summary_line_verbatim: "27 tests, 0 failures"
+    exit_code: 0
+
+  postgres_cleanup_independently_reverified:
+    method: >
+      Queried letflow-postgres-1 directly via `docker exec ... psql -U letflow
+      -d letflow_test2` after the isolated REQ-037 file run completed.
+    results:
+      - query: "SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname LIKE 'tenant_%';"
+        result: "0 rows"
+      - query: "SELECT count(*) FROM public.tenant_schemas;"
+        result: 0
+      - query: "SELECT count(*) FROM public.tenants;"
+        result: 0
+    conclusion: "No orphan tenant schemas or rows persist after the run."
+
+  docker_compose_not_run:
+    result: PASS
+    note: >
+      `docker ps --filter name=letflow-postgres-1` was used to confirm the
+      pre-existing container (from the primary ~/letflow checkout) was already
+      Up and healthy before any test invocation. `docker compose up`/`up -d`
+      was never invoked in this worktree during this step, per the explicit
+      standing instruction and the anti-patterns.md entry documenting the
+      earlier Step 3b violation in this same run.
+
+  known_noise_not_a_failure:
+    - >
+      Verbose SQL query debug logging appears in raw mix test output
+      (config/test.exs's default test log level) — expected, not indicative of
+      any problem.
+    - >
+      `ExUnit.Case.register_test/4 is deprecated` compiler warning appears
+      several times — compiler-level warning, not test-runner-caused, not a
+      failure.
+    - >
+      `redefining module Letflow.Repo.Migrations.CreateEventTypeRegistry
+      (current version defined in memory)` warning — expected artifact of
+      re-running ecto.migrate across repeated `mix test` invocations in the
+      same BEAM session, not a failure.
+
+pre_existing_failures_found: none
+issues_filed: none
+
+baseline_comparison:
+  step_00_baseline: "536 tests (as stated in this run's Step 00 handoff)"
+  req_037_new_tests_expected: 27
+  expected_total: 563
+  observed_total_run1: "563 tests, 4 properties"
+  observed_total_run2: "563 tests, 4 properties"
+  match: true
+  origin_main_check: >
+    Ran `git fetch origin main` — origin/main HEAD is 04e90812e3965d6dbd8d69071e5a7ef85c8195e8
+    ("chore(WF03-ISS0035): close out registry + orchestrator log for merged fix"),
+    unrelated to REQ-037's own branch work. Observed count (563) matches the
+    expected baseline+delta exactly, so no reconciliation against concurrent
+    main-branch merges was needed.
+
+test_file_breakdown:
+  new_req_037:
+    items:
+      - file: test/letflow/definitions/promotion_review_store_test.exs
+      - file: test/letflow/definitions/promotion_test.exs
+    subtotal: 27
+  full_suite_grand_total: 563
+  cross_check: >
+    563 total (4 properties, 559 example tests) reproduced identically across
+    three full-suite invocations (unpinned default seed x2, and pinned seed 0),
+    matching Step 00's baseline of 536 tests plus REQ-037's 27 new tests exactly.
+
+diagnosis: "N/A — no failures observed in this run. Nothing routed back to ELIXIR-DEV or TEST-DESIGNER."
+
+regression_check_vs_baseline: >
+  Step 00's baseline was 536 tests, 0 failures. This run reproduces
+  536 + 27 = 563 tests, 4 properties, 0 failures identically across three
+  independent full-suite runs (unpinned default seed twice, pinned seed 0 once),
+  on the same HEAD commit (b70c6c9), plus a live re-query of Postgres to
+  independently reconfirm no orphan tenant state remains. Zero regressions
+  confirmed. docker compose up was NOT run in this worktree at any point during
+  this step.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-17-WF02-REQ037-20260817.yaml
+  next_action: "Route to RELEASE-VALIDATOR (WF-02 Step 5) — no rework needed."

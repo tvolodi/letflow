@@ -1,0 +1,65 @@
+{
+  "handoff_id": "ffdb8b5b-27c0-41e7-9d3f-e40893ec83ef",
+  "run_id": "WF02-REQ037-20260817",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ037-20260817/step-02a-elixir-dev.json",
+  "created_at": "2026-08-17T19:17:06Z",
+  "started_at": "2026-08-17T19:17:06Z",
+  "completed_at": "2026-08-17T19:25:43Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-037"],
+    "related_handoff_ids": ["332b4c2c-1fe0-4b7c-a442-0d88f6cd3282"],
+    "artifacts_in": ["lib/letflow/design/promotion_review_state_machine.md"],
+    "owned_modules": [
+      "lib/letflow/definitions/promotion_review.ex",
+      "lib/letflow/definitions/promotion.ex"
+    ]
+  },
+  "task": {
+    "description": "Implement REQ-037 per the validated design at lib/letflow/design/promotion_review_state_machine.md (PASS from CODE-DESIGN-VALIDATOR). Verify branch first: git branch --show-current must equal feature/WF02-REQ037-20260817. Implement exactly what the design specifies: extend lib/letflow/definitions/promotion_review.ex (module name per the design -- likely Letflow.Definitions.PromotionReviewStore as a sibling context, keeping the existing Ecto schema in the same or an adjacent file per the design's own file-organization choice, follow the design literally) with insert_review/2, approve_review/4, reject_review/3, mark_review_applied/2, mark_review_failed/2, supersede_review/3; and create lib/letflow/definitions/promotion.ex (Letflow.Definitions.Promotion.promote_definition/3). Follow the design's algorithm steps, type shapes, error atoms, gate ordering, and the generic guarded-update pattern that makes the 7-edges invariant structural -- this design already passed a hard validation gate, do not silently diverge. If you find a genuine reason to diverge, state it explicitly in your handoff's issues, do not just change it quietly. No new migration needed (promotion_reviews already exists per REQ-035). Every moduledoc must restate the invariants the design calls out (7 permitted edges, no 8th edge possible without a code change; approve_review/4's 3-gate ordering with distinct error atoms).",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "MIX_TEST_PARTITION=2 mix test still passes (baseline 536/536, no regressions -- new tests come from TEST-DESIGNER in Step 3)",
+      "mix format --check-formatted exits 0",
+      "All 7 permitted edges implemented exactly as designed; no 8th edge reachable",
+      "approve_review/4's 3 gates implemented in the exact order the design specifies, with the 3 distinct error atoms",
+      "All function signatures match the validated design exactly (name, arity, @spec)",
+      "Every new/changed public function has a one-line @doc"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented REQ-037 exactly per the validated design (lib/letflow/design/promotion_review_state_machine.md): Letflow.Definitions.PromotionReviewStore (new file, lib/letflow/definitions/promotion_review_store.ex) with insert_review/2, approve_review/4 (4-gate order: self-approval -> status -> digest -> row_version-guarded update, 3 distinct error atoms plus review_not_found), reject_review/3, mark_review_applied/2, mark_review_failed/2, supersede_review/3 -- all six routed through one private transition/6 helper (pre_gate/status-check/post_gate/guarded-UPDATE) so 'exactly 7 permitted edges, no 8th' is structural: each function supplies only its own fixed allowed_source_statuses list. Letflow.Definitions.PromotionReview (schema, REQ-035) left untouched. Letflow.Definitions.Promotion (new file, lib/letflow/definitions/promotion.ex) with promote_definition/3: reuses PromotionPlan's permission_checker (Keyword.fetch!, no default) / tenant_classifier (defaults via direct &PromotionPlan.default_tenant_classifier/1 reference, no duplicated copy) opts shape, adds opts[:event_appender] with no built-in default per design OQ-1; runs the design's 10-step algorithm (JSON-decode plan, permission gate, tenant-classifier gate, prefix resolution, source-definition read, PromotionConflict.reject_if_conflicts/4 re-check, insert+deprecate+activate inside one Repo.transaction/1, event-append after commit). Both moduledocs restate INV-PRM04-1..5 and the approve_review/4 gate contract verbatim per the design's own requirement. Self-review: ran a throwaway ExUnit sanity test (provisioned two real tenant schemas, exercised all 7 edges including the NEW rejected->superseded edge, 3 non-edges rejected with :invalid_transition, gate-order/atom checks, duplicate-review guard, and a promote_definition/3 smoke run with a stub event_appender) -- all assertions passed, then deleted the file before commit (not part of committed suite; TEST-DESIGNER owns real coverage in Step 3).",
+    "artifacts_out": [
+      "lib/letflow/definitions/promotion_review_store.ex",
+      "lib/letflow/definitions/promotion.ex"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Handoff's own owned_modules/task text said 'extend lib/letflow/definitions/promotion_review.ex ... likely Letflow.Definitions.PromotionReviewStore as a sibling context'. The validated design (§1.2, an explicit file/module table) resolves this more precisely than the handoff's own hedge: PromotionReview (schema, REQ-035) stays untouched in its own file, and the new transition functions live in a NEW file, lib/letflow/definitions/promotion_review_store.ex, module Letflow.Definitions.PromotionReviewStore -- mirroring the InstanceDefinitionSnapshot/SnapshotStore schema-vs-context split precedent the design cites. Followed the design literally rather than the handoff's own softer phrasing; lib/letflow/definitions/promotion_review.ex was not modified. Not a design divergence -- the design itself made this call and CODE-DESIGN-VALIDATOR already passed it."
+      },
+      {
+        "severity": "MINOR",
+        "description": "insert_review/2's @type insert_review_error includes :invalid_tenant_id per the design's literal @spec (design §2.3), but the design's own algorithm text (steps 1-5) never produces that error -- insert_review/2 takes opts[:prefix] directly rather than deriving it from a tenant_id via TenantProvisioning, so there is no code path that returns it. Implemented the @type exactly as the design states (per the task's 'follow the design's ... type shapes ... exactly' instruction) rather than narrowing it to only what the algorithm can actually produce. Flagging for REVIEWER rather than silently narrowing or silently leaving unexplained."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ037-20260817",
+      "commit_sha_list": ["fb076c6170d52b69660f42a33402f306ad3f9f48"],
+      "remote_branch": "origin/feature/WF02-REQ037-20260817",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

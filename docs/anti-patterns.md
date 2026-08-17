@@ -120,3 +120,41 @@ that it was a reconstruction rather than a measurement (see
 `orch_timestamp_correction` field for the shape) — a silently corrected
 timestamp is indistinguishable from one that was right all along, which
 defeats the audit trail the correction is meant to preserve.
+
+## Running `docker compose up` from a secondary worktree checkout
+
+During WF02-REQ037-20260817's Step 3b (TEST-DESIGN-VALIDATOR, running from
+`~/letflow-wt2`, a secondary git worktree), the agent ran `docker compose up`
+in its own checkout directory to independently re-verify a test run,
+despite an explicit standing instruction for this worktree (its own
+session prompt, not this file) that Postgres is already running and
+shared with the primary `~/letflow` checkout's container, and
+`docker compose up` must never be run here. Because
+`~/letflow-wt2/docker-compose.yml` declares the same host port (5462)
+the primary checkout's container already holds, the new
+`letflow-wt2-postgres-1` container started successfully (compose
+doesn't always hard-fail on a port conflict — here it silently came up
+with an *empty* port mapping, `{}`, meaning nothing on the host could
+actually reach it) alongside an orphaned `letflow-wt2_letflow_pg`
+volume and `letflow-wt2_default` network. The test run's own result
+was unaffected (`config/test.exs` points at `localhost:5462`, which
+only the pre-existing, correctly-configured container actually
+publishes, so the tests transparently ran against the right database
+regardless) — but the extra container/volume/network were pure waste,
+and a small drift from this could plausibly have collided with the
+primary checkout's own container state instead of silently no-op'ing.
+
+**Why this is easy to miss:** the agent's own verification (`mix test`
+passing) gave no signal that anything was wrong — a docker-compose
+port conflict silently producing an unreachable container is not the
+kind of failure a downstream `mix test` PASS would ever surface.
+
+**Correct alternative:** never run `docker compose up`/`up -d` from a
+secondary worktree checkout — Postgres for that checkout is already
+running via the primary checkout's `docker compose up`, sharing the
+same server on a separate database (`MIX_TEST_PARTITION=N mix test`
+selects the isolated per-checkout database, not a separate Postgres
+server). If a docker-based re-verification is ever genuinely needed
+from a secondary worktree, use `docker ps`/`docker inspect` to confirm
+the existing shared container is healthy and reachable first, never
+`docker compose up`.

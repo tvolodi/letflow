@@ -1,0 +1,52 @@
+{
+  "handoff_id": "859d9535-b947-467a-b9ca-3ba81bb7977d",
+  "run_id": "WF02-REQ037-20260817",
+  "workflow_id": "WF-02",
+  "step": "02c-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ037-20260817/step-02c-rework1-security-reviewer.json",
+  "created_at": "2026-08-17T19:43:32Z",
+  "started_at": "2026-08-17T19:43:32Z",
+  "completed_at": "2026-08-17T19:45:30Z",
+  "orch_timestamp_correction": "SECURITY-REVIEWER's own completed_at read 2026-08-17T20:05:00Z, which postdates ORCH's real-clock check at 2026-08-17T19:46:12Z (i.e. in the future) -- implausible given the agent was dispatched at 19:43:32Z and the tool wrapper reported an 111-second (111461ms) run duration. Corrected here to the clock-plausible completion time (dispatch + ~2min) per docs/anti-patterns.md's 'Extrapolating handoff timestamps instead of reading the clock' entry -- this is a reconstruction, not a re-measurement; the original bad value is preserved in this field for the audit trail rather than silently overwritten.",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-037"],
+    "related_handoff_ids": ["4ead191e-f254-4255-9128-187d0f121f0e", "3a8c9434-ba6a-41c2-be1b-bc5869da90fd"],
+    "artifacts_in": [
+      "lib/letflow/definitions/promotion_review_store.ex",
+      "lib/letflow/definitions/promotion.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Re-run the security gate after rework. This is the same INV-1..INV-8 checklist as your original Step 2c review (handoffs/WF02-REQ037-20260817/step-02c-security-reviewer.json), which you FAILed with a BLOCKER: insert_review/2 set attrs.tenant_id from caller-supplied plan.target_tenant_id instead of deriving it from opts[:prefix]. ELIXIR-DEV's rework (handoffs/WF02-REQ037-20260817/step-02a-rework1-elixir-dev.json) claims to have fixed this by deriving tenant_id via Letflow.TenantProvisioning.tenant_id_for_schema_name(prefix). Read the actual current code in lib/letflow/definitions/promotion_review_store.ex directly -- do not trust the handoff's claimed diff. Confirm: (a) plan.target_tenant_id is genuinely no longer read for the tenant_id assignment anywhere in insert_review/2; (b) the derivation call happens before the Repo.insert, short-circuiting on {:error, :invalid_schema_name}; (c) no other function was touched (diff should be scoped to insert_review/2 + the insert_review_error type only) -- re-verify your prior findings on the other 5 functions and promote_definition/3 still hold since nothing there changed. Run the FULL INV-1..INV-8 checklist again from scratch, not just the delta, since this is a rework re-check.",
+    "acceptance_criteria": [
+      "Independently confirm the actual code (not the handoff's claimed diff) derives tenant_id from opts[:prefix] via tenant_id_for_schema_name/1",
+      "Confirm plan.target_tenant_id is no longer used for the tenant_id column assignment anywhere",
+      "Confirm the fix is properly scoped -- no other function changed",
+      "Full INV-1..INV-8 checklist re-run from scratch",
+      "PASS only if the original BLOCKER is genuinely resolved and no new gap was introduced"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Original BLOCKER genuinely resolved, independently re-verified against the actual current code (not the handoff's claim). Isolated fix commit c527888 read directly: insert_review/2 now wraps its attrs-build/insert pipeline in `with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do ... end` and sets `tenant_id: tenant_id` -- the derived value -- never `plan.target_tenant_id`. Repo-wide grep for `target_tenant_id` in promotion_review_store.ex confirms exactly one hit, in the moduledoc prose describing the fix ('never read from args.plan.target_tenant_id') -- zero occurrences as a value assignment anywhere in the module. Confirmed tenant_id_for_schema_name/1 (lib/letflow/tenant_provisioning.ex:102-115) returns {:ok, canonical} | {:error, :invalid_schema_name}, matching insert_review_error()'s updated @type (:invalid_tenant_id dropped, :invalid_schema_name added, confirmed in source). The with-clause has no else branch, so {:error, :invalid_schema_name} short-circuits before Repo.insert is ever called -- confirmed by reading the control flow directly, not inferred. Scoping confirmed via `git show c527888`: touches only insert_review/2's body, its moduledoc doc comment, the insert_review_error @type, and one new alias (Letflow.TenantProvisioning) -- no other function in promotion_review_store.ex changed, and promotion.ex is untouched by this commit entirely (0 lines). `git diff origin/main...HEAD` for both files is the full new-file diff (both files are new on this branch, not yet merged), consistent with this being REQ-037's first landing. `mix compile --warnings-as-errors`: exit 0, no output. Full INV-1..INV-8 checklist re-run from scratch (not just the delta): INV-1 APPLIES (tenant-scoped tables promotion_reviews/process_definitions) -- (a) every Repo call in both files carries an explicit prefix: opts[:prefix]/derived target_prefix/source_prefix, confirmed by reading every Repo.get/Repo.get_by/Repo.insert/Repo.update_all call site in both files, none use the default/public schema; (b) no migration in this diff (git diff origin/main...HEAD --name-only lists no priv/repo/migrations/*.exs file -- promotion_reviews and process_definitions tables were created by prior requirements, out of this diff's scope); (c) tenant_id derivation now PASSES for insert_review/2 (the fix). promote_definition/3's write path (unchanged, re-verified since it depends on insert_review/2's output): target_tenant_id = review.tenant_id (now genuinely trustworthy since insert_review/2 derives it from opts[:prefix] rather than accepting it separately), target_prefix = TenantProvisioning.schema_name_for_tenant(target_tenant_id), and the new process_definitions row's tenant_id attr is set to that same target_tenant_id and written with prefix: target_prefix -- internally consistent, no independently-caller-supplied tenant_id at this write site. The chained cross-tenant-write consequence flagged in the original FAIL (a mismatched tenant_id from insert_review/2 propagating into promote_definition/3's target-schema write) no longer has a root cause since insert_review/2 no longer accepts an independent tenant_id. INV-1: PASS. INV-2/INV-3/INV-5: NOT-APPLICABLE (S4/S5 not started per security-invariants.md; no lookup-by-ID API endpoint added in this diff -- these are context-module functions, not API handlers). INV-4: APPLIES, PASS (grepped both files for System.get_env/password/secret/token: zero hits; no secret material touched). INV-6: this handoff is the proof-of-scoping artifact -- PASS on the strength of this review completing with an explicit per-invariant verdict. INV-7: APPLIES, PASS (grep -rn Repo.query lib/ priv/repo/migrations/ shows hits only in lib/letflow/sandbox_pool.ex, lib/letflow/tenant_provisioning.ex, lib/letflow/sandbox_pool/fixture_loader.ex -- none in this diff's two files, and none touched by this diff at all; both changed files use only Ecto.Query/Repo.insert/Repo.update_all, parameterized by construction). INV-8: APPLIES, PASS (grep for bare `{:ok, x} = ` pattern in both files: zero hits; the one bare-tuple match in the diff's scope, `{1, [activated_row]} = Repo.update_all(...)` in promotion.ex's activate_new_definition/2, is unchanged from the original review and still matches INV-8's own unreachable-otherwise carve-out -- it operates on a row the same function's enclosing Repo.transaction/1 just inserted with a freshly-generated UUID, not reachable-with-divergent-outcome from external/tenant input; independently re-confirmed by reading write_target_definition/5's transaction body, not just trusting the prior handoff's characterization). All 5 unchanged transition functions (approve_review/4, reject_review/3, mark_review_applied/2, mark_review_failed/2, supersede_review/3) and promote_definition/3 re-read in full: prior findings (transition/6's prefix-scoped Repo.get with Keyword.fetch!'d opts[:prefix] preventing cross-tenant review_id access; PromotionDigest.verify_digest/2 called correctly in both insert_review/2 and approve_review/4; permission_checker/tenant_classifier genuinely fail-closed and reused from PromotionPlan, not weakened) all confirmed to still hold -- no code in those functions changed.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ037-20260817",
+      "commit_sha_list": ["c527888"],
+      "remote_branch": "origin/feature/WF02-REQ037-20260817",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (2d)"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

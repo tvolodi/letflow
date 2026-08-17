@@ -1,0 +1,58 @@
+{
+  "handoff_id": "390b27bc-28e1-44e2-a766-b6117538d510",
+  "run_id": "WF02-REQ037-20260817",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ037-20260817/step-01-code-designer.json",
+  "created_at": "2026-08-17T19:00:29Z",
+  "started_at": "2026-08-17T19:00:29Z",
+  "completed_at": "2026-08-17T19:09:23Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-037"],
+    "related_handoff_ids": ["a91b9b35-0090-4875-b9a6-311807af83f2"],
+    "artifacts_in": [
+      "docs/requirements.yaml (REQ-037 entry)",
+      "lib/letflow/definitions/promotion_review.ex (REQ-035, current schema-only state)",
+      "lib/letflow/definitions/promotion_plan.ex (REQ-036, PromotionPlan.t()/plan_entry() shapes)",
+      "lib/letflow/definitions/promotion_digest.ex (REQ-036, verify_digest/2)",
+      "priv/repo/migrations (promotion_reviews table, REQ-035)"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/promotion_review_state_machine.md"
+    ]
+  },
+  "task": {
+    "description": "Design artefact for REQ-037 (Promotion review state machine and base promote -- promotion_review.zig PRM-04 + promotion.zig ENV-03). Read REQ-037's full entry in docs/requirements.yaml (search 'id: REQ-037') -- it names the exact functions, gates, and the 7 permitted state edges in detail. Also read lib/letflow/definitions/promotion_review.ex in full (REQ-035's existing Ecto schema -- confirm exact field names: tenant_id, plan_digest, def_type, def_id, serialised_plan, status, requested_by, approved_by, approved_at, superseded_by, row_version), lib/letflow/definitions/promotion_plan.ex and promotion_digest.ex (REQ-036's PromotionPlan.t()/plan_entry() and verify_digest/2 -- insert_review/1 consumes REQ-036's plan+digest, approve_review/4's digest-mismatch check calls verify_digest/2), docs/guides/backend_developer_guide.md, and REQ-036's own design doc lib/letflow/design/promotion_plan.md sec 9.1 (the permission-check gap that recurs here per REQ-037's own moduledoc note -- do not silently invent a different resolution than REQ-036's opts[:permission_checker] pattern without justification; consistency across sibling requirements matters).\n\nProduce lib/letflow/design/promotion_review_state_machine.md covering:\n1. State machine: exactly 7 permitted edges (pending_review->approved, pending_review->rejected, approved->applied, approved->failed, applied->superseded, failed->superseded, rejected->superseded [the NEW edge]). Every other transition must return the same invalid-transition error regardless of which illegal edge was attempted -- state this as an explicit design invariant, not left implicit.\n2. insert_review/1(plan, digest, requested_by) -> {:ok, review} | {:error, :duplicate_review} -- consumes REQ-036's PromotionPlan.t()/digest, row_version: 1, tenant_id/def_id/def_type from the plan. Map REQ-035's partial unique index violation to the distinct duplicate-review error (not a generic Ecto.ConstraintError leak).\n3. approve_review/4(review_id, actor_id, plan_digest, opts) -- full @spec, gates IN ORDER: (a) reviewer != requested_by (self-approval forbidden) BEFORE any row update, (b) status == pending_review, (c) plan_digest matches stored value exactly (call PromotionDigest.verify_digest/2), (d) UPDATE ... WHERE row_version = $expected -- zero rows affected -> invalid-transition error, not a silent no-op. State the exact error atom for each distinct gate failure (self-approval error distinct from digest-mismatch distinct from invalid-transition).\n4. reject_review/2(review_id, actor_id) -- pending_review -> rejected, no digest check, no self-rejection restriction (explicit per prm-05).\n5. mark_review_applied/1, mark_review_failed/1 -- approved -> applied / approved -> failed, driven by REQ-040 (not built yet, not this requirement's concern -- just the transition functions).\n6. supersede_review/2(review_id, superseded_by_event_id) -- applied|failed|rejected -> superseded, all 3 edges via the same function (not 3 separate functions) unless there's a good reason to split.\n7. promote_definition/N (Letflow.Definitions.Promotion or similar new module) -- the version-pointer-move + event-append operation mark_review_applied's caller invokes; reuse REQ-036's permission-check-shape pattern (opts[:permission_checker]) and tenant-type-check pattern (opts[:tenant_classifier]) rather than inventing new ones -- state explicitly if REQ-037 needs different opts or can share REQ-036's exact shape.\n\nFor each of the 6 acceptance criteria, map to a concrete design element. Concurrency handling for approve_review/4's row_version optimistic lock must be spelled out precisely (this is testable via 2 concurrent calls per AC4 -- the design must make clear how a test can deterministically produce this race, e.g. by manually racing two Repo.update_all calls or by testing the WHERE-clause semantics directly without needing real concurrency). No implementation code -- signatures/types/algorithm prose only.",
+    "acceptance_criteria": [
+      "Every one of REQ-037's 6 acceptance criteria maps to a concrete design element in lib/letflow/design/promotion_review_state_machine.md",
+      "All 7 permitted edges enumerated explicitly with their guard conditions; the invalid-transition catch-all for every non-edge stated as an explicit invariant",
+      "approve_review/4's 3 gates (self-approval, status, digest) sequenced explicitly with distinct error atoms per failure, plus the row_version optimistic-lock mechanism",
+      "insert_review/1's duplicate-review error mapped explicitly from REQ-035's partial unique index constraint violation",
+      "promote_definition/N's relationship to REQ-036's permission_checker/tenant_classifier opts pattern addressed explicitly (reuse or explicit divergence with reason)",
+      "A concrete, testable mechanism for AC4's 'two concurrent approve_review/4 calls' is spelled out (not left to TEST-DESIGNER to invent)",
+      "No implementation code present -- signatures and type shapes only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Produced lib/letflow/design/promotion_review_state_machine.md covering: (1) the 7-edge state machine as a table + ASCII diagram, with an explicit invalid-transition catch-all invariant (INV-PRM04-1) driven by a per-function hardcoded allowed_source_statuses set; (2) insert_review/2, approve_review/4 (3 ordered gates -- self_approval_forbidden, then status pre-check, then digest_mismatch via PromotionDigest.verify_digest/2 -- plus the row_version-guarded UPDATE as the authoritative 4th step), reject_review/3, mark_review_applied/2, mark_review_failed/2, supersede_review/3 (one function for all 3 supersession edges) in a new Letflow.Definitions.PromotionReviewStore context module, following the InstanceDefinitionSnapshot/SnapshotStore schema-vs-context split precedent; (3) a new Letflow.Definitions.Promotion module for promote_definition/3, explicitly reusing PromotionPlan's permission_checker/tenant_classifier opts shape (tenant_classifier delegates to PromotionPlan.default_tenant_classifier/1 rather than duplicating it) and adding a new, no-default opts[:event_appender] injection point since EventStore.append/2 has no working non-instance-scoped path today (confirmed by direct inspection -- no DEFINITION_PROMOTED event type registered anywhere, and even platform_instance_id() doesn't resolve to a real instance_projections row); (4) a fully concrete AC4 concurrency-test recipe reusing test/letflow/event_store_test.exs's existing Task.async ready/go barrier idiom verbatim, with deterministic assertions that don't depend on wall-clock interleaving. Also resolved two real cross-requirement gaps explicitly rather than silently: REQ-035's own open question 3 (superseded_by's target -- resolved as the causing event's event_id, no FK), and REQ-036's design-doc forward-reference handing PromotionConflict.reject_if_conflicts/4's base_version check to REQ-037 (placed inside promote_definition/3, not approve_review/4, with reasoning). Six open questions listed explicitly (event-append's missing target and partial-failure window; def_type has no PromotionPlan source; approve_review/4 has no permission_checker gate, matching REQ-036's own flagged gap; reject_review's actor_id isn't persisted -- no column exists; promote_definition/N duplicates PD-03's two-step swap since REQ-030's activate/1 hasn't shipped; PromotionReview's PER_TENANT classification restated from REQ-035). All 6 acceptance criteria mapped in a closing table. No implementation code -- @spec/@type blocks and algorithm prose only, matching promotion_plan.md's validator-approved convention.",
+    "artifacts_out": ["lib/letflow/design/promotion_review_state_machine.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ037-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ037-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

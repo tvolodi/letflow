@@ -1,0 +1,53 @@
+{
+  "handoff_id": "3a8c9434-ba6a-41c2-be1b-bc5869da90fd",
+  "run_id": "WF02-REQ037-20260817",
+  "workflow_id": "WF-02",
+  "step": "02a-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ037-20260817/step-02a-rework1-elixir-dev.json",
+  "created_at": "2026-08-17T19:39:48Z",
+  "started_at": "2026-08-17T19:39:48Z",
+  "completed_at": "2026-08-17T19:42:02Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-037"],
+    "related_handoff_ids": ["cce077c1-3bfa-4021-907f-f59084e72fc6"],
+    "artifacts_in": ["lib/letflow/design/promotion_review_state_machine.md"],
+    "owned_modules": [
+      "lib/letflow/definitions/promotion_review_store.ex"
+    ]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1 (implementation): re-implement ONLY insert_review/2 in lib/letflow/definitions/promotion_review_store.ex per the revised, re-validated design (lib/letflow/design/promotion_review_state_machine.md sec 2.3/2.8). The bug: your prior implementation set attrs.tenant_id from plan.target_tenant_id (caller-supplied), which SECURITY-REVIEWER FAILed as a cross-tenant write risk (BLOCKER, INV-1). The revised design now requires deriving tenant_id via Letflow.TenantProvisioning.tenant_id_for_schema_name(prefix) instead -- read the design's revised sec 2.3 in full for the exact new algorithm step, and read tenant_id_for_schema_name/1's real implementation at lib/letflow/tenant_provisioning.ex:100-115 directly. Also update insert_review_error()'s @type: drop :invalid_tenant_id, add :invalid_schema_name (the function's real error atom now that plan.target_tenant_id is no longer read for this purpose). Do NOT touch approve_review/4, reject_review/3, mark_review_applied/2, mark_review_failed/2, supersede_review/3, or promotion.ex's promote_definition/3 -- SECURITY-REVIEWER and CODE-DESIGN-VALIDATOR both independently confirmed those are unaffected (they never touch tenant_id).",
+    "acceptance_criteria": [
+      "insert_review/2 derives tenant_id from opts[:prefix] via TenantProvisioning.tenant_id_for_schema_name/1, never from plan.target_tenant_id",
+      "insert_review_error() type updated: :invalid_schema_name present, :invalid_tenant_id removed",
+      "mix compile --warnings-as-errors exits 0",
+      "MIX_TEST_PARTITION=2 mix test still passes (536/536 baseline, no regressions)",
+      "mix format --check-formatted exits 0",
+      "No other function in either file changed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-implemented insert_review/2 per revised design sec 2.3: tenant_id is now derived via Letflow.TenantProvisioning.tenant_id_for_schema_name(prefix) (a with-clause wrapping the existing attrs-build/insert pipeline), never read from plan.target_tenant_id. insert_review_error() @type updated: :invalid_tenant_id removed, :invalid_schema_name added. Moduledoc's insert_review/2 doc comment updated to state the derivation explicitly. No other function in promotion_review_store.ex touched; promotion.ex untouched. mix compile --warnings-as-errors: exit 0. mix format --check-formatted on the changed file: exit 0 (repo-wide check shows one pre-existing, unrelated formatting issue in test/letflow/definitions/promotion_digest_test.exs from REQ-036, confirmed present before this change via git stash and untouched by this diff). MIX_TEST_PARTITION=2 mix test: 4 properties, 536 tests, 0 failures -- matches baseline, no regressions. Grep-confirmed plan.target_tenant_id no longer appears as a value assignment anywhere in the file (only referenced in the moduledoc prose explaining the fix).",
+    "artifacts_out": [
+      "lib/letflow/definitions/promotion_review_store.ex"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ037-20260817",
+      "commit_sha_list": ["c52788873d17ea656a49de91f1c2f29ab9a9f731"],
+      "remote_branch": "origin/feature/WF02-REQ037-20260817",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (2c) re-check"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

@@ -1,0 +1,50 @@
+{
+  "handoff_id": "332b4c2c-1fe0-4b7c-a442-0d88f6cd3282",
+  "run_id": "WF02-REQ037-20260817",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ037-20260817/step-01b-code-design-validator.json",
+  "created_at": "2026-08-17T19:13:55Z",
+  "started_at": "2026-08-17T19:13:55Z",
+  "completed_at": "2026-08-17T19:16:13Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-037"],
+    "related_handoff_ids": ["390b27bc-28e1-44e2-a766-b6117538d510"],
+    "artifacts_in": ["lib/letflow/design/promotion_review_state_machine.md"],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard gate on CODE-DESIGNER's output for REQ-037. Read lib/letflow/design/promotion_review_state_machine.md independently. Read REQ-037's full entry in docs/requirements.yaml first. Independently verify against actual source: lib/letflow/definitions/promotion_review.ex's real field names (tenant_id, plan_digest, def_type, def_id, serialised_plan, status, requested_by, approved_by, approved_at, superseded_by, row_version) match what the design assumes; confirm the partial unique index exists in the promotion_reviews migration as the design claims for insert_review/2's duplicate-review mapping. Pay particular attention to: (a) the exactly-7-permitted-edges invariant -- confirm the design's generic guarded-update algorithm structurally prevents any 8th edge, not just documents the 7 by name; (b) approve_review/4's 3-gate ordering and distinct error atoms; (c) the AC4 concurrency test mechanism (Task.async ready/go barrier) is concrete enough for TEST-DESIGNER to implement without further invention; (d) the 6 open questions in Sec 5 are genuine flagged gaps, not silent scope-narrowing that quietly drops part of REQ-037's own acceptance criteria.",
+    "acceptance_criteria": [
+      "Every one of REQ-037's 6 acceptance criteria maps to a concrete design element with no TBD/deferral",
+      "All function signatures fully specified (name, inputs, outputs, error cases)",
+      "The 7-permitted-edges invariant is structural (not just a documented list) -- verify the generic algorithm actually enforces it",
+      "approve_review/4's gate ordering and distinct error atoms explicitly verified against the requirement text's literal ordering",
+      "AC4's concurrency test mechanism is concrete and implementable as stated, not vague",
+      "Cross-module dependencies listed (PromotionPlan.t(), PromotionDigest.verify_digest/2, EventStore)",
+      "No implementation code present (no .ex code bodies -- signatures and type shapes only)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. Read lib/letflow/design/promotion_review_state_machine.md in full (886 lines) and REQ-037's entry in docs/requirements.yaml independently. Independently re-verified every source citation the design makes, not just its own claims: (1) lib/letflow/definitions/promotion_review.ex's actual Ecto schema fields (tenant_id, plan_digest, def_type default 'process', def_id, serialised_plan, status Ecto.Enum 6 values default :pending_review, requested_by, approved_by, approved_at, superseded_by, row_version default 1) match the design's §0/§2 citations exactly, including insert_changeset/2's castable-field list and its unique_constraint name. (2) priv/repo/migrations/20260816200001_create_promotion_reviews.exs's partial unique index matches verbatim: unique_index(:promotion_reviews, [:tenant_id, :plan_digest], name: :uq_promotion_review_active_digest, where: \"status IN ('pending_review', 'approved')\", prefix: prefix()) -- exactly what §2.3 step 5 maps to {:error, :duplicate_review}. (3) Cross-checked PromotionPlan.t()/promotion_opts(), PromotionDigest.verify_digest/2's actual argument order (digest first, plan_or_digest second -- design's gate (c) argument order claim is correct), PromotionConflict.reject_if_conflicts/4's real list-based signature (design's §3.2 step 6 call site correctly passes 1-element lists), ProcessDefinition's create_changeset/2 (confirmed it does not cast :status, confirmed both unique constraint names), EventStore.append/2's instance_id guard and platform_instance_id's 'never inserted into instance_projections' doc comment (confirms OQ-1's stated gap is real, not invented), event_store/registry.ex (confirmed no DEFINITION_PROMOTED-shaped register_type/2 call site exists anywhere), and test/letflow/event_store_test.exs lines ~352-405 (confirmed the Task.async + send/receive :ready/:go barrier idiom the design's §4 AC4 recipe reuses is real, established, and matches verbatim). Focus areas: (a) 7-permitted-edges invariant is structural, not just documented -- each of the 6 transition functions closes over its own hardcoded, fixed allowed_source_statuses list and a hardcoded destination status in its own UPDATE 'set:' clause; no function accepts a runtime 'target status' parameter, so an 8th edge is mechanically impossible to add without an actual code change (a new function or a widened hardcoded list), not a data/config bypass. (b) approve_review/4's gate ordering (self-approval -> status -> digest -> row_version-guarded update) is verified against REQ-037's own requirement text word-for-word ('reviewer != requested_by ... status == pending_review ... plan_digest matches ... Every UPDATE includes WHERE row_version = $expected') -- literal match, and exactly 3 distinct error atoms (:self_approval_forbidden, :invalid_transition, :digest_mismatch) are named per AC2/AC3's explicit demand. (c) AC4's concurrency mechanism is concrete: 9 numbered steps reusing the verified-real barrier idiom, with explicit deterministic assertions (row_version increments by exactly 1, exactly one {:ok,_}/one {:error,:invalid_transition}) -- directly translatable to ExUnit, no further invention needed. (d) All 6 of §5's open questions (event-append gap, def_type provenance, missing permission_checker gate on approve_review/4, reject_review's unpersisted actor_id, promote_definition's duplicated PD-03 swap logic, PER_TENANT classification) are genuine flagged gaps outside REQ-037's 6 acceptance criteria -- none of them narrows or silently drops any AC's literal scope. Standard gate checklist also verified: all 6 ACs map to concrete design elements (§9 table) with zero TBD/deferral language (grep confirms the doc's only 'TBD' occurrence is its own closing claim of having none); every function signature has full @spec + explicit @type error unions; cross-module dependencies section (§8) names PromotionPlan.t(), PromotionDigest.verify_digest/2, PromotionConflict.reject_if_conflicts/4, ProcessDefinition, TenantProvisioning, and explains EventStore's status as a deliberately-not-yet-wired dependency (opts[:event_appender], no default) rather than omitting it; grep for 'def ...do' function bodies in the .md file returns zero hits -- no implementation code, signatures/types only.",
+    "artifacts_out": ["lib/letflow/design/promotion_review_state_machine.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ037-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ037-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (2a)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

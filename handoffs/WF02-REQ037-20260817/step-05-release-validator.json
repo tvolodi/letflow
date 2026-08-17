@@ -1,0 +1,54 @@
+{
+  "handoff_id": "c58fc5c9-9a84-478a-900d-827ec33ab0be",
+  "run_id": "WF02-REQ037-20260817",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ037-20260817/step-05-release-validator.json",
+  "created_at": "2026-08-17T20:07:31Z",
+  "started_at": "2026-08-17T20:07:31Z",
+  "completed_at": "2026-08-17T20:09:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-037"],
+    "related_handoff_ids": ["8482d61d-0353-4772-8fd2-121aeb75c2d7"],
+    "artifacts_in": [
+      "lib/letflow/definitions/promotion_review_store.ex",
+      "lib/letflow/definitions/promotion.ex",
+      "test/letflow/definitions/promotion_review_store_test.exs",
+      "test/letflow/definitions/promotion_test.exs",
+      "test/reports/report-2026-08-17-WF02-REQ037-20260817.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently re-verify REQ-037 is actually done before it's marked done. Do not trust TEST-RUNNER's report alone -- re-run the suite yourself (never bare mix test, always MIX_TEST_PARTITION=2; never docker compose up in this worktree). Read every one of REQ-037's 6 acceptance_criteria in docs/requirements.yaml and check each one explicitly against the actual code/tests. This run went through one rework cycle (a real INV-1 BLOCKER, root-caused in the design, fixed and re-verified by both SECURITY-REVIEWER and REVIEWER) -- spot-check that the fix genuinely holds in the CURRENT code (not just that the rework handoffs claim PASS), and that the rest of the pipeline (Step 1b, 2d, 3b) shows genuine independent verification, not rubber-stamping. Check docs/status/requirement_status.yaml and docs/requirements.yaml for staleness -- REQ-037 should currently read in_progress.",
+    "acceptance_criteria": [
+      "Independently re-run MIX_TEST_PARTITION=2 mix test (full suite) -- do not trust the Step 4 report alone, do not run docker compose up",
+      "Each of REQ-037's 6 acceptance_criteria explicitly checked against actual code (cite file:line)",
+      "Independently re-confirm the INV-1 fix (insert_review/2 derives tenant_id from opts[:prefix], not plan.target_tenant_id) still holds in the current code",
+      "No status staleness found in docs/requirements.yaml / docs/status/requirement_status.yaml",
+      "Spot-check the run's handoff chain (including the rework cycle) for genuine independent verification, not rubber-stamping"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified REQ-037 is genuinely done -- PASS. (1) Re-ran `MIX_TEST_PARTITION=2 mix test` myself (not TEST-RUNNER's report): real output '4 properties, 563 tests, 0 failures', 'Finished in 22.1 seconds' -- matches Step 4's reported 563/563. docker ps confirmed letflow-postgres-1 already Up (healthy); never ran docker compose up in this worktree. (2) All 6 acceptance_criteria checked directly against current code: AC1 (duplicate_review) -- insert_review/2 lib/letflow/definitions/promotion_review_store.ex:195-216 + handle_insert_result/duplicate_digest_error? :387-408, test test/letflow/definitions/promotion_review_store_test.exs:204-236. AC2 (self-approval before update) -- approve_review/4 :235-260 (self_approval_gate runs as pre_gate, before check_status/post_gate in transition/6 :344-349), test :348-366. AC3 (digest-mismatch distinct atom) -- digest_gate :244-250, test :391-413. AC4 (concurrent approve_review, row_version guard) -- execute_update/3 :370-385 (WHERE status=$2 AND row_version=$3, 0 rows -> :invalid_transition), test :428-480 real Task.async + ready/go barrier, sandbox :auto so genuinely concurrent connections. AC5 (rejected -> superseded, the NEW edge) -- supersede_review/3 :310-319 includes :rejected in allowed_source_statuses, test :581-596 (edge 7/7). AC6 (all 7 edges + >=2 non-edges, identical :invalid_transition atom) -- tests :489-648, all 7 edges each have an explicit passing test, 2 non-edge tests assert `Enum.uniq([result_a, result_b]) == [{:error, :invalid_transition}]` (:627-632) plus a bonus terminal-state non-edge test. (3) INV-1 fix independently re-confirmed by reading insert_review/2 directly (lib/letflow/definitions/promotion_review_store.ex:195-216): tenant_id is derived via `TenantProvisioning.tenant_id_for_schema_name(prefix)` (opts[:prefix], Keyword.fetch!'d) inside a `with` that short-circuits to {:error, :invalid_schema_name} before any Repo.insert on failure; `plan.target_tenant_id` is never read for the tenant_id assignment (only remaining reference is descriptive moduledoc prose). Cross-checked tenant_id_for_schema_name/1's real implementation (lib/letflow/tenant_provisioning.ex:100-115): pure, returns {:ok, canonical} | {:error, :invalid_schema_name}, matches. Test test/letflow/definitions/promotion_review_store_test.exs:271-316 explicitly constructs a disagreeing plan.target_tenant_id, asserts the persisted row (fresh Repo.get! read) carries the prefix-derived tenant_id, and asserts the invalid-schema-name path with no row written. This genuinely closes SECURITY-REVIEWER's original BLOCKER (step-02c-security-reviewer.json) and matches docs/migration/decisions/0003-ecto-schema-strategy.md's 2026-08-17 addendum option (c) verbatim (read the addendum directly: lines 343-353, 'derived by the writing context module from the Postgres schema (:prefix) ... never accepted as a separate, independently-trusted field'). (4) No staleness: docs/requirements.yaml REQ-037 (line 1719) reads status: in_progress; docs/status/requirement_status.yaml's only REQ-037 event (line 3131) is 'started' from Step 00 -- no premature 'done' entry anywhere. (5) Spot-checked the full handoff chain (step-01b, step-01b-rework1, step-02c FAIL, step-02c-rework1 PASS, step-02d, step-03b): all show genuine independent re-derivation with file:line citations, direct reads of cited source (not paraphrase of a prior handoff's claim), and re-running checklists/tests from scratch on rework rather than reviewing only the delta -- no rubber-stamping found. The original SECURITY-REVIEWER FAIL is a substantive, well-reasoned BLOCKER (root-caused to the design doc's own explicit lines 337-339) with a concrete chained cross-tenant-write consequence, not a nitpick; the rework PASS independently re-reads the fix commit and re-runs the full INV-1..INV-8 checklist rather than trusting the diff description.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ037-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ037-20260817",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

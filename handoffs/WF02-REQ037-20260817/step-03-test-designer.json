@@ -1,0 +1,63 @@
+{
+  "handoff_id": "cb8c5a57-47d4-4f60-89a3-56bd1172fe3f",
+  "run_id": "WF02-REQ037-20260817",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ037-20260817/step-03-test-designer.json",
+  "created_at": "2026-08-17T19:49:38Z",
+  "started_at": "2026-08-17T19:49:38Z",
+  "completed_at": "2026-08-17T19:59:45Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-037"],
+    "related_handoff_ids": ["e6e2aea9-660d-48a7-ae02-d409bbe0c4a2"],
+    "artifacts_in": [
+      "lib/letflow/definitions/promotion_review_store.ex",
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/design/promotion_review_state_machine.md"
+    ],
+    "owned_modules": [
+      "test/letflow/definitions/promotion_review_store_test.exs",
+      "test/letflow/definitions/promotion_test.exs",
+      "test/specs/REQ-037.md"
+    ]
+  },
+  "task": {
+    "description": "Write test spec and test code for REQ-037. Real application-executable surface -- full procedure applies. Read REQ-037's 6 acceptance_criteria in docs/requirements.yaml, the validated (post-rework) design at lib/letflow/design/promotion_review_state_machine.md, and both implementation files. Write test/specs/REQ-037.md and test code under test/letflow/definitions/ (promotion_review_store_test.exs, promotion_test.exs), following this codebase's per-test tenant-schema-fixture convention (see test/letflow/definitions/promotion_plan_test.exs or promotion_conflict_test.exs from REQ-036 for the most recent precedent). insert_review/2 now derives tenant_id from opts[:prefix] (post-rework) -- tests must supply opts[:prefix] correctly and should NOT pass a separate tenant_id in the plan expecting it to be used for the row (confirm this explicitly with a test showing a mismatched plan.target_tenant_id is ignored/irrelevant, only prefix drives the stored tenant_id). Cover all 6 ACs as a floor:\n- AC1 duplicate-review: insert_review/2 twice with identical (tenant_id, plan_digest) while first is pending_review -> :duplicate_review, not a second row.\n- AC2 self-approval: approve_review/4 by the same principal as requested_by -> :self_approval_forbidden BEFORE any row update (verify row_version unchanged after the rejected call).\n- AC3 digest-mismatch: approve_review/4 with wrong plan_digest -> :digest_mismatch, distinct from self-approval and invalid-transition errors (assert on the exact atom, not just any error).\n- AC4 concurrency: TWO concurrent approve_review/4 calls on the same review_id -- exactly one succeeds, the other gets :invalid_transition from the row_version-guarded update. Use the design's own spelled-out mechanism (Task.async + ready/go barrier, per the design's citation of test/letflow/event_store_test.exs's established idiom) -- read that idiom directly and reuse it, don't invent a new one.\n- AC5 rejected->superseded: explicitly test this NEW edge via supersede_review/3, not left untested as if rejected were terminal.\n- AC6 all 7 edges + >=2 non-edges: one explicit passing test per edge (7 total), and at least 2 explicit rejecting tests for illegal transitions (e.g. rejected->approved, pending_review->applied) -- both must return the identical :invalid_transition atom regardless of which illegal edge was attempted, demonstrate this explicitly.\nAlso cover promote_definition/3's basic success path and its permission_checker/tenant_classifier fail-closed behavior (same convention as REQ-036's promotion_plan_test.exs -- every call must inject opts[:permission_checker] explicitly).",
+    "acceptance_criteria": [
+      "Every one of REQ-037's 6 acceptance criteria has at least one runnable ExUnit test that would fail if the behavior were violated",
+      "All 7 permitted edges have an explicit passing test each; at least 2 non-edges have explicit rejecting tests, both asserting the identical :invalid_transition atom",
+      "AC4's concurrency test genuinely exercises 2 concurrent approve_review/4 calls via the design's spelled-out Task.async barrier mechanism, not simulated sequentially",
+      "insert_review/2's tenant_id-from-prefix-not-plan behavior (post-rework) is explicitly tested, including a case where plan.target_tenant_id disagrees with the prefix's tenant to show it's ignored",
+      "Every promote_definition/3 call supplies opts[:permission_checker] explicitly",
+      "Test fixtures use per-test unique tenant/data",
+      "No test depends on wall-clock time or unseeded randomness",
+      "test/specs/REQ-037.md written alongside the test code"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote test/specs/REQ-037.md plus test/letflow/definitions/promotion_review_store_test.exs (19 tests) and test/letflow/definitions/promotion_test.exs (8 tests), 27 tests total, all passing against the real implementation (MIX_TEST_PARTITION=2 mix test: 27 tests, 0 failures, re-run twice with different seeds, no flakiness, no compile warnings under --warnings-as-errors). Coverage per AC: AC1 (duplicate-review) 2 tests; AC2 (self-approval-before-any-update, row_version verified unchanged) 2 tests; AC3 (digest-mismatch, distinct atom asserted side-by-side against self_approval_forbidden/invalid_transition) 1 test; AC4 (concurrency) 1 test using the exact Task.async + {:ready,pid}/:go barrier idiom from test/letflow/event_store_test.exs's concurrent-appends test, reused verbatim per the design's own §4 recipe -- asserts exactly one :ok/one :invalid_transition and row_version==2 afterwards; AC5 (rejected->superseded, the NEW edge) 1 dedicated test labeled for both AC5 and edge 7/7; AC6 (all 7 edges + >=2 non-edges) 7 explicit per-edge passing tests plus 2 required non-edge tests (rejected->approved, pending_review->applied) asserting Enum.uniq([result_a,result_b]) == [{:error,:invalid_transition}] to prove the identical atom, plus a 3rd bonus non-edge (superseded->superseded). insert_review/2's post-rework tenant_id-from-opts[:prefix] behavior is covered by a dedicated test with a deliberately disagreeing plan.target_tenant_id, proving the stored row's tenant_id is the prefix-derived value and the plan's own copy is ignored for attribution (re-read fresh from Postgres, not just the in-memory reply). promote_definition/3's basic success path is covered (version-pointer swap + event-append via an injected recording event_appender, plus a second test proving the deprecate-before-activate ordering against a pre-existing active target row), with opts[:permission_checker] supplied explicitly on every one of promotion_test.exs's 8 calls (2 tests specifically exercise the KeyError no-default path for permission_checker/event_appender). All fixtures use per-test unique tenant schemas (real CREATE SCHEMA + TenantProvisioning.replay_migrations/1) and Ecto.UUID.generate()/System.unique_integer/1 for uniqueness; no wall-clock or unseeded-randomness dependency anywhere. Two bugs found and fixed during self-verification before this handoff: (1) two 'wrong digest' fixtures had accidentally computed the SAME digest as the real one, since PromotionDigest.compute_plan_digest/1 hashes only plan.entries and the initial fixture always used identical default entries -- fixed via a differing_plan/1 helper with genuinely different entries; (2) the deprecate-before-activate test had a previous_target_def row with a random (non-matching) tenant_id, causing deprecate_previous_active/3's tenant_id-scoped WHERE clause to match zero rows and a real uq_active_definition unique-constraint violation on activation -- fixed by passing tenant_id: target_tenant_id explicitly.",
+    "artifacts_out": [
+      "test/specs/REQ-037.md",
+      "test/letflow/definitions/promotion_review_store_test.exs",
+      "test/letflow/definitions/promotion_test.exs"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ037-20260817",
+      "commit_sha_list": ["77f62fbe5238080e083b4a298902e8e52761ae96"],
+      "remote_branch": "origin/feature/WF02-REQ037-20260817",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

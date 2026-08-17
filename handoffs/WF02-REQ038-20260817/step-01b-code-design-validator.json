@@ -1,0 +1,76 @@
+{
+  "handoff_id": "a9d7eb65-c989-4326-9a6f-c3f5cf4fc5de",
+  "run_id": "WF02-REQ038-20260817",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ038-20260817/step-01b-code-design-validator.json",
+  "created_at": "2026-08-17T22:02:59Z",
+  "started_at": "2026-08-17T22:02:59Z",
+  "completed_at": "2026-08-17T22:02:59Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-038"],
+    "related_handoff_ids": ["handoffs/WF02-REQ038-20260817/step-01-code-designer.json"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req038-promotion-rollback.md",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/definitions/process_definition.ex",
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/definitions/promotion_review_store.ex",
+      "lib/letflow/definitions/promotion_review.ex",
+      "priv/repo/migrations/20260816200001_create_promotion_reviews.exs"
+    ],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "WF-02 Step 1b hard gate on lib/letflow/design/req038-promotion-rollback.md (Letflow.Definitions.rollback_definition_version/4). Independently re-derive PASS/FAIL against REQ-038's 5 acceptance criteria and against the actual shipped source files the design cites as precedent -- do not trust CODE-DESIGNER's self-report. Specific scrutiny targets: the SUPERSEDED->:deprecated status mapping (OQ implicit in Sec 3), OQ-5 (promotion_reviews.def_id scoping, flagged MAJOR), the proposed widening of PromotionReviewStore.supersede_review/3's allowed_source_statuses, OQ-3 (transaction boundary divergence, flagged MAJOR), permission-guard ordering (AC5), full AC traceability, absence of implementation code, and the MINOR index-predicate finding.",
+    "acceptance_criteria": [
+      "Every REQ-038 acceptance criterion (5) maps to a concrete, unambiguous, buildable design element -- re-derived independently from docs/requirements.yaml, not from the design doc's own traceability table",
+      "Function signatures fully specified: name, inputs, outputs, error cases -- verified against @spec blocks",
+      "Error handling shape stated ({:ok,_}|{:error,_} tags), not left implicit",
+      "Cross-module dependencies listed",
+      "No implementation code present (no .ex/.exs function bodies -- signatures and type shapes only)",
+      "Each self-flagged MAJOR open question (status mapping reuse claim, OQ-3, OQ-5) is either soundly resolved or is a real, named blocker -- no rubber-stamping"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Independently read docs/requirements.yaml REQ-038 (lines 1778-1820, all 5 ACs) and the full design doc, then verified every load-bearing claim against the actual shipped source: lib/letflow/definitions/process_definition.ex (status enum, PD-04 transition table), lib/letflow/definitions.ex (activate/2, deprecate/2, archive/2), lib/letflow/definitions/promotion.ex (promote_definition/3's injectable opts, transaction boundary, deprecate-then-activate swap), lib/letflow/definitions/promotion_review_store.ex (supersede_review/3's allowed_source_statuses, the transition/6 mechanism), lib/letflow/definitions/promotion_review.ex (def_id/status field types), and priv/repo/migrations/20260816200001_create_promotion_reviews.exs (both index predicates). Five of six scrutiny items check out; one is a genuine, demonstrable correctness defect that blocks this design from proceeding to Step 2a as written.\n\n1. STATUS MAPPING (SUPERSEDED -> :deprecated): CONFIRMED SOUND, not a blocker. process_definition.ex line 92-95 confirms the 4-value enum with no :superseded value; definitions.ex's moduledoc and deprecate/2's own doc confirm PD-04's transition table (only draft->active, active->deprecated, deprecated->archived). promotion.ex lines 260-265 (deprecate_previous_active/3) confirm promote_definition/3 already writes :deprecated for automatic supersession -- the reuse claim is TRUE, not merely asserted. I traced whether the resulting ambiguity (deliberate admin deprecate/2 vs. automatic supersede) could break AC1/AC2's guard logic: it cannot, because the eligibility test the design uses (status in [:active, :deprecated]) is exactly the set REQ-038's own AC text defines as eligible (\"ACTIVE or SUPERSEDED\"), and PD-04's transition table guarantees every :deprecated row -- via EITHER path -- was structurally :active immediately before, which is the only property AC1/AC2 depend on. This does mean a version an admin deliberately deprecated for cause is also a legal rollback target (design's own Sec 3 prose already surfaces the shared-value fact); flagged as a MINOR product-semantics note for REVIEWER's awareness, not a design defect.\n\n2. TRANSACTION BOUNDARY (OQ-3, MAJOR): CONFIRMED, adequately disclosed, not a blocker. promotion.ex's do_promote_definition/7 (lines 167-203) confirms write_target_definition/5's Repo.transaction/1 (lines 238-255) commits before append_promotion_event/9 (step 9) runs outside it -- the precedent claim is TRUE. The design's Sec 8 OQ-3 states the consequence plainly (\"if opts[:event_appender] fails, the pointer swap has already durably committed with no recorded event\") rather than hiding it, and Sec 6's own resolution for Step 4 (promotion_reviews supersede) explicitly discloses that a per-row supersede_review/3 race is silently absorbed rather than pretending it can't happen. Adequate disclosure of an already-REVIEWER-accepted tradeoff -- PASS.\n\n3. supersede_review/3 WIDENING: CONFIRMED correctly scoped as ELIXIR-DEV's task. promotion_review_store.ex line 44 confirms the shipped allowed_source_statuses is exactly [:applied, :failed, :rejected] (no :approved) and the moduledoc's \"exactly 7 permitted edges\" claim (lines 11-35). Design Sec 1's scope table and Sec 7 both state explicitly that this is a real edit ELIXIR-DEV makes to lib/letflow/definitions/promotion_review_store.ex at Step 2a (not silently assumed, not routed around via an ad-hoc Repo.update_all), including the requirement to update the moduledoc's \"7 edges\" diagram to 8, and flags it for REVIEWER sign-off per core-directives.md's decision-record-consistency rule. No gap.\n\n4. PERMISSION GUARD ORDERING (AC5): CONFIRMED. promotion.ex's cond (lines 147-152) checks permission_checker before any Repo call, matching design Sec 4.1/Sec 5 Step 1's stated ordering (tenant_id derivation is a pure string transform, not a row read; permission_checker is called before Repo.transaction/1 is ever opened). Design states this ordering explicitly rather than leaving it to be assumed. No gap.\n\n5. INDEX PREDICATE MISMATCH (MINOR): CONFIRMED non-blocking. The shipped migration's idx_promotion_review_rollback_lookup predicate is literally \"status IN ('applied', 'superseded')\" (migration line 90), not ('applied','approved') as REQ-038's own lookup filters on (design Sec 6's query: status in [:applied, :approved]). This is a missing-index-coverage gap only -- Postgres still returns correct rows for the approved branch via a non-index-covered scan; no correctness impact. Confirmed non-blocking as the design states.\n\n6. **BLOCKER -- OQ-5, Sec 6/7's promotion_reviews supersede-lookup (AC4) is not correctly scoped and its own stated fallback actively corrupts unrelated audit rows.** AC4's own text scopes the supersede action to \"the former-active definition\" (singular, specific). Confirmed directly: promotion_review.ex line 75 (def_id :string) and promotion_review_store.ex's insert_review/2 (def_id: plan.process_key) -- def_id is process-key-scoped, not definition/version-scoped, exactly as the design states. The design's own lookup query (Sec 6) filters ONLY on (tenant_id, def_id == process_key, status in [:applied, :approved]) -- it has NO way to distinguish reviews belonging to the specific version being rolled back away from versus reviews belonging to any OTHER version of the same process_key, ever. The design's own risk framing (\"in the common, expected flow, at most one row matches at any given time... a process_key normally has at most one 'live' applied/approved review\") is demonstrably false for an entirely ordinary history: nothing in this codebase ever moves an :applied promotion_reviews row out of :applied except supersede_review/3 itself (confirmed: promote_definition/3 never touches promotion_reviews at all; mark_review_applied/2 only ever sets :applied). Concrete counter-example, traced against the actual shipped code: process_key P promoted 3 times over its lifetime (v1 via review R1 -> mark_review_applied -> R1 stays :applied forever unless later superseded; v2 via review R2, same; v3 via review R3, same). All of R1, R2, R3 remain :applied simultaneously -- this is the ordinary, expected state of the table, not an edge case. A rollback from v3 back to v1 should, per AC4, supersede only R3 (the review for the former-active v3 definition). The design's actual query matches all three (R1, R2, R3 all satisfy def_id==P and status==:applied), and Sec 6's own stated resolution (\"call supersede once per matched row... every matched row ends up :superseded\") supersedes ALL THREE, setting superseded_by on R1 and R2 to an event_id from a rollback event that has nothing causally to do with either of them -- silently corrupting two unrelated, already-settled audit rows with a false causal link, not merely leaving an open question unresolved. This is exactly the correctness/blast-radius failure mode the task briefing asked to scrutinize (\"could it accidentally match reviews belonging to a different version of the same process_key\") -- confirmed yes, with a real mechanism and a real trigger condition that is not a rare race but the normal multi-promotion lifecycle of any process_key. OQ-5 as written only discusses a narrower 2-row scenario (a leftover approved review plus the applied review for the version rolled back from) and does not surface this broader multi-promotion over-match/corruption case at all, so REVIEWER was never actually asked to accept this specific risk.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ038-20260817/step-01b-code-design-validator.json"
+    ],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "lib/letflow/design/req038-promotion-rollback.md Sec 6/7: the promotion_reviews supersede-lookup for AC4 filters only on (tenant_id, def_id == process_key, status in [:applied, :approved]) -- def_id is process-key-scoped (confirmed: promotion_review.ex, promotion_review_store.ex's insert_review/2), not version/definition-scoped, so the query cannot distinguish the review for the specific former-active definition from reviews belonging to any other version of the same process_key. The design's own claim that 'at most one row matches in the common flow' is false for an ordinary multi-promotion history (every promote+mark_review_applied leaves a permanently :applied row unless something later supersedes it -- nothing in the shipped codebase does that automatically). The design's stated fallback (supersede every matched row) will silently mark unrelated, already-settled review rows :superseded with a superseded_by pointing at an event causally unrelated to them, corrupting audit history rather than merely leaving ambiguity unresolved. REQUIRED before re-submission: either (a) find and use a genuine version-scoped correlation if one exists in PromotionReview.serialised_plan/PromotionPlan.t() (verify what fields the serialised plan actually carries -- e.g. whether the resulting definition's version is recoverable from it -- before assuming none exists), or (b) adopt a materially safer default when more than one row matches (e.g. do not blanket-supersede all matches; supersede only when exactly one applied/approved row exists for the process_key, else leave superseded_review_id nil and record the ambiguity rather than mutating rows outside this call's own causal scope), or (c) if genuinely unresolvable within REQ-038's own scope, escalate explicitly that AC4 as literally written (\"for the former-active definition\") cannot be correctly implemented against promotion_reviews' current schema and route to REQ-ANALYST/REVIEWER for a scope decision (e.g. a companion schema change) rather than shipping an approximation that corrupts data.",
+        "affected_requirement": "REQ-038"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Design Sec 3's SUPERSEDED->:deprecated mapping (confirmed sound and reused correctly from promote_definition/3's own precedent) has a disclosed but understated product-semantics consequence: a process_definitions row an admin deliberately retired via Letflow.Definitions.deprecate/2 is structurally indistinguishable from one automatically superseded by a later promotion, so rollback_definition_version/4 will also treat deliberately-retired versions as legal rollback targets. Not a REQ-038 acceptance-criteria violation (AC1/AC2's eligibility test is satisfied correctly either way) and inherited from REQ-030's already-shipped single-value enum, not introduced by this design -- worth a one-line explicit callout for REVIEWER's awareness, not a rework requirement.",
+        "affected_requirement": "REQ-038"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Confirmed non-blocking: priv/repo/migrations/20260816200001_create_promotion_reviews.exs's idx_promotion_review_rollback_lookup predicate is status IN ('applied','superseded'), not ('applied','approved') as REQ-038's own Sec 6 query filters on -- an index-coverage gap only, not a correctness gap (Postgres still returns correct rows via a scan). Already correctly flagged as non-blocking by the design doc itself; carried forward here for the record.",
+        "affected_requirement": "REQ-035"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ038-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ038-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Rework CODE-DESIGNER: revise lib/letflow/design/req038-promotion-rollback.md Sec 6/7's promotion_reviews supersede-lookup per the BLOCKER issue above -- either a genuine version-scoped correlation, a materially safer ambiguous-match default, or an explicit scope escalation -- then resubmit to CODE-DESIGN-VALIDATOR (Step 1b) for a fresh, independent pass. Do not route to ELIXIR-DEV until this returns PASS."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,25 @@
+id: ISS-0033
+title: "handoffs/registry.json entry for WF03-ISS0030-20260817 stuck at BLOCKED despite the run having merged and closed out"
+discovered_by: ORCH
+discovered_in_run: WF02-REQ029-20260817
+discovered_at: "2026-08-17T10:15:00Z"
+severity: MINOR
+description: >
+  handoffs/registry.json's entry for run_id WF03-ISS0030-20260817 has
+  status: BLOCKED and no released_lock/lock_released_at fields, but
+  git history shows this run actually completed and merged: commit
+  00f6e7a "fix(tenant-provisioning-test): shorten test name over BEAM's
+  255-char limit (ISS-0030) (#91)" and 0a34f79 "chore(WF03-ISS0030):
+  close out resumed run -- PR #91 merged, queue task 76 released" are
+  both on main. The registry entry was never flipped to COMPLETED after
+  the resume succeeded, so it still reads as an active lock on
+  test/letflow/tenant_provisioning_test.exs. Did not block this run
+  (no owned_modules overlap with lib/letflow/definitions), but a future
+  run touching test/letflow/tenant_provisioning_test.exs would see a
+  false active-lock collision per ORCHESTRATOR.md §7's owned_modules
+  check.
+affected_files:
+  - handoffs/registry.json
+github_issue: 98 # manually filed by ORCH; letflow-queue register_task also auto-created GH#99 as its mirror (task_type issue) -- both point at this same finding
+queue_task_id: 79
+status: open

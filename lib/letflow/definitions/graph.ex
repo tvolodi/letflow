@@ -51,6 +51,13 @@ defmodule Letflow.Definitions.Graph do
   violations. Enforcing the actual "run PD-05/PD-06 only after
   `validate_graph/1` succeeds" ordering is the caller's job (intended to be
   `Letflow.Definitions.create/1`, REQ-030, once it exists).
+
+  ## SUB_PROCESS interface check (CHK-18, REQ-032)
+
+  CHK-18 (`check_sub_process_interface/1`, REQ-032) delegates to
+  `Letflow.Definitions.SubProcessInterface` for the SUB_PROCESS node type's
+  optional `interface` attribute — see that module's moduledoc for the full
+  SPC-02 contract and the explicit SPC-01-out-of-scope statement.
   """
 
   @type node_type ::
@@ -61,6 +68,7 @@ defmodule Letflow.Definitions.Graph do
           | :EXCLUSIVE_GATEWAY
           | :PARALLEL_GATEWAY
           | :TIMER
+          | :SUB_PROCESS
 
   defmodule Node do
     @moduledoc """
@@ -129,6 +137,12 @@ defmodule Letflow.Definitions.Graph do
             | :default_with_condition
             | :multiple_default_edges
             | :invalid_cel_syntax
+            | :sub_process_interface_not_object
+            | :sub_process_interface_inputs_not_array
+            | :sub_process_interface_outputs_not_array
+            | :sub_process_interface_entry_invalid
+            | :sub_process_interface_schema_invalid
+            | :sub_process_interface_duplicate_name
 
     @type t :: %__MODULE__{
             code: code(),
@@ -177,8 +191,10 @@ defmodule Letflow.Definitions.Graph do
   end
 
   @doc """
-  Runs the 4 per-node-type attribute checks (CHK-09..CHK-12, PD-05) against
-  every node in `graph` and returns every violation found — never
+  Runs the 4 per-node-type attribute checks (CHK-09..CHK-12, PD-05) plus
+  CHK-18 (`check_sub_process_interface/1`, REQ-032 — SUB_PROCESS's optional
+  `interface` attribute, delegated to `Letflow.Definitions.SubProcessInterface`)
+  against every node in `graph` and returns every violation found — never
   short-circuits, same unconditional-concatenation construction as
   `validate_graph/1`. Does not call `validate_graph/1` and does not verify
   structural validity as a precondition — see the moduledoc's "Ordering
@@ -191,7 +207,8 @@ defmodule Letflow.Definitions.Graph do
         &check_human_task_role/1,
         &check_service_task_endpoint/1,
         &check_service_task_timeout/1,
-        &check_timer_duration/1
+        &check_timer_duration/1,
+        &check_sub_process_interface/1
       ]
       |> Enum.flat_map(& &1.(graph))
 
@@ -609,6 +626,25 @@ defmodule Letflow.Definitions.Graph do
         message:
           "Node '#{node.id}' (TIMER) has an invalid 'duration_iso8601' attribute (#{inspect(value)})"
       }
+    end)
+  end
+
+  # CHK-18: a SUB_PROCESS node's optional "interface" attribute, if present,
+  # must be a well-formed interface contract (inputs/outputs entry lists,
+  # each entry a well-formed {name, json_schema, required} tuple with a
+  # well-formed json_schema) -- delegated entirely to
+  # `Letflow.Definitions.SubProcessInterface.validate_node_interface/2`
+  # (REQ-032 design doc §4). One check function producing up to 6 distinct
+  # codes, not 6 separate one-code-per-check functions -- a deliberate
+  # divergence from CHK-09..17's "one check, one code" convention, since the
+  # 6 codes form a dependency chain within a single parse (design doc §4).
+  # No-op on a node of any other type.
+  @spec check_sub_process_interface(t()) :: [Violation.t()]
+  defp check_sub_process_interface(%__MODULE__{nodes: nodes}) do
+    nodes
+    |> Enum.filter(&(&1.node_type == :SUB_PROCESS))
+    |> Enum.flat_map(fn node ->
+      Letflow.Definitions.SubProcessInterface.validate_node_interface(node.id, node.attributes)
     end)
   end
 

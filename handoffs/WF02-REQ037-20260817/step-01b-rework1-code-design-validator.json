@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ037-20260817/step-01b-rework1-code-design-validator.json",
   "created_at": "2026-08-17T19:37:07Z",
   "started_at": "2026-08-17T19:37:07Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-17T19:38:38Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S2",
@@ -29,19 +29,19 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": null,
+    "status": "PASS",
+    "summary": "Independently re-verified the rework-1 design fix -- PASS, no partial credit needed. (1) Read lib/letflow/tenant_provisioning.ex:100-115 directly: tenant_id_for_schema_name/1 is pure (no I/O, no Repo call, guard-clause pattern match + Ecto.UUID.cast/1 only), @spec confirms {:ok, Ecto.UUID.t()} | {:error, :invalid_schema_name} -- matches exactly what the revised §2.3 assumes (return value, error atom, and 'pure' characterization). (2) Read docs/migration/decisions/0003-ecto-schema-strategy.md's 2026-08-17 addendum in full: it names three candidate mechanisms and explicitly adopts only option (c) 'Derive it from the resolved schema at write time', rejecting (a) caller-supplied tenant_id for the exact attribution-integrity gap SECURITY-REVIEWER found, deferring (b) session-GUC. The revised §2.3 implements (c) precisely -- args.plan.target_tenant_id is no longer read for tenant_id at all (not even as a validated/rejected input), matching the addendum's own resolution rather than inventing a fourth validate-and-reject variant. (3) Independently re-checked §2.8's table against each of the 5 other functions' own algorithm sections: §2.4 approve_review/4's set: list (status, approved_by, approved_at, row_version), §2.5 reject_review/3 (status, row_version), §2.6 mark_review_applied/2 and mark_review_failed/2 (status, row_version each), §2.7 supersede_review/3 (status, superseded_by, row_version) -- none includes tenant_id; §2.2's shared generic algorithm (which all 5 route through) never appends a computed tenant_id to any set: list. Table's claim holds. (4) Full standard gate re-run from scratch: all 6 of REQ-037's acceptance_criteria (docs/requirements.yaml lines 1770-1775) map to a named concrete design element in §9's table, cross-checked against the actual requirement text, not just the doc's own restatement; every one of the 7 transition functions (insert_review/2, approve_review/4, reject_review/3, mark_review_applied/2, mark_review_failed/2, supersede_review/3, promote_definition/3) has a complete @spec with a closed @type error union naming every distinct error atom; no 'TBD'/deferral language on any in-scope element (the 6 open questions in §5 are legitimate out-of-scope flags per WF-02 Step 1's own 'open questions listed explicitly' acceptance criterion, not gaps in REQ-037's 6 ACs); no implementation code anywhere -- verified all 20 code fences in the file directly (awk-extracted every fenced block): only @type/@spec declarations and ASCII state-diagrams/dependency-diagrams appear, zero defmodule/def/defp bodies; §8 cross-module dependencies list is accurate and now explicitly includes the new Letflow.TenantProvisioning.tenant_id_for_schema_name/1 dependency insert_review/2 introduces (previously claimed as no direct dependency -- doc correctly flags this as a superseding correction, not a silent edit). No new gap introduced by the fix. PASS.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ037-20260817",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF02-REQ037-20260817",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to ELIXIR-DEV (2a) for re-implementation of insert_review/2 per revised lib/letflow/design/promotion_review_state_machine.md §2.3/§2.8, then back through SECURITY-REVIEWER (2c) before REVIEWER (2d)."
   },
   "rework_count": 1,
   "max_rework": 3

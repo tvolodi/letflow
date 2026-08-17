@@ -1,0 +1,58 @@
+{
+  "handoff_id": "b3e1a2c4-0005-4f1a-9a10-req034step02c",
+  "run_id": "WF02-REQ034-20260817",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ034-20260817/step-02c-security-reviewer.json",
+  "created_at": "2026-08-17T20:43:19Z",
+  "started_at": "2026-08-17T20:43:19Z",
+  "completed_at": "2026-08-17T20:44:42Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-034"],
+    "related_handoff_ids": ["step-02a-elixir-dev.json"],
+    "artifacts_in": ["lib/letflow/definitions/export_import.ex", "lib/letflow/design/export_import.md"],
+    "owned_modules": ["lib/letflow/definitions"]
+  },
+  "task": {
+    "description": "WF-02 Step 2c HARD GATE: security review of lib/letflow/definitions/export_import.ex (branch feature/WF02-REQ034-20260817, diff git diff main...HEAD). This module reads/writes process_definitions (tenant-scoped) by delegating entirely to REQ-030's get_by_id/2 and create/2 -- confirm the delegation is total (no direct tenant-schema access, no tenant_id trust-the-caller pattern, no bypass of the tenant_id derivation REQ-025/030/037 established).",
+    "acceptance_criteria": [
+      "Scope test performed: confirm this diff touches a tenant-data path per docs/agents/instructions/security-invariants.md's applicability notes",
+      "For each of INV-1..INV-8: determine APPLIES or NOT-APPLICABLE against this diff, with reasoning",
+      "For each APPLIES invariant, the verification check actually run (not asserted)",
+      "Specific check: import/3 must not accept or trust a caller-supplied tenant_id anywhere -- confirm create_attrs never includes a :tenant_id key (matches design INV -- tenant_id must come from create/2's own derivation, same as REQ-025/030/037's established pattern per docs/migration/decisions/0003-ecto-schema-strategy.md's write-time addendum)",
+      "Specific check: export/2's get_by_id/2 delegation doesn't leak cross-tenant data (id-only lookup, no tenant-scoping bypass)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: IN SCOPE. lib/letflow/definitions/export_import.ex (new file, 137 lines) is response-shaping/lookup-by-id code over process_definitions, a tenant-scoped table -- export/2 wraps get_by_id/2 (lookup-by-ID), import/3 wraps create/2 (write path). Reviewed the actual diff (git diff main...HEAD -- lib/letflow/definitions/export_import.ex, new-file) and the full module body directly, plus create/2 and get_by_id/2 in lib/letflow/definitions.ex (lines 310-366) that it delegates to. Findings: (1) grep for 'tenant_id' and 'prefix' inside export_import.ex returns zero hits -- the module never references, accepts, or threads a tenant_id/prefix value of its own; export/2 and import/3 both take opts() = [prefix: String.t()] verbatim and pass it straight through to Definitions.get_by_id/2 and Definitions.create/2 unmodified. (2) import/3's create_attrs map (lines 122-129) is {name, version, description, graph, created_by} -- no :tenant_id key, confirmed by both reading the literal map construction and the grep in (1). create/2 independently rejects any caller-supplied :tenant_id via reject_key/4 (line 335) and derives tenant_id from opts[:prefix] via TenantProvisioning.tenant_id_for_schema_name/1 (line 337) before insert_definition/3 writes it -- export_import.ex has no path around this. (3) export/2's read is a single 'with {:ok, definition} <- Definitions.get_by_id(id, opts) do' -- get_by_id/2 (definitions.ex:356-366) does Repo.get(ProcessDefinition, uuid, prefix: prefix), i.e. the lookup is confined to the tenant schema named by opts[:prefix]; a row belonging to another tenant's schema is not reachable through this prefix and returns {:error, :not_found} identically to a genuinely nonexistent id (same code path, same case clause) -- no cross-tenant leak, no id-only global lookup. (4) grep -n 'Repo\\.' export_import.ex: zero hits -- no direct/bypass DB access, 100% delegation to already-reviewed REQ-030 functions as the design doc claims. (5) grep -n 'Repo.query' export_import.ex: zero hits (INV-7). (6) grep -n 'System.get_env' and secret-literal heuristic grep against export_import.ex: zero hits -- module touches no secret material (INV-4 trivially satisfied). (7) grep -n '^\\s*{:ok, .*} = ' export_import.ex: zero hits -- export/2 uses a with/do with no else (falls through on any non-{:ok,_} value from get_by_id/2, matching export_error()'s declared type), import/3 uses a case covering both the matching-version and actual-version branches; no bare pattern match that can raise on realistic input (INV-8).",
+    "artifacts_out": [],
+    "issues": [],
+    "invariant_table": [
+      {"id": "INV-1", "title": "Tenant data isolation", "verdict": "APPLIES", "result": "PASS", "reasoning": "process_definitions is a tenant-scoped table (S1 done, S2 migrations exist per 0003-ecto-schema-strategy.md decided status). (a) both export/2 and import/3 delegate their only DB-reaching calls (get_by_id/2, create/2) which are prefix-scoped (Repo.get(..., prefix: prefix) / insert via prefix); no query bypasses :prefix. (b) no migration added by this diff, no new table. (c) tenant_id is never a key export_import.ex constructs or accepts -- confirmed by grep (zero hits for 'tenant_id' in the file) and by reading create/2's reject_key/4 + TenantProvisioning-derived tenant_id, which import/3's attrs map cannot circumvent since it never sets that key at all."},
+      {"id": "INV-2", "title": "Server-side field authorisation", "verdict": "NOT-APPLICABLE", "reasoning": "No multi-tenant HTTP API surface exists yet (S4 not started). ExportDocument is an internal struct returned by a library function, not serialized to any client/response in this diff."},
+      {"id": "INV-3", "title": "Untrusted runtime sandboxing", "verdict": "NOT-APPLICABLE", "reasoning": "S5 (scripting/plugins) has not started; this diff contains no Lua/WASM execution."},
+      {"id": "INV-4", "title": "Secrets by reference only", "verdict": "APPLIES", "result": "PASS", "reasoning": "Live now per security-invariants.md. Ran both prescribed greps (System.get_env presence check, hardcoded-secret heuristic) scoped to export_import.ex -- zero hits either way; module touches no secret material at all."},
+      {"id": "INV-5", "title": "Not-found/forbidden indistinguishability", "verdict": "NOT-APPLICABLE", "reasoning": "Written for S4 HTTP lookup-by-ID endpoints, which don't exist yet (no controller/route calls export/2). Noted for the record: the underlying get_by_id/2 already returns {:error, :not_found} identically for a missing row and a cross-tenant row (same Repo.get(..., prefix: prefix) call, same nil-branch), so the property this invariant wants is already structurally satisfied once S4 wires an endpoint to it -- but that wiring is out of scope for this diff, hence NOT-APPLICABLE today, not a forced pass/fail against nonexistent code."},
+      {"id": "INV-6", "title": "New data-access paths prove their scoping", "verdict": "APPLIES", "result": "PASS", "reasoning": "Meta-invariant: satisfied by this handoff itself -- explicit per-invariant applicability table with verification evidence, status PASS, routed through SECURITY-REVIEWER before Step 2d per WF-02."},
+      {"id": "INV-7", "title": "No SQL string interpolation", "verdict": "APPLIES", "result": "PASS", "reasoning": "Ecto in use, live now. grep -n 'Repo.query' lib/letflow/definitions/export_import.ex: zero hits -- the module makes no raw SQL calls at all (it only calls Definitions.get_by_id/2 and Definitions.create/2, both Ecto-query-based)."},
+      {"id": "INV-8", "title": "No unhandled crashes on realistic failure paths", "verdict": "APPLIES", "result": "PASS", "reasoning": "Live now. grep -n '^\\s*{:ok, .*} = ' lib/letflow/definitions/export_import.ex: zero hits. export/2 uses a with/do (no bare match, falls through cleanly on {:error, _}); import/3 uses a case with both branches (schema-version match and mismatch) explicitly handled. No path can raise on realistic tenant-controlled input (malformed graph, unknown schema version, nonexistent id all return typed {:error, _} tuples via the delegated create/2 / get_by_id/2)."}
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ034-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ034-20260817",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (Step 2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

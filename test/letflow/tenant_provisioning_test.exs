@@ -425,7 +425,14 @@ defmodule Letflow.TenantProvisioningTest do
   # genuine regression test rather than left purely convention-enforced.
   # ---------------------------------------------------------------------------------
 
-  describe "tenant-scoped migration guard pattern -- nil prefix is a real no-op (beyond REQ-022's bare acceptance criteria, REVIEWER Step 2d non-blocking note)" do
+  # NOTE(ISS-0030): describe/test names below are deliberately short -- ExUnit computes
+  # a combined "test " <> describe <> " " <> test_name atom whose length the BEAM caps
+  # at 255 chars (SystemLimitError), and the original long-sentence names totalled 292.
+  # Nothing here is lost: the "(beyond REQ-022's bare acceptance criteria, REVIEWER
+  # Step 2d non-blocking note)" context is already stated in the comment block just
+  # above, and the "test/support/req022_migration_fixture.ex" fixture path is documented
+  # in test/specs/REQ-022.md and via the MigrationFixture alias used in the test body.
+  describe "tenant-scoped migration guard pattern -- nil prefix is a real no-op" do
     # A deliberately implausible version number -- avoids any chance of colliding with
     # a real timestamp-based priv/repo/migrations/ version already recorded in the
     # real public.schema_migrations table.
@@ -448,7 +455,7 @@ defmodule Letflow.TenantProvisioningTest do
       :ok
     end
 
-    test "running test/support/req022_migration_fixture.ex with no :prefix option at all (a plain mix ecto.migrate-style run) leaves public untouched" do
+    test "running with no :prefix option (plain mix ecto.migrate-style run) leaves public untouched" do
       # Ecto.Migrator.run/4 returns a bare [integer] list on success (not an
       # {:ok, _} tuple) -- confirmed directly from deps/ecto_sql/lib/ecto/migrator.ex's
       # own @spec, same fact the design doc's SS3.2 cites as the reason

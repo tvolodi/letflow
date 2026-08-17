@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ036-20260817/step-06-doc-updater.json",
   "created_at": "2026-08-17T18:49:16Z",
   "started_at": "2026-08-17T18:49:16Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-17T18:50:18Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S2",
@@ -33,9 +33,14 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Flipped REQ-036 status in_progress -> done in docs/requirements.yaml. Appended a 'done' event for REQ-036 to docs/status/requirement_status.yaml (append-only, prior entries untouched) summarizing the 3 new modules (Letflow.Definitions.PromotionPlan/PromotionConflict/PromotionDigest), all 6 ACs met, 33 new tests, full suite 500/500. Moved REQ-036 from the pending list to the done list in docs/migration/stage-2-event-store-definitions.md's header (same bulk-refresh pattern as REQ-025/029/032/033). Checked README.md's 'Migration status' and 'What's here today' sections directly and left it untouched: REQ-036 is domain-logic only, no new HTTP endpoint/curl command, no ASCII state-diagram change. Confirmed no docs/migration/decisions/ file is named in REQ-036's acceptance_criteria by re-reading the requirements.yaml entry directly.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "docs/migration/stage-2-event-store-definitions.md",
+      "handoffs/WF02-REQ036-20260817/step-06-doc-updater.json"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ036-20260817",
@@ -45,7 +50,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to ELIXIR-DEV for Step Final"
   },
   "rework_count": 0,
   "max_rework": 3

@@ -1,0 +1,74 @@
+{
+  "handoff_id": "b3b09a57-45f1-4adc-bf6f-d45122ba2a41",
+  "run_id": "WF02-REQ038-20260817",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ038-20260817/step-03-test-designer.json",
+  "created_at": "2026-08-17T22:57:58Z",
+  "started_at": "2026-08-17T22:57:58Z",
+  "completed_at": "2026-08-17T22:58:24Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-038"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ038-20260817/step-01-code-designer.json",
+      "handoffs/WF02-REQ038-20260817/step-01-code-designer-rework.json",
+      "handoffs/WF02-REQ038-20260817/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ038-20260817/step-01b-code-design-validator-rereview.json",
+      "handoffs/WF02-REQ038-20260817/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ038-20260817/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ038-20260817/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req038-promotion-rollback.md",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/definitions/promotion_review_store.ex",
+      "handoffs/WF02-REQ038-20260817/step-02d-reviewer.json",
+      "test/specs/REQ-031.md",
+      "test/letflow/definitions/promotion_test.exs",
+      "test/letflow/definitions/promotion_review_store_test.exs",
+      "test/letflow/definitions/store_test.exs",
+      "docs/guides/test_developer_guide.md"
+    ],
+    "owned_modules": ["test/letflow/definitions", "test/specs"]
+  },
+  "task": {
+    "description": "WF-02 Step 3: write the test spec and test code for REQ-038's rollback_definition_version/4, now that ELIXIR-DEV's implementation has PASSed SECURITY-REVIEWER and REVIEWER. Cover all 5 acceptance criteria plus the extra coverage explicitly flagged by the run's design/review history: the cardinality-branched promotion_reviews supersede-lookup (the single rework-triggering defect), permission-guard ordering proven not asserted, the 3 guard cases in the correct order, status-enum reuse correctness across a double rollback, and the event-append-after-commit window proven via a separate connection.",
+    "acceptance_criteria": [
+      "test/specs/REQ-038.md maps every AC plus the extra flagged coverage to concrete test cases with a rationale, not a restatement",
+      "Real-Postgres test code under test/letflow/definitions/ per DIRECTIVE T-1 -- no mocked database",
+      "The cardinality-branching lookup gets its own named, explicit test group: zero-match, exactly-one-match (both :applied and the newly-widened :approved edge), and more-than-one-match proven to mutate zero rows",
+      "Permission guard ordering proven (not merely asserted) via a technique that would fail loudly if the guard didn't run first",
+      "3 guard cases tested in a way that would catch a reordering",
+      "Status-enum reuse correctness demonstrated via a double/alternating rollback",
+      "Event-append-after-commit window demonstrated via a genuinely separate connection read",
+      "mix test run on the new file and the full suite, real output quoted, no speculation"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read docs/requirements.yaml's REQ-038 entry (lines 1778-1820, 5 acceptance criteria verbatim), lib/letflow/design/req038-promotion-rollback.md in full (including the Rework-1 CODE-DESIGN-VALIDATOR history on the promotion_reviews cardinality lookup), lib/letflow/definitions.ex's rollback_definition_version/4 plus its 5 private helpers (do_rollback/6, run_rollback_transaction/4, swap_active_pointer/3, finish_rollback/8, supersede_matching_review/4) directly against the shipped code, promotion_review_store.ex's widened supersede_review/3 (7->8 edges, the new :approved source status), and REVIEWER's own step-02d handoff (confirmed PASS, no blockers, two MINOR issues neither affecting test design). Confirmed via TenantProvisioning.schema_name_for_tenant/1 and tenant_id_for_schema_name/1 (both read directly) that tenant_id derivation from opts[:prefix] is a pure, no-I/O string transform -- this fact is load-bearing for the AC5 permission-ordering proof (an unprovisioned-but-well-formed schema name lets a false permission_checker be proven to run before any Repo call, since a real read attempt against a nonexistent Postgres schema would raise rather than cleanly error).\n\nWrote test/specs/REQ-038.md mapping all 5 acceptance criteria plus the run's explicitly-flagged extra coverage (cardinality-branched lookup as its own named group, permission-guard-ordering proof, 3-guard-case ordering proof, status-enum reuse via double rollback, event-append-after-commit proof via a separate connection) to concrete test cases, each with a stated rationale distinct from the criterion's own wording, following test/specs/REQ-031.md's established format.\n\nWrote test/letflow/definitions/rollback_test.exs (Letflow.Definitions.RollbackTest), 18 tests across 9 describe blocks, using Letflow.DataCase + a real provisioned tenant schema per test (mirrors store_test.exs's/promotion_test.exs's established provisioned_tenant/0 + Sandbox :auto + async: false convention -- no mocked Repo anywhere). Every fixture is built via real, already-merged public functions (Definitions.create/2/activate/2/deprecate/2/archive/2, PromotionReviewStore.insert_review/2/approve_review/4/mark_review_applied/2) rather than raw Repo writes bypassing the state machines under test. Coverage: AC1 (2 tests, full success-path incl. exactly-one-event proof and get_active_by_name/2 queryable-state parity), AC2 (3 tests: draft-never-activated, no-row-at-all, archived-excluded per INV-RB-4), guard ordering (2 tests, including the one fixture shape -- all-deprecated with a version-matching deprecated row but no current active row -- where the two guards would genuinely disagree if reordered), AC3 (1 test, already-active proven via an exploding event_appender that would raise if ever invoked), AC5 (3 tests: permission-denial proven via an unprovisioned-but-decodable schema name that would raise rather than cleanly error if the guard ran late, plus both Keyword.fetch!/2 KeyError cases), AC4 cardinality lookup (4 tests: zero-match with an unrelated review present as a negative control, exactly-one-APPLIED, exactly-one-APPROVED specifically exercising this requirement's own promotion_review_store.ex widening, and more-than-one-match re-reading BOTH rows from Postgres to prove literally zero mutation rather than 'the first' or 'the most recent'), event-append-after-commit (1 test, a Task.async-spawned genuinely separate connection re-reads both rows inside the injected event_appender and confirms the swap is already visible), event_appender error propagation (1 test, mirrors promotion_test.exs's identical disclosed-tradeoff test), and status-enum reuse via a double, alternating rollback (1 test).\n\nHit an Erlang atom-length limit (SystemLimitError) on first compile: several describe+test name combinations, especially ones containing an inline anonymous fn (and one with a doubly-nested fn -- an event_appender closure whose body itself called Task.async with another inline fn), generated internal compiler atom names exceeding 255 characters. Fixed by shortening the longest describe/test strings and by extracting the nested Task.async call into a named private helper (reread_statuses_via_separate_connection/3) so only one level of inline-fn nesting remains in any test body -- this removes the risk structurally rather than by trimming margins alone. Also removed an unused default argument on create!/2 that mix flagged as a compiler warning.\n\nRan mix format on the new test file (two passes needed to converge; the tool's own diff was not idempotent in one pass, a known mix format behavior, not a defect in the source) and confirmed --check-formatted passes clean.\n\nVerification: baseline confirmed via mix test before any change: 629 passed (4 properties, 625 tests) -- matches the run's stated baseline exactly, no drift. mix test test/letflow/definitions/rollback_test.exs: 18 passed, no failures, no compiler warnings. Full mix test after adding both new files: 647 passed (4 properties, 643 tests) -- exactly baseline + 18, zero regressions elsewhere.",
+    "artifacts_out": [
+      "test/specs/REQ-038.md",
+      "test/letflow/definitions/rollback_test.exs",
+      "handoffs/WF02-REQ038-20260817/step-03-test-designer.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ038-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ038-20260817",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

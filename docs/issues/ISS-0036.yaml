@@ -34,4 +34,6 @@ description: >
 affected_files:
   - test/letflow/definitions/promotion_review_migration_test.exs
 github_issue: https://github.com/tvolodi/letflow/issues/113
-status: open
+status: resolved
+resolved_in_run: ADHOC-20260817-002
+resolved_at: "2026-08-17T21:14:13Z"

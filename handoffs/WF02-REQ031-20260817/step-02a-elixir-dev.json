@@ -1,0 +1,61 @@
+{
+  "handoff_id": "814f8e34-e086-4ed7-9691-dd88622c3286",
+  "run_id": "WF02-REQ031-20260817",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ031-20260817/step-02a-elixir-dev.json",
+  "created_at": "2026-08-17T20:31:47Z",
+  "started_at": "2026-08-17T20:31:47Z",
+  "completed_at": "2026-08-17T20:32:46Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-031"],
+    "related_handoff_ids": [
+      "d6c9a2e7-1b4f-4a8d-9e3c-7f2b0a5d8c14"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req031-service-scope-validator.md",
+      "handoffs/WF02-REQ031-20260817/step-01b-code-design-validator-rereview.json",
+      "docs/requirements.yaml (REQ-031 entry, lines 1420-1466)",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/definitions/graph.ex",
+      "docs/guides/backend_developer_guide.md",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": ["lib/letflow/definitions/service_scope_validator.ex"]
+  },
+  "task": {
+    "description": "Implement Letflow.Definitions.ServiceScopeValidator (SVC-03) exactly per the PASSed design doc lib/letflow/design/req031-service-scope-validator.md -- new file lib/letflow/definitions/service_scope_validator.ex only, zero changes to lib/letflow/definitions.ex or lib/letflow/definitions/graph.ex. Build build/1 and validate/3, the injectable Lookup struct-of-functions, the Violation struct with its closed-set reason() atom type, and the two branch tables (service and plugin), preserving the deliberate service/plugin asymmetries on nil owner_tenant_id and not-registered plugin lookups. Include AC5's required moduledoc text verbatim.",
+    "acceptance_criteria": [
+      "Given an injected lookup returning a global-scope service, a SERVICE_TASK referencing it passes validation for any tenant_id",
+      "Given an injected lookup returning a tenant-scoped service owned by tenant A, a SERVICE_TASK referencing it fails validation when activated by tenant B, with a violation naming node_id and the service ref_id",
+      "Given an injected lookup returning 'not registered' for a service_id, validation fails with a distinct not-registered violation reason, distinguishable from the owned-by-another-tenant case",
+      "REQ-030's activate/1 is demonstrated calling this validator via its nil-able hook when a lookup implementation is supplied, and skipping the check entirely when the hook is nil",
+      "The moduledoc explicitly names the ServiceCatalog/PluginRegistry dependency gap and which future stage each belongs to"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented Letflow.Definitions.ServiceScopeValidator in a new file, lib/letflow/definitions/service_scope_validator.ex (369 lines) -- zero changes to lib/letflow/definitions.ex or lib/letflow/definitions/graph.ex, confirmed by `git status --porcelain` showing only the one new untracked file. Built exactly the interface the design doc specifies: build/1 (@spec build(Lookup.t()) :: Letflow.Definitions.service_scope_validator_fun(), reusing REQ-030's existing type alias rather than redefining it) returning a closure that forwards to validate/3; validate/3 (@spec validate(Graph.t(), Ecto.UUID.t(), Lookup.t()) :: :ok | {:error, Violation.t()}), public per the design so it's testable without build/1's indirection, implemented as Enum.filter(SERVICE_TASK) |> Enum.reduce_while(:ok, ...) over graph.nodes' own order (INV-SSV-6), first-violation-wins (INV-SSV-2). Lookup (@enforce_keys [:service_lookup, :plugin_lookup]) and Violation (@enforce_keys [:node_id, :kind, :ref_id, :reason, :message], closed reason() union of :service_not_registered | :service_not_available_to_tenant | :plugin_not_available_to_tenant) are nested modules exactly as specified in design doc §2. Both branch tables (design doc §5) are implemented as ordered private function-head pattern matches (evaluate_service_lookup/4, evaluate_plugin_lookup/4) covering all 5 rows each verbatim, including the two deliberately-preserved R-Co asymmetries: (1) plugin 'not registered' -> :ok (INV-SSV-5) vs service 'not registered' -> Violation with reason :service_not_registered; (2) a resolved :tenant-scope lookup with owner_tenant_id: nil is a Violation on the service side (INV-SSV-7, reason :service_not_available_to_tenant, message 'scope data is inconsistent') but a silent pass on the plugin side (INV-SSV-9) -- neither asymmetry was 'fixed' into symmetry, per the task briefing's explicit instruction and the design doc's own OQ-4 flag for REVIEWER/SECURITY-REVIEWER. service_id/plugin_handler are read string-keyed via Map.get(attributes, \"service_id\"|\"plugin_handler\") with a non-empty-binary gate (ref_id/2, INV-SSV-3) -- missing key, nil, non-string, or empty string performs no lookup call and produces no violation, matching graph.ex's own string-keyed jsonb convention and its is_map/1 belt-and-suspenders defensive style. Module is pure (INV-SSV-4) -- no Letflow.Repo, Ecto.Changeset, Logger, clock, or I/O call anywhere; all external behavior is delegated to the two injected Lookup functions. Moduledoc includes AC5's exact required text verbatim (the 'Scope gap -- no real catalog/registry integration yet' section naming ServiceCatalog->S6 and PluginRegistry->S3, copied byte-for-byte from design doc §7) plus surrounding prose describing the module, its purity, and both asymmetries with citations. `mix compile --warnings-as-errors` exit 0 ('Compiling 1 file (.ex)' / 'Generated letflow app', no warnings). `mix format --check-formatted` exit 0 (no output, already formatted). Ran an ephemeral, non-persisted `mix run --no-start -e '...'` smoke check (no test files written, no DB touched, no artifacts left behind) directly exercising all 5 REQ-031 acceptance criteria plus both asymmetries plus the nil/empty-attribute skip path: AC1 (global scope, any tenant) -> :ok; AC2 mismatched-owner -> {:error, %Violation{node_id: \"svc1\", kind: :service, ref_id: \"svcX\", reason: :service_not_available_to_tenant, ...}}, matching-owner -> :ok; AC3 not-registered -> {:error, %Violation{reason: :service_not_registered, ...}}, confirmed distinct atom from AC2's reason; AC4 build/1 produces a 2-arity function (is_function(hook, 2) == true) and hook.(graph, tenant_id) reproduces validate/3's result exactly; plugin not-registered -> :ok (asymmetry 1 confirmed); service nil-owner -> Violation, plugin nil-owner -> :ok (asymmetry 2 confirmed, both against the identically-shaped {:ok, %{scope: :tenant, owner_tenant_id: nil}} input); nil-attributes node and empty-string service_id -> :ok with no lookup call performed. All outputs matched the design doc's tables exactly. Did NOT write any test files (TEST-DESIGNER's job, Step 3) and did NOT modify lib/letflow/definitions.ex or lib/letflow/definitions/graph.ex.",
+    "artifacts_out": [
+      "lib/letflow/definitions/service_scope_validator.ex"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ031-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ031-20260817",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c) -- this module implements tenant-scope-enforcement decision logic (service/plugin scope checks compare owner_tenant_id against the activating tenant_id), even though it has no DB path of its own yet; design doc §9 OQ-4 specifically flags the plugin-side nil-owner-pass asymmetry (INV-SSV-9) for SECURITY-REVIEWER's attention at this gate. REVIEWER (Step 2d) follows for idiomatic-OTP/scope-creep review."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

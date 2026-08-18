@@ -7,9 +7,9 @@
   "to_agent": "CODE-DESIGN-VALIDATOR",
   "file": "handoffs/WF03-ISS0047-20260818/step-02b-code-design-validator.json",
   "created_at": "2026-08-18T18:45:00Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-08-18T18:34:00Z",
+  "completed_at": "2026-08-18T18:50:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -39,10 +39,15 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
+    "status": "PASS",
+    "summary": "Verified all 5 required checks independently against the design doc, identity.ex, and identity_test.exs (not against the design's own prose claims alone). (1) Three-way branch (username_unique_conflict?/1 -> get_by_username/2 -> identity_matches?/2) is unambiguous: every branch (race/genuine-collision/not-a-username-error/holder-not-found) terminates in a concrete, fully-specified action with no judgment call left to ELIXIR-DEV. (2) Traced the genuine-collision test (identity_test.exs:379-394) by hand against the new branch: ctx_a and ctx_b are built via two separate identity_context() calls with no external_user_id override, so they have distinct external_realm/external_id (identity_context/1's helper generates a fresh unique_realm() and Ecto.UUID.generate() per call, confirmed by reading the helper at lines 110-123) -- identity_matches?/2 correctly returns false, the new branch falls to {:error, changeset} unchanged, so this pinned test's outcome is preserved exactly. (3) Confirmed against Postgres's own INSERT...ON CONFLICT grammar: conflict_target is a single column-list-or-constraint-name clause and only one ON CONFLICT clause is permitted per INSERT statement -- no syntax exists for 'suppress on conflict with index A OR index B' in one statement, so ruling out option (a) is correct. (4) Checked the 'not naive insert-then-rescue' distinction skeptically: the design's claim that this isn't rescue-based because there's no explicit try/rescue is narrowly true but understates that Ecto's own unique_constraint/3 mechanism is internally rescue-based (it converts a raised Postgrex unique-violation into a changeset error) -- so at a semantic level this IS an insert-then-reconcile pattern for the username index. However the distinction still substantively holds: (a) the forbidden pattern targeted wholesale replacement of the select-first/on_conflict/re-select algorithm to avoid changing R-Co's established concurrency semantics for the (external_realm,external_id) conflict path, which this design leaves completely untouched; (b) there is no established R-Co semantics for a SECOND independent unique index being violated by a race, since Postgres structurally cannot arbitrate two indexes in one INSERT (see check 3) -- the prohibition's rationale doesn't extend to a case the original mechanism could never have covered; (c) no new TOCTOU race window is introduced because Postgres serializes concurrent inserts against the same unique index (blocks until the other transaction commits/aborts before re-checking), so by the time the losing insert's changeset error surfaces the winning row is guaranteed already committed and visible to get_by_username/2 -- confirmed against Postgres's documented unique-constraint-checking behavior, matching the design's own 'should not happen but handled defensively' framing of the nil branch. Recommend the design's §2.1 prose be tightened in a future pass to acknowledge Ecto's internal rescue mechanism rather than imply no rescue semantics are involved at all, but this is a documentation-precision nit, not a correctness or ambiguity defect -- not blocking. (5) Confirmed also that the existing race test (lines 259-355) uses :manual mode + Sandbox.allow/3, routing both Tasks through one shared connection/transaction per its own inline comment (lines 265-281) and this file's moduledoc (lines 54-64), so it structurally cannot exercise the username-index race path -- the design's §5 correctly specifies a new, additive :auto-mode two-independent-connection test (not a modification of the existing test), reusing the existing barrier-sync pattern (lines 282-316) and assertion shape (lines 321-345), with explicit guidance to loop multiple race attempts given ISSUE-FIXER's own 4/6 nondeterministic reproduction rate. No implementation code present anywhere in the design (the §2.2 logic block uses IF/CASE/END pseudocode, not Elixir case/do/end syntax, matching req018's own precedent) -- only @spec signatures and prose logic descriptions. No TBD/deferral language blocks core design elements; the three Open Questions in §6 are all explicitly scoped as non-blocking for ELIXIR-DEV (OQ-1/OQ-3 explicitly say so; OQ-2 is a downstream anti-patterns.md action item, not a design gap). Verdict: PASS -- design is unambiguous, factually correct on the Postgres arbiter claim, correctly preserves the pinned genuine-collision test, and specifies a genuinely new regression test the existing suite cannot provide.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Design §2.1's claim of not being 'rescue-based' is technically true at the identity.ex syntax level (no try/rescue added) but understates that Ecto's unique_constraint/3 is itself internally implemented via catching/converting a raised Postgrex unique-violation -- the distinction from the forbidden 'naive insert-then-rescue' pattern rests more soundly on scope-narrowness (doesn't replace the primary algorithm) and structural necessity (Postgres cannot arbitrate two independent unique indexes in one INSERT, verified) than on the 'no rescue involved' framing as written. Does not block implementation -- recommend CODE-DESIGNER or ELIXIR-DEV tighten this prose in a follow-up, not a rework trigger."
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0047-20260818",
       "commit_sha_list": []

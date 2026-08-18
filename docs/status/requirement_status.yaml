@@ -3784,3 +3784,125 @@ history:
       ISS-0041 both correctly carry their respective run's real findings
       under their corrected numbers) -- flagging this for the historical
       record, not because anything is currently broken.
+  - req: REQ-040
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-18T02:00:26Z
+    note: >
+      Promotion assertion re-run orchestration shipped: Letflow.Definitions
+      .apply_promotion_assertion_rerun/6 (lib/letflow/definitions.ex), plus
+      lib/letflow/definitions/promotion_assertion_run.ex and
+      promotion_artifact.ex, priv/repo/migrations/20260818090001_create_promotion_assertion_runs.exs
+      (promotion_assertion_runs, schema-per-tenant per REQ-022, FK to
+      REQ-035/037's promotion_reviews), and
+      test/letflow/definitions/promotion_assertion_rerun_test.exs. Ports
+      assertion_rerun.zig's applyPromotionAssertionRerun() (PRM-06/07):
+      idempotency via a cached-outcome short-circuit that claims no second
+      sandbox on a repeat (review_id, plan_digest) call; fixtures-only
+      sandbox loading via REQ-039's load_fixtures_only; the
+      assertions_failed == 0 gate condition (explicitly NOT status ==
+      "passed" -- a teardown_failed row with assertions_failed == 0 is a
+      green gate) stated verbatim in the moduledoc per the requirement's
+      own acceptance criteria.
+
+      This run's real story, not just the happy path: Step 1b
+      (CODE-DESIGN-VALIDATOR) FAILed the first design with one BLOCKER --
+      AC4/AC6's moduledoc gate-condition and crash-safety text was left for
+      ELIXIR-DEV to synthesize at implementation time rather than specified
+      verbatim in the design doc itself. This was a focused,
+      weak-model-tolerance-driven gap (the pipeline's whole premise is that
+      a weak executing model must not be trusted to synthesize precise
+      prose under-specified by design), not an algorithm defect -- the
+      rework (rework_count 1) added design Sec 13 with the exact verbatim
+      text, and the re-review independently diffed the rework's actual
+      commit (6186561..3b084bf) rather than trusting its self-report,
+      confirming nothing else in the design silently changed.
+
+      Step 2a (ELIXIR-DEV) self-reported and Step 2c/2d/5 each
+      independently re-verified a real bug found and fixed during
+      implementation: an early form of the idempotency lookup passed
+      `prefix: prefix` as part of the same keyword list as the query
+      fields, which Ecto silently merges into the WHERE clause instead of
+      treating as a query option -- fixed to the explicit two-argument
+      `Repo.get_by(PromotionAssertionRun, [tenant_id: ..., idempotency_key:
+      ...], prefix: prefix)` form (fields list, then a separate opts
+      list), independently confirmed as the only Repo.get_by call site in
+      the diff by SECURITY-REVIEWER, REVIEWER, and RELEASE-VALIDATOR each
+      reading the current code themselves.
+
+      Step 3b (TEST-DESIGN-VALIDATOR) performed real mutation testing, not
+      a coverage-percentage check: disabling the double-run
+      non-determinism/idempotency-mismatch branch broke exactly one test,
+      and removing the try/rescue crash-safety span broke exactly one
+      (different) test -- each mutation confirmed to break precisely its
+      targeted test and no others, both mutations reverted with a
+      confirmed zero-diff git status afterward.
+
+      Semantics note: the idempotency check is a deliberate double-run
+      (call it twice, assert the second call is a cached hit and claims no
+      new sandbox), not an oracle-comparison against a separately computed
+      expected value -- this was faithfully ported from R-Co's own stub
+      reference implementation's actual behavior, not an invented
+      simplification.
+
+      Crash-safety gap disclosed, not silently assumed away: the
+      try/rescue span around fixture-load-through-finish-replay covers
+      normal completion, typed/expected error returns, and raised-exception
+      exits, and on any of those routes to fail_closed_counts/1 (never a
+      silent green, never assertions_failed stuck at 0, never a row left
+      stuck at :running) -- but it explicitly does NOT cover a hard
+      process kill or BEAM-level crash, per the requirement's own open
+      question (stage-2-event-store-definitions.md's Early findings
+      process-per-instance-vs-row-based-state note) and Elixir having no
+      exact equivalent to Zig's defer-covers-panic-unwind guarantee. This
+      is a disclosed, accepted limitation (moduledoc AC6), not a covered
+      gap misrepresented as covered.
+
+      Final test count: mix test (full suite) -- 673 passed (4 properties,
+      669 tests), exit 0, independently reproduced by RELEASE-VALIDATOR
+      from a fresh run (not trusting TEST-RUNNER's report alone), matching
+      exactly. All WF-02 gates passed: CODE-DESIGN-VALIDATOR (after one
+      rework cycle), SECURITY-REVIEWER, REVIEWER (idiom), TEST-DESIGN-VALIDATOR,
+      TEST-RUNNER, and RELEASE-VALIDATOR.
+
+      README.md checked directly (not assumed): read "What's here today"
+      and "Running it" in full -- REQ-040 adds one new internal function
+      plus a new tenant-scoped table, no new HTTP route, no change to the
+      documented curl/mix "Running it" flow or the ASCII state diagram --
+      left untouched, consistent with prior DOC-UPDATER precedent for
+      similarly internal-only requirements this stage.
+
+      docs/migration/stage-2-event-store-definitions.md header's
+      Requirements line updated to move REQ-040's own token from the
+      pending half to the done half -- read the CURRENT line first (this
+      exact line has already caused real merge conflicts three times this
+      session, REQ-030/031/038's Step Finals) and moved only REQ-040; no
+      other requirement's position touched. This was the last pending S2
+      requirement in that line, so the line now reads all 21 (REQ-022..042)
+      as done -- the "Status: in progress" stage-level field itself was
+      left untouched, since a full stage-gate close-out is a WF-04
+      decision, not something Step 6 of a single requirement's WF-02 run
+      makes unilaterally. The file's "Early findings" section (which
+      REQ-040's own crash-safety open question explicitly cited) was
+      checked and left as-is: it is general process-vs-row-based-state and
+      static-typing guidance for the whole stage, not a per-requirement
+      resolution log, and REQ-040's own disclosed, documented choice (a
+      row-based table with an explicitly disclosed hard-crash gap, not a
+      supervised process) is a specific instance of weighing that
+      general guidance rather than a finding requiring the guidance
+      itself to be rewritten.
+
+      Bookkeeping gap noticed, not fixed here, same convention as
+      REQ-031/038's own DOC-UPDATER pass for an identical gap: this file
+      had zero prior REQ-040 events of any kind before this entry -- no
+      "started" event was ever logged by ORCH at Step 00, confirmed via a
+      direct grep of the full file before writing this entry (the only
+      prior REQ-040 hit in the file is an unrelated impl_order bookkeeping
+      note, "REQ-038=55, REQ-040=56", not a started event) and
+      independently confirmed missing by RELEASE-VALIDATOR's own Step 5
+      handoff (its staleness check explicitly notes "no premature
+      'started'/'done' event for REQ-040"). This "done" event is
+      REQ-040's first-ever entry in this file's history. Not backfilled
+      retroactively with an invented "started" timestamp, since that would
+      misrepresent when Step 00 actually happened -- reported as a gap
+      instead.

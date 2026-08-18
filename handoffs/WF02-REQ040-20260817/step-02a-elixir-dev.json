@@ -1,0 +1,99 @@
+{
+  "handoff_id": "step-02a-elixir-dev",
+  "run_id": "WF02-REQ040-20260817",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ040-20260817/step-02a-elixir-dev.json",
+  "created_at": "2026-08-18T00:47:52Z",
+  "started_at": "2026-08-18T00:47:52Z",
+  "completed_at": "2026-08-18T01:05:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-040"],
+    "related_handoff_ids": [
+      "step-00-orch-self",
+      "step-01-code-designer",
+      "step-01-code-designer-rework",
+      "step-01b-code-design-validator-rereview"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req040-promotion-assertion-rerun.md",
+      "docs/requirements.yaml",
+      "docs/guides/backend_developer_guide.md",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/anti-patterns.md",
+      "lib/letflow/sandbox_pool.ex",
+      "lib/letflow/sandbox_pool/fixture_loader.ex",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/definitions/promotion_review.ex",
+      "lib/letflow/definitions/promotion_review_store.ex",
+      "lib/letflow/definitions/instance_definition_snapshot.ex",
+      "lib/letflow/definitions/process_definition.ex",
+      "lib/letflow/event_store.ex",
+      "priv/repo/migrations/20260816200001_create_promotion_reviews.exs",
+      "priv/repo/migrations/20260816193002_create_instance_definition_snapshots.exs",
+      "priv/repo/migrations/20260817181240_create_event_retention_policies.exs"
+    ],
+    "owned_modules": ["lib/letflow/", "priv/repo/migrations/"]
+  },
+  "task": {
+    "description": "Implement REQ-040 (Promotion assertion re-run orchestration) per lib/letflow/design/req040-promotion-assertion-rerun.md, PASSed by CODE-DESIGN-VALIDATOR after one rework cycle (verbatim moduledoc/@doc text added for AC4/AC6). Branch feature/WF02-REQ040-20260817 already checked out. Build: the promotion_assertion_runs migration (tenant-scoped, FK to promotion_reviews) plus its manifest entry in Letflow.TenantProvisioning; Letflow.Definitions.apply_promotion_assertion_rerun/6 in lib/letflow/definitions.ex; the PromotionAssertionRun Ecto schema and PromotionArtifact plain-struct modules the design specifies. Do not write tests (TEST-DESIGNER's job) and do not touch already-merged REQ-030/031/036/037/038/039 code.",
+    "acceptance_criteria": [
+      "calling apply_promotion_assertion_rerun/6 twice with the same (review_id, plan_digest) returns the cached outcome on the second call and claims no second sandbox, verified by sandbox claim count",
+      "a sandbox loaded via REQ-039 receives ONLY the artifact's fixtures[] rows, demonstrated by confirming no pre-existing tenant data appears in the sandbox schema",
+      "an assertion replay that fails records status = failed with a non-empty failing_assertion_ids list; a passing replay whose teardown itself fails records status = teardown_failed with assertions_failed = 0 -- both distinct outcomes tested explicitly",
+      "the moduledoc explicitly states the apply pipeline gate condition is assertions_failed == 0, not status == passed, citing the teardown_failed green-gate case",
+      "a simulated teardown failure appends a PROMOTION_ASSERTION_TEARDOWN_FAILED event via REQ-025's already-shipped append and does not change a passing run's outcome from green to failed",
+      "the moduledoc names the crash-safety/guaranteed-teardown open question explicitly, per this requirement's description and stage-2-event-store-definitions.md's Early findings"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented all three design elements exactly per lib/letflow/design/req040-promotion-assertion-rerun.md. (1) Migration priv/repo/migrations/20260818090001_create_promotion_assertion_runs.exs: tenant-scoped (`if prefix() do` guard), all §4 columns, a real FK to promotion_reviews (on_delete: :nothing), the (tenant_id, idempotency_key) unique index, the review_id reverse-lookup index, and a chk_promotion_assertion_run_status CHECK constraint (design's own flagged, justified divergence from promotion_reviews' Ecto.Enum-only convention). Registered the matching {20_260_818_090_001, CreatePromotionAssertionRuns, filename} entry in Letflow.TenantProvisioning.@tenant_scoped_migration_manifest (lib/letflow/tenant_provisioning.ex), updating both doc-comment entry counts from ten to eleven. (2) lib/letflow/definitions/promotion_assertion_run.ex: the Ecto schema, matching InstanceDefinitionSnapshot's no-belongs_to precedent, with insert_changeset/2 (four idempotency-anchor fields only, foreign_key_constraint on review_id, unique_constraint on the idempotency pair) and update_changeset/2 (the single-final-UPDATE fields). (3) lib/letflow/definitions/promotion_artifact.ex: the plain PromotionArtifact/Assertion/CandidateDefinition structs, reusing Letflow.SandboxPool.FixtureLoader.FixtureRow.t() directly for fixtures, exactly per design §5. (4) Letflow.Definitions.apply_promotion_assertion_rerun/6 added to lib/letflow/definitions.ex directly after rollback_definition_version/4 (matching that function's placement precedent, §1), with the full REQ-040 type block (assertion_rerun_opts/assertion_evaluator_fun/assertion_rerun_result/assertion_rerun_error, reusing event_appender_fun/common_error from REQ-038), and every algorithmic piece from the design: the insert/on_conflict/re-fetch idempotency idiom (§7.1, reusing the exact idiom already shipped in EventStore.claim_idempotency/3), the claim-sandbox/no-try-needed fail-closed path for a claim failure (§7.2), the try/rescue-wrapped fixture-load/replay/release span (§7.3/§7.6), the frozen-clock/seeded-:rand double-run replay algorithm with dot-path stripping and JSON-canonicalized byte comparison (§6/§6.1), fail_closed_counts/1's max(total,1)-never-zero accounting (§7.4), and the unified teardown-precedence-plus-eventing helper (apply_teardown_precedence/7) that implements recordTeardownFailure's CASE rule identically across all three release outcomes (:not_attempted/:ok/{:error,_}) -- a deliberate simplification versus the design's own per-path prose that produces byte-identical behavior on every path I traced (verified empirically, see below), not a silent algorithmic change. §13.1's verbatim moduledoc subsection was inserted into Letflow.Definitions' existing @moduledoc immediately after the activate/2 service_scope_validator subsection (per design's own placement instruction), and §13.2's verbatim text became the function's @doc, both copied near-verbatim (only backtick-to-code-block mechanical adjustments), satisfying AC4/AC6's literal-prose requirement directly. mix compile --warnings-as-errors: clean. mix format --check-formatted: clean. Beyond the required checks, I additionally ran the migration against a real Postgres tenant schema (via Ecto.Migrator.run/4 with a real :prefix, not just the no-op plain-migrate path) and confirmed via information_schema/pg_constraint/pg_indexes that every column, the FK, the CHECK, and both indexes exist exactly as designed, and that Letflow.TenantProvisioning.tenant_scoped_migrations/0 now returns 11 entries with the new one last. I also wrote and ran two throwaway smoke scripts (not committed) against real Postgres + a real Letflow.SandboxPool exercising: a fresh call (passed, real sandbox claimed and released), an idempotent second call (idempotent_hit: true, same run_id, no second sandbox), review_not_found (fake review_id -> FK violation mapped correctly), an empty-payload assertion (failed, correct failing_assertion_ids), a genuinely non-deterministic custom assertion_evaluator (failed via the double-run mismatch path, not the payload-emptiness path), sandbox_unavailable (pool at capacity, max_wait_ms 0 -> fail-closed row with sandbox_id: nil, assertions_failed: 1, status: :failed), and fixture_load_failed (a non-allowlisted table name -> sandbox released, fail-closed row, :fixture_load_failed returned). All seven scenarios behaved exactly as the design specifies. Ran the full existing mix test suite afterward (isolated test-DB partition, dropped before and after): 657 passed (4 properties, 653 tests), same as the pre-existing baseline -- nothing broken.",
+    "artifacts_out": [
+      "priv/repo/migrations/20260818090001_create_promotion_assertion_runs.exs",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/definitions/promotion_assertion_run.ex",
+      "lib/letflow/definitions/promotion_artifact.ex",
+      "lib/letflow/definitions.ex"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "One genuine bug found and fixed during manual verification, not present in the design: my first draft called Repo.get_by(PromotionAssertionRun, tenant_id: ..., idempotency_key: ..., prefix: prefix) as a single trailing keyword list -- Elixir's call sugar merges all three key:value pairs into ONE keyword-list argument when there is no explicit second positional arg, so `prefix` was being treated as a WHERE-clause field (which does not exist on the schema) rather than as the query option, raising Ecto.QueryError. Fixed to the explicit two-argument form `Repo.get_by(PromotionAssertionRun, [tenant_id: ..., idempotency_key: ...], prefix: prefix)`, matching Letflow.EventStore.claim_idempotency/3's own established idiom for the identical case. Caught only because I ran the idempotent-hit path against real Postgres, not from compile/format checks (neither catches it) -- flagging so REVIEWER/SECURITY-REVIEWER know this exact Repo.get_by/get_by-with-prefix call shape was empirically exercised, not merely inspected.",
+        "affected_requirement": "REQ-040"
+      },
+      {
+        "severity": "MINOR",
+        "description": "The design's own §11 OQ-2 (a synthetic \"__infrastructure_failure__\" sentinel id for a zero-assertion-artifact-plus-infrastructure-failure) and OQ-5 (absorbing an event_appender failure on the teardown-failure path) were both implemented literally as specified -- flagged only because both were explicitly marked in the design as this design's own reasoned-but-unconfirmed choices for REVIEWER's attention, not because implementation deviated from them.",
+        "affected_requirement": "REQ-040"
+      },
+      {
+        "severity": "MINOR",
+        "description": "assertion_rerun_error's type union includes one member not present in the design's own §3 literal list: {:error, {:idempotency_lookup_failed, :sidecar_row_missing}}, returned only on the ON-CONFLICT-DO-NOTHING re-fetch finding neither a won row nor an existing row (in practice unreachable, since Postgres's unique-index conflict handling blocks a concurrent inserter until the winning row is visible and committed). This mirrors Letflow.EventStore.claim_idempotency/3's own identical defensive fallback for the same class of case, is documented inline at both the type definition and the call site, and does not change any acceptance-criterion-visible behavior -- flagged as a small, reasoned addition for typing accuracy, not a silent deviation from the design's literal error taxonomy.",
+        "affected_requirement": "REQ-040"
+      },
+      {
+        "severity": "MINOR",
+        "description": "The default assertion_evaluator (design §6, a literal port of R-Co's own placeholder) echoes assertion.payload back as the \"result JSON\" text, but strip_non_deterministic_fields (design §6.1 step f) always JSON-decodes both replay results regardless of whether non_deterministic_fields is empty, matching the design's own \"parse both results as JSON... re-encode to canonical JSON text\" wording read as an unconditional canonicalization step. This means a PromotionArtifact.Assertion whose payload is not valid JSON text will raise Jason.DecodeError, caught by the enclosing try/rescue and surfaced as {:error, {:transaction_failed, exception}} rather than a normal pass/fail outcome. This is consistent with the design's own crash-safety framing (§2, 'exception anywhere in this span') and was not silently patched around -- flagging so TEST-DESIGNER knows PromotionArtifact.Assertion.payload fixtures should be valid JSON text (e.g. Jason.encode!(%{...})) when exercising the non-determinism/pass/fail paths, not arbitrary plain strings.",
+        "affected_requirement": "REQ-040"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ040-20260817",
+      "commit_sha_list": ["ed9dad4"],
+      "remote_branch": "origin/feature/WF02-REQ040-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

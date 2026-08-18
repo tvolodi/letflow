@@ -1,0 +1,82 @@
+{
+  "handoff_id": "5ce74fbb-5ada-4855-be1b-f069ae719a8e",
+  "run_id": "WF02-REQ040-20260817",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ040-20260817/step-02d-reviewer.json",
+  "created_at": "2026-08-18T01:02:24Z",
+  "started_at": "2026-08-18T01:02:24Z",
+  "completed_at": "2026-08-18T01:04:18Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-040"],
+    "related_handoff_ids": [
+      "step-01-code-designer",
+      "step-01-code-designer-rework",
+      "step-01b-code-design-validator-rereview",
+      "step-02a-elixir-dev",
+      "step-02c-security-reviewer"
+    ],
+    "artifacts_in": [
+      "priv/repo/migrations/20260818090001_create_promotion_assertion_runs.exs",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/definitions/promotion_assertion_run.ex",
+      "lib/letflow/definitions/promotion_artifact.ex",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/design/req040-promotion-assertion-rerun.md",
+      "handoffs/WF02-REQ040-20260817/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ040-20260817/step-02c-security-reviewer.json",
+      "docs/migration/decisions/0003-ecto-schema-strategy.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": ["lib/letflow/", "priv/repo/migrations/"]
+  },
+  "task": {
+    "description": "WF-02 Step 2d hard gate on REQ-040 (Promotion assertion re-run orchestration, PRM-06/07) for idiomatic OTP/Elixir usage and migration-decision-record consistency, following SECURITY-REVIEWER's PASS at Step 2c. Independently re-derive the verdict from the diff and the actual shipped code, not from ELIXIR-DEV's or SECURITY-REVIEWER's self-reports.",
+    "acceptance_criteria": [
+      "Idiomatic Elixir/OTP: @spec/@type coverage, pattern-matching style consistent with rollback_definition_version/4, PromotionAssertionRun/PromotionArtifact follow existing schema/plain-struct conventions, no new process where the design's crash-safety decision says none is warranted",
+      "Implementation matches the design doc: migration schema, idempotency mechanism, double-run non-determinism check (not an oracle comparison), fail_closed_counts/1's guarantee, crash-safety try/rescue span",
+      "Design doc §13.1/§13.2's verbatim moduledoc/@doc prose was actually pasted, not paraphrased, satisfying AC4/AC6's literal-wording requirement",
+      "try/rescue span verified structurally correct, not just present",
+      "Migration-decision-record consistency: docs/migration/decisions/0003-ecto-schema-strategy.md's tenant_id-derivation addendum, and the two-halves tenant-scoped-migration contract (guard + manifest entry)",
+      "Scope creep check against git diff main...HEAD --stat"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed git diff main...HEAD (13 files, 2595 insertions / 7 deletions) and read every changed lib/priv file in full, not just ELIXIR-DEV's/SECURITY-REVIEWER's self-reports. Independently re-ran `mix compile --force --warnings-as-errors` (clean, 59 files, no warnings) and `mix format --check-formatted` (clean) rather than trusting the prior handoffs' claims. (1) IDIOMATIC ELIXIR/OTP: apply_promotion_assertion_rerun/6 is pure functional/DB-transactional code with no new process -- correct per the design's own §2.3 reasoning, which I independently re-derived: no arbitration/backpressure need exists for a single non-concurrent replay call (the deciding factor stage-2-event-store-definitions.md's 'Early findings' names for when a process-per-unit-of-work is warranted), so a new supervised process here would be exactly the scope creep this role is asked to flag, and the design correctly declined to build one. Full @spec/@type coverage on the public function (assertion_rerun_status/opts/result/error, assertion_evaluator_fun), matching rollback_definition_version/4's own type-then-@doc-then-@spec-then-def shape exactly; private helpers carry no @spec, consistent with this file's own established convention (most existing private helpers -- do_rollback/6, finish_rollback/8, etc. -- also carry none). Keyword.get(opts,:prefix)/Keyword.fetch!(opts,:event_appender)/`with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do` is byte-for-byte the same idiom rollback_definition_version/4 uses. PromotionAssertionRun (lib/letflow/definitions/promotion_assertion_run.ex) matches PromotionReview's two-changeset split (insert_changeset/2 casts only the four idempotency-anchor fields; update_changeset/2 is the only path to every other field) and InstanceDefinitionSnapshot's no-belongs_to precedent (bare field(:review_id, Ecto.UUID) despite a real FK existing, documented reasoning identical to that precedent's). PromotionArtifact (lib/letflow/definitions/promotion_artifact.ex) matches FixtureLoader.FixtureRow's @enforce_keys+defstruct nested-struct convention exactly, and reuses FixtureLoader.FixtureRow.t() directly for its own `fixtures` field rather than duplicating a field-for-field struct -- confirmed by reading fixture_loader.ex directly (FixtureRow: @enforce_keys [:table_name, :row_json]). (2) MATCHES DESIGN DOC: idempotency (design §7.1) confirmed at claim_or_fetch_assertion_run/5 + fetch_existing_assertion_run/3 -- the insert/on_conflict:nothing/re-fetch-by-id idiom, matching EventStore.claim_idempotency/3's own shape per the design's own citation. The non-determinism check (design §6.1) is confirmed genuinely a double-run self-consistency comparison, NOT an oracle/expected-vs-actual comparison: replay_single_assertion/5 calls assertion_evaluator TWICE (seed_rng/1 reset between calls) and compare_replay_results/4 does a byte-level comparison of the two (stripped, re-encoded) results against each other -- there is no 'expected' value anywhere in the code, matching PromotionArtifact.Assertion's own id/payload-only shape and design §11 OQ-4's own disclosed ambiguity about this reading (correctly left open, not silently resolved). fail_closed_counts/1 (lines 1843-1859) confirmed to implement max(assertions_total,1)-never-zero exactly as designed, with the '__infrastructure_failure__' sentinel for the zero-assertion edge case (§11 OQ-2, correctly flagged not silently decided). (3) VERBATIM MODULEDOC/@DOC CHECK: read the actual shipped text side-by-side against design §13.1/§13.2. The moduledoc's new '## apply_promotion_assertion_rerun/6's gate condition and crash-safety scope (REQ-040)' subsection (definitions.ex:52-77) is a byte-for-byte match of §13.1, including the literal 'assertions_failed == 0' / 'NOT on status == \"passed\"' / 'status = :teardown_failed' language AC4 requires and the full crash-safety disclosure AC6 requires. The @doc block (definitions.ex:755-786) matches §13.2's literal text with one additive paragraph beyond it (a tenant_id/opts-derivation note) -- additive, not a paraphrase substitution; none of §13.2's literal AC4/AC6 wording was dropped or softened. (4) TRY/RESCUE STRUCTURE: confirmed the try in run_replay_span/8 (definitions.ex:1566-1616) wraps fixture-load (Step 3), replay (Step 4, via finish_replay/8), teardown+precedence+eventing (Step 5, via finalize_and_write/10 -> apply_teardown_precedence/7), and the single final UPDATE (Step 6) -- all four are genuinely inside the try body. It deliberately does NOT wrap Step 2's SandboxPool.claim/2 call, which happens one level up in claim_sandbox_and_proceed/8 -- this is not an omission, it is design §7.6's own explicit, reasoned scoping ('NOT wrapping Step 2's claim itself -- a claim failure needs no release'), and is structurally correct: nothing can leak before a sandbox is actually claimed. IMPORTANT CLARIFICATION ON THIS GATE'S OWN TASK BRIEFING: item 4 of my dispatched task described the expected rescue behavior as 'PROMOTION_ASSERTION_TEARDOWN_FAILED event + status = :teardown_failed' -- this does not match what the design specifies or what the code does, and I confirmed the code is the one that's correct. The rescue clause (definitions.ex:1601-1615) calls safe_release/2 (best-effort SandboxPool.release/2) then safe_fail_closed_update/5, which sets status: :failed (never :teardown_failed) via fail_closed_counts/1's conservative accounting, and deliberately does NOT call event_appender at all (inline comment: 'an external call inside an already-degraded, exception-recovery path would add another thing that could itself raise'). This is the correct, idiomatic choice, not a gap: :teardown_failed's green-gate semantics (AC3/AC4, PRM-07 AC2) specifically require that a REAL assertion replay genuinely completed with assertions_failed == 0 and ONLY the release step then failed -- an arbitrary exception mid-span (which can fire before replay even starts, e.g. during fixture load or a Jason.DecodeError) has no such guarantee, so reusing :teardown_failed for it would falsely claim a verified-green outcome for a run that was never actually verified. Fail-closed :failed is the textbook-safe choice here, matching §7.4's own stated philosophy. Also confirmed: the rescued exception neither crashes the caller (returns the typed {:error, {:transaction_failed, exception}}, matching activate/2's/rollback_definition_version/4's own established try/rescue idiom in this same file) nor silently swallows the error (the row is durably written to a fail-closed, gate-safe state). (5) DECISION-RECORD CONSISTENCY: docs/migration/decisions/0003-ecto-schema-strategy.md's 2026-08-17 addendum ('tenant_id derived by the schema being written into ... never accepted as a separate, independently-trusted field') is honored exactly -- apply_promotion_assertion_rerun/6's signature (review_id, plan_digest, artifact, sandbox_pool, max_wait_ms, opts) carries no tenant_id parameter at all; tenant_id comes only from TenantProvisioning.tenant_id_for_schema_name(Keyword.get(opts,:prefix)). Two-halves tenant-scoped-migration contract confirmed both present and correctly ordered: the migration file wraps every create table/index/constraint call in `if prefix() do ... end` with `prefix: prefix()` passed to each (priv/repo/migrations/20260818090001_create_promotion_assertion_runs.exs), and lib/letflow/tenant_provisioning.ex's @tenant_scoped_migration_manifest gained the matching {20_260_818_090_001, CreatePromotionAssertionRuns, filename} entry appended as the 11th (last) tuple after CreatePromotionReviews, with both doc-comment entry counts updated from ten to eleven -- correctly ordered (this migration's timestamp sorts after 20260816200001_create_promotion_reviews.exs, required since it carries a real FK to that table). (6) SCOPE CREEP: git diff main...HEAD --stat shows exactly 13 files, all within REQ-040's declared scope -- the 7 run handoffs, the design doc, the one migration, the two new modules, definitions.ex, and the tenant_provisioning.ex manifest edit. No new submodule, behaviour, macro, HTTP route, or unrequested abstraction; no REQ-030/031/036/037/038/039 file touched beyond the mandated manifest append. No anti-patterns.md entry applies to this diff.",
+    "artifacts_out": ["handoffs/WF02-REQ040-20260817/step-02d-reviewer.json"],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "This gate's own dispatched task briefing (item 4) described the expected try/rescue behavior inaccurately -- it asked me to confirm a rescued exception triggers 'PROMOTION_ASSERTION_TEARDOWN_FAILED event + status = :teardown_failed', but the design (§7.6) and the shipped code both correctly do something different: a rescued exception sets status: :failed via fail-closed accounting and does NOT call event_appender at all, reserving :teardown_failed for the narrower case (design §7.5) where a real replay genuinely completed with assertions_failed == 0 and only the subsequent release step failed. I verified the code against the design doc (the authoritative source) rather than against my own task briefing's assumption, and the code is correct. Flagging so the briefing template/ORCH's own understanding of this span gets corrected at the source, per this run's own 'flag a discrepancy rather than silently reconcile it' discipline.",
+        "affected_requirement": "REQ-040"
+      },
+      {
+        "severity": "MINOR",
+        "description": "assertion_rerun_result (this diff) and rollback_result (REQ-038, already shipped) are both bare %{...} maps rather than typed structs -- at least the second instance of this pattern in lib/letflow/definitions.ex's public API surface. Not a defect (consistent with this file's own established convention, and Elixir has no zero-cost closed-record type to reach for here), but worth watching as this module's public API grows: a Rust/OCaml-style tagged record would catch a typo'd or missing result field at compile time, where a bare map's @type spec is documentation only, not enforcement.",
+        "affected_requirement": "REQ-040"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Re-confirming (not re-litigating) SECURITY-REVIEWER's own two MINOR findings from Step 2c from an idiom angle: claim_sandbox_and_proceed/8's case on SandboxPool.claim/2 only matches {:ok,_} and {:error, reason} when reason in [:sandbox_unavailable, :provision_failed] -- narrower than SandboxPool.claim/2's own published @spec ({:error, term()}). This is idiomatically sound today (it's an exhaustive match against SandboxPool's actual current implementation, and a narrower case is preferable style to a catch-all `_ -> ...` that would silently swallow a future new error atom) but is coupled to a second module's internals rather than its own declared contract -- if SandboxPool.claim/2 is ever extended with a new {:error, _} shape, this call site needs a matching update or it becomes a live CaseClauseError. No action needed now; noting for the same reason SECURITY-REVIEWER did.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ040-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ040-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (Step 3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

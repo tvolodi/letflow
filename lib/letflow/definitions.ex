@@ -49,6 +49,33 @@ defmodule Letflow.Definitions do
   only the injection point** -- the hook's own logic (walking SERVICE_TASK nodes, checking
   tenant/service/plugin scope) is REQ-031's job, not implemented here.
 
+  ## `apply_promotion_assertion_rerun/6`'s gate condition and crash-safety scope (REQ-040)
+
+  The apply pipeline (REQ-037's `mark_review_applied/2` path) gates on this function's
+  recorded `assertions_failed == 0` -- NOT on `status == "passed"`. These are not the same
+  check: a passing assertion replay whose sandbox teardown itself fails is recorded as
+  `status = :teardown_failed` with `assertions_failed` still `0` (the real replay found
+  zero failures; only the *teardown* failed, tracked separately via a
+  `PROMOTION_ASSERTION_TEARDOWN_FAILED` event, never folded into the assertion counts). A
+  `teardown_failed` row is therefore a **green gate** -- a caller that checks
+  `status == :passed` instead of `assertions_failed == 0` will read this outcome
+  backwards and incorrectly block a promotion that should proceed.
+
+  Crash safety: the claim -> load-fixtures -> replay -> release -> record-outcome span is
+  wrapped in a single `try/rescue`. This covers three exit classes -- normal completion,
+  a typed error return from any step, and a raised exception anywhere in that span -- and
+  on all three, `SandboxPool.release/2` is attempted and the `promotion_assertion_runs`
+  row is written with fail-closed accounting (`assertions_failed >= 1`) rather than left
+  stuck at `status = :running`. It does **not** cover a hard process kill
+  (`Process.exit(pid, :kill)`), a BEAM node crash, or `System.halt/0` -- none of these run
+  a `rescue` clause, so a sandbox claimed and a row left `:running` at the moment one of
+  those events fires is neither released nor updated by this function. This residual gap
+  is a disclosed, deferred limitation, not an oversight: the concrete mitigation (a
+  background reaper sweeping stale `:running` rows and orphaned sandbox schemas, mirroring
+  R-Co's `reclaimLeakedSandboxes`) is not built here and is left to a dedicated follow-up
+  requirement -- the same deferral `Letflow.SandboxPool`'s own moduledoc already carries
+  for the analogous owner-crash-detection gap on an already-claimed sandbox.
+
   ## `search/2` -- full-text search over `name`/`description` (REQ-042)
 
   `search/2` (REQ-042) adds definition full-text search over `process_definitions`'
@@ -61,14 +88,20 @@ defmodule Letflow.Definitions do
   """
 
   import Ecto.Query
+  import Bitwise
 
   alias Letflow.Definitions.Graph
   alias Letflow.Definitions.PackUpdateResolution
   alias Letflow.Definitions.ProcessDefinition
+  alias Letflow.Definitions.PromotionArtifact
+  alias Letflow.Definitions.PromotionAssertionRun
   alias Letflow.Definitions.PromotionReview
   alias Letflow.Definitions.PromotionReviewStore
   alias Letflow.Definitions.SolutionPackArtefactBase
   alias Letflow.Repo
+  alias Letflow.SandboxPool
+  alias Letflow.SandboxPool.FixtureLoader
+  alias Letflow.SandboxPool.SandboxClaim
   alias Letflow.TenantProvisioning
 
   @type artefact_key :: %{artefact_type: String.t(), artefact_id: String.t()}
@@ -656,6 +689,152 @@ defmodule Letflow.Definitions do
         do_rollback(process_key, target_version, actor_id, tenant_id, prefix, event_appender)
       else
         {:error, :forbidden}
+      end
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-040 types -- lib/letflow/design/req040-promotion-assertion-rerun.md §3
+  # ---------------------------------------------------------------------------------
+
+  @type assertion_rerun_status :: :passed | :failed | :teardown_failed
+
+  @type assertion_evaluator_fun ::
+          (assertion :: PromotionArtifact.Assertion.t(),
+           injection :: %{frozen_clock_ms: integer(), rng_seed: non_neg_integer()} ->
+             {:ok, result_json :: String.t()} | {:error, term()})
+
+  @type assertion_rerun_opts :: [
+          prefix: String.t(),
+          # REUSED from §0/REQ-038 -- already defined above, not redefined here.
+          event_appender: event_appender_fun(),
+          # Optional; defaults to default_assertion_evaluator/2 when omitted or nil --
+          # a deliberate divergence from the permission_checker/event_appender
+          # no-default precedent (design §3), justified because R-Co's own canonical
+          # implementation ships a working (if placeholder) default.
+          assertion_evaluator: assertion_evaluator_fun() | nil
+        ]
+
+  @type assertion_rerun_result :: %{
+          run_id: Ecto.UUID.t(),
+          status: assertion_rerun_status(),
+          assertions_total: non_neg_integer(),
+          assertions_passed: non_neg_integer(),
+          assertions_failed: non_neg_integer(),
+          failing_assertion_ids: [String.t()],
+          # nil only on the sandbox-claim-failure path (design §7.2).
+          sandbox_id: Ecto.UUID.t() | nil,
+          teardown_error: String.t() | nil,
+          # true iff this call returned a cached row (AC1) and claimed no sandbox.
+          idempotent_hit: boolean(),
+          # true when no teardown failure occurred (nothing to append) OR the append
+          # succeeded; false only when a teardown failure occurred AND
+          # opts[:event_appender] itself also failed (design §7.5).
+          teardown_event_appended: boolean()
+        }
+
+  @type assertion_rerun_error ::
+          {:error, :sandbox_unavailable}
+          | {:error, :provision_failed}
+          | {:error, :fixture_load_failed}
+          # FK violation on review_id, mapped (design §4, §7.1).
+          | {:error, :review_not_found}
+          # Mirrors Letflow.EventStore.claim_idempotency/3's own defensive fallback
+          # for the same class of case (the ON CONFLICT DO NOTHING re-fetch finding
+          # neither "won the insert" nor "an existing row" -- in practice unreachable,
+          # since Postgres's unique-index conflict handling blocks a concurrent
+          # inserter until the winner's row is visible, but typed rather than left an
+          # undeclared crash). Not present in design §3's literal type list -- flagged
+          # in this requirement's own handoff as a small, reasoned addition matching
+          # established precedent, not a silent deviation.
+          | {:error, {:idempotency_lookup_failed, :sidecar_row_missing}}
+          # Unexpected insert_changeset/2 validation failure.
+          | {:error, Ecto.Changeset.t()}
+          | common_error()
+
+  @doc """
+  Ports `src/definition/assertion_rerun.zig`'s `applyPromotionAssertionRerun` (PRM-06/07)
+  -- idempotent assertion replay against an ephemeral REQ-039 sandbox, keyed by
+  `(review_id, plan_digest)`.
+
+  Returns the cached `{:ok, result}` with `idempotent_hit: true` on a second call for the
+  same `(review_id, plan_digest)` pair, claiming no sandbox. On a fresh call: claims a
+  sandbox (`Letflow.SandboxPool.claim/2`), loads only `artifact.fixtures[]` into it
+  (`Letflow.SandboxPool.FixtureLoader.load_fixtures_only/3` -- never organic tenant data),
+  replays each assertion twice under a frozen clock and a seeded, reset-between-runs RNG,
+  and records `status` + `assertions_total`/`assertions_passed`/`assertions_failed` +
+  `failing_assertion_ids` in `promotion_assertion_runs`.
+
+  **Gate condition -- read before wiring this into the apply pipeline:** callers must gate
+  on the returned `assertions_failed == 0`, NOT on `status == :passed`. A
+  `status = :teardown_failed` result with `assertions_failed == 0` is a green gate -- see
+  this module's moduledoc, "`apply_promotion_assertion_rerun/6`'s gate condition and
+  crash-safety scope".
+
+  **Crash safety -- also see this module's moduledoc:** the claim-through-release span is
+  wrapped in `try/rescue`, covering normal completion, typed errors, and raised
+  exceptions. It does NOT cover a hard process kill or a BEAM crash mid-replay -- that
+  residual gap is disclosed, not resolved, and left to a deferred reaper follow-up.
+
+  `tenant_id` is never a separate argument -- derived from `opts[:prefix]`, same as every
+  other function in this module. `opts[:event_appender]` is `Keyword.fetch!/2`'d -- no
+  built-in default, raises `KeyError` if omitted, same no-default stance
+  `rollback_definition_version/4` already established. `opts[:assertion_evaluator]` DOES
+  have a built-in default (`default_assertion_evaluator/2`, design §3/§6) -- a deliberate
+  divergence, since R-Co's own canonical implementation ships a working placeholder rather
+  than having no data path to a real one.
+  """
+  @spec apply_promotion_assertion_rerun(
+          review_id :: Ecto.UUID.t(),
+          plan_digest :: String.t(),
+          artifact :: PromotionArtifact.t(),
+          sandbox_pool :: GenServer.server(),
+          max_wait_ms :: non_neg_integer(),
+          opts :: assertion_rerun_opts()
+        ) :: {:ok, assertion_rerun_result()} | assertion_rerun_error()
+  def apply_promotion_assertion_rerun(
+        review_id,
+        plan_digest,
+        artifact,
+        sandbox_pool,
+        max_wait_ms,
+        opts
+      )
+      when is_binary(review_id) and is_binary(plan_digest) and is_list(opts) and
+             is_integer(max_wait_ms) and max_wait_ms >= 0 do
+    prefix = Keyword.get(opts, :prefix)
+    event_appender = Keyword.fetch!(opts, :event_appender)
+
+    assertion_evaluator =
+      Keyword.get(opts, :assertion_evaluator) || (&default_assertion_evaluator/2)
+
+    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      idempotency_key = build_idempotency_key(review_id, plan_digest)
+
+      case claim_or_fetch_assertion_run(
+             tenant_id,
+             review_id,
+             plan_digest,
+             idempotency_key,
+             prefix
+           ) do
+        {:ok, {:idempotent_hit, run}} ->
+          {:ok, build_result(run, true, true)}
+
+        {:ok, {:claimed, run}} ->
+          claim_sandbox_and_proceed(
+            run,
+            artifact,
+            sandbox_pool,
+            max_wait_ms,
+            tenant_id,
+            prefix,
+            event_appender,
+            assertion_evaluator
+          )
+
+        {:error, _reason} = error ->
+          error
       end
     end
   end
@@ -1254,6 +1433,619 @@ defmodule Letflow.Definitions do
         # this schema (design §0's Rework-1 evidence, §6). Mutate nothing rather than
         # heuristically guess among several candidates.
         nil
+    end
+  end
+
+  # -----------------------------------------------------------------------------------
+  # apply_promotion_assertion_rerun/6 helpers (design §6, §7)
+  # -----------------------------------------------------------------------------------
+
+  # Design §7.1 -- direct port of buildIdempotencyKey (assertion_rerun.zig:120-122).
+  defp build_idempotency_key(review_id, plan_digest) do
+    "promotion_rerun:" <> review_id <> ":" <> plan_digest
+  end
+
+  # Design §7.1 steps 1-3: reuses the exact "attempt an insert with on_conflict:
+  # :nothing, then re-fetch by the client-generated id to disambiguate
+  # real-insert-vs-suppressed" idiom already shipped in
+  # Letflow.EventStore.claim_idempotency/3 and insert_definition/3 above -- not raw
+  # SQL, not a new idiom. status/assertions_*/failing_assertion_ids are never cast
+  # here -- a winning insert starts at its column defaults (:running, 0, []).
+  defp claim_or_fetch_assertion_run(tenant_id, review_id, plan_digest, idempotency_key, prefix) do
+    attrs = %{
+      tenant_id: tenant_id,
+      review_id: review_id,
+      idempotency_key: idempotency_key,
+      plan_digest: plan_digest
+    }
+
+    changeset = PromotionAssertionRun.insert_changeset(%PromotionAssertionRun{}, attrs)
+
+    case Repo.insert(changeset,
+           on_conflict: :nothing,
+           conflict_target: [:tenant_id, :idempotency_key],
+           prefix: prefix
+         ) do
+      {:ok, %PromotionAssertionRun{id: attempted_id}} ->
+        case Repo.get(PromotionAssertionRun, attempted_id, prefix: prefix) do
+          %PromotionAssertionRun{} = won ->
+            # Found -- this call genuinely won the insert (a fresh :running row it
+            # now owns exclusively -- ON CONFLICT DO NOTHING guarantees exactly one
+            # winner for this (tenant_id, idempotency_key) pair).
+            {:ok, {:claimed, won}}
+
+          nil ->
+            fetch_existing_assertion_run(tenant_id, idempotency_key, prefix)
+        end
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        if review_not_found_error?(changeset) do
+          {:error, :review_not_found}
+        else
+          {:error, changeset}
+        end
+    end
+  end
+
+  # Not found (suppressed by the unique-index conflict) -- fetch the real existing
+  # row. No sandbox is claimed on this path (AC1's own literal wording, INV-AR-4).
+  defp fetch_existing_assertion_run(tenant_id, idempotency_key, prefix) do
+    case Repo.get_by(
+           PromotionAssertionRun,
+           [tenant_id: tenant_id, idempotency_key: idempotency_key],
+           prefix: prefix
+         ) do
+      %PromotionAssertionRun{} = existing -> {:ok, {:idempotent_hit, existing}}
+      nil -> {:error, {:idempotency_lookup_failed, :sidecar_row_missing}}
+    end
+  end
+
+  defp review_not_found_error?(%Ecto.Changeset{errors: errors}) do
+    Enum.any?(errors, fn {_field, {_message, opts}} ->
+      Keyword.get(opts, :constraint) == :foreign and
+        Keyword.get(opts, :constraint_name) == "promotion_assertion_runs_review_id_fkey"
+    end)
+  end
+
+  # Design §7.2 -- SandboxPool.claim/2's own shipped implementation only ever
+  # returns these two named error atoms (traced directly, sandbox_pool.ex); no
+  # sandbox was ever claimed on either, so no release is needed or possible --
+  # write a fail-closed final UPDATE directly (no try needed, nothing here can
+  # leak a sandbox), then return the error unchanged (design §7.2, a deliberate
+  # improvement over R-Co's own literal stuck-`running` behavior, §7.4).
+  defp claim_sandbox_and_proceed(
+         run,
+         artifact,
+         sandbox_pool,
+         max_wait_ms,
+         tenant_id,
+         prefix,
+         event_appender,
+         assertion_evaluator
+       ) do
+    case SandboxPool.claim(max_wait_ms, sandbox_pool) do
+      {:ok, %SandboxClaim{} = claim} ->
+        run_replay_span(
+          run,
+          artifact,
+          claim,
+          sandbox_pool,
+          tenant_id,
+          prefix,
+          event_appender,
+          assertion_evaluator
+        )
+
+      {:error, reason} when reason in [:sandbox_unavailable, :provision_failed] ->
+        %{assertions_total: total, assertions_failed: failed, failing_assertion_ids: failing_ids} =
+          fail_closed_counts(artifact)
+
+        _ =
+          finalize_and_write(
+            run,
+            tenant_id,
+            prefix,
+            nil,
+            :not_attempted,
+            total,
+            0,
+            failed,
+            failing_ids,
+            event_appender
+          )
+
+        {:error, reason}
+    end
+  end
+
+  # Design §7.6 -- the try/rescue crash-safety wrapper (§2.3). Wraps Steps 3-6
+  # (fixture load, replay, teardown+precedence+eventing, the final UPDATE) --
+  # NOT Step 2's claim itself (a claim failure needs no release, matching
+  # rollback_definition_version/4's own "try/rescue wraps only the step that can
+  # leak a resource" scoping note).
+  defp run_replay_span(
+         run,
+         artifact,
+         %SandboxClaim{sandbox_id: sandbox_id, schema_name: schema_name},
+         sandbox_pool,
+         tenant_id,
+         prefix,
+         event_appender,
+         assertion_evaluator
+       ) do
+    try do
+      case FixtureLoader.load_fixtures_only(schema_name, artifact.fixtures, []) do
+        :ok ->
+          finish_replay(
+            run,
+            artifact,
+            sandbox_id,
+            sandbox_pool,
+            tenant_id,
+            prefix,
+            event_appender,
+            assertion_evaluator
+          )
+
+        {:error, _reason} ->
+          handle_fixture_load_failure(
+            run,
+            artifact,
+            sandbox_id,
+            sandbox_pool,
+            tenant_id,
+            prefix,
+            event_appender
+          )
+      end
+    rescue
+      exception ->
+        # Best-effort release attempt -- may be redundant if teardown already ran
+        # and succeeded before the exception fired (e.g. the exception originated
+        # in the final UPDATE itself) -- SandboxPool.release/2 on an
+        # already-released sandbox_id returns {:error, :not_found}, itself
+        # swallowed here, matching provision_sandbox/0's own "cleanup, not the
+        # primary error path" stance.
+        safe_release(sandbox_id, sandbox_pool)
+        # Best-effort fail-closed row update -- swallows its OWN failure too (the
+        # DB itself may be unreachable, which is presumably why an exception fired
+        # in the first place).
+        safe_fail_closed_update(run, artifact, sandbox_id, prefix, exception)
+        {:error, {:transaction_failed, exception}}
+    end
+  end
+
+  # Design §7.3 -- fixtures[] failed to load: the sandbox WAS claimed and must be
+  # released. This is a typed return, not a raised exception, so it's handled by
+  # ordinary pattern matching inside run_replay_span/8's own try body (still
+  # covered by that try's rescue if release or the write itself unexpectedly
+  # raises). The underlying FixtureLoader error is deliberately not surfaced
+  # verbatim -- :fixture_load_failed is this function's own, coarser, stable
+  # error tag, matching R-Co's own FixtureLoadFailed collapsing all three
+  # FixtureLoadError variants into one.
+  defp handle_fixture_load_failure(
+         run,
+         artifact,
+         sandbox_id,
+         sandbox_pool,
+         tenant_id,
+         prefix,
+         event_appender
+       ) do
+    release_outcome = SandboxPool.release(sandbox_id, sandbox_pool)
+
+    %{assertions_total: total, assertions_failed: failed, failing_assertion_ids: failing_ids} =
+      fail_closed_counts(artifact)
+
+    _ =
+      finalize_and_write(
+        run,
+        tenant_id,
+        prefix,
+        sandbox_id,
+        release_outcome,
+        total,
+        0,
+        failed,
+        failing_ids,
+        event_appender
+      )
+
+    {:error, :fixture_load_failed}
+  end
+
+  # Design §6/§7.5 -- fixtures loaded successfully: replay every assertion twice
+  # under the frozen-clock/seeded-RNG injection, release the sandbox, then apply
+  # the teardown precedence rule and write the single final UPDATE.
+  defp finish_replay(
+         run,
+         artifact,
+         sandbox_id,
+         sandbox_pool,
+         tenant_id,
+         prefix,
+         event_appender,
+         assertion_evaluator
+       ) do
+    %{
+      assertions_total: total,
+      assertions_passed: passed,
+      assertions_failed: failed,
+      failing_assertion_ids: failing_ids
+    } = replay_assertions(artifact, assertion_evaluator)
+
+    release_outcome = SandboxPool.release(sandbox_id, sandbox_pool)
+
+    finalize_and_write(
+      run,
+      tenant_id,
+      prefix,
+      sandbox_id,
+      release_outcome,
+      total,
+      passed,
+      failed,
+      failing_ids,
+      event_appender
+    )
+  end
+
+  # Design §7.4/§7.5 unified: pre_teardown_status is derived from assertions_failed
+  # the same way on every path (real replay counts, or fail-closed counts on an
+  # infrastructure-failure path -- fail_closed_counts/1 guarantees assertions_failed
+  # is never 0, so pre_teardown_status is always :failed on those paths, which is
+  # exactly design §7.4's own literal "status is set to :failed" rule, derived here
+  # rather than special-cased). release_outcome is one of :not_attempted (no
+  # sandbox was ever claimed, §7.2), :ok, or {:error, reason} -- the single shared
+  # precedence + eventing rule (recordTeardownFailure's own CASE WHEN, §7.5)
+  # handles all three uniformly.
+  defp finalize_and_write(
+         run,
+         tenant_id,
+         prefix,
+         sandbox_id,
+         release_outcome,
+         assertions_total,
+         assertions_passed,
+         assertions_failed,
+         failing_assertion_ids,
+         event_appender
+       ) do
+    pre_teardown_status = if assertions_failed == 0, do: :passed, else: :failed
+
+    {final_status, teardown_error, teardown_event_appended} =
+      apply_teardown_precedence(
+        run,
+        tenant_id,
+        sandbox_id,
+        prefix,
+        pre_teardown_status,
+        release_outcome,
+        event_appender
+      )
+
+    attrs = %{
+      status: final_status,
+      sandbox_id: sandbox_id,
+      assertions_total: assertions_total,
+      assertions_passed: assertions_passed,
+      assertions_failed: assertions_failed,
+      failing_assertion_ids: failing_assertion_ids,
+      teardown_error: teardown_error,
+      completed_at: DateTime.utc_now() |> DateTime.truncate(:microsecond)
+    }
+
+    case run |> PromotionAssertionRun.update_changeset(attrs) |> Repo.update(prefix: prefix) do
+      {:ok, %PromotionAssertionRun{} = updated_run} ->
+        {:ok, build_result(updated_run, false, teardown_event_appended)}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  # No sandbox was ever claimed (§7.2) -- nothing to release, nothing to append.
+  defp apply_teardown_precedence(
+         _run,
+         _tenant_id,
+         _sandbox_id,
+         _prefix,
+         pre_teardown_status,
+         :not_attempted,
+         _event_appender
+       ) do
+    {pre_teardown_status, nil, true}
+  end
+
+  # Teardown succeeded -- final_status is exactly the pre-teardown status, nothing
+  # to append (design §7.5's :ok branch).
+  defp apply_teardown_precedence(
+         _run,
+         _tenant_id,
+         _sandbox_id,
+         _prefix,
+         pre_teardown_status,
+         :ok,
+         _event_appender
+       ) do
+    {pre_teardown_status, nil, true}
+  end
+
+  # Teardown (release) failed -- the recordTeardownFailure precedence rule
+  # (assertion_rerun.zig:620-631, quoted in design §0/§7.5): a teardown failure
+  # never demotes an already-failed run, and only ever demotes a passed run into
+  # :teardown_failed (PRM-07 AC2's green-gate case, INV-AR-6). The
+  # PROMOTION_ASSERTION_TEARDOWN_FAILED event is appended exactly once, regardless
+  # of which branch pre_teardown_status took (design §7.5) -- INV-AR-8: a failure
+  # here never alters final_status/assertions_failed, only teardown_event_appended.
+  defp apply_teardown_precedence(
+         run,
+         tenant_id,
+         sandbox_id,
+         prefix,
+         pre_teardown_status,
+         {:error, release_reason},
+         event_appender
+       ) do
+    final_status = if pre_teardown_status == :failed, do: :failed, else: :teardown_failed
+    teardown_error = describe_release_failure(release_reason)
+
+    teardown_event_appended =
+      append_teardown_failure_event(
+        event_appender,
+        run,
+        sandbox_id,
+        tenant_id,
+        prefix,
+        teardown_error
+      )
+
+    {final_status, teardown_error, teardown_event_appended}
+  end
+
+  defp describe_release_failure(release_reason) do
+    "sandbox release failed: " <> to_string(release_reason)
+  end
+
+  defp append_teardown_failure_event(
+         event_appender,
+         run,
+         sandbox_id,
+         tenant_id,
+         prefix,
+         teardown_error
+       ) do
+    event_attrs = %{
+      event_type: "PROMOTION_ASSERTION_TEARDOWN_FAILED",
+      run_id: run.id,
+      sandbox_id: sandbox_id,
+      tenant_id: tenant_id,
+      error: teardown_error
+    }
+
+    case event_appender.(event_attrs, prefix) do
+      {:ok, _} -> true
+      # Absorbed, never propagated as this function's own error (design §7.5,
+      # INV-AR-8) -- the same "don't let a side-effect's own failure corrupt an
+      # already-computed, already-durable-once-written outcome" resolution
+      # finish_rollback/8's own OQ-6 already established for an analogous tension.
+      {:error, _reason} -> false
+    end
+  end
+
+  # Design §7.4 -- a deliberate, disclosed improvement over R-Co's own traced
+  # behavior (which leaves a claim/fixture-load-failure row stuck at :running
+  # forever, so a naive future reader checking assertions_failed == 0 without also
+  # checking status would misread an infrastructure failure as a green gate).
+  # Every assertion is conservatively treated as failed; max(assertions_total, 1)
+  # guarantees assertions_failed is never 0 even for a zero-assertion artifact
+  # (INV-AR-7).
+  defp fail_closed_counts(%PromotionArtifact{assertions: assertions}) do
+    assertions_total = length(assertions)
+    assertions_failed = max(assertions_total, 1)
+
+    failing_assertion_ids =
+      if assertions_total > 0 do
+        Enum.map(assertions, & &1.id)
+      else
+        ["__infrastructure_failure__"]
+      end
+
+    %{
+      assertions_total: assertions_total,
+      assertions_failed: assertions_failed,
+      failing_assertion_ids: failing_assertion_ids
+    }
+  end
+
+  # Best-effort release attempt for the rescue clause only (run_replay_span/8) --
+  # swallows any exception SandboxPool.release/2 itself might raise, since this
+  # runs OUTSIDE the try that would otherwise catch it. Its return value is
+  # deliberately discarded by the caller (best-effort, not the primary error path).
+  defp safe_release(sandbox_id, sandbox_pool) do
+    SandboxPool.release(sandbox_id, sandbox_pool)
+  rescue
+    _exception -> {:error, :release_failed}
+  end
+
+  # Best-effort fail-closed row update for the rescue clause only -- swallows its
+  # own failure too (design §7.6: "the DB itself may be unreachable, which is
+  # presumably why an exception fired in the first place"). Does not attempt to
+  # call event_appender -- an external call inside an already-degraded,
+  # exception-recovery path would add another thing that could itself raise.
+  defp safe_fail_closed_update(run, artifact, sandbox_id, prefix, exception) do
+    %{assertions_total: total, assertions_failed: failed, failing_assertion_ids: failing_ids} =
+      fail_closed_counts(artifact)
+
+    attrs = %{
+      status: :failed,
+      sandbox_id: sandbox_id,
+      assertions_total: total,
+      assertions_passed: 0,
+      assertions_failed: failed,
+      failing_assertion_ids: failing_ids,
+      teardown_error: "assertion rerun crashed: " <> Exception.message(exception),
+      completed_at: DateTime.utc_now() |> DateTime.truncate(:microsecond)
+    }
+
+    run
+    |> PromotionAssertionRun.update_changeset(attrs)
+    |> Repo.update(prefix: prefix)
+
+    :ok
+  rescue
+    _exception -> :ok
+  end
+
+  defp build_result(%PromotionAssertionRun{} = run, idempotent_hit, teardown_event_appended) do
+    %{
+      run_id: run.id,
+      status: run.status,
+      assertions_total: run.assertions_total,
+      assertions_passed: run.assertions_passed,
+      assertions_failed: run.assertions_failed,
+      failing_assertion_ids: run.failing_assertion_ids,
+      sandbox_id: run.sandbox_id,
+      teardown_error: run.teardown_error,
+      idempotent_hit: idempotent_hit,
+      teardown_event_appended: teardown_event_appended
+    }
+  end
+
+  # Design §6 -- frozen_clock_ms is derived once per call (not per assertion, not
+  # per replay-run), as the upper 32 bits of rng_seed treated as Unix epoch-seconds
+  # multiplied to milliseconds (prm-batch1's FrozenClockProvider note, R-Co's own
+  # Open question 1, restated in this design's §11 OQ-3 -- not resolved here).
+  defp frozen_clock_ms(rng_seed) do
+    (rng_seed >>> 32) * 1000
+  end
+
+  # Design §6.1 -- ports replayAssertions faithfully: for each assertion, in order,
+  # run the evaluator twice under the same reset RNG seed, strip
+  # non_deterministic_fields from both results, and byte-compare.
+  defp replay_assertions(%PromotionArtifact{} = artifact, assertion_evaluator) do
+    frozen_clock_ms = frozen_clock_ms(artifact.rng_seed)
+    injection = %{frozen_clock_ms: frozen_clock_ms, rng_seed: artifact.rng_seed}
+
+    {passed, failed, failing_ids_rev} =
+      Enum.reduce(artifact.assertions, {0, 0, []}, fn assertion, {passed, failed, failing_ids} ->
+        case replay_single_assertion(
+               assertion,
+               injection,
+               artifact.rng_seed,
+               artifact.non_deterministic_fields,
+               assertion_evaluator
+             ) do
+          :passed -> {passed + 1, failed, failing_ids}
+          :failed -> {passed, failed + 1, [assertion.id | failing_ids]}
+        end
+      end)
+
+    %{
+      assertions_total: length(artifact.assertions),
+      assertions_passed: passed,
+      assertions_failed: failed,
+      failing_assertion_ids: Enum.reverse(failing_ids_rev)
+    }
+  end
+
+  # Design §6.1 steps a-e: :rand.seed/2 immediately before each of the two replay
+  # passes (matching Zig's own prng reset before each of its two runs) -- process-
+  # scoped Erlang/OTP state, so concurrent calls never interfere with each other's
+  # RNG state. Either evaluator call returning {:error, _} counts this assertion as
+  # failed (fail-closed) -- an evaluator that cannot produce a result is not
+  # silently treated as a pass.
+  defp replay_single_assertion(
+         assertion,
+         injection,
+         rng_seed,
+         non_deterministic_fields,
+         assertion_evaluator
+       ) do
+    seed_rng(rng_seed)
+    result1 = assertion_evaluator.(assertion, injection)
+
+    seed_rng(rng_seed)
+    result2 = assertion_evaluator.(assertion, injection)
+
+    with {:ok, result1_json} <- result1,
+         {:ok, result2_json} <- result2 do
+      compare_replay_results(assertion, result1_json, result2_json, non_deterministic_fields)
+    else
+      _ -> :failed
+    end
+  end
+
+  # Splits the 64-bit rng_seed into :exsss's expected 3-integer tuple, matching
+  # Zig's own std.Random.DefaultPrng.init(artifact.rng_seed) reset before each run
+  # (design §6).
+  defp seed_rng(rng_seed) do
+    :rand.seed(:exsss, {band(rng_seed, 0xFFFFFFFF), rng_seed >>> 32, 0})
+  end
+
+  # Design §6.1 steps f-h: strip non_deterministic_fields from both results, then
+  # byte-compare the re-encoded canonical JSON text (Jason.encode!/1 on Elixir maps
+  # of identical content always iterates in the same order, so this comparison is
+  # equivalent to Zig's own std.mem.eql(u8, ...) on the stripped, re-encoded text --
+  # arguably more robust than a literal text diff, since it is insensitive to the
+  # two results' original key ordering). A mismatch means this assertion is
+  # non-deterministic (AC3's own idempotency check); on a match, assertion.payload's
+  # own emptiness decides pass/fail (R-Co's own placeholder rule).
+  defp compare_replay_results(assertion, result1_json, result2_json, non_deterministic_fields) do
+    stripped1 = strip_non_deterministic_fields(result1_json, non_deterministic_fields)
+    stripped2 = strip_non_deterministic_fields(result2_json, non_deterministic_fields)
+
+    cond do
+      stripped1 != stripped2 -> :failed
+      byte_size(assertion.payload) == 0 -> :failed
+      true -> :passed
+    end
+  end
+
+  # Design §6.1 step f -- a direct port of stripDotPath's recursive
+  # descend-then-remove-leaf-key algorithm (assertion_rerun.zig:589-601): parse as
+  # JSON, for each dot-path descend into nested objects by "."-separated segments
+  # and remove the final segment's key if present, re-encode to canonical JSON
+  # text. A Jason.DecodeError here (result_json not valid JSON text) propagates as
+  # a raised exception, caught by run_replay_span/8's own enclosing try/rescue --
+  # this function does not swallow it, matching design §2's "exception anywhere in
+  # this span" framing.
+  defp strip_non_deterministic_fields(json_text, dot_paths) do
+    decoded = Jason.decode!(json_text)
+
+    stripped =
+      Enum.reduce(dot_paths, decoded, fn dot_path, acc ->
+        strip_dot_path(acc, String.split(dot_path, "."))
+      end)
+
+    Jason.encode!(stripped)
+  end
+
+  # A path that doesn't exist (missing key, or descends into a non-map value) is
+  # silently skipped -- matches Zig's own stripDotPath exactly.
+  defp strip_dot_path(value, [last_segment]) when is_map(value) do
+    Map.delete(value, last_segment)
+  end
+
+  defp strip_dot_path(value, [segment | rest]) when is_map(value) do
+    case Map.fetch(value, segment) do
+      {:ok, nested} -> Map.put(value, segment, strip_dot_path(nested, rest))
+      :error -> value
+    end
+  end
+
+  defp strip_dot_path(value, _segments), do: value
+
+  # Design §6.1 -- default assertion_evaluator when opts[:assertion_evaluator] is
+  # omitted or nil: a direct, literal port of R-Co's own placeholder
+  # (assertion_rerun.zig:500-501, 513-514), not a richer "real" evaluator this
+  # codebase has no engine to justify. frozen_clock_ms/rng_seed are accepted but
+  # unused, exactly as Zig's own placeholder computes and discards them.
+  defp default_assertion_evaluator(%PromotionArtifact.Assertion{payload: payload}, _injection) do
+    if byte_size(payload) > 0 do
+      {:ok, payload}
+    else
+      {:ok, "{}"}
     end
   end
 end

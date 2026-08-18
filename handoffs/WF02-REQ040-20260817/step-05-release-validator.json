@@ -1,0 +1,76 @@
+{
+  "handoff_id": "step-05-release-validator",
+  "run_id": "WF02-REQ040-20260817",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ040-20260817/step-05-release-validator.json",
+  "created_at": "2026-08-18T01:56:03Z",
+  "started_at": "2026-08-18T01:56:03Z",
+  "completed_at": "2026-08-18T02:15:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-040"],
+    "related_handoff_ids": [
+      "step-00-git-setup",
+      "step-01-code-designer",
+      "step-01b-code-design-validator",
+      "step-01-code-designer-rework",
+      "step-01b-code-design-validator-rereview",
+      "step-02a-elixir-dev",
+      "step-02c-security-reviewer",
+      "step-02d-reviewer",
+      "step-03-test-designer",
+      "step-03b-test-design-validator",
+      "step-04-test-runner"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "lib/letflow/design/req040-promotion-assertion-rerun.md",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/definitions/promotion_assertion_run.ex",
+      "lib/letflow/definitions/promotion_artifact.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "priv/repo/migrations/20260818090001_create_promotion_assertion_runs.exs",
+      "test/letflow/definitions/promotion_assertion_rerun_test.exs",
+      "test/letflow/definitions_test.exs",
+      "docs/migration/decisions/0003-ecto-schema-strategy.md",
+      "handoffs/WF02-REQ040-20260817/step-00-git-setup.json through step-04-test-runner.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 5 independent re-verification of REQ-040 (Promotion assertion re-run orchestration, PRM-06/07) before DOC-UPDATER flips status. Re-run the full suite independently, re-check all 6 acceptance criteria against actual shipped code (not TEST-RUNNER's report), re-verify the prefix bug fix and the moduledoc text byte-for-byte, re-read the try/rescue crash-safety span and fail_closed_counts/1, confirm requirement_status.yaml/requirements.yaml staleness, sanity-check the full gate sequence, and check for scope creep.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors clean and mix test shows 673 passed (4 properties, 669 tests), 0 failures, independently run",
+      "All 6 of REQ-040's acceptance criteria checked explicitly against actual code/tests with line citations",
+      "Repo.get_by prefix bug fix re-verified as the correct explicit two-arg form",
+      "Moduledoc/@doc text verified byte-for-byte against design doc §13.1/§13.2",
+      "try/rescue span and fail_closed_counts/1 re-read and confirmed to fail-close (never silent green, never stuck :running)",
+      "docs/status/requirement_status.yaml and docs/requirements.yaml checked for staleness",
+      "Full gate sequence (step-00 through step-04, including 01b FAIL->rework->PASS) sanity-checked",
+      "git diff main...HEAD --stat checked for scope creep"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified REQ-040 is genuinely done; all 8 checks pass. (1) FRESH TEST RUN: ran `mix compile --force --warnings-as-errors` myself -- clean, exit 0, 59 files, zero warnings. Ran `mix test` (full suite, unpinned) myself from a clean shell -- 'Result: 673 passed (4 properties, 669 tests)', exit 0; grepped the full raw log for failure/error markers (excluding expected test-data strings like 'assertions_failed'/':failed]'/'teardown_failed') and found zero genuine failures, zero 'Failures:' header. Matches TEST-RUNNER's step-04 claim exactly, not merely inferred from absence of a failures line -- I checked the exit code and grepped explicitly. (2) ALL 6 ACs RE-CHECKED AGAINST CODE: AC1 (idempotency, no second sandbox) -- lib/letflow/definitions.ex:821-822, the `{:ok, {:idempotent_hit, run}} -> {:ok, build_result(run, true, true)}` branch returns without ever calling claim_sandbox_and_proceed/8; verified by reading apply_promotion_assertion_rerun/6's full body (lines 795-840). AC2 (fixtures-only) -- definitions.ex:1577, `FixtureLoader.load_fixtures_only(schema_name, artifact.fixtures, [])` -- only the artifact's own fixtures field is passed, no broader tenant dataset. AC3 (failed vs teardown_failed) -- definitions.ex:1714 (`pre_teardown_status = if assertions_failed == 0, do: :passed, else: :failed`) and apply_teardown_precedence/7's three clauses (1748-1804): a release failure on a :failed pre-status stays :failed (line 1790, never promoted); a release failure on a :passed pre-status becomes :teardown_failed with assertions_failed left untouched at 0. AC4 (moduledoc gate-condition text) -- read lib/letflow/definitions.ex:52-77 directly and diffed by eye against lib/letflow/design/req040-promotion-assertion-rerun.md:922-949 (design §13.1): byte-for-byte identical, including the literal 'assertions_failed == 0 -- NOT on `status == \"passed\"`' phrasing and the teardown_failed green-gate example. AC5 (teardown-failure event, no green-to-failed flip) -- definitions.ex:1793-1801 appends PROMOTION_ASSERTION_TEARDOWN_FAILED via event_appender exactly once on the {:error, release_reason} branch; confirmed a passing run's outcome only ever moves to :teardown_failed (never :failed) via the same apply_teardown_precedence/7 clause already cited for AC3. AC6 (crash-safety open question in moduledoc) -- same definitions.ex:64-77 / design §13.1 block, byte-for-byte match, names what try/rescue covers/does not cover and the deferred-reaper mitigation. Also diffed @doc (definitions.ex:755-777) against design §13.2 (lines 954-976): byte-for-byte identical, with one additive, non-contradicting paragraph (779-785) about tenant_id/opts derivation, matching REVIEWER's own finding. (3) PREFIX BUG RE-VERIFIED: read fetch_existing_assertion_run/3 directly (definitions.ex:1492-1501) -- `Repo.get_by(PromotionAssertionRun, [tenant_id: tenant_id, idempotency_key: idempotency_key], prefix: prefix)`, the explicit two-argument clause form (field keyword list, then a separate opts keyword list) -- prefix is a genuine query option, not merged into the WHERE clause. Confirmed this is the only Repo.get_by call site in the diff. (4) MODULEDOC TEXT: covered under (2) above -- verified byte-for-byte, not paraphrased; also spot-checked the migration file's own header comment (priv/repo/migrations/20260818090001_create_promotion_assertion_runs.exs:22-29), which independently restates the same 'assertions_failed == 0, NOT status == passed' framing consistently. (5) TRY/RESCUE + fail_closed_counts/1: read run_replay_span/8 (definitions.ex:1566-1616) -- the try wraps fixture-load through finish_replay (replay+release+finalize_and_write); the rescue clause calls safe_release/2 (best-effort) then safe_fail_closed_update/5 (definitions.ex:1876-1898), which sets `status: :failed`, `assertions_failed: failed` from fail_closed_counts/1 (definitions.ex:1843-1859, `max(assertions_total, 1)` -- never 0, with a `__infrastructure_failure__` sentinel id for a zero-assertion artifact) and writes a durable UPDATE (itself wrapped in its own local rescue that swallows only its OWN failure, still returning :ok so the outer rescue clause's flow is not disrupted). Confirmed: a rescued exception can never produce a silent green (assertions_failed is always >= 1 on that path) and never leaves the row stuck at :running (the UPDATE, best-effort, always fires). Also independently confirmed (via claim_sandbox_and_proceed/8 and handle_fixture_load_failure/7, lines 1516-1655) that the two other infrastructure-failure paths -- sandbox-claim failure and fixture-load failure -- both also route through fail_closed_counts/1, matching the design's own disclosed R-Co-improvement claim. (6) STALENESS CHECK: docs/requirements.yaml:1878 still reads `status: pending` for REQ-040 (not yet flipped -- correct, DOC-UPDATER Step 6 has not run). Grepped docs/status/requirement_status.yaml for REQ-040: only one hit, an unrelated impl_order bookkeeping note ('REQ-038=55, REQ-040=56...'), no premature 'started'/'done' event for REQ-040 -- both files are exactly as stale as expected at this point in the pipeline, no drift. (7) GATE SEQUENCE SANITY: read all 11 handoff files in handoffs/WF02-REQ040-20260817/ directly (step-00 through step-04, including both step-01b files and the step-01 rework). All show status: COMPLETED. result.status is PASS on every one except step-01b-code-design-validator.json, which correctly shows FAIL with a single well-reasoned BLOCKER (AC4/AC6 moduledoc text deferred to ELIXIR-DEV's synthesis instead of specified verbatim in the design) -- followed immediately by step-01-code-designer-rework.json (PASS, rework_count 1, adds design §13 verbatim text) and step-01b-code-design-validator-rereview.json (PASS, independently re-verifies the new §13 text against source and confirms nothing else in the design silently changed via a direct commit diff, 6186561..3b084bf, one hunk). This is a genuine rework cycle, not a rubber-stamp: the rereview traced the actual diff, not the rework's self-report. step-02c (SECURITY-REVIEWER) and step-02d (REVIEWER) both independently re-verified the self-reported Repo.get_by/prefix bug fix by reading the current code rather than trusting ELIXIR-DEV's handoff -- confirmed by reading their handoffs' own text, which cites the exact call-site line and form. step-03b (TEST-DESIGN-VALIDATOR) performed real mutation testing (disabled the double-run mismatch branch -> exactly 1 test failed; removed the rescue clause -> exactly 1 test failed, both reverted with a confirmed zero-diff git status) -- read directly, not summarized secondhand. (8) SCOPE CHECK: `git diff main...HEAD --stat` (run myself) shows 21 files: 11 handoff JSONs, the design doc, lib/letflow/definitions.ex, the two new modules (promotion_assertion_run.ex, promotion_artifact.ex), tenant_provisioning.ex (the 20-line manifest-registration diff, independently read and confirmed to be exactly the REQ-040 entry plus its two doc-comment count updates -- no unrelated change), the one new migration, the two test files, the test report, and test/specs/REQ-040.md. No file outside REQ-040's declared scope was touched; no REQ-030/031/035/036/037/038/039 file was modified beyond the mandated manifest append. Also independently confirmed docs/migration/decisions/0003-ecto-schema-strategy.md's 2026-08-17 addendum ('tenant_id derived by the schema being written into... never accepted as a separate, independently-trusted field') is honored: apply_promotion_assertion_rerun/6's signature carries no tenant_id parameter; tenant_id comes only from `TenantProvisioning.tenant_id_for_schema_name(Keyword.get(opts, :prefix))` (definitions.ex:805,811) -- no decision record is contradicted by this diff. This is not a WF-04 stage-gate run, so no docs/migration/stage-N-*.md REVIEWER sign-off section applies here.",
+    "artifacts_out": ["handoffs/WF02-REQ040-20260817/step-05-release-validator.json"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ040-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ040-20260817",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER (Step 6)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,46 @@
+{
+  "handoff_id": "step-00-orch-self",
+  "run_id": "WF02-REQ040-20260817",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ040-20260817/step-00-git-setup.json",
+  "created_at": "2026-08-17T23:49:59Z",
+  "started_at": "2026-08-17T23:49:59Z",
+  "completed_at": "2026-08-17T23:53:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-040"],
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": ["lib/letflow/definitions", "priv/repo/migrations"]
+  },
+  "task": {
+    "description": "Git setup for REQ-040 (Promotion assertion re-run orchestration, assertion_rerun.zig, PRM-06/07). Claimed letflow-queue task 56 (agent_id tvolodi-orch), depends_on REQ-039/REQ-037 (both done). Branch, verify baseline, push.",
+    "acceptance_criteria": [
+      "Branch feature/WF02-REQ040-20260817 created from main",
+      "Baseline mix compile --warnings-as-errors and mix test pass",
+      "Branch pushed to origin"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Claimed queue task 56 (REQ-040, depends_on: [42, 54] = REQ-039 and REQ-037, both done). Branched feature/WF02-REQ040-20260817 from main (f175fda, tip after ISS-0041's own bookkeeping close-out). Baseline: mix compile --warnings-as-errors clean, mix test 657/657 (4 properties, 653 tests). Pushed to origin. This requirement's own text explicitly flags an open question for CODE-DESIGNER (concrete crash-safety/guaranteed-teardown mechanism -- the requirement mandates the CONTRACT, not the mechanism) and points at two prior precedents to weigh: (1) docs/migration/stage-2-event-store-definitions.md's 'Early findings' section on process-per-instance vs. row-based state, listing 'ownership of an OS-level resource with no natural row representation' as a factor favoring a process; (2) REQ-039's own already-shipped resolution (lib/letflow/design/req039-sandbox-pool-fixture-loader.md), a singleton supervised GenServer that monitors each claiming caller's pid so a caller crash auto-releases its sandbox claim -- a live, working crash-safety precedent in this exact codebase for a conceptually adjacent problem (sandbox lifecycle vs. this requirement's assertion-run/teardown lifecycle). R-Co source confirmed present at c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\definition\\assertion_rerun.zig for CODE-DESIGNER to port against; its own header explicitly states teardown runs through a single defer covering every exit path 'including panic unwind', which Elixir has no exact equivalent for (try/after covers normal + raised-exception exits only, not a hard process kill). Routing to CODE-DESIGNER for Step 1.",
+    "artifacts_out": ["handoffs/WF02-REQ040-20260817/step-00-git-setup.json"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ040-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ040-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER for Step 1"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

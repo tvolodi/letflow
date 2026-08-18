@@ -1875,7 +1875,7 @@ requirements:
   - id: REQ-040
     title: Promotion assertion re-run orchestration (assertion_rerun.zig, PRM-06/07 + promotion_assertion_runs schema)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S2
     impl_order: 56  # letflow-queue task id
     description: >

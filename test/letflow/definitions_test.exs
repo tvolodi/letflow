@@ -254,4 +254,77 @@ defmodule Letflow.DefinitionsTest do
              "moduledoc does not state the query runs against process_definitions exactly as REQ-027 shipped it"
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-040 acceptance criterion 4: "the moduledoc explicitly states the apply
+  # pipeline gate condition is assertions_failed == 0, not status == passed, citing
+  # the teardown_failed green-gate case." A pure doc-content assertion, no database
+  # needed -- the behavioral half of REQ-040 (idempotency, sandbox isolation, the
+  # distinct :failed/:teardown_failed outcomes, the try/rescue span) lives in
+  # test/letflow/definitions/promotion_assertion_rerun_test.exs, which uses
+  # Letflow.DataCase. See test/specs/REQ-040.md for the full rationale.
+  # ---------------------------------------------------------------------------------
+
+  describe "moduledoc -- AC4: apply_promotion_assertion_rerun/6's gate condition is assertions_failed == 0, not status == passed (REQ-040)" do
+    test "states the gate condition literally as assertions_failed == 0, NOT status == \"passed\"" do
+      doc = normalized_moduledoc(Definitions)
+
+      assert doc =~ "`assertions_failed == 0` -- NOT on `status == \"passed\"`",
+             "moduledoc does not state the gate condition literally as assertions_failed == 0, NOT status == \"passed\""
+    end
+
+    test "states the teardown_failed green-gate case explicitly, with assertions_failed remaining 0" do
+      doc = normalized_moduledoc(Definitions)
+
+      assert doc =~
+               "`status = :teardown_failed` with `assertions_failed` still `0`",
+             "moduledoc does not state the teardown_failed outcome with assertions_failed remaining 0"
+
+      assert doc =~ "`teardown_failed` row is therefore a **green gate**",
+             "moduledoc does not call a teardown_failed row a green gate explicitly"
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-040 acceptance criterion 6: "the moduledoc names the crash-safety/
+  # guaranteed-teardown open question explicitly, per this requirement's description
+  # and stage-2-event-store-definitions.md's Early findings." A pure doc-content
+  # assertion, no database needed.
+  # ---------------------------------------------------------------------------------
+
+  describe "moduledoc -- AC6: crash-safety/guaranteed-teardown open question is named explicitly (REQ-040)" do
+    test "states the try/rescue wraps the claim-through-record-outcome span and names the three exit classes it covers" do
+      doc = normalized_moduledoc(Definitions)
+
+      assert doc =~ "wrapped in a single `try/rescue`",
+             "moduledoc does not state the claim-through-record-outcome span is wrapped in try/rescue"
+
+      assert doc =~
+               "normal completion, a typed error return from any step, and a raised exception",
+             "moduledoc does not name the three exit classes the try/rescue covers"
+
+      assert doc =~
+               "fail-closed accounting (`assertions_failed >= 1`) rather than left stuck at `status = :running`",
+             "moduledoc does not state the fail-closed-accounting-instead-of-stuck-running guarantee"
+    end
+
+    test "explicitly discloses the residual gap: a hard process kill, a BEAM node crash, and System.halt/0 are NOT covered" do
+      doc = normalized_moduledoc(Definitions)
+
+      assert doc =~ "does **not** cover a hard process kill",
+             "moduledoc does not disclose that a hard process kill is not covered"
+
+      assert doc =~ "`Process.exit(pid, :kill)`",
+             "moduledoc does not name Process.exit(pid, :kill) explicitly"
+
+      assert doc =~ "BEAM node crash",
+             "moduledoc does not name a BEAM node crash explicitly"
+
+      assert doc =~ "`System.halt/0`",
+             "moduledoc does not name System.halt/0 explicitly"
+
+      assert doc =~ "disclosed, deferred limitation, not an oversight",
+             "moduledoc does not frame the residual gap as a disclosed, deferred limitation"
+    end
+  end
 end

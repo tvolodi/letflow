@@ -1,0 +1,82 @@
+{
+  "handoff_id": "step-01-code-designer",
+  "run_id": "WF02-REQ040-20260817",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ040-20260817/step-01-code-designer.json",
+  "created_at": "2026-08-18T00:07:22Z",
+  "started_at": "2026-08-18T00:07:22Z",
+  "completed_at": "2026-08-18T00:08:21Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-040"],
+    "related_handoff_ids": ["step-00-git-setup"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "handoffs/WF02-REQ040-20260817/step-00-git-setup.json",
+      "C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\definition\\assertion_rerun.zig",
+      "C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\design\\prm-batch1-promotion-assertion-rerun.md",
+      "lib/letflow/sandbox_pool.ex",
+      "lib/letflow/sandbox_pool/fixture_loader.ex",
+      "lib/letflow/design/req039-sandbox-pool-fixture-loader.md",
+      "lib/letflow/design/req038-promotion-rollback.md",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/definitions/promotion_review_store.ex",
+      "lib/letflow/definitions/promotion_review.ex",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "priv/repo/migrations/20260816200001_create_promotion_reviews.exs",
+      "priv/repo/migrations/20260816193002_create_instance_definition_snapshots.exs",
+      "docs/migration/stage-2-event-store-definitions.md",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": ["lib/letflow/definitions", "priv/repo/migrations"]
+  },
+  "task": {
+    "description": "WF-02 Step 1 (CODE-DESIGNER) for REQ-040: design Letflow.Definitions.apply_promotion_assertion_rerun/6 (port of R-Co's src/definition/assertion_rerun.zig, PRM-06/PRM-07), the promotion_assertion_runs migration (schema-per-tenant, FK to promotion_reviews), the idempotency/sandbox-claim/fixture-load/replay/teardown algorithm, and -- the core deliverable -- an investigated (not guessed) resolution of the crash-safety/guaranteed-teardown open question, explicitly weighing REQ-039's already-shipped SandboxPool crash-safety mechanism against a from-scratch supervised-process alternative before deciding.",
+    "acceptance_criteria": [
+      "calling apply_promotion_assertion_rerun/6 twice with the same (review_id, plan_digest) returns the cached outcome on the second call and claims no second sandbox, verified by sandbox claim count",
+      "a sandbox loaded via REQ-039 receives ONLY the artifact's fixtures[] rows, demonstrated by confirming no pre-existing tenant data appears in the sandbox schema",
+      "an assertion replay that fails records status = failed with a non-empty failing_assertion_ids list; a passing replay whose teardown itself fails records status = teardown_failed with assertions_failed = 0 -- both distinct outcomes tested explicitly",
+      "the moduledoc explicitly states the apply pipeline gate condition is assertions_failed == 0, not status == passed, citing the teardown_failed green-gate case",
+      "a simulated teardown failure appends a PROMOTION_ASSERTION_TEARDOWN_FAILED event via REQ-025's already-shipped append mechanism and does not change a passing run's outcome from green to failed",
+      "the moduledoc names the crash-safety/guaranteed-teardown open question explicitly, per this requirement's description and stage-2-event-store-definitions.md's Early findings"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req040-promotion-assertion-rerun.md (full design, no implementation code): Letflow.Definitions.apply_promotion_assertion_rerun/6's exact signature (review_id, plan_digest, artifact, sandbox_pool, max_wait_ms, opts -- tenant_id deliberately NOT a positional arg, derived from opts[:prefix] per this codebase's project-wide 0003-addendum convention, reasoned explicitly in the doc's Section 3), the promotion_assertion_runs migration (Section 4: tenant-scoped via the mandatory if prefix() do guard PLUS the required Letflow.TenantProvisioning.@tenant_scoped_migration_manifest entry -- both halves named explicitly since a migration missing either half is inert or corrupting), the PromotionArtifact input struct (Section 5, reusing Letflow.SandboxPool.FixtureLoader.FixtureRow directly rather than duplicating it), the frozen-clock/seeded-RNG injection interface and full replay algorithm (Section 6, a faithful port of assertion_rerun.zig's replayAssertions including its own placeholder non-engine evaluator, confirmed empirically by tracing the Zig body -- R-Co's own canonical implementation has no real assertion-engine call either), and the full apply_promotion_assertion_rerun/6 algorithm (Section 7: idempotency via the same on_conflict:+re-fetch idiom EventStore.claim_idempotency/3 already established, sandbox claim/fixture-load reusing REQ-039 unmodified, the recordTeardownFailure precedence rule ported verbatim so a teardown failure never demotes an already-failed run and never promotes a passing run to failed, and a deliberate, disclosed improvement over R-Co's own traced behavior: R-Co leaves the run row stuck at status='running' forever on a sandbox-claim/fixture-load failure, which -- read against AC4's literal assertions_failed==0 gate rule with no status check -- would misread an infrastructure failure as a green gate; this design's fail_closed_counts/1 helper guarantees assertions_failed is never 0 on that path, including a max(assertions_total,1) safety net for a zero-assertion artifact). Section 2 is the requirement's own named core deliverable: I read lib/letflow/sandbox_pool.ex's actual :DOWN handler directly (not assumed) and confirmed empirically that SandboxPool's existing crash-safety ONLY covers a caller that dies while still queued waiting for a slot (Process.monitor/1 set up in handle_queue_or_reject/3, demonitored the moment a waiter is serviced) -- it establishes NO monitor at all on a caller's pid once a claim actually succeeds, so there is no free crash-safety to piggyback on for a caller that dies mid-replay after a successful claim. This is exactly what REQ-039's own design doc's OQ-2 already disclosed, now independently reconfirmed against the shipped source rather than taken on faith. Decision: try/rescue (covering normal return, typed-error return, and raised exceptions -- matching activate/2's and the already-shipped rollback_definition_version/4's own established try/rescue idiom in this same file) wrapping the claim-to-release span, with a best-effort release + fail-closed row update in the rescue clause; explicitly NOT a new supervised-process/Task.Supervisor mechanism, reasoned in three parts in Section 2.3 (AC6 only requires the moduledoc to NAME this open question, not solve it; a plain linked Task would add no real isolation and a genuinely decoupled solution would mean standing up new permanent supervision-tree surface with no arbitration/backpressure need to justify it per stage-2-event-store-definitions.md's own process-vs-row test; and the concrete mechanism that WOULD close the gap -- a leaked-sandbox reaper -- is already a named, deferred follow-up from PRM-07 AC5/req039's own OQ-2/OQ-3, reused rather than reinvented). The residual gap (a hard process kill / BEAM crash / System.halt, which no try/rescue can catch) is named explicitly, not hidden, in Section 2.3 and Open Question OQ-1 -- both written so ELIXIR-DEV copies this reasoning into the real @moduledoc's own 'Crash safety' section verbatim in substance, satisfying AC6 literally. Two further open questions worth CODE-DESIGN-VALIDATOR's attention are flagged rather than silently resolved: OQ-4 (MAJOR) -- REQ-040's own requirement text says non-deterministic fields are stripped 'from both expected/actual results', language suggesting a genuine oracle comparison, but assertion_rerun.zig's actual implementation (the only concrete reference that exists) runs the SAME assertion twice and compares the two runs against each other for self-consistency, with no 'expected' field anywhere in its own Assertion struct; this design adopts the double-run reading as primary because it's the only one grounded in a written implementation, and flags the alternative explicitly for REQ-ANALYST/REVIEWER confirmation rather than guessing. OQ-1 (the crash-safety residual gap itself, MAJOR) and OQ-2/OQ-3/OQ-5 (MINOR, an infrastructure-failure sentinel id choice, the frozen-clock-derivation-is-a-placeholder restatement, and the event-appender-failure-absorption choice) are also stated in full in Section 11. All six acceptance criteria are traced to concrete design elements in Section 12 -- none left as TBD. No implementation code anywhere in the document (types/@specs/schema/algorithm-as-numbered-prose only).",
+    "artifacts_out": [
+      "lib/letflow/design/req040-promotion-assertion-rerun.md",
+      "handoffs/WF02-REQ040-20260817/step-01-code-designer.json"
+    ],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "OQ-4: REQ-040's requirement-text description ('stripping non_deterministic_fields dot-paths from both expected/actual results') reads as a genuine expected-vs-actual oracle comparison, but the one concrete reference implementation (assertion_rerun.zig's replayAssertions) implements a double-run self-consistency check instead, with no 'expected' field anywhere in its Assertion struct. This design adopts the double-run reading (grounded in the one written implementation) as primary and flags the alternative explicitly -- needs REQ-ANALYST/REVIEWER confirmation of which was actually intended before ELIXIR-DEV builds against it.",
+        "affected_requirement": "REQ-040"
+      },
+      {
+        "severity": "MAJOR",
+        "description": "OQ-1 (the requirement's own named core question): a hard process kill / BEAM node crash / System.halt during the sandbox claim-to-release span is not covered by try/rescue and SandboxPool has no existing monitor for an already-successful claim (confirmed by reading sandbox_pool.ex directly) -- the sandbox remains permanently 'active' and the run row stuck at status='running' in that specific case. The concrete fix (a leaked-sandbox reaper) is a named, deferred follow-up (inherited from req039's own OQ-2/OQ-3), not built by this design -- AC6 only requires this to be named in the moduledoc, which this design's Section 2/Section 11 OQ-1 text is written to satisfy verbatim.",
+        "affected_requirement": "REQ-040"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ040-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ040-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for Step 1b"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

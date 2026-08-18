@@ -171,12 +171,28 @@ overwritten):
 `DONE` is only written after Step Final returns PASS with `push_status: ok` (or the
 documented `PARTIAL` fallback when `gh` is unavailable — see `GIT_MERGE.md`).
 
-## 10. Sizing note (carried over from the earlier 4-agent system)
+## 10. Sizing rule — when ORCH may act directly
 
-For a genuinely single-file, single-concern request — a typo fix, a one-line config
-change — ORCH may act directly rather than spawning the full producer/validator chain.
-This is a judgment call about request size, not a license to skip validation on
-anything with real implementation surface. When in doubt, run the full workflow: the
-cost of an unnecessary validator pass is small; the cost of an unvalidated bug reaching
-`main` unreviewed, with no human backstop, is the exact failure mode this whole system
-exists to prevent.
+**This section is the canonical definition of the direct-action exception.** Other files
+point here; none of them restates the test. Do not re-derive it from "is this trivial?"
+
+ORCH may act directly, without spawning the producer/validator chain, **only when every
+one of these is true**:
+
+1. The change touches **exactly one file**.
+2. It adds **no new public function, module, or `@spec`**.
+3. It adds or modifies **no migration** (`priv/repo/migrations/`).
+4. It does **not** touch `lib/letflow/process_instance.ex`, `instance_supervisor.ex`, or
+   any other supervision-tree file.
+5. It does **not** touch a tenant-data path (see SECURITY-REVIEWER's scope test).
+6. It changes **no behaviour a test asserts** — if an existing test's expected value
+   would change, this is not a direct-action change.
+
+**Any single "no" means run the full workflow.** This is a checklist, not a judgment
+call: the point is that an agent with limited judgement reaches the same verdict as one
+with good judgement. Typical qualifying changes: a typo in a docstring or `README.md`, a
+one-line config value, a comment.
+
+The asymmetry justifying the strictness: an unnecessary validator pass costs one agent
+turn; an unvalidated bug reaching `main` with no human backstop is the exact failure
+mode this whole system exists to prevent. When a check is ambiguous, it is a "no."

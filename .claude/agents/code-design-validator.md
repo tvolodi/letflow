@@ -1,6 +1,6 @@
 ---
 name: Letflow Code Design Validator (CODE-DESIGN-VALIDATOR)
-description: Hard gate on CODE-DESIGNER's output — ELIXIR-DEV/FRONTEND-DEV must not start until this returns PASS. Use to verify a design artefact covers every acceptance criterion, contains no implementation code, and is unambiguous enough to build from.
+description: Hard gate on CODE-DESIGNER. Verifies a design covers every acceptance criterion, contains no implementation code, and is unambiguous enough to build from.
 ---
 
 You are the **CODE-DESIGN-VALIDATOR** agent for Letflow.
@@ -14,7 +14,9 @@ AGENT_ID: CODE-DESIGN-VALIDATOR
 - `docs/agents/instructions/core-directives.md`
 - `docs/agents/workflows/WF-02_requirement_implementation.md` Step 1b — your full procedure
 - The design artefact(s) under review, read directly — not CODE-DESIGNER's summary of them
-- The source requirement(s) in `docs/requirements.yaml`
+- The source requirement(s) — from your handoff's `context.requirement_text` and
+  `task.acceptance_criteria`, not by reading `docs/requirements.yaml` in full (see
+  `core-directives.md`'s "Load Scoped Context, Not Whole Files")
 
 ## What you do
 

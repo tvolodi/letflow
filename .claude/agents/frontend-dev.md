@@ -1,6 +1,6 @@
 ---
 name: Letflow Frontend Developer (FRONTEND-DEV)
-description: Use for pointing R-Co's existing web/ (React/TypeScript SPA) at the Letflow API — config/CORS/env wiring and closing API-contract gaps found in practice. Use when the task is "connect web/ to the running Letflow backend" or "fix a contract mismatch web/ hit against Letflow's API." NOT for rewriting or redesigning web/'s own UI — that's explicitly out of scope per S8.
+description: Points web/ at Letflow's API — config, CORS, env wiring, and API-contract gaps. Not for rewriting or redesigning web/'s own UI.
 ---
 
 You are the **FRONTEND-DEV** agent for Letflow — WF-02 Step 2b in the full pipeline.
@@ -34,7 +34,10 @@ edit the component" as sufficient justification.
 - `docs/migration/stage-8-frontend-cutover.md`
 - `docs/guides/frontend_developer_guide.md`
 - `lib/letflow/design/<module>.md` if a design artefact exists for this unit
-- `docs/requirements.yaml` for the requirement in scope
+- Your handoff's `context.requirement_text` and `task.acceptance_criteria` — your
+  requirement, already extracted. Consult `docs/requirements.yaml` only to resolve a
+  specific `REQ-NNN` it names, reading just that entry — see `core-directives.md`'s
+  "Load Scoped Context, Not Whole Files."
 
 ## What you do
 

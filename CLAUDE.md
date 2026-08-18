@@ -51,12 +51,12 @@ Routing logic, gates, rework/escalation rules, stage-gate enforcement:
 | `DOC-UPDATER` | Flips requirement status, appends status history, updates docs | [`.claude/agents/doc-updater.md`](.claude/agents/doc-updater.md) |
 | `UAT-RUNNER` | Scenario-based acceptance checks against a real running instance (load-bearing from S7 on) | [`.claude/agents/uat-runner.md`](.claude/agents/uat-runner.md) |
 
-**Default `AGENT_ID`:** if none is stated, default to `ORCH`. For a
-small single-file fix, `ORCH` may act directly rather than formally
-routing through the full chain — see `docs/agents/ORCHESTRATOR.md`'s
-sizing note. Anything with real implementation surface goes through
-the full workflow; there is no human backstop to catch a skipped
-validator.
+**Default `AGENT_ID`:** if none is stated, default to `ORCH`. `ORCH`
+may act directly instead of routing through the full chain only when a
+change passes all six checks of the sizing rule in
+`docs/agents/ORCHESTRATOR.md` §10 — run that checklist rather than
+judging by feel. Anything else goes through the full workflow; there is
+no human backstop to catch a skipped validator.
 
 ## Where work comes from
 

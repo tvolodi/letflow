@@ -90,12 +90,11 @@ other than `ORCH` writes to `registry.json` directly, regardless of what this ta
 Agents communicate through handoff files under `handoffs/<RUN-ID>/`. Full schema,
 timestamp rules, and completion mechanics: `docs/agents/shared/HANDOFF_PROTOCOL.md`.
 
-For a genuinely single-file, single-concern request, ORCH may act directly rather than
-formally spawning a subagent and writing a handoff file — this stays true from the
-earlier 4-agent system and is not overridden by the fuller roster (see
-`docs/agents/ORCHESTRATOR.md`'s sizing note). The handoff-file machinery exists for
-multi-step work where independent validation actually matters; forcing it onto a
-one-line typo fix would be ceremony without benefit.
+ORCH may act directly, without spawning a subagent or writing a handoff file, only when
+a change passes all six checks of `docs/agents/ORCHESTRATOR.md` §10's sizing rule — that
+section is the canonical definition and this file does not restate the test. The
+handoff-file machinery exists for multi-step work where independent validation actually
+matters; forcing it onto a one-line typo fix would be ceremony without benefit.
 
 ---
 

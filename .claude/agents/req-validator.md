@@ -1,6 +1,6 @@
 ---
 name: Letflow Requirement Validator (REQ-VALIDATOR)
-description: Hard gate on REQ-ANALYST's output. Use to check a new or changed requirement in docs/requirements.yaml for testability, consistency with existing done requirements and decision records, correct depends_on, and correct sizing, before it's eligible for WF-02.
+description: Hard gate on REQ-ANALYST. Checks a requirement for testability, consistency, depends_on, and sizing before it is eligible for WF-02.
 ---
 
 You are the **REQ-VALIDATOR** agent for Letflow.
@@ -13,7 +13,10 @@ AGENT_ID: REQ-VALIDATOR
 
 - `docs/agents/instructions/core-directives.md`
 - `docs/agents/workflows/WF-01_requirement_development.md` — your full procedure (Step 2)
-- `docs/requirements.yaml` in full
+- `docs/requirements.yaml` in full — you are one of two roles (with REQ-ANALYST) exempt
+  from `core-directives.md`'s "Load Scoped Context, Not Whole Files", because your
+  consistency and `depends_on` checks are inherently cross-requirement. Prefer
+  `grep`/`awk` for targeted checks; full-read only for the global ones.
 - `docs/migration/decisions/*.md` — every recorded decision
 
 ## What you do

@@ -1,9 +1,11 @@
 # Shared Protocol — Handoff Lifecycle
 
 **Audience:** every agent in Letflow's pipeline.
-**Status:** AUTHORITATIVE. Where an agent-specific file disagrees with this document on
-handoff mechanics, this document wins — report the discrepancy in your handoff
-`result.issues` with severity MINOR so it gets fixed at the source.
+**Status:** Canonical for handoff *mechanics*. Conflicts with any other document are
+resolved by the **Instruction Precedence** chain in
+`docs/agents/instructions/core-directives.md` — not by this file claiming to win —
+and reported in your handoff `result.issues` at MINOR severity so the drift gets fixed
+at the source.
 
 This file exists so the handoff lifecycle is stated exactly once. See
 `docs/agents/instructions/core-directives.md` for the broader behavioural rules this
@@ -55,6 +57,9 @@ that and stop. Do not invent work — check `docs/requirements.yaml` for the nex
   "context": {
     "stage": "<S0-S8 or null>",
     "requirement_ids": ["<REQ-ID>", "..."],
+    "requirement_text": {
+      "<REQ-ID>": "<the requirement's full `description` text, copied verbatim from docs/requirements.yaml>"
+    },
     "related_handoff_ids": ["<uuid>", "..."],
     "artifacts_in": ["<relative/path>", "..."],
     "owned_modules": ["lib/letflow/...", "..."]
@@ -85,6 +90,16 @@ that and stop. Do not invent work — check `docs/requirements.yaml` for the nex
 }
 ```
 
+**`context.requirement_text` — written by ORCH, read by everyone else.** ORCH copies each
+in-scope requirement's full `description` verbatim from `docs/requirements.yaml` into this
+map when it creates the handoff. Receiving agents read the requirement *here*, not by
+opening the 61k-token `docs/requirements.yaml` — see `core-directives.md`'s "Load Scoped
+Context, Not Whole Files." Listing `"docs/requirements.yaml"` in `artifacts_in` is not a
+substitute: it tells the receiving agent to read the whole file, which is the exact cost
+this field exists to remove. If a handoff reaches you with `requirement_ids` set but
+`requirement_text` missing, that is a malformed handoff — read the named entries with a
+targeted `awk`/`Select-String` range (never a full read) and report it as a MINOR issue.
+
 **Legal `result.status` values — no others:**
 
 | Value | Meaning |
@@ -94,6 +109,77 @@ that and stop. Do not invent work — check `docs/requirements.yaml` for the nex
 | `PARTIAL` | Some criteria met; remainder blocked and listed in `issues` |
 | `BLOCKED` | Could not start or continue; blocker named in `issues` |
 | `SKIPPED` | Step not applicable to this run (state why in `summary`) |
+
+### Worked examples — what a finished `result` block looks like
+
+Match these shapes. They are the format contract for every role; the differences between
+them are the point.
+
+<example name="validator-fail">
+A FAIL names every failed check, by acceptance criterion, with the specific gap — never
+a general impression. This is what "route back with the specific gaps named" means:
+
+```json
+"result": {
+  "status": "FAIL",
+  "summary": "3 of 6 acceptance criteria unmet in lib/letflow/design/req039-sandbox-pool.md. AC2 (blocking quota wait) has no design element: the doc names claim/1 but never states what happens when all slots are in use. AC4's error shape is 'returns an error' — not a tagged tuple, so ELIXIR-DEV would have to invent it. Section 6 contains a 14-line Elixir function body (claim/1), which this gate fails on sight per WF-02 Step 1b check 2e.",
+  "artifacts_out": [],
+  "issues": [
+    {"severity": "BLOCKER", "description": "AC2: no design element covers the all-slots-in-use path. Design must state the blocking mechanism and the wait-window timeout value.", "affected_requirement": "REQ-039"},
+    {"severity": "BLOCKER", "description": "AC4: error shape unspecified. State the exact tagged tuple, e.g. {:error, :invalid_table_name}.", "affected_requirement": "REQ-039"},
+    {"severity": "BLOCKER", "description": "Section 6 lines 88-101 contain an implementation body, not a signature. Design artefacts carry signatures and type shapes only.", "affected_requirement": "REQ-039"}
+  ],
+  "next_action": "Rework CODE-DESIGNER — 3 BLOCKERs above, rework iteration 1 of 3"
+}
+```
+</example>
+
+<example name="validator-pass">
+A PASS states what was independently re-derived and how. "Looks good" is not a PASS;
+naming the artefact you opened and the check you ran is:
+
+```json
+"result": {
+  "status": "PASS",
+  "summary": "Read lib/letflow/design/req039-sandbox-pool.md directly (not CODE-DESIGNER's summary). All 6 acceptance criteria map to concrete design elements: AC1→claim/1 signature §3.1, AC2→blocking wait §3.2 with 5000ms window, AC3→release/1 + information_schema verification §3.3, AC4→{:error, :invalid_table_name} §4.1, AC5→TRUNCATE-before-insert §4.2, AC6→verbatim moduledoc text §10. No TBD/deferral language (grepped). No .ex bodies present — §6 carries @spec-style signatures only. Cross-module deps listed §7 (Letflow.TenantProvisioning, Ecto.Migrator).",
+  "artifacts_out": [],
+  "issues": [],
+  "next_action": "Route to ELIXIR-DEV (Step 2a)"
+}
+```
+</example>
+
+<example name="security-reviewer-scoped">
+SECURITY-REVIEWER records a verdict per invariant, INV-1..INV-8, with APPLIES or
+NOT-APPLICABLE stated for each — an unlisted invariant reads as an unrun check:
+
+```json
+"result": {
+  "status": "PASS",
+  "summary": "Scope test: in scope — diff adds priv/repo/migrations/20260818120000_create_tasks.exs. Verdicts against git diff main...HEAD: INV-1 APPLIES (tenant-scoped table) → PASS, tasks table created with prefix: from Ecto.Migration opts, no GLOBAL exception claimed, matches REQ-022 :prefix mechanism. INV-4 APPLIES (config touched) → PASS, no literal secret added; DB URL still read from System.get_env/1. INV-7 APPLIES → PASS, no string interpolation of tenant/user input into SQL; the one interpolated value (schema_name) is validated against ^sandbox_[0-9a-f]{32}$ before use. INV-8 APPLIES → PASS, no unresolved {:ok,_}= on an external-I/O path. INV-2, INV-3, INV-5, INV-6 NOT-APPLICABLE (S4/S5 surface, no API route or response-shaping code in this diff).",
+  "artifacts_out": [],
+  "issues": [],
+  "next_action": "Route to REVIEWER (Step 2d)"
+}
+```
+</example>
+
+<example name="partial">
+PARTIAL is for genuinely met-plus-blocked, never for "mostly passed." Say which criteria
+landed and what specifically blocks the rest:
+
+```json
+"result": {
+  "status": "PARTIAL",
+  "summary": "5 of 6 acceptance criteria verified by mix test (42 tests, 0 failures — full output in test/reports/report-20260818-WF02-REQ039.yaml). AC3 could not be verified: it asserts the schema no longer appears in information_schema.schemata after release/1, and the sandboxed Ecto connection cannot observe DDL committed by another connection. Not a code defect — a test-harness limitation. Filed as ISS-0031 with a proposed fix (run this one assertion via a checked-out non-sandboxed connection).",
+  "artifacts_out": ["test/reports/report-20260818-WF02-REQ039.yaml", "docs/issues/ISS-0031.yaml"],
+  "issues": [
+    {"severity": "MAJOR", "description": "AC3 unverifiable under the sandboxed test connection; needs a non-sandboxed connection for the information_schema assertion. See ISS-0031.", "affected_requirement": "REQ-039"}
+  ],
+  "next_action": "ORCH decision: AC3 blocks 'done' for REQ-039 — route to TEST-DESIGNER for the connection fix, do not advance to Step 5"
+}
+```
+</example>
 
 ---
 

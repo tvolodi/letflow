@@ -246,3 +246,52 @@ and hand-edit to the intended result). After resolving any conflict this way on 
 shared/audited file, independently re-read the resulting file's actual content
 before writing a log/status entry that claims what was kept -- don't narrate
 intent as if it were the verified outcome.
+
+---
+
+## Reading a whole large file to find one entry in it
+
+**Found:** 2026-08-18, during a prompt-efficiency audit of the agent instruction
+corpus (`docs/agents/`, `.claude/agents/`).
+
+Nine role files instructed their agent to read `docs/requirements.yaml` — several
+with the words "in full" — as a "Mandatory reading at session start" item. That
+file is 3,384 lines and roughly 61,000 tokens, holding 70 requirements, of which
+a given run needs one to four. Measured against the mandated preamble for a
+single ELIXIR-DEV turn (CLAUDE.md + core-directives + WF-02 + security-invariants
++ anti-patterns + the role file + requirements.yaml), the requirements file alone
+was ~76% of roughly 79,900 tokens — more than the other 29 instruction files
+combined, by about 25x.
+
+**Why this is easy to miss:** it reads as diligence. "Read the requirements in
+full before touching code" is exactly the kind of instruction that looks careful,
+and each individual role file states it once, in one line, so no single file looks
+bloated. The cost is only visible when you sum what one turn is actually told to
+load.
+
+**Why it also costs accuracy, not just tokens:** 33 of those 70 requirements are
+`done`, and this project's requirement descriptions are long and densely
+cross-referential (REQ-043's alone runs 40+ lines citing four other REQ ids, a
+decision record, and two R-Co source paths). Loading all of them buries the one
+requirement in scope under other stages' constraints, which is a real chance for
+an agent to build against the wrong stage's rules.
+
+**Correct alternative:** carry scoped context in the handoff instead of pointing
+at the file. ORCH — which already reads `docs/requirements.yaml` to select work —
+copies the in-scope requirement's full `description` into
+`context.requirement_text` (see `HANDOFF_PROTOCOL.md` §2), and downstream roles
+read it there. Naming the file in `artifacts_in` is *not* sufficient: that still
+tells the receiving agent to open it. When a role genuinely must consult the file
+for a cross-referenced id, read only that entry:
+
+```bash
+awk '/^  - id: REQ-039$/,/^  - id: REQ-04[0-9]$/' docs/requirements.yaml
+```
+
+Two roles are legitimately exempt and say so explicitly in their own files —
+REQ-ANALYST (global numbering/schema) and REQ-VALIDATOR (cross-requirement
+consistency). The general rule now lives in `core-directives.md`'s "Load Scoped
+Context, Not Whole Files", and it generalizes past this one file: prefer a
+targeted read over a whole-file read for anything above a few hundred lines
+(`git diff main...HEAD` over reading every changed file; `grep -n` over reading a
+3,000-line YAML to find one key).

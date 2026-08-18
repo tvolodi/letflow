@@ -556,3 +556,5 @@
 2026-08-18T07:03:26Z | DONE | WF-03 | WF03-ISS0043-20260818 | ORCH | Step Final: PR #163 squash-merged as 610b9524208af28f58a89f5c9429de07fe010e67. Queue task 107 released done.
 2026-08-18T07:04:44Z | DISPATCH | WF-02 | WF02-REQ049-20260818 | ORCH -> ELIXIR-DEV(self) | Step 00: git setup (worktree variant), claimed via letflow-queue task 92.
 2026-08-18T07:04:44Z | PASS | WF-02 | WF02-REQ049-20260818 | ORCH | Step 00: feature/WF02-REQ049-20260818 branched from origin/main, pushed. REQ-049 status -> in_progress, started event logged.
+2026-08-18T07:05:17Z | DISPATCH | WF-02 | WF02-REQ049-20260818 | ORCH -> CODE-DESIGNER | Step 1: design lib/letflow/design/req049-variable-merge.md.
+2026-08-18T07:14:57Z | PASS | WF-02 | WF02-REQ049-20260818 | CODE-DESIGNER -> ORCH | Step 1: design doc committed, covers merge/3 pure kernel, REQ-024 validate_payload/3 composition (caller-invoked, purity preserved), REQ-061 dependency-ordering resolution, flagged open question (no variable_schemas storage exists yet).

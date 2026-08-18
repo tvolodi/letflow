@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0046-20260818/step-01-diagnose.json",
   "created_at": "2026-08-18T08:24:44Z",
   "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-18T08:28:58Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": null,
@@ -30,9 +30,11 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
+    "summary": "Step 0.5 (registry lookup): grepped docs/issues/*.yaml for status: resolved entries. ISS-0044 (WF03-ISS0044-20260818) is the only prior entry touching mix compile/test warnings, but its symptoms are mix test-time deprecation/unused-arg/migration-reload warnings in a different module class -- confirmed NOT a match, this is a new defect class (compile-time struct-update type-inference gap under --warnings-as-errors). No recurrence.\n\nStep 1 (diagnose): reproduced directly. `rm -rf _build/dev/lib/letflow && mix compile --warnings-as-errors` on this branch (Elixir 1.20.3 / OTP 29, local toolchain, not Docker) fails with exactly 3 warnings, all in lib/letflow/engine/transition.ex, matching ISS-0046's count but CORRECTING its per-warning attribution: (1) line 218, dispatch_start/4 -- struct update `%Token{token | node_id: edge.target}` warns that `token` has inferred type dynamic(), 'must also pattern match on %Letflow.Engine.Token{}'. ISS-0046 mischaracterized this as an InstanceState warning at line ~220; it is actually a Token warning at line 218, one line earlier, and the struct in question is Token, not InstanceState. (2) line 235, dispatch_end/3 -- `%InstanceState{instance_state | tokens: remaining_tokens, status: new_status}` warns instance_state has type dynamic(%{..., tokens: term()}). (3) line 246, dispatch_human_task/3 -- `%InstanceState{instance_state | pending_task_nodes: new_pending}` warns instance_state has type dynamic(%{..., pending_task_nodes: list(term())}).\n\nRoot cause, corrected against ISS-0046's own hypothesis: ISS-0046 attributed the gap to dispatch_node/4's catch-all clause never pattern-matching instance_state/token against their structs. That is not the actual mechanism -- read dispatch_node/4 (transition.ex:151-197) directly: every one of its 6 clauses (including the catch-all) receives instance_state and token as bare variables, true, but the REAL narrowing loss happens one level down. transition/3 itself (line 144) DOES pattern-match `%InstanceState{} = instance_state` in its own head, so instance_state IS a narrowed %InstanceState{} at the point it is passed into dispatch_node/4. The type narrowing is lost when it crosses into dispatch_start/4, dispatch_end/3, and dispatch_human_task/3 -- three PRIVATE functions that take instance_state/token as bare, unpattern-matched parameters and have NO @spec of their own (unlike dispatch_node/4, dispatch_exclusive_gateway/4, find_node/2, replace_token/2, which all declare one). Elixir 1.20's set-theoretic type checker does not propagate a caller's already-narrowed struct type through an unspec'd function boundary into that function's own parameter bindings -- each function's parameter types are (re)inferred from that function's own head/body, not inherited from the call site. Empirically confirmed in isolation (scratch .ex files, cleaned up after): a private function with a @spec declaring a struct-typed parameter but no pattern match in its head still produces the exact same struct-update warning (@spec alone does not narrow); adding an explicit `%TestStruct{} = s` pattern match to the SAME function's parameter, with or without a @spec, produces a clean compile. So the @spec presence/absence on dispatch_node/4 is a red herring -- what actually matters is that dispatch_start/4, dispatch_end/3, and dispatch_human_task/3 never pattern-match their own instance_state/token parameters against %InstanceState{}/%Token{} in their own heads.\n\nWhy existing tests didn't catch it: this is a compile-time --warnings-as-errors gate failure, not a runtime defect -- test/letflow/engine/transition_test.exs's assertions run fine under plain `mix test` (warnings don't fail assertions), so nothing in the test suite itself exercises the warnings-as-errors compile gate; only a dedicated `mix compile --warnings-as-errors` run (or CI step) surfaces it.\n\nFix shape for CODE-DESIGNER (do not implement here): add an explicit struct pattern match to each of the three affected private functions' own parameter list, matching this module's already-established idiom elsewhere in the same file (dispatch_node/4's clauses already do exactly this for their `node`/4th parameter, e.g. `%Node{node_type: :START} = node`) -- i.e. `defp dispatch_start(definition_snapshot, instance_state, %Token{} = token, node)` (the warning here is on token, not instance_state) and `defp dispatch_end(%InstanceState{} = instance_state, token, _node)` and `defp dispatch_human_task(%InstanceState{} = instance_state, token, _node)`. This is a minimal, mechanical, in-idiom fix -- no restructuring of dispatch_node/4's own dispatch shape is needed, since the loss happens one call-level below it, not at its own catch-all clause as ISS-0046 guessed.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      {"severity": "MINOR", "description": "This handoff's started_at was still null when ISSUE-FIXER picked it up (ORCH did not stamp it before dispatch, per HANDOFF_PROTOCOL.md §3's 'ORCH only, immediately before dispatch' rule). Not corrected by this agent per protocol (only ORCH writes started_at) -- flagged for ORCH to fix at the source.", "affected_requirement": null}
+    ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0046-20260818",
       "commit_sha_list": [],
@@ -41,7 +43,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGNER for fix design (Step 2)"
   },
   "rework_count": 0,
   "max_rework": 3

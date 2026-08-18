@@ -3950,3 +3950,14 @@ history:
       recorded. Immediately released back to status open (not claimed
       for real work) so no lock was left dangling from this
       verification call.
+  - req: REQ-044
+    event: started
+    agent: ORCH
+    at: "2026-08-18T06:00:57Z"
+    note: >
+      WF02-REQ044-20260818 (hetzner-wt2-orch), claimed via letflow-queue
+      get_next_task (task id 88). Pure transition kernel core types and
+      dispatch skeleton (transition.zig, EE-02) -- first Stage 3
+      requirement to enter implementation. Step 00 (git setup, worktree
+      variant) PASS: feature/WF02-REQ044-20260818 branched from
+      origin/main (43e009e), pushed.

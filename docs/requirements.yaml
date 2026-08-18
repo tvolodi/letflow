@@ -2234,7 +2234,7 @@ requirements:
   - id: REQ-044
     title: Pure transition kernel core types and dispatch skeleton (transition.zig, EE-02)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S3
     impl_order: 88  # letflow-queue task id
     description: >

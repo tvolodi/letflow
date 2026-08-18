@@ -726,6 +726,26 @@
       "queue_agent_id": "tvolodi-orch",
       "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
       "note": "letflow-queue task 85 (GH#127): PromotionReviewStore's moduledoc opening paragraph stated wrong arities for 5 of its 6 transition functions, stale since before REQ-038 widened the module. The queue task's own description still referenced its pre-renumbering local record (docs/issues/ISS-0038.yaml) -- the actual current record is docs/issues/ISS-0041.yaml (renumbered during REQ-038's own Step Final, see that run's own note above). Handled directly by ORCH under ORCHESTRATOR.md's sizing exception (single-file, mechanical, zero design ambiguity), but still obtained independent REVIEWER sign-off before merging per core-directives.md's producer/validator principle -- all 6 corrected arities independently re-verified against real `def` signatures. REVIEWER's sign-off pass additionally caught pre-existing mix format drift in two unrelated test files (test/letflow/definitions/promotion_review_store_test.exs, test/letflow/definitions/promotion_test.exs), confirmed pre-existing via zero diff and reproduction on bare main -- fixed in the same commit per the ISS-0035 precedent rather than filed separately. mix compile --warnings-as-errors clean, mix format --check-formatted clean repo-wide, mix test 657/657 (4 properties, 653 tests) unaffected."
+    },
+    {
+      "run_id": "WF03-ISS0029-20260818",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "stage": null,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "test/letflow/definitions/migrations_test.exs",
+        "test/specs/REQ-027.md"
+      ],
+      "lock_acquired_at": "2026-08-18T01:15:13Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00: git setup dispatched.",
+      "backfilled": false,
+      "queue_task_id": 86,
+      "queue_agent_id": "hetzner-orch",
+      "worktree": "/home/tvolodi/letflow (primary worktree)",
+      "note": "ISS-0029/GH#87: vacuous refute table_exists_in_schema?(\"public\", ...) in test/letflow/definitions/migrations_test.exs, plus stale test/specs/REQ-027.md:111-113 citing it as proof of the :prefix mechanism. letflow-queue task 86 registered this session (task 86 was never auto-imported from GH#87 since that issue was filed directly via gh issue create rather than register_task -- see TASK_QUEUE.md note that the GH-issue-import path is not yet exercised in practice). register_task auto-created a duplicate GH issue #132, closed immediately as duplicate of #87 (canonical record stays docs/issues/ISS-0029.yaml / GH#87)."
     }
   ]
 }

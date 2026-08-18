@@ -1,0 +1,48 @@
+{
+  "handoff_id": "e6d4a7ba-2c5f-4a9d-be4a-4f5a6b7c8d9e",
+  "run_id": "WF03-ISS0047-20260818",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0047-20260818/step-03b-security-reviewer.json",
+  "created_at": "2026-08-18T18:58:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0047-20260818/step-02-code-designer.json",
+      "handoffs/WF03-ISS0047-20260818/step-03-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss-0047-username-race-conflict-target.md",
+      "lib/letflow/identity.ex"
+    ],
+    "owned_modules": ["lib/letflow/identity.ex"]
+  },
+  "task": {
+    "description": "Security review of the ISS-0047 fix in lib/letflow/identity.ex (commit 548c338 on branch feature/WF03-ISS0047-20260818). This touches the tenant-scoped identity/JIT-provisioning path (insert_or_fetch/4 and new helpers username_unique_conflict?/1, get_by_username/2, identity_matches?/2). The new get_by_username/2 helper queries users by username within a caller-supplied :prefix (per-tenant Postgres schema, Decision 0006). Verify this does not introduce a cross-tenant leak, an identity-confusion vector, or an authentication bypass -- specifically: could identity_matches?/2's comparison ever incorrectly treat two DIFFERENT external identities as the same, letting an attacker-controlled JIT provisioning request resolve to (and thus authenticate as) another user's existing account? Check security-invariants.md's INV list for anything applicable to identity/auth paths.",
+    "acceptance_criteria": [
+      "get_by_username/2 is correctly scoped to the same :prefix (tenant schema) as the rest of insert_or_fetch/4 -- no cross-tenant query possible.",
+      "identity_matches?/2's comparison logic cannot be satisfied by two genuinely different external identities (verify the exact fields compared and their semantics).",
+      "The fix does not create a path where an unauthenticated or wrong caller can cause provision_oidc_user/4 to resolve to an existing, unrelated user's account (account-takeover-via-race check).",
+      "No new information disclosure (e.g. username existence across tenants) introduced.",
+      "Applicable security-invariants.md INV items checked explicitly, not assumed satisfied."
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0047-20260818",
+      "commit_sha_list": ["548c338", "3b4a562"]
+    }
+  }
+}

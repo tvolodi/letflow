@@ -53,7 +53,7 @@
     ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ051-20260818",
-      "commit_sha_list": ["PENDING_COMMIT"]
+      "commit_sha_list": ["43ae7ca78aec6a8ebf4ca5a6e3ce887e126c33fc"]
     }
   }
 }

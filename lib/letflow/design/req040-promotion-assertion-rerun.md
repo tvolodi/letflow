@@ -896,6 +896,81 @@ explicitly forbids). Flagged for REVIEWER, not silently assumed.
 | 1 | "calling apply_promotion_assertion_rerun/6 twice with the same (review_id, plan_digest) returns the cached outcome on the second call and claims no second sandbox, verified by sandbox claim count" | §7.1 Step 1 (the `on_conflict: :nothing`/re-fetch idempotency idiom, `idempotent_hit: true`, `SandboxPool.claim/2` never called on that path); INV-AR-4 |
 | 2 | "a sandbox loaded via REQ-039 receives ONLY the artifact's fixtures[] rows, demonstrated by confirming no pre-existing tenant data appears in the sandbox schema" | §7.3 Step 3 (`FixtureLoader.load_fixtures_only/3`, unmodified reuse); INV-AR-2 |
 | 3 | "an assertion replay that fails records status = failed with a non-empty failing_assertion_ids list; a passing replay whose teardown itself fails records status = teardown_failed with assertions_failed = 0 -- both distinct outcomes tested explicitly" | §6.1 (replay/counting algorithm) + §7.5 (the `recordTeardownFailure`-precedence-rule port: `pre_teardown_status == :failed` stays `:failed`; `:passed` + release failure → `:teardown_failed` with `assertions_failed` unchanged at `0`); INV-AR-6 |
-| 4 | "the moduledoc explicitly states the apply pipeline gate condition is assertions_failed == 0, not status == passed, citing the teardown_failed green-gate case" | §7.5's own stated precedence rule + §11 OQ-1's framing are the substance ELIXIR-DEV copies into the real `@moduledoc`; INV-AR-6/INV-AR-7 make the underlying data safe for that literal gate rule to be true in practice, not just asserted in prose |
+| 4 | "the moduledoc explicitly states the apply pipeline gate condition is assertions_failed == 0, not status == passed, citing the teardown_failed green-gate case" | §7.5's own stated precedence rule + §11 OQ-1's framing are the underlying reasoning; **§13.1's ready-to-paste `@moduledoc` subsection and §13.2's `@doc` block are the literal text ELIXIR-DEV copies**, satisfying this AC's own literal-prose requirement directly, not via synthesis; INV-AR-6/INV-AR-7 make the underlying data safe for that gate rule to be true in practice |
 | 5 | "a simulated teardown failure appends a PROMOTION_ASSERTION_TEARDOWN_FAILED event via REQ-025's already-shipped append mechanism and does not change a passing run's outcome from green to failed" | §7.5 (`event_appender.(%{event_type: "PROMOTION_ASSERTION_TEARDOWN_FAILED", ...}, prefix)`, called via the exact `opts[:event_appender]` convention `promote_definition/3`/`rollback_definition_version/4` already established, §0/§9); INV-AR-6 (never flips passed→failed) |
-| 6 | "the moduledoc names the crash-safety/guaranteed-teardown open question explicitly, per this requirement's description and stage-2-event-store-definitions.md's Early findings" | §2 (full investigation + decision) + §11 OQ-1, both intended to be copied into the real `@moduledoc`'s own "Crash safety" section verbatim in substance, matching `SandboxPool`'s own moduledoc precedent (§0) of stating its resolved-open-question reasoning directly in the shipped `@moduledoc`, not only in the design doc |
+| 6 | "the moduledoc names the crash-safety/guaranteed-teardown open question explicitly, per this requirement's description and stage-2-event-store-definitions.md's Early findings" | §2 (full investigation + decision) + §11 OQ-1 are the underlying reasoning; **§13.1's ready-to-paste `@moduledoc` subsection and §13.2's `@doc` block are the literal text ELIXIR-DEV copies**, matching `SandboxPool`'s own moduledoc precedent (§0, req039 design §10) of stating its resolved-open-question reasoning directly in the shipped `@moduledoc`, not only in the design doc |
+
+---
+
+## 13. Verbatim `@moduledoc`/`@doc` text
+
+Presented as literal documentation-string content ELIXIR-DEV copies verbatim (prose
+only, no function bodies, no logic) — matching req039's design doc §10 precedent, whose
+equivalent text shipped nearly verbatim into `sandbox_pool.ex`'s real `@moduledoc`.
+`apply_promotion_assertion_rerun/6` is added to the existing `Letflow.Definitions`
+context module (§1), not a new module, so this section gives two paste targets: §13.1 is
+a new `##`-headed subsection to insert into `Letflow.Definitions`' own existing
+`@moduledoc` (immediately after the "`activate/2`'s `service_scope_validator` option"
+subsection, `definitions.ex:40`, §0 — the same "one `##` subsection per
+requirement-specific hook/contract" convention that subsection itself establishes), and
+§13.2 is the `@doc` block directly above `def apply_promotion_assertion_rerun/6` itself,
+matching `activate/2`'s own `@doc` → "see this module's moduledoc" pointer pattern
+(`definitions.ex:456-461`, §0) rather than duplicating the full explanation twice.
+
+### 13.1 `Letflow.Definitions` moduledoc — new subsection
+
+```
+## `apply_promotion_assertion_rerun/6`'s gate condition and crash-safety scope (REQ-040)
+
+The apply pipeline (REQ-037's `mark_review_applied/2` path) gates on this function's
+recorded `assertions_failed == 0` -- NOT on `status == "passed"`. These are not the same
+check: a passing assertion replay whose sandbox teardown itself fails is recorded as
+`status = :teardown_failed` with `assertions_failed` still `0` (the real replay found
+zero failures; only the *teardown* failed, tracked separately via a
+`PROMOTION_ASSERTION_TEARDOWN_FAILED` event, never folded into the assertion counts). A
+`teardown_failed` row is therefore a **green gate** -- a caller that checks
+`status == :passed` instead of `assertions_failed == 0` will read this outcome
+backwards and incorrectly block a promotion that should proceed.
+
+Crash safety: the claim -> load-fixtures -> replay -> release -> record-outcome span is
+wrapped in a single `try/rescue`. This covers three exit classes -- normal completion,
+a typed error return from any step, and a raised exception anywhere in that span -- and
+on all three, `SandboxPool.release/2` is attempted and the `promotion_assertion_runs`
+row is written with fail-closed accounting (`assertions_failed >= 1`) rather than left
+stuck at `status = :running`. It does **not** cover a hard process kill
+(`Process.exit(pid, :kill)`), a BEAM node crash, or `System.halt/0` -- none of these run
+a `rescue` clause, so a sandbox claimed and a row left `:running` at the moment one of
+those events fires is neither released nor updated by this function. This residual gap
+is a disclosed, deferred limitation, not an oversight: the concrete mitigation (a
+background reaper sweeping stale `:running` rows and orphaned sandbox schemas, mirroring
+R-Co's `reclaimLeakedSandboxes`) is not built here and is left to a dedicated follow-up
+requirement -- the same deferral `Letflow.SandboxPool`'s own moduledoc already carries
+for the analogous owner-crash-detection gap on an already-claimed sandbox.
+```
+
+### 13.2 `apply_promotion_assertion_rerun/6`'s own `@doc`
+
+```
+Ports `src/definition/assertion_rerun.zig`'s `applyPromotionAssertionRerun` (PRM-06/07)
+-- idempotent assertion replay against an ephemeral REQ-039 sandbox, keyed by
+`(review_id, plan_digest)`.
+
+Returns the cached `{:ok, result}` with `idempotent_hit: true` on a second call for the
+same `(review_id, plan_digest)` pair, claiming no sandbox. On a fresh call: claims a
+sandbox (`Letflow.SandboxPool.claim/2`), loads only `artifact.fixtures[]` into it
+(`Letflow.SandboxPool.FixtureLoader.load_fixtures_only/3` -- never organic tenant data),
+replays each assertion twice under a frozen clock and a seeded, reset-between-runs RNG,
+and records `status` + `assertions_total`/`assertions_passed`/`assertions_failed` +
+`failing_assertion_ids` in `promotion_assertion_runs`.
+
+**Gate condition -- read before wiring this into the apply pipeline:** callers must gate
+on the returned `assertions_failed == 0`, NOT on `status == :passed`. A
+`status = :teardown_failed` result with `assertions_failed == 0` is a green gate -- see
+this module's moduledoc, "`apply_promotion_assertion_rerun/6`'s gate condition and
+crash-safety scope".
+
+**Crash safety -- also see this module's moduledoc:** the claim-through-release span is
+wrapped in `try/rescue`, covering normal completion, typed errors, and raised
+exceptions. It does NOT cover a hard process kill or a BEAM crash mid-replay -- that
+residual gap is disclosed, not resolved, and left to a deferred reaper follow-up.
+```

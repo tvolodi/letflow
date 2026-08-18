@@ -1,0 +1,48 @@
+{
+  "handoff_id": "f7a6b5c4-0001-4a1a-9c00-000000000001",
+  "run_id": "WF03-ISS0045-20260818",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0045-20260818/step-01-issue-fixer.json",
+  "created_at": "2026-08-18T07:44:56Z",
+  "started_at": "2026-08-18T07:44:56Z",
+  "completed_at": "2026-08-18T07:47:30Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": ["docs/issues/"]
+  },
+  "task": {
+    "description": "WF-03 Steps 0.5 and 1 for letflow-queue task 110 / GitHub issue #165, claimed via get_next_task. Same shape as this session's earlier WF03-ISS0043-20260818 precedent: filed by another host mid-run (WF02-REQ043-20260818, which has now progressed past RELEASE-VALIDATOR on that other host but STILL has NOT merged to main in this checkout -- confirmed: docs/requirements.yaml shows REQ-043 status: pending, and `ls lib/letflow/engine/` shows only instance_state.ex, token.ex, transition.ex, variable_merge.ex -- no task.ex or token.ex-for-REQ-043 context module). The GitHub issue's body claims 'Local record: docs/issues/ISS-0043.yaml' but that file already exists on this main and is a DIFFERENT, unrelated, already-resolved finding (this session's own WF03-ISS0043-20260818, about Task.assignee_type). Cross-host ISS-numbering collision again -- same class as before. The correct next available local number is ISS-0045 (highest existing is ISS-0044.yaml, filed earlier this session by TEST-RUNNER).\n\nRAW ISSUE CONTENT (from the queue task, since the local file doesn't exist here to read):\nTitle: tenant_id caller-mismatch rejection not yet enforced on Letflow.Engine.Task/Token (no context module exists)\nBody: REQ-043's own acceptance criterion 6 asks for a test demonstrating that a deliberately-mismatched caller-supplied tenant_id on a tasks/tokens insert 'fails loudly rather than silently attributing to the wrong tenant.' Not literally satisfiable by REQ-043's shipped scope: it ships only lib/letflow/engine/token.ex and lib/letflow/engine/task.ex (schema + changeset modules), no context-module function exists yet that accepts a public attrs parameter a caller could reach. This gap was independently identified and correctly handled (not silently worked around) at every gate of WF02-REQ043-20260818: design doc section 6.2, CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER (a tripwire test pins today's real accept-not-reject behavior), TEST-DESIGN-VALIDATOR, and RELEASE-VALIDATOR. Resolve when REQ-045 (or REQ-051/REQ-062) lands a real Letflow.Engine context module with a public write path: add the literal 'rejects a disagreeing tenant_id' regression test and update/remove the tripwire in test/letflow/engine/migrations_test.exs. Discovered by RELEASE-VALIDATOR during WF02-REQ043-20260818.\n\nYOUR JOB: this issue is EXPLICITLY self-deferred by its own filer (RELEASE-VALIDATOR, a hard-gate role) to a specific named future trigger (REQ-045/051/062 landing a public write path) -- and REQ-045 is precisely the next Stage 3 requirement this project would naturally pick up. Evaluate: is there anything actionable now, or is this correctly deferred? You cannot do a live-code read of REQ-043's shipped modules since they're not merged here yet, but the finding itself is entirely about a FUTURE test that can't exist until a FUTURE module exists -- so a live-code read isn't necessary to reach a diagnosis, same reasoning as the WF03-ISS0043-20260818 precedent.",
+    "acceptance_criteria": [
+      "Step 0.5 registry lookup: check docs/issues/ISS-0043.yaml (this session's precedent) and note the new cross-host numbering collision explicitly",
+      "Explicit statement on why a live-code read wasn't possible/necessary here",
+      "Explicit diagnosis: correctly deferred to REQ-045/051/062 vs. something actionable now",
+      "If deferred: create docs/issues/ISS-0045.yaml (correct next local number) documenting this finding with status: resolved, resolved_in_run: WF03-ISS0045-20260818, a resolution_note explaining the diagnosis and the renumbering correction, github_issue set to issue #165's URL. Close GitHub issue #165 via gh issue close 165 --comment explaining both. Commit and push on branch fix/WF03-ISS0045-20260818."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Step 0.5 (registry lookup): Read docs/issues/ISS-0043.yaml in full (this session's precedent, WF03-ISS0043-20260818). It documents the identical pattern -- a concurrent host's issue body claiming a local record filename that on this main is actually a different, already-resolved, unrelated finding. Confirmed docs/issues/ISS-0043.yaml on THIS checkout is that unrelated entry (Letflow.Engine.Task.assignee_type free-text/Ecto.Enum type-safety note, resolved in WF03-ISS0043-20260818, closed as GH issue #159), not this finding. `ls docs/issues/` shows highest existing file is ISS-0044.yaml (filed by TEST-RUNNER during WF02-REQ049-20260818, status: open, unrelated test-hygiene warnings finding) -- so ISS-0045 is confirmed the correct next local number.\n\nStep 1 (diagnose): Confirmed via `ls lib/letflow/engine/` that this checkout has instance_state.ex, token.ex, transition.ex, variable_merge.ex -- no task.ex. Read lib/letflow/engine/token.ex in full: it is REQ-044's Letflow.Engine.Token, a plain struct with zero Ecto/Letflow.Repo dependency (moduledoc explicitly: 'ports transition.zig's Token (EE-02)... this module has zero Ecto/Letflow.Repo dependency'), NOT REQ-043's tokens-table Ecto.Schema module. Confirmed via grep that docs/requirements.yaml has REQ-043 status: pending (stage S3, depends_on [REQ-023, REQ-027]) -- i.e. REQ-043 genuinely has not merged to main on this checkout. `ls test/letflow/engine/` confirms no migrations_test.exs either (the tripwire test the issue references). Fetched GitHub issue #165 directly (gh issue view 165 --json) and confirmed its body text verbatim matches the handoff's raw content, including the 'Local record: docs/issues/ISS-0043.yaml' claim that is the source of the cross-host collision. Also confirmed REQ-045 ('Instance start and engine execution shell (instance.zig create, EE-01)') is status: pending, stage: S3 in docs/requirements.yaml -- i.e. it is a real, specific, already-scheduled next requirement, not a vague someday-trigger.\n\nWhy a live-code read of REQ-043's shipped task.ex/token.ex content was not necessary: this finding is not a claim about currently-broken runtime behavior reproducible by running code -- it is a test-coverage gap about a write path (a context-module function accepting caller-supplied attrs) that the issue's own text states does not exist yet on ANY host ('no context-module function exists yet that accepts a public attrs parameter a caller could reach'). The absence of that context module is the entire finding, and that absence is independently confirmed by this checkout's own directory listing (no task.ex at all) and by the issue text itself -- there is nothing in REQ-043's eventual shipped file content that could change this diagnosis, since the write-path function it depends on doesn't exist regardless of task.ex's exact field list.\n\nDiagnosis: CORRECTLY DEFERRED, not actionable now. (1) The issue is self-deferred by RELEASE-VALIDATOR, a hard-gate role, to a specific named trigger (REQ-045/051/062 landing a public write path), and REQ-045 is confirmed the next Stage 3 requirement in sequence -- a real, imminent trigger, not indefinite deferral. (2) The gap was already correctly handled (a tripwire test, not a silent workaround) at every gate of the originating run (design, CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER, TEST-DESIGN-VALIDATOR, RELEASE-VALIDATOR) -- no process failure to correct. (3) Writing the regression test now would require inventing a throwaway write path ahead of REQ-045, which is scope creep per CLAUDE.md/core-directives.md's anti-scope-creep norms and would duplicate work REQ-045 is specifically scoped to do properly. (4) No ORCHESTRATOR.md section 10 sizing exception applies -- a tenant-isolation regression test against a not-yet-existing write path must be gated by SECURITY-REVIEWER together with that write path, not applied solo by ISSUE-FIXER.\n\nCreated docs/issues/ISS-0045.yaml with status: resolved, resolved_in_run: WF03-ISS0045-20260818, resolved_at: 2026-08-18T07:46:23Z (real clock), github_issue: https://github.com/tvolodi/letflow/issues/165, and a resolution_note covering both the renumbering correction and the full diagnosis reasoning above. Closed GitHub issue #165 via `gh issue close 165 --comment ...` referencing ISS-0045.yaml, the renumbering, and the REQ-045 deferral target -- confirmed closed via gh output ('Closed issue tvolodi/letflow#165').",
+    "artifacts_out": ["docs/issues/ISS-0045.yaml"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "fix/WF03-ISS0045-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/fix/WF03-ISS0045-20260818",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "No code fix required -- issue correctly deferred to REQ-045 (or REQ-051/REQ-062). Route to Step Final (git merge) per WF-03; REQ-045 will independently pick up the deferred regression test / migrations_test.exs tripwire update when it lands the public write path."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

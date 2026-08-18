@@ -1,10 +1,11 @@
 # Stage 3 — Instance engine
 
-Status: expanded, not started. Depends on: S2 (all of REQ-022..REQ-042
-`done`). Requirements: REQ-043, REQ-044, REQ-045, REQ-046, REQ-047,
-REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-055,
+Status: in progress. Depends on: S2 (all of REQ-022..REQ-042 `done`).
+Requirements: REQ-044 `done` (Pure transition kernel core types and
+dispatch skeleton); REQ-043, REQ-045, REQ-046, REQ-047, REQ-048,
+REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-055,
 REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062
-(`docs/requirements.yaml`, 20 total) all `pending`.
+(`docs/requirements.yaml`, 19 total) `pending`.
 
 ## Scope
 

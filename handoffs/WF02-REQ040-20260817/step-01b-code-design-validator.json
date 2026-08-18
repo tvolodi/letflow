@@ -1,0 +1,70 @@
+{
+  "handoff_id": "step-01b-code-design-validator",
+  "run_id": "WF02-REQ040-20260817",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ040-20260817/step-01b-code-design-validator.json",
+  "created_at": "2026-08-18T00:13:39Z",
+  "started_at": "2026-08-18T00:13:39Z",
+  "completed_at": "2026-08-18T00:24:10Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-040"],
+    "related_handoff_ids": ["step-00-git-setup", "step-01-code-designer"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req040-promotion-assertion-rerun.md",
+      "lib/letflow/design/req039-sandbox-pool-fixture-loader.md",
+      "lib/letflow/design/req038-promotion-rollback.md",
+      "lib/letflow/sandbox_pool.ex",
+      "lib/letflow/sandbox_pool/fixture_loader.ex",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "priv/repo/migrations/20260816200001_create_promotion_reviews.exs",
+      "C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\definition\\assertion_rerun.zig",
+      "docs/agents/instructions/core-directives.md",
+      "docs/agents/workflows/WF-02_requirement_implementation.md",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "handoffs/WF02-REQ040-20260817/step-01-code-designer.json"
+    ],
+    "owned_modules": ["lib/letflow/design"]
+  },
+  "task": {
+    "description": "WF-02 Step 1b (CODE-DESIGN-VALIDATOR) for REQ-040: independently validate lib/letflow/design/req040-promotion-assertion-rerun.md against REQ-040's six acceptance criteria. Specifically re-derive (not trust) three claims: (1) OQ-4's double-run-vs-oracle-comparison reading, checked directly against assertion_rerun.zig's replayAssertions body; (2) the crash-safety investigation's empirical claim that SandboxPool establishes no monitor on a caller once a claim succeeds, checked directly against sandbox_pool.ex; (3) the claim that R-Co's own reference implementation leaves a promotion_assertion_runs row stuck at status='running' forever on a sandbox-claim/fixture-load failure, and that this design's fail_closed_counts/1 genuinely closes that gap. Also verify the migration's tenant-scoping (if prefix() do guard + TenantProvisioning manifest entry), the review_id FK, the (tenant_id, idempotency_key) unique constraint, REQ-039 integration (exact SandboxPool/FixtureLoader signatures), presence of a fully-specified moduledoc-text design element for AC4/AC6, and absence of implementation code.",
+    "acceptance_criteria": [
+      "calling apply_promotion_assertion_rerun/6 twice with the same (review_id, plan_digest) returns the cached outcome on the second call and claims no second sandbox, verified by sandbox claim count",
+      "a sandbox loaded via REQ-039 receives ONLY the artifact's fixtures[] rows, demonstrated by confirming no pre-existing tenant data appears in the sandbox schema",
+      "an assertion replay that fails records status = failed with a non-empty failing_assertion_ids list; a passing replay whose teardown itself fails records status = teardown_failed with assertions_failed = 0 -- both distinct outcomes tested explicitly",
+      "the moduledoc explicitly states the apply pipeline gate condition is assertions_failed == 0, not status == passed, citing the teardown_failed green-gate case",
+      "a simulated teardown failure appends a PROMOTION_ASSERTION_TEARDOWN_FAILED event via REQ-025's already-shipped append mechanism and does not change a passing run's outcome from green to failed",
+      "the moduledoc names the crash-safety/guaranteed-teardown open question explicitly, per this requirement's description and stage-2-event-store-definitions.md's Early findings"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Five of six acceptance criteria's underlying design substance is sound and independently re-verified against source, not taken on trust. OQ-4 (double-run vs. oracle comparison): read assertion_rerun.zig lines 466-547 directly -- replayAssertions resets `std.Random.DefaultPrng.init(artifact.rng_seed)` identically before each of two runs, strips non_deterministic_fields from both stripped1/stripped2 via stripDotPath, and does a byte-level std.mem.eql comparison between the two runs; Assertion{id, payload} has no 'expected' field anywhere in the struct or the file. This is a self-consistency/non-determinism check, not an expected-vs-actual oracle comparison -- the design's own reading (Section 6, Section 11 OQ-4) is correct and matches the reference implementation exactly, and the comment 'Placeholder result... PRM-05 follow-on will replace this with the real engine call' (line 498-499) confirms R-Co's own implementation is itself a stub, which the design correctly does not try to replace with an invented real engine. Crash-safety claim: read sandbox_pool.ex directly -- Process.monitor/1 is established only in handle_queue_or_reject/3 (line 187) for a caller still parked in `waiting`, and is explicitly demonitored the moment that waiter is serviced (service_next_waiter/1, line 201) or its own :DOWN clears it (line 155-164, only matches entries found via find_waiter against `state.waiting`); handle_provision_now/1 (the immediate-grant path) never calls Process.monitor/1 at all, and state.active carries no pid. The design's claim of zero crash-safety coverage after a successful claim is accurate. The chosen try/rescue mechanism (covering normal return, typed error, raised exception; explicitly not covering a hard kill/BEAM crash) is a reasoned, proportionate choice given AC6 only requires disclosure not resolution, and the residual gap is honestly named rather than hidden. R-Co-improvement claim: traced applyPromotionAssertionRerun's early-return paths (lines 234-240 for claim failure, 254-261 for fixture-load failure) -- on a claim failure the row is never touched again after its initial INSERT ('running'); on a fixture-load failure the `defer`-driven release runs, but only touches the row if release itself also fails (via recordTeardownFailure's CASE, which would set status='teardown_failed' while assertions_failed stays at its column default of 0 -- an even worse silent-green-gate case than the one the design names). The design's fail_closed_counts/1 (Section 7.4) writes an assertions_failed >= 1 outcome on both the claim-failure and fixture-load-failure paths regardless of whether release itself succeeds or fails, genuinely closing the gap in every sub-case, not merely relocating it. Migration, REQ-039 integration, and absence of implementation code all check out: promotion_reviews.id is :binary_id confirming a real FK is possible (unlike tenant_id); the review_id FK/on_delete:nothing/reverse-index shape matches instance_definition_snapshots' precedent; the unique constraint is UNIQUE (tenant_id, idempotency_key) exactly per AC1; TenantProvisioning.@tenant_scoped_migration_manifest is confirmed to require both the if prefix() do guard and a manifest tuple entry, and the design's planned entry is correctly shaped and positioned; SandboxPool.claim/2, .release/2, and FixtureLoader.load_fixtures_only/3 are the actual shipped signatures and the design calls them with the correct arity/argument order; grepping the design doc for def /defp /defmodule found only the PromotionArtifact/Assertion/CandidateDefinition struct shells (defstruct + @type t, no function bodies) -- no implementation code present. FAIL reason (BLOCKER, see issues): AC4 and AC6 are both literally about moduledoc CONTENT, not about the underlying algorithm/reasoning being correct -- and the design never actually drafts that moduledoc text. Grepping the design doc for '@moduledoc' turns up only references to OTHER, already-shipped modules' moduledocs (SandboxPool, promotion.ex, promotion_review_store.ex) plus two AC-traceability-table entries (rows 4 and 6, Section 12) that say the moduledoc text is 'the substance ELIXIR-DEV copies' from Section 7.5/Section 2/Section 11 OQ-1 'verbatim in substance' -- i.e. ELIXIR-DEV is expected to synthesize the actual AC-satisfying prose itself out of ~900 lines of discursive design rationale (which itself references section numbers, PRM tags, and 'REVIEWER' -- language that does not belong in a shipped moduledoc verbatim). This design's own explicitly-cited structural precedent, lib/letflow/design/req039-sandbox-pool-fixture-loader.md, does this correctly: it has a dedicated '## 10. Verbatim @moduledoc text' section with an actual fenced prose block, and that exact text is what shipped nearly verbatim in sandbox_pool.ex's real @moduledoc (confirmed by reading the shipped file directly). req040's design cites req039's moduledoc as its own model ('matching SandboxPool's own moduledoc precedent... of stating its resolved-open-question reasoning directly in the shipped @moduledoc, not only in the design doc', Section 11 OQ-1) but does not itself do the equivalent work. This is a genuine specification gap, not a nitpick: AC4's exact gate-direction wording ('assertions_failed == 0, not status == passed') and AC6's exact disclosure requirement are two of six acceptance criteria that hinge entirely on literal moduledoc prose, and per core-directives.md's weak-model-tolerance constraint, a design cannot rely on an implementer correctly re-deriving precise, AC-literal prose from scattered rationale -- that is exactly the kind of ambiguity Step 1b exists to catch before it reaches ELIXIR-DEV.",
+    "artifacts_out": ["handoffs/WF02-REQ040-20260817/step-01b-code-design-validator.json"],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "lib/letflow/design/req040-promotion-assertion-rerun.md has no 'Verbatim @moduledoc text' design element (unlike its own cited precedent, req039's design doc Section 10, whose text shipped nearly verbatim in sandbox_pool.ex). AC4 ('the moduledoc explicitly states the apply pipeline gate condition is assertions_failed == 0, not status == passed, citing the teardown_failed green-gate case') and AC6 ('the moduledoc names the crash-safety/guaranteed-teardown open question explicitly') are both acceptance criteria about literal moduledoc prose, not about algorithm correctness -- and Section 12's traceability table (rows 4 and 6) resolves both by telling ELIXIR-DEV to synthesize 'the substance' out of Section 7.5/Section 2/Section 11 OQ-1 rather than providing the text. That is a TBD-equivalent deferral for these two specific ACs. REWORK: CODE-DESIGNER adds a new section (matching req039 Section 10's shape) with near-verbatim @moduledoc prose that (a) states literally that the apply-pipeline gate is assertions_failed == 0 rather than status == \"passed\", citing the teardown_failed green-gate case by name, and (b) names the crash-safety/guaranteed-teardown open question -- what try/rescue covers (normal return, typed error, raised exception) and what it explicitly does not (hard process kill / BEAM crash / System.halt), plus the deferred-reaper mitigation -- in prose ready for ELIXIR-DEV to paste into the real @moduledoc with no further synthesis required.",
+        "affected_requirement": "REQ-040"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ040-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ040-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Rework CODE-DESIGNER: add a dedicated verbatim/near-verbatim @moduledoc text section to lib/letflow/design/req040-promotion-assertion-rerun.md satisfying AC4 and AC6 literally (see issues[0] for the exact requirement), matching req039's design doc Section 10 precedent, then re-submit to CODE-DESIGN-VALIDATOR. Everything else in the design -- OQ-4's double-run reading, the try/rescue crash-safety decision and its disclosed residual gap, the fail_closed_counts/1 R-Co-improvement, the migration shape, and the REQ-039 integration -- was independently re-verified against source and holds up; CODE-DESIGNER should not need to revisit those sections."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

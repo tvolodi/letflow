@@ -527,3 +527,5 @@
 2026-08-18T06:00:57Z | UPDATE | WF-02 | WF02-REQ044-20260818 | ORCH | REQ-044 status pending -> in_progress, started event logged.
 2026-08-18T06:02:07Z | DISPATCH | WF-02 | WF02-REQ044-20260818 | ORCH -> CODE-DESIGNER | Step 1: design lib/letflow/design/req044-transition-kernel.md.
 2026-08-18T06:11:33Z | PASS | WF-02 | WF02-REQ044-20260818 | CODE-DESIGNER -> ORCH | Step 1: design doc committed (c94165f), covers InstanceState/Token structs, transition/3 spec, 5-way dispatch with gateway stubs for REQ-050/051, both error paths, verbatim moduledoc notes.
+2026-08-18T06:13:33Z | DISPATCH | WF-02 | WF02-REQ044-20260818 | ORCH -> CODE-DESIGN-VALIDATOR | Step 1b hard gate.
+2026-08-18T06:14:44Z | PASS | WF-02 | WF02-REQ044-20260818 | CODE-DESIGN-VALIDATOR -> ORCH | Step 1b: all 6 checks PASS, independently re-derived REQ-044 depends_on / REQ-043 status. Committed df33ecd.

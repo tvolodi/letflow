@@ -1,0 +1,107 @@
+# Test run report — WF-02 Step 4 (test run) for REQ-044
+
+req_id: REQ-044
+workflow: WF-02
+step: "04"
+agent: TEST-RUNNER
+run_id: WF02-REQ044-20260818
+date_utc: 2026-08-18T06:41:19Z
+
+git:
+  branch: feature/WF02-REQ044-20260818
+  branch_confirmed: true
+  commit: 47f89d8334824f12a7a6bfc7ee395d333717508e
+  commit_subject: "chore(WF02-REQ044): log Step 3b"
+  worktree: true
+  note: >
+    This checkout is a secondary git worktree (~/letflow-wt2), sharing its
+    Postgres container with the primary ~/letflow checkout. Per this
+    worktree's standing session instructions, `docker compose up` was NOT
+    run here (Postgres was already running, container letflow-postgres-1,
+    confirmed via `docker ps` — Up 22 hours, healthy,
+    0.0.0.0:5462->5432/tcp). Tests were invoked with MIX_TEST_PARTITION=2
+    as this worktree requires, to avoid colliding with the primary
+    checkout's own test database.
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 27 [erts-15.2.7.4] ... Elixir 1.18.3 (compiled with Erlang/OTP 27)"
+  postgres_container: letflow-postgres-1 (already running, 22h uptime, healthy,
+    0.0.0.0:5462->5432/tcp and [::]:5462->5432/tcp — confirmed via `docker ps`
+    only; `docker compose up` was NOT run per this worktree's standing
+    instructions, container is shared with the primary ~/letflow checkout).
+  partition: "MIX_TEST_PARTITION=2 (required for this worktree, per standing
+    session instructions, to avoid colliding with the primary checkout's
+    concurrently-running test database)"
+  command_run: "MIX_TEST_PARTITION=2 mix test (full suite, unpinned/default
+    random seed — the `test` alias runs ecto.create + ecto.migrate --quiet
+    first automatically)"
+
+verdict: PASS
+
+checks:
+  test_suite_full_run:
+    result: PASS
+    exit_code: 0
+    seed: 378212 (unpinned/random — ExUnit's own default, printed at run start)
+    summary_line_verbatim: "5 properties, 688 tests, 0 failures"
+    finished_line_verbatim: "Finished in 37.1 seconds (1.7s async, 35.3s sync)"
+    failures: 0
+
+  new_req044_tests_included_in_run:
+    result: PASS
+    note: >
+      test/letflow/engine/token_test.exs, test/letflow/engine/instance_state_test.exs,
+      and test/letflow/engine/transition_test.exs (including the property test
+      "calling transition/3 twice with the identical (snapshot, state, event)
+      triple always returns == -equal results", test/letflow/engine/transition_test.exs:52)
+      all executed as part of the full-suite run above — no isolated/filtered
+      run was needed since the full suite already covers them and reports
+      0 failures.
+
+  known_noise_not_a_failure:
+    - >
+      Verbose SQL query debug logging (`[debug] QUERY OK ...` lines, including
+      tenant-schema DDL/DML from multi-tenant test fixtures) appears in raw
+      mix test output (config/test.exs's default test log level) — expected,
+      not indicative of any problem.
+    - >
+      Repeated `[error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/...` lines (nxdomain) — expected:
+      OIDC discovery is deliberately pointed at an unreachable placeholder
+      host in test config to exercise retry/failure-handling paths, not a
+      real connectivity problem.
+    - >
+      `warning: ExUnit.Case.register_test/4 is deprecated` (3 occurrences,
+      pre-existing property-test macro usage) and `warning: default values
+      for the optional arguments in .../1 are never used` (pre-existing
+      test-helper functions) and `warning: redefining module
+      Letflow.Repo.Migrations.CreateEventTypeRegistry` (expected artifact of
+      the `test` alias's ecto.migrate re-running in the same BEAM session) —
+      compiler warnings only, not failures, and not introduced by REQ-044's
+      own changes (grepped: none reference lib/letflow/engine/ or
+      test/letflow/engine/).
+
+pre_existing_failures_found: none
+issues_filed: none
+note_on_iss_0042: >
+  docs/issues/ISS-0042.yaml (Graph.t()'s CHK-04 START-node outgoing-edge
+  invariant being runtime-only, not type-representable) was already filed by
+  REVIEWER during this same run's Step 2d, prior to this step — it is a MINOR
+  type-safety observation, not a test failure, and required no action here.
+
+diagnosis: "N/A — no failures observed in this run. Nothing routed back to
+  ELIXIR-DEV or TEST-DESIGNER."
+
+regression_check: >
+  688 tests, 5 properties, 0 failures, full suite including REQ-044's new
+  test/letflow/engine/ suite (token_test.exs, instance_state_test.exs,
+  transition_test.exs) alongside all pre-existing tests. No pre-existing
+  failure was found masking this result, so Unblock-Everything did not
+  apply — nothing needed fixing before reporting PASS.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-20260818-WF02-REQ044-20260818.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

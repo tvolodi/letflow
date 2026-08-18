@@ -61,6 +61,17 @@
 # This migration must never run before the data copy (mix letflow.copy_identity_tables)
 # has completed for every registered tenant -- the guard below enforces that
 # mechanically rather than relying on operator discipline alone.
+#
+# ISS-0050 fix: a tenant_schemas row whose schema is missing groups/users/tenant_role
+# (e.g. provision_tenant_schema/1 ran but replay_migrations/2 has not finished, or a
+# leaked/incomplete fixture row) used to crash the guard with 42P01 undefined_table,
+# because the dynamic EXECUTE format(...) below must resolve %I.<table> at parse time
+# regardless of whether the WHERE clause would match any rows. Each per-table check is
+# now preceded by a to_regclass(format('%I.<table>', v_tenant.schema_name)) IS NULL
+# existence check -- the same to_regclass mechanism the idempotency short-circuit above
+# already uses -- so a missing table is treated as "copy not verifiable, skip the drop"
+# (v_all_copied := FALSE, RAISE NOTICE naming the tenant/schema/missing table) instead
+# of crashing. See lib/letflow/design/iss-0050-drop-legacy-guard-missing-table.md.
 defmodule Letflow.Repo.Migrations.DropLegacyPublicIdentityTables do
   use Ecto.Migration
 
@@ -84,46 +95,68 @@ defmodule Letflow.Repo.Migrations.DropLegacyPublicIdentityTables do
 
       FOR v_tenant IN SELECT tenant_id, schema_name FROM public.tenant_schemas LOOP
         -- groups: every public.groups row for this tenant must exist (by id) in
-        -- the tenant's own groups copy.
-        EXECUTE format(
-          'SELECT count(*) FROM public.groups g WHERE g.tenant_id = %L
-             AND NOT EXISTS (SELECT 1 FROM %I.groups tg WHERE tg.id = g.id)',
-          v_tenant.tenant_id, v_tenant.schema_name
-        ) INTO v_missing_count;
-
-        IF v_missing_count > 0 THEN
+        -- the tenant's own groups copy. ISS-0050: the table itself might not exist
+        -- yet for this tenant (mid-provisioning, or a leaked fixture row) -- check
+        -- existence first rather than letting the dynamic EXECUTE below crash with
+        -- 42P01 when it tries to resolve %I.groups at parse time.
+        IF to_regclass(format('%I.groups', v_tenant.schema_name)) IS NULL THEN
           v_all_copied := FALSE;
-          RAISE NOTICE 'DropLegacyPublicIdentityTables: tenant % missing % groups row(s) in schema %.',
-            v_tenant.tenant_id, v_missing_count, v_tenant.schema_name;
+          RAISE NOTICE 'DropLegacyPublicIdentityTables: tenant % schema %.groups does not exist -- treating copy as incomplete for this tenant.',
+            v_tenant.tenant_id, v_tenant.schema_name;
+        ELSE
+          EXECUTE format(
+            'SELECT count(*) FROM public.groups g WHERE g.tenant_id = %L
+               AND NOT EXISTS (SELECT 1 FROM %I.groups tg WHERE tg.id = g.id)',
+            v_tenant.tenant_id, v_tenant.schema_name
+          ) INTO v_missing_count;
+
+          IF v_missing_count > 0 THEN
+            v_all_copied := FALSE;
+            RAISE NOTICE 'DropLegacyPublicIdentityTables: tenant % missing % groups row(s) in schema %.',
+              v_tenant.tenant_id, v_missing_count, v_tenant.schema_name;
+          END IF;
         END IF;
 
-        -- users: same check.
-        EXECUTE format(
-          'SELECT count(*) FROM public.users u WHERE u.tenant_id = %L
-             AND NOT EXISTS (SELECT 1 FROM %I.users tu WHERE tu.id = u.id)',
-          v_tenant.tenant_id, v_tenant.schema_name
-        ) INTO v_missing_count;
-
-        IF v_missing_count > 0 THEN
+        -- users: same check, plus the same missing-table tolerance.
+        IF to_regclass(format('%I.users', v_tenant.schema_name)) IS NULL THEN
           v_all_copied := FALSE;
-          RAISE NOTICE 'DropLegacyPublicIdentityTables: tenant % missing % users row(s) in schema %.',
-            v_tenant.tenant_id, v_missing_count, v_tenant.schema_name;
+          RAISE NOTICE 'DropLegacyPublicIdentityTables: tenant % schema %.users does not exist -- treating copy as incomplete for this tenant.',
+            v_tenant.tenant_id, v_tenant.schema_name;
+        ELSE
+          EXECUTE format(
+            'SELECT count(*) FROM public.users u WHERE u.tenant_id = %L
+               AND NOT EXISTS (SELECT 1 FROM %I.users tu WHERE tu.id = u.id)',
+            v_tenant.tenant_id, v_tenant.schema_name
+          ) INTO v_missing_count;
+
+          IF v_missing_count > 0 THEN
+            v_all_copied := FALSE;
+            RAISE NOTICE 'DropLegacyPublicIdentityTables: tenant % missing % users row(s) in schema %.',
+              v_tenant.tenant_id, v_missing_count, v_tenant.schema_name;
+          END IF;
         END IF;
 
         -- tenant_role: no tenant_id column -- partitioned via groups' tenant_id,
-        -- same join shape as Letflow.IdentityMigration.copy_tenant/2 uses.
-        EXECUTE format(
-          'SELECT count(*) FROM public.tenant_role tr
-             JOIN public.groups g ON tr.group_id = g.id
-             WHERE g.tenant_id = %L
-             AND NOT EXISTS (SELECT 1 FROM %I.tenant_role ttr WHERE ttr.id = tr.id)',
-          v_tenant.tenant_id, v_tenant.schema_name
-        ) INTO v_missing_count;
-
-        IF v_missing_count > 0 THEN
+        -- same join shape as Letflow.IdentityMigration.copy_tenant/2 uses. Same
+        -- missing-table tolerance as groups/users above.
+        IF to_regclass(format('%I.tenant_role', v_tenant.schema_name)) IS NULL THEN
           v_all_copied := FALSE;
-          RAISE NOTICE 'DropLegacyPublicIdentityTables: tenant % missing % tenant_role row(s) in schema %.',
-            v_tenant.tenant_id, v_missing_count, v_tenant.schema_name;
+          RAISE NOTICE 'DropLegacyPublicIdentityTables: tenant % schema %.tenant_role does not exist -- treating copy as incomplete for this tenant.',
+            v_tenant.tenant_id, v_tenant.schema_name;
+        ELSE
+          EXECUTE format(
+            'SELECT count(*) FROM public.tenant_role tr
+               JOIN public.groups g ON tr.group_id = g.id
+               WHERE g.tenant_id = %L
+               AND NOT EXISTS (SELECT 1 FROM %I.tenant_role ttr WHERE ttr.id = tr.id)',
+            v_tenant.tenant_id, v_tenant.schema_name
+          ) INTO v_missing_count;
+
+          IF v_missing_count > 0 THEN
+            v_all_copied := FALSE;
+            RAISE NOTICE 'DropLegacyPublicIdentityTables: tenant % missing % tenant_role row(s) in schema %.',
+              v_tenant.tenant_id, v_missing_count, v_tenant.schema_name;
+          END IF;
         END IF;
       END LOOP;
 

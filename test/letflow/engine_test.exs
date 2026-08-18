@@ -714,8 +714,12 @@ defmodule Letflow.EngineTest do
     end
   end
 
-  describe "AC6 -- moduledoc names the process-vs-row open question, cites the stage doc, leaves later engine subsystems to their own decision" do
-    test "names the question as this stage's largest open design question and cites stage-3-instance-engine.md's second Early finding" do
+  # AC6: moduledoc names the process-vs-row open question, cites the stage doc,
+  # leaves later engine subsystems to their own decision.
+  describe "AC6 -- moduledoc names the process-vs-row open question" do
+    # Names the question as this stage's largest open design question and cites
+    # stage-3-instance-engine.md's second Early finding.
+    test "cites stage doc as source of the open design question" do
       doc = normalized_moduledoc(Engine)
 
       assert doc =~

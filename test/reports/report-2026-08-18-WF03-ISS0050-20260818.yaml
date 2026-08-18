@@ -1,0 +1,51 @@
+run_id: WF03-ISS0050-20260818
+agent: TEST-RUNNER
+step: "04c"
+date: "2026-08-18"
+branch: feature/WF03-ISS0050-20260818
+
+commands_run:
+  - "docker compose ps  # letflow-postgres-1 already Up (healthy) on
+    port 5462, 38h uptime -- no-op, no restart needed"
+  - "mix compile --warnings-as-errors"
+  - "mix test  (full suite, run against letflow-postgres-1)"
+
+compile_result:
+  status: PASS
+  output: "mix compile --warnings-as-errors exited 0 with no output --
+    clean compile, 0 warnings"
+
+test_result:
+  status: PASS
+  summary: "5 properties, 846 tests, 0 failures"
+  finished_in: "90.2 seconds (2.0s async, 88.1s sync)"
+  reconfirmed: >
+    Ran the full `mix test` summary line a second time (grep for
+    Finished/failures/excluded across a fresh invocation) to confirm the
+    count was stable: identical "5 properties, 846 tests, 0 failures".
+
+scope_covered: >
+  Full suite, not just this run's own files. Includes
+  test/letflow/identity_migration_test.exs (8 tests: 7 pre-existing +
+  TEST-DESIGNER's new ISS-0050 regression test at line 407, already
+  independently fail-then-pass verified by TEST-DESIGN-VALIDATOR in
+  step-04b) plus every other test file in test/letflow/ and test/support/.
+
+triage:
+  this_run_own_scope_failures: "none -- 0 failures total, nothing to fix"
+  pre_existing_unrelated_failures: "none observed -- the known ISS-0048
+    orphaned-schema flake class did not resurface in this run"
+
+diagnosis_for_iss0050_scope: >
+  identity_migration_test.exs compiled and ran clean as part of the full
+  846-test run, contributing its 8 tests with 0 failures. No
+  Postgrex.Error 42P01 or any other failure occurred, consistent with
+  ELIXIR-DEV's fix (priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs)
+  and TEST-DESIGNER/TEST-DESIGN-VALIDATOR's prior fail-then-pass proof
+  holding at full-suite scope, not just in isolation.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-18-WF03-ISS0050-20260818.yaml
+  next_action: "Route to ISSUE-FIXER Step 5 (close issue)"

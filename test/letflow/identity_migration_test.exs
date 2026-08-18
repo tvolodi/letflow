@@ -404,6 +404,53 @@ defmodule Letflow.IdentityMigrationTest do
       recreate_legacy_public_tables!()
     end
 
+    test "ISS-0050 regression: a tenant schema missing one identity table makes the guard SKIP the drop, not raise 42P01" do
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
+
+      # Simulate the ISS-0050 scenario: a tenant_schemas registry row exists and
+      # its schema is genuinely CREATE SCHEMA'd (provisioned_tenant!/0 already did
+      # both), but ONE of the three identity tables the guard's dynamic
+      # EXECUTE format('%I.<table>', ...) touches is missing from that schema --
+      # e.g. TenantProvisioning.replay_migrations/2 was interrupted mid-flight
+      # before creating it, or a leaked fixture row's schema was never fully
+      # replayed. Dropping the tenant's own groups table directly reproduces
+      # exactly that physical shape without needing to fabricate a whole
+      # incomplete-replay code path.
+      Repo.query!(~s(DROP TABLE IF EXISTS "#{schema_name}".groups CASCADE))
+
+      ensure_drop_migration_loaded!()
+      version = unique_drop_migration_version()
+
+      on_exit(fn ->
+        Repo.query!("DELETE FROM schema_migrations WHERE version = $1", [version])
+      end)
+
+      # Pre-fix, this Ecto.Migrator.run/4 call itself raises
+      # `** (Postgrex.Error) ERROR 42P01 (undefined_table) relation
+      # "<schema>.groups" does not exist` from inside the guard's dynamic EXECUTE
+      # -- see ISSUE-FIXER's diagnosis in
+      # handoffs/WF03-ISS0050-20260818/step-01-issue-fixer.json. Post-fix, the
+      # guard's to_regclass(...) IS NULL existence check catches the missing
+      # table first, logs a RAISE NOTICE, and folds it into v_all_copied := FALSE
+      # instead -- so this call must complete normally and return the applied
+      # version, exactly like the "skip-on-uncopied-row" test above.
+      assert [^version] =
+               Ecto.Migrator.run(
+                 Letflow.Repo,
+                 [{version, Letflow.Repo.Migrations.DropLegacyPublicIdentityTables}],
+                 :up,
+                 all: true,
+                 log: false
+               )
+
+      # The guard skipped: all three legacy public tables must still exist (same
+      # "skip, don't partially drop" invariant as the uncopied-row test above).
+      for table <- ["groups", "users", "tenant_role"] do
+        %{rows: [[regclass]]} = Repo.query!("SELECT to_regclass('public.#{table}')::text")
+        assert regclass != nil, "expected public.#{table} to survive the skipped drop"
+      end
+    end
+
     test "re-running the drop migration after it already succeeded is a clean no-op (idempotent, per its own to_regclass IS NULL guard)" do
       # No tenant/copy needed for this one -- exercises the migration's own
       # "already absent -- nothing to do" RAISE NOTICE branch directly.

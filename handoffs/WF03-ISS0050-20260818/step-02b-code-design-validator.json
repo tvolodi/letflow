@@ -1,0 +1,46 @@
+{
+  "handoff_id": "a1b2c3d4-0000-4000-8000-000000000004",
+  "run_id": "WF03-ISS0050-20260818",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0050-20260818/step-02b-code-design-validator.json",
+  "created_at": "2026-08-18T21:41:45Z",
+  "started_at": "2026-08-18T21:41:45Z",
+  "completed_at": "2026-08-18T21:42:36Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["step-01-issue-fixer.json", "step-02-code-designer.json"],
+    "artifacts_in": [
+      "lib/letflow/design/iss-0050-drop-legacy-guard-missing-table.md",
+      "handoffs/WF03-ISS0050-20260818/step-02-code-designer.json",
+      "priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs"
+    ],
+    "owned_modules": ["priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs"]
+  },
+  "task": {
+    "description": "Independently validate lib/letflow/design/iss-0050-drop-legacy-guard-missing-table.md against ISS-0050's diagnosis (step-01-issue-fixer.json) and the acceptance criteria in step-02-code-designer.json's task block. Re-derive your verdict from the design artifact and the migration file itself -- do not trust CODE-DESIGNER's own summary.",
+    "acceptance_criteria": [
+      "Design covers all 3 tables (groups, users, tenant_role), each independently guarded with a to_regclass-style existence check before the existing dynamic EXECUTE.",
+      "A missing table folds into the existing v_all_copied := FALSE / skip-the-DROP path, not a new/different failure mode.",
+      "IF/ELSE structure (not CONTINUE/skip-the-rest) confirmed, so a tenant missing only one table still gets its other two checked.",
+      "Top-of-block idempotency short-circuit is unchanged.",
+      "No Ecto schema/module design elements were introduced (this is a migration-file-only fix, correctly scoped).",
+      "ISS-0048 is correctly left out of scope, not silently expanded into."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-derived (not echoing CODE-DESIGNER's own summary). Read lib/letflow/design/iss-0050-drop-legacy-guard-missing-table.md in full, cross-checked it line-by-line against the current priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs and against step-01-issue-fixer.json's diagnosis. All 6 acceptance criteria verified PASS: (1) all 3 tables (groups/users/tenant_role) each get an independent to_regclass(format('%I.<table>', v_tenant.schema_name)) IS NULL existence check placed before that table's existing dynamic EXECUTE (design section 2) -- confirmed the ELSE-branch EXECUTE text in the design is a verbatim match (modulo indentation) of the current migration file's existing per-table EXECUTE format(...) blocks at lines 88-92, 101-105, 115-121, so the design correctly wraps rather than alters existing logic. (2) a missing table sets v_all_copied := FALSE only -- no new terminal state, RETURN, or exception path -- folding into the existing skip-the-DROP check at current lines 130-133 (design section 5), confirmed. (3) design section 2 explicitly rejects CONTINUE (would under-report by skipping a tenant's remaining table checks) in favor of IF/ELSE per table block, so a tenant missing only one of three tables still gets the other two checked and reported independently -- confirmed structurally sound (section 1's earlier pseudocode floats CONTINUE as a considered-and-superseded alternative before section 2 finalizes IF/ELSE as the actual design; not a residual ambiguity since section 2 is explicit and section 8 states no open questions). (4) top-of-block idempotency short-circuit (to_regclass('public.users')/('public.groups')/('public.tenant_role') IS NULL AND ... RETURN, current lines 78-83) is confirmed untouched -- the new per-tenant checks only run inside the FOR loop, strictly after this early return. (5) design states explicitly and repeatedly (header block + section 0) that this is a migration-file-only SQL/plpgsql change with no Ecto schema, @spec, or lib/letflow/*.ex module touched -- confirmed correct scoping; no implementation code for any Elixir module is present, only plpgsql structure for the DO $$ block itself (the SQL/pseudocode precision here is the domain-appropriate design granularity for a migration guard, per step-02-code-designer.json's own acceptance criterion 2, which explicitly required precision sufficient that ELIXIR-DEV does not have to invent the check -- distinct from Ecto schema/module design where signatures-only would apply). (6) ISS-0048 (orphaned schema accumulation) is explicitly and correctly left out of scope in the design's header and section 0 -- the design only makes the guard tolerate a missing-table row regardless of why it exists, without attempting to fix the leak itself; section 7 flags the one currently-leaked test-DB row as an operational note for ELIXIR-DEV/TEST-RUNNER, not a scope expansion. No TBD/deferral language found anywhere in the design; section 8 explicitly states no open questions.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Route to ELIXIR-DEV for implementation"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

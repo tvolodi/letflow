@@ -1,0 +1,68 @@
+{
+  "handoff_id": "b2c3d4e5-0063-4a00-9f01-req063step02c",
+  "run_id": "WF02-REQ063-20260818",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ063-20260818/step-02c-security-review.json",
+  "created_at": "2026-08-18T09:29:56Z",
+  "started_at": "2026-08-18T09:29:56Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-063"],
+    "requirement_text": {
+      "REQ-063": "Execute Decision 0006's D1: relocate users, groups and tenant_role from the public schema into each tenant's own Postgres schema via :prefix. Full design: lib/letflow/design/req063-identity-tables-schema-per-tenant.md. Full decision record and security rationale: docs/migration/decisions/0006-identity-tables-schema-per-tenant.md, section 3 especially -- that section is THE reason this run has a HIGH-priority security gate: moving users per-schema changes the meaning of two shipped unique indexes (username; external_realm+external_id), and decision 0006 section 3.2's central claim (the global one-OIDC-identity-per-user guarantee relocates from users to tenants_idp_realm_id_partial_index rather than being lost) is explicitly flagged in the decision record itself as needing independent SECURITY-REVIEWER re-derivation, not acceptance on the decision's own say-so."
+    },
+    "related_handoff_ids": [
+      "b2c3d4e5-0063-4a00-9f01-req063step01",
+      "b2c3d4e5-0063-4a00-9f01-req063step01b",
+      "b2c3d4e5-0063-4a00-9f01-req063step02a"
+    ],
+    "artifacts_in": [
+      "docs/migration/decisions/0006-identity-tables-schema-per-tenant.md",
+      "lib/letflow/design/req063-identity-tables-schema-per-tenant.md",
+      "priv/repo/migrations/20260819000001_create_groups_tenant_scoped.exs",
+      "priv/repo/migrations/20260819000002_create_tenant_role_tenant_scoped.exs",
+      "priv/repo/migrations/20260819000003_create_users_tenant_scoped.exs",
+      "priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/identity_migration.ex",
+      "lib/mix/tasks/letflow.copy_identity_tables.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/plugs/auth_pipeline.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Read context.artifacts_in and git diff main...HEAD on this branch. This diff touches a tenant-data path -- scope test result is YES, in scope, do not skip to out-of-scope PASS.\n\nRun the full INV-1..INV-8 checklist per security-invariants.md, but weight your time toward these four items this run's own history makes highest-risk, each with a specific claim to verify rather than accept:\n\n1. **INV-1 (tenant isolation) -- decision 0006 section 3.2's central claim.** The users migration's unique_index(:users, [:username]) and the external-identity partial index both become per-tenant-schema-scoped rather than global once users moves off the public schema. Decision 0006 argues the global one-OIDC-identity-per-user guarantee is RELOCATED to tenants_idp_realm_id_partial_index (a realm binds to exactly one tenant, immutably) rather than lost. Independently re-derive this yourself against the actual shipped migrations -- read priv/repo/migrations/20260816000001_create_tenants.exs's tenants_idp_realm_id_partial_index directly, and lib/letflow/identity/tenant.ex's update_changeset/2 to confirm idp_realm_id truly cannot be reassigned after creation. Do not accept decision 0006's argument on its own say-so -- this is the one thing this whole run exists to have you check.\n\n2. **INV-7 (SQL injication / identifier safety) -- the drop migration's dynamic EXECUTE format(...).** priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs reads schema_name values out of public.tenant_schemas and interpolates them into a dynamic EXECUTE format(...) statement to build its per-row existence check across N tenant schemas (schema_name isn't known at migration-write time, only at migration-run time). The migration's own header comment argues schema_name is safe because it only ever holds values Letflow.TenantProvisioning.schema_name_for_tenant/1 produced (tenant_[0-9a-f]{32} shape, constrained by Ecto.UUID.cast/1, never free text) and is read back from a column this project's own code populated, never accepted as a migration parameter. Verify this claim directly: confirm no code path lets an arbitrary string land in tenant_schemas.schema_name (check the column's origin at every INSERT into that table, not just the one you'd expect), and confirm the migration's EXECUTE format(...) uses %I (identifier quoting) or an equivalent safe-quoting mechanism for schema_name and %L/parameterization for any literal values, not raw string concatenation.\n\n3. **INV-1/INV-8 -- the drop migration's guard mechanism (ELIXIR-DEV's own engineering call, explicitly flagged for you).** Design section 5 left the guard mechanism as an open question; ELIXIR-DEV implemented a per-row existence check (by primary key) rather than a row-count-parity check or an operator flag, with reasoning recorded in the migration's own header comment and in handoffs/WF02-REQ063-20260818/step-02a-elixir-dev.json's result.summary/issues. Evaluate this call on its merits: does a per-row PK-existence check actually close the corruption gap it claims to (a row landing in the wrong tenant while another goes missing, with counts still balancing)? Is skip-all-three-tables-on-any-single-missing-row the right failure mode, or does it risk never being able to complete the cutover if even one tenant is perpetually out of sync? State your own verdict, don't just confirm ELIXIR-DEV's reasoning is internally consistent.\n\n4. **INV-8 (unresolved {:ok,_} matches on external-I/O paths) -- provision_oidc_user/3 to /4's arity change.** Confirm lib/letflow/plugs/auth_pipeline.ex's updated call site correctly handles a new possible error case (if TenantProvisioning.schema_name_for_tenant/1 fails) rather than assuming success, and that no other caller of the old /3 arity was missed (grep for provision_oidc_user across the whole lib/ and test/ tree, not just the design doc's claimed single caller).\n\nFor every other INV-2..INV-6 not named above, run your standard APPLIES/NOT-APPLICABLE determination and check as usual -- don't skip them, just don't over-invest relative to the four above.",
+    "acceptance_criteria": [
+      "Verdict stated per invariant, INV-1 through INV-8, APPLIES or NOT-APPLICABLE, with a PASS/FAIL for each APPLIES invariant",
+      "INV-1's decision-0006-section-3.2 claim independently re-derived against the actual shipped tenants_idp_realm_id_partial_index and Tenant.update_changeset/2, not accepted from the decision record's own text",
+      "INV-7's dynamic EXECUTE format(...) verified for identifier-quoting safety, not just trusted from the migration's own header comment",
+      "ELIXIR-DEV's guard-mechanism engineering call evaluated on its own merits with an independent verdict, not merely confirmed as internally consistent",
+      "provision_oidc_user's arity change confirmed to have no missed callers and correct new-error-case handling",
+      "FAIL immediately, no partial credit, if any APPLIES invariant fails"
+    ]
+  },
+  "result": {
+    "status": "",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ063-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ063-20260818",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

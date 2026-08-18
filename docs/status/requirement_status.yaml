@@ -4315,3 +4315,46 @@ history:
       row-based instance state) -- left for CODE-DESIGNER per the
       requirement's own text, citing stage-3-instance-engine.md's second
       Early finding.
+  - req: REQ-045
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-18T20:07:51Z"
+    note: >
+      WF02-REQ045-20260818 Step 6. RELEASE-VALIDATOR PASSed at Step 5,
+      independently re-confirming all seven acceptance criteria against
+      lib/letflow/engine.ex and test/letflow/engine_test.exs; one unrelated
+      pre-existing flaky test filed separately as docs/issues/ISS-0049.yaml,
+      not blocking this run. Shipped: lib/letflow/engine.ex
+      (Letflow.Engine.create/2, EE-01 instance-start -- resolved the
+      process-vs-row open question toward a plain transactional context
+      module, no gen_statem/process per instance), lib/letflow/definitions/
+      graph.ex's new Graph.from_map/1, and the tenant_provisioning.ex
+      event_type_registry seed fix (OQ-3a). One rework cycle: TEST-RUNNER
+      found 2 real bugs (END-first-node completion handled incorrectly;
+      missing guard for gateway-not-yet-implemented), both fixed before
+      RELEASE-VALIDATOR's PASS. Final suite: 797/797 green (the one
+      unrelated flake noted above not counted against this run).
+      README.md checked directly: "What's here today" and "Running it"
+      still describe only the original pilot slice (Letflow.ProcessInstance
+      gen_statem, InstanceSupervisor, TransitionEvent, Router's 3 HTTP
+      endpoints, the curl/mix flow) -- REQ-045 added an internal
+      context-module function with no new HTTP route (POST
+      /api/v1/instances is explicitly S4 scope per this requirement's own
+      acceptance criteria) and no gen_statem/process change, so neither
+      section nor the ASCII state diagram is affected. Left untouched.
+      REQ-045's seven acceptance criteria re-read directly from
+      docs/requirements.yaml: none names a docs/migration/decisions/*.md
+      file. One criterion requires the moduledoc itself to cite
+      stage-3-instance-engine.md's second Early finding (a moduledoc
+      content check, confirmed already satisfied by ELIXIR-DEV/REVIEWER,
+      not a doc-file edit for this step) -- no other stage-N-*.md citation
+      among the seven.
+      docs/migration/stage-3-instance-engine.md's header (lines 3-8)
+      updated: REQ-043 and REQ-045 moved from the pending list into the
+      done list (REQ-043 was already `done` in docs/requirements.yaml per
+      its own REQ-043 DOC-UPDATER entry above, but the header's pending
+      list had not been updated to reflect that -- fixed here alongside
+      REQ-045 since both share the same line), pending count corrected
+      from 18 to 16, matching the REQ-044/REQ-049 DOC-UPDATER precedent
+      for this same header.
+      Flipped docs/requirements.yaml REQ-045 status: in_progress -> done.

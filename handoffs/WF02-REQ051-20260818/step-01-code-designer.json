@@ -1,0 +1,51 @@
+{
+  "handoff_id": "4c1e2f3a-8b5d-4e9c-a1f0-6d7c8b9a0e1f",
+  "run_id": "WF02-REQ051-20260818",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ051-20260818/step-01-code-designer.json",
+  "created_at": "2026-08-18T19:00:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-051"],
+    "requirement_text": {
+      "REQ-051": "Port src/engine/transition.zig's PARALLEL_GATEWAY branches (per src/design/engine.md \"Section EE-06: Parallel Split\", L2638 and \"Section EE-07: Parallel Join\", L2898) into REQ-044's transition dispatch. Pure, no I/O, same contract as REQ-044. Split and join ship together because they share the Token/JoinCounter model and neither is independently meaningful.\nSPLIT (EE-06):\n- A token reaching a PARALLEL_GATEWAY with N outgoing edges produces N independent tokens simultaneously, one per edge, each with its own branch_id (EE-06 AC1).\n- Each token progresses independently: a task completion on one branch never blocks another (EE-06 AC2).\n- The split emits a PendingEvent recording the split (EE-06 AC3), and all N tokens are created in one transaction at the persistence layer (EE-06 AC4 / DB-03 -- the atomicity is REQ-047's orchestration job, the token production is this requirement's).\nJOIN (EE-07):\n- A PARALLEL_GATEWAY acting as a join waits until all ACTIVE incoming tokens have arrived before creating the single outgoing token (EE-07 AC1), tracked via transition.zig's JoinCounter struct (received_count/expected_from_branches, added by R-Co's ISS-105).\n- \"Active\" EXCLUDES tokens on branches cancelled via REQ-052's EE-08 path: a cancelled branch contributes no token and is excluded from the join count, so the join still fires when the remaining active branches arrive (EE-07 AC2/AC3). This exclusion is the single subtlest rule in the parallel model -- a naive implementation waits forever.\n- If ALL branches of a split are cancelled before any reaches the join, the join node is itself cancelled and the instance transitions to CANCELLED (EE-07 AC4).\n- The join fires EXACTLY ONCE regardless of concurrent token arrival order (EE-07 AC5).\n- Variable key collisions between branches merging at the join follow REQ-049's EE-09 collision policy (overwrite plus VARIABLE_OVERWRITTEN event) -- reuse it, do not write a second merge rule.\n\nIMPORTANT SCOPE NOTE (confirmed by ORCH before dispatch): REQ-052 (instance cancellation, still pending) is NOT a dependency of this requirement. REQ-052's own requirements.yaml entry states explicitly: \"That token-level rule [cancelled-branch exclusion] lives in REQ-051's pure transition logic; this requirement [REQ-052] owns the instance-level persistence of a cancellation.\" This means REQ-051 must itself define whatever data representation marks a token/branch as cancelled (e.g. a token status or a cancelled-branch-ids set on InstanceState) -- purely, with no I/O -- and the join logic reads that representation. REQ-052 will later be the caller-initiated path that sets it via real persistence; you do not need REQ-052 to exist to design or implement this. Do not block on it; do not silently invent instance-level persistence to compensate for it (that's out of scope -- REQ-047/052's job)."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/engine/instance_state.ex",
+      "lib/letflow/engine/token.ex",
+      "lib/letflow/design/req044-transition-kernel.md",
+      "lib/letflow/design/req049-variable-scoping-merge.md"
+    ],
+    "owned_modules": ["lib/letflow/engine", "test/letflow/engine"]
+  },
+  "task": {
+    "description": "Design REQ-051: PARALLEL_GATEWAY split and join in Letflow.Engine.Transition's pure dispatch (lib/letflow/engine/transition.ex), matching R-Co's transition.zig EE-06/EE-07 sections (see requirement_text above for the exact behavioral contract, and c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\engine\\transition.zig and src\\design\\engine.md if reachable from this environment for the original port source -- if unreachable, work from the requirement_text's own description, which is a faithful summary). Read lib/letflow/engine/transition.ex, instance_state.ex, and token.ex in full first, plus req044's and req049's own design docs for this module's established conventions (dispatch function shape, PendingEvent representation, purity discipline, how REQ-049's merge policy is invoked).\n\nDesign must cover: (1) Token.branch_id generation/uniqueness for a split producing N tokens; (2) how a join's JoinCounter (received_count/expected_from_branches) is represented in InstanceState -- pure data, no process/GenServer; (3) the cancelled-branch representation this requirement itself must introduce (per the scope note above) and how the join's active-token count excludes it; (4) the all-branches-cancelled -> join-cancelled -> instance CANCELLED path; (5) exactly-once join firing under concurrent arrival order; (6) reuse (not reimplementation) of REQ-049's variable merge/collision policy at the join.",
+    "acceptance_criteria": [
+      "Design doc(s) at lib/letflow/design/ (following req044/req049's naming convention) cover every one of REQ-051's 6 acceptance criteria with a concrete design element.",
+      "Design explicitly specifies the new cancelled-branch/token representation this requirement introduces (do not defer it to REQ-052 -- REQ-052 depends on it existing).",
+      "Design explicitly reuses REQ-049's merge-policy function rather than defining a second collision rule.",
+      "Design stays within Transition's pure, no-I/O contract (no Ecto/Repo calls).",
+      "Open questions listed explicitly rather than silently resolved.",
+      "next_action set to 'Route to CODE-DESIGN-VALIDATOR'."
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ051-20260818",
+      "commit_sha_list": []
+    }
+  }
+}

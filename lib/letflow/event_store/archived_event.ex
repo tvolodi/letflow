@@ -45,13 +45,16 @@ defmodule Letflow.EventStore.ArchivedEvent do
   `prefix: schema_name` explicitly at call time rather than relying on a
   compile-time prefix.
 
-  ## `tenant_id` (design §2.5)
+  ## No `tenant_id` column (Decision 0006 D2)
 
-  This table is one of three (with `events` and `instance_projections`) that
-  carry `tenant_id`, matching R-Co's own settled `adp-0x` state exactly — not
-  every event-store table needs it, since every table here already lives
-  inside one tenant's own Postgres schema. See the design doc §2.5 for the
-  full asymmetry rationale before "completing" it on another table.
+  This table carried `tenant_id` until Decision 0006 D2
+  (`docs/migration/decisions/0006-identity-tables-schema-per-tenant.md`)
+  dropped it from every event-store table — the per-tenant Postgres schema
+  already identifies the owning tenant, and 0006 §R3 documents that this
+  table's own original migration header already conceded the column carried
+  at most one distinct value per schema. See `lib/letflow/design/req023-event-store-schema.md`
+  §2.5 for the superseded asymmetry rationale (retained there for history,
+  not as current guidance).
   """
 
   use Ecto.Schema
@@ -69,7 +72,6 @@ defmodule Letflow.EventStore.ArchivedEvent do
     field(:idempotency_key, :string)
     field(:metadata, :map, default: %{})
     field(:global_seq, :integer)
-    field(:tenant_id, Ecto.UUID)
     field(:archived_at, :utc_datetime_usec)
   end
 
@@ -86,7 +88,6 @@ defmodule Letflow.EventStore.ArchivedEvent do
     :idempotency_key,
     :metadata,
     :global_seq,
-    :tenant_id,
     :archived_at
   ]
 
@@ -99,8 +100,7 @@ defmodule Letflow.EventStore.ArchivedEvent do
     :actor_id,
     :sequence_number,
     :idempotency_key,
-    :global_seq,
-    :tenant_id
+    :global_seq
   ]
 
   @doc """

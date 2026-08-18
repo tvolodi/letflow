@@ -36,15 +36,14 @@ defmodule Letflow.Engine.Task do
   `prefix: schema_name` explicitly at call time rather than relying on a
   compile-time prefix.
 
-  ## `tenant_id` is never caller-supplied (design §6)
+  ## No `tenant_id` column (Decision 0006 D2)
 
-  Neither changeset below is reachable from any built context-module function
-  yet, but the contract every future caller must follow is fixed here: the
-  value cast into `tenant_id` must always be
-  `Letflow.TenantProvisioning.tenant_id_for_schema_name/1`'s result, derived
-  from the `:prefix` the write targets — never a value taken from external
-  caller input. See `Letflow.EventStore.append/2` and
-  `Letflow.Definitions.create/2` for the established shape of that contract.
+  This table lived inside a per-tenant Postgres schema from the start
+  (Decision 0003 Dimension B) — the schema boundary alone already made any
+  `tenant_id` column here fully redundant. Decision 0006 D2
+  (`docs/migration/decisions/0006-identity-tables-schema-per-tenant.md`)
+  removes it. Do not re-add a `tenant_id` field to this schema without first
+  re-reading that record.
   """
 
   use Ecto.Schema
@@ -52,7 +51,6 @@ defmodule Letflow.Engine.Task do
 
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "tasks" do
-    field(:tenant_id, Ecto.UUID)
     field(:instance_id, Ecto.UUID)
     field(:token_id, Ecto.UUID)
     field(:node_id, :string)
@@ -84,7 +82,6 @@ defmodule Letflow.Engine.Task do
   def insert_changeset(task, attrs) do
     task
     |> cast(attrs, [
-      :tenant_id,
       :instance_id,
       :token_id,
       :node_id,
@@ -93,14 +90,14 @@ defmodule Letflow.Engine.Task do
       :assignee_ref,
       :form_schema
     ])
-    |> validate_required([:tenant_id, :instance_id, :token_id, :node_id, :node_name])
+    |> validate_required([:instance_id, :token_id, :node_id, :node_name])
   end
 
   @doc """
   Structural changeset for completing (or cancelling) an existing task row.
-  `instance_id`, `token_id`, `node_id`, `node_name` and `tenant_id` are
-  structurally not castable here — a task never changes which
-  instance/token/node/tenant it belongs to.
+  `instance_id`, `token_id`, `node_id` and `node_name` are structurally not
+  castable here — a task never changes which instance/token/node it belongs
+  to.
   """
   @spec complete_changeset(t(), attrs :: map()) :: Ecto.Changeset.t()
   def complete_changeset(task, attrs) do

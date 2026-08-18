@@ -193,13 +193,20 @@ defmodule Letflow.Definitions.PromotionReviewStore do
   Creates a `:pending_review` row from a `PromotionPlan.t()` + its digest.
   Re-verifies `digest` actually matches `plan` before writing (this module's
   own defense of `PromotionDigest`'s INV-PRM-5 — no comparator against a
-  `plan_digest`-shaped value is ever bypassed). `tenant_id` is always derived
-  from `opts[:prefix]` via `Letflow.TenantProvisioning.tenant_id_for_schema_name/1`
-  — never read from `args.plan.target_tenant_id` (design §2.3, addendum
-  resolution (c) of `docs/migration/decisions/0003-ecto-schema-strategy.md`).
-  A duplicate `(tenant_id, plan_digest)` while an earlier review is still
-  `pending_review`/`approved` (the partial unique index, REQ-035) surfaces as
-  `{:error, :duplicate_review}` — never a leaked changeset for that one case.
+  `plan_digest`-shaped value is ever bypassed).
+
+  **Post-Decision-0006-D2 note (REQ-064):** `promotion_reviews.tenant_id` no
+  longer exists as a column — the per-tenant Postgres schema already
+  identifies the tenant, so this function no longer stamps a `tenant_id`
+  value into the insert. `opts[:prefix]` is still resolved via
+  `Letflow.TenantProvisioning.tenant_id_for_schema_name/1` before any row is
+  written, purely as an early prefix-validity guard (an unprovisioned or
+  malformed prefix surfaces as `{:error, :invalid_schema_name}` here rather
+  than a raw error later out of `Repo.insert/2`) — its result is otherwise
+  unused. A duplicate `plan_digest` while an earlier review is still
+  `pending_review`/`approved` (the partial unique index, REQ-035, now
+  `[:plan_digest]` alone per Decision 0006 D2) surfaces as `{:error,
+  :duplicate_review}` — never a leaked changeset for that one case.
   """
   @spec insert_review(
           args :: %{
@@ -213,9 +220,8 @@ defmodule Letflow.Definitions.PromotionReviewStore do
     if PromotionDigest.verify_digest(digest, plan) do
       prefix = Keyword.fetch!(opts, :prefix)
 
-      with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      with {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
         attrs = %{
-          tenant_id: tenant_id,
           plan_digest: digest,
           def_id: plan.process_key,
           serialised_plan: Jason.encode!(plan),

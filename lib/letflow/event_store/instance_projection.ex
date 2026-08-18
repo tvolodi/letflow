@@ -86,13 +86,16 @@ defmodule Letflow.EventStore.InstanceProjection do
   `prefix: schema_name` explicitly at call time rather than relying on a
   compile-time prefix.
 
-  ## `tenant_id` (design §2.5)
+  ## No `tenant_id` column (Decision 0006 D2)
 
-  This table is one of three (with `events` and `events_archive`) that carry
-  `tenant_id`, matching R-Co's own settled `adp-0x` state exactly — not every
-  event-store table needs it, since every table here already lives inside one
-  tenant's own Postgres schema. See the design doc §2.5 for the full
-  asymmetry rationale before "completing" it on another table.
+  This table carried `tenant_id` until Decision 0006 D2
+  (`docs/migration/decisions/0006-identity-tables-schema-per-tenant.md`)
+  dropped it from every event-store table — the per-tenant Postgres schema
+  already identifies the owning tenant, and 0006 §R3 documents that this
+  table's own original migration header already conceded the column carried
+  at most one distinct value per schema. See `lib/letflow/design/req023-event-store-schema.md`
+  §2.5 for the superseded asymmetry rationale (retained there for history,
+  not as current guidance).
   """
 
   use Ecto.Schema
@@ -100,8 +103,6 @@ defmodule Letflow.EventStore.InstanceProjection do
 
   @primary_key {:instance_id, :binary_id, autogenerate: false}
   schema "instance_projections" do
-    field(:tenant_id, Ecto.UUID)
-
     field(:status, Ecto.Enum,
       values: [active: "ACTIVE", completed: "COMPLETED", cancelled: "CANCELLED", error: "ERROR"],
       default: :active
@@ -131,7 +132,6 @@ defmodule Letflow.EventStore.InstanceProjection do
     projection
     |> cast(attrs, [
       :instance_id,
-      :tenant_id,
       :status,
       :last_event_seq,
       :definition_id,
@@ -139,16 +139,16 @@ defmodule Letflow.EventStore.InstanceProjection do
       :current_nodes,
       :variables
     ])
-    |> validate_required([:instance_id, :tenant_id, :status, :definition_id])
+    |> validate_required([:instance_id, :status, :definition_id])
     |> unique_constraint(:correlation_key, name: :uq_instance_correlation)
   end
 
   @doc """
   Structural changeset for advancing an existing projection row. `instance_id`,
-  `tenant_id`, `definition_id` and `correlation_key` are structurally not
-  castable here — a projection never changes which instance or tenant it
-  describes, or which definition it was started from, or its correlation key
-  (all immutable after the EE-01 insert, design req043 §2.3).
+  `definition_id` and `correlation_key` are structurally not castable here —
+  a projection never changes which instance it describes, or which
+  definition it was started from, or its correlation key (all immutable
+  after the EE-01 insert, design req043 §2.3).
   """
   @spec update_changeset(t(), attrs :: map()) :: Ecto.Changeset.t()
   def update_changeset(projection, attrs) do

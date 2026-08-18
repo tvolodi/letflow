@@ -84,7 +84,6 @@ defmodule Letflow.Definitions.ProcessDefinition do
 
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "process_definitions" do
-    field(:tenant_id, Ecto.UUID)
     field(:name, :string)
     field(:version, :string)
     field(:description, :string)
@@ -111,8 +110,8 @@ defmodule Letflow.Definitions.ProcessDefinition do
   @spec create_changeset(t(), attrs :: map()) :: Ecto.Changeset.t()
   def create_changeset(definition, attrs) do
     definition
-    |> cast(attrs, [:tenant_id, :name, :version, :description, :stage, :graph, :created_by])
-    |> validate_required([:tenant_id, :name, :version, :graph, :created_by])
+    |> cast(attrs, [:name, :version, :description, :stage, :graph, :created_by])
+    |> validate_required([:name, :version, :graph, :created_by])
     |> validate_common()
   end
 

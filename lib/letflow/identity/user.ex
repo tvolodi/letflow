@@ -7,10 +7,13 @@ defmodule Letflow.Identity.User do
   migration/backfill semantics", "Unique index semantics", "Key
   invariants").
 
-  `tenant_id` is an intra-schema column per Decision B
-  (`docs/migration/decisions/0003-ecto-schema-strategy.md`) — it carries no
-  database-level foreign key to `tenants.id` (see the `CreateUsers`
-  migration's header comment for the full rationale).
+  `tenant_id` was an intra-schema column per Decision B
+  (`docs/migration/decisions/0003-ecto-schema-strategy.md`) until Decision
+  0006 D2 (`docs/migration/decisions/0006-identity-tables-schema-per-tenant.md`)
+  dropped it — the per-tenant Postgres schema (Decision 0006 D1) already
+  fully identifies which tenant this table's rows belong to, making the
+  column redundant. See 0006 §R1-R3 for the full reasoning and the `users`
+  per-tenant migration's own header for this table's specific history.
 
   `auth_source`-vs-external-fields consistency (adp-04a's rule 2:
   `auth_source: :oidc` requires both `external_id`/`external_realm`
@@ -30,7 +33,6 @@ defmodule Letflow.Identity.User do
 
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "users" do
-    field(:tenant_id, Ecto.UUID)
     field(:username, :string)
     field(:display_name, :string)
     field(:email, :string)
@@ -47,11 +49,11 @@ defmodule Letflow.Identity.User do
 
   @doc """
   Builds the insert changeset for a JIT-provisioned (OIDC) user, per
-  `lib/letflow/design/req018-jit-provisioning.md` §4/§5. `tenant_id`,
-  `external_realm`, `external_id`, `username`, `display_name`, and `email` are
-  populated from the caller-supplied `attrs` map (built by
-  `Letflow.Identity.provision_oidc_user/3` from its `IdentityContext` and
-  `tenant_id` arguments — never taken directly from raw external input by this
+  `lib/letflow/design/req018-jit-provisioning.md` §4/§5. `external_realm`,
+  `external_id`, `username`, `display_name`, and `email` are populated from
+  the caller-supplied `attrs` map (built by
+  `Letflow.Identity.provision_oidc_user/3` from its `IdentityContext`
+  argument — never taken directly from raw external input by this
   function). `password_hash` and `auth_source` are fixed, changeset-internal
   values — set unconditionally below, never accepted from `attrs`, so no
   caller can override them.
@@ -60,7 +62,6 @@ defmodule Letflow.Identity.User do
   def jit_changeset(%__MODULE__{} = user, attrs) do
     user
     |> cast(attrs, [
-      :tenant_id,
       :external_realm,
       :external_id,
       :username,
@@ -69,7 +70,6 @@ defmodule Letflow.Identity.User do
       :status
     ])
     |> validate_required([
-      :tenant_id,
       :external_realm,
       :external_id,
       :username,

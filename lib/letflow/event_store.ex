@@ -466,6 +466,11 @@ defmodule Letflow.EventStore do
   # doc §6.2.4). event_id/created_at come from ctx (minted once, P6);
   # sequence_number comes from M2's result; tenant_id comes from ctx's
   # derived value -- never anything attrs-supplied.
+  # Post-Decision-0006-D2 (REQ-064): ctx's tenant_id key is destructured as
+  # _tenant_id (not used) -- events.tenant_id no longer exists as a column, so
+  # this function no longer stamps it into attrs below. See build_multi/1 and
+  # append/2 for why ctx itself still carries the key (left as harmless dead
+  # data, design decision, not restructured).
   defp insert_event(repo, %{assign_sequence: assigned_sequence_number}, %{
          event_id: event_id,
          created_at: created_at,
@@ -474,7 +479,7 @@ defmodule Letflow.EventStore do
          actor_id: actor_id,
          idempotency_key: idempotency_key,
          metadata: metadata,
-         tenant_id: tenant_id,
+         tenant_id: _tenant_id,
          schema_name: schema_name,
          payload_bytes: payload_bytes,
          decoded_payload: decoded_payload
@@ -495,8 +500,7 @@ defmodule Letflow.EventStore do
       actor_id: actor_id,
       sequence_number: assigned_sequence_number,
       idempotency_key: idempotency_key,
-      metadata: metadata,
-      tenant_id: tenant_id
+      metadata: metadata
     }
 
     %Event{}
@@ -696,7 +700,7 @@ defmodule Letflow.EventStore do
     prefix = Keyword.get(opts, :prefix)
 
     with {:ok, instance_id} <- cast_instance_id(instance_id),
-         {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
          :ok <- ensure_instance_started(instance_id, prefix) do
       instance_id
       |> query_instance_events(prefix, read_filter(opts))
@@ -759,7 +763,7 @@ defmodule Letflow.EventStore do
     after_global_seq = Keyword.get(opts, :after_global_seq)
     effective_limit = clamp_read_global_limit(Keyword.get(opts, :limit))
 
-    with {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+    with {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
       raw_events =
         Event
         |> apply_after_global_seq(after_global_seq)
@@ -815,7 +819,7 @@ defmodule Letflow.EventStore do
     prefix = Keyword.get(opts, :prefix)
 
     with {:ok, retention_days} <- fetch_retention_days(opts),
-         {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+         {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
       event_ids = compute_archive_target_event_ids(prefix, retention_days)
 
       with :ok <- archive_phase1_insert(prefix, event_ids),
@@ -1091,6 +1095,11 @@ defmodule Letflow.EventStore do
     end
   end
 
+  # Post-Decision-0006-D2 (REQ-064): no longer copies tenant_id from the
+  # source `events` row -- neither `events.tenant_id` nor
+  # `events_archive.tenant_id` exists as a column any more (both dropped by
+  # this requirement), and %Event{} itself no longer carries the field to
+  # copy from.
   defp archived_event_entry(%Event{} = event, archived_at) do
     %{
       event_id: event.event_id,
@@ -1103,7 +1112,6 @@ defmodule Letflow.EventStore do
       idempotency_key: event.idempotency_key,
       metadata: event.metadata,
       global_seq: event.global_seq,
-      tenant_id: event.tenant_id,
       archived_at: archived_at
     }
   end

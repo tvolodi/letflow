@@ -175,7 +175,6 @@ defmodule Letflow.Identity do
     prefix = Keyword.fetch!(opts, :prefix)
 
     attrs = %{
-      tenant_id: tenant_id,
       external_realm: identity_context.realm,
       external_id: identity_context.external_user_id,
       username: identity_context.preferred_username,
@@ -229,13 +228,20 @@ defmodule Letflow.Identity do
     end
   end
 
-  defp get_by_external_identity(tenant_id, identity_context, opts) do
+  # `tenant_id` is accepted here (and by every caller above) only because the
+  # upsert-key contract predates Decision 0006 D2 -- see this function's
+  # callers' own `tenant_id` parameter threading, unchanged by D2. The actual
+  # `Repo.get_by/3` filter below no longer includes `tenant_id:` because
+  # `users.tenant_id` was dropped (Decision 0006 D2, REQ-064): the per-tenant
+  # Postgres schema (`prefix:` below) already scopes this lookup to exactly
+  # one tenant, so filtering on the now-removed column would raise
+  # Ecto.QueryError instead of narrowing anything real.
+  defp get_by_external_identity(_tenant_id, identity_context, opts) do
     prefix = Keyword.fetch!(opts, :prefix)
 
     Repo.get_by(
       User,
       [
-        tenant_id: tenant_id,
         external_realm: identity_context.realm,
         external_id: identity_context.external_user_id
       ],

@@ -402,7 +402,7 @@ defmodule Letflow.Definitions do
 
     with :ok <- reject_key(attrs, :tenant_id, "tenant_id", :tenant_id_not_accepted),
          :ok <- reject_key(attrs, :status, "status", :initial_status_not_draft),
-         {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
          {:ok, _name} <- fetch_name(attrs),
          {:ok, _version} <- fetch_version(attrs),
          {:ok, graph_map} <- fetch_graph_map(attrs),
@@ -410,7 +410,7 @@ defmodule Letflow.Definitions do
          :ok <- check_graph_result(Graph.validate_graph(graph)),
          :ok <- check_graph_result(Graph.validate_node_attributes(graph)),
          :ok <- check_graph_result(Graph.validate_edge_conditions(graph)) do
-      insert_definition(attrs, tenant_id, prefix)
+      insert_definition(attrs, prefix)
     end
   end
 
@@ -424,7 +424,7 @@ defmodule Letflow.Definitions do
   def get_by_id(id, opts) when is_list(opts) do
     prefix = Keyword.get(opts, :prefix)
 
-    with {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+    with {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
          {:ok, uuid} <- cast_uuid(id) do
       case Repo.get(ProcessDefinition, uuid, prefix: prefix) do
         nil -> {:error, :not_found}
@@ -443,7 +443,7 @@ defmodule Letflow.Definitions do
   def get_active_by_name(name, opts) when is_binary(name) and is_list(opts) do
     prefix = Keyword.get(opts, :prefix)
 
-    with {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+    with {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
       ProcessDefinition
       |> where([d], d.name == ^name and d.status == :active)
       |> Repo.all(prefix: prefix)
@@ -466,7 +466,7 @@ defmodule Letflow.Definitions do
   def list(filters, opts) when is_map(filters) and is_list(opts) do
     prefix = Keyword.get(opts, :prefix)
 
-    with {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+    with {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
       effective_limit = effective_limit(Map.get(filters, :limit))
 
       query =
@@ -568,7 +568,7 @@ defmodule Letflow.Definitions do
 
     with :ok <- check_query_not_empty(query),
          :ok <- check_query_not_too_long(query),
-         {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+         {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
       pattern = "%" <> query <> "%"
       effective_limit = Keyword.get(opts, :limit) || 20
       effective_offset = Keyword.get(opts, :offset) || 0
@@ -893,14 +893,18 @@ defmodule Letflow.Definitions do
   # atom-keyed @type and the EventStore.append/2 precedent this design cites, whose
   # own field fetchers (fetch_uuid/3, fetch_payload/1, ...) are atom-only; only the
   # tenant_id/status *rejection* checks (reject_key/4 above) check both forms, mirroring
-  # EventStore's reject_tenant_id/1 exactly. Merging a string-keyed attrs map with the
-  # atom-keyed :tenant_id (insert_definition/3 below) would otherwise raise
-  # Ecto.CastError via Ecto.Changeset.convert_params/1's mixed-key guard (confirmed
-  # directly: deps/ecto/lib/ecto/changeset.ex:949-964) -- flagged here as a deliberate,
-  # reasoned divergence from the design's literal fallback text, not a silent one.
-  defp insert_definition(attrs, tenant_id, prefix) do
-    merged_attrs = Map.put(attrs, :tenant_id, tenant_id)
-    changeset = ProcessDefinition.create_changeset(%ProcessDefinition{}, merged_attrs)
+  # EventStore's reject_tenant_id/1 exactly.
+  #
+  # Post-Decision-0006-D2 (REQ-064): this function no longer merges a
+  # caller-derived :tenant_id into attrs before building the changeset --
+  # process_definitions.tenant_id no longer exists as a column (the per-tenant
+  # Postgres schema, written via `prefix:` in Repo.insert/2 below, already
+  # identifies the tenant). tenant_id_for_schema_name/1 is still called at this
+  # function's own call site (create/2) purely to validate `prefix` resolves to
+  # a real, provisioned tenant before any row is written -- its result is no
+  # longer threaded into this function at all.
+  defp insert_definition(attrs, prefix) do
+    changeset = ProcessDefinition.create_changeset(%ProcessDefinition{}, attrs)
 
     try do
       changeset
@@ -1128,7 +1132,7 @@ defmodule Letflow.Definitions do
   defp transition(id, opts, from_status, to_status) do
     prefix = Keyword.get(opts, :prefix)
 
-    with {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+    with {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
       try do
         run_transition(id, prefix, from_status, to_status)
       rescue
@@ -1267,10 +1271,20 @@ defmodule Letflow.Definitions do
   # transaction (Step 2), mirroring activate/2's own try/rescue -> {:transaction_failed,
   # _} shape. Steps 3/4 (event-append, promotion_reviews supersede) run afterward, own
   # errors, and are never folded into :transaction_failed.
-  defp do_rollback(process_key, target_version, actor_id, tenant_id, prefix, event_appender) do
+  # tenant_id is accepted (and left as a real, non-underscored parameter name in
+  # the @spec-less signature below only for symmetry with its call site,
+  # rollback_definition_version/4, which the design's §3.1 explicitly keeps
+  # unchanged since permission_checker.(actor_id, tenant_id) there is a genuine
+  # functional consumer, not stamping) but is no longer used inside this
+  # function's own body post-Decision-0006-D2 (REQ-064) -- both
+  # run_rollback_transaction/3 and finish_rollback/7 dropped their tenant_id
+  # parameters once process_definitions.tenant_id/promotion_reviews.tenant_id
+  # stopped existing. Prefixed _tenant_id to avoid an unused-variable warning
+  # without changing rollback_definition_version/4's own call shape.
+  defp do_rollback(process_key, target_version, actor_id, _tenant_id, prefix, event_appender) do
     transaction_result =
       try do
-        run_rollback_transaction(process_key, target_version, tenant_id, prefix)
+        run_rollback_transaction(process_key, target_version, prefix)
       rescue
         exception -> {:error, {:transaction_failed, exception}}
       end
@@ -1282,7 +1296,6 @@ defmodule Letflow.Definitions do
         process_key,
         target_version,
         actor_id,
-        tenant_id,
         prefix,
         event_appender,
         activated_row,
@@ -1291,16 +1304,24 @@ defmodule Letflow.Definitions do
     end
   end
 
-  # Design §5 step 2: locks every version row for (tenant_id, process_key) FOR UPDATE in
-  # one statement (generalizes run_activate_transaction/4's single-row lock to the whole
+  # Design §5 step 2: locks every version row for process_key FOR UPDATE in one
+  # statement (generalizes run_activate_transaction/4's single-row lock to the whole
   # set), then the three guard cases in R-Co's own literal order (already_active checked
   # before the target-row lookup -- §5 step 2c's note on why this ordering can never
   # disagree with checking version_never_active first).
-  defp run_rollback_transaction(process_key, target_version, tenant_id, prefix) do
+  #
+  # Post-Decision-0006-D2 (REQ-064): the row-selection predicate below was
+  # `d.tenant_id == ^tenant_id and d.name == ^process_key`; process_definitions.tenant_id
+  # no longer exists as a column, so the predicate is now `d.name == ^process_key`
+  # alone -- `prefix` (passed to Repo.all/2 below) already confines this query to
+  # exactly one tenant's schema, so the dropped tenant_id filter was redundant with
+  # that schema boundary, not an independent safety check. tenant_id is no longer
+  # needed by this function at all -- dropped from its parameter list.
+  defp run_rollback_transaction(process_key, target_version, prefix) do
     Repo.transaction(fn ->
       rows =
         ProcessDefinition
-        |> where([d], d.tenant_id == ^tenant_id and d.name == ^process_key)
+        |> where([d], d.name == ^process_key)
         |> lock("FOR UPDATE")
         |> Repo.all(prefix: prefix)
 
@@ -1358,11 +1379,14 @@ defmodule Letflow.Definitions do
   # function does not assume anything about opts[:event_appender]'s own transactionality
   # (same stance Promotion.promote_definition/3 already established). A {:error, reason}
   # here propagates unchanged; the pointer swap has already durably committed.
+  #
+  # Post-Decision-0006-D2 (REQ-064): no longer takes tenant_id -- it was only
+  # ever forwarded to supersede_matching_review/4's now-removed tenant_id
+  # filter (see that function's own comment).
   defp finish_rollback(
          process_key,
          target_version,
          actor_id,
-         tenant_id,
          prefix,
          event_appender,
          activated_row,
@@ -1378,7 +1402,7 @@ defmodule Letflow.Definitions do
 
     case event_appender.(event_attrs, prefix) do
       {:ok, %{event_id: event_id}} ->
-        superseded_review_id = supersede_matching_review(tenant_id, process_key, event_id, prefix)
+        superseded_review_id = supersede_matching_review(process_key, event_id, prefix)
 
         {:ok,
          %{
@@ -1403,13 +1427,19 @@ defmodule Letflow.Definitions do
   # asymmetric handling -- zero matches -> nil, exactly one -> supersede it, more than one
   # -> nil, mutate nothing -- is exactly the fix for the data-integrity defect
   # CODE-DESIGN-VALIDATOR's Rework 1 blocked on (design §0, §6, INV-RB-10).
-  defp supersede_matching_review(tenant_id, process_key, event_id, prefix) do
+  #
+  # Post-Decision-0006-D2 (REQ-064): the lookup predicate below was
+  # `r.tenant_id == ^tenant_id and r.def_id == ^process_key and ...`;
+  # promotion_reviews.tenant_id no longer exists as a column, so the predicate is
+  # now `r.def_id == ^process_key and ...` alone -- `prefix` (passed to Repo.all/2
+  # below) already confines this query to exactly one tenant's schema. tenant_id
+  # is no longer needed by this function at all -- dropped from its parameter list.
+  defp supersede_matching_review(process_key, event_id, prefix) do
     matching_reviews =
       PromotionReview
       |> where(
         [r],
-        r.tenant_id == ^tenant_id and r.def_id == ^process_key and
-          r.status in [:applied, :approved]
+        r.def_id == ^process_key and r.status in [:applied, :approved]
       )
       |> Repo.all(prefix: prefix)
 
@@ -1451,9 +1481,16 @@ defmodule Letflow.Definitions do
   # Letflow.EventStore.claim_idempotency/3 and insert_definition/3 above -- not raw
   # SQL, not a new idiom. status/assertions_*/failing_assertion_ids are never cast
   # here -- a winning insert starts at its column defaults (:running, 0, []).
-  defp claim_or_fetch_assertion_run(tenant_id, review_id, plan_digest, idempotency_key, prefix) do
+  # Post-Decision-0006-D2 (REQ-064): tenant_id is still accepted as a
+  # parameter (its caller, apply_promotion_assertion_rerun/6, still resolves
+  # and threads a real tenant_id -- see that function's own note), but is no
+  # longer stamped into attrs or used as an on_conflict/get_by scoping key
+  # below -- promotion_assertion_runs.tenant_id no longer exists as a column,
+  # and prefix already scopes every one of these calls to exactly one
+  # tenant's schema. See PromotionAssertionRun's own moduledoc/migration
+  # header for the restated idempotency contract this shape change preserves.
+  defp claim_or_fetch_assertion_run(_tenant_id, review_id, plan_digest, idempotency_key, prefix) do
     attrs = %{
-      tenant_id: tenant_id,
       review_id: review_id,
       idempotency_key: idempotency_key,
       plan_digest: plan_digest
@@ -1463,7 +1500,7 @@ defmodule Letflow.Definitions do
 
     case Repo.insert(changeset,
            on_conflict: :nothing,
-           conflict_target: [:tenant_id, :idempotency_key],
+           conflict_target: [:idempotency_key],
            prefix: prefix
          ) do
       {:ok, %PromotionAssertionRun{id: attempted_id}} ->
@@ -1471,11 +1508,11 @@ defmodule Letflow.Definitions do
           %PromotionAssertionRun{} = won ->
             # Found -- this call genuinely won the insert (a fresh :running row it
             # now owns exclusively -- ON CONFLICT DO NOTHING guarantees exactly one
-            # winner for this (tenant_id, idempotency_key) pair).
+            # winner for this idempotency_key, within this tenant's schema).
             {:ok, {:claimed, won}}
 
           nil ->
-            fetch_existing_assertion_run(tenant_id, idempotency_key, prefix)
+            fetch_existing_assertion_run(idempotency_key, prefix)
         end
 
       {:error, %Ecto.Changeset{} = changeset} ->
@@ -1489,10 +1526,15 @@ defmodule Letflow.Definitions do
 
   # Not found (suppressed by the unique-index conflict) -- fetch the real existing
   # row. No sandbox is claimed on this path (AC1's own literal wording, INV-AR-4).
-  defp fetch_existing_assertion_run(tenant_id, idempotency_key, prefix) do
+  #
+  # Post-Decision-0006-D2 (REQ-064): dropped the tenant_id parameter --
+  # promotion_assertion_runs.tenant_id no longer exists as a column, so this
+  # Repo.get_by/3 filters on idempotency_key alone; prefix already scopes the
+  # lookup to one tenant's schema.
+  defp fetch_existing_assertion_run(idempotency_key, prefix) do
     case Repo.get_by(
            PromotionAssertionRun,
-           [tenant_id: tenant_id, idempotency_key: idempotency_key],
+           [idempotency_key: idempotency_key],
            prefix: prefix
          ) do
       %PromotionAssertionRun{} = existing -> {:ok, {:idempotent_hit, existing}}

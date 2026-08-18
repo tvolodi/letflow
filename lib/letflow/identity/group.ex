@@ -9,9 +9,11 @@ defmodule Letflow.Identity.Group do
   need. Full group-membership modeling (adp-04's `GroupMembership`,
   group-task claim authorization) is explicitly out of scope here.
 
-  `tenant_id` carries no database-level foreign key to `tenants.id`, same
-  rationale as `Letflow.Identity.User.tenant_id` (see the `CreateGroups`
-  migration's header comment).
+  `tenant_id` was carried on this table, with no database-level foreign key
+  to `tenants.id`, until Decision 0006 D2 dropped it for the same reason it
+  was dropped from `users` — the per-tenant Postgres schema already
+  identifies the owning tenant. See
+  `docs/migration/decisions/0006-identity-tables-schema-per-tenant.md`.
 
   No changeset function is defined here — no requirement in this batch
   (REQ-015 through REQ-021) owns `groups` CRUD; a future requirement owns
@@ -22,7 +24,6 @@ defmodule Letflow.Identity.Group do
 
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "groups" do
-    field(:tenant_id, Ecto.UUID)
     field(:name, :string)
 
     timestamps()

@@ -28,6 +28,21 @@ defmodule Letflow.SandboxPool do
   a claimed sandbox (inert data between `claim` and `release`) is not. See the design
   doc §2 for the full reasoning, including the accepted trade-off that pool state does
   not survive a `SandboxPool` process restart (design doc §11 OQ-3).
+
+  ## Same-process claim/release contract
+
+  A claim belongs to the process that called `claim/2` — it must be that same process
+  which later calls `release/2` for the returned `sandbox_id`. This is enforced by the
+  owner-monitor mechanism, not merely documented: `claim/2` monitors whichever process
+  calls it, so handing the claim to a different process (e.g. via `Task.async`, whose
+  spawned process exits as soon as it returns its value) looks identical, from the
+  pool's perspective, to that process crashing, and the slot is reclaimed accordingly.
+  This mirrors the same idiom OTP itself uses for its own lock-shaped resources — e.g.
+  `:global.set_lock/3`'s lock is likewise tied to the calling process — rather than
+  providing an explicit ownership-transfer primitive (which OTP itself only offers,
+  e.g. `:ets.give_away/3`, when transfer is a genuine requirement; it is not one here).
+  See `lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md` §13 for the full
+  reasoning.
   """
 
   use GenServer
@@ -82,6 +97,11 @@ defmodule Letflow.SandboxPool do
   Claims a sandbox: provisions one immediately if a slot is free, otherwise blocks
   (without busy-polling) until either a slot frees or `max_wait_ms` elapses, in which
   case it returns `{:error, :sandbox_unavailable}`.
+
+  The process that calls `claim/2` must be the same process that later calls
+  `release/2` for the returned `sandbox_id` — handing a claim to a different process
+  and releasing from there is indistinguishable, by design, from that process leaking
+  the claim (see moduledoc's owner-monitor section) and will be reclaimed automatically.
   """
   @spec claim(max_wait_ms :: non_neg_integer(), pool :: GenServer.server()) ::
           {:ok, SandboxClaim.t()}

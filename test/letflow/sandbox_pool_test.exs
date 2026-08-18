@@ -202,22 +202,51 @@ defmodule Letflow.SandboxPoolTest do
       # after a slot had already, coincidentally, become free some other way, it
       # would be vacuous. The waiter genuinely blocks (:noreply internally) until
       # release/2 below frees the slot.
-      waiter = Task.async(fn -> SandboxPool.claim(2_000, pool) end)
+      #
+      # The claim and its matching release must happen from the same process (see
+      # SandboxPool's "Same-process claim/release contract" moduledoc section) --
+      # a Task.async process that merely returns its claim and exits looks, to the
+      # owner-monitor, identical to that process leaking/crashing, and the slot
+      # would be reclaimed before the test process's own release/2 call ran. So the
+      # spawned process itself claims, relays the claim back via a send/receive
+      # rendezvous for the test process to assert on, waits for a "go ahead" signal,
+      # and only then calls release/2 itself, before returning.
+      test_pid = self()
+
+      waiter =
+        Task.async(fn ->
+          assert {:ok, %SandboxClaim{} = waiter_claim} = SandboxPool.claim(2_000, pool)
+
+          send(test_pid, {:waiter_claimed, waiter_claim})
+
+          receive do
+            :release_waiter_claim -> :ok
+          after
+            3_000 -> flunk("test process never signalled release for the waiter claim")
+          end
+
+          assert :ok = SandboxPool.release(waiter_claim.sandbox_id, pool)
+
+          waiter_claim
+        end)
 
       wait_until_waiter_queued(pool)
 
       assert :ok = SandboxPool.release(held_id, pool)
       refute schema_exists?(held_schema)
 
-      assert {:ok, %SandboxClaim{sandbox_id: waiter_id, schema_name: waiter_schema}} =
-               Task.await(waiter, 3_000)
+      assert_receive {:waiter_claimed,
+                      %SandboxClaim{sandbox_id: waiter_id, schema_name: waiter_schema}},
+                     3_000
 
       on_exit(fn -> drop_schema!(waiter_schema) end)
 
       assert waiter_id != held_id
       assert schema_exists?(waiter_schema)
 
-      assert :ok = SandboxPool.release(waiter_id, pool)
+      send(waiter.pid, :release_waiter_claim)
+
+      assert %SandboxClaim{sandbox_id: ^waiter_id} = Task.await(waiter, 3_000)
     end
 
     test "when no slot frees within the wait window, returns {:error, :sandbox_unavailable} and the held claim is untouched" do

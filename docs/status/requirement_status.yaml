@@ -3906,3 +3906,47 @@ history:
       retroactively with an invented "started" timestamp, since that would
       misrepresent when Step 00 actually happened -- reported as a gap
       instead.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-18T05:29:16Z
+    note: >
+      Registered REQ-043..062 (Stage 3 instance-engine batch, 20
+      requirements, all status pending) into letflow-queue
+      (https://queue-test.ai-dala.com), closing the gap the WF01-S3-
+      EXPANSION-20260818 run explicitly left open ("No queue tasks
+      registered for REQ-043..062 -- a later session with
+      $QUEUE_AUTH_TOKEN must register them before WF-02 picks any up").
+      $QUEUE_AUTH_TOKEN was found in this checkout's own .env (same
+      convention hetzner-wt2-orch used per this file's 2026-08-16
+      history), not typed into the session. Registered in topological
+      order so every depends_on could be translated from REQ-ID to
+      queue task-id at registration time (external S2 deps already
+      registered: REQ-023=38, REQ-024=39, REQ-025=45, REQ-026=49,
+      REQ-027=40, REQ-028=37, REQ-029=44, REQ-030=48, REQ-032=47,
+      REQ-033=46). New mapping: REQ-043=87, REQ-044=88, REQ-045=89,
+      REQ-046=90, REQ-047=91, REQ-049=92, REQ-048=93, REQ-050=94,
+      REQ-051=95, REQ-052=96, REQ-061=97, REQ-053=98, REQ-054=99,
+      REQ-055=100, REQ-056=101, REQ-057=102, REQ-058=103, REQ-059=104,
+      REQ-060=105, REQ-062=106. Each REQ-ID's docs/requirements.yaml
+      entry gained an `impl_order:` field recording its queue task id.
+      Registration order followed the internal dependency DAG so no
+      depends_on ever referenced a not-yet-registered task
+      (REQ-045 depends on REQ-043+REQ-044, both registered first;
+      REQ-053 depends on REQ-052+REQ-061, both registered first; etc.)
+      -- verified no cycles before registering.
+
+      `register_task`'s best-effort GitHub sync created issues #136-155
+      on tvolodi/letflow, one per requirement, titled "REQ-NNN: <title>"
+      matching docs/requirements.yaml exactly -- confirmed live via
+      `gh issue list`, all 20 OPEN. This was the point of the exercise
+      per the operator's explicit ask ("I want to see them in github").
+
+      Verified end-to-end after registration: `get_next_task` (agent_id
+      audit-verify) correctly offered task 87 (REQ-043 -- lowest
+      impl_order among the new batch, only S2 deps which are already
+      done), confirming the batch is genuinely claimable and not just
+      recorded. Immediately released back to status open (not claimed
+      for real work) so no lock was left dangling from this
+      verification call.

@@ -1,0 +1,51 @@
+{
+  "handoff_id": "ec1f7a1b-5eac-4c0f-2d9e-0a1b2c3d4e5f",
+  "run_id": "WF02-REQ047-20260818",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ047-20260818/step-05-release-validator.json",
+  "created_at": "2026-08-18T22:07:34Z",
+  "started_at": "2026-08-18T22:07:34Z",
+  "completed_at": "2026-08-18T22:10:02Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-047"],
+    "requirement_text": {
+      "REQ-047": "Task activation persistence. TEST-RUNNER reported 872/872, 0 failures at Step 4. Do not trust that report alone -- re-run the suite yourself."
+    },
+    "related_handoff_ids": ["db0e6f0a-4d9b-4bef-1c8d-9f0a1b2c3d4e"],
+    "artifacts_in": ["lib/letflow/design/req047-task-activation-persistence.md", "lib/letflow/engine/task_activation.ex", "lib/letflow/engine.ex", "test/specs/REQ-047.md", "test/reports/report-2026-08-18-WF02-REQ047-20260818.yaml"],
+    "owned_modules": ["lib/letflow/engine/", "test/letflow/engine/"]
+  },
+  "task": {
+    "description": "Independently re-run MIX_TEST_PARTITION=2 mix test (do not trust TEST-RUNNER's report alone). Confirm every REQ-047 acceptance criterion below is satisfied -- check each explicitly against the actual code/test, not against TEST-RUNNER's summary. Check docs/status/requirement_status.yaml and docs/requirements.yaml for staleness relative to what actually shipped (REQ-047's status is still in_progress at this point, that's expected -- DOC-UPDATER flips it next).",
+    "acceptance_criteria": [
+      "a transition that enters a HUMAN_TASK node results in exactly one tasks row with status PENDING carrying instance_id, node_id, node_name, assignee_type and assignee_ref, committed in the same transaction as the instance_projections update and the appended event",
+      "when the event append fails, zero tasks rows and zero instance_projections changes are committed -- demonstrated by forcing an append failure and reading all three tables back",
+      "transitions entering START, END, EXCLUSIVE_GATEWAY and PARALLEL_GATEWAY nodes create zero tasks rows, each with its own explicit test, verifying (not merely assuming) the transition function's pending_task_nodes guarantee",
+      "a HUMAN_TASK whose assignee_ref names a group with no members still produces a PENDING task rather than an activation error",
+      "a token entering an END node sets the instance to COMPLETED, creates no task, and leaves a documented named hook for SCH-03 timer cancellation with S6 identified as its owning stage"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-ran `MIX_TEST_PARTITION=2 mix test` myself (not TEST-RUNNER's report): '5 properties, 872 tests, 0 failures', 89.6s (2.2s async, 87.3s sync) -- matches TEST-RUNNER's step-04 872/872 in substance, confirmed by my own execution, not by reading their report. All 5 REQ-047 acceptance criteria verified against actual shipped code and test code: AC1 (exactly one PENDING tasks row with instance_id/node_id/node_name/assignee_type/assignee_ref, same-transaction) -- verified in lib/letflow/engine.ex lines 397-449: `TaskActivation.append_multi/6` is chained inside the same `Multi.new() |> ... |> Repo.transaction()` pipeline as :instance_projection and :event steps (single transaction, not three); test/letflow/engine_test.exs:781-802 asserts task_count==1 with all six fields plus token_id FK resolving to the committed tokens row. AC2 (event-append failure -> zero tasks/projections/tokens rows) -- test/letflow/engine_test.exs:812-827 forces a missing :actor_id event-append failure and reads back task_count/projection_count/token_count/event_count all == 0; the :event Multi.run step runs after :task_records in the same Multi so Ecto.Multi's own rollback-on-error semantics cover it structurally, not just by test assertion. AC3 (START/END/EXCLUSIVE_GATEWAY/PARALLEL_GATEWAY create zero tasks rows, each own test) -- both a pure-kernel level (test/letflow/engine/task_activation_test.exs:232-284, calling REQ-044's real Transition.transition/3 directly and diffing pending_task_nodes, including a deliberate HUMAN_TASK contrast case at line 275 proving the helper isn't a tautology) and a DB-integration level (test/letflow/engine_test.exs:835-878, one describe block per node type) both exist. AC4 (group with no members still produces PENDING task) -- test/letflow/engine_test.exs:885-899 asserts status :active, task.status :pending, assignee_type \"GROUP\", assignee_ref \"empty-group\" -- no activation error. AC5 (END -> COMPLETED, no task, named SCH-03/S6 hook) -- test/letflow/engine_test.exs:908-919 asserts instance_projections.status == :completed and task_count==0; the named hook itself (lib/letflow/engine/task_activation.ex `cancel_pending_timers/2`) has a @doc naming SCH-03 and S6 explicitly, checked programmatically via Code.fetch_docs in test/letflow/engine/task_activation_test.exs:197-211 (asserts the doc string contains both \"SCH-03\" and \"owned by Stage S6\"), not just asserted true by inspection. docs/requirements.yaml REQ-047 entry: status in_progress (expected, DOC-UPDATER has not run yet -- not a defect). docs/status/requirement_status.yaml's most recent REQ-047 event is 'started' at 2026-08-18T21:42:02Z with no 'done' event yet, consistent with in_progress and with DOC-UPDATER being the next step. No staleness found.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ047-20260818",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

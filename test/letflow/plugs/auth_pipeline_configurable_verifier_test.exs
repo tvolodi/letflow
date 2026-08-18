@@ -24,6 +24,15 @@ defmodule Letflow.Plugs.AuthPipelineConfigurableVerifierTest do
   value is restored via `on_exit/1` even if a test fails, so no other test file (all of
   which run `async: true` and expect `config/test.exs`'s literal
   `Letflow.Oidc.TokenVerifierDouble`) is ever affected.
+
+  **REQ-063 fixture change:** `insert_tenant_for_realm!/1` now also provisions and
+  migrates a real tenant schema (`Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)`
+  + `TenantProvisioning.provision_tenant_schema/1` + `replay_migrations/2`), not just
+  a bare `tenants` row — `users`/`groups`/`tenant_role` moved out of `public` per
+  `lib/letflow/design/req063-identity-tables-schema-per-tenant.md`, so
+  `AuthPipeline.provision_user/3`'s internal JIT-provisioning step needs somewhere
+  real to write. See `test/letflow/plugs/auth_pipeline_test.exs`'s own moduledoc/
+  `insert_tenant!/1` comment for the fuller reasoning this file's helper mirrors.
   """
 
   use Letflow.DataCase, async: false
@@ -32,6 +41,8 @@ defmodule Letflow.Plugs.AuthPipelineConfigurableVerifierTest do
   alias Letflow.Identity.User
   alias Letflow.Oidc.ConfigurableTokenVerifierDouble
   alias Letflow.Plugs.AuthPipeline
+  alias Letflow.TenantProvisioning
+  alias Letflow.TenantProvisioning.Registration
 
   import Ecto.Query
   import Plug.Test
@@ -59,21 +70,54 @@ defmodule Letflow.Plugs.AuthPipelineConfigurableVerifierTest do
     "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
   end
 
+  # REQ-063: this file was already `async: false` (needed for the global
+  # Application-config swap in `setup` above), so it does not itself change
+  # async-mode. But it now ALSO needs `Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo,
+  # :auto)` before inserting the tenant row, per the same reasoning
+  # `test/letflow/plugs/auth_pipeline_test.exs`'s own `insert_tenant!/1` comment
+  # documents in full: `TenantProvisioning.provision_tenant_schema/1`'s `:auto`-mode
+  # connection cannot see a tenant row that only exists inside a not-yet-committed
+  # sandboxed transaction, and `Ecto.Migrator` (called by `replay_migrations/2`)
+  # cannot run at all under the sandbox's shared single connection. Every tenant
+  # this file seeds now needs a real, provisioned + migrated schema, not just a bare
+  # `tenants` row, for `AuthPipeline.provision_user/3`'s internal JIT-provisioning
+  # step to succeed against.
   defp insert_tenant_for_realm!(realm) do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: unique_slug(),
-        display_name: "Configurable Verifier Test Tenant",
-        idp_realm_id: realm
-      },
-      :enabled
-    )
-    |> Repo.insert!()
+    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+
+    tenant =
+      %Tenant{}
+      |> Tenant.create_changeset(
+        %{
+          slug: unique_slug(),
+          display_name: "Configurable Verifier Test Tenant",
+          idp_realm_id: realm
+        },
+        :enabled
+      )
+      |> Repo.insert!()
+
+    on_exit(fn ->
+      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
+        {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
+        {:error, :invalid_tenant_id} -> :ok
+      end
+
+      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
+      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
+    end)
+
+    assert {:ok, %Registration{schema_name: _schema_name}} =
+             TenantProvisioning.provision_tenant_schema(tenant.id)
+
+    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+
+    tenant
   end
 
   defp user_count_for_tenant(tenant_id) do
-    User |> where(tenant_id: ^tenant_id) |> Repo.aggregate(:count)
+    {:ok, schema_name} = TenantProvisioning.schema_name_for_tenant(tenant_id)
+    User |> where(tenant_id: ^tenant_id) |> Repo.aggregate(:count, :id, prefix: schema_name)
   end
 
   defp call_pipeline(method, headers) do

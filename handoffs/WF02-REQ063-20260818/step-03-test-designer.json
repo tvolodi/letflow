@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ063-20260818/step-03-test-designer.json",
   "created_at": "2026-08-18T09:39:43Z",
   "started_at": "2026-08-18T09:39:43Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-18T10:24:03Z",
+  "status": "PASS",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -52,19 +52,36 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "Fixed all ~39 pre-existing test failures ELIXIR-DEV's Step 2a run reported (722/761 baseline), confirmed with real mix test output: full suite now 770/770 passed (5 properties, 765 tests), 0 failures, reproduced stable across 3 consecutive full runs. 9 new tests added (770 total vs 761 baseline): test/letflow/identity_test.exs's provision_oidc_user/4 tests now provision a real tenant schema (TenantProvisioning.provision_tenant_schema/1 + replay_migrations/2) and pass prefix: explicitly, per design section 5b's required opts arg; the REQ-018 acceptance-criterion-3 concurrent-race test was restored to the original :manual mode + Sandbox.allow/3 mechanism after using :auto mode only for up-front schema provisioning -- a first attempt at running the race under genuine :auto-mode two-independent-connections surfaced a real, separate, pre-existing gap in Identity.insert_or_fetch/4's on_conflict handling (only covers (external_realm, external_id), not the separate username unique index), filed as docs/issues/ISS-0047.yaml + GitHub issue #176 rather than fixed inline or silently masked. test/letflow/plugs/auth_pipeline_test.exs and auth_pipeline_configurable_verifier_test.exs now provision real tenant schemas per fixture (AuthPipeline.provision_user/3 needs somewhere real to JIT-provision into). test/letflow/identity/{user,group,tenant_role}_test.exs and test/letflow/role_registry_test.exs (bare-struct-insert / no-prefix-parameter modules RoleRegistry was deliberately never given one by REQ-020's own design) fixed via a verified SET search_path TO \"<schema>\", public technique on the sandboxed connection -- confirmed transaction-scoped/rollback-safe against real Postgres before use. Added test/letflow/identity_migration_test.exs (new, 7 tests) covering IdentityMigration.copy_all_tenants/2/copy_tenant/2 (full copy with preserved-id spot-check, idempotent re-run, multi-tenant aggregate row counts, orphaned-tenant_role abort) and the drop migration's guard (skip-on-uncopied-row across all three tables, proceed-once-fully-copied, idempotent re-run-after-success) -- turns ELIXIR-DEV's own one-time manual Postgres demonstration into permanent, repeatable coverage, running the actual shipped migration file via Code.require_file/1 + Ecto.Migrator.run/4 against throwaway-recreated public tables (this branch's own mix ecto.migrate already ran the real drop once). Cross-tenant username success/single-tenant-conflict acceptance criterion covered in both identity_test.exs (through the JIT path) and user_test.exs (direct DB constraint, isolated from JIT logic). The (external_realm, external_id)-cross-tenant-rejection acceptance criterion (tenants_idp_realm_id_partial_index) was already covered by a pre-existing, unmodified identity_test.exs test (Tenant stays in public per Decision 0006 D3) -- re-confirmed passing, no new test needed. AuthPipeline end-to-end acceptance criterion covered by auth_pipeline_test.exs's existing AC1 tests with fixtures updated. mix compile --warnings-as-errors --force: exit 0, zero warnings. mix format --check-formatted on every touched file: exit 0 after one mix format pass.",
+    "artifacts_out": [
+      "test/letflow/identity_test.exs",
+      "test/letflow/plugs/auth_pipeline_test.exs",
+      "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs",
+      "test/letflow/identity/user_test.exs",
+      "test/letflow/identity/group_test.exs",
+      "test/letflow/identity/tenant_role_test.exs",
+      "test/letflow/role_registry_test.exs",
+      "test/letflow/identity_migration_test.exs",
+      "test/specs/REQ-063.md",
+      "docs/issues/ISS-0047.yaml"
+    ],
+    "issues": [
+      {
+        "id": "ISS-0047",
+        "severity": "MINOR",
+        "summary": "Identity.insert_or_fetch/4's on_conflict target only covers (external_realm, external_id) -- a genuine two-independent-connection race on an identical username can raise a username-uniqueness changeset error instead of resolving via the intended re-select fallback. Pre-existing REQ-018 gap, not a REQ-063 regression -- surfaced only because REQ-063's fixture rewrite needed Sandbox :auto mode for an unrelated reason (real migration replay), which first made a literal two-independent-connections version of the REQ-018 race test possible to write. Filed, not fixed inline (lib/ edits are ELIXIR-DEV's lane). GitHub issue: https://github.com/tvolodi/letflow/issues/176"
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ063-20260818",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF02-REQ063-20260818",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

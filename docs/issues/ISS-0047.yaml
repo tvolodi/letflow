@@ -1,0 +1,92 @@
+id: ISS-0047
+title: "Identity.insert_or_fetch/4's on_conflict target only covers (external_realm, external_id) -- a genuine two-connection race on an identical username can still raise a username-uniqueness changeset error instead of resolving via the intended re-select fallback"
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF02-REQ063-20260818
+discovered_at: "2026-08-18T10:00:37Z"
+severity: MINOR
+tags:
+  - identity
+  - concurrency
+  - pre-existing
+description: >
+  Discovered while updating test/letflow/identity_test.exs's REQ-018 acceptance
+  criterion 3 concurrent-insert race test for REQ-063's tenant-schema-per-tenant
+  fixture change. The test needed `Ecto.Adapters.SQL.Sandbox` `:auto` mode first
+  (for `TenantProvisioning.replay_migrations/2`'s own documented single-shared-
+  connection incompatibility), so genuinely independent connections were available
+  for the first draft of the race, instead of the original design's `:manual` mode +
+  `Sandbox.allow/3` (which routes both spawned Tasks through the same underlying
+  sandboxed connection).
+
+  Running the identical-identity two-task race under `:auto` mode (two REAL,
+  independent Postgres connections, not one shared connection wearing two Elixir
+  process identities) reliably reproduced a genuine `Ecto.Changeset` error on
+  `username: ["has already been taken"]` instead of the expected `{:ok, _}` /
+  re-select-on-conflict outcome, on every run (deterministic, not flaky -- confirmed
+  across 3 consecutive runs).
+
+  Root cause: `Letflow.Identity.insert_or_fetch/4`
+  (lib/letflow/identity.ex:174-220) calls `Repo.insert(changeset, on_conflict:
+  :nothing, conflict_target: {:unsafe_fragment, "(external_realm, external_id)
+  WHERE external_id IS NOT NULL"}, ...)`. This `on_conflict: :nothing` ONLY
+  suppresses a conflict on the `users_external_identity_partial_index`
+  (`external_realm`, `external_id`) target. `users` also carries a separate,
+  unrelated `unique_index(:users, [:username])`. When two connections race to
+  insert the SAME `(tenant_id/schema, external_realm, external_id)` triple AND the
+  same `username` (as REQ-018's own acceptance-criterion-3 test deliberately does,
+  since it provisions one identity_context and calls provision_oidc_user/4 twice
+  concurrently with it), Postgres's constraint-checking order is not guaranteed to
+  evaluate the `on_conflict`-target index before the plain `username` unique index --
+  whichever insert loses the race can raise on the username constraint instead of
+  being silently suppressed by `on_conflict: :nothing`, surfacing as
+  `{:error, %Ecto.Changeset{}}` with a `username: ["has already been taken"]` error
+  from `Repo.insert/2` itself (not from any application-level conflict handling),
+  propagating out of `provision_oidc_user/4` as a hard error instead of resolving to
+  the same row both callers expect.
+
+  This is NOT a REQ-063 regression -- REQ-063 only added the `prefix:` opts-threading
+  (lib/letflow/design/req063-identity-tables-schema-per-tenant.md section 5b) and did
+  not touch `insert_or_fetch/4`'s `on_conflict`/`conflict_target` logic at all. It is
+  a pre-existing gap in the original REQ-018 implementation
+  (lib/letflow/design/req018-jit-provisioning.md section 3.3's INSERT ... ON CONFLICT
+  design), never previously exercised as a genuine two-connection race because
+  REQ-018's own test (per its design doc section 9's guidance) always used
+  `Sandbox.allow/3` in `:manual` mode, which routes both Tasks through the same
+  underlying sandboxed connection/transaction -- serializing the two INSERT attempts
+  at the Postgres session level in a way that happens to always resolve via the
+  `(external_realm, external_id)` on_conflict path before a genuine cross-connection
+  username race could ever be exercised. REQ-063's fixture rewrite (needing `:auto`
+  mode for its own, unrelated reason -- real migration replay) was what first made a
+  literal two-independent-connections version of this test possible to write, which
+  is how this gap surfaced now rather than being introduced now.
+
+  TEST-DESIGNER's disposition: kept the test faithful to REQ-018's original design
+  (restored `:manual` mode + `Sandbox.allow/3` for the race itself, after using
+  `:auto` mode only for the up-front schema/migration provisioning step) rather than
+  either (a) silently weakening the acceptance criterion's proof to make a
+  genuinely-harder race pass, or (b) leaving a flaky/failing test in the suite while
+  a fix to lib/letflow/identity.ex (out of TEST-DESIGNER's role -- lib/ edits belong
+  to ELIXIR-DEV) was pending. Filing this as its own issue rather than fixing
+  identity.ex here, per this project's "unblock only what blocks the current task"
+  scope boundary and "no agent's own claim is validation" principle -- REQ-063's own
+  acceptance criteria do not require fixing this pre-existing gap, and the restored
+  test genuinely proves REQ-018's original acceptance criterion 3 (same-connection
+  race resolves cleanly), which remains true; it does not claim the FULLY independent-
+  connections case is handled, which is what this issue tracks separately.
+
+  Suggested fix shape for a future ELIXIR-DEV run (not designed in full here): either
+  add `on_conflict: :nothing, conflict_target: :username` as a second, chained
+  upsert clause (Ecto's `on_conflict` only accepts one target list per statement, so
+  this likely needs a raw `ON CONFLICT (username) DO NOTHING` alternative path, or
+  restructuring the insert as `INSERT ... ON CONFLICT ON CONSTRAINT ... DO NOTHING`
+  covering both indexes via a single WHERE-qualified expression, or catching the
+  specific `username`-constraint `Ecto.Changeset` error case explicitly in
+  `insert_or_fetch/4` and falling through to `re_select_on_conflict/3` the same way
+  the `(external_realm, external_id)` conflict already does), matched against a new,
+  genuinely-independent-connections version of the concurrent-race test this issue's
+  discovery test could be promoted into once the fix lands.
+affected_files:
+  - lib/letflow/identity.ex
+  - test/letflow/identity_test.exs
+github_issue: https://github.com/tvolodi/letflow/issues/176
+status: open

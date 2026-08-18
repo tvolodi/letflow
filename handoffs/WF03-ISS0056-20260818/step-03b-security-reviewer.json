@@ -1,0 +1,56 @@
+{
+  "handoff_id": "9c2e6b1a-4f7d-4e3b-8a1c-2d5f9b6e7a04",
+  "run_id": "WF03-ISS0056-20260818",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0056-20260818/step-03b-security-reviewer.json",
+  "created_at": "2026-08-18T23:31:57Z",
+  "started_at": "2026-08-18T23:31:57Z",
+  "completed_at": "2026-08-18T23:31:57Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-029"],
+    "related_handoff_ids": [
+      "b7f2a9d3-1c4e-4f8a-9d6b-3e5c7a1f0d82"
+    ],
+    "artifacts_in": [
+      "lib/letflow/definitions/graph.ex",
+      "lib/letflow/design/iss-0056-human-task-fallback-edge-validation.md",
+      "handoffs/WF03-ISS0056-20260818/step-03-elixir-dev.json"
+    ],
+    "owned_modules": [
+      "docs/agents/instructions/security-invariants.md"
+    ]
+  },
+  "task": {
+    "description": "Gate ISS-0056's graph.ex change (commit 0f8bd06, loosened CHK-14 + new CHK-19 fallback-edge check) against security-invariants.md INV-1..INV-8.",
+    "acceptance_criteria": [
+      "Scope test run and recorded explicitly",
+      "Each of INV-1..INV-8 given an explicit APPLIES/NOT-APPLICABLE verdict",
+      "Applicable invariants verified per their How-to-verify procedure with PASS/FAIL recorded"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: reviewed git diff origin/main...HEAD -- lib/letflow/definitions/graph.ex (commit 0f8bd06) plus the full branch diff (docs/issues/ISS-0056.yaml, design doc, handoff JSON files, orchestrator.log -- none of those are code). graph.ex's changed functions (check_unpermitted_edge_condition/1, check_human_task_fallback_edge/1, human_task_source?/3, human_task_edge_really_conditioned?/1, human_task_edge_fallback_candidate?/1) operate purely on in-memory %Node{}/%Edge{}/%__MODULE__{} structs already resident in a decoded Graph -- confirmed via grep that graph.ex contains zero 'Repo.' calls, zero 'schema \"' declarations, and no migration file is touched anywhere in the branch diff (git diff --stat shows only graph.ex, a design doc, ISS-0056.yaml, and handoff/log JSON). No API route, no response-shaping of a tenant-scoped entity, no lookup-by-ID handler, no secret resolution. Per the role file's scope test this is out of scope for a tenant-data path, but per WF-02 Step 2c and INV-6 the full INV-1..8 sweep is still recorded below rather than short-circuited on the scope test alone, since INV-1 is now a live invariant that must be checked against the diff's content, not just the file's category.\n\nINV-1 (tenant data isolation): APPLIES-test run -- graph.ex declares no Ecto schema, issues no Repo.* calls, and the diff adds/modifies no priv/repo/migrations/*.exs file; the changed code touches zero business tables. Verdict: NOT-APPLICABLE (no tenant-scoped table, schema, or migration touched -- confirmed by grep, not assumed).\nINV-2 (server-side field authorisation): NOT-APPLICABLE -- no API response type touched, S4 not started.\nINV-3 (untrusted runtime sandboxing): NOT-APPLICABLE -- no Lua/WASM execution path touched, S5 not started.\nINV-4 (secrets by reference only): APPLIES-test run -- grep -rn \"System.get_env\" and the hardcoded-secret heuristic grep against lib/letflow/definitions/graph.ex show zero hits; the diff introduces no config/env/token handling of any kind. PASS.\nINV-5 (not-found/forbidden indistinguishability): NOT-APPLICABLE -- no lookup-by-ID endpoint touched, S4 not started.\nINV-6 (new data-access paths prove their scoping): APPLIES (meta-invariant, always applies) -- this handoff itself is the proof artefact; no new data-access path was introduced by this diff (confirmed above), so there is nothing further to prove. PASS.\nINV-7 (no SQL string interpolation): APPLIES-test run -- grep -rn \"Repo.query\" lib/ priv/repo/migrations/ shows zero hits inside graph.ex, and the diff touches no migration file. PASS.\nINV-8 (no unhandled crashes on realistic failure paths): APPLIES-test run -- grep -rn '^\\s*{:ok, .*} = ' lib/letflow/definitions/graph.ex shows zero hits; all new logic (check_unpermitted_edge_condition/1, check_human_task_fallback_edge/1, human_task_source?/3, and the two new predicates) is built from Enum.filter/Enum.map/Enum.any? and a defensive case Map.fetch(...) do {:ok,_}->...; :error->false end in human_task_source?/3 that explicitly handles the dangling-edge miss case rather than pattern-matching only {:ok, _} -- consistent with the existing exclusive_gateway_source?/3 convention. No bare match that can raise on realistic (malformed/dangling-edge) input. PASS.\n\nAll applicable invariants PASS; INV-2/3/5 correctly NOT-APPLICABLE (pre-S4/S5); INV-1 explicitly tested against the diff's content (not defaulted) and found NOT-APPLICABLE because no tenant-scoped table/schema/migration is touched -- consistent with security-reviewer.md's guidance that INV-1 applies to diffs touching tenant-scoped tables/schemas/migrations, which this diff does not.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0056-20260818/step-03b-security-reviewer.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0056-20260818",
+      "commit_sha_list": ["0f8bd06"],
+      "remote_branch": "origin/feature/WF03-ISS0056-20260818",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

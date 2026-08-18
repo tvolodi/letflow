@@ -36,7 +36,7 @@ defmodule Letflow.Definitions.Graph do
   cycle check (CHK-06), and §7 for the never-short-circuit / check-independence
   proof.
 
-  ## Node-attribute and edge-condition checks (CHK-09..CHK-17, REQ-029)
+  ## Node-attribute and edge-condition checks (CHK-09..CHK-17, CHK-19, REQ-029, ISS-0056)
 
   `validate_node_attributes/1` (PD-05) and `validate_edge_conditions/1`
   (PD-06) are separate public functions, not folded into `validate_graph/1`
@@ -143,6 +143,7 @@ defmodule Letflow.Definitions.Graph do
             | :sub_process_interface_entry_invalid
             | :sub_process_interface_schema_invalid
             | :sub_process_interface_duplicate_name
+            | :human_task_no_fallback_edge
 
     @type t :: %__MODULE__{
             code: code(),
@@ -327,24 +328,26 @@ defmodule Letflow.Definitions.Graph do
   end
 
   @doc """
-  Runs the 5 edge-condition/CEL checks (CHK-13..CHK-17, PD-06) against every
-  edge in `graph` and returns every violation found — never short-circuits,
-  same unconditional-concatenation construction as `validate_graph/1`. Does
-  not call `validate_graph/1` and does not verify structural validity as a
-  precondition — see the moduledoc's "Ordering contract" note. Total and
-  defensive: an edge whose `source` doesn't resolve to any node (a dangling
-  edge) is treated as not sourced from an `EXCLUSIVE_GATEWAY` rather than
-  raising (design doc §5.2).
+  Runs the 6 edge-condition/CEL checks (CHK-13..17 and CHK-19, PD-06) against
+  every edge in `graph` and returns every violation found — never
+  short-circuits, same unconditional-concatenation construction as
+  `validate_graph/1`. Does not call `validate_graph/1` and does not verify
+  structural validity as a precondition — see the moduledoc's "Ordering
+  contract" note. Total and defensive: an edge whose `source` doesn't resolve
+  to any node (a dangling edge) is treated as not sourced from an
+  `EXCLUSIVE_GATEWAY` or a `HUMAN_TASK` rather than raising (design doc
+  §5.2, `iss-0056-human-task-fallback-edge-validation.md` §3.1).
   """
   @spec validate_edge_conditions(t()) :: result()
   def validate_edge_conditions(%__MODULE__{} = graph) do
     violations =
       [
         &check_gateway_condition_presence/1,
-        &check_non_gateway_condition_absence/1,
+        &check_unpermitted_edge_condition/1,
         &check_default_condition_conflict/1,
         &check_single_default_edge/1,
-        &check_cel_syntax/1
+        &check_cel_syntax/1,
+        &check_human_task_fallback_edge/1
       ]
       |> Enum.flat_map(& &1.(graph))
 
@@ -913,23 +916,29 @@ defmodule Letflow.Definitions.Graph do
     end)
   end
 
-  # CHK-14: every edge that is NOT a non-default EXCLUSIVE_GATEWAY outgoing
-  # edge (a non-gateway-sourced edge, or the gateway's own default edge) must
-  # have a null condition (design doc §5.1).
-  @spec check_non_gateway_condition_absence(t()) :: [Violation.t()]
-  defp check_non_gateway_condition_absence(%__MODULE__{nodes: nodes, edges: edges}) do
+  # CHK-14: every edge whose source is neither a non-default EXCLUSIVE_GATEWAY
+  # outgoing edge nor a HUMAN_TASK outgoing edge must have a null condition
+  # (design doc §5.1, `iss-0056-human-task-fallback-edge-validation.md` §3.2).
+  # Renamed from `check_non_gateway_condition_absence/1` -- that name became
+  # misleading once a HUMAN_TASK (non-gateway) source is also permitted to
+  # carry a condition.
+  @spec check_unpermitted_edge_condition(t()) :: [Violation.t()]
+  defp check_unpermitted_edge_condition(%__MODULE__{nodes: nodes, edges: edges}) do
     node_index = build_node_index(nodes)
 
     edges
     |> Enum.filter(fn edge ->
-      not (exclusive_gateway_source?(nodes, node_index, edge) and edge.is_default != true) and
-        edge.condition != nil
+      not (
+        (exclusive_gateway_source?(nodes, node_index, edge) and edge.is_default != true) or
+          human_task_source?(nodes, node_index, edge)
+      ) and edge.condition != nil
     end)
     |> Enum.map(fn edge ->
       %Violation{
         code: :unexpected_edge_condition,
         message:
-          "Edge '#{edge.id}' is not a non-default EXCLUSIVE_GATEWAY outgoing edge and must not have a condition"
+          "Edge '#{edge.id}' is not a non-default EXCLUSIVE_GATEWAY outgoing edge or a " <>
+            "HUMAN_TASK outgoing edge and must not have a condition"
       }
     end)
   end
@@ -995,6 +1004,54 @@ defmodule Letflow.Definitions.Graph do
     end)
   end
 
+  # CHK-19: a HUMAN_TASK node with at least one "really conditioned" outgoing
+  # edge must also have at least one fallback-candidate outgoing edge to
+  # resolve to if every condition evaluates false -- one violation per
+  # offending node, not per edge (`iss-0056-human-task-fallback-edge-validation.md`
+  # §4.2). Iterates `graph.nodes` filtered to HUMAN_TASK, matching CHK-09's
+  # own node-filtering idiom -- not grouped by resolved source index the way
+  # CHK-16 groups gateway edges, since this check's unit of concern is one
+  # violation per node, not per edge.
+  @spec check_human_task_fallback_edge(t()) :: [Violation.t()]
+  defp check_human_task_fallback_edge(%__MODULE__{nodes: nodes, edges: edges}) do
+    nodes
+    |> Enum.filter(&(&1.node_type == :HUMAN_TASK))
+    |> Enum.filter(fn node ->
+      outgoing = Enum.filter(edges, &(&1.source == node.id))
+
+      Enum.any?(outgoing, &human_task_edge_really_conditioned?/1) and
+        not Enum.any?(outgoing, &human_task_edge_fallback_candidate?/1)
+    end)
+    |> Enum.map(fn node ->
+      %Violation{
+        code: :human_task_no_fallback_edge,
+        message:
+          "HUMAN_TASK node '#{node.id}' has at least one really-conditioned outgoing edge " <>
+            "but no fallback edge (is_default: true, or a blank/nil condition) to resolve " <>
+            "to if every condition evaluates false"
+      }
+    end)
+  end
+
+  # Mirrors `Letflow.Engine.Transition`'s `really_conditioned?/1` predicate
+  # literally (copied by value, not imported/aliased/called cross-module --
+  # design doc §4.1) so `graph.ex` and `transition.ex` share the same
+  # "really conditioned" definition without a cross-module dependency. Does
+  # NOT trim whitespace -- deliberately different from `blank_condition?/1`,
+  # a disclosed, unreconciled inconsistency (design doc §4.1's open question).
+  @spec human_task_edge_really_conditioned?(Edge.t()) :: boolean()
+  defp human_task_edge_really_conditioned?(edge) do
+    edge.is_default != true and is_binary(edge.condition) and edge.condition != ""
+  end
+
+  # The logical complement of `human_task_edge_really_conditioned?/1`, stated
+  # separately (not as `not human_task_edge_really_conditioned?/1`) for
+  # readability at the CHK-19 call site (design doc §4.1).
+  @spec human_task_edge_fallback_candidate?(Edge.t()) :: boolean()
+  defp human_task_edge_fallback_candidate?(edge) do
+    edge.is_default == true or is_nil(edge.condition) or edge.condition == ""
+  end
+
   @spec blank_condition?(String.t() | nil) :: boolean()
   defp blank_condition?(nil), do: true
   defp blank_condition?(condition) when is_binary(condition), do: String.trim(condition) == ""
@@ -1013,6 +1070,25 @@ defmodule Letflow.Definitions.Graph do
   defp exclusive_gateway_source?(nodes, node_index, edge) do
     case Map.fetch(node_index, edge.source) do
       {:ok, idx} -> Enum.at(nodes, idx).node_type == :EXCLUSIVE_GATEWAY
+      :error -> false
+    end
+  end
+
+  # Resolves `edge.source` via `node_index` (§5.2) and reports whether the
+  # resolved node is a HUMAN_TASK. An unresolvable (dangling) source is
+  # defensively treated as "not a HUMAN_TASK" rather than raising -- same
+  # convention as `exclusive_gateway_source?/3`; kept as a separate helper
+  # rather than a generalization of it so CHK-13/16's existing call sites are
+  # untouched by this change (`iss-0056-human-task-fallback-edge-validation.md`
+  # §3.1).
+  @spec human_task_source?(
+          [Node.t()],
+          %{String.t() => non_neg_integer()},
+          Edge.t()
+        ) :: boolean()
+  defp human_task_source?(nodes, node_index, edge) do
+    case Map.fetch(node_index, edge.source) do
+      {:ok, idx} -> Enum.at(nodes, idx).node_type == :HUMAN_TASK
       :error -> false
     end
   end

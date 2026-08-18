@@ -1,0 +1,60 @@
+{
+  "handoff_id": "ac56cb21-fe6a-4701-a64b-fc545c2e256f",
+  "run_id": "WF03-ISS0056-20260818",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0056-20260818/step-02-code-designer.json",
+  "created_at": "2026-08-18T23:35:00Z",
+  "started_at": "2026-08-18T23:22:28Z",
+  "completed_at": "2026-08-18T23:35:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-029"],
+    "requirement_text": {
+      "REQ-029": "Extend REQ-028's graph module with src/definition/graph.zig's validateNodeAttributes() (PD-05) and the edge-condition rules (PD-06). Edge condition rules (PD-06): condition MUST be present (non-null, non-empty) on every non-default outgoing edge from an EXCLUSIVE_GATEWAY, MUST be null on every other edge; is_default MUST NOT coexist with a non-null condition; at most one outgoing edge per EXCLUSIVE_GATEWAY may be default. Also port isValidCelSyntax's minimal structural CEL check as a pure syntax-only validator."
+    },
+    "related_handoff_ids": ["6f2ed002-0eac-4c9f-bbbe-d8052bec2b3a"],
+    "artifacts_in": [
+      "docs/issues/ISS-0056.yaml",
+      "lib/letflow/definitions/graph.ex",
+      "test/letflow/definitions/graph_test.exs",
+      "handoffs/WF03-ISS0056-20260818/step-01-issue-fixer.json",
+      "lib/letflow/design/req029-node-attribute-edge-condition-validators.md"
+    ],
+    "owned_modules": ["lib/letflow/definitions/graph.ex", "test/letflow/definitions/graph_test.exs"]
+  },
+  "task": {
+    "description": "Design the fix for ISS-0056: CHK-14 (check_non_gateway_condition_absence/1) currently forbids any non-nil condition on any non-EXCLUSIVE_GATEWAY-sourced edge, which blocks REQ-048's entire conditioned-task-completion feature on :HUMAN_TASK edges outright, not just the narrow multi-condition-no-fallback case ISS-0056 names. Design: (1) loosen CHK-14 to permit real conditions on :HUMAN_TASK-sourced edges, (2) add a new CHK check (verify next unused number yourself) requiring at least one fallback-candidate outgoing edge on a :HUMAN_TASK node whenever any outgoing edge is really-conditioned. Zero change to lib/letflow/engine/ permitted.",
+    "acceptance_criteria": [
+      "Design covers loosening CHK-14 to permit :HUMAN_TASK-sourced conditions, with the exact new guard stated",
+      "Design covers the new CHK check (verified CHK number, exact violation code and message shape)",
+      "States exactly which existing function(s) change and how their guard changes, in prose/pseudocode-signature terms only, no implementation code",
+      "Confirms zero change required outside lib/letflow/definitions/graph.ex and its test file",
+      "States edge cases considered, including the single-edge conditioned-non-default HUMAN_TASK case and CHK-13/16 precedent search",
+      "No implementation code (no .ex/.exs function bodies) anywhere in the design artefact"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design artefact written at lib/letflow/design/iss-0056-human-task-fallback-edge-validation.md. Confirmed by direct grep of graph.ex that CHK-01..18 are taken (CHK-18 = check_sub_process_interface/1, REQ-032) so CHK-19 is the next free number, per ISSUE-FIXER's own suggestion, verified independently rather than trusted. Two changes designed, both confined to lib/letflow/definitions/graph.ex: (1) a new private human_task_source?/3 helper (mirrors exclusive_gateway_source?/3's shape/defensive-dangling-source convention but checks :HUMAN_TASK), and check_non_gateway_condition_absence/1 (CHK-14) renamed to check_unpermitted_edge_condition/1 with its guard broadened to permit a non-nil condition when the source is either (a) an EXCLUSIVE_GATEWAY with is_default != true (unchanged) or (b) a HUMAN_TASK (new, unconditional on is_default -- reasoned through in design doc SS3.3 why CHK-15 alone already correctly rejects the one invalid HUMAN_TASK is_default+condition combination, so no redundant carve-out is needed); violation code stays :unexpected_edge_condition, only the message text and trigger logic change. (2) A new CHK-19 check_human_task_fallback_edge/1, dispatched from validate_edge_conditions/1's existing check list (not validate_node_attributes/1's -- it's an edge-condition check, not a node-attribute one), firing :human_task_no_fallback_edge once per offending HUMAN_TASK node (not per edge) when at least one outgoing edge is really-conditioned and none is a fallback candidate. The 'really conditioned' predicate is deliberately mirrored literally from transition.ex's really_conditioned?/1 (is_default != true AND is_binary(condition) AND condition != \"\", no String.trim) rather than reusing graph.ex's own trim-aware blank_condition?/1 helper, per the diagnosis's explicit instruction to avoid future drift between the two modules -- this introduces a real, narrow semantic gap (a whitespace-only condition is 'really conditioned' under CHK-19 but 'blank' under CHK-17) which the design flags explicitly in SS4.1 as an open question, not silently resolved. SS6 works through 7 edge cases including the single-edge conditioned-non-default HUMAN_TASK case (fires, no precedent exists in CHK-13/16 for a fallback requirement at all -- confirmed by reading both, neither has an analogous concept) and the zero-outgoing-edge case (does not fire, CHK-04's territory). SS7 makes an explicit, reasoned decision NOT to extend CHK-16 to HUMAN_TASK sources in this run (ISSUE-FIXER flagged it optional/non-blocking; extending it would require a second non-trivial design decision about violation-counting semantics this design has no mandate to make on ISS-0056's authority alone), naming it as a candidate for a future separately-filed issue rather than silently dropping it. SS0 states the zero-change-outside-graph.ex confirmation explicitly and lists what must NOT change (SS8), including every existing CHK function this design leaves untouched. No .ex/.exs code blocks anywhere in the document -- all algorithm steps are @spec-level signatures or FOR/IF-shaped pseudocode, matching this project's iss-0048 design-doc convention. Acceptance-criteria traceability table (SS11) maps every handoff acceptance criterion to its concrete design section.",
+    "artifacts_out": [
+      "lib/letflow/design/iss-0056-human-task-fallback-edge-validation.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0056-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0056-20260818",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

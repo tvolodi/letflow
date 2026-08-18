@@ -1,0 +1,47 @@
+id: ISS-0056
+title: "No design-time validation (REQ-029-style CHK check) catches a :HUMAN_TASK node whose outgoing edges can never resolve at complete_task/3 time"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ048-20260818 (Step 2d idiom/scope gate)
+discovered_at: "2026-08-18T23:08:18Z"
+severity: MINOR
+tags:
+  - type-safety
+description: >
+  While reviewing REQ-048's `Letflow.Engine.Transition.dispatch_task_completion/4`
+  (lib/letflow/engine/transition.ex), confirmed ELIXIR-DEV's own disclosed design
+  deviation is correct: REQ-029's CHK-13..CHK-17 edge-condition/CEL validators
+  (lib/letflow/definitions/graph.ex, `exclusive_gateway_source?/3`-gated) are scoped
+  to `:EXCLUSIVE_GATEWAY` sources only, so nothing at graph-validation time (create/2's
+  own definition-load path) checks that a `:HUMAN_TASK` node's own outgoing edges are
+  well-formed for `dispatch_task_completion/4`'s own `really_conditioned?/1` partition.
+
+  This is a genuine class of invalid state only a runtime error (or a targeted test)
+  currently catches: a structurally-valid graph can define a `:HUMAN_TASK` node with
+  two or more outgoing edges, each carrying a real non-empty `condition` and neither
+  marked `is_default: true`. Such a graph passes REQ-029/CHK-13..17 validation
+  unconditionally (they don't look at `:HUMAN_TASK` sources at all) and will only fail
+  much later, at the first real `complete_task/3` call whose merged variables cause
+  every one of those conditions to evaluate false -- `{:error, {:no_matching_edge, ...}}`,
+  discovered in production rather than at definition-publish time. The single-edge,
+  no-condition case (the common one) is now handled correctly by `really_conditioned?/1`
+  (confirmed during this review); this finding is about the *no-fallback,
+  all-conditions-false* case for a `:HUMAN_TASK` with multiple conditioned edges, which
+  has no equivalent of CHK-13's "must have a default/fallback" guarantee.
+
+  A `@type`/validator change could make this unrepresentable instead of runtime-only:
+  extend REQ-029's edge-condition checks (or a new CHK-1x) to also require a
+  `:HUMAN_TASK` source's outgoing edges to include at least one
+  `is_default: true`/unconditioned fallback edge whenever more than one outgoing edge
+  carries a real condition -- the same shape CHK-13 already enforces for
+  `:EXCLUSIVE_GATEWAY` sources, extended to cover `:HUMAN_TASK` sources too.
+
+  Not filed as blocking REQ-048's own REVIEWER gate (per reviewer.md point 3, this
+  class of finding does not block PASS) -- filed as claimable follow-up work, most
+  naturally scoped as a REQ-029 extension or its own small requirement.
+affected_files:
+  - lib/letflow/definitions/graph.ex
+  - lib/letflow/engine/transition.ex
+status: resolved
+github_issue: https://github.com/tvolodi/letflow/issues/201
+resolved_in_run: WF03-ISS0056-20260818
+resolved_at: "2026-08-18T23:42:17Z"

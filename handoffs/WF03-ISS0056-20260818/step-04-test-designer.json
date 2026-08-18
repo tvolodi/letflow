@@ -1,0 +1,67 @@
+{
+  "handoff_id": "9c3a7e5f-2d81-4b6a-8e4c-1f7b6a0d9c52",
+  "run_id": "WF03-ISS0056-20260818",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0056-20260818/step-04-test-designer.json",
+  "created_at": "2026-08-18T23:35:29Z",
+  "started_at": "2026-08-18T23:35:29Z",
+  "completed_at": "2026-08-18T23:36:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-029"],
+    "related_handoff_ids": [
+      "b7f2a9d3-1c4e-4f8a-9d6b-3e5c7a1f0d82"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss-0056-human-task-fallback-edge-validation.md",
+      "handoffs/WF03-ISS0056-20260818/step-03-elixir-dev.json",
+      "docs/issues/ISS-0056.yaml",
+      "lib/letflow/definitions/graph.ex",
+      "test/letflow/definitions/graph_test.exs"
+    ],
+    "owned_modules": [
+      "test/letflow/definitions/graph_test.exs",
+      "test/specs/ISS-0056.md"
+    ]
+  },
+  "task": {
+    "description": "Write a WF-03 regression test spec and test code proving the ISS-0056 fix (CHK-14 loosened to permit HUMAN_TASK-sourced conditions, new CHK-19 fallback-edge requirement): a HUMAN_TASK edge with a single condition now validates; 2+ conditioned edges with no fallback fires :human_task_no_fallback_edge; 2+ conditioned edges plus a default/implicit fallback validates; CHK-14's original non-gateway/non-HUMAN_TASK protection is intact. Must be proven fail-then-pass against the pre-fix commit, not just asserted.",
+    "acceptance_criteria": [
+      "test/specs/ISS-0056.md written, citing the design doc's §6/§10 edge cases per criterion",
+      "New describe block in test/letflow/definitions/graph_test.exs (no other file touched, no lib/letflow/engine/ changes)",
+      "Single conditioned non-default HUMAN_TASK edge now validates (core regression case)",
+      "2+ conditioned HUMAN_TASK edges, no fallback -> :human_task_no_fallback_edge",
+      "2+ conditioned HUMAN_TASK edges plus is_default:true fallback -> valid",
+      "Non-HUMAN_TASK, non-EXCLUSIVE_GATEWAY source (SERVICE_TASK) with a condition still fails with :unexpected_edge_condition (CHK-14 regression guard)",
+      "Fail-then-pass proven against 0f8bd06^ (pre-fix graph.ex) with real mix test output quoted, not claimed",
+      "describe+test name combined length kept well under ExUnit's 255-char limit (project has hit this failure class 4 times)",
+      "graph.ex restored to the exact post-fix committed state (git diff empty) before finishing"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Added a new describe block 'validate_edge_conditions/1 — ISS-0056: HUMAN_TASK condition permission' (7 tests) to test/letflow/definitions/graph_test.exs, right after the existing CHK-14/CHK-15 describe block, matching the file's existing graph/node/cond_edge fixture-builder style exactly (no new fixture builders needed, per design doc §10). Test cases cover: (1) single conditioned non-default HUMAN_TASK edge validates (core regression), (2) 2+ conditioned edges no fallback fires :human_task_no_fallback_edge (literal ISS-0056 reproduction), (3) 2+ conditioned edges plus is_default:true fallback validates, (4) 2+ conditioned edges plus an implicit (non-default, blank-condition) fallback validates, (5) single blank-condition edge -> no CHK-19 violation (common case), (6) single real-condition non-default edge -> CHK-19 fires (design's flagged 'no CHK-13/16 precedent' edge case), (7) SERVICE_TASK source with a condition still fires :unexpected_edge_condition (CHK-14 regression guard, confirms the broadened guard didn't over-permit a third source type). All describe+test combined name lengths checked programmatically: max 190 chars, well under the 255-char ExUnit hard limit this project has hit 4 times before (docs/anti-patterns.md). FAIL-THEN-PASS PROVEN: checked out 0f8bd06^'s (commit 3340062) lib/letflow/definitions/graph.ex into the working tree via `git checkout 0f8bd06^ -- lib/letflow/definitions/graph.ex` (test file left as-is), ran `mix test test/letflow/definitions/graph_test.exs`: result '53 tests, 5 failures' -- exactly test cases 1,2,3,4,6 failed (all asserting the loosened-CHK-14/new-CHK-19 behavior), each showing the old :unexpected_edge_condition code where :human_task_no_fallback_edge or valid:true was expected; test cases 5 and 7 (unrelated to the fix) correctly still passed pre-fix, confirming they are legitimate regression guards rather than false coverage, and all 46 pre-existing tests also passed unchanged. Then ran `git checkout HEAD -- lib/letflow/definitions/graph.ex` to restore the post-fix version, confirmed `git diff lib/letflow/definitions/graph.ex` was empty, and re-ran the full suite: `mix test test/letflow/definitions/graph_test.exs` -> '53 tests, 0 failures' (0.4s). Full pre-fix and post-fix output quoted verbatim in test/specs/ISS-0056.md's Fail-then-pass section. graph.ex confirmed unmodified from its committed post-fix state before this handoff was written (git status clean on that file).",
+    "artifacts_out": [
+      "test/letflow/definitions/graph_test.exs",
+      "test/specs/ISS-0056.md",
+      "handoffs/WF03-ISS0056-20260818/step-04-test-designer.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0056-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0056-20260818",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,63 @@
+{
+  "handoff_id": "b7f2a9d3-1c4e-4f8a-9d6b-3e5c7a1f0d82",
+  "run_id": "WF03-ISS0056-20260818",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0056-20260818/step-03-elixir-dev.json",
+  "created_at": "2026-08-18T23:30:47Z",
+  "started_at": "2026-08-18T23:30:47Z",
+  "completed_at": "2026-08-18T23:30:47Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-029"],
+    "related_handoff_ids": [
+      "d1a4e8c7-6b3f-4a9c-9e2d-7f0b5c8a3e91"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss-0056-human-task-fallback-edge-validation.md",
+      "handoffs/WF03-ISS0056-20260818/step-02b-code-design-validator.json",
+      "lib/letflow/definitions/graph.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/definitions/graph.ex",
+      "test/letflow/definitions/graph_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Implement the validated design (iss-0056-human-task-fallback-edge-validation.md) in lib/letflow/definitions/graph.ex: (1) loosen CHK-14 to permit a non-nil edge condition when sourced from a HUMAN_TASK node, in addition to the existing non-default EXCLUSIVE_GATEWAY case; (2) add CHK-19, a new check requiring at least one fallback-candidate outgoing edge on a HUMAN_TASK node whenever it has at least one really-conditioned outgoing edge.",
+    "acceptance_criteria": [
+      "check_non_gateway_condition_absence/1 renamed to check_unpermitted_edge_condition/1 with a broadened guard permitting HUMAN_TASK-sourced edges to carry a condition, unconditional on is_default",
+      "New private helper human_task_source?/3, mirroring exclusive_gateway_source?/3's shape and defensive dangling-source handling, added as a separate helper (not a generalization of exclusive_gateway_source?/3)",
+      "New CHK-19 check_human_task_fallback_edge/1 added, dispatched from validate_edge_conditions/1, emitting :human_task_no_fallback_edge exactly once per offending HUMAN_TASK node",
+      "New standalone predicates human_task_edge_really_conditioned?/1 and human_task_edge_fallback_candidate?/1, mirroring transition.ex's really_conditioned?/1 literally (non-trimming), not reusing blank_condition?/1",
+      "Violation.code union extended with :human_task_no_fallback_edge, appended at the end, no reordering",
+      "validate_edge_conditions/1 doc and moduledoc CHK-count references updated to reflect 6 checks / CHK-19",
+      "Zero changes outside lib/letflow/definitions/graph.ex; lib/letflow/engine/ untouched",
+      "mix compile --warnings-as-errors passes"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented exactly per lib/letflow/design/iss-0056-human-task-fallback-edge-validation.md, no deviations. In lib/letflow/definitions/graph.ex: (1) Violation.code union (around line 121-146) gained :human_task_no_fallback_edge, appended at the end. (2) validate_edge_conditions/1's @doc and dispatch list (originally graph.ex:329-352) updated: dispatch list now [&check_gateway_condition_presence/1, &check_unpermitted_edge_condition/1, &check_default_condition_conflict/1, &check_single_default_edge/1, &check_cel_syntax/1, &check_human_task_fallback_edge/1]; doc now describes '6 edge-condition/CEL checks (CHK-13..17 and CHK-19, PD-06)'. (3) check_non_gateway_condition_absence/1 renamed to check_unpermitted_edge_condition/1 (CHK-14), guard broadened to: edge.condition != nil AND NOT ((exclusive_gateway_source?(...) AND edge.is_default != true) OR human_task_source?(...)); comment and message text updated to name both permitted source types. (4) New private helper human_task_source?/3 added immediately after exclusive_gateway_source?/3, same signature shape and same dangling-source-returns-false defensive convention, kept fully separate per the design's explicit reasoning (no shared node_type_at_source/3 helper, so CHK-13/16's call sites are untouched by construction). (5) New CHK-19 check_human_task_fallback_edge/1 added (after check_cel_syntax/1's helpers, before blank_condition?/1): filters graph.nodes to :HUMAN_TASK, filters each node's outgoing edges by edge.source == node.id (no node_index lookup needed, per design §4.2), and emits one :human_task_no_fallback_edge violation per node where Enum.any?(outgoing, &human_task_edge_really_conditioned?/1) and not Enum.any?(outgoing, &human_task_edge_fallback_candidate?/1). (6) New standalone predicates human_task_edge_really_conditioned?/1 (edge.is_default != true and is_binary(edge.condition) and edge.condition != '') and human_task_edge_fallback_candidate?/1 (edge.is_default == true or is_nil(edge.condition) or edge.condition == ''), mirroring transition.ex's really_conditioned?/1 literally, deliberately not reusing blank_condition?/1 (non-trim vs. trim, disclosed gap per design §4.1) -- lib/letflow/engine/ was never opened or referenced. (7) Moduledoc's 'Node-attribute and edge-condition checks' heading updated to mention CHK-19/ISS-0056. `mix compile --warnings-as-errors` ran clean (output: 'Compiling 1 file (.ex)' / 'Generated letflow app', zero warnings). A throwaway, uncommitted sanity script (elixir -pa _build/dev/lib/*/ebin, run against the pure Graph module directly -- no DB/app start needed since this module has no I/O) exercised 4 scenarios from the design's §6/§10 table: (a) single HUMAN_TASK edge, real non-default condition, no other edge -> correctly fires :human_task_no_fallback_edge (design §6 row 1's 'no precedent, new invariant' case); (b) two really-conditioned HUMAN_TASK edges, no fallback -> fires :human_task_no_fallback_edge naming the node; (c) same plus a third is_default:true/nil-condition edge -> zero violations (legal shape); (d) SERVICE_TASK-sourced edge with a condition -> still fires :unexpected_edge_condition (CHK-14 regression check, confirms guard did not over-permit a third source type). All 4 matched the design's expected outcomes exactly. No implementation deviation from the design: CHK-16 was not extended (design §7's explicit deferral, honored), CHK-13/15/17 untouched, exclusive_gateway_source?/3 and blank_condition?/1 untouched, lib/letflow/engine/ never opened.",
+    "artifacts_out": [
+      "lib/letflow/definitions/graph.ex",
+      "handoffs/WF03-ISS0056-20260818/step-03-elixir-dev.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0056-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0056-20260818",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER then REVIEWER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

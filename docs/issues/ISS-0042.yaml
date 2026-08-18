@@ -49,4 +49,67 @@ affected_files:
   - lib/letflow/engine/transition.ex
   - lib/letflow/definitions/graph.ex
 github_issue: https://github.com/tvolodi/letflow/issues/157
-status: in_progress
+status: resolved
+resolved_by: ISSUE-FIXER
+resolved_in_run: WF03-ISS0042-20260818
+resolved_at: 2026-08-18T06:56:13Z
+resolution_note: >
+  Diagnosed-and-deferred, not resolved-by-code-change. WF-03 Steps 0.5/1
+  performed independently rather than trusting the issue text:
+
+  Step 0.5 (registry lookup): docs/issues/ was searched for prior entries
+  sharing this shape. ISS-0020 is the closest match (also a REVIEWER-filed,
+  MINOR, non-blocking rationale/type gap discovered during a PASSing Step 2d
+  gate) but its resolution doesn't transfer here: ISS-0020's three fixes
+  were one-to-three-sentence doc/moduledoc additions/corrections whose exact
+  content the issue text already specified, qualifying for
+  ORCHESTRATOR.md §10's sizing exception. ISS-0042's own suggested fix is a
+  new opaque/phantom-tagged ValidatedGraph.t() type spanning
+  Letflow.Engine.Transition.transition/3's public @spec -- categorically
+  different in size and kind, not a sizing-exception candidate. No other
+  docs/issues/*.yaml entry matches.
+
+  Step 1 (diagnose, independently verified against the actual code, not the
+  issue's prose): read lib/letflow/engine/transition.ex's dispatch_start/4
+  (lines 212-222) and lib/letflow/definitions/graph.ex's CHK-04
+  check_isolated_nodes/1 validator (lines 389-435) directly. Confirmed the
+  claim is accurate -- CHK-04 enforces "every :START node has >=1 outgoing
+  edge" only via a runtime validator call site; Graph.t()'s struct/@type
+  carries no marker distinguishing a CHK-04-passed graph from an arbitrary
+  one, so dispatch_start/4 must (and does) carry a defensive nil-branch
+  returning {:error, {:unknown_node_id, node.id}} to stay total. Ran
+  `MIX_TEST_PARTITION=2 mix test test/letflow/engine/`: 1 property + 19
+  tests, 0 failures -- nothing is currently broken. Confirmed this
+  defensive branch already has dedicated coverage: transition_test.exs:257
+  "a START node with no outgoing edge at all returns a named error rather
+  than raising (defensive totality)" -- so the gap is purely
+  static-type-level (nothing statically stops constructing an unvalidated
+  Graph.t()), not a runtime coverage gap; nothing is under-tested.
+
+  Conclusion: no genuine root cause requiring a code fix. This is not a
+  defect -- REQ-044's REVIEWER gate already PASSed with this exact code, no
+  test fails, no invariant is actually violated at runtime (CHK-04 does run
+  before any graph reaches the engine in the current call path), and the
+  proposed fix is a new type-level abstraction with no
+  docs/requirements.yaml entry or docs/migration/decisions/ record calling
+  for it (checked: no match for ValidatedGraph/opaque graph/phantom type in
+  either). Applying core-directives.md's anti-scope-creep norms and
+  CLAUDE.md's "don't design for hypothetical future requirements" directly:
+  adding a ValidatedGraph.t() wrapper now, ahead of any stage/decision
+  record calling for it, would itself be the scope-creep this project's
+  norms forbid -- and it would fail ORCHESTRATOR.md §10's sizing checklist
+  outright (adds a new public type/module/@spec, changes a
+  test-asserted @spec), so it cannot be absorbed as a small in-run fix the
+  way ISS-0020's doc corrections were; it would need its own full
+  WF-02-shaped design/implement/test chain with no requirement currently
+  authorizing it.
+
+  This closes the loop that WF-03 Step 1 exists to answer, choosing the
+  "diagnosed and correctly deferred" branch over "silently ignored" --
+  matching REVIEWER's own original recommendation in this issue's
+  description ("Not proposed as required work now ... this is exactly the
+  kind of abstraction that would be scope creep to add ahead of a
+  stage/decision record calling for it"). The suggested
+  ValidatedGraph.t()/opaque-wrapper sketch remains recorded above,
+  findable, for whichever future stage/decision record first needs
+  stronger type-level graph-validity guarantees.

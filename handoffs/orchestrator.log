@@ -701,3 +701,4 @@
 2026-08-18T19:26:42Z | DISPATCH | WF-02 | step-05-release-validator | ORCH → RELEASE-VALIDATOR | PENDING
 2026-08-18T19:29:09Z | COMPLETE | WF-02 | step-05-release-validator | RELEASE-VALIDATOR → ORCH | PASS
 2026-08-18T19:29:24Z | DISPATCH | WF-02 | step-06-doc-updater | ORCH → DOC-UPDATER | PENDING
+2026-08-18T19:30:27Z | COMPLETE | WF-02 | step-06-doc-updater | DOC-UPDATER → ORCH | PASS (verified: REQ-051 status done, done event appended)

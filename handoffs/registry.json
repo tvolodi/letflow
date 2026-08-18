@@ -991,17 +991,17 @@
       "workflow_id": "WF-02",
       "requirement_ids": ["REQ-064"],
       "stage": "S3",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": ["priv/repo/migrations", "lib/letflow/engine", "lib/letflow/event_store", "lib/letflow/definitions", "lib/letflow/identity", "lib/letflow/definitions.ex", "lib/letflow/event_store.ex", "lib/letflow/tenant_provisioning.ex"],
       "lock_acquired_at": "2026-08-18T12:43:35Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 (git-setup) PASS -- branch feature/WF02-REQ064-20260818 pushed from main at 881f10c (post REQ-063 merge). Routing to CODE-DESIGNER (Step 1).",
+      "lock_released_at": "2026-08-18T15:35:05Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (git merge) COMPLETED -- PR #178 squash-merged into main as 3d19e8c23665e79d05754be58ab80096ac038637. Independently re-verified by ORCH: main's docs/requirements.yaml shows REQ-064 status done, gh pr view 178 confirms state MERGED.",
       "backfilled": false,
       "queue_task_id": null,
       "queue_agent_id": null,
       "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
-      "note": "Executes decision 0006's D2 (docs/migration/decisions/0006-identity-tables-schema-per-tenant.md): drop tenant_id from the ten schema-isolated business tables now that REQ-063 (D1, users/groups/tenant_role schema-per-tenant) is merged. Explicitly does NOT touch the four D3 tables (tenant_schemas, solution_pack_installs, solution_pack_artefact_bases, pack_update_resolutions) where tenant_id is a real FK. depends_on REQ-063, satisfied. owned_modules overlaps with REQ-063's former lock on priv/repo/migrations and lib/letflow/identity, but that run is COMPLETED and released -- no live conflict."
+      "note": "Executed decision 0006's D2 (docs/migration/decisions/0006-identity-tables-schema-per-tenant.md): dropped tenant_id from the ten schema-isolated business tables. Design gate PASSed clean (0 rework) -- correctly identified REQ-063's Engine.Token -> Engine.TokenRecord rename, a third unnamed users index, and two functionally-live definitions.ex call sites needing to stay unchanged. Security review (HIGH priority) traced 3 implementation fixes beyond the approved design's own scope (definitions.ex's two prefix-only queries, identity.ex's auth-path get_by_external_identity/3, promotion.ex's target_tenant_id source change) back to their origins, confirming none introduced cross-tenant risk -- one was confirmed mandatory (the old query would have raised Ecto.QueryError once the column was gone), not just a cleanup. Test-design gate required 1 rework round: a test restructure had silently dropped the only assertion covering TenantProvisioning.tenant_id_for_schema_name/1's own contract, caught because REQ-064's own acceptance criteria required that function stay tested -- fixed via a new direct unit test in tenant_provisioning_test.exs. Also found and fixed, along the way, a genuine production bug in lib/letflow/identity_migration.ex (a fragment/2 query lost its UUID type inference once the backing Ecto field was dropped, causing a real DBConnection.EncodeError) -- filed nowhere separately since it was fixed inline as a direct, mandatory consequence of this same diff. This is the second and final half of Decision 0006 -- together with REQ-063 (D1, PR #177), the identity-tables-schema-per-tenant migration is now fully executed; decision 0006's own Status line was updated during this run's release validation to reflect both halves shipped."
     }
   ]
 }

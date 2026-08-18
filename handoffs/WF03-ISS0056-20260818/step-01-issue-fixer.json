@@ -1,0 +1,66 @@
+{
+  "handoff_id": "6f2ed002-0eac-4c9f-bbbe-d8052bec2b3a",
+  "run_id": "WF03-ISS0056-20260818",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0056-20260818/step-01-issue-fixer.json",
+  "created_at": "2026-08-18T23:20:18Z",
+  "started_at": "2026-08-18T23:16:00Z",
+  "completed_at": "2026-08-18T23:20:18Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-029"],
+    "requirement_text": {
+      "REQ-029": "Extend REQ-028's graph module with src/definition/graph.zig's validateNodeAttributes() (PD-05) and the edge-condition rules (PD-06). Edge condition rules (PD-06): condition MUST be present (non-null, non-empty) on every non-default outgoing edge from an EXCLUSIVE_GATEWAY, MUST be null on every other edge; is_default MUST NOT coexist with a non-null condition; at most one outgoing edge per EXCLUSIVE_GATEWAY may be default. Also port isValidCelSyntax's minimal structural CEL check as a pure syntax-only validator."
+    },
+    "related_handoff_ids": ["b3f0a6b2-2c1a-4e0a-9a1d-6f2a0c9f0056"],
+    "artifacts_in": [
+      "docs/issues/ISS-0056.yaml",
+      "lib/letflow/definitions/graph.ex",
+      "test/letflow/definitions/graph_test.exs",
+      "lib/letflow/engine/transition.ex (read-only, sibling worktree copy, NOT owned/touched)"
+    ],
+    "owned_modules": ["lib/letflow/definitions/graph.ex", "test/letflow/definitions/graph_test.exs"]
+  },
+  "task": {
+    "description": "Step 0.5 registry lookup + Step 1 diagnosis for ISS-0056: no design-time validation catches a :HUMAN_TASK node whose outgoing edges can never resolve at complete_task/3 time.",
+    "acceptance_criteria": [
+      "Registry checked for a prior resolved entry with matching symptoms",
+      "Issue's premise reproduced directly (not diagnosed from prose alone)",
+      "Root cause traced to exact function(s) in graph.ex",
+      "Confirmed achievable without touching lib/letflow/engine/ (else BLOCKED)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Step 0.5 (registry lookup): grepped docs/issues/*.yaml for status: resolved entries mentioning graph.ex/CHK-1x/edge-condition/exclusive_gateway. One partial match, ISS-0042 (resolved WF03-ISS0042-20260818): also a REVIEWER-filed, MINOR, graph.ex type-safety gap discovered during a PASSing Step 2d gate, resolved as 'diagnosed-and-deferred, no code change' because the suggested fix (a ValidatedGraph.t() phantom type) was scope creep with no requirement/decision-record calling for it. Root cause is different (CHK-04 START-node runtime-only invariant vs. this issue's CHK-13..17 HUMAN_TASK gap) and, per this diagnosis below, ISS-0056's fix IS a small, requirement-shaped extension (not a new type-level abstraction), so ISS-0042's 'defer, don't fix' precedent does not transfer. No exact-match resolved entry exists. Not a recurrence.\n\nStep 1 (diagnosis, reproduced directly): Read lib/letflow/definitions/graph.ex in full. validate_edge_conditions/1 (line 339) runs 5 checks: check_gateway_condition_presence/1 (CHK-13, line 899, requires a non-empty condition on every non-default EXCLUSIVE_GATEWAY-sourced edge), check_non_gateway_condition_absence/1 (CHK-14, line 920, requires condition == nil on every edge that is NOT a non-default EXCLUSIVE_GATEWAY-sourced edge), check_default_condition_conflict/1 (CHK-15, source-independent), check_single_default_edge/1 (CHK-16, at most one is_default:true edge per EXCLUSIVE_GATEWAY, gated the same way as CHK-13), check_cel_syntax/1 (CHK-17, source-independent, runs on any edge with a present condition regardless of source type). CHK-13/14/16 share one gate, exclusive_gateway_source?/3 (line 1013), which recognizes only :EXCLUSIVE_GATEWAY as a 'may legitimately carry a condition' source type.\n\nReproduced the issue's literal scenario with a throwaway ExUnit test (compiled via `mix compile` then `mix run --no-start` against a hand-built %Graph{} -- avoided `mix test`'s aliased ecto.create/ecto.migrate steps, which fail in this checkout on an unrelated pre-existing migration-timestamp collision between two already-committed main-branch migrations, 20260819000001_create_groups_tenant_scoped.exs and 20260819000001_drop_transition_events.exs -- unrelated to this issue, not touched, not in scope). Built a :HUMAN_TASK node 'h' with two outgoing edges, each carrying a real non-empty condition ('amount > 100', 'amount < 0'), neither is_default: true, matching the issue's exact description. Actual output:\n  validate_graph: %{valid: true, violations: []}\n  validate_node_attributes: %{valid: false, violations: [%{code: :missing_role, ...}]}  (irrelevant -- fixture omitted HUMAN_TASK's required role attribute, CHK-09, not part of this issue)\n  validate_edge_conditions: %{valid: false, violations: [%{code: :unexpected_edge_condition, message: \"Edge 'h->e1' is not a non-default EXCLUSIVE_GATEWAY outgoing edge and must not have a condition\"}, %{code: :unexpected_edge_condition, message: \"Edge 'h->e2' is not a non-default EXCLUSIVE_GATEWAY outgoing edge and must not have a condition\"}]}\n\nThis DISPROVES the issue's literal premise ('passes REQ-029/CHK-13..17 validation unconditionally today') for the exact reproduction given -- CHK-14 already rejects it, just under an unrelated-looking error (:unexpected_edge_condition), not silently. But this reveals a MORE severe, blocking root cause than the one filed, independently confirmed by reading (read-only, not modified) the sibling worktree's in-progress lib/letflow/engine/transition.ex (~/letflow-wt2, WF02-REQ048-20260818, not yet merged to main): dispatch_task_completion/4 there partitions a :HUMAN_TASK node's outgoing edges via really_conditioned?/1 (is_default != true AND is_binary(condition) AND condition != \"\") into real-conditioned edges vs. fallback candidates, and evaluates real conditions at runtime -- i.e. REQ-048's whole conditioned-task-completion feature requires :HUMAN_TASK edges to be ABLE to carry real conditions. But CHK-14, as it exists on main right now, unconditionally forbids ANY non-nil condition on ANY non-EXCLUSIVE_GATEWAY-sourced edge -- so no graph using REQ-048's feature at all can ever pass graph validation today, not just the narrow 'two conditions, no fallback' case the issue names. This is why REVIEWER filed this as ELIXIR-DEV's own 'disclosed design deviation' during REQ-048's Step 2d review.\n\nRoot cause (confirmed, not guessed): exclusive_gateway_source?/3's single-node-type gate, shared by CHK-13/CHK-14/CHK-16, is out of sync with really_conditioned?/1's semantics being built in REQ-048. graph.ex is the stale side, not transition.ex.\n\nFix needed in graph.ex (two parts, both achievable with zero changes to lib/letflow/engine/):\n(1) Loosen CHK-14 (check_non_gateway_condition_absence/1) so a non-nil condition is also permitted on a :HUMAN_TASK-sourced edge -- generalize the gate (e.g. a new conditioned_edge_source?/3 alongside or replacing exclusive_gateway_source?/3) to recognize both :EXCLUSIVE_GATEWAY and :HUMAN_TASK. Do NOT extend CHK-13 (require-condition) to :HUMAN_TASK sources -- unlike a gateway, a :HUMAN_TASK's non-default edge with a blank/nil condition is legitimate and is really_conditioned?/1's own implicit fallback case; requiring a condition there would contradict REQ-048's design. CHK-15 and CHK-17 are already source-independent and need no change.\n(2) Add a new check -- next unused CHK number is CHK-19 (CHK-01..18 all already assigned; 18 is check_sub_process_interface/1) -- that requires, for every :HUMAN_TASK node, IF at least one outgoing edge is really-conditioned (mirror really_conditioned?/1's exact predicate literally, to keep graph.ex and transition.ex from drifting on this definition again) THEN at least one outgoing edge from that same node must be a fallback candidate (is_default == true OR condition is nil/blank). This is the literal ask in ISS-0056's description and is the part that actually prevents the runtime {:error, {:no_matching_edge, ...}} the issue is about. New violation code suggestion: :human_task_no_fallback_edge.\nOptional, non-blocking, flag for CODE-DESIGNER's judgment only: CHK-16 (at most one is_default:true edge) is also currently gated to :EXCLUSIVE_GATEWAY only and would silently allow two is_default:true edges on one :HUMAN_TASK node; extending it is directly adjacent to this same invariant family but is not required to close ISS-0056's stated gap and could be scoped separately to avoid creep.\n\nNo test currently covers any of the :HUMAN_TASK-sourced-edge-condition space in test/letflow/definitions/graph_test.exs (verified: every CHK-13..17 describe block in that file only builds EXCLUSIVE_GATEWAY-sourced or non-conditioned fixtures) -- this is why the gap went uncaught until manual review.\n\nConfirmed achievable entirely within lib/letflow/definitions/graph.ex + its test file; no change to lib/letflow/engine/transition.ex or anything under lib/letflow/engine/ is needed -- transition.ex's really_conditioned?/1 (sibling worktree, in progress) is already correct and does not need graph.ex's fix to land first or in a particular order, since REQ-048 hasn't merged yet.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "The issue as filed understates severity: CHK-14 does not just fail to add a new HUMAN_TASK-specific check, it actively forbids any real condition on a HUMAN_TASK-sourced edge today, which blocks REQ-048's entire conditioned-task-completion feature outright (not just the narrow multi-condition-no-fallback corner case named in the issue text), until graph.ex's CHK-13/14/16 gate is extended to recognize :HUMAN_TASK sources. CODE-DESIGNER should treat 'permit conditions on HUMAN_TASK edges at all' as the first, load-bearing part of the fix, with the new CHK-19 fallback-requirement check as the second, smaller part.",
+        "affected_requirement": "REQ-029"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Unrelated environment issue found while reproducing: `mix test` (aliased to run ecto.create/ecto.migrate first) currently fails in this checkout with Ecto.MigrationError: migration version 20260819000001 is duplicated, between priv/repo/migrations/20260819000001_create_groups_tenant_scoped.exs and priv/repo/migrations/20260819000001_drop_transition_events.exs, both already committed on main (feat commits #199/#177). Worked around it for this diagnosis via `mix compile` + `mix run --no-start` (Letflow.Definitions.Graph is a pure module with no Repo dependency). Not fixed here -- out of this run's owned_modules and not caused by this issue; flagging for ORCH/whichever run next needs `mix test` to actually pass in this checkout.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0056-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0056-20260818",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER for fix design"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

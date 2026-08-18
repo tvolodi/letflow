@@ -1,0 +1,69 @@
+id: ISS-0050
+title: "Letflow.IdentityMigrationTest's DropLegacyPublicIdentityTables guard test fails intermittently under full-suite mix test (undefined_table on a tenant schema's groups table), passes 7/7 in isolation"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ045-20260818 (Step 5 release-gate re-verification)
+discovered_at: "2026-08-19T00:59:00Z"
+severity: MINOR
+tags:
+  - test-hygiene
+  - postgres
+  - tenant-provisioning
+  - identity-migration
+description: >
+  While independently re-running the full suite twice (per RELEASE-VALIDATOR's
+  mandate to never trust TEST-RUNNER's report alone), both runs reported
+  796/797 (791/792 tests, 5/5 properties), with the exact same single failure
+  both times: "test DropLegacyPublicIdentityTables migration guard (REQ-063
+  §5) -- skip-on-uncopied-row once the copy is completed for every registered
+  tenant, the guard PROCEEDS and drops all three public tables
+  (Letflow.IdentityMigrationTest)" at test/letflow/identity_migration_test.exs:367,
+  with `** (Postgrex.Error) ERROR 42P01 (undefined_table) relation
+  "tenant_<hash>.groups" does not exist` raised from inside an
+  Ecto.Migrator.run/4 DDL step.
+
+  This contradicts commit c606865's ("test(WF02-REQ045): Step 4 test run --
+  full suite 797/797 green after rework") claimed clean 797/797 result.
+  Re-running test/letflow/identity_migration_test.exs alone (not full-suite)
+  passed 7/7 in 4.8s with no error -- so this is order/isolation-dependent,
+  only surfacing under the full suite's async/concurrent tenant-schema churn,
+  not a deterministic failure of the test itself.
+
+  Not caused by REQ-045's own diff: identity_migration_test.exs and its
+  DropLegacyPublicIdentityTables migration (REQ-063 scope) are untouched by
+  the WF02-REQ045-20260818 branch (`git diff main...HEAD --stat` confirms).
+  REQ-045's branch does touch lib/letflow/tenant_provisioning.ex
+  (replay_migrations/2 gains a maybe_seed_platform_event_types/2 step), which
+  is at least topically adjacent (same tenant-provisioning/migration-replay
+  machinery) -- not confirmed causal, but worth a look if this recurs after
+  REQ-045 merges.
+
+  Likely the same general class of test-isolation issue as ISS-0048 (orphaned
+  tenant_*/sandbox_* schemas, cross-test-run pollution in this same identity
+  area) rather than a new root cause -- filed separately since the concrete
+  symptom (a live DROP TABLE inside a migration hitting undefined_table
+  mid-suite) differs from ISS-0048's orphaned-schema-count symptom, and
+  because ISS-0048 explicitly named this same test-file family
+  (test/letflow/identity_test.exs and siblings) as likely-affected without
+  yet including identity_migration_test.exs specifically.
+
+  Not diagnosed further -- filed and forwarded per
+  docs/agents/protocols/ISSUE_QUEUE.md rather than investigated inline; this
+  run's own scope is REQ-045's release gate, not WF-03 issue diagnosis. Did
+  not block REQ-045's own PASS verdict: all 7 of REQ-045's acceptance
+  criteria are independently confirmed via direct code/test inspection, and
+  this failure sits entirely outside REQ-045's own test file
+  (test/letflow/engine_test.exs, which passed in full both full-suite runs).
+affected_files:
+  - test/letflow/identity_migration_test.exs
+  - lib/letflow/tenant_provisioning.ex
+status: open
+github_issue: https://github.com/tvolodi/letflow/issues/185
+renumbering_note: >
+  Filed by RELEASE-VALIDATOR during WF02-REQ045-20260818 as ISS-0049 (GH#185).
+  Renumbered to ISS-0050 at this run's Step Final rebase: main had
+  independently taken ISS-0049 for an unrelated, already-fixed finding
+  (three ExUnit test names over the 255-char limit, WF02-REQ063/064-adjacent,
+  fixed in commit d2be124) before this branch rebased. Same cross-host
+  ISS-numbering collision class documented in docs/anti-patterns.md
+  (ISS-0034/0035, ISS-0036/0037/0039, ISS-0042/0043, ISS-0043/0044-0045). No
+  content changed beyond this note and the id field.

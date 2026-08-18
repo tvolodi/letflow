@@ -1,0 +1,58 @@
+{
+  "handoff_id": "b3f1e6a2-1c4d-4a2e-9c8b-2f6a7d0e5c11",
+  "run_id": "WF03-ISS0029-20260818",
+  "workflow_id": "WF-03",
+  "step": "0.5+1",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0029-20260818/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-08-18T01:18:00Z",
+  "started_at": "2026-08-18T01:18:00Z",
+  "completed_at": "2026-08-18T01:20:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "related_handoff_ids": ["5918d99e-cb78-4fd2-9504-7f10117318ba"],
+    "artifacts_in": [
+      "docs/issues/ISS-0029.yaml",
+      "test/letflow/definitions/migrations_test.exs",
+      "test/specs/REQ-027.md",
+      "test/letflow/event_store/migrations_test.exs"
+    ],
+    "owned_modules": [
+      "test/letflow/definitions/migrations_test.exs",
+      "test/specs/REQ-027.md"
+    ]
+  },
+  "task": {
+    "description": "Step 0.5 (registry lookup): check docs/issues/ for a resolved entry with matching symptoms (vacuous test assertion class). Step 1 (diagnose): independently reproduce and verify ISS-0029/GH#87's claim yourself -- do NOT take the filed diagnosis on faith, per this project's own No Speculation / verify-don't-trust discipline. ISS-0029.yaml claims: the `refute table_exists_in_schema?(\"public\", \"process_definitions\")` assertion around line 300 of test/letflow/definitions/migrations_test.exs can never fail under replay_migrations/2, because Ecto.Migration.__prefix__/1 injects the migrator run's prefix regardless of whether the migration itself specifies prefix: prefix(). It claims this was demonstrated by replacing every prefix: prefix() with prefix: nil across both REQ-027 migrations and all 14 tests in that file staying green, and that the real coverage for this property exists in test/letflow/event_store/migrations_test.exs's section-4 guard test (flipping `if prefix() do` to `if true do` there fails that guard test naming CreateProcessDefinitions). Reproduce this yourself: read Ecto.Migration's __prefix__/1 source (via mix deps or hex docs) to confirm the mechanism, then actually run the mutation (prefix: prefix() -> prefix: nil in both REQ-027 migrations, priv/repo/migrations/20260816193001_create_process_definitions.exs and 20260816193002_create_instance_definition_snapshots.exs) against MIX_ENV=test mix test test/letflow/definitions/migrations_test.exs and confirm the result. Also verify the section-4 guard test in test/letflow/event_store/migrations_test.exs really does fail when the :prefix guard is defeated (flip `if prefix() do` to `if true do` in the relevant migration(s) and re-run that guard test), then revert all mutations and confirm the tree is clean and full suite green before finishing. State your own independent conclusion plainly, including if it disagrees with the filed diagnosis. Do NOT implement the fix yourself -- produce a diagnosis for CODE-DESIGNER.",
+    "acceptance_criteria": [
+      "docs/issues/*.yaml checked for a prior resolved entry with matching symptoms; result stated",
+      "The vacuous-assertion claim independently reproduced via a real mutation run (prefix: prefix() -> prefix: nil), not just re-read from the issue file",
+      "The section-4 guard test's real coverage of the :prefix property independently reproduced via a real mutation run",
+      "All mutations reverted, working tree clean, full suite confirmed green before completing",
+      "Handoff result.summary states root cause, affected files, and exactly what a fix needs to change -- explicit disagreement noted if your own findings diverge from ISS-0029.yaml's claim"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "STEP 0.5 (registry lookup): grepped docs/issues/*.yaml for the 'vacuous assertion' symptom class (matches: ISS-0020, ISS-0017, ISS-0040, ISS-0028, ISS-0029 itself). None share ISS-0029's root cause. ISS-0028 touches the same file (event_store/migrations_test.exs section-4 guard test) but is a different, already-resolved defect (stray-table cleanup allowlist drift, ISS-0028/GH#86) -- not a recurrence. No prior resolved entry matches; not flagged as recurring.\n\nSTEP 1 (diagnose) -- independently reproduced, not taken on faith:\n\n1. Read Ecto's actual source, deps/ecto_sql/lib/ecto/migration.ex:1756-1773, __prefix__/1: when a table/index struct's own :prefix is nil, it is set to Runner.prefix() (falling back to repo config); when non-nil and it matches the runner's prefix, passed through unchanged; a mismatch RAISES. There is no branch that leaves the table in the default/public schema when the migrator itself supplies a real :prefix. lib/letflow/tenant_provisioning.ex:210-233 replay_migrations/2 always calls Ecto.Migrator.run(Repo, migrations, :up, all: true, prefix: schema_name, log: false) -- a concrete, non-nil prefix on every invocation. So under replay_migrations/2 a migrated table lands in the tenant schema whether or not the migration author wrote `prefix: prefix()` on its own table/index calls. Mechanism confirmed from source, matching ISS-0029's claim exactly.\n\n2. Empirical mutation A (vacuous-assertion claim): backed up both REQ-027 migrations, then sed-replaced every `prefix: prefix()` with `prefix: nil` in priv/repo/migrations/20260816193001_create_process_definitions.exs (5 occurrences) and 20260816193002_create_instance_definition_snapshots.exs (2 occurrences). Baseline run (pre-mutation) of `MIX_ENV=test mix test test/letflow/definitions/migrations_test.exs`: 14 tests, 0 failures. Post-mutation run of the same file: still 14 tests, 0 failures -- byte-identical result, including the AC1 test containing the `refute table_exists_in_schema?(\"public\", table)` assertion at test/letflow/definitions/migrations_test.exs:~283-300 (iterates @req027_tables, so this is the line ISS-0029 cites). CONFIRMS the assertion cannot detect the removal of the very option it appears to be checking -- it is vacuous, independently of ISS-0029's own prior mutation run. Reverted both files from backup immediately after; git diff on priv/repo/migrations/ empty afterward.\n\n3. Empirical mutation B (section-4 guard test's real coverage claim): in the same two migration files, flipped `if prefix() do` to `if true do` in each `def change do` body (guard only -- left `prefix: prefix()` on the table/index calls untouched, simulating an author who forgot the §4 guard rather than the prefix option). Ran `MIX_ENV=test mix test test/letflow/event_store/migrations_test.exs` (houses the section-4 guard test): 13 tests, 1 FAILURE -- 'every migration registered in tenant_scoped_migrations/0 creates nothing in public when run with no :prefix (§4 guard pattern)' at test/letflow/event_store/migrations_test.exs:484, message 'a registered tenant-scoped migration created something in public when run with no :prefix -- §4's guard pattern is missing or broken in one of: [...]' with both CreateProcessDefinitions and CreateInstanceDefinitionSnapshots present in the candidate list (the test lists the full registered-migrations manifest rather than pinpointing a single failing module, since it only diffs public_tables() once at the end of the loop -- a minor precision gap in ISS-0029's phrasing 'naming CreateProcessDefinitions', not a substantive disagreement). CONFIRMS this section-4 guard test, not the line-300 refute, is the real load-bearing coverage for the :prefix-guard property. The test's own on_exit stray-table cleanup ran correctly (verified via psql: no process_definitions/instance_definition_snapshots tables left in public afterward). Reverted both migration files from backup; git diff on priv/repo/migrations/ empty afterward; backup files removed from /tmp.\n\nINDEPENDENT CONCLUSION: agrees fully with ISS-0029.yaml's filed diagnosis -- the mechanism, the vacuous-assertion finding, and the section-4-guard-test-is-the-real-coverage finding all reproduce cleanly and independently (source-level mechanism read directly from Ecto, not inferred from the issue's prose; both mutation experiments re-run myself rather than trusting the issue file's own prior mutation run). No disagreement other than the minor phrasing note in point 3 above, which does not change the substance.\n\nROOT CAUSE (for CODE-DESIGNER): test/letflow/definitions/migrations_test.exs's AC1 test (~line 283-300) contains `refute table_exists_in_schema?(\"public\", table)` intending to prove the :prefix mechanism works, but Ecto.Migration.__prefix__/1 makes that outcome unreachable under replay_migrations/2 regardless of the migration's own prefix option -- so the assertion is dead weight that occupies the space where real coverage would be looked for. The real coverage lives in test/letflow/event_store/migrations_test.exs's section-4 guard test (line ~484), which runs each registered migration with NO :prefix at all and asserts public is unchanged.\n\nWHAT A FIX NEEDS TO CHANGE (per ISS-0029's own suggested fix, ISS-0029.yaml preferring the first option): EITHER (a) delete the vacuous `refute table_exists_in_schema?(\"public\", table)` lines from test/letflow/definitions/migrations_test.exs's AC1 test and repoint test/specs/REQ-027.md (lines ~111-113) at the section-4 guard test in test/letflow/event_store/migrations_test.exs as the true owner of the :prefix-guard property, OR (b) keep the refute as a cheap sanity check but reword its inline comment and test/specs/REQ-027.md to state only what it actually establishes (the replay did not ALSO create the tables in public) rather than that it verifies the :prefix mechanism. Affected files: test/letflow/definitions/migrations_test.exs, test/specs/REQ-027.md. Do not touch test/letflow/event_store/migrations_test.exs's section-4 guard test itself -- it is already correct and is the property's real owner.\n\nAll mutations reverted; `git status --short` shows only this handoff file as untracked; full suite `MIX_ENV=test mix test` -> 4 properties, 653 tests, 0 failures.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0029-20260818/step-01-issue-fixer-diagnose.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0029-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0029-20260818",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH routes to CODE-DESIGNER for fix design"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -558,3 +558,5 @@
 2026-08-18T07:04:44Z | PASS | WF-02 | WF02-REQ049-20260818 | ORCH | Step 00: feature/WF02-REQ049-20260818 branched from origin/main, pushed. REQ-049 status -> in_progress, started event logged.
 2026-08-18T07:05:17Z | DISPATCH | WF-02 | WF02-REQ049-20260818 | ORCH -> CODE-DESIGNER | Step 1: design lib/letflow/design/req049-variable-merge.md.
 2026-08-18T07:14:57Z | PASS | WF-02 | WF02-REQ049-20260818 | CODE-DESIGNER -> ORCH | Step 1: design doc committed, covers merge/3 pure kernel, REQ-024 validate_payload/3 composition (caller-invoked, purity preserved), REQ-061 dependency-ordering resolution, flagged open question (no variable_schemas storage exists yet).
+2026-08-18T07:16:45Z | DISPATCH | WF-02 | WF02-REQ049-20260818 | ORCH -> CODE-DESIGN-VALIDATOR | Step 1b hard gate.
+2026-08-18T07:18:09Z | PASS | WF-02 | WF02-REQ049-20260818 | CODE-DESIGN-VALIDATOR -> ORCH | Step 1b: all 6 checks PASS, independently re-verified validate_payload/3's real signature/I-O and REQ-049 depends_on/REQ-061 status. Committed 82053a5.

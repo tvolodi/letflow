@@ -41,5 +41,7 @@ description: >
 affected_files:
   - lib/letflow/definitions/graph.ex
   - lib/letflow/engine/transition.ex
-status: open
+status: resolved
 github_issue: https://github.com/tvolodi/letflow/issues/201
+resolved_in_run: WF03-ISS0056-20260818
+resolved_at: "2026-08-18T23:42:17Z"

@@ -4053,3 +4053,68 @@ history:
       documented curl/mix flow or the ASCII state diagram -- left untouched,
       consistent with REQ-028/REQ-029/REQ-044's own DOC-UPDATER precedent
       for similarly internal-only requirements.
+  - req: REQ-043
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-18T07:39:04Z
+    note: >
+      WF02-REQ043-20260818 Step 6. All prior gates passed: CODE-DESIGN-VALIDATOR
+      (design gate), SECURITY-REVIEWER (INV-1/INV-8), REVIEWER (idiom), TEST-DESIGN-
+      VALIDATOR, TEST-RUNNER (725/725 green), and RELEASE-VALIDATOR (independently
+      re-ran mix test twice, re-checked all six acceptance criteria directly against
+      the shipped code/tests, PASS). Shipped: priv/repo/migrations/
+      20260818110001_alter_instance_projections_add_engine_columns.exs (adds
+      definition_id, correlation_key, current_nodes, variables, error_detail,
+      completed_at, cancelled_at plus uq_instance_correlation partial-unique and
+      idx_proj_definition indexes to instance_projections),
+      20260818110002_create_tokens.exs and 20260818110003_create_tasks.exs (both
+      schema-per-tenant via REQ-022's :prefix mechanism), lib/letflow/engine/task.ex
+      (Ecto.Schema module; moduledoc states src/tasks/store.zig's standalone
+      query/list surface is deliberately not ported here) and, renamed at this
+      run's rebase/integration time from lib/letflow/engine/token.ex to
+      lib/letflow/engine/token_record.ex (Letflow.Engine.TokenRecord) because
+      REQ-044's transition kernel, merged to main first, independently claimed
+      lib/letflow/engine/token.ex/Letflow.Engine.Token for its own, structurally
+      different pure in-memory struct -- see docs/anti-patterns.md's "Two branches
+      picking the same module name" entry; TokenRecord's moduledoc justifies
+      keeping a separate tokens table rather than relying on
+      instance_projections.current_nodes alone, since tasks.token_id needs a real
+      FK-referenceable row. Design doc: lib/letflow/design/req043-instance-engine-schema.md
+      (predates the rename; still authoritative for schema/field/changeset shape).
+      RELEASE-VALIDATOR flagged one MINOR issue in its Step 5 result (AC6's literal
+      "caller-supplied tenant_id mismatch" test isn't satisfiable by REQ-043's own
+      schema-only scope, since no context module with a public attrs-accepting write
+      path exists yet) and recommended filing it as its own docs/issues/ISS-NNNN.yaml
+      rather than leaving it only in handoff result.issues fields -- confirmed this
+      was already done before this step ran, under this run's own then-current local
+      numbering (docs/issues/ISS-0043.yaml, GitHub issue #165, forwarded to
+      REQ-045/051/062; and ISS-0042.yaml, REVIEWER's separate assignee_type free-text
+      finding, GitHub issue #159). Both numbers collided with main's own,
+      independently-numbered findings from WF02-REQ044-20260818 and were renumbered
+      at this same run's rebase/integration time -- and the tenant_id-mismatch
+      finding collided a second time, against a concurrent host's own recovery of
+      this identical branch/finding (see docs/anti-patterns.md's "Two branches
+      picking the same module name" entry, final paragraph): that host's resolution
+      reached main first as docs/issues/ISS-0045.yaml (WF03-ISS0045-20260818,
+      GH#165), so this run's own local ISS-0044.yaml duplicate was dropped rather
+      than re-filed under yet another number. Final state on main: the assignee_type
+      finding is docs/issues/ISS-0043.yaml (GH#159, resolved); the tenant_id-mismatch
+      finding is docs/issues/ISS-0045.yaml (GH#165, resolved-as-deferred);
+      docs/issues/ISS-0044.yaml is an unrelated TEST-RUNNER finding from
+      WF02-REQ049-20260818 (compile-warning hygiene) -- no content changed in any of
+      the three beyond what each finding's own resolving run already recorded.
+      docs/requirements.yaml REQ-043 status flipped in_progress -> done.
+      README.md checked directly against what actually shipped (not assumed stale or
+      non-stale): "What's here today" and "Running it" describe the original pilot
+      slice (Letflow.ProcessInstance gen_statem, InstanceSupervisor, TransitionEvent,
+      Router's 3 HTTP endpoints) -- REQ-043 added only internal Stage-3
+      migrations/Ecto.Schema modules with no new HTTP route, no gen_statem/process
+      change, and no change to the documented curl/mix flow or ASCII state diagram;
+      "Migration status" already deliberately avoids a per-requirement snapshot count
+      (per ISS-0022) so it doesn't go stale here either. Left untouched, consistent
+      with the REQ-040 DOC-UPDATER precedent for similarly internal-only
+      requirements this stage.
+      REQ-043's acceptance criteria did not name any docs/migration/stage-N-*.md or
+      docs/migration/decisions/*.md file requiring an update (schema/migration-only
+      requirement) -- confirmed by re-reading the six acceptance criteria directly,
+      none reference either path.

@@ -2162,7 +2162,7 @@ requirements:
   - id: REQ-043
     title: Instance-engine schema (instance_projections ALTER + tasks + tokens tables)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S3
     impl_order: 87  # letflow-queue task id
     description: >

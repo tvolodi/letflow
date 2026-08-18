@@ -2048,3 +2048,1337 @@ requirements:
       - "search/1 respects limit (default 20) and offset for pagination, demonstrated with more matching rows than fit in one page across two successive calls"
       - "the moduledoc states no new migration/table was added, explicitly citing definition.md's PD-10 section for that boundary"
     depends_on: [REQ-030]
+
+
+  # ---------------------------------------------------------------
+  # S3 — instance-engine
+  # Expanded once S2 (event-store-and-definitions) was fully done --
+  # REQ-022..042 all `done`. Inherits docs/migration/decisions/
+  # 0003-ecto-schema-strategy.md Decision A (Ecto-idiomatic redesign,
+  # binary_id PKs, Ecto.Enum for status columns), Decision B
+  # (schema-per-tenant via REQ-022's :prefix mechanism -- every table
+  # this batch adds is tenant-scoped, none is GLOBAL), and Decision C
+  # point 1 (event tables stay append-only).
+  #
+  # Real R-Co source ported: src/engine/ (11 files: instance.zig 5550
+  # lines, transition.zig 3323, reconstruction.zig 1646,
+  # pin_resolver.zig 967, service_task.zig 420, pin_rebind.zig 388,
+  # snapshot_writer.zig 348, plugin_registry.zig 232,
+  # lua_script_audit.zig 201, plugin_interface.zig 79,
+  # transition_source_embed.zig 24), decomposed along R-Co's own
+  # EE-01..EE-12 behavioural seams (src/design/engine.md's `## Section
+  # EE-NN` headings map 1:1 to those requirement ids) rather than
+  # 1:1 per file -- instance.zig and transition.zig each span many
+  # EE-* requirements and cannot be one agent turn each.
+  #
+  # transition_source_embed.zig is DELIBERATELY NOT PORTED and gets no
+  # requirement: its own header states it exists solely because Zig's
+  # `@embedFile` cannot escape a module root, so
+  # tests/differential/differential_test.zig needs a one-line shim
+  # colocated beside transition.zig to read its raw source bytes at
+  # compile time. Elixir has no equivalent constraint (a test can read
+  # any file at runtime, and `File.read!/1` at compile time is
+  # unrestricted), so porting it would produce a file with no purpose.
+  # Named here explicitly rather than silently dropped from the
+  # 11-file count.
+  #
+  # This stage GENERALIZES Letflow's existing early-pattern modules
+  # rather than starting fresh, per
+  # docs/migration/stage-3-instance-engine.md: REQ-045 supersedes
+  # lib/letflow/process_instance.ex, REQ-052 supersedes
+  # lib/letflow/parallel_approval.ex, and REQ-045 generalizes
+  # lib/letflow/instance_supervisor.ex. Each of those three
+  # requirements says concretely which module is replaced, extended,
+  # or retired.
+  #
+  # Scope deliberately excludes (flagged inside the relevant
+  # requirement's own description below, not silently dropped): all
+  # HTTP routes/controllers (POST /instances, POST /tasks/:id/complete,
+  # POST /instances/:id/cancel, POST /instances/:id/rebind-pins,
+  # GET /instances/:id/pins, POST /instances/:id/reconstruct -- S4
+  # api-surface; this batch ports domain logic as context-module
+  # functions only), the Lua and WASM execution runtimes themselves
+  # (src/lua/ 29 files, src/wasm/ 19 files -- S5
+  # scripting-and-plugins, which needs its own build-vs-bind decision
+  # record per stage-5-scripting-plugins.md; S3 ports only the
+  # engine-side plugin REGISTRY CONTRACT in REQ-057 and the lua AUDIT
+  # PERSISTENCE PATH in REQ-058, both against an injected executor
+  # interface), the real outbound HTTP client for SERVICE_TASK
+  # dispatch (REQ-056 ports config parsing/retry classification and
+  # leaves the transport injectable), the DLQ and scheduler stores
+  # (src/dlq/, src/scheduler/ -- S6 operational-cross-cutting), and
+  # the service_catalog / PLC-01 module catalog that PIN-01's AC1/AC2
+  # need (R-Co itself holds PIN-01/PIN-03 at TESTED rather than
+  # RELEASED over exactly this gap, tracked there as ISS-0672/GH-306
+  # -- REQ-059 carries the same scoping forward explicitly rather
+  # than pretending the dependency exists).
+  #
+  # Several requirements below name a genuine open question no
+  # existing docs/migration/decisions/*.md record settles, following
+  # REQ-039/REQ-040/REQ-041's precedent: process-per-instance vs.
+  # row-based state for the engine's own execution path (REQ-045,
+  # REQ-052), for the plugin registry (REQ-057), and for the snapshot
+  # cadence counter (REQ-054); and whether the instance-engine tables
+  # are driven through a supervised :gen_statem at all or stay a
+  # transactional context module (REQ-045, the stage's single largest
+  # design question). These are left for CODE-DESIGNER/REVIEWER to
+  # resolve at WF-02 design time, not silently decided here.
+  #
+  # REQ-052 and REQ-061 were one requirement (EE-08 + EE-10) in this
+  # batch's first draft and were split on sizing review: together they
+  # span 1,324 lines of engine.md against REQ-044's 644-line baseline,
+  # and they differ in kind -- EE-08 cancellation is caller-initiated
+  # and drives to a terminal CANCELLED, while EE-10 error handling is
+  # engine-internal, driven by REQ-049/050/056/057/062's failure
+  # paths, and halts NON-terminally at ERROR pending an S6 dead-letter
+  # action. Their shared row-locking shape did not justify one agent
+  # turn. REQ-051 (EE-06+EE-07) was reviewed for the same concern and
+  # deliberately NOT split: at 661 lines it is at baseline, split and
+  # join share the Token/JoinCounter model, and EE-07's
+  # cancelled-branch-exclusion rule is unstateable without the split
+  # half in the same requirement.
+  #
+  # Gateway condition evaluation (REQ-050) is deliberately NOT on that
+  # list: R-Co has a real, working reference implementation to port --
+  # src/engine/transition.zig's evaluateGatewayCondition() (~L1118)
+  # translating CEL syntax to R-Co's src/expr/ module, per commit
+  # 480b7dc5 which retired vendor/cel from production. The "cel.zig is
+  # a stub" wording in src/design/definition.md and engine.md's own
+  # EE-05 section is stale as a description of RUNTIME evaluation, and
+  # REQ-029 quoted it correctly only for its own definition-time
+  # syntax-check scope. REQ-050 records that distinction so it is not
+  # re-propagated a third time.
+  #
+  # docs/migration/stage-3-instance-engine.md's two Early findings are
+  # binding on this whole batch and are cited by id in the affected
+  # requirements: (1) hold the generalized engine to real :gen_statem
+  # per-state callbacks and real supervised isolation, never a
+  # GenServer hand-simulating a state machine; (2) do NOT assume
+  # process-per-instance by default -- its case is strongest for
+  # service task dispatch, plugin registries, timers, backpressure,
+  # and expensive-to-reconstruct in-memory state.
+  # ---------------------------------------------------------------
+
+  - id: REQ-043
+    title: Instance-engine schema (instance_projections ALTER + tasks + tokens tables)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Add the priv/repo/migrations and Ecto.Schema modules the instance engine
+      needs but that S2 deliberately did not build, all schema-per-tenant via
+      REQ-022's :prefix mechanism (Decision B's general rule for business
+      tables -- none of these three is GLOBAL, and none needs REQ-041's
+      GLOBAL-exception flagging, since R-Co's own 005_instances.sql tables are
+      per-tenant like events/events_archive):
+      (a) an ALTER TABLE migration on REQ-023's instance_projections adding
+      exactly the columns REQ-023's own migration header
+      (priv/repo/migrations/20260816120003_create_instance_projections.exs,
+      "COLUMNS DELIBERATELY NOT CREATED HERE") names as S3/EE-01's job:
+      definition_id (binary_id, not null), correlation_key (string, nullable),
+      current_nodes (jsonb, default "[]" -- active token positions),
+      variables (jsonb, default "{}" -- the merged variable map, seeded from
+      EE-01's initial_variables per engine.md section EE-01 1a's "Note on
+      initial_variables"), error_detail (jsonb, nullable -- set on ERROR
+      status by EE-10), completed_at and cancelled_at (utc_datetime_usec,
+      nullable), plus the two indexes REQ-023 names: uq_instance_correlation
+      (UNIQUE on (definition_id, correlation_key) WHERE correlation_key IS NOT
+      NULL -- the index that structurally enforces EE-01's correlation-key
+      uniqueness acceptance criterion) and idx_proj_definition. The existing
+      status Ecto.Enum already carries ERROR (REQ-023 included it
+      deliberately, per that migration's header), so no enum migration is
+      needed here -- confirm that rather than adding one.
+      (b) a tasks table per engine.md section EE-03 1a
+      (R-Co migrations/005_instances.sql): id (binary_id), instance_id
+      (binary_id, not null, indexed), token_id (binary_id, not null), node_id
+      (string, not null), node_name (string, not null), status (Ecto.Enum:
+      PENDING/COMPLETED/CANCELLED, default PENDING), assignee_type (string,
+      nullable -- USER|GROUP|ROLE), assignee_ref (string, nullable),
+      form_schema (jsonb, nullable), output_variables (jsonb, nullable),
+      completed_by (binary_id, nullable), completed_at/cancelled_at
+      (utc_datetime_usec, nullable), timestamps(). R-Co's tasks logic lives in
+      src/tasks/store.zig (1202 lines), a directory OUTSIDE this stage's
+      src/engine/ scope -- this requirement builds only the table + schema
+      module that src/engine/instance.zig writes into at EE-03 activation and
+      EE-04 completion time; the standalone task query/list surface
+      (src/tasks/store.zig's own list/filter operations) is NOT ported here
+      and belongs with S4's tasks routes or its own later requirement. State
+      that boundary in the moduledoc.
+      (c) a tokens table: id (binary_id), instance_id (binary_id, not null),
+      node_id (string), branch_id (string), plus whatever the EE-06/EE-07
+      parallel token model needs -- tasks.token_id references it. Because
+      engine.md section EE-02 2 defines Token as an in-memory value
+      (node_id/branch_id/token_id/waiting_child_instance_id) and
+      instance_projections.current_nodes already persists active token
+      positions as jsonb, flag explicitly in the moduledoc whether a separate
+      tokens TABLE is genuinely required in Letflow or whether current_nodes
+      subsumes it -- R-Co has both, but R-Co's tasks.token_id FK is the only
+      thing that forces the separate table there. Do NOT silently drop the
+      table or silently keep it; state which and why, since REQ-051's join
+      counters and REQ-044's tasks FK both depend on the answer.
+      tenant_id on every table above is NOT NULL with no DB default and is
+      derived from the Ecto :prefix the write targets by reversing REQ-022's
+      Letflow.TenantProvisioning.schema_name_for_tenant/1, exactly as REQ-025
+      and REQ-030 established for their own tables -- never a caller-supplied
+      field.
+    acceptance_criteria:
+      - "an ALTER TABLE migration adds definition_id, correlation_key, current_nodes, variables, error_detail, completed_at and cancelled_at to instance_projections and applies cleanly against a provisioned tenant schema via REQ-022's migration-replay mechanism"
+      - "the uq_instance_correlation partial unique index exists and is demonstrated rejecting a second instance_projections row with the same (definition_id, correlation_key) while permitting any number of rows whose correlation_key is NULL"
+      - "priv/repo/migrations gains tasks and (if REQ-043 concludes it is needed) tokens migrations, schema-per-tenant per REQ-022, applying cleanly, with tasks.status as an Ecto.Enum over exactly PENDING/COMPLETED/CANCELLED"
+      - "the tasks schema module's moduledoc explicitly states that src/tasks/store.zig's standalone task query surface is NOT ported by this requirement and names where it belongs instead"
+      - "the moduledoc states explicitly, as a resolved-and-justified choice rather than an omission, whether a separate tokens table exists in Letflow or whether instance_projections.current_nodes subsumes it"
+      - "a row written into tasks has tenant_id equal to the tenant whose schema the write targeted, derived internally; a test deliberately making a caller-supplied tenant_id disagree with the target schema fails loudly rather than silently attributing to the wrong tenant"
+    depends_on: [REQ-023, REQ-027]
+
+  - id: REQ-044
+    title: Pure transition kernel core types and dispatch skeleton (transition.zig, EE-02)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Port the core value types and top-level dispatch of
+      src/engine/transition.zig's transition() (per src/design/engine.md
+      "Section EE-02: Pure Transition Function", L442) as a pure Letflow
+      module -- no Ecto.Repo call, no I/O of any kind, no clock read, matching
+      transition.zig's own header contract ("All state is passed in; all
+      output is returned. No DB, no network, no clock") and the same purity
+      bar REQ-028 already established for the graph validator.
+      This requirement builds the SKELETON and its non-gateway node
+      transitions only. The gateway bodies are separate requirements
+      (REQ-050 exclusive, REQ-051 parallel split/join) that plug into the
+      dispatch this requirement defines -- transition.zig is 3323 lines and
+      cannot be one agent turn.
+      Port:
+      - InstanceState (engine.md section EE-02 1): instance_id, status
+      (ACTIVE/COMPLETED/CANCELLED/ERROR, reusing REQ-043's Ecto.Enum values),
+      tokens, variables (a plain Elixir map -- Zig's std.json.ObjectMap and
+      its explicit allocator-ownership contract have no Elixir equivalent;
+      note that divergence in the moduledoc rather than silently inventing an
+      ownership discipline, the same way REQ-029 handled GraphError.OutOfMemory).
+      - Token (engine.md section EE-02 2): node_id, branch_id, token_id
+      (stable identity, added by R-Co's ISS-105), waiting_child_instance_id.
+      - TransitionEvent and PendingEvent (the tagged union transition.zig
+      declares for EE-06/EE-07 split/join payloads) as tagged tuples or
+      structs.
+      - transition/3 itself: (definition_snapshot, instance_state, event) ->
+      {:ok, new_instance_state, pending_events} | {:error, reason}. Determinism
+      is the load-bearing property (EE-02 AC2, and XC-04 kernel determinism per
+      transition.zig's header): identical inputs always produce identical
+      outputs. An unknown event type returns an error state, never raises
+      (EE-02 AC5). A token sitting on a node id absent from the snapshot graph
+      returns an error state naming the inconsistency (EE-02 edge case).
+      - The non-gateway node transitions: token entering a HUMAN_TASK node
+      appends to pending_task_nodes (the signal REQ-047 turns into a tasks
+      row -- engine.md section EE-03's "the signal itself is the guard"
+      note: START/END/gateway nodes never appear there, so the persistence
+      layer needs no node-type guard of its own); token entering an END node
+      moves the instance toward COMPLETED.
+      Reuses REQ-028's DefinitionGraph/GraphNode/GraphEdge/NodeType structs
+      directly rather than redefining them (lib/letflow/definitions/graph.ex),
+      since engine.md names src/definition/graph.zig as this module's
+      dependency.
+    acceptance_criteria:
+      - "transition/3's function signature and its entire call graph contain zero Repo calls, zero HTTP/file access, and zero DateTime.utc_now/System.system_time reads, confirmed by inspection and stated in the moduledoc"
+      - "calling transition/3 twice with the identical (snapshot, state, event) triple returns byte-identical results, demonstrated by an explicit test rather than asserted"
+      - "an unknown/unrecognised event type returns an error result, and a state whose token sits on a node_id absent from the snapshot graph returns an error result naming the offending node_id -- neither raises or crashes"
+      - "a token entering a HUMAN_TASK node adds that node to pending_task_nodes, while tokens entering START, END, EXCLUSIVE_GATEWAY and PARALLEL_GATEWAY nodes do not -- each of the five node-type cases has its own explicit test"
+      - "the moduledoc states explicitly that Zig's std.json.ObjectMap allocator-ownership contract is deliberately not ported (Elixir maps are immutable values), rather than leaving the divergence unremarked"
+      - "the module reuses REQ-028's existing graph structs from lib/letflow/definitions/graph.ex rather than defining a second copy of DefinitionGraph/GraphNode/GraphEdge/NodeType"
+    depends_on: [REQ-028, REQ-029]
+
+  - id: REQ-045
+    title: Instance start and engine execution shell (instance.zig create, EE-01) -- supersedes lib/letflow/process_instance.ex
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Port src/engine/instance.zig's InstanceStore.create() (per
+      src/design/engine.md "Section EE-01: Start Instance", L18) as the
+      instance-start entry point, operating on REQ-043's extended
+      instance_projections and REQ-033's already-shipped
+      Letflow.Definitions.SnapshotStore.
+      This is the requirement that GENERALIZES Letflow's existing early
+      pattern, per docs/migration/stage-3-instance-engine.md's Scope section.
+      Concretely: lib/letflow/process_instance.ex (a hardcoded
+      draft->submitted->approved/rejected :gen_statem with a four-atom state
+      graph baked into function heads, persisting via
+      Letflow.Events.TransitionEvent) is SUPERSEDED by this requirement --
+      its hardcoded state graph becomes data (REQ-027's process_definitions
+      graph column, snapshotted per instance by REQ-033), and its transition/5
+      helper's job is taken over by REQ-044's pure transition/3 plus this
+      requirement's persistence orchestration. lib/letflow/instance_supervisor.ex
+      is GENERALIZED, not retired: its DynamicSupervisor shape stays, but
+      start_instance/1 takes a definition-driven instance rather than a bare
+      id string. State in the moduledoc, concretely, which of the two modules
+      is replaced and which is extended, and whether
+      Letflow.Events.TransitionEvent and its migration
+      (20260814000001_create_transition_events.exs) are retired in favour of
+      REQ-023's events table or deliberately left in place -- do not leave
+      that dangling.
+      create/1 behaviour (engine.md section EE-01 5's algorithm):
+      - Accepts definition_id (or name+version, resolved via REQ-030's
+      get_active_by_name/1), an optional correlation_key, and an
+      initial_variables map. initial_variables must be a JSON object -- nil
+      and lists are rejected with a distinct error (EE-01 edge case: "{}" is
+      valid, null is not).
+      - Rejects a definition whose status is not ACTIVE with a distinct
+      not-active error (EE-01 AC5).
+      - Calls REQ-033's SnapshotStore.create/2 to bind the definition graph
+      snapshot to the instance -- this is the EE-01 integration point REQ-033's
+      own moduledoc explicitly deferred to S3 ("the engine calling create/2 at
+      instance-start time (EE-01), BEFORE any event is appended, is S3's job").
+      Honour that ordering.
+      - Inserts the instance_projections row seeded with variables =
+      initial_variables and the token placed on the START node, and appends an
+      INSTANCE_STARTED event via REQ-025's append/1 -- with the event append
+      and the row insert atomic (Ecto.Multi or Repo.transaction).
+      - A duplicate (definition_id, correlation_key) is rejected by REQ-043's
+      uq_instance_correlation index and surfaced as a distinct
+      duplicate-correlation error (EE-01 AC2); a nil correlation_key applies no
+      uniqueness constraint at all (EE-01 AC3).
+      - The first task activation fires immediately for the first non-START
+      node (EE-01 AC7) -- via REQ-044's transition/3 and REQ-047's activation
+      persistence.
+      OPEN QUESTION (flag, do not silently resolve -- this is the stage's
+      single largest design question, and stage-3-instance-engine.md's second
+      Early finding is directly on point): whether a running instance is a
+      supervised :gen_statem process (generalizing
+      lib/letflow/process_instance.ex + instance_supervisor.ex) or a plain
+      transactional context module writing instance_projections rows with no
+      process per instance. The finding is explicit that process-per-instance
+      "was operationally heavier than a plain Postgres row needed to be" for
+      the earlier low-complexity approval feature and bought "a narrower
+      guarantee than it sounds," while its case "gets stronger specifically
+      where this stage's actual scope lives: service task dispatch, plugin
+      registries, and anything with expensive-to-reconstruct in-memory state,
+      timers, backpressure." EE-01's own path here is closer to the row side
+      (every write is already transactional, and REQ-053's reconstruction
+      makes state cheaply rebuildable from the log), while REQ-056's service
+      task dispatch and REQ-057's registry are closer to the process side --
+      so the answer may legitimately differ per subsystem rather than being
+      one global choice. This requirement ports create/1's CONTRACT
+      (signature + behaviour + atomicity) and leaves the process-vs-row
+      choice to CODE-DESIGNER at WF-02 design time, citing this note.
+      If CODE-DESIGNER does choose a process, the first Early finding binds
+      it: real :gen_statem per-state callbacks and real supervised isolation
+      (the bar lib/letflow/parallel_approval.ex already met), never a
+      GenServer hand-simulating a state machine via a `case data.mode do`
+      dispatch.
+      SCOPE BOUNDARY: POST /api/v1/instances and every other HTTP route is S4
+      (api-surface). This requirement builds a context-module function, not a
+      Plug/Phoenix handler -- the same boundary REQ-036 and REQ-042 already
+      established for their own S2 domain logic.
+    acceptance_criteria:
+      - "create/1 against an ACTIVE definition inserts an instance_projections row with status ACTIVE, variables seeded from initial_variables, a token on the START node, and an instance_definition_snapshots row created via REQ-033's SnapshotStore.create/2 -- with the snapshot demonstrably written before the INSTANCE_STARTED event is appended"
+      - "create/1 against a definition whose status is draft, deprecated or archived returns a distinct not-active error and writes zero rows across instance_projections, instance_definition_snapshots and events"
+      - "create/1 with initial_variables set to nil, or to a list, is rejected with a distinct error, while an empty map is accepted -- three explicit tests"
+      - "a second create/1 with the same (definition_id, correlation_key) returns a distinct duplicate-correlation error and writes no second row, while two create/1 calls with correlation_key nil both succeed"
+      - "the moduledoc states concretely which of lib/letflow/process_instance.ex and lib/letflow/instance_supervisor.ex is superseded and which is generalized, and states whether Letflow.Events.TransitionEvent is retired in favour of REQ-023's events table or deliberately kept"
+      - "the moduledoc names the process-per-instance-vs-row-based-state open question explicitly and states it is left for CODE-DESIGNER, citing stage-3-instance-engine.md's second Early finding"
+      - "the moduledoc states that POST /api/v1/instances is S4 scope and that this requirement builds a context-module function only"
+    depends_on: [REQ-043, REQ-044, REQ-030, REQ-033, REQ-025]
+
+  - id: REQ-046
+    title: Retirement or generalization of lib/letflow/process_instance.ex and its supervision tree
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Execute the supersession REQ-045 decides. REQ-045 ports EE-01's start
+      path and states in its moduledoc which early module is replaced and
+      which is generalized; this requirement carries that out in the codebase
+      so the two engines do not coexist indefinitely as parallel, divergent
+      implementations of "a running workflow instance."
+      Concretely, based on REQ-045's recorded decision:
+      - lib/letflow/process_instance.ex: either delete it and its
+      Letflow.Events.TransitionEvent persistence (migrating any tests that
+      exercise it onto REQ-045's definition-driven path), or keep it and
+      document in its moduledoc exactly why it survives alongside the real
+      engine and what it is now for. Do not leave it undocumented and
+      unreferenced.
+      - lib/letflow/instance_supervisor.ex: generalize start_instance/1 so it
+      starts a definition-driven instance (whatever shape REQ-045's
+      process-vs-row resolution produced) rather than
+      Letflow.ProcessInstance.child_spec/1 with a bare id string. If REQ-045
+      resolved to a row-based engine with no process per instance, this
+      supervisor may have nothing left to supervise -- in that case retire it
+      explicitly with a moduledoc-or-status-history record of why, rather
+      than leaving a DynamicSupervisor in the tree with no children.
+      - lib/letflow/application.ex's supervision tree and Letflow.Registry
+      keys are updated to match whichever shape lands, with the first Early
+      finding honoured: real supervised isolation via a DynamicSupervisor
+      (the ApprovalSupervisor-vs-InstanceSupervisor separation
+      lib/letflow/parallel_approval.ex's moduledoc describes as deliberate is
+      the precedent), never a shared singleton process funnelling every
+      instance's work.
+      This requirement is deliberately separate from REQ-045 rather than
+      folded into it: REQ-045 is already a large port, and deleting or
+      rewiring modules that existing tests depend on is its own reviewable
+      unit of work with its own regression risk.
+    acceptance_criteria:
+      - "lib/letflow/process_instance.ex is either deleted (with every test referencing it migrated or removed, and mix test passing) or retained with a moduledoc paragraph stating explicitly why it survives alongside REQ-045's engine and what its remaining role is"
+      - "lib/letflow/instance_supervisor.ex either starts REQ-045's definition-driven instances or is retired explicitly with a recorded reason -- it is not left in the supervision tree supervising a superseded module"
+      - "mix test passes with the actual output quoted, after the change -- no test is deleted merely to make the suite green without stating why in the commit or moduledoc"
+      - "the resulting supervision tree preserves real supervised isolation (killing one instance's process, if processes are used, does not affect another), demonstrated by a test or explicitly stated as not-applicable if REQ-045 resolved to a row-based engine"
+    depends_on: [REQ-045]
+
+  - id: REQ-047
+    title: Task activation persistence (instance.zig applyTransition, EE-03)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Port src/engine/instance.zig's InstanceStore.applyTransition() (per
+      src/design/engine.md "Section EE-03: Task Activation", L1086) as the
+      persistence orchestration layer that turns REQ-044's pure transition
+      output into committed rows. This is the seam between the I/O-free kernel
+      and the database.
+      - Given a transition result whose pending_task_nodes gained an entry,
+      insert a REQ-043 tasks row with status PENDING, task id, instance_id,
+      token_id, node_id, node_name, assignee_type and assignee_ref taken from
+      the HUMAN_TASK node's attributes (REQ-029's PD-05 rules already
+      guarantee a HUMAN_TASK carries a non-empty role).
+      - The tasks row insert, the instance_projections state update, and the
+      event append via REQ-025 all commit in ONE transaction (EE-03 AC2,
+      DB-03). A task must never be visible to a reader before the transition
+      that created it is committed (EE-03 AC5).
+      - No node-type guard is written in this layer: engine.md section EE-03's
+      module purpose is explicit that the transition function only ever
+      appends HUMAN_TASK nodes to pending_task_nodes, so "the signal itself is
+      the guard." Port that property rather than re-implementing a
+      START/END/gateway exclusion check here -- but assert it with a test
+      (EE-03 AC3/AC4) so the property is verified rather than assumed.
+      - A HUMAN_TASK whose assignee_ref names a group with no current members
+      still creates a PENDING task; assignment resolution is deferred to
+      runtime (EE-03 edge case), not an activation-time failure.
+      - A token entering an END node transitions the instance to COMPLETED and
+      creates no task. R-Co's EE-03 edge case also fires SCH-03 timer
+      cancellation at that point -- src/scheduler/ is S6
+      (operational-cross-cutting) and does not exist in Letflow, so port the
+      COMPLETED transition and leave a named, documented hook for timer
+      cancellation rather than silently omitting it or inventing a scheduler.
+      SCOPE BOUNDARY: GET /api/v1/tasks and the task list/query surface are S4
+      (api-surface) plus R-Co's own src/tasks/store.zig, outside this stage's
+      src/engine/ scope per REQ-043's note. This requirement writes tasks rows
+      from the engine; it does not build the read side.
+    acceptance_criteria:
+      - "a transition that enters a HUMAN_TASK node results in exactly one tasks row with status PENDING carrying instance_id, node_id, node_name, assignee_type and assignee_ref, committed in the same transaction as the instance_projections update and the appended event"
+      - "when the event append fails, zero tasks rows and zero instance_projections changes are committed -- demonstrated by forcing an append failure and reading all three tables back"
+      - "transitions entering START, END, EXCLUSIVE_GATEWAY and PARALLEL_GATEWAY nodes create zero tasks rows, each with its own explicit test, verifying (not merely assuming) the transition function's pending_task_nodes guarantee"
+      - "a HUMAN_TASK whose assignee_ref names a group with no members still produces a PENDING task rather than an activation error"
+      - "a token entering an END node sets the instance to COMPLETED, creates no task, and leaves a documented named hook for SCH-03 timer cancellation with S6 identified as its owning stage"
+    depends_on: [REQ-045]
+
+  - id: REQ-048
+    title: Task completion (instance.zig completeTask, EE-04)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Port src/engine/instance.zig's InstanceStore.completeTask() (per
+      src/design/engine.md "Section EE-04: Complete Task", L1632) as
+      complete_task/N, operating on REQ-043's tasks table and REQ-044's
+      transition/3.
+      - Accepts a task_id and an output_variables map. output_variables may be
+      an empty map (valid, EE-04 AC5); nil is rejected with a distinct error
+      (EE-04 edge case: "use {} for no output").
+      - A task_id that does not exist returns a distinct not-found error
+      (EE-04 AC2). A task whose status is not PENDING (already COMPLETED or
+      CANCELLED) returns a distinct conflict error (EE-04 AC3) -- these two are
+      separately pattern-matchable, not one generic error.
+      - In ONE transaction (EE-04 AC4): merge output variables per REQ-049's
+      EE-09 merge, evaluate outgoing edge conditions via REQ-044/REQ-050,
+      activate the next node(s) via REQ-047's activation path, flip the task
+      to COMPLETED with completed_by/completed_at/output_variables set, and
+      append a TASK_COMPLETED event via REQ-025.
+      - Row-level locking (SELECT ... FOR UPDATE on the task or the instance)
+      serialises two concurrent completions of the same task so exactly one
+      wins -- this is the EE-12 concurrency property, exercised concretely
+      here and stated generally in REQ-055.
+      SCOPE BOUNDARY: POST /api/v1/tasks/:id/complete is S4 (api-surface).
+      R-Co's EE-04 AC bullets are written as HTTP status codes (404/409/422);
+      this requirement returns the corresponding tagged tuples and the S4
+      layer owns the status mapping, exactly as REQ-025's is_duplicate boolean
+      left the 200-vs-201 choice to S4. Likewise EE-04's edge case "TASK_WORKER
+      completing a task assigned to a different user: HTTP 403 (per IDN-03
+      role matrix)" is an authorization concern belonging to the S4 auth plug
+      (REQ-021's precedent) -- name it explicitly as out of scope here rather
+      than partially implementing a role check inside the engine.
+    acceptance_criteria:
+      - "complete_task on a PENDING task merges output_variables, flips the task to COMPLETED with completed_at and completed_by set, activates the next node, and appends exactly one TASK_COMPLETED event -- all verified by reading tasks, instance_projections and events back after one call"
+      - "complete_task with output_variables set to an empty map succeeds; with nil it returns a distinct error -- two explicit tests"
+      - "complete_task against a non-existent task_id and against an already-COMPLETED task return two distinct, separately pattern-matchable errors, not one shared generic error"
+      - "two concurrent complete_task calls on the same task_id result in exactly one success and one conflict error, demonstrated with an actual concurrent test or the FOR UPDATE locking code path cited explicitly if concurrency cannot be exercised in this environment"
+      - "the moduledoc states that HTTP status mapping and the IDN-03 assignee authorization check are S4 scope, not implemented here"
+    depends_on: [REQ-047, REQ-049]
+
+  - id: REQ-049
+    title: Variable scoping and merge (instance.zig mergeVariables, EE-09)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Port src/engine/instance.zig's InstanceStore.mergeVariables() (per
+      src/design/engine.md "Section EE-09: Variable Scoping and Merge", L3957)
+      as the variable-merge rule every task completion, service-task response
+      and sub-process output flows through.
+      - A key K absent from the instance variable map is inserted (EE-09 AC1).
+      - A key K already present, whose new value is schema-compatible (or where
+      no variable schema is registered), is overwritten AND a
+      VARIABLE_OVERWRITTEN event is appended recording key, old value and new
+      value (EE-09 AC2). This event append is not optional decoration -- it is
+      the audit record the acceptance criterion requires.
+      - A key K already present whose new value is REJECTED by a registered
+      variable schema is NOT merged: the instance transitions to ERROR via
+      REQ-061's EE-10 path and an EXECUTION_ERROR event is appended (EE-09
+      AC3). The schema validation reuses REQ-024's validate_payload/3 rather
+      than introducing a second JSON Schema validator -- REQ-024 already
+      resolved the library choice open question at its own WF-02 design time,
+      so follow whatever it settled on rather than re-deciding.
+      - An empty output_variables map merges as a no-op with NO
+      VARIABLE_OVERWRITTEN event appended (EE-09 edge case).
+      - Merged variable state is immediately visible to subsequent CEL
+      condition evaluations (EE-09 AC4) -- i.e. the merge commits before
+      REQ-050's gateway evaluation reads variables, not after.
+      Merge is a pure function over (current_variables, incoming_variables,
+      optional_schema) returning the new map plus the list of events to
+      append, with the actual appending done by the calling transaction --
+      keeping it testable without a database, the same separation REQ-044
+      establishes between the pure kernel and its persistence orchestration.
+    acceptance_criteria:
+      - "merging a key absent from the instance map inserts it with no VARIABLE_OVERWRITTEN event; merging a key already present overwrites it AND produces exactly one VARIABLE_OVERWRITTEN event carrying the key, the old value and the new value -- two explicit tests"
+      - "merging an empty map is a no-op producing zero events and leaving the variable map unchanged"
+      - "merging a value that a registered variable schema rejects leaves the variable map unchanged, transitions the instance to ERROR, and produces an EXECUTION_ERROR event -- verified by reading the variable map back and confirming it did not absorb the rejected value"
+      - "schema validation goes through REQ-024's validate_payload/3 rather than a second JSON Schema implementation, confirmed by inspection and stated in the moduledoc"
+      - "variables merged by a task completion are visible to a gateway condition evaluated later in the same completion, demonstrated by an explicit test rather than argued"
+    depends_on: [REQ-044, REQ-024]
+
+  - id: REQ-050
+    title: Exclusive gateway evaluation and condition expressions (transition.zig, EE-05)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Port src/engine/transition.zig's EXCLUSIVE_GATEWAY branch (per
+      src/design/engine.md "Section EE-05: Exclusive Gateway/CEL", L2238) into
+      REQ-044's transition dispatch. Pure, no I/O, same contract as REQ-044.
+      - Outgoing edge conditions are evaluated in DECLARED edge order and the
+      token follows the FIRST edge whose condition evaluates true (EE-05 AC1).
+      - An edge with is_default true is evaluated LAST regardless of its
+      declared position, and carries no condition expression (EE-05 AC2).
+      REQ-029 already enforces at definition time that is_default and a
+      non-null condition cannot coexist and that at most one default edge
+      exists per gateway, so this requirement may rely on those invariants
+      rather than re-validating them -- state that reliance explicitly.
+      - Exactly one outgoing edge is followed per evaluation: never zero,
+      never more than one (EE-05 AC5).
+      - A condition that raises a runtime error (type mismatch, undefined
+      variable) is treated as FALSE for that edge, not as an instance error
+      (EE-05 AC4 and its edge case). This is easy to get backwards -- a
+      condition erroring is different from no condition matching.
+      - If no condition matches and no default edge exists, the instance
+      transitions to ERROR per REQ-061's EE-10 path, with a structured reason
+      naming the gateway node_id and the conditions that were evaluated
+      (EE-05 AC3). The reason must carry enough detail for an operator to
+      diagnose without replaying (EE-10 AC5), so record the evaluated
+      conditions, not just the node id.
+      CONDITION EVALUATION -- port against R-Co's real, working
+      implementation, which is NOT vendor/cel/cel.zig. Read
+      src/engine/transition.zig's evaluateGatewayCondition() (~line 1118,
+      R-Co's EXP-102 adapter) as the reference: it translates the CEL-syntax
+      condition string stored in definition graphs into expr syntax, then
+      parses and evaluates via R-Co's src/expr/ module (7 files: lexer.zig,
+      parser.zig, ast.zig, evaluator.zig, error.zig, mod.zig,
+      benchmark.zig). Its own header states the contract this requirement
+      needs: "Returns false on any translation, parse, or evaluation error --
+      preserving the same `catch false` semantics as the previous cel.evaluate
+      call," plus an explicit I/O-free guarantee ("expr.parse() and
+      expr.evaluate() are pure computations"), which is exactly what REQ-044's
+      purity contract requires. That catch-false rule IS EE-05 AC4's
+      treat-errors-as-false behaviour -- port it as one rule, not two.
+      The translation layer (translateCelToExpr) is small and fully specified
+      in transition.zig: strip the `variables.` prefix, map `&&`->`and`,
+      `||`->`or`, `!`->`not ` (with `!=` passing through unchanged), and
+      return no-match for expressions using unsupported CEL features (macros,
+      type-conversion functions, collection functions, the ternary operator)
+      -- which, via catch-false, means those conditions evaluate false rather
+      than erroring the instance. Port that supported/unsupported boundary
+      explicitly rather than inferring it, and cite hasCelUnsupportedFeatures()
+      as its source.
+      Note on a stale citation, so it is not re-propagated: REQ-029's
+      description states R-Co's vendor/cel/cel.zig is a stub. That wording
+      comes from src/design/definition.md (and engine.md's own EE-05 section,
+      lines 451/1005/1020, which the code has since superseded) and was
+      correct for REQ-029's own scope -- DEFINITION-TIME syntax checking,
+      where Letflow indeed ships only isValidCelSyntax with no evaluation. It
+      does NOT describe runtime evaluation today: R-Co commit 480b7dc5 wired
+      src/expr into transition.zig and retired vendor/cel from production, and
+      vendor/cel/cel.zig is in any case a real 13,877-byte subset evaluator
+      with a working evaluate() at line 391, not a stub. This requirement
+      therefore has a real reference implementation to port and needs no
+      build-vs-adopt decision record. Whatever lands must stay deterministic
+      and I/O-free to preserve REQ-044's purity contract.
+      SCOPE NOTE: R-Co reaches src/expr/ as a named module shared beyond the
+      engine. Letflow has no expression evaluator yet, so this requirement
+      builds the minimal evaluator the gateway path actually needs (the
+      operators and comparisons translateCelToExpr can produce), not a port of
+      all 7 src/expr/ files -- benchmark.zig in particular is a Zig
+      benchmarking harness with no Elixir equivalent here. State in the
+      moduledoc which subset landed and that a fuller expression surface, if a
+      later stage needs one, extends this rather than replacing it.
+    acceptance_criteria:
+      - "a gateway whose second declared edge is the first to evaluate true routes the token down that edge, not the first or third -- an explicit ordering test, not a single-edge case"
+      - "a gateway with a default edge declared FIRST and two non-default edges that both evaluate false routes the token down the default edge, proving the default is evaluated last regardless of declared position"
+      - "a condition expression that raises a runtime error (undefined variable or type mismatch) is treated as false and evaluation continues to the next edge, rather than transitioning the instance to ERROR -- an explicit test distinguishing this from the no-match case"
+      - "a gateway where no condition matches and no default edge exists transitions the instance to ERROR with a structured reason naming the gateway node_id AND the conditions that were evaluated"
+      - "exactly one outgoing edge is followed in every passing case, asserted directly rather than inferred"
+      - "a condition using an unsupported CEL feature (a macro, a type-conversion function, a collection function, or the ternary operator) evaluates to false via the catch-false rule rather than raising or erroring the instance, matching hasCelUnsupportedFeatures()'s boundary -- at least two such expressions tested explicitly"
+      - "the CEL-to-expr translation is tested directly on each of its four documented rewrites (variables. prefix stripped, && -> and, || -> or, ! -> not with != passing through unchanged), rather than only end-to-end through gateway evaluation"
+      - "the evaluator performs zero I/O and is deterministic, confirmed by inspection of its call graph and stated in the moduledoc, which cites src/engine/transition.zig's evaluateGatewayCondition() and src/expr/ as the ported reference and records which subset of the expression surface landed"
+    depends_on: [REQ-044]
+
+  - id: REQ-051
+    title: Parallel gateway split and join (transition.zig, EE-06/EE-07)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Port src/engine/transition.zig's PARALLEL_GATEWAY branches (per
+      src/design/engine.md "Section EE-06: Parallel Split", L2638 and "Section
+      EE-07: Parallel Join", L2898) into REQ-044's transition dispatch. Pure,
+      no I/O, same contract as REQ-044. Split and join ship together because
+      they share the Token/JoinCounter model and neither is independently
+      meaningful.
+      SPLIT (EE-06):
+      - A token reaching a PARALLEL_GATEWAY with N outgoing edges produces N
+      independent tokens simultaneously, one per edge, each with its own
+      branch_id (EE-06 AC1).
+      - Each token progresses independently: a task completion on one branch
+      never blocks another (EE-06 AC2).
+      - The split emits a PendingEvent recording the split (EE-06 AC3), and
+      all N tokens are created in one transaction at the persistence layer
+      (EE-06 AC4 / DB-03 -- the atomicity is REQ-047's orchestration job, the
+      token production is this requirement's).
+      JOIN (EE-07):
+      - A PARALLEL_GATEWAY acting as a join waits until all ACTIVE incoming
+      tokens have arrived before creating the single outgoing token (EE-07
+      AC1), tracked via transition.zig's JoinCounter struct
+      (received_count/expected_from_branches, added by R-Co's ISS-105).
+      - "Active" EXCLUDES tokens on branches cancelled via REQ-052's EE-08
+      path: a cancelled branch contributes no token and is excluded from the
+      join count, so the join still fires when the remaining active branches
+      arrive (EE-07 AC2/AC3). This exclusion is the single subtlest rule in
+      the parallel model -- a naive implementation waits forever.
+      - If ALL branches of a split are cancelled before any reaches the join,
+      the join node is itself cancelled and the instance transitions to
+      CANCELLED (EE-07 AC4).
+      - The join fires EXACTLY ONCE regardless of concurrent token arrival
+      order (EE-07 AC5).
+      - Variable key collisions between branches merging at the join follow
+      REQ-049's EE-09 collision policy (overwrite plus VARIABLE_OVERWRITTEN
+      event) -- reuse it, do not write a second merge rule.
+    acceptance_criteria:
+      - "a PARALLEL_GATEWAY with 3 outgoing edges produces exactly 3 tokens with 3 distinct branch_ids in one transition call"
+      - "a join with 3 expected branches does not fire when 2 tokens have arrived and does fire when the 3rd arrives, asserted at both points"
+      - "a join whose branch count is 3 but where 1 branch was cancelled via the EE-08 path fires when the remaining 2 active tokens arrive -- it does not wait for the cancelled branch, demonstrated by an explicit test"
+      - "when every branch of a split is cancelled before any reaches the join, the join node is cancelled and the instance status becomes CANCELLED"
+      - "tokens arriving at a join in two different orders produce the identical post-join state, and the join fires exactly once in both orderings"
+      - "a variable key produced with different values on two parallel branches resolves through REQ-049's merge policy with a VARIABLE_OVERWRITTEN event, not through a second collision rule defined in this module"
+    depends_on: [REQ-044, REQ-049]
+
+  - id: REQ-052
+    title: Instance cancellation (instance.zig cancelInstance, EE-08) -- supersedes lib/letflow/parallel_approval.ex
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Port src/engine/instance.zig's InstanceStore.cancelInstance() (per
+      src/design/engine.md "Section EE-08: Cancellation", L3299) as
+      cancel_instance/N. This is the caller-initiated path that drives a
+      running instance to the terminal CANCELLED status.
+      Split note: this requirement originally also carried EE-10 execution
+      error handling. The two were separated because they are different in
+      kind, not merely large together -- EE-08 is caller-initiated and
+      terminal (CANCELLED admits no further operation), while EE-10 (REQ-061)
+      is engine-internal, driven by REQ-049/050/056/057's failure paths, and
+      halts NON-terminally at ERROR pending an operator retry/discard through
+      S6's dead-letter path. Their shared row-locking shape was not sufficient
+      justification to keep them in one agent turn.
+      - Sets all open tasks to CANCELLED, appends an INSTANCE_CANCELLED event,
+      and sets the instance status to CANCELLED -- all in ONE transaction
+      (EE-08 AC3).
+      - An instance already CANCELLED or COMPLETED returns a distinct conflict
+      error (EE-08 AC2). Cancelled instances are terminal: no further task
+      completion or event append is permitted (EE-08 AC4) -- and REQ-025's
+      append/1 already enforces exactly this at the event-store layer via its
+      active-instance guard on instance_projections.status, so verify that
+      guard now actually fires for engine-driven appends rather than
+      duplicating the check.
+      - Cancelling an instance with no open tasks or timers still appends
+      INSTANCE_CANCELLED (EE-08 edge case).
+      - Concurrent cancellation racing a task completion: the first operation
+      to acquire the row-level lock wins, the other gets a conflict error
+      (EE-08 edge case) -- the same locking discipline REQ-048 uses and
+      REQ-055 verifies globally.
+      - R-Co's EE-08 also cancels pending timers atomically via SCH-03
+      (src/scheduler/, S6) and abandons in-flight SERVICE_TASK HTTP calls
+      best-effort (REQ-056's transport, whose real client is out of S3 scope).
+      Neither dependency exists in Letflow yet: port the cancellation of what
+      DOES exist (tasks, status, event) and leave named, documented hooks for
+      both, identifying S6 and REQ-056 respectively -- do not silently omit
+      them from the moduledoc as if EE-08 were fully covered.
+      BRANCH CANCELLATION: REQ-051's parallel join excludes cancelled branches
+      from its join count (EE-07 AC2/AC3), and cancelling every branch of a
+      split cancels the join node and the instance (EE-07 AC4). That token-level
+      rule lives in REQ-051's pure transition logic; this requirement owns the
+      instance-level persistence of a cancellation. Confirm the two agree --
+      an instance CANCELLED by the all-branches-cancelled path and one
+      CANCELLED by a direct caller request must reach the same persisted state.
+      SUPERSESSION: lib/letflow/parallel_approval.ex is superseded by this
+      requirement together with REQ-051 -- its two-approver :gen_statem (a
+      single :pending state holding approver progress as genuine gen_statem
+      data, with Letflow.ApprovalSupervisor as a deliberately separate
+      DynamicSupervisor) is the hand-written special case of what REQ-051's
+      PARALLEL_GATEWAY split/join now expresses as definition data. State in
+      the moduledoc whether it is deleted or retained-with-a-reason, and do
+      the same for Letflow.ApprovalSupervisor, the same way REQ-046 handles
+      ProcessInstance/InstanceSupervisor. Its first Early finding remains the
+      quality bar for whatever replaces it: real per-state callbacks and real
+      supervised isolation, never a GenServer simulating a state machine.
+      OPEN QUESTION (flag, do not silently resolve): if REQ-045's
+      process-vs-row resolution chose supervised processes, cancellation must
+      terminate a live process, and killing a process is exactly the exit path
+      that Elixir's try/after does not cover -- the same crash-safety question
+      REQ-040 flagged for sandbox teardown. Leave the concrete mechanism to
+      CODE-DESIGNER, citing REQ-040's precedent.
+      SCOPE BOUNDARY: POST /api/v1/instances/:id/cancel is S4 (api-surface).
+      This requirement returns tagged tuples; S4 owns the status mapping.
+    acceptance_criteria:
+      - "cancelling an ACTIVE instance sets every open task to CANCELLED, appends exactly one INSTANCE_CANCELLED event, and sets the instance status to CANCELLED -- all committed together, verified by reading tasks, instance_projections and events back"
+      - "cancelling an already-CANCELLED or already-COMPLETED instance returns a distinct conflict error and changes nothing; cancelling an ACTIVE instance with zero open tasks still appends INSTANCE_CANCELLED"
+      - "after cancellation, a further append via REQ-025's append/1 is rejected by its existing active-instance guard -- demonstrated against the real event store rather than asserted from the code"
+      - "a cancellation racing a task completion on the same instance resolves with exactly one winner and a distinct conflict error for the loser, run concurrently rather than sequentially"
+      - "an instance cancelled via REQ-051's all-branches-cancelled join path and one cancelled by a direct cancel_instance call reach the same persisted state (status, task statuses, appended event), compared explicitly"
+      - "the moduledoc names the SCH-03 timer-cancellation hook (S6) and the in-flight SERVICE_TASK abandonment hook (REQ-056) as explicitly out of scope, rather than implying EE-08 is fully covered"
+      - "the moduledoc states concretely whether lib/letflow/parallel_approval.ex and Letflow.ApprovalSupervisor are deleted or retained-with-a-stated-reason, and mix test passes with the actual output quoted after the change"
+    depends_on: [REQ-048, REQ-051]
+
+  - id: REQ-053
+    title: State reconstruction by event replay (reconstruction.zig, EE-11)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Port src/engine/reconstruction.zig's reconstructInstance() (per
+      src/design/engine.md "Section EE-11: State Reconstruction", L5237) as
+      Letflow.Engine.Reconstruction.reconstruct_instance/2. This is the
+      requirement that proves REQ-044's kernel is genuinely pure and
+      deterministic: it replays the whole ordered event log through
+      transition/3 and must land on a state field-for-field equal to the
+      persisted projection.
+      - Reads every event for an instance in strict sequence_number order
+      across BOTH REQ-023's events table and its events_archive table (EE-11
+      AC5: reconstruction spanning archived events must produce identical
+      results to pre-archival reconstruction). REQ-026's read/2 covers the
+      live table; the archive half needs its own query, since REQ-026's read/2
+      does not span events_archive -- confirm that against
+      lib/letflow/event_store.ex rather than assuming either way, and extend
+      or wrap it accordingly.
+      - Replays them through REQ-044's transition/3 to produce an
+      InstanceState (EE-11 AC1) equal to the persisted instance_projections
+      row field-for-field: same tokens, same variable map, same task set, same
+      status.
+      - Works even when the projection row is corrupt or absent entirely
+      (EE-11 AC3) -- the event log is ground truth. An instance with zero
+      events reconstructs to the initial state (token on START, empty
+      variables, ACTIVE); an event log containing an EXECUTION_ERROR event
+      reconstructs to status ERROR (EE-11 edge cases).
+      - Optional write-back (EE-11 AC4): when requested, the reconstructed
+      state is written back to instance_projections under SELECT ... FOR
+      UPDATE, with lock contention surfaced as a distinct error rather than a
+      silent overwrite -- matching reconstruction.zig's own LockContention
+      error. Write-back is OPT-IN, never the default: a read-only
+      reconstruction must not mutate the read model.
+      - Distinct, pattern-matchable errors per reconstruction.zig's own error
+      set: instance-not-found (no events in either table), lock-contention,
+      replay-failed (transition/3 errored mid-replay, indicating a corrupt or
+      inconsistent log) -- not one generic error.
+      R-Co's EE-11 AC2 sets a performance bound (NFR-04: 10,000 events in
+      under 5 seconds). Letflow has no NFR requirement covering this and no
+      benchmark harness; state the bound in the moduledoc as R-Co's documented
+      target and note that Letflow has not adopted an NFR requirement for it,
+      rather than either silently dropping the bound or inventing a
+      performance requirement this stage never scoped.
+      SCOPE BOUNDARY: POST /api/v1/instances/:id/reconstruct is S4
+      (api-surface); this requirement builds the context-module function.
+    acceptance_criteria:
+      - "an instance with N appended events reconstructs to an InstanceState equal field-for-field (tokens, variables, task set, status) to its persisted instance_projections row, demonstrated by building a real multi-event instance and comparing both sides"
+      - "deleting the instance_projections row entirely and then reconstructing still produces the correct state, proving reconstruction does not read the projection as an input"
+      - "an instance whose events span both events and events_archive (some rows moved by REQ-026's archive/1) reconstructs to the identical state it had before archival"
+      - "an instance with zero events reconstructs to token-on-START, empty variables, status ACTIVE; an instance whose log contains an EXECUTION_ERROR event reconstructs to status ERROR"
+      - "reconstruction without write-back leaves instance_projections byte-identical (verified by reading the row before and after); reconstruction with write-back updates it, and a concurrent lock holder causes a distinct lock-contention error rather than a silent overwrite"
+      - "instance-not-found, lock-contention and replay-failed are three separately pattern-matchable errors, each with its own test"
+      - "the moduledoc records R-Co's NFR-04 bound (10,000 events under 5 seconds) as documented context and states explicitly that Letflow has not adopted an NFR requirement for it"
+    depends_on: [REQ-052, REQ-061, REQ-026]
+
+  - id: REQ-054
+    title: Periodic instance state snapshots (snapshot_writer.zig, ISS-601)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Port src/engine/snapshot_writer.zig (348 lines -- R-Co's ISS-601, design
+      artefact src/design/iss601_state_snapshots.md) as
+      Letflow.Engine.SnapshotWriter, plus its instance_state_snapshots
+      migration and Ecto.Schema module (schema-per-tenant per REQ-022, same as
+      every other table this stage adds).
+      THIS REQUIREMENT EXTENDS REQ-053's already-shipped reconstruct path --
+      it is not a standalone module. REQ-053 builds full-log replay from
+      sequence 1; this requirement adds the snapshot table, the writer, and
+      the replay-source selection that lets that same reconstruct function
+      start from the latest snapshot instead. The deliverable is therefore a
+      modification of REQ-053's function plus new supporting code, and the
+      correctness bar below is that both paths agree.
+      Purpose: reconstruction (REQ-053) replaying the FULL event log from
+      sequence 1 is O(events) and gets slower forever. A periodic snapshot of
+      the InstanceState as a jsonb blob lets reconstruction replay only the
+      events SINCE the latest snapshot.
+      - take_snapshot/N: serialises REQ-044's InstanceState (status, tokens,
+      variables, pending task nodes, error_detail) plus the sequence_number it
+      is current as of, into an instance_state_snapshots row.
+      - maybe_take_snapshot/N: the cadence check -- snapshot every N events,
+      default 1000 per snapshot_writer.zig's DEFAULT_SNAPSHOT_INTERVAL.
+      Called after event appends and on instance completion.
+      - REQ-053's replay-source selection: given a latest snapshot at
+      sequence S, replay only events with sequence_number > S on top of the
+      deserialised snapshot state, versus replaying from 1 when no snapshot
+      exists (reconstruction.zig's determineReplaySourceForSnapshot()). This
+      requirement extends REQ-053's reconstruct path to use snapshots when
+      present -- and the correctness bar is that BOTH paths produce the
+      identical state, since a snapshot that diverges from full replay is
+      worse than no snapshot at all.
+      - This table is NOT the same thing as REQ-027/REQ-033's
+      instance_definition_snapshots (the immutable PD-08 DEFINITION graph
+      bound to an instance at start). These are periodic EXECUTION STATE
+      snapshots, mutable in the sense that new rows accumulate over an
+      instance's life. Say so explicitly in the moduledoc -- the two names are
+      one word apart and confusing them would be a silent data-model error.
+      OPEN QUESTION (flag, do not silently resolve): where the
+      events-since-last-snapshot counter lives. instance_projections.last_event_seq
+      (REQ-023) already tracks the latest sequence per instance, which makes a
+      pure row-based cadence check possible with no in-memory counter at all;
+      R-Co's own SnapshotWriter is a struct holding a pool handle. If REQ-045
+      resolved to supervised processes, an in-process counter is available but
+      is exactly the kind of state stage-3-instance-engine.md's second Early
+      finding warns is NOT automatically worth a process. Leave the choice to
+      CODE-DESIGNER, citing that finding and REQ-045's resolution.
+    acceptance_criteria:
+      - "priv/repo/migrations gains an instance_state_snapshots migration, schema-per-tenant per REQ-022, applying cleanly against a provisioned tenant schema"
+      - "take_snapshot writes a row whose deserialised state equals the InstanceState passed in, round-tripped field-for-field including tokens and variables"
+      - "maybe_take_snapshot writes no row before the interval is reached and exactly one row when it is, with the interval configurable and defaulting to 1000"
+      - "reconstructing an instance that has a snapshot at sequence S replays only events with sequence_number greater than S, and produces a state identical to the same instance reconstructed with snapshots ignored entirely -- an explicit both-paths-agree test, not just a faster-path test"
+      - "the moduledoc explicitly distinguishes instance_state_snapshots (periodic execution state, this requirement) from instance_definition_snapshots (immutable PD-08 definition graph, REQ-027/REQ-033)"
+      - "the moduledoc names the snapshot-cadence-counter placement as an open question left for CODE-DESIGNER, citing stage-3-instance-engine.md's second Early finding and REQ-045's process-vs-row resolution"
+    depends_on: [REQ-053]
+
+  - id: REQ-055
+    title: Concurrent instance isolation guarantees (instance.zig locking, EE-12)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Establish and verify the concurrency-safety property R-Co's EE-12 states
+      (per src/design/engine.md "Section EE-12: Concurrent Instance Safety",
+      L5771) across the engine paths REQ-045/047/048/052 build. EE-12 adds
+      almost no new code of its own in R-Co (its implemented_in names
+      src/engine/instance.zig and src/api/routes/tasks.zig, files other
+      requirements already port); its deliverable is the guarantee, the
+      locking discipline that produces it, and the tests that prove it.
+      - Instance state is fully isolated: no instance's variable map, task
+      set, event log or token positions can be corrupted by another instance's
+      concurrent operation (EE-12 AC1).
+      - Row-level locking serialises concurrent operations on the SAME
+      instance; cross-instance contention must be ZERO -- no global lock is
+      held across instance boundaries (EE-12 AC2). This is the specific
+      failure this requirement exists to prevent: a single mutex, a singleton
+      GenServer funnelling every instance's transitions, or a table-level lock
+      would all pass a naive correctness test while destroying throughput and
+      violating the isolation the first Early finding demands.
+      - Two concurrent task completions on the SAME instance: exactly one
+      succeeds, the other gets a conflict (EE-12 AC3) -- REQ-048 already
+      implements this; this requirement verifies it holds under real
+      concurrency rather than by code reading.
+      - The load-shaped criterion (EE-12 AC4: 100 concurrent task completions
+      across 100 distinct instances complete without deadlock or corruption)
+      is portable as an ExUnit concurrent test against a real Postgres, using
+      the Docker-based verification path docs/anti-patterns.md documents.
+      If REQ-045 resolved to supervised processes, this requirement also
+      verifies supervised isolation concretely: killing one instance's process
+      must not affect any other instance, the property
+      lib/letflow/process_instance.ex's moduledoc already claimed and
+      lib/letflow/parallel_approval.ex's separate ApprovalSupervisor was
+      structured to preserve. If REQ-045 resolved to row-based state, state
+      that this half is not applicable rather than silently skipping it.
+    acceptance_criteria:
+      - "100 concurrent task completions across 100 distinct instances all succeed with no deadlock and no cross-instance corruption, run against a real Postgres with the actual test output quoted"
+      - "two concurrent task completions on the SAME instance produce exactly one success and one conflict, run concurrently rather than sequentially"
+      - "no global or table-level lock is held across instance boundaries anywhere in the engine's write paths -- confirmed by inspecting every lock acquisition in REQ-045/047/048/052's code and naming each one's scope in the moduledoc"
+      - "after the concurrent run, every one of the 100 instances reconstructs (via REQ-053) to a state matching its own projection, proving no instance absorbed another's events or variables"
+      - "if REQ-045 resolved to supervised processes, killing one instance's process leaves every other instance reachable and correct, demonstrated by a test; if it resolved to row-based state, the moduledoc states that explicitly instead"
+    depends_on: [REQ-053]
+
+  - id: REQ-056
+    title: Service task configuration, retry classification and dispatch contract (service_task.zig, EXT-01)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Port src/engine/service_task.zig (420 lines, R-Co's EXT-01) as
+      Letflow.Engine.ServiceTask -- the engine-side half of SERVICE_TASK node
+      execution.
+      Port as pure functions (no I/O, testable without a network):
+      - parse_config_from_node_attributes/1: builds a ServiceTaskConfig from a
+      SERVICE_TASK node's attributes -- node_id, url_template, service_id,
+      route_kind (inline_url | catalog_service), method (GET/POST/PUT/PATCH/
+      DELETE), headers, timeout_ms (default 30000 per EXT-01, and REQ-029
+      already validates the [1, 300000] range at definition time),
+      retry_limit (default 3), body_template. When both a URL and a service_id
+      are supplied, the URL is ignored and a
+      BothUrlAndServiceIdProvidedUrlIgnored warning is recorded -- a warning,
+      not an error.
+      - validate_rendered_url/1: rejects a template that renders to an empty
+      string (EXT-01 edge case: rejected at node activation, routed to
+      REQ-061's EE-10 ERROR path).
+      - classify_failure_kind/1 and is_retriable_failure/1: map an outcome to
+      timeout | network | http_non_2xx | http_redirect_3xx | rate_limited_429
+      | invalid_2xx_body | request_build_error. Two rules are easy to get
+      wrong and are explicitly called out: a 3xx redirect is a FAILURE, never
+      followed automatically (EXT-01 AC5), and a 429 is a failure that DOES
+      retry (EXT-01 edge case).
+      - compute_service_task_backoff_ms/3: exponential back-off with a base
+      and a cap -- deterministic given (attempt_index, base, cap), so it is
+      unit-testable without waiting.
+      - decide_failure/3: given (kind, attempt_index, retry_limit), returns
+      retry or give-up.
+      - build_idempotency_key/N: so a retried dispatch is not a duplicate
+      side effect.
+      On an HTTP 2xx whose body is a JSON object, the body merges into
+      instance variables via REQ-049's EE-09 merge; a 2xx body that is NOT a
+      JSON object is NOT merged and routes to REQ-061's ERROR path (EXT-01
+      AC1/AC2).
+      SCOPE BOUNDARY -- state explicitly, do not paper over: the actual
+      outbound HTTP transport is left INJECTABLE (a behaviour or a function
+      passed in), not wired to a concrete client here. R-Co's
+      executeHttpRequest() is the transport, and two of its downstream
+      dependencies do not exist in Letflow: OBS-05's dead-letter queue
+      (src/dlq/, S6 operational-cross-cutting -- EXT-01 AC4 requires an
+      exhausted-retry invocation to land in the DLQ) and the service_catalog
+      that route_kind catalog_service resolves against (src/repository/,
+      S6 -- the same dependency REQ-031's moduledoc already flagged as
+      missing). Port the classification/config/backoff logic against an
+      injectable transport and injectable catalog lookup, exactly as REQ-031
+      did for its ServiceCatalog/PluginRegistry gap, so this is testable and
+      correct in isolation now, with real wiring deferred to the stage that
+      builds those dependencies. Do NOT build a partial DLQ here.
+    acceptance_criteria:
+      - "parse_config_from_node_attributes returns a config with timeout_ms defaulting to 30000 and retry_limit defaulting to 3 when the node omits them, and records the BothUrlAndServiceIdProvidedUrlIgnored warning (not an error) when both url and service_id are present"
+      - "an HTTP 3xx is classified as a failure and is never followed as a redirect, and an HTTP 429 is classified as a retriable failure -- two explicit tests, since both are easy to get backwards"
+      - "each of the 7 failure kinds has an explicit test mapping an input condition to that kind, and is_retriable_failure/decide_failure are tested at attempt_index below, equal to, and above retry_limit"
+      - "compute_service_task_backoff_ms grows exponentially with attempt_index and is clamped at the cap, verified across at least 4 successive attempt indices without any sleeping"
+      - "a 2xx response whose body is a JSON object merges into instance variables via REQ-049's merge; a 2xx response whose body is a JSON array or a bare string does not merge and routes to REQ-061's ERROR path -- two explicit tests"
+      - "a URL template rendering to an empty string is rejected at activation and routes to the ERROR path rather than dispatching a request"
+      - "the moduledoc states explicitly that the HTTP transport and the service_catalog lookup are injectable interfaces, names OBS-05's DLQ (S6) as the unbuilt destination for exhausted retries, and confirms no partial DLQ was built here"
+    depends_on: [REQ-061]
+
+  - id: REQ-057
+    title: Plugin handler interface and registry contract (plugin_interface.zig + plugin_registry.zig, EXT-03)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Port src/engine/plugin_interface.zig (79 lines, the stable handler type)
+      and src/engine/plugin_registry.zig (232 lines, the registration and
+      resolution table) as Letflow.Engine.PluginInterface and
+      Letflow.Engine.PluginRegistry -- R-Co's EXT-03.
+      - The handler contract: a handler receives a PluginExecutionContext
+      (instance_id, definition_id, node_id, node_type, instance variables,
+      node config, trace_id) and returns exactly one of two outcomes --
+      COMPLETE (with optional output variables) or ERROR (with a reason
+      string) (EXT-03 AC2). In Elixir this is a behaviour with a callback
+      returning a tagged tuple, which is the idiomatic equivalent of R-Co's
+      function-pointer union; note that mapping in the moduledoc.
+      - A handler that CRASHES is treated as an ERROR outcome and routed to
+      REQ-061's EE-10 path (EXT-03 AC3). R-Co catches a panic; on the BEAM the
+      idiomatic equivalents are a try/rescue-and-catch around the call or
+      running the handler in a monitored Task so an exit is observable rather
+      than propagating. Do not silently assume a bare try/rescue is enough --
+      it does not cover a process exit, the same gap REQ-040 already
+      documented for sandbox teardown.
+      - register_plugin_handler/1: rejects a duplicate node_type, an invalid
+      node_type, a nil handler, an incompatible API version, and registration
+      after the registry is frozen -- each a distinct, pattern-matchable
+      error, matching plugin_registry.zig's PluginRegistrationError set.
+      - Registration is startup-only with no dynamic loading at runtime
+      (EXT-03 AC4): freeze_plugin_registry/1 makes the registry immutable, and
+      any registration afterwards fails.
+      - resolve_node_handler_kind: a plugin registered for a node_type that
+      also has a built-in handler takes PRECEDENCE; the built-in is shadowed
+      (EXT-03 edge case).
+      - SVC-02 scoping: a registration carries scope global or tenant. A
+      tenant-scoped registration REQUIRES an owner_tenant_id and a global one
+      must NOT have one (plugin_registry.zig's
+      TenantScopedPluginRequiresOwnerId / GlobalPluginMustNotHaveOwnerId
+      errors), and resolve_plugin_handler_for_tenant/2 honours that scoping.
+      This is also the PluginRegistry dependency REQ-031's moduledoc named as
+      missing ("plugin_registry.zig belongs to src/engine/ (S3
+      instance-engine, not yet ported)") -- so this requirement should also
+      wire REQ-031's injectable plugin-lookup callback to this real registry,
+      or state explicitly why it does not yet.
+      SCOPE BOUNDARY -- state explicitly: this is the REGISTRY CONTRACT only.
+      The WASM plugin host that would actually execute third-party plugin code
+      (R-Co's src/wasm/, 19 files) is S5 (scripting-and-plugins) and needs its
+      own build-vs-bind decision record first, per
+      docs/migration/stage-5-scripting-plugins.md. S3 defines the behaviour
+      and the registry; S5 supplies runtime-hosted implementations of it.
+      In-process Elixir modules implementing the behaviour are the only
+      handlers S3 supports.
+      OPEN QUESTION (flag, do not silently resolve): where the registry lives.
+      R-Co uses a process-local struct plus a global singleton
+      (registerGlobalPluginHandler / resolveGlobalPluginHandler). A frozen,
+      startup-populated, read-mostly lookup table is a textbook fit for
+      :persistent_term or a compile-time module, and is also exactly one of
+      the cases stage-3-instance-engine.md's second Early finding names as
+      where a supervised process's value IS strongest ("service task dispatch,
+      plugin registries"). Those two readings point different ways, so do not
+      pre-decide: port the register/freeze/resolve CONTRACT and leave the
+      concrete mechanism (GenServer, :persistent_term, ETS, Application env)
+      to CODE-DESIGNER, citing that finding.
+    acceptance_criteria:
+      - "a registered handler is invoked with a context carrying instance_id, definition_id, node_id, node_type, instance variables, node config and trace_id, and returning COMPLETE with output variables merges them via REQ-049's merge"
+      - "a handler returning ERROR routes the instance to REQ-061's EE-10 ERROR path with the handler's reason string preserved in the EXECUTION_ERROR event"
+      - "a handler that raises, and a handler that exits, are BOTH treated as ERROR outcomes rather than propagating -- two explicit tests, since a bare try/rescue passes the first and fails the second"
+      - "each of the registration errors (duplicate node_type, invalid node_type, nil handler, incompatible API version, registration after freeze) is a distinct pattern-matchable error with its own test"
+      - "a tenant-scoped registration without an owner_tenant_id and a global registration with one are both rejected with their own distinct errors, and resolution for tenant B does not return tenant A's tenant-scoped handler"
+      - "a plugin registered for a node_type that also has a built-in handler shadows the built-in, demonstrated by an explicit test"
+      - "the moduledoc states that the WASM plugin host is S5 scope and that S3 supports only in-process Elixir behaviour implementations, and names the registry-storage mechanism as an open question left for CODE-DESIGNER"
+    depends_on: [REQ-061]
+
+  - id: REQ-058
+    title: Lua script execution audit persistence path (lua_script_audit.zig, LUA-07 minimal path)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Port src/engine/lua_script_audit.zig (201 lines, R-Co's ISS-0176/GH#504
+      -- LUA-07's second acceptance criterion) as
+      Letflow.Engine.LuaScriptAudit, plus its lua_script_execution_audit
+      migration and Ecto.Schema module (schema-per-tenant per REQ-022).
+      What this is: a MINIMAL, deliberately narrow engine-side call path that
+      (a) invokes a script executor and (b) persists the resulting
+      manifest_hash to a queryable audit record. R-Co's own file header is
+      unusually explicit about the narrowness, and porting it without carrying
+      that framing across would misrepresent what ships: "It is **not** the
+      SERVICE_TASK script-execution handler and must not be called from
+      processServiceTaskRuntimeInTx or any other normal process-execution
+      flow... The general SERVICE_TASK-with-script integration described in
+      src/design/lua-integration.md section 25 remains unbuilt; when it lands,
+      that work supersedes this function rather than building on it." Carry
+      that statement into the Elixir moduledoc verbatim in substance -- a
+      future reader must not mistake this for the real scripting integration.
+      - execute_script_for_audit/N: validates the instance_id BEFORE invoking
+      the executor (R-Co's own ordering rationale: the function's entire
+      purpose is producing an ATTRIBUTABLE audit row, so an unparseable
+      instance_id is rejected up front rather than after a script has already
+      run), invokes the executor, and writes the audit row carrying at minimum
+      instance_id, manifest_hash, actor_id and a timestamp.
+      - The registered_hash parameter versus the executed manifest's hash: a
+      mismatch is a distinct, pattern-matchable error, not a silently-recorded
+      row -- this is the whole point of persisting a manifest hash.
+      SCOPE BOUNDARY -- state explicitly, this is the S3/S5 line: the LUA
+      EXECUTION RUNTIME ITSELF is S5 (scripting-and-plugins). R-Co's file
+      imports ../lua/executor.zig, ../lua/manifest.zig and ../lua/errors.zig
+      -- all three are in src/lua/ (29 files), which
+      docs/migration/stage-5-scripting-plugins.md scopes to S5 and which
+      explicitly needs its own build-vs-bind decision record (Elixir NIF/Port
+      wrapping a real Lua runtime vs. reimplementing) before its requirements
+      are expanded. S3 therefore ports the AUDIT PERSISTENCE PATH against an
+      INJECTED executor interface (a behaviour with an execute-with-manifest
+      callback), exactly the injectable-lookup pattern REQ-031 established for
+      its own missing dependencies -- so the audit path is testable and
+      correct in isolation now with a test-double executor, and S5 supplies
+      the real Lua host later. Do NOT add a Lua dependency to mix.exs in this
+      requirement, and do NOT pre-empt S5's build-vs-bind decision by
+      implicitly choosing a runtime.
+    acceptance_criteria:
+      - "priv/repo/migrations gains a lua_script_execution_audit migration, schema-per-tenant per REQ-022, applying cleanly against a provisioned tenant schema"
+      - "execute_script_for_audit with a test-double executor writes exactly one audit row carrying instance_id, manifest_hash, actor_id and a timestamp, verified by reading the row back"
+      - "an unparseable or absent instance_id is rejected BEFORE the injected executor is invoked, demonstrated by a test-double that records whether it was called at all"
+      - "a manifest hash differing from the supplied registered_hash returns a distinct, pattern-matchable mismatch error and writes no audit row"
+      - "mix.exs gains no Lua/NIF dependency, and the moduledoc states that the Lua execution runtime is S5 scope pending stage-5-scripting-plugins.md's build-vs-bind decision record"
+      - "the moduledoc carries R-Co's own narrowness statement in substance: this is not the SERVICE_TASK script-execution handler, must not be called from normal process-execution flow, and will be superseded (not extended) by the real scripting integration when it lands"
+    depends_on: [REQ-045]
+
+  - id: REQ-059
+    title: Dependency pin resolution, recording and inheritance (pin_resolver.zig, PIN-01/02/03/04)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Port src/engine/pin_resolver.zig (967 lines, R-Co's PIN-01..PIN-04) as
+      Letflow.Engine.PinResolver -- the mechanism that freezes every versioned
+      dependency an instance uses at start time, so a running instance is
+      never silently upgraded by a catalog change underneath it.
+      - resolve/N (PIN-01): enumerates every versioned reference in the
+      definition snapshot and resolves each to a PinnedVersion entry
+      {kind, ref, resolved_id, version, source} with kind in catalog_entry |
+      variable_schema | module and source in resolved | override | inherited.
+      Resolution completes BEFORE the instance row is written, so a failed
+      resolution writes no partial instance (PIN-01 AC1/AC4). pinned_versions
+      is ordered by kind then ref, so two starts of the same definition
+      against the same catalog produce byte-identical payloads (PIN-01 AC5) --
+      deterministic ordering is load-bearing, not cosmetic.
+      - Initial variables violating the resolved variable_schema version are
+      rejected with a distinct VariableSchemaViolation-equivalent listing each
+      failing field (PIN-01 AC3), reusing REQ-024's validator.
+      - Recording (PIN-02): the resolved pin set is written as the
+      pinned_versions field of the INSTANCE_STARTED event payload, appended in
+      the SAME transaction as REQ-045's instance row insert. The EVENT LOG is
+      the record of record -- no side table stores pins (PIN-02 AC3). If the
+      INSTANCE_STARTED append fails, the whole thing rolls back so no
+      committed instance has an unrecorded pin set (PIN-02 AC2). A definition
+      with zero catalog and zero module references still records exactly one
+      variable_schema entry (PIN-02 AC4).
+      - No fallback (PIN-03): a reference with no pin entry raises a distinct
+      PinMissing error naming the reference, and NO code path substitutes the
+      current active version for a missing or unresolvable pin (PIN-03 AC1/
+      AC5). A newer catalog version published mid-flight does not affect an
+      in-flight instance (PIN-03 AC2). R-Co's PIN-03 AC4 routes an exhausted
+      PinMissing retry budget to the dead-letter queue -- OBS-05's DLQ is S6,
+      the same gap REQ-056 flagged; leave a named hook rather than a partial
+      DLQ.
+      - Replay and inheritance (PIN-04): REQ-053's reconstruction reads the
+      effective pin set from INSTANCE_STARTED plus the most recent
+      INSTANCE_PINS_REBOUND event, NEVER from a live catalog (PIN-04 AC1/AC5)
+      -- this is what makes replay deterministic. merge_effective_pins/N
+      computes that effective set. A sub-process child instance inherits its
+      parent's pin set and adds entries only for references the parent does
+      not carry, with inherited entries marked source: inherited (PIN-04 AC2);
+      a child reference resolving to a version differing from an inherited pin
+      uses the INHERITED pin and records the conflict in the child's
+      INSTANCE_STARTED payload (PIN-04 AC3) -- inheritance wins, which is easy
+      to get backwards.
+      SCOPE BOUNDARY: GET /api/v1/instances/{id}/pins (PIN-04 AC4) is S4
+      (api-surface); this requirement exposes the effective-pin-set function
+      the route will call, including the source event identifier per entry.
+      SCOPE GAP -- carry R-Co's own scoping forward explicitly rather than
+      re-discovering it: PIN-01 AC1 (service_catalog version resolution) and
+      AC2 (module_ref resolution against PLC-01), and PIN-03 AC3 (execution
+      proceeds on a pinned version after that version is DEPRECATED), are NOT
+      satisfiable in Letflow, for the same reason they are unsatisfied in R-Co
+      itself -- R-Co holds PIN-01 and PIN-03 at TESTED rather than RELEASED
+      over exactly this, tracked there as ISS-0672/GH-306, because
+      service_catalog has no version/status column and PLC-01 (the process
+      module catalog) does not exist. In Letflow the gap is wider still:
+      src/repository/ (service_catalog) is S6 and PLC-01 is unscoped to any
+      stage. Scope this requirement to the variable_schema branch plus the
+      resolution/ordering/recording/inheritance MACHINERY against an
+      injectable catalog and module lookup -- the same pattern REQ-031 used
+      for its identical missing-catalog gap -- and have unresolvable
+      references return distinct UnresolvedCatalogRef / UnresolvedModuleRef
+      errors rather than a silent no-op or a stub that pretends to resolve.
+      Name this gap in the moduledoc, with the future stage each dependency
+      belongs to.
+    acceptance_criteria:
+      - "resolve returns pinned_versions ordered by kind then ref, and two resolutions of the same definition against the same injected lookups produce byte-identical output, demonstrated by an explicit test comparing serialised payloads"
+      - "a failed resolution writes zero rows -- no instance_projections row, no instance_definition_snapshots row, no events row -- verified by reading all three back after a deliberately unresolvable reference"
+      - "initial variables violating the resolved variable_schema are rejected with an error listing each failing field, using REQ-024's validator rather than a second implementation"
+      - "the INSTANCE_STARTED event payload carries the pinned_versions entries, and a definition with zero catalog and zero module references still records exactly one variable_schema entry; no separate pin table exists anywhere in priv/repo/migrations"
+      - "a reference with no pin entry returns a distinct PinMissing error naming the reference, and no code path anywhere in the module queries a catalog for a current/latest version as a fallback -- confirmed by inspection and stated in the moduledoc"
+      - "a child instance started from a parent inherits the parent's pins with source: inherited, and a child reference resolving to a different version than an inherited pin uses the INHERITED version while recording the conflict in the child's INSTANCE_STARTED payload"
+      - "reconstruction via REQ-053 derives the effective pin set from INSTANCE_STARTED (plus INSTANCE_PINS_REBOUND when present) and issues zero reads against any catalog or module registry, demonstrated by an injected lookup that records whether it was called"
+      - "the moduledoc names the service_catalog (S6) and PLC-01 (unscoped) dependency gap explicitly, cites R-Co's own ISS-0672/GH-306 precedent for holding PIN-01/PIN-03 partially unmet, and states that unresolvable references return typed errors rather than stubs"
+    depends_on: [REQ-045, REQ-053]
+
+  - id: REQ-060
+    title: Explicit instance pin rebind (pin_rebind.zig, PIN-05)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Port src/engine/pin_rebind.zig (388 lines, R-Co's PIN-05) as
+      Letflow.Engine.PinRebind.rebind_pins/N -- the SOLE write path to an
+      instance's effective pin set after INSTANCE_STARTED (PIN-05 AC5). Its
+      whole reason to exist is that pins are otherwise immutable: no scheduled
+      job, catalog publication or definition promotion may change a running
+      instance's pins, so there is exactly one deliberate, audited, explicit
+      way to change them.
+      - Takes explicit {kind, ref, version} entries plus a MANDATORY reason.
+      A request with no reason, an empty entries list, or a malformed entry is
+      rejected with a distinct invalid-input error (PIN-05 AC4).
+      - Validates every named ref exists in the instance's CURRENT effective
+      pin set (via REQ-059's merge_effective_pins). A ref absent from that set
+      returns a distinct UnknownPinRef error and applies NONE of the entries
+      in the request (PIN-05 AC2) -- all-or-nothing, so a partially-applied
+      rebind is impossible.
+      - Rejects a terminal instance (COMPLETED, CANCELLED, or ERROR) with a
+      distinct InstanceNotRebindable error (PIN-05 AC3). Note the naming
+      mismatch R-Co's own file documents: PIN-05's requirement text says
+      "FAILED" but instance.zig's InstanceStatus enum has no FAILED variant --
+      the codebase's ERROR status is the one meant. Letflow's own status enum
+      (REQ-023/REQ-043) likewise has ACTIVE/COMPLETED/CANCELLED/ERROR and no
+      FAILED, so treat ERROR as terminal for rebind purposes and say so in the
+      moduledoc rather than leaving a reader to wonder whether a status is
+      missing.
+      - On success, appends exactly one INSTANCE_PINS_REBOUND event carrying
+      {ref, prior_version, new_version, actor, reason} per CHANGED entry,
+      atomically (PIN-05 AC1). An entry whose requested version equals the
+      current pinned version is not a change and contributes no payload entry.
+      - Concurrency: R-Co uses SELECT FOR UPDATE NOWAIT and surfaces
+      contention as a distinct ConcurrentModification error rather than
+      blocking, matching its CompleteTaskError convention. Port that
+      convention -- REQ-055's zero-cross-instance-contention rule applies here
+      too.
+      SCOPE BOUNDARY: POST /api/v1/instances/{id}/rebind-pins is S4
+      (api-surface). R-Co's pin_rebind.zig maps its errors to HTTP 422/409/404
+      in its own doc comments; this requirement returns the tagged tuples and
+      S4 owns the status mapping, the same boundary REQ-048 and REQ-045 set.
+    acceptance_criteria:
+      - "a valid rebind on a running instance appends exactly one INSTANCE_PINS_REBOUND event carrying ref, prior_version, new_version, actor and reason for each CHANGED entry, and an entry whose requested version already matches contributes no payload entry"
+      - "a rebind naming a ref absent from the current effective pin set returns a distinct UnknownPinRef error and applies NONE of the entries -- verified by reading the effective pin set back and confirming it is unchanged, including for the entries that were individually valid"
+      - "a rebind against a COMPLETED, CANCELLED or ERROR instance returns a distinct InstanceNotRebindable error, with each of the three statuses tested"
+      - "a rebind with a missing or empty reason, an empty entries list, and a malformed entry each return a distinct invalid-input error"
+      - "after a rebind, REQ-059's effective pin set reflects the new versions and REQ-053's reconstruction derives the same set from INSTANCE_STARTED plus INSTANCE_PINS_REBOUND, with no catalog read"
+      - "lock contention surfaces as a distinct ConcurrentModification error rather than blocking, and the moduledoc states that ERROR (not a non-existent FAILED status) is the terminal status PIN-05's text refers to"
+    depends_on: [REQ-059]
+
+  - id: REQ-061
+    title: Execution error handling (instance.zig setInstanceError, EE-10)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Port src/engine/instance.zig's InstanceStore.setInstanceError() (per
+      src/design/engine.md "Section EE-10: Execution Error Handling", L4571)
+      as set_instance_error/N -- the single, shared path every engine-internal
+      failure funnels into. Split out of REQ-052 (which keeps EE-08
+      cancellation): EE-08 is caller-initiated and drives to a terminal
+      CANCELLED, while this requirement is engine-internal and halts the
+      instance NON-terminally at ERROR, pending an operator retry or discard.
+      - Sets status to ERROR and appends an EXECUTION_ERROR event atomically
+      (EE-10 AC4), carrying error type, the affected node or field, a
+      human-readable reason, AND the instance variable state at the time of
+      the error (EE-10 AC1/AC5 -- an operator must be able to diagnose without
+      replaying the instance, so the variable snapshot is load-bearing, not
+      optional decoration).
+      - This is deliberately a shared sink with several callers, which is why
+      it is its own requirement rather than duplicated logic in each: REQ-050's
+      no-matching-gateway-edge-and-no-default case, REQ-049's
+      schema-violation-on-merge case, REQ-056's exhausted-service-task-retries
+      case, REQ-057's plugin-ERROR-outcome case, and REQ-062's four SPC-01
+      sub-process interface violations. Each caller supplies its own error
+      type and affected node; the transition-to-ERROR, the event shape, and
+      the atomicity are this requirement's. R-Co models exactly this as a
+      single setInstanceError() with a SetInstanceErrorArgs struct and an
+      error-code mapping (instance.zig ~L3078, with the code table at ~L4067)
+      -- port that shape rather than scattering ad-hoc error writes.
+      - An instance in ERROR rejects task completion with a distinct conflict
+      error (EE-10 AC2) and STAYS in ERROR until an operator retries or
+      discards it (EE-10 AC3). That operator retry/discard path is R-Co's
+      OBS-05 dead-letter API (src/dlq/, S6 operational-cross-cutting plus S4's
+      route layer) -- explicitly out of this stage's scope. Leave a named hook
+      and state the boundary; do NOT build a partial DLQ.
+      - Two concurrent operations that both trigger EE-10 on one instance: the
+      first to commit wins, the second sees status ERROR and is rejected
+      (EE-10 edge case).
+      - ERROR is NOT terminal in the way CANCELLED and COMPLETED are: REQ-060's
+      pin rebind treats it as non-rebindable and REQ-052's cancellation treats
+      CANCELLED/COMPLETED as already-finished, but an operator action can
+      still move an instance out of ERROR once S6 lands. State that
+      distinction explicitly in the moduledoc -- reading ERROR as terminal is
+      the easy mistake, and REQ-023's status enum already carries all four
+      values.
+    acceptance_criteria:
+      - "an EXECUTION_ERROR event carries error type, affected node or field, a human-readable reason, and the instance variable map as it stood at the moment of the error -- all four verified by reading the event payload back"
+      - "the status flip to ERROR and the EXECUTION_ERROR append commit together: forcing the append to fail leaves the instance status unchanged, verified by reading both back"
+      - "an instance in ERROR rejects task completion with a distinct conflict error and remains in ERROR afterwards"
+      - "at least three of the five calling paths (REQ-049 schema violation, REQ-050 gateway no-match, REQ-056 exhausted retries, REQ-057 plugin ERROR, REQ-062 sub-process interface violation) are demonstrated routing into this one function rather than writing their own ERROR transition, confirmed by inspection and by test"
+      - "two concurrent operations both triggering EE-10 on the same instance result in exactly one committed EXECUTION_ERROR and one rejection, run concurrently rather than sequentially"
+      - "the moduledoc names OBS-05's dead-letter retry/discard path (S6/S4) as the out-of-scope operator action, confirms no partial DLQ was built, and states that ERROR is non-terminal in a way CANCELLED and COMPLETED are not"
+    depends_on: [REQ-048, REQ-050]
+
+  - id: REQ-062
+    title: Sub-process invocation runtime half (instance.zig SPC-01 -- child start, parent-token wait, completion propagation)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Port SPC-01's RUNTIME half from src/engine/instance.zig -- the half
+      shipped REQ-032 explicitly deferred to this stage. REQ-032's own
+      description and acceptance criteria state that SPC-01 "belongs to S3
+      (src/engine/ port) since it requires a running instance/token model that
+      doesn't exist yet" and name src/engine/instance.zig as its future
+      integration point; REQ-032 ported only the SPC-02 definition-time half
+      (parse_interface, validate_schema_shape). This requirement closes that
+      loop. Two requirements in this same batch already presuppose it:
+      REQ-044 ports Token.waiting_child_instance_id, and REQ-059 AC6 requires
+      child-instance pin inheritance -- neither has a child-creation path to
+      hang off without this.
+      Port (R-Co source paths verified directly against
+      src/engine/instance.zig and src/engine/transition.zig):
+      - Child instance creation: createWithParentInheritance() (~L562, whose
+      own comment states it is "called only from
+      startSubProcessesForPendingEventsInTx() -- never exposed on the public
+      API surface"), driven by startSubProcessesForPendingEventsInTx()
+      (~L4668). Port that same non-public shape: sub-process child creation is
+      an internal engine path, not a second public start entry point
+      alongside REQ-045's create/1.
+      - The sub_process_start PendingEvent that REQ-044's transition kernel
+      emits when a token enters a SUB_PROCESS node (transition.zig's
+      processNodeEntry SUB_PROCESS branch, which returns early if the parent
+      token is already waiting on a child), and its consumption here.
+      - The parent-token wait: the token's waiting_child_instance_id is set
+      while the child runs and cleared on the sub_process_completed event
+      (transition.zig ~L897 handles that event; the token-copy note at ~L678
+      records a real bug, R-Co's GH #428, where waiting_child_instance_id was
+      dropped during token copying -- port the field preservation carefully,
+      since losing it silently strands the parent forever).
+      - buildSubProcessChildInitialVars() (~L4544): SPC-01's input filtering.
+      When the SUB_PROCESS node declares an interface, ONLY the named inputs
+      are copied into the child's initial variable map, each validated against
+      its json_schema first; when it declares none, EXT-05 behaviour applies
+      unchanged (the full parent variable map is copied). Use REQ-032's
+      already-shipped parse/validate functions for the interface itself rather
+      than re-parsing it.
+      - Completion propagation: on child COMPLETED, only the variables named
+      in interface.outputs merge into the parent per REQ-049's EE-09 merge;
+      every other variable the child produced is DISCARDED, not merged. With
+      no declared interface, the full child map merges back (EXT-05).
+      - The four SPC-01 failure modes, each a distinct error routing into
+      REQ-061's EE-10 path (instance.zig's error enum at L258-272 and the code
+      mapping at L4147-4155): SUB_PROCESS_MISSING_REQUIRED_INPUT,
+      SUB_PROCESS_INPUT_SCHEMA_VIOLATION (both at activation -- the parent
+      goes to ERROR and NO child instance is created, so no orphan),
+      SUB_PROCESS_MISSING_REQUIRED_OUTPUT, SUB_PROCESS_OUTPUT_SCHEMA_VIOLATION
+      (both at completion -- the parent goes to ERROR and the merge is not
+      applied, not partially applied).
+      RELATIONSHIP TO REQ-059: a child instance inherits its parent's pin set
+      (PIN-04 AC2/AC3), which REQ-059 already specifies -- and
+      createWithParentInheritance() is the function that carries it. This
+      requirement owns child creation and the interface contract; REQ-059 owns
+      what the pin entries contain and how conflicts are recorded. Neither
+      should re-implement the other's half; state the seam in the moduledoc.
+      SCOPE BOUNDARY: R-Co's EE-08 documents that cancelling a parent does NOT
+      cancel its child -- port that documented behaviour rather than inventing
+      a cascade. No HTTP surface is added: sub-processes are started by the
+      engine, never by a route. There is no public sub-process start endpoint
+      to defer to S4 in the first place -- say so in the moduledoc, so a later
+      reader does not go looking for one.
+    acceptance_criteria:
+      - "a token entering a SUB_PROCESS node with a declared interface creates exactly one child instance whose initial variable map contains ONLY the declared inputs -- a parent variable not named in inputs is demonstrably absent from the child"
+      - "a SUB_PROCESS node with no declared interface copies the full parent variable map to the child (EXT-05 behaviour preserved), demonstrated by an explicit test alongside the filtered case"
+      - "each of the four SPC-01 failure modes has its own test and its own distinct error: the two activation failures leave ZERO child instances created (verified by counting instance rows), and the two completion failures leave the parent's variable map unmodified (no partial merge)"
+      - "on child completion with a declared interface.outputs, only the named outputs merge into the parent via REQ-049's merge, and a child variable not named in outputs is demonstrably absent from the parent afterwards"
+      - "the parent token's waiting_child_instance_id is set while the child runs and cleared on completion, and it survives a transition that copies tokens for an unrelated reason -- an explicit regression test for R-Co's GH #428 field-dropping bug"
+      - "child instance creation is not reachable through REQ-045's public create/1 path, matching R-Co's internal-only createWithParentInheritance shape, confirmed by inspection and stated in the moduledoc"
+      - "cancelling a parent instance does not cancel its running child, matching R-Co's documented EE-08 behaviour, demonstrated by an explicit test rather than assumed"
+    depends_on: [REQ-061, REQ-049, REQ-032]

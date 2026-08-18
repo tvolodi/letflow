@@ -1,5 +1,5 @@
 {
-  "_comment": "Per-run lock/status registry backing docs/agents/ORCHESTRATOR.md \u00a77's owned_modules collision check and AGENT_SYSTEM.md \u00a77's pre-start check. Append-only per HANDOFF_PROTOCOL.md \u00a75 -- never shrink, never regenerate wholesale. Created 2026-08-16 to close ISS-0010 (this file had never existed; REQ-015 through REQ-021 all ran and merged without it). Entries below for REQ-018/019/020/021 are a best-effort backfill reconstructed from each run's own handoffs/<run_id>/step-*.json files and docs/status/requirement_status.yaml, not live-recorded at the time -- see each entry's backfilled: true flag. Every run listed is already merged to main (Step Final PASS), so all are status COMPLETED with released_lock: true; none represent an active lock.",
+  "_comment": "Per-run lock/status registry backing docs/agents/ORCHESTRATOR.md §7's owned_modules collision check and AGENT_SYSTEM.md §7's pre-start check. Append-only per HANDOFF_PROTOCOL.md §5 -- never shrink, never regenerate wholesale. Created 2026-08-16 to close ISS-0010 (this file had never existed; REQ-015 through REQ-021 all ran and merged without it). Entries below for REQ-018/019/020/021 are a best-effort backfill reconstructed from each run's own handoffs/<run_id>/step-*.json files and docs/status/requirement_status.yaml, not live-recorded at the time -- see each entry's backfilled: true flag. Every run listed is already merged to main (Step Final PASS), so all are status COMPLETED with released_lock: true; none represent an active lock.",
   "runs": [
     {
       "run_id": "WF02-REQ018-20260816",
@@ -117,7 +117,7 @@
         "handoffs/WF02-REQ021-20260816/step-06-doc-updater.json",
         "PR #41 (merged)"
       ],
-      "note": "This is the only run of the four with a complete on-disk handoff trail (step-01 through step-06), though registry.json itself was still never updated live during the run -- the gap ISS-0010 describes. This entry is the first live-accurate backfill; future runs should update this file directly per HANDOFF_PROTOCOL.md \u00a74 step 4 rather than requiring another backfill."
+      "note": "This is the only run of the four with a complete on-disk handoff trail (step-01 through step-06), though registry.json itself was still never updated live during the run -- the gap ISS-0010 describes. This entry is the first live-accurate backfill; future runs should update this file directly per HANDOFF_PROTOCOL.md §4 step 4 rather than requiring another backfill."
     },
     {
       "run_id": "WF02-REQ022-20260816",
@@ -138,7 +138,7 @@
       "backfilled": false,
       "queue_task_id": 36,
       "queue_agent_id": "tvolodi-orch",
-      "note": "Claimed live via letflow-queue get_next_task (not the requirements.yaml fallback) -- first run since the queue's S2 backlog was registered this session. Updated live per HANDOFF_PROTOCOL.md \u00a74 step 4, not backfilled. Step 5 (RELEASE-VALIDATOR) PASSed (handoffs/WF02-REQ022-20260816/step-05-release-validator.json); Step 6 (DOC-UPDATER) flipped docs/requirements.yaml REQ-022 to done and appended the done event. Step Final (ELIXIR-DEV): origin/main had moved (56b7540, TASK_QUEUE S2-backlog registration) but was already an ancestor of this branch's HEAD, so the rebase was a no-op with zero conflicts; mix compile --warnings-as-errors and mix test (146/146) re-verified green post-fetch; pushed, opened PR #66, squash-merged (--delete-branch), and returned to a clean main at da73c15. No CI existed to wait on (.github/workflows/ absent, REQ-013 still pending) -- proceeded per GIT_MERGE.md's documented interim behavior for that case. Lock released (released_lock: true) and run marked COMPLETED."
+      "note": "Claimed live via letflow-queue get_next_task (not the requirements.yaml fallback) -- first run since the queue's S2 backlog was registered this session. Updated live per HANDOFF_PROTOCOL.md §4 step 4, not backfilled. Step 5 (RELEASE-VALIDATOR) PASSed (handoffs/WF02-REQ022-20260816/step-05-release-validator.json); Step 6 (DOC-UPDATER) flipped docs/requirements.yaml REQ-022 to done and appended the done event. Step Final (ELIXIR-DEV): origin/main had moved (56b7540, TASK_QUEUE S2-backlog registration) but was already an ancestor of this branch's HEAD, so the rebase was a no-op with zero conflicts; mix compile --warnings-as-errors and mix test (146/146) re-verified green post-fetch; pushed, opened PR #66, squash-merged (--delete-branch), and returned to a clean main at da73c15. No CI existed to wait on (.github/workflows/ absent, REQ-013 still pending) -- proceeded per GIT_MERGE.md's documented interim behavior for that case. Lock released (released_lock: true) and run marked COMPLETED."
     },
     {
       "run_id": "WF02-REQ028-20260816",
@@ -319,7 +319,7 @@
       "queue_task_id": 59,
       "queue_agent_id": "hetzner-orch",
       "worktree": "/home/tvolodi/letflow (Hetzner host ubuntu-16gb-nbg1-1)",
-      "note": "Doc-only rationale-gap fix (ISS-0020, GH#76): three non-blocking gaps REVIEWER filed during REQ-023's Step 2d gate (which PASSED). Handled directly by ORCH under ORCHESTRATOR.md \u00a710's sizing exception (scoped, low-ambiguity, exact required content specified by the issue's own description), but still obtained independent REVIEWER sign-off before committing rather than skipping validation -- REVIEWER PASSed after independently re-verifying all three claims against actual schema/migration code and empirically re-testing the corrected \u00a72.4 mechanism claim in this environment, flagging one non-blocking phrasing tightening applied before commit. Zero implementation code changed. mix compile --warnings-as-errors clean, mix format --check-formatted clean, mix test 4 properties + 306 tests 0 failures, both pre-merge and re-verified again on main's actual merged tip (985ef74) post-merge."
+      "note": "Doc-only rationale-gap fix (ISS-0020, GH#76): three non-blocking gaps REVIEWER filed during REQ-023's Step 2d gate (which PASSED). Handled directly by ORCH under ORCHESTRATOR.md §10's sizing exception (scoped, low-ambiguity, exact required content specified by the issue's own description), but still obtained independent REVIEWER sign-off before committing rather than skipping validation -- REVIEWER PASSed after independently re-verifying all three claims against actual schema/migration code and empirically re-testing the corrected §2.4 mechanism claim in this environment, flagging one non-blocking phrasing tightening applied before commit. Zero implementation code changed. mix compile --warnings-as-errors clean, mix format --check-formatted clean, mix test 4 properties + 306 tests 0 failures, both pre-merge and re-verified again on main's actual merged tip (985ef74) post-merge."
     },
     {
       "run_id": "WF03-ISS0011-20260817",
@@ -771,6 +771,47 @@
       "queue_agent_id": "tvolodi-orch",
       "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
       "note": "Promotion assertion re-run orchestration (assertion_rerun.zig, PRM-06/07), the last pending S2 requirement -- stage-2-event-store-definitions.md's header now lists all of REQ-022 through REQ-042 as done. New tenant-scoped promotion_assertion_runs table, FK to promotion_reviews, built on REQ-039's already-shipped SandboxPool/FixtureLoader. Full producer/validator chain via genuinely independent dispatched agents (all on Sonnet), all PASS with one real rework cycle: CODE-DESIGN-VALIDATOR FAILed the design once at Step 1b, not on an algorithm defect but on a genuine weak-model-tolerance gap -- AC4/AC6 require literal moduledoc TEXT content, and the original design deferred that prose to ELIXIR-DEV's own synthesis rather than specifying it verbatim. CODE-DESIGNER's rework added a dedicated verbatim-moduledoc-text section (following REQ-039's own precedent), independently re-verified byte-for-byte correct by CODE-DESIGN-VALIDATOR's re-review. ORCH independently confirmed the design's core semantic reading (a double-run non-determinism self-consistency check, NOT an oracle comparison) directly against R-Co's real assertion_rerun.zig source before dispatching the design gate, and confirmed R-Co's own reference implementation is itself an unfinished stub. ELIXIR-DEV self-caught and fixed one real bug during its own verification (Repo.get_by(..., prefix: prefix) silently merging prefix into the WHERE clause instead of passing it as a query option), independently re-verified fixed by both SECURITY-REVIEWER and REVIEWER. REVIEWER also caught and corrected an inaccuracy in ORCH's own dispatch briefing (about what the try/rescue crash-safety path should record on a rescued exception), verifying against the authoritative design doc rather than the flawed instruction -- exactly the kind of independent verification this pipeline exists for. TEST-DESIGN-VALIDATOR (Step 3b) performed real mutation testing -- broke the double-run non-determinism check and the try/rescue crash-safety span, confirmed each broke exactly its targeted test, then reverted cleanly. Step Final rebase was clean (16 commits, zero conflicts) despite landing after a concurrent host's ISS-0029 fix. mix compile --warnings-as-errors clean, mix test 673/673 (4 properties, 669 tests) on the actual merged tip, re-verified by ORCH directly both pre- and post-merge. Bookkeeping note: this run's own Step 00 never appended a 'started' event to docs/status/requirement_status.yaml (same recurring gap as REQ-031/038) -- worth fixing in this session's own habits going forward, not just noting per-run."
+    },
+    {
+      "run_id": "WF01-S3-EXPANSION-20260818",
+      "workflow_id": "WF-01",
+      "requirement_ids": [
+        "REQ-043",
+        "REQ-044",
+        "REQ-045",
+        "REQ-046",
+        "REQ-047",
+        "REQ-048",
+        "REQ-049",
+        "REQ-050",
+        "REQ-051",
+        "REQ-052",
+        "REQ-053",
+        "REQ-054",
+        "REQ-055",
+        "REQ-056",
+        "REQ-057",
+        "REQ-058",
+        "REQ-059",
+        "REQ-060",
+        "REQ-061",
+        "REQ-062"
+      ],
+      "stage": "S3",
+      "status": "COMPLETED",
+      "owned_modules": [
+        "docs/requirements.yaml",
+        "docs/migration/stage-3-instance-engine.md"
+      ],
+      "lock_acquired_at": "2026-08-18T03:39:40Z",
+      "lock_released_at": "2026-08-18T04:17:22Z",
+      "released_lock": true,
+      "last_known_step": "Step 2 (REQ-VALIDATOR hard gate) PASS after one rework cycle. 20 pending S3 requirements REQ-043..REQ-062 ready for WF-02. No git wrapper -- WF-01 writes only to docs/, per WF-01's own Step 00/Final exemption.",
+      "backfilled": false,
+      "queue_task_id": null,
+      "queue_agent_id": "tvolodi-orch",
+      "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
+      "note": "Stage 3 (instance-engine) requirement expansion, triggered by S2 (REQ-022..042) reaching all-done. FALLBACK MODE for task selection: queue-test.ai-dala.com/health returns 200 but $QUEUE_AUTH_TOKEN is unset in this session, so letflow-queue could not be called; stage expansion is not a queue-dispatched implementation task, and no queue tasks were registered for REQ-043..062 -- a later session with the token must register them before WF-02 picks any up. Decomposed R-Co's ~13k-line src/engine/ along its own EE-01..EE-12 behavioural seams plus EXT-01/EXT-03/PIN-01..05/SPC-01, NOT one-requirement-per-file (instance.zig 5550 lines spans 7 EE requirements). REQ-VALIDATOR FAILed the first pass with 3 blocking findings, all real and all independently re-verified by ORCH against R-Co source before rework was routed: (1) REQ-050 rested on a FALSE premise that no reference implementation exists for gateway condition evaluation -- R-Co's src/expr/ (7 files) is wired into transition.zig's evaluateGatewayCondition() at L1118 with catch-false semantics, and vendor/cel/cel.zig is a real 13877-byte evaluator, not a stub; the stale 'stub' wording lives in engine.md itself at L451/L1005/L1020 (ORCH confirmed all three lines directly), so the stage's own primary design doc actively misleads on this point -- future S3 work should distrust engine.md's CEL statements specifically. (2) REQ-052 bundled EE-08 cancellation with EE-10 error handling at 1324 design-doc lines vs the 644-line REQ-044 baseline; split into REQ-052 (EE-08, 658) + REQ-061 (EE-10, 666), with four dependents rewired. (3) SPC-01's runtime half was silently missing although shipped REQ-032's own text and acceptance criteria explicitly hand it to S3 naming src/engine/instance.zig -- added as REQ-062, which also gives REQ-044's Token.waiting_child_instance_id and REQ-059 AC6's pin inheritance the child-creation path they presupposed, and turns R-Co's GH#428 token-copy bug into a required regression test. REQ-051 (EE-06+EE-07) was scrutinised for the same oversizing and deliberately NOT split -- 661 lines, and EE-07's cancelled-branch-exclusion rule is unstateable without the split. transition_source_embed.zig deliberately gets no requirement (Zig @embedFile module-root shim, no Elixir equivalent), stated explicitly rather than dropped. Deferred with reasons: HTTP routes to S4, Lua/WASM runtimes to S5, SCH-03 timers and OBS-05 DLQ to S6, PIN-01 AC1/AC2 + PIN-03 AC3 unsatisfiable until service_catalog (S6) and PLC-01 exist (R-Co holds these at TESTED not RELEASED for the same reason). Append-only verified by ORCH via git diff: zero removed lines in requirements.yaml. ORCH independently re-verified structure after each pass (61 requirements parse, zero duplicate ids, zero orphans, zero dependency cycles) and spot-checked the validator's own citations against R-Co source rather than accepting the PASS at face value. ORCH corrected one stale 'The 18 requirements' count in the stage doc left over from the rework. requirement_status.yaml intentionally NOT appended: WF-01 does not flip status, and these 20 are pending, not started."
     }
   ]
 }

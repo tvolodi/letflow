@@ -1,0 +1,60 @@
+{
+  "handoff_id": "a7d1e4c2-0001-4b3a-8e21-s3expansionstep01",
+  "run_id": "WF01-S3-EXPANSION-20260818",
+  "workflow_id": "WF-01",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "REQ-ANALYST",
+  "file": "handoffs/WF01-S3-EXPANSION-20260818/step-01-req-analyst.json",
+  "created_at": "2026-08-18T03:39:40Z",
+  "started_at": "2026-08-18T03:39:40Z",
+  "completed_at": "2026-08-18T04:09:01Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/migration/README.md",
+      "docs/migration/stage-3-instance-engine.md",
+      "docs/migration/stage-2-event-store-definitions.md",
+      "docs/anti-patterns.md",
+      "c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\engine\\",
+      "c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\design\\engine.md",
+      "c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\docs\\requirements.yaml"
+    ],
+    "owned_modules": [
+      "docs/requirements.yaml",
+      "docs/migration/stage-3-instance-engine.md"
+    ]
+  },
+  "task": {
+    "description": "WF-01 Step 1: expand Stage 3 (instance-engine) into REQ-xxx entries in docs/requirements.yaml. S2 (REQ-022..REQ-042) is fully done, so S3 is now the active stage and is eligible for expansion per docs/migration/README.md's 'Requirement expansion' rule. Append new requirements starting at REQ-043 (verify the highest existing REQ id across the WHOLE file first -- note REQ-101..108 exist as cancelled MVP-1 entries, so the next free id is NOT simply max+1 without checking). Also update docs/migration/stage-3-instance-engine.md's header line ('Status: not started ... Requirements: none expanded yet') to list the expanded requirement ids, matching how stage-2-event-store-definitions.md's header reads.",
+    "acceptance_criteria": [
+      "Every new requirement has id, title, owner, status: pending, stage: S3, description, >=2 concrete acceptance_criteria, depends_on -- same schema and prose style as the existing REQ-022..REQ-042 S2 block (read several in full first; match their depth, R-Co-path citation habit, and explicit OPEN QUESTION flagging convention)",
+      "Scope covers R-Co's src/engine/ (11 files) as stage-3-instance-engine.md defines it, decomposed along R-Co's own EE-01..EE-12 requirement ids (see R-Co docs/requirements.yaml, which carries full per-requirement acceptance criteria, and src/design/engine.md whose sections map 1:1: EE-01 Start Instance, EE-02 Pure Transition Function, EE-03 Task Activation, EE-04 Complete Task, EE-05 Exclusive Gateway, EE-06 Parallel Split, EE-07 Parallel Join, EE-08 Cancellation, EE-09 Variable Scoping, EE-10 Execution Error Handling, EE-11 State Reconstruction, EE-12 Concurrent Instance Safety), plus the non-EE engine files: snapshot_writer.zig (ISS-601 periodic state snapshots), service_task.zig (EXT-01), plugin_interface.zig + plugin_registry.zig (EXT-03), pin_resolver.zig (PIN-01..04), pin_rebind.zig (PIN-05), lua_script_audit.zig (LUA-07 minimal audit path)",
+      "Each requirement is sized to ONE agent turn -- R-Co's engine is ~13k lines of Zig (instance.zig alone is 5,550 lines, transition.zig 3,323, reconstruction.zig 1,646), so a 1:1 file-to-requirement mapping is WRONG and would produce oversized entries. Split along behavioral seams (EE-* sections) and chain them via depends_on, exactly as the S2 block split src/definition/'s 16 files into 21 requirements",
+      "depends_on references are real and genuinely required: new S3 requirements will depend on shipped S2 ids (REQ-023/025/026 event store, REQ-027 definition core schema + instance_definition_snapshots, REQ-028/029 graph validators, REQ-030 definition store CRUD, REQ-032 sub-process interface definition-time half, REQ-033 definition snapshot store) and on each other. No orphaned ids",
+      "The existing early-code generalization path is addressed explicitly rather than ignored: stage-3-instance-engine.md instructs that this stage GENERALIZES lib/letflow/process_instance.ex, lib/letflow/parallel_approval.ex, and lib/letflow/instance_supervisor.ex rather than starting fresh -- read all three modules first, and make the requirement(s) that supersede/absorb them say so concretely (which module is replaced, extended, or retired)",
+      "stage-3-instance-engine.md's two Early findings are honoured, not silently overridden: (1) hold the generalized engine to real :gen_statem per-state callbacks and real supervised isolation, not a GenServer hand-simulating a state machine; (2) do NOT assume process-per-instance by default -- the finding says its case is strongest for service task dispatch, plugin registries, timers, backpressure, and expensive-to-reconstruct in-memory state. Where a requirement faces the process-vs-row choice, flag it as an explicit OPEN QUESTION for CODE-DESIGNER (following the precedent set by REQ-039/REQ-040's descriptions) rather than pre-deciding it in the requirement text",
+      "No contradiction with any docs/migration/decisions/*.md record (read the directory: 0001-web-framework, 0002-oidc, 0003-ecto-schema-strategy, 0004-humanless-pipeline). In particular S3 tables must follow 0003 + REQ-022's schema-per-tenant mechanism unless there is a stated, R-Co-grounded reason to classify one as GLOBAL -- and if so, flag it as an OPEN QUESTION the way REQ-041's description does",
+      "Requirements stay inside S3's scope boundary: HTTP routes/controllers belong to S4 (api-surface), and the actual Lua/WASM runtime hosts belong to S5 (scripting-and-plugins). lua_script_audit.zig's engine-side audit path and plugin_registry/plugin_interface's registry contract ARE in S3, but the script/plugin execution runtimes they call into are NOT -- state that boundary explicitly in the affected requirements",
+      "Append-only: do not reorder, rewrite, or renumber any existing requirement entry",
+      "Report the full list of new REQ ids with one-line titles in your handoff result summary, plus explicitly note any R-Co engine behavior you deliberately deferred out of S3 and why"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Expanded Stage 3 (instance-engine) into 18 new requirements, REQ-043..REQ-060, appended to docs/requirements.yaml. Verified the true highest existing id across the whole file before numbering: max is REQ-108 (cancelled MVP-1 milestone, REQ-101..108), but the migration-stage sequence ends at REQ-042, so REQ-043 is the next free id in that sequence and REQ-043..060 collide with nothing (YAML-parsed duplicate check returned zero). Decomposed along R-Co's own EE-01..EE-12 behavioural seams rather than 1:1 per file -- instance.zig (5550 lines) alone spans EE-01/03/04/08/09/10/12 and is split across REQ-045/047/048/049/052/055; transition.zig (3323) spans EE-02/05/06/07 and is split across REQ-044/050/051. Non-EE engine files map to REQ-054 (snapshot_writer.zig, ISS-601), REQ-056 (service_task.zig, EXT-01), REQ-057 (plugin_interface.zig + plugin_registry.zig, EXT-03), REQ-058 (lua_script_audit.zig, LUA-07 minimal path), REQ-059 (pin_resolver.zig, PIN-01..04), REQ-060 (pin_rebind.zig, PIN-05). transition_source_embed.zig deliberately gets NO requirement (Zig @embedFile module-root shim, no Elixir equivalent) -- stated explicitly in both the requirements.yaml S3 header comment and stage-3-instance-engine.md rather than silently dropped. All 18 entries carry the full existing schema (id/title/owner/status/stage/description/acceptance_criteria/depends_on) with 4-8 concrete acceptance criteria each; every depends_on reference resolves to a real id (checked programmatically, zero orphans). Append-only verified by diffing the first 2050 lines against a pre-edit backup: byte-identical. Also updated docs/migration/stage-3-instance-engine.md's header to list all 18 ids and added Scope-boundary, Early-findings-mapping, and Decisions sections. || REWORK ITERATION 1 (2026-08-18T04:09:01Z), addressing REQ-VALIDATOR FAIL. (1) REQ-050 premise corrected -- I verified the validator's finding directly rather than accepting it: vendor/cel/cel.zig is a real 13,877-byte evaluator with pub fn evaluate() at L391, and production evaluation lives in src/engine/transition.zig's evaluateGatewayCondition() (~L1118) translating CEL syntax to src/expr/ (7 files). My 'no reference implementation to port' claim was wrong; it came from stale wording in R-Co's src/design/definition.md AND engine.md's own EE-05 section (L451/1005/1020), retired by R-Co commit 480b7dc5. REQ-050 now ports evaluateGatewayCondition() + the translateCelToExpr rewrite rules + hasCelUnsupportedFeatures()'s boundary, with the catch-false-on-any-error rule identified as EE-05 AC4 itself; build/adopt framing and the decision-record flag removed; 3 new acceptance criteria added (unsupported-feature catch-false, direct translation-rule tests, I/O-free confirmation). Same correction made in stage-3-instance-engine.md and in requirements.yaml's S3 header comment. (2) REQ-052 split: REQ-052 now EE-08 cancellation only (terminal, caller-initiated); NEW REQ-061 is EE-10 execution error handling (non-terminal, engine-internal, shared sink for 5 caller paths). Split rationale recorded in both requirements and the stage doc, including why REQ-051 was deliberately NOT split. (3) NEW REQ-062 ports SPC-01's runtime half -- verified in instance.zig (error enum L258-272, createWithParentInheritance L562, startSubProcessesForPendingEventsInTx L4668, buildSubProcessChildInitialVars L4544, code mapping L4147-4155) and transition.zig (sub_process_completed L897, GH#428 token-copy bug L678). Covers child creation, parent-token wait, interface-filtered I/O propagation, and the 4 SPC-01 failure modes. (4) MINOR: validate_payload/2 -> /3 in REQ-049 (2 occurrences; shipped REQ-024/REQ-025's own citations left untouched per append-only); REQ-054 now states it EXTENDS REQ-053's reconstruct path rather than reading standalone. Dependency edges rewired after the split: REQ-053 -> [REQ-052, REQ-061, REQ-026] (replay must cover both CANCELLED and ERROR); REQ-056 -> [REQ-061]; REQ-057 -> [REQ-061]; REQ-058 -> [REQ-045] (lua audit touches neither terminal path). Seven prose cross-references citing REQ-052's EE-10 path repointed to REQ-061; the one citing REQ-052's EE-08 branch-cancellation left as-is. Re-validated: 61 requirements parse, 0 duplicate ids, 0 orphaned depends_on, 0 dependency cycles, all 20 new S3 entries carry the full schema with >=4 acceptance criteria. Append-only re-confirmed by diffing the first 2050 lines against the pre-edit backup: byte-identical, so REQ-001..042 and REQ-101..108 are untouched.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/migration/stage-3-instance-engine.md"
+    ],
+    "issues": [],
+    "next_action": "Route to REQ-VALIDATOR"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

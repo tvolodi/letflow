@@ -1,0 +1,51 @@
+{
+  "handoff_id": "c4b2e5f8-0a3d-4e7b-9c2f-2d3e4f5a6b7c",
+  "run_id": "WF03-ISS0047-20260818",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0047-20260818/step-02b-code-design-validator.json",
+  "created_at": "2026-08-18T18:45:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0047-20260818/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0047-20260818/step-02-code-designer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss-0047-username-race-conflict-target.md",
+      "handoffs/WF03-ISS0047-20260818/step-01-issue-fixer.json",
+      "lib/letflow/identity.ex",
+      "test/letflow/identity_test.exs"
+    ],
+    "owned_modules": ["lib/letflow/identity.ex", "test/letflow/identity_test.exs"]
+  },
+  "task": {
+    "description": "Validate CODE-DESIGNER's design at lib/letflow/design/iss-0047-username-race-conflict-target.md as the hard gate before ELIXIR-DEV implements it. The design proposes replacing insert_or_fetch/4's {:error, %Ecto.Changeset{}} passthrough with a three-way branch using new helpers username_unique_conflict?/1, get_by_username/2, and identity_matches?/2 to distinguish an identical-identity race (fall through to re_select_on_conflict/3) from a genuine unrelated username collision (must keep propagating the error, per the existing passing test at test/letflow/identity_test.exs:379-394).",
+    "acceptance_criteria": [
+      "Design covers ISS-0047's full failure scenario (identical-identity race resolves cleanly) without ambiguity ELIXIR-DEV would have to resolve by guessing.",
+      "Design does not silently break or weaken the existing genuine-collision test at identity_test.exs:379-394 -- verify by reading that test directly, not by trusting the design doc's own claim.",
+      "Design contains no implementation code (interfaces/@specs/logic description only).",
+      "Design's claim that Postgres ON CONFLICT permits only one arbiter per INSERT statement (ruling out option (a), a second on_conflict clause) is correct -- verify independently, don't just accept it.",
+      "Design's claim that pattern-matching on the changeset's returned :unique constraint error (not the message string) is reliable, not the forbidden naive insert-then-rescue pattern the module's own comment prohibits -- verify the distinction actually holds.",
+      "Design specifies a new :auto-mode two-independent-connection regression test, since the existing :manual-mode test structurally cannot exercise this path."
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0047-20260818",
+      "commit_sha_list": []
+    }
+  }
+}

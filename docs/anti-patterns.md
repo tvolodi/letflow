@@ -405,3 +405,50 @@ sees why the name doesn't match the original design doc. This is the same
 "confirm what's on disk, don't trust the branch's own narrative" discipline the
 ISS-0036 incident above establishes, applied to module names instead of issue
 numbers.
+
+## A rebase add/add conflict on `docs/issues/ISS-NNNN.yaml` can land without git ever flagging it as CONFLICT
+
+**Found:** 2026-08-18, ORCH post-merge independent verification of WF03-ISS0050-20260818
+(PR #193, merge commit `c9894b2`).
+
+Two concurrent hosts independently discovered and fixed the identical bug (a fourth
+occurrence of the 255-char ExUnit test-name class, `test/letflow/engine_test.exs:717-718`)
+within 16 minutes of each other, and each filed it as its own `docs/issues/ISS-0051.yaml`
+(same path, different content) — the same class of numbering collision documented
+elsewhere in this file (ISS-0034/0035, ISS-0036/0037/0039, ISS-0042/0043, ISS-0043/0044-0045).
+`WF02-REQ047-20260818`'s commit (`c7a5d4a`) reached `main` first. `WF03-ISS0050-20260818`'s
+branch had its own `docs/issues/ISS-0051.yaml` commit created *before* REQ-047 merged, so
+Step Final's `git rebase origin/main` had to replay a commit that adds a file at a path
+`main` already had different content at — textbook add/add conflict shape. **But the
+Step Final agent's own handoff (`step-final-git-merge.json`) reported only one conflicted
+file (`handoffs/orchestrator.log`) and never mentioned `docs/issues/ISS-0051.yaml` at
+all** — yet the file that landed on `main` is `WF03-ISS0050-20260818`'s content, not
+`WF02-REQ047-20260818`'s, meaning REQ-047's own audit-trail record (and its `github_issue`
+cross-reference, GH#192) was silently dropped without ever being surfaced as something
+requiring resolution. GIT_MERGE.md's own conflict-count check
+(`git diff --name-only --diff-filter=U | wc -l`) would have caught this file if the agent
+had actually re-run it after resolving the reported conflict, rather than treating the
+rebase as fully clean once *a* conflict was resolved. This was only caught because ORCH,
+per this project's own "never trust a resolving run's own narrative" discipline, diffed
+the pre-merge blob (`git show <pre-merge-sha>:<path>`) against the post-merge file instead
+of trusting the Step Final handoff's summary.
+
+**Why this is easy to miss:** the rebase command's own exit code and the agent's own
+narration ("one conflict, resolved, tests green") both looked completely clean — nothing
+in the visible output distinguished "one conflict occurred and was the only one" from
+"one conflict was noticed and resolved, a second one existed and was resolved without
+being reported" (or, alternatively, resolved by a stale `git add -A`-style catch-all that
+silently staged an unresolved but no-longer-marked-`<<<<<<<`-visible file). Post-merge
+`mix test` passing gave no signal either, since both sides' fixes were code-equivalent —
+the lost content was pure audit-trail, not a behavior regression, so no test could ever
+have caught it.
+
+**Correct alternative:** after `git rebase --continue` reports success, re-run
+`git diff --name-only --diff-filter=U | wc -l` one more time as a hard check (must be
+`0`) before proceeding to push — do not rely on having "handled a conflict" once as proof
+none remain. When a run adds a new file under `docs/issues/` (or any other append-style
+directory this project treats as collision-prone), diff the specific file's pre-rebase
+and post-rebase blobs (`git show ORIG_HEAD:<path>` vs current) as a final check even when
+git reported the rebase as conflict-free for that path — a silently-applied patch that
+happened not to conflict textually can still be the wrong side's content in a genuine
+add/add scenario, and only a content diff (not the exit code) reveals it.

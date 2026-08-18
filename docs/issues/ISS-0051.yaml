@@ -1,56 +1,68 @@
 id: ISS-0051
-title: "Full test suite failed to compile: a fourth describe+test name pair exceeded ExUnit's 255-char combined limit (test/letflow/engine_test.exs)"
-discovered_by: ISSUE-FIXER
-discovered_in_run: WF03-ISS0050-20260818 (Step 1 diagnose -- full-suite reproduction attempt)
-discovered_at: "2026-08-18T21:37:12Z"
-severity: BLOCKER
+title: "test/letflow/engine_test.exs's AC6 describe+test name pair exceeded ExUnit's 255-char SystemLimitError threshold, blocking the entire suite's compilation (same class as ISS-0030/0033/0040/0049)"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ047-20260818 (Step 2a implementation)
+discovered_at: "2026-08-18T21:53:46Z"
+severity: MAJOR
 tags:
   - test-hygiene
-  - compile-error
-  - test-designer
+  - compilation-blocker
 description: >
-  While attempting to reproduce ISS-0050 (identity_migration_test.exs's
-  intermittent full-suite failure) by running `mix test` directly, the suite
-  failed to *compile* entirely with the same `SystemLimitError` class
-  documented in ISS-0049 and docs/anti-patterns.md's "TEST-DESIGNER writing
-  narratively-detailed describe/test names that exceed ExUnit's 255-char
-  combined limit" entry -- this is the fourth occurrence of this exact failure
-  class on this project, in a fifth/sixth location (ISS-0049 already covered
-  three pairs across two files; this is one more pair in a third file).
+  While implementing REQ-047, `mix test test/letflow/engine_test.exs` failed
+  to compile with `** (SystemLimitError) the computed name of a test ...
+  must be shorter than 255 characters, got: "test AC6 -- moduledoc names the
+  process-vs-row open question, cites the stage doc, leaves later engine
+  subsystems to their own decision names the question as this stage's
+  largest open design question and cites stage-3-instance-engine.md's second
+  Early finding"` at test/letflow/engine_test.exs:718.
 
-  Location: test/letflow/engine_test.exs:717-718 (REQ-045/EE-01 work), combined
-  `describe "AC6 -- moduledoc names the process-vs-row open question, cites the
-  stage doc, leaves later engine subsystems to their own decision"` + `test
-  "names the question as this stage's largest open design question and cites
-  stage-3-instance-engine.md's second Early finding"` measured at 259 characters
-  (`"test " <> describe <> " " <> test_name`), 4 over ExUnit's 255-char cap
-  (`ExUnit.Case.validate_test_name/1`). This blocked the entire suite (0 tests
-  could run) on this branch (identical on `origin/main` at commit a553674,
-  confirmed via `git diff origin/main --stat`, i.e. this is a pre-existing
-  defect on `main` itself, not something this branch introduced) -- discovered
-  and fixed by ISSUE-FIXER under core-directives.md's "Unblock-Everything"
-  directive (an unrelated compile error blocking the current task's own
-  acceptance criteria -- reproducing ISS-0050 requires a compiling, runnable
-  full suite) rather than left as a blocker for a separate run.
+  Confirmed pre-existing (not introduced by REQ-047's own diff) via `git
+  stash` -- the failure reproduces identically on the pre-change tree. This
+  is the fourth occurrence of the exact failure class documented in
+  docs/anti-patterns.md's "TEST-DESIGNER writing narratively-detailed
+  describe/test names" entry (ISS-0030, ISS-0033, ISS-0040, ISS-0049 all
+  the same root cause in different files) -- narratively-detailed
+  describe/test name pairs exceeding ExUnit's combined 255-char ceiling,
+  which fails the *whole file's* compilation rather than one test.
 
-  Fix: shortened the describe string to "AC6 -- moduledoc names the
-  process-vs-row open question" and the test string to "cites stage doc as
-  source of the open design question", moving the dropped narrative detail into
-  `#` comments immediately above each (preserving the original wording/citation
-  for a future reader), matching ISS-0049's own established fix shape. Verified
-  via `mix compile` (clean) and `mix test` (suite now runs; ISS-0050's own
-  target failure reproduced separately, unrelated to this fix).
+  Not caused by REQ-050/051's work directly as far as this run investigated
+  -- ISS-0050 (filed during REQ-045's Step 5) explicitly notes
+  test/letflow/engine_test.exs "passed in full" at that point, so this
+  describe/test pair was introduced sometime between REQ-045's merge and
+  REQ-047's Step 2a, most likely by REQ-050 or REQ-051's own TEST-DESIGNER
+  output (both landed gateway/hop-limit test coverage in this same file per
+  handoffs/registry.json's WF02-REQ051 note) -- not confirmed which commit,
+  not investigated further since this run's own scope is REQ-047.
 
-  Filed per "No Issue Left Local-Only" even though already resolved as part of
-  unblocking ISS-0050's diagnosis -- fourth occurrence of this class strongly
-  suggests TEST-DESIGNER and TEST-DESIGN-VALIDATOR need a mechanical
-  pre-commit-style length check (e.g. a short mix task or a check in
-  TEST-DESIGN-VALIDATOR's own gate checklist), not just documentation in
-  anti-patterns.md, since documentation alone has not prevented three prior
-  recurrences after the pattern was first identified.
+  Fixed inline by this run (blocking Step 4's full-suite mix test, per
+  core-directives.md's Unblock-Everything): shortened both the describe and
+  test strings to well under 200 combined chars, no behavioral change,
+  verified via `mix test test/letflow/engine_test.exs` -> 24 tests, 0
+  failures (all passing, same assertions, same coverage).
 affected_files:
   - test/letflow/engine_test.exs
-github_issue: null   # gh available and authenticated; not filed to GitHub per ISS-0049's own precedent for a same-session self-resolved blocker fix -- open to filing on request
 status: resolved
-resolved_in_run: WF03-ISS0050-20260818
-resolved_at: "2026-08-18T21:37:12Z"
+fixed_by: WF02-REQ047-20260818
+github_issue: https://github.com/tvolodi/letflow/issues/192
+reconciliation_note: >
+  A concurrent host (WF03-ISS0050-20260818, ISSUE-FIXER, discovered_at
+  21:37:12Z -- earlier than this run's own 21:53:46Z discovery, but merged to
+  main SECOND) independently found and fixed the exact same describe/test pair
+  and also filed it as its own docs/issues/ISS-0051.yaml. That run's Step Final
+  rebase (commit c9894b2, PR #193) silently overwrote this file with its own
+  content on the add/add path collision -- git did not flag it as a conflict.
+  Discovered by ORCH post-merge (2026-08-18T22:05:58Z) via independent re-read
+  of main's actual file content, same discipline as docs/anti-patterns.md's
+  ISS-0036 incident. Reconciled: this record restored as canonical ISS-0051
+  (chronologically first-merged to main keeps the number, per the
+  ISS-0043/44/45 precedent in docs/anti-patterns.md); the other run's own
+  record moved to docs/issues/ISS-0052.yaml with a matching cross-reference.
+  No content lost. Both fixes targeted the same lines with different but
+  equally-valid shortened strings; only one survived on disk (verified: the
+  version now on main matches WF03-ISS0050-20260818's specific wording, "AC6
+  -- moduledoc names the process-vs-row open question" / "cites stage doc as
+  source of the open design question") -- functionally equivalent outcome
+  either way (24/24 and 8/8 relevant test files passing on main post-merge),
+  so no further code change needed, this is a bookkeeping-only reconciliation.
+  GitHub issue #192 (still open) closed by ORCH as part of this reconciliation,
+  cross-referencing ISS-0052.

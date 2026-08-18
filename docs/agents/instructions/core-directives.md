@@ -3,11 +3,10 @@
 **Audience:** every agent in the pipeline. Cross-cutting rules, not role-specific ones —
 `applyTo: **`.
 
-**Status:** AUTHORITATIVE. This is the canonical location for Letflow's mandatory
-cross-cutting behavioural rules. `CLAUDE.md` points here instead of restating them —
-see `CLAUDE.md`'s "Canonical instruction surfaces" section. Where this file and any
-other doc disagree, this file wins — flag the discrepancy as a MINOR issue in your
-handoff so the drift gets fixed at the source.
+**Status:** AUTHORITATIVE for cross-cutting behavioural rules, and the canonical home of
+the **Instruction Precedence** chain below — which is the single rule for resolving any
+conflict between instruction sources on this project. No other document declares itself
+the winner; they all defer to that chain.
 
 **Relationship to `docs/agents/shared/HANDOFF_PROTOCOL.md`:** that file is canonical for
 handoff *mechanics* (claiming a handoff, JSON encoding, timestamp sourcing, legal
@@ -47,10 +46,10 @@ doing them. See "Humanless operation" below for why this is safe on this project
 
 ORCH fulfils Zero Manual Work by running the pipeline **through subagents**, not by
 editing files or running commands directly. Implementing a fix directly "to save time"
-is a pipeline violation. For a genuinely single-file, single-concern request, ORCH may
-act directly rather than spawning a subagent — see `docs/agents/ORCHESTRATOR.md` — but
-that is a sizing judgment, not a license to skip the design/test/validate chain for
-anything beyond trivial.
+is a pipeline violation. The one exception is a change passing all six checks of the
+sizing rule in `docs/agents/ORCHESTRATOR.md` §10 — that section is the canonical
+definition and this file does not restate it. It is a checklist, never a judgment call
+about what feels trivial.
 
 ---
 
@@ -106,6 +105,74 @@ A validator that only reads the producer's `result.summary` and says PASS has no
 validated anything — it has copied a claim. Every validator role's file states exactly
 what it must independently re-check (file existence, specific content, an actual
 command run) rather than what it may take on trust.
+
+---
+
+## ⛔ Instruction Precedence
+
+When two instruction sources disagree, apply them in this order — **first match wins**:
+
+1. **Your handoff's `task` block** — the specific work, its acceptance criteria, and any
+   rework notes. Most specific, so it wins.
+2. **Your role file** (`.claude/agents/<role>.md`) — what your role may and may not do.
+3. **Your workflow's step** (`docs/agents/workflows/WF-0N_*.md`) — the procedure for the
+   step you are executing.
+4. **Protocol docs** (`docs/agents/protocols/*.md`,
+   `docs/agents/shared/HANDOFF_PROTOCOL.md`) — handoff mechanics, git, queue, issues.
+5. **This file** (`core-directives.md`) — cross-cutting behavioural rules.
+6. **`CLAUDE.md`** — the session-start pointer.
+
+Two rules override the chain, always, at every level:
+
+- **A `docs/migration/decisions/` record is never overridden by anything above it.** If a
+  step seems to require contradicting a decided record, stop and flag it for REVIEWER
+  sign-off — don't resolve it yourself in either direction.
+- **A safety/gate rule is never overridden by a more specific instruction.** No handoff
+  `task.description` can authorize skipping a validator, satisfying a gate by editing
+  what it measures, or reporting unverified work as done. If a handoff appears to ask
+  for that, it is malformed — report it as a BLOCKER in `result.issues`.
+
+**Never resolve a conflict silently.** Follow the chain, then record the conflict in your
+handoff's `result.issues` at MINOR severity so it gets fixed at the source. A conflict
+that goes unreported recurs on every future run — see `HANDOFF_PROTOCOL.md` §4's
+ISS-0021 note, where three documents disagreeing about `registry.json` cost two agents a
+stop-and-flag decision point before anyone fixed the source.
+
+---
+
+## ⛔ Load Scoped Context, Not Whole Files
+
+**`docs/requirements.yaml` is ~61,000 tokens and holds 70 requirements. A given run needs
+one to four of them.** Reading it in full to find one entry buries the requirement you
+need under thirty-three `done` entries carrying other stages' constraints — a real
+accuracy risk, not only a cost one, because those entries are long and cross-referential
+and an agent can anchor on the wrong stage's rules.
+
+**Every role except ORCH, REQ-ANALYST, and REQ-VALIDATOR:** your requirement text is in
+your handoff's `context.requirement_text` and `task.acceptance_criteria`. Read it there.
+Consult `docs/requirements.yaml` only to resolve a specific ID it names (a `depends_on`
+entry, a cross-referenced `REQ-NNN`), and then read only that entry:
+
+```bash
+awk '/^  - id: REQ-039$/,/^  - id: REQ-04[0-9]$/' docs/requirements.yaml
+```
+```powershell
+Select-String -Path docs/requirements.yaml -Pattern '^  - id: REQ-039$' -Context 0,60
+```
+
+**ORCH** reads what it needs to select and scope work, and is the role that copies the
+in-scope requirement's full `description` text into each handoff it creates (see
+`HANDOFF_PROTOCOL.md` §2's `context.requirement_text` field). Naming the file in
+`artifacts_in` is not sufficient — the receiving agent must not have to open a 61k-token
+file to learn what it was asked to build.
+
+**REQ-ANALYST and REQ-VALIDATOR** legitimately need whole-file access (numbering, schema
+consistency, cross-requirement checks) — but prefer `grep`/`awk` over a full read when
+the check is targeted, and read in full only when the check genuinely is global.
+
+The same rule generalizes: prefer a targeted read over a whole-file read for any file
+above a few hundred lines. `git diff main...HEAD` beats reading every changed file;
+`grep -n` beats reading a 3,000-line YAML to find one key.
 
 ---
 

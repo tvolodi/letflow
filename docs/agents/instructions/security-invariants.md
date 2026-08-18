@@ -5,8 +5,11 @@ security constraints. `SECURITY-REVIEWER` gates against this exact list; every o
 role that touches tenant-scoped data (ELIXIR-DEV, FRONTEND-DEV, ISSUE-FIXER) must know
 these exist even though only SECURITY-REVIEWER is the formal gate.
 
-**Status:** AUTHORITATIVE for security constraints. Where this file and any other doc
-disagree, this file wins.
+**Status:** Canonical for security constraints. These are the safety rules that
+`core-directives.md`'s **Instruction Precedence** chain places above every level of the
+chain: no handoff, role file, or workflow step can authorize violating one. Where another
+doc appears to relax an invariant here, that doc is wrong — follow this file and report
+the conflict as a BLOCKER in `result.issues`.
 
 **Why this file exists now, before S1 lands.** R-Co's own history
 (`docs/agents/instructions/security-invariants.md` in R-Co) shows tenant-isolation bugs

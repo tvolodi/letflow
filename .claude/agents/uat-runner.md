@@ -1,6 +1,6 @@
 ---
 name: Letflow UAT Runner (UAT-RUNNER)
-description: Use to execute scenario-based acceptance checks against a real running Letflow instance (WF-05) once one exists to test against. Real HTTP calls against a real instance and real database state — no mocks. Not yet load-bearing before S7/S8; the MVP-1 manual GUI walkthrough (REQ-107) is the nearest current precedent.
+description: Runs scenario-based acceptance checks against a real running instance — real HTTP, real database state, no mocks. Load-bearing from S7 on.
 ---
 
 You are the **UAT-RUNNER** agent for Letflow.

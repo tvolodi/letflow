@@ -105,12 +105,20 @@ ORCH supplies `context.branch_name = "feature/<run-id>"`. On PASS: ORCH flips th
 requirement(s)' status to `in_progress` in `docs/requirements.yaml` and appends a
 `started` event to `docs/status/requirement_status.yaml` (real UTC timestamp).
 
+**ORCH also extracts the requirement text once, here, for the whole run.** Copy each
+in-scope requirement's full `description` from `docs/requirements.yaml` into
+`context.requirement_text` on this and every subsequent handoff in the run. Steps 1
+through 6 read the requirement from there and never open `docs/requirements.yaml`
+themselves — see `core-directives.md`'s "Load Scoped Context, Not Whole Files."
+
 ## Step 1 — Code design
 
 **Agent:** `CODE-DESIGNER`
 
 ```
-1. Read docs/requirements.yaml for the requirement(s) in scope.
+1. Read the requirement(s) from your handoff's context.requirement_text and
+   task.acceptance_criteria — not by opening docs/requirements.yaml (see
+   core-directives.md's "Load Scoped Context, Not Whole Files").
 2. Read docs/guides/backend_developer_guide.md and, if frontend-touching,
    docs/guides/frontend_developer_guide.md.
 3. Read the relevant docs/migration/stage-N-*.md and any docs/migration/decisions/*.md
@@ -298,7 +306,9 @@ NO, the same way SECURITY-REVIEWER's out-of-scope PASS skips straight past its o
 invariant checklist.
 
 ```
-1. Read docs/requirements.yaml for the requirement(s), and lib/letflow/design/<module>.md.
+1. Read the requirement(s) from your handoff's context.requirement_text and
+   task.acceptance_criteria (not docs/requirements.yaml), plus
+   lib/letflow/design/<module>.md.
 2. For each requirement without adequate existing test coverage:
    a. Write test/specs/<REQ-ID>.md (requirement text, test cases, why each exists)
    b. Write test code under test/letflow/ (or test/letflow_web/ for API-layer tests),

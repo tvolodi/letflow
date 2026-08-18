@@ -49,19 +49,30 @@ defmodule Letflow.Engine do
   returning tagged tuples, matching the boundary every other S2-S3 context
   module already established.
 
-  ## Disclosed limitation: only `:HUMAN_TASK`/`:END` first nodes succeed today
+  ## Activation loops to a stable resting state (AC7, updated post-REQ-050/051)
 
-  `create/2` calls `Letflow.Engine.Transition.transition/3` twice (AC7):
-  once to advance the root token off `:START`, and once more — driven by
-  `Transition`'s own "single hop per call" contract (its moduledoc) — to
-  actually dispatch whatever node the token lands on. Gateway/service-task
-  dispatch is not yet shipped (REQ-050/051/056/057 are not dependencies of
-  this requirement), so `create/2` fails with
-  `{:error, {:activation_failed, {:gateway_not_yet_implemented, ...}}}` (or
-  `:node_type_not_yet_implemented`) — writing nothing — for any definition
-  whose first node past `:START` is anything other than `:HUMAN_TASK` or
-  `:END`. This is a disclosed, temporary capability gap (design doc §9
-  OQ-1a), not a defect this module attempts to work around.
+  `create/2` drives `Letflow.Engine.Transition.transition/3` from a worklist
+  loop (`advance_until_stable/4`), one hop per call — matching
+  `Transition`'s own "single hop per call" contract (its moduledoc) —
+  rather than assuming any fixed hop count. After each hop it diffs the
+  token list against what it was immediately before that hop
+  (`tokens_needing_dispatch/3`) to decide which token_ids still need a
+  dispatch call: a token needs another hop exactly when it just arrived
+  somewhere its own node's dispatch hasn't run yet (whether via a plain
+  :START/gateway advance, or as one of several fresh tokens produced by a
+  `:PARALLEL_GATEWAY` split or join) — never when it stayed at the same
+  `node_id` (`:HUMAN_TASK`'s genuine "no automatic outgoing traversal"
+  stop) or was removed outright (`:END`, or a join's `:wait` outcome). The
+  loop ends the instant the worklist is empty: either no token remains
+  (the instance reached `:END` and completed) or every remaining token
+  sits on a genuine waiting state or a node type this engine doesn't
+  dispatch yet (`:SERVICE_TASK`/`:TIMER`/`:SUB_PROCESS`, surfaced as
+  `{:error, {:activation_failed, {:node_type_not_yet_implemented, ...}}}`).
+  A defensive, generously-sized hop bound
+  (`length(graph.nodes) * 4 + 10`) guards against ever looping forever
+  should a malformed/cyclic graph somehow reach this code despite
+  REQ-028's structural validators rejecting true cycles — see design doc
+  §9 OQ-1a (updated) for the full history of this limitation.
 
   ## `tenant_id` is validated, never persisted
 
@@ -258,35 +269,88 @@ defmodule Letflow.Engine do
         pending_task_nodes: []
       }
 
-      case Transition.transition(graph, instance_state, {:advance_token, token_id}) do
-        {:ok, off_start_state, _pending_events} ->
-          dispatch_landing_node(graph, off_start_state, token_id)
+      # Defensive-only bound (see moduledoc): REQ-028's structural validators
+      # are expected to reject any true graph cycle before a definition ever
+      # reaches create/2, so this is never expected to actually trigger --
+      # it exists purely so a malformed graph that somehow slips past those
+      # validators fails with a typed error instead of looping forever
+      # (this codebase's "never raise, never hang" totality discipline,
+      # transition.ex's own moduledoc). Scaled by a small multiple of the
+      # node count, not just `length(graph.nodes) + 1`: a PARALLEL_GATEWAY
+      # split (REQ-051) can put several tokens in flight at once, each
+      # independently walking its own branch toward the matching join, so
+      # the total hop budget for one activation can legitimately exceed the
+      # raw node count without any cycle being involved.
+      hop_limit = length(graph.nodes) * 4 + 10
 
-        {:error, reason} ->
-          {:error, {:activation_failed, reason}}
-      end
+      advance_until_stable(graph, instance_state, [token_id], hop_limit)
     end
   end
 
-  # Transition/3's own "single hop per call" contract (its moduledoc) means the
-  # call above only moves the root token off :START onto the target of its
-  # first outgoing edge -- it never itself dispatches that target node's own
-  # behavior. A second, caller-driven transition/3 call against the same
-  # token_id is required to actually dispatch whatever node the token landed
-  # on: for :HUMAN_TASK this is a harmless no-op hop that appends the token to
-  # pending_task_nodes (dispatch_human_task/3); for :END it is what actually
-  # removes the token and flips status to :completed (dispatch_end/3); for a
-  # gateway/unimplemented node type it is what surfaces
-  # :gateway_not_yet_implemented / :node_type_not_yet_implemented, matching
-  # design doc §9 OQ-1a's disclosed "only :HUMAN_TASK/:END first nodes
-  # succeed" boundary -- a single hop alone left both :END and gateway first
-  # nodes silently mishandled (:END never completing; a gateway silently
-  # accepted as an ordinary token position).
-  defp dispatch_landing_node(graph, off_start_state, token_id) do
-    case Transition.transition(graph, off_start_state, {:advance_token, token_id}) do
-      {:ok, new_instance_state, _pending_events} -> {:ok, new_instance_state}
-      {:error, reason} -> {:error, {:activation_failed, reason}}
+  # Worklist-driven activation loop: `pending_token_ids` holds every token_id
+  # still known to need a dispatch attempt at its *current* position.
+  # Advances a single hop with the head of the worklist, then re-derives
+  # which token_ids need dispatching next by diffing the token list before
+  # and after that hop (`tokens_needing_dispatch/3`) -- this is what lets a
+  # single uniform rule handle every REQ-044/050/051 dispatch clause without
+  # this module hardcoding which node types "auto-advance": a token needs
+  # another dispatch call exactly when it just arrived somewhere its own
+  # node's dispatch hasn't run yet (a fresh `node_id`, whether reached via
+  # :START/gateway advance, a PARALLEL_GATEWAY split's newly-derived
+  # branches, or a join firing's newly-derived merged token) -- never when
+  # it stayed put (:HUMAN_TASK's "no automatic outgoing traversal" contract,
+  # or a join's :wait outcome consuming the arriving branch token without
+  # producing a new one).
+  defp advance_until_stable(_graph, instance_state, [], _hops_remaining) do
+    {:ok, instance_state}
+  end
+
+  defp advance_until_stable(_graph, _instance_state, [token_id | _rest], hops_remaining)
+       when hops_remaining <= 0 do
+    {:error, {:activation_failed, {:hop_limit_exceeded, token_id}}}
+  end
+
+  defp advance_until_stable(graph, instance_state, [token_id | rest], hops_remaining) do
+    previous_tokens = instance_state.tokens
+
+    case Transition.transition(graph, instance_state, {:advance_token, token_id}) do
+      {:ok, new_instance_state, _pending_events} ->
+        newly_pending =
+          tokens_needing_dispatch(previous_tokens, new_instance_state.tokens, token_id)
+
+        advance_until_stable(graph, new_instance_state, rest ++ newly_pending, hops_remaining - 1)
+
+      {:error, reason} ->
+        {:error, {:activation_failed, reason}}
     end
+  end
+
+  # Diffs the token list from just before/after one dispatch call to decide
+  # which token_ids still need their own dispatch attempt: any token_id that
+  # didn't exist before this hop (a PARALLEL_GATEWAY split's derived
+  # branches, or a join's newly-fired merged token) is always fresh and
+  # needs one; the just-dispatched token_id itself needs another pass only
+  # if its node_id actually changed (it moved somewhere new) -- if it's
+  # gone entirely (:END removed it, or a join consumed it) or stayed at the
+  # same node_id (:HUMAN_TASK's genuine stop) it does not. Every other
+  # existing token is untouched by this hop and was already resolved (either
+  # still correctly queued from an earlier hop, or already stable) -- this
+  # function never re-adds it.
+  @spec tokens_needing_dispatch([Token.t()], [Token.t()], String.t()) :: [String.t()]
+  defp tokens_needing_dispatch(previous_tokens, new_tokens, dispatched_token_id) do
+    previous_by_id = Map.new(previous_tokens, &{&1.token_id, &1})
+
+    new_tokens
+    |> Enum.filter(fn token ->
+      case Map.fetch(previous_by_id, token.token_id) do
+        :error ->
+          true
+
+        {:ok, %Token{node_id: previous_node_id}} ->
+          token.token_id == dispatched_token_id and token.node_id != previous_node_id
+      end
+    end)
+    |> Enum.map(& &1.token_id)
   end
 
   defp build_graph(graph_map) do

@@ -324,21 +324,25 @@ If all five steps succeed, `create/2` proceeds to the transactional phase (§5, 
    `branch_id: instance_id` is the root-branch convention req043 §3.2 already documents
    ("root branch = `instance_id` hex") — this design is the first to actually construct
    one, so it states the convention explicitly rather than inventing a different one.
-9. **Advance the token off START (AC7).** `Letflow.Engine.Transition.transition(graph,
-   instance_state, {:advance_token, token_id})` — exactly one call, matching
-   `Transition`'s "single hop per call" contract. This moves the token from `:START`
-   onto the target of its first outgoing edge and, if that target is a `:HUMAN_TASK`
-   node, appends it to `pending_task_nodes` in the same hop (per `dispatch_human_task/3`
-   — no second `transition/3` call is made by this step). A `{:error, reason}` return
-   here — `:unknown_node_id` (structurally impossible given CHK-04/CHK-01, but never
-   raised, so still handled), `:gateway_not_yet_implemented`, or
-   `:node_type_not_yet_implemented` — aborts the whole `create/2` call with
+9. **Advance the token off START and through any further auto-advancing nodes (AC7,
+   updated — see §9 OQ-1a).** `activate/3` calls
+   `Letflow.Engine.Transition.transition(graph, instance_state, {:advance_token,
+   token_id})` in a loop (`advance_until_stable/4`), one hop per call — matching
+   `Transition`'s "single hop per call" contract — re-selecting whichever token still
+   rests on an auto-advancing node type (`:START`, `:EXCLUSIVE_GATEWAY`,
+   `:PARALLEL_GATEWAY`) after each hop, until no such token remains: either every token
+   is gone (`:END` reached, instance completed) or every remaining token rests on
+   `:HUMAN_TASK` or an undispatched type. A `{:error, reason}` return from any hop —
+   `:unknown_node_id` (structurally impossible given CHK-04/CHK-01, but never raised, so
+   still handled), `:node_type_not_yet_implemented`, or the loop's own defensive
+   `:hop_limit_exceeded` — aborts the whole `create/2` call with
    `{:error, {:activation_failed, reason}}`, **writing nothing**: this is why step 9
    runs entirely *before* the `Ecto.Multi` below opens, not inside one of its steps — a
    pure-function failure discovered mid-transaction would otherwise force a rollback of
-   the projection insert this step doesn't even need yet. See §9 OQ-1a for the concrete
-   limitation this creates today (a definition whose first non-START node is a gateway
-   fails `create/2` entirely, since REQ-050/051 aren't shipped).
+   the projection insert this step doesn't even need yet. See §9 OQ-1a for the full
+   history and the concrete limitation that remains today (only
+   `:SERVICE_TASK`/`:TIMER`/`:SUB_PROCESS` first/intermediate nodes still fail
+   `create/2`).
 10. **Open one `Ecto.Multi`** (matching `EventStore.append/2`'s own established shape —
     a `Multi.run/3` step per operation, `Repo.transaction/1` once):
     - **M1 — insert `instance_projections`.**
@@ -464,15 +468,58 @@ git history), not a live open design question. §6 M2 now cites
 `Letflow.Engine.TokenRecord.insert_changeset/2` directly — no REVIEWER action needed on
 this point.
 
-**OQ-1a (MINOR, disclosed limitation).** Step 9's single `transition/3` call means
-`create/2` fails outright (`{:error, {:activation_failed,
-{:gateway_not_yet_implemented, ...}}}`, writing nothing) for any definition whose first
-node past `:START` is `:EXCLUSIVE_GATEWAY`/`:PARALLEL_GATEWAY` (REQ-050/051 not yet
-shipped) or `:SERVICE_TASK`/`:TIMER`/`:SUB_PROCESS` (no dispatch clause at all yet). Only
-definitions whose first real node is `:HUMAN_TASK` or `:END` can be started successfully
-today. This is a real, temporary capability gap this requirement's own scope cannot
-close (REQ-050/051/056/057/062 aren't dependencies) — disclosed here, not silently
-narrowed into an unstated assumption.
+**OQ-1a (MINOR, disclosed limitation — SUPERSEDED 2026-08-18/19, WF02-REQ045-20260818
+rework, run `WF02-REQ045-20260818`).** *Original text, kept for history:* step 9's
+single `transition/3` call meant `create/2` failed outright
+(`{:error, {:activation_failed, {:gateway_not_yet_implemented, ...}}}`, writing
+nothing) for any definition whose first node past `:START` was
+`:EXCLUSIVE_GATEWAY`/`:PARALLEL_GATEWAY` (REQ-050/051 not yet shipped) or
+`:SERVICE_TASK`/`:TIMER`/`:SUB_PROCESS` (no dispatch clause at all). Only definitions
+whose first real node was `:HUMAN_TASK` or `:END` could be started successfully.
+
+**What actually changed:** REQ-050 (`:EXCLUSIVE_GATEWAY` condition dispatch) and
+REQ-051 (`:PARALLEL_GATEWAY` split/join) both shipped to `main` after this design was
+originally authored. Critically, both gateway dispatch clauses
+(`dispatch_exclusive_gateway/4`, `dispatch_parallel_gateway/4` in
+`lib/letflow/engine/transition.ex`) **auto-advance the token past the gateway within
+the same `transition/3` call** — they never return `:gateway_not_yet_implemented`.
+This broke §6 step 9's fixed "exactly one/two `transition/3` calls" assumption: a
+gateway first node no longer errors, it silently under-advances (the token lands
+mid-graph with the instance still `:active` instead of reaching its real resting
+state), discovered post-rebase when this branch was integrated onto a `main` that had
+since shipped both requirements.
+
+**The fix (this rework):** `activate/3`'s dispatch is no longer a fixed hop count. It
+now runs a worklist loop (`advance_until_stable/4`, `lib/letflow/engine.ex`), seeded
+with the root token_id, that repeatedly pops one pending token_id and calls
+`Transition.transition/3` against it. After each hop it diffs the token list against
+what it was immediately before that hop (`tokens_needing_dispatch/3`) to decide which
+token_ids still need dispatching: a token needs another hop exactly when it just
+arrived somewhere its own node's dispatch hasn't run yet — this covers a plain
+`:START`/`:EXCLUSIVE_GATEWAY`/`:PARALLEL_GATEWAY` pass-through advance (the dispatched
+token_id's `node_id` changed) *and* a `:PARALLEL_GATEWAY` split or join firing (brand
+new token_ids appear that weren't in the previous token list at all, per
+`dispatch_parallel_split/4`/`fire_join/5`) — and never when the dispatched token
+stayed at the same `node_id` (`:HUMAN_TASK`'s genuine "no automatic outgoing
+traversal" contract) or was removed outright (`:END`, or a join's `:wait` outcome
+consuming the arriving branch without producing a new token). This diff-based rule is
+deliberately node-type-agnostic in `Letflow.Engine` itself — it never hardcodes which
+`node_type`s "auto-advance," so it needs no update the next time `transition.ex` gains
+a new dispatch clause. The loop ends the instant the worklist is empty. A defensive,
+generously-sized hop bound (`length(graph.nodes) * 4 + 10`, not just
+`length(graph.nodes) + 1` — a split can put several tokens in flight walking separate
+branches at once, so the legitimate hop budget can exceed the raw node count) prevents
+an unbounded loop should a malformed/cyclic graph somehow reach this code despite
+REQ-028's structural validators rejecting true cycles — not an expected-to-trigger
+path, a totality fallback only, matching this codebase's "never raise, never hang"
+discipline.
+
+**Current, real remaining limitation:** only `:SERVICE_TASK`/`:TIMER`/`:SUB_PROCESS`
+first (or intermediate, pre-`:HUMAN_TASK`/`:END`) nodes still fail `create/2` today,
+via `:node_type_not_yet_implemented` — no requirement has shipped a dispatch clause
+for any of these three node types yet (REQ-056/057/062 are the named future owners).
+`:HUMAN_TASK`/`:END`/`:EXCLUSIVE_GATEWAY`/`:PARALLEL_GATEWAY` first nodes all now
+succeed.
 
 **OQ-2 (MINOR).** §3's reading of "definition_id (or name+version...)" as
 `get_active_by_name/2` (no separate version parameter) rather than a new
@@ -532,5 +579,5 @@ authoritative implementation, e.g. `VariableMerge`'s explicit refusal to
 | AC4 — duplicate correlation rejected; nil correlation unconstrained | §6 M1 (`uq_instance_correlation`, partial index on non-null), error mapping to `:duplicate_correlation_key` |
 | AC5 — moduledoc states supersede/generalize + TransitionEvent disposition | §1 (decision), §2 point 1 (required moduledoc content) |
 | AC6 — moduledoc names the process-vs-row question, cites the stage doc, leaves it to CODE-DESIGNER | §1 (this design *is* that resolution), §2 point 2 (required moduledoc content restates it) |
-| AC7 — first task activation fires immediately via `transition/3` | §6 step 9 (single `transition/3` call moves token off START in the same call) |
+| AC7 — first task activation fires immediately via `transition/3` | §6 step 9 (`transition/3` called in a loop, `advance_until_stable/4`, until a stable resting state is reached — §9 OQ-1a, updated) |
 | Scope boundary — HTTP is S4 | §2 point 3 (required moduledoc content) |

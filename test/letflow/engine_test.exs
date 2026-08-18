@@ -122,7 +122,8 @@ defmodule Letflow.EngineTest do
   end
 
   # START -> EXCLUSIVE_GATEWAY -> END. First non-START node is
-  # :EXCLUSIVE_GATEWAY -- design §9 OQ-1a's disclosed capability gap.
+  # :EXCLUSIVE_GATEWAY -- now auto-advances via REQ-050's dispatch and
+  # activate/3's own hop loop (design §9 OQ-1a, superseded).
   # is_default: true on the gateway's one outgoing edge so CHK-13/CHK-16 (which
   # would otherwise require a condition on a non-default gateway edge) don't
   # reject this fixture at Definitions.create/2 time -- this graph must itself
@@ -418,26 +419,70 @@ defmodule Letflow.EngineTest do
   end
 
   # ---------------------------------------------------------------------------------
-  # Design §9 OQ-1a -- disclosed capability boundary: only :HUMAN_TASK/:END first
-  # nodes succeed today.
+  # Design §9 OQ-1a (superseded by REQ-050/051) -- gateways now auto-advance;
+  # activate/3 loops to a stable resting state instead of assuming a fixed hop
+  # count. See test/specs/REQ-045.md for the updated rationale.
   # ---------------------------------------------------------------------------------
 
-  describe "design §9 OQ-1a -- a definition whose first non-START node is a gateway fails create/2 entirely" do
-    test "returns {:error, {:activation_failed, {:gateway_not_yet_implemented, ...}}}, writing zero rows except the benign snapshot orphan" do
+  describe "design §9 OQ-1a (superseded) -- a definition whose first non-START node is a gateway now completes via the activation loop" do
+    test "a definition whose first non-START node is :EXCLUSIVE_GATEWAY (default edge -> END) completes in the same call" do
       %{schema_name: schema_name} = provisioned_tenant()
       definition = active_definition!(schema_name, graph_start_gateway_end())
 
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+
+      assert result.status == :completed
+      assert result.current_nodes == []
+
+      projection = Repo.get!(InstanceProjection, result.instance_id, prefix: schema_name)
+      assert projection.status == :completed
+      assert projection.current_nodes == []
+
+      # REQ-044's own :END dispatch removes the token before persist/7 builds
+      # the tokens insert -- no tokens row for this instance at all, matching
+      # the START->END fixture's own assertion above.
+      assert token_count(schema_name) == 0
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # Disclosed limitation that genuinely remains today: node types no
+  # dispatch clause implements yet (:SERVICE_TASK/:TIMER/:SUB_PROCESS).
+  # ---------------------------------------------------------------------------------
+
+  describe "a definition whose first non-START node is a type with no dispatch clause yet fails create/2 entirely" do
+    test "returns {:error, {:activation_failed, {:node_type_not_yet_implemented, :SERVICE_TASK, _}}}, writing zero rows except the benign snapshot orphan" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      graph = %{
+        "nodes" => [
+          %{"id" => "start", "node_type" => "START"},
+          %{
+            "id" => "svc",
+            "node_type" => "SERVICE_TASK",
+            "attributes" => %{"endpoint" => "https://example.test/svc", "timeout_ms" => 5000}
+          },
+          %{"id" => "end", "node_type" => "END"}
+        ],
+        "edges" => [
+          %{"id" => "e1", "source" => "start", "target" => "svc"},
+          %{"id" => "e2", "source" => "svc", "target" => "end"}
+        ]
+      }
+
+      definition = active_definition!(schema_name, graph)
+
       assert {:error,
-              {:activation_failed, {:gateway_not_yet_implemented, :EXCLUSIVE_GATEWAY, "gw"}}} =
+              {:activation_failed, {:node_type_not_yet_implemented, :SERVICE_TASK, "svc"}}} =
                Engine.create(base_attrs(definition), prefix: schema_name)
 
       assert projection_count(schema_name) == 0
       assert token_count(schema_name) == 0
       assert event_count(schema_name) == 0
 
-      # The one deliberate exception (design §5 step 7 / §9 OQ-4): the
-      # snapshot call runs -- and commits -- before the pure activate/3
-      # dispatch that fails, so it survives as a benign orphan.
+      # Same benign snapshot-orphan exception as before (design §5 step 7 /
+      # §9 OQ-4): the snapshot call runs -- and commits -- before the pure
+      # activate/3 dispatch that fails.
       assert snapshot_count(schema_name) == 1
     end
   end

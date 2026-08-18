@@ -4475,6 +4475,25 @@ history:
       persistence, and retiring instance_supervisor.ex explicitly (nothing
       left to supervise) -- left for CODE-DESIGNER to confirm and detail,
       not pre-decided here.
+  - req: REQ-048
+    event: started
+    agent: ORCH
+    at: "2026-08-18T22:29:30Z"
+    note: >
+      Session resumed on hetzner-wt2-orch (~/letflow-wt2). QUEUE_AUTH_TOKEN
+      unset -- letflow-queue unreachable, operating in single-host fallback
+      per TASK_QUEUE.md (stated explicitly here per No Speculation). Read
+      docs/requirements.yaml directly: REQ-045/REQ-050/REQ-051 (named
+      newly-unblocked in this session's prompt) were already done, completed
+      by a concurrent host since that summary was written. Of the
+      dependency-satisfied pending requirements (REQ-046, REQ-048, REQ-058),
+      REQ-046 was found already under active work by another host
+      (feature/WF02-REQ046-20260818, commits minutes old through Step 3) --
+      skipped to avoid collision. REQ-048 (Task completion, EE-04) has no
+      existing branch/PR/registry entry and is lowest impl_order (93) among
+      the remaining eligible set. Step 00 git setup PASS (worktree variant,
+      branch feature/WF02-REQ048-20260818). docs/requirements.yaml REQ-048
+      flipped pending -> in_progress.
   - req: REQ-046
     event: done
     agent: DOC-UPDATER

@@ -9,16 +9,22 @@ defmodule Letflow.Identity.TenantRoleTest do
   this file mirrors, INCLUDING the "Sandbox mode: what ACTUALLY protects against
   cross-test leakage" section there — this file's `setup` below restores a real
   sandboxed transaction (`Sandbox.mode(Repo, :manual)` + fresh
-  `Sandbox.checkout/1`, checked back in via an explicit `Sandbox.checkin/1` in
-  `on_exit/1` — NOT `{:shared, self()}` mode, which was empirically observed to
-  leave orphaned tenant/schema rows behind across suite runs; see
-  user_test.exs's moduledoc for why) immediately after the `:auto`-mode
-  migration-replay work finishes and before issuing `SET search_path`, for
-  exactly the reason explained there: switching to `:auto` mode checks in
-  (discards) whatever transaction `Letflow.DataCase` had already checked out, so
-  without this restore, `SET search_path` would commit against a bare pooled
-  connection instead of running inside a transaction that gets rolled back on
-  teardown.
+  `Sandbox.checkout/1` — NOT `{:shared, self()}` mode, and deliberately NOT
+  followed by an `on_exit/1`-based `Sandbox.checkin/1`; see user_test.exs's
+  moduledoc for why an `on_exit/1` checkin is a no-op — `ExUnit.OnExitHandler`
+  runs `on_exit/1` callbacks in a separate spawned process, and
+  `Sandbox.checkin/1` is keyed by the CALLING process's own pid, so a checkin
+  from that other process finds no matching ownership entry) immediately after
+  the `:auto`-mode migration-replay work finishes and before issuing
+  `SET search_path`, for exactly the reason explained there: switching to `:auto`
+  mode checks in (discards) whatever transaction `Letflow.DataCase` had already
+  checked out, so without this restore, `SET search_path` would commit against a
+  bare pooled connection instead of running inside a transaction. The checkout
+  this `setup` takes is reclaimed the same way `Letflow.DataCase`'s own
+  `{:shared, self()}` checkout already is (it never calls `checkin/1` either):
+  `DBConnection.Ownership.Manager`'s unconditional `:DOWN`-monitor handler fires
+  automatically once this test's own process exits, rolling back the
+  transaction and returning the connection to the pool.
   """
 
   use Letflow.DataCase, async: false
@@ -65,8 +71,8 @@ defmodule Letflow.Identity.TenantRoleTest do
 
     assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
-    # REQ-063 rework: restore a REAL sandboxed transaction before issuing
-    # SET search_path -- :auto mode above checked in (discarded) whatever
+    # REQ-063 rework (iteration 2): restore a REAL sandboxed transaction before
+    # issuing SET search_path -- :auto mode above checked in (discarded) whatever
     # transaction Letflow.DataCase's setup had checked out, so without this
     # restore, SET search_path (a session-level GUC, not SET LOCAL) would commit
     # against a bare pooled connection and leak into whichever later test reuses
@@ -76,19 +82,19 @@ defmodule Letflow.Identity.TenantRoleTest do
     #
     # Uses plain :manual mode + a bare checkout (NOT {:shared, self()}) -- this
     # file's tests are single-process (no Task.async spawns needing to share the
-    # connection), so there is no need for shared ownership, and explicit
-    # single-owner :manual mode lets on_exit/1 below checkin the SAME connection
-    # deterministically rather than force-switching the whole pool's global mode
-    # from a different process (the OnExitHandler process, not this test's own),
-    # which was empirically observed to leave orphaned tenant/schema rows behind
-    # across test runs (leftover `req063-trole-*` rows in `public.tenants`,
-    # confirmed via direct Postgres inspection while debugging this rework).
+    # connection), so there is no need for shared ownership.
+    #
+    # Deliberately does NOT register an on_exit/1 checkin -- see moduledoc's
+    # "Sandbox mode: what ACTUALLY protects against cross-test leakage" section.
+    # A checkin from on_exit/1 runs in ExUnit's separate OnExitHandler process,
+    # not this test process, so DBConnection.Ownership.Manager's proxy_checkin
+    # (keyed by the CALLING process's pid) finds no matching ownership entry and
+    # silently no-ops. This checkout is instead reclaimed by
+    # DBConnection.Ownership.Manager's unconditional :DOWN-monitor handler when
+    # this test process itself exits -- the same mechanism Letflow.DataCase's
+    # own {:shared, self()} checkout already relies on.
     Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :manual)
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Letflow.Repo)
-
-    on_exit(fn ->
-      Ecto.Adapters.SQL.Sandbox.checkin(Letflow.Repo)
-    end)
 
     Repo.query!(~s(SET search_path TO "#{schema_name}", public))
 

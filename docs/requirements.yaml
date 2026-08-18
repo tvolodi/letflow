@@ -3406,7 +3406,7 @@ requirements:
   - id: REQ-063
     title: Move users/groups/tenant_role behind :prefix (identity tables schema-per-tenant)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S3
     description: >
       Execute Decision 0006's D1

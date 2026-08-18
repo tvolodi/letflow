@@ -4118,3 +4118,18 @@ history:
       docs/migration/decisions/*.md file requiring an update (schema/migration-only
       requirement) -- confirmed by re-reading the six acceptance criteria directly,
       none reference either path.
+  - req: REQ-063
+    event: started
+    agent: ORCH
+    at: "2026-08-18T08:48:48Z"
+    note: >
+      WF02-REQ063-20260818. Move users/groups/tenant_role behind :prefix
+      (identity tables schema-per-tenant), executing decision
+      docs/migration/decisions/0006-identity-tables-schema-per-tenant.md's D1.
+      No depends_on. Step 00 (git setup) PASS: feature/WF02-REQ063-20260818
+      branched from main (13e78e1, post ISS-0046 fix), pushed. Prerequisite
+      work this session: decision 0006 drafted and pushed (commit 2ef8b38);
+      ISS-0046 (pre-existing mix compile --warnings-as-errors break on main,
+      unrelated to this requirement) found, routed through WF-03, fixed and
+      merged (PR #175) before this run started, so REQ-063 begins against a
+      clean compile gate.

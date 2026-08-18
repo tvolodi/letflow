@@ -4475,3 +4475,39 @@ history:
       persistence, and retiring instance_supervisor.ex explicitly (nothing
       left to supervise) -- left for CODE-DESIGNER to confirm and detail,
       not pre-decided here.
+  - req: REQ-046
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-18T22:32:49Z"
+    note: >
+      WF02-REQ046-20260818. RELEASE-VALIDATOR PASSed Step 5 (all 4
+      acceptance criteria independently confirmed against actual code, own
+      mix test re-run 850/850, 0 failures). Shipped: deletion of
+      lib/letflow/process_instance.ex and lib/letflow/events/transition_event.ex
+      (superseded by REQ-045's Letflow.Engine.create/2), a new migration
+      dropping the transition_events table, and retention of
+      lib/letflow/instance_supervisor.ex with start_instance/1 removed,
+      reconciling with REQ-045's own already-shipped moduledoc commitment
+      that it's "kept for REQ-056/057" -- this took a design rework cycle
+      after CODE-DESIGN-VALIDATOR first FAILed a silent-deletion design.
+      Mid-flight discovery: lib/letflow/router.ex was live code calling the
+      deleted symbols, a real gap the original design missed -- resolved by
+      removing the three dead routes (POST /instances, POST
+      /instances/:id/actions, GET /instances/:id) and keeping only /health
+      + 404, documented in router.ex's own moduledoc pointing at
+      lib/letflow/design/req046-process-instance-retirement.md section 6a.
+      New coverage in test/letflow/router_test.exs (5 cases). Final:
+      850/850 tests passing.
+      DOC-UPDATER Step 6: flipped docs/requirements.yaml status
+      in_progress -> done. Corrected README.md's "What's here today" and
+      "Running it" sections -- the three curl examples for the removed
+      routes and the "three HTTP endpoints" prose were stale against
+      router.ex's actual current behavior (GET /health only, real
+      instance-management API deferred to S4). Corrected
+      lib/letflow/plugs/auth_pipeline.ex's moduledoc, which still cited
+      the three now-removed route names as "already-done, already-tested
+      functionality" it deliberately wasn't mounted in front of --
+      SECURITY-REVIEWER had confirmed the plug isn't wired into router.ex
+      either way, so this was a stale prose fix only, no behavior change.
+      Updated docs/migration/stage-3-instance-engine.md's header to move
+      REQ-046 from the pending list into the done list.

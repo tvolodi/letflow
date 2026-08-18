@@ -20,15 +20,17 @@ defmodule Letflow.Plugs.AuthPipeline do
   A request with a missing/malformed bearer token is rejected with 401
   before any DB or claim-mapping work runs (step 1's short-circuit).
 
-  **Not mounted in front of any route today.** All 3 of `Letflow.Router`'s
-  existing routes (`POST /instances`, `POST /instances/:id/actions`,
-  `GET /instances/:id`) are non-tenant-scoped and have no tenant/user context
-  to use even if this plug ran ahead of them — mounting it unconditionally
-  would break their existing unauthenticated behavior, which is
-  already-`done`, already-tested functionality outside this requirement's
-  scope. This module is built, compiled, and directly tested — left
-  available for S4 (the first tenant-scoped route) to add via
-  `plug Letflow.Plugs.AuthPipeline` ahead of `:match` in `router.ex`.
+  **Not mounted in front of any route today.** `Letflow.Router` currently
+  serves only `GET /health` (the earlier `POST /instances`,
+  `POST /instances/:id/actions`, `GET /instances/:id` pilot-slice routes
+  this note used to reference were removed as of REQ-046, alongside
+  `Letflow.ProcessInstance`'s own retirement — see
+  `lib/letflow/design/req046-process-instance-retirement.md` §6a); none of
+  today's routes are tenant-scoped or have tenant/user context to use even
+  if this plug ran ahead of them. This module is built, compiled, and
+  directly tested — left available for S4 (the first tenant-scoped route)
+  to add via `plug Letflow.Plugs.AuthPipeline` ahead of `:match` in
+  `router.ex`.
 
   See `lib/letflow/design/req021-auth-plug-pipeline.md` for the full design.
   """

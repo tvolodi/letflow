@@ -1,0 +1,48 @@
+run_id: WF02-REQ046-20260818
+step: WF-02 Step 4
+agent: TEST-RUNNER
+date: 2026-08-19
+branch: feature/WF02-REQ046-20260818
+commit: 51708f8
+requirement: REQ-046
+scope: retirement of lib/letflow/process_instance.ex + lib/letflow/events/transition_event.ex,
+  trim of lib/letflow/instance_supervisor.ex and lib/letflow/router.ex, and new coverage
+  in test/letflow/router_test.exs. All prior gates (CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER,
+  REVIEWER, TEST-DESIGN-VALIDATOR) already PASSed on this commit. This dispatch is the
+  official Step 4 record; ORCH had already independently run the full suite twice on
+  essentially this same commit (845/845 before the test-design commit, 850/850 after).
+
+full_suite:
+  command: mix test
+  duration_seconds: 210.9
+  result: "850 passed (4 properties, 846 tests)"
+  failed: 0
+
+isolated_run:
+  command: mix test test/letflow/router_test.exs
+  duration_seconds: 0.1
+  result: "5 passed"
+  failed: 0
+
+pre_existing_failures_check:
+  performed: false
+  reason: >
+    Not applicable — full suite is 100% green, nothing to distinguish as pre-existing.
+
+docker_compose: "letflow-postgres-1 running on localhost:5462 (started via docker compose up -d)"
+
+notes: >
+  A Dialyzer-style type-checking warning (not a test failure) was printed during the
+  isolated router_test.exs compile, in lib/letflow/engine/transition.ex around
+  dispatch_cancel_branch/3 (JoinCounter struct-update pattern-matching warning). It did not
+  affect compilation success or any test result and is unrelated to REQ-046's scope
+  (router.ex / process_instance.ex / instance_supervisor.ex). Noting it here for visibility
+  but not treating it as a Step-4 blocker since it predates this change and touches
+  unrelated engine code.
+
+verdict: PASS
+verdict_detail: >
+  Full suite: 850 passed (4 properties, 846 tests), 0 failures. Isolated
+  test/letflow/router_test.exs run: 5 passed, 0 failures, confirming the new router
+  regression coverage. Numbers match ORCH's independent pre-dispatch runs on this commit.
+  No regressions observed. Ready for RELEASE-VALIDATOR's independent re-verification.

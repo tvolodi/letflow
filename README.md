@@ -31,27 +31,20 @@ starting unscoped work, same as always.
 
 ## What's here today
 
-The earliest working slice (still the actual runnable code — the
-migration builds on top of it, doesn't replace it): a minimal slice of
-a BPM engine, one workflow, four states, plus a second
-parallel-approval state machine.
+The original pilot slice (`Letflow.ProcessInstance`, a hand-rolled
+4-state `:gen_statem` workflow, plus a second parallel-approval state
+machine) was retired as of REQ-046 — superseded by the real,
+definition-driven instance engine landing across Stage 3
+(`Letflow.Engine.create/2`; see `docs/migration/stage-3-instance-engine.md`).
+`Letflow.Router` now serves only `GET /health` (Plug + Bandit, no
+Phoenix — see `docs/migration/decisions/0001-web-framework.md`); the
+real tenant-scoped instance-management HTTP API is deferred to S4
+(api-surface) and will be built against `Letflow.Engine.create/2`, not
+a revival of the old pilot contract's three routes. `Letflow.InstanceSupervisor`
+is retained, with `start_instance/1` removed, reserved for REQ-056/057.
 
-```
-draft --submit--> submitted --approve--> approved (terminal)
-  ^                   |
-  |                 reject
-  +----resubmit-------+ (rejected)
-```
-
-- `Letflow.ProcessInstance` — one `:gen_statem` process per running
-  workflow instance.
-- `Letflow.InstanceSupervisor` — a `DynamicSupervisor` that owns one
-  instance process per running workflow.
-- `Letflow.Events.TransitionEvent` / migrations — every transition is
-  logged to Postgres via Ecto, mirroring R-Co's migration discipline.
-- `Letflow.Router` — three HTTP endpoints (Plug + Bandit, no Phoenix
-  yet — see `docs/migration/decisions/0001-web-framework.md`) to drive
-  it end to end.
+Check `docs/requirements.yaml` for the current per-requirement status
+of the Stage 3 engine build-out.
 
 ## Running it
 
@@ -75,15 +68,13 @@ migration by hand), use the already-isolated test database instead:
 `MIX_ENV=test MIX_TEST_PARTITION=<N> mix run -e '...'`.
 
 ```
-curl -s -X POST localhost:4000/instances | tee /tmp/inst.json
-# {"id": "..."}
-
-curl -s -X POST localhost:4000/instances/<id>/actions \
-  -H 'content-type: application/json' -d '{"action": "submit"}'
-
-curl -s localhost:4000/instances/<id>
-# {"state": "submitted", "history": [...]}
+curl -s localhost:4000/health
+# {"status": "ok"}
 ```
+
+This is the only working HTTP endpoint today — see "What's here today"
+above. Any other path currently 404s; the real instance-management API
+lands in S4.
 
 ```
 mix test

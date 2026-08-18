@@ -14,9 +14,14 @@ gap-fix shape REQ-045's own DOC-UPDATER already applied to REQ-043
 above); REQ-047 `done` (Task activation persistence, EE-03 -- tasks-row
 insert, instance_projections update and event append committed in one
 transaction via Letflow.Engine.TaskActivation; same header-sync gap-fix
-shape applied by this requirement's own DOC-UPDATER); REQ-046, REQ-048,
-REQ-052, REQ-053, REQ-054, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059,
-REQ-060, REQ-061, REQ-062 (`docs/requirements.yaml`, 14 total) `pending`.
+shape applied by this requirement's own DOC-UPDATER); REQ-046 `done`
+(Retirement of lib/letflow/process_instance.ex and its supervision tree
+-- process_instance.ex and transition_event.ex deleted,
+instance_supervisor.ex retained with start_instance/1 removed, reserved
+for REQ-056/057; router.ex's dead pilot-slice routes removed as a
+mid-flight gap fix); REQ-048, REQ-052, REQ-053, REQ-054, REQ-055,
+REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062
+(`docs/requirements.yaml`, 13 total) `pending`.
 
 ## Scope
 

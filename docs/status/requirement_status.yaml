@@ -4299,3 +4299,19 @@ history:
       section nor the diagram is affected. Left untouched, same reasoning
       REQ-063/REQ-064's DOC-UPDATER steps applied. Flipped
       docs/requirements.yaml REQ-051 status to done.
+  - req: REQ-045
+    event: started
+    agent: ORCH
+    at: "2026-08-18T18:23:12Z"
+    note: >
+      WF02-REQ045-20260818. Claimed via direct docs/requirements.yaml read
+      (letflow-queue unreachable in this session -- no QUEUE_AUTH_TOKEN set;
+      /health returns 200 but the token-gated API cannot be called), lowest
+      impl_order (89) among pending Stage 3 requirements with all depends_on
+      satisfied (REQ-043, REQ-044, REQ-030, REQ-033, REQ-025 all done). Step 00
+      (git setup) PASS: feature/WF02-REQ045-20260818 branched from origin/main
+      (e8ef92d), pushed. Status flipped pending -> in_progress. This is the
+      stage's largest open design question (process-per-instance vs.
+      row-based instance state) -- left for CODE-DESIGNER per the
+      requirement's own text, citing stage-3-instance-engine.md's second
+      Early finding.

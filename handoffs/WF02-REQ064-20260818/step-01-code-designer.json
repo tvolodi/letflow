@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ064-20260818/step-01-code-designer.json",
   "created_at": "2026-08-18T12:43:35Z",
   "started_at": "2026-08-18T12:43:35Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-18T12:53:44Z",
+  "status": "PASS",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -64,9 +64,9 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Produced lib/letflow/design/req064-drop-tenant-id.md. Corrected the tokens-table module ownership: Letflow.Engine.TokenRecord owns tokens.tenant_id (not Engine.Token, which is REQ-044's unrelated pure in-memory struct with zero Ecto dependency) -- verified by direct read of both lib/letflow/engine/token.ex and token_record.ex. All other nine named modules matched the requirement text exactly on direct re-check. Design covers: (1) ten migrations dropping tenant_id, each with the mandatory if prefix() do guard and remove(:tenant_id, :binary_id) for reversibility, registered via tenant_scoped_migrations/0's three-element manifest form; (2) both composite-index simplifications (promotion_reviews, promotion_assertion_runs) with exact before/after index/constraint definitions and the idempotency contract restated for the migration header, plus a third tenant_id-leading index found on `users` during this session's direct read (not named in the requirement text) that also needs dropping, flagged as an open question on replacement; (3) all 14 tenant_id_for_schema_name/1 call sites (corrected count from the requirement text's ~13 -- definitions.ex actually has 9 sites, not 8), each given an explicit per-site removed/kept-as-validation/kept-unchanged decision, including two sites (activate/2, rollback_definition_version/4) that use tenant_id for a genuine functional purpose unrelated to the dropped column and must NOT be touched; (4) field/cast/validate_required removal for all ten corrected schema modules, including two unique_constraint/2 calls that must drop their leading :tenant_id to keep matching their simplified index names; (5) exact moduledoc replacement text for TokenRecord, Task, User, Group, and all three EventStore modules (a fourth+fifth moduledoc site beyond the two the requirement text named, found by direct read), plus confirmation that ProcessDefinition/PromotionReview/PromotionAssertionRun have no dedicated tenant_id prose to edit. Explicitly stated: the four D3 tables are untouched (no file for them may appear in ELIXIR-DEV's diff), and tenant_id_for_schema_name/1 itself is not deleted. Four open questions recorded (§7) rather than silently resolved: the apply_promotion_assertion_rerun/6 tenant_id binding's full call-graph trace, the users third index's replacement-or-not, migration file grouping granularity, and whether to trim event_store.ex's ctx map. No implementation code written -- signatures, exact cast/validate_required/index/constraint shapes, and moduledoc prose only.",
+    "artifacts_out": ["lib/letflow/design/req064-drop-tenant-id.md"],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ064-20260818",
@@ -76,7 +76,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

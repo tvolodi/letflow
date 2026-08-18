@@ -475,16 +475,34 @@ defmodule Letflow.Engine.TransitionTest do
   end
 
   # ---------------------------------------------------------------------
-  # AC4, case 5/5 -- :PARALLEL_GATEWAY stub: same shape as :EXCLUSIVE_GATEWAY
+  # AC4, case 5/5 -- :PARALLEL_GATEWAY: REQ-044 shipped this as a stub
+  # (`{:error, {:gateway_not_yet_implemented, :PARALLEL_GATEWAY, node_id}}`
+  # for every input). REQ-051 (lib/letflow/design/
+  # req051-parallel-gateway-split-join.md) replaces that stub with a real
+  # split/join dispatch body -- see test/letflow/engine/parallel_gateway_test.exs
+  # for the split/join/cancel behavior itself. The one case still worth
+  # covering *here*, alongside the rest of this file's 5-way dispatch survey,
+  # is the degenerate zero-edge PARALLEL_GATEWAY: no in-edges and no
+  # out-edges classifies as gateway_role/2's `:pass_through` (design doc
+  # §3), which then finds no outgoing edge to advance onto and returns
+  # {:error, {:unknown_node_id, node_id}} -- not the old stub error, which
+  # no longer exists on this dispatch path at all. REVIEWER
+  # (handoffs/WF02-REQ051-20260818/step-02d-reviewer.json) confirmed this
+  # is a genuine, anticipated consequence of REQ-051's replacement, not a
+  # regression. Verified to fail against the pre-REQ-051 code: REQ-044's
+  # `dispatch_parallel_gateway/4` unconditionally returned
+  # `{:gateway_not_yet_implemented, :PARALLEL_GATEWAY, node_id}` for every
+  # input, so this assertion (`{:unknown_node_id, node_id}`) would not have
+  # matched against that earlier implementation.
   # ---------------------------------------------------------------------
 
-  describe "transition/3 -- :PARALLEL_GATEWAY node dispatch (5-way case 5/5, stub, design doc §6.5) -- pending_task_nodes unchanged" do
-    test "returns the named :gateway_not_yet_implemented error, never {:ok, ...}" do
+  describe "transition/3 -- :PARALLEL_GATEWAY node dispatch (5-way case 5/5, design doc §3)" do
+    test "a zero-edge PARALLEL_GATEWAY is :pass_through and returns {:error, {:unknown_node_id, _}}, not the retired stub" do
       g = graph([node("gw", :PARALLEL_GATEWAY)], [])
       state = instance_state([token("gw", "t1")], pending_task_nodes: [])
 
       assert Transition.transition(g, state, {:advance_token, "t1"}) ==
-               {:error, {:gateway_not_yet_implemented, :PARALLEL_GATEWAY, "gw"}}
+               {:error, {:unknown_node_id, "gw"}}
 
       assert state.pending_task_nodes == []
     end

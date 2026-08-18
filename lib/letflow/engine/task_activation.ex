@@ -66,20 +66,39 @@ defmodule Letflow.Engine.TaskActivation do
   end
 
   @doc """
-  Returns every `Token.t()` in `new_pending_task_nodes` whose `token_id` is
-  not present (by `token_id` equality) in `previous_pending_task_nodes` — a
-  plain set-difference keyed on `token_id` (design §5.1), resolving REQ-044's
-  own open question (§12.3) of how "already materialized" is tracked: this
-  function diffs against the `pending_task_nodes` value that was current
-  immediately before the `transition/3` call that produced the new state,
-  rather than anything being removed from `pending_task_nodes` itself.
+  Returns every `Token.t()` in `new_pending_task_nodes` whose `{token_id,
+  node_id}` pair is not present in `previous_pending_task_nodes` — a
+  set-difference keyed on the `{token_id, node_id}` pair (design §5.1),
+  resolving REQ-044's own open question (§12.3) of how "already
+  materialized" is tracked: this function diffs against the
+  `pending_task_nodes` value that was current immediately before the
+  `transition/3` call that produced the new state, rather than anything
+  being removed from `pending_task_nodes` itself.
+
+  ## Keyed on the pair, not `token_id` alone (ISS-0057 fix)
+
+  REQ-047's original diff (`token_id` equality only) is correct for its own
+  caller, `append_multi/6` (`create/2`'s own `previous_pending_task_nodes`
+  argument is always `[]`, so no existing `token_id` can ever mask a new
+  entry there). It is **not** correct for REQ-048's own caller,
+  `append_multi_from_existing_records/6`: a token that continues directly
+  from one `:HUMAN_TASK` to another keeps the *same* `token_id`
+  (`Transition.advance_token/3` updates `node_id` in place) — diffing by
+  `token_id` alone made that token's genuinely-new pending entry (at the
+  next node) look "already accounted for" purely because a *stale* entry
+  for the same `token_id` (at the now-completed node) was present in
+  "previous," so no `tasks` row was ever inserted for the next node (a
+  stranded instance — see `docs/issues/ISS-0057.yaml`). Diffing by the
+  `{token_id, node_id}` pair instead means a token's stale previous
+  position no longer masks its new one, while still correctly excluding
+  any token whose position is genuinely unchanged across this hop-chain.
   """
   @spec newly_pending_tokens([Token.t()], [Token.t()]) :: [Token.t()]
   def newly_pending_tokens(previous_pending_task_nodes, new_pending_task_nodes) do
-    previous_ids = MapSet.new(previous_pending_task_nodes, & &1.token_id)
+    previous_positions = MapSet.new(previous_pending_task_nodes, &{&1.token_id, &1.node_id})
 
-    Enum.filter(new_pending_task_nodes, fn %Token{token_id: token_id} ->
-      not MapSet.member?(previous_ids, token_id)
+    Enum.filter(new_pending_task_nodes, fn %Token{token_id: token_id, node_id: node_id} ->
+      not MapSet.member?(previous_positions, {token_id, node_id})
     end)
   end
 

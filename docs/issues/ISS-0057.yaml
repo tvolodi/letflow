@@ -60,5 +60,45 @@ affected_files:
   - lib/letflow/engine.ex
   - lib/letflow/engine/task_activation.ex
   - lib/letflow/design/req048-task-completion.md
-status: open
+status: resolved
+resolved_by: ELIXIR-DEV
+resolved_in_run: WF02-REQ048-20260818 (rework iteration 1 of 3)
+resolution: >
+  Fixed the root cause, not a workaround: `TaskActivation.newly_pending_tokens/2`
+  (lib/letflow/engine/task_activation.ex) now diffs `previous_pending_task_nodes`
+  against `new_pending_task_nodes` by the `{token_id, node_id}` pair instead of by
+  `token_id` alone -- the first candidate fix direction this issue itself named. A
+  token continuing directly from one HUMAN_TASK to another keeps the same `token_id`
+  (`Transition.advance_token/3` updates `node_id` in place), so a stale
+  `{token_id, old_node_id}` "previous" entry no longer masks the token's genuinely-new
+  `{token_id, new_node_id}` pending position -- while a token whose position is
+  genuinely unchanged across the hop-chain (the same `{token_id, node_id}` pair in
+  both sets) is still correctly excluded, so no duplicate `tasks` row is ever
+  attempted.
+
+  `Letflow.Engine.load_pending_task_tokens/3` (lib/letflow/engine.ex) was updated to
+  populate the real `node_id` of each currently-PENDING task's `Token.t()` (previously
+  left `nil`/"unused" per the design doc's original §6.4 text) -- this field is now
+  load-bearing for the pair diff above.
+
+  `append_multi/6`'s own call site (`create/2`'s `persist/8`) is unaffected: its
+  `previous_pending_task_nodes` argument is always `[]`, so the diff key change (pair
+  vs. token_id-alone) makes no observable difference there -- confirmed by the full
+  suite still passing with no regressions.
+
+  Verification: `mix compile --warnings-as-errors` clean;
+  `MIX_TEST_PARTITION=2 mix test test/letflow/engine_complete_task_test.exs` --
+  8 tests, 0 failures (including the specific reproducing AC1 test,
+  `assert length(tasks) == 2` now passes); full suite
+  (`MIX_TEST_PARTITION=2 mix test`) -- 5 properties, 881 tests, 1 failure, and that one
+  failure is the pre-existing, unrelated `test/letflow/identity_migration_test.exs`
+  intermittent failure (ISS-0048), reproduced identically against the base commit with
+  this fix removed, confirming it is not a regression.
+status_history:
+  - status: open
+    at: "2026-08-18T23:15:43Z"
+    by: TEST-DESIGNER
+  - status: resolved
+    at: "2026-08-18T23:30:00Z"
+    by: ELIXIR-DEV
 github_issue: https://github.com/tvolodi/letflow/issues/202

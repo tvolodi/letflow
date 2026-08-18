@@ -964,14 +964,25 @@ defmodule Letflow.Engine do
 
   # §6.4 -- every currently-PENDING task's token (including the one about to
   # be completed by this call, still PENDING at read time), reduced to a
-  # minimal Token.t() carrying only token_id: newly_pending_tokens/2 diffs by
-  # token_id equality only (req047 §5.1), so node_id/branch_id are left
-  # unused at their struct defaults.
+  # minimal Token.t() carrying token_id and node_id (branch_id left unused at
+  # its struct default).
+  #
+  # node_id is load-bearing here (ISS-0057 fix, docs/issues/ISS-0057.yaml):
+  # TaskActivation.newly_pending_tokens/2 now diffs by the {token_id, node_id}
+  # pair, not token_id alone -- a token continuing directly from one
+  # :HUMAN_TASK to another keeps the same token_id but moves to a new
+  # node_id, and the design doc's original §6.4 text (node_id left nil,
+  # "unused") made that stale-token_id-only "previous" entry wrongly mask the
+  # token's genuinely-new pending position at the next node, so no `tasks`
+  # row was ever inserted for it. Populating the task's own real node_id here
+  # (the node this PENDING task is actually sitting at) is what lets the pair
+  # diff tell "still pending at the same node, already accounted for" apart
+  # from "same token, but now pending somewhere new."
   defp load_pending_task_tokens(repo, instance_id, prefix) do
     Task
     |> where([t], t.instance_id == ^instance_id and t.status == :pending)
     |> repo.all(prefix: prefix)
-    |> Enum.map(&%Token{token_id: to_string(&1.token_id), node_id: nil, branch_id: nil})
+    |> Enum.map(&%Token{token_id: to_string(&1.token_id), node_id: &1.node_id, branch_id: nil})
   end
 
   # §6.5 -- assembling the seed InstanceState.t(). join_counters is always

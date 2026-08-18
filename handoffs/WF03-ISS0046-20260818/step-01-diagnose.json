@@ -1,0 +1,48 @@
+{
+  "handoff_id": "a1b2c3d4-0046-4a00-9f01-iss0046step01",
+  "run_id": "WF03-ISS0046-20260818",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0046-20260818/step-01-diagnose.json",
+  "created_at": "2026-08-18T08:24:44Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["a1b2c3d4-0046-4a00-9f01-iss0046step00"],
+    "artifacts_in": ["docs/issues/ISS-0046.yaml"],
+    "owned_modules": ["lib/letflow/engine/transition.ex"]
+  },
+  "task": {
+    "description": "docs/issues/ISS-0046.yaml (status: open) reports that `mix compile --warnings-as-errors` currently fails on main with three type warnings in lib/letflow/engine/transition.ex, all shaped 'a struct for Letflow.Engine.InstanceState is expected on struct update ... but got type: dynamic(...) ... you must also pattern match on %Letflow.Engine.InstanceState{}', at dispatch_start/4 (line ~220), dispatch_end/3 (line ~235), and dispatch_human_task/3 (line ~246). Verified directly against origin/main in an isolated worktree by ORCH before filing -- this is a real, currently-standing break in the compile gate every future WF-02/WF-03 run's Step 2a/Step 3 relies on, not a transient local artifact.\n\nStep 0.5: check docs/issues/ for a resolved entry with matching symptoms first -- ISS-0044 covers different warnings (mix test deprecations/unused-args/migration-reload), not this compile-time struct-update class, so this is likely NOT a recurrence, but confirm rather than assume.\n\nStep 1: reproduce directly (mix compile --warnings-as-errors on a clean _build), then trace to root cause rather than trusting ISS-0046's own hypothesis. ISS-0046's filed hypothesis: dispatch_node/4 (transition.ex ~154-197) dispatches on node.node_type across six clauses, and none of them -- including the catch-all at ~190-196, which matches only %Node{node_type: node_type, id: node_id} and leaves instance_state/token as untyped wildcards -- ever pattern-matches instance_state against %InstanceState{}, so Elixir 1.20's set-theoretic type checker cannot narrow instance_state's type through that dispatch, and the three affected private functions' %InstanceState{instance_state | ...} struct-update syntax degrades to a warning. Confirm or correct this independently -- do not just restate it.\n\nDo NOT implement the fix in this step. Read lib/letflow/design/req044-transition-kernel.md first to understand this module's established idiom (design doc for the module you're diagnosing) so your diagnosis names a fix shape consistent with it, not just 'add a pattern match somewhere'.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors reproduced directly on this branch (not assumed from the issue's own text), actual output quoted",
+      "root cause traced to the specific line/clause responsible, confirmed or corrected against ISS-0046's own hypothesis, not just restated",
+      "diagnosis names which function(s) need a fix and the shape of the fix (e.g. an explicit %InstanceState{} = instance_state pattern where), without writing the actual fix",
+      "explicitly states whether this is a recurrence of any resolved issue (checked docs/issues/*.yaml, esp. ISS-0044) or a new defect class"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0046-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0046-20260818",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

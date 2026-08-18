@@ -51,10 +51,12 @@ defmodule Letflow.Engine do
 
   ## Disclosed limitation: only `:HUMAN_TASK`/`:END` first nodes succeed today
 
-  `create/2` calls `Letflow.Engine.Transition.transition/3` exactly once to
-  advance the root token off `:START` (AC7). Gateway/service-task dispatch
-  is not yet shipped (REQ-050/051/056/057 are not dependencies of this
-  requirement), so `create/2` fails with
+  `create/2` calls `Letflow.Engine.Transition.transition/3` twice (AC7):
+  once to advance the root token off `:START`, and once more — driven by
+  `Transition`'s own "single hop per call" contract (its moduledoc) — to
+  actually dispatch whatever node the token lands on. Gateway/service-task
+  dispatch is not yet shipped (REQ-050/051/056/057 are not dependencies of
+  this requirement), so `create/2` fails with
   `{:error, {:activation_failed, {:gateway_not_yet_implemented, ...}}}` (or
   `:node_type_not_yet_implemented`) — writing nothing — for any definition
   whose first node past `:START` is anything other than `:HUMAN_TASK` or
@@ -115,7 +117,7 @@ defmodule Letflow.Engine do
   @type create_result :: %{
           instance_id: Ecto.UUID.t(),
           definition_id: Ecto.UUID.t(),
-          status: :active,
+          status: :active | :completed,
           current_nodes: [String.t()],
           variables: map(),
           started_at: DateTime.t()
@@ -257,9 +259,33 @@ defmodule Letflow.Engine do
       }
 
       case Transition.transition(graph, instance_state, {:advance_token, token_id}) do
-        {:ok, new_instance_state, _pending_events} -> {:ok, new_instance_state}
-        {:error, reason} -> {:error, {:activation_failed, reason}}
+        {:ok, off_start_state, _pending_events} ->
+          dispatch_landing_node(graph, off_start_state, token_id)
+
+        {:error, reason} ->
+          {:error, {:activation_failed, reason}}
       end
+    end
+  end
+
+  # Transition/3's own "single hop per call" contract (its moduledoc) means the
+  # call above only moves the root token off :START onto the target of its
+  # first outgoing edge -- it never itself dispatches that target node's own
+  # behavior. A second, caller-driven transition/3 call against the same
+  # token_id is required to actually dispatch whatever node the token landed
+  # on: for :HUMAN_TASK this is a harmless no-op hop that appends the token to
+  # pending_task_nodes (dispatch_human_task/3); for :END it is what actually
+  # removes the token and flips status to :completed (dispatch_end/3); for a
+  # gateway/unimplemented node type it is what surfaces
+  # :gateway_not_yet_implemented / :node_type_not_yet_implemented, matching
+  # design doc §9 OQ-1a's disclosed "only :HUMAN_TASK/:END first nodes
+  # succeed" boundary -- a single hop alone left both :END and gateway first
+  # nodes silently mishandled (:END never completing; a gateway silently
+  # accepted as an ordinary token position).
+  defp dispatch_landing_node(graph, off_start_state, token_id) do
+    case Transition.transition(graph, off_start_state, {:advance_token, token_id}) do
+      {:ok, new_instance_state, _pending_events} -> {:ok, new_instance_state}
+      {:error, reason} -> {:error, {:activation_failed, reason}}
     end
   end
 
@@ -296,22 +322,30 @@ defmodule Letflow.Engine do
          prefix
        ) do
     current_node_ids = Enum.map(new_instance_state.tokens, & &1.node_id)
-    [root_token] = new_instance_state.tokens
 
     Multi.new()
     |> Multi.run(:instance_projection, fn repo, _changes ->
+      # M1 always inserts :active, even when the landing-node dispatch above
+      # already completed the instance (design doc §9 OQ-1a's :END success
+      # case): Letflow.EventStore.append/2's own active_instance_guard (its
+      # M1, run as part of M3 below) requires the instance_projections row
+      # to be non-terminal at INSTANCE_STARTED append time -- the same
+      # ordering EventStore.append/2 already enforces for every other
+      # event. M4 below flips the row to its true final status immediately
+      # after the event append succeeds, still inside this same Multi.
       insert_instance_projection(
         repo,
         instance_id,
         definition,
         correlation_key,
+        :active,
         current_node_ids,
         initial_variables,
         prefix
       )
     end)
     |> Multi.run(:token_record, fn repo, _changes ->
-      insert_token_record(repo, instance_id, root_token, prefix)
+      insert_token_records(repo, instance_id, new_instance_state.tokens, prefix)
     end)
     |> Multi.run(:event, fn _repo, _changes ->
       append_instance_started_event(
@@ -323,8 +357,17 @@ defmodule Letflow.Engine do
         prefix
       )
     end)
+    |> Multi.run(:finalize, fn repo, %{instance_projection: projection} ->
+      finalize_instance_projection(repo, projection, new_instance_state.status, prefix)
+    end)
     |> Repo.transaction()
-    |> interpret_create_result(instance_id, definition, current_node_ids, initial_variables)
+    |> interpret_create_result(
+      instance_id,
+      definition,
+      new_instance_state.status,
+      current_node_ids,
+      initial_variables
+    )
   end
 
   # M1 -- insert instance_projections. A uq_instance_correlation collision
@@ -336,13 +379,14 @@ defmodule Letflow.Engine do
          instance_id,
          definition,
          correlation_key,
+         status,
          current_node_ids,
          initial_variables,
          prefix
        ) do
     attrs = %{
       instance_id: instance_id,
-      status: :active,
+      status: status,
       definition_id: definition.id,
       correlation_key: correlation_key,
       current_nodes: current_node_ids,
@@ -365,10 +409,23 @@ defmodule Letflow.Engine do
     end
   end
 
-  # M2 -- insert the root tokens row, post-step-9 node_id, branch_id ==
-  # instance_id (req043 §3.2's root-branch convention). Must run after M1
+  # M2 -- insert the root tokens row, post-landing-dispatch node_id, branch_id
+  # == instance_id (req043 §3.2's root-branch convention). Must run after M1
   # (tokens.instance_id's FK target must already exist in the same
-  # transaction).
+  # transaction). An empty token list means the root token already reached
+  # :END and was removed by dispatch_end/3 (design doc §9 OQ-1a's :END
+  # success case) -- no tokens row at all for this instance, matching the
+  # test's own explicit assertion that a same-call :END completion leaves
+  # zero rows in `tokens`, not one stranded at "end".
+  defp insert_token_records(_repo, _instance_id, [], _prefix), do: {:ok, []}
+
+  defp insert_token_records(repo, instance_id, [%Token{} = token], prefix) do
+    case insert_token_record(repo, instance_id, token, prefix) do
+      {:ok, record} -> {:ok, [record]}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   defp insert_token_record(repo, instance_id, %Token{} = token, prefix) do
     attrs = %{
       instance_id: instance_id,
@@ -427,6 +484,30 @@ defmodule Letflow.Engine do
     end
   end
 
+  # M4 -- flips the instance_projections row to its true final status once
+  # the INSTANCE_STARTED event (M3) has been appended while the row was
+  # still :active (see M1's comment above). A no-op when the landing-node
+  # dispatch left the instance :active (the common HUMAN_TASK case) --
+  # avoids an unconditional extra UPDATE for the overwhelmingly common path.
+  # `completed_at` is set here (not at M1) since this is the one place the
+  # row's terminal status actually becomes true, matching
+  # `InstanceProjection.terminal?/1`'s own :completed/:cancelled framing.
+  defp finalize_instance_projection(_repo, %InstanceProjection{} = projection, :active, _prefix) do
+    {:ok, projection}
+  end
+
+  defp finalize_instance_projection(repo, %InstanceProjection{} = projection, :completed, prefix) do
+    attrs = %{status: :completed, completed_at: DateTime.utc_now()}
+
+    projection
+    |> InstanceProjection.update_changeset(attrs)
+    |> repo.update(prefix: prefix)
+    |> case do
+      {:ok, %InstanceProjection{} = updated} -> {:ok, updated}
+      {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
+    end
+  end
+
   defp unique_violation?(%Ecto.Changeset{errors: errors}, field) do
     Enum.any?(errors, fn
       {^field, {_message, opts}} -> Keyword.get(opts, :constraint) == :unique
@@ -442,6 +523,7 @@ defmodule Letflow.Engine do
          {:ok, %{instance_projection: %InstanceProjection{} = projection}},
          instance_id,
          definition,
+         status,
          current_node_ids,
          initial_variables
        ) do
@@ -449,7 +531,7 @@ defmodule Letflow.Engine do
      %{
        instance_id: instance_id,
        definition_id: definition.id,
-       status: :active,
+       status: status,
        current_nodes: current_node_ids,
        variables: initial_variables,
        started_at: projection.started_at
@@ -465,6 +547,7 @@ defmodule Letflow.Engine do
          {:error, _failed_step, reason, _changes},
          _instance_id,
          _definition,
+         _status,
          _current_node_ids,
          _initial_variables
        ) do

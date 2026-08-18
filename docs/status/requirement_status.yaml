@@ -4475,6 +4475,25 @@ history:
       persistence, and retiring instance_supervisor.ex explicitly (nothing
       left to supervise) -- left for CODE-DESIGNER to confirm and detail,
       not pre-decided here.
+  - req: REQ-048
+    event: started
+    agent: ORCH
+    at: "2026-08-18T22:29:30Z"
+    note: >
+      Session resumed on hetzner-wt2-orch (~/letflow-wt2). QUEUE_AUTH_TOKEN
+      unset -- letflow-queue unreachable, operating in single-host fallback
+      per TASK_QUEUE.md (stated explicitly here per No Speculation). Read
+      docs/requirements.yaml directly: REQ-045/REQ-050/REQ-051 (named
+      newly-unblocked in this session's prompt) were already done, completed
+      by a concurrent host since that summary was written. Of the
+      dependency-satisfied pending requirements (REQ-046, REQ-048, REQ-058),
+      REQ-046 was found already under active work by another host
+      (feature/WF02-REQ046-20260818, commits minutes old through Step 3) --
+      skipped to avoid collision. REQ-048 (Task completion, EE-04) has no
+      existing branch/PR/registry entry and is lowest impl_order (93) among
+      the remaining eligible set. Step 00 git setup PASS (worktree variant,
+      branch feature/WF02-REQ048-20260818). docs/requirements.yaml REQ-048
+      flipped pending -> in_progress.
   - req: REQ-046
     event: done
     agent: DOC-UPDATER
@@ -4511,3 +4530,61 @@ history:
       either way, so this was a stale prose fix only, no behavior change.
       Updated docs/migration/stage-3-instance-engine.md's header to move
       REQ-046 from the pending list into the done list.
+  - req: REQ-048
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-18T23:39:36Z"
+    note: >
+      Task completion (EE-04) shipped: Letflow.Engine.complete_task/3, backed by
+      an Ecto.Multi persistence orchestration that in one transaction merges
+      output_variables (REQ-049's EE-09 merge), evaluates outgoing edge
+      conditions (REQ-044/REQ-050), activates the next node(s) via REQ-047's
+      TaskActivation path, flips the completing task to COMPLETED with
+      completed_by/completed_at/output_variables set, and appends exactly one
+      TASK_COMPLETED event. New support code: Transition.dispatch_task_completion/4
+      and really_conditioned?/1 (partitions a HUMAN_TASK's outgoing edges into
+      genuinely-conditioned vs. plain), and TaskActivation.append_multi_from_existing_records/6.
+      Design deviation found and fixed during implementation: the original
+      design's edge partition did not correctly separate HUMAN_TASK's own
+      outgoing edges from the exclusive-gateway-style conditioned/default
+      partition -- corrected in Transition's dispatch path, documented in
+      lib/letflow/design/req048-task-completion.md.
+      A real bug (ISS-0057, GitHub #202) was found by TEST-DESIGNER while
+      writing test/letflow/engine_complete_task_test.exs's AC1 test: two
+      directly-chained HUMAN_TASK nodes (no intervening gateway) never got a
+      tasks row inserted for the second task, because
+      TaskActivation.newly_pending_tokens/2 diffed the previous/new
+      pending-task sets by token_id alone, and a token continuing directly
+      from one HUMAN_TASK to another keeps the same token_id -- so its
+      genuinely-new pending position was filtered out as already accounted
+      for. ELIXIR-DEV fixed the root cause during rework (iteration 1 of 3):
+      the diff now keys on {token_id, node_id} pairs, and
+      Engine.load_pending_task_tokens/3 was updated to populate each pending
+      task's real node_id (previously left nil/unused) since that field is
+      now load-bearing for the pair diff. ISS-0057 is now `resolved`,
+      confirmed by rereading docs/issues/ISS-0057.yaml in this step. One
+      incidental, non-blocking follow-up was filed during REVIEWER's Step 2d
+      idiom/scope gate: ISS-0056 (GitHub #201) -- no design-time (REQ-029-style
+      CHK) validation catches a HUMAN_TASK node whose outgoing edges can never
+      resolve at complete_task/3 time (no-fallback, all-conditions-false
+      case); left `open` as claimable follow-up work, confirmed correct and
+      untouched in this step. RELEASE-VALIDATOR independently re-verified all
+      5 acceptance criteria: test/letflow/engine_complete_task_test.exs 8/8,
+      full suite 881 tests (5 properties), 1 failure -- that failure is the
+      pre-existing, unrelated test/letflow/identity_migration_test.exs
+      intermittent failure (ISS-0048/ISS-0050 territory), reproduced
+      identically against the base commit with REQ-048's changes removed,
+      confirming it is not a regression. docs/requirements.yaml REQ-048
+      flipped in_progress -> done. Checked this step, no changes needed:
+      README.md's "What's here today" and "Running it" sections still
+      describe only the original pilot slice (Letflow.ProcessInstance
+      gen_statem, three Router HTTP endpoints) -- task completion is an
+      internal engine capability with no new HTTP route and no
+      gen_statem/process-model change, so neither section nor the ASCII state
+      diagram is affected, same reasoning REQ-045's and REQ-047's DOC-UPDATER
+      passes applied. docs/migration/stage-3-instance-engine.md's header
+      listed REQ-048 in its `pending` list even though it is now `done` --
+      fixed in this same pass (moved REQ-048 into the `done` clause with an
+      EE-04 one-line summary, pending count corrected 14 -> 13), same
+      header-sync shape REQ-045's and REQ-047's DOC-UPDATER passes already
+      applied.

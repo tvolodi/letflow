@@ -1,0 +1,147 @@
+# Test run report — WF-02 Step 4 (test run, RE-RUN after ISS-0057 rework) for REQ-048
+
+req_id: REQ-048
+workflow: WF-02
+step: "04"
+agent: TEST-RUNNER
+run_id: WF02-REQ048-20260818
+date_utc: 2026-08-18T23:32:37Z
+
+git:
+  branch: feature/WF02-REQ048-20260818
+  branch_confirmed: true
+  commit: 4898414
+  commit_subject: "fix(ISS-0057): diff newly-pending tokens by (token_id, node_id), not token_id alone"
+  worktree: true
+  note: >
+    This checkout is a secondary git worktree (~/letflow-wt2), sharing its
+    Postgres container with the primary ~/letflow checkout. Per this
+    worktree's standing session instructions, `docker compose up` was NOT
+    run here (Postgres was already running, container letflow-postgres-1,
+    confirmed via `docker ps` — 0.0.0.0:5462->5432/tcp, [::]:5462->5432/tcp).
+    Tests were invoked with MIX_TEST_PARTITION=2 as this worktree requires,
+    to avoid colliding with the primary checkout's own test database.
+  context: >
+    This is a RE-RUN of Step 4 after rework: ELIXIR-DEV fixed the ISS-0057
+    blocker (previously reported in
+    test/reports/report-20260818-WF02-REQ048-20260818.yaml, verdict FAIL)
+    in commit 4898414, and SECURITY-REVIEWER + REVIEWER both incrementally
+    re-PASSed that commit before this re-run.
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 27 [erts-15.2.7.4] ... Mix 1.18.3 (compiled with Erlang/OTP 27)"
+  postgres_container: "letflow-postgres-1 (already running, confirmed via
+    \`docker ps\` only — 0.0.0.0:5462->5432/tcp and [::]:5462->5432/tcp;
+    \`docker compose up\` was NOT run per this worktree's standing
+    instructions, container is shared with the primary ~/letflow checkout)."
+  partition: "MIX_TEST_PARTITION=2 (required for this worktree, per standing
+    session instructions, to avoid colliding with the primary checkout's
+    concurrently-running test database)"
+  command_run: "MIX_TEST_PARTITION=2 mix test (full suite, unpinned/default
+    random seed — the \`test\` alias runs ecto.create + ecto.migrate --quiet
+    first automatically)"
+
+verdict: FAIL
+
+checks:
+  test_suite_full_run:
+    result: FAIL
+    exit_code: 2
+    summary_line_verbatim: "5 properties, 881 tests, 1 failure"
+    finished_line_verbatim: "Finished in 95.2 seconds (2.2s async, 93.0s sync)"
+    failures: 1
+
+  engine_complete_task_test_targeted_rerun:
+    result: PASS
+    summary_line_verbatim: "8 tests, 0 failures"
+    finished_line_verbatim: "Finished in 2.7 seconds (0.00s async, 2.7s sync)"
+    note: >
+      test/letflow/engine_complete_task_test.exs (REQ-048's own test file,
+      including the previously-failing AC1 test) now passes in full — both
+      in the full-suite run and in an isolated targeted re-run. This
+      confirms ISS-0057 is fixed and REQ-048's own acceptance criteria are
+      all green.
+
+  failure_1_identity_migration_iss0048:
+    result: FAIL
+    classification: "Pre-existing, unrelated, environmental — ISS-0048, still open"
+    test: "test DropLegacyPublicIdentityTables migration guard (REQ-063 §5)
+      -- skip-on-uncopied-row once the copy is completed for every
+      registered tenant, the guard PROCEEDS and drops all three public
+      tables (Letflow.IdentityMigrationTest)"
+    location: "test/letflow/identity_migration_test.exs:367 (assertion at
+      line 396)"
+    assertion_output_verbatim: |
+      expected public.groups to be dropped
+      code: for table <- ["groups", "users", "tenant_role"] do
+      stacktrace:
+        test/letflow/identity_migration_test.exs:396: anonymous fn/2 in
+          Letflow.IdentityMigrationTest."test DropLegacyPublicIdentityTables
+          migration guard (REQ-063 §5) -- skip-on-uncopied-row once the copy
+          is completed for every registered tenant, the guard PROCEEDS and
+          drops all three public tables"/1
+        (elixir 1.18.3) lib/enum.ex:2546:
+          Enum."-reduce/3-lists^foldl/2-0-"/3
+        test/letflow/identity_migration_test.exs:394: (test)
+    diagnosis: >
+      Same failure signature as the one recorded in this requirement's
+      previous run report
+      (test/reports/report-20260818-WF02-REQ048-20260818.yaml) and in the
+      already-open docs/issues/ISS-0048.yaml — identical test name,
+      identical location, identical assertion text
+      ("expected public.groups to be dropped"), identical stacktrace shape.
+      Confirmed to be the same known intermittent environmental failure
+      (orphaned tenant_*/sandbox_* Postgres schemas accumulating in the
+      shared test database), not a new problem and not caused by commit
+      4898414 (which only touches
+      lib/letflow/engine/task_activation.ex-area token-diffing logic, no
+      identity-migration code).
+    routing: "No action taken here — ISS-0048 remains separately tracked
+      and open. Not re-filed. Does not represent a REQ-048 regression."
+
+known_noise_not_a_failure:
+  - >
+    Verbose SQL query debug logging (`[debug] QUERY OK ...` lines, including
+    tenant-schema DDL/DML from multi-tenant test fixtures) appears throughout
+    raw mix test output (config/test.exs's default test log level) —
+    expected, not indicative of any problem.
+
+issues_filed_this_run: none (the one remaining failure maps to the
+  already-open, pre-existing ISS-0048; no new filing required)
+
+diagnosis: >
+  1 of 881 tests failed on this re-run, down from 2 in the prior run. The
+  previously-blocking failure — REQ-048's own AC1 test in
+  engine_complete_task_test.exs, caused by ISS-0057 (Engine.complete_task/3
+  token-diffing bug) — is now fully resolved by commit 4898414;
+  engine_complete_task_test.exs passes 8/8 both in the full suite and in an
+  isolated targeted re-run. The one remaining failure
+  (identity_migration_test.exs, DropLegacyPublicIdentityTables guard test)
+  is the same signature as the pre-existing, already-open ISS-0048
+  (orphaned tenant schemas in the shared test DB), unrelated to REQ-048's
+  changes, and not blocking per this run's own instructions.
+
+regression_check: >
+  881 tests total, 5 properties, 1 failure. No test outside the single
+  pre-existing ISS-0048 failure failed. No sign of any new regression
+  introduced by commit 4898414's fix.
+
+handoff:
+  verdict: FAIL
+  status_note: >
+    Reported verdict is FAIL per raw mix test exit code and count (1
+    failure), matching HANDOFF_PROTOCOL.md's requirement to report the
+    actual result rather than a subjective judgment call. However, the one
+    remaining failure is the pre-existing, already-open, environmental
+    ISS-0048 (unrelated to REQ-048), and REQ-048's own acceptance-criteria
+    test file (engine_complete_task_test.exs) is fully green (8/8). This
+    run is not blocked by a REQ-048 defect; RELEASE-VALIDATOR should treat
+    ISS-0048's presence as expected/known rather than a new blocker when it
+    independently re-runs the suite.
+  artifacts_out:
+    - test/reports/report-20260818-WF02-REQ048-20260818-retry.yaml
+  next_action: "REQ-048's own tests are green; ISS-0057 rework is verified
+    fixed. Proceed to RELEASE-VALIDATOR for independent re-verification.
+    ISS-0048 (identity_migration_test.exs) remains separately tracked/open
+    and requires no further action as part of this requirement."

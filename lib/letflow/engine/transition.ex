@@ -82,14 +82,21 @@ defmodule Letflow.Engine.Transition do
   `token_id` one step according to whatever node type it currently
   occupies." `{:cancel_branch, branch_id}` is REQ-051's own addition (design
   doc §3.4) — the concrete, pure cancelled-branch representation this
-  requirement itself defines (not deferred to REQ-052). Deliberately not a
-  closed enumeration beyond these two — every later EE-* requirement that
-  needs its own event shape adds its own tagged-tuple constructor to this
-  same union (design doc §4, §12.5).
+  requirement itself defines (not deferred to REQ-052). `{:complete_task,
+  token_id}` is REQ-048's own addition (EE-04,
+  `lib/letflow/design/req048-task-completion.md` §5) — a token sitting on a
+  `:HUMAN_TASK` node has no automatic outgoing traversal
+  (`dispatch_human_task/3`'s own contract), so `{:advance_token, token_id}`
+  cannot move it off that node; this constructor is the caller's explicit
+  "this token's human task just completed, evaluate its outgoing edges"
+  signal. Deliberately not a closed enumeration beyond these three — every
+  later EE-* requirement that needs its own event shape adds its own
+  tagged-tuple constructor to this same union (design doc §4, §12.5).
   """
   @type transition_event ::
           {:advance_token, token_id :: String.t()}
           | {:cancel_branch, branch_id :: String.t()}
+          | {:complete_task, token_id :: String.t()}
 
   @typedoc """
   The tagged union `transition.zig` declares for EE-06/EE-07 split/join
@@ -120,7 +127,9 @@ defmodule Letflow.Engine.Transition do
   `:node_type_not_yet_implemented` is the generic node-type catch-all's
   error (design doc §4, §7). `:unknown_branch_id`, `:no_matching_join_found`,
   and `:combined_split_join_not_supported` are REQ-051's own additions
-  (design doc §7).
+  (design doc §7). `:token_not_at_human_task` is REQ-048's own defensive
+  addition — `{:complete_task, token_id}` dispatched against a token not
+  currently sitting on a `:HUMAN_TASK` node (req048 design doc §5 point 1).
   """
   @type transition_error ::
           {:unknown_event_type, event :: term()}
@@ -133,6 +142,7 @@ defmodule Letflow.Engine.Transition do
           | {:unknown_branch_id, branch_id :: String.t()}
           | {:no_matching_join_found, split_node_id :: String.t()}
           | {:combined_split_join_not_supported, node_id :: String.t()}
+          | {:token_not_at_human_task, node_type :: atom(), node_id :: String.t()}
 
   @typedoc """
   One entry per non-default outgoing edge of an `:EXCLUSIVE_GATEWAY` whose
@@ -178,6 +188,21 @@ defmodule Letflow.Engine.Transition do
 
       {:cancel_branch, branch_id} ->
         dispatch_cancel_branch(definition_snapshot, instance_state, branch_id)
+
+      {:complete_task, token_id} ->
+        case find_token(instance_state.tokens, token_id) do
+          nil ->
+            {:error, {:unknown_token_id, token_id}}
+
+          token ->
+            case find_node(definition_snapshot.nodes, token.node_id) do
+              nil ->
+                {:error, {:unknown_node_id, token.node_id}}
+
+              node ->
+                dispatch_task_completion(definition_snapshot, instance_state, token, node)
+            end
+        end
 
       other ->
         {:error, {:unknown_event_type, other}}
@@ -291,6 +316,97 @@ defmodule Letflow.Engine.Transition do
   defp dispatch_human_task(%InstanceState{} = instance_state, token, _node) do
     new_pending = instance_state.pending_task_nodes ++ [token]
     {:ok, %InstanceState{instance_state | pending_task_nodes: new_pending}, []}
+  end
+
+  # --- {:complete_task, token_id} (REQ-048 design doc §5, EE-04) -------------
+
+  # Moves a token off the :HUMAN_TASK node it is currently sitting on, once
+  # its task has completed -- the caller's own explicit signal that the
+  # "no automatic outgoing traversal" stop dispatch_human_task/3 left it at
+  # is now over. Never appends to pending_task_nodes (design doc §5 point 3,
+  # INV-EE48-6) -- only dispatch_human_task/3 does that.
+  #
+  # Deliberate, empirically-forced divergence from req048 design doc §5
+  # point 2's literal text: that section claimed reusing
+  # dispatch_exclusive_gateway/4's exact partition-by-is_default algorithm
+  # "degrades to the one default/unconditioned edge wins" for a HUMAN_TASK's
+  # single, unconditioned outgoing edge. Confirmed FALSE by direct execution
+  # against real Postgres while implementing this requirement: REQ-029's
+  # CHK-13 (which forces every non-default EXCLUSIVE_GATEWAY edge to carry a
+  # real, non-empty condition, making dispatch_exclusive_gateway/4's
+  # is_default-only partition safe there) is scoped to :EXCLUSIVE_GATEWAY
+  # sources only (confirmed against graph.ex's own exclusive_gateway_source?/3
+  # guard) -- a :HUMAN_TASK's own outgoing edges carry no such guarantee. The
+  # ordinary, structurally-valid, single-unconditioned-edge HUMAN_TASK (no
+  # `is_default`, no `condition`) is the overwhelmingly common real-world
+  # shape and is exactly AC1's own scenario; reusing the exact
+  # is_default-only partition sent that edge into the "conditioned" bucket,
+  # evaluated Expr.evaluate_condition(nil, _) (always false), found no match,
+  # found no default_edge (is_default was never set), and returned
+  # {:error, {:no_matching_edge, ...}} on every ordinary completion -- not an
+  # edge case, the common path. Fixed here by partitioning on "carries a
+  # real, non-empty condition and isn't explicitly is_default" instead of on
+  # is_default alone: an edge with `condition: nil` (or `""`), same as one
+  # explicitly marked `is_default: true`, is treated as a default/fallback
+  # candidate. dispatch_exclusive_gateway/4 itself is left completely
+  # unmodified (this fix is local to this new function only). Flagged
+  # prominently for REVIEWER -- this is a correctness fix to newly-added
+  # logic discovered via direct smoke testing, not a silent re-decision of
+  # any already-shipped, gate-approved behavior.
+  @spec dispatch_task_completion(Graph.t(), InstanceState.t(), Token.t(), Node.t()) ::
+          {:ok, InstanceState.t(), [pending_event()]}
+          | {:error, {:token_not_at_human_task, node_type :: atom(), node_id :: String.t()}}
+          | {:error,
+             {:no_matching_edge, node_id :: String.t(),
+              evaluated_conditions :: [evaluated_condition()]}}
+  defp dispatch_task_completion(
+         definition_snapshot,
+         %InstanceState{} = instance_state,
+         %Token{} = token,
+         %Node{node_type: :HUMAN_TASK} = node
+       ) do
+    outgoing_edges = Enum.filter(definition_snapshot.edges, &(&1.source == node.id))
+
+    {conditioned_edges, default_candidates} =
+      Enum.split_with(outgoing_edges, &really_conditioned?/1)
+
+    default_edge = List.first(default_candidates)
+
+    case evaluate_conditioned_edges(conditioned_edges, instance_state.variables) do
+      {:match, edge} ->
+        advance_token(instance_state, token, edge.target)
+
+      {:no_match, evaluated_conditions} ->
+        case default_edge do
+          nil ->
+            {:error, {:no_matching_edge, node.id, evaluated_conditions}}
+
+          edge ->
+            advance_token(instance_state, token, edge.target)
+        end
+    end
+  end
+
+  # Defensive guard against a stale/mismatched task.token_id <-> token_record
+  # node_id pairing -- should be unreachable given Letflow.Engine's own
+  # reconstruction invariant, kept for this codebase's "never raise" totality
+  # discipline (design doc §5 point 1).
+  defp dispatch_task_completion(_definition_snapshot, _instance_state, _token, %Node{
+         node_type: node_type,
+         id: node_id
+       }) do
+    {:error, {:token_not_at_human_task, node_type, node_id}}
+  end
+
+  # An edge is "really conditioned" only if it isn't explicitly is_default
+  # AND it carries a real, non-empty CEL condition string -- everything else
+  # (is_default: true, or condition nil/"") is a default/fallback candidate.
+  # See dispatch_task_completion/4's own comment above for why this
+  # partition (rather than dispatch_exclusive_gateway/4's is_default-only
+  # one) is needed for a :HUMAN_TASK's outgoing edges specifically.
+  @spec really_conditioned?(Graph.Edge.t()) :: boolean()
+  defp really_conditioned?(%Graph.Edge{is_default: is_default, condition: condition}) do
+    is_default != true and is_binary(condition) and condition != ""
   end
 
   # --- :EXCLUSIVE_GATEWAY (REQ-050 design doc §5, EE-05) ----------------------
@@ -518,7 +634,11 @@ defmodule Letflow.Engine.Transition do
         %Node{} = current_node ->
           case Enum.filter(definition_snapshot.edges, &(&1.source == current_node.id)) do
             [single_edge] ->
-              walk_to_gateway(definition_snapshot, single_edge.target, MapSet.put(visited, node_id))
+              walk_to_gateway(
+                definition_snapshot,
+                single_edge.target,
+                MapSet.put(visited, node_id)
+              )
 
             _other ->
               :error

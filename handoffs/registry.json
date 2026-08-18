@@ -1124,6 +1124,23 @@
       "queue_agent_id": "tvolodi-orch",
       "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
       "note": "Fallback task selection (no QUEUE_AUTH_TOKEN), lowest impl_order (90) among ready S3 requirements. Executes the supersession REQ-045's own shipped moduledoc already recorded: deleted lib/letflow/process_instance.ex and lib/letflow/events/transition_event.ex (superseded by Letflow.Engine.create/2), added a new migration dropping the transition_events table, deleted test/letflow/process_instance_test.exs (5 cases, all superseded by test/letflow/engine_test.exs). Design gate FAILed once, correctly: the first design silently deleted lib/letflow/instance_supervisor.ex, contradicting REQ-045's own already-shipped, AC5-tested moduledoc commitment (\"generalized, not superseded... kept for later reuse by REQ-056/REQ-057\") without flagging the reversal for REVIEWER per CLAUDE.md's decision-record rule. CODE-DESIGNER reworked to retain instance_supervisor.ex instead (start_instance/1 removed, new moduledoc documenting why it's idle), re-passed. Mid-Step-2a, ELIXIR-DEV correctly stopped rather than guess: lib/letflow/router.ex -- never named in the requirement text or the design's own source list -- turned out to be live code wired into application.ex, directly calling every symbol this requirement deletes, with no S4 replacement built. CODE-DESIGNER wrote a narrowly-scoped follow-up design (removed the three dead routes outright, not wired to Engine.create/2's mismatched contract, not stubbed to avoid inventing out-of-scope S4 API surface), re-passed by CODE-DESIGN-VALIDATOR. SECURITY-REVIEWER PASS (INV-1/4/7/8 applied; migration is a plain non-tenant-scoped table drop, matching the original table's own never-tenant-scoped shape). REVIEWER PASS, independently agreed with the instance_supervisor.ex retention call on its engineering merits (not just gate-passing), and judged the drop_transition_events migration's non-auto-reversibility (Ecto only synthesizes create table's inverse) acceptable as an irreversible change/0 given no production deployment exists yet -- design doc corrected to state this accurately rather than its original (wrong) auto-reversible claim. TEST-DESIGNER's scope test: partial YES -- AC1/AC4 already covered by REQ-045's and parallel_approval_test.exs's existing suites, but router.ex was genuinely new-to-test surface (no router_test.exs existed anywhere in this codebase before), so added 5 Plug.Test cases proving /health still works and the three removed routes now cleanly 404 rather than raising. Full suite 850/850 pre-rebase, independently reproduced by ORCH, TEST-RUNNER, RELEASE-VALIDATOR. DOC-UPDATER corrected README.md's stale \"Running it\" curl examples (three now-404ing routes) and a stale route citation in lib/letflow/plugs/auth_pipeline.ex's moduledoc. Step Final's rebase picked up REQ-047 (task activation persistence, EE-03) merged concurrently -- one append-only bookkeeping conflict (requirement_status.yaml) and one stage-3-instance-engine.md header conflict (both REQ-046 and REQ-047 done-list entries), composed rather than picked; re-verified post-rebase: mix compile clean, full suite 878/878."
+    },
+    {
+      "run_id": "WF02-REQ048-20260818",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-048"],
+      "stage": "S3",
+      "status": "IN_PROGRESS",
+      "owned_modules": ["lib/letflow/engine/", "lib/letflow/instance*", "priv/repo/migrations/"],
+      "lock_acquired_at": "2026-08-18T22:28:30Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (git setup) COMPLETED",
+      "backfilled": false,
+      "queue_task_id": null,
+      "queue_agent_id": "hetzner-wt2-orch",
+      "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
+      "note": "Fallback task selection (no QUEUE_AUTH_TOKEN in this session). REQ-045/REQ-050/REQ-051 named in session prompt as newly-unblocked were already done (completed by concurrent hosts). REQ-046 (also eligible, lowest impl_order) skipped -- already under active work by another host (feature/WF02-REQ046-20260818). REQ-048 (Task completion, EE-04) claimed instead: lowest impl_order among remaining eligible pending requirements, no existing branch/PR."
     }
   ]
 }

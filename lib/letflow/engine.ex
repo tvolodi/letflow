@@ -83,17 +83,36 @@ defmodule Letflow.Engine do
   not stored anywhere by this module, since none of
   `instance_projections`/`tokens`/`tasks` carries a `tenant_id` column
   (Decision 0006 D2).
+
+  ## `complete_task/3` (EE-04, REQ-048) — HTTP and assignee authorization are
+  ## out of scope
+
+  `POST /api/v1/tasks/:id/complete`'s HTTP status-code mapping (404/409/422
+  for `:task_not_found`/`{:task_not_pending, _}`/`:invalid_output_variables`
+  respectively) is S4 (api-surface) scope — `complete_task/3` returns tagged
+  tuples only, exactly as `Letflow.EventStore.append/2`'s `is_duplicate`
+  boolean already left the 200-vs-201 choice to S4. Whether the calling
+  `TASK_WORKER` is the task's own `assignee_ref` (HTTP 403 otherwise, per
+  IDN-03's role matrix) is **not checked anywhere in this module** — that is
+  the S4 auth plug's job, per REQ-021's precedent; `complete_task/3` performs
+  no assignee comparison and accepts `attrs.actor_id` as already-authorized
+  by the caller. See `lib/letflow/design/req048-task-completion.md` for the
+  full design.
   """
+
+  import Ecto.Query
 
   alias Ecto.Multi
   alias Letflow.Definitions
   alias Letflow.Definitions.Graph
   alias Letflow.Definitions.SnapshotStore
   alias Letflow.Engine.InstanceState
+  alias Letflow.Engine.Task
   alias Letflow.Engine.TaskActivation
   alias Letflow.Engine.Token
   alias Letflow.Engine.TokenRecord
   alias Letflow.Engine.Transition
+  alias Letflow.Engine.VariableMerge
   alias Letflow.EventStore
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Repo
@@ -672,6 +691,578 @@ defmodule Letflow.Engine do
          _current_node_ids,
          _initial_variables
        ) do
+    {:error, reason}
+  end
+
+  # =========================================================================
+  # complete_task/3 (EE-04, REQ-048) -- see
+  # lib/letflow/design/req048-task-completion.md for the full design this
+  # section implements.
+  # =========================================================================
+
+  @type complete_attrs :: %{
+          required(:output_variables) => map(),
+          required(:actor_id) => Ecto.UUID.t(),
+          required(:idempotency_key) => String.t()
+        }
+
+  @type complete_opts :: [prefix: String.t()]
+
+  @type complete_error ::
+          {:error, :invalid_output_variables}
+          | {:error, :invalid_task_id}
+          | {:error, :invalid_schema_name}
+          | {:error, :task_not_found}
+          | {:error, {:task_not_pending, status :: :completed | :cancelled}}
+          | {:error, :instance_not_found}
+          | {:error, {:instance_not_active, status :: :completed | :cancelled | :error}}
+          | {:error, :snapshot_not_found}
+          | {:error, {:graph_structure_invalid, term()}}
+          | {:error, {:missing_token_record, token_id :: Ecto.UUID.t()}}
+          | {:error, {:transition_failed, Transition.transition_error()}}
+          | {:error, {:new_token_during_resume_not_supported, token_id :: String.t()}}
+          | {:error, {:task_activation_failed, term()}}
+          | {:error, {:event_append_failed, term()}}
+          | {:error, :missing_actor_id}
+          | {:error, :missing_idempotency_key}
+          | {:error, Ecto.Changeset.t()}
+          | {:error, term()}
+
+  @type complete_result :: %{
+          task_id: Ecto.UUID.t(),
+          instance_id: Ecto.UUID.t(),
+          instance_status: :active | :completed,
+          current_nodes: [String.t()],
+          variables: map(),
+          completed_at: DateTime.t()
+        }
+
+  @doc """
+  Completes a `PENDING` `Letflow.Engine.Task` (EE-04): merges
+  `attrs[:output_variables]` into the instance's live variables (REQ-049's
+  `Letflow.Engine.VariableMerge.merge/3`), evaluates the completed
+  `:HUMAN_TASK` node's own outgoing edges via
+  `Letflow.Engine.Transition`'s new `{:complete_task, token_id}` dispatch,
+  activates any newly-reached `:HUMAN_TASK` node(s)
+  (`Letflow.Engine.TaskActivation.append_multi_from_existing_records/6`),
+  flips the task row to `COMPLETED`, and appends exactly one
+  `TASK_COMPLETED` event (REQ-025) -- all inside one `Ecto.Multi`/
+  `Repo.transaction/1`. Row-level `SELECT ... FOR UPDATE` locking on the
+  `tasks` row (and, for the same reason `instance_projections` writes need
+  it, on the owning `instance_projections` row) serializes two concurrent
+  `complete_task/3` calls on the same `task_id`: exactly one commits
+  `:completed`, the other observes `{:error, {:task_not_pending,
+  :completed}}`.
+
+  `attrs[:output_variables]` must be present and a plain map (`%{}` is
+  valid); `nil`, a missing key, or a non-map/struct value are all rejected
+  with `{:error, :invalid_output_variables}` before any I/O is attempted.
+  `attrs[:actor_id]`/`attrs[:idempotency_key]` are not independently
+  pre-validated here -- they are plumbed straight through to
+  `Letflow.EventStore.append/2`'s own identical requirement, matching
+  `create/2`'s own `append_instance_started_event/6` pattern (design doc
+  §10).
+
+  See this module's moduledoc for the S4 (HTTP status mapping, IDN-03
+  assignee authorization) scope boundary this function does not implement.
+  """
+  @spec complete_task(
+          task_id :: Ecto.UUID.t(),
+          attrs :: complete_attrs(),
+          opts :: complete_opts()
+        ) :: {:ok, complete_result()} | complete_error()
+  def complete_task(task_id, attrs, opts) when is_map(attrs) and is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+
+    with {:ok, task_id} <- cast_task_id(task_id),
+         {:ok, output_variables} <- fetch_output_variables(attrs),
+         {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      actor_id = Map.get(attrs, :actor_id)
+      idempotency_key = Map.get(attrs, :idempotency_key)
+      completed_at = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+      run_complete_task(
+        task_id,
+        output_variables,
+        actor_id,
+        idempotency_key,
+        completed_at,
+        prefix
+      )
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # Pre-transaction phase (design doc §4) -- zero DB writes attempted.
+  # ---------------------------------------------------------------------
+
+  # Defensive INV-8 guard, not literally named by the design's own §3/§4
+  # text: task_id flows straight into a `where t.id == ^task_id` query
+  # (M1, below) -- a malformed, non-UUID-shaped value there raises
+  # Ecto.Query.CastError rather than returning a typed error, the same
+  # class of bug lib/letflow/event_store.ex's fetch_uuid/3 and
+  # lib/letflow/definitions/snapshot_store.ex's cast_uuid/2 already guard
+  # against for their own externally-reachable id arguments. Flagged for
+  # REVIEWER as a deliberate addition beyond the design's literal text.
+  defp cast_task_id(task_id) do
+    case Ecto.UUID.cast(task_id) do
+      {:ok, uuid} -> {:ok, uuid}
+      :error -> {:error, :invalid_task_id}
+    end
+  end
+
+  defp fetch_output_variables(attrs) do
+    case Map.get(attrs, :output_variables) do
+      variables when is_map(variables) and not is_struct(variables) -> {:ok, variables}
+      _other -> {:error, :invalid_output_variables}
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # Atomic phase (design doc §8) -- one Ecto.Multi.
+  # ---------------------------------------------------------------------
+
+  defp run_complete_task(
+         task_id,
+         output_variables,
+         actor_id,
+         idempotency_key,
+         completed_at,
+         prefix
+       ) do
+    Multi.new()
+    |> Multi.run(:task, fn repo, _changes -> fetch_and_lock_task(repo, task_id, prefix) end)
+    |> Multi.run(:instance_projection, fn repo, %{task: task} ->
+      fetch_and_lock_instance_projection(repo, task.instance_id, prefix)
+    end)
+    |> Multi.run(:snapshot_and_state, fn repo, %{task: task, instance_projection: projection} ->
+      build_snapshot_and_state(repo, task, projection, prefix)
+    end)
+    |> Multi.run(:merge, fn _repo, %{snapshot_and_state: %{seed_instance_state: seed_state}} ->
+      merge_output_variables(seed_state.variables, output_variables)
+    end)
+    |> Multi.run(:transition, fn _repo,
+                                 %{snapshot_and_state: snapshot_and_state, merge: merge_result} ->
+      dispatch_task_completion_hop_chain(snapshot_and_state, merge_result)
+    end)
+    |> Multi.merge(fn changes ->
+      build_task_activation_and_reconciliation_multi(changes, completed_at, prefix)
+    end)
+    |> Multi.run(:task_complete, fn repo, %{task: task} ->
+      complete_task_row(repo, task, actor_id, output_variables, completed_at, prefix)
+    end)
+    |> Multi.run(:event, fn _repo, changes ->
+      append_task_completed_event(changes, output_variables, actor_id, idempotency_key, prefix)
+    end)
+    |> Multi.run(:projection, fn repo,
+                                 %{instance_projection: projection, transition: final_state} ->
+      reconcile_projection(repo, projection, final_state, completed_at, prefix)
+    end)
+    |> Repo.transaction()
+    |> interpret_complete_result()
+  end
+
+  # M1 -- row-lock + fetch the tasks row (design doc §8.1, AC4). Ecto's
+  # lock/2 query composition, never a hand-written SQL string (INV-7).
+  defp fetch_and_lock_task(repo, task_id, prefix) do
+    Task
+    |> where([t], t.id == ^task_id)
+    |> lock("FOR UPDATE")
+    |> repo.one(prefix: prefix)
+    |> case do
+      nil -> {:error, :task_not_found}
+      %Task{status: :pending} = task -> {:ok, task}
+      %Task{status: status} -> {:error, {:task_not_pending, status}}
+    end
+  end
+
+  # M2 -- row-lock + fetch the owning instance_projections row (design doc
+  # §8.1). Defensive: a PENDING task's own instance is expected to already
+  # be :active by construction, but this call never assumes it.
+  defp fetch_and_lock_instance_projection(repo, instance_id, prefix) do
+    InstanceProjection
+    |> where([p], p.instance_id == ^instance_id)
+    |> lock("FOR UPDATE")
+    |> repo.one(prefix: prefix)
+    |> case do
+      nil -> {:error, :instance_not_found}
+      %InstanceProjection{status: :active} = projection -> {:ok, projection}
+      %InstanceProjection{status: status} -> {:error, {:instance_not_active, status}}
+    end
+  end
+
+  # M3 -- scoped state reconstruction (design doc §6): the narrowest
+  # InstanceState.t() sufficient for one dispatch hop-chain seeded from a
+  # single completing task, built directly from the already-durable
+  # tasks/tokens/instance_projections rows -- not a full REQ-053 event-log
+  # replay (design doc §6, MAJOR OQ-2).
+  defp build_snapshot_and_state(repo, %Task{} = task, %InstanceProjection{} = projection, prefix) do
+    with {:ok, graph} <- fetch_graph(task.instance_id, prefix) do
+      active_token_records = load_active_tokens(repo, task.instance_id, prefix)
+      active_tokens = Enum.map(active_token_records, &to_pure_token/1)
+
+      with {:ok, own_token} <- find_token_for_task(task, active_tokens) do
+        pending_task_tokens = load_pending_task_tokens(repo, task.instance_id, prefix)
+        seed_instance_state = build_instance_state(projection, active_tokens, pending_task_tokens)
+
+        {:ok,
+         %{
+           graph: graph,
+           seed_instance_state: seed_instance_state,
+           original_active_tokens: active_token_records,
+           own_token_id: own_token.token_id
+         }}
+      end
+    end
+  end
+
+  # §6.1 -- the same immutable snapshot create/2 captured at instance-start
+  # time, never a live re-read of process_definitions.
+  defp fetch_graph(instance_id, prefix) do
+    case SnapshotStore.get_by_instance_id(instance_id, prefix: prefix) do
+      {:ok, snapshot} -> build_graph(snapshot.graph)
+      {:error, :snapshot_not_found} -> {:error, :snapshot_not_found}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # §6.2 -- every live token of the instance, not just the completing task's
+  # own: dispatch_end/3's "instance becomes :completed iff no token remains
+  # live" check needs the instance's full live token set, or a
+  # PARALLEL_GATEWAY-split instance's still-running sibling branches would
+  # be wrongly invisible to this call.
+  defp load_active_tokens(repo, instance_id, prefix) do
+    TokenRecord
+    |> where([t], t.instance_id == ^instance_id and t.status == :active)
+    |> repo.all(prefix: prefix)
+  end
+
+  # token_id: to_string(record.id) -- the TokenRecord's own DB-generated
+  # UUID, stringified, reused directly as this call's Token.t() id (design
+  # doc §6.2's own reconstruction invariant, load-bearing for §9's
+  # append_multi_from_existing_records/6 and §8.2's reconcile_token_records/5
+  # below).
+  defp to_pure_token(%TokenRecord{} = record) do
+    %Token{
+      token_id: to_string(record.id),
+      node_id: record.node_id,
+      branch_id: record.branch_id,
+      waiting_child_instance_id: record.waiting_child_instance_id
+    }
+  end
+
+  # §6.3 -- a nil result here is a genuine invariant violation (tasks.token_id
+  # FK-references tokens.id; a row this call's own :task step just locked and
+  # read PENDING from must have a live, :active tokens row), surfaced as a
+  # typed error, never a MatchError.
+  defp find_token_for_task(%Task{} = task, tokens) do
+    case Enum.find(tokens, &(&1.token_id == to_string(task.token_id))) do
+      nil -> {:error, {:missing_token_record, task.token_id}}
+      token -> {:ok, token}
+    end
+  end
+
+  # §6.4 -- every currently-PENDING task's token (including the one about to
+  # be completed by this call, still PENDING at read time), reduced to a
+  # minimal Token.t() carrying token_id and node_id (branch_id left unused at
+  # its struct default).
+  #
+  # node_id is load-bearing here (ISS-0057 fix, docs/issues/ISS-0057.yaml):
+  # TaskActivation.newly_pending_tokens/2 now diffs by the {token_id, node_id}
+  # pair, not token_id alone -- a token continuing directly from one
+  # :HUMAN_TASK to another keeps the same token_id but moves to a new
+  # node_id, and the design doc's original §6.4 text (node_id left nil,
+  # "unused") made that stale-token_id-only "previous" entry wrongly mask the
+  # token's genuinely-new pending position at the next node, so no `tasks`
+  # row was ever inserted for it. Populating the task's own real node_id here
+  # (the node this PENDING task is actually sitting at) is what lets the pair
+  # diff tell "still pending at the same node, already accounted for" apart
+  # from "same token, but now pending somewhere new."
+  defp load_pending_task_tokens(repo, instance_id, prefix) do
+    Task
+    |> where([t], t.instance_id == ^instance_id and t.status == :pending)
+    |> repo.all(prefix: prefix)
+    |> Enum.map(&%Token{token_id: to_string(&1.token_id), node_id: &1.node_id, branch_id: nil})
+  end
+
+  # §6.5 -- assembling the seed InstanceState.t(). join_counters is always
+  # %{} (design doc §6.5, §11 INV-EE48-7, MAJOR OQ-3): no table persists
+  # JoinCounter state across calls today.
+  defp build_instance_state(
+         %InstanceProjection{} = projection,
+         active_tokens,
+         pending_task_tokens
+       ) do
+    %InstanceState{
+      instance_id: projection.instance_id,
+      status: :active,
+      tokens: active_tokens,
+      variables: projection.variables,
+      pending_task_nodes: pending_task_tokens,
+      join_counters: %{}
+    }
+  end
+
+  # M4 -- EE-09 variable merge (design doc §7), pure. variable_validations:
+  # nil means the {:rejected, ...} branch is provably unreachable (§7) --
+  # handled here anyway (never a non-exhaustive match / raise on this
+  # call's own totality discipline).
+  defp merge_output_variables(current_variables, output_variables) do
+    case VariableMerge.merge(current_variables, output_variables, nil) do
+      {:ok, new_variables, merge_events} ->
+        {:ok, %{new_variables: new_variables, merge_events: merge_events}}
+
+      {:rejected, _unchanged_variables, events} ->
+        {:error, {:unexpected_variable_rejection, events}}
+    end
+  end
+
+  # M5 -- the first {:complete_task, token_id} hop, then the existing
+  # advance_until_stable/4 / tokens_needing_dispatch/3 worklist loop (reused
+  # unchanged, design doc §1) for every subsequent {:advance_token, ...} hop.
+  defp dispatch_task_completion_hop_chain(
+         %{graph: graph, seed_instance_state: seed_state, own_token_id: own_token_id},
+         %{new_variables: merged_variables}
+       ) do
+    state_with_merged_variables = %InstanceState{seed_state | variables: merged_variables}
+    hop_limit = length(graph.nodes) * 4 + 10
+
+    case Transition.transition(graph, state_with_merged_variables, {:complete_task, own_token_id}) do
+      {:ok, new_instance_state, _pending_events} ->
+        newly_pending =
+          tokens_needing_dispatch(
+            state_with_merged_variables.tokens,
+            new_instance_state.tokens,
+            own_token_id
+          )
+
+        advance_until_stable(graph, new_instance_state, newly_pending, hop_limit - 1)
+
+      {:error, reason} ->
+        {:error, {:transition_failed, reason}}
+    end
+  end
+
+  # M6/M7 -- built together via Multi.merge/2 (the idiomatic Ecto mechanism
+  # for appending Multi steps whose concrete arguments are only known once
+  # earlier steps have run inside this same transaction): task activation for
+  # any freshly-reached :HUMAN_TASK node(s) (design doc §9,
+  # TaskActivation.append_multi_from_existing_records/6), then token-record
+  # reconciliation (design doc §8.2). Neither of these two steps' own
+  # callback bodies reads from `changes` once called -- both close over
+  # already-resolved plain values, matching each function's own @spec.
+  defp build_task_activation_and_reconciliation_multi(changes, completed_at, prefix) do
+    %{
+      task: task,
+      snapshot_and_state: %{
+        graph: graph,
+        seed_instance_state: seed_state,
+        original_active_tokens: original_active_tokens
+      },
+      transition: final_instance_state
+    } = changes
+
+    Multi.new()
+    |> TaskActivation.append_multi_from_existing_records(
+      task.instance_id,
+      graph,
+      seed_state.pending_task_nodes,
+      final_instance_state,
+      prefix
+    )
+    |> reconcile_token_records(original_active_tokens, final_instance_state, completed_at, prefix)
+  end
+
+  # §8.2 -- new function. Advances/completes existing tokens rows to match
+  # final_instance_state's final token positions; a token_id present in
+  # final_instance_state.tokens with no matching original record is a typed,
+  # rolled-back failure (INV-EE48-8), never a silent mis-insert.
+  defp reconcile_token_records(
+         %Multi{} = multi,
+         original_active_tokens,
+         %InstanceState{} = final_instance_state,
+         completed_at,
+         prefix
+       ) do
+    Multi.run(multi, :token_reconciliation, fn repo, _changes ->
+      do_reconcile_token_records(
+        repo,
+        original_active_tokens,
+        final_instance_state.tokens,
+        completed_at,
+        prefix
+      )
+    end)
+  end
+
+  defp do_reconcile_token_records(repo, original_tokens, final_tokens, completed_at, prefix) do
+    original_ids = MapSet.new(original_tokens, &to_string(&1.id))
+
+    case Enum.find(final_tokens, &(not MapSet.member?(original_ids, &1.token_id))) do
+      %Token{token_id: token_id} ->
+        {:error, {:new_token_during_resume_not_supported, token_id}}
+
+      nil ->
+        final_by_id = Map.new(final_tokens, &{&1.token_id, &1})
+
+        original_tokens
+        |> Enum.reduce_while({:ok, []}, fn %TokenRecord{} = record, {:ok, acc} ->
+          case reconcile_one_token_record(repo, record, final_by_id, completed_at, prefix) do
+            {:ok, updated} -> {:cont, {:ok, [updated | acc]}}
+            {:error, reason} -> {:halt, {:error, reason}}
+          end
+        end)
+        |> case do
+          {:ok, records} -> {:ok, Enum.reverse(records)}
+          {:error, reason} -> {:error, reason}
+        end
+    end
+  end
+
+  defp reconcile_one_token_record(
+         repo,
+         %TokenRecord{} = record,
+         final_by_id,
+         completed_at,
+         prefix
+       ) do
+    case Map.fetch(final_by_id, to_string(record.id)) do
+      {:ok, %Token{node_id: node_id}} when node_id != record.node_id ->
+        update_token_record(repo, record, %{node_id: node_id}, prefix)
+
+      {:ok, _unchanged} ->
+        {:ok, record}
+
+      :error ->
+        update_token_record(
+          repo,
+          record,
+          %{status: :completed, completed_at: completed_at},
+          prefix
+        )
+    end
+  end
+
+  defp update_token_record(repo, %TokenRecord{} = record, attrs, prefix) do
+    record
+    |> TokenRecord.advance_changeset(attrs)
+    |> repo.update(prefix: prefix)
+  end
+
+  # M8 -- flips the tasks row to COMPLETED (design doc §8, table row M8).
+  # output_variables here is the caller's original, unmerged map -- the
+  # task's own record of what it submitted.
+  defp complete_task_row(repo, %Task{} = task, actor_id, output_variables, completed_at, prefix) do
+    attrs = %{
+      status: :completed,
+      completed_by: actor_id,
+      completed_at: completed_at,
+      output_variables: output_variables
+    }
+
+    task
+    |> Task.complete_changeset(attrs)
+    |> repo.update(prefix: prefix)
+  end
+
+  # M9 -- appends the TASK_COMPLETED event (design doc §10, EE-04 AC1,
+  # REQ-025). merge_events (VARIABLE_OVERWRITTEN outcomes) are embedded as
+  # informational metadata inside this one event's payload, never appended
+  # as their own separate rows (INV-EE48-5).
+  defp append_task_completed_event(changes, output_variables, actor_id, idempotency_key, prefix) do
+    %{task: task, merge: %{merge_events: merge_events}, transition: final_instance_state} =
+      changes
+
+    payload =
+      Jason.encode!(%{
+        task_id: task.id,
+        node_id: task.node_id,
+        output_variables: output_variables,
+        merged_variable_events: encode_merge_events(merge_events),
+        activated_nodes: Enum.map(final_instance_state.tokens, & &1.node_id)
+      })
+
+    event_attrs = %{
+      instance_id: task.instance_id,
+      event_type: "TASK_COMPLETED",
+      payload: payload,
+      actor_id: actor_id,
+      idempotency_key: idempotency_key
+    }
+
+    case EventStore.append(event_attrs, prefix: prefix) do
+      {:ok, result} -> {:ok, result}
+      {:error, reason} -> {:error, {:event_append_failed, reason}}
+    end
+  end
+
+  # merge_events tuples ({:variable_overwritten, key, old, new}) aren't
+  # JSON-encodable as-is (Jason has no Encoder for tuples) -- mapped to
+  # plain maps for the event payload only, never persisted as their own
+  # separate rows.
+  defp encode_merge_events(merge_events) do
+    Enum.map(merge_events, fn {:variable_overwritten, key, old_value, new_value} ->
+      %{event: "variable_overwritten", key: key, old_value: old_value, new_value: new_value}
+    end)
+  end
+
+  # M10 -- projection reconciliation (design doc §8.3). last_event_seq is not
+  # set here -- EventStore.append/2's own update_projection/3 (M9's own
+  # nested Multi) already advances it as part of the :event step above.
+  defp reconcile_projection(
+         repo,
+         %InstanceProjection{} = projection,
+         %InstanceState{} = final_instance_state,
+         completed_at,
+         prefix
+       ) do
+    attrs = %{
+      status: final_instance_state.status,
+      current_nodes: Enum.map(final_instance_state.tokens, & &1.node_id),
+      variables: final_instance_state.variables
+    }
+
+    attrs =
+      if final_instance_state.status == :completed do
+        Map.put(attrs, :completed_at, completed_at)
+      else
+        attrs
+      end
+
+    projection
+    |> InstanceProjection.update_changeset(attrs)
+    |> repo.update(prefix: prefix)
+  end
+
+  # ---------------------------------------------------------------------
+  # Result assembly (design doc §8's table + §3's complete_result()).
+  # ---------------------------------------------------------------------
+
+  defp interpret_complete_result(
+         {:ok,
+          %{
+            task: %Task{} = task,
+            transition: %InstanceState{} = final_instance_state,
+            task_complete: %Task{} = completed_task
+          }}
+       ) do
+    {:ok,
+     %{
+       task_id: task.id,
+       instance_id: task.instance_id,
+       instance_status: final_instance_state.status,
+       current_nodes: Enum.map(final_instance_state.tokens, & &1.node_id),
+       variables: final_instance_state.variables,
+       completed_at: completed_task.completed_at
+     }}
+  end
+
+  # Catch-all -- every Multi step's own callback above already maps its
+  # failure to the exact error shape complete_error() promises (or passes a
+  # raw changeset/term() through, matching those catch-all clauses); this
+  # just unwraps Ecto.Multi's {:error, failed_step, reason, changes_so_far}
+  # envelope around whatever reason each step already produced.
+  defp interpret_complete_result({:error, _failed_step, reason, _changes}) do
     {:error, reason}
   end
 end

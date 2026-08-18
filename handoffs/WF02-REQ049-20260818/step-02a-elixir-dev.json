@@ -1,0 +1,53 @@
+{
+  "handoff_id": "e6f5d4c3-0001-4a1a-9c00-000000000003",
+  "run_id": "WF02-REQ049-20260818",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ049-20260818/step-02a-elixir-dev.json",
+  "created_at": "2026-08-18T07:18:56Z",
+  "started_at": "2026-08-18T07:18:56Z",
+  "completed_at": "2026-08-18T07:21:16Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-049"],
+    "requirement_text": {
+      "REQ-049": "Variable scoping and merge (instance.zig mergeVariables, EE-09). Pure function merge/3 over (current_variables, incoming_variables, variable_validations). Key absent -> insert, no event. Key present + :ok validation or no entry in variable_validations -> overwrite + VARIABLE_OVERWRITTEN event. Key present + {:rejected, failures} in variable_validations -> not merged, {:rejected, unchanged_variables, events} returned with an EXECUTION_ERROR event. Empty incoming map -> no-op, zero events. No REQ-061 module referenced. Schema validation composition happens in the caller (not this module) via REQ-024's validate_payload/3."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": ["lib/letflow/design/req049-variable-merge.md"],
+    "owned_modules": ["lib/letflow/engine/"]
+  },
+  "task": {
+    "description": "WF-02 Step 2a. Verify branch first: git branch --show-current must equal feature/WF02-REQ049-20260818 -- if not, STOP and report FAIL. Read lib/letflow/design/req049-variable-merge.md in full and implement it exactly: lib/letflow/engine/variable_merge.ex with Letflow.Engine.VariableMerge.merge/3, the merge_result()/merge_event()/execution_error_event() types, the verbatim moduledoc text (design doc section 6), following the exact algorithm in section 3.1. No DB migration involved (pure module).",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "mix format --check-formatted exits 0",
+      "merging a key absent from the instance map inserts it with no VARIABLE_OVERWRITTEN event; merging a key already present overwrites it AND produces exactly one VARIABLE_OVERWRITTEN event carrying the key, the old value and the new value",
+      "merging an empty map is a no-op producing zero events and leaving the variable map unchanged",
+      "merging a value flagged {:rejected, failures} in variable_validations leaves the variable map unchanged, returns {:rejected, unchanged_variables, events}, and produces an EXECUTION_ERROR event",
+      "the module contains zero Repo/HTTP/clock calls anywhere (pure, matching design doc's purity claim)",
+      "no reference anywhere in the module to a REQ-061 module (none exists yet)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented lib/letflow/engine/variable_merge.ex (Letflow.Engine.VariableMerge) exactly per lib/letflow/design/req049-variable-merge.md: merge/3 plus merge_event/execution_error_event/validation_outcome/variable_validations/merge_result types, and the verbatim design-doc section 6 'Dependency ordering: this module does not depend on REQ-061' text copied into the moduledoc. No migration (pure module, matches design doc section 1). `mix compile --warnings-as-errors` output: 'Compiling 1 file (.ex)' / 'Generated letflow app' -- exit 0, zero warnings. `mix format --check-formatted` produced no output -- exit 0, already formatted. Self-review: `grep -n \"Repo\\.\\|Logger\\.\\|DateTime\\.\\|System\\.os_time\\|System\\.system_time\\|HTTPoison\\|Req\\.\\|File\\.\\|:rand\\.\\|:crypto\\.\\|Registry\\.validate_payload\\|Registry\\.get_type\\|Registry\\.register_type\" lib/letflow/engine/variable_merge.ex` matches only moduledoc prose (lines 26/56/63/106), no actual code call -- identical pattern to the already-shipped lib/letflow/engine/transition.ex self-matching its own equivalent grep for the same reason; zero real Repo/HTTP/clock calls in code. `grep -n REQ-061 lib/letflow/engine/variable_merge.ex` shows only moduledoc prose describing why no REQ-061 module is referenced; no alias/import/call of any REQ-061 module exists (only alias is Letflow.EventStore.Registry.ValidationFailure, REQ-024, used purely as a type reference). Manually exercised insert/overwrite/empty-map/rejected/mixed-batch/first-failure-wins cases via a scratch ExUnit file (test/letflow/engine/variable_merge_scratch_test.exs, run with `MIX_ENV=test mix test <file>`, result '6 tests, 0 failures', then deleted -- not part of this commit, since TEST-DESIGNER owns the real test suite per WF-02 step boundaries): insert-no-event, overwrite-with-one-VARIABLE_OVERWRITTEN-event, empty-map-no-op (same map value, zero events), rejected-key-leaves-map-unchanged-and-returns-one-EXECUTION_ERROR-event, mixed-batch-abort-on-first-rejected-key (new_keys not inserted either), and sorted-order insert+overwrite composition all matched the design doc's stated behavior exactly.",
+    "artifacts_out": ["lib/letflow/engine/variable_merge.ex"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ049-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ049-20260818",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

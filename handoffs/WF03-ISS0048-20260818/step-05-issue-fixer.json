@@ -1,0 +1,48 @@
+{
+  "handoff_id": "7f5c2df0-dddd-4000-8000-00000000000e",
+  "run_id": "WF03-ISS0048-20260818",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0048-20260818/step-05-issue-fixer.json",
+  "created_at": "2026-08-18T23:02:13Z",
+  "started_at": "2026-08-18T23:02:13Z",
+  "completed_at": "2026-08-18T23:03:09Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0048-20260818/step-04c-test-runner.json"],
+    "artifacts_in": ["docs/issues/ISS-0048.yaml"],
+    "owned_modules": ["docs/issues/ISS-0048.yaml"]
+  },
+  "task": {
+    "description": "Close out ISS-0048 per WF-03 Step 5. Set docs/issues/ISS-0048.yaml's status: resolved, resolved_in_run: WF03-ISS0048-20260818, resolved_at: <real UTC timestamp>. Note in the file that the fix scope shifted during diagnosis: the originally-suspected 5 identity/role_registry test files were exonerated (already had correct on_exit ordering), and the actual root cause + fix was Letflow.SandboxPool's disclosed-but-unbuilt crash/kill reaper (owner-monitor extension, lib/letflow/sandbox_pool.ex), proven via a fail-then-pass regression test (test/letflow/sandbox_pool_test.exs, test/specs/ISS-0048.md). Also note the unexplained tenant_* population drop (69->0 within 10h, no known cause) as an open observation, not resolved by this fix, in case it recurs. The linked GitHub issue is #198 (queue task 115) -- close it: gh issue close 198 --comment referencing this run and the regression test path.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0048.yaml: status: resolved, resolved_in_run, resolved_at (real UTC) set",
+      "File accurately summarizes the scope shift (identity test files exonerated, SandboxPool was the real fix) and the still-unexplained tenant_* population drop",
+      "gh issue close 198 executed with a comment referencing the run and regression test",
+      "docs/issues/ISS-0048.yaml committed as part of this step (per core-directives.md's file-placement rule)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Closed out ISS-0048 per WF-03 Step 5. Updated docs/issues/ISS-0048.yaml: status: resolved, resolved_in_run: WF03-ISS0048-20260818, resolved_at: 2026-08-18T23:02:37Z, plus a resolution_note recording the scope shift discovered during diagnosis (steps 01-04c of this run): the originally-suspected affected_files (5 identity/role_registry test files) were exonerated -- each already had correct on_exit DROP SCHEMA ordering -- and the actual root cause was Letflow.SandboxPool (lib/letflow/sandbox_pool.ex) disclosing but never implementing an owner-crash/kill reaper, so a test process that died abnormally (crash/kill/timeout) before its on_exit ran left its tenant/sandbox schema permanently orphaned instead of reclaimed. Fixed by implementing the missing owner-monitor extension in SandboxPool, proven via a fail-then-pass regression test (test/letflow/sandbox_pool_test.exs, spec test/specs/ISS-0048.md) and confirmed clean against the full suite (5 properties, 874 tests, 0 failures, per step-04c-test-runner.json). The resolution_note also flags an open, unresolved observation: a separately-noted drop of the orphaned-schema population from 69 to 0 within ~10h with no identified cause -- explicitly not explained or resolved by this fix, called out for anyone investigating a future recurrence. Closed GitHub issue #198 via `gh issue close 198 --comment ...` referencing this run and the regression test path. Committed docs/issues/ISS-0048.yaml (commit afe48d9) and pushed to origin/feature/WF03-ISS0048-20260818.",
+    "artifacts_out": ["docs/issues/ISS-0048.yaml"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0048-20260818",
+      "commit_sha_list": ["afe48d9"],
+      "remote_branch": "origin/feature/WF03-ISS0048-20260818",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH: GitHub issue #198 closed and docs/issues/ISS-0048.yaml resolved -- WF-03 for ISS-0048 complete on this branch. Merge feature/WF03-ISS0048-20260818 to main (all prior gates -- CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER -- already PASS per steps 02b/03b/03c/04b/04c) and record status history / registry close-out."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,59 @@
+{
+  "handoff_id": "step-01b-code-design-validator-rereview",
+  "run_id": "WF02-REQ040-20260817",
+  "workflow_id": "WF-02",
+  "step": "01b-rereview",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ040-20260817/step-01b-code-design-validator-rereview.json",
+  "created_at": "2026-08-18T00:22:20Z",
+  "started_at": "2026-08-18T00:22:20Z",
+  "completed_at": "2026-08-18T00:31:05Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-040"],
+    "related_handoff_ids": [
+      "step-00-git-setup",
+      "step-01-code-designer",
+      "step-01b-code-design-validator",
+      "step-01-code-designer-rework"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req040-promotion-assertion-rerun.md",
+      "lib/letflow/design/req039-sandbox-pool-fixture-loader.md",
+      "lib/letflow/sandbox_pool.ex",
+      "lib/letflow/definitions.ex",
+      "docs/migration/stage-2-event-store-definitions.md",
+      "handoffs/WF02-REQ040-20260817/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ040-20260817/step-01-code-designer-rework.json"
+    ],
+    "owned_modules": ["lib/letflow/design"]
+  },
+  "task": {
+    "description": "Re-review (rework_count 1) of lib/letflow/design/req040-promotion-assertion-rerun.md after CODE-DESIGNER's rework claims to close the single BLOCKER from the prior FAIL: a new '## 13. Verbatim @moduledoc/@doc text' section with ready-to-paste prose for AC4/AC6, plus repointed traceability-table rows 4/6. Independently re-verify: (1) the new section 13 text literally satisfies AC4 (assertions_failed == 0 vs status == \"passed\", citing teardown_failed as the green-gate case) and AC6 (crash-safety/guaranteed-teardown open question named explicitly, consistent with stage-2-event-store-definitions.md's Early findings) without requiring further synthesis; (2) section 12's traceability rows 4/6 now point at 13.1/13.2, not the old stale pointers; (3) nothing else in the design changed (diff 6186561..3b084bf); (4) no implementation code was introduced; (5) tone/register of the new prose is consistent with this codebase's real shipped moduledocs (sandbox_pool.ex, definitions.ex).",
+    "acceptance_criteria": [
+      "the moduledoc explicitly states the apply pipeline gate condition is assertions_failed == 0, not status == passed, citing the teardown_failed green-gate case",
+      "the moduledoc names the crash-safety/guaranteed-teardown open question explicitly, per this requirement's description and stage-2-event-store-definitions.md's Early findings"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read the design doc's new section 13 directly (lib/letflow/design/req040-promotion-assertion-rerun.md:905-976), not CODE-DESIGNER's summary of it. Section 13.1 ('Letflow.Definitions moduledoc -- new subsection', lines 920-949) and Section 13.2 ('apply_promotion_assertion_rerun/6's own @doc', lines 951-976) are literal, ready-to-paste prose inside plain fenced code blocks -- not another pointer to 'see rationale above'. AC4 is satisfied literally: 13.1 states 'The apply pipeline ... gates on this function's recorded assertions_failed == 0 -- NOT on status == \"passed\"' and explicitly names 'a passing assertion replay whose sandbox teardown itself fails is recorded as status = :teardown_failed with assertions_failed still 0 ... A teardown_failed row is therefore a green gate' -- the exact gate-direction and teardown_failed-as-green-gate example AC4 requires, using the requirement's own literal 'status == \"passed\"' string form. 13.2 restates the same gate rule as a callable-facing @doc warning. AC6 is satisfied literally: 13.1's 'Crash safety' paragraph names what try/rescue covers (normal completion, typed error return, raised exception across the claim-through-release span) and what it explicitly does not (hard process kill via Process.exit(pid, :kill), a BEAM node crash, System.halt/0), and names the disclosed, deferred mitigation (a background reaper mirroring R-Co's reclaimLeakedSandboxes). This is consistent with stage-2-event-store-definitions.md's 'Early findings' section (read directly: process-per-instance-vs-row-based-state, keyed on whether a serialization/arbitration point is needed) -- Section 2.3 of the design doc (untouched by this rework, already independently verified in the prior review) explicitly applies that exact test by name ('this is precisely the shape of docs/migration/stage-2-event-store-definitions.md's \"Early findings\" test for when a process-per-unit-of-work is warranted') to justify try/rescue over a new supervised process, and Section 13.1's prose is a faithful, consistent condensation of that same reasoning for the shipped moduledoc, not a divergent or vaguer restatement. Neither AC requires the moduledoc prose itself to cite the stage-2 doc's filename verbatim -- the requirement text's 'per ... stage-2-event-store-definitions.md's Early findings' qualifies how the open question must be named (consistent with that document's reasoning), which it is. Section 12's traceability table was read directly (lines 892-901): row 4 now reads '...**Section 13.1's ready-to-paste @moduledoc subsection and Section 13.2's @doc block are the literal text ELIXIR-DEV copies**, satisfying this AC's own literal-prose requirement directly, not via synthesis...' and row 6 reads '...**Section 13.1's ready-to-paste @moduledoc subsection and Section 13.2's @doc block are the literal text ELIXIR-DEV copies**, matching SandboxPool's own moduledoc precedent...' -- both rows genuinely repointed to 13.1/13.2, the old stale Section 7.5/Section 2/Section 11 OQ-1-only pointers are gone. Diffed the rework commit directly (git diff 6186561 3b084bf -- lib/letflow/design/req040-promotion-assertion-rerun.md): exactly one hunk, @@ -896,6 +896,81 @@, confined to table rows 4/6 (2 lines changed) plus the new Section 13 appended at the file's end (79 new lines) -- no other line in the file touched. This confirms byte-identical: the OQ-4 double-run-vs-oracle reading (Section 6, Section 11 OQ-4), the try/rescue crash-safety investigation and decision (Section 2), fail_closed_counts/1's fix over R-Co's own stuck-at-running bug (Section 7.4), the promotion_assertion_runs migration schema (Section 4), and the REQ-039 SandboxPool/FixtureLoader integration calls (Section 7.2/7.3, Section 8) are exactly what the prior review already independently verified against source -- none of it was silently touched under cover of this rework. Grepped the full file for 'def '/'defp '/'defmodule ' after the edit: only the three pre-existing struct shells from Section 5 (Letflow.Definitions.PromotionArtifact, its nested Assertion and CandidateDefinition submodules -- defstruct + @type t, no function bodies) match, unchanged from the pre-rework version -- no implementation code was introduced by this rework, and the new Section 13 content is entirely prose inside plain (non-Elixir-tagged) fenced blocks. Tone/register sanity check against lib/letflow/sandbox_pool.ex's real shipped @moduledoc and lib/letflow/definitions.ex's real shipped @moduledoc (both read directly): both use the exact '## `<function/topic>` -- <short description> (REQ-NNN)' subsection-heading convention Section 13.1 follows precisely (e.g. definitions.ex's actual shipped '## `activate/2`'s `service_scope_validator` option -- the SVC-03 integration point (REQ-031)' vs. Section 13.1's '## `apply_promotion_assertion_rerun/6`'s gate condition and crash-safety scope (REQ-040)'); both use backtick-quoted code/function/module references and bold for a single emphasized load-bearing phrase (sandbox_pool.ex's shipped moduledoc: 'a property a single process's mailbox provides natively'; Section 13.1: '**green gate**'), matching register exactly. Section 13.1/13.2 contain zero design-doc-internal references (no '§' section numbers, no 'OQ-1', no 'REVIEWER') that would need stripping before pasting -- fully copy-paste ready, unlike the pre-rework Section 12 pointers that required ELIXIR-DEV to synthesize from discursive rationale referencing section numbers. All five verification points hold. The rework genuinely closes the single BLOCKER gap the prior FAIL identified; no new gap was introduced.",
+    "artifacts_out": ["handoffs/WF02-REQ040-20260817/step-01b-code-design-validator-rereview.json"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ040-20260817",
+      "commit_sha_list": ["3b084bf"],
+      "remote_branch": "origin/feature/WF02-REQ040-20260817",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (Step 2a) -- design is unblocked. lib/letflow/design/req040-promotion-assertion-rerun.md Section 13.1/13.2 are the literal @moduledoc/@doc text to paste verbatim for AC4/AC6; all other design elements (function signature Section 3, migration Section 4, algorithm Section 7, invariants Section 10) were already independently verified in the prior review and are unchanged."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

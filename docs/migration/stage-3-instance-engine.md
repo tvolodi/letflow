@@ -4,9 +4,16 @@ Status: in progress. Depends on: S2 (all of REQ-022..REQ-042 `done`).
 Requirements: REQ-044 `done` (Pure transition kernel core types and
 dispatch skeleton); REQ-049 `done` (Variable scoping and merge, EE-09);
 REQ-050 `done` (Exclusive gateway evaluation and condition expressions,
-EE-05); REQ-043, REQ-045, REQ-046, REQ-047, REQ-048, REQ-051, REQ-052,
-REQ-053, REQ-054, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060,
-REQ-061, REQ-062 (`docs/requirements.yaml`, 17 total) `pending`.
+EE-05); REQ-043 `done` (Instance engine schema: instance_projections
+ALTER, tokens, tasks); REQ-045 `done` (Instance start and engine
+execution shell, EE-01); REQ-051 `done` (Parallel gateway split and
+join, EE-06/EE-07 -- status already `done` in `docs/requirements.yaml`
+per REQ-051's own DOC-UPDATER entry, but this header's pending list had
+not been updated to reflect that; fixed here alongside REQ-045, same
+gap-fix shape REQ-045's own DOC-UPDATER already applied to REQ-043
+above); REQ-046, REQ-047, REQ-048, REQ-052, REQ-053, REQ-054, REQ-055,
+REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062
+(`docs/requirements.yaml`, 15 total) `pending`.
 
 ## Scope
 

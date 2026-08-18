@@ -1,0 +1,58 @@
+run_id: WF02-REQ045-20260818
+step: WF-02 Step 4 (official re-verification, final)
+agent: TEST-RUNNER
+date: 2026-08-19
+branch: feature/WF02-REQ045-20260818
+commit: 096b5b3
+requirement: REQ-045
+scope: EE-01 instance-start / PARALLEL_GATEWAY hop-limit coverage
+  (lib/letflow/engine.ex, test/letflow/engine_test.exs)
+
+context: >
+  This is the third WF-02 Step 4 report on run WF02-REQ045-20260818, filed under a new
+  name (report-2026-08-19-WF02-REQ045-20260818-final.yaml) per dispatch instruction, so
+  the earlier report-2026-08-19-WF02-REQ045-20260818.yaml (which recorded the fix for
+  AC1/OQ-1a at commit 1840484) remains as historical record rather than being overwritten.
+  Two further rework cycles landed since that report: (1) the worklist-loop rework in
+  e4512ef, fixing a gateway-auto-advance integration bug surfaced by rebasing onto main
+  after REQ-050/REQ-051 merged; and (2) TEST-DESIGNER's new PARALLEL_GATEWAY/hop-limit
+  coverage in e26b8cb plus ELIXIR-DEV's fix in 096b5b3 for the FunctionClauseError that
+  coverage found (generalizing insert_token_records/4 to N tokens). This run independently
+  re-executes the suite at commit 096b5b3 rather than trusting ORCH's two prior runs of the
+  same commit (which both reported 850 passed, 0 failures) — per this project's "no agent's
+  own claim is evidence" discipline.
+
+full_suite:
+  command: mix test
+  duration_seconds: 153.0
+  result: "850 passed (5 properties, 845 tests)"
+  failed: 0
+
+isolated_run:
+  command: mix test test/letflow/engine_test.exs
+  duration_seconds: 8.9
+  result: "24 passed"
+  failed: 0
+  note: >
+    24, not 25 — checked directly rather than assumed. No properties in this file (all
+    24 are example-based tests); the suite's 5 property tests referenced above live
+    elsewhere (e.g. process_instance_test.exs's "no sequence of actions produces an
+    invalid state").
+
+docker_compose: "letflow-postgres-1 running on localhost:5462 (started via docker compose up -d)"
+
+regressions_vs_prior_report: >
+  None. report-2026-08-19-WF02-REQ045-20260818.yaml (commit 1840484) recorded
+  797 passed (5 properties, 792 tests) full-suite and 20/20 isolated. The increase to
+  850/24 here reflects REQ-050/REQ-051 merging into main plus the new
+  PARALLEL_GATEWAY/hop-limit tests added in e26b8cb — not any loss of coverage.
+
+verdict: PASS
+verdict_detail: >
+  Full suite at commit 096b5b3: 850 passed (5 properties, 845 tests), 0 failures.
+  Isolated test/letflow/engine_test.exs: 24 passed, 0 failures. Matches both of ORCH's
+  independent runs on this commit (850/0), now confirmed by TEST-RUNNER's own execution
+  rather than copied from ORCH's report. Both rework cycles — the worklist-loop fix
+  (e4512ef) and the N-token insert_token_records/4 generalization (096b5b3, fixing the
+  FunctionClauseError found by e26b8cb's new PARALLEL_GATEWAY/hop-limit tests) — are
+  verified green with no regressions elsewhere in the suite. Ready for RELEASE-VALIDATOR.

@@ -2291,7 +2291,7 @@ requirements:
   - id: REQ-045
     title: Instance start and engine execution shell (instance.zig create, EE-01) -- supersedes lib/letflow/process_instance.ex
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S3
     impl_order: 89  # letflow-queue task id
     description: >

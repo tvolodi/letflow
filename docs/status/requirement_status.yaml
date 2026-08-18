@@ -4299,3 +4299,120 @@ history:
       section nor the diagram is affected. Left untouched, same reasoning
       REQ-063/REQ-064's DOC-UPDATER steps applied. Flipped
       docs/requirements.yaml REQ-051 status to done.
+  - req: REQ-045
+    event: started
+    agent: ORCH
+    at: "2026-08-18T18:23:12Z"
+    note: >
+      WF02-REQ045-20260818. Claimed via direct docs/requirements.yaml read
+      (letflow-queue unreachable in this session -- no QUEUE_AUTH_TOKEN set;
+      /health returns 200 but the token-gated API cannot be called), lowest
+      impl_order (89) among pending Stage 3 requirements with all depends_on
+      satisfied (REQ-043, REQ-044, REQ-030, REQ-033, REQ-025 all done). Step 00
+      (git setup) PASS: feature/WF02-REQ045-20260818 branched from origin/main
+      (e8ef92d), pushed. Status flipped pending -> in_progress. This is the
+      stage's largest open design question (process-per-instance vs.
+      row-based instance state) -- left for CODE-DESIGNER per the
+      requirement's own text, citing stage-3-instance-engine.md's second
+      Early finding.
+  - req: REQ-045
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-18T20:07:51Z"
+    note: >
+      WF02-REQ045-20260818 Step 6. RELEASE-VALIDATOR PASSed at Step 5,
+      independently re-confirming all seven acceptance criteria against
+      lib/letflow/engine.ex and test/letflow/engine_test.exs; one unrelated
+      pre-existing flaky test filed separately as docs/issues/ISS-0049.yaml,
+      not blocking this run. Shipped: lib/letflow/engine.ex
+      (Letflow.Engine.create/2, EE-01 instance-start -- resolved the
+      process-vs-row open question toward a plain transactional context
+      module, no gen_statem/process per instance), lib/letflow/definitions/
+      graph.ex's new Graph.from_map/1, and the tenant_provisioning.ex
+      event_type_registry seed fix (OQ-3a). One rework cycle: TEST-RUNNER
+      found 2 real bugs (END-first-node completion handled incorrectly;
+      missing guard for gateway-not-yet-implemented), both fixed before
+      RELEASE-VALIDATOR's PASS. Final suite: 797/797 green (the one
+      unrelated flake noted above not counted against this run).
+      README.md checked directly: "What's here today" and "Running it"
+      still describe only the original pilot slice (Letflow.ProcessInstance
+      gen_statem, InstanceSupervisor, TransitionEvent, Router's 3 HTTP
+      endpoints, the curl/mix flow) -- REQ-045 added an internal
+      context-module function with no new HTTP route (POST
+      /api/v1/instances is explicitly S4 scope per this requirement's own
+      acceptance criteria) and no gen_statem/process change, so neither
+      section nor the ASCII state diagram is affected. Left untouched.
+      REQ-045's seven acceptance criteria re-read directly from
+      docs/requirements.yaml: none names a docs/migration/decisions/*.md
+      file. One criterion requires the moduledoc itself to cite
+      stage-3-instance-engine.md's second Early finding (a moduledoc
+      content check, confirmed already satisfied by ELIXIR-DEV/REVIEWER,
+      not a doc-file edit for this step) -- no other stage-N-*.md citation
+      among the seven.
+      docs/migration/stage-3-instance-engine.md's header (lines 3-8)
+      updated: REQ-043 and REQ-045 moved from the pending list into the
+      done list (REQ-043 was already `done` in docs/requirements.yaml per
+      its own REQ-043 DOC-UPDATER entry above, but the header's pending
+      list had not been updated to reflect that -- fixed here alongside
+      REQ-045 since both share the same line), pending count corrected
+      from 18 to 16, matching the REQ-044/REQ-049 DOC-UPDATER precedent
+      for this same header.
+      Flipped docs/requirements.yaml REQ-045 status: in_progress -> done.
+  - req: REQ-045
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-18T21:14:03Z
+    note: >
+      WF02-REQ045-20260818 Step 6 follow-up, requested by RELEASE-VALIDATOR
+      after its final PASS: the prior `done` entry above (commit 16da94e,
+      20:07:51Z) was written before two post-rebase rework commits and only
+      describes the pre-rework 797/797 state -- this event fills that gap.
+      Appended per this file's append-only discipline (docs/anti-patterns.md);
+      the prior entry is untouched. docs/requirements.yaml's REQ-045
+      status was already `done` and needed no further edit.
+      What happened: during WF-02 Step Final's rebase onto `main`, ORCH
+      found `main` had concurrently merged REQ-050 and REQ-051, shipping
+      real :EXCLUSIVE_GATEWAY/:PARALLEL_GATEWAY auto-advance dispatch in
+      lib/letflow/engine/transition.ex. This broke Letflow.Engine.create/2's
+      original fixed-2-hop dispatch assumption (valid when written, since
+      gateways didn't exist yet). Two rework cycles followed:
+      (1) commit e4512ef -- ELIXIR-DEV reworked activate/3 into a
+      worklist-based loop (advance_until_stable/4 + tokens_needing_dispatch/3)
+      that dispatches hops until a genuinely stable state, with a defensive
+      hop-limit bound (length(graph.nodes) * 4 + 10) returning
+      {:error, {:activation_failed, {:hop_limit_exceeded, token_id}}} instead
+      of looping forever; REVIEWER re-reviewed and PASSed the loop logic but
+      flagged a real coverage gap -- no test exercised PARALLEL_GATEWAY
+      split/join or the hop-limit path.
+      (2) commit e26b8cb -- TEST-DESIGNER added that coverage (split-to-join,
+      split-to-two-HUMAN_TASKs, and a hop-limit-exceeded fixture via a
+      CHK-06-valid gateway-to-gateway cycle) and found a second real bug
+      while writing it: insert_token_records/4 only handled 0 or exactly 1
+      tokens, crashing FunctionClauseError on a legitimate 2+-token split --
+      left as a red reproducing test per this project's discipline rather
+      than worked around.
+      (3) commit 096b5b3 -- ELIXIR-DEV fixed insert_token_records/4 to
+      handle any number of tokens via Enum.reduce_while/3.
+      (4) commit a1c0b5e -- TEST-RUNNER's final Step 4 re-run: 850 passed
+      (5 properties, 845 tests), 0 failures -- independently reproduced by
+      RELEASE-VALIDATOR's own Step 5 pass and by ORCH twice.
+      lib/letflow/design/req045-instance-start-engine-shell.md section 9
+      OQ-1a updated by the implementing agents: original "only
+      HUMAN_TASK/END first nodes succeed" disclosure marked superseded
+      (original text kept for history, followed by what changed and why) --
+      gateways now work; remaining gap is SERVICE_TASK/TIMER/SUB_PROCESS
+      first nodes, still :node_type_not_yet_implemented.
+      Also filed, not part of REQ-045's own scope: one unrelated
+      pre-existing flaky test (Letflow.IdentityMigrationTest) found during
+      this run's Step 5 re-verification, filed as docs/issues/ISS-0050.yaml
+      (renumbered during this same rebase to avoid a collision with a
+      concurrent host's own ISS-0049).
+      Checked this step, no changes needed: README.md's "What's here today"
+      and "Running it" still describe only the original pilot slice
+      (Letflow.ProcessInstance gen_statem, three Router HTTP endpoints) --
+      the rework was internal to the engine's dispatch loop, added no HTTP
+      route and no gen_statem/process change, so neither section nor the
+      ASCII state diagram is affected. docs/migration/stage-3-instance-engine.md's
+      header already lists REQ-045 as `done` from the original Step 6 pass
+      and needed no edit. No docs/migration/decisions/*.md changes were
+      required by REQ-045's acceptance criteria.

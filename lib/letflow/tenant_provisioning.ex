@@ -38,6 +38,23 @@ defmodule Letflow.TenantProvisioning do
   schema-per-tenant post-migration-060) is left open for a future requirement
   to decide explicitly — not assumed either way by this module.
 
+  ## `replay_migrations/2` also seeds platform event types (REQ-045 §9 OQ-3a)
+
+  When `replay_migrations/2` is called with its default `migration_source`
+  (i.e. the real `tenant_scoped_migrations/0` manifest, not a caller-supplied
+  one), it seeds the `"INSTANCE_STARTED"` `event_type_registry` row
+  immediately after migrations apply successfully —
+  `Letflow.EventStore.Registry.validate_payload/3` otherwise fails closed
+  with `{:error, :unknown_event_type}` for every tenant, since no shipped
+  migration seeds this row and R-Co's own 20-built-in-type seed was
+  deliberately left out of `20260816163103_create_event_type_registry.exs`
+  (that migration's own header comment: "nothing yet exists that emits
+  them"). `Letflow.Engine.create/2` (REQ-045) is the first thing that does.
+  Idempotent, and skipped entirely when a caller passes an explicit
+  `migration_source` (so `test/support/req022_migration_fixture.ex`'s
+  fixture-only replay is unaffected). See `replay_migrations/2`'s own
+  private `maybe_seed_platform_event_types/2` for the full reasoning.
+
   ## Secondary open question (surfaced during design, not in REQ-022's
   original list)
 
@@ -52,6 +69,7 @@ defmodule Letflow.TenantProvisioning do
 
   import Ecto.Query
 
+  alias Letflow.EventStore.Registry
   alias Letflow.Repo
   alias Letflow.TenantProvisioning.Registration
 
@@ -214,6 +232,7 @@ defmodule Letflow.TenantProvisioning do
 
       %Registration{schema_name: schema_name} ->
         try do
+          using_default_manifest? = is_nil(migration_source)
           migrations = migration_source || tenant_scoped_migrations()
 
           applied_versions =
@@ -225,7 +244,9 @@ defmodule Letflow.TenantProvisioning do
 
           mark_migrations_applied(tenant_id)
 
-          {:ok, applied_versions}
+          with :ok <- maybe_seed_platform_event_types(using_default_manifest?, tenant_id) do
+            {:ok, applied_versions}
+          end
         rescue
           exception -> {:error, {:migration_failed, exception}}
         end
@@ -450,5 +471,68 @@ defmodule Letflow.TenantProvisioning do
 
     from(r in Registration, where: r.tenant_id == ^tenant_id)
     |> Repo.update_all(set: [migrations_applied_at: now])
+  end
+
+  # Seeds the "INSTANCE_STARTED" event_type_registry row (REQ-045 §9 OQ-3a) --
+  # only when replay_migrations/2 ran the real, default production manifest
+  # (tenant_scoped_migrations/0), never when a caller passed an explicit
+  # migration_source. This distinction matters: a caller-supplied
+  # migration_source (test/support/req022_migration_fixture.ex's own
+  # {1, MigrationFixture} case, exercised by
+  # test/letflow/tenant_provisioning_test.exs) may not include
+  # event_type_registry's own migration at all, so unconditionally seeding
+  # here would attempt an insert against a table that doesn't exist in that
+  # schema and turn an otherwise-passing replay into a crash.
+  #
+  # Why this lives in replay_migrations/2 and not provision_tenant_schema/1
+  # (REQ-045's own design doc names both as candidate extension points):
+  # event_type_registry is a tenant-scoped table created by a *migration*
+  # (priv/repo/migrations/20260816163103_create_event_type_registry.exs),
+  # replayed here via Ecto.Migrator.run/4 above -- it does not exist yet at
+  # provision_tenant_schema/1's own point in a tenant's onboarding sequence
+  # (that function only creates the bare Postgres schema and the
+  # tenant_schemas registry row; migration replay is this module's own
+  # moduledoc's "two separate, composable primitives" the caller sequences
+  # itself). Seeding here, immediately after this same call's own
+  # Ecto.Migrator.run/4 succeeds, is the earliest point the table is
+  # guaranteed to exist.
+  #
+  # Idempotent by construction: Letflow.EventStore.Registry.register_type/2's
+  # own (name, schema_version) collision -- {:error, :duplicate_event_type_version}
+  # -- is treated as success here, so a second replay_migrations/2 call
+  # against an already-seeded tenant schema (Ecto.Migrator.run/4 itself is
+  # already idempotent on re-applying migrations) is also a no-op on this
+  # step, not a hard failure.
+  #
+  # No other event type is seeded here. REQ-045's own OQ-3a is narrowly
+  # scoped to "INSTANCE_STARTED" (the one event type EE-01's Letflow.Engine.create/2
+  # actually appends) -- no other already-designed event type currently has a
+  # real writer in this codebase that would need its own registry row yet;
+  # seeding one this call has no caller for would be speculative, not a fix
+  # for a demonstrated gap.
+  @instance_started_event_type_attrs %{
+    name: "INSTANCE_STARTED",
+    schema_version: 1,
+    description:
+      "Emitted once by Letflow.Engine.create/2 (EE-01) when a new process instance starts.",
+    json_schema: %{
+      "type" => "object",
+      "properties" => %{
+        "definition_id" => %{"type" => "string"},
+        "correlation_key" => %{"type" => ["string", "null"]},
+        "initial_variables" => %{"type" => "object"}
+      },
+      "required" => ["definition_id", "initial_variables"]
+    }
+  }
+
+  defp maybe_seed_platform_event_types(false, _tenant_id), do: :ok
+
+  defp maybe_seed_platform_event_types(true, tenant_id) do
+    case Registry.register_type(@instance_started_event_type_attrs, tenant_id) do
+      {:ok, _event_type} -> :ok
+      {:error, :duplicate_event_type_version} -> :ok
+      {:error, reason} -> {:error, {:event_type_seed_failed, reason}}
+    end
   end
 end

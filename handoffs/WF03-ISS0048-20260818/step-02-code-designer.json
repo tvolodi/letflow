@@ -1,0 +1,49 @@
+{
+  "handoff_id": "c4a1e2b0-2222-4000-8000-000000000003",
+  "run_id": "WF03-ISS0048-20260818",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0048-20260818/step-02-code-designer.json",
+  "created_at": "2026-08-18T22:33:46Z",
+  "started_at": "2026-08-18T22:33:46Z",
+  "completed_at": "2026-08-18T22:38:08Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0048-20260818/step-01-issue-fixer.json"],
+    "artifacts_in": ["handoffs/WF03-ISS0048-20260818/step-01-issue-fixer.json", "docs/issues/ISS-0048.yaml"],
+    "owned_modules": ["lib/letflow/sandbox_pool.ex", "lib/letflow/definitions.ex", "test/letflow/sandbox_pool_test.exs", "test/letflow/definitions/promotion_assertion_rerun_test.exs"]
+  },
+  "task": {
+    "description": "Design a fix for ISS-0048, scoped per ISSUE-FIXER's diagnosis (handoffs/WF03-ISS0048-20260818/step-01-issue-fixer.json's result.summary -- read it in full before designing). Root cause: Letflow.SandboxPool (lib/letflow/sandbox_pool.ex) claims a schema for a caller (currently only Letflow.Definitions.apply_promotion_assertion_rerun/6, lib/letflow/definitions.ex ~1780-1820) and the claim-to-release span is wrapped in try/rescue only -- which does not catch exit signals (process kills, ExUnit timeouts, linked-crash propagation). A killed claiming process leaks its sandbox schema with no cleanup. The module's own moduledoc already discloses this as a deferred reaper follow-up that was never built. Design a real safety net for this case: either (a) a supervised claim-owner monitor inside SandboxPool that DROP SCHEMAs a claim when its owning process dies (the codebase already has a proven pattern for this shape -- see test/support/data_case.ex's use of DBConnection.Ownership.Manager's :DOWN-monitor reclaim, per ISSUE-FIXER's note), or (b) a standalone periodic reaper comparing live sandbox_*/tenant_* Postgres schemas against an active-claims table and dropping true orphans past an age threshold. Pick whichever is the better fit for SandboxPool's existing architecture (read lib/letflow/sandbox_pool.ex in full first) and justify the choice; design artefact only, no implementation code. State explicitly in the design: interfaces/@specs for any new/changed public functions, what state SandboxPool's GenServer (if it is one -- verify) needs to add to track claim-owner monitors, and how this interacts with the existing claim/2 and release/2 contract without breaking apply_promotion_assertion_rerun/6's existing callers. Do NOT change the 5 originally-suspected identity/role_registry test files -- ISSUE-FIXER confirmed they already have correct on_exit ordering, out of scope for this fix. Write the design artefact to lib/letflow/design/ per this project's convention (see other files there for the expected shape).",
+    "acceptance_criteria": [
+      "Design artefact written under lib/letflow/design/ (design-only, no implementation code)",
+      "Covers exactly the SandboxPool crash/kill safety gap ISSUE-FIXER diagnosed -- does not touch the 5 exonerated test files",
+      "States the interface (@spec-level) for any new/changed public function(s) on Letflow.SandboxPool",
+      "Explains how the fix does not break apply_promotion_assertion_rerun/6's existing claim/2 -> release/2 contract",
+      "Justifies the chosen mechanism (owner-monitor vs. periodic reaper) against SandboxPool's actual current architecture, not assumed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design written to lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md, scoped exactly to ISSUE-FIXER's confirmed gap: Letflow.SandboxPool's claim-through-release span has no safety net for an exit signal (kill/timeout/linked-crash) hitting the owning process, since try/rescue never catches exit signals. Chose mechanism (a), a supervised owner-monitor inside SandboxPool, over (b) a standalone periodic reaper -- justified in design SS2 against SandboxPool's actual architecture: it already runs an identical Process.monitor/handle_info(:DOWN,...) pattern for *waiting* callers (sandbox_pool.ex handle_queue_or_reject/3 + the existing :DOWN clause), so extending that same discipline to *claim-holding* callers is a symmetric, zero-new-dependency extension; a periodic reaper would instead require re-introducing the DB-backed active-claims table req039's own design already rejected in favor of pure in-memory GenServer state, inherits ISS-0048's own false-positive risk (sandbox_* schemas are deliberately never in tenant_schemas), and has no correct age-threshold default given sandboxes are meant to be short-lived. Confirmed via direct reading of lib/letflow/definitions.ex (~lines 755-1650, apply_promotion_assertion_rerun/6, claim_sandbox_and_proceed/8, run_replay_span/8) that apply_promotion_assertion_rerun/6 runs synchronously in its caller's own process (no Task.async/spawn) -- so monitoring claim/2's caller pid inside SandboxPool directly observes the exact process ISSUE-FIXER's kill scenario targets. Design states explicitly: (1) claim/2 and release/2's public @specs are completely unchanged -- zero new public functions, the fix is entirely an internal state/handler extension (SS4); (2) SandboxPool's GenServer state.active's value type changes from a bare schema_name string to %{schema_name, owner_ref}, where owner_ref is a Process.monitor/1 reference on the claim's owning pid, established in handle_provision_now/1 (now needs `from`) and service_next_waiter/1, torn down via demonitor(owner_ref, [:flush]) on a normal release/2, and detected via a new three-way dispatch inside the existing handle_info({:DOWN,...}) clause (waiter match -> unchanged; active-claim-owner match -> new: best-effort drop_schema/1, remove from active, service_next_waiter/1; neither -> unchanged no-op) (SS3, SS5); (3) SS7 works through why this does not break apply_promotion_assertion_rerun/6's existing claim/2->release/2 contract in either direction -- the two safety nets (Letflow.Definitions' try/rescue for raised exceptions, SandboxPool's new :DOWN handler for exit signals) are strictly layered/non-overlapping, never double-releasing, and zero changes are needed to lib/letflow/definitions.ex. Design also surfaces one residual, explicitly-disclosed gap (INV-SP-DOWN-4, SS6/SS11 OQ-2): a drop_schema/1 failure coinciding with an owner kill is still unreclaimed, narrower than today's every-owner-kill-leaks gap and not claimed as fully closed. No implementation code anywhere in the artefact (pseudocode CASE/OF/END blocks and @spec/type shapes only, matching this project's req018/iss-0047 precedent). Does not touch or reference editing any of the 5 exonerated identity/role_registry test files.",
+    "artifacts_out": ["lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0048-20260818",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (WF-03 Step 2b) to independently re-check this design against the handoff's five acceptance criteria before ELIXIR-DEV implements."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

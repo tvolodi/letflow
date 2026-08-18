@@ -1,0 +1,44 @@
+{
+  "handoff_id": "a1b2c3d4-0000-4000-8000-00000000000c",
+  "run_id": "WF03-ISS0050-20260818",
+  "workflow_id": "WF-03",
+  "step": "Final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0050-20260818/step-final-git-merge.json",
+  "created_at": "2026-08-18T21:59:26Z",
+  "started_at": "2026-08-18T21:59:26Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["step-05-issue-fixer.json"],
+    "artifacts_in": [],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Execute Step Final (git merge) per docs/agents/protocols/GIT_MERGE.md exactly, standard (non-worktree) procedure -- this checkout is the primary checkout holding local main. All gates for WF03-ISS0050-20260818 are green: design validated, security review PASS, idiom review PASS, regression test fail-then-pass proven, full suite 846/846 green (0 failures), ISS-0050 and ISS-0051 both status: resolved, GitHub issue #185 closed.",
+    "acceptance_criteria": [
+      "git branch --show-current == feature/WF03-ISS0050-20260818 before starting.",
+      "Stage/commit any remaining uncommitted files by explicit filename.",
+      "git fetch origin main; git rebase origin/main -- resolve any conflicts per GIT_MERGE.md's rebase-specific --ours/--theirs guidance if they occur; re-verify mix compile --warnings-as-errors and mix test after any conflict resolution.",
+      "git push origin feature/WF03-ISS0050-20260818",
+      "gh pr create --title 'fix: DropLegacyPublicIdentityTables guard tolerates a tenant schema missing an identity table [WF03-ISS0050-20260818]' with a body summarizing the fix, validation, and closed issues (ISS-0050, ISS-0051) per GIT_MERGE.md's template.",
+      "gh pr merge --squash --delete-branch",
+      "Local cleanup: git checkout main; git pull --ff-only origin main; git branch -d feature/WF03-ISS0050-20260818; verify clean tree and HEAD matches the squash-merge commit."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Pending execution.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {"branch_name": "feature/WF03-ISS0050-20260818", "commit_sha_list": [], "push_status": "skipped", "pr_url": null},
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

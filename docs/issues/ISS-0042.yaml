@@ -49,4 +49,4 @@ affected_files:
   - lib/letflow/engine/transition.ex
   - lib/letflow/definitions/graph.ex
 github_issue: https://github.com/tvolodi/letflow/issues/157
-status: open
+status: in_progress

@@ -746,6 +746,31 @@
       "queue_agent_id": "hetzner-orch",
       "worktree": "/home/tvolodi/letflow (primary worktree)",
       "note": "ISS-0029/GH#87: vacuous refute table_exists_in_schema?(\"public\", ...) in test/letflow/definitions/migrations_test.exs, plus stale test/specs/REQ-027.md:111-113 citing it as proof of the :prefix mechanism. letflow-queue task 86 registered this session (task 86 was never auto-imported from GH#87 since that issue was filed directly via gh issue create rather than register_task -- see TASK_QUEUE.md note that the GH-issue-import path is not yet exercised in practice). register_task auto-created a duplicate GH issue #132, closed immediately as duplicate of #87 (canonical record stays docs/issues/ISS-0029.yaml / GH#87)."
+    },
+    {
+      "run_id": "WF02-REQ040-20260817",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-040"
+      ],
+      "stage": "S2",
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/definitions.ex",
+        "lib/letflow/definitions/promotion_assertion_run.ex",
+        "lib/letflow/definitions/promotion_artifact.ex",
+        "priv/repo/migrations",
+        "lib/letflow/tenant_provisioning.ex"
+      ],
+      "lock_acquired_at": "2026-08-17T23:49:59Z",
+      "lock_released_at": "2026-08-18T02:08:29Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (git merge) COMPLETED -- PR #134 squash-merged into main as 0123707 (fast-forward), queue task 56 released done, GH#64 closed.",
+      "backfilled": false,
+      "queue_task_id": 56,
+      "queue_agent_id": "tvolodi-orch",
+      "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
+      "note": "Promotion assertion re-run orchestration (assertion_rerun.zig, PRM-06/07), the last pending S2 requirement -- stage-2-event-store-definitions.md's header now lists all of REQ-022 through REQ-042 as done. New tenant-scoped promotion_assertion_runs table, FK to promotion_reviews, built on REQ-039's already-shipped SandboxPool/FixtureLoader. Full producer/validator chain via genuinely independent dispatched agents (all on Sonnet), all PASS with one real rework cycle: CODE-DESIGN-VALIDATOR FAILed the design once at Step 1b, not on an algorithm defect but on a genuine weak-model-tolerance gap -- AC4/AC6 require literal moduledoc TEXT content, and the original design deferred that prose to ELIXIR-DEV's own synthesis rather than specifying it verbatim. CODE-DESIGNER's rework added a dedicated verbatim-moduledoc-text section (following REQ-039's own precedent), independently re-verified byte-for-byte correct by CODE-DESIGN-VALIDATOR's re-review. ORCH independently confirmed the design's core semantic reading (a double-run non-determinism self-consistency check, NOT an oracle comparison) directly against R-Co's real assertion_rerun.zig source before dispatching the design gate, and confirmed R-Co's own reference implementation is itself an unfinished stub. ELIXIR-DEV self-caught and fixed one real bug during its own verification (Repo.get_by(..., prefix: prefix) silently merging prefix into the WHERE clause instead of passing it as a query option), independently re-verified fixed by both SECURITY-REVIEWER and REVIEWER. REVIEWER also caught and corrected an inaccuracy in ORCH's own dispatch briefing (about what the try/rescue crash-safety path should record on a rescued exception), verifying against the authoritative design doc rather than the flawed instruction -- exactly the kind of independent verification this pipeline exists for. TEST-DESIGN-VALIDATOR (Step 3b) performed real mutation testing -- broke the double-run non-determinism check and the try/rescue crash-safety span, confirmed each broke exactly its targeted test, then reverted cleanly. Step Final rebase was clean (16 commits, zero conflicts) despite landing after a concurrent host's ISS-0029 fix. mix compile --warnings-as-errors clean, mix test 673/673 (4 properties, 669 tests) on the actual merged tip, re-verified by ORCH directly both pre- and post-merge. Bookkeeping note: this run's own Step 00 never appended a 'started' event to docs/status/requirement_status.yaml (same recurring gap as REQ-031/038) -- worth fixing in this session's own habits going forward, not just noting per-run."
     }
   ]
 }

@@ -1,0 +1,49 @@
+{
+  "handoff_id": "c4e3b2a1-0001-4a1a-9c00-000000000001",
+  "run_id": "WF03-ISS0042-20260818",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0042-20260818/step-01-issue-fixer.json",
+  "created_at": "2026-08-18T06:54:50Z",
+  "started_at": "2026-08-18T06:54:50Z",
+  "completed_at": "2026-08-18T06:56:49Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/issues/ISS-0042.yaml", "lib/letflow/engine/transition.ex", "lib/letflow/definitions/graph.ex", "lib/letflow/design/req044-transition-kernel.md"],
+    "owned_modules": ["lib/letflow/engine/", "lib/letflow/definitions/graph.ex"]
+  },
+  "task": {
+    "description": "WF-03 Steps 0.5 and 1 (docs/agents/workflows/WF-03_issue_resolving.md) for docs/issues/ISS-0042.yaml, claimed via letflow-queue task 108. Read the issue file in full. IMPORTANT CONTEXT ORCH wants your independent judgment on: ISS-0042 is NOT a reported defect -- nothing is broken, no test fails, REQ-044's own REVIEWER gate already PASSed with this exact code. It's a self-filed type-safety OBSERVATION by REVIEWER during REQ-044's Step 2d review, and REVIEWER's own filed text explicitly states: 'Not proposed as required work now; REQ-044's own scope is the dispatch skeleton, and this is exactly the kind of abstraction that would be scope creep to add ahead of a stage/decision record calling for it.' Do Step 0.5 (registry lookup -- check docs/issues/ for similar resolved entries) and Step 1 (diagnose) for real: verify the claim independently by reading lib/letflow/engine/transition.ex's dispatch_start/4 and lib/letflow/definitions/graph.ex's CHK-04 validator yourself, run the existing test suite for this module (test/letflow/engine/) to confirm nothing is currently failing or under-tested because of this gap. Then answer the actual question WF-03's Step 1 exists to answer: is there a genuine root cause here that needs a code fix, or is 'no code fix warranted right now, this is a legitimate deferred design note' the correct diagnosis? This project's CLAUDE.md and core-directives.md are explicit that agents must not add abstractions/features beyond what's required and must not design for hypothetical future requirements -- weigh that directly against WF-03's general 'run the full workflow, don't skip based on your own judgement' framing, which is written for genuine defects, not for a MINOR non-blocking design note whose own author already recommended deferral. State your reasoning plainly either way.",
+    "acceptance_criteria": [
+      "Step 0.5 registry lookup performed against docs/issues/ for similar prior entries",
+      "The specific code (dispatch_start/4, CHK-04 validator) independently read and the claim in ISS-0042 verified against it, not just trusted from the issue text",
+      "test/letflow/engine/ suite run to confirm current state (nothing broken)",
+      "Explicit diagnosis stated: either (a) a genuine root cause requiring a code fix -- in which case name it precisely and route to CODE-DESIGNER per WF-03's normal Step 2, or (b) no code fix is warranted right now -- in which case state why this doesn't meet the bar for a WF-03 fix given the project's explicit anti-scope-creep norms, and recommend closing the issue as diagnosed-and-deferred rather than resolved-by-code-change",
+      "If (b): update docs/issues/ISS-0042.yaml yourself -- status: resolved, resolved_in_run: WF03-ISS0042-20260818, resolved_at: <real UTC timestamp>, and add a resolution_note field explaining the diagnosed-and-deferred outcome and citing REVIEWER's own original deferral recommendation. If github_issue is set, close it via gh issue close 157 --comment explaining the same. Commit docs/issues/ISS-0042.yaml on this branch (fix/WF03-ISS0042-20260818) and push."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Step 0.5 (registry lookup): searched docs/issues/*.yaml for a prior entry sharing this shape. ISS-0020 is the closest match (also REVIEWER-filed, MINOR, non-blocking, discovered during a PASSing Step 2d gate) but does not transfer as precedent for a code/doc fix here: ISS-0020's three fixes were one-to-three-sentence doc/moduledoc additions whose exact content the issue text already specified -- they qualified for ORCHESTRATOR.md sec 10's sizing exception. ISS-0042's own suggested fix is a new opaque/phantom-tagged ValidatedGraph.t() type spanning Letflow.Engine.Transition.transition/3's public @spec -- categorically larger and not sizing-exception-eligible. No recurrence found (this is not a repeat of a previously 'fixed' issue that didn't hold).\n\nStep 1 (diagnose, verified against actual code, not the issue's prose): read lib/letflow/engine/transition.ex's dispatch_start/4 (lines 212-222) directly -- it does `case Enum.find(definition_snapshot.edges, &(&1.source == node.id)) do nil -> {:error, {:unknown_node_id, node.id}}; edge -> ... end`, a defensive nil-branch guarding against a :START node with zero outgoing edges. Read lib/letflow/definitions/graph.ex's CHK-04 check_isolated_nodes/1 (lines 389-435) directly -- confirmed it enforces 'every :START node has >=1 outgoing edge' but purely as a runtime validator call site; Graph.t()'s @type/struct shape carries no marker distinguishing a CHK-04-passed graph from an arbitrary hand-built one. The issue's technical claim is accurate. Ran `MIX_TEST_PARTITION=2 mix test test/letflow/engine/`: 1 property + 19 tests, 0 failures -- nothing currently broken. Found the defensive branch already has dedicated coverage: transition_test.exs:257 'a START node with no outgoing edge at all returns a named error rather than raising (defensive totality)' -- so the gap this issue describes is purely static-type-level, not a runtime coverage gap.\n\nDIAGNOSIS: (b) no code fix warranted now -- diagnosed-and-deferred, not resolved-by-code-change. Reasoning: REQ-044's REVIEWER gate already PASSed with this exact code; no test fails; CHK-04 does run before any graph reaches the engine in the current call path, so no invariant is actually violated at runtime today. Checked docs/requirements.yaml and docs/migration/decisions/*.md for any mention of ValidatedGraph/opaque graph/phantom type -- no match, so no requirement or decision record currently calls for this abstraction. Applying core-directives.md's anti-scope-creep norms and CLAUDE.md's 'don't design for hypothetical future requirements' directly: building the ValidatedGraph.t() wrapper now would itself be the scope-creep those norms forbid. It also fails ORCHESTRATOR.md sec 10's sizing checklist outright (adds a new public type/module/@spec; would change transition/3's @spec, which is asserted by existing tests) -- so unlike ISS-0020 it cannot be absorbed as a small in-run fix; it would need its own full WF-02-shaped design/implement/test chain with no requirement currently authorizing it. This matches REVIEWER's own original recommendation in the issue text. Updated docs/issues/ISS-0042.yaml (status: resolved, resolved_by: ISSUE-FIXER, resolved_in_run: WF03-ISS0042-20260818, resolved_at: 2026-08-18T06:56:13Z, resolution_note added with full reasoning). Closed GitHub issue #157 via `gh issue close 157 --comment ...` with the same reasoning. Committed docs/issues/ISS-0042.yaml on fix/WF03-ISS0042-20260818 (commit 0855f11) and pushed to origin.",
+    "artifacts_out": ["docs/issues/ISS-0042.yaml"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "fix/WF03-ISS0042-20260818",
+      "commit_sha_list": ["0855f11737f0a04eaf8c8b5921c2a22a31491fd6"],
+      "remote_branch": "origin/fix/WF03-ISS0042-20260818",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "No further WF-03 steps needed -- this run does not proceed to Step 2 (CODE-DESIGNER). Route to Step Final (git merge fix/WF03-ISS0042-20260818 to main; only docs/issues/ISS-0042.yaml and this handoff changed, no application code) then close out the run."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

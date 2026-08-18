@@ -1,0 +1,114 @@
+# Test run report — WF-02 Step 4 (test run) for REQ-050
+
+req_id: REQ-050
+workflow: WF-02
+step: "04"
+agent: TEST-RUNNER
+run_id: WF02-REQ050-20260818
+date_utc: 2026-08-18T18:59:00Z
+
+git:
+  branch: feature/WF02-REQ050-20260818
+  branch_confirmed: true
+  worktree: false
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 27 [erts-15.2.7.4] [source] [64-bit] [smp:8:8] [ds:8:8:10] [async-threads:1] [jit:ns]; Elixir 1.18.3 (compiled with Erlang/OTP 27)"
+  postgres_container: "letflow-postgres-1 (already running before this run,
+    confirmed via \`docker ps\` — 0.0.0.0:5462->5432/tcp, [::]:5462->5432/tcp;
+    docker compose up not needed, container was already healthy)"
+  command_run: "mix test (full suite, unpinned/default random seed — the
+    \`test\` alias runs ecto.create + ecto.migrate --quiet first
+    automatically)"
+
+verdict: PASS
+
+checks:
+  test_suite_full_run:
+    result: PASS
+    exit_code: 0
+    note: "Run twice: once as a plain `mix test`, once with output
+      captured to file for a clean grep of the summary/seed lines. Both
+      runs reported identical 5 properties / 813 tests / 0 failures."
+    seed_verbatim: "Running ExUnit with seed: 59866, max_cases: 16"
+    summary_line_verbatim: "5 properties, 813 tests, 0 failures"
+    finished_line_verbatim: "Finished in 83.1-84.4 seconds (2.0-2.1s
+      async, 81.0-82.3s sync) across the two runs"
+    failures: 0
+
+  new_req050_tests_included_in_run:
+    result: PASS
+    note: >
+      This run's diff against main (git diff --stat main...HEAD) shows
+      REQ-050 added lib/letflow/engine/expr.ex (new CEL-subset expression
+      evaluator, 442 lines) and extended lib/letflow/engine/transition.ex
+      (+122/-lines, EXCLUSIVE_GATEWAY dispatch), backed by
+      test/letflow/engine/expr_test.exs (new, 241 lines) and an extension
+      to test/letflow/engine/transition_test.exs (+162 lines, including
+      the property "calling transition/3 twice with the identical
+      (snapshot, state, event) triple always returns == equal results" at
+      transition_test.exs:63, and gateway dispatch/CEL-evaluation cases).
+      test/letflow/engine/variable_merge_test.exs picked up a small
+      15-line adjustment for the new transition_error() shape. All of
+      these ran as part of the single full-suite invocation above — no
+      isolated/filtered run was needed. Test count is 813 in this run vs
+      704 recorded in REQ-049's prior full-suite report, a rise of 109,
+      consistent with expr_test.exs's new example-based cases plus the
+      transition_test.exs additions and the pre-existing property tests
+      now also exercising the gateway path.
+
+  properties_present:
+    result: PASS
+    note: >
+      5 properties ran, matching the 5 properties seen in REQ-049's prior
+      report (StreamData property tests are not gated behind any
+      exclusion tag in this project's config/test.exs). Confirmed the
+      REQ-050-relevant one directly:
+      test/letflow/engine/transition_test.exs:63 "calling transition/3
+      twice with the identical (snapshot, state, event) triple always
+      returns == -equal results" (determinism property, exercises the new
+      EXCLUSIVE_GATEWAY/CEL path along with every other dispatch branch).
+      The pre-existing "no sequence of actions produces an invalid state"
+      property (process_instance_test.exs:64) and the parallel-approval
+      equivalent (parallel_approval_test.exs:145) also ran unmodified.
+
+  known_noise_not_a_failure:
+    - >
+      Verbose SQL query debug logging (`[debug] QUERY OK ...` lines,
+      including tenant-schema DDL/DML from multi-tenant test fixtures) in
+      raw mix test output (config/test.exs's default test log level) —
+      expected, not indicative of any problem.
+    - >
+      Repeated `[error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/...` lines (nxdomain) —
+      expected: OIDC discovery is deliberately pointed at an unreachable
+      placeholder host in test config to exercise retry/failure-handling
+      paths, not a real connectivity problem.
+    - >
+      `warning: ExUnit.Case.register_test/4 is deprecated. Use
+      register_test/6 instead` on the three `property` macro usages
+      (process_instance_test.exs:64, transition_test.exs:63,
+      parallel_approval_test.exs:145) — pre-existing, already filed as
+      ISS-0044 (GitHub issue #166) by REQ-049's test run, not
+      re-filed here since it is the identical pre-existing condition, not
+      a new one introduced by REQ-050.
+
+pre_existing_failures_found: none
+issues_filed: []
+
+diagnosis: "N/A — no failures observed in this run. Nothing routed back to
+  ELIXIR-DEV or TEST-DESIGNER."
+
+regression_check: >
+  813 tests, 5 properties, 0 failures, full suite including REQ-050's new
+  test/letflow/engine/expr_test.exs and the transition_test.exs additions
+  alongside every pre-existing test. No pre-existing failure was found
+  masking this result, so Unblock-Everything did not apply — nothing
+  needed fixing before reporting PASS.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-18-WF02-REQ050-20260818.yaml
+  next_action: "Route to RELEASE-VALIDATOR (Step 5)"

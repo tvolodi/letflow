@@ -3081,7 +3081,7 @@ requirements:
   - id: REQ-058
     title: Lua script execution audit persistence path (lua_script_audit.zig, LUA-07 minimal path)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S3
     impl_order: 103  # letflow-queue task id
     description: >

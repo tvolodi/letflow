@@ -4588,3 +4588,18 @@ history:
       EE-04 one-line summary, pending count corrected 14 -> 13), same
       header-sync shape REQ-045's and REQ-047's DOC-UPDATER passes already
       applied.
+  - req: REQ-058
+    event: started
+    agent: ORCH
+    at: "2026-08-18T23:51:22Z"
+    note: >
+      WF02-REQ058-20260818. Single-host fallback mode (QUEUE_AUTH_TOKEN unset,
+      get_next_task returned 401). Read docs/requirements.yaml directly:
+      first pending Stage 3 requirement in file order with all depends_on
+      satisfied (REQ-045, done) that isn't already claimed elsewhere --
+      REQ-048 (also dependency-satisfied) confirmed actively in-progress on
+      sibling worktree hetzner-wt2-orch, PR #204 open, so skipped in favor
+      of REQ-058. Step 00 git setup complete: branch
+      feature/WF02-REQ058-20260818 created from up-to-date main, pushed.
+      owned_modules: lib/letflow/engine/lua_script_audit.ex,
+      priv/repo/migrations/*lua_script_execution_audit*.

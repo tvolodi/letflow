@@ -1,0 +1,60 @@
+{
+  "handoff_id": "a1e2c3d4-0050-4a00-8000-000000000009",
+  "run_id": "WF02-REQ050-20260818",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ050-20260818/step-05-release-validation.json",
+  "created_at": "2026-08-18T19:01:08Z",
+  "started_at": "2026-08-18T19:01:08Z",
+  "completed_at": "2026-08-18T19:03:47Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-050"],
+    "requirement_text": {
+      "REQ-050": "See handoffs/WF02-REQ050-20260818/step-01-code-designer.json's context.requirement_text.REQ-050 for the full requirement text -- read it there, do not open docs/requirements.yaml."
+    },
+    "related_handoff_ids": ["a1e2c3d4-0050-4a00-8000-000000000008"],
+    "artifacts_in": [
+      "lib/letflow/engine/expr.ex",
+      "lib/letflow/engine/transition.ex",
+      "test/letflow/engine/expr_test.exs",
+      "test/letflow/engine/transition_test.exs",
+      "test/reports/report-2026-08-18-WF02-REQ050-20260818.yaml"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex", "lib/letflow/engine/expr.ex", "test/letflow/engine", "test/specs"]
+  },
+  "task": {
+    "description": "Independently re-run mix test yourself -- do not trust TEST-RUNNER's report alone. Confirm every one of REQ-050's 8 acceptance criteria is satisfied by the actual code/test, not by TEST-RUNNER's summary. Check docs/status/requirement_status.yaml and docs/requirements.yaml for staleness relative to what actually shipped.",
+    "acceptance_criteria": [
+      "a gateway whose second declared edge is the first to evaluate true routes the token down that edge, not the first or third -- an explicit ordering test, not a single-edge case",
+      "a gateway with a default edge declared FIRST and two non-default edges that both evaluate false routes the token down the default edge, proving the default is evaluated last regardless of declared position",
+      "a condition expression that raises a runtime error (undefined variable or type mismatch) is treated as false and evaluation continues to the next edge, rather than transitioning the instance to ERROR -- an explicit test distinguishing this from the no-match case",
+      "a gateway where no condition matches and no default edge exists transitions the instance to ERROR with a structured reason naming the gateway node_id AND the conditions that were evaluated",
+      "exactly one outgoing edge is followed in every passing case, asserted directly rather than inferred",
+      "a condition using an unsupported CEL feature (a macro, a type-conversion function, a collection function, or the ternary operator) evaluates to false via the catch-false rule rather than raising or erroring the instance, matching hasCelUnsupportedFeatures()'s boundary -- at least two such expressions tested explicitly",
+      "the CEL-to-expr translation is tested directly on each of its four documented rewrites (variables. prefix stripped, && -> and, || -> or, ! -> not with != passing through unchanged), rather than only end-to-end through gateway evaluation",
+      "the evaluator performs zero I/O and is deterministic, confirmed by inspection of its call graph and stated in the moduledoc, which cites src/engine/transition.zig's evaluateGatewayCondition() and src/expr/ as the ported reference and records which subset of the expression surface landed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-ran mix test (not trusting TEST-RUNNER's report). Scoped run: mix test test/letflow/engine/expr_test.exs test/letflow/engine/transition_test.exs -> 1 property, 56 tests, 0 failures. Full suite: mix test -> 5 properties, 813 tests, 0 failures. Per-AC verification against actual code/tests (not TEST-RUNNER's summary): AC1 (2nd edge, first true, wins) -- transition_test.exs:339-356 'the second declared edge, the first to evaluate true, is the one taken', asserts new_state.tokens == [%Token{node_id: \"b\"}] via list equality against dispatch_exclusive_gateway/4 (transition.ex:287-310) which filters+splits conditioned/default edges and short-circuits in evaluate_conditioned_edges/3 (transition.ex:319-336). AC2 (default declared first, evaluated last) -- transition_test.exs:360-375, default edge declared as edges[0] but only reached after both conditioned edges evaluate false; code confirms default_edge is computed via Enum.split_with then only consulted in the {:no_match,_} branch (transition.ex:294-309). AC3 (runtime error treated as false, not instance ERROR) -- transition_test.exs:379-409, two explicit tests (undefined variable, string/number type-mismatch ordering compare) distinct from the no-match case; Expr.eval/2 (expr.ex:344-421) returns {:error,{:eval_error,_}} which evaluate_condition/2's catch-false composition (expr.ex:432-441) folds to plain `false`, never raising. AC4 (no match + no default -> structured ERROR naming node_id and evaluated conditions) -- transition_test.exs:447-474, two tests (populated and zero-edge cases) asserting the exact {:error,{:no_matching_edge,\"gw\",[%{edge_id:,condition:,result: false},...]}} shape; transition.ex:301-304 constructs this from evaluate_conditioned_edges/3's accumulated evaluated_conditions list. AC5 (exactly one edge followed, asserted not inferred) -- every AC1/AC2/AC3-passing test above asserts new_state.tokens via direct list equality (single-element list with the expected node_id), confirmed inline in transition_test.exs (e.g. line 355 comment 'REQ-050 AC5, asserted directly via list equality') and cross-checked against test/specs/REQ-050.md:79-84/129. AC6 (unsupported CEL feature, >=2 examples, catch-false not raise) -- transition_test.exs:413-443 has 2 end-to-end gateway tests (macro-call has(...), ternary operator) plus expr_test.exs:65-96 tests 5 distinct unsupported-feature examples (macro, type-conversion int(), collection size(), `in` operator, ternary) all returning {:error,:unsupported_cel_feature} from unsupported_cel_feature?/1 (expr.ex:142-171), matching hasCelUnsupportedFeatures()'s documented boundary (expr.ex:55-75 @unsupported_call_markers). AC7 (4 CEL->expr rewrites tested directly, not just end-to-end) -- expr_test.exs:20-58, 4 describe blocks each testing translate_cel_to_expr/1 directly: 'variables.' prefix stripped (lines 21-27), && -> and (31-33), || -> or (37-39), ! -> not with != passing through unchanged (43-57, including a mixed !/!= case); verified against strip_variables_prefix/1, String.replace calls, and rewrite_not/1's negative-lookahead regex (expr.ex:104-135). AC8 (zero I/O, deterministic, moduledoc citing transition.zig/src/expr/, states landed subset) -- expr.ex moduledoc (lines 2-34) explicitly cites 'transition.zig's evaluateGatewayCondition() (~L1118, R-Co's EXP-102 adapter)' and 'src/expr/' and states the landed subset (variable refs, 6 comparison ops, boolean and/or/not, literals -- not lexer.zig/parser.zig/ast.zig/evaluator.zig/error.zig/mod.zig/benchmark.zig in full); expr_test.exs:204-221 greps the actual code (docs/comments stripped) for Repo./Logger./DateTime./System.os_time/HTTPoison/Req./File./:rand./:crypto. and asserts zero matches; expr_test.exs:223-239 has 3 explicit repeated-call-equality determinism checks. Also confirmed transition.ex's own AC1/AC2 moduledoc sections (lines 28-46) carry the same grep-checkable purity claim across instance_state.ex/token.ex/transition.ex, and that grep independently returns zero matches. Staleness check: docs/requirements.yaml REQ-050 status is `in_progress` (line 2566); docs/status/requirement_status.yaml's last REQ-050 event is `started` (agent ORCH, 2026-08-18T18:29:11Z) with no `done` event -- this is the expected pre-DOC-UPDATER state, not a defect. Also confirmed the REQ-044 fallout the design doc claims (variable_merge_test.exs updated to expect {:error,{:no_matching_edge,\"gw\",[]}} instead of the old stub error) is real: variable_merge_test.exs:297-303.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ050-20260818",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER (Step 6)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

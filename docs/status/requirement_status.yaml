@@ -4457,3 +4457,21 @@ history:
       pass (moved REQ-047 into the `done` clause with an EE-03 one-line
       summary, pending count corrected 15 -> 14), same header-sync shape
       REQ-045's DOC-UPDATER already applied to REQ-043/REQ-051.
+  - req: REQ-046
+    event: started
+    agent: ORCH
+    at: "2026-08-18T21:39:02Z"
+    note: >
+      WF02-REQ046-20260818. Claimed via direct docs/requirements.yaml read
+      (letflow-queue unreachable, no QUEUE_AUTH_TOKEN), lowest impl_order (90)
+      among pending requirements with all depends_on satisfied (REQ-045 done).
+      Step 00 (git setup) PASS: feature/WF02-REQ046-20260818 branched from
+      origin/main (78f8031), pushed. Status flipped pending -> in_progress.
+      Executes the supersession REQ-045's own moduledoc already recorded:
+      process_instance.ex superseded, instance_supervisor.ex generalized but
+      untouched by REQ-045 itself; REQ-045 resolved to a plain transactional
+      context module (no process/gen_statem per instance), so this run's
+      likely shape is deleting process_instance.ex and its TransitionEvent
+      persistence, and retiring instance_supervisor.ex explicitly (nothing
+      left to supervise) -- left for CODE-DESIGNER to confirm and detail,
+      not pre-decided here.

@@ -2384,7 +2384,7 @@ requirements:
   - id: REQ-046
     title: Retirement or generalization of lib/letflow/process_instance.ex and its supervision tree
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S3
     impl_order: 90  # letflow-queue task id
     description: >

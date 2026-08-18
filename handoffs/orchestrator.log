@@ -535,3 +535,5 @@
 2026-08-18T06:21:16Z | PASS | WF-02 | WF02-REQ044-20260818 | SECURITY-REVIEWER -> ORCH | Step 2c: out of scope, no tenant-data path touched. Committed a8d8057.
 2026-08-18T06:21:52Z | DISPATCH | WF-02 | WF02-REQ044-20260818 | ORCH -> REVIEWER | Step 2d hard gate.
 2026-08-18T06:28:10Z | PASS | WF-02 | WF02-REQ044-20260818 | REVIEWER -> ORCH | Step 2d: idiomatic, no supervision concern, no scope creep. :START zero-outgoing-edges defensive branch accepted as-is. 2 MINOR issues filed (ISS-0042/GH#157), not blocking. Committed 1a0f133.
+2026-08-18T06:26:51Z | DISPATCH | WF-02 | WF02-REQ044-20260818 | ORCH -> TEST-DESIGNER | Step 3: test spec + code.
+2026-08-18T06:36:36Z | PASS | WF-02 | WF02-REQ044-20260818 | TEST-DESIGNER -> ORCH | Step 3: test/specs/REQ-044.md + 3 test files under test/letflow/engine/, StreamData property test for determinism (AC2), all 5 node-type dispatch cases, both error paths. mix test 5 properties/688 tests/0 failures. Committed 3c3427f.

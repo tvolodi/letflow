@@ -2648,7 +2648,7 @@ requirements:
   - id: REQ-051
     title: Parallel gateway split and join (transition.zig, EE-06/EE-07)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S3
     impl_order: 95  # letflow-queue task id
     description: >

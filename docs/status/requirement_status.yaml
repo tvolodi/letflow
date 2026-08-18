@@ -4259,3 +4259,14 @@ history:
       untouched, same reasoning REQ-063/REQ-064's DOC-UPDATER steps
       applied.
       Flipped docs/requirements.yaml REQ-050 status to done.
+  - req: REQ-051
+    event: started
+    agent: hetzner-wt2-orch
+    at: "2026-08-18T18:57:37Z"
+    note: >
+      Parallel gateway split and join (transition.zig EE-06/EE-07). Depends
+      on REQ-044 (done) and REQ-049 (done); REQ-052 (instance cancellation)
+      is not a dependency by design -- REQ-052's own description states the
+      token-level cancelled-branch exclusion rule lives in REQ-051's pure
+      transition logic, REQ-052 only owns instance-level persistence of a
+      cancellation triggered elsewhere. Confirmed before starting.

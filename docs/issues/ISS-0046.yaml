@@ -62,4 +62,39 @@ description: >
   lib/letflow/design/req044-transition-kernel.md) before either is applied.
 affected_files:
   - lib/letflow/engine/transition.ex
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0046-20260818
+resolved_at: "2026-08-18T08:41:51Z"
+resolution: >
+  Root cause corrected against this issue's own filed hypothesis during ISSUE-FIXER's
+  Step 1 re-diagnosis (WF03-ISS0046-20260818): the gap is NOT in dispatch_node/4's
+  clauses (which this issue originally suspected, including its catch-all) -- that
+  function's own instance_state IS already narrowed to %InstanceState{} by the time it
+  arrives there, inherited from transition/3's own `%InstanceState{} = instance_state`
+  head match. The actual narrowing loss happens one call-level below: dispatch_start/4,
+  dispatch_end/3, and dispatch_human_task/3 are private functions with no @spec and no
+  struct pattern match of their own, so Elixir 1.20's type checker re-infers their
+  parameter types from scratch rather than inheriting the caller's already-narrowed
+  type across that unspec'd function boundary. This issue's per-warning attribution was
+  also corrected: the dispatch_start/4 warning is about Letflow.Engine.Token, not
+  Letflow.Engine.InstanceState as originally filed.
+
+  Fix: added explicit struct pattern matches (%InstanceState{} = instance_state,
+  %Token{} = token, as applicable per function) to the 3 affected private functions'
+  own parameter lists, matching dispatch_node/4's own established idiom of pattern-
+  matching its node parameter (e.g. %Node{node_type: :START} = node). A 4th warning
+  (on dispatch_start/4's instance_state) surfaced only after the first edit was applied
+  and the compile gate re-run -- not visible in the original 3-warning reproduction --
+  and was fixed the same way once found. See lib/letflow/design/
+  iss-0046-transition-struct-update-warnings.md for the full design, including the
+  design-validator pass and this correction's own record.
+
+  Verified via mix compile --warnings-as-errors (clean _build, exit 0, zero warnings)
+  and mix test (761 passed, 0 failures) on the fix branch, both independently
+  re-confirmed by a second pass (TEST-DESIGN-VALIDATOR/TEST-RUNNER equivalent steps)
+  rather than trusted from a single run. Fail-first proof: the same compile command,
+  run against the pre-fix file state (via git stash), reproduced the original 3
+  warnings and exit 1, confirming the regression the fix actually closes.
+github_issue: null # gh authenticated and reachable, but this issue was filed directly
+  # as docs/issues/ISS-0046.yaml with no github_issue field set at filing time (unlike
+  # its sibling ISS-0045) -- no GitHub issue exists to close for this one.

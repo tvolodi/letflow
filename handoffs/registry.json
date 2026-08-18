@@ -951,6 +951,23 @@
       "queue_agent_id": "hetzner-wt2-orch",
       "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
       "note": "ISS-0044/GH#166 (own finding, filed by TEST-RUNNER during this session's WF02-REQ049-20260818 run): 3 groups of pre-existing compiler warnings. ISSUE-FIXER's Steps 0.5/1 diagnosis: Group 2 (4 unused-default-arg warnings) mechanical and fixable now -- every call site already supplies the argument; Group 1 (register_test/4 deprecation) originates entirely inside StreamData 0.6.0's own macro, needs its own scoped version-bump requirement, deferred; Group 3 (migration module redefinition) confirmed same non-blocking mechanism ISS-0020 already established, no fix needed. ORCH applied Group 2's fix directly under ORCHESTRATOR.md sec10's sizing exception (single-concern, exactly-specified, per file), then obtained independent REVIEWER sign-off before merging rather than skipping validation, matching the ISS-0020 precedent. mix test 704 tests/0 failures maintained; all 4 targeted warnings confirmed gone, no new warning introduced. ISS-0044 marked resolved as a whole (its only actionable item fixed+verified; Groups 1/3 documented as permanently deferred, not silently dropped). GH#166 closed."
+    },
+    {
+      "run_id": "WF03-ISS0046-20260818",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "stage": null,
+      "status": "IN_PROGRESS",
+      "owned_modules": ["lib/letflow/engine/transition.ex"],
+      "lock_acquired_at": "2026-08-18T08:24:44Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (git-setup) PASS -- branch feature/WF03-ISS0046-20260818 pushed from main at 2ef8b38. Routing to ISSUE-FIXER (Step 0.5/1).",
+      "backfilled": false,
+      "queue_task_id": null,
+      "queue_agent_id": null,
+      "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
+      "note": "ISS-0046 (own finding, filed by ORCH while verifying the compile gate before starting WF02-REQ063-20260818): mix compile --warnings-as-errors currently fails on main with 3 struct-update type-inference warnings in lib/letflow/engine/transition.ex (dispatch_start/4, dispatch_end/3, dispatch_human_task/3), all traced to dispatch_node/4's catch-all clause never pattern-matching instance_state against %InstanceState{}. Confirmed directly against origin/main in an isolated worktree, not assumed from local state. Not caused by REQ-063/064's own scope (transition.ex belongs to REQ-044/049) -- filed and routed through WF-03 rather than fixed inline, so REQ-063 can start against a clean compile gate per this run's own blocking finding. owned_modules scoped to the single affected file; no overlap with REQ-063/064's eventual owned_modules (priv/repo/migrations, lib/letflow/identity, lib/letflow/engine/task.ex, lib/letflow/engine/token_record.ex, and friends per decision 0006 section 5)."
     }
   ]
 }

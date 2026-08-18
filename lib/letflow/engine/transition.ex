@@ -209,7 +209,7 @@ defmodule Letflow.Engine.Transition do
   # violates that upstream invariant, not a literal AC3 case -- flagged here
   # per the design doc's own §7.3 precedent for defensive additions beyond
   # the literal acceptance criteria.
-  defp dispatch_start(definition_snapshot, instance_state, token, node) do
+  defp dispatch_start(definition_snapshot, %InstanceState{} = instance_state, %Token{} = token, node) do
     case Enum.find(definition_snapshot.edges, &(&1.source == node.id)) do
       nil ->
         {:error, {:unknown_node_id, node.id}}
@@ -227,7 +227,7 @@ defmodule Letflow.Engine.Transition do
   # `:completed` iff no token remains live afterward; otherwise unchanged
   # (other branches may still be executing, relevant once REQ-051's
   # PARALLEL_GATEWAY split can produce more than one live token).
-  defp dispatch_end(instance_state, token, _node) do
+  defp dispatch_end(%InstanceState{} = instance_state, token, _node) do
     remaining_tokens = Enum.reject(instance_state.tokens, &(&1.token_id == token.token_id))
 
     new_status = if remaining_tokens == [], do: :completed, else: instance_state.status
@@ -241,7 +241,7 @@ defmodule Letflow.Engine.Transition do
   # automatic outgoing traversal. The same Token.t() value is appended to
   # pending_task_nodes; this is the only dispatch clause that ever appends
   # to it (the guard for REQ-047's future tasks-row materialization).
-  defp dispatch_human_task(instance_state, token, _node) do
+  defp dispatch_human_task(%InstanceState{} = instance_state, token, _node) do
     new_pending = instance_state.pending_task_nodes ++ [token]
     {:ok, %InstanceState{instance_state | pending_task_nodes: new_pending}, []}
   end

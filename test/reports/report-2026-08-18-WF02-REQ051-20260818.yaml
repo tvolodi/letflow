@@ -1,0 +1,44 @@
+run_id: WF02-REQ051-20260818
+agent: TEST-RUNNER
+date: 2026-08-18
+branch: feature/WF02-REQ051-20260818
+requirement_ids:
+  - REQ-051
+stage: S3
+
+environment:
+  postgres: >
+    Postgres already running for this host as `letflow-postgres-1`
+    (0.0.0.0:5462->5432/tcp, healthy, up 35h) -- shared across worktrees
+    on this port. `docker compose up -d` in this worktree failed with
+    "port is already allocated" for `letflow-wt2-postgres-1`, which is
+    expected/harmless: the already-running container on 5462 is the one
+    `mix test` connects to, so no separate container was needed here.
+
+commands_run:
+  - cmd: "mix compile --warnings-as-errors"
+    result: PASS
+    output: "(no output -- clean compile, no warnings)"
+  - cmd: "MIX_TEST_PARTITION=2 mix test"
+    result: PASS
+    output: "Finished in 81.7 seconds (2.0s async, 79.7s sync)\n5 properties, 780 tests, 0 failures"
+
+result:
+  status: PASS
+  properties: 5
+  tests: 780
+  failures: 0
+  regressions_found: false
+  notes: >
+    Full suite (not just test/letflow/engine/) run per task instructions
+    to confirm REQ-051 (parallel gateway split/join) introduces no
+    regressions elsewhere. All property tests, including the
+    process-instance "no sequence of actions produces an invalid state"
+    property, passed. No pre-existing/unrelated failures observed on this
+    run -- branch is clean relative to main for test purposes.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-18-WF02-REQ051-20260818.yaml
+  next_action: "ORCH routes to RELEASE-VALIDATOR for independent re-verification"

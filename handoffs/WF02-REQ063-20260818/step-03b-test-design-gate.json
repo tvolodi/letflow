@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ063-20260818/step-03b-test-design-gate.json",
   "created_at": "2026-08-18T10:25:30Z",
   "started_at": "2026-08-18T10:25:30Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-18T10:30:37Z",
+  "status": "FAIL",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -45,19 +45,27 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
+    "status": "FAIL",
+    "summary": "FAIL on the flagged wrinkle: the SET search_path fixture technique in test/letflow/identity/user_test.exs, group_test.exs, tenant_role_test.exs, and test/letflow/role_registry_test.exs is NOT rollback-safe as claimed, and independently reproducing the reasoning (not just reading the moduledoc's claim) shows a real cross-test leak risk. All other checks (workstream-1 fix completeness, migration-test authenticity, cross-tenant constraint tests, ISS-0047 framing, no hardcoded secrets/shared fixture IDs) independently verified and PASS. Routing back to TEST-DESIGNER for rework of the four flagged files only.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "check": "SET search_path fixture technique — Sandbox checkout/checkin soundness",
+        "finding": "The moduledoc comment in test/letflow/identity/user_test.exs (lines 26-31, copied verbatim into group_test.exs/tenant_role_test.exs/role_registry_test.exs's own moduledocs) claims: 'a SET search_path issued on a sandboxed connection is transaction-scoped exactly like any other write on that connection -- reverted automatically by Letflow.DataCase's normal rollback, no manual cleanup needed'. This claim is FALSE for how these four files actually use it, and is directly contradicted by deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex's own moduledoc (read directly, lines 476-516): 'Whenever you change the mode to :manual or :auto, all existing connections are checked in.' In all four files, setup calls `Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)` as the FIRST statement, which checks in (and thereby rolls back/discards) the sandboxed transaction Letflow.DataCase's own setup had just checked out -- and puts the whole Repo pool into :auto mode for the rest of the test. Every subsequent Repo call in the test body, INCLUDING the `Repo.query!(~s(SET search_path TO ...))` call itself and every `Repo.insert`/assertion that follows it, therefore runs on an ordinary auto-checkout connection from the pool with NO sandbox transaction wrapping it at all -- there is nothing left to roll back. The `SET search_path` statement is a plain session-level SET (not SET LOCAL), so it is a real, committed change to that specific pooled connection's session state, and the connection is returned to the pool (config/test.exs: `pool_size: System.schedulers_online() * 2`, an ordinary multi-connection DBConnection pool) still carrying that GUC. Any later test anywhere in the suite that reuses that same pooled connection without itself issuing its own SET search_path (which is the overwhelming majority of the suite, since these four files are the only ones using this mechanism) will have its unprefixed queries silently resolve against the leaked tenant schema instead of public -- a real, reproducible cross-test-pollution vector, not a hypothetical one. Confirmed this is inconsistent with this project's own working pattern for the identical problem: test/letflow/identity_test.exs lines 268-280 handles the same :auto-mode-for-migration-replay need correctly, by explicitly switching BACK via `Sandbox.mode(Repo, :manual)` + a fresh `Sandbox.checkout/1` + `Sandbox.mode(Repo, {:shared, self()})` before the test's own race-condition body runs, specifically because (per that file's own comment) the original design required real sandboxed rollback semantics for that portion. None of the four flagged files do this reset -- they stay in :auto mode for their entire test body, which is why they additionally need manual on_exit DROP SCHEMA / DELETE cleanup (itself indirect evidence the rollback-safety claim is false: if rollback were actually happening, that manual cleanup would be redundant, and it is not).",
+        "verification_performed": "Read deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex directly (not from memory/training data) -- moduledoc section on mode/2, lines 476-516. Read test/support/data_case.ex (checkout + optional {:shared, self()} in setup). Read config/test.exs (pool: Ecto.Adapters.SQL.Sandbox, pool_size: System.schedulers_online() * 2 -- a real multi-connection pool, not size 1). Confirmed no SET LOCAL, no RESET search_path, and no post-test mode-restore anywhere in any of the four flagged files (grepped for RESET/search_path and Sandbox.mode across all four). Compared directly against identity_test.exs's own correct handling of the same underlying constraint (lines 268-280) as a working counter-example within this same codebase.",
+        "required_fix": "Either (a) mirror identity_test.exs's pattern: after the :auto-mode schema-provisioning/migration-replay step completes, switch back to Sandbox.mode(Repo, :manual) + Sandbox.checkout(Repo) + Sandbox.mode(Repo, {:shared, self()}) BEFORE issuing SET search_path and running the actual test assertions, so the SET search_path and all subsequent inserts genuinely run inside a real sandboxed transaction that DataCase's teardown rolls back; or (b) if (a) is infeasible for some reason not yet identified, issue an explicit `Repo.query!(\"RESET search_path\")` (or `SET search_path TO public`) in each test's on_exit/1 before the connection is checked back into the pool, and get REVIEWER/SECURITY-REVIEWER sign-off that manual GUC-reset-on-exit is an accepted substitute for sandboxed rollback in this specific pool-sharing scenario. Do not re-ship the current moduledoc's rollback-safety claim without one of these fixes -- the claim itself must also be corrected or removed regardless of which fix is chosen."
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ063-20260818",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF02-REQ063-20260818",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Rework TEST-DESIGNER: fix the SET search_path leak in test/letflow/identity/user_test.exs, test/letflow/identity/group_test.exs, test/letflow/identity/tenant_role_test.exs, and test/letflow/role_registry_test.exs per the required_fix above, and correct/remove the false rollback-safety claim in each file's moduledoc. All other checks in this gate (workstream-1 ~39-test-fix completeness, no @tag :skip, identity_migration_test.exs's use of the real shipped migration via Ecto.Migrator.run/4, cross-tenant username-collision and idp_realm_id-collision tests asserting real DB constraint violations, per-test-unique fixture data, ISS-0047's correct out-of-scope framing) independently verified and PASSED -- do not re-do that work, only the four flagged files need rework."
   },
   "rework_count": 0,
   "max_rework": 3

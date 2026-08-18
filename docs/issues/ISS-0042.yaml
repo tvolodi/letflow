@@ -1,0 +1,52 @@
+id: ISS-0042
+title: "Graph.t()'s CHK-04 START-node outgoing-edge invariant is runtime-only, not type-representable (Letflow.Engine.Transition, REQ-044)"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ044-20260818
+discovered_at: "2026-08-18T06:24:54Z"
+severity: MINOR
+tags:
+  - type-safety
+description: >
+  Found during REQ-044's REVIEWER gate (Step 2d) on
+  lib/letflow/engine/transition.ex, specifically dispatch_start/4's defensive
+  handling of a `:START` node with zero outgoing edges
+  (Enum.find(definition_snapshot.edges, &(&1.source == node.id)) returning
+  nil).
+
+  Letflow.Definitions.Graph's structural validator (REQ-028, CHK-04,
+  lib/letflow/definitions/graph.ex around line 389-428) already guarantees
+  that any Graph.t() which has passed validation has at least one outgoing
+  edge from every :START node. That guarantee is enforced entirely at
+  runtime, by a function call site (the validator), not by Graph.t()'s own
+  @type or struct shape -- nothing distinguishes, at the type level, a
+  Graph.t() value that has been through CHK-04 from an arbitrary
+  hand-constructed or stale one. Because Letflow.Engine.Transition.transition/3
+  is a pure function whose @spec accepts a bare Graph.t() (design doc
+  lib/letflow/design/req044-transition-kernel.md, no "validated" marker in
+  the type), it has no static way to know its input already satisfies CHK-04,
+  so dispatch_start/4 has to carry its own defensive nil-branch to stay total
+  (never raise) -- a class of invalid state (START node, 0 outgoing edges)
+  that only a runtime validator or a property test currently rules out, not
+  the type system.
+
+  This does not block REQ-044's REVIEWER PASS (the defensive branch itself is
+  correct, idiomatic, and consistent with this module's other total-function
+  lookups at design doc §7.2/§7.3) -- filed per reviewer.md's instruction to
+  route type-safety observations to docs/issues/ rather than let them reach
+  no one via a handoff summary alone.
+
+  Possible type-level fix for a future stage: an opaque/phantom-tagged
+  "validated graph" wrapper (e.g. a ValidatedGraph.t() struct or module
+  produced only by Letflow.Definitions.Graph's own validation pipeline, never
+  constructed directly elsewhere) that Letflow.Engine.Transition.transition/3
+  requires instead of a bare Graph.t() -- making "an unvalidated graph
+  reached the transition kernel" a signature-level distinction instead of a
+  purely runtime one. Not proposed as required work now; REQ-044's own scope
+  is the dispatch skeleton, and this is exactly the kind of abstraction that
+  would be scope creep to add ahead of a stage/decision record calling for
+  it.
+affected_files:
+  - lib/letflow/engine/transition.ex
+  - lib/letflow/definitions/graph.ex
+github_issue: https://github.com/tvolodi/letflow/issues/157
+status: open

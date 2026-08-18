@@ -1,0 +1,55 @@
+{
+  "handoff_id": "b3f2a1c0-0001-4a1a-9c00-000000000006",
+  "run_id": "WF02-REQ044-20260818",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ044-20260818/step-02d-reviewer.json",
+  "created_at": "2026-08-18T06:21:52Z",
+  "started_at": "2026-08-18T06:21:52Z",
+  "completed_at": "2026-08-18T06:28:10Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-044"],
+    "requirement_text": {
+      "REQ-044": "Pure transition kernel core types and dispatch skeleton (transition.zig, EE-02). lib/letflow/engine/{token.ex,instance_state.ex,transition.ex}. Reuses Letflow.Definitions.Graph/Node (REQ-028), no redefinition. Gateway node bodies (EXCLUSIVE_GATEWAY/PARALLEL_GATEWAY) are explicit named-function stubs for REQ-050/REQ-051. Determinism load-bearing, no Repo/IO/clock anywhere."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": ["lib/letflow/engine/token.ex", "lib/letflow/engine/instance_state.ex", "lib/letflow/engine/transition.ex", "lib/letflow/design/req044-transition-kernel.md"],
+    "owned_modules": ["lib/letflow/engine/"]
+  },
+  "task": {
+    "description": "WF-02 Step 2d hard gate (docs/agents/workflows/WF-02_requirement_implementation.md 'Step 2d — Idiom review'). Read the branch diff (git diff main...HEAD) and check against .claude/agents/reviewer.md's four questions (idiomatic vs. crutch, supervision, type-safety gaps, scope creep) and docs/anti-patterns.md. SPECIFIC ITEM TO ADJUDICATE: ELIXIR-DEV flagged its own judgment call in Step 2a -- the :START node dispatch defensively returns {:error, {:unknown_node_id, node.id}} if a :START node has zero outgoing edges, a case not literally specified in the design (which assumes REQ-028's structural validator already guarantees >=1 outgoing edge on START nodes upstream). Determine whether this is an acceptable defensive-totality choice (reusing an existing error variant rather than inventing an unauthorized 6th) or whether it should be reworked (e.g. because it's unreachable dead code, or because it silently masks what should be a different error, or because the design doc didn't authorize this branch and CODE-DESIGN-VALIDATOR's PASS didn't cover it).",
+    "acceptance_criteria": [
+      "Idiomatic Elixir vs. crutch: no hand-rolled state-machine simulation where pattern matching/function clauses would be idiomatic; structs and case/cond usage reviewed",
+      "No supervision-integrity concern (this module has no process/GenServer, so likely N/A -- confirm)",
+      "No type-safety gaps beyond what the design doc already accepted",
+      "No scope creep beyond REQ-044's stated boundary (no accidental REQ-050/051 gateway logic implemented, no REQ-043 schema module referenced)",
+      "The :START zero-outgoing-edges defensive branch is explicitly adjudicated (accept as-is, or FAIL with a specific instruction)",
+      "Checked against docs/anti-patterns.md for any recurrence of a known mistake"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read git diff main...HEAD -- lib/letflow/engine/ (3 new files, 372 lines: token.ex, instance_state.ex, transition.ex) directly, plus lib/letflow/design/req044-transition-kernel.md and docs/anti-patterns.md. Checked against reviewer.md's 4 questions: (1) Idiomatic vs. crutch -- PASS. dispatch_node/4 is a 5-way (+1 catch-all) pattern-matched function-clause dispatch on Node.t().node_type, matching graph.ex's established one-@spec-per-function-name convention (transition.ex lines ~140-200); no hand-rolled `case state do` state-machine simulation anywhere. transition_event()/pending_event()/transition_error() are declared @type unions, not stringly-typed values. (2) Supervision -- N/A, confirmed: grep for GenServer/spawn/Supervisor/gen_statem across all 3 files returns zero matches; Token/InstanceState are plain immutable structs, Transition is a pure module with no process of its own, consistent with the moduledoc's explicit 'no DB, no network, no clock' purity contract. (3) Type-safety gaps -- one found and filed (does not block PASS per reviewer.md's own rule): Graph.t()'s CHK-04 invariant (every :START node has >=1 outgoing edge, enforced by REQ-028's runtime structural validator, lib/letflow/definitions/graph.ex ~L389-428) is not encoded in Graph.t()'s own type, so transition/3 accepts a bare, possibly-unvalidated Graph.t() and dispatch_start/4 needs its own defensive runtime branch to stay total. Filed as docs/issues/ISS-0042.yaml (MINOR, tag type-safety, github.com/tvolodi/letflow/issues/157). (4) Scope creep -- none: dispatch_exclusive_gateway/4 and dispatch_parallel_gateway/4 are named stubs returning {:error, {:gateway_not_yet_implemented, ...}} only, no REQ-050/051 CEL/split-join logic implemented ahead of schedule; grepped the diff for 'Ecto'/'Repo'/any REQ-043 schema module name -- zero hits, matching the moduledoc's explicit dependency-ordering statement. Checked against docs/anti-patterns.md -- no recurrence of a logged mistake (not a duplicated fragment/1 SQL literal, not a git rebase --ours/--theirs situation, not an overwritten status file, not a re-derived timestamp). SPECIFIC ADJUDICATION -- :START zero-outgoing-edges defensive branch (dispatch_start/4, transition.ex, the `nil -> {:error, {:unknown_node_id, node.id}}` clause): ACCEPTED AS-IS, not reworked. The defensive branch itself is correct and idiomatic: it keeps transition/3 total (never-raising) exactly as design doc §7.2/§7.3 already establish for the token-lookup and node-lookup cases, it does not invent an unauthorized 6th error-union member, and per WF-02 Step 2d's own stated FAIL bar ('FAIL if a genuine crutch, broken supervision, or scope creep is found') this finding is none of the three -- it is not dead code in the pejorative sense (defensive totality for a pure function whose caller cannot statically prove its input already passed CHK-04 is standard practice, not a crutch), and CHK-04 makes it correctly rare in the validated-data-only path. One non-blocking precision note, recorded per WF-02's 'PASS with any non-blocking notes recorded for the record' clause rather than silently dropped: reusing {:unknown_node_id, node.id} here is semantically imprecise -- unlike its other trigger site (design doc §7.2, token.node_id absent from definition_snapshot.nodes), the node.id reported here is NOT unknown -- it was already resolved by find_node/2 and dispatched on by dispatch_node/4 one frame up; what is actually missing is an outgoing edge, not the node itself. A future reader debugging a fired instance of this branch could reasonably misinterpret the error as 'this node doesn't exist in the graph' when it does. Recommended (not required) follow-up for a later pass: either mint a distinct error tag mirroring the :unknown_token_id precedent (design doc §7.3), e.g. {:start_node_missing_outgoing_edge, node_id}, or at minimum extend transition_error()'s @type moduledoc to state that :unknown_node_id now has a second trigger site with different semantics -- not filed as its own docs/issues/ entry since it is a documentation/naming precision matter, not a defect, and is fully captured in this handoff's audit record.",
+    "artifacts_out": ["docs/issues/ISS-0042.yaml"],
+    "issues": [
+      {"severity": "MINOR", "description": "dispatch_start/4's nil-branch reuses {:unknown_node_id, node.id} for a semantically distinct failure (missing outgoing edge on a node that IS known/found, not an unknown node_id). Non-blocking; recommend a distinct error tag or an updated transition_error() moduledoc note in a future pass.", "affected_requirement": "REQ-044"},
+      {"severity": "MINOR", "description": "Type-safety gap: Graph.t() does not statically distinguish a CHK-04-validated graph from an arbitrary one, so Letflow.Engine.Transition.transition/3 relies on a runtime defensive branch instead of an unrepresentable-invalid-state guarantee. Filed as docs/issues/ISS-0042.yaml, not blocking.", "affected_requirement": "REQ-044"}
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ044-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ044-20260818",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (Step 3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

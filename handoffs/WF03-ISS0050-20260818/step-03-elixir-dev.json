@@ -1,0 +1,50 @@
+{
+  "handoff_id": "a1b2c3d4-0000-4000-8000-000000000005",
+  "run_id": "WF03-ISS0050-20260818",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0050-20260818/step-03-elixir-dev.json",
+  "created_at": "2026-08-18T21:43:08Z",
+  "started_at": "2026-08-18T21:43:08Z",
+  "completed_at": "2026-08-18T21:46:12Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["step-02-code-designer.json", "step-02b-code-design-validator.json"],
+    "artifacts_in": [
+      "lib/letflow/design/iss-0050-drop-legacy-guard-missing-table.md",
+      "priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs"
+    ],
+    "owned_modules": ["priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs"]
+  },
+  "task": {
+    "description": "Implement the CODE-DESIGN-VALIDATOR-approved design at lib/letflow/design/iss-0050-drop-legacy-guard-missing-table.md into priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs's guard DO $$ block exactly as specified: wrap each of the three existing per-table dynamic EXECUTE checks (groups/users/tenant_role) in an IF to_regclass(format('%I.<table>', v_tenant.schema_name)) IS NULL THEN ... ELSE <existing check, unchanged> END IF, so a missing table sets v_all_copied := FALSE and RAISE NOTICEs the tenant/schema/missing table instead of crashing with 42P01.",
+    "acceptance_criteria": [
+      "Migration file compiles and applies cleanly against a fresh test DB (mix ecto.migrate / test setup does this implicitly).",
+      "Guard no longer raises 42P01 when a registered tenant_schemas row's schema is missing groups/users/tenant_role (verify by manually creating a leaked/incomplete tenant schema row and running the guard against it, e.g. via a throwaway script or by reproducing ISSUE-FIXER's leaked-row scenario from step-01-issue-fixer.json).",
+      "Existing behavior (crash-free skip when a table exists but rows are missing) is unchanged -- run the existing test/letflow/identity_migration_test.exs suite in isolation to confirm all 7 tests still pass.",
+      "mix compile --warnings-as-errors passes.",
+      "No Ecto schema/module files touched -- migration file only.",
+      "If the currently-leaked tenant_schemas row you found in the shared test DB during diagnosis is still present, note whether it needs manual cleanup for the isolated test run to pass cleanly, but do not treat cleaning it up as this task's job beyond what's needed to verify your own fix (ISS-0048 owns the general leak problem)."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented the CODE-DESIGN-VALIDATOR-approved design (lib/letflow/design/iss-0050-drop-legacy-guard-missing-table.md) exactly as specified into priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs's guard DO $$ block: each of the three per-tenant per-table dynamic EXECUTE checks (groups/users/tenant_role) is now preceded by `IF to_regclass(format('%I.<table>', v_tenant.schema_name)) IS NULL THEN ... ELSE <existing check, byte-for-byte unchanged> END IF`, using IF/ELSE (not CONTINUE, per design section 2) so a tenant missing only one of the three tables still gets the other two checked independently. A missing table sets v_all_copied := FALSE and RAISE NOTICEs the tenant_id/schema_name/missing-table-name, folding into the guard's existing skip-the-DROP path instead of crashing with 42P01 undefined_table. Also added a short paragraph to the module's GUARD MECHANISM comment block (design section 6) documenting why the to_regclass(format(...)) IS NULL checks exist, citing ISS-0050. No Ecto schema/module file touched -- migration file only.\n\nVerification performed (docker exec against letflow-postgres-1 / mix toolchain, all commands actually run, no speculation):\n1. `mix compile --warnings-as-errors` -- clean, no warnings.\n2. `mix format --check-formatted` on the migration file -- clean.\n3. Found ISSUE-FIXER's diagnosed leaked row (tenant_id 77f0469f-83ef-4adc-8ee1-4e5a8848e65c) still present in the shared letflow_test DB via docker exec psql, confirmed its physical schema had zero identity tables (only schema_migrations). Also discovered a SECOND leaked row (tenant_id 1015c65d-2d8c-4c36-a728-a4c1e0a1896e, referenced in ISSUE-FIXER's own diagnosis as a second live confirmation) whose schema had groups but was missing users/tenant_role -- both are exactly the ISS-0050 missing-table scenario, live in this host's DB, not synthetic.\n4. Ran test/letflow/identity_migration_test.exs in isolation BEFORE purging: reproduced a real failure (not a crash -- the 42P01 crash is gone) -- the 'guard PROCEEDS' test failed its own assertion because the leaked rows correctly make v_all_copied := FALSE for the whole registry scan, which is the new fix's correct behavior per design section 7, but conflicts with that one test's fixture assumption of a clean tenant_schemas registry.\n5. Purged both leaked rows (DROP SCHEMA CASCADE + DELETE FROM tenant_schemas for each) -- the minimum needed per acceptance criterion 6 to verify the fix cleanly; ISS-0048 (the general leak-accumulation problem) is explicitly out of this task's scope and remains open.\n6. Re-ran test/letflow/identity_migration_test.exs in isolation: 7 tests, 0 failures -- confirms acceptance criterion 3 (existing crash-free-skip-on-missing-row behavior unchanged).\n7. Directly verified acceptance criterion 2's exact mechanism: created a synthetic tenant + tenant_schemas row pointing at a schema with zero identity tables (reproducing the leaked-row shape), recreated public.groups/users/tenant_role via docker exec psql, ran the migration's own guard DO $$ block verbatim against live Postgres -- got three RAISE NOTICEs (one per table) naming the tenant_id, schema_name, and missing table, then the guard's existing 'data copy incomplete ... skipping DROP' NOTICE -- zero 42P01 errors. Confirmed the DROP did not run (guard correctly stayed conservative). Tore down all synthetic state (tables, schema, tenant_schemas row, tenants row) afterward, restoring letflow_test to the clean state left by step 5.\n8. Re-ran identity_migration_test.exs one final time post-teardown: 7 tests, 0 failures, and re-ran `mix compile --warnings-as-errors` and `mix format --check-formatted`: both clean.",
+    "artifacts_out": [
+      "priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs"
+    ],
+    "issues": [
+      "Purged two leaked tenant_schemas rows (tenant_id 77f0469f-83ef-4adc-8ee1-4e5a8848e65c and 1015c65d-2d8c-4c36-a728-a4c1e0a1896e) from the shared letflow_test DB on this host -- required to get identity_migration_test.exs's own 'guard PROCEEDS' test to pass cleanly against this fix (see result.summary items 3-6). This is a manual DB-state cleanup only, not a code change, and does not address ISS-0048's general leak-accumulation problem, which remains open and unowned by this task."
+    ],
+    "git_evidence": {"branch_name": "feature/WF03-ISS0050-20260818", "commit_sha_list": []},
+    "next_action": "Route to SECURITY-REVIEWER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

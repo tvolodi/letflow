@@ -1,0 +1,65 @@
+{
+  "handoff_id": "c3d4e5f6-0064-4a00-9f01-req064step05",
+  "run_id": "WF02-REQ064-20260818",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ064-20260818/step-05-release-validation.json",
+  "created_at": "2026-08-18T15:09:26Z",
+  "started_at": "2026-08-18T15:09:26Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-064"],
+    "requirement_text": {
+      "REQ-064": "Execute Decision 0006's D2 (docs/migration/decisions/0006-identity-tables-schema-per-tenant.md): drop tenant_id from ten schema-isolated business tables. Full acceptance criteria list is in docs/requirements.yaml's REQ-064 entry -- read it there directly."
+    },
+    "related_handoff_ids": [
+      "c3d4e5f6-0064-4a00-9f01-req064step01",
+      "c3d4e5f6-0064-4a00-9f01-req064step01b",
+      "c3d4e5f6-0064-4a00-9f01-req064step02a",
+      "c3d4e5f6-0064-4a00-9f01-req064step02c",
+      "c3d4e5f6-0064-4a00-9f01-req064step02d",
+      "c3d4e5f6-0064-4a00-9f01-req064step03",
+      "c3d4e5f6-0064-4a00-9f01-req064step03b",
+      "c3d4e5f6-0064-4a00-9f01-req064step04"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "test/reports/report-2026-08-18-WF02-REQ064-20260818.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently re-run mix test yourself -- do not trust TEST-RUNNER's report alone. Then confirm every one of REQ-064's seven acceptance criteria (read them directly from docs/requirements.yaml, not from any prior handoff's paraphrase) is satisfied against the actual shipped code/tests.\n\nThis run's own history is worth being aware of, not repeating: the test-design gate FAILed once and required one rework cycle -- a test restructure had silently dropped the only assertion covering TenantProvisioning.tenant_id_for_schema_name/1's own contract, caught because REQ-064's acceptance criteria explicitly required that function stay tested. The fix added a direct unit test to test/letflow/tenant_provisioning_test.exs. Confirm that test still exists and still passes as part of your own independent check -- don't assume the earlier gate's finding is still true just because it passed once.\n\nAlso this run's security gate (HIGH priority) traced three implementation fixes beyond the original design's scope for cross-tenant safety -- all PASSed. As RELEASE-VALIDATOR your job isn't to re-do that security trace, but do confirm via docs/requirements.yaml and git log that this diff's scope genuinely matches what REQ-064 asked for (D2 only -- the ten-table tenant_id drop -- not touching the four D3 tables or reopening D1's schema-per-tenant isolation choice).\n\nCheck docs/requirements.yaml (REQ-064's own status field, currently in_progress) and docs/status/requirement_status.yaml for staleness relative to what actually shipped.\n\nCheck whether decision 0006 (docs/migration/decisions/0006-identity-tables-schema-per-tenant.md) needs any update now that BOTH D1 (REQ-063) and D2 (REQ-064) have shipped -- its Status line was updated during REQ-063's own release validation to say 'D1 shipped... D2 not yet executed -- pending REQ-064.' That D2-pending wording is now stale.",
+    "acceptance_criteria": [
+      "mix test independently re-run, real output quoted, matches or explains any discrepancy from the reported 777/777",
+      "Each of REQ-064's seven acceptance criteria checked explicitly against the actual code/test files, not against any step's summary",
+      "The tenant_provisioning_test.exs coverage fix from the test-design gate's rework confirmed still present and passing",
+      "docs/requirements.yaml and docs/status/requirement_status.yaml checked for staleness -- name any drift found",
+      "decision 0006's Status line checked for staleness now that both D1 and D2 have shipped, updated if it still says D2 is pending",
+      "PASS routes to DOC-UPDATER; FAIL identifies the blocking issue and which agent it routes back to"
+    ]
+  },
+  "result": {
+    "status": "",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ064-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ064-20260818",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

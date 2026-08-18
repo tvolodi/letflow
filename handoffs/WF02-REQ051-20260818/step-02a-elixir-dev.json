@@ -1,0 +1,59 @@
+{
+  "handoff_id": "6e3a4b5c-0d7f-4bae-c3b2-8f9e0d1c2a3b",
+  "run_id": "WF02-REQ051-20260818",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ051-20260818/step-02a-elixir-dev.json",
+  "created_at": "2026-08-18T19:40:00Z",
+  "started_at": "2026-08-18T19:00:00Z",
+  "completed_at": "2026-08-18T19:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-051"],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ051-20260818/step-01-code-designer.json",
+      "handoffs/WF02-REQ051-20260818/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req051-parallel-gateway-split-join.md",
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/engine/instance_state.ex",
+      "lib/letflow/engine/token.ex",
+      "lib/letflow/design/req049-variable-merge.md"
+    ],
+    "owned_modules": ["lib/letflow/engine"]
+  },
+  "task": {
+    "description": "Implement the validated design at lib/letflow/design/req051-parallel-gateway-split-join.md (design gate PASSed, see handoffs/WF02-REQ051-20260818/step-01b-code-design-validator.json). Implements PARALLEL_GATEWAY split and join in lib/letflow/engine/transition.ex per the design's exact function/module specification: new Letflow.Engine.JoinCounter struct, InstanceState.join_counters field, deterministic branch_id/token_id derivation for split, {:cancel_branch, branch_id} event handling, join_outcome/1 pure helper implementing the :wait|:fire|:cancel_join set-algebra, and reuse of Letflow.Engine.VariableMerge.merge/3 (REQ-049) at join-fire time. Stay within Transition's pure, no-I/O contract -- no Ecto/Repo/Letflow.Repo anywhere in this diff. Follow the design doc's exact shape; do not deviate without flagging why. Implement in lib/ only -- do not write tests yourself (TEST-DESIGNER's job at Step 3).",
+    "acceptance_criteria": [
+      "PARALLEL_GATEWAY split with N outgoing edges produces exactly N tokens with distinct branch_ids in one dispatch call, per the design's deterministic derivation scheme.",
+      "JoinCounter (received_from_branches/expected_from_branches/cancelled_branches) implemented as pure InstanceState.join_counters data -- no process/GenServer.",
+      "join_outcome/1 implements :wait|:fire|:cancel_join correctly for: all-received (fire), all-cancelled-zero-received (cancel_join -> instance :cancelled), mixed active+cancelled (fire once remaining active arrive), any arrival order (still exactly-once, cohort removed on resolution).",
+      "{:cancel_branch, branch_id} handling is entirely self-contained in this module -- no dependency on any REQ-052 module (which doesn't exist yet).",
+      "Variable merge at join-fire reuses Letflow.Engine.VariableMerge.merge/3 (REQ-049) -- no second collision rule defined.",
+      "mix compile --warnings-as-errors passes.",
+      "Existing engine test suite (MIX_TEST_PARTITION=2 mix test test/letflow/engine/) still passes unchanged."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented REQ-051 (PARALLEL_GATEWAY split/join, EE-06/EE-07) exactly per the validated design lib/letflow/design/req051-parallel-gateway-split-join.md. New file lib/letflow/engine/join_counter.ex adds Letflow.Engine.JoinCounter (set-based expected/received/cancelled_from_branches). lib/letflow/engine/instance_state.ex gains the join_counters: %{optional(String.t()) => JoinCounter.t()} field (default %{}), keyed by join_node_id per design §2.1. lib/letflow/engine/transition.ex: replaced dispatch_parallel_gateway/4's stub with gateway_role/2-routed dispatch (:split/:join/:pass_through/:combined_unsupported per §3), added dispatch_parallel_split/4 (deterministic token_id/branch_id = parent_token_id <> \"/\" <> index, §3.1), find_matching_join/2 + walk_to_gateway/3 (§3.3), dispatch_parallel_join/4 + join_outcome/1 (shared :wait|:fire|:cancel_join set-algebra, §4.1) + fire_join/5 (shared fire construction calling VariableMerge.merge(vars, %{}, nil) per §4.3, never a second collision rule), the new {:cancel_branch, branch_id} transition_event/0 constructor wired into transition/3's top-level match and its own dispatch_cancel_branch/3 (§3.4, fully self-contained, no REQ-052 reference anywhere). pending_event/0 narrowed from term() to the 3-variant closed union (§5); transition_error/0 gained the 3 new variants (§7). No Ecto/Repo/Logger/clock/:rand/:crypto call anywhere in the diff (verified by the design's own grep command, zero matches). `mix compile --warnings-as-errors` passes clean. `MIX_TEST_PARTITION=2 mix test test/letflow/engine/`: 76/77 tests pass; 1 pre-existing failure is test/letflow/engine/transition_test.exs:348 ('returns the named :gateway_not_yet_implemented error, never {:ok, ...}' for :PARALLEL_GATEWAY), which asserted REQ-044's stub behavior for the exact extension point this design explicitly (§7, quoted verbatim: 'retired from this module's own possible return values ... REQ-044's stub is fully replaced') replaces -- an anticipated, unavoidable consequence of implementing the approved design, not a defect introduced here. Per role instructions I did not touch any test file; flagging this for TEST-DESIGNER/REVIEWER to retire or rewrite that one test at Step 2b/3, mirroring the design's own explicit call-out.",
+    "artifacts_out": [
+      "lib/letflow/engine/join_counter.ex",
+      "lib/letflow/engine/instance_state.ex",
+      "lib/letflow/engine/transition.ex"
+    ],
+    "issues": [
+      "test/letflow/engine/transition_test.exs:348 ('transition/3 -- :PARALLEL_GATEWAY node dispatch (5-way case 5/5, stub, design doc §6.5) -- pending_task_nodes unchanged') asserts the retired REQ-044 stub error ({:gateway_not_yet_implemented, :PARALLEL_GATEWAY, \"gw\"}) for a PARALLEL_GATEWAY node with no edges at all (in_degree 0, out_degree 0). Under this design's gateway_role/2, that node is :pass_through with no outgoing edge, so the real behavior is {:error, {:unknown_node_id, \"gw\"}} instead -- both are error tuples, neither raises, but the specific reason atom changed because the stub it tested no longer exists for this node type. This is the design doc's own explicitly flagged, expected consequence (§7: 'retired from this module's own possible return values ... REQ-044's stub is fully replaced'), not something I could resolve without editing a test file, which is out of scope for ELIXIR-DEV. Needs TEST-DESIGNER/REVIEWER to retire or rewrite this one test."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ051-20260818",
+      "commit_sha_list": ["43ae7ca78aec6a8ebf4ca5a6e3ce887e126c33fc"]
+    }
+  }
+}

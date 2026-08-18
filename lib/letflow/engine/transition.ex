@@ -72,40 +72,55 @@ defmodule Letflow.Engine.Transition do
   alias Letflow.Definitions.Graph.Node
   alias Letflow.Engine.Expr
   alias Letflow.Engine.InstanceState
+  alias Letflow.Engine.JoinCounter
   alias Letflow.Engine.Token
+  alias Letflow.Engine.VariableMerge
 
   @typedoc """
-  One event this requirement's dispatch reacts to. `{:advance_token,
-  token_id}` is the only constructor REQ-044 needs: "move the token
-  identified by `token_id` one step according to whatever node type it
-  currently occupies." Deliberately not a closed enumeration — every later
-  EE-* requirement that needs its own event shape (task completion,
-  cancellation, a timer firing) adds its own tagged-tuple constructor to this
+  One event this module's dispatch reacts to. `{:advance_token, token_id}`
+  is REQ-044's original constructor: "move the token identified by
+  `token_id` one step according to whatever node type it currently
+  occupies." `{:cancel_branch, branch_id}` is REQ-051's own addition (design
+  doc §3.4) — the concrete, pure cancelled-branch representation this
+  requirement itself defines (not deferred to REQ-052). Deliberately not a
+  closed enumeration beyond these two — every later EE-* requirement that
+  needs its own event shape adds its own tagged-tuple constructor to this
   same union (design doc §4, §12.5).
   """
-  @type transition_event :: {:advance_token, token_id :: String.t()}
+  @type transition_event ::
+          {:advance_token, token_id :: String.t()}
+          | {:cancel_branch, branch_id :: String.t()}
 
   @typedoc """
   The tagged union `transition.zig` declares for EE-06/EE-07 split/join
-  payloads. Declared as `term()` here, a deliberate placeholder rather than a
-  fabricated tagged-tuple union — its real shape lives in `engine.md`'s
-  EE-06/EE-07 sections, not reconstructable in this environment (design doc
-  §4, §12.5). None of this requirement's own dispatch cases ever construct a
-  `pending_event()` value; every case implemented here returns
-  `pending_events: []`. REQ-050/REQ-051 narrow this to a real closed union
-  once they add gateway split/join payloads.
+  payloads — narrowed here (design doc §5) from REQ-044's `term()`
+  placeholder to a real closed union of the 3 pending-event shapes this
+  requirement's dispatch clauses construct: `{:parallel_split, ...}` (design
+  doc §5.1), `{:parallel_join_fired, ...}` (§5.2), and
+  `{:parallel_join_cancelled, ...}` (§5.3). No other dispatch clause in this
+  module (`:START`/`:END`/`:HUMAN_TASK`/the catch-all) ever constructs any of
+  these 3 variants.
   """
-  @type pending_event :: term()
+  @type pending_event ::
+          {:parallel_split, origin_token_id :: String.t(), gateway_node_id :: String.t(),
+           branch_ids :: [String.t()]}
+          | {:parallel_join_fired, join_node_id :: String.t(), origin_token_id :: String.t(),
+             new_token_id :: String.t(), merge_events :: [VariableMerge.merge_event()]}
+          | {:parallel_join_cancelled, join_node_id :: String.t(), origin_token_id :: String.t()}
 
   @typedoc """
   Every failure `transition/3` can return. `:unknown_event_type` and
   `:unknown_node_id` are the two explicit error paths the requirement text
   names; `:unknown_token_id` is this module's own defensive totality
   addition (a stale/nonexistent `token_id` is exactly as plausible an input
-  as a stale/nonexistent `node_id`); `:gateway_not_yet_implemented` and
-  `:node_type_not_yet_implemented` are the stub/catch-all extension points
-  `dispatch_exclusive_gateway/4`, `dispatch_parallel_gateway/4`, and the
-  generic node-type catch-all use (design doc §4, §7).
+  as a stale/nonexistent `node_id`); `:gateway_not_yet_implemented` is
+  retired from this module's own possible return values for
+  `:PARALLEL_GATEWAY` (REQ-044's stub is fully replaced) but stays in the
+  type union unchanged since `:EXCLUSIVE_GATEWAY` (REQ-050) still uses it;
+  `:node_type_not_yet_implemented` is the generic node-type catch-all's
+  error (design doc §4, §7). `:unknown_branch_id`, `:no_matching_join_found`,
+  and `:combined_split_join_not_supported` are REQ-051's own additions
+  (design doc §7).
   """
   @type transition_error ::
           {:unknown_event_type, event :: term()}
@@ -115,6 +130,9 @@ defmodule Letflow.Engine.Transition do
           | {:node_type_not_yet_implemented, node_type :: atom(), node_id :: String.t()}
           | {:no_matching_edge, node_id :: String.t(),
              evaluated_conditions :: [evaluated_condition()]}
+          | {:unknown_branch_id, branch_id :: String.t()}
+          | {:no_matching_join_found, split_node_id :: String.t()}
+          | {:combined_split_join_not_supported, node_id :: String.t()}
 
   @typedoc """
   One entry per non-default outgoing edge of an `:EXCLUSIVE_GATEWAY` whose
@@ -157,6 +175,9 @@ defmodule Letflow.Engine.Transition do
                 dispatch_node(definition_snapshot, instance_state, token, node)
             end
         end
+
+      {:cancel_branch, branch_id} ->
+        dispatch_cancel_branch(definition_snapshot, instance_state, branch_id)
 
       other ->
         {:error, {:unknown_event_type, other}}
@@ -345,14 +366,331 @@ defmodule Letflow.Engine.Transition do
     {:ok, %InstanceState{instance_state | tokens: new_tokens}, []}
   end
 
-  # --- :PARALLEL_GATEWAY stub (design doc §6.5, REQ-051's extension point) --
+  # --- :PARALLEL_GATEWAY (design doc §3-§4, REQ-051's EE-06/EE-07 body) ------
 
-  # Same shape and rationale as dispatch_exclusive_gateway/4 above, for
-  # REQ-051 (EE-06 split + EE-07 join) to replace instead.
+  # Replaces REQ-044's stub. Routes on gateway_role/2's classification of
+  # this node's own in/out-degree -- never raises for any of the 4 possible
+  # roles (design doc §3).
   @spec dispatch_parallel_gateway(Graph.t(), InstanceState.t(), Token.t(), Node.t()) ::
-          {:error, {:gateway_not_yet_implemented, :PARALLEL_GATEWAY, node_id :: String.t()}}
-  defp dispatch_parallel_gateway(_definition_snapshot, _instance_state, _token, node) do
-    {:error, {:gateway_not_yet_implemented, :PARALLEL_GATEWAY, node.id}}
+          {:ok, InstanceState.t(), [pending_event()]}
+          | {:error, transition_error()}
+  defp dispatch_parallel_gateway(definition_snapshot, instance_state, token, node) do
+    case gateway_role(definition_snapshot, node) do
+      :split ->
+        dispatch_parallel_split(definition_snapshot, instance_state, token, node)
+
+      :join ->
+        dispatch_parallel_join(definition_snapshot, instance_state, token, node)
+
+      :pass_through ->
+        case Enum.find(definition_snapshot.edges, &(&1.source == node.id)) do
+          nil ->
+            {:error, {:unknown_node_id, node.id}}
+
+          edge ->
+            new_token = %Token{token | node_id: edge.target}
+            new_tokens = replace_token(instance_state.tokens, new_token)
+            {:ok, %InstanceState{instance_state | tokens: new_tokens}, []}
+        end
+
+      :combined_unsupported ->
+        {:error, {:combined_split_join_not_supported, node.id}}
+    end
+  end
+
+  # design doc §3 -- classifies a PARALLEL_GATEWAY node's role purely from
+  # its own in/out-degree within definition_snapshot.edges.
+  @type gateway_role :: :split | :join | :pass_through | :combined_unsupported
+
+  @spec gateway_role(Graph.t(), Node.t()) :: gateway_role()
+  defp gateway_role(definition_snapshot, node) do
+    out_degree = Enum.count(definition_snapshot.edges, &(&1.source == node.id))
+    in_degree = Enum.count(definition_snapshot.edges, &(&1.target == node.id))
+
+    cond do
+      out_degree > 1 and in_degree > 1 -> :combined_unsupported
+      out_degree > 1 -> :split
+      in_degree > 1 -> :join
+      true -> :pass_through
+    end
+  end
+
+  # --- SPLIT (design doc §3.1, EE-06 AC1-AC3) ---------------------------------
+
+  @spec dispatch_parallel_split(Graph.t(), InstanceState.t(), Token.t(), Node.t()) ::
+          {:ok, InstanceState.t(), [pending_event()]}
+          | {:error, transition_error()}
+  defp dispatch_parallel_split(definition_snapshot, instance_state, token, node) do
+    edges_out = Enum.filter(definition_snapshot.edges, &(&1.source == node.id))
+
+    new_tokens =
+      edges_out
+      |> Enum.with_index()
+      |> Enum.map(fn {edge, index} ->
+        derived_id = token.token_id <> "/" <> Integer.to_string(index)
+
+        %Token{
+          token_id: derived_id,
+          branch_id: derived_id,
+          node_id: edge.target,
+          waiting_child_instance_id: nil
+        }
+      end)
+
+    branch_ids = Enum.map(new_tokens, & &1.branch_id)
+
+    case find_matching_join(definition_snapshot, node) do
+      {:error, :no_matching_join} ->
+        {:error, {:no_matching_join_found, node.id}}
+
+      {:ok, join_node_id} ->
+        new_counter = %JoinCounter{
+          join_node_id: join_node_id,
+          origin_token_id: token.token_id,
+          expected_from_branches: MapSet.new(branch_ids),
+          received_from_branches: MapSet.new(),
+          cancelled_branches: MapSet.new()
+        }
+
+        updated_join_counters = Map.put(instance_state.join_counters, join_node_id, new_counter)
+
+        updated_tokens =
+          Enum.reject(instance_state.tokens, &(&1.token_id == token.token_id)) ++ new_tokens
+
+        pending_event = {:parallel_split, token.token_id, node.id, branch_ids}
+
+        {:ok,
+         %InstanceState{
+           instance_state
+           | tokens: updated_tokens,
+             join_counters: updated_join_counters
+         }, [pending_event]}
+    end
+  end
+
+  # design doc §3.3 -- walks forward from each branch's own first edge target
+  # along single-outgoing-edge chains until a PARALLEL_GATEWAY node is
+  # reached; succeeds iff every branch agrees on the same such node.
+  @spec find_matching_join(Graph.t(), Node.t()) ::
+          {:ok, join_node_id :: String.t()} | {:error, :no_matching_join}
+  defp find_matching_join(definition_snapshot, node) do
+    edges_out = Enum.filter(definition_snapshot.edges, &(&1.source == node.id))
+
+    edges_out
+    |> Enum.reduce_while({:ok, nil}, fn edge, {:ok, acc_join_id} ->
+      case walk_to_gateway(definition_snapshot, edge.target, MapSet.new()) do
+        {:ok, gateway_id} ->
+          cond do
+            acc_join_id == nil -> {:cont, {:ok, gateway_id}}
+            acc_join_id == gateway_id -> {:cont, {:ok, acc_join_id}}
+            true -> {:halt, {:error, :no_matching_join}}
+          end
+
+        :error ->
+          {:halt, {:error, :no_matching_join}}
+      end
+    end)
+    |> case do
+      {:ok, nil} -> {:error, :no_matching_join}
+      {:ok, gateway_id} -> {:ok, gateway_id}
+      {:error, :no_matching_join} -> {:error, :no_matching_join}
+    end
+  end
+
+  # Follows single-outgoing-edge chains from `node_id` until a
+  # PARALLEL_GATEWAY node is reached. `visited` guards against an infinite
+  # loop in a malformed graph. Returns :error if :END is reached first, if a
+  # node with more than one outgoing edge is encountered before any
+  # PARALLEL_GATEWAY, or if a cycle is detected.
+  @spec walk_to_gateway(Graph.t(), String.t(), MapSet.t(String.t())) ::
+          {:ok, String.t()} | :error
+  defp walk_to_gateway(definition_snapshot, node_id, visited) do
+    if MapSet.member?(visited, node_id) do
+      :error
+    else
+      case find_node(definition_snapshot.nodes, node_id) do
+        nil ->
+          :error
+
+        %Node{node_type: :PARALLEL_GATEWAY, id: gateway_id} ->
+          {:ok, gateway_id}
+
+        %Node{} = current_node ->
+          case Enum.filter(definition_snapshot.edges, &(&1.source == current_node.id)) do
+            [single_edge] ->
+              walk_to_gateway(definition_snapshot, single_edge.target, MapSet.put(visited, node_id))
+
+            _other ->
+              :error
+          end
+      end
+    end
+  end
+
+  # --- JOIN (design doc §4, EE-07 AC1-AC3, AC5) -------------------------------
+
+  @spec dispatch_parallel_join(Graph.t(), InstanceState.t(), Token.t(), Node.t()) ::
+          {:ok, InstanceState.t(), [pending_event()]}
+          | {:error, transition_error()}
+  defp dispatch_parallel_join(definition_snapshot, instance_state, token, node) do
+    with %JoinCounter{} = counter <- Map.get(instance_state.join_counters, node.id),
+         true <- MapSet.member?(counter.expected_from_branches, token.branch_id) do
+      tokens_without = Enum.reject(instance_state.tokens, &(&1.token_id == token.token_id))
+      updated_received = MapSet.put(counter.received_from_branches, token.branch_id)
+      updated_counter = %JoinCounter{counter | received_from_branches: updated_received}
+
+      case join_outcome(updated_counter) do
+        :wait ->
+          updated_join_counters = Map.put(instance_state.join_counters, node.id, updated_counter)
+
+          {:ok,
+           %InstanceState{
+             instance_state
+             | tokens: tokens_without,
+               join_counters: updated_join_counters
+           }, []}
+
+        :fire ->
+          fire_join(definition_snapshot, instance_state, tokens_without, updated_counter, node)
+      end
+    else
+      _ -> {:error, {:unknown_branch_id, token.branch_id}}
+    end
+  end
+
+  # design doc §4.1 -- the single shared fire/wait/cancel decision, used by
+  # both the arrival path (dispatch_parallel_join/4) and the cancellation
+  # path (dispatch_cancel_branch/3).
+  @type join_outcome :: :wait | :fire | :cancel_join
+
+  @spec join_outcome(JoinCounter.t()) :: join_outcome()
+  defp join_outcome(%JoinCounter{} = counter) do
+    still_outstanding =
+      MapSet.difference(
+        counter.expected_from_branches,
+        MapSet.union(counter.received_from_branches, counter.cancelled_branches)
+      )
+
+    cond do
+      MapSet.size(still_outstanding) > 0 ->
+        :wait
+
+      MapSet.size(counter.received_from_branches) == 0 ->
+        :cancel_join
+
+      true ->
+        :fire
+    end
+  end
+
+  # design doc §4.3 -- shared fire construction, called from both fire paths
+  # (arrival-triggered and cancellation-triggered).
+  @spec fire_join(Graph.t(), InstanceState.t(), [Token.t()], JoinCounter.t(), Node.t()) ::
+          {:ok, InstanceState.t(), [pending_event()]}
+          | {:error, transition_error()}
+  defp fire_join(definition_snapshot, instance_state, tokens_without, counter, node) do
+    {_merge_status, merged_variables, merge_events} =
+      VariableMerge.merge(instance_state.variables, %{}, nil)
+
+    case Enum.find(definition_snapshot.edges, &(&1.source == node.id)) do
+      nil ->
+        {:error, {:unknown_node_id, node.id}}
+
+      join_outgoing_edge ->
+        new_token_id = counter.origin_token_id <> "/" <> node.id <> "/joined"
+
+        new_token = %Token{
+          token_id: new_token_id,
+          node_id: join_outgoing_edge.target,
+          branch_id: nil,
+          waiting_child_instance_id: nil
+        }
+
+        final_tokens = tokens_without ++ [new_token]
+
+        updated_join_counters = Map.delete(instance_state.join_counters, node.id)
+
+        new_instance_state = %InstanceState{
+          instance_state
+          | tokens: final_tokens,
+            join_counters: updated_join_counters,
+            variables: merged_variables
+        }
+
+        pending_event =
+          {:parallel_join_fired, node.id, counter.origin_token_id, new_token_id, merge_events}
+
+        {:ok, new_instance_state, [pending_event]}
+    end
+  end
+
+  # --- {:cancel_branch, branch_id} (design doc §3.4, EE-07 AC4) --------------
+
+  @spec dispatch_cancel_branch(Graph.t(), InstanceState.t(), String.t()) ::
+          {:ok, InstanceState.t(), [pending_event()]}
+          | {:error, transition_error()}
+  defp dispatch_cancel_branch(definition_snapshot, instance_state, branch_id) do
+    case Enum.find(instance_state.tokens, &(&1.branch_id == branch_id)) do
+      nil ->
+        {:error, {:unknown_branch_id, branch_id}}
+
+      token ->
+        tokens_without = Enum.reject(instance_state.tokens, &(&1.token_id == token.token_id))
+
+        case Enum.find(Map.values(instance_state.join_counters), fn counter ->
+               MapSet.member?(counter.expected_from_branches, branch_id)
+             end) do
+          nil ->
+            {:ok, %InstanceState{instance_state | tokens: tokens_without}, []}
+
+          counter ->
+            join_node_id = counter.join_node_id
+            updated_cancelled = MapSet.put(counter.cancelled_branches, branch_id)
+            updated_counter = %JoinCounter{counter | cancelled_branches: updated_cancelled}
+
+            case join_outcome(updated_counter) do
+              :wait ->
+                updated_join_counters =
+                  Map.put(instance_state.join_counters, join_node_id, updated_counter)
+
+                {:ok,
+                 %InstanceState{
+                   instance_state
+                   | tokens: tokens_without,
+                     join_counters: updated_join_counters
+                 }, []}
+
+              :cancel_join ->
+                updated_join_counters = Map.delete(instance_state.join_counters, join_node_id)
+
+                new_instance_state = %InstanceState{
+                  instance_state
+                  | tokens: tokens_without,
+                    join_counters: updated_join_counters,
+                    status: :cancelled
+                }
+
+                pending_event = {:parallel_join_cancelled, join_node_id, counter.origin_token_id}
+
+                {:ok, new_instance_state, [pending_event]}
+
+              :fire ->
+                case find_node(definition_snapshot.nodes, join_node_id) do
+                  nil ->
+                    {:error, {:unknown_node_id, join_node_id}}
+
+                  join_node ->
+                    fire_join(
+                      definition_snapshot,
+                      instance_state,
+                      tokens_without,
+                      updated_counter,
+                      join_node
+                    )
+                end
+            end
+        end
+    end
   end
 
   # --- shared lookups (design doc §6, §7.2, §7.3) -----------------------------

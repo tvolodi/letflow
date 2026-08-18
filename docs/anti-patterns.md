@@ -383,6 +383,16 @@ should treat an unusually long describe/test pair as worth a manual length check
 before passing the gate, since `mix compile`/`mix test` failing to even start is the
 only signal today.
 
+**Update, 2026-08-18 (ISS-0051):** this recurred a *fourth* time
+(`test/letflow/engine_test.exs:717-718`, REQ-045/EE-01 work, 259 chars), found by
+ISSUE-FIXER while trying to reproduce ISS-0050 on a branch based on current `main` —
+confirmed pre-existing on `main` itself, not introduced by that branch. Three
+documented recurrences of this exact class had not prevented a fourth. Documentation
+alone is evidently not a sufficient gate; TEST-DESIGN-VALIDATOR (or a `mix test`
+alias/CI step) should add a mechanical mode-independent check — e.g. a small script
+that greps every `describe`/`test` pair and flags any combined length ≥ 200 — rather
+than relying on a human/agent noticing during review.
+
 **Correct alternative:** don't silently let the later-merged branch's name win by
 accident of rebase order. Confirm which module is already shipped and load-bearing
 on `main` (`grep -rl` its call sites — REQ-044's `Token` was aliased from

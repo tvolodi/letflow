@@ -18,7 +18,7 @@ defmodule Letflow.Engine.SchemasTest do
   use ExUnit.Case, async: true
 
   alias Letflow.Engine.Task
-  alias Letflow.Engine.Token
+  alias Letflow.Engine.TokenRecord, as: Token
 
   # ---------------------------------------------------------------------------------
   # Helpers
@@ -360,7 +360,7 @@ defmodule Letflow.Engine.SchemasTest do
     test "states status dumps uppercase, contrasted explicitly with Token's lowercase (design §4.3 point 3)" do
       doc = normalized_moduledoc(Task)
 
-      assert doc =~ "unlike `Letflow.Engine.Token.status`, which dumps lowercase"
+      assert doc =~ "unlike `Letflow.Engine.TokenRecord.status`, which dumps lowercase"
     end
 
     test "states tenant_id is never populated from caller-supplied attrs by this schema's own contract (design §4.3 point 5)" do

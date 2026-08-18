@@ -35,7 +35,7 @@ defmodule Letflow.Engine.MigrationsTest do
   import Ecto.Query
 
   alias Letflow.Engine.Task
-  alias Letflow.Engine.Token
+  alias Letflow.Engine.TokenRecord, as: Token
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Identity.Tenant
   alias Letflow.TenantProvisioning

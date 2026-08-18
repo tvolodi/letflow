@@ -189,10 +189,14 @@ test (read) — confirmed by grep, no other hit. Both are removed by this requir
 **Action:**
 - Delete `lib/letflow/events/transition_event.ex` in full.
 - Add one new migration, `priv/repo/migrations/<timestamp>_drop_transition_events.exs`,
-  whose `change/0` is `drop table(:transition_events)` — a single reversible operation
-  (Ecto auto-generates the down-migration's `create table` from the same call), matching
-  §3.7 of the backend guide ("additive and reversible"; a `drop table/1` inside `change/0`
-  is Ecto's own reversible idiom, not a hand-written `up/0`+`down/0` pair). Do **not**
+  whose `change/0` is `drop table(:transition_events)`. **Correction (REVIEWER, Step 2d):**
+  this is *not* auto-reversible — Ecto only synthesizes an inverse for `create table` (it
+  has the column list to replay); a bare `drop table/1` has nothing to reconstruct from, so
+  `mix ecto.rollback` on this migration raises `Ecto.MigrationError`. Judged acceptable
+  anyway, not upgraded to an explicit `up/0`/`down/0` pair: a hand-written `down/0`
+  recreating the table would only restore an *empty* schema, not the dropped rows — false
+  reversibility, not real rollback safety — and this codebase has no production deployment
+  yet at stake (CLAUDE.md). Do **not**
   edit or delete `20260814000001_create_transition_events.exs` itself — migrations are
   an append-only historical record in this codebase (implied by every existing migration
   file being additive-only, and matching the event-store's own insert-only philosophy

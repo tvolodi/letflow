@@ -30,6 +30,7 @@ defmodule Letflow.EngineTest do
   alias Letflow.Engine
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Definitions.InstanceDefinitionSnapshot
+  alias Letflow.Engine.Task
   alias Letflow.Engine.TokenRecord
   alias Letflow.Identity.Tenant
   alias Letflow.TenantProvisioning
@@ -310,6 +311,35 @@ defmodule Letflow.EngineTest do
       Repo.query!(~s[SELECT COUNT(*) FROM "#{schema_name}"."events"], [])
 
     count
+  end
+
+  # req047 -- task-row counter, mirrors token_count/1's own shape.
+  defp task_count(schema_name) do
+    Repo.aggregate(Task, :count, prefix: schema_name)
+  end
+
+  # req047 (AC4) -- a HUMAN_TASK whose assignee_ref names a group with no
+  # members (nothing in this schema backs a group/membership concept at all,
+  # so "no members" is simply "never validated against anything" -- design
+  # §4.3's own "zero group-membership resolution" statement). assignee_type
+  # is set to "GROUP" so the fixture concretely exercises both attrs this
+  # requirement's insert_attrs/4 reads.
+  defp graph_start_human_task_group_end do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "task",
+          "node_type" => "HUMAN_TASK",
+          "attributes" => %{"role" => "empty-group", "assignee_type" => "GROUP"}
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "task"},
+        %{"id" => "e2", "source" => "task", "target" => "end"}
+      ]
+    }
   end
 
   # ---------------------------------------------------------------------------------
@@ -746,6 +776,153 @@ defmodule Letflow.EngineTest do
 
       assert doc =~ "POST /api/v1/instances` and every other HTTP route belong to S4"
       assert doc =~ "this module builds a context-module function only"
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-047 (EE-03) -- task-activation persistence. See test/specs/REQ-047.md for the
+  # full test-case rationale and AC traceability; pure-layer coverage of
+  # Letflow.Engine.TaskActivation itself lives in
+  # test/letflow/engine/task_activation_test.exs, not here.
+  # ---------------------------------------------------------------------------------
+
+  describe "create/2 (REQ-047 AC1) -- HUMAN_TASK entry produces exactly one PENDING tasks row" do
+    test "the tasks row carries instance_id, node_id, node_name, assignee_type, assignee_ref, status PENDING" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_human_task_end())
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+
+      assert task_count(schema_name) == 1
+      [task] = Repo.all(Task, prefix: schema_name)
+      assert task.instance_id == result.instance_id
+      assert task.node_id == "task"
+      assert task.node_name == "task"
+      assert task.assignee_type == nil
+      assert task.assignee_ref == "approver"
+      assert task.status == :pending
+
+      # Same-transaction visibility: the task row's own token_id resolves to
+      # the exact tokens row create/2 also committed for this instance.
+      [token_record] = Repo.all(TokenRecord, prefix: schema_name)
+      assert task.token_id == token_record.id
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-047 AC2 -- forced event-append failure leaves zero rows in tasks,
+  # instance_projections, AND tokens. Reuses the exact missing-:actor_id forced-failure
+  # technique this file's own REQ-045 atomicity test (AC1's second test, above) already
+  # established, against a HUMAN_TASK-first graph so a tasks row would otherwise have
+  # been committed.
+  # ---------------------------------------------------------------------------------
+
+  describe "create/2 (REQ-047 AC2) -- forced :event Multi-step failure rolls back the tasks insert too" do
+    test "missing :actor_id fails the event append and leaves zero tasks/instance_projections/tokens rows" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_human_task_end())
+
+      attrs = base_attrs(definition) |> Map.delete(:actor_id)
+
+      assert {:error, {:event_append_failed, :missing_actor_id}} =
+               Engine.create(attrs, prefix: schema_name)
+
+      assert task_count(schema_name) == 0
+      assert projection_count(schema_name) == 0
+      assert token_count(schema_name) == 0
+      assert event_count(schema_name) == 0
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-047 AC3 -- START/END/EXCLUSIVE_GATEWAY/PARALLEL_GATEWAY entries create zero
+  # tasks rows, each its own explicit test (the DB-level companion to
+  # task_activation_test.exs's pure per-node-type diff tests).
+  # ---------------------------------------------------------------------------------
+
+  describe "create/2 (REQ-047 AC3) -- START entry creates zero tasks rows" do
+    test "a definition whose only nodes are START and END creates zero tasks rows" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_end())
+
+      assert {:ok, _result} = Engine.create(base_attrs(definition), prefix: schema_name)
+
+      assert task_count(schema_name) == 0
+    end
+  end
+
+  describe "create/2 (REQ-047 AC3) -- END entry creates zero tasks rows" do
+    test "a definition whose first non-START node is :END creates zero tasks rows" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_end())
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+
+      assert result.status == :completed
+      assert task_count(schema_name) == 0
+    end
+  end
+
+  describe "create/2 (REQ-047 AC3) -- EXCLUSIVE_GATEWAY entry creates zero tasks rows" do
+    test "a definition whose first non-START node is :EXCLUSIVE_GATEWAY creates zero tasks rows" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_gateway_end())
+
+      assert {:ok, _result} = Engine.create(base_attrs(definition), prefix: schema_name)
+
+      assert task_count(schema_name) == 0
+    end
+  end
+
+  describe "create/2 (REQ-047 AC3) -- PARALLEL_GATEWAY entry creates zero tasks rows" do
+    test "a split whose branches lead directly to the matching join creates zero tasks rows" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_parallel_split_join_end())
+
+      assert {:ok, _result} = Engine.create(base_attrs(definition), prefix: schema_name)
+
+      assert task_count(schema_name) == 0
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-047 AC4 -- a HUMAN_TASK whose assignee_ref names a group with no members still
+  # produces a PENDING task, not an activation error.
+  # ---------------------------------------------------------------------------------
+
+  describe "create/2 (REQ-047 AC4) -- assignee_ref naming a group with no members still creates a PENDING task" do
+    test "create/2 succeeds and the tasks row carries the group's assignee_type/assignee_ref unchanged" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_human_task_group_end())
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+      assert result.status == :active
+
+      assert task_count(schema_name) == 1
+      [task] = Repo.all(Task, prefix: schema_name)
+      assert task.status == :pending
+      assert task.assignee_type == "GROUP"
+      assert task.assignee_ref == "empty-group"
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-047 AC5 -- a token entering END sets the instance COMPLETED, creates no task,
+  # and the named SCH-03/S6 hook is documented (checked directly on TaskActivation's
+  # own @doc in task_activation_test.exs; this test only proves the COMPLETED +
+  # no-task half of AC5 end to end).
+  # ---------------------------------------------------------------------------------
+
+  describe "create/2 (REQ-047 AC5) -- END entry sets the instance COMPLETED with no task row" do
+    test "instance_projections.status becomes :completed and zero tasks rows are created" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_end())
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+
+      projection = Repo.get!(InstanceProjection, result.instance_id, prefix: schema_name)
+      assert projection.status == :completed
+      assert task_count(schema_name) == 0
     end
   end
 end

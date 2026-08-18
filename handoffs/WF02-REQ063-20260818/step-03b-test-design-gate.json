@@ -1,0 +1,89 @@
+{
+  "handoff_id": "b2c3d4e5-0063-4a00-9f01-req063step03b",
+  "run_id": "WF02-REQ063-20260818",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ063-20260818/step-03b-test-design-gate.json",
+  "created_at": "2026-08-18T10:25:30Z",
+  "started_at": "2026-08-18T12:01:17Z",
+  "completed_at": null,
+  "status": "PASS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-063"],
+    "requirement_text": {
+      "REQ-063": "Execute Decision 0006's D1: relocate users, groups and tenant_role from the public schema into each tenant's own Postgres schema via :prefix. Full design: lib/letflow/design/req063-identity-tables-schema-per-tenant.md. Acceptance criteria: see handoffs/WF02-REQ063-20260818/step-03-test-designer.json's requirement_text for the full verbatim list."
+    },
+    "related_handoff_ids": ["b2c3d4e5-0063-4a00-9f01-req063step03"],
+    "artifacts_in": [
+      "test/specs/REQ-063.md",
+      "test/letflow/identity_test.exs",
+      "test/letflow/plugs/auth_pipeline_test.exs",
+      "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs",
+      "test/letflow/identity/user_test.exs",
+      "test/letflow/identity/group_test.exs",
+      "test/letflow/identity/tenant_role_test.exs",
+      "test/letflow/role_registry_test.exs",
+      "test/letflow/identity_migration_test.exs",
+      "docs/issues/ISS-0047.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "RE-GATE after rework iteration 2 (this run's third pass over the same code path -- max_rework is 3, so this needs to land clean or the run escalates). Your own prior FAIL (iteration-1 re-gate) found that TEST-DESIGNER's on_exit-registered Ecto.Adapters.SQL.Sandbox.checkin(Letflow.Repo) call was a silent no-op, and that all four files' moduledocs falsely claimed it as the working protection mechanism. TEST-DESIGNER's iteration-2 rework took the recommended option (a): deleted the no-op checkin entirely and now relies on the SAME mechanism test/support/data_case.ex's own {:shared, self()} checkout already relies on for its own cleanup -- DBConnection.Ownership.Manager's unconditional :DOWN-monitor reclaim firing when the test process exits, no on_exit-based cleanup step at all for the sandboxed connection itself.\n\nVerify this directly: (1) read test/support/data_case.ex yourself and confirm it genuinely never calls Sandbox.checkin/1 for its own {:shared, self()} checkout -- if TEST-DESIGNER's claim that this mirrors an already-proven, already-relied-upon pattern is accurate, that's a materially different (and stronger) argument than 'we verified empirically it doesn't leak', since DataCase's own pattern already gates every other test in this suite. (2) read the four fixed files directly (test/letflow/identity/user_test.exs, group_test.exs, tenant_role_test.exs, role_registry_test.exs) and confirm the no-op checkin call and the false moduledoc claim are both actually gone, not just one of them. (3) run the full suite yourself at least twice AND do your own fresh real Postgres row-count/schema-count check -- do not accept TEST-DESIGNER's reported numbers this time either, this is the fourth round of verification on this exact code path and independent re-derivation is the whole point of this gate. (4) TEST-DESIGNER's report separately surfaced a pre-existing, unrelated finding -- roughly 69-70 orphaned tenant_*/sandbox_* Postgres schemas already present in the test database before and after their isolated runs, confirmed via a join to tenant_schemas as real schemas whose DROP SCHEMA cleanup never ran, explicitly stated as broader/unrelated/out of scope for this rework. Confirm this framing is correct (skim what it's pointing at, don't launch a full investigation) and that it isn't secretly connected to the search_path/Sandbox bug this whole rework chain has been chasing -- if it turns out to BE connected, that changes your verdict; if it's genuinely a separate, older issue, it should be filed (check whether TEST-DESIGNER already filed it as a docs/issues/ISS-NNNN.yaml entry per this project's own ISSUE_QUEUE.md protocol for incidental findings -- if not, note that gap in your issues but don't let it alone fail the gate, since WF-02 Step 3's own rule is 'forward, don't fix' for incidental findings, not 'must file before this step can PASS').\n\nOriginal (iteration 1) re-gate instructions below, superseded by the above but kept for context: Your prior FAIL (this same handoff, now superseded below) found the SET search_path fixture technique in test/letflow/identity/user_test.exs, group_test.exs, tenant_role_test.exs, and role_registry_test.exs was not rollback-safe. TEST-DESIGNER's rework report (handoffs/WF02-REQ063-20260818/step-03-test-designer.json) claims it applied your required_fix option (a) (mirroring identity_test.exs's mode-restore sequence), but ALSO reports that doing so exactly as directed surfaced a SECOND bug your own review didn't anticipate: {:shared, self()} mode ties connection ownership to the test process, and on_exit (running in ExUnit.OnExitHandler, a different process) force-switching the pool back to :auto to run its own DROP SCHEMA/DELETE cleanup allegedly raced against that ownership teardown, leaving orphaned req063-* tenant rows in public.tenants across runs. TEST-DESIGNER's claimed fix for THIS second issue: switched from {:shared, self()} to plain :manual mode + a bare checkout, checked back in via an explicit Sandbox.checkin/1 registered in on_exit (same-process checkin/checkout, no cross-process handoff).\n\nYour job: independently verify this second claim too, not just re-check the original fix. Read deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex's own documentation on Sandbox.checkin/1 and on cross-process mode-switching to confirm the race TEST-DESIGNER describes is real and that their fix (explicit same-process checkin in on_exit, no {:shared, self()}) actually closes it -- don't just accept the narrative. Read all four fixed files directly. Run the full suite yourself at least twice (TEST-DESIGNER's own verification found a run-3 failure in ONE of their 4 runs, in a file this rework never touched -- Letflow.Plugs.TenantStatusTest, traced to a pre-existing flake already referenced by ISS-0031/GH#90 -- confirm this attribution is correct and not a symptom you should instead trace back to the search_path fix). Also spot-check user_test.exs's restructured 'two different tenant schemas' test (TEST-DESIGNER reports splitting the fixture helper into provision_tenant_schema!/0 and point_search_path_at!/1 and changing this test's provisioning strategy) still actually asserts what REQ-063's acceptance criterion requires (two users, same username, two different tenant schemas, no conflict).\n\nDo a real Postgres row-count check yourself for leftover req063-*/orphaned tenant rows after running the suite, matching the verification TEST-DESIGNER claims to have done -- don't just trust their reported row counts.\n\nOriginal Step 3b instructions below, still applicable for anything not superseded above: Independently validate TEST-DESIGNER's work. Read test/specs/REQ-063.md and the actual test source files directly -- do not read TEST-DESIGNER's handoff result.summary as a substitute.\n\nThis run has an unusual wrinkle worth extra scrutiny: TEST-DESIGNER's own report describes fixing several test files (test/letflow/identity/user_test.exs, group_test.exs, tenant_role_test.exs, test/letflow/role_registry_test.exs) via a `SET search_path TO \"<schema>\", public` technique, used because RoleRegistry and some bare-struct inserts have no `prefix:` call site of their own. Scrutinize this specifically: (a) is this a real, sound technique for a test fixture, or does it risk leaking search_path state across tests sharing a sandboxed connection (check Ecto.Adapters.SQL.Sandbox's checkout/checkin behavior -- does a SET search_path survive past this test's own transaction rollback, could it bleed into an unrelated test on the same connection)? (b) is it used ONLY where genuinely necessary (no prefix: call site exists) or was it used as a shortcut somewhere prefix: threading was actually available and should have been used instead? TEST-DESIGNER's own handoff claims this was 'verified transaction-scoped/rollback-safe against real Postgres before adopting it' -- confirm this claim yourself rather than accepting it.\n\nAlso specifically verify: (1) all ~39 previously-failing tests are genuinely fixed, not skipped/excluded -- grep for @tag :skip or excluded tests in the touched files; (2) the new test/letflow/identity_migration_test.exs's drop-migration guard-skip test actually runs the real shipped migration (Ecto.Migrator.run/4 against the actual file), not a reimplementation of its logic in Elixir that could drift from the real SQL; (3) the cross-tenant username-collision test and the (external_realm,external_id)-cross-tenant-rejection test both exist and assert against real DB constraint violations, not mocked; (4) test fixtures use per-test unique data (grep for hardcoded tenant/schema names shared across tests); (5) docs/issues/ISS-0047.yaml (the independently-found insert_or_fetch/4 username-race bug) is legitimately out of scope for THIS run to fix -- confirm it's correctly filed as a separate, pre-existing, non-blocking issue rather than something masking a REQ-063 acceptance criterion.\n\nStandard procedure: for each REQ-063 acceptance criterion, verify at least one runnable test targets it, no TODO-implement-test left in the spec, tests are self-sufficient (don't depend on execution order), no hardcoded secrets/connection strings.",
+    "acceptance_criteria": [
+      "Every REQ-063 acceptance criterion has at least one runnable test, verified against actual test source",
+      "The SET search_path fixture technique independently verified safe against Sandbox checkout/checkin semantics, and confirmed used only where no prefix: call site exists",
+      "No @tag :skip or excluded test among the ~39 fixed tests",
+      "The drop-migration guard-skip test runs the real shipped migration via Ecto.Migrator, not a reimplementation",
+      "Cross-tenant username-collision and realm-binding-rejection tests assert against real DB constraints",
+      "Test fixtures use per-test unique data, no shared hardcoded tenant/schema names",
+      "ISS-0047 confirmed correctly out-of-scope for this run, not masking an unmet acceptance criterion",
+      "RE-GATE: TEST-DESIGNER's second-bug claim (cross-process {:shared, self()}/on_exit race) independently verified as real, not just narratively plausible",
+      "RE-GATE: the checkin-in-on_exit fix verified to actually close that race, against Sandbox's own documented checkin/checkout semantics",
+      "RE-GATE: a real Postgres row-count check performed directly (not trusting TEST-DESIGNER's reported counts) confirming no leftover req063-* tenant rows after the suite runs",
+      "RE-GATE: the run-3 TenantStatusTest failure's attribution to a pre-existing, unrelated flake (ISS-0031/GH#90) confirmed correct",
+      "RE-GATE ITERATION 2: on_exit-based checkin confirmed fully removed from all four files, not just partially",
+      "RE-GATE ITERATION 2: reliance on DBConnection's :DOWN-reclaim independently confirmed to already be DataCase's own established pattern, not a novel risk introduced here",
+      "RE-GATE ITERATION 2: fresh full-suite runs (not iteration-1/2's cited numbers) plus a fresh real Postgres schema/row-count check",
+      "RE-GATE ITERATION 2: the pre-existing ~69-70 orphaned-schema finding confirmed genuinely unrelated to this bug chain, and its out-of-scope framing correct"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "RE-GATE ITERATION 2: PASS. (1) Read test/support/data_case.ex directly: its `setup` calls only `Sandbox.checkout(Letflow.Repo)` and, unless `tags[:async]`, `Sandbox.mode(Letflow.Repo, {:shared, self()})` -- it never calls `Sandbox.checkin/1` anywhere. TEST-DESIGNER's claim that the four fixed files now rely on exactly the same already-proven mechanism DataCase itself depends on for every other test in the suite is confirmed accurate, not just narratively plausible -- this is materially stronger than an empirical-only argument. (2) Read all four files (user_test.exs, group_test.exs, tenant_role_test.exs, role_registry_test.exs) directly: grepped for `Sandbox.checkin` -- zero actual calls in any of the four; every remaining hit is inside a moduledoc/comment explaining why an on_exit-based checkin would no-op (correct, matches the DBConnection.Ownership.Manager proxy_checkin-keyed-by-calling-pid mechanism from the iteration-1 finding). Moduledocs were re-read in full and now state the real mechanism (DBConnection.Ownership.Manager's unconditional :DOWN-monitor reclaim on test-process exit) instead of the disproven claim -- both the no-op call and the false claim are gone, not just one. The separate on_exit blocks that DO exist in these files run `Sandbox.mode(Repo, :auto)` then DROP SCHEMA/DELETE cleanup for provisioned tenant fixtures -- a distinct, legitimate concern (forcing a real checked-in connection for cleanup queries), not a disguised sandbox-checkin call. (3) Ran the full suite independently twice from a clean `mix compile --force` (68 files, 0 warnings): run 1 -- 770 passed (5 properties, 765 tests), 0 failures, exit 0, 142.5s; run 2 -- identical, 770 passed, 0 failures, exit 0, 135.1s. Fresh Postgres checks via `docker exec letflow-postgres-1 psql` (not TEST-DESIGNER's numbers): pre-run req063-* tenant rows = 0, pre-run tenant_*/sandbox_* schema count = 69 (all 69 confirmed orphaned via LEFT-JOIN-style NOT EXISTS against tenant_schemas); post-run (after both suite runs) req063-* tenant rows = 0, schema count still 69 -- zero delta attributable to running the suite twice, confirming no new leakage from these four files or from the rework. public.users/groups/tenant_role confirmed absent (to_regclass null), consistent with the drop migration's guard having already run in this environment, not a regression. (4) The ~69-70 orphaned-schema finding: independently confirmed the count (69) and confirmed via a live NOT EXISTS-against-tenant_schemas query that these are real, committed schema objects (persistent DDL surviving across process runs) with no owning tenant_schemas row -- structurally different from the Sandbox/search_path bug this whole rework chain has chased, which is about in-run DBConnection ownership/checkout reclaim, not committed cross-run DDL. Confirmed genuinely unrelated, not secretly the same root cause. Checked docs/issues/: TEST-DESIGNER did NOT file this as its own ISS-NNNN.yaml entry -- only ISS-0047 (the pre-existing insert_or_fetch/4 username-race, correctly retained/out of scope) appears in their issues list. Noting this as a gap below per WF-02 Step 3's 'forward, don't fix' rule for incidental findings -- not a fail condition on its own, since it was flagged/forwarded in their handoff summary even though not formally filed. All standard Step 3b criteria (per-criterion coverage, no @tag :skip across all touched files, real Ecto.Migrator.run/4 in the drop-migration guard-skip test, real-DB-constraint collision/rejection tests, per-test unique fixture data, ISS-0047 correctly out of scope) were independently re-confirmed on the iteration-1 pass and remain true -- none of the files backing those checks were touched again in iteration 2.",
+    "artifacts_out": [
+      "test/letflow/identity/user_test.exs",
+      "test/letflow/identity/group_test.exs",
+      "test/letflow/identity/tenant_role_test.exs",
+      "test/letflow/role_registry_test.exs"
+    ],
+    "issues": [
+      {
+        "id": "GAP-ORPHANED-SCHEMAS",
+        "severity": "MINOR",
+        "summary": "The pre-existing ~69-70 orphaned tenant_*/sandbox_* Postgres schema pool (real, committed schemas whose owning tenant_schemas row is already deleted, DROP SCHEMA cleanup never ran) was surfaced and correctly framed as unrelated/out-of-scope by TEST-DESIGNER in their step-03 handoff summary, and independently re-confirmed unrelated here (69 orphaned schemas before and after two independent full-suite runs, zero delta). However it was not filed as its own docs/issues/ISS-NNNN.yaml entry -- only forwarded in prose. Per WF-02 Step 3's 'forward, don't fix' rule this does not block this gate's PASS, but the gap should be closed (file it as ISS-NNNN so it's tracked/claimable rather than living only in a handoff summary) before it's lost to history."
+      },
+      {
+        "id": "ISS-0047",
+        "severity": "MINOR",
+        "summary": "Retained from TEST-DESIGNER's report -- Identity.insert_or_fetch/4's on_conflict target only covers (external_realm, external_id); a genuine two-independent-connection race on identical username can raise a changeset error instead of resolving via re-select fallback. Pre-existing REQ-018 gap, confirmed correctly out of scope for REQ-063. Already filed: https://github.com/tvolodi/letflow/issues/176."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ063-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ063-20260818",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (4)"
+  },
+  "rework_count": 2,
+  "max_rework": 3,
+  "completed_at": "2026-08-18T12:10:18Z"
+}

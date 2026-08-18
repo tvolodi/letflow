@@ -1,6 +1,8 @@
 # 0006 — Identity tables move behind `:prefix`; `tenant_id` retired from schema-isolated tables
 
-Status: proposed (awaiting REVIEWER sign-off). Owner: ORCH → REVIEWER + SECURITY-REVIEWER.
+Status: decided. D1 shipped (REQ-063, REVIEWER + SECURITY-REVIEWER sign-off,
+RELEASE-VALIDATOR PASS). D2 not yet executed — pending REQ-064. Owner: ORCH →
+REVIEWER + SECURITY-REVIEWER.
 
 Supersedes: `0003-ecto-schema-strategy.md` Dimension B, in part (see §6 for the
 exact clause superseded and the exact clauses left standing).

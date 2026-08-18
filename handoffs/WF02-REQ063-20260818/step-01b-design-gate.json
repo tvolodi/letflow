@@ -1,0 +1,124 @@
+{
+  "handoff_id": "b2c3d4e5-0063-4a00-9f01-req063step01b",
+  "run_id": "WF02-REQ063-20260818",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ063-20260818/step-01b-design-gate.json",
+  "created_at": "2026-08-18T08:55:42Z",
+  "started_at": "2026-08-18T09:04:34Z",
+  "completed_at": "2026-08-18T09:07:42Z",
+  "status": "PASS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-063"],
+    "requirement_text": {
+      "REQ-063": "Execute Decision 0006's D1 (docs/migration/decisions/0006-identity-tables-schema-per-tenant.md): relocate REQ-015's users, groups and tenant_role tables out of the public default schema and into each tenant's own Postgres schema, via the same :prefix mechanism and the same TenantProvisioning.tenant_scoped_migrations/0 registry every business table already uses. See handoffs/WF02-REQ063-20260818/step-01-code-designer.json for the full text (unchanged, not re-copied here to keep this handoff shorter -- read it there)."
+    },
+    "related_handoff_ids": ["b2c3d4e5-0063-4a00-9f01-req063step01"],
+    "artifacts_in": [
+      "lib/letflow/design/req063-identity-tables-schema-per-tenant.md",
+      "docs/migration/decisions/0006-identity-tables-schema-per-tenant.md",
+      "handoffs/WF02-REQ063-20260818/step-01-code-designer.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "RE-GATE after rework iteration 1. CODE-DESIGNER added a new §5b to lib/letflow/design/req063-identity-tables-schema-per-tenant.md addressing the single BLOCKER from your prior FAIL (check 2a, the identity.ex prefix-threading TBD). Read §5b directly and confirm it is now concrete, not illustrative: a real @spec for provision_oidc_user/4 (arity changed from /3) with an opts :: [prefix: String.t()] parameter matching lib/letflow/definitions.ex's actual established convention (confirm CODE-DESIGNER actually grepped/read definitions.ex rather than citing it from memory -- check the cited line number and pattern shape match what's really in that file), the same threading through upsert_by_external_identity/4, insert_or_fetch/4, re_select_on_conflict/3, get_by_external_identity/3, the exact AuthPipeline.provision_user/3 call-site edit (deriving the prefix via TenantProvisioning.schema_name_for_tenant/1 on the already-resolved tenant_id), and a stated error-shape consequence (or explicit confirmation of none). Confirm resolve_tenant_by_realm/1 and verify_realm_ownership/2 were correctly left unchanged (they only touch the public-schema Tenant table) -- the fix should not have expanded beyond provision_oidc_user's own chain. If §5b still just gestures at a shape without full signatures for every function in the chain, that is still a check-2a FAIL, rework iteration 2.\n\nAlso re-verify the five originally-passing checks were NOT accidentally broken by this rework (spot check, not a full re-read is fine for these five, since they were untouched by the rework instruction): three migrations' prefix() guards, the divergence-closure header comment, tenant_role's join-through-groups partitioning, the drop migration's separation, and the tenant_id-not-dropped scope statement.\n\nOriginal Step 1b instructions below, still applicable for anything not superseded by the RE-GATE paragraph above: Independently validate lib/letflow/design/req063-identity-tables-schema-per-tenant.md against REQ-063's acceptance criteria and decision 0006. Read the design artefact directly -- do not read CODE-DESIGNER's handoff result.summary as a substitute.\n\nPay particular attention to a gap CODE-DESIGNER's own summary flagged as newly surfaced (not named in decision 0006 or the requirement text): Letflow.Identity's existing functions (provision_oidc_user/3, resolve_tenant_by_realm/1, etc.) have no :prefix threading today, and will break the moment the public users/groups/tenant_role tables are dropped by this design's step-4 drop migration. Confirm the design actually addresses this as a hard precondition (not silently assumed away) -- if the design defers it to REQ-063's own implementation step without a concrete plan, that's a design gap significant enough to fail on: ELIXIR-DEV needs to know at implementation time whether Letflow.Identity's public functions need a prefix/tenant_schema parameter added, and if so, what every existing caller (notably lib/letflow/plugs/auth_pipeline.ex) needs to change to. A design that says 'this needs fixing' without saying how is a TBD deferral and fails check 2a below.\n\nAlso specifically verify: (1) all three migrations carry REQ-022 section 4's prefix()-truthiness guard: (2) the users migration's index shape correctly closes the (tenant_id, external_realm, external_id) vs (external_realm, external_id) divergence decision 0006 section 3.2 names, with the header-comment requirement stated; (3) the data-copy mechanism's function signature handles tenant_role correctly -- it has no tenant_id column, so per-tenant partitioning must go through a join via groups, confirm the design actually specifies this rather than assuming tenant_role has a tenant_id column it doesn't have; (4) the drop migration is a genuinely separate migration from the three create migrations, not bundled; (5) the design explicitly and clearly states tenant_id is NOT dropped by this design (that's REQ-064).",
+    "acceptance_criteria": [
+      "Every MUST/acceptance criterion has a corresponding design element, no TBD/deferral language",
+      "The newly-surfaced Letflow.Identity :prefix-threading gap is addressed concretely, not deferred without a plan",
+      "Function signatures fully specified (name, inputs, outputs, error cases)",
+      "Error handling shape stated ({:ok,_}|{:error,_} tags, not left implicit)",
+      "Cross-module dependencies listed",
+      "No implementation code present (no .ex/.exs code bodies -- signatures and type shapes only)",
+      "tenant_role's lack of a tenant_id column is correctly handled in the data-copy design, not assumed away"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "RE-GATE PASS after rework iteration 1. Independently re-derived (not trusted from CODE-DESIGNER's summary): §5b's identity.ex prefix-threading fix is genuinely concrete, not illustrative. Verified against real source: (a) definitions.ex line 145 is exactly `@type opts :: [prefix: String.t()]`, and the design's cited Repo.get(ProcessDefinition, uuid, prefix: prefix) pattern matches definitions.ex line 429 verbatim -- CODE-DESIGNER's citation is accurate, not fabricated from memory. (b) identity.ex's real function chain and line numbers match the design's claims exactly: provision_oidc_user/3 (lines 55-71), upsert_by_external_identity (142), insert_or_fetch (152, Repo.insert at 165, Repo.get at 186), re_select_on_conflict (197), get_by_external_identity (207, Repo.get_by at 208) -- all three cited Repo call-site line numbers (165/186/208) are correct and each currently has no prefix option, matching the design's 'today's call has no options' claims. (c) Full @spec given for provision_oidc_user/4 with opts :: opts() as a new required (non-defaulted) 4th argument; the same opts argument threaded, by signature, through all four private functions in the chain (upsert_by_external_identity/4, insert_or_fetch/4, re_select_on_conflict/3, get_by_external_identity/3) -- every hop specified, not just the top-level function. (d) auth_pipeline.ex's real call site matches exactly: provision_user/3 at line 168, Identity.provision_oidc_user/3 call at line 171, existing alias block confirmed (Identity, ClaimMapping, ClaimMappingConfig, JitProvisioningConfig). The design's prescribed edit -- call TenantProvisioning.schema_name_for_tenant/1 on the already-step-2-resolved tenant_id, pass prefix: schema_name as the new opts -- is concrete and correct; schema_name_for_tenant/1's real @spec ({:ok, String.t()} | {:error, :invalid_tenant_id}) matches the design's cited error atom exactly. (e) Error-shape consequence explicitly stated: provisioning_error/0 is unchanged; the new :invalid_tenant_id case surfaces only in AuthPipeline's {:provision, reason} tag, and the design correctly identifies that call/2's existing {:error, {:provision, _reason}} -> reject(conn, 500, ...) catch-all (verified present at auth_pipeline.ex lines 90-91) already covers it with no new call/2 branch needed. (f) resolve_tenant_by_realm/1 and verify_realm_ownership/2 correctly confirmed unchanged -- both query only Letflow.Identity.Tenant (verified at identity.ex lines 85 and 102), a Decision 0006 D3 public-schema table this design never touches; no scope creep. §1, §6, and §7 item 1 all correctly updated to reference and cross-link §5b's resolution; §8's traceability table adds three new REWORK rows mapping each rework acceptance point to §5b. No .ex/.exs code bodies found anywhere in the document (grep for defmodule/def/defp with a body returned zero matches) -- §5b's function lines are bare signatures, consistent with the rest of the design's specification altitude. Spot-checked the five originally-passing elements (three migrations' prefix() guards, users migration's divergence-closure header comment, tenant_role's join-through-groups partitioning, drop migration's separation, tenant_id-not-dropped statement) and confirmed all five untouched and still correct. Routing to ELIXIR-DEV (2a).",
+    "artifacts_out": ["lib/letflow/design/req063-identity-tables-schema-per-tenant.md"],
+    "issues": [
+      {
+        "severity": "INFO",
+        "check": "REWORK re-gate: §5b provision_oidc_user/4 @spec concreteness (arity, opts type, required not defaulted)",
+        "location": "§5b lines 479-499",
+        "finding": "Independently confirmed concrete: full @spec with opts :: opts() as new required 4th argument (no \\\\ [] default), matching definitions.ex's real [prefix: String.t()] convention (confirmed at definitions.ex line 145, cited usage pattern confirmed at definitions.ex line 429). Not illustrative -- a real, buildable signature. No issue, non-blocking."
+      },
+      {
+        "severity": "INFO",
+        "check": "REWORK re-gate: full private call-chain threading (upsert_by_external_identity, insert_or_fetch, re_select_on_conflict, get_by_external_identity)",
+        "location": "§5b lines 501-525",
+        "finding": "Independently confirmed every one of the four private functions in identity.ex's real call chain (verified at identity.ex lines 142/152/197/207) has its own new signature with opts threaded as the last argument, plus the three specific Repo call sites (identity.ex lines 165, 186, 208, all verified accurate) each named with the exact prefix: prefix addition. Not just the top-level function -- every hop specified. No issue, non-blocking."
+      },
+      {
+        "severity": "INFO",
+        "check": "REWORK re-gate: exact AuthPipeline.provision_user/3 call-site edit, prefix derivation named",
+        "location": "§5b lines 533-565",
+        "finding": "Independently confirmed against the real auth_pipeline.ex (provision_user/3 at line 168, Identity.provision_oidc_user/3 call at line 171, existing alias block matches): the design specifies TenantProvisioning.schema_name_for_tenant/1 called on the already-step-2-resolved tenant_id (confirmed resolve_tenant/1 runs at call/2's 4th with-clause, strictly before provision_user/3's 8th), a new alias, and the exact success/error branch bodies. schema_name_for_tenant/1's real @spec ({:ok, String.t()} | {:error, :invalid_tenant_id}) matches the design's cited atom exactly. No issue, non-blocking."
+      },
+      {
+        "severity": "INFO",
+        "check": "REWORK re-gate: error-shape consequence of the new arity/opts stated explicitly",
+        "location": "§5b lines 567-578",
+        "finding": "Independently confirmed provisioning_error/0 (identity.ex's existing @type) is stated as unchanged, with the new :invalid_tenant_id case surfacing only at AuthPipeline's {:provision, reason} tag -- verified this is already caught by call/2's existing {:error, {:provision, _reason}} -> reject(conn, 500, ...) catch-all at auth_pipeline.ex lines 90-91, so the design's claim of 'no new call/2 branch needed' is correct, not asserted without checking. No issue, non-blocking."
+      },
+      {
+        "severity": "INFO",
+        "check": "REWORK re-gate: resolve_tenant_by_realm/1 and verify_realm_ownership/2 correctly left unchanged, no scope creep",
+        "location": "§5b lines 455-462",
+        "finding": "Independently confirmed both functions (identity.ex lines 82-97 and 124+, via private helper resolve_realm_by_tenant/1 at lines 99-110) query only Letflow.Identity.Tenant, a Decision 0006 D3 table that stays in the public schema. The design correctly does not add a prefix/opts parameter to either. No issue, non-blocking."
+      },
+      {
+        "severity": "INFO",
+        "check": "REQ-022 §4 prefix()-truthiness guard on all three create migrations",
+        "location": "§2.1, §2.2, §2.3 header-comment requirements",
+        "finding": "Independently confirmed present and correctly specified for all three (groups, tenant_role, users) -- no issue, non-blocking."
+      },
+      {
+        "severity": "INFO",
+        "check": "users migration index-shape divergence closure (tenant_id,external_realm,external_id) vs (external_realm,external_id)",
+        "location": "§2.3 point 5 (lines 189-203)",
+        "finding": "Independently confirmed correctly closed and explicitly stated as a header-comment requirement, matching decision 0006 §3.2's framing exactly (relocates rather than removes the global guarantee, via tenants_idp_realm_id_partial_index). No issue, non-blocking."
+      },
+      {
+        "severity": "INFO",
+        "check": "tenant_role has no tenant_id column -- data-copy must partition via join through groups",
+        "location": "§4 step 3 (lines 356-369)",
+        "finding": "Independently confirmed the design does NOT wrongly assume tenant_role has a tenant_id column -- it explicitly states 'tenant_role requires special handling: it carries no tenant_id column' and specifies the join-through-groups query shape plus an orphan-row error case ({:error, {:orphaned_tenant_role, tenant_role_id}}). No issue, non-blocking."
+      },
+      {
+        "severity": "INFO",
+        "check": "drop migration is a genuinely separate migration, not bundled",
+        "location": "§5 (lines 393-440)",
+        "finding": "Independently confirmed as a separate file/module (DropLegacyPublicIdentityTables) from §2's three create migrations, explicitly stated as never-bundled, matching GBL-112 precedent. No issue, non-blocking (though see the BLOCKER above -- being structurally separate does not resolve the identity.ex precondition gap for when it is safe to run)."
+      },
+      {
+        "severity": "INFO",
+        "check": "design explicitly states tenant_id is NOT dropped by this design (reserved for REQ-064)",
+        "location": "§1 scope boundary (top), §2.1, §2.3 header-comment requirements",
+        "finding": "Independently confirmed stated explicitly and repeatedly (top-level scope boundary plus both per-migration header-comment requirements). No issue, non-blocking."
+      },
+      {
+        "severity": "INFO",
+        "check": "no implementation code present (.ex/.exs bodies)",
+        "location": "whole document",
+        "finding": "Confirmed no defmodule/def blocks anywhere in the file (grep returned zero matches). Inline Repo.all(from(...))/Repo.insert(...) fragments at lines 70, 346, 348, 353, 364 are prose-level query-shape specification (illustrating what a query selects/inserts), not code bodies with control flow -- consistent with specification altitude elsewhere in this design (e.g. req043's prior designs use the same convention). Does not itself fail check 2e. No issue, non-blocking."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ063-20260818",
+      "commit_sha_list": ["156409ed9c92d282d52c59bf2244e6e3db4ee066"],
+      "remote_branch": "origin/feature/WF02-REQ063-20260818",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (2a)"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

@@ -1,0 +1,130 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-063
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ063-20260818
+date_utc: 2026-08-18T17:11:00Z
+
+git:
+  branch: feature/WF02-REQ063-20260818
+  branch_confirmed: true
+  commit: 9e29323
+  commit_subject: "chore(WF02-REQ063): file ISS-0048, dispatch Step 4 test run"
+  note: >
+    Confirmed via `git branch --show-current` and `git log --oneline -1` at
+    start of this run. This run picked up after TEST-DESIGN-VALIDATOR's
+    Step 3b PASS on rework iteration 2
+    (handoffs/WF02-REQ063-20260818/step-03b-test-design-gate.json), which
+    followed two rework rounds resolving a connection-pooling / search_path
+    Sandbox cross-test-pollution bug chain. This Step 4 run is TEST-RUNNER's
+    own independent, formal re-verification from a cold `mix test` invocation
+    -- not a rubber stamp of TEST-DESIGNER's or TEST-DESIGN-VALIDATOR's prior
+    numbers, per "every producing step has a validating step."
+
+environment:
+  toolchain: local -- mix/elixir/erl reachable directly on PATH
+  postgres_container: letflow-postgres-1 (confirmed Up 4 hours/healthy via
+    `docker compose ps` before running tests, port 5462 -> 5432)
+  command_run: >
+    `mix test` (full suite, default/unpinned random seed 82744) -- the `test`
+    alias runs ecto.create + ecto.migrate --quiet first automatically. Full
+    suite run, not just REQ-063's own new/changed tests, per Unblock-Everything.
+
+verdict: PASS
+
+checks:
+  test_suite_full_run:
+    result: PASS
+    exit_code: 0
+    seed: 82744 (unpinned/random -- ExUnit's own default)
+    summary_line_verbatim: "Result: 770 passed (5 properties, 765 tests)"
+    finished_line_verbatim: "Finished in 129.5 seconds (2.4s async, 127.0s sync)"
+    failures: 0
+    grep_check: >
+      Searched the full raw captured log (19,531 lines) for the numbered
+      ExUnit failure-block marker pattern (`^\s*[0-9]*) `) and for
+      "TenantStatusTest" specifically -- zero failure blocks found, and the
+      known pre-existing Letflow.Plugs.TenantStatusTest flake (ISS-0031/
+      GH#90) did not reproduce in this run at all (0 occurrences of that
+      module name in the whole log). Nothing to forward this run beyond
+      noting its absence.
+
+  known_noise_not_a_failure:
+    - >
+      [error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in
+      NNNN ms. -- REQ-016's Ueberauth OIDC worker attempting to reach a
+      deliberately unreachable placeholder issuer configured in
+      config/test.exs. Pre-existing since REQ-016, already documented as
+      expected noise in every prior WF-02 test report. Present in this run;
+      does not fail, skip, or affect any test.
+    - >
+      Verbose SQL query debug logging appears in raw mix test output
+      (config/test.exs's default test log level) for every DB-backed test --
+      established pattern, not itself evidence of failure (confirmed by the
+      zero failure-block grep above and the run's own "0 failures" implicit
+      in "770 passed" with no failures/skipped/excluded line printed).
+    - >
+      ExUnit.Case.register_test/4 deprecation warnings on the suite's five
+      property tests (claim_mapping_property_test.exs x2,
+      process_instance_test.exs, a transition-equality property in another
+      engine test file, parallel_approval_test.exs) -- pre-existing baseline
+      noise, unrelated to REQ-063.
+    - >
+      Two Elixir type-checker warnings unrelated to REQ-063: a "clause will
+      never match" warning at test/letflow/event_store/registry_test.exs:654
+      and a "comparison between distinct types" warning at
+      test/letflow/definitions/snapshot_store_test.exs:253. Both are
+      compile-time static-analysis notes on pre-existing test assertions
+      (nil-comparison idioms against tagged-tuple return types), not test
+      failures -- both files' tests pass. Neither file is owned by REQ-063
+      (identity/users/groups/tenant_role schema relocation); not routed as
+      rework here, noted for visibility only.
+
+pre_existing_issue_confirmed_not_reproduced:
+  id: ISS-0031 / GH#90
+  description: >
+    Letflow.Plugs.TenantStatusTest documented pre-existing flake (async:
+    true test with an unfiltered node-global :telemetry.attach handler).
+    Already confirmed unrelated to this branch's own changes by two
+    independent prior verifications earlier in this run's history
+    (TEST-DESIGNER and TEST-DESIGN-VALIDATOR, each running the full suite
+    at least twice across the Step 3b rework rounds).
+  outcome_this_run: >
+    Did not reproduce. Zero occurrences of "TenantStatusTest" anywhere in
+    this run's full captured log; the test passed cleanly as part of the
+    770-passed total. Per the task's own instruction this does not block
+    PASS either way (present-but-flaky would not have blocked; absent is
+    consistent with "flake," not with the issue being newly resolved --
+    ISS-0031 stays open, not touched by this step).
+
+issues_filed_this_step: none
+issues_referenced_not_refiled: >
+  docs/issues/ISS-0048.yaml was filed earlier in this same run (during
+  TEST-DESIGN-VALIDATOR's Step 3b rework iteration 2) -- MINOR test-hygiene
+  finding, ~69-70 orphaned tenant_*/sandbox_* Postgres schemas accumulated
+  in the test database from missing on_exit DROP SCHEMA cleanup in some
+  test helper(s), confirmed structurally unrelated to REQ-063's own
+  search_path/Sandbox bug chain and to this step's pass/fail verdict. Not
+  refiled here; referenced only for audit completeness. Orphaned schemas
+  do not affect `mix test` pass/fail (each test provisions/uses its own
+  freshly-created schema regardless of what else is present in the DB).
+
+test_file_breakdown:
+  full_suite_grand_total: "770 passed (5 properties, 765 tests), 0 failures"
+  regression_check_vs_prior_runs: >
+    Task-cited prior numbers (TEST-DESIGNER/TEST-DESIGN-VALIDATOR, most
+    recent of 3 rework rounds): 770 passed, 5 properties, 765 tests, 0
+    failures, reproduced twice on a clean mix compile. This independent
+    Step 4 run reproduces the identical total: 770 passed (5 properties,
+    765 tests), 0 failures. No regression, no discrepancy.
+
+diagnosis: "N/A -- no failures observed in this run. Nothing routed back to ELIXIR-DEV or TEST-DESIGNER."
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-18-WF02-REQ063-20260818.yaml
+  next_action: "Route to RELEASE-VALIDATOR (WF-02 Step 5) -- no rework needed."

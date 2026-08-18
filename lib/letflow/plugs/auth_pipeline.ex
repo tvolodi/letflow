@@ -13,7 +13,7 @@ defmodule Letflow.Plugs.AuthPipeline do
        (`Letflow.Identity.resolve_tenant_by_realm/1`).
     3. Realm-ownership guard, **before** JIT provisioning
        (`Letflow.Identity.verify_realm_ownership/2`).
-    4. JIT provisioning/lookup (`Letflow.Identity.provision_oidc_user/3`).
+    4. JIT provisioning/lookup (`Letflow.Identity.provision_oidc_user/4`).
     5. Attach an auth context (`user_id`, `tenant_id`, `roles`) to
        `conn.assigns[:auth_context]` for downstream plugs.
 
@@ -41,6 +41,7 @@ defmodule Letflow.Plugs.AuthPipeline do
   alias Letflow.Oidc.ClaimMapping
   alias Letflow.Oidc.ClaimMappingConfig
   alias Letflow.Oidc.JitProvisioningConfig
+  alias Letflow.TenantProvisioning
 
   @impl Plug
   def init(opts), do: opts
@@ -48,7 +49,7 @@ defmodule Letflow.Plugs.AuthPipeline do
   # Every branch's failure reason is tagged with which pipeline step
   # produced it (rather than matched by the raw, callee-specific reason atom
   # in the `else` clause below) — the verifier adapter, `resolve_tenant_by_realm/1`,
-  # and `provision_oidc_user/3` all use `:not_found`/similarly-generic atoms
+  # and `provision_oidc_user/4` all use `:not_found`/similarly-generic atoms
   # for unrelated failures, so dispatching on the bare reason alone would
   # conflate them. Tagging the step is what keeps each failure mapped to the
   # correct status code (§5) regardless of which callee produced it.
@@ -162,15 +163,27 @@ defmodule Letflow.Plugs.AuthPipeline do
     end
   end
 
-  # Step 4b — Letflow.Identity.provision_oidc_user/3. tenant_id passed here
+  # Step 4b — Letflow.Identity.provision_oidc_user/4. tenant_id passed here
   # is the step-2-resolved, DB-sourced value — never
-  # identity_context.tenant_id (the token-claimed hint field).
+  # identity_context.tenant_id (the token-claimed hint field). REQ-063 moved
+  # `users` behind schema-per-tenant, so this step must first derive the
+  # tenant's physical schema name (pure, no extra DB round trip --
+  # TenantProvisioning.schema_name_for_tenant/1 is confirmed no-I/O) and pass
+  # it through as provision_oidc_user/4's new `prefix:` opt.
   defp provision_user(identity_context, tenant_id, realm) do
     jit_config = JitProvisioningConfig.for_realm(realm)
 
-    case Identity.provision_oidc_user(identity_context, tenant_id, jit_config) do
-      {:ok, provisioned} -> {:ok, provisioned}
-      {:error, reason} -> {:error, {:provision, reason}}
+    case TenantProvisioning.schema_name_for_tenant(tenant_id) do
+      {:ok, schema_name} ->
+        case Identity.provision_oidc_user(identity_context, tenant_id, jit_config,
+               prefix: schema_name
+             ) do
+          {:ok, provisioned} -> {:ok, provisioned}
+          {:error, reason} -> {:error, {:provision, reason}}
+        end
+
+      {:error, :invalid_tenant_id} ->
+        {:error, {:provision, :invalid_tenant_id}}
     end
   end
 

@@ -1,41 +1,80 @@
 defmodule Letflow.IdentityTest do
   @moduledoc """
-  Tests for `Letflow.Identity.provision_oidc_user/3` (REQ-018) and
-  `Letflow.Identity.resolve_tenant_by_realm/1`, `resolve_realm_by_tenant/1`,
-  `verify_realm_ownership/2`, plus `Letflow.Identity.Tenant.create_changeset/3`/
-  `update_changeset/2` (REQ-019). See `test/specs/REQ-018.md` and
-  `test/specs/REQ-019.md` for the full test-case rationale, including which criteria
-  are covered by inspection rather than a runtime assertion (REQ-018 AC4's moduledoc
-  citation, and the `:external_identity_collision` defensive branch).
+  Tests for `Letflow.Identity.provision_oidc_user/4` (REQ-018, arity bumped to /4 by
+  REQ-063 — see below) and `Letflow.Identity.resolve_tenant_by_realm/1`,
+  `resolve_realm_by_tenant/1`, `verify_realm_ownership/2`, plus
+  `Letflow.Identity.Tenant.create_changeset/3`/`update_changeset/2` (REQ-019). See
+  `test/specs/REQ-018.md` and `test/specs/REQ-019.md` for the full test-case
+  rationale, including which criteria are covered by inspection rather than a runtime
+  assertion (REQ-018 AC4's moduledoc citation, and the `:external_identity_collision`
+  defensive branch). See `test/specs/REQ-063.md` for why this file's fixtures changed.
 
-  Uses `Letflow.DataCase` (real Postgres, sandboxed connection, rolled back per test)
-  per `docs/guides/test_developer_guide.md` DIRECTIVE T-1 — no mocked database anywhere
-  in this file.
+  Uses `Letflow.DataCase` (real Postgres) per `docs/guides/test_developer_guide.md`
+  DIRECTIVE T-1 — no mocked database anywhere in this file.
 
-  The concurrent-race test (acceptance criterion 3) runs `async: true` deliberately:
-  `Letflow.DataCase` only calls `Ecto.Adapters.SQL.Sandbox.mode(Repo, {:shared, self()})`
-  when a test is NOT `async: true` (see `test/support/data_case.ex`) — shared mode would
-  let the two spawned `Task`s reach the connection pool implicitly, which defeats the
-  point of proving the race is handled through the sandbox's normal per-process
-  ownership rules. Staying in the sandbox's default (manual, per-process) ownership and
-  explicitly `Ecto.Adapters.SQL.Sandbox.allow/3`-ing each spawned `Task` onto the test
-  process's own checked-out connection (per design doc §9's exact guidance) is what
-  makes this a genuine two-connection race rather than an accidentally-serialized one.
+  ## REQ-063 fixture change (read before touching a `provision_oidc_user/4` test here)
 
-  Every REQ-019 test also runs `async: true` — each test constructs its own tenant
-  row(s) inside its own sandboxed transaction (rolled back after the test), so even the
-  tests that deliberately reuse the literal `"bpm-default"` slug/realm (per
-  `test/specs/REQ-019.md`'s "What 'seeded default tenant' means here") do not collide
-  with each other across tests.
+  REQ-063 (`lib/letflow/design/req063-identity-tables-schema-per-tenant.md`) moved
+  `users`/`groups`/`tenant_role` out of the `public` schema into each tenant's own
+  provisioned Postgres schema, and `Identity.provision_oidc_user/3` became `/4` with a
+  required `opts :: [prefix: String.t()]` fourth argument (design §5b). Every test that
+  exercises `provision_oidc_user/4` now needs a **real, provisioned tenant schema**
+  (`Letflow.TenantProvisioning.provision_tenant_schema/1` +
+  `replay_migrations/2`) to pass as that `prefix:`, not a bare `Ecto.UUID.generate()`
+  tenant_id with an implicit `public`-schema `users` table — that table no longer
+  exists post-cutover (this branch already ran the drop migration; see
+  `mix ecto.migrate` output referenced in `test/specs/REQ-063.md`).
+
+  `Ecto.Migrator` (which `replay_migrations/2` calls) "cannot run dynamically during
+  test under `Ecto.Adapters.SQL.Sandbox`, as the sandbox has to share a single
+  connection across processes" (`deps/ecto_sql/lib/ecto/migrator.ex`'s own moduledoc,
+  flagged for TEST-DESIGNER at `lib/letflow/design/req022-tenant-schema-provisioning.md`
+  §6's testing-environment caveat). This file follows the same
+  `Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)` + manual `on_exit/1` cleanup
+  pattern `test/letflow/tenant_provisioning_test.exs` and `test/letflow/event_store_test.exs`
+  already establish for exactly this reason — `provisioned_tenant!/0` below mirrors
+  those files' `provisioned_tenant/1` helper. Every `describe` block in this file that
+  provisions a tenant therefore runs under real (non-rolled-back) Postgres state,
+  cleaned up explicitly in `on_exit/1`.
+
+  **This file is now `async: false` for its entire module** (ExUnit's `async` setting
+  is module-wide, not per-test) — unlike its pre-REQ-063 version, which had
+  `provision_oidc_user/3` tests running `async: true` against `public`. Every
+  `provision_oidc_user/4` test now needs `:auto` mode, which is only safe when no other
+  `async: true` module's connection could be disturbed; `async: false` combined with
+  ExUnit's documented full-drain-before-sync-modules scheduling (see
+  `tenant_provisioning_test.exs`'s moduledoc for the source-level citation this file
+  relies on rather than re-deriving) makes that safe. The REQ-019 `Tenant`-only tests
+  (which never touch `users`/`groups`/`tenant_role` — `Tenant` stays in `public`
+  permanently per Decision 0006 D3) do not themselves need `:auto` mode, but must share
+  this module's `async: false` setting regardless since it is module-wide; they still
+  run inside DataCase's normal rolled-back sandbox connection (no `:auto` switch of
+  their own), so nothing about their isolation changes.
+
+  The concurrent-race test (acceptance criterion 3) needs `provisioned_tenant!/0`'s
+  migration replay first (which needs `:auto` mode, same as every other test in this
+  file), but then switches BACK to `:manual` mode + a fresh checkout for the race
+  itself — restoring the original `Sandbox.allow/3`-based two-process-same-connection
+  mechanism design §9 specifies, once the schema/migration prerequisite is already real
+  committed Postgres state that survives the mode switch. See that test's own inline
+  comment for the full reasoning and why a genuine `:auto`-mode two-independent-
+  connections race was tried first and rejected (it surfaces a real, separate,
+  pre-existing gap in `Identity.insert_or_fetch/4`'s conflict handling — filed as
+  ISS-0047, not silently fixed or masked here — rather than reproducing this specific
+  acceptance criterion's intended proof).
   """
 
-  use Letflow.DataCase, async: true
+  use Letflow.DataCase, async: false
+
+  import Ecto.Query
 
   alias Letflow.Identity
   alias Letflow.Identity.Tenant
   alias Letflow.Identity.User
   alias Letflow.Oidc.IdentityContext
   alias Letflow.Oidc.JitProvisioningConfig
+  alias Letflow.TenantProvisioning
+  alias Letflow.TenantProvisioning.Registration
 
   # Every test builds its own unique identity triple — no shared hardcoded
   # tenant_id/realm/external_id, per test_developer_guide.md's "no test pollution"
@@ -95,74 +134,113 @@ defmodule Letflow.IdentityTest do
     )
   end
 
-  describe "provision_oidc_user/3 — idempotency (acceptance criterion 1)" do
-    test "calling provision_oidc_user/3 twice with the same identity returns the same user.id, created: true then false" do
-      tenant_id = Ecto.UUID.generate()
+  # ---------------------------------------------------------------------------------
+  # REQ-063 tenant-schema provisioning helper — mirrors
+  # test/letflow/tenant_provisioning_test.exs's and test/letflow/event_store_test.exs's
+  # established `provisioned_tenant/1` pattern (see this file's own moduledoc for why
+  # :auto mode + manual on_exit/1 cleanup is required here instead of the normal
+  # rolled-back sandbox transaction). Returns the tenant struct and its schema_name
+  # (the value `provision_oidc_user/4`'s `opts[:prefix]` needs).
+  # ---------------------------------------------------------------------------------
+  defp provisioned_tenant!(oidc_mode \\ :disabled) do
+    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+
+    tenant =
+      insert_tenant!(
+        %{slug: unique_slug(), display_name: "REQ-063 Test Tenant"},
+        oidc_mode
+      )
+
+    on_exit(fn ->
+      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
+        {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
+        {:error, :invalid_tenant_id} -> :ok
+      end
+
+      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
+      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
+    end)
+
+    assert {:ok, %Registration{schema_name: schema_name}} =
+             TenantProvisioning.provision_tenant_schema(tenant.id)
+
+    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+
+    %{tenant: tenant, schema_name: schema_name}
+  end
+
+  describe "provision_oidc_user/4 — idempotency (acceptance criterion 1)" do
+    test "calling provision_oidc_user/4 twice with the same identity returns the same user.id, created: true then false" do
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
       ctx = identity_context()
       config = jit_config()
 
       assert {:ok, %{user: %User{id: id1}, created: true}} =
-               Identity.provision_oidc_user(ctx, tenant_id, config)
+               Identity.provision_oidc_user(ctx, tenant.id, config, prefix: schema_name)
 
       assert {:ok, %{user: %User{id: id2}, created: false}} =
-               Identity.provision_oidc_user(ctx, tenant_id, config)
+               Identity.provision_oidc_user(ctx, tenant.id, config, prefix: schema_name)
 
       assert id1 == id2
     end
 
     test "three consecutive calls all resolve to the same user.id" do
-      tenant_id = Ecto.UUID.generate()
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
       ctx = identity_context()
       config = jit_config()
 
       assert {:ok, %{user: %User{id: id1}, created: true}} =
-               Identity.provision_oidc_user(ctx, tenant_id, config)
+               Identity.provision_oidc_user(ctx, tenant.id, config, prefix: schema_name)
 
       assert {:ok, %{user: %User{id: id2}, created: false}} =
-               Identity.provision_oidc_user(ctx, tenant_id, config)
+               Identity.provision_oidc_user(ctx, tenant.id, config, prefix: schema_name)
 
       assert {:ok, %{user: %User{id: id3}, created: false}} =
-               Identity.provision_oidc_user(ctx, tenant_id, config)
+               Identity.provision_oidc_user(ctx, tenant.id, config, prefix: schema_name)
 
       assert id1 == id2
       assert id2 == id3
     end
 
-    test "different (tenant_id, realm, external_id) triples create distinct rows" do
+    test "different (tenant_id, realm, external_id) triples in different tenant schemas create distinct rows" do
+      %{tenant: tenant_a, schema_name: schema_a} = provisioned_tenant!()
+      %{tenant: tenant_b, schema_name: schema_b} = provisioned_tenant!()
       config = jit_config()
 
       ctx_a = identity_context()
       ctx_b = identity_context()
 
       assert {:ok, %{user: %User{id: id_a}, created: true}} =
-               Identity.provision_oidc_user(ctx_a, Ecto.UUID.generate(), config)
+               Identity.provision_oidc_user(ctx_a, tenant_a.id, config, prefix: schema_a)
 
       assert {:ok, %{user: %User{id: id_b}, created: true}} =
-               Identity.provision_oidc_user(ctx_b, Ecto.UUID.generate(), config)
+               Identity.provision_oidc_user(ctx_b, tenant_b.id, config, prefix: schema_b)
 
       assert id_a != id_b
     end
   end
 
-  describe "provision_oidc_user/3 — fixed literals (acceptance criterion 2)" do
+  describe "provision_oidc_user/4 — fixed literals (acceptance criterion 2)" do
     test "the inserted row has the fixed OIDC-only password_hash and auth_source: :oidc" do
-      tenant_id = Ecto.UUID.generate()
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
       ctx = identity_context()
 
       assert {:ok, %{user: %User{id: id}, created: true}} =
-               Identity.provision_oidc_user(ctx, tenant_id, jit_config())
+               Identity.provision_oidc_user(ctx, tenant.id, jit_config(), prefix: schema_name)
 
       # Re-select from Postgres directly, rather than trusting the in-memory reply —
       # matches process_instance_test.exs's "every successful transition is persisted
-      # to Postgres" persistence-test convention.
-      persisted = Repo.get(User, id)
+      # to Postgres" persistence-test convention. Must pass prefix: here too, per
+      # REQ-063 — Repo.get/3 with no prefix would look in public, which no longer has
+      # this row.
+      persisted = Repo.get(User, id, prefix: schema_name)
 
       assert persisted.password_hash == "__OIDC_ONLY__"
       assert persisted.auth_source == :oidc
     end
 
     test "password_hash and auth_source are not caller-overridable" do
-      tenant_id = Ecto.UUID.generate()
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
       # IdentityContext has no password_hash/auth_source field at all, so this
       # exercises that the changeset always sets fixed values regardless of what's
       # in the context — there is no input surface here that COULD supply an
@@ -170,19 +248,36 @@ defmodule Letflow.IdentityTest do
       ctx = identity_context(%{email: "override-attempt@example.com"})
 
       assert {:ok, %{user: %User{id: id}}} =
-               Identity.provision_oidc_user(ctx, tenant_id, jit_config())
+               Identity.provision_oidc_user(ctx, tenant.id, jit_config(), prefix: schema_name)
 
-      persisted = Repo.get(User, id)
+      persisted = Repo.get(User, id, prefix: schema_name)
       assert persisted.password_hash == "__OIDC_ONLY__"
       assert persisted.auth_source == :oidc
     end
   end
 
-  describe "provision_oidc_user/3 — concurrent-insert race (acceptance criterion 3)" do
+  describe "provision_oidc_user/4 — concurrent-insert race (acceptance criterion 3)" do
     test "a genuine concurrent race between two tasks resolves to exactly one created row, both callers succeed" do
-      tenant_id = Ecto.UUID.generate()
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
       ctx = identity_context()
       config = jit_config()
+
+      # REQ-063 update: provisioned_tenant!/0 above needed Sandbox :auto mode for its
+      # migration replay (Ecto.Migrator's own documented single-shared-connection
+      # incompatibility, see this file's moduledoc) -- but the ORIGINAL pre-REQ-063
+      # version of this test relied specifically on :manual mode + Sandbox.allow/3,
+      # which routes both spawned Tasks through the SAME underlying sandboxed
+      # connection/transaction (nested savepoints), matching design §9's exact
+      # guidance ("Ecto.Adapters.SQL.Sandbox `:manual` mode with `Sandbox.allow/3`").
+      # Switching back to :manual mode and taking a fresh checkout here, AFTER the
+      # schema/migration work above has already completed under :auto, restores that
+      # exact intended mechanism for the race itself -- the tenant schema created
+      # above survives the mode switch (it's real, committed Postgres state, not
+      # sandboxed), so this checkout's rolled-back transaction only ever touches the
+      # User row this test itself inserts.
+      Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :manual)
+      :ok = Ecto.Adapters.SQL.Sandbox.checkout(Letflow.Repo)
+      Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, {:shared, self()})
 
       parent = self()
 
@@ -190,7 +285,7 @@ defmodule Letflow.IdentityTest do
         Ecto.Adapters.SQL.Sandbox.allow(Repo, parent, self())
 
         # Barrier: make both tasks announce readiness, then wait for the parent's
-        # go-ahead, so both reach Identity.provision_oidc_user/3's own select-first
+        # go-ahead, so both reach Identity.provision_oidc_user/4's own select-first
         # step at effectively the same time and genuinely race into the INSERT ...
         # ON CONFLICT path together, rather than being accidentally serialized by
         # Task.async/1's own scheduling.
@@ -202,7 +297,7 @@ defmodule Letflow.IdentityTest do
           5000 -> flunk("barrier release never arrived")
         end
 
-        Identity.provision_oidc_user(ctx, tenant_id, config)
+        Identity.provision_oidc_user(ctx, tenant.id, config, prefix: schema_name)
       end
 
       task1 = Task.async(run_task)
@@ -239,79 +334,104 @@ defmodule Letflow.IdentityTest do
       assert is_boolean(created2)
 
       # Exactly one row exists in the database for this identity afterward.
-      import Ecto.Query
-
       rows =
         User
         |> where(
-          tenant_id: ^tenant_id,
+          tenant_id: ^tenant.id,
           external_realm: ^ctx.realm,
           external_id: ^ctx.external_user_id
         )
-        |> Repo.all()
+        |> Repo.all(prefix: schema_name)
 
       assert length(rows) == 1
+
+      # Switch back to :auto mode BEFORE this test ends -- provisioned_tenant!/0's
+      # on_exit/1 cleanup (DROP SCHEMA / DELETE FROM tenants) needs a real, checked-in
+      # connection to run against; leaving this test's manual-mode checkout open past
+      # the test body would orphan it once this test process exits, and on_exit/1's
+      # own Repo calls would then fail trying to check out a connection whose owner
+      # process is already gone (confirmed empirically while drafting this test).
+      Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
     end
   end
 
-  describe "provision_oidc_user/3 — jit_config.enabled == false (design-flagged, not a numbered AC)" do
+  describe "provision_oidc_user/4 — jit_config.enabled == false (design-flagged, not a numbered AC)" do
     test "jit_config.enabled == false returns {:error, :jit_disabled} without writing to the database" do
-      tenant_id = Ecto.UUID.generate()
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
       ctx = identity_context()
       config = jit_config(%{enabled: false})
 
-      assert {:error, :jit_disabled} = Identity.provision_oidc_user(ctx, tenant_id, config)
-
-      import Ecto.Query
+      assert {:error, :jit_disabled} =
+               Identity.provision_oidc_user(ctx, tenant.id, config, prefix: schema_name)
 
       rows =
         User
         |> where(
-          tenant_id: ^tenant_id,
+          tenant_id: ^tenant.id,
           external_realm: ^ctx.realm,
           external_id: ^ctx.external_user_id
         )
-        |> Repo.all()
+        |> Repo.all(prefix: schema_name)
 
       assert rows == []
     end
   end
 
-  describe "provision_oidc_user/3 — username cross-tenant collision (design §4.4/OQ-3, design-flagged)" do
-    test "two different tenants with the same preferred_username: the second JIT provisioning call fails with a username uniqueness changeset error" do
+  describe "provision_oidc_user/4 — username collision, same tenant schema vs different tenant schemas (REQ-063 acceptance criteria)" do
+    test "two users with the same username in the SAME tenant schema: the second JIT provisioning call fails with a username uniqueness changeset error" do
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
       shared_username = "collide-#{System.unique_integer([:positive])}"
       config = jit_config()
-
-      tenant_a = Ecto.UUID.generate()
-      tenant_b = Ecto.UUID.generate()
 
       ctx_a = identity_context(%{preferred_username: shared_username})
       ctx_b = identity_context(%{preferred_username: shared_username})
 
       assert {:ok, %{user: %User{}, created: true}} =
-               Identity.provision_oidc_user(ctx_a, tenant_a, config)
+               Identity.provision_oidc_user(ctx_a, tenant.id, config, prefix: schema_name)
 
       assert {:error, %Ecto.Changeset{} = changeset} =
-               Identity.provision_oidc_user(ctx_b, tenant_b, config)
+               Identity.provision_oidc_user(ctx_b, tenant.id, config, prefix: schema_name)
 
       assert %{username: ["has already been taken"]} = errors_on(changeset)
     end
+
+    test "two users with the same username in TWO DIFFERENT tenant schemas both succeed (per-tenant-unique, not global-unique — Decision 0006 §3.1)" do
+      %{tenant: tenant_a, schema_name: schema_a} = provisioned_tenant!()
+      %{tenant: tenant_b, schema_name: schema_b} = provisioned_tenant!()
+      shared_username = "collide-#{System.unique_integer([:positive])}"
+      config = jit_config()
+
+      ctx_a = identity_context(%{preferred_username: shared_username})
+      ctx_b = identity_context(%{preferred_username: shared_username})
+
+      assert {:ok, %{user: %User{id: id_a}, created: true}} =
+               Identity.provision_oidc_user(ctx_a, tenant_a.id, config, prefix: schema_a)
+
+      assert {:ok, %{user: %User{id: id_b}, created: true}} =
+               Identity.provision_oidc_user(ctx_b, tenant_b.id, config, prefix: schema_b)
+
+      assert id_a != id_b
+
+      # Both rows genuinely persisted, one per tenant schema, same username value.
+      assert %User{username: ^shared_username} = Repo.get(User, id_a, prefix: schema_a)
+      assert %User{username: ^shared_username} = Repo.get(User, id_b, prefix: schema_b)
+    end
   end
 
-  describe "provision_oidc_user/3 — display_name fallback (design §4.3, design-flagged)" do
+  describe "provision_oidc_user/4 — display_name fallback (design §4.3, design-flagged)" do
     test "display_name nil in the identity context falls back to preferred_username on the persisted row" do
-      tenant_id = Ecto.UUID.generate()
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
       ctx = identity_context(%{display_name: nil, preferred_username: "fallback-username"})
 
       assert {:ok, %{user: %User{id: id}}} =
-               Identity.provision_oidc_user(ctx, tenant_id, jit_config())
+               Identity.provision_oidc_user(ctx, tenant.id, jit_config(), prefix: schema_name)
 
-      persisted = Repo.get(User, id)
+      persisted = Repo.get(User, id, prefix: schema_name)
       assert persisted.display_name == "fallback-username"
     end
 
     test "display_name present in the identity context is stored verbatim" do
-      tenant_id = Ecto.UUID.generate()
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
 
       ctx =
         identity_context(%{
@@ -320,9 +440,9 @@ defmodule Letflow.IdentityTest do
         })
 
       assert {:ok, %{user: %User{id: id}}} =
-               Identity.provision_oidc_user(ctx, tenant_id, jit_config())
+               Identity.provision_oidc_user(ctx, tenant.id, jit_config(), prefix: schema_name)
 
-      persisted = Repo.get(User, id)
+      persisted = Repo.get(User, id, prefix: schema_name)
       assert persisted.display_name == "Explicit Display Name"
     end
   end
@@ -377,7 +497,6 @@ defmodule Letflow.IdentityTest do
       assert {:error, %Ecto.Changeset{} = changeset} = result
       assert %{idp_realm_id: ["has already been taken"]} = errors_on(changeset)
 
-      import Ecto.Query
       rows = Tenant |> where(idp_realm_id: ^shared_realm) |> Repo.all()
       assert length(rows) == 1
     end

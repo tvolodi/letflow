@@ -1,0 +1,59 @@
+{
+  "handoff_id": "b2c3d4e5-0063-4a00-9f01-req063step06",
+  "run_id": "WF02-REQ063-20260818",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ063-20260818/step-06-doc-updater.json",
+  "created_at": "2026-08-18T12:30:38Z",
+  "started_at": "2026-08-18T12:30:38Z",
+  "completed_at": "2026-08-18T12:33:02Z",
+  "status": "PASS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-063"],
+    "requirement_text": {
+      "REQ-063": "Execute Decision 0006's D1: relocate users, groups and tenant_role from the public schema into each tenant's own Postgres schema via :prefix. RELEASE-VALIDATOR PASSed (Step 5), independently re-verifying all six acceptance criteria and re-running mix test (770/770)."
+    },
+    "related_handoff_ids": ["b2c3d4e5-0063-4a00-9f01-req063step05"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "README.md",
+      "docs/migration/decisions/0006-identity-tables-schema-per-tenant.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "1. Flip REQ-063's status in docs/requirements.yaml from in_progress to done.\n2. Append a done event to docs/status/requirement_status.yaml (real UTC timestamp from the clock, not memory) -- note the started event for this requirement was already logged at 2026-08-18T08:48:48Z.\n3. Check README.md: does this requirement's change alter any documented current behavior (the ASCII state diagram, the curl/mix flow described in 'Running it')? REQ-063 moved users/groups/tenant_role tables and added a Mix task (mix letflow.copy_identity_tables) plus a new context module (Letflow.IdentityMigration) -- these are internal schema/migration changes with no new HTTP route and no gen_statem/process change, matching the precedent RELEASE-VALIDATOR and prior DOC-UPDATER runs (e.g. REQ-043) have already established for similarly internal-only requirements this stage: leave README.md untouched unless you find a concrete reason this one differs.\n4. RELEASE-VALIDATOR already updated docs/migration/decisions/0006-identity-tables-schema-per-tenant.md's Status line from 'proposed' to 'decided' with D1-shipped/D2-pending wording during Step 5 -- confirm that's still accurate (D1 is now genuinely done; D2/REQ-064 is still pending) and do not re-do or contradict that edit.\n5. This requirement's own acceptance criteria did not name any other docs/migration/stage-N-*.md file requiring an update -- confirm by re-reading REQ-063's six acceptance criteria directly from docs/requirements.yaml, don't assume.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-063 status flipped in_progress -> done",
+      "docs/status/requirement_status.yaml has a new done event with a real UTC timestamp",
+      "README.md checked directly against what actually shipped, left untouched or updated with an explicit reason stated either way",
+      "decision 0006's already-updated Status line confirmed accurate, not re-edited unnecessarily",
+      "Every file actually touched is named explicitly in artifacts_out, not just 'docs updated'"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-063 flipped in_progress -> done in docs/requirements.yaml. Appended a done event to docs/status/requirement_status.yaml with a real clock timestamp (2026-08-18T12:31:58Z). README.md's 'What's here today'/'Running it' sections read directly and confirmed unaffected (still describe the original ProcessInstance/InstanceSupervisor/Router pilot slice; REQ-063 is internal identity-schema/migration work with no new HTTP route or gen_statem change) -- left untouched, matching the REQ-043 precedent. Decision 0006's Status line (already updated by RELEASE-VALIDATOR at Step 5) read and confirmed accurate as-is -- D1 genuinely shipped, D2/REQ-064 genuinely still pending -- not re-edited. REQ-063's six acceptance criteria re-read directly from docs/requirements.yaml; none names a docs/migration/stage-N-*.md file, so no stage doc update was required.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ063-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ063-20260818",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH to verify artifacts_out against git diff and proceed to Step Final (merge)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,10 +1,12 @@
 defmodule Letflow.Identity do
   @moduledoc """
-  Context module for the identity domain. `provision_oidc_user/3` (below) ports
+  Context module for the identity domain. `provision_oidc_user/4` (below) ports
   the JIT (just-in-time) user-provisioning orchestration from
   `src/oidc/jit_provisioning.zig` together with the actual upsert from
   `src/identity/registry.zig`'s `createOrGetJitOidcUser` (lines ~843-912),
-  operating on REQ-015's `users` schema (`Letflow.Identity.User`).
+  operating on REQ-015's `users` schema (`Letflow.Identity.User`), now relocated
+  per-tenant-schema per REQ-063 (`opts[:prefix]` selects the target schema — see
+  `provision_oidc_user/4`'s own @doc).
 
   `resolve_tenant_by_realm/1`, `resolve_realm_by_tenant/1`, and
   `verify_realm_ownership/2` (below) port `src/oidc/realm_tenant_binding.zig`
@@ -37,6 +39,15 @@ defmodule Letflow.Identity do
           | Ecto.Changeset.t()
           | term()
 
+  @typedoc """
+  Keyword opts threaded into every `Repo` call in `provision_oidc_user/4`'s call
+  chain, matching `lib/letflow/definitions.ex`'s established `opts :: [prefix:
+  String.t()]` convention. `:prefix` is required (no default) — see
+  `provision_oidc_user/4`'s own @doc for why a missing prefix must never silently
+  fall back to the (post-REQ-063) no-longer-authoritative `public` schema.
+  """
+  @type opts :: [prefix: String.t()]
+
   @doc """
   Idempotent upsert keyed on `(tenant_id, external_realm, external_id)`:
   returns the existing user if one already matches that triple, otherwise
@@ -44,6 +55,15 @@ defmodule Letflow.Identity do
   caller (REQ-019/021's territory) — it is not read from
   `identity_context.tenant_id` (the token-claimed hint, not the authoritative
   value) and not re-derived or cross-checked here.
+
+  `opts[:prefix]` (required, no default) selects which tenant schema's `users`
+  table this call targets — REQ-063 moved `users`/`groups`/`tenant_role` out of
+  the public schema into each tenant's own schema, so a caller that omitted this
+  would resolve against `public`, which no longer holds `users` once the
+  Decision 0006 D1 cutover's drop migration has run. The one caller
+  (`Letflow.Plugs.AuthPipeline.provision_user/3`) derives this value via
+  `Letflow.TenantProvisioning.schema_name_for_tenant/1` on its own
+  already-resolved `tenant_id`, never from a caller-supplied/external value.
 
   Returns `{:ok, %{user: user, created: created?}}` on success, where
   `created?` is `true` only when this call actually inserted the row (`false`
@@ -55,17 +75,19 @@ defmodule Letflow.Identity do
   @spec provision_oidc_user(
           identity_context :: IdentityContext.t(),
           tenant_id :: Ecto.UUID.t(),
-          jit_config :: JitProvisioningConfig.t()
+          jit_config :: JitProvisioningConfig.t(),
+          opts :: opts()
         ) ::
           {:ok, %{user: User.t(), created: boolean()}}
           | {:error, provisioning_error()}
   def provision_oidc_user(
         %IdentityContext{} = identity_context,
         tenant_id,
-        %JitProvisioningConfig{} = jit_config
+        %JitProvisioningConfig{} = jit_config,
+        opts
       ) do
     if jit_config.enabled do
-      upsert_by_external_identity(identity_context, tenant_id, jit_config)
+      upsert_by_external_identity(identity_context, tenant_id, jit_config, opts)
     else
       {:error, :jit_disabled}
     end
@@ -139,17 +161,19 @@ defmodule Letflow.Identity do
   # pattern (that would change the concurrency semantics R-Co's own
   # implementation chose) — see
   # lib/letflow/design/req018-jit-provisioning.md §3.
-  defp upsert_by_external_identity(identity_context, tenant_id, jit_config) do
-    case get_by_external_identity(tenant_id, identity_context) do
+  defp upsert_by_external_identity(identity_context, tenant_id, jit_config, opts) do
+    case get_by_external_identity(tenant_id, identity_context, opts) do
       %User{} = existing ->
         {:ok, %{user: existing, created: false}}
 
       nil ->
-        insert_or_fetch(identity_context, tenant_id, jit_config)
+        insert_or_fetch(identity_context, tenant_id, jit_config, opts)
     end
   end
 
-  defp insert_or_fetch(identity_context, tenant_id, jit_config) do
+  defp insert_or_fetch(identity_context, tenant_id, jit_config, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
     attrs = %{
       tenant_id: tenant_id,
       external_realm: identity_context.realm,
@@ -166,7 +190,8 @@ defmodule Letflow.Identity do
            on_conflict: :nothing,
            conflict_target:
              {:unsafe_fragment, "(external_realm, external_id) WHERE external_id IS NOT NULL"},
-           returning: true
+           returning: true,
+           prefix: prefix
          ) do
       {:ok, %User{id: id} = inserted} ->
         # Empirically verified against real Postgres (see handoff notes):
@@ -183,10 +208,10 @@ defmodule Letflow.Identity do
         # The only reliable way to tell them apart is to check whether a row
         # with our own freshly-generated id actually exists in the database —
         # Repo.get/2 on the primary key is the cheapest form of that check.
-        if Repo.get(User, id) do
+        if Repo.get(User, id, prefix: prefix) do
           {:ok, %{user: inserted, created: true}}
         else
-          re_select_on_conflict(tenant_id, identity_context)
+          re_select_on_conflict(tenant_id, identity_context, opts)
         end
 
       {:error, %Ecto.Changeset{}} = error ->
@@ -194,8 +219,8 @@ defmodule Letflow.Identity do
     end
   end
 
-  defp re_select_on_conflict(tenant_id, identity_context) do
-    case get_by_external_identity(tenant_id, identity_context) do
+  defp re_select_on_conflict(tenant_id, identity_context, opts) do
+    case get_by_external_identity(tenant_id, identity_context, opts) do
       %User{} = existing ->
         {:ok, %{user: existing, created: false}}
 
@@ -204,11 +229,17 @@ defmodule Letflow.Identity do
     end
   end
 
-  defp get_by_external_identity(tenant_id, identity_context) do
-    Repo.get_by(User,
-      tenant_id: tenant_id,
-      external_realm: identity_context.realm,
-      external_id: identity_context.external_user_id
+  defp get_by_external_identity(tenant_id, identity_context, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    Repo.get_by(
+      User,
+      [
+        tenant_id: tenant_id,
+        external_realm: identity_context.realm,
+        external_id: identity_context.external_user_id
+      ],
+      prefix: prefix
     )
   end
 end

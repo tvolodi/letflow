@@ -1,0 +1,66 @@
+{
+  "handoff_id": "b2c3d4e5-0063-4a00-9f01-req063step05",
+  "run_id": "WF02-REQ063-20260818",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ063-20260818/step-05-release-validation.json",
+  "created_at": "2026-08-18T12:17:45Z",
+  "started_at": "2026-08-18T12:17:45Z",
+  "completed_at": "2026-08-18T12:28:50Z",
+  "status": "PASS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-063"],
+    "requirement_text": {
+      "REQ-063": "Execute Decision 0006's D1 (docs/migration/decisions/0006-identity-tables-schema-per-tenant.md): relocate users, groups and tenant_role from the public schema into each tenant's own Postgres schema via :prefix. Full acceptance criteria list is in docs/requirements.yaml's REQ-063 entry -- read it there directly (not copied here, this handoff is intentionally short; see handoffs/WF02-REQ063-20260818/step-03-test-designer.json's requirement_text for the verbatim list if a shorter read is preferred)."
+    },
+    "related_handoff_ids": [
+      "b2c3d4e5-0063-4a00-9f01-req063step01",
+      "b2c3d4e5-0063-4a00-9f01-req063step01b",
+      "b2c3d4e5-0063-4a00-9f01-req063step02a",
+      "b2c3d4e5-0063-4a00-9f01-req063step02c",
+      "b2c3d4e5-0063-4a00-9f01-req063step02d",
+      "b2c3d4e5-0063-4a00-9f01-req063step03",
+      "b2c3d4e5-0063-4a00-9f01-req063step03b",
+      "b2c3d4e5-0063-4a00-9f01-req063step04"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "test/reports/report-2026-08-18-WF02-REQ063-20260818.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently re-run mix test yourself -- do not trust TEST-RUNNER's report alone, per your own standard procedure and this run's own precedent (every gate in this run has independently re-derived rather than trusted the prior step, several times catching real gaps that way -- keep that discipline here too). Then confirm every one of REQ-063's six acceptance criteria (read them directly from docs/requirements.yaml, not from any prior handoff's paraphrase) is satisfied against the actual shipped code/tests, not against any step's summary.\n\nThis run has an unusually deep verification history worth being aware of, not repeating: the test-design gate (Step 3b) FAILed twice and required two full rework cycles on a real Sandbox/connection-pooling bug before passing on the third attempt -- if you want the detail, handoffs/WF02-REQ063-20260818/step-03b-test-design-gate.json's three result blocks (only the last is current; read git log on that file if you want the full history) document a real, subtle bug that was found and fixed, not glossed over. Your own check should still independently verify current-state correctness, not re-litigate that history.\n\nCheck docs/requirements.yaml and docs/status/requirement_status.yaml for staleness relative to what actually shipped. Also confirm: decision 0006 (docs/migration/decisions/0006-identity-tables-schema-per-tenant.md) is the record this requirement executes against -- check whether its own text needs any update now that D1 has actually shipped (e.g. does it still read as a forward-looking proposal in places where it should now read as done), though note decision records aren't normally revised after the fact just because their content shipped -- use judgement on whether anything here actually needs updating versus is fine as historical rationale.\n\nTwo incidental-finding issues were filed during this run and are NOT this run's job to resolve, just confirm they're correctly out of scope: docs/issues/ISS-0047.yaml (a pre-existing Identity.insert_or_fetch/4 race on username, found during test rework) and docs/issues/ISS-0048.yaml (pre-existing orphaned Postgres schemas, found during the same rework's verification).",
+    "acceptance_criteria": [
+      "mix test independently re-run, real output quoted, matches or explains any discrepancy from the reported 770/770",
+      "Each of REQ-063's six acceptance criteria checked explicitly against the actual code/test files, not against any prior step's summary",
+      "docs/requirements.yaml and docs/status/requirement_status.yaml checked for staleness relative to what actually shipped -- name any drift found",
+      "ISS-0047 and ISS-0048 confirmed correctly out of scope for this requirement, not masking an unmet acceptance criterion",
+      "PASS routes to DOC-UPDATER; FAIL identifies the blocking issue and which agent it routes back to"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-ran the full suite from a clean DB (mix ecto.reset, MIX_ENV=test mix compile --warnings-as-errors: clean, then mix test): Result: 770 passed (5 properties, 765 tests), 0 failures -- matches TEST-RUNNER's report-2026-08-18-WF02-REQ063-20260818.yaml exactly, independently re-derived, not copied. No @tag :skip/:pending anywhere in test/. Re-ran the four REQ-063-specific files in isolation too (identity_migration_test.exs, auth_pipeline_test.exs, user_test.exs, identity_test.exs): 54 passed, 0 failures.\n\nAll six of REQ-063's own acceptance criteria (read directly from docs/requirements.yaml's REQ-063 entry, not from any handoff paraphrase -- that entry lists 6 substantive criteria plus a 7th 'mix test green' criterion) independently re-verified against real code/DB, not against any step's summary:\n\n1. PASS -- ran a real verification script (provision_tenant_schema/1 + replay_migrations/2 for two fresh tenants), queried information_schema.tables directly: both tenant schemas contain users/groups/tenant_role; public contains zero of the three post-cutover. Not taken from ELIXIR-DEV's Step 2a claim.\n\n2. PASS -- independently ran `mix ecto.drop && mix ecto.create && mix ecto.migrate` (plain, no :prefix) against a genuinely clean DB myself and queried information_schema.tables across all schemas: zero rows for users/groups/tenant_role anywhere. Confirms all three migrations' `if prefix() do` guards (read directly in priv/repo/migrations/20260819000001/2/3_*.exs) actually no-op under a plain migrate, not just that the guard code is present.\n\n3. PASS -- same verification script: inserted a user with username 'dupcheck' into tenant schema 1, another user with the identical username into tenant schema 2 (both :ok), then a second 'dupcheck' insert into tenant schema 1 again -- rejected with Postgrex unique_violation on users_username_index. Matches identity_test.exs/user_test.exs's 3a/3b test pairs (also re-ran and passed).\n\n4. PASS -- tenants_idp_realm_id_partial_index lives on the public tenants table (Decision 0006 D3 keeps it there permanently; REQ-063 never touches it). Pre-existing test identity_test.exs:484 'creating a second tenant with an already-bound idp_realm_id is rejected, not silently overwritten' covers exactly this, re-ran and passed. Correctly unmodified by this run per REQ-063's own scope boundary.\n\n5. PASS -- read test/letflow/identity_migration_test.exs directly: copy_all_tenants/0 aggregate-count test (row-count equality across two tenants), preserved-id spot-check test, idempotent-recopy test, orphaned-tenant_role-abort test, plus three DropLegacyPublicIdentityTables guard tests (skip-on-uncopied-row, proceed-once-copied, idempotent-rerun). Also independently re-read the shipped drop migration's guard SQL (20260819000004) -- per-row EXISTS check by id per tenant, skips the DROP entirely for all three tables if any row is missing anywhere, not a weaker count-only check.\n\n6. PASS -- read lib/letflow/plugs/auth_pipeline.ex directly: call/2's step order is token -> realm -> tenant -> ownership-guard -> provision_user/3 (unchanged, matching REQ-063's own scope boundary that no pipeline rework was needed); provision_user/3 (line 173) resolves TenantProvisioning.schema_name_for_tenant/1 and threads prefix: schema_name into Identity.provision_oidc_user/4. auth_pipeline_test.exs's 'a valid bearer token flows through the full pipeline...' test does `Repo.get(User, user_id, prefix: schema_name)` as its own proof the row landed in the tenant schema, not just that the HTTP response looked right. Re-ran, passed.\n\n7. PASS -- see mix test re-run above, real output quoted, 770/770, matches reported.\n\nStaleness check: docs/requirements.yaml REQ-063 status is `in_progress` (correct -- DOC-UPDATER has not run yet, this is the expected pre-DOC-UPDATER state, not drift). docs/status/requirement_status.yaml has exactly one REQ-063 event (`started`, from ORCH) -- also correct, no `done` event exists yet because this gate is what authorizes DOC-UPDATER to write it. No drift found in either file.\n\nISS-0047 and ISS-0048 confirmed correctly out of scope: ISS-0047 is a pre-existing Identity.insert_or_fetch/4 on_conflict gap from REQ-018's original design (only newly exercisable because REQ-063's fixture rewrite needed :auto sandbox mode for replay_migrations/2) -- none of REQ-063's 6 criteria concern concurrent-race JIT provisioning, and the affected test was correctly restored to its original :manual-mode form (still proving REQ-018's own AC3) rather than weakened. ISS-0048 (orphaned tenant_*/sandbox_* schemas) was confirmed by its own discoverer as a stable pre-existing population with zero delta attributable to this run's changes -- unrelated test-suite hygiene debt, not a REQ-063 regression. Neither issue's presence weakens any of the 6 PASS verdicts above.\n\nDecision record check: docs/migration/decisions/0006-identity-tables-schema-per-tenant.md's Status line read 'proposed (awaiting REVIEWER sign-off)' -- stale, since both REVIEWER (commit 1947854) and SECURITY-REVIEWER (commit 5aff48d) already signed off on REQ-063, and every other decision record in docs/migration/decisions/ uses the 'decided (REQ-XXX)' convention post-sign-off. Updated it to 'decided. D1 shipped (REQ-063, REVIEWER + SECURITY-REVIEWER sign-off, RELEASE-VALIDATOR PASS). D2 not yet executed -- pending REQ-064.' -- phrased to avoid falsely implying D2 (tenant_id drop, still `pending` in requirements.yaml) has also shipped. Rest of the document's body (design rationale in section 3/4, and the explicitly-forward-looking D4 cross-tenant-lookup mentions in section 7) left untouched -- correctly still describes genuinely future/unshipped work, not stale.",
+    "artifacts_out": [
+      "docs/migration/decisions/0006-identity-tables-schema-per-tenant.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ063-20260818",
+      "commit_sha_list": ["ea7739c0b53b70319e8bba6e8ce307e63e0665c4"],
+      "remote_branch": "origin/feature/WF02-REQ063-20260818",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

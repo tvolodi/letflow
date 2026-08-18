@@ -1,0 +1,52 @@
+{
+  "handoff_id": "b3f2a1c0-0001-4a1a-9c00-000000000002",
+  "run_id": "WF02-REQ044-20260818",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ044-20260818/step-01-code-designer.json",
+  "created_at": "2026-08-18T06:02:07Z",
+  "started_at": "2026-08-18T06:02:07Z",
+  "completed_at": "2026-08-18T06:11:33Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-044"],
+    "requirement_text": {
+      "REQ-044": "Port the core value types and top-level dispatch of src/engine/transition.zig's transition() (per src/design/engine.md \"Section EE-02: Pure Transition Function\", L442) as a pure Letflow module -- no Ecto.Repo call, no I/O of any kind, no clock read, matching transition.zig's own header contract (\"All state is passed in; all output is returned. No DB, no network, no clock\") and the same purity bar REQ-028 already established for the graph validator. This requirement builds the SKELETON and its non-gateway node transitions only. The gateway bodies are separate requirements (REQ-050 exclusive, REQ-051 parallel split/join) that plug into the dispatch this requirement defines -- transition.zig is 3323 lines and cannot be one agent turn. Port: - InstanceState (engine.md section EE-02 1): instance_id, status (ACTIVE/COMPLETED/CANCELLED/ERROR, reusing REQ-043's Ecto.Enum values), tokens, variables (a plain Elixir map -- Zig's std.json.ObjectMap and its explicit allocator-ownership contract have no Elixir equivalent; note that divergence in the moduledoc rather than silently inventing an ownership discipline, the same way REQ-029 handled GraphError.OutOfMemory). - Token (engine.md section EE-02 2): node_id, branch_id, token_id (stable identity, added by R-Co's ISS-105), waiting_child_instance_id. - TransitionEvent and PendingEvent (the tagged union transition.zig declares for EE-06/EE-07 split/join payloads) as tagged tuples or structs. - transition/3 itself: (definition_snapshot, instance_state, event) -> {:ok, new_instance_state, pending_events} | {:error, reason}. Determinism is the load-bearing property (EE-02 AC2, and XC-04 kernel determinism per transition.zig's header): identical inputs always produce identical outputs. An unknown event type returns an error state, never raises (EE-02 AC5). A token sitting on a node id absent from the snapshot graph returns an error state naming the inconsistency (EE-02 edge case). - The non-gateway node transitions: token entering a HUMAN_TASK node appends to pending_task_nodes (the signal REQ-047 turns into a tasks row -- engine.md section EE-03's \"the signal itself is the guard\" note: START/END/gateway nodes never appear there, so the persistence layer needs no node-type guard of its own); token entering an END node moves the instance toward COMPLETED. Reuses REQ-028's DefinitionGraph/GraphNode/GraphEdge/NodeType structs directly rather than redefining them (lib/letflow/definitions/graph.ex), since engine.md names src/definition/graph.zig as this module's dependency. IMPORTANT NOTE FROM ORCH: REQ-044's depends_on in docs/requirements.yaml is [REQ-028, REQ-029] (both status: done) -- NOT REQ-043. REQ-043 (the instance_projections/tasks/tokens DB schema) is still status: pending / not yet implemented by anyone. Since this requirement is explicitly a PURE module (no Ecto.Repo call of any kind), it must NOT depend on REQ-043's actual migration or Ecto.Schema modules existing -- it only needs to choose InstanceState.status values (ACTIVE/COMPLETED/CANCELLED/ERROR) that are source-compatible with what REQ-043's future Ecto.Enum will use (plain atoms, not a reference to a not-yet-existing schema module). State this explicitly in the design as a resolved dependency-ordering note, not silently."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": ["handoffs/WF02-REQ044-20260818/step-00-elixir-dev-gitsetup.json"],
+    "owned_modules": ["lib/letflow/engine/"]
+  },
+  "task": {
+    "description": "Produce the design artefact for REQ-044 per WF-02 Step 1 (docs/agents/workflows/WF-02_requirement_implementation.md). Read docs/guides/backend_developer_guide.md, docs/migration/stage-3-instance-engine.md in full, and lib/letflow/definitions/graph.ex (the DefinitionGraph/GraphNode/GraphEdge/NodeType structs this module reuses) before writing the design. Also skim lib/letflow/design/req028-graph-structural-validator.md and lib/letflow/design/req029-*.md (if present) for the established purity-bar precedent (no Repo call, no I/O) this requirement must match. Write lib/letflow/design/req044-transition-kernel.md covering: InstanceState struct (fields per requirement_text), Token struct, TransitionEvent/PendingEvent tagged-tuple shapes, transition/3's full @spec (definition_snapshot, instance_state, event -> {:ok, new_instance_state, pending_events} | {:error, reason}), the five node-type dispatch cases (START, END, HUMAN_TASK, EXCLUSIVE_GATEWAY, PARALLEL_GATEWAY -- gateway cases stubbed/deferred explicitly since REQ-050/REQ-051 fill their bodies, but the dispatch skeleton must route to them), the unknown-event-type error case, and the token-on-missing-node error case (must name the offending node_id). State explicitly in the design: (a) the Zig ObjectMap allocator-ownership divergence note (verbatim moduledoc text to include), (b) the REQ-043 dependency-ordering note (verbatim, per requirement_text above), (c) which module reuses REQ-028's graph structs and how (no redefinition).",
+    "acceptance_criteria": [
+      "transition/3's function signature and its entire call graph contain zero Repo calls, zero HTTP/file access, and zero DateTime.utc_now/System.system_time reads, confirmed by inspection and stated in the moduledoc",
+      "calling transition/3 twice with the identical (snapshot, state, event) triple returns byte-identical results, demonstrated by an explicit test rather than asserted",
+      "an unknown/unrecognised event type returns an error result, and a state whose token sits on a node_id absent from the snapshot graph returns an error result naming the offending node_id -- neither raises or crashes",
+      "a token entering a HUMAN_TASK node adds that node to pending_task_nodes, while tokens entering START, END, EXCLUSIVE_GATEWAY and PARALLEL_GATEWAY nodes do not -- each of the five node-type cases has its own explicit test",
+      "the moduledoc states explicitly that Zig's std.json.ObjectMap allocator-ownership contract is deliberately not ported (Elixir maps are immutable values), rather than leaving the divergence unremarked",
+      "the module reuses REQ-028's existing graph structs from lib/letflow/definitions/graph.ex rather than defining a second copy of DefinitionGraph/GraphNode/GraphEdge/NodeType"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req044-transition-kernel.md: Letflow.Engine.InstanceState (instance_id/status/tokens/variables/pending_task_nodes) and Letflow.Engine.Token (node_id/branch_id/token_id/waiting_child_instance_id) as their own files under lib/letflow/engine/, reusing Letflow.Definitions.Graph/Node/node_type() from REQ-028 directly with no redefinition. transition/3's full @spec (definition_snapshot, instance_state, event -> {:ok, new_instance_state, pending_events} | {:error, reason}) plus the 5-way node-type dispatch (START advances the token; END moves the instance toward :completed once all tokens are gone; HUMAN_TASK appends to pending_task_nodes; EXCLUSIVE_GATEWAY/PARALLEL_GATEWAY are named stub functions returning {:error, {:gateway_not_yet_implemented, ...}} as REQ-050/051's plug-in point) plus a catch-all for SERVICE_TASK/TIMER/SUB_PROCESS/unknown node types (totality). Both explicit error paths (unknown event type; token on a node_id absent from the snapshot, naming the node_id) are non-raising by construction. Includes the two verbatim moduledoc-text blocks the handoff named (Zig ObjectMap allocator-ownership divergence, and the REQ-043 dependency-ordering resolution confirming InstanceState.status's 4 atoms are source-compatible with Letflow.EventStore.InstanceProjection's already-shipped Ecto.Enum without depending on REQ-043 itself). Purity/determinism argued in full with a grep/mix xref verification method matching REQ-028/029's precedent. 6 open questions flagged explicitly (START multi-edge tie-break, END's multi-token completion rule, pending_task_nodes clearing ownership, initial InstanceState construction belonging to REQ-045, transition_event/pending_event as open extension points) rather than silently resolved. No implementation code anywhere -- signatures, @specs, and type/field tables only. Full acceptance-criteria and handoff-item traceability tables included (§13).",
+    "artifacts_out": ["lib/letflow/design/req044-transition-kernel.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ044-20260818",
+      "commit_sha_list": ["c94165f7f5c154ed88a985b5d542719118247cff"],
+      "remote_branch": "origin/feature/WF02-REQ044-20260818",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

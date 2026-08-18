@@ -1,0 +1,68 @@
+{
+  "handoff_id": "c3d4e5f6-0064-4a00-9f01-req064step03",
+  "run_id": "WF02-REQ064-20260818",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ064-20260818/step-03-test-designer.json",
+  "created_at": "2026-08-18T13:32:25Z",
+  "started_at": "2026-08-18T13:32:25Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-064"],
+    "requirement_text": {
+      "REQ-064": "Execute Decision 0006's D2: drop tenant_id from ten schema-isolated business tables (events, events_archive, instance_projections, process_definitions, tokens, tasks, promotion_reviews, promotion_assertion_runs, users, groups). Full acceptance criteria (from docs/requirements.yaml, verbatim): none of the ten tables has a tenant_id column, confirmed via information_schema.columns in a provisioned tenant schema; the four D3 tables (tenant_schemas, solution_pack_installs, solution_pack_artefact_bases, pack_update_resolutions) still have tenant_id WITH their FK intact, confirmed the same way plus a test that a bad tenant_id is still rejected; the promotion_assertion_runs idempotency contract still holds under the simplified single-column index (same key twice in one tenant schema yields one row, same key in a different tenant schema yields a separate row); the promotion_reviews plan_digest uniqueness still holds per-tenant under the simplified index; no lib/ module references a tenant_id field on any of the ten tables (grep-confirmed), and TenantProvisioning.tenant_id_for_schema_name/1 itself still exists and is still tested; every moduledoc that described tenant_id on a dropped-from table has been updated (grep for 'never caller-supplied' and 'intra-schema column' should find nothing stale); mix test is green with no skipped/excluded tests."
+    },
+    "related_handoff_ids": [
+      "c3d4e5f6-0064-4a00-9f01-req064step01",
+      "c3d4e5f6-0064-4a00-9f01-req064step02a",
+      "c3d4e5f6-0064-4a00-9f01-req064step02c",
+      "c3d4e5f6-0064-4a00-9f01-req064step02d"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req064-drop-tenant-id.md",
+      "priv/repo/migrations/20260820000001_20260820000010",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/identity_migration.ex"
+    ],
+    "owned_modules": ["test/letflow", "test/specs"]
+  },
+  "task": {
+    "description": "ELIXIR-DEV's own Step 2a implementation report states ~20 test files fail to compile because they construct struct literals with a tenant_id: field against schemas this requirement just stripped it from (e.g. %InstanceProjection{tenant_id: ...}) -- this is NOT a regression to diagnose, it's the expected, designed consequence of the field removal, same shape as REQ-063's own ~39-test fallout. ORCH independently confirmed 20 affected files via grep before writing this handoff: test/letflow/definitions/{export_import,migrations,promotion_conflict,promotion_plan,promotion_review_migration,promotion_review_store,promotion_review,promotion,schemas,snapshot_store}_test.exs, test/letflow/engine/{migrations,schemas}_test.exs, test/letflow/event_store/{migrations,schemas}_test.exs, test/letflow/event_store_test.exs, test/letflow/identity/{group,tenant_role,user}_test.exs, test/letflow/identity_test.exs, test/letflow/role_registry_test.exs.\n\nYour job: (1) fix every one of these ~20 files' fixtures/struct literals to drop the tenant_id: key on the ten affected schemas (Engine.TokenRecord, Engine.Task, EventStore.Event/ArchivedEvent/InstanceProjection, Definitions.ProcessDefinition/PromotionReview/PromotionAssertionRun, Identity.User/Group) -- do NOT touch tenant_id references on the four D3 tables' schemas or on tenant_role (which never had the field), those are correct as-is. (2) run the full suite yourself and confirm these fixes actually compile and pass, with real output quoted -- do not assume from the file list alone. Given REQ-063's own test-rework history in this same codebase involved real, subtle bugs hiding behind what looked like simple mechanical fixture updates, do not treat this as pure mechanical busywork -- actually run it and watch for surprises.\n\nBeyond fixing the ~20 pre-existing breaks, write NEW tests covering acceptance criteria not yet exercised by any existing test: (a) the promotion_assertion_runs idempotency contract under the SIMPLIFIED single-column index -- same idempotency_key twice within one tenant schema yields one row (on_conflict resolves it), same key in a DIFFERENT tenant schema yields a separate row (proving the index is genuinely per-schema now, not accidentally still enforcing something cross-tenant); (b) the promotion_reviews plan_digest uniqueness under its own simplified index, same two-part proof; (c) a test that a bad/nonexistent tenant_id is still rejected by the FK on at least one D3 table (e.g. solution_pack_installs), confirming D3's FK integrity wasn't accidentally touched; (d) confirm via information_schema.columns queries (against a real provisioned tenant schema, following this codebase's established pattern from REQ-063's own tests) that all ten tables genuinely lack tenant_id and all four D3 tables genuinely still have it.\n\nAlso verify: TenantProvisioning.tenant_id_for_schema_name/1 itself is still tested (check the existing test suite covers it, it should be unaffected by this requirement since only its stamping CALL SITES were removed, not the function). Grep for the now-stale moduledoc phrases 'never caller-supplied' and 'intra-schema column' across lib/ to confirm none remain (this should already be true per REVIEWER's Step 2d PASS, but confirm it yourself as part of writing this run's test coverage, not just trust the prior gate).\n\nDo NOT write tests for anything beyond REQ-064's own ten-table scope -- the four D3 tables' existing coverage should already be adequate, you're only adding the FK-rejection proof named above, not re-testing everything about them.",
+    "acceptance_criteria": [
+      "All ~20 pre-existing test-compile failures fixed (tenant_id: removed from struct literals on the ten affected schemas only), confirmed by re-running mix test yourself with real output quoted",
+      "No new test failures introduced by the fixture changes",
+      "A test exists proving promotion_assertion_runs' simplified idempotency_key index still resolves same-key-same-tenant to one row and same-key-different-tenant to two rows",
+      "A test exists proving promotion_reviews' simplified plan_digest index behaves the same way",
+      "A test exists proving a bad tenant_id is still rejected by a D3 table's FK",
+      "A test exists confirming via information_schema.columns that all ten tables lack tenant_id and all four D3 tables retain it",
+      "TenantProvisioning.tenant_id_for_schema_name/1 confirmed still tested",
+      "grep confirms no lib/ moduledoc still says 'never caller-supplied' or 'intra-schema column' about a dropped-from table",
+      "No test depends on wall-clock time or unseeded randomness",
+      "Test fixtures use per-test unique data, not shared hardcoded tenant/schema names"
+    ]
+  },
+  "result": {
+    "status": "",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ064-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ064-20260818",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

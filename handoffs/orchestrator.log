@@ -564,3 +564,5 @@
 2026-08-18T07:21:16Z | PASS | WF-02 | WF02-REQ049-20260818 | ELIXIR-DEV -> ORCH | Step 2a: variable_merge.ex created, mix compile/format clean, self-review via scratch test (6/6 passing, deleted). Committed 033c00a.
 2026-08-18T07:22:18Z | DISPATCH | WF-02 | WF02-REQ049-20260818 | ORCH -> SECURITY-REVIEWER | Step 2c hard gate.
 2026-08-18T07:23:17Z | PASS | WF-02 | WF02-REQ049-20260818 | SECURITY-REVIEWER -> ORCH | Step 2c: out of scope, no tenant-data path touched. Committed 360c09c.
+2026-08-18T07:23:54Z | DISPATCH | WF-02 | WF02-REQ049-20260818 | ORCH -> REVIEWER | Step 2d hard gate.
+2026-08-18T07:25:01Z | PASS | WF-02 | WF02-REQ049-20260818 | REVIEWER -> ORCH | Step 2d: idiomatic, no supervision concern, no scope creep. Batch-rejection semantics confirmed matching design (all-or-nothing, not a divergence). Committed a98434a.

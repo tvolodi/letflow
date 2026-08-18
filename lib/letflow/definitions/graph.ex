@@ -167,6 +167,117 @@ defmodule Letflow.Definitions.Graph do
   @type result :: %{valid: boolean(), violations: [Violation.t()]}
 
   @doc """
+  Converts a plain map (`%{"nodes" => [...], "edges" => [...]}` — a process
+  definition's stored `graph` column, or an instance snapshot's captured
+  `graph`) into a `%Graph{}` struct. Moved here, as a public function, from
+  `Letflow.Definitions`'s own private `graph_struct_from_map/1`
+  (`lib/letflow/design/req045-instance-start-engine-shell.md` §8) so
+  `Letflow.Engine.create/2` (REQ-045) can perform the identical conversion
+  without reaching across a module boundary into a private function — one
+  authoritative implementation, not a second private duplicate.
+  `Letflow.Definitions.create/2` and `activate/2` are refactored to call this
+  function instead of their own former private copy; behavior is unchanged.
+
+  An unrecognized `"node_type"` string maps to `:unknown_node_type` rather
+  than failing outright — this function's own structural validator
+  (`validate_graph/1`) is what actually rejects a node of that type, not
+  this conversion step. A missing/malformed `"nodes"`/`"edges"` list, or a
+  node/edge missing a required string field (`"id"`, and `"node_type"` for a
+  node or `"source"`/`"target"` for an edge), is `:error`.
+  """
+  @spec from_map(graph_map :: map()) :: {:ok, t()} | :error
+  def from_map(graph_map) when is_map(graph_map) and not is_struct(graph_map) do
+    with {:ok, nodes_raw} <- fetch_graph_list(graph_map, "nodes"),
+         {:ok, edges_raw} <- fetch_graph_list(graph_map, "edges"),
+         {:ok, nodes} <- build_graph_nodes(nodes_raw),
+         {:ok, edges} <- build_graph_edges(edges_raw) do
+      {:ok, %__MODULE__{nodes: nodes, edges: edges}}
+    else
+      _ -> :error
+    end
+  end
+
+  def from_map(_not_a_map), do: :error
+
+  @node_type_map %{
+    "START" => :START,
+    "END" => :END,
+    "HUMAN_TASK" => :HUMAN_TASK,
+    "SERVICE_TASK" => :SERVICE_TASK,
+    "EXCLUSIVE_GATEWAY" => :EXCLUSIVE_GATEWAY,
+    "PARALLEL_GATEWAY" => :PARALLEL_GATEWAY,
+    "TIMER" => :TIMER
+  }
+
+  defp fetch_graph_list(map, key) do
+    case Map.get(map, key) do
+      list when is_list(list) -> {:ok, list}
+      _ -> :error
+    end
+  end
+
+  defp build_graph_nodes(nodes_raw) do
+    nodes_raw
+    |> Enum.reduce_while({:ok, []}, fn node, {:ok, acc} ->
+      case build_graph_node(node) do
+        {:ok, built} -> {:cont, {:ok, [built | acc]}}
+        :error -> {:halt, :error}
+      end
+    end)
+    |> finish_graph_build()
+  end
+
+  defp build_graph_node(%{} = node) when not is_struct(node) do
+    with id when is_binary(id) <- Map.get(node, "id"),
+         node_type_str when is_binary(node_type_str) <- Map.get(node, "node_type") do
+      {:ok,
+       %Node{
+         id: id,
+         node_type: Map.get(@node_type_map, node_type_str, :unknown_node_type),
+         label: Map.get(node, "label"),
+         attributes: Map.get(node, "attributes")
+       }}
+    else
+      _ -> :error
+    end
+  end
+
+  defp build_graph_node(_not_a_map), do: :error
+
+  defp build_graph_edges(edges_raw) do
+    edges_raw
+    |> Enum.reduce_while({:ok, []}, fn edge, {:ok, acc} ->
+      case build_graph_edge(edge) do
+        {:ok, built} -> {:cont, {:ok, [built | acc]}}
+        :error -> {:halt, :error}
+      end
+    end)
+    |> finish_graph_build()
+  end
+
+  defp build_graph_edge(%{} = edge) when not is_struct(edge) do
+    with id when is_binary(id) <- Map.get(edge, "id"),
+         source when is_binary(source) <- Map.get(edge, "source"),
+         target when is_binary(target) <- Map.get(edge, "target") do
+      {:ok,
+       %Edge{
+         id: id,
+         source: source,
+         target: target,
+         condition: Map.get(edge, "condition"),
+         is_default: Map.get(edge, "is_default", false)
+       }}
+    else
+      _ -> :error
+    end
+  end
+
+  defp build_graph_edge(_not_a_map), do: :error
+
+  defp finish_graph_build({:ok, reversed_acc}), do: {:ok, Enum.reverse(reversed_acc)}
+  defp finish_graph_build(:error), do: :error
+
+  @doc """
   Runs all 8 named structural checks (CHK-01..CHK-08) against `graph` and
   returns every violation found — never short-circuits on the first failure
   (Key invariant 5; design doc §7.1). `result.valid == (result.violations == [])`

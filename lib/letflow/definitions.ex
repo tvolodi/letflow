@@ -876,7 +876,7 @@ defmodule Letflow.Definitions do
   end
 
   defp convert_graph(graph_map) do
-    case graph_struct_from_map(graph_map) do
+    case Graph.from_map(graph_map) do
       {:ok, graph} -> {:ok, graph}
       :error -> {:error, :graph_structure_invalid}
     end
@@ -1078,7 +1078,7 @@ defmodule Letflow.Definitions do
 
   defp run_service_scope_validator(%ProcessDefinition{graph: graph_map}, tenant_id, validator)
        when is_function(validator, 2) do
-    case graph_struct_from_map(graph_map) do
+    case Graph.from_map(graph_map) do
       {:ok, graph} ->
         case validator.(graph, tenant_id) do
           :ok -> :ok
@@ -1168,100 +1168,14 @@ defmodule Letflow.Definitions do
   end
 
   # -----------------------------------------------------------------------------------
-  # graph_struct_from_map/1 -- resolves req027-…md OQ-3 (design §5). Used by both
-  # create/2 (via convert_graph/1) and activate/2 (via run_service_scope_validator/3,
-  # only when a service_scope_validator hook is supplied).
+  # graph_struct_from_map/1 -- moved to Letflow.Definitions.Graph.from_map/1
+  # (lib/letflow/design/req045-instance-start-engine-shell.md §8, REQ-045):
+  # Letflow.Engine.create/2 needs the identical conversion and cannot call a
+  # private function across module boundaries, so this logic now lives once,
+  # on the struct's own module, rather than being duplicated a second time in
+  # Letflow.Engine. convert_graph/1 and run_service_scope_validator/3 above
+  # call Graph.from_map/1 directly; behavior is unchanged.
   # -----------------------------------------------------------------------------------
-
-  @node_type_map %{
-    "START" => :START,
-    "END" => :END,
-    "HUMAN_TASK" => :HUMAN_TASK,
-    "SERVICE_TASK" => :SERVICE_TASK,
-    "EXCLUSIVE_GATEWAY" => :EXCLUSIVE_GATEWAY,
-    "PARALLEL_GATEWAY" => :PARALLEL_GATEWAY,
-    "TIMER" => :TIMER
-  }
-
-  @spec graph_struct_from_map(graph_map :: map()) :: {:ok, Graph.t()} | :error
-  defp graph_struct_from_map(graph_map) do
-    with {:ok, nodes_raw} <- fetch_list(graph_map, "nodes"),
-         {:ok, edges_raw} <- fetch_list(graph_map, "edges"),
-         {:ok, nodes} <- build_nodes(nodes_raw),
-         {:ok, edges} <- build_edges(edges_raw) do
-      {:ok, %Graph{nodes: nodes, edges: edges}}
-    else
-      _ -> :error
-    end
-  end
-
-  defp fetch_list(map, key) do
-    case Map.get(map, key) do
-      list when is_list(list) -> {:ok, list}
-      _ -> :error
-    end
-  end
-
-  defp build_nodes(nodes_raw) do
-    nodes_raw
-    |> Enum.reduce_while({:ok, []}, fn node, {:ok, acc} ->
-      case build_node(node) do
-        {:ok, built} -> {:cont, {:ok, [built | acc]}}
-        :error -> {:halt, :error}
-      end
-    end)
-    |> finish_build()
-  end
-
-  defp build_node(%{} = node) when not is_struct(node) do
-    with id when is_binary(id) <- Map.get(node, "id"),
-         node_type_str when is_binary(node_type_str) <- Map.get(node, "node_type") do
-      {:ok,
-       %Graph.Node{
-         id: id,
-         node_type: Map.get(@node_type_map, node_type_str, :unknown_node_type),
-         label: Map.get(node, "label"),
-         attributes: Map.get(node, "attributes")
-       }}
-    else
-      _ -> :error
-    end
-  end
-
-  defp build_node(_not_a_map), do: :error
-
-  defp build_edges(edges_raw) do
-    edges_raw
-    |> Enum.reduce_while({:ok, []}, fn edge, {:ok, acc} ->
-      case build_edge(edge) do
-        {:ok, built} -> {:cont, {:ok, [built | acc]}}
-        :error -> {:halt, :error}
-      end
-    end)
-    |> finish_build()
-  end
-
-  defp build_edge(%{} = edge) when not is_struct(edge) do
-    with id when is_binary(id) <- Map.get(edge, "id"),
-         source when is_binary(source) <- Map.get(edge, "source"),
-         target when is_binary(target) <- Map.get(edge, "target") do
-      {:ok,
-       %Graph.Edge{
-         id: id,
-         source: source,
-         target: target,
-         condition: Map.get(edge, "condition"),
-         is_default: Map.get(edge, "is_default", false)
-       }}
-    else
-      _ -> :error
-    end
-  end
-
-  defp build_edge(_not_a_map), do: :error
-
-  defp finish_build({:ok, reversed_acc}), do: {:ok, Enum.reverse(reversed_acc)}
-  defp finish_build(:error), do: :error
 
   # -----------------------------------------------------------------------------------
   # rollback_definition_version/4 helpers (design §5, §6, §7)

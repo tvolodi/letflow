@@ -352,6 +352,37 @@ recovering the *same* interrupted branch independently can each do the
 check whether `main` already carries an equivalent record before re-filing
 one, not to just take the next free number on faith.
 
+## TEST-DESIGNER writing narratively-detailed `describe`/`test` names that exceed ExUnit's 255-char combined limit
+
+**Found:** 2026-08-18, ORCH session-start verification on `main` (commit `e8ef92d`,
+before ISS-0049's fix), `mix test` failed to compile entirely.
+
+Three `describe`/`test` string pairs, all from recent TEST-DESIGNER output for the
+REQ-063/REQ-064 (Decision 0006) work, packed full acceptance-criteria context inline
+into the names themselves — e.g. `describe "provision_oidc_user/4 — username
+collision, same tenant schema vs different tenant schemas (REQ-063 acceptance
+criteria)"` combined with an equally long `test "..."` string. ExUnit concatenates
+`"test " <> describe <> " " <> test_name` into one internal identifier and hard-caps
+it at 255 characters (`ExUnit.Case.validate_test_name/1`) — exceeding it is a
+`SystemLimitError` at compile time, not a warning, so it doesn't fail one test, it
+fails the whole file's compilation and blocks the entire suite (0 tests ran). See
+`docs/issues/ISS-0049.yaml` for the full incident; this is the third occurrence of
+this exact failure class in this project.
+
+**Why this is easy to miss:** writing a self-documenting test name feels like good
+practice, and each individual name looks reasonable in isolation in an editor — the
+255-char ceiling only bites when `describe` and `test` are summed together, which
+nothing in the file's own diff highlights.
+
+**Correct alternative:** keep `describe`/`test` names as a short label, not a
+restatement of the requirement's acceptance criteria — put the "why"/spec citation in
+a `#` comment above the test instead of in the name string. TEST-DESIGNER should keep
+combined `describe` + `test` name length comfortably under 200 characters (leaving
+margin for ExUnit's own `"test "` prefix and separator), and TEST-DESIGN-VALIDATOR
+should treat an unusually long describe/test pair as worth a manual length check
+before passing the gate, since `mix compile`/`mix test` failing to even start is the
+only signal today.
+
 **Correct alternative:** don't silently let the later-merged branch's name win by
 accident of rebase order. Confirm which module is already shipped and load-bearing
 on `main` (`grep -rl` its call sites — REQ-044's `Token` was aliased from

@@ -278,8 +278,8 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
   # prefix-validity guard before Repo.insert/2.
   # ---------------------------------------------------------------------------------
 
-  describe "insert_review/2 -- prefix validity is still checked, even though no tenant_id is stamped" do
-    test "plan.target_tenant_id disagreeing with opts[:prefix]'s real tenant has no bearing on where the row is written -- it is stored verbatim only inside serialised_plan" do
+  describe "insert_review/2 -- prefix validity still checked, no tenant_id stamped" do
+    test "disagreeing target_tenant_id doesn't affect row placement, only echoed in serialised_plan" do
       %{tenant_id: real_tenant_id, schema_name: schema_name} = provisioned_tenant()
 
       # Deliberately a DIFFERENT, unrelated tenant_id -- never provisioned, never

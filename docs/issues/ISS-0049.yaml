@@ -1,0 +1,45 @@
+id: ISS-0049
+title: "Full test suite failed to compile: three test names exceeded ExUnit's 255-char combined describe+test limit"
+discovered_by: ORCH
+discovered_in_run: hetzner-orch-session-20260818 (pre-task verification, before first queue claim)
+discovered_at: "2026-08-18T18:27:41Z"
+severity: BLOCKER
+tags:
+  - test-hygiene
+  - compile-error
+  - test-designer
+description: >
+  `mix test` failed to compile with `SystemLimitError` ("the computed name of a
+  test ... must be shorter than 255 characters") in three places, all introduced
+  by recent TEST-DESIGNER output for the REQ-063/REQ-064 (Decision 0006,
+  identity-tables-schema-per-tenant) work:
+    - test/letflow/definitions/promotion_review_store_test.exs:281-282
+      (describe + test combined ~247 visible chars, over limit with the
+      "test " prefix and separators ExUnit adds)
+    - test/letflow/identity_test.exs:378-379 (len=267)
+    - test/letflow/identity_test.exs:396 (len=263)
+
+  This blocked the entire suite (0 tests could run) on `main` at commit e8ef92d,
+  discovered before this session's first queue task claim while verifying repo
+  state per session-start protocol. Fixed directly by ORCH under
+  ORCHESTRATOR.md §10's sizing rule (test-file-only, string-shortening, no
+  assertion/behavior change, one describe/test pair per file touched) rather
+  than routing through a full WF-03 run, since it was blocking *every* future
+  run's ability to verify anything -- Unblock-Everything applies pre-task, not
+  just mid-run.
+
+  Fix: shortened the three describe/test name strings (kept the substantive
+  content, dropped redundant qualifiers) so each combined name is well under
+  255 chars. Verified via `mix test`: 772 tests, 0 failures, 5 properties, all
+  green post-fix.
+
+  Filed for audit-trail per "No Issue Left Local-Only" even though already
+  resolved -- this is the third occurrence of this exact failure class on this
+  project (long, narratively-detailed describe/test names describing full
+  acceptance-criteria context inline), so it's also being added to
+  docs/anti-patterns.md as a recurring pattern for TEST-DESIGNER to watch for.
+affected_files:
+  - test/letflow/definitions/promotion_review_store_test.exs
+  - test/letflow/identity_test.exs
+github_issue: null   # gh available and authenticated, but issue filed as already-resolved local record only per this project's convention of not opening GH issues for same-session self-resolved findings; open to filing on request
+status: resolved

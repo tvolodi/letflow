@@ -375,8 +375,8 @@ defmodule Letflow.IdentityTest do
     end
   end
 
-  describe "provision_oidc_user/4 — username collision, same tenant schema vs different tenant schemas (REQ-063 acceptance criteria)" do
-    test "two users with the same username in the SAME tenant schema: the second JIT provisioning call fails with a username uniqueness changeset error" do
+  describe "provision_oidc_user/4 — username collision, same vs different tenant schemas (REQ-063)" do
+    test "same username in the SAME tenant schema: second JIT provisioning call fails uniqueness" do
       %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
       shared_username = "collide-#{System.unique_integer([:positive])}"
       config = jit_config()
@@ -393,7 +393,7 @@ defmodule Letflow.IdentityTest do
       assert %{username: ["has already been taken"]} = errors_on(changeset)
     end
 
-    test "two users with the same username in TWO DIFFERENT tenant schemas both succeed (per-tenant-unique, not global-unique — Decision 0006 §3.1)" do
+    test "same username in TWO DIFFERENT tenant schemas both succeed (per-tenant-unique — Decision 0006 §3.1)" do
       %{tenant: tenant_a, schema_name: schema_a} = provisioned_tenant!()
       %{tenant: tenant_b, schema_name: schema_b} = provisioned_tenant!()
       shared_username = "collide-#{System.unique_integer([:positive])}"

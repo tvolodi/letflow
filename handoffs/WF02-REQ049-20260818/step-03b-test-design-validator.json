@@ -1,0 +1,52 @@
+{
+  "handoff_id": "e6f5d4c3-0001-4a1a-9c00-000000000007",
+  "run_id": "WF02-REQ049-20260818",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ049-20260818/step-03b-test-design-validator.json",
+  "created_at": "2026-08-18T07:31:59Z",
+  "started_at": "2026-08-18T07:31:59Z",
+  "completed_at": "2026-08-18T07:32:53Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-049"],
+    "requirement_text": {
+      "REQ-049": "Variable scoping and merge. 5 acceptance criteria plus whole-batch all-or-nothing rejection semantics."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": ["test/specs/REQ-049.md", "test/letflow/engine/variable_merge_test.exs"],
+    "owned_modules": ["lib/letflow/engine/"]
+  },
+  "task": {
+    "description": "WF-02 Step 3b hard gate. Read test/specs/REQ-049.md and test/letflow/engine/variable_merge_test.exs independently. Run mix test test/letflow/engine/variable_merge_test.exs yourself and confirm the actual pass count. Perform at least one real mutation check on a load-bearing assertion in lib/letflow/engine/variable_merge.ex -- e.g. break the whole-batch all-or-nothing rejection logic (make it merge non-rejected keys anyway), or break the VARIABLE_OVERWRITTEN event's old/new value order -- confirm the test(s) actually catch it, then revert cleanly.",
+    "acceptance_criteria": [
+      "Every acceptance criterion has >=1 runnable test targeting it -- no @tag :skip without a passing counterpart",
+      "No TODO: implement test left in the spec",
+      "Test fixtures use per-test unique data, no cross-test pollution",
+      "Tests are self-sufficient",
+      "No hardcoded secrets/connection strings",
+      "At least one real mutation-testing drill performed and reported: which line was mutated, which test(s) caught it, tree reverted cleanly afterward"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read test/specs/REQ-049.md and test/letflow/engine/variable_merge_test.exs directly (not via producer summary). Ran `mix test test/letflow/engine/variable_merge_test.exs` myself: 16 tests, 0 failures (seed 189604). All 5 ACs plus the whole-batch all-or-nothing semantics and the AC2 nil/%{} equivalence branch each map to >=1 concrete, runnable test in the file (spec's own coverage table cross-checked against the actual test names, all present verbatim). AC4 (validate_payload/3 reuse) is correctly documented as code-inspection-only (not runtime-testable) with its own re-run grep evidence in the spec, following the transition_test.exs precedent -- not a gap. No `@tag :skip` anywhere in the file. No 'TODO: implement test' in the spec (grepped, zero hits). Every test builds its own local `current`/`incoming`/`validations` fixtures inline -- no shared module-level mutable state, no cross-test pollution, each test independently runnable (verified no test references another test's data or ordering). No hardcoded secrets or connection strings (grepped for password/secret/api_key/token=/connstring/postgres:// patterns, zero hits) -- module is pure, no Repo/DB config anywhere. Mutation drill: edited lib/letflow/engine/variable_merge.ex's `find_rejection` rejection branch (merge/3, ~line 161) to also apply `new_keys` inserts into the returned map before returning {:rejected, ...} -- i.e. made the whole-batch all-or-nothing rejection leak the otherwise-unproblematic new-key insert instead of discarding the whole batch. Re-ran the same test file: 16 tests, 1 failure -- caught by exactly 'a batch with both a valid new key and a rejected overwrite key: neither lands' (test/letflow/engine/variable_merge_test.exs:170), asserting unchanged_variables == current failed with left: %{\"amount\" => 10, \"brand_new_key\" => \"should_never_land\"} vs right: %{\"amount\" => 10} -- exactly the defect this test was designed to catch, and no other test spuriously failed. Reverted the mutation (git diff on the file confirmed empty after revert) and re-ran: 16 tests, 0 failures again, tree clean. All Step 3b checks pass; no gaps found to route back to TEST-DESIGNER.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ049-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ049-20260818",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (Step 4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

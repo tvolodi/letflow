@@ -1042,17 +1042,17 @@
       "workflow_id": "WF-02",
       "requirement_ids": ["REQ-051"],
       "stage": "S3",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "owned_modules": ["lib/letflow/engine", "test/letflow/engine"],
       "lock_acquired_at": "2026-08-18T18:57:37Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 (git setup) COMPLETED -- branch feature/WF02-REQ051-20260818 pushed. Status flipped in_progress, started event logged.",
+      "lock_released_at": "2026-08-18T19:35:23Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (git merge) COMPLETED -- PR #182 squash-merged into main as 944afb65651085274e765254de6419c50042cf9d. Independently re-verified by ORCH: gh pr view 182 confirms state MERGED, mergedAt 2026-08-18T19:35:23Z; origin/main's HEAD matches; mix compile --warnings-as-errors clean.",
       "backfilled": false,
       "queue_task_id": 95,
       "queue_agent_id": "hetzner-wt2-orch",
       "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
-      "note": "REQ-051: parallel gateway split and join (transition.zig EE-06/EE-07) ported into REQ-044's transition dispatch. depends_on REQ-044, REQ-049 (both done). REQ-052 (instance cancellation) deliberately NOT a dependency -- its own description states the token-level cancelled-branch exclusion rule belongs to REQ-051's pure transition logic, REQ-052 only adds instance-level persistence later. Confirmed before starting rather than assuming the queue's depends_on list was complete."
+      "note": "REQ-051: parallel gateway split and join (transition.zig EE-06/EE-07) ported into REQ-044's transition dispatch. depends_on REQ-044, REQ-049 (both done). REQ-052 (instance cancellation) deliberately NOT a dependency -- its own description states the token-level cancelled-branch exclusion rule belongs to REQ-051's pure transition logic, REQ-052 only adds instance-level persistence later. Confirmed before starting rather than assuming the queue's depends_on list was complete. New Letflow.Engine.JoinCounter struct tracks per-join expected/received/cancelled branch sets purely (no process/GenServer). Design gate PASS (0 rework). Security review PASS (out of scope, pure module). Reviewer PASS, confirmed one pre-existing test's failure (REQ-044-era PARALLEL_GATEWAY stub assertion) was a correct, anticipated consequence of the design, not a regression -- TEST-DESIGNER retired/rewrote it. All 6 acceptance criteria covered by new tests in test/letflow/engine/parallel_gateway_test.exs, independently confirmed non-vacuous by TEST-DESIGN-VALIDATOR and RELEASE-VALIDATOR (line-by-line). Full suite 780 tests/0 failures pre-merge. Step Final's rebase (branch was 42 commits behind after concurrent REQ-050/ISS-0047 merges) hit one real semantic conflict in transition.ex's transition_error() type union (REQ-050 and REQ-051 both added variants) -- composed both sets rather than picking a side, ORCH independently verified both REQ-050's and REQ-051's variants are present post-merge and the full suite (821 tests) passes. Also composed append-only bookkeeping conflicts (requirement_status.yaml, registry.json, orchestrator.log) chronologically."
     }
   ]
 }

@@ -72,4 +72,4 @@ affected_files:
   - test/letflow/definitions/service_scope_validator_test.exs
   - priv/repo/migrations/20260816163103_create_event_type_registry.exs
 github_issue: https://github.com/tvolodi/letflow/issues/166
-status: open
+status: in_progress

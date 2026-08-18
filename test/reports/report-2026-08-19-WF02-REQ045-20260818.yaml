@@ -1,0 +1,53 @@
+run_id: WF02-REQ045-20260818
+step: WF-02 Step 4
+agent: TEST-RUNNER
+date: 2026-08-19
+branch: feature/WF02-REQ045-20260818
+commit: 1840484dc110f86d4d93198b08db9b00aafc2c3f
+requirement: REQ-045
+scope: EE-01 instance-start (lib/letflow/engine.ex, test/letflow/engine_test.exs)
+retry_of: prior WF-02 Step 4 pass (recorded in this same file, now superseded) which found
+  two failures (AC1 END-first-node completion, OQ-1a gateway guard) and routed them to
+  ELIXIR-DEV. This run verifies rework commit 1840484 ("fix(WF02-REQ045): Engine.create/2
+  dispatches the landing node, not just the START hop").
+
+full_suite:
+  command: mix test
+  duration_seconds: 202.2
+  result: "797/797 passed (5 properties, 792 tests)"
+  failed: 0
+
+isolated_run:
+  command: mix test test/letflow/engine_test.exs
+  duration_seconds: 9.1
+  result: "20/20 passed"
+  failed: 0
+
+pre_existing_failures_check:
+  performed: false
+  reason: >
+    Not applicable — full suite is 100% green, nothing to distinguish as pre-existing.
+
+previously_reported_failures:
+  - id: AC1
+    prior_status: FAIL (current_nodes left as ["end"] instead of [] on immediate-completion
+      to an END node)
+    this_run_status: PASS — confirmed passing in both the full suite and the isolated
+      engine_test.exs run.
+  - id: OQ-1a
+    prior_status: FAIL (gateway-first-node activation was not rejected;
+      Engine.create/2 returned {:ok, ...} instead of
+      {:error, {:activation_failed, {:gateway_not_yet_implemented, ...}}})
+    this_run_status: PASS — confirmed passing in both the full suite and the isolated
+      engine_test.exs run.
+
+docker_compose: "letflow-postgres-1 running on localhost:5462 (started via docker compose up -d)"
+
+verdict: PASS
+verdict_detail: >
+  Full suite: 797/797 passed (5 properties, 792 tests), 0 failures. Isolated
+  test/letflow/engine_test.exs run: 20/20 passed, 0 failures. Both previously-failing tests
+  (AC1 END-first-node completion, OQ-1a gateway-not-yet-implemented guard) now pass following
+  ELIXIR-DEV's rework commit 1840484. No regressions observed elsewhere in the suite. This
+  report is the current record for run WF02-REQ045-20260818 and supersedes the stale FAIL
+  report previously at this same path.

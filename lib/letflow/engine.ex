@@ -90,6 +90,7 @@ defmodule Letflow.Engine do
   alias Letflow.Definitions.Graph
   alias Letflow.Definitions.SnapshotStore
   alias Letflow.Engine.InstanceState
+  alias Letflow.Engine.TaskActivation
   alias Letflow.Engine.Token
   alias Letflow.Engine.TokenRecord
   alias Letflow.Engine.Transition
@@ -229,12 +230,14 @@ defmodule Letflow.Engine do
     instance_id = Ecto.UUID.generate()
 
     with {:ok, _snapshot} <- create_snapshot(instance_id, definition, prefix),
-         {:ok, new_instance_state} <- activate(instance_id, definition, initial_variables) do
+         {:ok, graph, new_instance_state} <-
+           activate(instance_id, definition, initial_variables) do
       persist(
         instance_id,
         definition,
         initial_variables,
         correlation_key,
+        graph,
         new_instance_state,
         attrs,
         prefix
@@ -283,7 +286,10 @@ defmodule Letflow.Engine do
       # raw node count without any cycle being involved.
       hop_limit = length(graph.nodes) * 4 + 10
 
-      advance_until_stable(graph, instance_state, [token_id], hop_limit)
+      case advance_until_stable(graph, instance_state, [token_id], hop_limit) do
+        {:ok, new_instance_state} -> {:ok, graph, new_instance_state}
+        {:error, reason} -> {:error, reason}
+      end
     end
   end
 
@@ -381,6 +387,7 @@ defmodule Letflow.Engine do
          definition,
          initial_variables,
          correlation_key,
+         graph,
          new_instance_state,
          attrs,
          prefix
@@ -411,6 +418,19 @@ defmodule Letflow.Engine do
     |> Multi.run(:token_record, fn repo, _changes ->
       insert_token_records(repo, instance_id, new_instance_state.tokens, prefix)
     end)
+    |> TaskActivation.append_multi(
+      instance_id,
+      graph,
+      # create/2's own call site always starts from a freshly-constructed
+      # InstanceState (pending_task_nodes: []), so every entry in
+      # new_instance_state.pending_task_nodes is "newly pending" by
+      # construction (req047 design §5.1) -- a future EE-04 caller is
+      # expected to pass that instance's own pending_task_nodes value, read
+      # at the start of its own call, instead of [].
+      [],
+      new_instance_state,
+      prefix
+    )
     |> Multi.run(:event, fn _repo, _changes ->
       append_instance_started_event(
         instance_id,
@@ -422,7 +442,13 @@ defmodule Letflow.Engine do
       )
     end)
     |> Multi.run(:finalize, fn repo, %{instance_projection: projection} ->
-      finalize_instance_projection(repo, projection, new_instance_state.status, prefix)
+      finalize_instance_projection(
+        repo,
+        projection,
+        new_instance_state.status,
+        prefix,
+        instance_id
+      )
     end)
     |> Repo.transaction()
     |> interpret_create_result(
@@ -566,19 +592,40 @@ defmodule Letflow.Engine do
   # `completed_at` is set here (not at M1) since this is the one place the
   # row's terminal status actually becomes true, matching
   # `InstanceProjection.terminal?/1`'s own :completed/:cancelled framing.
-  defp finalize_instance_projection(_repo, %InstanceProjection{} = projection, :active, _prefix) do
+  defp finalize_instance_projection(
+         _repo,
+         %InstanceProjection{} = projection,
+         :active,
+         _prefix,
+         _instance_id
+       ) do
     {:ok, projection}
   end
 
-  defp finalize_instance_projection(repo, %InstanceProjection{} = projection, :completed, prefix) do
+  defp finalize_instance_projection(
+         repo,
+         %InstanceProjection{} = projection,
+         :completed,
+         prefix,
+         instance_id
+       ) do
     attrs = %{status: :completed, completed_at: DateTime.utc_now()}
 
     projection
     |> InstanceProjection.update_changeset(attrs)
     |> repo.update(prefix: prefix)
     |> case do
-      {:ok, %InstanceProjection{} = updated} -> {:ok, updated}
-      {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
+      {:ok, %InstanceProjection{} = updated} ->
+        # req047 design §8 -- the named SCH-03 timer-cancellation hook,
+        # called here (still inside this open transaction) immediately
+        # after the instance_projections row's status is confirmed flipped
+        # to :completed, so a future S6 implementation that performs a real
+        # DB write participates in this same atomic commit/rollback.
+        :ok = TaskActivation.cancel_pending_timers(instance_id, prefix)
+        {:ok, updated}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error, changeset}
     end
   end
 

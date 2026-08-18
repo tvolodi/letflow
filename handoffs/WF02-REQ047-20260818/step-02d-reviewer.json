@@ -1,0 +1,50 @@
+{
+  "handoff_id": "a8d6b4c7-1a6f-4d8d-ef5a-6c7d8e9f0a1b",
+  "run_id": "WF02-REQ047-20260818",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ047-20260818/step-02d-reviewer.json",
+  "created_at": "2026-08-18T21:56:49Z",
+  "started_at": "2026-08-18T21:57:34Z",
+  "completed_at": "2026-08-18T21:57:34Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-047"],
+    "requirement_text": {
+      "REQ-047": "Task activation persistence -- new Letflow.Engine.TaskActivation module, wired into Letflow.Engine.persist/8's Ecto.Multi. See lib/letflow/design/req047-task-activation-persistence.md for full design; SECURITY-REVIEWER already PASSed Step 2c (see step-02c handoff)."
+    },
+    "related_handoff_ids": ["f7c5a3b6-0f5e-4c7c-de4f-5b6c7d8e9f0a"],
+    "artifacts_in": ["lib/letflow/engine/task_activation.ex", "lib/letflow/engine.ex", "test/letflow/engine_test.exs", "docs/issues/ISS-0051.yaml"],
+    "owned_modules": ["lib/letflow/engine/", "lib/letflow/instance*", "priv/repo/migrations/"]
+  },
+  "task": {
+    "description": "Run WF-02 Step 2d's idiom review: read the branch diff (git diff main...HEAD), check against .claude/agents/reviewer.md's four questions (idiomatic vs. crutch, supervision integrity, type-safety gaps, scope creep), and against docs/anti-patterns.md's documented entries. This diff also fixes an unrelated pre-existing compile blocker (ISS-0051, test/letflow/engine_test.exs's 255-char test-name limit) -- confirm that fix is genuinely mechanical (name shortening only, no assertion/behavior change) and in scope per Unblock-Everything, not scope creep.",
+    "acceptance_criteria": [
+      "No crutch pattern (raw SQL where Ecto suffices, bypassing the Multi transaction, etc.)",
+      "No supervision-tree change (this requirement should not touch process_instance.ex/instance_supervisor.ex/application.ex)",
+      "No scope creep beyond REQ-047's design and the mechanical ISS-0051 fix",
+      "Consistent with docs/migration/decisions/, especially 0006 (no tenant_id reintroduced)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-047 (Letflow.Engine.TaskActivation, wired into persist/7's Ecto.Multi via append_multi/6) reviewed against the four idiom-review questions. (1) No gen_statem/GenServer crutch -- this is pure Ecto.Multi.run/3 composition inside the caller's already-open transaction; TaskActivation.append_multi/6 makes zero Repo calls of its own (INV-EE47-7), matching the EventStore.append/2 / SnapshotStore.create/3 pattern already established. (2) Supervision untouched -- git diff main...HEAD touches zero files under lib/letflow/process_instance.ex, lib/letflow/instance_supervisor.ex, or lib/letflow/application.ex; per-instance isolation via Letflow.InstanceSupervisor is unaffected. (3) No new type-safety gap found: assignee_type/assignee_ref resolution (resolve_assignee/1) reads directly off Graph.Node.attributes with no invented defaults, and Task.status is excluded from insert_changeset/2's cast list so every row is PENDING by construction -- nothing here needs a docs/issues/ type-safety filing. (4) No scope creep: cancel_pending_timers/2 is a documented named no-op hook explicitly deferred to S6 (matches stage-3-instance-engine.md's stated pattern of a named hook over a partial implementation), and TaskActivation builds no node-type re-validation or group-membership logic ahead of what REQ-047's own design calls for. Verified against docs/migration/decisions/0006: lib/letflow/engine/task.ex's own moduledoc documents 'No tenant_id column (Decision 0006 D2)', and neither task_activation.ex nor the engine.ex diff introduces a tenant_id field anywhere (grep confirms the only tenant_id references in the diff are engine.ex's pre-existing reject_tenant_id/1 validation, unrelated to this table). Checked docs/anti-patterns.md's ISS-0051 fix in test/letflow/engine_test.exs: confirmed genuinely mechanical -- only the describe/test name strings were shortened (same class as ISS-0030/0033/0040/0049, this project's known 255-char ExUnit SystemLimitError ceiling); the two `assert doc =~ ...` assertion bodies inside the test are byte-for-byte unchanged, and ISS-0051.yaml documents it as pre-existing (reproduces via git stash on pre-REQ-047 tree) and blocking under Unblock-Everything, not new REQ-047 scope. No blocking findings.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ047-20260818",
+      "commit_sha_list": ["77daa71", "c7a5d4a", "530f319", "338a542", "da69970", "3a302af"],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

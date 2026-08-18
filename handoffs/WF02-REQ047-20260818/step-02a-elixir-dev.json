@@ -1,0 +1,59 @@
+{
+  "handoff_id": "e6b4f2a5-9e4d-4b6b-cd3f-4a5b6c7d8e9f",
+  "run_id": "WF02-REQ047-20260818",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ047-20260818/step-02a-elixir-dev.json",
+  "created_at": "2026-08-18T21:50:27Z",
+  "started_at": "2026-08-18T21:50:27Z",
+  "completed_at": "2026-08-18T21:53:46Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-047"],
+    "requirement_text": {
+      "REQ-047": "Port src/engine/instance.zig's InstanceStore.applyTransition() as the persistence orchestration layer that turns REQ-044's pure transition output into committed rows -- task activation. Full design in lib/letflow/design/req047-task-activation-persistence.md, validated PASS by CODE-DESIGN-VALIDATOR (see step-01b handoff)."
+    },
+    "related_handoff_ids": ["d5a3e1f4-8d3c-4a5a-bc2f-3a4b5c6d7e8f"],
+    "artifacts_in": ["lib/letflow/design/req047-task-activation-persistence.md"],
+    "owned_modules": ["lib/letflow/engine/", "lib/letflow/instance*", "priv/repo/migrations/"]
+  },
+  "task": {
+    "description": "Implement lib/letflow/design/req047-task-activation-persistence.md exactly as designed. Verify branch first (git branch --show-current must equal feature/WF02-REQ047-20260818). Implement Letflow.Engine.TaskActivation and wire it into Letflow.Engine.persist/7's Multi chain per the design. mix compile --warnings-as-errors, mix ecto.migrate if any migration is needed (design should clarify whether the tasks table already has all needed columns from REQ-043 -- if so no new migration), mix format --check-formatted. Self-review per WF-02 Step 2a's checklist: no SQL string interpolation of tenant/user input, every state transition persisted via Letflow.Repo inside the transition, one supervised process per instance preserved if touching process_instance.ex/instance_supervisor.ex (this requirement should not touch those), new public functions have a one-line @doc, all callers of any changed function signature still compile.",
+    "acceptance_criteria": [
+      "a transition that enters a HUMAN_TASK node results in exactly one tasks row with status PENDING carrying instance_id, node_id, node_name, assignee_type and assignee_ref, committed in the same transaction as the instance_projections update and the appended event",
+      "when the event append fails, zero tasks rows and zero instance_projections changes are committed -- demonstrated by forcing an append failure and reading all three tables back",
+      "transitions entering START, END, EXCLUSIVE_GATEWAY and PARALLEL_GATEWAY nodes create zero tasks rows, each with its own explicit test, verifying (not merely assuming) the transition function's pending_task_nodes guarantee",
+      "a HUMAN_TASK whose assignee_ref names a group with no members still produces a PENDING task rather than an activation error",
+      "a token entering an END node sets the instance to COMPLETED, creates no task, and leaves a documented named hook for SCH-03 timer cancellation with S6 identified as its owning stage",
+      "mix compile --warnings-as-errors exits 0",
+      "mix format --check-formatted exits 0 (or files formatted)",
+      "all existing callers of any changed function signature still compile"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented REQ-047 per lib/letflow/design/req047-task-activation-persistence.md exactly. New module lib/letflow/engine/task_activation.ex (Letflow.Engine.TaskActivation): token_id_to_record_id/2 (zips new_instance_state.tokens with M2's inserted TokenRecord list), newly_pending_tokens/2 (set-diff by token_id, resolving REQ-044's open pending_task_nodes-tracking question per design §5.1), resolve_assignee/1 (reads node.attributes['role']/['assignee_type'], zero group-membership resolution, satisfying AC4), insert_attrs/4 (six-key attrs map, node_name falls back to node.id when node.label is nil per design §4.2/OQ-2), append_multi/6 (appends one Multi.run(:task_records, ...) step to the caller's Ecto.Multi, short-circuits on first failure via Enum.reduce_while, returns {:error,{:missing_token_record,_}} / {:error,{:unknown_node_id,_}} rather than raising), and cancel_pending_timers/2 (the named SCH-03/S6 hook, unconditional :ok body, moduledoc/doc text naming S6 as owner verbatim per design §8). Zero Repo calls inside TaskActivation itself (INV-EE47-7) -- all writes happen inside the caller's already-open Multi/transaction. Wired into lib/letflow/engine.ex: persist/7 became persist/8 (added a `graph` parameter, threaded from a new activate/3 return value {:ok, graph, new_instance_state} instead of {:ok, new_instance_state} -- both are private functions with no external callers, confirmed by grep). The Multi chain gained TaskActivation.append_multi(instance_id, graph, [], new_instance_state, prefix) positioned after :token_record (M2) and before :event (M3), matching design §1's documented ordering; create/2's own call site always passes [] as previous_pending_task_nodes since a freshly-constructed InstanceState always starts with pending_task_nodes: [] (design §5.1). finalize_instance_projection/4 became /5 (added instance_id) and now calls `:ok = TaskActivation.cancel_pending_timers(instance_id, prefix)` inside the :completed clause, immediately after the status flip to :completed, still inside the open transaction (design §8). No migration added -- confirmed against priv/repo/migrations/ (20260818110003_create_tasks.exs already has every column this design writes: instance_id, token_id, node_id, node_name, assignee_type, assignee_ref, status default :pending) and design §9's own explicit statement that no migration is needed. `mix compile --warnings-as-errors` output: 'Compiling 1 file (.ex)\\nGenerated letflow app' -- exit 0, zero warnings. `mix format --check-formatted` on the two touched files (lib/letflow/engine.ex, lib/letflow/engine/task_activation.ex) after running `mix format` on them: 'FORMATTED_OK' -- exit 0 (the two files needed reformatting after edits, matching this project's existing convention; several other pre-existing files in the repo are also currently unformatted -- transition.ex, identity_migration.ex, and several test files -- left untouched as out of this requirement's scope). Ran the existing engine test suite to confirm no call-site breakage: `mix test test/letflow/engine/` -> '1 property, 125 tests, 0 failures'. `mix test test/letflow/engine_test.exs` fails to compile with a pre-existing SystemLimitError (a test name over 255 chars) -- confirmed via `git stash`/re-run that this failure exists identically on the pre-change tree, unrelated to this run's changes, not reworked here. No new test files were written (TEST-DESIGNER's job per Step 2a's own instruction).",
+    "artifacts_out": [
+      "lib/letflow/engine/task_activation.ex",
+      "lib/letflow/engine.ex"
+    ],
+    "issues": [
+      "Pre-existing SystemLimitError in test/letflow/engine_test.exs (test name >255 chars) blocks that file's compilation -- confirmed present before this run's changes via git stash; not this requirement's own scope to fix, flagging for TEST-RUNNER/TEST-DESIGNER awareness."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ047-20260818",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

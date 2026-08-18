@@ -1,0 +1,50 @@
+{
+  "handoff_id": "b3e1c9d2-6b1a-4e3f-9a0d-1e2f3a4b5c6d",
+  "run_id": "WF02-REQ047-20260818",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ047-20260818/step-00-elixir-dev.json",
+  "created_at": "2026-08-18T21:41:03Z",
+  "started_at": "2026-08-18T21:41:40Z",
+  "completed_at": "2026-08-18T21:41:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-047"],
+    "requirement_text": {
+      "REQ-047": "Port src/engine/instance.zig's InstanceStore.applyTransition() (per src/design/engine.md \"Section EE-03: Task Activation\", L1086) as the persistence orchestration layer that turns REQ-044's pure transition output into committed rows. This is the seam between the I/O-free kernel and the database. Given a transition result whose pending_task_nodes gained an entry, insert a REQ-043 tasks row with status PENDING, task id, instance_id, token_id, node_id, node_name, assignee_type and assignee_ref taken from the HUMAN_TASK node's attributes (REQ-029's PD-05 rules already guarantee a HUMAN_TASK carries a non-empty role). The tasks row insert, the instance_projections state update, and the event append via REQ-025 all commit in ONE transaction (EE-03 AC2, DB-03). A task must never be visible to a reader before the transition that created it is committed (EE-03 AC5). No node-type guard is written in this layer: engine.md section EE-03's module purpose is explicit that the transition function only ever appends HUMAN_TASK nodes to pending_task_nodes, so \"the signal itself is the guard.\" Port that property rather than re-implementing a START/END/gateway exclusion check here -- but assert it with a test (EE-03 AC3/AC4) so the property is verified rather than assumed. A HUMAN_TASK whose assignee_ref names a group with no current members still creates a PENDING task; assignment resolution is deferred to runtime (EE-03 edge case), not an activation-time failure. A token entering an END node transitions the instance to COMPLETED and creates no task. R-Co's EE-03 edge case also fires SCH-03 timer cancellation at that point -- src/scheduler/ is S6 (operational-cross-cutting) and does not exist in Letflow, so port the COMPLETED transition and leave a named, documented hook for timer cancellation rather than silently omitting it or inventing a scheduler. SCOPE BOUNDARY: GET /api/v1/tasks and the task list/query surface are S4 (api-surface) plus R-Co's own src/tasks/store.zig, outside this stage's src/engine/ scope per REQ-043's note. This requirement writes tasks rows from the engine; it does not build the read side."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": ["lib/letflow/engine/", "lib/letflow/instance*", "priv/repo/migrations/"]
+  },
+  "task": {
+    "description": "Execute WF-02 Step 00 (git setup, worktree variant per GIT_SETUP.md) for REQ-047. This checkout (~/letflow-wt2) is a secondary git worktree -- use the worktree variant (fetch origin main, branch directly from origin/main, never `git checkout main`).",
+    "acceptance_criteria": [
+      "git fetch origin main succeeded",
+      "git checkout -b feature/WF02-REQ047-20260818 origin/main succeeded",
+      "git branch --show-current outputs feature/WF02-REQ047-20260818",
+      "git push -u origin feature/WF02-REQ047-20260818 exited 0"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Secondary-worktree git setup for REQ-047 completed via GIT_SETUP.md worktree variant (1w/2w + 3-8). Fetched origin main, branched feature/WF02-REQ047-20260818 directly from origin/main (never touched local main), verified current branch, and pushed with upstream tracking set. No pre-existing local or remote branch of this name was found before starting.",
+    "artifacts_out": ["branch: feature/WF02-REQ047-20260818"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ047-20260818",
+      "commit_sha_list": ["78f8031fcc1e2503041a29bd4bf37bce770dd884"],
+      "remote_branch": "origin/feature/WF02-REQ047-20260818",
+      "push_status": "success",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH routes to next step per active workflow (WF-02 Step 01)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

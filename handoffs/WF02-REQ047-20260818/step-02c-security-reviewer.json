@@ -1,0 +1,50 @@
+{
+  "handoff_id": "f7c5a3b6-0f5e-4c7c-de4f-5b6c7d8e9f0a",
+  "run_id": "WF02-REQ047-20260818",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ047-20260818/step-02c-security-reviewer.json",
+  "created_at": "2026-08-18T21:55:26Z",
+  "started_at": "2026-08-18T21:55:30Z",
+  "completed_at": "2026-08-18T21:56:19Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-047"],
+    "requirement_text": {
+      "REQ-047": "Task activation persistence -- new Letflow.Engine.TaskActivation module, wired into Letflow.Engine.persist/8's Ecto.Multi. Writes tasks rows (instance_id, token_id, node_id, node_name, assignee_type, assignee_ref) inside a per-tenant-schema (:prefix) transaction, per REQ-043's tasks table and Decision 0006 (no tenant_id column -- schema is the isolation boundary)."
+    },
+    "related_handoff_ids": ["e6b4f2a5-9e4d-4b6b-cd3f-4a5b6c7d8e9f"],
+    "artifacts_in": ["lib/letflow/engine/task_activation.ex", "lib/letflow/engine.ex"],
+    "owned_modules": ["lib/letflow/engine/", "lib/letflow/instance*", "priv/repo/migrations/"]
+  },
+  "task": {
+    "description": "Run WF-02 Step 2c's security gate against this branch's diff (git diff main...HEAD). Scope test first: does this diff touch a tenant-data path per docs/agents/instructions/security-invariants.md? This writes rows into a per-tenant-schema table (tasks) via the :prefix mechanism, so it is very likely in scope. For each of INV-1..INV-8, determine APPLIES or NOT-APPLICABLE, and for each APPLIES invariant run its verification check. Pay particular attention to: no tenant_id column reintroduced on the tasks/instance_projections tables (Decision 0006 D2), the :prefix value's provenance (must trace back to the caller's already-resolved tenant schema, never a raw/unvalidated string), and no SQL string interpolation of tenant/user input.",
+    "acceptance_criteria": [
+      "Verdict recorded per INV-1..INV-8 (APPLIES/NOT-APPLICABLE, with PASS/FAIL for each APPLIES invariant)",
+      "No tenant_id column present on any table this diff touches (Decision 0006 D2 compliance)",
+      "No SQL string interpolation of tenant/user input",
+      "assignee_ref/assignee_type sourced from validated node attributes, not raw external input bypassing existing validation"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: diff touches a tenant-data path (writes tasks rows via Ecto.Multi under a per-tenant :prefix, in lib/letflow/engine/task_activation.ex and lib/letflow/engine.ex; no migration in this diff -- tasks/tenant_id-drop migrations were already merged on main prior to this branch). Invariant verdicts: INV-1 (tenant data isolation) APPLIES/PASS -- (a) all writes in TaskActivation.do_insert/3 and Engine.finalize_instance_projection/5 go through repo.insert(prefix: prefix)/repo.update(prefix: prefix), no default-schema access found; (b) no migration added by this diff, tasks table already schema-scoped per merged migration 20260818110003_create_tasks.exs with its `if prefix() do` guard; (c) Letflow.Engine.Task schema (lib/letflow/engine/task.ex) carries no tenant_id column at all (Decision 0006 D2, dropped by prior merged commit 3d19e8c) so there is no caller-supplied-vs-derived attribution risk to check on this table -- confirmed via task.ex changeset cast list, which excludes tenant_id entirely. INV-2 NOT-APPLICABLE (no API response surface, S4 not started). INV-3 NOT-APPLICABLE (no scripting/plugin surface, S5 not started). INV-4 (secrets by reference) APPLIES/PASS -- diff introduces no new secret-resolving code; grep for hardcoded-secret patterns in lib/config finds no new hits from this diff. INV-5 NOT-APPLICABLE (no lookup-by-ID endpoint, S4 not started). INV-6 (new data-access paths prove scoping) APPLIES/PASS -- this handoff itself is the proof artifact; TaskActivation.append_multi/6's prefix param is threaded from Engine.create/2's opts[:prefix], validated via TenantProvisioning.tenant_id_for_schema_name/1 before any I/O (lib/letflow/engine.ex lines ~158-167), never a raw unvalidated caller string reaching a query. INV-7 (no SQL string interpolation) APPLIES/PASS -- grep for Repo.query in lib/letflow/engine.ex, lib/letflow/engine/task_activation.ex, lib/letflow/engine/task.ex returns zero hits; all writes go through Ecto.Changeset + Repo.insert/update, fully parameterised. INV-8 (no unhandled crashes on realistic failure paths) APPLIES/PASS -- grep heuristic for bare `{:ok, x} = external_call()` hits only case-branch patterns (case/with arms handling both :ok and :error), not bare matches; TaskActivation.insert_newly_pending/6 uses reduce_while + with, handling :unknown_node and {:error, reason} explicitly; Engine.finalize_instance_projection/5's :completed clause pattern-matches repo.update's own {:ok,_}/{:error,_} result inside a case, both branches handled. No tenant_id column reintroduced anywhere in the diff (confirmed via grep -- all tenant_id references are validation/rejection logic in Engine.create/2's reject_tenant_id/1, never a stored field). No SQL string interpolation of tenant/user input found.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ047-20260818",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

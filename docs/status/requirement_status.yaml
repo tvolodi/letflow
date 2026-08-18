@@ -4416,3 +4416,44 @@ history:
       header already lists REQ-045 as `done` from the original Step 6 pass
       and needed no edit. No docs/migration/decisions/*.md changes were
       required by REQ-045's acceptance criteria.
+  - req: REQ-047
+    event: started
+    agent: hetzner-wt2-orch
+    at: "2026-08-18T21:42:02Z"
+    note: >
+      WF02-REQ047-20260818 started (single-host fallback mode -- QUEUE_AUTH_TOKEN
+      not available in this session's environment, so task selection used
+      docs/requirements.yaml directly per TASK_QUEUE.md's fallback, not
+      get_next_task). REQ-045/REQ-063/REQ-064 all done, REQ-047's sole
+      dependency (REQ-045) satisfied. REQ-046 skipped -- origin already carries
+      an active feature/WF02-REQ046-20260818 branch from a concurrent host
+      (commit timestamp ~1 minute old at selection time), so REQ-047 was chosen
+      instead to avoid collision. Step 00 git setup PASS (worktree variant,
+      branch feature/WF02-REQ047-20260818).
+  - req: REQ-047
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-18T22:11:14Z"
+    note: >
+      Task activation persistence (EE-03) shipped: Letflow.Engine.TaskActivation
+      wired into persist/8's Ecto.Multi, so the tasks-row insert, the
+      instance_projections update, and the REQ-025 event append all commit in
+      one transaction. RELEASE-VALIDATOR PASSed all 5 acceptance criteria (see
+      step-05 handoff); 872/872 tests, 0 failures, independently reproduced
+      twice (TEST-RUNNER + RELEASE-VALIDATOR). Incidental fixes/filings during
+      this run, not part of REQ-047's own scope: (1) ISS-0051 fixed -- a
+      pre-existing test-name-length compile failure that was blocking the
+      suite; (2) ISS-0052 filed -- a non-blocking near-miss found during this
+      run's verification, left for a later fix run. docs/requirements.yaml
+      REQ-047 flipped in_progress -> done. Checked this step, no changes
+      needed: README.md's "What's here today" and "Running it" sections still
+      describe only the original pilot slice (Letflow.ProcessInstance
+      gen_statem, three Router HTTP endpoints) -- task activation is an
+      internal engine capability with no new HTTP route and no
+      gen_statem/process-model change, so neither section nor the ASCII state
+      diagram is affected, same reasoning REQ-045's DOC-UPDATER pass applied.
+      docs/migration/stage-3-instance-engine.md's header listed REQ-047 in
+      its `pending` list even though it is now `done` -- fixed in this same
+      pass (moved REQ-047 into the `done` clause with an EE-03 one-line
+      summary, pending count corrected 15 -> 14), same header-sync shape
+      REQ-045's DOC-UPDATER already applied to REQ-043/REQ-051.

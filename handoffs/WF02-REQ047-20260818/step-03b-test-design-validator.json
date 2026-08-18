@@ -1,0 +1,54 @@
+{
+  "handoff_id": "cae5d7f9-3c8a-4fae-0b7c-8e9f0a1b2c3d",
+  "run_id": "WF02-REQ047-20260818",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ047-20260818/step-03b-test-design-validator.json",
+  "created_at": "2026-08-18T22:02:54Z",
+  "started_at": "2026-08-18T22:02:54Z",
+  "completed_at": "2026-08-18T22:04:09Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-047"],
+    "requirement_text": {
+      "REQ-047": "Task activation persistence. See test/specs/REQ-047.md, test/letflow/engine/task_activation_test.exs, and the new describe blocks in test/letflow/engine_test.exs for TEST-DESIGNER's output."
+    },
+    "related_handoff_ids": ["b9e7c5d8-2b7f-4e9e-fa6b-7d8e9f0a1b2c"],
+    "artifacts_in": ["test/specs/REQ-047.md", "test/letflow/engine/task_activation_test.exs", "test/letflow/engine_test.exs"],
+    "owned_modules": ["test/letflow/engine/"]
+  },
+  "task": {
+    "description": "Independently validate REQ-047's test spec and test code per WF-02 Step 3b's checklist. Read the actual test files, not TEST-DESIGNER's result.summary.",
+    "acceptance_criteria": [
+      "Every acceptance criterion has at least one runnable test targeting it (no @tag :skip without a passing counterpart)",
+      "No 'TODO: implement test' left in the spec",
+      "Test fixtures use per-test unique data (not shared hardcoded IDs)",
+      "Tests are self-sufficient -- don't depend on other tests running first",
+      "No hardcoded secrets/connection strings in test files",
+      "No describe+test combined name pair approaches the 255-char ExUnit ceiling (this project has hit it 5 times already)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently read test/specs/REQ-047.md, test/letflow/engine/task_activation_test.exs, and the new REQ-047 describe blocks in test/letflow/engine_test.exs (diffed against main). All 5 REQ-047 acceptance criteria have runnable tests: AC1 -> insert_attrs/4 unit test + 'create/2 (REQ-047 AC1)' integration test; AC2 -> 'create/2 (REQ-047 AC2)' forced :actor_id-missing rollback test covering tasks/instance_projections/tokens/events; AC3 -> 4 explicit unit dispatch tests (START/END/EXCLUSIVE_GATEWAY/PARALLEL_GATEWAY) in task_activation_test.exs plus 4 explicit 'create/2 (REQ-047 AC3)' integration tests, one per node type; AC4 -> resolve_assignee/1 unit tests (present + absent + empty-group) plus 'create/2 (REQ-047 AC4)' integration test; AC5 -> cancel_pending_timers/2 doc-assertion test (SCH-03 + S6 named) plus 'create/2 (REQ-047 AC5)' integration test (COMPLETED status, zero tasks rows). No '@tag :skip' or 'TODO: implement test' found anywhere in the spec or test files (grep clean). No hardcoded secrets/connection strings (grep clean). Fixtures are per-test unique: provisioned_tenant/0 creates a fresh tenant + Postgres schema per test via insert_tenant!/unique_name (System.unique_integer), with on_exit cleanup dropping the schema -- no shared hardcoded IDs, matching the file's established REQ-045 pattern. Tests are self-sufficient: each test independently provisions its own tenant/schema and definition (active_definition!/2), async: false with per-test isolated schemas so there is no ordering dependency; AC5's coverage spans two files (case 6 doc-check + case 11 integration) but neither test depends on the other having run. Programmatically measured describe+test combined string lengths (regex-extracted describe/test pairs, script at /tmp/len_check.py) for both files: task_activation_test.exs max = 148 chars ('pending_task_nodes diff per node type (AC3)' + PARALLEL_GATEWAY test name); engine_test.exs new REQ-047 describe blocks max = 191 chars ('create/2 (REQ-047 AC4) -- assignee_ref naming a group with no members still creates a PENDING task' + its test name) -- both well clear of the 255-char ExUnit ceiling. Note: engine_test.exs as a whole (pre-existing, non-REQ-047 tests) has one unrelated describe/test pair at 245 chars ('create/2 -- hop-limit-exceeded (REVIEWER-flagged gap, WF02-R...)') which is NOT part of this TEST-DESIGNER submission and is flagged here only as a pre-existing risk worth a follow-up, not a gate failure for REQ-047.",
+    "artifacts_out": [],
+    "issues": [
+      "Pre-existing (not part of this submission) describe+test pair in test/letflow/engine_test.exs -- 'create/2 -- hop-limit-exceeded (REVIEWER-flagged gap, WF02-R...)' -- measures 245 chars, only 10 chars under the 255 ExUnit ceiling. Not a REQ-047 gate failure, but worth a follow-up ticket to shorten it before it tips over."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ047-20260818",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

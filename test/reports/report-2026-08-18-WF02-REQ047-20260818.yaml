@@ -1,0 +1,41 @@
+run_id: WF02-REQ047-20260818
+step: WF-02 Step 4
+agent: TEST-RUNNER
+date: 2026-08-18
+branch: feature/WF02-REQ047-20260818
+commit: 2964edb848992d415e36f78ba36620c7b7b18b53
+requirement: REQ-047
+scope: Task activation persistence (lib/letflow/engine.ex, lib/letflow/engine/task_activation.ex,
+  test/letflow/engine/task_activation_test.exs, test/letflow/engine_test.exs)
+
+full_suite:
+  command: "MIX_TEST_PARTITION=2 mix test"
+  duration_seconds: 89.5
+  result: "872/872 passed (5 properties, 872 tests)"
+  failed: 0
+  note: >
+    Standing host instruction for this worktree checkout requires MIX_TEST_PARTITION=2
+    on every mix test invocation (Postgres shared with the primary checkout on port
+    5462; docker compose up not run here per instruction, DB was already running).
+
+pre_existing_failures_check:
+  performed: false
+  reason: >
+    Not applicable — full suite is 100% green, nothing to distinguish as pre-existing
+    vs. this run's own implementation.
+
+rework_needed: false
+
+issues_filed: []
+
+docker_compose: "not started by this run (shared Postgres on localhost:5462 already running per host instruction)"
+
+verdict: PASS
+verdict_detail: >
+  Full suite (MIX_TEST_PARTITION=2 mix test): 872 tests, 5 properties, 0 failures, in
+  89.5 seconds (2.1s async, 87.4s sync). This includes REQ-047's new
+  test/letflow/engine/task_activation_test.exs and the extended
+  test/letflow/engine_test.exs, plus every other test file in the suite. No failures
+  observed anywhere, so there is nothing to route back to ELIXIR-DEV/TEST-DESIGNER and
+  no pre-existing/unrelated failure to file under docs/issues/. Report reflects actual
+  `mix test` output, not a prediction.

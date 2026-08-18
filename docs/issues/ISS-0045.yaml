@@ -1,0 +1,123 @@
+---
+id: ISS-0045
+title: "tenant_id caller-mismatch rejection not yet enforced on Letflow.Engine.Task/Token (no context module exists)"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ043-20260818
+discovered_at: "2026-08-18T07:44:56Z"
+severity: MINOR
+tags:
+  - tenant-isolation
+  - test-coverage
+  - deferred
+description: >
+  REQ-043's own acceptance criterion 6 asks for a test demonstrating that a
+  deliberately-mismatched caller-supplied tenant_id on a tasks/tokens insert
+  "fails loudly rather than silently attributing to the wrong tenant." Not
+  literally satisfiable by REQ-043's shipped scope: it ships only
+  lib/letflow/engine/token.ex and lib/letflow/engine/task.ex (schema +
+  changeset modules), no context-module function exists yet that accepts a
+  public `attrs` parameter a caller could reach.
+
+  This gap was independently identified and correctly handled (not silently
+  worked around) at every gate of WF02-REQ043-20260818: design doc section
+  6.2, CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER (a
+  tripwire test pins today's real accept-not-reject behavior),
+  TEST-DESIGN-VALIDATOR, and RELEASE-VALIDATOR.
+
+  Resolve when REQ-045 (or REQ-051/REQ-062) lands a real Letflow.Engine
+  context module with a public write path: add the literal "rejects a
+  disagreeing tenant_id" regression test and update/remove the tripwire in
+  test/letflow/engine/migrations_test.exs.
+
+  Discovered by RELEASE-VALIDATOR during WF02-REQ043-20260818.
+affected_files:
+  - lib/letflow/engine/task.ex
+  - lib/letflow/engine/token.ex
+  - test/letflow/engine/migrations_test.exs
+github_issue: https://github.com/tvolodi/letflow/issues/165
+status: resolved
+resolved_by: ISSUE-FIXER
+resolved_in_run: WF03-ISS0045-20260818
+resolved_at: "2026-08-18T07:46:23Z"
+resolution_note: >
+  Diagnosed-and-deferred, not resolved-by-code-change -- same shape as the
+  ISS-0043 precedent from earlier this session (WF03-ISS0043-20260818), with
+  the same cross-host renumbering correction required.
+
+  Renumbering correction (Step 0.5, registry lookup): this finding was
+  originally filed as GitHub issue #165 with the body stating "Local record:
+  docs/issues/ISS-0043.yaml". That is a cross-host ISS-numbering collision,
+  the same class already documented in docs/anti-patterns.md
+  (ISS-0034/ISS-0035, ISS-0036/ISS-0037/ISS-0039) and repeated once already
+  this session (ISS-0042/ISS-0043): issue #165 was filed by the concurrent
+  host running WF02-REQ043-20260818, which at filing time had not yet seen
+  this host's own WF03-ISS0043-20260818 run land ISS-0043.yaml as a
+  *different*, unrelated, already-resolved finding (Letflow.Engine.Task's
+  assignee_type free-text/Ecto.Enum note). docs/issues/ISS-0043.yaml on this
+  checkout was read directly and confirmed to be that unrelated,
+  already-resolved entry, not this one. The correct next available local
+  number on this main, per `ls docs/issues/` (highest existing entry was
+  ISS-0044.yaml, filed by TEST-RUNNER during WF02-REQ049-20260818 this same
+  session), is ISS-0045 -- this file. No file content was overwritten; the
+  GitHub issue #165 close comment documents this renumbering for anyone
+  following the GH issue back to this repo.
+
+  Step 1 (diagnose): a live-code read of REQ-043's shipped
+  lib/letflow/engine/task.ex was not possible in this checkout, and was not
+  necessary to reach a diagnosis, for the same class of reason as the
+  ISS-0043 precedent but confirmed independently here:
+  (1) `ls lib/letflow/engine/` on this checkout shows instance_state.ex,
+  token.ex, transition.ex, variable_merge.ex -- no task.ex. token.ex present
+  here is REQ-044's Letflow.Engine.Token (read in full: a plain struct, zero
+  Ecto/Letflow.Repo dependency, moduledoc explicitly identifies it as
+  porting transition.zig's in-memory Token, EE-02) -- NOT REQ-043's
+  tokens-table Ecto.Schema module. `test/letflow/engine/` similarly has no
+  migrations_test.exs. docs/requirements.yaml confirms REQ-043 status:
+  pending on this checkout, i.e. REQ-043 genuinely has not merged to main
+  here; this run is a concurrent-host artifact of that same unmerged work,
+  exactly as the ISS-0043 precedent was.
+  (2) Unlike a claim about currently-broken runtime behavior (which would
+  need reproduction against real code), this finding is entirely a
+  forward-looking test-coverage gap about a write path
+  (a context-module function accepting caller-supplied attrs) that the
+  issue's own text says does not exist yet either, on ANY host: "no
+  context-module function exists yet that accepts a public attrs parameter
+  a caller could reach." There is no runtime scenario to reproduce today --
+  the absence of the context module is the entire finding, and that absence
+  is independently confirmed by this checkout's own directory listing and
+  by the GitHub issue text itself, so the missing live-code read of
+  task.ex/token.ex's *content* does not weaken the diagnosis.
+
+  Conclusion: correctly deferred to REQ-045 (or REQ-051/REQ-062), not
+  actionable now. Grounds:
+  (1) the issue's own text already names the precise landing point --
+  whichever requirement first lands a real Letflow.Engine context module
+  with a public write path -- and REQ-045 ("Instance start and engine
+  execution shell (instance.zig create, EE-01)") is confirmed status:
+  pending, stage: S3 in docs/requirements.yaml and is the next Stage 3
+  requirement in sequence after REQ-043/REQ-044, i.e. precisely the
+  "specific named future trigger" this issue defers to, not a vague someday;
+  (2) this gap was already identified and deliberately, correctly handled
+  (a tripwire test, not a silent gap) at every gate of the run that produced
+  it -- design, CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER,
+  TEST-DESIGNER, TEST-DESIGN-VALIDATOR, RELEASE-VALIDATOR -- so there is no
+  process failure here to correct, only a future test to add once its
+  precondition (a public write path) exists;
+  (3) applying CLAUDE.md's and core-directives.md's anti-scope-creep norms:
+  there is no context-module function to write this regression test against
+  yet in this checkout or in REQ-043's own shipped scope, so writing it now
+  would mean either inventing a throwaway ad hoc write path ahead of the
+  requirement designed to build one (REQ-045), or leaving the test
+  permanently coupled to REQ-043's tripwire in a way the tripwire's own
+  design already anticipated and named the correct successor for;
+  (4) no ORCHESTRATOR.md section 10 sizing exception applies -- this is a
+  tenant-isolation regression test that must be designed and gated together
+  with the write path it tests (SECURITY-REVIEWER is a hard gate on any
+  tenant-data write path per security-invariants.md), not a one-line fix
+  ISSUE-FIXER could apply solo ahead of that gate.
+
+  No code fix is filed. This issue is closed as diagnosed-and-correctly-
+  deferred; the "rejects a disagreeing tenant_id" regression test and the
+  migrations_test.exs tripwire update/removal remain recorded above,
+  findable, for REQ-045 (or REQ-051/REQ-062, whichever lands the write path
+  first) to pick up.

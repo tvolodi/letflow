@@ -1,4 +1,4 @@
-# Design: REQ-046 — Retirement of `process_instance.ex` / `instance_supervisor.ex`
+# Design: REQ-046 — Retirement of `process_instance.ex`; retention of `instance_supervisor.ex`
 
 **Requirement:** REQ-046 (`docs/requirements.yaml`, stage S3)
 **Owner (implementer):** ELIXIR-DEV
@@ -54,57 +54,121 @@ carries that out.
 2. `Letflow.ProcessInstance` has no remaining role. It is not read by, written by, or
    referenced from any other shipped module (confirmed: only
    `Letflow.InstanceSupervisor` and `test/letflow/process_instance_test.exs` reference
-   it — both retired/migrated by this same requirement, §2/§4). A "retained module" with
-   zero live callers and zero remaining purpose is exactly the "undocumented and
-   unreferenced" failure mode AC1's own text warns against, just with a moduledoc paragraph
-   papering over it rather than preventing it.
+   it — the former edited, not deleted, by this same requirement (§2), the latter
+   deleted (§4)). A "retained module" with zero live callers and zero remaining purpose
+   is exactly the "undocumented and unreferenced" failure mode AC1's own text warns
+   against, just with a moduledoc paragraph papering over it rather than preventing it.
+   This reasoning is specific to `process_instance.ex` itself — §2 below reaches a
+   different conclusion for `instance_supervisor.ex`, which is *not* zero-purpose in the
+   same sense: it carries a forward-looking, already-recorded reservation for
+   REQ-056/REQ-057, not a stale reference to a dead module.
 
 **Action:** delete `lib/letflow/process_instance.ex` in full.
 
 ---
 
-## 2. Decision: `lib/letflow/instance_supervisor.ex` — RETIRE (delete), not generalize
+## 2. Decision: `lib/letflow/instance_supervisor.ex` — RETAIN, edited (not deleted)
 
-REQ-045 §1 confirms this requirement introduces no process for `InstanceSupervisor` to
-supervise: `Letflow.Engine.create/2` is a plain transactional function, not a
-`:gen_statem`. There is therefore nothing today for `start_instance/1` to be generalized
-*to* — REQ-045 §1 is explicit that "`start_instance/1`'s eventual generalization ... is
-deferred to [REQ-056/REQ-057], not built here," and this requirement's own text names the
-same fork: "if REQ-045 resolved to a row-based engine with no process per instance, this
-supervisor may have nothing left to supervise — in that case retire it explicitly."
+**This section supersedes this design's prior conclusion ("retire, not generalize"),
+which CODE-DESIGN-VALIDATOR correctly FAILed.** The prior version cited only
+`lib/letflow/design/req045-instance-start-engine-shell.md` (a planning artefact) as
+grounds for deletion and never reconciled `lib/letflow/engine.ex`'s actual shipped
+moduledoc, which makes a forward-looking, already-recorded promise this design must not
+silently break. Quoting the real text (`lib/letflow/engine.ex` lines 31-36, confirmed by
+direct read):
 
-That is exactly the state today, so: **retire, not generalize.**
+> `lib/letflow/instance_supervisor.ex` is **generalized, not superseded** — but not by
+> this requirement, since this requirement introduces no process for it to supervise.
+> Its `DynamicSupervisor` shape is confirmed still correct in principle for whichever
+> later S3 requirement (REQ-056/REQ-057) does need a supervised process.
+> `Letflow.Engine` does not modify `instance_supervisor.ex` at all.
 
-**Retire = delete, not "leave as an inert module."** Two forcing reasons, not just a
-style preference:
+`test/letflow/engine_test.exs`'s AC5 describe block (lines 702-707) asserts this exact
+text via `Code.fetch_docs`, so it is load-bearing on the currently-passing suite, not
+just prose.
 
-1. `instance_supervisor.ex` line 19 calls `Letflow.ProcessInstance.child_spec(id)`
-   directly. Once §1 deletes `process_instance.ex`, this line does not compile — a
-   "retained but undocumented no-op" is not an available option; the module must be
-   either rewritten to start something else (nothing exists to start, per REQ-045 §1) or
-   removed.
-2. An inert `DynamicSupervisor` module kept in the tree with a `start_instance/1` that
-   can never be called (nothing else in the codebase calls it — confirmed by the same
-   reference grep as §1) is precisely the "left in the supervision tree supervising a
-   superseded module" outcome AC2 forbids.
+**Decision: retain the module (Path A), not reverse the recorded decision (Path B).**
+Reasoning:
 
-**Action:** delete `lib/letflow/instance_supervisor.ex` in full, and remove
-`Letflow.InstanceSupervisor` from `lib/letflow/application.ex`'s `children` list (§5).
+1. **Cost of retention is genuinely near-zero.** The file is 21 lines, a bare
+   `DynamicSupervisor` scaffold. Keeping it does not entail maintaining a parallel state
+   machine, a duplicated schema, or any ongoing complexity tax — the concern
+   CLAUDE.md's "don't design for hypothetical future requirements" rule is actually
+   protecting against (speculative *behavior*, not an idle supervisor shell). There is no
+   real "premature abstraction" cost here to weigh against the recorded decision.
+2. **Reversal cost is real and requirement-scope-widening.** Path B would require
+   editing `lib/letflow/engine.ex` (a REQ-045-owned, already-shipped/merged file — out of
+   this requirement's stated scope, "the retirement of `process_instance.ex` /
+   `instance_supervisor.ex`", not "revise REQ-045's engine module"), correcting/removing
+   `engine_test.exs`'s AC5 assertion (REQ-045's own already-validated test coverage), and
+   mandatorily routing through REVIEWER as a decision-reversal gate before ELIXIR-DEV
+   could even start. All of that to save keeping one 21-line file inert for a handful of
+   requirements' duration. That is a worse trade than doing nothing.
+3. **`DynamicSupervisor.start_link/2` with zero children at boot is normal, not a
+   defect.** `DynamicSupervisor.init(strategy: :one_for_one)` does not require any
+   children to be specified — a `DynamicSupervisor` is designed to start empty and
+   accept children later via `start_child/2`; this is its whole reason for existing
+   (contrast `Supervisor`, which lists static children at init). An empty
+   `DynamicSupervisor` in the tree is exactly as legitimate a supervision-tree shape as
+   one with children — confirmed against `DynamicSupervisor`'s own documented semantics,
+   not assumed.
+4. **AC2's dichotomy ("starts REQ-045's engine, or is retired with a recorded reason,
+   not left supervising a superseded module") is satisfiable by a third, unnamed
+   reading that better matches what's actually true today:** the module does not
+   "supervise a superseded module" under this design, because after the edit below it
+   supervises *nothing* — superseded or otherwise. AC2's actual concern (a supervisor
+   silently left pointed at dead code, undocumented) is fully addressed: nothing dead is
+   referenced, and the "why idle" reason is stated explicitly in the module's own
+   moduledoc, not left implicit.
 
-**Recorded reason (since no moduledoc survives to carry it):** this design doc (§1, §2)
-is the primary record; `DOC-UPDATER`'s status-history event for REQ-046
-(`docs/status/requirement_status.yaml`) must restate it in one line: *"`InstanceSupervisor`
-retired — REQ-045 resolved the running-instance shape to a plain transactional context
-module (`Letflow.Engine.create/2`), leaving no process for a `DynamicSupervisor` to own;
-re-introducing a supervised instance process is REQ-056/REQ-057's own decision to make
-against their own shape, not a revival of this module."* The commit message deleting the
-file must carry the same one-line reason, per this project's "don't delete without
-stating why" convention (WF-02 Step 1 procedure's own instruction; `docs/anti-patterns.md`
-precedent for undocumented deletions).
+**Does the `ApprovalSupervisor`-vs-`InstanceSupervisor` separation precedent still make
+sense with `InstanceSupervisor` idle?** Yes. `lib/letflow/parallel_approval.ex`'s
+moduledoc states the reason for the split: `Letflow.ApprovalSupervisor` is "a separate
+`DynamicSupervisor` from `Letflow.InstanceSupervisor`, since [`ParallelApproval`] is a
+structurally different workflow, not a variant of `Letflow.ProcessInstance`." That
+reasoning is about topology-by-workflow-type — two structurally different workflows get
+two separate supervision trees — and was never contingent on `InstanceSupervisor`
+actually holding live children at any given moment. It stays coherent whether
+`InstanceSupervisor` is idle or populated; the split exists so that when REQ-056/REQ-057
+eventually populate it, `ParallelApproval` processes are not caught up in that
+supervisor's restart semantics, and vice versa.
 
-No stub, no `@deprecated` shim, no re-export — nothing else in the codebase or its tests
-references `Letflow.InstanceSupervisor` after §4's test migration, so no compile-time
-compatibility surface is needed.
+**Action:** keep `lib/letflow/instance_supervisor.ex`, with two edits:
+
+1. Remove `start_instance/1` (lines 17-20). It calls
+   `Letflow.ProcessInstance.child_spec(id)` directly, which stops compiling once §1
+   deletes `process_instance.ex`; there is nothing today for it to start instead (no
+   process exists per REQ-045 §1), so the function is deleted outright rather than
+   rewritten against a nonexistent target. REQ-056/REQ-057 add a real `start_instance/1`
+   back against their own child spec when a supervised process actually exists — this is
+   their decision to make, not a stub for this requirement to guess at.
+2. Replace the moduledoc with (shape, not implementation — this is prose content, not
+   code the module executes):
+
+   > `DynamicSupervisor` reserved for per-process-instance processes.
+   >
+   > Currently supervises no children. REQ-045 resolved the S3 running-instance shape to
+   > a plain transactional context module (`Letflow.Engine.create/2`), not a supervised
+   > process, so there is nothing for this supervisor to own yet. It is deliberately
+   > retained rather than deleted, per `Letflow.Engine`'s own moduledoc (REQ-045 AC5):
+   > "`instance_supervisor.ex` is generalized, not superseded ... its `DynamicSupervisor`
+   > shape is confirmed still correct in principle for whichever later S3 requirement
+   > (REQ-056/REQ-057) does need a supervised process." REQ-046 does not reverse that
+   > recorded decision — see `lib/letflow/design/req046-process-instance-retirement.md`
+   > §2 for the full reasoning.
+   >
+   > `start_instance/1` was removed by REQ-046 alongside `Letflow.ProcessInstance`'s own
+   > deletion (its only caller). A real `start_instance/1` is added back by whichever of
+   > REQ-056/REQ-057 introduces the first supervised instance process, against that
+   > requirement's own child spec — not reconstructed speculatively here.
+
+   The resulting module therefore keeps only `start_link/1` and `init/1` (unchanged) plus
+   this moduledoc — a deliberately-idle scaffold, not a stub with dead code inside it.
+
+**`lib/letflow/application.ex`:** unchanged — `Letflow.InstanceSupervisor` stays in the
+`children` list (§5 below). No REVIEWER gate is required for this path: it does not
+reverse, edit, or touch REQ-045's `engine.ex` moduledoc or `engine_test.exs` at all, so
+nothing recorded is being overridden — the opposite of Path B's situation.
 
 ---
 
@@ -194,33 +258,39 @@ coverage is REQ-045/TEST-DESIGNER's prior responsibility, already discharged.
 
 ## 5. `lib/letflow/application.ex` — resulting supervision tree
 
-Current `children` list (line 12-27, reproduced for the diff):
+Current `children` list (line 12-27):
 
 ```
 Letflow.Repo,
 {Ecto.Migrator, ...},
 {Oidcc.ProviderConfiguration.Worker, ...},
 {Registry, keys: :unique, name: Letflow.Registry},
-Letflow.InstanceSupervisor,        # <- removed
+Letflow.InstanceSupervisor,
 Letflow.ApprovalSupervisor,
 {Letflow.SandboxPool, []}
 ++ http_child()
 ```
 
-**Change:** remove the `Letflow.InstanceSupervisor,` line only. Nothing else in the
-`children` list changes.
+**Change: none.** Per §2's revised decision, `Letflow.InstanceSupervisor` is retained,
+not deleted, so it stays in the `children` list unmodified. It boots as an empty
+`DynamicSupervisor` (zero children at start, per §2 point 3 — a normal, documented
+`DynamicSupervisor` shape, not an error condition) and stays empty until REQ-056/REQ-057
+give it something to supervise.
 
 - `{Registry, keys: :unique, name: Letflow.Registry}` **stays** — `Letflow.ApprovalSupervisor`
   /`Letflow.ParallelApproval` still register under it via `{:via, Registry,
   {Letflow.Registry, {:approval, id}}}` (`parallel_approval.ex` line 53). No key
   changes: the only keys ever registered under `Letflow.Registry` by
   `Letflow.ProcessInstance` were bare `id` strings (`process_instance.ex` line 60); those
-  simply stop being produced once the module is deleted. `Letflow.ApprovalSupervisor`'s
+  simply stop being produced once the module is deleted. `Letflow.InstanceSupervisor`
+  itself never registered under `Letflow.Registry` (it only ever held `ProcessInstance`
+  children via `DynamicSupervisor.start_child/2`, not `:via` registration), so retaining
+  it introduces no registry-key behavior at all. `Letflow.ApprovalSupervisor`'s
   `{:approval, id}`-tuple keys are untouched and remain the only keys registered after
   this change.
 - `Letflow.ApprovalSupervisor` **stays**, unmodified — out of this requirement's scope
   entirely (it supervises `ParallelApproval`, a structurally different, still-current
-  workflow per its own moduledoc, §0).
+  workflow per its own moduledoc, §0, §2).
 
 ---
 
@@ -248,7 +318,7 @@ for) and does not remove the existing one.
 | REQ-046 AC | Concrete design element |
 |---|---|
 | AC1 — `process_instance.ex` deleted, tests migrated/removed, `mix test` passes | §1 (delete decision + reasons), §4 (full test disposition per case) |
-| AC2 — `instance_supervisor.ex` starts REQ-045's engine or is retired with a recorded reason, not left supervising a superseded module | §2 (retire = delete decision + reasons + recorded-reason text), §5 (removed from `application.ex`) |
+| AC2 — `instance_supervisor.ex` starts REQ-045's engine or is retired with a recorded reason, not left supervising a superseded module | §2 (retain decision + reasons + `engine.ex` moduledoc reconciliation + the exact moduledoc/code edit), §5 (`application.ex` unchanged, reasoning for why) |
 | AC3 — `mix test` passes, no test deleted without a stated reason | §4 (per-test reason table + the required commit/PR statement) |
 | AC4 — supervised isolation preserved or explicitly not-applicable | §6 (not-applicable, with `parallel_approval_test.exs`'s existing coverage cited as the surviving general-guarantee evidence) |
 | (implicit) `Letflow.Events.TransitionEvent` disposition, named by REQ-045 as REQ-046's job | §3 (delete module + table-drop migration) |
@@ -258,11 +328,16 @@ for) and does not remove the existing one.
 
 ## 8. Open questions
 
-None genuinely open. This requirement is execution of REQ-045's already-recorded
-decision (§1 of that design), not a fresh architectural question — every fork the
-requirement text itself poses (delete-vs-retain, generalize-vs-retire) resolves to one
-concrete branch once REQ-045's resolution (plain transactional module, no process) is
-applied, as shown in §1, §2, §3 above. ELIXIR-DEV should flag to REVIEWER only if a
-reference to any of the three retired modules/table is discovered during implementation
-that this design's grep (§0) missed — not expected, but stated as the one residual risk
-worth a human-legible flag rather than a silent surprise.
+None genuinely open. §1's and §3's decisions are execution of REQ-045's already-recorded
+decision, not a fresh architectural question. §2's decision (`instance_supervisor.ex`
+retained, not deleted) was reworked after CODE-DESIGN-VALIDATOR's FAIL specifically
+because the prior version treated a reversal of `engine.ex`'s recorded forward-looking
+statement as a foregone conclusion without reconciling it; §2 now quotes that statement
+directly and resolves in its favor (Path A — retain), so no REVIEWER sign-off gate is
+required for this run (that gate is only triggered by Path B, a genuine reversal — this
+design does not take that path). ELIXIR-DEV should flag to REVIEWER only if a reference
+to any of the retired modules/table (`process_instance.ex`,
+`Letflow.Events.TransitionEvent`, `transition_events`) or to `instance_supervisor.ex`'s
+now-removed `start_instance/1` is discovered during implementation that this design's
+grep (§0) missed — not expected, but stated as the one residual risk worth a
+human-legible flag rather than a silent surprise.

@@ -1,0 +1,79 @@
+{
+  "handoff_id": "b1e2f3a4-0003-4c1a-9f01-req043step03",
+  "run_id": "WF02-REQ043-20260818",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ043-20260818/step-03-test-design.json",
+  "created_at": "2026-08-18T06:54:39Z",
+  "started_at": "2026-08-18T06:54:39Z",
+  "completed_at": "2026-08-18T07:14:33Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-043"],
+    "requirement_text": {
+      "REQ-043": "Add the priv/repo/migrations and Ecto.Schema modules the instance engine needs but that S2 deliberately did not build, all schema-per-tenant via REQ-022's :prefix mechanism (Decision B's general rule for business tables -- none of these three is GLOBAL, and none needs REQ-041's GLOBAL-exception flagging, since R-Co's own 005_instances.sql tables are per-tenant like events/events_archive): (a) an ALTER TABLE migration on REQ-023's instance_projections adding exactly the columns REQ-023's own migration header names as S3/EE-01's job: definition_id, correlation_key, current_nodes, variables, error_detail, completed_at, cancelled_at, plus uq_instance_correlation (partial unique) and idx_proj_definition. (b) a tasks table: id, instance_id, token_id, node_id, node_name, status (Ecto.Enum PENDING/COMPLETED/CANCELLED), assignee_type, assignee_ref, form_schema, output_variables, completed_by, completed_at/cancelled_at, timestamps(). The standalone task query/list surface (src/tasks/store.zig's own list/filter operations) is NOT ported here. (c) a tokens table: id, instance_id, node_id, branch_id, plus whatever the parallel token model needs -- resolved BUILD in the design (lib/letflow/design/req043-instance-engine-schema.md section 3.1). tenant_id on every table above is NOT NULL with no DB default and is derived internally, never a caller-supplied field, reusing Letflow.TenantProvisioning.tenant_id_for_schema_name/1."
+    },
+    "related_handoff_ids": ["b1e2f3a4-002a-4c1a-9f01-req043step02a", "b1e2f3a4-002c-4c1a-9f01-req043step02c", "b1e2f3a4-002d-4c1a-9f01-req043step02d"],
+    "artifacts_in": [
+      "lib/letflow/design/req043-instance-engine-schema.md",
+      "priv/repo/migrations/20260818110001_alter_instance_projections_add_engine_columns.exs",
+      "priv/repo/migrations/20260818110002_create_tokens.exs",
+      "priv/repo/migrations/20260818110003_create_tasks.exs",
+      "lib/letflow/engine/token.ex",
+      "lib/letflow/engine/task.ex",
+      "lib/letflow/event_store/instance_projection.ex",
+      "lib/letflow/event_store/json_array.ex",
+      "test/letflow/event_store_test.exs",
+      "test/letflow/event_store/schemas_test.exs"
+    ],
+    "owned_modules": ["test/letflow", "test/specs"]
+  },
+  "task": {
+    "description": "WF-02 Step 3 for REQ-043. Scope test already run by ORCH: YES, application-executable surface exists (new Ecto schema modules Letflow.Engine.Token/Letflow.Engine.Task, changesets, custom Ecto.Type, migrations) -- proceed with the full test-design procedure, do not skip to Step 5. ELIXIR-DEV already added/updated some fixture-level test changes as a mechanical consequence of its own implementation (test/letflow/event_store_test.exs's seed_projection!/4, test/letflow/event_store/schemas_test.exs's moduledoc-substring assertions) -- read those first so you don't duplicate coverage that already exists; your job is the acceptance-criteria-level coverage those fixture tweaks don't provide (uniqueness enforcement, tenant_id internal-derivation enforcement, enum restriction, array round-trip). Write test/specs/REQ-043.md plus test code under test/letflow/.",
+    "acceptance_criteria": [
+      "Every REQ-043 acceptance criterion has at least one test case that would fail if violated",
+      "A test demonstrating uq_instance_correlation rejects a second instance_projections row with the same (definition_id, correlation_key) while permitting any number of NULL-correlation_key rows",
+      "A test demonstrating a row written into tasks (and tokens) has tenant_id equal to the tenant whose schema the write targeted, derived internally; a test deliberately making a caller-supplied tenant_id disagree with the target schema fails loudly rather than silently attributing to the wrong tenant",
+      "A test confirming tasks.status Ecto.Enum accepts only PENDING/COMPLETED/CANCELLED",
+      "A test confirming current_nodes (via the new JSONArray custom Ecto.Type) round-trips a list through real Postgres without corruption",
+      "A test confirming all three new/altered migrations apply cleanly and are schema-per-tenant (no-op under no :prefix)",
+      "Test specs written before/alongside test code, not as an afterthought",
+      "No test depends on wall-clock time or unseeded randomness",
+      "Test fixtures use per-test unique data, self-sufficient, no cross-test pollution, no hardcoded secrets"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test verdict re-confirmed YES (real Ecto.Schema modules, changesets, a custom Ecto.Type, and load-bearing migration conditionals -- not docs/build-config). Wrote test/specs/REQ-043.md plus three new test files: test/letflow/event_store/json_array_test.exs (pure unit tests for the JSONArray custom Ecto.Type's cast/1, load/1, dump/1), test/letflow/engine/schemas_test.exs (pure tests for Letflow.Engine.Token/Task -- table/prefix mapping, Ecto.Enum closed-set + casing for both tables, changeset required-field and immutability structure, and the design-mandated moduledoc content), and test/letflow/engine/migrations_test.exs (integration tests against real Postgres via Letflow.DataCase -- uq_instance_correlation partial-unique-index enforcement including the NULL-permitting case and the different-definition_id contrast case, current_nodes JSONArray round-trip through real Postgres for both a non-empty list and the schema-level [] default, tasks.status/tokens.status raw DB column casing, tenant_id internal-derivation for tasks/tokens, and a scoped §4 no-op-under-no-:prefix guard test for exactly REQ-043's three migrations). ELIXIR-DEV's own event_store_test.exs/event_store/schemas_test.exs fixture updates were read first and not duplicated. Did not stop at 'wrote the files': ran the actual toolchain myself (Elixir 1.20.3/OTP 29/Mix 1.20.3, real Postgres 16 container letflow-postgres-1:5462) against every new file -- found and fixed three real bugs the tests themselves surfaced (two validate_required/2 tests that were vacuously passing because %Task{}/%Token{}'s own schema-level status default masked the required-field check; one changes.status KeyError against Ecto's own no-change-recorded-if-equal-to-default behavior) and one atom-length SystemLimitError from several describe+test name combinations that were too long (shortened them; full rationale for each test's existence stays in test/specs/REQ-043.md, not lost). Final verification: mix compile --warnings-as-errors exits 0; the three new files run 52/52 green; the FULL suite (including all pre-existing tests) runs 725/725 green (673 baseline + 52 new, zero regressions); mix format --check-formatted exits 0 after formatting the three new files.",
+    "artifacts_out": [
+      "test/specs/REQ-043.md",
+      "test/letflow/event_store/json_array_test.exs",
+      "test/letflow/engine/schemas_test.exs",
+      "test/letflow/engine/migrations_test.exs"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "area": "test/specs/REQ-043.md \"Flagged limitation\" section; test/letflow/engine/migrations_test.exs's \"tenant_id internal-derivation contract\" describe block",
+        "description": "This run's own acceptance criterion 3 ('a test deliberately making a caller-supplied tenant_id disagree with the target schema fails loudly rather than silently attributing to the wrong tenant') is not literally satisfiable against REQ-043's own shipped artifacts: Letflow.Engine.Token/Task ship schema-only, with no context-module function carrying a public attrs parameter a caller could reach -- confirmed by direct read of both changesets and both migrations (tenant_id carries no FK, no check constraint, no changeset-level comparison against anything). The design doc's own §6 point 2 states this explicitly and defers enforcement to REQ-045/051/062. Writing a test asserting rejection today would assert something false about the actual code (a 'No Speculation' violation). Addressed as honestly as possible: three tests cover (a) the correct-derivation positive case, (b) storage-level tenant/schema isolation, and (c) an explicit, deliberately-tripwired pin of today's real behavior (a disagreeing tenant_id is currently ACCEPTED, not rejected) -- written to fail the moment enforcement is added without updating it. Recommend REQ-045's own TEST-DESIGNER add the literal 'rejects a disagreeing tenant_id' regression test once Letflow.Engine's real context-module function exists to reject it. This is an Instruction Precedence conflict between this run's handoff task.acceptance_criteria (likely copied from ELIXIR-DEV's own Step 2a criteria, which reused REQ-025's EventStore.append/2-shaped wording) and REQ-043's actual schema-only scope -- flagged per core-directives.md rather than silently resolved."
+      }
+    ],
+    "git_evidence": {
+      "branch": "feature/WF02-REQ043-20260818",
+      "toolchain": "real local Elixir 1.20.3 / Erlang OTP 29 / Mix 1.20.3 (on PATH), real Postgres 16 container letflow-postgres-1 (port 5462) -- Docker fallback not needed",
+      "verification": {
+        "mix_compile_warnings_as_errors": "PASS (exit 0)",
+        "mix_format_check_formatted": "PASS (exit 0)",
+        "new_files_only": "52/52 passed (test/letflow/engine/schemas_test.exs, test/letflow/engine/migrations_test.exs, test/letflow/event_store/json_array_test.exs)",
+        "full_suite": "725 passed (4 properties, 721 tests), 0 failures -- up from the 673 baseline ELIXIR-DEV reported at Step 2a, +52 new, zero regressions"
+      }
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

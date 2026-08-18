@@ -313,11 +313,110 @@ for) and does not remove the existing one.
 
 ---
 
+## 6a. `lib/letflow/router.ex` — required disposition (gap found by ELIXIR-DEV at Step 2a)
+
+**Not covered by §0's source list or by REQ-046's own requirement text** — `router.ex`
+was never read during the original design pass. It is live production code
+(`lib/letflow/application.ex`'s `http_child()` wires `{Bandit, plug: Letflow.Router,
+...}` into the supervision tree, confirmed by direct read) and its two non-health routes
+call every symbol §1/§4 delete: `POST /instances` calls
+`Letflow.InstanceSupervisor.start_instance/1` (removed by §2), `POST
+/instances/:id/actions` and `GET /instances/:id` call
+`Letflow.ProcessInstance.submit/1`/`.approve/1`/`.reject/1`/`.resubmit/1`/`.get/1`
+(all deleted by §1). Left unaddressed, §1+§2's deletions would leave `router.ex`
+calling undefined remote functions — a `mix compile --warnings-as-errors` failure,
+not merely a test failure, breaking the running application itself. **This is squarely
+within REQ-046's own scope to fix**, not a separate requirement's job: it is a direct,
+mechanical consequence of this requirement's own deletions (§1, §2), not a new feature
+or a fresh architectural question.
+
+**Decision: remove the two broken routes (`POST /instances`, `POST
+/instances/:id/actions`, `GET /instances/:id`) from `router.ex` outright. Do not wire
+them onto `Letflow.Engine.create/2`, and do not add a `501`/stub response for them.**
+
+Reasoning:
+
+1. **`POST /instances` has no like-for-like replacement under `Letflow.Engine.create/2`
+   — wiring it through would be a mismatched contract, not a swap.** The old route took
+   no request body at all: it generated a UUID and started an instance of the single
+   hardcoded 4-state workflow. `Letflow.Engine.create/2`'s `create_attrs()` (confirmed by
+   direct read, `lib/letflow/engine.ex` lines 101-108) *requires* `initial_variables`,
+   `actor_id`, `idempotency_key`, and exactly one of `definition_id`/`definition_name` —
+   none of which a bare `POST /instances` with no body has ever supplied, and none of
+   which this requirement has any authority to invent values for (a fabricated
+   `actor_id`/`idempotency_key`/definition reference would not be a real caller identity
+   or a real workflow selection — it would be this design guessing at API shape,
+   precisely the scope creep the task brief warns against). There is no honest way to
+   satisfy `create/2`'s contract from the old route's contract; forcing the wire-through
+   would produce an endpoint that either silently fabricates required fields or 422s on
+   every real call, which is worse than not existing.
+2. **The two action/read routes have no replacement at all in this requirement's
+   scope** — `.submit/1`/`.approve/1`/etc. are workflow actions specific to the deleted
+   hardcoded state machine; the graph-driven engine's vocabulary (gateways, tasks) has no
+   1:1 analog, matching §4's identical reasoning for why the corresponding tests aren't
+   migrated either.
+3. **A `501`/"migrated, pending S4" stub is rejected** as inventing route surface this
+   requirement was never asked to build. A stub response is still a piece of API
+   contract (a status code and body shape callers could come to depend on) that no
+   requirement has specified — REQ-045's own moduledoc states the real replacement,
+   `POST /api/v1/instances`, is S4 scope not yet started (§0's read of `engine.ex`,
+   confirmed independently here). Inventing an interim contract preempts that future
+   requirement's own design decision about what "not yet implemented" should return
+   (which version prefix, which error shape) rather than leaving it open for S4 to
+   decide cleanly.
+4. **Nothing operational depends on the two removed routes.** `deploy/redeploy-test.sh`
+   (confirmed by direct read) polls only `GET /health` for its post-deploy check —
+   `curl -sf http://127.0.0.1:3113/health`, nothing else. Grepping the full repo for
+   `/instances` (case-insensitive) turns up no CI workflow, no other deploy/script
+   reference — only `router.ex` itself, its own inline comments, and README.md's
+   "Running it" walkthrough (handled next). Removing the two routes has zero effect on
+   anything that actually runs today outside a developer's own manual curl session.
+5. **This keeps `router.ex` honest** about what currently works: after this change it
+   exposes exactly one route, `/health`, which is exactly what remains true and
+   supervised end-to-end. This is the same "don't paper over a superseded module with
+   documentation that outlives its accuracy" reasoning §1 point 1 already applies to
+   `process_instance.ex` itself.
+
+**Resulting `router.ex` shape (route list only, no implementation code):**
+
+- `GET /health` → unchanged, `{"status": "ok"}`.
+- `POST /instances` → **removed**.
+- `POST /instances/:id/actions` → **removed**.
+- `GET /instances/:id` → **removed**.
+- `match _` (404 fallback) → unchanged.
+- `encode_history_entry/1` (private helper) → **removed** — its only caller
+  (`GET /instances/:id`'s handler) is removed above.
+- `send_json/3` (private helper) → unchanged, still used by `/health` and the 404
+  fallback.
+- Moduledoc → updated to drop the "Three endpoints" framing (line 3, "Deliberately
+  minimal — Plug + Bandit, no Phoenix. Three endpoints, just enough to drive the state
+  machine end to end over HTTP.") to something reflecting the post-REQ-046 state, e.g.:
+  "Deliberately minimal — Plug + Bandit, no Phoenix. `/health` only as of REQ-046; the
+  `POST/GET /instances...` pilot-slice routes this module carried through S1-S3 were
+  removed alongside `Letflow.ProcessInstance`'s own retirement (see
+  `lib/letflow/design/req046-process-instance-retirement.md` §6a) — S4 (api-surface)
+  is expected to add the real `/api/v1/instances` routes against
+  `Letflow.Engine.create/2`, not a revival of this pilot contract."
+- `lib/letflow/application.ex`'s `{Bandit, plug: Letflow.Router, ...}` wiring is
+  **unchanged** — the router module still exists and still serves `/health`, so nothing
+  about the supervision tree changes.
+
+**README.md flag for DOC-UPDATER (Step 6):** this decision changes what commands a
+reader of README.md's "Running it" section (lines 77-86) would actually be able to run.
+The three `curl` examples against `POST /instances`, `POST /instances/:id/actions`, and
+`GET /instances/:id` will 404 after this requirement ships. DOC-UPDATER must remove or
+replace that block — at minimum drop it down to the `GET /health` example alone (or
+note explicitly that the create/act/read flow is offline pending S4) — do not leave
+stale curl examples that no longer work in the primary onboarding doc.
+
+---
+
 ## 7. Acceptance-criteria traceability
 
 | REQ-046 AC | Concrete design element |
 |---|---|
 | AC1 — `process_instance.ex` deleted, tests migrated/removed, `mix test` passes | §1 (delete decision + reasons), §4 (full test disposition per case) |
+| AC1 (compile integrity) — no remaining reference to a deleted symbol, `mix compile --warnings-as-errors` passes | §6a (`router.ex`'s three broken routes removed; only remaining caller of the deleted symbols) |
 | AC2 — `instance_supervisor.ex` starts REQ-045's engine or is retired with a recorded reason, not left supervising a superseded module | §2 (retain decision + reasons + `engine.ex` moduledoc reconciliation + the exact moduledoc/code edit), §5 (`application.ex` unchanged, reasoning for why) |
 | AC3 — `mix test` passes, no test deleted without a stated reason | §4 (per-test reason table + the required commit/PR statement) |
 | AC4 — supervised isolation preserved or explicitly not-applicable | §6 (not-applicable, with `parallel_approval_test.exs`'s existing coverage cited as the surviving general-guarantee evidence) |
@@ -341,3 +440,10 @@ to any of the retired modules/table (`process_instance.ex`,
 now-removed `start_instance/1` is discovered during implementation that this design's
 grep (§0) missed — not expected, but stated as the one residual risk worth a
 human-legible flag rather than a silent surprise.
+
+**Update (WF02-REQ046-20260818, Step 1 follow-up):** this residual risk materialized —
+`lib/letflow/router.ex` was exactly such a missed reference (never in §0's source list,
+never named by REQ-046's requirement text), caught by ELIXIR-DEV at Step 2a before any
+edit was made. Resolved by §6a above (routes removed, not rewired or stubbed). No other
+missed reference has been found; §6a's own grep (case-insensitive, whole-repo, for
+`/instances`) is the confirming check for this specific gap.

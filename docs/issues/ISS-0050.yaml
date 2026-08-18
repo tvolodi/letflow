@@ -56,7 +56,9 @@ description: >
 affected_files:
   - test/letflow/identity_migration_test.exs
   - lib/letflow/tenant_provisioning.ex
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0050-20260818
+resolved_at: "2026-08-18T21:58:52Z"
 github_issue: https://github.com/tvolodi/letflow/issues/185
 renumbering_note: >
   Filed by RELEASE-VALIDATOR during WF02-REQ045-20260818 as ISS-0049 (GH#185).

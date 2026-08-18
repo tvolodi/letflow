@@ -533,3 +533,5 @@
 2026-08-18T06:19:11Z | PASS | WF-02 | WF02-REQ044-20260818 | ELIXIR-DEV -> ORCH | Step 2a: token.ex/instance_state.ex/transition.ex created, mix compile --warnings-as-errors clean, mix format clean, self-review verified all dispatch/error cases by hand. One judgment call flagged for REVIEWER: :START defensively returns {:error,{:unknown_node_id,_}} on zero outgoing edges (not literally specified, reuses existing error variant rather than inventing a 6th). Committed e8ef254.
 2026-08-18T06:20:37Z | DISPATCH | WF-02 | WF02-REQ044-20260818 | ORCH -> SECURITY-REVIEWER | Step 2c hard gate.
 2026-08-18T06:21:16Z | PASS | WF-02 | WF02-REQ044-20260818 | SECURITY-REVIEWER -> ORCH | Step 2c: out of scope, no tenant-data path touched. Committed a8d8057.
+2026-08-18T06:21:52Z | DISPATCH | WF-02 | WF02-REQ044-20260818 | ORCH -> REVIEWER | Step 2d hard gate.
+2026-08-18T06:28:10Z | PASS | WF-02 | WF02-REQ044-20260818 | REVIEWER -> ORCH | Step 2d: idiomatic, no supervision concern, no scope creep. :START zero-outgoing-edges defensive branch accepted as-is. 2 MINOR issues filed (ISS-0042/GH#157), not blocking. Committed 1a0f133.

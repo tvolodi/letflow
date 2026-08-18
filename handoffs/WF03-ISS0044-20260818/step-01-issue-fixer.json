@@ -1,0 +1,49 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4a1a-9c00-000000000001",
+  "run_id": "WF03-ISS0044-20260818",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0044-20260818/step-01-issue-fixer.json",
+  "created_at": "2026-08-18T07:50:21Z",
+  "started_at": "2026-08-18T07:50:21Z",
+  "completed_at": "2026-08-18T07:57:15Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/issues/ISS-0044.yaml"],
+    "owned_modules": ["test/", "priv/repo/migrations/"]
+  },
+  "task": {
+    "description": "WF-03 Steps 0.5 and 1 for docs/issues/ISS-0044.yaml (letflow-queue task 109, GH#166), filed by TEST-RUNNER during this session's own WF02-REQ049-20260818 run. Three distinct warning groups -- read the full issue file first. (1) ExUnit.Case.register_test/4 deprecation on 5 StreamData property blocks -- the issue's own text already concludes this is a StreamData/ExUnit version-compatibility issue NOT fixable inside the test files themselves without a library version bump; verify this conclusion yourself (check mix.exs for the stream_data/ex_unit version pins) rather than trusting it blindly, then confirm 'defer, not actionable now' is correct. (2) 4 unused default-argument warnings in test helper functions (start_pool!/1, create!/2, node/3) -- these ARE mechanically fixable (drop the unused default or find/add a call site that omits the arg). (3) one migration-module-redefinition warning at priv/repo/migrations/20260816163103_create_event_type_registry.exs:40 -- the issue flags this needs individual inspection against ISS-0020's established precedent (a prior, confirmed-harmless instance of the same warning class) before concluding it's the identical non-blocking mechanism. Diagnose all three groups for real: check mix.exs, read each affected test file's call sites, and read the migration file plus ISS-0020's actual resolution.",
+    "acceptance_criteria": [
+      "Step 0.5: read docs/issues/ISS-0020.yaml (referenced precedent) to confirm what was concluded there and whether it transfers",
+      "Group 1 (register_test/4): mix.exs stream_data/ex_unit versions checked directly; explicit diagnosis of defer-vs-fixable",
+      "Group 2 (unused defaults): each of the 4 call sites read directly; explicit diagnosis of the correct fix per site (drop default, or note a call site that should omit the arg)",
+      "Group 3 (migration redefinition): the migration file and ISS-0020's precedent read directly; explicit diagnosis of whether this is the same harmless mechanism or something distinct",
+      "For each group, state explicitly: fix now (route to CODE-DESIGNER/ELIXIR-DEV or ORCH direct-action if it meets ORCHESTRATOR.md sec10's sizing exception) vs. defer (state why, update the issue to reflect exactly which groups remain open and why)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Step 0.5: read docs/issues/ISS-0020.yaml in full (item 2, the named precedent) plus widened the search and found a closer precedent, docs/issues/ISS-0036.yaml (identical unused-default-arg-in-test-helper shape, resolved ADHOC-20260817-002 by dropping the default). Neither is a recurrence -- ISS-0044's three groups are new instances of the same warning classes, so severity stays MINOR. Full diagnosis (all reproduced directly, not taken from the issue's prose) written into docs/issues/ISS-0044.yaml's new `diagnosis:` field; summarized here. GROUP 1 (register_test/4 deprecation, 5 property blocks) -- CONFIRMED, DEFER. mix.exs pins {:stream_data, \"~> 0.6\"}; mix.lock resolves 0.6.0. deps/stream_data/lib/ex_unit_properties.ex:174,223 call the deprecated 4-arity ExUnit.Case.register_test/4 inside stream_data's own `property` macro -- none of Letflow's test files call register_test directly. Installed toolchain is Elixir/ExUnit 1.18.3 (`mix --version`), which deprecated the 4-arity form. Reproduced: `mix test` on the 5 named files emits exactly these 5 warnings at exactly the reported lines; `MIX_ENV=test mix compile --warnings-as-errors --force` exits 0 (test/*.exs is outside :test's elixirc_paths, mix compile never touches these files). Issue's own claim CONFIRMED. New finding: `mix hex.info stream_data` (network reachable) shows releases up to 1.4.0 vs. locked 0.6.0 -- an upgrade path may exist but is a 4-major-version jump, register_test/6 usage and generator-API compatibility in 1.4.0 are UNVERIFIED (only 0.6.0 vendored locally). DEFER -- not a same-file mechanical fix; a stream_data bump needs its own scoped requirement. GROUP 2 (unused default args, 4 call sites) -- CONFIRMED, FIXABLE NOW (mechanical). Read all 4 defp definitions and grepped every call site in each file (defp is file-local, so this is the complete set): sandbox_pool_test.exs:70 start_pool!(opts \\\\ []) -- 7 call sites (131,157,193,224,244,267,297), all pass explicit opts; fixture_loader_test.exs:44 start_pool!(opts \\\\ []) -- 1 call site (60), passes max_concurrent: 2; search_test.exs:107 create!(schema_name, overrides \\\\ %{}) -- 7 call sites (123,124,127,202,204,229,256), all pass an explicit map; service_scope_validator_test.exs:32 node(id, type, attributes \\\\ nil) -- 1 call site (385), passes attributes explicitly. Reproduced: mix test emits exactly these 4 warnings at exactly the reported lines. Same shape as the ISS-0036 precedent. Correct minimal fix per site: drop the `\\\\ <default>` -- do NOT manufacture a new short-arg call site (that would add new test behavior as a side effect of a hygiene fix, TEST-DESIGNER's lane not this one's). Each site individually passes all six of ORCHESTRATOR.md sec10's direct-action checks (single file, no new public function/module/@spec, no migration, no supervision file, no tenant-data path, no test-asserted value change since every call already supplied the arg); bundled as one 4-file fix it fails check 1 (\"exactly one file\") -- ORCH's call whether to run 4 single-file direct actions or one CODE-DESIGNER batch. GROUP 3 (migration module redefinition) -- CONFIRMED, SAME MECHANISM AS ISS-0020 ITEM 2, DEFER (non-blocking, no fix needed). Read the migration file in full: ordinary tenant-scoped migration, standard prefix()-guard, nothing unusual. Traced the actual call path (not assumed): mix.exs's `test:` alias runs `ecto.migrate --quiet` before `test`, which loads this migration module via Ecto's own migrator (Code.compile_file/1, deps/ecto_sql, no ensure-loaded guard) on its first pass. Separately, test/letflow/event_store/registry_test.exs:131-138 carries a documented, deliberate workaround (Code.require_file/1 on this exact file) for a real functional gap already described in that file's own comment and in lib/letflow/tenant_provisioning.ex's tenant_scoped_migrations/0 moduledoc: priv/repo/migrations/*.exs is outside :test's elixirc_paths, so Ecto.Migrator.run/4's {version, module} form raises Ecto.MigrationError unless something loads the module first. registry_test.exs's Code.require_file/1 is idempotent against itself but has no visibility into ecto.migrate's earlier, separate load -- so its first call in a run still recompiles an already-defined module, producing the warning. Reproduced: ran the full suite (MIX_TEST_PARTITION=2 mix test: 704 tests/5 properties/0 failures, matching the issue's reported count) and captured the warning verbatim at priv/repo/migrations/20260816163103_create_event_type_registry.exs:40, firing exactly once, immediately before a test provisioning a req024-* tenant. Compared directly against ISS-0020 item 2's resolution text and independently re-verified its central claim in this environment: `MIX_ENV=test mix compile --warnings-as-errors --force` exits 0 (priv/repo/migrations/ is outside elixirc_paths entirely, so mix compile can never trigger this warning). DEFER -- non-blocking, no fix required.",
+    "artifacts_out": ["docs/issues/ISS-0044.yaml"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "fix/WF03-ISS0044-20260818",
+      "commit_sha_list": ["2490c11292bde05e5a7d6d336850662335d32915"],
+      "remote_branch": "origin/fix/WF03-ISS0044-20260818",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route Group 2 (the 4 unused-default-arg sites) to CODE-DESIGNER for fix design, or ORCH direct-action per ORCHESTRATOR.md sec10 if ORCH treats each site as its own single-file direct action -- exact fix content specified per-site in docs/issues/ISS-0044.yaml's diagnosis field (drop `\\\\ <default>` from start_pool!/1 x2, create!/2, node/3). Groups 1 and 3 stay open/deferred: Group 1 needs its own separately-scoped requirement only if/when a stream_data version bump is undertaken (unverified compatibility, not mechanical); Group 3 needs no fix (confirmed same non-blocking mechanism as ISS-0020 item 2, already documented as a deliberate workaround). Do not flip ISS-0044 to resolved at Step 5 until Group 2 is actually fixed and verified -- Groups 1 and 3 may remain permanently open/no-fix-needed in the same record, per the diagnosis field."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

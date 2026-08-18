@@ -818,17 +818,17 @@
       "workflow_id": "WF-02",
       "requirement_ids": ["REQ-043"],
       "stage": "S3",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": ["priv/repo/migrations", "lib/letflow/schemas"],
       "lock_acquired_at": "2026-08-18T05:53:09Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 (git-setup) PASS -- branch feature/WF02-REQ043-20260818 pushed. Routing to CODE-DESIGNER (Step 1).",
+      "lock_released_at": "2026-08-18T08:20:51Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (git merge) COMPLETED -- PR #174 squash-merged into main as e25822a, queue task 87 released done.",
       "backfilled": false,
       "queue_task_id": 87,
       "queue_agent_id": "tvolodi-orch",
       "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
-      "note": "First WF-02 run against the Stage 3 (instance-engine) batch REQ-VALIDATOR passed in WF01-S3-EXPANSION-20260818. Claimed via get_next_task (lowest impl_order among the open S3 batch, only S2 deps which are all done). owned_modules scoped to the migrations/schema surface this requirement builds; no overlap with any other active run."
+      "note": "First WF-02 run against the Stage 3 (instance-engine) batch REQ-VALIDATOR passed in WF01-S3-EXPANSION-20260818. Claimed via get_next_task (lowest impl_order among the open S3 batch, only S2 deps which are all done). Interrupted by a host power outage mid-rebase (Step Final, reconciling against main after REQ-044 merged first); recovered in a later session. Two real integration collisions found and resolved on resume, both documented in docs/anti-patterns.md: (1) REQ-044's already-shipped Letflow.Engine.Token (pure in-memory struct, transition kernel) collided on module name/path with this run's own Ecto.Schema for the tokens table -- resolved by renaming this run's module to Letflow.Engine.TokenRecord (lib/letflow/engine/token_record.ex), never touching the already-shipped struct. (2) This run's own tenant_id-caller-mismatch finding collided twice on docs/issues/ ISS-numbering -- first with REQ-044's ISS-0042 (renumbered to ISS-0044 locally), then with a concurrent host's own independent recovery of this identical branch/finding, which reached main first as ISS-0045; this run's local ISS-0044 duplicate was dropped in favor of main's ISS-0045 rather than re-filed. Re-verified after both resolutions: mix compile clean (only pre-existing REQ-044 type-inference warnings), full mix test suite 761 passed / 0 failures against real Postgres. owned_modules scoped to the migrations/schema surface this requirement builds; no overlap with any other active run."
     },
     {
       "run_id": "WF02-REQ044-20260818",

@@ -713,3 +713,24 @@
 2026-08-18T21:34:33Z | STOP | -- | -- | ORCH (hetzner-wt2-orch) | 404 no_eligible_task -- fresh session start, resynced to origin/main (5b9f54f); QUEUE_AUTH_TOKEN sourced from .env (not exported by default in this shell -- noted for next session), get_next_task queried 4x (0/10/10/10s spacing), still no_eligible_task each time; confirmed via git show origin/main:docs/requirements.yaml that REQ-046, REQ-047, REQ-058 (the three depends_on-satisfied S3 candidates) are still status: pending on main -- i.e. genuinely locked in letflow-queue by the other concurrently-active hosts (hetzner-orch, tvolodi-orch, worktree2-orch), not stale/abandoned locks worth force-releasing (no evidence any is dead -- all three hosts were explicitly relaunched this same round per the session prompt). Did not attempt set_lock/force-release: no basis to conclude any lock-holder is dead. Clean stopping boundary, worktree clean, detached HEAD == origin/main, no local changes.
 2026-08-18T21:36:49Z | STOP | -- | -- | ORCH (hetzner-wt2-orch) | 404 no_eligible_task -- resynced to origin/main (ed20336), get_next_task queried, still no_eligible_task. Verified via awk over docs/requirements.yaml: Stage 3 pending backlog (REQ-046..048,052..062) unchanged from last session -- REQ-046/047/058 remain the only depends_on-satisfied candidates (REQ-045 done), still locked by the 3 concurrently-active hosts (hetzner-orch, tvolodi-orch, worktree2-orch), no evidence any lock-holder is dead so no force-release attempted. Nothing expandable: Stage 3 requirements are already fully expanded in docs/requirements.yaml, this is lock contention not missing scope. Clean stopping boundary, worktree clean, detached HEAD == origin/main, no local changes.
 2026-08-18T21:37:46Z | COMPLETE | WF-03 | step-01-issue-fixer | ISSUE-FIXER → ORCH | PASS -- root cause: DropLegacyPublicIdentityTables guard crashes on any tenant_schemas row with an unmigrated/leaked schema (missing groups/users/tenant_role tables), same leak class as ISS-0048; also fixed blocking ISS-0049-class compile error (ISS-0051) under Unblock-Everything
+2026-08-18T21:39:33Z | DISPATCH | WF-03 | step-02-code-designer | ORCH → CODE-DESIGNER | PENDING
+2026-08-18T21:41:19Z | COMPLETE | WF-03 | step-02-code-designer | CODE-DESIGNER → ORCH | PASS
+2026-08-18T21:41:45Z | DISPATCH | WF-03 | step-02b-code-design-validator | ORCH → CODE-DESIGN-VALIDATOR | PENDING
+2026-08-18T21:42:36Z | COMPLETE | WF-03 | step-02b-code-design-validator | CODE-DESIGN-VALIDATOR → ORCH | PASS
+2026-08-18T21:43:08Z | DISPATCH | WF-03 | step-03-elixir-dev | ORCH → ELIXIR-DEV | PENDING
+2026-08-18T21:46:12Z | COMPLETE | WF-03 | step-03-elixir-dev | ELIXIR-DEV → ORCH | PASS
+2026-08-18T21:46:57Z | DISPATCH | WF-03 | step-03b-security-reviewer | ORCH → SECURITY-REVIEWER | PENDING
+2026-08-18T21:47:32Z | COMPLETE | WF-03 | step-03b-security-reviewer | SECURITY-REVIEWER → ORCH | PASS
+2026-08-18T21:48:00Z | DISPATCH | WF-03 | step-03c-reviewer | ORCH → REVIEWER | PENDING
+2026-08-18T21:48:39Z | COMPLETE | WF-03 | step-03c-reviewer | REVIEWER → ORCH | PASS
+2026-08-18T21:49:04Z | DISPATCH | WF-03 | step-04-test-designer | ORCH → TEST-DESIGNER | PENDING
+2026-08-18T21:51:45Z | COMPLETE | WF-03 | step-04-test-designer | TEST-DESIGNER → ORCH | PASS (fail-then-pass proven)
+2026-08-18T21:52:19Z | DISPATCH | WF-03 | step-04b-test-design-validator | ORCH → TEST-DESIGN-VALIDATOR | PENDING
+2026-08-18T21:53:45Z | COMPLETE | WF-03 | step-04b-test-design-validator | TEST-DESIGN-VALIDATOR → ORCH | PASS
+2026-08-18T21:54:18Z | DISPATCH | WF-03 | step-04c-test-runner | ORCH → TEST-RUNNER | PENDING
+2026-08-18T21:58:06Z | COMPLETE | WF-03 | step-04c-test-runner | TEST-RUNNER → ORCH | PASS (846 tests, 0 failures, 5 properties)
+2026-08-18T21:58:30Z | DISPATCH | WF-03 | step-05-issue-fixer | ORCH → ISSUE-FIXER | PENDING
+2026-08-18T21:59:04Z | COMPLETE | WF-03 | step-05-issue-fixer | ISSUE-FIXER → ORCH | PASS -- ISS-0050 resolved, GH#185 closed
+2026-08-18T21:59:26Z | DISPATCH | WF-03 | step-final-git-merge | ORCH → ELIXIR-DEV | PENDING
+2026-08-18T22:02:40Z | COMPLETE | WF-03 | step-final-git-merge | ELIXIR-DEV → ORCH | PASS -- PR #193 merged as c9894b26
+2026-08-18T22:06:00Z | DONE | WF-03 | WF03-ISS0050-20260818 | ORCH → (complete) | PASS -- PR #193 squash-merged c9894b26, ISS-0050+ISS-0051 resolved, GH#185 closed, 846/846 tests green, queue task 112 released done

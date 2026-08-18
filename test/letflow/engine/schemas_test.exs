@@ -45,7 +45,6 @@ defmodule Letflow.Engine.SchemasTest do
 
   defp valid_token_attrs do
     %{
-      tenant_id: Ecto.UUID.generate(),
       instance_id: Ecto.UUID.generate(),
       node_id: "node-1",
       branch_id: "branch-1"
@@ -54,7 +53,6 @@ defmodule Letflow.Engine.SchemasTest do
 
   defp valid_task_attrs do
     %{
-      tenant_id: Ecto.UUID.generate(),
       instance_id: Ecto.UUID.generate(),
       token_id: Ecto.UUID.generate(),
       node_id: "node-1",
@@ -187,12 +185,12 @@ defmodule Letflow.Engine.SchemasTest do
   # ---------------------------------------------------------------------------------
 
   describe "Token.insert_changeset/2" do
-    test "requires tenant_id, instance_id, node_id, branch_id" do
+    test "requires instance_id, node_id, branch_id" do
       changeset = Token.insert_changeset(%Token{}, %{})
       refute changeset.valid?
       errors = errors_on(changeset)
 
-      for field <- [:tenant_id, :instance_id, :node_id, :branch_id] do
+      for field <- [:instance_id, :node_id, :branch_id] do
         assert Map.has_key?(errors, field), "expected #{field} to be required"
       end
     end
@@ -203,9 +201,8 @@ defmodule Letflow.Engine.SchemasTest do
   end
 
   describe "Token.advance_changeset/2 cannot re-point identity fields (design §5.2)" do
-    test "tenant_id, instance_id, branch_id, parent_token_id, gateway_id are structurally not castable" do
+    test "instance_id, branch_id, parent_token_id, gateway_id are structurally not castable" do
       token = %Token{
-        tenant_id: Ecto.UUID.generate(),
         instance_id: Ecto.UUID.generate(),
         branch_id: "branch-1",
         parent_token_id: nil,
@@ -214,7 +211,6 @@ defmodule Letflow.Engine.SchemasTest do
 
       changeset =
         Token.advance_changeset(token, %{
-          tenant_id: Ecto.UUID.generate(),
           instance_id: Ecto.UUID.generate(),
           branch_id: "branch-2",
           parent_token_id: Ecto.UUID.generate(),
@@ -224,7 +220,6 @@ defmodule Letflow.Engine.SchemasTest do
         })
 
       assert changeset.valid?
-      refute Map.has_key?(changeset.changes, :tenant_id)
       refute Map.has_key?(changeset.changes, :instance_id)
       refute Map.has_key?(changeset.changes, :branch_id)
       refute Map.has_key?(changeset.changes, :parent_token_id)
@@ -251,12 +246,12 @@ defmodule Letflow.Engine.SchemasTest do
   end
 
   describe "Task.insert_changeset/2" do
-    test "requires tenant_id, instance_id, token_id, node_id, node_name" do
+    test "requires instance_id, token_id, node_id, node_name" do
       changeset = Task.insert_changeset(%Task{}, %{})
       refute changeset.valid?
       errors = errors_on(changeset)
 
-      for field <- [:tenant_id, :instance_id, :token_id, :node_id, :node_name] do
+      for field <- [:instance_id, :token_id, :node_id, :node_name] do
         assert Map.has_key?(errors, field), "expected #{field} to be required"
       end
     end
@@ -283,9 +278,8 @@ defmodule Letflow.Engine.SchemasTest do
   end
 
   describe "Task.complete_changeset/2 cannot re-point identity fields (design §4.4)" do
-    test "instance_id, token_id, node_id, node_name, tenant_id are structurally not castable" do
+    test "instance_id, token_id, node_id, node_name are structurally not castable" do
       task = %Task{
-        tenant_id: Ecto.UUID.generate(),
         instance_id: Ecto.UUID.generate(),
         token_id: Ecto.UUID.generate(),
         node_id: "node-1",
@@ -294,7 +288,6 @@ defmodule Letflow.Engine.SchemasTest do
 
       changeset =
         Task.complete_changeset(task, %{
-          tenant_id: Ecto.UUID.generate(),
           instance_id: Ecto.UUID.generate(),
           token_id: Ecto.UUID.generate(),
           node_id: "node-2",
@@ -304,7 +297,6 @@ defmodule Letflow.Engine.SchemasTest do
         })
 
       assert changeset.valid?
-      refute Map.has_key?(changeset.changes, :tenant_id)
       refute Map.has_key?(changeset.changes, :instance_id)
       refute Map.has_key?(changeset.changes, :token_id)
       refute Map.has_key?(changeset.changes, :node_id)
@@ -363,10 +355,11 @@ defmodule Letflow.Engine.SchemasTest do
       assert doc =~ "unlike `Letflow.Engine.TokenRecord.status`, which dumps lowercase"
     end
 
-    test "states tenant_id is never populated from caller-supplied attrs by this schema's own contract (design §4.3 point 5)" do
+    test "states the tenant_id column was dropped by Decision 0006 D2 and must not be re-added" do
       doc = normalized_moduledoc(Task)
 
-      assert doc =~ "never a value taken from external caller input"
+      assert doc =~ "No `tenant_id` column (Decision 0006 D2)"
+      assert doc =~ "Do not re-add a `tenant_id` field to this schema"
     end
   end
 

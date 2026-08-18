@@ -116,8 +116,12 @@ defmodule Letflow.Plugs.AuthPipelineConfigurableVerifierTest do
   end
 
   defp user_count_for_tenant(tenant_id) do
+    # REQ-064 (Decision 0006 D2) dropped `users.tenant_id` -- the tenant boundary is
+    # now the provisioned schema itself (`prefix: schema_name`), so counting all rows
+    # in that schema is already tenant-scoped without an extra `where`. Mirrors
+    # auth_pipeline_test.exs's identically-adjusted helper.
     {:ok, schema_name} = TenantProvisioning.schema_name_for_tenant(tenant_id)
-    User |> where(tenant_id: ^tenant_id) |> Repo.aggregate(:count, :id, prefix: schema_name)
+    User |> Repo.aggregate(:count, :id, prefix: schema_name)
   end
 
   defp call_pipeline(method, headers) do

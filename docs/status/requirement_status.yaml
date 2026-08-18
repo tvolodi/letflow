@@ -4167,3 +4167,51 @@ history:
       uniqueness tests, the public-to-tenant-schema data copy, and an end-to-end
       AuthPipeline test -- no stage doc citation among them.
       Flipped docs/requirements.yaml REQ-063 status to done.
+  - req: REQ-064
+    event: started
+    agent: ORCH
+    at: "2026-08-18T12:43:35Z"
+    note: >
+      WF02-REQ064-20260818. Drop tenant_id from schema-isolated tables,
+      executing decision docs/migration/decisions/0006-identity-tables-
+      schema-per-tenant.md's D2. depends_on REQ-063, which merged as PR #177
+      (5941472) immediately before this run started. Step 00 (git setup)
+      PASS: feature/WF02-REQ064-20260818 branched from main, pushed.
+  - req: REQ-064
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-18T15:25:04Z"
+    note: >
+      Decision 0006's D2 (tenant_id dropped from the ten schema-isolated
+      tables: events, events_archive, instance_projections,
+      process_definitions, tokens, tasks, promotion_reviews,
+      promotion_assertion_runs, users, groups) shipped. RELEASE-VALIDATOR
+      PASSed at Step 5, independently re-verifying all seven acceptance
+      criteria and re-running mix test (777/777 green).
+      README.md checked directly against what actually shipped: "What's
+      here today" and "Running it" still describe only the original pilot
+      slice (Letflow.ProcessInstance gen_statem, InstanceSupervisor,
+      TransitionEvent, Router's 3 HTTP endpoints, the curl/mix flow) --
+      REQ-064 is an internal Stage-3 column-drop/write-path cleanup with no
+      new HTTP route and no gen_statem/process change, so neither section
+      nor the ASCII state diagram is affected. Left untouched, same
+      reasoning REQ-063's DOC-UPDATER step applied.
+      docs/migration/decisions/0006-identity-tables-schema-per-tenant.md's
+      Status line (already updated by RELEASE-VALIDATOR at Step 5 to
+      "decided and fully shipped. D1 shipped (REQ-063 ...). D2 shipped
+      (REQ-064 ..., 777/777 tests green).") confirmed accurate against the
+      actual run and against REQ-064's real test count. Not re-edited.
+      REQ-064's seven acceptance criteria re-read directly from
+      docs/requirements.yaml: they cover information_schema.columns checks
+      for the dropped column, the four D3 tables retaining tenant_id plus
+      its FK, the promotion_assertion_runs/promotion_reviews simplified
+      unique-index contracts, a grep for remaining tenant_id references and
+      confirmation tenant_id_for_schema_name/1 is untouched, a grep for
+      stale moduledoc phrasing, and a green mix test run -- no
+      docs/migration/stage-N-*.md citation among them.
+      docs/migration/README.md's "Requirement expansion" section confirmed
+      to still deliberately avoid a per-requirement snapshot count (points
+      at docs/requirements.yaml directly, citing ISS-0022) -- that
+      precedent holds for this two-part requirement pair too, so left
+      alone. No docs/migration/stage-3-*.md file exists to check.
+      Flipped docs/requirements.yaml REQ-064 status to done.

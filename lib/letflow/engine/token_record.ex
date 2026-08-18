@@ -56,15 +56,14 @@ defmodule Letflow.Engine.TokenRecord do
   source file (`migrations/005_instances.sql`), confirmed by direct read, so
   this is not harmonized into a shared casing.
 
-  ## `tenant_id` is never caller-supplied (design §6)
+  ## No `tenant_id` column (Decision 0006 D2)
 
-  Neither changeset below is reachable from any built context-module function
-  yet, but the contract every future caller must follow is fixed here: the
-  value cast into `tenant_id` must always be
-  `Letflow.TenantProvisioning.tenant_id_for_schema_name/1`'s result, derived
-  from the `:prefix` the write targets — never a value taken from external
-  caller input. See `Letflow.EventStore.append/2` and
-  `Letflow.Definitions.create/2` for the established shape of that contract.
+  This table lived inside a per-tenant Postgres schema from the start
+  (Decision 0003 Dimension B) — the schema boundary alone already made any
+  `tenant_id` column here fully redundant. Decision 0006 D2
+  (`docs/migration/decisions/0006-identity-tables-schema-per-tenant.md`)
+  removes it. Do not re-add a `tenant_id` field to this schema without first
+  re-reading that record.
   """
 
   use Ecto.Schema
@@ -72,7 +71,6 @@ defmodule Letflow.Engine.TokenRecord do
 
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "tokens" do
-    field(:tenant_id, Ecto.UUID)
     field(:instance_id, Ecto.UUID)
     field(:node_id, :string)
     field(:branch_id, :string)
@@ -101,7 +99,6 @@ defmodule Letflow.Engine.TokenRecord do
   def insert_changeset(token, attrs) do
     token
     |> cast(attrs, [
-      :tenant_id,
       :instance_id,
       :node_id,
       :branch_id,
@@ -109,14 +106,14 @@ defmodule Letflow.Engine.TokenRecord do
       :parent_token_id,
       :gateway_id
     ])
-    |> validate_required([:tenant_id, :instance_id, :node_id, :branch_id])
+    |> validate_required([:instance_id, :node_id, :branch_id])
   end
 
   @doc """
-  Structural changeset for advancing an existing token row. `tenant_id`,
-  `instance_id`, `branch_id`, `parent_token_id` and `gateway_id` are
-  structurally not castable here — a token's tenant, owning instance, branch
-  identity, and split lineage never change after creation.
+  Structural changeset for advancing an existing token row. `instance_id`,
+  `branch_id`, `parent_token_id` and `gateway_id` are structurally not
+  castable here — a token's owning instance, branch identity, and split
+  lineage never change after creation.
   """
   @spec advance_changeset(t(), attrs :: map()) :: Ecto.Changeset.t()
   def advance_changeset(token, attrs) do

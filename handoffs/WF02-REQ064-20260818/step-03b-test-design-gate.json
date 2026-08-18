@@ -1,0 +1,63 @@
+{
+  "handoff_id": "c3d4e5f6-0064-4a00-9f01-req064step03b",
+  "run_id": "WF02-REQ064-20260818",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ064-20260818/step-03b-test-design-gate.json",
+  "created_at": "2026-08-18T14:33:21Z",
+  "started_at": "2026-08-18T14:50:02Z",
+  "completed_at": "2026-08-18T15:00:04Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-064"],
+    "requirement_text": {
+      "REQ-064": "Execute Decision 0006's D2: drop tenant_id from ten schema-isolated business tables. Full acceptance criteria: see handoffs/WF02-REQ064-20260818/step-03-test-designer.json's requirement_text."
+    },
+    "related_handoff_ids": ["c3d4e5f6-0064-4a00-9f01-req064step03"],
+    "artifacts_in": [
+      "test/specs/REQ-064.md",
+      "test/letflow/req064_tenant_id_removal_test.exs",
+      "lib/letflow/identity_migration.ex",
+      "lib/letflow/definitions/promotion_assertion_run.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "RE-GATE after rework iteration 1. Your prior FAIL found tenant_id_for_schema_name/1's only round-trip assertion was removed (not kept) during event_store_test.exs's restructure, contradicting REQ-064's own acceptance criteria requiring the function stay tested. TEST-DESIGNER's rework added a direct unit test to test/letflow/tenant_provisioning_test.exs instead of restoring the removed assertion inline (your own preferred fix), covering both the success round-trip and the {:error, :invalid_schema_name} path, and corrected test/specs/REQ-064.md's traceability table.\n\nVerify: (1) read the new test(s) in test/letflow/tenant_provisioning_test.exs directly -- confirm they genuinely exercise tenant_id_for_schema_name/1's own contract (a real schema_name_for_tenant/1 output round-tripped back, plus a malformed-string error case), not a shallow/trivial assertion. (2) confirm test/specs/REQ-064.md's traceability table now accurately reflects where this criterion is covered. (3) confirm event_store_test.exs was NOT touched by this rework (per your own instruction to fix it elsewhere) -- git diff should show only tenant_provisioning_test.exs and test/specs/REQ-064.md changed in this rework's own commits. (4) run the full suite yourself and confirm no new failures (TEST-DESIGNER reports 777/777 after this fix -- independently re-derive, don't accept the number).\n\nOriginal (iteration 1) instructions below, superseded by the above but kept for context: TEST-DESIGNER's own run took several dispatches to complete due to unrelated infrastructure interruptions (a nested background process hit a transient API error) -- the work itself, once it finished, was independently re-verified: ORCH ran the full suite twice directly (775/775 both times) and TEST-DESIGNER's own final report separately confirms 775/775 across two of its own runs, with one flaky failure in test/letflow/identity_migration_test.exs's :auto-mode DropLegacyPublicIdentityTables guard test isolated and attributed to pre-existing connection-pool-timing flakiness (REQ-063-era code, untouched by this requirement), not a REQ-064 regression. Confirm this attribution yourself -- read that specific test, check whether this diff touched anything it depends on (it shouldn't have, per the design's own scope boundary), and if you also hit this flake, re-run just that file in isolation 3-4 times to confirm it's genuinely intermittent and not deterministic under some condition this diff introduced.\n\nRead test/specs/REQ-064.md and the actual test source directly -- do not read TEST-DESIGNER's handoff result.summary as a substitute.\n\nTEST-DESIGNER found and fixed a genuine production bug beyond pure test work: lib/letflow/identity_migration.ex's copy_groups/2, copy_users/2, copy_tenant_roles/2 used fragment(\"? = ?\", g.tenant_id, ^tenant_id) which relied on the now-removed Group/User Ecto field declaration for UUID type inference -- once that field was dropped, Postgrex received a raw UUID string instead of the 16-byte binary form, causing a real DBConnection.EncodeError. Fixed with explicit type(^tenant_id, Ecto.UUID) casts. Verify this fix is correct and complete: read all three call sites directly, confirm the type/2 cast is present and correctly typed, and confirm this was a genuine pre-existing-but-latent bug this same PR's own column drop exposed (not something the fix itself introduces or masks).\n\nSeveral tests were restructured (not just patched) because their entire purpose was proving something about the now-removed tenant_id field -- event_store_test.exs's AC6 block, promotion_review_store_test.exs's prefix-derivation block, store_test.exs's AC9 block, engine/schemas_test.exs's moduledoc-content test. For each, confirm the restructured version still proves the SAME underlying acceptance-criterion claim (typically via schema-prefix reachability instead of a direct field read), not a weaker or different claim.\n\nStandard procedure: for each REQ-064 acceptance criterion, verify at least one runnable test targets it, no TODO-implement-test deferrals, tests self-sufficient and don't depend on execution order, no hardcoded secrets/connection strings, per-test unique fixture data.",
+    "acceptance_criteria": [
+      "Every REQ-064 acceptance criterion has at least one runnable test, verified against actual test source",
+      "The identity_migration_test.exs flake independently confirmed pre-existing/unrelated, not a REQ-064 regression",
+      "identity_migration.ex's type(^tenant_id, Ecto.UUID) fix verified correct at all three call sites",
+      "Each restructured test (event_store_test.exs, promotion_review_store_test.exs, store_test.exs, engine/schemas_test.exs) confirmed to still prove its original acceptance-criterion claim, not a weaker one",
+      "No @tag :skip or excluded test",
+      "Test fixtures use per-test unique data, no shared hardcoded tenant/schema names",
+      "RE-GATE: new tenant_provisioning_test.exs test(s) genuinely exercise tenant_id_for_schema_name/1's contract (round-trip + error path), not a shallow assertion",
+      "RE-GATE: test/specs/REQ-064.md's traceability table corrected and accurate",
+      "RE-GATE: event_store_test.exs confirmed untouched by this rework",
+      "RE-GATE: full suite re-run independently, no new failures"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "RE-GATE (rework iteration 1) PASS. Verified all four points independently, not from TEST-DESIGNER's self-report: (1) Read test/letflow/tenant_provisioning_test.exs's new describe block directly -- 'round-trips a schema_name_for_tenant/1 output back to the same tenant_id' generates a real Ecto.UUID.generate(), feeds it through schema_name_for_tenant/1 to get a real schema_name, then asserts tenant_id_for_schema_name/1 on that schema_name returns {:ok, ^tenant_id} -- a genuine full round-trip through the function's actual encode/decode contract (hex-reassembly + Ecto.UUID.cast per lib/letflow/tenant_provisioning.ex:102-115), not a shallow/trivial assertion. The second test asserts {:error, :invalid_schema_name} for the literal malformed string 'not_a_valid_schema_name', which genuinely exercises the with/else error path (fails the 'tenant_' <> hex prefix match). (2) test/specs/REQ-064.md's traceability table row for this criterion now reads 'REWORK (test-design-gate iteration 1) -- corrected' and accurately points at the new tenant_provisioning_test.exs describe block instead of the removed event_store_test.exs assertion; the 'What is verified by inspection, not a new runtime test' section was also updated to drop the now-false claim that this criterion is inspection-only. (3) git show --stat c1f6bc2 (the rework commit) touched only test/letflow/tenant_provisioning_test.exs, test/specs/REQ-064.md, and the step-03 handoff JSON -- event_store_test.exs was NOT touched, confirmed via git diff 8502d01 c1f6bc2 --stat across both rework commits (c1f6bc2, dc9c2e6) as well. (4) Ran `mix test` myself twice independently: both runs report 'Result: 777 passed (5 properties, 772 tests)', 0 failures, no @tag :skip found anywhere in tenant_provisioning_test.exs and no excluded tests in the run output. Independently re-derived the 777 figure rather than accepting TEST-DESIGNER's report.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ064-20260818/step-03b-test-design-gate.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ064-20260818",
+      "commit_sha_list": ["8d33dc3"],
+      "remote_branch": "origin/feature/WF02-REQ064-20260818",
+      "push_status": "success",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -337,7 +337,6 @@ defmodule Letflow.IdentityTest do
       rows =
         User
         |> where(
-          tenant_id: ^tenant.id,
           external_realm: ^ctx.realm,
           external_id: ^ctx.external_user_id
         )
@@ -367,7 +366,6 @@ defmodule Letflow.IdentityTest do
       rows =
         User
         |> where(
-          tenant_id: ^tenant.id,
           external_realm: ^ctx.realm,
           external_id: ^ctx.external_user_id
         )

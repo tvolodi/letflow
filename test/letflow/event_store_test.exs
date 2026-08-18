@@ -184,11 +184,10 @@ defmodule Letflow.EventStoreTest do
   # file asserts anything about which definition an instance belongs to, and
   # instance_projections.definition_id carries no FK (see
   # Letflow.EventStore.InstanceProjection's own moduledoc).
-  defp seed_projection!(schema_name, tenant_id, instance_id, status) do
+  defp seed_projection!(schema_name, _tenant_id, instance_id, status) do
     %InstanceProjection{}
     |> InstanceProjection.insert_changeset(%{
       instance_id: instance_id,
-      tenant_id: tenant_id,
       status: status,
       last_event_seq: 0,
       definition_id: Ecto.UUID.generate()
@@ -217,7 +216,7 @@ defmodule Letflow.EventStoreTest do
   # the past for archive/1 eligibility tests) and an optional caller-chosen
   # event_id/payload (so a $ref-pointing payload can reference its own
   # event_id, for the ON DELETE RESTRICT ordering test).
-  defp seed_event!(schema_name, tenant_id, instance_id, event_type, seq, created_at, opts \\ []) do
+  defp seed_event!(schema_name, _tenant_id, instance_id, event_type, seq, created_at, opts \\ []) do
     event_id = Keyword.get(opts, :event_id, Ecto.UUID.generate())
     payload = Keyword.get(opts, :payload, %{"seeded" => true})
 
@@ -230,8 +229,7 @@ defmodule Letflow.EventStoreTest do
       payload: payload,
       actor_id: Ecto.UUID.generate(),
       sequence_number: seq,
-      idempotency_key: unique_idempotency_key(),
-      tenant_id: tenant_id
+      idempotency_key: unique_idempotency_key()
     })
     |> Repo.insert!(prefix: schema_name)
   end
@@ -512,37 +510,37 @@ defmodule Letflow.EventStoreTest do
   end
 
   # ---------------------------------------------------------------------------------
-  # Acceptance criterion 6: tenant_id derivation and isolation. §9 OQ-1 of the
-  # design doc: events/instance_projections carry a real tenant_id column
-  # (asserted directly, sub-case a); instance_sequence/event_idempotency carry NO
-  # such column at all (asserted via schema-prefix reachability instead, sub-case
-  # b); a caller-supplied :tenant_id must fail loudly, not silently strip/honor
-  # (sub-case c).
+  # Acceptance criterion 6: tenant isolation. §9 OQ-1 of the design doc originally
+  # described this via a real tenant_id column on events/instance_projections
+  # (sub-case a); Decision 0006 D2 (REQ-064) dropped that column from both tables
+  # -- the per-tenant Postgres schema alone identifies the tenant now, so
+  # sub-case a below is restructured to prove isolation via :prefix reachability,
+  # the same technique sub-case b (instance_sequence/event_idempotency, which
+  # never had a tenant_id column) already used. A caller-supplied :tenant_id must
+  # still fail loudly, not silently strip/honor (sub-case c) -- that contract is
+  # about append/2's public API surface, not the schema, and is unaffected by the
+  # column drop (see Letflow.EventStore's own moduledoc).
   # ---------------------------------------------------------------------------------
 
   describe "tenant_id (AC6)" do
-    test "events and instance_projections rows carry tenant_id equal to the tenant :prefix resolves to" do
+    test "an event appended and its resulting projection are reachable only under the tenant whose :prefix they were written with" do
       %{tenant_id: tenant_id, schema_name: schema_name} = provisioned_tenant()
+      %{schema_name: other_schema_name} = provisioned_tenant()
+
       event_type = register_event_type!(tenant_id)
       instance_id = Ecto.UUID.generate()
       seed_projection!(schema_name, tenant_id, instance_id, :active)
 
-      # Computed independently of the fixture's own tenant_id, so a derivation bug
-      # in append/2 (e.g. reading the wrong opts key, or a broken reverse mapping)
-      # would surface as a genuine assertion failure rather than tautologically
-      # matching.
-      assert {:ok, expected_tenant_id} = TenantProvisioning.tenant_id_for_schema_name(schema_name)
-      assert expected_tenant_id == tenant_id
-
       attrs = append_attrs(event_type, %{instance_id: instance_id})
 
-      assert {:ok, %{event: %Event{tenant_id: event_tenant_id}}} =
+      assert {:ok, %{event: %Event{} = event}} =
                EventStore.append(attrs, prefix: schema_name)
 
-      assert event_tenant_id == expected_tenant_id
+      assert Repo.get_by(Event, [event_id: event.event_id], prefix: schema_name)
+      refute Repo.get_by(Event, [event_id: event.event_id], prefix: other_schema_name)
 
-      projection = Repo.get(InstanceProjection, instance_id, prefix: schema_name)
-      assert projection.tenant_id == expected_tenant_id
+      assert %InstanceProjection{} = Repo.get(InstanceProjection, instance_id, prefix: schema_name)
+      refute Repo.get(InstanceProjection, instance_id, prefix: other_schema_name)
     end
 
     test "instance_sequence and event_idempotency rows are reachable only under the correct tenant's schema prefix" do

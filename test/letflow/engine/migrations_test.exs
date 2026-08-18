@@ -164,11 +164,10 @@ defmodule Letflow.Engine.MigrationsTest do
     value
   end
 
-  defp insert_projection!(schema_name, tenant_id, instance_id, opts \\ []) do
+  defp insert_projection!(schema_name, _tenant_id, instance_id, opts \\ []) do
     attrs =
       %{
         instance_id: instance_id,
-        tenant_id: tenant_id,
         status: :active,
         last_event_seq: 0,
         definition_id: Keyword.get(opts, :definition_id, Ecto.UUID.generate())
@@ -383,7 +382,6 @@ defmodule Letflow.Engine.MigrationsTest do
       token =
         %Token{}
         |> Token.insert_changeset(%{
-          tenant_id: tenant_id,
           instance_id: instance_id,
           node_id: "n1",
           branch_id: instance_id
@@ -393,7 +391,6 @@ defmodule Letflow.Engine.MigrationsTest do
       task =
         %Task{}
         |> Task.insert_changeset(%{
-          tenant_id: tenant_id,
           instance_id: instance_id,
           token_id: token.id,
           node_id: "n1",
@@ -412,7 +409,6 @@ defmodule Letflow.Engine.MigrationsTest do
       token =
         %Token{}
         |> Token.insert_changeset(%{
-          tenant_id: tenant_id,
           instance_id: instance_id,
           node_id: "n1",
           branch_id: instance_id
@@ -424,69 +420,16 @@ defmodule Letflow.Engine.MigrationsTest do
   end
 
   # ---------------------------------------------------------------------------------
-  # Acceptance criterion: "a test demonstrating a row written into tasks (and
-  # tokens) has tenant_id equal to the tenant whose schema the write targeted,
-  # derived internally; a test deliberately making a caller-supplied tenant_id
-  # disagree with the target schema fails loudly rather than silently attributing
-  # to the wrong tenant"
-  #
-  # See test/specs/REQ-043.md's "Flagged limitation" section for the full
-  # explanation (also filed as a MINOR issue on this run's handoff): REQ-043 ships
-  # NO context-module function with a public `attrs` parameter for either table --
-  # only the two Ecto.Schema modules and their structural changesets. The design
-  # doc itself (§6 point 2) states this explicitly: "this requirement's schema
-  # modules structurally support that contract ... but cannot themselves enforce
-  # the 'never caller-supplied' half, since REQ-043 builds no public function a
-  # caller could pass attrs into. Flagged explicitly for REQ-045/051/062's own
-  # CODE-DESIGNER to carry forward, not silently assumed automatic." A literal
-  # "rejects a disagreeing tenant_id" test would therefore assert something false
-  # about REQ-043's own code -- so the three tests below instead (a) demonstrate
-  # the CORRECT usage pattern a future caller must follow, (b) demonstrate real
-  # tenant/schema isolation at the storage level (schema-per-tenant does its job
-  # regardless of what tenant_id column value is stamped), and (c) HONESTLY pins
-  # today's real, documented-as-a-gap behavior: a disagreeing tenant_id is
-  # currently accepted, not rejected. Test (c) is written so that it fails the
-  # moment someone adds enforcement at this layer without updating this test --
-  # forcing a conscious acknowledgement rather than a silent behavior change.
+  # Post-REQ-064 (Decision 0006 D2): `tokens.tenant_id`/`tasks.tenant_id` were
+  # dropped -- the per-tenant Postgres schema alone identifies the tenant now, so
+  # there is no longer a "tenant_id derivation" contract to test at this layer
+  # (see token_record.ex's/task.ex's own "No `tenant_id` column (Decision 0006
+  # D2)" moduledoc sections). What remains meaningful is that tenant isolation is
+  # still real at the storage level: a row written under one tenant's schema is
+  # simply not reachable through a different tenant's :prefix.
   # ---------------------------------------------------------------------------------
 
-  describe "tenant_id internal-derivation contract (design §6)" do
-    test "a Token/Task row's correctly-derived tenant_id stores and reads back exactly" do
-      %{schema_name: schema_name, tenant_id: tenant_id} = provisioned_tenant()
-      instance_id = Ecto.UUID.generate()
-      assert {:ok, _} = insert_projection!(schema_name, tenant_id, instance_id)
-
-      # Derived independently of the fixture's own tenant_id, so a derivation bug
-      # would surface as a genuine assertion failure rather than tautologically
-      # matching -- same technique event_store_test.exs's AC6 test uses.
-      assert {:ok, expected_tenant_id} = TenantProvisioning.tenant_id_for_schema_name(schema_name)
-      assert expected_tenant_id == tenant_id
-
-      token =
-        %Token{}
-        |> Token.insert_changeset(%{
-          tenant_id: expected_tenant_id,
-          instance_id: instance_id,
-          node_id: "n1",
-          branch_id: instance_id
-        })
-        |> Repo.insert!(prefix: schema_name)
-
-      task =
-        %Task{}
-        |> Task.insert_changeset(%{
-          tenant_id: expected_tenant_id,
-          instance_id: instance_id,
-          token_id: token.id,
-          node_id: "n1",
-          node_name: "Approve"
-        })
-        |> Repo.insert!(prefix: schema_name)
-
-      assert Repo.get(Token, token.id, prefix: schema_name).tenant_id == expected_tenant_id
-      assert Repo.get(Task, task.id, prefix: schema_name).tenant_id == expected_tenant_id
-    end
-
+  describe "tenant isolation is enforced by schema (:prefix), not by a tenant_id column" do
     test "a Token row is reachable only under its own tenant's :prefix" do
       %{schema_name: schema_name, tenant_id: tenant_id} = provisioned_tenant()
       %{schema_name: other_schema_name} = provisioned_tenant()
@@ -497,7 +440,6 @@ defmodule Letflow.Engine.MigrationsTest do
       token =
         %Token{}
         |> Token.insert_changeset(%{
-          tenant_id: tenant_id,
           instance_id: instance_id,
           node_id: "n1",
           branch_id: instance_id
@@ -506,32 +448,6 @@ defmodule Letflow.Engine.MigrationsTest do
 
       assert Repo.get(Token, token.id, prefix: schema_name)
       refute Repo.get(Token, token.id, prefix: other_schema_name)
-    end
-
-    test "a disagreeing tenant_id is currently accepted, not rejected (flagged gap, design §6 pt 2)" do
-      %{schema_name: schema_name, tenant_id: tenant_id} = provisioned_tenant()
-      instance_id = Ecto.UUID.generate()
-      assert {:ok, _} = insert_projection!(schema_name, tenant_id, instance_id)
-
-      disagreeing_tenant_id = Ecto.UUID.generate()
-      refute disagreeing_tenant_id == tenant_id
-
-      changeset =
-        Token.insert_changeset(%Token{}, %{
-          tenant_id: disagreeing_tenant_id,
-          instance_id: instance_id,
-          node_id: "n1",
-          branch_id: instance_id
-        })
-
-      # The schema module's own changeset does not know what schema it will be
-      # written under (design §6 point 1 -- "the schema module itself has no
-      # access to opts[:prefix]"), so it cannot itself reject this. This is the
-      # exact, deliberate boundary the design flags for REQ-045/051/062 to close.
-      assert changeset.valid?
-
-      assert {:ok, token} = Repo.insert(changeset, prefix: schema_name)
-      assert Repo.get(Token, token.id, prefix: schema_name).tenant_id == disagreeing_tenant_id
     end
   end
 

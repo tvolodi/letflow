@@ -1,0 +1,111 @@
+{
+  "handoff_id": "c3d4e5f6-0064-4a00-9f01-req064step02c",
+  "run_id": "WF02-REQ064-20260818",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ064-20260818/step-02c-security-review.json",
+  "created_at": "2026-08-18T13:20:18Z",
+  "started_at": "2026-08-18T13:20:18Z",
+  "completed_at": "2026-08-18T13:25:46Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-064"],
+    "requirement_text": {
+      "REQ-064": "Execute Decision 0006's D2: drop tenant_id from ten schema-isolated business tables and remove the write-path machinery that populated it. See lib/letflow/design/req064-drop-tenant-id.md for the approved design and handoffs/WF02-REQ064-20260818/step-02a-elixir-dev.json for the full implementation report, including scope beyond the design's own artifacts_in list -- flagged explicitly below, this is the main reason this gate is HIGH priority."
+    },
+    "related_handoff_ids": [
+      "c3d4e5f6-0064-4a00-9f01-req064step01",
+      "c3d4e5f6-0064-4a00-9f01-req064step01b",
+      "c3d4e5f6-0064-4a00-9f01-req064step02a"
+    ],
+    "artifacts_in": [
+      "priv/repo/migrations/20260820000001_20260820000010",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/identity_migration.ex",
+      "lib/letflow/tenant_provisioning.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Read context.artifacts_in and git diff main...HEAD on this branch. This diff touches a tenant-data path -- scope test result is YES, in scope.\n\nThis run's ELIXIR-DEV self-reported finding and fixing THREE real breaks that were NOT in the approved design's artifacts_in list -- these are exactly the kind of unreviewed scope-expansion that most needs independent security scrutiny, since no design gate ever looked at them:\n\n1. lib/letflow/definitions.ex's run_rollback_transaction/4 and supersede_matching_review/4 (downstream of the design's own 'leave unchanged' call site rollback_definition_version/4) previously queried d.tenant_id/r.tenant_id directly -- ELIXIR-DEV changed these to rely on prefix-scoping alone (i.e. the Postgres schema boundary, not a WHERE tenant_id = ... clause). Verify this is actually safe: does removing the explicit tenant_id predicate from these two queries risk a cross-tenant read/write if prefix-scoping is ever wrong or missing at the call site? Trace where prefix comes from in both functions' call chains.\n\n2. lib/letflow/identity.ex's get_by_external_identity/3 previously did Repo.get_by(User, tenant_id: ...) directly -- now relies on prefix-scoping alone. This function is on the JIT-provisioning/auth path (called from provision_oidc_user/4's chain, which SECURITY-REVIEWER already gated once in REQ-063's own run) -- verify the same way: could removing the tenant_id predicate here weaken the cross-tenant identity-collision protection REQ-063's own security gate established, or is prefix-scoping alone equivalent (as decision 0006 argues generally, but this is a specific function on an auth-sensitive path, verify it specifically rather than accepting the general argument).\n\n3. lib/letflow/definitions/promotion.ex's promote_definition/3 previously read target_tenant_id from review.tenant_id (a field now removed from PromotionReview); ELIXIR-DEV changed it to read plan[\"target_tenant_id\"] from the serialised_plan instead, claiming this value was 'already present, not a new source'. Verify this claim directly: read where serialised_plan/plan[\"target_tenant_id\"] is originally set (trace it back to its origin), and confirm it is NOT attacker/caller-controlled data that could be used to redirect a promotion to an unintended tenant -- this is a promotion/cross-tenant-write path, exactly the shape of thing INV-1 and INV-7 exist to catch. Also check write_target_definition/5 and deprecate_previous_active/3, both of which ELIXIR-DEV also modified in this same file.\n\nAlso run your full standard INV-1..INV-8 checklist against the rest of the diff (the ten migrations, the schema-module field removals, the identity_migration.ex fragment/2 changes) -- the three items above are where to weight your time, not the entirety of your check.",
+    "acceptance_criteria": [
+      "Verdict stated per invariant, INV-1 through INV-8, APPLIES or NOT-APPLICABLE, with a PASS/FAIL for each APPLIES invariant",
+      "definitions.ex's two prefix-scoping-only queries (run_rollback_transaction/4, supersede_matching_review/4) independently traced for prefix-source safety, not accepted on ELIXIR-DEV's claim",
+      "identity.ex's get_by_external_identity/3 prefix-reliance verified specifically against the auth/JIT-provisioning path, not just against decision 0006's general argument",
+      "promotion.ex's plan[\"target_tenant_id\"] data source traced to its origin and confirmed not attacker/caller-controlled",
+      "FAIL immediately, no partial credit, if any APPLIES invariant fails or if any of the three traced items reveals a real cross-tenant risk"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Traced all three flagged unreviewed items to their origin and confirmed no cross-tenant risk in any. (1) definitions.ex run_rollback_transaction/4 and supersede_matching_review/4: prefix originates at rollback_definition_version/4's Keyword.get(opts, :prefix), gated by TenantProvisioning.tenant_id_for_schema_name(prefix) before any write, threaded unchanged through do_rollback -> run_rollback_transaction/finish_rollback -> supersede_matching_review -- same pattern as every other already-reviewed function in this module (get_by_id/2, list/2, etc), no caller in-repo yet supplies opts[:prefix] from untrusted input (not wired to any web/auth surface pre-S4). Prefix-scoping alone is sufficient. (2) identity.ex get_by_external_identity/3: opts[:prefix] traces to AuthPipeline.provision_user/3 (unchanged by this diff), which derives it via TenantProvisioning.schema_name_for_tenant(tenant_id) where tenant_id comes from resolve_tenant_by_realm/1 -- resolved from the realm claim against tenants, never a client-supplied tenant_id. users.tenant_id column is physically dropped by this diff's migration 20260820000009, so the old Repo.get_by filter would now raise Ecto.QueryError -- removing it is required, not just safe. (3) promotion.ex promote_definition/3 (plus write_target_definition/5, deprecate_previous_active/3): plan[\"target_tenant_id\"] traces to compute_promotion_plan/5's direct target_tenant_id function argument, stamped into the plan map and Jason.encode!'d into serialised_plan exactly once at insert_review/2 time (promotion_review_store.ex:227). PromotionReview has no update_changeset/2 (moduledoc states this explicitly) and status transitions only use Repo.update_all on status-scoped fields -- serialised_plan is immutable post-insert. promote_definition/3 pattern-matches on a real %PromotionReview{} Ecto struct, so no caller can pass an arbitrary JSON blob directly; the only way target_tenant_id reaches this function is via a row that was already durably persisted through insert_review/2. Confirmed NOT attacker/caller-controlled. One non-blocking observation recorded for the record: PromotionDigest.compute_plan_digest/1's docstring states the digest covers only plan.entries, not the full plan envelope, so verify_digest/2 does not itself protect target_tenant_id from tampering in isolation -- but this is pre-existing digest scope unchanged by this diff, and no live write path exists today (pre-S4, no API surface) where an attacker could inject an arbitrary serialised_plan at insert time. Full INV-1..INV-8 checklist run against the rest of the diff (ten migrations, schema-module field removals, identity_migration.ex fragment/2 changes): all ten migrations correctly guarded (if prefix() do) and registered in tenant_scoped_migration_manifest (27 entries, verified by diff); all ten schema modules' tenant_id field/cast/validate_required entries removed in lockstep, no schema retains a castable tenant_id; identity_migration.ex's fragment(\"? = ?\", g.tenant_id, ^tenant_id) reads from the legacy public.groups/public.users tables (which still carry tenant_id until a separate drop migration), uses a bound parameter (^tenant_id), not string interpolation -- INV-7 clean. No hardcoded secrets or Repo.query changes in this diff (grep clean; the three Repo.query! hits in tenant_provisioning.ex/sandbox_pool.ex/fixture_loader.ex are pre-existing, untouched by this diff). No new {:ok, x} = bare-match crash risk introduced (grep clean).",
+    "artifacts_out": [
+      "handoffs/WF02-REQ064-20260818/step-02c-security-review.json"
+    ],
+    "issues": [],
+    "invariant_checklist": {
+      "INV-1": {
+        "verdict": "APPLIES",
+        "result": "PASS",
+        "notes": "Ten tenant-scoped tables' tenant_id columns dropped (migrations 20260820000001-000010). (a) All reads/writes in the touched functions confirmed scoped through :prefix (Repo.*(..., prefix: prefix) or equivalent) -- traced in definitions.ex, identity.ex, promotion.ex, promotion_review_store.ex, event_store.ex, event_store/*.ex, engine/task.ex, engine/token_record.ex. (b) All ten migrations use the mandatory `if prefix() do` guard and are registered in TenantProvisioning.tenant_scoped_migration_manifest (verified: 27 entries total, ten new ones added in this diff) -- not silently left reachable outside the tenant-scoped-migration mechanism. (c) No schema module retains a tenant_id field/cast that could accept a caller-supplied value post-drop -- confirmed across process_definition.ex, promotion_review.ex, promotion_assertion_run.ex, task.ex, token_record.ex, event.ex, archived_event.ex, instance_projection.ex, identity/user.ex, identity/group.ex."
+      },
+      "INV-2": {
+        "verdict": "NOT-APPLICABLE",
+        "result": "N/A",
+        "notes": "No multi-tenant API surface exists yet (S4 not started); this diff touches no controller/response-shaping code."
+      },
+      "INV-3": {
+        "verdict": "NOT-APPLICABLE",
+        "result": "N/A",
+        "notes": "S5 (scripting/plugins) has not started; no sandboxed-runtime code touched."
+      },
+      "INV-4": {
+        "verdict": "APPLIES",
+        "result": "PASS",
+        "notes": "grep -rniE secret/password/token pattern against the diff's changed files: no hits. No secret material introduced, logged, or threaded through any return value/handoff in this diff."
+      },
+      "INV-5": {
+        "verdict": "NOT-APPLICABLE",
+        "result": "N/A",
+        "notes": "No lookup-by-ID endpoint exists yet (S4 not started)."
+      },
+      "INV-6": {
+        "verdict": "APPLIES",
+        "result": "PASS",
+        "notes": "This handoff itself is the proof artefact: explicit per-invariant statement of applicability and satisfaction, independently re-derived from the diff rather than accepted from ELIXIR-DEV's self-report."
+      },
+      "INV-7": {
+        "verdict": "APPLIES",
+        "result": "PASS",
+        "notes": "grep -rn Repo.query lib/ priv/repo/migrations/ -- three hits, all in files untouched by this diff (tenant_provisioning.ex lines not part of this diff's changed hunks, sandbox_pool.ex, fixture_loader.ex) and all pre-existing/previously reviewed with server-derived schema_name, not user input. identity_migration.ex's new fragment(\"? = ?\", g.tenant_id, ^tenant_id) uses a bound parameter, not string interpolation -- clean. No raw-SQL string concatenation introduced anywhere in this diff."
+      },
+      "INV-8": {
+        "verdict": "APPLIES",
+        "result": "PASS",
+        "notes": "grep -n '^\\+\\s*{:ok, .*} = ' against the diff: no hits. No new unhandled bare-match crash risk introduced on any tenant-controlled or external-I/O path."
+      }
+    },
+    "traced_items": {
+      "item_1_definitions_ex": "SAFE -- prefix traced to rollback_definition_version/4's opts[:prefix], gated via TenantProvisioning.tenant_id_for_schema_name/1, threaded unchanged through the full call chain. No untrusted-caller path exists to this pre-S4 engine-internal API.",
+      "item_2_identity_ex": "SAFE -- prefix traced through AuthPipeline.provision_user/3 (unchanged) to TenantProvisioning.schema_name_for_tenant(tenant_id) on a tenant_id resolved via resolve_tenant_by_realm/1 from the realm binding, never client-supplied. Column removal is required for correctness (users.tenant_id no longer exists), not merely safe.",
+      "item_3_promotion_ex": "SAFE -- plan[\"target_tenant_id\"] traced to compute_promotion_plan/5's direct function argument, persisted once and immutably into promotion_reviews.serialised_plan (no update_changeset/2 exists on PromotionReview). Not attacker/caller-controlled. Non-blocking note: PromotionDigest covers only plan.entries, not the envelope including target_tenant_id -- pre-existing scope, unchanged by this diff, no live exploitable path today."
+    },
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ064-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ064-20260818",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

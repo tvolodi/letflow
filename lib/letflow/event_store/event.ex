@@ -60,13 +60,16 @@ defmodule Letflow.EventStore.Event do
   table. The ES-03 global-uniqueness invariant is enforced solely by
   `Letflow.EventStore.IdempotencyRecord`'s `uq_event_idempotency_key`.
 
-  ## `tenant_id` (design §2.5)
+  ## No `tenant_id` column (Decision 0006 D2)
 
-  This table is one of three (with `events_archive` and `instance_projections`)
-  that carry `tenant_id`, matching R-Co's own settled `adp-0x` state exactly —
-  not every event-store table needs it, since every table here already lives
-  inside one tenant's own Postgres schema. See the design doc §2.5 for the
-  full asymmetry rationale before "completing" it on another table.
+  This table carried `tenant_id` until Decision 0006 D2
+  (`docs/migration/decisions/0006-identity-tables-schema-per-tenant.md`)
+  dropped it from every event-store table — the per-tenant Postgres schema
+  already identifies the owning tenant, and 0006 §R3 documents that this
+  table's own original migration header already conceded the column carried
+  at most one distinct value per schema. See `lib/letflow/design/req023-event-store-schema.md`
+  §2.5 for the superseded asymmetry rationale (retained there for history,
+  not as current guidance).
   """
 
   use Ecto.Schema
@@ -84,7 +87,6 @@ defmodule Letflow.EventStore.Event do
     field(:idempotency_key, :string)
     field(:metadata, :map, default: %{})
     field(:global_seq, :integer, read_after_writes: true)
-    field(:tenant_id, Ecto.UUID)
   end
 
   @type t :: %__MODULE__{}
@@ -98,8 +100,7 @@ defmodule Letflow.EventStore.Event do
     :actor_id,
     :sequence_number,
     :idempotency_key,
-    :metadata,
-    :tenant_id
+    :metadata
   ]
 
   @required_fields [
@@ -110,8 +111,7 @@ defmodule Letflow.EventStore.Event do
     :payload,
     :actor_id,
     :sequence_number,
-    :idempotency_key,
-    :tenant_id
+    :idempotency_key
   ]
 
   @doc """

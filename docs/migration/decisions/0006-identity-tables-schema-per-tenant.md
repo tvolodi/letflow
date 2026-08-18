@@ -1,8 +1,13 @@
 # 0006 — Identity tables move behind `:prefix`; `tenant_id` retired from schema-isolated tables
 
-Status: decided. D1 shipped (REQ-063, REVIEWER + SECURITY-REVIEWER sign-off,
-RELEASE-VALIDATOR PASS). D2 not yet executed — pending REQ-064. Owner: ORCH →
-REVIEWER + SECURITY-REVIEWER.
+Status: decided and fully shipped. D1 shipped (REQ-063, REVIEWER +
+SECURITY-REVIEWER sign-off, RELEASE-VALIDATOR PASS). D2 shipped (REQ-064,
+REVIEWER + SECURITY-REVIEWER sign-off, RELEASE-VALIDATOR PASS — 777/777 tests
+green). D3 and D4 stand as documented in this record: D3 (tenant_id retained
+on the four structurally-global public-schema tables) was never itself a
+change to execute — it is what D2 deliberately leaves untouched. D4 (the
+cross-tenant reporting mechanism) remains an open forward commitment with no
+owning requirement yet, per §7. Owner: ORCH → REVIEWER + SECURITY-REVIEWER.
 
 Supersedes: `0003-ecto-schema-strategy.md` Dimension B, in part (see §6 for the
 exact clause superseded and the exact clauses left standing).

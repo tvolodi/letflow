@@ -1,0 +1,113 @@
+{
+  "handoff_id": "c3d4e5f6-0064-4a00-9f01-req064step02a",
+  "run_id": "WF02-REQ064-20260818",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ064-20260818/step-02a-elixir-dev.json",
+  "created_at": "2026-08-18T12:57:34Z",
+  "started_at": "2026-08-18T12:57:34Z",
+  "completed_at": "2026-08-18T13:20:00Z",
+  "status": "PASS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-064"],
+    "requirement_text": {
+      "REQ-064": "Execute Decision 0006's D2: drop tenant_id from the ten schema-isolated business tables. Approved design (PASS on first gate pass, all 4 flagged corrections independently re-verified): lib/letflow/design/req064-drop-tenant-id.md."
+    },
+    "related_handoff_ids": [
+      "c3d4e5f6-0064-4a00-9f01-req064step01",
+      "c3d4e5f6-0064-4a00-9f01-req064step01b"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req064-drop-tenant-id.md",
+      "docs/migration/decisions/0006-identity-tables-schema-per-tenant.md",
+      "lib/letflow/engine/token_record.ex",
+      "lib/letflow/engine/task.ex",
+      "lib/letflow/event_store/event.ex",
+      "lib/letflow/event_store/archived_event.ex",
+      "lib/letflow/event_store/instance_projection.ex",
+      "lib/letflow/definitions/process_definition.ex",
+      "lib/letflow/definitions/promotion_review.ex",
+      "lib/letflow/definitions/promotion_assertion_run.ex",
+      "lib/letflow/identity/user.ex",
+      "lib/letflow/identity/group.ex",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/definitions/promotion_review_store.ex"
+    ],
+    "owned_modules": [
+      "priv/repo/migrations",
+      "lib/letflow/engine",
+      "lib/letflow/event_store",
+      "lib/letflow/definitions",
+      "lib/letflow/identity",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/tenant_provisioning.ex"
+    ]
+  },
+  "task": {
+    "description": "Implement lib/letflow/design/req064-drop-tenant-id.md in full. Read the design doc in full before writing any code -- it went through one clean gate pass with 4 specific corrections to the original requirement text independently re-verified, so implement exactly what it specifies, not the requirement text's now-superseded module names/call-site counts.\n\nKey points from the design (do not deviate without flagging why in your handoff):\n- Letflow.Engine.TokenRecord (not Engine.Token, which is REQ-044's separate in-memory struct) owns the tokens table's tenant_id field.\n- 14 tenant_id_for_schema_name/1 call sites across definitions.ex/event_store.ex/promotion_review_store.ex, each with its own per-site decision in the design -- two definitions.ex sites (activate/2, rollback_definition_version/4) are explicitly LEFT UNCHANGED because tenant_id there feeds a real service-scope/permission-checker consumer, not column-stamping. Do not touch those two.\n- A third users index (index(:users, [:tenant_id, :status, :inserted_at])) gets dropped with no replacement per the design's §7.2 open-question resolution (confirmed safe by the design gate -- no query filters on status+inserted_at within a tenant schema).\n- Two composite indexes simplify with the idempotency contract restated in the new migration's header (promotion_reviews, promotion_assertion_runs).\n- Moduledoc updates needed on more modules than the original requirement text named: Engine.Task, Engine.TokenRecord, Identity.User, Identity.Group, and all three EventStore schema modules (Event, ArchivedEvent, InstanceProjection) -- each currently has tenant_id-describing prose that must be corrected, not left stale.\n- Do NOT delete TenantProvisioning.tenant_id_for_schema_name/1 itself -- only its now-unneeded stamping call sites.\n- Do NOT touch the four D3 tables (tenant_schemas, solution_pack_installs, solution_pack_artefact_bases, pack_update_resolutions) -- tenant_id there is a real FK, out of scope.\n\nSelf-review checklist (WF-02 §2a, plus this run's own specifics):\n- mix compile --warnings-as-errors must exit 0\n- mix ecto.migrate applies cleanly against a real/Docker Postgres for the new drop-tenant_id migration(s), applied against at least one real provisioned tenant schema\n- Every one of the 10 schema modules' tenant_id field/cast/validate_required entries removed per the design's confirmed module list (TokenRecord, not Token)\n- The two definitions.ex call sites left unchanged compile correctly and still function (their consumers -- run_service_scope_validator/3, the permission_checker -- are untouched)\n- Moduledoc text updated on every module the design names, not just the two the original requirement text named\n- No SQL string interpolation of tenant/user input (INV-7) in the new migration",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "All migrations apply cleanly against a fresh DB via mix ecto.migrate",
+      "None of the ten confirmed tables has a tenant_id column after migration, verified against information_schema.columns in a real provisioned tenant schema",
+      "The four D3 tables retain tenant_id with their FK intact, untouched",
+      "The two composite indexes are simplified per the design, with the idempotency contract preserved",
+      "The two definitions.ex call sites (activate/2, rollback_definition_version/4) are unchanged and still compile/function",
+      "tenant_id_for_schema_name/1 itself still exists",
+      "Every moduledoc the design names is updated, not left describing a removed field"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented lib/letflow/design/req064-drop-tenant-id.md in full: ten new tenant-scoped migrations drop tenant_id from events, events_archive, instance_projections, process_definitions, tokens (Letflow.Engine.TokenRecord, per the design's corrected module list), tasks, promotion_reviews, promotion_assertion_runs, users, groups; both composite indexes (uq_promotion_review_active_digest, uq_promotion_assertion_runs_idempotency) simplified per the design's exact before/after with idempotency contract restated in each migration header; the third users index (users_tenant_id_status_inserted_at_index) dropped with no replacement per the design's §7 resolution; ten schema modules' field/cast/validate_required entries removed; moduledocs updated on Engine.Task, Engine.TokenRecord, Identity.User, Identity.Group, and all three EventStore schema modules. All 14 tenant_id_for_schema_name/1 call sites in definitions.ex/event_store.ex/promotion_review_store.ex handled per the design's per-site table -- the two definitions.ex sites (activate/2 line 506, rollback_definition_version/4 line 687) left unchanged as specified, feeding run_service_scope_validator/permission_checker respectively. tenant_id_for_schema_name/1 itself untouched; the four D3 tables (tenant_schemas, solution_pack_installs, solution_pack_artefact_bases, pack_update_resolutions) untouched, verified by direct information_schema query against a real provisioned tenant schema. During implementation, found and fixed three real breaks the design's artifacts_in list did not cover, all direct, mandatory consequences of the same column drops: (1) lib/letflow/definitions.ex's run_rollback_transaction/4 and supersede_matching_review/4 (both in rollback_definition_version/4's call graph, downstream of the 'unchanged' line-687 site) queried d.tenant_id/r.tenant_id directly on process_definitions/promotion_reviews -- fixed to rely on prefix-scoping alone, tenant_id parameters dropped from both plus finish_rollback/8 and do_rollback/6 (the latter's param prefixed _tenant_id rather than removed, to keep rollback_definition_version/4's own call site to do_rollback/6 exactly as the design specified); (2) lib/letflow/identity.ex's get_by_external_identity/3 queried Repo.get_by(User, tenant_id: ...) directly -- fixed to rely on prefix-scoping alone; (3) lib/letflow/definitions/promotion.ex's promote_definition/3 read target_tenant_id from review.tenant_id (a field now gone from PromotionReview) and both write_target_definition/5 and deprecate_previous_active/3 stamped/queried process_definitions.tenant_id directly -- fixed to read target_tenant_id from plan[\"target_tenant_id\"] (already present in serialised_plan via PromotionPlan.t(), not a new/less-trusted source) and drop the tenant_id filter from the deprecate query. Also fixed lib/letflow/identity_migration.ex's copy_groups/2, copy_users/2, copy_tenant_roles/2 (REQ-063's legacy-to-per-tenant cutover copy, still live/tested): these read FROM the legacy public.groups/public.users tables via Letflow.Identity.Group/User Ecto queries filtering on g.tenant_id/u.tenant_id -- since those schema modules just lost the field, the query macro would no longer compile; switched to fragment/2 raw-column references since the SOURCE side of this one-time copy still legitimately queries the about-to-be-dropped legacy public columns (the destination per-tenant insert side already drops tenant_id automatically via Ecto.Changeset.change/1 on the now-field-less struct, no code change needed there). All three fixes flagged here for REVIEWER since they go beyond artifacts_in but were required for mix compile --warnings-as-errors to stay clean and for the affected functions to still work at runtime -- none is a re-decision of anything in Decision 0006/0003, all are mechanical consequences of the same column drops the design specifies.",
+    "artifacts_out": [
+      "priv/repo/migrations/20260820000001_drop_tenant_id_events.exs",
+      "priv/repo/migrations/20260820000002_drop_tenant_id_events_archive.exs",
+      "priv/repo/migrations/20260820000003_drop_tenant_id_instance_projections.exs",
+      "priv/repo/migrations/20260820000004_drop_tenant_id_process_definitions.exs",
+      "priv/repo/migrations/20260820000005_drop_tenant_id_tokens.exs",
+      "priv/repo/migrations/20260820000006_drop_tenant_id_tasks.exs",
+      "priv/repo/migrations/20260820000007_drop_tenant_id_promotion_reviews.exs",
+      "priv/repo/migrations/20260820000008_drop_tenant_id_promotion_assertion_runs.exs",
+      "priv/repo/migrations/20260820000009_drop_tenant_id_users.exs",
+      "priv/repo/migrations/20260820000010_drop_tenant_id_groups.exs",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/engine/token_record.ex",
+      "lib/letflow/engine/task.ex",
+      "lib/letflow/event_store/event.ex",
+      "lib/letflow/event_store/archived_event.ex",
+      "lib/letflow/event_store/instance_projection.ex",
+      "lib/letflow/definitions/process_definition.ex",
+      "lib/letflow/definitions/promotion_review.ex",
+      "lib/letflow/definitions/promotion_assertion_run.ex",
+      "lib/letflow/identity/user.ex",
+      "lib/letflow/identity/group.ex",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/definitions/promotion_review_store.ex",
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity_migration.ex"
+    ],
+    "issues": [
+      "Three real breaks found beyond the design's artifacts_in list, all fixed (see summary): lib/letflow/definitions.ex (run_rollback_transaction/4, supersede_matching_review/4, finish_rollback/8, do_rollback/6 tenant_id-column-query cleanup downstream of rollback_definition_version/4), lib/letflow/identity.ex (get_by_external_identity/3), lib/letflow/definitions/promotion.ex (promote_definition/3, write_target_definition/5, deprecate_previous_active/3 -- review.tenant_id source removed, replaced with plan[\"target_tenant_id\"]), and lib/letflow/identity_migration.ex (copy_groups/2, copy_users/2, copy_tenant_roles/2 -- switched to fragment/2 for the legacy-public-table read side). REVIEWER should re-confirm these are correct scope, not re-decisions of anything settled by Decision 0006/0003 -- they are mechanical consequences of the column drops, not new design choices.",
+      "mix test (informational, not this handoff's gate): confirmed 32 test files reference tenant_id, ~20 constructing struct literals against the ten changed schema modules; test/letflow/event_store/schemas_test.exs fails to compile at %InstanceProjection{tenant_id: ...} as the first example hit. This is expected fallout from the schema change and is TEST-DESIGNER/TEST-RUNNER's downstream job per WF-02, not fixed here -- flagging so REVIEWER and the next steps aren't surprised by red CI before TEST-DESIGNER updates the affected specs."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ064-20260818",
+      "commit_sha_list": ["11ddb01b812668ec3a2c9c1c32ec2de7b48ef5f7"],
+      "remote_branch": "origin/feature/WF02-REQ064-20260818",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,59 @@
+{
+  "handoff_id": "c3d4e5f6-0064-4a00-9f01-req064step06",
+  "run_id": "WF02-REQ064-20260818",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ064-20260818/step-06-doc-updater.json",
+  "created_at": "2026-08-18T15:22:54Z",
+  "started_at": "2026-08-18T15:22:54Z",
+  "completed_at": "2026-08-18T15:25:04Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-064"],
+    "requirement_text": {
+      "REQ-064": "Execute Decision 0006's D2: drop tenant_id from ten schema-isolated business tables. RELEASE-VALIDATOR PASSed (Step 5), independently re-verifying all seven acceptance criteria and re-running mix test (777/777). This is the second and final half of decision 0006 -- REQ-063 (D1) already merged; RELEASE-VALIDATOR already updated decision 0006's Status line to reflect both halves shipped."
+    },
+    "related_handoff_ids": ["c3d4e5f6-0064-4a00-9f01-req064step05"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "README.md",
+      "docs/migration/decisions/0006-identity-tables-schema-per-tenant.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "1. Flip REQ-064's status in docs/requirements.yaml from in_progress to done.\n2. Append a done event to docs/status/requirement_status.yaml (real UTC timestamp from the clock, not memory) -- the started event for this requirement was already logged at 2026-08-18T12:43:35Z.\n3. Check README.md: this requirement is a column drop across ten tables plus write-path cleanup -- internal schema/migration work, no new HTTP route, no gen_statem/process change. REQ-063 (a closely related, larger schema-per-tenant change) left README.md untouched under this same reasoning -- confirm that precedent still applies by actually reading README.md's relevant sections yourself, don't just assume.\n4. RELEASE-VALIDATOR already updated docs/migration/decisions/0006-identity-tables-schema-per-tenant.md's Status line during Step 5 to reflect both D1 and D2 as shipped -- read it and confirm it's accurate, do not re-edit unless you find it's actually wrong.\n5. Re-read REQ-064's seven acceptance criteria directly from docs/requirements.yaml to confirm none names a docs/migration/stage-N-*.md file needing an update.\n6. This is the second of a two-part requirement (REQ-063 D1, REQ-064 D2) both executing decision 0006 -- if this project's docs/migration/README.md or stage-3 doc keeps any kind of per-requirement completion tracking that would need updating now that both halves are done, check it; if not (per the ISS-0022 precedent RELEASE-VALIDATOR/prior DOC-UPDATER runs have already established, avoiding per-requirement snapshot counts), leave it alone.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-064 status flipped in_progress -> done",
+      "docs/status/requirement_status.yaml has a new done event with a real UTC timestamp",
+      "README.md checked directly against what actually shipped, left untouched or updated with an explicit reason stated either way",
+      "decision 0006's Status line confirmed accurate, not re-edited unnecessarily",
+      "Every file actually touched is named explicitly in artifacts_out, not just 'docs updated'"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-064 flipped in_progress -> done in docs/requirements.yaml. Appended a done event to docs/status/requirement_status.yaml with real UTC timestamp 2026-08-18T15:25:04Z. README.md's 'What's here today'/'Running it' sections read directly: they still describe only the original pilot slice (ProcessInstance gen_statem, Router's 3 HTTP endpoints) with no mention of tenant_id/identity tables, so REQ-064 (internal column-drop + write-path cleanup, no new HTTP route, no gen_statem/process change) doesn't alter documented behavior -- left untouched, same reasoning as REQ-063's DOC-UPDATER step. Decision 0006's Status line read and confirmed accurate (D1 shipped REQ-063, D2 shipped REQ-064, 777/777 tests) -- not re-edited. REQ-064's seven acceptance criteria re-read from docs/requirements.yaml directly -- none names a docs/migration/stage-N-*.md file. docs/migration/README.md's 'Requirement expansion' section confirmed to still deliberately avoid a per-requirement snapshot count (ISS-0022 precedent) -- left alone; no docs/migration/stage-3-*.md file exists.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ064-20260818",
+      "commit_sha_list": ["39fe2a0"],
+      "remote_branch": "origin/feature/WF02-REQ064-20260818",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH: proceed to stage-gate/merge checks for REQ-064."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

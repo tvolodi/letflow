@@ -47,9 +47,16 @@ defmodule Letflow.Definitions.Promotion do
 
     1. `Jason.decode!/1` `review.serialised_plan` — a plain string-keyed map,
        never re-hydrated into the atom-keyed `PromotionPlan.t()` shape.
-       Extracts `source_tenant_id`, `process_key`, `base_version` from it;
-       `target_tenant_id` is read from `review.tenant_id` directly (already a
-       trusted, typed value on the struct).
+       Extracts `source_tenant_id`, `process_key`, `base_version`,
+       `target_tenant_id` from it. **Post-Decision-0006-D2 note (REQ-064):**
+       `target_tenant_id` used to be read from `review.tenant_id` directly
+       (already a trusted, typed value on the struct); `promotion_reviews.tenant_id`
+       no longer exists as a column (D2 dropped it — the per-tenant Postgres
+       schema the row lives in already identifies the tenant), so this now reads
+       `plan["target_tenant_id"]` instead — the same trusted value, already
+       present in `serialised_plan` via `PromotionPlan.t().target_tenant_id`
+       (`compute_promotion_plan/5`'s own output), not a new or less-trusted
+       source.
     2. `opts[:permission_checker].(actor_id, source_tenant_id)` -> `false` ->
        `{:error, :forbidden}`.
     3. `opts[:tenant_classifier].(source_tenant_id) == :production` ->
@@ -142,7 +149,11 @@ defmodule Letflow.Definitions.Promotion do
     source_tenant_id = plan["source_tenant_id"]
     process_key = plan["process_key"]
     base_version = plan["base_version"]
-    target_tenant_id = review.tenant_id
+    # Post-Decision-0006-D2 (REQ-064): was `review.tenant_id` -- that column no
+    # longer exists on `promotion_reviews`. `plan["target_tenant_id"]` is the
+    # same trusted value (PromotionPlan.t().target_tenant_id, already
+    # serialised into this review at insert_review/2 time), not a new source.
+    target_tenant_id = plan["target_tenant_id"]
 
     cond do
       not permission_checker.(actor_id, source_tenant_id) ->
@@ -183,7 +194,6 @@ defmodule Letflow.Definitions.Promotion do
          {:ok, new_row} <-
            write_target_definition(
              source_row,
-             target_tenant_id,
              process_key,
              actor_id,
              target_prefix
@@ -216,17 +226,18 @@ defmodule Letflow.Definitions.Promotion do
   # Design §3.2 steps 7-8, both inside one Repo.transaction/1: insert the
   # target row (still :draft, uq_definition_version mapped to
   # :duplicate_version), then the guarded deprecate-then-activate swap
-  # (PD-03 ordering).
+  # (PD-03 ordering). No longer takes target_tenant_id (Decision 0006 D2,
+  # REQ-064) -- it was only ever forwarded to deprecate_previous_active/3's
+  # now-removed tenant_id filter; target_prefix alone already scopes every
+  # write in this function to the correct tenant schema.
   @spec write_target_definition(
           ProcessDefinition.t(),
-          Ecto.UUID.t(),
           String.t(),
           Ecto.UUID.t(),
           String.t()
         ) :: {:ok, ProcessDefinition.t()} | {:error, :duplicate_version | Ecto.Changeset.t()}
-  defp write_target_definition(source_row, target_tenant_id, process_key, actor_id, target_prefix) do
+  defp write_target_definition(source_row, process_key, actor_id, target_prefix) do
     attrs = %{
-      tenant_id: target_tenant_id,
       name: process_key,
       version: source_row.version,
       description: source_row.description,
@@ -241,7 +252,7 @@ defmodule Letflow.Definitions.Promotion do
       |> Repo.insert(prefix: target_prefix)
       |> case do
         {:ok, new_row} ->
-          deprecate_previous_active(target_tenant_id, process_key, target_prefix)
+          deprecate_previous_active(process_key, target_prefix)
           activate_new_definition(new_row, target_prefix)
 
         {:error, %Ecto.Changeset{} = changeset} ->
@@ -255,11 +266,16 @@ defmodule Letflow.Definitions.Promotion do
   end
 
   # Step 8(a) -- deprecate whatever row is currently active for this
-  # (target_tenant_id, process_key). 0 or 1 row, never more --
-  # uq_active_definition guarantees at most one.
-  defp deprecate_previous_active(target_tenant_id, process_key, target_prefix) do
+  # process_key, within target_prefix's own tenant schema. 0 or 1 row, never
+  # more -- uq_active_definition guarantees at most one. Post-Decision-0006-D2
+  # (REQ-064): was additionally filtered on `d.tenant_id == ^target_tenant_id`;
+  # that column no longer exists on `process_definitions` -- `target_prefix`
+  # (the schema this Repo.update_all/3 call is scoped to via `prefix:`) already
+  # confines this query to exactly one tenant, so the extra predicate was
+  # redundant with the schema boundary and is dropped along with the column.
+  defp deprecate_previous_active(process_key, target_prefix) do
     from(d in ProcessDefinition,
-      where: d.tenant_id == ^target_tenant_id and d.name == ^process_key and d.status == :active
+      where: d.name == ^process_key and d.status == :active
     )
     |> Repo.update_all([set: [status: :deprecated]], prefix: target_prefix)
   end

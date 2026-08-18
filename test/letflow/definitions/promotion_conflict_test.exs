@@ -96,7 +96,6 @@ defmodule Letflow.Definitions.PromotionConflictTest do
 
   defp insert_definition!(schema_name, attrs) do
     base = %{
-      tenant_id: Ecto.UUID.generate(),
       version: "1.0.0",
       graph: %{"nodes" => [], "edges" => []},
       created_by: Ecto.UUID.generate()

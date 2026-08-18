@@ -104,7 +104,6 @@ defmodule Letflow.Definitions.PromotionTest do
 
   defp insert_definition!(schema_name, attrs) do
     base = %{
-      tenant_id: Ecto.UUID.generate(),
       version: "1.0.0",
       graph: %{"nodes" => [], "edges" => []},
       created_by: Ecto.UUID.generate()
@@ -147,11 +146,13 @@ defmodule Letflow.Definitions.PromotionTest do
 
   # Builds an in-memory (never persisted) PromotionReview struct, matching the
   # exact envelope insert_review/2 would have produced (design §2.3 step 4 --
-  # the FULL plan, not just entries).
+  # the FULL plan, not just entries). No tenant_id field -- REQ-064 (Decision
+  # 0006 D2) dropped promotion_reviews.tenant_id; the target tenant is read
+  # from plan["target_tenant_id"] inside serialised_plan instead (see
+  # Promotion.promote_definition/3's own moduledoc).
   defp review_for(plan, overrides \\ %{}) do
     base = %{
       id: Ecto.UUID.generate(),
-      tenant_id: plan.target_tenant_id,
       plan_digest: PromotionDigest.compute_plan_digest(plan),
       def_id: plan.process_key,
       serialised_plan: Jason.encode!(plan),
@@ -215,7 +216,6 @@ defmodule Letflow.Definitions.PromotionTest do
         Repo.get!(ProcessDefinition, result.target_definition_id, prefix: target_schema)
 
       assert target_row.status == :active
-      assert target_row.tenant_id == target_tenant_id
       assert target_row.name == process_key
       assert target_row.version == "2.0.0"
       assert target_row.description == "source description"
@@ -252,13 +252,12 @@ defmodule Letflow.Definitions.PromotionTest do
           graph: %{"nodes" => [], "edges" => []}
         })
 
-      # tenant_id must match target_tenant_id explicitly -- deprecate_previous_active/3
-      # filters on d.tenant_id == ^target_tenant_id (belt-and-suspenders on top of
-      # the schema-per-tenant prefix scoping), and insert_definition!/2's own
-      # `base` map defaults tenant_id to an unrelated random UUID otherwise.
+      # deprecate_previous_active/3 no longer filters on tenant_id at all
+      # (REQ-064, Decision 0006 D2 -- process_definitions.tenant_id was
+      # dropped); target_prefix's own schema-per-tenant scoping is the only
+      # scoping mechanism now.
       previous_target_def =
         insert_active_definition!(target_schema, %{
-          tenant_id: target_tenant_id,
           name: process_key,
           version: "1.0.0",
           graph: %{"nodes" => [], "edges" => []}
@@ -416,7 +415,7 @@ defmodule Letflow.Definitions.PromotionTest do
       # rather than silently changing shape.
       assert Repo.aggregate(
                from(d in ProcessDefinition,
-                 where: d.tenant_id == ^target_tenant_id and d.status == :active
+                 where: d.status == :active
                ),
                :count,
                prefix: target_schema

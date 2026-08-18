@@ -1,0 +1,73 @@
+{
+  "handoff_id": "c3d4e5f6-0064-4a00-9f01-req064step03",
+  "run_id": "WF02-REQ064-20260818",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ064-20260818/step-03-test-designer.json",
+  "created_at": "2026-08-18T13:32:25Z",
+  "started_at": "2026-08-18T14:39:21Z",
+  "completed_at": "2026-08-18T19:49:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-064"],
+    "requirement_text": {
+      "REQ-064": "Execute Decision 0006's D2: drop tenant_id from ten schema-isolated business tables (events, events_archive, instance_projections, process_definitions, tokens, tasks, promotion_reviews, promotion_assertion_runs, users, groups). Full acceptance criteria (from docs/requirements.yaml, verbatim): none of the ten tables has a tenant_id column, confirmed via information_schema.columns in a provisioned tenant schema; the four D3 tables (tenant_schemas, solution_pack_installs, solution_pack_artefact_bases, pack_update_resolutions) still have tenant_id WITH their FK intact, confirmed the same way plus a test that a bad tenant_id is still rejected; the promotion_assertion_runs idempotency contract still holds under the simplified single-column index (same key twice in one tenant schema yields one row, same key in a different tenant schema yields a separate row); the promotion_reviews plan_digest uniqueness still holds per-tenant under the simplified index; no lib/ module references a tenant_id field on any of the ten tables (grep-confirmed), and TenantProvisioning.tenant_id_for_schema_name/1 itself still exists and is still tested; every moduledoc that described tenant_id on a dropped-from table has been updated (grep for 'never caller-supplied' and 'intra-schema column' should find nothing stale); mix test is green with no skipped/excluded tests."
+    },
+    "related_handoff_ids": [
+      "c3d4e5f6-0064-4a00-9f01-req064step01",
+      "c3d4e5f6-0064-4a00-9f01-req064step02a",
+      "c3d4e5f6-0064-4a00-9f01-req064step02c",
+      "c3d4e5f6-0064-4a00-9f01-req064step02d"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req064-drop-tenant-id.md",
+      "priv/repo/migrations/20260820000001_20260820000010",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/identity_migration.ex"
+    ],
+    "owned_modules": ["test/letflow", "test/specs"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1: TEST-DESIGN-VALIDATOR FAILed your prior submission (see handoffs/WF02-REQ064-20260818/step-03b-test-design-gate.json) on exactly one gap -- everything else (the 25-file fallout fix, the identity_migration.ex bug fix, the new coverage, the other three restructured tests) independently PASSed and does not need to change.\n\nThe gap: your own test/specs/REQ-064.md line 217 claims event_store_test.exs's restructured AC6 test 'already asserts {:ok, expected_tenant_id} = TenantProvisioning.tenant_id_for_schema_name(schema_name) as a genuine round-trip check' -- but the validator read git diff main...HEAD -- test/letflow/event_store_test.exs directly and found that exact assertion was REMOVED, not kept, by your restructure. grep -n tenant_id_for_schema_name test/letflow/event_store_test.exs now returns zero hits. A broader grep across test/ found tenant_id_for_schema_name mentioned only in a moduledoc doc-string substring assertion (test/letflow/definitions_test.exs:212, which never calls the function) and two comments -- no test anywhere asserts on the function's own input/output correctness or its {:error, :invalid_schema_name} path. REQ-064's own acceptance criteria explicitly require 'TenantProvisioning.tenant_id_for_schema_name/1 itself still exists and is still tested' -- it is not, currently.\n\nFix required (the validator's own suggested path, take it): add a direct test to test/letflow/tenant_provisioning_test.exs covering both tenant_id_for_schema_name/1's success round-trip (a real schema_name_for_tenant/1 output fed back in, confirming it returns the same UUID) and its {:error, :invalid_schema_name} path (a malformed schema_name string). Read the function's own @spec and moduledoc directly at lib/letflow/tenant_provisioning.ex:100-115 before writing the test -- it's a pure, total function (is_binary/1 guard, with/else chain, no I/O), so this should be a small, fast unit test, not an integration test needing a real tenant/schema. Correct test/specs/REQ-064.md's traceability table to point at this new test instead of the now-inaccurate event_store_test.exs claim.\n\nDo NOT restore the removed assertion inside event_store_test.exs itself -- the validator's own framing treats adding a direct test to tenant_provisioning_test.exs as the preferred fix, and that module is the more natural home for testing a TenantProvisioning function's own contract, separate from whatever event_store_test.exs is otherwise verifying.\n\nAfter the fix, re-run the full suite yourself and confirm no new failures (this file's own past pattern: don't skip verification just because this is a small addition).\n\nOriginal (iteration 1) instructions below, restated for context, already satisfied and not to be redone: ELIXIR-DEV's own Step 2a implementation report states ~20 test files fail to compile because they construct struct literals with a tenant_id: field against schemas this requirement just stripped it from (e.g. %InstanceProjection{tenant_id: ...}) -- this is NOT a regression to diagnose, it's the expected, designed consequence of the field removal, same shape as REQ-063's own ~39-test fallout. ORCH independently confirmed 20 affected files via grep before writing this handoff: test/letflow/definitions/{export_import,migrations,promotion_conflict,promotion_plan,promotion_review_migration,promotion_review_store,promotion_review,promotion,schemas,snapshot_store}_test.exs, test/letflow/engine/{migrations,schemas}_test.exs, test/letflow/event_store/{migrations,schemas}_test.exs, test/letflow/event_store_test.exs, test/letflow/identity/{group,tenant_role,user}_test.exs, test/letflow/identity_test.exs, test/letflow/role_registry_test.exs.\n\nYour job: (1) fix every one of these ~20 files' fixtures/struct literals to drop the tenant_id: key on the ten affected schemas (Engine.TokenRecord, Engine.Task, EventStore.Event/ArchivedEvent/InstanceProjection, Definitions.ProcessDefinition/PromotionReview/PromotionAssertionRun, Identity.User/Group) -- do NOT touch tenant_id references on the four D3 tables' schemas or on tenant_role (which never had the field), those are correct as-is. (2) run the full suite yourself and confirm these fixes actually compile and pass, with real output quoted -- do not assume from the file list alone. Given REQ-063's own test-rework history in this same codebase involved real, subtle bugs hiding behind what looked like simple mechanical fixture updates, do not treat this as pure mechanical busywork -- actually run it and watch for surprises.\n\nBeyond fixing the ~20 pre-existing breaks, write NEW tests covering acceptance criteria not yet exercised by any existing test: (a) the promotion_assertion_runs idempotency contract under the SIMPLIFIED single-column index -- same idempotency_key twice within one tenant schema yields one row (on_conflict resolves it), same key in a DIFFERENT tenant schema yields a separate row (proving the index is genuinely per-schema now, not accidentally still enforcing something cross-tenant); (b) the promotion_reviews plan_digest uniqueness under its own simplified index, same two-part proof; (c) a test that a bad/nonexistent tenant_id is still rejected by the FK on at least one D3 table (e.g. solution_pack_installs), confirming D3's FK integrity wasn't accidentally touched; (d) confirm via information_schema.columns queries (against a real provisioned tenant schema, following this codebase's established pattern from REQ-063's own tests) that all ten tables genuinely lack tenant_id and all four D3 tables genuinely still have it.\n\nAlso verify: TenantProvisioning.tenant_id_for_schema_name/1 itself is still tested (check the existing test suite covers it, it should be unaffected by this requirement since only its stamping CALL SITES were removed, not the function). Grep for the now-stale moduledoc phrases 'never caller-supplied' and 'intra-schema column' across lib/ to confirm none remain (this should already be true per REVIEWER's Step 2d PASS, but confirm it yourself as part of writing this run's test coverage, not just trust the prior gate).\n\nDo NOT write tests for anything beyond REQ-064's own ten-table scope -- the four D3 tables' existing coverage should already be adequate, you're only adding the FK-rejection proof named above, not re-testing everything about them.",
+    "acceptance_criteria": [
+      "All ~20 pre-existing test-compile failures fixed (tenant_id: removed from struct literals on the ten affected schemas only), confirmed by re-running mix test yourself with real output quoted",
+      "No new test failures introduced by the fixture changes",
+      "A test exists proving promotion_assertion_runs' simplified idempotency_key index still resolves same-key-same-tenant to one row and same-key-different-tenant to two rows",
+      "A test exists proving promotion_reviews' simplified plan_digest index behaves the same way",
+      "A test exists proving a bad tenant_id is still rejected by a D3 table's FK",
+      "A test exists confirming via information_schema.columns that all ten tables lack tenant_id and all four D3 tables retain it",
+      "TenantProvisioning.tenant_id_for_schema_name/1 confirmed still tested",
+      "grep confirms no lib/ moduledoc still says 'never caller-supplied' or 'intra-schema column' about a dropped-from table",
+      "No test depends on wall-clock time or unseeded randomness",
+      "Test fixtures use per-test unique data, not shared hardcoded tenant/schema names",
+      "REWORK: a direct test exists for tenant_id_for_schema_name/1's success round-trip and its {:error, :invalid_schema_name} path, in test/letflow/tenant_provisioning_test.exs",
+      "REWORK: test/specs/REQ-064.md's traceability table corrected to point at the new test, not the removed event_store_test.exs assertion"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REWORK ITERATION 1 fix applied. TEST-DESIGN-VALIDATOR's single gap: test/specs/REQ-064.md falsely claimed event_store_test.exs's restructured AC6 test still asserted on TenantProvisioning.tenant_id_for_schema_name/1's round-trip correctness -- that assertion was actually removed during the restructure, leaving the function untested despite REQ-064's acceptance criteria requiring it stay tested. Fixed by adding a direct unit test to test/letflow/tenant_provisioning_test.exs: a new describe block 'tenant_id_for_schema_name/1 (REQ-064: reverse of schema_name_for_tenant/1, still tested after call-site removal)' with two tests -- (a) success round-trip: schema_name_for_tenant/1's real output fed back into tenant_id_for_schema_name/1 returns the same UUID, and (b) {:error, :invalid_schema_name} for a malformed schema_name string. Placed adjacent to the existing schema_name_for_tenant/1 describe block, matching that function's own test placement. Pure/total function per its @spec/moduledoc (lib/letflow/tenant_provisioning.ex:100-115) -- no DataCase database interaction needed. Did NOT restore the removed assertion in event_store_test.exs, per the validator's own preferred-fix framing. Corrected test/specs/REQ-064.md's traceability table row (line ~217) and its 'What is verified by inspection' section to point at the new test instead of the removed event_store_test.exs claim; also added the new test file to the 'Modified' artifacts list. Re-ran the full suite after the fix: 777 passed (5 properties, 772 tests), 0 failures, 0 skipped/excluded -- confirmed via real mix test output, not assumed. Only test/letflow/tenant_provisioning_test.exs and test/specs/REQ-064.md changed in this rework iteration; no other files touched (git status confirmed).",
+    "artifacts_out": [
+      "test/letflow/tenant_provisioning_test.exs",
+      "test/specs/REQ-064.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ064-20260818",
+      "commit_sha_list": ["c1f6bc2b08eff32ec5dc4cc27a5f08b2ba5363fb"],
+      "remote_branch": "origin/feature/WF02-REQ064-20260818",
+      "push_status": "success",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

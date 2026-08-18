@@ -70,7 +70,6 @@ defmodule Letflow.Definitions.PromotionReviewTest do
 
   defp valid_review_attrs do
     %{
-      tenant_id: Ecto.UUID.generate(),
       plan_digest: unique_plan_digest(),
       def_id: "req035-proc-#{System.unique_integer([:positive, :monotonic])}",
       serialised_plan: ~s({"nodes":[],"edges":[]}),
@@ -151,7 +150,7 @@ defmodule Letflow.Definitions.PromotionReviewTest do
   # ---------------------------------------------------------------------------------
 
   describe "acceptance criterion 2 -- insert_changeset/2 declares the unique constraint by index name" do
-    test "insert_changeset/2 declares uq_promotion_review_active_digest by index name on [:tenant_id, :plan_digest]" do
+    test "insert_changeset/2 declares uq_promotion_review_active_digest by index name on [:plan_digest]" do
       changeset = PromotionReview.insert_changeset(%PromotionReview{}, valid_review_attrs())
 
       assert changeset.valid?
@@ -159,9 +158,9 @@ defmodule Letflow.Definitions.PromotionReviewTest do
       assert Enum.any?(changeset.constraints, fn constraint ->
                constraint.type == :unique and
                  constraint.constraint == "uq_promotion_review_active_digest" and
-                 constraint.field == :tenant_id
+                 constraint.field == :plan_digest
              end),
-             "expected a :unique constraint named uq_promotion_review_active_digest on :tenant_id, got #{inspect(changeset.constraints)}"
+             "expected a :unique constraint named uq_promotion_review_active_digest on :plan_digest, got #{inspect(changeset.constraints)}"
     end
   end
 
@@ -251,14 +250,14 @@ defmodule Letflow.Definitions.PromotionReviewTest do
   # ---------------------------------------------------------------------------------
 
   describe "insert_changeset/2 -- required fields and def_type's deliberate exception" do
-    test "insert_changeset/2 requires tenant_id, plan_digest, def_id, serialised_plan and requested_by, and treats def_type as optional" do
+    test "insert_changeset/2 requires plan_digest, def_id, serialised_plan and requested_by, and treats def_type as optional" do
       changeset = PromotionReview.insert_changeset(%PromotionReview{}, %{})
 
       refute changeset.valid?
 
       errors = errors_on(changeset)
 
-      for field <- [:tenant_id, :plan_digest, :def_id, :serialised_plan, :requested_by] do
+      for field <- [:plan_digest, :def_id, :serialised_plan, :requested_by] do
         assert Map.has_key?(errors, field),
                "expected #{field} to be required, errors: #{inspect(errors)}"
       end

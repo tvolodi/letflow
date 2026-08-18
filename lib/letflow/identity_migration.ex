@@ -110,13 +110,26 @@ defmodule Letflow.IdentityMigration do
     end
   end
 
+  # `g.tenant_id`/`u.tenant_id` below are `fragment/1` references, not the
+  # `Letflow.Identity.Group`/`User` Ecto schema's own field -- Decision 0006
+  # D2 (REQ-064) removed `tenant_id` from those schema modules, since the
+  # per-tenant copies these rows are being copied INTO no longer carry the
+  # column. The SOURCE side of this one-time cutover copy still reads from
+  # the legacy `public.groups`/`public.users` tables, which retain their
+  # `tenant_id` column until `20260819000004_drop_legacy_public_identity_tables.exs`
+  # drops them -- so this query must keep filtering on that column via a raw
+  # fragment rather than a schema-typed field reference, which would no
+  # longer compile once the field left the schema module. This is the one
+  # place in the codebase that legitimately still queries a `tenant_id`
+  # column post-D2: it targets the about-to-be-dropped legacy public tables,
+  # not any of the ten D2 tables.
   defp copy_groups(tenant_id, schema_name) do
-    rows = Repo.all(from(g in Group, where: g.tenant_id == ^tenant_id))
+    rows = Repo.all(from(g in Group, where: fragment("? = ?", g.tenant_id, type(^tenant_id, Ecto.UUID))))
     insert_all_preserving_id(rows, schema_name)
   end
 
   defp copy_users(tenant_id, schema_name) do
-    rows = Repo.all(from(u in User, where: u.tenant_id == ^tenant_id))
+    rows = Repo.all(from(u in User, where: fragment("? = ?", u.tenant_id, type(^tenant_id, Ecto.UUID))))
     insert_all_preserving_id(rows, schema_name)
   end
 
@@ -143,7 +156,7 @@ defmodule Letflow.IdentityMigration do
             from(tr in TenantRole,
               join: g in Group,
               on: tr.group_id == g.id,
-              where: g.tenant_id == ^tenant_id,
+              where: fragment("? = ?", g.tenant_id, type(^tenant_id, Ecto.UUID)),
               select: tr
             )
           )

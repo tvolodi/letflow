@@ -1,0 +1,56 @@
+{
+  "handoff_id": "c3d4e5f6-0064-4a00-9f01-req064step01b",
+  "run_id": "WF02-REQ064-20260818",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ064-20260818/step-01b-design-gate.json",
+  "created_at": "2026-08-18T12:54:49Z",
+  "started_at": "2026-08-18T12:54:49Z",
+  "completed_at": "2026-08-18T12:57:34Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-064"],
+    "requirement_text": {
+      "REQ-064": "Execute Decision 0006's D2: drop tenant_id from the ten schema-isolated business tables. Full text: see handoffs/WF02-REQ064-20260818/step-01-code-designer.json's requirement_text."
+    },
+    "related_handoff_ids": ["c3d4e5f6-0064-4a00-9f01-req064step01"],
+    "artifacts_in": [
+      "lib/letflow/design/req064-drop-tenant-id.md",
+      "docs/migration/decisions/0006-identity-tables-schema-per-tenant.md",
+      "handoffs/WF02-REQ064-20260818/step-01-code-designer.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently validate lib/letflow/design/req064-drop-tenant-id.md against REQ-064's acceptance criteria and decision 0006. Read the design artefact directly -- do not read CODE-DESIGNER's handoff result.summary as a substitute.\n\nCODE-DESIGNER's own report flags several corrections it made to the requirement text's own claims -- verify each of these independently rather than accepting them on the design's own say-so, since a wrong correction here would be worse than the original requirement text's error:\n\n1. **Tokens-table module ownership.** The design claims Letflow.Engine.TokenRecord (not Engine.Token) owns the tokens table and its tenant_id field, because REQ-063 renamed the schema module to avoid REQ-044's own separate Engine.Token in-memory struct. Read lib/letflow/engine/token_record.ex and lib/letflow/engine/token.ex directly yourself and confirm this is accurate -- which one actually has `use Ecto.Schema` and a tenant_id field, and which is a plain struct.\n\n2. **Call-site count and per-site decisions.** The design claims 14 tenant_id_for_schema_name/1 call sites (not the requirement text's ~13 estimate), with two sites in definitions.ex (activate/2 and rollback_definition_version/4) explicitly left UNCHANGED because tenant_id there feeds a genuine functional consumer (a permission/service-scope checker) unrelated to the dropped column, not just column-stamping. Read those two specific call sites in lib/letflow/definitions.ex directly and confirm this distinction is real -- if it's wrong (i.e. those two sites also just discard/stamp), that's a design defect that would leave dead code or break a real feature.\n\n3. **A third tenant_id-leading index not named in the requirement text.** The design found index(:users, [:tenant_id, :status, :inserted_at]) during a direct read of the shipped users migration, and defaults to dropping it with no replacement index, flagged as an open question. Read priv/repo/migrations/20260819000003_create_users_tenant_scoped.exs directly and confirm this index actually exists as described. Evaluate whether dropping it with no replacement is safe (does anything query users by status+inserted_at within a tenant schema? grep for it) or whether the design should have specified a replacement index -- this is exactly the kind of open question a design gate should push back on if the default (drop, no replacement) risks a real performance regression on a query path that exists.\n\n4. **Moduledoc scope.** The design extends moduledoc updates beyond the requirement text's two named modules (Engine.Task/TokenRecord, Identity.User) to also cover Identity.Group and the three EventStore schema modules. Confirm these additional modules genuinely have tenant_id-describing prose that would go stale (spot-check at least two of them directly).\n\nStandard procedure: for each acceptance criterion, verify a corresponding design element exists, no TBD/deferral language, function signatures fully specified with error shapes, cross-module dependencies listed, no implementation code (.ex/.exs bodies) present -- only signatures/type shapes.",
+    "acceptance_criteria": [
+      "Every REQ-064 acceptance criterion has a corresponding design element, no TBD/deferral language",
+      "TokenRecord vs Token module ownership independently confirmed against the real files",
+      "The two left-unchanged definitions.ex call sites (activate/2, rollback_definition_version/4) independently confirmed to have a genuine non-stamping consumer, not just asserted",
+      "The third users index finding confirmed against the real migration file, and its drop-with-no-replacement default evaluated for safety, not rubber-stamped",
+      "Moduledoc scope extension to Identity.Group and EventStore modules spot-checked against real files",
+      "No implementation code present"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified all four corrections CODE-DESIGNER made to the requirement text, plus the standard design-gate procedure, against real lib/ and priv/repo/migrations/ files (not against the design's own prose or CODE-DESIGNER's handoff summary). All four hold up: (1) lib/letflow/engine/token_record.ex:70,74,75 confirmed use Ecto.Schema + schema \"tokens\" + field(:tenant_id, Ecto.UUID); lib/letflow/engine/token.ex:11 confirmed bare defstruct, zero Ecto dependency, no tenant_id -- TokenRecord is the correct owner. (2) lib/letflow/definitions.ex:506 (activate/2) and :687 (rollback_definition_version/4) confirmed tenant_id flows to run_service_scope_validator/3's validator.(actor_id, tenant_id) and permission_checker.(actor_id, tenant_id) respectively -- genuine functional consumers, not column-stamping; design correctly leaves both unchanged. (3) priv/repo/migrations/20260819000003_create_users_tenant_scoped.exs confirmed to contain create index(:users, [:tenant_id, :status, :inserted_at], prefix: prefix()) exactly as claimed; grepped lib/letflow/identity.ex, identity/user.ex, and codebase-wide for any status+inserted_at-filtered users query -- none found (only other User query site is identity_migration.ex:119, a plain tenant_id-only scan) -- drop-with-no-replacement default is safe given current call sites, and the design correctly flags it as an open question (§7.2) rather than silently resolving it. (4) Identity.Group's moduledoc (lib/letflow/identity/group.ex:12-13) and all three EventStore modules' '## `tenant_id` (design §2.5)' sections (event.ex:63, archived_event.ex:48, instance_projection.ex:89) confirmed present verbatim as quoted -- moduledoc scope extension is justified. Standard checks: every acceptance criterion maps to a design section (§9); no blocking TBD/deferral language (one inert 'TBD' on idx_token_parent's name does not affect any decision since that index is only checked for absence of tenant_id, not modified, and the design already states its correct name, confirmed against priv/repo/migrations/20260818110002_create_tokens.exs); cross-module dependencies listed (§8); grepped for def/defp -- no Elixir function implementation bodies found anywhere in the document, only migration DDL specs and schema/cast-list deltas, which are legitimate design-artefact content.",
+    "artifacts_out": ["lib/letflow/design/req064-drop-tenant-id.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ064-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ064-20260818",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (2a)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

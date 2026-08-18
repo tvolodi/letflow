@@ -69,7 +69,6 @@ defmodule Letflow.Definitions.PromotionReview do
 
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "promotion_reviews" do
-    field(:tenant_id, Ecto.UUID)
     field(:plan_digest, :string)
     field(:def_type, :string, default: "process")
     field(:def_id, :string)
@@ -104,11 +103,11 @@ defmodule Letflow.Definitions.PromotionReview do
   @spec insert_changeset(t(), attrs :: map()) :: Ecto.Changeset.t()
   def insert_changeset(review, attrs) do
     review
-    |> cast(attrs, [:tenant_id, :plan_digest, :def_type, :def_id, :serialised_plan, :requested_by])
-    |> validate_required([:tenant_id, :plan_digest, :def_id, :serialised_plan, :requested_by])
+    |> cast(attrs, [:plan_digest, :def_type, :def_id, :serialised_plan, :requested_by])
+    |> validate_required([:plan_digest, :def_id, :serialised_plan, :requested_by])
     |> validate_length(:plan_digest, is: 64)
     |> validate_format(:plan_digest, ~r/^[0-9a-f]{64}\z/)
     |> validate_length(:def_id, max: 255)
-    |> unique_constraint([:tenant_id, :plan_digest], name: :uq_promotion_review_active_digest)
+    |> unique_constraint(:plan_digest, name: :uq_promotion_review_active_digest)
   end
 end

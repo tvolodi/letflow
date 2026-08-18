@@ -1,0 +1,142 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-064
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ064-20260818
+date_utc: 2026-08-18T15:06:41Z
+
+git:
+  branch: feature/WF02-REQ064-20260818
+  branch_confirmed: true
+  commit: f7a72f8
+  commit_subject: "chore(WF02-REQ064): dispatch Step 4 test run"
+  note: >
+    Confirmed via `git branch --show-current` and `git rev-parse HEAD` at
+    the start of this run. Picked up after TEST-DESIGN-VALIDATOR's Step 3b
+    PASS (handoffs/WF02-REQ064-20260818/step-03b-test-design-gate.json,
+    one rework round on a tenant_id_for_schema_name/1 coverage gap,
+    resolved). This Step 4 run reproduces the full suite itself from a
+    cold background `mix test` invocation rather than trusting
+    TEST-DESIGNER's/TEST-DESIGN-VALIDATOR's prior reported counts, per
+    Unblock-Everything / "every producing step has a validating step."
+
+environment:
+  toolchain: local (not Docker fallback) -- mix/elixir/erl reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5] ... Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  postgres_container: "letflow-postgres-1, confirmed Up 7 hours (healthy) via docker ps, port 5462 -> 5432"
+  command_run: >
+    `mix test` (full suite, default/unpinned random ExUnit seed) -- the
+    `test` alias runs ecto.create + ecto.migrate --quiet first
+    automatically. Run in background due to ~3.5 minute duration; full raw
+    output captured to a task output file and read in full after
+    completion (exit code 0).
+
+verdict: PASS
+
+checks:
+  test_suite_full_run:
+    result: PASS
+    exit_code: 0
+    seed: unpinned/random (ExUnit's own default -- not pinned to 0)
+    summary_line_verbatim: "Result: 777 passed (5 properties, 772 tests)"
+    finished_line_verbatim: "Finished in 205.8 seconds (2.4s async, 203.4s sync)"
+    failures: 0
+    notes: >
+      Matches exactly the count most recently reported independently by
+      both TEST-DESIGNER and TEST-DESIGN-VALIDATOR post-rework (777
+      passed, 5 properties, 772 tests, 0 failures). No "Failed:" line,
+      no ExUnit failure block, and no non-zero exit code -- ExUnit always
+      emits an explicit "Failed: N" segment in the Result line and a
+      numbered failure block per failing test when failures exist; neither
+      appeared anywhere in the captured output.
+
+  known_identity_migration_flake:
+    result: NOT_HIT
+    detail: >
+      This run's task description flagged a known flake in
+      test/letflow/identity_migration_test.exs's :auto-mode
+      DropLegacyPublicIdentityTables guard test, previously observed by
+      ORCH (774/775 and 775/775 across two earlier runs in this same
+      run's history, pre-rework) and traced/confirmed pre-existing
+      (REQ-063 scope, untouched by this diff) by TEST-DESIGN-VALIDATOR via
+      4 isolated reruns all passing 7/7. This TEST-RUNNER run did not
+      reproduce it -- the full suite passed clean on the first (and only,
+      per this step's procedure) formal run, consistent with a
+      known-intermittent race rather than a deterministic failure.
+
+  issue_queue_check_for_known_flake:
+    action_taken: >
+      Searched docs/issues/*.yaml for "identity_migration",
+      "DropLegacyPublicIdentityTables", and "connection.pool" before
+      running the suite. No existing issue record matches this specific
+      flake shape. (docs/issues/ISS-0011.yaml is a superficially similar
+      but DISTINCT and already-resolved flake --
+      test/letflow/plugs/tenant_status_test.exs's method-short-circuit
+      test racing on a global :telemetry.attach handler, fixed via commit
+      40d6bf5 on main and confirmed resolved 2026-08-17. Not the same
+      file, not the same mechanism, and already closed -- not applicable
+      here.)
+    conclusion: >
+      Since the identity_migration_test.exs flake was NOT observed in this
+      run's own formal execution, there is nothing to file right now under
+      ISSUE_QUEUE.md's "observed, not merely reported" bar -- filing an
+      issue for a failure this run did not itself witness would not be an
+      independent reproduction. Deferred to whichever future run (TEST-
+      RUNNER, RELEASE-VALIDATOR, or ORCH) next reproduces it directly;
+      that run should file it, referencing this report and the two prior
+      ORCH/TEST-DESIGN-VALIDATOR observations already on record in
+      handoffs/WF02-REQ064-20260818/ as the pre-existing evidence trail.
+
+  other_failures:
+    result: NONE
+    detail: >
+      No failure of any other shape occurred. Nothing routed back to
+      ELIXIR-DEV or TEST-DESIGNER as rework.
+
+known_noise_not_a_failure:
+  - >
+    Verbose SQL query debug logging appears throughout raw mix test output
+    (config/test.exs's default test log level) for every DB-backed test --
+    established pattern across prior WF-02 reports, not itself evidence of
+    failure.
+  - >
+    Prior reports in this project (e.g. ISS-0044, report-20260818-WF02-REQ049)
+    document pre-existing ExUnit.Case.register_test/4 deprecation warnings
+    on the suite's 5 property-test files and a handful of unrelated
+    cosmetic warnings; these are StreamData/ExUnit version-compatibility
+    noise, already filed and triaged (ISS-0044, partially fixed, remainder
+    deliberately deferred), unrelated to REQ-064's own scope.
+
+pre_existing_failures_found: none (this run)
+
+issues_filed: none (by this step -- see known_identity_migration_flake and
+  issue_queue_check_for_known_flake above for why no new filing was made)
+
+test_file_breakdown:
+  full_suite_grand_total: "777 total passed (5 properties, 772 example tests), 0 failures"
+  cross_check: >
+    Matches the task's cited baseline exactly: TEST-DESIGNER and
+    TEST-DESIGN-VALIDATOR both independently landed on 777 passed (5
+    properties, 772 tests), 0 failures, post-rework. This Step 4 run is
+    the independent, formal re-verification of that claim from a fresh
+    background `mix test` invocation, not a rubber stamp of the prior
+    reports.
+
+diagnosis: "N/A -- no failures observed in this run. Nothing routed back to ELIXIR-DEV or TEST-DESIGNER."
+
+regression_check_vs_baseline: >
+  Full suite run clean at 777 passed (5 properties, 772 tests), 0
+  failures, exit code 0. Zero regressions confirmed. The one known,
+  previously-observed intermittent flake
+  (test/letflow/identity_migration_test.exs, REQ-063-scope, pre-existing)
+  did not reproduce in this run's own execution, so nothing was filed by
+  this step per ISSUE_QUEUE.md's observed-not-reported bar; nothing else
+  failed.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-18-WF02-REQ064-20260818.yaml
+  next_action: "Route to RELEASE-VALIDATOR (WF-02 Step 5) -- no rework needed."

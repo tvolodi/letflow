@@ -21,8 +21,9 @@ defmodule Letflow.Definitions.PromotionAssertionRun do
 
   ## Two changesets, not one — mirroring `PromotionReview`'s own split
 
-  `insert_changeset/2` casts only the four columns present at idempotency-claim time
-  (`tenant_id`, `review_id`, `idempotency_key`, `plan_digest`); `status`,
+  `insert_changeset/2` casts only the three columns present at idempotency-claim time
+  (`review_id`, `idempotency_key`, `plan_digest` — `tenant_id` was a fourth column here
+  until Decision 0006 D2 dropped it, see the migration file's own header); `status`,
   `assertions_*`, `failing_assertion_ids`, `sandbox_id`, `teardown_error` and
   `completed_at` are never castable there — a freshly-inserted row always starts at
   its column defaults. `update_changeset/2` is the only place any of those fields is
@@ -48,7 +49,6 @@ defmodule Letflow.Definitions.PromotionAssertionRun do
 
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "promotion_assertion_runs" do
-    field(:tenant_id, Ecto.UUID)
     field(:review_id, Ecto.UUID)
     field(:idempotency_key, :string)
     field(:plan_digest, :string)
@@ -91,15 +91,18 @@ defmodule Letflow.Definitions.PromotionAssertionRun do
   @spec insert_changeset(t(), attrs :: map()) :: Ecto.Changeset.t()
   def insert_changeset(run, attrs) do
     run
-    |> cast(attrs, [:tenant_id, :review_id, :idempotency_key, :plan_digest])
-    |> validate_required([:tenant_id, :review_id, :idempotency_key, :plan_digest])
+    |> cast(attrs, [:review_id, :idempotency_key, :plan_digest])
+    |> validate_required([:review_id, :idempotency_key, :plan_digest])
     |> validate_length(:plan_digest, is: 64)
     |> validate_format(:plan_digest, ~r/^[0-9a-f]{64}\z/)
-    # Turns a duplicate (tenant_id, idempotency_key) insert into {:error, changeset}
-    # rather than a raised Ecto.ConstraintError -- design §7.1's own
-    # "attempt an insert with on_conflict: :nothing" idiom relies on this constraint
-    # name to disambiguate a genuine validation failure from a suppressed conflict.
-    |> unique_constraint([:tenant_id, :idempotency_key],
+    # Turns a duplicate idempotency_key insert into {:error, changeset} rather
+    # than a raised Ecto.ConstraintError -- design §7.1's own "attempt an
+    # insert with on_conflict: :nothing" idiom relies on this constraint name
+    # to disambiguate a genuine validation failure from a suppressed conflict.
+    # Scoped to idempotency_key alone (not (tenant_id, idempotency_key)) since
+    # Decision 0006 D2 dropped tenant_id from this table -- the per-tenant
+    # Postgres schema already provides that scoping.
+    |> unique_constraint(:idempotency_key,
       name: :uq_promotion_assertion_runs_idempotency
     )
     # Turns a dangling review_id into {:error, changeset} rather than a raised

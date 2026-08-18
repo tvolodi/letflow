@@ -103,9 +103,9 @@ defmodule Letflow.Identity.TenantRoleTest do
 
   # No changeset function exists yet on `TenantRole` (design §3.4 — REQ-020
   # owns list_roles/upsert_role) — insert the struct directly.
-  defp insert_group!(%{tenant: tenant}) do
+  defp insert_group!(_ctx) do
     {:ok, group} =
-      Repo.insert(%Group{tenant_id: tenant.id, name: "Group #{Ecto.UUID.generate()}"})
+      Repo.insert(%Group{name: "Group #{Ecto.UUID.generate()}"})
 
     group
   end

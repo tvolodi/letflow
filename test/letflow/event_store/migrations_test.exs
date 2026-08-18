@@ -378,7 +378,6 @@ defmodule Letflow.EventStore.MigrationsTest do
     test "deleting an events row that has an event_payload_store row is blocked by ON DELETE RESTRICT (design OQ-2's deliberate signal)",
          %{schema_name: schema_name} do
       event_id = Ecto.UUID.generate()
-      tenant_id = Ecto.UUID.generate()
 
       assert {:ok, event} =
                %Event{}
@@ -391,8 +390,7 @@ defmodule Letflow.EventStore.MigrationsTest do
                  actor_id: Ecto.UUID.generate(),
                  sequence_number: 1,
                  idempotency_key:
-                   "req023-restrict-#{System.unique_integer([:positive, :monotonic])}",
-                 tenant_id: tenant_id
+                   "req023-restrict-#{System.unique_integer([:positive, :monotonic])}"
                })
                |> Repo.insert(prefix: schema_name)
 

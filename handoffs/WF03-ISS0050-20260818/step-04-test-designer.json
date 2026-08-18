@@ -1,0 +1,48 @@
+{
+  "handoff_id": "a1b2c3d4-0000-4000-8000-000000000008",
+  "run_id": "WF03-ISS0050-20260818",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0050-20260818/step-04-test-designer.json",
+  "created_at": "2026-08-18T21:49:04Z",
+  "started_at": "2026-08-18T21:49:04Z",
+  "completed_at": "2026-08-18T21:51:45Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["step-01-issue-fixer.json", "step-03-elixir-dev.json"],
+    "artifacts_in": [
+      "priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs",
+      "test/letflow/identity_migration_test.exs",
+      "handoffs/WF03-ISS0050-20260818/step-01-issue-fixer.json"
+    ],
+    "owned_modules": ["test/letflow/identity_migration_test.exs"]
+  },
+  "task": {
+    "description": "Write a regression test for ISS-0050 in test/letflow/identity_migration_test.exs (or a new test file if that one's fixture shape doesn't fit) that reproduces the bug ELIXIR-DEV fixed: a tenant_schemas row whose schema is missing groups/users/tenant_role must no longer crash the DropLegacyPublicIdentityTables guard with 42P01 undefined_table -- instead the guard must RAISE NOTICE and skip the DROP (v_all_copied-style conservative behavior), same as the already-covered 'row exists in public but not copied to tenant schema' case. Per WF-03's Step 4 requirement, this test MUST be proven to fail against the PRE-fix migration and pass against the POST-fix migration -- state this explicitly, don't just assert it.",
+    "acceptance_criteria": [
+      "New test creates a tenant_schemas row pointing at a schema deliberately missing one or more of groups/users/tenant_role (a synthetic leaked-row scenario, matching ISSUE-FIXER's diagnosis), then runs the guard and asserts it does NOT raise (Postgrex.Error or otherwise) and that the legacy public tables are NOT dropped as a result.",
+      "Test is proven to fail against the pre-fix migration: check out the migration file's content as it existed before ELIXIR-DEV's commit (git show <pre-fix-sha>:priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs), apply that pre-fix guard against your test scenario (e.g. temporarily via a scratch script or by stashing the fix), and confirm the new test fails with the exact 42P01 error. State the exact command/method used and the failure output in result.summary.",
+      "Test is proven to pass against the post-fix migration (current HEAD) -- state the actual mix test output.",
+      "All existing tests in test/letflow/identity_migration_test.exs (7 pre-existing + new) still pass together.",
+      "Clean up all synthetic tenant/schema state created by the new test via on_exit or equivalent -- do not leave orphaned schemas (this run is fixing exactly that class of problem; don't add to it)."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Added new test 'ISS-0050 regression: a tenant schema missing one identity table makes the guard SKIP the drop, not raise 42P01' to test/letflow/identity_migration_test.exs (line 407, inside the existing 'DropLegacyPublicIdentityTables migration guard (REQ-063 §5) -- skip-on-uncopied-row' describe block), plus test/specs/ISS-0050.md. Test name shortened to stay under ExUnit's 255-char combined-name limit (same class as ISS-0051 -- verified with `wc -m`, 199 chars).\n\nMechanism: provisions a real tenant via the file's existing provisioned_tenant!/0 helper (full migration replay, so groups/users/tenant_role all genuinely exist), then `DROP TABLE IF EXISTS \"<schema>\".groups CASCADE` to reproduce ISSUE-FIXER's diagnosed live physical shape (tenant_schemas registry row + real schema, missing one identity table), then runs the drop migration via Ecto.Migrator.run/4 (same mechanism the file's other guard tests use) and asserts the call completes normally (does not raise) and all three public legacy tables survive (guard skipped the drop).\n\nFAIL-THEN-PASS PROOF (both phases actually executed, not asserted):\nPre-fix commit identified via `git log --oneline -- priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs` on this branch -> 5941472 (immediately before cf4c064, the fix commit; only these two commits touch the file). Saved current (post-fix) migration content to /tmp/post_fix_migration.exs, then overwrote the working file with `git show 5941472:priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs` and ran `mix test test/letflow/identity_migration_test.exs:407`: FAILED with `** (Postgrex.Error) ERROR 42P01 (undefined_table) relation \"tenant_089c38949547438292fa09fc02423387.groups\" does not exist`, raised from Ecto.Migrator.run/4 (Ecto.Migration.Runner.log_and_execute_ddl/3 -> Ecto.Adapters.SQL.execute_ddl/4) -- exactly the ISS-0050 crash mode, and 'exit: 0' meaning the raise was ExUnit-caught as a test failure (8 tests, 1 failure, 7 excluded), not a process crash. Restored /tmp/post_fix_migration.exs over the working file and confirmed `git diff priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs | wc -l` == 0 (byte-identical to HEAD). Then ran `mix test test/letflow/identity_migration_test.exs:407` (8 tests, 0 failures, 7 excluded) and the full file three separate times (8 tests, 0 failures each run) -- all pass, including the 7 pre-existing tests.\n\nCLEANUP VERIFIED: after the full fail-then-pass sequence, queried the live letflow_test Postgres DB directly (docker exec letflow-postgres-1 psql -U letflow -d letflow_test): `SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'tenant_%'` -> 0 rows; `SELECT count(*) FROM public.tenant_schemas` -> 0; `SELECT version FROM schema_migrations WHERE version BETWEEN 900000000 AND 901000000` -> 0 rows. No orphaned tenant_* schemas, no stray tenant_schemas registry rows, no stray schema_migrations rows in this file's own test-version range -- this run introduced none of the exact leak class (ISS-0048/ISS-0050 shared root cause) it exists to guard against.\n\nFull details, commands, and exact output in test/specs/ISS-0050.md.",
+    "artifacts_out": [
+      "test/letflow/identity_migration_test.exs",
+      "test/specs/ISS-0050.md"
+    ],
+    "issues": [],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

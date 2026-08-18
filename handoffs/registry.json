@@ -979,7 +979,7 @@
       "lock_acquired_at": "2026-08-18T08:48:48Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 00 (git-setup) PASS -- branch feature/WF02-REQ063-20260818 pushed from main at 13e78e1 (post ISS-0046 fix). Routing to CODE-DESIGNER (Step 1).",
+      "last_known_step": "Step 1b (design gate) PASS on re-gate after 1 rework (identity.ex prefix-threading gap, §5b added). Routing to ELIXIR-DEV (Step 2a).",
       "backfilled": false,
       "queue_task_id": null,
       "queue_agent_id": null,

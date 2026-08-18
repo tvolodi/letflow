@@ -116,6 +116,31 @@ defmodule Letflow.TenantProvisioningTest do
   end
 
   # ---------------------------------------------------------------------------------
+  # REQ-064 rework (test-design-gate iteration 1): tenant_id_for_schema_name/1 is the
+  # reverse of schema_name_for_tenant/1 above -- REQ-064 removed its CALL SITES (the
+  # tenant_id-stamping done at write time in EventStore/Definitions/Identity context
+  # modules) but not the function itself, and REQ-064's own acceptance criteria
+  # require it "still exists and is still tested". Pure/total (is_binary/1 guard,
+  # with/else chain, no I/O per its own moduledoc/@spec at
+  # lib/letflow/tenant_provisioning.ex:100-115) -- a plain unit test, no DataCase
+  # database interaction needed for either case below.
+  # ---------------------------------------------------------------------------------
+
+  describe "tenant_id_for_schema_name/1 (REQ-064: reverse of schema_name_for_tenant/1, still tested after call-site removal)" do
+    test "round-trips a schema_name_for_tenant/1 output back to the same tenant_id" do
+      tenant_id = Ecto.UUID.generate()
+
+      assert {:ok, schema_name} = TenantProvisioning.schema_name_for_tenant(tenant_id)
+      assert {:ok, ^tenant_id} = TenantProvisioning.tenant_id_for_schema_name(schema_name)
+    end
+
+    test "returns {:error, :invalid_schema_name} for a malformed schema_name" do
+      assert {:error, :invalid_schema_name} =
+               TenantProvisioning.tenant_id_for_schema_name("not_a_valid_schema_name")
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
   # Acceptance criterion 1: "priv/repo/migrations gains a tenant_schemas migration
   # (public/default schema) that applies cleanly via mix ecto.migrate, with columns
   # for at minimum tenant_id and schema_name"

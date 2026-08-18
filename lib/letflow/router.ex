@@ -1,7 +1,11 @@
 defmodule Letflow.Router do
   @moduledoc """
-  Deliberately minimal — Plug + Bandit, no Phoenix. Three endpoints,
-  just enough to drive the state machine end to end over HTTP.
+  Deliberately minimal — Plug + Bandit, no Phoenix. `/health` only as of REQ-046; the
+  `POST/GET /instances...` pilot-slice routes this module carried through S1-S3 were
+  removed alongside `Letflow.ProcessInstance`'s own retirement (see
+  `lib/letflow/design/req046-process-instance-retirement.md` §6a) — S4 (api-surface)
+  is expected to add the real `/api/v1/instances` routes against
+  `Letflow.Engine.create/2`, not a revival of this pilot contract.
   """
 
   use Plug.Router
@@ -17,50 +21,8 @@ defmodule Letflow.Router do
     send_json(conn, 200, %{status: "ok"})
   end
 
-  # POST /instances -> {"id": "..."}
-  post "/instances" do
-    id = Ecto.UUID.generate()
-
-    case Letflow.InstanceSupervisor.start_instance(id) do
-      {:ok, _pid} -> send_json(conn, 201, %{id: id})
-      {:error, reason} -> send_json(conn, 500, %{error: inspect(reason)})
-    end
-  end
-
-  # POST /instances/:id/actions  body: {"action": "submit"}
-  post "/instances/:id/actions" do
-    result =
-      case conn.body_params["action"] do
-        "submit" -> Letflow.ProcessInstance.submit(id)
-        "approve" -> Letflow.ProcessInstance.approve(id)
-        "reject" -> Letflow.ProcessInstance.reject(id)
-        "resubmit" -> Letflow.ProcessInstance.resubmit(id)
-        other -> {:error, {:unknown_action, other}}
-      end
-
-    case result do
-      :ok -> send_json(conn, 200, %{ok: true})
-      {:error, reason} -> send_json(conn, 422, %{error: inspect(reason)})
-    end
-  end
-
-  # GET /instances/:id -> {"state": "...", "history": [...]}
-  get "/instances/:id" do
-    case Letflow.ProcessInstance.get(id) do
-      %{state: state, history: history} ->
-        send_json(conn, 200, %{
-          state: state,
-          history: Enum.map(history, &encode_history_entry/1)
-        })
-    end
-  end
-
   match _ do
     send_json(conn, 404, %{error: "not_found"})
-  end
-
-  defp encode_history_entry(%{action: action, from: from, to: to, at: at}) do
-    %{action: action, from: from, to: to, at: DateTime.to_iso8601(at)}
   end
 
   defp send_json(conn, status, body) do

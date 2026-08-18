@@ -93,12 +93,14 @@ After both edits, the loop body (currently lines 292–302) reads as exactly:
         # The table exists under the tenant's own schema.
         assert table_exists_in_schema?(schema_name, table),
                "#{table} is missing from tenant schema #{schema_name}"
+
       end
 ```
 
-The blank line that currently sits at line 296 (between the `assert` and the deleted
-`refute` block) is also removed as part of deleting 297–301, so the loop body has no
-internal blank line — matching the shape above.
+The blank line that currently sits at line 296 (between the `assert` block and the
+deleted `refute` block) is **not** part of the 297–301 deletion range and is left
+untouched, consistent with 2b's "no other change to this line" — it remains in place
+between the `assert` block and `end`, as shown above.
 
 **What is explicitly preserved, unchanged:** the `assert table_exists_in_schema?(schema_name, table)` line and its failure message (current lines 294–295) — this is AC1's
 positive-half assertion, and ISSUE-FIXER's diagnosis confirms it is real coverage

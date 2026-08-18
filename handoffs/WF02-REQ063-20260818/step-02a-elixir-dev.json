@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ063-20260818/step-02a-elixir-dev.json",
   "created_at": "2026-08-18T09:09:11Z",
   "started_at": "2026-08-18T09:09:11Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-18T09:27:40Z",
+  "status": "PASS",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -55,19 +55,32 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "Implemented every section of lib/letflow/design/req063-identity-tables-schema-per-tenant.md faithfully. §2: three new tenant-scoped migrations (20260819000001/2/3_..._tenant_scoped.exs) for groups/tenant_role/users, following the prefix()-truthiness guard pattern from 20260818110003_create_tasks.exs exactly -- column/index shape carried forward unchanged from the legacy public migrations, tenant_id retained (not dropped -- that's REQ-064). §3: three manifest entries appended to Letflow.TenantProvisioning.tenant_scoped_migrations/0, ordered groups before tenant_role (FK dependency), users last. §4: Letflow.IdentityMigration (lib/letflow/identity_migration.ex) + mix letflow.copy_identity_tables (lib/mix/tasks/letflow.copy_identity_tables.ex) -- tenant_role has no tenant_id column, so copy_tenant/2 partitions its rows via an INNER JOIN through groups.tenant_id, exactly as the design specifies; a genuinely tenant-agnostic orphan check (LEFT JOIN groups, IS NULL) blocks the whole run rather than silently dropping an orphaned row. §5b: provision_oidc_user/3 -> /4 with the new opts :: [prefix: String.t()] threaded through upsert_by_external_identity/4, insert_or_fetch/4, re_select_on_conflict/3, get_by_external_identity/3, and all three Repo calls inside that chain; AuthPipeline.provision_user/3's body now calls TenantProvisioning.schema_name_for_tenant/1 on its own already-resolved tenant_id and passes prefix: schema_name -- new {:invalid_tenant_id} branch absorbed by call/2's existing {:provision, _} 500 catch-all, no new call/2 clause needed, provisioning_error/0 unchanged.\n\n§5 GUARD MECHANISM -- ENGINEERING CALL MADE, FLAGGED FOR REVIEWER: the design's §7 item 3 left the drop migration's guard mechanism as an open question (GBL-112's migration_window_active flag has no Letflow equivalent). I chose a per-row EXISTENCE check (not row-count parity, not an operator flag): for each row in public.groups/users (and, via a join through groups, public.tenant_role), confirm a matching-id row exists in that row's owning tenant's schema copy, using public.tenant_schemas.schema_name as the dynamic identifier source (safe per INV-7 -- schema_name only ever holds values TenantProvisioning.schema_name_for_tenant/1 produced, never caller/tenant-supplied text). Row-count parity was rejected because it can't detect a row landing in the wrong tenant's schema while another goes missing if counts still balance; an operator flag was rejected because it requires inventing new migration-window infrastructure this requirement doesn't otherwise need. The guard skips the DROP entirely (RAISE NOTICE, no partial drop) if ANY row anywhere is uncopied, and no-ops cleanly on re-run once already dropped (checked via to_regclass IS NULL on all three tables first). Empirically verified end-to-end against real Postgres (see below) -- including deliberately inserting an uncopied row, confirming the guard skipped the drop, running mix letflow.copy_identity_tables, then confirming the drop proceeded on re-migrate.\n\nVERIFICATION (all run against real Docker Postgres, letflow-postgres-1, port 5462 -- no toolchain gaps in this environment):\n- mix compile --warnings-as-errors --force: EXIT 0, zero warnings (68 files compiled clean).\n- mix format --check-formatted on every file this REQ touched: EXIT 0. (Two pre-existing unformatted files -- lib/letflow/engine/transition.ex, test/letflow/engine/variable_merge_test.exs -- are untouched by this branch, confirmed via git diff --stat against main showing no changes to either; not introduced by REQ-063.)\n- mix ecto.migrate (test env): all 4 new migrations (3 create + drop) applied cleanly against public with zero rows/tenants present -- the 3 creates correctly no-op'd (if prefix() guard, confirmed via to_regclass query showing public.users/groups/tenant_role false after the run), and the drop's guard passed vacuously (no tenant data to lose) and dropped the legacy public tables.\n- Provisioned a REAL tenant (Tenant.create_changeset + TenantProvisioning.provision_tenant_schema/1 + replay_migrations/2): all 17 tenant-scoped migrations replayed cleanly including the 3 new ones; confirmed via information_schema that groups/tenant_role/users exist inside the real tenant_<hex> schema with the correct FK (tenant_role.group_id -> groups.id resolving inside the same schema) and all three index sets (unique username, partial external-identity, tenant_id/status/inserted_at composite). Performed real Ecto inserts (Group, TenantRole, User via User.jit_changeset) into the tenant schema -- all succeeded, FK enforced correctly.\n- Called Identity.provision_oidc_user/4 twice against the real tenant schema with prefix: schema_name: first call created (created: true), second call idempotently found the existing row (created: false) -- confirms the full opts-threading chain works end-to-end against real Postgres.\n- Re-created legacy public tables with realistic pre-cutover data (1 group, 1 user, 1 tenant_role for the provisioned tenant) and ran IdentityMigration.copy_all_tenants/0 directly: {:ok, %{tenants_processed: 1, groups_copied: 1, users_copied: 1, tenant_roles_copied: 1}} -- confirmed the tenant_role join-through-groups partitioning works.\n- Guard mechanism fail-first proof: inserted an additional UNCOPIED public.groups row for the same tenant, rolled back and re-ran the drop migration -- guard correctly detected the incomplete copy and SKIPPED the drop (RAISE NOTICE, public.groups still present, confirmed via to_regclass). Ran mix letflow.copy_identity_tables (the actual Mix task, not just the backing module) to pick up the remaining row -- OK, 2 groups/1 user/1 tenant_role. Rolled back and re-migrated again -- guard now passed, drop proceeded, RAISE NOTICE confirmed. This is real, not assumed: both the skip and the proceed paths were independently exercised against live Postgres.\n- Reset the test DB to a clean baseline (drop/create/migrate) afterward.\n- mix test (full suite, real Postgres): 722/761 passed, 39 failed. Every one of the 39 failures is confined to exactly the files/reasons the design's own §7 item 4 predicted and explicitly scoped OUT of this handoff: (a) undefined_table errors in Letflow.Identity.{Group,TenantRole,User,RoleRegistry}Test -- these tests insert fixtures directly into the now-dropped public groups/tenant_role/users tables; (b) UndefinedFunctionError: provision_oidc_user/3 is undefined (did you mean provision_oidc_user/4) in Letflow.IdentityTest and Letflow.Plugs.{AuthPipeline,AuthPipelineConfigurableVerifier}Test -- these tests call the pre-REQ-063 3-arity signature. No failure outside these two categories; no failure in any file this REQ doesn't touch. This is TEST-DESIGNER's Step 3 concern per the design's own explicit deferral, not a defect in this implementation -- flagging it here so it isn't mistaken for a regression.\n\nSCOPE CONFIRMATION: tenant_id was NOT removed from Identity.User or Identity.Group's schema modules (grep-confirmed both still declare field(:tenant_id, ...)) -- that's REQ-064's job. Confirmed via grep that lib/letflow/plugs/auth_pipeline.ex is the ONLY runtime caller of provision_oidc_user/3 before this change (test files and design docs are the only other hits, both expected/out of scope here). provision_oidc_user's prefix is derived only inside AuthPipeline.provision_user/3 from its own already-resolved tenant_id (the step-2 DB-sourced value, never identity_context.tenant_id) -- never caller-supplied from outside.",
+    "artifacts_out": [
+      "priv/repo/migrations/20260819000001_create_groups_tenant_scoped.exs",
+      "priv/repo/migrations/20260819000002_create_tenant_role_tenant_scoped.exs",
+      "priv/repo/migrations/20260819000003_create_users_tenant_scoped.exs",
+      "priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/identity_migration.ex",
+      "lib/mix/tasks/letflow.copy_identity_tables.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/plugs/auth_pipeline.ex"
+    ],
+    "issues": [
+      "Design §7 item 3's guard-mechanism open question was resolved by ELIXIR-DEV as a per-row existence check (see result.summary) -- REVIEWER should confirm this engineering call, not just the code shape, since it is the one piece of this requirement with real data-loss risk if wrong.",
+      "Design §7 item 4 (existing Identity/AuthPipeline test fixtures break against the now-per-tenant-schema tables) materialized exactly as predicted -- 39 test failures, all in that named category, confirmed not a regression. Routed to TEST-DESIGNER's Step 3 per the design's own deferral, not fixed here."
+    ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ063-20260818",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF02-REQ063-20260818",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to SECURITY-REVIEWER (2c)"
   },
   "rework_count": 0,
   "max_rework": 3

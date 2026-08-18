@@ -1,0 +1,40 @@
+{
+  "handoff_id": "a1b2c3d4-0000-4000-8000-000000000006",
+  "run_id": "WF03-ISS0050-20260818",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0050-20260818/step-03b-security-reviewer.json",
+  "created_at": "2026-08-18T21:46:57Z",
+  "started_at": "2026-08-18T21:46:57Z",
+  "completed_at": "2026-08-18T21:47:32Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["step-03-elixir-dev.json"],
+    "artifacts_in": ["priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs"],
+    "owned_modules": ["priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs"]
+  },
+  "task": {
+    "description": "Scope test + INV-1..INV-8 review of the diff to priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs (git diff main...HEAD -- that file). This is a migration file (tenant-data path) so it is in scope. The change only adds to_regclass(format('%I.<table>', v_tenant.schema_name)) IS NULL guard checks before the existing per-tenant dynamic EXECUTE statements -- schema_name is read from public.tenant_schemas, never caller/user-supplied, same identifier-safety property the pre-existing code already relied on (unchanged by this diff). No new dynamic SQL construction pattern introduced -- verify this claim directly against the diff rather than trusting it.",
+    "acceptance_criteria": [
+      "Confirm INV-7 (no unsafe interpolation of tenant/user input into SQL) still holds -- the new format('%I.<table>', v_tenant.schema_name) calls use the identical schema_name source and %I identifier-quoting mechanism as the pre-existing code, with a literal (not variable) table name.",
+      "Confirm the fix does not weaken tenant isolation -- it only ever causes the guard to be MORE conservative (skip the DROP) on missing-table cases, never less.",
+      "State PASS/NOT-APPLICABLE per invariant per HANDOFF_PROTOCOL.md's worked example format.",
+      "Confirm no other file in the diff is out of scope (git diff main...HEAD --stat should show only the migration file, plus non-code artefacts: handoffs/, docs/issues/, docs/anti-patterns.md, test files from prior steps)."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: migration file priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs is a tenant-data path (migration touching tenant-scoped table drops) -- IN SCOPE. git diff main...HEAD --stat confirms no other code file is touched besides this migration; the only other changes are non-code artefacts (docs/anti-patterns.md, docs/issues/ISS-0051.yaml, handoffs/*, lib/letflow/design/iss-0050-drop-legacy-guard-missing-table.md) plus a cosmetic test-name/comment rewording in test/letflow/engine_test.exs (AC6 describe/test renamed, no assertion or behavior change) -- confirmed via `git diff main...HEAD -- test/letflow/engine_test.exs`, out of scope for security review. Per-invariant verdicts: INV-1 (tenant data isolation) APPLIES -- PASS: the diff only adds to_regclass(format('%I.<table>', v_tenant.schema_name)) IS NULL guard checks before the pre-existing per-tenant dynamic EXECUTE statements; schema_name is read from public.tenant_schemas (unchanged source, not caller/user-supplied), and the guard is strictly more conservative (skips the DROP / sets v_all_copied := FALSE on a missing table) rather than less -- no weakening of the schema-per-tenant scoping mechanism, no new data-access path. INV-2 (server-side field authorisation) NOT-APPLICABLE -- no API response surface touched, S4 not started. INV-3 (untrusted runtime sandboxing) NOT-APPLICABLE -- no Lua/WASM path touched, S5 not started. INV-4 (secrets by reference only) NOT-APPLICABLE -- no secret material, env var, or config resolution touched by this diff. INV-5 (not-found/forbidden indistinguishability) NOT-APPLICABLE -- no lookup-by-ID endpoint, S4 not started. INV-6 (new data-access paths prove scoping) APPLIES -- PASS: this SECURITY-REVIEWER handoff itself is the required proof artefact; migration introduces no new business table or data-access path, only hardens an existing guard. INV-7 (no unsafe SQL string interpolation) APPLIES -- PASS: verified directly against the diff -- all three new format('%I.<table>', v_tenant.schema_name) calls use the identical v_tenant.schema_name source and %I identifier-quoting mechanism as the pre-existing EXECUTE format(...) calls; the <table> portion is a literal (groups/users/tenant_role), never a variable; the new to_regclass(...) calls are read-only introspection, not EXECUTE, so no new dynamic-SQL execution surface is introduced. INV-8 (no unhandled crashes on realistic failure paths) APPLIES -- PASS: this is precisely the invariant the fix restores -- previously a tenant row with a missing groups/users/tenant_role table crashed the migration with 42P01 undefined_table; the fix replaces that crash with a typed conservative branch (RAISE NOTICE + v_all_copied := FALSE) on realistic mid-provisioning/incomplete-fixture input, consistent with ISS-0050's root cause.",
+    "artifacts_out": ["handoffs/WF03-ISS0050-20260818/step-03b-security-reviewer.json"],
+    "issues": [],
+    "next_action": "Route to REVIEWER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

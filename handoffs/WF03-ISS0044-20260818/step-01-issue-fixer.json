@@ -36,9 +36,9 @@
     "issues": [],
     "git_evidence": {
       "branch_name": "fix/WF03-ISS0044-20260818",
-      "commit_sha_list": [],
+      "commit_sha_list": ["2490c11292bde05e5a7d6d336850662335d32915"],
       "remote_branch": "origin/fix/WF03-ISS0044-20260818",
-      "push_status": "skipped",
+      "push_status": "pushed",
       "pr_url": null,
       "pr_create_error": null
     },

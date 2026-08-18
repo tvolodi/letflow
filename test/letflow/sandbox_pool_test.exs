@@ -67,7 +67,7 @@ defmodule Letflow.SandboxPoolTest do
   # exercising never contends with another test in this file or with the
   # application's own singleton (design doc §4.7 INV-SP-7). Returns the pid --
   # SandboxPool.claim/2 and release/2 both accept a raw pid as `pool`.
-  defp start_pool!(opts \\ []) do
+  defp start_pool!(opts) do
     name = :"sandbox_pool_test_#{System.unique_integer([:positive, :monotonic])}"
     {:ok, pid} = SandboxPool.start_link(Keyword.put_new(opts, :name, name))
     on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)

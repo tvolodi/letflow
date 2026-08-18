@@ -41,7 +41,7 @@ defmodule Letflow.SandboxPool.FixtureLoaderTest do
   # Isolated, uniquely-named pool -- same reasoning as sandbox_pool_test.exs's
   # start_pool!/1 (design doc §4.7 INV-SP-7). max_concurrent: 2 is plenty for this
   # file's needs (never more than one claim outstanding at a time per test).
-  defp start_pool!(opts \\ []) do
+  defp start_pool!(opts) do
     name = :"fixture_loader_test_pool_#{System.unique_integer([:positive, :monotonic])}"
     {:ok, pid} = SandboxPool.start_link(Keyword.put_new(opts, :name, name))
     on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)

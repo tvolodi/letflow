@@ -29,7 +29,7 @@ defmodule Letflow.Definitions.ServiceScopeValidatorTest do
   defp service_task(id, attributes),
     do: %Node{id: id, node_type: :SERVICE_TASK, attributes: attributes}
 
-  defp node(id, type, attributes \\ nil),
+  defp node(id, type, attributes),
     do: %Node{id: id, node_type: type, attributes: attributes}
 
   defp graph(nodes), do: %Graph{nodes: nodes, edges: []}

@@ -104,7 +104,7 @@ defmodule Letflow.Definitions.SearchTest do
     )
   end
 
-  defp create!(schema_name, overrides \\ %{}) do
+  defp create!(schema_name, overrides) do
     assert {:ok, definition} = Definitions.create(create_attrs(overrides), prefix: schema_name)
     definition
   end

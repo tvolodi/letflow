@@ -39,8 +39,20 @@ defmodule Letflow.Engine.InstanceState do
   REQ-043 schema module. `status` is declared here as a plain atom type
   (`:active | :completed | :cancelled | :error`), not as `Ecto.Enum` and not
   as a call into a REQ-043-owned module that does not yet exist.
+
+  ## `join_counters` (REQ-051)
+
+  Added by `lib/letflow/design/req051-parallel-gateway-split-join.md` §2.1:
+  one outstanding `Letflow.Engine.JoinCounter` cohort per PARALLEL_GATEWAY
+  join node currently awaiting some of its branches, keyed by `join_node_id`
+  alone — **not** by `{join_node_id, origin_token_id}`. This means at most
+  one cohort can be outstanding per join node at a time; a second split
+  reaching the same join node while an earlier cohort is still outstanding
+  (e.g. loop re-entry) would overwrite the earlier entry — out of scope for
+  this requirement, flagged as an open question (design doc §12.1).
   """
 
+  alias Letflow.Engine.JoinCounter
   alias Letflow.Engine.Token
 
   @enforce_keys [:instance_id]
@@ -49,7 +61,8 @@ defmodule Letflow.Engine.InstanceState do
     status: :active,
     tokens: [],
     variables: %{},
-    pending_task_nodes: []
+    pending_task_nodes: [],
+    join_counters: %{}
   ]
 
   @type status :: :active | :completed | :cancelled | :error
@@ -59,6 +72,7 @@ defmodule Letflow.Engine.InstanceState do
           status: status(),
           tokens: [Token.t()],
           variables: map(),
-          pending_task_nodes: [Token.t()]
+          pending_task_nodes: [Token.t()],
+          join_counters: %{optional(String.t()) => JoinCounter.t()}
         }
 end

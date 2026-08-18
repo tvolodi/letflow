@@ -1,0 +1,46 @@
+{
+  "handoff_id": "f3c6e9d8-0a7f-4e1b-e5c8-1d6f7a9e0f44",
+  "run_id": "WF03-ISS0029-20260818",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0029-20260818/step-05-issue-fixer-close.json",
+  "created_at": "2026-08-18T01:52:00Z",
+  "started_at": "2026-08-18T01:52:00Z",
+  "completed_at": "2026-08-18T01:52:42Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "related_handoff_ids": ["e2b5f8d7-9c6f-4e0a-d4b7-0c5e6f8d9f33"],
+    "artifacts_in": ["docs/issues/ISS-0029.yaml"],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Close out docs/issues/ISS-0029.yaml per WF-03 Step 5: set status: resolved, resolved_in_run: WF03-ISS0029-20260818, resolved_at: <real UTC timestamp>. GitHub issue #87 is the canonical record (github_issue field already points to it) -- close it with `gh issue close 87 --comment \"Fixed in WF03-ISS0029-20260818. See docs/issues/ISS-0029.yaml and the regression test evidence in test/specs/REQ-027.md.\"`. Do NOT touch GH issue #132 (already closed earlier this session as a duplicate of #87, created inadvertently by letflow-queue's register_task auto-sync -- no action needed there).",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0029.yaml status flipped to resolved with resolved_in_run and resolved_at fields",
+      "GitHub issue #87 closed with a comment referencing the resolving run and the regression evidence",
+      "File append-only conventions respected (never delete the issue record, only update fields)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Verified the upstream WF-03 fix run had already removed the vacuous `refute table_exists_in_schema?(\"public\", ...)` assertion from test/letflow/definitions/migrations_test.exs and reworded test/specs/REQ-027.md (lines ~111-113) to state that the :prefix-guard property is owned by test/letflow/event_store/migrations_test.exs's section-4 guard test, not by this describe block -- matching the fix ISS-0029 called for. Closed out docs/issues/ISS-0029.yaml: status -> resolved, resolved_in_run: WF03-ISS0029-20260818, resolved_at: 2026-08-18T01:52:35Z (fields appended, record not deleted). Closed GitHub issue #87 with `gh issue close 87 --comment \"Fixed in WF03-ISS0029-20260818. See docs/issues/ISS-0029.yaml and the regression test evidence in test/specs/REQ-027.md.\"` -- confirmed closed via `gh issue close` success output. Did not touch GH#132 (already closed earlier this session as an inadvertent duplicate) per handoff instruction.",
+    "artifacts_out": ["docs/issues/ISS-0029.yaml"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0029-20260818",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH routes to Step Final: git merge"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

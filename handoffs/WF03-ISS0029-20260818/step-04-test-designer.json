@@ -1,0 +1,53 @@
+{
+  "handoff_id": "c9f2e5b3-6a4d-4c8e-b2f5-7a3c8e1f4b11",
+  "run_id": "WF03-ISS0029-20260818",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0029-20260818/step-04-test-designer.json",
+  "created_at": "2026-08-18T01:42:00Z",
+  "started_at": "2026-08-18T01:42:00Z",
+  "completed_at": "2026-08-18T01:45:21Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "related_handoff_ids": ["a2b6d4e1-7f3c-4a8d-b1e6-9c4f7a2e3b99"],
+    "artifacts_in": [
+      "lib/letflow/design/iss-0029-req027-migrations-test-fix.md"
+    ],
+    "owned_modules": [
+      "test/letflow/definitions/migrations_test.exs",
+      "test/specs/REQ-027.md"
+    ]
+  },
+  "task": {
+    "description": "Follow the design doc's own section 5 (lib/letflow/design/iss-0029-req027-migrations-test-fix.md) literally -- it already specifies the exact regression-test procedure for this fix, since this is a deletion/correction of test/spec text rather than new production behavior: (1) confirm by reading the diff that test/letflow/definitions/migrations_test.exs no longer contains any table_exists_in_schema?(\"public\", ...) call; (2) re-run test/letflow/event_store/migrations_test.exs's section-4 guard test, confirm it passes, then re-apply the `if prefix() do` -> `if true do` mutation in priv/repo/migrations/20260816193001_create_process_definitions.exs and confirm the guard test fails (naming CreateProcessDefinitions) -- this is the fail-first proof appropriate here (the property's real owner still detects the defect the deleted assertion never could), then revert the mutation and confirm tree clean; (3) confirm full suite (MIX_ENV=test mix test) stays green with test count unchanged in migrations_test.exs (same file, same test count, one fewer assertion). Write this up as a short test spec addendum in test/specs/REQ-027.md's own file or a new note (your judgment on placement per existing conventions) documenting that this property's real coverage was reproduced pre/post -- consult test/specs/ conventions for how prior WF-03 fixes documented this (see e.g. how ISS-0038/ISS-0041 fixes were documented, if applicable) -- and record the actual fail-then-pass evidence in your handoff.",
+    "acceptance_criteria": [
+      "Diff-read confirms zero remaining table_exists_in_schema?(\"public\", ...) calls in migrations_test.exs",
+      "Section-4 guard test shown to FAIL when the if prefix() do -> if true do mutation is applied (fail-first proof)",
+      "Section-4 guard test shown to PASS after the mutation is reverted",
+      "Full suite green after all mutations reverted, tree clean",
+      "Evidence recorded in the handoff and/or a committed artifact, not just asserted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design doc §5 procedure (lib/letflow/design/iss-0029-req027-migrations-test-fix.md) reproduced literally against the branch's actual state. (1) Diff-read: `grep -n 'table_exists_in_schema?(\"public\"' test/letflow/definitions/migrations_test.exs` returns zero matches -- the only remaining `table_exists_in_schema?` call is the positive-half assertion against the tenant's own schema (line 294); test case 1 in test/specs/REQ-027.md already reflects the renamed test string. (2) Fail-first proof, reproduced live: baseline run of the section-4 guard test (`MIX_ENV=test mix test test/letflow/event_store/migrations_test.exs:484`) passed clean (13 tests, 0 failures, 12 excluded). Mutated priv/repo/migrations/20260816193001_create_process_definitions.exs's `def change do` guard from `if prefix() do` to `if true do` and re-ran the same test -- it FAILED: '1) test §4 guard pattern -- every registered tenant-scoped migration is a real no-op without a prefix every migration registered in tenant_scoped_migrations/0 creates nothing in public when run with no :prefix (§4 guard pattern) (Letflow.EventStore.MigrationsTest) / test/letflow/event_store/migrations_test.exs:484 / a registered tenant-scoped migration created something in public when run with no :prefix -- §4's guard pattern is missing or broken in one of: [Letflow.Repo.Migrations.CreateEvents, Letflow.Repo.Migrations.CreateInstanceSequence, Letflow.Repo.Migrations.CreateInstanceProjections, Letflow.Repo.Migrations.CreateEventPayloadStore, Letflow.Repo.Migrations.CreateEventsArchive, Letflow.Repo.Migrations.CreateEventIdempotency, Letflow.Repo.Migrations.CreateEventTypeRegistry, Letflow.Repo.Migrations.CreateProcessDefinitions, Letflow.Repo.Migrations.CreateInstanceDefinitionSnapshots, Letflow.Repo.Migrations.CreatePromotionReviews] / code: assert public_tables() == tables_before, / 13 tests, 1 failure, 12 excluded'. CreateProcessDefinitions (REQ-027's own migration) is named in the candidate list -- the guard test genuinely detects the defect class the deleted assertion never could. (3) Reverted the mutation (`git diff` on the migration file returned empty afterward) and re-ran: '13 tests, 0 failures, 12 excluded' -- pass restored. (4) Full suite with tree clean: `MIX_ENV=test mix test` -> '4 properties, 653 tests, 0 failures'; migrations_test.exs alone: '14 tests, 0 failures' (same count as before the fix, one assertion removed from an existing test, no test removed/added). `git status --short` after all reverts shows only test/specs/REQ-027.md modified plus this handoff file -- migration and migrations_test.exs files are byte-identical to HEAD. Evidence recorded as a committed artifact in a new 'Regression note' subsection under AC1 in test/specs/REQ-027.md (following the 'Regression note'/'Regression --' convention already used in test/specs/REQ-029.md and test/specs/REQ-030.md; no ISS-0038/ISS-0041-specific test/specs precedent exists since those were doc-only/moduledoc fixes with no test-designer step), plus referenced in the Coverage check section.",
+    "artifacts_out": ["test/specs/REQ-027.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0029-20260818",
+      "commit_sha_list": ["48eb028"],
+      "remote_branch": "origin/feature/WF03-ISS0029-20260818",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH routes to TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

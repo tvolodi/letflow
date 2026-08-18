@@ -65,4 +65,6 @@ affected_files:
   - test/letflow/definitions/migrations_test.exs
   - test/specs/REQ-027.md
 github_issue: https://github.com/tvolodi/letflow/issues/87
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0029-20260818
+resolved_at: 2026-08-18T01:52:35Z

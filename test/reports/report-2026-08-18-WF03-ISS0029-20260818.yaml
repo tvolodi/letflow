@@ -1,0 +1,134 @@
+# Test run report — WF-03 Step 4c (full suite verification, per WF-02 Step 4 procedure)
+
+issue_id: ISS-0029
+req_id: REQ-027
+workflow: WF-03
+step: 04c
+agent: TEST-RUNNER
+run_id: WF03-ISS0029-20260818
+date_utc: 2026-08-18T01:51:04Z
+
+git:
+  branch: feature/WF03-ISS0029-20260818
+  branch_confirmed: true
+  commit: 6bbb8f02e794ffc14e4af93a27891ce3ba421270
+  commit_subject: "chore(WF03-ISS0029-20260818): record commit sha and push status in step-04b handoff"
+  note: >
+    Confirmed via `git log -1` and `pwd` (primary ~/letflow checkout, not a
+    worktree) at start of this run. Prior gates (CODE-DESIGN-VALIDATOR,
+    SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR) already passed on this
+    commit per dispatching handoff (step-04b-test-design-validator.json), which
+    independently re-derived a baseline of 4 properties, 653 tests, 0 failures
+    on this same branch.
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 27 [erts-15.2.7.4] ... Elixir 1.18.3 (compiled with Erlang/OTP 27)"
+  postgres_container: letflow-postgres-1 (already running, 18h+ uptime, healthy,
+    0.0.0.0:5462->5432/tcp and [::]:5462->5432/tcp — confirmed via `docker ps`
+    only; `docker compose up`/`up -d` was NOT run since this is the primary
+    ~/letflow checkout with an already-healthy container, matching this
+    project's established convention of not re-upping a healthy shared
+    container, see docs/anti-patterns.md's worktree-specific entry on this).
+  partition: "none (primary checkout, default database — bare `mix test`/
+    `MIX_ENV=test mix test` used for every invocation, no MIX_TEST_PARTITION
+    needed here)"
+  command_run: >
+    `mix compile --warnings-as-errors`, `mix format --check-formatted`, then
+    `MIX_ENV=test mix test` (full suite, default/unpinned random seed) and
+    `MIX_ENV=test mix test --seed 0` (full suite, pinned-seed independent run)
+    — the `test` alias runs ecto.create + ecto.migrate --quiet first
+    automatically.
+
+verdict: PASS
+
+checks:
+  compile_warnings_as_errors:
+    result: PASS
+    exit_code: 0
+    command: "mix compile --warnings-as-errors"
+    output: "(no output — clean compile, zero warnings)"
+
+  format_check:
+    result: PASS
+    exit_code: 0
+    command: "mix format --check-formatted"
+    output: "(no output — all files already formatted)"
+
+  test_suite_full_run1:
+    result: PASS
+    exit_code: 0
+    seed: unpinned/random — ExUnit's own default
+    summary_line_verbatim: "4 properties, 653 tests, 0 failures"
+    finished_line_verbatim: "Finished in 31.4 seconds (1.5s async, 29.8s sync)"
+    failures: 0
+
+  test_suite_full_run2:
+    result: PASS
+    exit_code: 0
+    seed: 0 (pinned, second independent run per this project's established
+      double-run practice given its flaky-test history)
+    summary_line_verbatim: "4 properties, 653 tests, 0 failures"
+    finished_line_verbatim: "Finished in 31.3 seconds (1.6s async, 29.7s sync)"
+    failures: 0
+
+  docker_compose_not_run:
+    result: PASS
+    note: >
+      `docker ps` was used to confirm the pre-existing container
+      (letflow-postgres-1) was already Up (18h+, healthy) and port-mapped
+      (0.0.0.0:5462->5432/tcp) before any test invocation. `docker compose
+      up`/`up -d` was not invoked during this step — the container was
+      already healthy and this is the primary checkout, so re-upping it was
+      unnecessary.
+
+  known_noise_not_a_failure:
+    - >
+      Verbose SQL query debug logging (many `[debug] QUERY OK ...` lines,
+      including tenant-schema DDL/DML from the multi-tenant test fixtures)
+      appears in raw mix test output (config/test.exs's default test log
+      level) — expected, not indicative of any problem; overall run reports
+      0 failures.
+    - >
+      `redefining module Letflow.Repo.Migrations....` warnings — expected
+      artifact of re-running ecto.migrate across repeated `mix test`
+      invocations in the same BEAM session, not a failure (none observed
+      to fail compile-with-warnings-as-errors, since that ran once, standalone,
+      before either test invocation).
+
+pre_existing_failures_found: none
+issues_filed: none
+
+baseline_comparison:
+  step_04b_baseline: "4 properties, 653 tests, 0 failures — independently
+    re-derived by TEST-DESIGN-VALIDATOR in
+    handoffs/WF03-ISS0029-20260818/step-04b-test-design-validator.json on
+    this same commit, tree clean, immediately before this step."
+  observed_total_run1: "653 tests, 4 properties"
+  observed_total_run2: "653 tests, 4 properties"
+  match: true
+  origin_main_check: >
+    Not re-checked in this step — TEST-DESIGN-VALIDATOR's step-04b handoff
+    already confirms the branch's own state; this step verifies the feature
+    branch as pushed (origin/feature/WF03-ISS0029-20260818, branch up to
+    date per `git status`), consistent with this project's established
+    per-step scope (see e.g. report-2026-08-17-WF02-REQ042-20260817.yaml's
+    same treatment).
+
+diagnosis: "N/A — no failures observed in this run. Nothing routed back to
+  ELIXIR-DEV or TEST-DESIGNER."
+
+regression_check_vs_baseline: >
+  653 tests, 4 properties, 0 failures reproduced identically across two
+  independent full-suite invocations (unpinned default seed, and pinned
+  seed 0), matching TEST-DESIGN-VALIDATOR's own independently-observed
+  baseline from the immediately preceding step on the same commit. Zero
+  failures observed anywhere. mix compile --warnings-as-errors and mix
+  format --check-formatted both exited 0 with no output. docker compose
+  up was NOT run during this step (pre-existing healthy container reused).
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-18-WF03-ISS0029-20260818.yaml
+  next_action: "ORCH routes to ISSUE-FIXER for Step 5 close-out"

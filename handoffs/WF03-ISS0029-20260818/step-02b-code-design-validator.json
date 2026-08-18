@@ -1,0 +1,57 @@
+{
+  "handoff_id": "d5b3f8a2-9c4e-4b1a-b2d7-4a8c9f3e0b55",
+  "run_id": "WF03-ISS0029-20260818",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0029-20260818/step-02b-code-design-validator.json",
+  "created_at": "2026-08-18T01:25:00Z",
+  "started_at": "2026-08-18T01:25:00Z",
+  "completed_at": "2026-08-18T01:30:37Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "related_handoff_ids": ["c4a2e7f1-8b3d-4e9a-a1c6-3f7b8e2d9a44"],
+    "artifacts_in": [
+      "lib/letflow/design/iss-0029-req027-migrations-test-fix.md",
+      "handoffs/WF03-ISS0029-20260818/step-01-issue-fixer-diagnose.json",
+      "test/letflow/definitions/migrations_test.exs",
+      "test/specs/REQ-027.md",
+      "test/letflow/event_store/migrations_test.exs"
+    ],
+    "owned_modules": [
+      "test/letflow/definitions/migrations_test.exs",
+      "test/specs/REQ-027.md"
+    ]
+  },
+  "task": {
+    "description": "Hard gate on CODE-DESIGNER's output at lib/letflow/design/iss-0029-req027-migrations-test-fix.md. Independently re-derive your verdict: read the design AND the actual current content of test/letflow/definitions/migrations_test.exs and test/specs/REQ-027.md yourself (do not trust the design's claimed line numbers without checking them against the live file), and confirm the design's line references are still accurate (no drift since CODE-DESIGNER wrote it), the proposed deletion genuinely leaves the AC1 positive-half assertions intact, no other test in the file references the deleted assertion or the renamed test description, and the REQ-027.md replacement text is unambiguous enough for ELIXIR-DEV to apply verbatim with no judgment calls. Flag ANY ambiguity, drift, or missed reference as FAIL for rework -- do not rubber-stamp.\n\nRE-VALIDATION after rework: your prior pass (see this handoff's own history / step-02's result.summary) FAILed section 2c for contradicting 2a/2b about whether the blank line at migrations_test.exs line 296 is deleted. CODE-DESIGNER's rework kept line 296 untouched (your offered option (b)) and rewrote 2c's 'net shape' block to show the blank line present before `end`, removing the false removal claim. Re-check specifically: (1) 2a, 2b, and 2c now genuinely agree with each other and with the live file -- read the design's new 2c text and the live file yourself, don't just trust CODE-DESIGNER's claim that they now agree; (2) nothing else in the design was altered beyond section 2c (spot-check Edit 2 / REQ-027.md and the rest of Edit 1 are still exactly what you verified correct last time). This is a genuine re-derivation, not a rubber stamp of 'rework happened so it must be fixed.'",
+    "acceptance_criteria": [
+      "Design's line references independently confirmed against the actual current file content",
+      "Confirmed the AC1 positive-half assertions survive the proposed edit",
+      "Confirmed no other test/spec text references the deleted assertion or old test description",
+      "Confirmed the design contains zero implementation/test code (design doc only)",
+      "PASS or FAIL verdict independently re-derived, not copied from CODE-DESIGNER's own summary"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "RE-VALIDATION after rework, independently re-derived (not copied from CODE-DESIGNER's rework summary). Re-read the design at lib/letflow/design/iss-0029-req027-migrations-test-fix.md in full on branch feature/WF03-ISS0029-20260818, and re-read the live content of test/letflow/definitions/migrations_test.exs (lines 270-309), test/specs/REQ-027.md (lines 100-129), and test/letflow/event_store/migrations_test.exs (lines 478-492) myself.\n\nLINE-296 CONTRADICTION FROM MY PRIOR FAIL IS RESOLVED, via option (b): CODE-DESIGNER left line 296 (the blank line) untouched and rewrote 2c. Sec 2a still reads 'Delete lines 297-301 in full' (5 lines, quoted text byte-identical to the live file's lines 297-301). Sec 2b still reads 'No other change to this line or to lines 292, 294-296' (blank line 296 declared unchanged). Sec 2c's 'net shape' code block NOW explicitly shows the blank line present between the assert-message line and `end` (6 lines: for/comment/assert/message/blank/end), and its prose now states plainly that the blank line 'is not part of the 297-301 deletion range and is left untouched, consistent with 2b's \"no other change to this line\" -- it remains in place between the assert block and end.' I hand-applied 2a+2b to the live file's lines 292-302 myself and the result matches 2c's quoted block exactly, line for line. All three subsections now state one single, non-contradictory outcome; no trace of the old 'is also removed' claim remains.\n\nSPOT-CHECK FOR OTHER DRIFT: nothing else changed. Section 1 (root cause), 2a's deletion block, 2d's rename (line 285 quote matches live file exactly), section 3 (Edit 2 / REQ-027.md replacement block), section 4 (negative scope), section 5 (regression-test guidance), section 6 (open questions: none) all read identical in substance to what I verified correct in my prior pass.\n\nRE-RAN INDEPENDENT CHECKS FROM MY PRIOR PASS: `grep -n 'table_exists_in_schema?(\"public\"' test/letflow/definitions/migrations_test.exs` -> exactly one hit, line 300 (the one being deleted); no other test in the file references it. `grep -n 'never in public|public half|:prefix guard|prefix guard' test/specs/REQ-027.md` -> exactly one hit, line 110, inside the 8-line block (lines 107-114) the design replaces verbatim, live text byte-identical to the design's quoted 'current text'. Guard-test citation: `grep -n` in test/letflow/event_store/migrations_test.exs confirms the section-4 guard test is at exactly line 484, consistent with (more precise than) the design's '~line 484' citation. Searched the whole tree for both the pre-rename and post-rename test-name strings: only the two files the design already targets (migrations_test.exs, REQ-027.md) reference either string -- no missed third reference. AC1's positive-half assertion (live lines 294-295, `assert table_exists_in_schema?(schema_name, table)` + failure message) is untouched by the proposed edit, confirmed by direct comparison. No implementation code present: all quoted blocks are verbatim before/after test-file and spec-file text for a mechanical deletion/rename, not new production logic.\n\nAll five acceptance criteria on this handoff's task are independently satisfied. Design is unambiguous enough for ELIXIR-DEV to apply verbatim with no judgment calls.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0029-20260818",
+      "commit_sha_list": ["1f7f60d"],
+      "remote_branch": "origin/feature/WF03-ISS0029-20260818",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH routes to ELIXIR-DEV for implementation"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

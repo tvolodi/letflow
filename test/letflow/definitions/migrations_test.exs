@@ -282,7 +282,7 @@ defmodule Letflow.Definitions.MigrationsTest do
     # :prefix mechanism, applying cleanly"
     # -------------------------------------------------------------------------------
 
-    test "replay_migrations/2 applies both REQ-027 migrations and both definition tables land in the tenant's own schema, never in public",
+    test "replay_migrations/2 applies both REQ-027 migrations and both definition tables land in the tenant's own schema",
          %{tenant: tenant, schema_name: schema_name, applied_versions: applied_versions} do
       registered_versions =
         TenantProvisioning.tenant_scoped_migrations() |> Enum.map(&elem(&1, 0))
@@ -290,15 +290,9 @@ defmodule Letflow.Definitions.MigrationsTest do
       assert applied_versions == registered_versions
 
       for {table, _module} <- @req027_tables do
-        # The table exists under the tenant's own schema...
+        # The table exists under the tenant's own schema.
         assert table_exists_in_schema?(schema_name, table),
                "#{table} is missing from tenant schema #{schema_name}"
-
-        # ...and does NOT exist under public. This half is what proves :prefix is doing
-        # the work: a migration that ignored :prefix and wrote to the default schema
-        # would still satisfy a naive "does the table exist" check.
-        refute table_exists_in_schema?("public", table),
-               "#{table} leaked into the public schema -- the :prefix guard is not working"
       end
 
       # REQ-022's own observable that the replay ran to completion rather than partially.

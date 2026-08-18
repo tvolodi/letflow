@@ -1,0 +1,70 @@
+{
+  "handoff_id": "b4f1a7b0-6e3c-4c7a-9d2e-8a5c1f0d3b6a",
+  "run_id": "WF02-REQ040-20260817",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ040-20260817/step-03b-test-design-validator.json",
+  "created_at": "2026-08-18T01:39:53Z",
+  "started_at": "2026-08-18T01:39:53Z",
+  "completed_at": "2026-08-18T01:52:30Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-040"],
+    "related_handoff_ids": [
+      "step-00-git-setup",
+      "step-01-code-designer",
+      "step-01-code-designer-rework",
+      "step-01b-code-design-validator-rereview",
+      "step-02a-elixir-dev",
+      "step-02c-security-reviewer",
+      "step-02d-reviewer",
+      "step-03-test-designer"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req040-promotion-assertion-rerun.md",
+      "lib/letflow/definitions.ex",
+      "test/specs/REQ-040.md",
+      "test/letflow/definitions/promotion_assertion_rerun_test.exs",
+      "test/letflow/definitions_test.exs",
+      "test/letflow/definitions/rollback_test.exs"
+    ],
+    "owned_modules": ["test/specs/REQ-040.md", "test/letflow/definitions/promotion_assertion_rerun_test.exs", "test/letflow/definitions_test.exs"]
+  },
+  "task": {
+    "description": "WF-02 Step 3b hard gate for REQ-040. Independently verify TEST-DESIGNER's test spec and test code actually cover all 6 acceptance criteria with runnable, non-vacuous tests before TEST-RUNNER is allowed to start -- re-derive every acceptance criterion from docs/requirements.yaml directly, read every claimed proof technique (pool-quota-exhaustion claim-count proof, real Postgres sandbox-schema inspection, genuine double-run non-determinism, real raised-exception crash safety, real SandboxPool.release/2-triggered teardown failure) against the actual shipped code rather than trusting TEST-DESIGNER's own summary, run the tests, and mutation-test the two most safety-critical checks.",
+    "acceptance_criteria": [
+      "Every one of REQ-040's 6 acceptance criteria has at least one runnable test that would fail if the corresponding behavior were broken",
+      "No @tag :skip / @tag :pending on a MUST-covering test without a passing counterpart",
+      "No 'TODO: implement test' left in the spec",
+      "Test fixtures use per-test unique data, no cross-test pollution, no test depends on another test running first",
+      "No hardcoded secrets/connection strings in test files",
+      "DIRECTIVE T-1 honored: real Postgres, real SandboxPool/FixtureLoader throughout, no mocking",
+      "mix test on the two touched files, and the full suite, actually pass with the claimed counts",
+      "Mutation-sanity check on the double-run non-determinism test and the try/rescue crash-safety test: both must actually fail when the corresponding implementation logic is broken"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-derived REQ-040's 6 acceptance criteria from docs/requirements.yaml:1930-1936 and confirmed each maps to a specific, non-vacuous test: AC1 -> 'AC1 -- idempotent replay, no second sandbox claim' (promotion_assertion_rerun_test.exs:415-492), using a real pool-quota-exhaustion technique (max_concurrent: 1, the test claims the pool's own single slot after call 1 to fully exhaust it, call 2 uses max_wait_ms: 0 and an exploding_event_appender/0) -- traced against the actual apply_promotion_assertion_rerun/6 body in lib/letflow/definitions.ex and confirmed a real second SandboxPool.claim/2 call on the idempotent-hit path would deterministically return {:error, :sandbox_unavailable} and fail the test's `assert {:ok, result2} = ...` match, so this is a genuine, non-vacuous proof, not a trust-the-return-value check. AC2 -> the AC2 describe block (500-541) uses evaluator_snapshotting_sandbox_rows/2, which runs a REAL Postgres query (`SELECT ... FROM \"#{schema_name}\".\"process_definitions\"`) against the live sandbox schema mid-replay via :sys.get_state/1-derived sandbox_id -- a genuine inspection of the sandbox's actual row contents, not a check of the returned struct's claimed fields; asserts the row set equals exactly [fixture_id], excluding a real organic definition seeded via Definitions.create/2 beforehand. AC3 (both halves) -> AC3a (548-577, empty payload -> :failed, non-empty failing_assertion_ids) and AC3b+AC5 (586-631, passing replay + a REAL unmocked SandboxPool.release/2 call issued from inside the evaluator -- confirmed by reading evaluator_releasing_sandbox_once/1, lines 363-373 -- forces finish_replay/8's own subsequent release to hit a genuine {:error, :not_found} -> :teardown_failed, assertions_failed == 0) are two genuinely distinct tests, plus an INV-AR-6 companion test (638-669) proving a FAILING replay with the same real release-failure technique stays :failed, not :teardown_failed -- this third test is exactly the kind of check that would catch a precedence-rule regression the AC3/AC5 tests alone could miss. AC4/AC6 -> definitions_test.exs's two new describe blocks (268-329) assert specific literal substrings (`assertions_failed == 0` / NOT `status == \"passed\"`, the teardown_failed green-gate framing, the try/rescue's three named exit classes, and the disclosed Process.exit(pid, :kill)/BEAM-crash/System.halt/0 residual gap) against Code.fetch_docs/1's real compiled moduledoc -- read the actual shipped @moduledoc in lib/letflow/definitions.ex:52-77 and confirmed every asserted substring is a byte-for-byte match against the real text, not a loose 'the word gate appears somewhere' check. AC5's 'via REQ-025's append' language: confirmed this design correctly follows the SAME opts[:event_appender]-abstraction convention REQ-038's own already-shipped, already-gate-passed rollback_test.exs uses (grep-confirmed recording_event_appender/1 in rollback_test.exs:227) rather than a literal Letflow.EventStore.append/2 call -- consistent with design doc §0/§9's explicit, disclosed statement that PROMOTION_ASSERTION_TEARDOWN_FAILED is not yet a registered event_type_registry entry, so a literal EventStore.append/2 call would itself fail; this is established, already-approved codebase precedent, not a shortcut. Double-run non-determinism check (676-698): read evaluator_with_changing_nonce/0 and confirmed it genuinely returns a DIFFERENT metadata.nonce value on each of the two same-seed replay calls (a process-scoped counter, not a fixed value) -- confirmed via mutation testing below that this is a real, not vacuous, detector. fail_closed_counts/1 (729-817): confirmed real tests for both a sandbox-claim failure (max_concurrent: 0) and a fixture-load failure (a not-on-allowlist table name), each re-reading the persisted row from Postgres and asserting assertions_failed >= 1 and a real terminal status (never :running), plus the disallowed-fixture-table test independently confirms via information_schema.schemata that the claimed sandbox was still genuinely released. try/rescue crash-safety (824-857): confirmed evaluator_raising/0 performs a genuine `raise \"simulated evaluator crash\"` (not a simulated error-tuple stand-in) inside run_replay_span/8's own try body, asserting the exact %RuntimeError{} struct is returned wrapped in {:error, {:transaction_failed, exception}} rather than crashing the test process, plus an independent information_schema.schemata query confirming the rescue clause's best-effort release genuinely ran. Ran `mix compile --warnings-as-errors` (clean) and `mix test test/letflow/definitions/promotion_assertion_rerun_test.exs test/letflow/definitions_test.exs`: 32/32 passed (12 in the new file, matching the claimed count; 20 total in definitions_test.exs, of which 4 are the new AC4/AC6 tests). Ran the full suite independently: 673 passed (4 properties, 669 tests) -- matches TEST-DESIGNER's claimed counts exactly, verified myself rather than trusted. Grepped both test files and the spec for @tag :skip, @tag :pending, TODO, and hardcoded secrets/connection-string patterns: zero matches. Grepped for Mox/mock/stub usage: zero real mocking (only explanatory comments referencing 'no mock lib'), confirming DIRECTIVE T-1. Confirmed every test fixture uses System.unique_integer/1-suffixed identifiers or fresh Ecto.UUID.generate() calls, each test provisions its own tenant (provisioned_tenant/0) and its own isolated SandboxPool (start_pool!/1), and no test reads another test's data. Performed the required mutation-sanity checks: (1) temporarily changed compare_replay_results/4's `stripped1 != stripped2 -> :failed` branch to `false -> :failed` (disabling the double-run mismatch detector) and re-ran the file -- exactly 1 test failed (the 'changing nonce, undeclared -> failed' test, asserting `left: :passed, right: :failed`), all 11 others still passed, confirming the double-run test is a real, non-vacuous detector, not a coincidental pass. (2) temporarily removed the `rescue` clause from run_replay_span/8 entirely and re-ran the file -- exactly 1 test failed (the try/rescue crash-safety test, now crashing the test process with an uncaught `** (RuntimeError) simulated evaluator crash`), all 11 others still passed. Both mutations were reverted immediately after observation; `git diff --stat lib/letflow/definitions.ex` confirms zero net diff, and the full targeted-file suite (32/32) was re-run clean after reverting to confirm no residual damage. No issues found. TEST-DESIGNER's work holds up under independent re-derivation, real-code tracing, and mutation testing -- gate PASSES.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ040-20260817/step-03b-test-design-validator.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ040-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ040-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (Step 4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

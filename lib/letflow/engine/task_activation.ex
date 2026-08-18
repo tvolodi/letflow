@@ -25,10 +25,16 @@ defmodule Letflow.Engine.TaskActivation do
 
   ## Callers
 
-  `Letflow.Engine.persist/7` is this module's first caller (§5 of the
-  design). A future EE-04 (task completion) requirement is expected to
-  reuse `append_multi/6` against its own `Ecto.Multi` rather than
-  duplicating this diff/insert logic a second time.
+  `Letflow.Engine.persist/8` is `append_multi/6`'s only caller (§5 of the
+  design). REQ-048 (EE-04, task completion,
+  `lib/letflow/design/req048-task-completion.md` §9) does **not** reuse
+  `append_multi/6` unmodified — its own Multi never produces the
+  `:token_record`-keyed step `append_multi/6` requires (its tokens are
+  pre-existing rows being advanced/reconciled, never freshly inserted).
+  `Letflow.Engine.complete_task/3` instead calls
+  `append_multi_from_existing_records/6`, a second public function this
+  module exposes, which reuses `newly_pending_tokens/2` and `insert_attrs/4`
+  genuinely unchanged but skips the FK-zip step entirely.
 
   ## Zero `Repo` calls of its own (INV-EE47-7)
 
@@ -183,6 +189,91 @@ defmodule Letflow.Engine.TaskActivation do
     |> case do
       {:ok, tasks} -> {:ok, Enum.reverse(tasks)}
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @doc """
+  Appends one `Multi.run(:task_records, ...)` step to `multi`, inserting one
+  `Letflow.Engine.Task` row per newly-pending `Token.t()` — REQ-048's own
+  variant of `append_multi/6` (EE-04,
+  `lib/letflow/design/req048-task-completion.md` §9), for a caller whose
+  tokens are **pre-existing** `tokens` rows being advanced/reconciled rather
+  than freshly inserted the way `Letflow.Engine.persist/8`'s own
+  `:token_record` step produces. Reads nothing from `changes` — every
+  `Token.t()` this function is ever asked to materialize a `tasks` row for
+  already carries, as its own `token_id`, the stringified `id` of an
+  existing `TokenRecord` row (the caller's own reconstruction invariant), so
+  no `:token_record`-keyed Multi step or positional FK zip is needed here,
+  unlike `append_multi/6`. `append_multi/6` itself is left completely
+  unmodified by this addition — `Letflow.Engine.create/2`'s own call site is
+  unaffected.
+  """
+  @spec append_multi_from_existing_records(
+          multi :: Ecto.Multi.t(),
+          instance_id :: Ecto.UUID.t(),
+          graph :: Graph.t(),
+          previous_pending_task_nodes :: [Token.t()],
+          new_instance_state :: InstanceState.t(),
+          prefix :: String.t()
+        ) :: Ecto.Multi.t()
+  def append_multi_from_existing_records(
+        %Multi{} = multi,
+        instance_id,
+        %Graph{} = graph,
+        previous_pending_task_nodes,
+        %InstanceState{} = new_instance_state,
+        prefix
+      ) do
+    Multi.run(multi, :task_records, fn repo, _changes ->
+      newly_pending =
+        newly_pending_tokens(previous_pending_task_nodes, new_instance_state.pending_task_nodes)
+
+      case newly_pending do
+        [] ->
+          {:ok, []}
+
+        _ ->
+          insert_newly_pending_from_existing_records(
+            repo,
+            newly_pending,
+            graph,
+            instance_id,
+            prefix
+          )
+      end
+    end)
+  end
+
+  defp insert_newly_pending_from_existing_records(repo, newly_pending, graph, instance_id, prefix) do
+    newly_pending
+    |> Enum.reduce_while({:ok, []}, fn %Token{} = token, {:ok, acc} ->
+      with {:ok, token_record_id} <- cast_token_record_id(token.token_id),
+           %Graph.Node{} = node <- find_node(graph.nodes, token.node_id) || :unknown_node,
+           attrs <- insert_attrs(instance_id, token_record_id, token, node),
+           {:ok, task} <- do_insert(repo, attrs, prefix) do
+        {:cont, {:ok, [task | acc]}}
+      else
+        :unknown_node ->
+          {:halt, {:error, {:unknown_node_id, token.node_id}}}
+
+        {:error, reason} ->
+          {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, tasks} -> {:ok, Enum.reverse(tasks)}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # Defense-in-depth check on top of the caller's own token_id-is-a-real-
+  # TokenRecord-id reconstruction invariant (req048 design §9 point 4a): a
+  # token whose token_id is not UUID-shaped here (e.g. a derived split-branch
+  # id like "<parent>/0") means that invariant was violated upstream.
+  defp cast_token_record_id(token_id) do
+    case Ecto.UUID.cast(token_id) do
+      {:ok, uuid} -> {:ok, uuid}
+      :error -> {:error, {:invalid_token_record_id, token_id}}
     end
   end
 

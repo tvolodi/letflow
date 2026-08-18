@@ -1,0 +1,51 @@
+{
+  "handoff_id": "d5a3e1f4-8d3c-4a5a-bc2f-3a4b5c6d7e8f",
+  "run_id": "WF02-REQ047-20260818",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ047-20260818/step-01b-code-design-validator.json",
+  "created_at": "2026-08-18T21:48:47Z",
+  "started_at": "2026-08-18T21:48:47Z",
+  "completed_at": "2026-08-18T21:49:44Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-047"],
+    "requirement_text": {
+      "REQ-047": "Port src/engine/instance.zig's InstanceStore.applyTransition() as the persistence orchestration layer that turns REQ-044's pure transition output into committed rows. See lib/letflow/design/req047-task-activation-persistence.md for the full design; see step-01-code-designer.json's result.summary for CODE-DESIGNER's own account of what it produced -- do not trust that account, re-derive your verdict from the .md file directly."
+    },
+    "related_handoff_ids": ["c4f2d0e3-7c2b-4f4f-ab1e-2f3a4b5c6d7e"],
+    "artifacts_in": ["lib/letflow/design/req047-task-activation-persistence.md"],
+    "owned_modules": ["lib/letflow/engine/", "lib/letflow/instance*", "priv/repo/migrations/"]
+  },
+  "task": {
+    "description": "Independently validate lib/letflow/design/req047-task-activation-persistence.md against REQ-047's five acceptance criteria (below) per WF-02 Step 1b's checklist. Read the .md file directly -- do not read CODE-DESIGNER's result.summary as a substitute.",
+    "acceptance_criteria": [
+      "a transition that enters a HUMAN_TASK node results in exactly one tasks row with status PENDING carrying instance_id, node_id, node_name, assignee_type and assignee_ref, committed in the same transaction as the instance_projections update and the appended event",
+      "when the event append fails, zero tasks rows and zero instance_projections changes are committed -- demonstrated by forcing an append failure and reading all three tables back",
+      "transitions entering START, END, EXCLUSIVE_GATEWAY and PARALLEL_GATEWAY nodes create zero tasks rows, each with its own explicit test, verifying (not merely assuming) the transition function's pending_task_nodes guarantee",
+      "a HUMAN_TASK whose assignee_ref names a group with no members still produces a PENDING task rather than an activation error",
+      "a token entering an END node sets the instance to COMPLETED, creates no task, and leaves a documented named hook for SCH-03 timer cancellation with S6 identified as its owning stage"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read lib/letflow/design/req047-task-activation-persistence.md directly (all 519 lines), independently of CODE-DESIGNER's step-01 result.summary. Checked all 5 acceptance criteria per WF-02 Step 1b's a-e checklist: (a) each AC maps to a concrete design element in the §12 traceability table, with §2-§8 supplying the actual content -- no TBD/deferral language found anywhere (open items are explicitly enumerated as OQ-1..OQ-5 in §11, which is the required behavior, not a violation); (b) function signatures are fully specified: token_id_to_record_id/2, resolve_assignee/1, insert_attrs/4, newly_pending_tokens/2, append_multi/6, cancel_pending_timers/2 all carry full @spec-style input/output types; (c) error shape is explicit and tagged throughout -- {:error, {:missing_token_record, token_id}}, {:error, {:unknown_node_id, node_id}}, {:ok, inserted_task_records}/{:error, reason} short-circuit semantics for append_multi/6, no untagged/implicit error path; (d) cross-module dependencies are listed in a dedicated §10 table (Transition/InstanceState/Token, TokenRecord, Task, Graph/Node, Engine.persist/7, future EE-04, S6) with direction and nature stated for each; (e) no implementation code present -- every code block in the document is a @spec, a field-mapping table, or an algorithm-shape/pseudocode description matching req043/044/045's own established convention; no def...do...end body with real logic anywhere. Independently cross-checked the design's claims about already-shipped code against the actual source rather than trusting the doc's citations: lib/letflow/engine.ex's persist/7 Multi chain is confirmed to run exactly :instance_projection -> :token_record -> :event -> :finalize in that order (lines 390-426); insert_token_records/4 (lines 488-501) confirmed to insert one row per Token.t() in new_instance_state.tokens and return records in that same order via Enum.reduce_while + Enum.reverse; lib/letflow/engine/transition.ex confirmed dispatch_human_task/3 (lines 291-293) is the only dispatch clause that appends to pending_task_nodes, doing so via `pending_task_nodes ++ [token]` without removing the token from `.tokens` (matches design §3's INV-EE47-3 basis); dispatch_start/4, dispatch_end/3, dispatch_exclusive_gateway/4, dispatch_parallel_gateway/4 (split+join) contain no other pending_task_nodes reference, confirming AC3's zero-task-row claim for those four node types; lib/letflow/engine/task.ex confirmed the tasks schema (instance_id, token_id, node_id, node_name, status Ecto.Enum default :pending never cast by insert_changeset/2, assignee_type, assignee_ref, form_schema) matches design §4.5's exact 6-key attrs-map claim and the 'PENDING by construction' claim (INV-EE47-2); lib/letflow/engine/token_record.ex confirmed TokenRecord's @primary_key {:id, :binary_id, autogenerate: true} matches design §3's FK-resolution premise; lib/letflow/engine/token.ex confirmed Token.token_id :: String.t() (caller-minted, not a DB id) matches design §3's stated reason the token_id_to_record_id map is needed; lib/letflow/definitions/graph.ex confirmed Node's defstruct is [:id, :node_type, label: nil, attributes: nil] -- no `name` field -- matching design §4.2's node_name-from-label-with-id-fallback reasoning; lib/letflow/engine.ex's finalize_instance_projection/4 :completed clause (lines 573-583) confirmed to set status: :completed, completed_at: DateTime.utc_now() with no other side effect, matching design §8's claim that the COMPLETED flip needs no new logic and that cancel_pending_timers/2 is purely an added call site. All claims the design makes about already-shipped code are accurate, not invented. Verdict: PASS on all 5 acceptance criteria, no rework required.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ047-20260818",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (2a)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

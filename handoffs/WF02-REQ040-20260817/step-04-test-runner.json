@@ -1,0 +1,75 @@
+{
+  "handoff_id": "4f3a480e-3bea-4e5d-8244-3b3401e7f37e",
+  "run_id": "WF02-REQ040-20260817",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ040-20260817/step-04-test-runner.json",
+  "created_at": "2026-08-18T01:41:30Z",
+  "started_at": "2026-08-18T01:41:30Z",
+  "completed_at": "2026-08-18T01:48:55Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-040"],
+    "related_handoff_ids": [
+      "step-00-git-setup",
+      "step-01-code-designer",
+      "step-01-code-designer-rework",
+      "step-01b-code-design-validator-rereview",
+      "step-02a-elixir-dev",
+      "step-02c-security-reviewer",
+      "step-02d-reviewer",
+      "step-03-test-designer",
+      "step-03b-test-design-validator"
+    ],
+    "artifacts_in": [
+      "lib/letflow/definitions.ex",
+      "lib/letflow/definitions/promotion_artifact.ex",
+      "lib/letflow/definitions/promotion_assertion_run.ex",
+      "priv/repo/migrations/20260818090001_create_promotion_assertion_runs.exs",
+      "test/specs/REQ-040.md",
+      "test/letflow/definitions/promotion_assertion_rerun_test.exs",
+      "test/letflow/definitions_test.exs"
+    ],
+    "owned_modules": [
+      "test/letflow/process_instance_test.exs",
+      "test/support/data_case.ex"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 4 for REQ-040. Run the FULL test suite (not just the new REQ-040 files), per Unblock-Everything, and report pass/fail with real evidence -- reproduce TEST-DESIGNER's and TEST-DESIGN-VALIDATOR's claimed counts independently rather than citing them. Run mix test at least twice (unpinned seed, then a pinned seed), plus the two REQ-040 test files in isolation once more. Investigate any SandboxPool-related flakiness seriously given REQ-039's real crash/quota-exhaustion injection in these tests, rather than assuming a one-off. File any unrelated failure per ISSUE_QUEUE.md without letting it block this PASS.",
+    "acceptance_criteria": [
+      "mix test (full suite, unpinned seed) actually run and its real output quoted",
+      "mix test --seed 0 (full suite, pinned seed) actually run and its real output quoted, results compared against run 1",
+      "mix test on the two REQ-040 test files run in isolation, real output quoted, matches TEST-DESIGN-VALIDATOR's claimed 32",
+      "Pass/fail counts cross-checked against the task-cited baseline (657 passed / 653 tests / 4 properties on main) plus the 16 new tests",
+      "Any flakiness or timing sensitivity on the SandboxPool-exercising tests investigated, not dismissed",
+      "Any unrelated failure filed per ISSUE_QUEUE.md, not silently absorbed or used to block this PASS",
+      "test/reports/report-2026-08-18-WF02-REQ040-20260817.yaml written with real pass/fail counts and output",
+      "Report follows the format of test/reports/report-2026-08-18-WF02-REQ038-20260817.yaml"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently reproduced TEST-DESIGNER's and TEST-DESIGN-VALIDATOR's claimed counts from a cold start on branch feature/WF02-REQ040-20260817 (HEAD 4db3647, working tree clean). Postgres (letflow-postgres-1, port 5462) already up/healthy; toolchain (Erlang/OTP 29, Elixir 1.20.3, Mix 1.20.3) reachable locally, no Docker-fallback needed. Ran `mix test` three separate times: (1) full suite, unpinned seed 384064 -- 'Result: 673 passed (4 properties, 669 tests)', exit 0, 0 failures, zero matches on a failure-marker regex over the full 16,118-line raw log; (2) full suite, pinned seed 0 -- identical 'Result: 673 passed (4 properties, 669 tests)', exit 0, 0 failures, zero matches over the 16,048-line raw log; (3) isolated run of test/letflow/definitions/promotion_assertion_rerun_test.exs + test/letflow/definitions_test.exs, unpinned seed 324606 -- 'Result: 32 passed', exit 0, 0 failures, exactly matching TEST-DESIGN-VALIDATOR's claimed 12 (new file) + 20 (definitions_test.exs, 4 new) breakdown. Count arithmetic verified against the task-cited main baseline: 657 + 16 new tests = 673 total / 653 + 16 = 669 example tests / 4 properties unchanged -- matches both full-suite runs exactly. Took the SandboxPool-flakiness warning seriously: compared all three runs' seeds/results (all identical pass counts, no retries or intermittent results), grepped both full-suite logs for sandbox_unavailable/pool-timeout/max_wait/retry-related text outside the known OIDC noise (zero matches in either log), and grepped every [error] line across all three logs (only the known pre-existing OIDC placeholder-issuer connection-retry noise appeared -- 6/4/1 occurrences respectively, varying only with each run's wall-clock duration since it's a periodic retry timer -- nothing SandboxPool- or REQ-040-related). No flakiness or timing sensitivity found. Investigated all 10 compiler warnings present in run1's log before dismissing them as noise: ran `git diff main...HEAD --stat` (19-file diff: handoffs/, lib/letflow/definitions.ex, lib/letflow/definitions/promotion_artifact.ex, lib/letflow/definitions/promotion_assertion_run.ex, lib/letflow/design/req040-promotion-assertion-rerun.md, lib/letflow/tenant_provisioning.ex, the new migration file, the two REQ-040 test files, test/specs/REQ-040.md) and confirmed none of the five warning-source test files (fixture_loader_test.exs, service_scope_validator_test.exs, claim_mapping_property_test.exs, event_store/registry_test.exs, search_test.exs) appear in it; `git log --oneline -1` on each confirms all were last touched by unrelated prior merged commits (REQ-039, REQ-042, REQ-017, REQ-024). lib/letflow/tenant_provisioning.ex's 20-line diff was itself inspected and is exactly the expected REQ-040 migration-manifest registration (11th tenant-scoped entry, per the design doc's own §4 guard-pattern requirement), not an unrelated change. Zero pre-existing failures found anywhere in the suite. No new docs/issues/ISS-NNNN.yaml entry needed -- nothing unrelated failed, and git log main..HEAD -- docs/issues/ is empty for this branch (no issue was filed upstream in this run's pipeline either, unlike REQ-038's). Report written to test/reports/report-2026-08-18-WF02-REQ040-20260817.yaml following the REQ-038 report's format.",
+    "artifacts_out": [
+      "test/reports/report-2026-08-18-WF02-REQ040-20260817.yaml",
+      "handoffs/WF02-REQ040-20260817/step-04-test-runner.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ040-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ040-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to RELEASE-VALIDATOR (Step 5)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

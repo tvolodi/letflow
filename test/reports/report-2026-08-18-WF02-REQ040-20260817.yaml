@@ -1,0 +1,240 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-040
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ040-20260817
+date_utc: 2026-08-18T01:47:02Z
+
+git:
+  branch: feature/WF02-REQ040-20260817
+  branch_confirmed: true
+  commit: 4db3647
+  commit_subject: "chore(WF02-REQ040): TEST-DESIGN-VALIDATOR PASS -- Step 3b gate"
+  note: >
+    Confirmed via `git branch --show-current` and `git log --oneline -1` at
+    start of this run; working tree clean, branch up to date with origin.
+    This run picked up immediately after TEST-DESIGN-VALIDATOR's Step 3b PASS
+    (handoffs/WF02-REQ040-20260817/step-03b-test-design-validator.json), which
+    independently confirmed 32 passed (isolated, two touched files) / 673
+    passed (4 properties, 669 tests, full suite) plus real mutation-testing
+    evidence (two deliberate break-and-revert cycles against the double-run
+    non-determinism detector in compare_replay_results/4 and the try/rescue
+    crash-safety clause in run_replay_span/8) against the implementation.
+    This Step 4 run reproduces those counts itself from a cold start rather
+    than trusting the prior claim, per Unblock-Everything / "every producing
+    step has a validating step."
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir/erl reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5] ... Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  postgres_container: letflow-postgres-1 (confirmed Up 2 days/healthy via `docker compose ps`, port 5462 -> 5432)
+  command_run: >
+    `mix test` (full suite, default/unpinned random seed) and
+    `mix test --seed 0` (full suite, second independent run, pinned seed) —
+    the `test` alias runs ecto.create + ecto.migrate --quiet first
+    automatically. Plus one isolated run of `mix test
+    test/letflow/definitions/promotion_assertion_rerun_test.exs
+    test/letflow/definitions_test.exs` targeting REQ-040's new/changed test
+    files specifically, per this step's task instructions.
+
+verdict: PASS
+
+checks:
+  test_suite_full_run1:
+    result: PASS
+    exit_code: 0
+    seed: 384064 (unpinned/random — ExUnit's own default)
+    summary_line_verbatim: "Result: 673 passed (4 properties, 669 tests)"
+    finished_line_verbatim: "Finished in 73.5 seconds (1.6s async, 71.8s sync)"
+    failures: 0
+    grep_check: >
+      Regex covering "Failures:", "Failure:", "** (", "Excluded:", "Skipped:"
+      and " failure[s]?," / "failed)" (excluding the "0 failures" summary
+      phrasing itself) over the full raw log (16,118 lines, captured to a
+      scratchpad file, not just the tail) — zero matches.
+
+  test_suite_full_run2:
+    result: PASS
+    exit_code: 0
+    seed: 0 (pinned, second independent run per this project's established
+      double-run practice)
+    summary_line_verbatim: "Result: 673 passed (4 properties, 669 tests)"
+    finished_line_verbatim: "Finished in 65.8 seconds (1.3s async, 64.4s sync)"
+    failures: 0
+    grep_check: "Same failure-marker regex over the full raw log (16,048 lines), zero matches."
+
+  new_files_isolated_run:
+    command_run: >
+      mix test test/letflow/definitions/promotion_assertion_rerun_test.exs
+      test/letflow/definitions_test.exs
+    result: PASS
+    exit_code: 0
+    seed: 324606 (unpinned)
+    summary_line_verbatim: "Result: 32 passed"
+    finished_line_verbatim: "Finished in 6.8 seconds (0.4s async, 6.4s sync)"
+    failures: 0
+    matches_claimed: >
+      Exactly matches the 32-test count independently confirmed by both
+      TEST-DESIGNER (Step 3) and TEST-DESIGN-VALIDATOR (Step 3b): 12 new
+      tests in promotion_assertion_rerun_test.exs (new file) + 20 total in
+      definitions_test.exs (of which 4 are the new AC4/AC6 moduledoc-gate
+      tests added on this branch).
+
+  count_arithmetic_cross_check:
+    baseline_cited_in_task: "657 passed (4 properties, 653 tests) on main"
+    new_tests_added:
+      - "test/letflow/definitions/promotion_assertion_rerun_test.exs -- new file, 12 tests covering apply_promotion_assertion_rerun/6's AC1-AC5/INV-AR-6 (counted directly: matches TEST-DESIGNER's and TEST-DESIGN-VALIDATOR's independently-confirmed 12-test count, and this run's own isolated-file run above)"
+      - "test/letflow/definitions_test.exs -- 4 new tests in two new describe blocks (AC4/AC6 moduledoc-gate assertions), added to the existing file"
+    expected: "653 + 16 = 669 tests, 657 + 16 = 673 total, 4 properties (unchanged)"
+    actual_full_suite: "669 tests, 4 properties, 673 total passed, 0 failures"
+    result: MATCHES — verified via actual runs (both full-suite runs identical), not assumed from arithmetic alone.
+
+  flakiness_investigation:
+    reason: >
+      Task instructions flagged this suite exercises REQ-039's real
+      SandboxPool GenServer under real crash/failure injection (deliberately
+      raised exceptions, real quota exhaustion via max_concurrent limits) and
+      asked for serious investigation of any timing sensitivity across
+      multiple runs, not dismissal as one-off noise.
+    method: >
+      Compared pass/fail counts and seed-independence across all three runs
+      (unpinned seed 384064, pinned seed 0, unpinned seed 324606 on the
+      isolated new-file run) — all three produced 0 failures and the exact
+      expected counts, no retries, no intermittent results. Additionally
+      grepped both full-suite raw logs for sandbox_unavailable/pool
+      timeout/max_wait/retry-related text outside the known OIDC noise —
+      zero matches in either log. Grepped `[error]` lines across all three
+      logs — only the known pre-existing OIDC placeholder-issuer connection
+      noise appeared (6 occurrences in run1, 4 in run2, 1 in run3; count
+      varies only with wall-clock run duration since it's a periodic retry
+      timer), nothing SandboxPool- or REQ-040-related.
+    result: >
+      No flakiness or timing sensitivity observed. All three independent
+      runs are consistent. Nothing to route back to TEST-DESIGNER or
+      ELIXIR-DEV.
+
+  known_noise_not_a_failure:
+    - >
+      [error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in
+      NNNN ms. — REQ-016's Ueberauth OIDC worker attempting to reach a
+      deliberately unreachable placeholder issuer configured in
+      config/test.exs. Pre-existing since REQ-016, already documented as
+      expected noise in every prior WF-02 test report (e.g. REQ-038's,
+      REQ-030's, REQ-031's). Present in all three runs this step performed;
+      does not fail, skip, or affect any test.
+    - >
+      Verbose SQL query debug logging appears in raw mix test output
+      (config/test.exs's default test log level) for every DB-backed test —
+      established pattern, not itself evidence of failure (confirmed by the
+      zero-match failure-marker grep above and each run's own "0 failures"
+      summary).
+    - >
+      Pre-existing compiler warnings — 10 total across run1's log, same set
+      as documented in the REQ-038 report: 4x ExUnit.Case.register_test/4
+      deprecated (test/letflow/oidc/claim_mapping_property_test.exs and one
+      other site), 3x unused default-value optional args (start_pool!/1 in
+      test/letflow/sandbox_pool/fixture_loader_test.exs:44, node/3 in
+      test/letflow/definitions/service_scope_validator_test.exs:32, and
+      create!/2 in test/letflow/definitions/search_test.exs:107), 1x
+      redefined-module warning for an old migration
+      (Letflow.Repo.Migrations.CreateEventTypeRegistry), and 2
+      set-theoretic-type-checker warnings ("the following clause will never
+      match" and "comparison between distinct types found") in
+      test/letflow/event_store/registry_test.exs:654 and its immediate
+      vicinity. Investigated before dismissing, specifically for this run:
+      `git diff main...HEAD --stat` shows this branch's 19-file diff touches
+      only handoffs/WF02-REQ040-20260817/*, lib/letflow/definitions.ex,
+      lib/letflow/definitions/promotion_artifact.ex,
+      lib/letflow/definitions/promotion_assertion_run.ex,
+      lib/letflow/design/req040-promotion-assertion-rerun.md,
+      lib/letflow/tenant_provisioning.ex (11-entry migration-manifest
+      registration, expected per REQ-040's design doc §4 guard pattern),
+      priv/repo/migrations/20260818090001_create_promotion_assertion_runs.exs,
+      test/letflow/definitions/promotion_assertion_rerun_test.exs,
+      test/letflow/definitions_test.exs, test/specs/REQ-040.md — none of the
+      four warning-source test files above. `git log --oneline -1` on each
+      of test/letflow/sandbox_pool/fixture_loader_test.exs,
+      test/letflow/definitions/service_scope_validator_test.exs,
+      test/letflow/oidc/claim_mapping_property_test.exs,
+      test/letflow/event_store/registry_test.exs, and
+      test/letflow/definitions/search_test.exs confirms all five were last
+      touched by unrelated prior merged commits (REQ-039's sandbox-pool
+      merge, REQ-042's full-text-search merge, REQ-017's claim-mapping
+      merge, REQ-024's event-type-registry merge), not this branch. These
+      are compiler-time diagnostics local to each file's own pre-existing
+      code, unaffected by anything REQ-040 changed, and none is an error,
+      skip, or failure (0 failures confirmed in all three runs). Not filed
+      to ISSUE_QUEUE — no failure occurred and these are unchanged from
+      prior reports' documented baseline noise. Noted here in full for
+      audit-trail honesty.
+
+pre_existing_failures_found: none
+issues_filed: none
+issues_referenced_not_refiled: none — no docs/issues/ISS-NNNN.yaml entry was filed anywhere upstream in this run's pipeline (git log main..HEAD -- docs/issues/ is empty for this branch), unlike REQ-038's run.
+
+test_file_breakdown:
+  new_req_040:
+    items:
+      - file: test/letflow/definitions/promotion_assertion_rerun_test.exs
+        detail: >
+          New file. Real-Postgres (Letflow.DataCase, sandboxed, no mocking)
+          coverage of Letflow.Definitions.apply_promotion_assertion_rerun/6
+          against AC1-AC5 and INV-AR-6: idempotent replay proof via genuine
+          pool-quota exhaustion (max_concurrent: 1, second call would
+          deterministically fail if it claimed a second sandbox slot),
+          sandbox-row-content inspection via a real
+          information_schema-backed query against the live sandbox schema
+          mid-replay, empty-payload failure path, passing-replay +ubc
+          genuine unmocked SandboxPool.release/2-triggered teardown-failure
+          path (both the :teardown_failed-on-pass and the
+          stays-:failed-on-fail precedence cases), real double-run
+          non-determinism detection (process-scoped changing nonce, not a
+          fixed value), fail-closed counts on both sandbox-claim failure and
+          fixture-load failure, and try/rescue crash safety against a
+          genuine `raise` inside the replay span with a real best-effort
+          release afterward.
+        subtotal: 12
+      - file: test/letflow/definitions_test.exs
+        detail: >
+          2 new describe blocks (existing file) asserting literal substrings
+          from the real compiled @moduledoc (via Code.fetch_docs/1) for the
+          AC4 (assertions_failed == 0 as pass criterion, not status ==
+          "passed") and AC6 (teardown_failed green-gate framing, the
+          try/rescue's three named exit classes, and the disclosed residual
+          gap for Process.exit(pid, :kill)/BEAM crash/System.halt/0) gate
+          requirements.
+        subtotal: 4
+  full_suite_grand_total: 673 (669 example tests + 4 properties)
+  cross_check: >
+    673 total (4 properties, 669 example tests) reproduced identically
+    across both full-suite runs (unpinned seed 384064, and pinned seed 0),
+    matching the task's cited baseline of 657 passed / 653 tests / 4
+    properties on main plus this run's 16 new tests. This Step 4 run is the
+    independent, formal re-verification of TEST-DESIGNER's and
+    TEST-DESIGN-VALIDATOR's prior claims — run separately three times total
+    (two full-suite runs plus one isolated run of the two touched files).
+
+diagnosis: "N/A — no failures observed in this run. Nothing routed back to ELIXIR-DEV or TEST-DESIGNER."
+
+regression_check_vs_baseline: >
+  Task-cited baseline: 657 passed (4 properties, 653 tests) on main, before
+  this branch's changes. This run adds
+  test/letflow/definitions/promotion_assertion_rerun_test.exs (12 new tests,
+  new file) and 4 new tests in test/letflow/definitions_test.exs, and
+  reproduces 673 passed (4 properties, 669 tests) / 0 failures identically
+  across two independent full-suite runs (unpinned seed 384064 and pinned
+  seed 0), plus 32 passed / 0 failures on the isolated run of both touched
+  files. Zero regressions confirmed. No pre-existing failure was found
+  anywhere in the suite this run, and no flakiness was observed on the
+  REQ-039 SandboxPool real-crash/quota-exhaustion paths across all three
+  independent runs (Unblock-Everything rule: N/A, nothing to unblock;
+  ISSUE_QUEUE protocol: N/A, nothing new to file).
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-18-WF02-REQ040-20260817.yaml
+  next_action: "Route to RELEASE-VALIDATOR (WF-02 Step 5) — no rework needed."

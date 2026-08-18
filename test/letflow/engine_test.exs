@@ -638,8 +638,12 @@ defmodule Letflow.EngineTest do
     end
   end
 
-  describe "create/2 -- hop-limit-exceeded (REVIEWER-flagged gap, WF02-REQ045-20260818)" do
-    test "a CHK-06-permitted gateway cycle that never exits returns {:error, {:activation_failed, {:hop_limit_exceeded, _}}}, writing zero rows except the benign snapshot orphan" do
+  # REVIEWER-flagged gap (WF02-REQ045-20260818): a CHK-06-permitted gateway cycle that
+  # never exits must return {:error, {:activation_failed, {:hop_limit_exceeded, _}}},
+  # writing zero rows except the benign snapshot orphan. Names kept short (ISS-0052) --
+  # was 10 chars from ExUnit's 255-char SystemLimitError ceiling.
+  describe "create/2 -- hop-limit-exceeded gateway cycle" do
+    test "returns activation_failed/hop_limit_exceeded, writes zero rows except the snapshot" do
       %{schema_name: schema_name} = provisioned_tenant()
       definition = active_definition!(schema_name, graph_start_gateway_cycle_never_exits())
 

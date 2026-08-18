@@ -1,0 +1,60 @@
+id: ISS-0053
+title: "test/letflow/engine_test.exs's hop-limit-exceeded describe+test pair was 245-248 chars -- 10 chars from ExUnit's SystemLimitError ceiling"
+discovered_by: TEST-DESIGN-VALIDATOR
+discovered_in_run: WF02-REQ047-20260818 (Step 3b test design gate)
+discovered_at: "2026-08-18T22:04:09Z"
+severity: MINOR
+tags:
+  - test-hygiene
+description: >
+  While validating REQ-047's own new test coverage, TEST-DESIGN-VALIDATOR
+  programmatically measured describe+test combined lengths across
+  test/letflow/engine_test.exs and found one pre-existing, unrelated pair --
+  "create/2 -- hop-limit-exceeded (REVIEWER-flagged gap, WF02-R...)" -- at
+  ~245-248 characters (measured slightly differently by ORCH: 248, counting
+  `"test " <> describe <> " " <> test_name` literally), only a handful of
+  characters under ExUnit's 255-char SystemLimitError ceiling that has already
+  broken this project's full-suite compilation five times (ISS-0030, ISS-0033,
+  ISS-0040, ISS-0049, ISS-0051). Not currently broken (compiled fine), but any
+  small addition to either string (a fixture rename, a clarifying phrase)
+  would tip it over and re-break full-suite compilation the same way the
+  prior five incidents did.
+
+  Not fixed by WF02-REQ047-20260818 (pre-existing, not touched by that
+  branch's diff) -- filed there per Unblock-Everything's "notice but don't
+  fix, file and forward" rule for non-blocking incidental findings, on that
+  branch as its own docs/issues/ISS-0052.yaml (still unmerged at the time
+  ORCH picked this up via letflow-queue task 114 -- renumbered to ISS-0053 to
+  avoid colliding with that branch's own eventual merge of ISS-0052.yaml, per
+  this project's established renumbering-collision precedent).
+
+  Fixed by ORCH directly (docs/agents/ORCHESTRATOR.md §10 sizing rule: single
+  file, test/letflow/engine_test.exs only, no new function/module/@spec, no
+  migration, not a supervision-tree file, not a tenant-data path, no test
+  assertion changed): shortened the describe string to "create/2 --
+  hop-limit-exceeded gateway cycle" and the test string to "returns
+  activation_failed/hop_limit_exceeded, writes zero rows except the
+  snapshot", combined length now 132 chars (well under the 200-char
+  TEST-DESIGN-VALIDATOR guideline). Original narrative detail (REVIEWER gap
+  citation, WF02-REQ045-20260818, CHK-06-permitted-cycle framing) preserved in
+  a `#` comment immediately above, matching ISS-0049/0051's established fix
+  shape. Verified via `mix compile --warnings-as-errors` (clean) and
+  `mix test test/letflow/engine_test.exs` (24 tests, 0 failures, same
+  assertions).
+affected_files:
+  - test/letflow/engine_test.exs
+status: resolved
+resolved_in_run: ORCH-direct-20260818 (sizing-rule direct action, queue task 114)
+resolved_at: "2026-08-18T22:08:34Z"
+github_issue: https://github.com/tvolodi/letflow/issues/194
+renumbering_note: >
+  Filed on the still-unmerged origin/feature/WF02-REQ047-20260818 branch as
+  ISS-0052 (GH#194). Renumbered to ISS-0053 by ORCH on pickup (before that
+  branch merges) to avoid a repeat of the exact ISS-0051/ISS-0052 add/add
+  collision this same session already had to reconcile once today -- see
+  docs/anti-patterns.md's "A rebase add/add conflict on docs/issues/ISS-NNNN.yaml
+  can land without git ever flagging it as CONFLICT" entry. When
+  WF02-REQ047-20260818 eventually merges, its own docs/issues/ISS-0052.yaml
+  will need the same treatment (restore/renumber) if this file is still at
+  ISS-0053 by then and ISS-0052 is otherwise free -- or simply cross-reference
+  this file if ISS-0052 is by then already taken by something else.

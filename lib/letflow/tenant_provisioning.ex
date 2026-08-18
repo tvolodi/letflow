@@ -242,9 +242,12 @@ defmodule Letflow.TenantProvisioning do
   # (lib/letflow/design/req024-event-type-registry.md §3), REQ-027's two
   # definition-core migrations (lib/letflow/design/req027-definition-core-schema.md §4),
   # REQ-035's promotion_reviews migration
-  # (lib/letflow/design/req035-promotion-reviews-schema.md §4), and REQ-040's
+  # (lib/letflow/design/req035-promotion-reviews-schema.md §4), REQ-040's
   # promotion_assertion_runs migration
-  # (lib/letflow/design/req040-promotion-assertion-rerun.md §4) — eleven entries in
+  # (lib/letflow/design/req040-promotion-assertion-rerun.md §4), and REQ-043's three
+  # instance-engine-schema migrations -- the instance_projections engine-columns
+  # ALTER TABLE, tokens, and tasks
+  # (lib/letflow/design/req043-instance-engine-schema.md §7) — fourteen entries in
   # total. Each of these files carries the §4 guard pattern; registration here is
   # the other mandatory half.
   @tenant_scoped_migration_manifest [
@@ -269,7 +272,12 @@ defmodule Letflow.TenantProvisioning do
     {20_260_816_200_001, Letflow.Repo.Migrations.CreatePromotionReviews,
      "20260816200001_create_promotion_reviews.exs"},
     {20_260_818_090_001, Letflow.Repo.Migrations.CreatePromotionAssertionRuns,
-     "20260818090001_create_promotion_assertion_runs.exs"}
+     "20260818090001_create_promotion_assertion_runs.exs"},
+    {20_260_818_110_001, Letflow.Repo.Migrations.AlterInstanceProjectionsAddEngineColumns,
+     "20260818110001_alter_instance_projections_add_engine_columns.exs"},
+    {20_260_818_110_002, Letflow.Repo.Migrations.CreateTokens,
+     "20260818110002_create_tokens.exs"},
+    {20_260_818_110_003, Letflow.Repo.Migrations.CreateTasks, "20260818110003_create_tasks.exs"}
   ]
 
   @doc """
@@ -284,10 +292,12 @@ defmodule Letflow.TenantProvisioning do
   `instance_definition_snapshots`
   (`lib/letflow/design/req027-definition-core-schema.md` §4), REQ-035 the
   `promotion_reviews` migration
-  (`lib/letflow/design/req035-promotion-reviews-schema.md` §4), and REQ-040 the
+  (`lib/letflow/design/req035-promotion-reviews-schema.md` §4), REQ-040 the
   `promotion_assertion_runs` migration
-  (`lib/letflow/design/req040-promotion-assertion-rerun.md` §4) — eleven entries
-  in total, ordered by version. Every future tenant-scoped migration must append its
+  (`lib/letflow/design/req040-promotion-assertion-rerun.md` §4), and REQ-043 three
+  more: the `instance_projections` engine-columns `ALTER TABLE`, `tokens`, and
+  `tasks` (`lib/letflow/design/req043-instance-engine-schema.md` §7) — fourteen
+  entries in total, ordered by version. Every future tenant-scoped migration must append its
   own entry to `@tenant_scoped_migration_manifest`, in addition to following the
   required guard pattern in its own migration file (see this module's design doc
   §4) — a migration file that does one without the other is either inert

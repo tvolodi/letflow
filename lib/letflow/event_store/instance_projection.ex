@@ -11,14 +11,63 @@ defmodule Letflow.EventStore.InstanceProjection do
   `instance_projections` directly for the ES-01 active-instance guard and
   the DB-03 `last_event_seq` update.
 
-  Its *meaningful population at instance start* is EE-01 / S3 territory
-  (`src/engine/`, not built yet). Do not read this migration as
-  instance-engine work landing early. The engine-owned columns R-Co's
+  **REQ-043 update:** the seven engine-owned columns R-Co's
   `migrations/001_event_store.sql` also carries — `definition_id`,
   `correlation_key`, `current_nodes`, `variables`, `error_detail`,
   `completed_at`, `cancelled_at`, and the `uq_instance_correlation` /
-  `idx_proj_definition` indexes that depend on them — are deliberately not
-  created here; S3 adds them in its own migration.
+  `idx_proj_definition` indexes that depend on them — have now been added
+  (`priv/repo/migrations/20260818110001_alter_instance_projections_add_engine_columns.exs`)
+  and are declared below, so the columns *exist* and are Ecto-accessible. Do
+  not read this as the instance-engine's write logic landing early, though:
+  *meaningful population at instance start* is still EE-01 / S3 territory
+  (REQ-045+, `src/engine/`, not built yet) — this is a schema-only change,
+  identical caution to REQ-023's own original scope note above.
+
+  ## No FK on `definition_id` (design req043 §2.2, confirmed not assumed)
+
+  `definition_id` carries **no** `references/2` constraint, even though
+  `process_definitions` already exists in Letflow at this migration's point in
+  the ordering. `001_event_store.sql:83` declares `definition_id UUID NOT
+  NULL` with no `REFERENCES` clause — confirmed by direct read, matching R-Co
+  exactly rather than "completing" an asymmetry R-Co itself left. A future
+  reader should not assume a real FK exists from the field's name alone.
+
+  ## `current_nodes`'s Ecto type (design req043 §2.4/OQ-3 — resolved empirically,
+  not by design-time guess)
+
+  `current_nodes` is a `jsonb` column holding a JSON **array** (`'[]'::jsonb`
+  DB-level default, "active token positions"), unlike `variables`/
+  `error_detail` which hold JSON **objects**. The design flagged as an open
+  question (OQ-3) whether `Ecto.Changeset.cast/3` would accept a `list()` value
+  for a `:map`-typed field, naming `put_change/3` as the fallback if not.
+  Empirically, against real Postgres, the actual failure is more fundamental
+  than OQ-3 anticipated and `put_change/3` alone does not fix it: Ecto's
+  built-in `:map` type's `dump/1` (`same_map/1` in `deps/ecto/lib/ecto/type.ex`)
+  unconditionally requires `is_map/1`, rejecting any list at *insert* time
+  regardless of how it entered the changeset — and `field(:current_nodes, :map,
+  default: [])` fails even earlier, at compile time
+  (`Ecto.Schema.validate_default!/3`), before any changeset exists at all.
+  `current_nodes` therefore uses `Letflow.EventStore.JSONArray` — a small
+  custom `Ecto.Type` (see that module's own moduledoc for the full empirical
+  finding) whose `type/0` still reports `:map` (identical jsonb wire encoding)
+  but whose `cast/1`/`dump/1`/`load/1` accept a `list()`. This is a **deviation
+  from the approved design's literal `field(:current_nodes, :map, default:
+  [])` text**, made because that literal text does not compile/run against
+  real Ecto — flagged explicitly for REVIEWER. `variables`/`error_detail` hold
+  genuine JSON objects, hit none of this, and keep the plain built-in `:map`
+  type (`variables` with a normal `default: %{}`).
+
+  ## `unique_constraint(:correlation_key, name: :uq_instance_correlation)` —
+  also not in the design's literal §2.3 changeset text, added for the same
+  reason `Letflow.Definitions.ProcessDefinition`'s `validate_common/1` and
+  `Letflow.EventStore.IdempotencyRecord`'s `insert_changeset/2` already declare
+  their own unique indexes: without it, a real `uq_instance_correlation`
+  collision raises `Ecto.ConstraintError` out of `Repo.insert/2` instead of
+  returning this project's established `{:error, changeset}` shape — exactly
+  the "bare crash on realistic tenant-controlled input" pattern
+  `docs/agents/instructions/security-invariants.md` INV-8 flags, confirmed by
+  a real duplicate-insert against Postgres while implementing this
+  requirement. Flagged for REVIEWER alongside `JSONArray` above.
 
   ## Derived state (design INV-EV-9)
 
@@ -60,6 +109,14 @@ defmodule Letflow.EventStore.InstanceProjection do
 
     field(:last_event_seq, :integer, default: 0)
 
+    field(:definition_id, Ecto.UUID)
+    field(:correlation_key, :string)
+    field(:current_nodes, Letflow.EventStore.JSONArray, default: [])
+    field(:variables, :map, default: %{})
+    field(:error_detail, :map)
+    field(:completed_at, :utc_datetime_usec)
+    field(:cancelled_at, :utc_datetime_usec)
+
     timestamps(inserted_at: :started_at, type: :utc_datetime_usec)
   end
 
@@ -72,19 +129,39 @@ defmodule Letflow.EventStore.InstanceProjection do
   @spec insert_changeset(t(), attrs :: map()) :: Ecto.Changeset.t()
   def insert_changeset(projection, attrs) do
     projection
-    |> cast(attrs, [:instance_id, :tenant_id, :status, :last_event_seq])
-    |> validate_required([:instance_id, :tenant_id, :status])
+    |> cast(attrs, [
+      :instance_id,
+      :tenant_id,
+      :status,
+      :last_event_seq,
+      :definition_id,
+      :correlation_key,
+      :current_nodes,
+      :variables
+    ])
+    |> validate_required([:instance_id, :tenant_id, :status, :definition_id])
+    |> unique_constraint(:correlation_key, name: :uq_instance_correlation)
   end
 
   @doc """
-  Structural changeset for advancing an existing projection row. `instance_id`
-  and `tenant_id` are structurally not castable here — a projection never
-  changes which instance or tenant it describes.
+  Structural changeset for advancing an existing projection row. `instance_id`,
+  `tenant_id`, `definition_id` and `correlation_key` are structurally not
+  castable here — a projection never changes which instance or tenant it
+  describes, or which definition it was started from, or its correlation key
+  (all immutable after the EE-01 insert, design req043 §2.3).
   """
   @spec update_changeset(t(), attrs :: map()) :: Ecto.Changeset.t()
   def update_changeset(projection, attrs) do
     projection
-    |> cast(attrs, [:status, :last_event_seq])
+    |> cast(attrs, [
+      :status,
+      :last_event_seq,
+      :current_nodes,
+      :variables,
+      :error_detail,
+      :completed_at,
+      :cancelled_at
+    ])
     |> validate_required([:status, :last_event_seq])
     |> validate_number(:last_event_seq, greater_than_or_equal_to: 0)
   end

@@ -177,13 +177,21 @@ defmodule Letflow.EventStoreTest do
   # requirement's own test coverage -- a direct Repo.insert against
   # instance_projections, NEVER via append/2 itself (append/2 is update-only for
   # this table, design doc §6.2.6 M6).
+  # REQ-043 note: definition_id became a required column/field on
+  # InstanceProjection (priv/repo/migrations/20260818110001_...), so every
+  # caller of insert_changeset/2 -- including this REQ-025/026 fixture --
+  # must now supply one. A fresh random UUID is fine here: no test in this
+  # file asserts anything about which definition an instance belongs to, and
+  # instance_projections.definition_id carries no FK (see
+  # Letflow.EventStore.InstanceProjection's own moduledoc).
   defp seed_projection!(schema_name, tenant_id, instance_id, status) do
     %InstanceProjection{}
     |> InstanceProjection.insert_changeset(%{
       instance_id: instance_id,
       tenant_id: tenant_id,
       status: status,
-      last_event_seq: 0
+      last_event_seq: 0,
+      definition_id: Ecto.UUID.generate()
     })
     |> Repo.insert!(prefix: schema_name)
   end

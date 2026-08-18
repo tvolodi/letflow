@@ -4133,3 +4133,37 @@ history:
       unrelated to this requirement) found, routed through WF-03, fixed and
       merged (PR #175) before this run started, so REQ-063 begins against a
       clean compile gate.
+  - req: REQ-063
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-18T12:31:58Z"
+    note: >
+      Decision 0006's D1 (users/groups/tenant_role relocated behind :prefix into
+      each tenant's own Postgres schema) shipped. RELEASE-VALIDATOR PASSed at
+      Step 5, independently re-verifying all six acceptance criteria and
+      re-running mix test (770/770 green). Added mix letflow.copy_identity_tables
+      and Letflow.IdentityMigration to carry out the replay/copy/drop cutover
+      per decision 0006 section 4's ordering.
+      README.md checked directly against what actually shipped: "What's here
+      today" and "Running it" describe the original pilot slice
+      (Letflow.ProcessInstance gen_statem, InstanceSupervisor, TransitionEvent,
+      Router's 3 HTTP endpoints, the curl/mix flow) -- REQ-063 is an internal
+      Stage-3 schema/migration change (identity tables relocated per-tenant, a
+      new Mix task, a new context module) with no new HTTP route and no
+      gen_statem/process change, so neither section nor the ASCII state diagram
+      is affected. Left untouched, consistent with the REQ-043 DOC-UPDATER
+      precedent for similarly internal-only requirements this stage.
+      docs/migration/decisions/0006-identity-tables-schema-per-tenant.md's
+      Status line (already updated by RELEASE-VALIDATOR at Step 5, from
+      "proposed (awaiting REVIEWER sign-off)" to "decided. D1 shipped (REQ-063,
+      REVIEWER + SECURITY-REVIEWER sign-off, RELEASE-VALIDATOR PASS). D2 not yet
+      executed -- pending REQ-064.") confirmed accurate against the actual run:
+      D1 genuinely shipped this run, D2 is REQ-064 and genuinely still pending.
+      Not re-edited.
+      REQ-063's six acceptance criteria re-read directly from
+      docs/requirements.yaml: none names a docs/migration/stage-N-*.md file: they
+      cover information_schema.tables checks across tenant schemas, the
+      prefix()-truthiness migration guard, per-tenant username/OIDC-identity
+      uniqueness tests, the public-to-tenant-schema data copy, and an end-to-end
+      AuthPipeline test -- no stage doc citation among them.
+      Flipped docs/requirements.yaml REQ-063 status to done.

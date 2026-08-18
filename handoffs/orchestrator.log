@@ -560,3 +560,5 @@
 2026-08-18T07:14:57Z | PASS | WF-02 | WF02-REQ049-20260818 | CODE-DESIGNER -> ORCH | Step 1: design doc committed, covers merge/3 pure kernel, REQ-024 validate_payload/3 composition (caller-invoked, purity preserved), REQ-061 dependency-ordering resolution, flagged open question (no variable_schemas storage exists yet).
 2026-08-18T07:16:45Z | DISPATCH | WF-02 | WF02-REQ049-20260818 | ORCH -> CODE-DESIGN-VALIDATOR | Step 1b hard gate.
 2026-08-18T07:18:09Z | PASS | WF-02 | WF02-REQ049-20260818 | CODE-DESIGN-VALIDATOR -> ORCH | Step 1b: all 6 checks PASS, independently re-verified validate_payload/3's real signature/I-O and REQ-049 depends_on/REQ-061 status. Committed 82053a5.
+2026-08-18T07:18:56Z | DISPATCH | WF-02 | WF02-REQ049-20260818 | ORCH -> ELIXIR-DEV | Step 2a: implement lib/letflow/engine/variable_merge.ex.
+2026-08-18T07:21:16Z | PASS | WF-02 | WF02-REQ049-20260818 | ELIXIR-DEV -> ORCH | Step 2a: variable_merge.ex created, mix compile/format clean, self-review via scratch test (6/6 passing, deleted). Committed 033c00a.

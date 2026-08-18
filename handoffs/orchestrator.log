@@ -574,3 +574,5 @@
 2026-08-18T07:37:44Z | PASS | WF-02 | WF02-REQ049-20260818 | TEST-RUNNER -> ORCH | Step 4: MIX_TEST_PARTITION=2 mix test -- 5 properties, 704 tests, 0 failures (run 3x for stability). Incidental pre-existing warnings filed as ISS-0044/GH#166, not fixed here. Committed b9b2a2d.
 2026-08-18T07:38:28Z | DISPATCH | WF-02 | WF02-REQ049-20260818 | ORCH -> RELEASE-VALIDATOR | Step 5: independent re-verification.
 2026-08-18T07:40:12Z | PASS | WF-02 | WF02-REQ049-20260818 | RELEASE-VALIDATOR -> ORCH | Step 5: mix test re-run independently, 5 properties/704 tests/0 failures. All 5 ACs re-confirmed against actual code/tests by file/line. Committed 88e39fb.
+2026-08-18T07:41:05Z | DISPATCH | WF-02 | WF02-REQ049-20260818 | ORCH -> DOC-UPDATER | Step 6: doc update.
+2026-08-18T07:42:28Z | PASS | WF-02 | WF02-REQ049-20260818 | DOC-UPDATER -> ORCH | Step 6: REQ-049 status -> done, requirement_status.yaml done event appended, stage-3-instance-engine.md header updated (REQ-044+REQ-049 done, 18 pending). README.md checked, no change needed. ORCH independently confirmed all 3 file changes directly. Committed d7558d0.

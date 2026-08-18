@@ -1,0 +1,49 @@
+{
+  "handoff_id": "f7d4a5e0-5555-4000-8000-000000000006",
+  "run_id": "WF03-ISS0048-20260818",
+  "workflow_id": "WF-03",
+  "step": "02-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0048-20260818/step-02-code-designer-rework1.json",
+  "created_at": "2026-08-18T22:44:23Z",
+  "started_at": "2026-08-18T22:44:23Z",
+  "completed_at": "2026-08-18T22:46:41Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0048-20260818/step-03-elixir-dev.json", "handoffs/WF03-ISS0048-20260818/step-02-code-designer.json"],
+    "artifacts_in": ["lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md", "handoffs/WF03-ISS0048-20260818/step-03-elixir-dev.json", "lib/letflow/sandbox_pool.ex"],
+    "owned_modules": ["lib/letflow/sandbox_pool.ex", "lib/letflow/definitions.ex", "test/letflow/sandbox_pool_test.exs"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1: ELIXIR-DEV implemented lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md exactly as written (mix compile --warnings-as-errors clean) and found a genuine design gap, not an implementation bug (see handoffs/WF03-ISS0048-20260818/step-03-elixir-dev.json's result.summary/issues for full detail): the owner-monitor mechanism monitors `elem(from, 0)` -- the literal pid that called claim/2. This is correct when the claimer and releaser are the same process (Letflow.Definitions.apply_promotion_assertion_rerun/6's actual call pattern, which the original design verified). But it is indistinguishable, by construction, from a legitimate pattern where a short-lived helper process (e.g. Task.async) calls claim/2, hands the claim off to a longer-lived process, and exits normally -- which the design's own INV-SP-DOWN-2 (any exit reason, including :normal, reclaims) treats as a leak. test/letflow/sandbox_pool_test.exs:192-221's existing 'a queued waiter is served once the held slot frees' test does exactly this (claims via Task.async, releases from the test process) and now fails deterministically (reproduced 3/3): SandboxPool reclaims on the Task's normal exit before the test's own explicit release/2 runs, so release/2 returns {:error, :not_found}. Revise the design to resolve this ambiguity. You have two legitimate directions -- choose whichever is the better fit, and justify the choice the same way SS2 justified owner-monitor-vs-reaper originally: (a) add an explicit claim-ownership-transfer primitive (e.g. a function that lets the current owner hand off its monitor to a different pid before the original process exits, so a Task-based claim/release-elsewhere pattern stays leak-safe without being falsely reclaimed), or (b) determine that claim/2's contract should require the SAME process to call release/2 (i.e. the Task.async pattern in the existing test is itself the thing that needs to change, and that test needs updating to call claim/2 and release/2 from the same process) -- if you choose (b), state explicitly in the design that TEST-DESIGNER/ELIXIR-DEV must update test/letflow/sandbox_pool_test.exs:192-221 as part of this fix (which changes owned_modules), and confirm this doesn't quietly re-decide something Letflow.Definitions' own usage pattern depends on (it currently doesn't use Task.async around claim/2, per ELIXIR-DEV's step-03 finding, so (b) is not obviously wrong -- but state your reasoning, don't assume). Whichever direction, re-verify against apply_promotion_assertion_rerun/6's real call site again, not just re-assert the prior finding.",
+    "acceptance_criteria": [
+      "Design revised to resolve the Task.async claim/release-across-processes ambiguity ELIXIR-DEV found, with an explicit choice between (a) an ownership-transfer primitive or (b) a same-process claim/release contract requirement, and stated reasoning for the choice",
+      "If (b) is chosen: design explicitly states test/letflow/sandbox_pool_test.exs:192-221 needs updating, and owned_modules is updated to include that test file",
+      "Re-verified against apply_promotion_assertion_rerun/6's actual call site (still synchronous, same-process per ELIXIR-DEV's finding) that the chosen direction doesn't break it",
+      "claim/2's public @spec may change only if strictly necessary for the chosen direction -- state explicitly whether it does or doesn't, don't leave it ambiguous this time",
+      "Design artefact updated in place (or appended with a dated revision section) at lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Revised lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md by appending a new §13 ('REWORK -- resolving the Task.async claim/release-elsewhere ambiguity') plus a REWORK NOTICE under the title pointing to it as authoritative wherever it overrides §§1-12 (which are left unedited in place as the historical record of what was validated/implemented before this gap was found, per the task's own framing of it as a genuine design gap, not an implementation bug). Chose direction (b): claim/2's contract now explicitly requires the SAME process that calls claim/2 to also call the matching release/2 -- formalizing what the owner-monitor mechanism (Process.monitor(elem(from, 0)), unchanged) always implicitly assumed. Re-read lib/letflow/definitions.ex directly for this revision (fresh grep for Task.async/spawn around claim_sandbox_and_proceed/8 line 1472, run_replay_span/8 line 1522, and their one call site line 825 inside apply_promotion_assertion_rerun/6: zero matches) -- reconfirms, not merely re-asserts, that this function is still synchronous and same-process from claim/2 through release/2 (via safe_release/2 in run_replay_span/8's rescue clause), so (b) costs Letflow.Definitions' one real production caller nothing (§13.0, §13.5). Rejected (a) (an explicit ownership-transfer primitive) for four concrete reasons (§13.1): the one real caller already satisfies (b) natively; (a) would add a new public primitive purely to accommodate a test's own concurrency-testing convenience, not a genuine production need; (a) does not actually leave the existing test unmodified either -- it just relocates the same-process requirement to a new confirm-ownership call the test would still have to invoke at the right moment; and a same-process claim/release contract matches OTP's own idiom for tied-to-caller resources (:global's lock semantics; ETS's :ets.give_away/3 is OTP's actual explicit-transfer primitive when transfer is a real requirement, and it costs exactly what (a) would). claim/2's and release/2's public @specs explicitly do NOT change (§13.2) -- confirmed, not left ambiguous: (b) is a documented contract addition enforced by the existing owner-monitor mechanism, not a signature change. Two doc-only additions are specified for ELIXIR-DEV to add in the implementation pass: a one-sentence claim/2 @doc addition stating the same-process contract (§13.2, explicitly permitted since §8's 'must not change' list only names @specs/start_link/1, not doc comments), and a short moduledoc paragraph stating the same (§13.3). §13.4 states explicitly that test/letflow/sandbox_pool_test.exs:192-221 must be restructured (prose-level rendezvous shape given: Task.async body sends its claim result to the test process via send/2, blocks on a 'go ahead' receive, then itself calls release/2, so the release call moves into the same process that called claim/2) and that owned_modules for the next implementation step now includes test/letflow/sandbox_pool_test.exs alongside lib/letflow/sandbox_pool.ex (moduledoc/@doc prose only, no new .ex logic beyond §§1-12's already-specified mechanism). Verified via grep that this is the test file's only Task.async call site wrapping a claim/2 call whose release/2 happens elsewhere (test/letflow/sandbox_pool_test.exs:205 is the sole match), so no other existing test is affected by this contract.",
+    "artifacts_out": ["lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0048-20260818",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR to re-gate the revised design (specifically §13 -- confirm the (b) choice and its reasoning against apply_promotion_assertion_rerun/6 hold up, confirm the @spec-unchanged claim, confirm the test-restructuring guidance is concrete enough for ELIXIR-DEV/TEST-DESIGNER to implement without further ambiguity), then back to ELIXIR-DEV with owned_modules now including test/letflow/sandbox_pool_test.exs to implement the §13.2/§13.3 doc additions and restructure the test per §13.4, and re-run mix test test/letflow/sandbox_pool_test.exs to confirm it passes green this time."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

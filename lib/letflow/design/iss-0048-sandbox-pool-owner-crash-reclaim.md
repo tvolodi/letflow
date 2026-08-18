@@ -18,6 +18,25 @@ project's `req018-jit-provisioning.md` §3.3 / `iss-0047-username-race-conflict-
 **Owner (implementer):** ELIXIR-DEV
 **Run:** `WF03-ISS0048-20260818`, WF-03 Step 2
 
+**REWORK NOTICE (2026-08-18, rework iteration 1):** §§1-12 below are the original design,
+implemented byte-for-byte by ELIXIR-DEV in commit `ef1e4c8` and confirmed structurally
+correct — but ELIXIR-DEV found a genuine ambiguity the original design did not consider:
+the owner-monitor mechanism (`Process.monitor(elem(from, 0))`, §5.1/§5.2) cannot
+distinguish "the calling process died without releasing (a real leak)" from "the calling
+process was a short-lived helper (e.g. `Task.async`) that legitimately handed the claim
+off to a longer-lived process before exiting `:normal`" — and
+`test/letflow/sandbox_pool_test.exs:192-221`'s existing "a queued waiter is served"
+test does exactly the latter (claims via `Task.async`, releases from the test process),
+so it now fails deterministically (3/3 reproductions;
+`handoffs/WF03-ISS0048-20260818/step-03-elixir-dev.json`'s `result.summary` has the full
+trace). **§13 below resolves this — read §13 as authoritative wherever it overrides
+anything in §§1-12; §§1-12 are left unedited in place as the historical record of what
+was validated and implemented before this gap was found, not because they are still
+fully accurate on their own.** In particular, §13 supersedes: §1's scope-boundary table
+(test-file ownership), §9's cross-module dependency table (test file moves from
+"TEST-DESIGNER's own scope" to "in scope for this fix"), and §10's TEST-DESIGNER guidance
+item 2 (now a mandatory rework, not an optional judgment call).
+
 ---
 
 ## 0. Sources read in full for this design
@@ -565,3 +584,180 @@ design closes, not by a coincident DROP-SCHEMA failure).
 | "States the interface (@spec-level) for any new/changed public function(s) on Letflow.SandboxPool" | §4 — explicitly states there are none, and why that is itself the correct, load-bearing answer (not an omission) |
 | "Explains how the fix does not break apply_promotion_assertion_rerun/6's existing claim/2 -> release/2 contract" | §7, worked through for both the exit-signal case and the already-handled raised-exception case, plus the second-order in-flight-release-call case |
 | "Justifies the chosen mechanism (owner-monitor vs. periodic reaper) against SandboxPool's actual current architecture, not assumed" | §2, citing `sandbox_pool.ex`'s own existing waiting-queue monitor precedent (2.1) and three concrete, architecture-specific reasons the reaper alternative was rejected (2.2), not a generic preference |
+
+---
+
+## 13. REWORK — resolving the Task.async claim/release-elsewhere ambiguity (2026-08-18, rework iteration 1)
+
+### 13.0 Sources re-read for this revision
+
+- `handoffs/WF03-ISS0048-20260818/step-02-code-designer-rework1.json` (`task.description`,
+  full) — the rework instruction itself, both named directions (a)/(b), and the explicit
+  requirement to re-verify against `apply_promotion_assertion_rerun/6`'s real call site
+  again rather than re-assert the prior finding.
+- `handoffs/WF03-ISS0048-20260818/step-03-elixir-dev.json` (`result.summary`/`issues`,
+  full) — ELIXIR-DEV's diagnosis: `state.active` entries now `{schema_name, owner_ref}`
+  (implemented as a two-key map, matching §3's design exactly); `owner_ref` established
+  via `Process.monitor(elem(from, 0))` in `handle_provision_now/2` and
+  `service_next_waiter/1`'s hand-off path; torn down via `Process.demonitor(owner_ref,
+  [:flush])` on `release/2`'s success path — all exactly per §5. The one failure:
+  `test/letflow/sandbox_pool_test.exs:192-221`'s "a queued waiter is served" test claims
+  via `Task.async(fn -> SandboxPool.claim(2_000, pool) end)` (test line 205) and releases
+  from the test process (test line 220) — a different pid from the one that actually
+  called `claim/2`. The Task process replies and exits `:normal` immediately after
+  `claim/2` returns, so `SandboxPool` observes that `:DOWN` and reclaims (per
+  INV-SP-DOWN-2's own "any exit reason including `:normal`" clause) before the test
+  process's own `release/2` call runs, which then correctly gets `{:error, :not_found}`.
+  Reproduced 3/3 — not a race, an inherent consequence of `Task.async`'s semantics
+  (the spawned process's job is to compute a value and exit; it is not meant to
+  outlive its own return).
+- `lib/letflow/sandbox_pool.ex` (current, post-`ef1e4c8`, re-read in full, quoted above in
+  the tool output used to write this revision) — confirms the implementation matches §3-§5
+  exactly; the gap is in the *design's* mechanism, not a deviation ELIXIR-DEV introduced.
+- `lib/letflow/definitions.ex` — re-grepped for `Task.async`/`spawn` around
+  `claim_sandbox_and_proceed/8` (line 1472), `run_replay_span/8` (line 1522), and their
+  one call site (line 825, inside `apply_promotion_assertion_rerun/6`): **zero matches**.
+  `claim_sandbox_and_proceed/8` calls `SandboxPool.claim/2` directly (not via
+  `Task.async`/`spawn`) and `run_replay_span/8` calls `SandboxPool.release/2` directly
+  (via `safe_release/2` in its `rescue` clause, definitions.ex:1817+) from the same
+  process, in both the normal-completion and raised-exception paths. §7's original
+  finding — `apply_promotion_assertion_rerun/6` is synchronous, single-process, from
+  `claim/2` through `release/2` — is **reconfirmed unchanged** by this re-read, not
+  merely re-asserted from the prior design pass.
+
+### 13.1 Decision: (b) — same-process claim/release contract; test updated, no new primitive
+
+**Chosen: (b).** `SandboxPool.claim/2`'s contract now explicitly requires that the SAME
+process which called `claim/2` also calls the matching `release/2` for that
+`sandbox_id` — a caller must not hand a live claim to a different process and expect
+`SandboxPool` to treat that as anything other than an owner death. `(a)` (an explicit
+ownership-transfer primitive) was considered and rejected, for reasons specific to this
+module's actual call pattern, not a generic preference:
+
+1. **The one real production caller already satisfies (b) natively, and has since the
+   original design pass.** §13.0's re-verification confirms `apply_promotion_assertion_rerun/6`
+   still calls `claim/2` and `release/2` from the same process, synchronously, with no
+   `Task.async`/`spawn` anywhere in between. `(b)` costs this caller nothing — it already
+   conforms. Choosing `(a)` would add a new public primitive that this module's only real
+   caller would never use, built solely to accommodate a test's own concurrency-testing
+   convenience rather than a genuine production need — the kind of speculative API surface
+   `docs/anti-patterns.md`'s general "don't build for a caller that doesn't exist"
+   discipline (and this design's own §4 "zero new public API surface" framing from the
+   original pass) argues against.
+2. **`(a)` does not actually make the Task.async pattern free — it just relocates the
+   same-process requirement to a different call.** Any ownership-transfer primitive
+   (e.g. a `SandboxPool.confirm_owner/2`-shaped function the *new* owning process would
+   have to call after `Task.await/2`) still requires the test (or any future caller using
+   this pattern) to know about and explicitly invoke a `SandboxPool`-specific API at
+   exactly the right moment — it does not let the existing test's code stay as-is any more
+   than `(b)` does. Given that neither direction leaves the existing test unmodified,
+   `(b)` is the smaller, more legible change: a documented contract plus a same-process
+   test fix, versus a documented contract *and* a new public function *and* a
+   same-process-equivalent test fix (the new primitive still has to be called from the
+   correct process at the correct time to avoid the identical race).
+3. **A same-process claim/release contract is the same idiom OTP itself uses for its own
+   `:global`/`:mutex`-shaped resources** (e.g. `:global.set_lock/3`'s note that the lock
+   is tied to the calling process; ETS's `:ets.give_away/3` is the actual explicit-transfer
+   primitive OTP provides *when* transfer is a real requirement — and it requires the
+   sending and receiving processes to coordinate explicitly, which is exactly `(a)`'s cost
+   without `(a)`'s benefit here). `SandboxPool.claim/2`'s own doc-comment already frames a
+   claim as belonging to "the caller" (§4's original `@doc`: no plural, no hand-off
+   language) — `(b)` formalizes an assumption the interface already implied, rather than
+   introducing a new one.
+4. **This does not quietly re-decide anything `Letflow.Definitions`' usage depends on.**
+   Restated per the handoff's explicit instruction to confirm, not assume: `definitions.ex`
+   has zero `Task.async`/`spawn` around any `claim/2`/`release/2` pair (§13.0). No
+   production code path changes behavior under `(b)`. The only code that changes is the
+   one test that was, itself, relying on an assumption (`claim` and `release` may happen
+   from different processes) that no other part of this codebase — production or test —
+   depends on. `grep -rn "Task.async" test/letflow/sandbox_pool_test.exs` confirms this
+   is the *only* `Task.async` usage in this test file wrapping a `claim/2` call whose
+   `release/2` happens elsewhere.
+
+### 13.2 `claim/2`'s public `@spec` — explicitly does NOT change
+
+Restated per the handoff's explicit acceptance criterion, not left ambiguous: **`claim/2`'s
+and `release/2`'s public `@spec`s are unchanged by this revision** — byte-identical to
+§4's original statement and to the currently-shipped `sandbox_pool.ex`. `(b)` is a
+*contract* addition (a documented, enforced-by-mechanism precondition on which process
+may call `release/2` for a given claim), not a *signature* addition — there is no new
+parameter (e.g. no "expected owner pid" argument) and no new return-value variant. The
+existing `owner_ref = Process.monitor(elem(from, 0))` mechanism (§5.1/§5.2, unchanged by
+this revision) already **is** the enforcement: it was always implicitly a same-process
+contract by construction (it monitors whichever pid happens to call `claim/2`) — this
+revision's only change is naming that fact explicitly as the documented contract instead
+of leaving it an unstated assumption discoverable only by an owner-monitor false-positive,
+and updating the one test that violated it.
+
+**One documentation-only change to `claim/2`'s `@doc` (not its `@spec`) is added:** a
+sentence stating "the process that calls `claim/2` must be the same process that later
+calls `release/2` for the returned `sandbox_id` — handing a claim to a different process
+and releasing from there is indistinguishable, by design, from that process leaking the
+claim (see moduledoc's owner-monitor section) and will be reclaimed automatically." This
+is prose inside an existing `@doc` string, not a code change to any function body or
+`@spec` — ELIXIR-DEV should add it as part of implementing this revision (a one-sentence
+`@doc` edit, explicitly permitted since §8's "must not change" list only names `@spec`s
+and `start_link/1`, not doc comments).
+
+### 13.3 Moduledoc addition
+
+`SandboxPool`'s moduledoc (sandbox_pool.ex:2-31) gains one short paragraph, placed after
+the existing "Process-per-instance vs. row-based state" section, stating the same-process
+contract from §13.2 plus the one-sentence reasoning from §13.1 point 3 (claim ownership is
+tied to the claiming process, same idiom as `:global`'s lock semantics) — so a future
+reader of the module encounters the contract before writing a new caller that violates it,
+not only in a `@doc` string on one function.
+
+### 13.4 Test file update — required, in scope for this fix
+
+`test/letflow/sandbox_pool_test.exs:192-221`'s "a queued waiter is served once the held
+slot frees, before its wait window elapses" test must be restructured so the process that
+calls `SandboxPool.claim/2` (currently the `Task.async`-spawned process, test line 205) is
+the same process that calls `SandboxPool.release/2` (currently the test process, test line
+220). The test's actual intent — proving the *queueing/hand-off* mechanism
+(`service_next_waiter/1`, `waiting` → `active` transition) works, which requires a second,
+concurrently-blocked caller — is unaffected by this restructuring; only the release call's
+process needs to move.
+
+**Concrete restructuring shape (prose, not code, matching this document's own
+no-implementation-code constraint):** the `Task.async` body should not return immediately
+after `claim/2` succeeds. Instead it should rendezvous with the test process — e.g. send
+its `{:ok, claim}` result to the test process via `send/2`, then block (`receive`) for a
+"go ahead and release" message from the test process, then itself call `SandboxPool.release/2`
+for that claim, then return whatever the test still needs asserted (e.g. the claim struct,
+or `:ok`) as its own `Task.async` return value for `Task.await/2` to receive. The test
+process's assertions (`waiter_id != held_id`, `schema_exists?(waiter_schema)`) still run
+in the test process, using the claim data relayed via the rendezvous `send/2` — only the
+literal `SandboxPool.release(waiter_id, pool)` call moves inside the `Task.async` body,
+after the rendezvous, so it executes in the same process that called `claim/2`. This is a
+standard Elixir test-synchronization idiom (send/receive rendezvous around an
+otherwise-async `Task`), not a new mechanism.
+
+This changes **`owned_modules`** for the implementation step that follows this design:
+`test/letflow/sandbox_pool_test.exs` is now in scope alongside `lib/letflow/sandbox_pool.ex`
+(and, per §13.2/§13.3, the moduledoc/`@doc` prose inside `sandbox_pool.ex` — no `.ex`
+logic beyond what §§1-12 already specified). ELIXIR-DEV (or TEST-DESIGNER, per whichever
+agent the next handoff assigns this to) must update this test as part of closing this
+rework, not treat it as pre-existing, untouchable coverage — it is the one piece of
+existing coverage this revision determines was asserting an unsupported contract.
+
+### 13.5 Re-verification against `apply_promotion_assertion_rerun/6` (restated, not reused)
+
+Per the handoff's explicit instruction not to merely re-assert the prior finding: §13.0
+above re-read `definitions.ex` directly for this revision (fresh `grep` for
+`Task.async`/`spawn` around both `claim_sandbox_and_proceed/8` and `run_replay_span/8`,
+zero matches) and reconfirms §7's original conclusion still holds unchanged — `(b)`'s new
+same-process contract does not break `apply_promotion_assertion_rerun/6` because that
+function's call pattern already, natively, satisfies it. No change to
+`lib/letflow/definitions.ex` is needed by this revision, consistent with §7/§8's original
+"nothing in `definitions.ex`" scope, which this rework does not reopen.
+
+### 13.6 Updated acceptance-criteria traceability (this rework's handoff)
+
+| Rework acceptance criterion | Concrete design element |
+|---|---|
+| "Design revised to resolve the Task.async claim/release-across-processes ambiguity... with an explicit choice between (a)/(b) and stated reasoning" | §13.1 — `(b)` chosen, four concrete reasons against `(a)` |
+| "If (b) is chosen: design explicitly states test file needs updating, and owned_modules is updated" | §13.4 |
+| "Re-verified against apply_promotion_assertion_rerun/6's actual call site... that the chosen direction doesn't break it" | §13.0 (fresh re-read), §13.5 |
+| "claim/2's public @spec may change only if strictly necessary... state explicitly whether it does or doesn't" | §13.2 — explicitly does NOT change; only `@doc` prose and moduledoc prose are added |
+| "Design artefact updated in place... at lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md" | This §13, plus the REWORK NOTICE below the title |

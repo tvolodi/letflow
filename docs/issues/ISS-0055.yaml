@@ -22,5 +22,21 @@ description: >
   don't fix, file and forward" rule for non-blocking incidental findings.
 affected_files:
   - test/letflow/engine_test.exs
-status: open
+status: resolved
+resolved_in_run: ORCH-direct-20260818 (hetzner-orch, verification-only, no code change needed)
+resolved_at: "2026-08-18T22:26:30Z"
 github_issue: https://github.com/tvolodi/letflow/issues/194
+resolution_note: >
+  Stale duplicate, confirmed on independent re-check rather than assumed: this is the
+  same finding as ISS-0053 (same file, same describe/test pair, same GH#194 -- filed
+  from WF02-REQ047-20260818's own still-unmerged branch, GH#194 already closed when
+  ISS-0053 fixed the pair on 2026-08-18T22:08:34Z), reintroduced into docs/issues/ as
+  its own open record when that branch later merged (PR #195), without being
+  reconciled against ISS-0053's already-resolved state -- the same
+  cross-host/cross-branch numbering-collision-but-content-duplicate class documented
+  in docs/anti-patterns.md. Verified directly against current main
+  (test/letflow/engine_test.exs:675-676): the describe/test pair now reads
+  "create/2 -- hop-limit-exceeded gateway cycle" / "returns
+  activation_failed/hop_limit_exceeded, writes zero rows except the snapshot"
+  (132 chars combined, ISS-0053's fix), not the 245-char pair this record describes.
+  No further action needed.

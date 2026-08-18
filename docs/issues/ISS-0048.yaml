@@ -53,3 +53,11 @@ affected_files:
   - test/letflow/identity/tenant_role_test.exs
   - test/letflow/role_registry_test.exs
 status: open
+github_issue: https://github.com/tvolodi/letflow/issues/198
+queue_task_id: 115
+registration_note: >
+  Not registered on GitHub or in letflow-queue at time of filing (2026-08-18T12:11:57Z),
+  a "No Issue Left Local-Only" gap -- closed retroactively by ORCH (hetzner-orch) at
+  2026-08-18T22:25Z: filed GH#197 by hand, then register_task (queue task 115) best-effort
+  auto-created its own duplicate GH#198 pointing at the same task -- #197 closed as
+  duplicate of #198, which is now the canonical linked issue for this task/finding.

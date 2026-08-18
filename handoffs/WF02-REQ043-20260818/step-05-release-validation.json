@@ -1,0 +1,60 @@
+{
+  "handoff_id": "b1e2f3a4-0005-4c1a-9f01-req043step05",
+  "run_id": "WF02-REQ043-20260818",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ043-20260818/step-05-release-validation.json",
+  "created_at": "2026-08-18T07:24:34Z",
+  "started_at": "2026-08-18T07:24:34Z",
+  "completed_at": "2026-08-18T07:34:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-043"],
+    "requirement_text": {
+      "REQ-043": "Add the priv/repo/migrations and Ecto.Schema modules the instance engine needs but that S2 deliberately did not build, all schema-per-tenant via REQ-022's :prefix mechanism (Decision B's general rule for business tables -- none of these three is GLOBAL): (a) an ALTER TABLE migration on REQ-023's instance_projections adding definition_id, correlation_key, current_nodes, variables, error_detail, completed_at, cancelled_at, plus uq_instance_correlation (partial unique) and idx_proj_definition. (b) a tasks table with status Ecto.Enum PENDING/COMPLETED/CANCELLED; the standalone task query/list surface is NOT ported here. (c) a tokens table -- resolved BUILD in the design. tenant_id on every table is NOT NULL with no DB default, derived internally, never caller-supplied."
+    },
+    "related_handoff_ids": ["b1e2f3a4-0004-4c1a-9f01-req043step04"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "test/reports/report-2026-08-18-WF02-REQ043-20260818.yaml",
+      "lib/letflow/design/req043-instance-engine-schema.md",
+      "priv/repo/migrations/20260818110001_alter_instance_projections_add_engine_columns.exs",
+      "priv/repo/migrations/20260818110002_create_tokens.exs",
+      "priv/repo/migrations/20260818110003_create_tasks.exs",
+      "lib/letflow/engine/token.ex",
+      "lib/letflow/engine/task.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 5. Independently re-run mix test yourself (do not trust TEST-RUNNER's report alone -- three prior steps in this run already reported 725/725 green; re-derive it, don't just read the report file). Confirm every REQ-043 acceptance criterion is satisfied against the actual code/test, not against any step's summary. Check docs/requirements.yaml (REQ-043's status field, currently in_progress) and docs/status/requirement_status.yaml for staleness relative to what actually shipped.",
+    "acceptance_criteria": [
+      "mix test independently re-run, real output quoted, matches or explains any discrepancy from the reported 725/725",
+      "Each of REQ-043's six acceptance criteria (ALTER TABLE column list + both indexes, tasks/tokens migrations with status enum, tasks moduledoc boundary statement, tokens-table justification, tenant_id internal-derivation with a caller-mismatch test, all migrations apply cleanly) checked explicitly against the actual code/test files, not against a prior step's summary",
+      "docs/requirements.yaml and docs/status/requirement_status.yaml checked for staleness relative to what actually shipped -- name any drift found",
+      "PASS routes to DOC-UPDATER; FAIL identifies the blocking issue and which agent it routes back to"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified (not trusting TEST-RUNNER's or any earlier gate's report). (1) mix test re-run twice from a cold shell on branch feature/WF02-REQ043-20260818: both runs report 'Result: 725 passed (4 properties, 721 tests)', 0 failures, exit clean -- exactly matches TEST-RUNNER's Step 4 report (test/reports/report-2026-08-18-WF02-REQ043-20260818.yaml). mix compile --warnings-as-errors exit 0; mix format --check-formatted exit 0. (2) Checked each of REQ-043's six requirements.yaml acceptance_criteria directly against the actual files, not against any step's summary: AC1 (ALTER TABLE columns) -- confirmed all 7 columns (definition_id, correlation_key, current_nodes, variables, error_detail, completed_at, cancelled_at) present in priv/repo/migrations/20260818110001_alter_instance_projections_add_engine_columns.exs, guarded by `if prefix() do`, and migrations_test.exs's 'instance_projections' new engine columns exist and match InstanceProjection's fields' test exercises this against real Postgres via TenantProvisioning.replay_migrations (REQ-022's mechanism). AC2 (uq_instance_correlation) -- confirmed the partial unique index (WHERE correlation_key IS NOT NULL) and idx_proj_definition in the same migration; migrations_test.exs's 'uq_instance_correlation (partial unique index)' describe block has 4 tests demonstrating rejection of a real duplicate (definition_id, correlation_key), permitting unlimited NULL-correlation_key rows, permitting the same key under a different definition_id, and confirming both indexes' actual pg_indexes DDL shape. AC3 (tasks/tokens migrations, status enum) -- confirmed 20260818110002_create_tokens.exs and 20260818110003_create_tasks.exs both exist, both tenant-scoped (`if prefix() do`), both registered in Letflow.TenantProvisioning.tenant_scoped_migrations/0 in the correct ALTER-then-tokens-then-tasks order (asserted by a dedicated ordering test); Letflow.Engine.Task.status is an Ecto.Enum with Ecto.Enum.values/2 == exactly [:cancelled, :completed, :pending] (schemas_test.exs), dumping uppercase PENDING/COMPLETED/CANCELLED strings, confirmed at the raw DB column level too. AC4 (tasks moduledoc boundary) -- read lib/letflow/engine/task.ex directly: moduledoc explicitly states src/tasks/store.zig's query/list/filter surface 'is not ported by this module or by REQ-043 at all' and names 'S4's tasks routes or its own later requirement' as the destination; schemas_test.exs asserts this text via Code.fetch_docs/1 against the compiled module (not the .ex source string). AC5 (tokens-table justification) -- read lib/letflow/engine/token.ex directly: moduledoc's 'Why this table exists' section gives a reasoned BUILD resolution (Task.token_id needs a real FK-referenceable row; a JSONB array element cannot be an FK target) rather than silently keeping or dropping the table, and states current_nodes remains the engine's authoritative summary -- matches the migration header's identical three-reasons justification. AC6 (tenant_id internal derivation + caller-mismatch test) -- PARTIALLY non-literal, but honestly and correctly handled: I independently confirmed via `ls lib/letflow/engine/` that only token.ex and task.ex exist (no context module with a public attrs-accepting function), so no code path exists today that could reject a caller-supplied tenant_id -- writing a literal 'rejects a disagreeing tenant_id' test would misrepresent the shipped code. Design doc lib/letflow/design/req043-instance-engine-schema.md section 6 point 2 states this gap explicitly and defers enforcement to REQ-045/051/062 (all of which depend on REQ-043 per docs/requirements.yaml). The shipped test suite instead has 3 tests in migrations_test.exs's 'tenant_id internal-derivation contract' describe block: a correct-derivation positive case, a schema-per-tenant storage-isolation case, and an explicit tripwire test titled 'a disagreeing tenant_id is currently accepted, not rejected (flagged gap, design section 6 pt 2)' that will break the moment enforcement is added without updating it. This exact reasoning was independently re-derived and signed off by CODE-DESIGN-VALIDATOR (design gate), SECURITY-REVIEWER (INV-1/INV-8), REVIEWER (Step 2d), and TEST-DESIGN-VALIDATOR (Step 3b) -- I re-checked their conclusion against the actual code myself rather than trusting the chain, and it holds. This is a legitimate, explicitly-flagged Instruction Precedence conflict (the AC's literal wording was copied from REQ-025's EventStore.append/2-shaped phrasing and doesn't fit a schema-only requirement that ships no context module), not a hidden defect -- correctly forwarded at every step's result.issues, never silently resolved. (3) Checked docs/requirements.yaml and docs/status/requirement_status.yaml for staleness: REQ-043's requirements.yaml entry still reads status: in_progress (correct -- DOC-UPDATER Step 6 hasn't run yet); requirement_status.yaml's last REQ-043 event is 'started' at 2026-08-18T05:53:09Z with no 'done' event yet (correct, consistent with in_progress). No staleness found.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ043-20260818/step-05-release-validation.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "area": "docs/requirements.yaml REQ-043 acceptance_criteria #6 vs. docs/issues/",
+        "description": "AC6's literal text ('a test deliberately making a caller-supplied tenant_id disagree with the target schema fails loudly rather than silently attributing to the wrong tenant') cannot be satisfied by REQ-043's own correctly-scoped artifacts (schema-only, no context-module write path yet) -- confirmed independently. This was caught and honestly handled at every gate (Step 1b design, Step 2c security, Step 2d reviewer, Step 3b test-design-gate, all recorded in their own result.issues/summary) and is tracked forward via the design doc's section 6 point 2 and a deliberate tripwire test, but unlike the sibling MINOR finding (assignee_type free-text, filed as docs/issues/ISS-0042.yaml + GitHub #159), this tenant_id-enforcement gap was never given its own docs/issues/ISS-NNNN.yaml entry -- it lives only inside handoff result.issues fields and code comments. Recommend DOC-UPDATER or a follow-up ORCH action file a docs/issues/ISS-NNNN.yaml (severity MINOR, discovered_by: RELEASE-VALIDATOR, forwarded to REQ-045/051/062) so it is queue-discoverable the same way ISS-0042 is, rather than relying on a future CODE-DESIGNER happening to re-read REQ-043's design doc. Not blocking -- does not change this step's PASS verdict."
+      }
+    ],
+    "next_action": "Route to DOC-UPDATER (Step 6)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,56 @@
+{
+  "handoff_id": "b1e2f3a4-002c-4c1a-9f01-req043step02c",
+  "run_id": "WF02-REQ043-20260818",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ043-20260818/step-02c-security-review.json",
+  "created_at": "2026-08-18T06:46:44Z",
+  "started_at": "2026-08-18T06:46:44Z",
+  "completed_at": "2026-08-18T06:48:58Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-043"],
+    "requirement_text": {
+      "REQ-043": "Add the priv/repo/migrations and Ecto.Schema modules the instance engine needs but that S2 deliberately did not build, all schema-per-tenant via REQ-022's :prefix mechanism. tenant_id on every table is NOT NULL with no DB default and is derived internally from the Ecto :prefix the write targets, never a caller-supplied field. See handoffs/WF02-REQ043-20260818/step-02a-elixir-dev.json for the full implementation summary."
+    },
+    "related_handoff_ids": ["b1e2f3a4-002a-4c1a-9f01-req043step02a"],
+    "artifacts_in": [
+      "priv/repo/migrations/20260818110001_alter_instance_projections_add_engine_columns.exs",
+      "priv/repo/migrations/20260818110002_create_tokens.exs",
+      "priv/repo/migrations/20260818110003_create_tasks.exs",
+      "lib/letflow/engine/token.ex",
+      "lib/letflow/engine/task.ex",
+      "lib/letflow/event_store/instance_projection.ex",
+      "lib/letflow/event_store/json_array.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": ["priv/repo/migrations", "lib/letflow/schemas", "lib/letflow/engine"]
+  },
+  "task": {
+    "description": "WF-02 Step 2c HARD GATE (in-scope: this diff touches tenant-scoped tables and derives tenant_id internally, per REQ-022's :prefix mechanism). Run git diff main...HEAD (branch feature/WF02-REQ043-20260818) and check against every invariant in docs/agents/instructions/security-invariants.md's INV-1..INV-8.",
+    "acceptance_criteria": [
+      "For each of INV-1..INV-8, state APPLIES or NOT-APPLICABLE against this diff",
+      "For each APPLIES invariant, run its How to verify check and record the result",
+      "Specifically verify tenant_id is never caller-supplied on any new insert path (tasks, tokens, instance_projections) -- it must be derived internally via Letflow.TenantProvisioning, matching REQ-025/REQ-030's established convention",
+      "Verify no SQL string interpolation of tenant/user input in any of the three new/altered migrations",
+      "Verify the new lib/letflow/event_store/json_array.ex custom Ecto.Type (an empirically-forced deviation from the design, flagged by ELIXIR-DEV in its own handoff) introduces no injection or type-confusion risk",
+      "FAIL immediately on any applicable invariant failing -- all BLOCKER, no partial credit"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: IN SCOPE -- diff (git diff main...HEAD) touches three tenant-scoped tables: an ALTER TABLE on instance_projections (adds definition_id/correlation_key/current_nodes/variables/error_detail/completed_at/cancelled_at + uq_instance_correlation/idx_proj_definition indexes) and two new tables, tokens and tasks, plus their Ecto.Schema modules and a manifest update in Letflow.TenantProvisioning. INV-1 APPLIES (verified): (a) all three migrations create/alter tables and indexes with `prefix: prefix()` passed explicitly and are wrapped in the mandatory `if prefix() do ... end` guard -- confirmed by direct read of all three migration files; ELIXIR-DEV's own handoff additionally reports an empirical no-op-under-no-:prefix probe (matching migrations_test.exs's established technique), which I take as corroborating evidence, not as the review itself. (b) no table is left reachable in the public/default schema -- all three are inside the guard, and Letflow.TenantProvisioning's @tenant_scoped_migration_manifest gained exactly the three new entries (20260818110001/110002/110003), confirmed via git diff on lib/letflow/tenant_provisioning.ex. (c) tenant_id on tokens and tasks is `binary_id, null: false` with no DB default (confirmed reading both migrations); Letflow.Engine.Token and Letflow.Engine.Task's moduledocs state the tenant_id contract explicitly (derived internally via Letflow.TenantProvisioning.tenant_id_for_schema_name/1 from the :prefix the write targets, never a caller-supplied field), matching REQ-025/030's established convention grepped across lib/letflow/event_store.ex, lib/letflow/definitions.ex, lib/letflow/definitions/promotion_review_store.ex. Neither Token nor Task has a context-module write path yet (both moduledocs state this explicitly -- that's REQ-045/051's job), so there is no live insert call site to inspect this run; the DB-level constraint (NOT NULL, no default) and the documented contract are the enforcement available today, consistent with how REQ-023's original instance_projections.tenant_id was gated before REQ-025's append/2 existed. instance_projections.insert_changeset/2 still casts tenant_id from attrs, unchanged from REQ-023/025's already-reviewed shape -- not a new caller-supplied-tenant_id path introduced by this diff. INV-2 NOT-APPLICABLE (no API route/response-shaping code in this diff, S4 not started). INV-3 NOT-APPLICABLE (no scripting/plugin sandbox code, S5 not started). INV-4 NOT-APPLICABLE (diff resolves no secret/env/token; confirmed by reading every changed file -- migrations, Ecto schemas, moduledoc-only changes to instance_projection.ex and tenant_provisioning.ex's manifest list). INV-5 NOT-APPLICABLE (no lookup-by-ID endpoint in this diff, S4 not started). INV-6 APPLIES and is satisfied by this handoff itself (explicit per-invariant statement below, status PASS). INV-7 APPLIES (new migrations/schemas touch tenant data): ran `grep -rn \"Repo.query\" priv/repo/migrations/2026081811000{1,2,3}_*.exs lib/letflow/engine/token.ex lib/letflow/engine/task.ex lib/letflow/event_store/instance_projection.ex lib/letflow/event_store/json_array.ex lib/letflow/tenant_provisioning.ex` -- zero hits in every file this diff adds or meaningfully changes. Two pre-existing `Repo.query!` calls in lib/letflow/tenant_provisioning.ex (advisory lock, CREATE SCHEMA) were flagged by the grep's file-level scope but confirmed via `git diff main...HEAD -- lib/letflow/tenant_provisioning.ex` and `git show main:lib/letflow/tenant_provisioning.ex` to be byte-identical to main, i.e. not touched by this diff (this diff only appends manifest entries at lines ~242-292) -- out of this gate's scope, already covered by an earlier requirement's own SECURITY-REVIEWER pass. All three new migrations use Ecto's migration DSL (`add`, `references`, `create index`/`unique_index`) exclusively, parameterised by construction. PASS. INV-8 APPLIES (tenant-controlled-data write paths): ran `grep -n \"^\\s*{:ok, .*} = \" ` against every new/changed lib file -- zero hits. Letflow.EventStore.JSONArray's cast/1, dump/1, load/1 each return {:ok, value} | :error (no raising path, consistent with the Ecto.Type behaviour contract) and introduce no injection/type-confusion risk: type/0 still reports :map so the Postgres adapter emits the identical jsonb wire encoding a plain :map field would, and cast/dump/load only pattern-match on is_list/1 vs. anything else -- no string building, no dynamic atom conversion from external input, no eval. ELIXIR-DEV's own MAJOR/MINOR-flagged deviations (JSONArray custom type; added unique_constraint(:correlation_key, name: :uq_instance_correlation) on InstanceProjection.insert_changeset/2) were reviewed directly: the unique_constraint addition is itself an INV-8 fix (a real uq_instance_correlation collision now returns {:error, changeset} instead of raising Ecto.ConstraintError out of Repo.insert/2, confirmed by ELIXIR-DEV's own duplicate-insert test against real Postgres, matching the established Letflow.Definitions.ProcessDefinition / Letflow.EventStore.IdempotencyRecord pattern) -- correctly implemented, not a violation. PASS.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ043-20260818/step-02c-security-review.json"
+    ],
+    "issues": [],
+    "next_action": "Route to REVIEWER (Step 2d) -- flag the two ELIXIR-DEV-documented design deviations (Letflow.EventStore.JSONArray custom Ecto.Type; unique_constraint(:correlation_key, name: :uq_instance_correlation) on InstanceProjection.insert_changeset/2) for REVIEWER's explicit sign-off per step-02a's own next_action, since both are genuine deviations from the approved design's literal text even though neither is a security defect."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

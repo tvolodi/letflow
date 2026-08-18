@@ -1,0 +1,97 @@
+{
+  "handoff_id": "b1e2f3a4-002a-4c1a-9f01-req043step02a",
+  "run_id": "WF02-REQ043-20260818",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ043-20260818/step-02a-elixir-dev.json",
+  "created_at": "2026-08-18T06:16:00Z",
+  "started_at": "2026-08-18T06:16:00Z",
+  "completed_at": "2026-08-18T06:43:27Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-043"],
+    "requirement_text": {
+      "REQ-043": "Add the priv/repo/migrations and Ecto.Schema modules the instance engine needs but that S2 deliberately did not build, all schema-per-tenant via REQ-022's :prefix mechanism (Decision B's general rule for business tables -- none of these three is GLOBAL, and none needs REQ-041's GLOBAL-exception flagging, since R-Co's own 005_instances.sql tables are per-tenant like events/events_archive): (a) an ALTER TABLE migration on REQ-023's instance_projections adding exactly the columns REQ-023's own migration header (priv/repo/migrations/20260816120003_create_instance_projections.exs, \"COLUMNS DELIBERATELY NOT CREATED HERE\") names as S3/EE-01's job: definition_id (binary_id, not null), correlation_key (string, nullable), current_nodes (jsonb, default \"[]\" -- active token positions), variables (jsonb, default \"{}\" -- the merged variable map, seeded from EE-01's initial_variables per engine.md section EE-01 1a's \"Note on initial_variables\"), error_detail (jsonb, nullable -- set on ERROR status by EE-10), completed_at and cancelled_at (utc_datetime_usec, nullable), plus the two indexes REQ-023 names: uq_instance_correlation (UNIQUE on (definition_id, correlation_key) WHERE correlation_key IS NOT NULL -- the index that structurally enforces EE-01's correlation-key uniqueness acceptance criterion) and idx_proj_definition. The existing status Ecto.Enum already carries ERROR (REQ-023 included it deliberately, per that migration's header), so no enum migration is needed here -- confirm that rather than adding one. (b) a tasks table per engine.md section EE-03 1a (R-Co migrations/005_instances.sql): id (binary_id), instance_id (binary_id, not null, indexed), token_id (binary_id, not null), node_id (string, not null), node_name (string, not null), status (Ecto.Enum: PENDING/COMPLETED/CANCELLED, default PENDING), assignee_type (string, nullable -- USER|GROUP|ROLE), assignee_ref (string, nullable), form_schema (jsonb, nullable), output_variables (jsonb, nullable), completed_by (binary_id, nullable), completed_at/cancelled_at (utc_datetime_usec, nullable), timestamps(). R-Co's tasks logic lives in src/tasks/store.zig (1202 lines), a directory OUTSIDE this stage's src/engine/ scope -- this requirement builds only the table + schema module that src/engine/instance.zig writes into at EE-03 activation and EE-04 completion time; the standalone task query/list surface (src/tasks/store.zig's own list/filter operations) is NOT ported here and belongs with S4's tasks routes or its own later requirement. State that boundary in the moduledoc. (c) a tokens table: id (binary_id), instance_id (binary_id, not null), node_id (string), branch_id (string), plus whatever the EE-06/EE-07 parallel token model needs -- tasks.token_id references it. Because engine.md section EE-02 2 defines Token as an in-memory value (node_id/branch_id/token_id/waiting_child_instance_id) and instance_projections.current_nodes already persists active token positions as jsonb, flag explicitly in the moduledoc whether a separate tokens TABLE is genuinely required in Letflow or whether current_nodes subsumes it -- R-Co has both, but R-Co's tasks.token_id FK is the only thing that forces the separate table there. Do NOT silently drop the table or silently keep it; state which and why, since REQ-051's join counters and REQ-044's tasks FK both depend on the answer. tenant_id on every table above is NOT NULL with no DB default and is derived from the Ecto :prefix the write targets by reversing REQ-022's Letflow.TenantProvisioning.schema_name_for_tenant/1, exactly as REQ-025 and REQ-030 established for their own tables -- never a caller-supplied field."
+    },
+    "related_handoff_ids": ["b1e2f3a4-0001-4c1a-9f01-req043step01", "b1e2f3a4-001b-4c1a-9f01-req043step01b"],
+    "artifacts_in": [
+      "lib/letflow/design/req043-instance-engine-schema.md",
+      "priv/repo/migrations/20260816120003_create_instance_projections.exs",
+      "lib/letflow/event_store/instance_projection.ex",
+      "lib/letflow/tenant_provisioning.ex"
+    ],
+    "owned_modules": ["priv/repo/migrations", "lib/letflow/schemas", "lib/letflow/engine"]
+  },
+  "task": {
+    "description": "Implement REQ-043 per WF-02 Step 2a and the approved design at lib/letflow/design/req043-instance-engine-schema.md (CODE-DESIGN-VALIDATOR PASSed it on re-gate iteration 1 -- build exactly what it specifies, do not deviate from its resolved decisions, especially the tokens-table BUILD decision in its section 3.1 and the tenant_id-reuse contract in its section 6). Verify you are on branch feature/WF02-REQ043-20260818 before touching any file (git branch --show-current). Write: (1) an ALTER TABLE migration on instance_projections per the design's section 2, (2) a companion update to Letflow.EventStore.InstanceProjection's field list/changesets/moduledoc per section 2.3 so the new columns are Ecto-reachable, (3) a tasks table migration + new Ecto.Schema module per sections 4.1-4.4, including the moduledoc's verbatim src/tasks/store.zig-not-ported boundary statement, (4) a tokens table migration + new Ecto.Schema module per sections 3.2-5.2, (5) the internal tenant_id-derivation call wired into every new insert path per section 6, reusing Letflow.TenantProvisioning.tenant_id_for_schema_name/1 -- never a caller-supplied tenant_id field. Run mix compile --warnings-as-errors, mix ecto.migrate against a real or Docker-provisioned test DB (see docs/anti-patterns.md's Docker fallback if no local toolchain), and mix format --check-formatted. Commit your work locally on the feature branch (do not push -- Step Final handles that) with a clear message referencing REQ-043.",
+    "acceptance_criteria": [
+      "an ALTER TABLE migration adds definition_id, correlation_key, current_nodes, variables, error_detail, completed_at and cancelled_at to instance_projections and applies cleanly against a provisioned tenant schema via REQ-022's migration-replay mechanism",
+      "the uq_instance_correlation partial unique index exists and is demonstrated rejecting a second instance_projections row with the same (definition_id, correlation_key) while permitting any number of rows whose correlation_key is NULL",
+      "priv/repo/migrations gains tasks and tokens migrations (per the design's resolved BUILD decision), schema-per-tenant per REQ-022, applying cleanly, with tasks.status as an Ecto.Enum over exactly PENDING/COMPLETED/CANCELLED",
+      "the tasks schema module's moduledoc explicitly states that src/tasks/store.zig's standalone task query surface is NOT ported by this requirement and names where it belongs instead",
+      "the moduledoc states explicitly, as a resolved-and-justified choice, that a separate tokens table was built and why",
+      "a row written into tasks has tenant_id equal to the tenant whose schema the write targeted, derived internally; a test deliberately making a caller-supplied tenant_id disagree with the target schema fails loudly rather than silently attributing to the wrong tenant",
+      "mix compile --warnings-as-errors exits 0",
+      "all migrations apply cleanly against a fresh DB",
+      "no SQL string interpolation of tenant/user data",
+      "all callers of any changed function signature (e.g. Letflow.EventStore.InstanceProjection's changesets) still compile"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented REQ-043 exactly per the approved design (lib/letflow/design/req043-instance-engine-schema.md): the instance_projections ALTER TABLE migration adding the 7 engine-owned columns + uq_instance_correlation + idx_proj_definition; the companion Letflow.EventStore.InstanceProjection field/changeset/moduledoc update; the new tokens table + Letflow.Engine.Token (design's resolved BUILD decision, section 3.1); the new tasks table + Letflow.Engine.Task with the mandated src/tasks/store.zig-not-ported moduledoc boundary; three new Letflow.TenantProvisioning.@tenant_scoped_migration_manifest entries; tenant_id on all three tables required/no-DB-default/never-caller-supplied, reusing Letflow.TenantProvisioning.tenant_id_for_schema_name/1 unchanged. Two deviations from the design's literal implementation text were required and are documented in-code (InstanceProjection's own moduledoc) and below: current_nodes needed a small custom Ecto.Type (Letflow.EventStore.JSONArray) because Ecto's built-in :map type cannot hold a list end-to-end (design OQ-3 anticipated a lesser cast/3 issue with a put_change/3 fix; the real failure is at dump/default-validation level and put_change/3 does not solve it); insert_changeset/2 gained unique_constraint(:correlation_key, name: :uq_instance_correlation) so a real collision returns {:error, changeset} instead of raising, matching this codebase's established pattern and INV-8. Fixed two pre-existing REQ-025/023 tests whose fixtures/assertions were a direct, mechanical consequence of this change (event_store_test.exs's seed_projection!/4 now supplies definition_id; schemas_test.exs's acceptance-criterion-5 test now matches the necessarily-reworded scope paragraph the design's own §2.3 point 1 required). Verified via a real toolchain (Elixir 1.20.3 / Erlang OTP 29 / Mix 1.20.3 on PATH) against a real Postgres 16 container (letflow-postgres-1, port 5462) -- not the Docker-fallback recipe, a working local toolchain was already present.",
+    "artifacts_out": [
+      "priv/repo/migrations/20260818110001_alter_instance_projections_add_engine_columns.exs",
+      "priv/repo/migrations/20260818110002_create_tokens.exs",
+      "priv/repo/migrations/20260818110003_create_tasks.exs",
+      "lib/letflow/engine/token.ex",
+      "lib/letflow/engine/task.ex",
+      "lib/letflow/event_store/json_array.ex",
+      "lib/letflow/event_store/instance_projection.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/letflow/event_store_test.exs",
+      "test/letflow/event_store/schemas_test.exs"
+    ],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "area": "lib/letflow/event_store/instance_projection.ex, lib/letflow/event_store/json_array.ex",
+        "description": "Design OQ-3 (§2.4) flagged an unverified concern that Ecto.Changeset.cast/3 might reject a list value for current_nodes' :map-typed field, naming Ecto.Changeset.put_change/3 as the documented fallback. Empirically (against real Postgres, confirmed by direct insert, not assumed), the real failure is stronger and one layer lower than OQ-3 anticipated: Ecto's built-in :map type's dump/1 (same_map/1 in deps/ecto/lib/ecto/type.ex) unconditionally requires is_map/1 at INSERT time regardless of how a list value entered the changeset, and field(:current_nodes, :map, default: []) fails even earlier, at compile time (Ecto.Schema.validate_default!/3) -- so put_change/3 alone does NOT fix this, contrary to what OQ-3's fallback assumed. Resolved by adding Letflow.EventStore.JSONArray, a ~15-line custom Ecto.Type whose type/0 still reports :map (identical jsonb wire encoding, migration/DB layer untouched) but whose cast/1, dump/1, load/1 accept a list(). This is a genuine deviation from the design's literal `field(:current_nodes, :map, default: [])` text (a design decision, not just an implementation nuance) -- flagged here and in the module's own moduledoc for REVIEWER's explicit sign-off, since it introduces a new type module the approved design did not itself specify."
+      },
+      {
+        "severity": "MINOR",
+        "area": "lib/letflow/event_store/instance_projection.ex",
+        "description": "insert_changeset/2 gained unique_constraint(:correlation_key, name: :uq_instance_correlation), not present in the design's literal §2.3 changeset text. Without it, a real uq_instance_correlation collision raises Ecto.ConstraintError out of Repo.insert/2 instead of returning this project's established {:error, changeset} shape -- confirmed by a real duplicate-insert against Postgres during implementation, and exactly the 'bare crash on realistic tenant-controlled input' pattern security-invariants.md INV-8 flags. Matches the identical pattern Letflow.Definitions.ProcessDefinition and Letflow.EventStore.IdempotencyRecord already use for their own unique indexes. Flagged for REVIEWER alongside the JSONArray addition."
+      },
+      {
+        "severity": "MINOR",
+        "area": "test/letflow/event_store_test.exs, test/letflow/event_store/schemas_test.exs",
+        "description": "Two pre-existing tests (owned by TEST-DESIGNER's domain, not ELIXIR-DEV's) broke as a direct, foreseeable, mechanical consequence of this change and were fixed rather than left broken: (1) event_store_test.exs's seed_projection!/4 fixture didn't supply the now-required definition_id -- 15/28 tests in that file failed with Ecto.InvalidChangesetError before the fix, all 28 pass after; (2) schemas_test.exs's acceptance-criterion-5 test asserted an exact substring of InstanceProjection's old moduledoc scope paragraph, which the design's own §2.3 point 1 explicitly required rewording ('replace the existing... closing paragraph') -- updated the test's expected substrings to match the new, accurate wording rather than forcing the new prose to artificially preserve stale text. Full mix test suite verified green after both fixes: 673 passed (4 properties, 669 tests), 0 failures."
+      },
+      {
+        "severity": "MINOR",
+        "area": "priv/repo/migrations/20260818110001_alter_instance_projections_add_engine_columns.exs",
+        "description": "current_nodes' DB-level default could also not use the design's literal `default: []` (Ecto's migration DSL rejects a bare [] literal for a :map-typed add/3 column outright: 'ArgumentError: unknown default [] for type :map'). Uses `default: fragment(\"'[]'::jsonb\")` instead, which emits the identical DDL R-Co's own 001_event_store.sql:86 carries. Documented in the migration's own header; not a behavior change, purely a syntax-level finding."
+      }
+    ],
+    "git_evidence": {
+      "branch": "feature/WF02-REQ043-20260818",
+      "commit_sha_list": ["3e64c13"],
+      "verification": {
+        "mix_compile_warnings_as_errors": "PASS (exit 0)",
+        "mix_format_check_formatted": "PASS (exit 0)",
+        "mix_ecto_migrate": "PASS -- all 14 tenant-scoped migrations (including this run's 3 new ones) applied cleanly via TenantProvisioning.replay_migrations/2 against a real provisioned tenant schema on Postgres 16 (letflow-postgres-1 container, port 5462, MIX_ENV=test)",
+        "toolchain": "real local Elixir 1.20.3 / Erlang OTP 29 / Mix 1.20.3 (on PATH) -- Docker fallback not needed",
+        "manual_verification": "throwaway script (not committed) provisioned a real tenant schema, replayed all 14 tenant-scoped migrations, confirmed instance_projections' real columns match InstanceProjection.__schema__(:fields) exactly, confirmed uq_instance_correlation rejects a duplicate (definition_id, correlation_key) row while permitting multiple NULL-correlation_key rows, confirmed current_nodes/variables schema-level defaults ([]/%{}) round-trip and an explicit non-empty current_nodes array round-trips correctly, confirmed Token/Task insert with tokens.status dumping lowercase and tasks.status dumping uppercase as designed (verified against raw DB column values, not just the Elixir struct), and confirmed all three new migrations no-op under no :prefix (§4 guard pattern) via a synthetic-version Ecto.Migrator.run/4 probe matching migrations_test.exs's own established technique. All test schemas/tenants/rows created during verification were dropped afterward.",
+        "full_test_suite": "673 passed (4 properties, 669 tests), 0 failures -- run twice (once before, once after the two test-fixture fixes described in issues above)"
+      }
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c) -- this change touches three tenant-data-path tables (instance_projections ALTER, tokens, tasks), all tenant_id-bearing, so SECURITY-REVIEWER's gate applies. Flag the JSONArray custom-type deviation and the unique_constraint addition (both documented above and in-code) for REVIEWER's explicit attention at Step 2d."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

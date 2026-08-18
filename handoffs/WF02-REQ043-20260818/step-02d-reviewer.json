@@ -1,0 +1,71 @@
+{
+  "handoff_id": "b1e2f3a4-002d-4c1a-9f01-req043step02d",
+  "run_id": "WF02-REQ043-20260818",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ043-20260818/step-02d-reviewer.json",
+  "created_at": "2026-08-18T06:50:14Z",
+  "started_at": "2026-08-18T06:50:14Z",
+  "completed_at": "2026-08-18T06:53:25Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-043"],
+    "requirement_text": {
+      "REQ-043": "Add the priv/repo/migrations and Ecto.Schema modules the instance engine needs but that S2 deliberately did not build, all schema-per-tenant via REQ-022's :prefix mechanism. See handoffs/WF02-REQ043-20260818/step-02a-elixir-dev.json for the full implementation summary and lib/letflow/design/req043-instance-engine-schema.md for the approved design."
+    },
+    "related_handoff_ids": ["b1e2f3a4-002a-4c1a-9f01-req043step02a", "b1e2f3a4-002c-4c1a-9f01-req043step02c"],
+    "artifacts_in": [
+      "lib/letflow/design/req043-instance-engine-schema.md",
+      "priv/repo/migrations/20260818110001_alter_instance_projections_add_engine_columns.exs",
+      "priv/repo/migrations/20260818110002_create_tokens.exs",
+      "priv/repo/migrations/20260818110003_create_tasks.exs",
+      "lib/letflow/engine/token.ex",
+      "lib/letflow/engine/task.ex",
+      "lib/letflow/event_store/instance_projection.ex",
+      "lib/letflow/event_store/json_array.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "docs/anti-patterns.md",
+      "docs/migration/decisions/"
+    ],
+    "owned_modules": ["priv/repo/migrations", "lib/letflow/schemas", "lib/letflow/engine"]
+  },
+  "task": {
+    "description": "WF-02 Step 2d HARD GATE. Read git diff main...HEAD on branch feature/WF02-REQ043-20260818. Check against .claude/agents/reviewer.md's four questions (idiomatic vs. crutch, supervision integrity, type-safety gaps, scope creep) and docs/anti-patterns.md. SECURITY-REVIEWER (Step 2c) PASSed and flagged two genuine deviations from the approved design's literal text for your explicit sign-off (not security defects, but design-fidelity/idiom questions): (1) a new custom Ecto.Type, lib/letflow/event_store/json_array.ex, added because ELIXIR-DEV found Ecto's built-in :map type cannot round-trip a list end-to-end against real Postgres; (2) an added unique_constraint(:correlation_key, name: :uq_instance_correlation) on InstanceProjection.insert_changeset/2 so a real collision returns {:error, changeset} instead of raising.",
+    "acceptance_criteria": [
+      "Idiomatic vs. crutch: is the new custom Ecto.Type (json_array.ex) a justified, minimal fix for a genuine Ecto/Postgres limitation, or should it have been solved a different way? State a verdict.",
+      "Is the added unique_constraint a correct, idiomatic fix (matches this codebase's established pattern per SECURITY-REVIEWER's citation of Letflow.Definitions.ProcessDefinition/Letflow.EventStore.IdempotencyRecord) or scope creep beyond the approved design?",
+      "Supervision integrity: this requirement adds no gen_statem/process code -- confirm that's true and no supervision surface was touched",
+      "Type-safety gaps: @spec/@type coverage on the new Letflow.Engine.Token/Letflow.Engine.Task modules",
+      "Scope creep: anything built beyond what REQ-043 and its approved design actually asked for",
+      "Consistency with docs/migration/decisions/ records (schema-per-tenant, Plug/Bandit-not-Phoenix)",
+      "FAIL if a genuine crutch, broken supervision, or scope creep is found; otherwise PASS with any non-blocking notes recorded"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read git diff main...HEAD directly (13 files: 3 new migrations, 2 new schema modules lib/letflow/engine/token.ex + task.ex, 1 new custom Ecto.Type lib/letflow/event_store/json_array.ex, InstanceProjection + TenantProvisioning updates, 2 pre-existing test fixtures, plus the design doc and two upstream handoffs). Verified against the four review questions: (1) Idiomatic vs. crutch -- no violation found; this is schema/migration work only, no gen_statem or GenServer code anywhere in the diff. (2) Supervision integrity -- confirmed by direct check (git diff main...HEAD --name-only | grep -iE 'supervisor|gen_statem|state_machine|application.ex' returns zero hits): no supervision-tree file is touched, Letflow.InstanceSupervisor is untouched, each tenant's process isolation is unaffected -- this requirement adds no process code at all, matching REQ-043's own schema-only scope. (3) Type-safety gaps -- both new modules carry @type t, a closed @type status union, and @spec on every public function (insert_changeset/2, advance_changeset/2 on Token; insert_changeset/2, complete_changeset/2 on Task), matching InstanceProjection's and ProcessDefinition's established shape. Found one genuine gap: Letflow.Engine.Task.assignee_type is a plain :string for a semantically closed USER|GROUP|ROLE set (EE-03's own column comment) -- filed as docs/issues/ISS-0042.yaml (GitHub #159), non-blocking per the design's own explicit, reasoned deferral (no acceptance criterion mandated a closed set at this stage; the natural point to add the Ecto.Enum is REQ-045/051's own write-path work). (4) Scope creep -- none found: three tables/columns are exactly what REQ-043 and the CODE-DESIGN-VALIDATOR-approved design specify, no premature abstraction, no context-module (Letflow.Engine) write path added ahead of REQ-045/051 despite the natural temptation, no query/list surface built ahead of S4 (task.ex's moduledoc explicitly excludes it), no speculative columns (design §3.2 explicitly declines porting R-Co's tokens.data JSONB scratch field, and idx_token_active/idx_token_waiting/idx_task_pending/idx_task_status are explicitly deferred to REQ-051/S4 rather than guessed at now). Checked docs/anti-patterns.md -- no entry applies to this diff (the fragment/1 duplication entry is unrelated; no docker-compose/timestamp/rebase issues here). Confirmed no decision-record conflict: schema-per-tenant (Decision B) is followed correctly on all three tables via the `if prefix() do` guard + manifest registration, matching REQ-025/030's tenant_id-derivation contract exactly (no caller-supplied tenant_id path, verified independently of SECURITY-REVIEWER's own INV-1/INV-8 pass); no Phoenix-vs-Plug/Bandit surface touched (0001-web-framework.md not implicated by schema-only work). Independently ran `mix compile --warnings-as-errors` on the branch myself (exit 0) as a sanity check before signing off.\n\nVerdict on the two flagged deviations: (A) Letflow.EventStore.JSONArray (custom Ecto.Type) -- PASS, justified and minimal. Verified the underlying Ecto constraint is real, not assumed: the built-in :map type's dump/1 (same_map/1) unconditionally requires is_map/1, and field(:current_nodes, :map, default: []) fails at compile time via Ecto.Schema.validate_default!/3 -- ELIXIR-DEV's own handoff documents this was confirmed empirically against real Postgres, not guessed. The ~15-line type is scoped to exactly this need (type/0 still reports :map, identical jsonb wire encoding; cast/1, dump/1, load/1 only pattern-match is_list/1), is not reused where it isn't needed (variables/error_detail correctly keep the plain :map type), and both cast/dump/load return {:ok, _} | :error per the Ecto.Type behaviour contract with no raising path. This is the correct idiomatic fix for a genuine Ecto/Postgres limitation, not a crutch -- a crutch would have been hand-rolling JSON encode/decode in the changeset or silently storing the array as a string. (B) unique_constraint(:correlation_key, name: :uq_instance_correlation) on InstanceProjection.insert_changeset/2 -- PASS, correct and idiomatic, not scope creep. Grepped every unique_constraint/2,3 call site in lib/letflow/ (ProcessDefinition: uq_definition_version, uq_active_definition; IdempotencyRecord: uq_event_idempotency_key; Event: uq_event_sequence; StoredPayload: uq_event_payload_event; PromotionReview: uq_promotion_review_active_digest; Tenant: slug + idp_realm_id partial index; etc.) -- every one of these tables with a real unique index also declares the matching unique_constraint/2,3 so a collision returns {:error, changeset} rather than raising Ecto.ConstraintError out of Repo.insert/2. InstanceProjection's uq_instance_correlation index (added by this same requirement) was the only unique index in the diff without the matching declaration until this fix -- adding it completes the established pattern rather than diverging from it. This is a minor, low-risk, load-bearing correction (matches the anti-patterns.md precedent of REVIEWER catching a real, verified gap and requiring it rather than treating it as gold-plating), correctly flagged by SECURITY-REVIEWER as INV-8-relevant and correctly implemented.\n\nNon-blocking notes (not blocking PASS, recorded per reviewer.md and this gate's acceptance criteria, not silently dropped): (1) ISS-0042 filed (see above) -- assignee_type type-safety gap, deferred to REQ-045/051's write-path work. (2) Design doc's self-flagged OQ-2 (no FK on instance_projections.definition_id, even though process_definitions now exists in Letflow's own migration order unlike R-Co's) -- I concur with the design's choice not to add one unilaterally: REQ-043's own task text says 'exactly the columns' REQ-023's header named, and definition_id's semantics/lifecycle (can a projection reference a definition that's since been archived/deleted?) aren't yet decided by any shipped requirement -- adding a real FK now would be a reasoned Decision-A correction outrunning what's actually needed yet, i.e. exactly the scope-creep risk item 4 of this gate exists to catch. Leave for REQ-045/051 to add if/when definition lifecycle rules make the constraint's semantics clear. (3) OQ-5 (Letflow.Engine namespace choice, no prior precedent) -- reasonable and consistent with the existing Letflow.EventStore.Event / Letflow.Definitions.ProcessDefinition precedent (schema module ships under a bounded-context namespace before that namespace's own context module exists); no correction needed, confirmed. (4) OQ-6 (migration-safety precondition on the ALTER TABLE's NOT NULL definition_id column, undocumented-in-migration-code-but-documented-in-header) -- acceptable as documented-precondition-only, matching this codebase's established practice cited directly in the migration's own header (REQ-030's uq_active_definition precedent) -- not a defect.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ043-20260818/step-02d-reviewer.json",
+      "docs/issues/ISS-0042.yaml"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "area": "lib/letflow/engine/task.ex",
+        "description": "assignee_type is a free-text :string for a semantically closed USER|GROUP|ROLE set (EE-03's own column comment). A type-safety gap, not a defect -- the design's own §4.1 explicitly and correctly declined an Ecto.Enum here since no REQ-043 acceptance criterion mandated a closed set. Filed as docs/issues/ISS-0042.yaml (GitHub #159) per reviewer.md item 3, non-blocking, for REQ-045/051's own write-path work to pick up."
+      },
+      {
+        "severity": "MINOR",
+        "area": "lib/letflow/event_store/instance_projection.ex (design OQ-2)",
+        "description": "instance_projections.definition_id carries no FK to process_definitions(id), even though that table now exists earlier in Letflow's migration order than in R-Co. Reviewed and concur with the design's decision not to add one unilaterally -- definition lifecycle/deletion semantics aren't decided by any shipped requirement yet, so adding a real FK now would itself be scope creep ahead of that decision. Non-blocking; left for REQ-045/051 if/when it becomes relevant."
+      }
+    ],
+    "next_action": "Route to TEST-DESIGNER (Step 3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

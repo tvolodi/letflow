@@ -254,9 +254,15 @@ defmodule Letflow.EventStore.SchemasTest do
     test "InstanceProjection's moduledoc scopes the schema to the event store and its population to EE-01/S3" do
       doc = normalized_moduledoc(InstanceProjection)
 
+      # REQ-043 note: this moduledoc's scope paragraph was deliberately reworded
+      # (design req043-instance-engine-schema.md §2.3 point 1) once REQ-043
+      # actually added the seven engine-owned columns REQ-023's own header
+      # named as "deliberately not created here" -- the assertions below match
+      # the current, accurate wording rather than the pre-REQ-043 phrasing this
+      # test originally pinned.
       assert doc =~ "This table's *schema* is event-store scope"
-      assert doc =~ "Its *meaningful population at instance start* is EE-01 / S3 territory"
-      assert doc =~ "Do not read this migration as instance-engine work landing early."
+      assert doc =~ "*meaningful population at instance start* is still EE-01 / S3 territory"
+      assert doc =~ "Do not read this as the instance-engine's write logic landing early"
     end
 
     test "terminal?/1 is true for :completed and :cancelled only -- :error is NOT terminal" do

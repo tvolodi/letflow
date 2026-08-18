@@ -1,0 +1,121 @@
+# Test run report — WF-02 Step 4 (test run) for REQ-049
+
+req_id: REQ-049
+workflow: WF-02
+step: "04"
+agent: TEST-RUNNER
+run_id: WF02-REQ049-20260818
+date_utc: 2026-08-18T07:37:00Z
+
+git:
+  branch: feature/WF02-REQ049-20260818
+  branch_confirmed: true
+  commit: 75407c17eb260851f8566045825578a15c36d0bf
+  commit_subject: "chore(WF02-REQ049): log Step 3b"
+  worktree: true
+  note: >
+    This checkout is a secondary git worktree (~/letflow-wt2), sharing its
+    Postgres container with the primary ~/letflow checkout. Per this
+    worktree's standing session instructions, `docker compose up` was NOT
+    run here (Postgres was already running, container letflow-postgres-1,
+    confirmed via `docker ps` — 0.0.0.0:5462->5432/tcp, [::]:5462->5432/tcp).
+    Tests were invoked with MIX_TEST_PARTITION=2 as this worktree requires,
+    to avoid colliding with the primary checkout's own test database.
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 27 [erts-15.2.7.4] ... Mix 1.18.3 (compiled with Erlang/OTP 27)"
+  postgres_container: "letflow-postgres-1 (already running, confirmed via
+    \`docker ps\` only — 0.0.0.0:5462->5432/tcp and [::]:5462->5432/tcp;
+    \`docker compose up\` was NOT run per this worktree's standing
+    instructions, container is shared with the primary ~/letflow checkout)."
+  partition: "MIX_TEST_PARTITION=2 (required for this worktree, per standing
+    session instructions, to avoid colliding with the primary checkout's
+    concurrently-running test database)"
+  command_run: "MIX_TEST_PARTITION=2 mix test (full suite, unpinned/default
+    random seed — the \`test\` alias runs ecto.create + ecto.migrate --quiet
+    first automatically)"
+
+verdict: PASS
+
+checks:
+  test_suite_full_run:
+    result: PASS
+    exit_code: 0
+    note: "run three times to confirm stability; identical pass/fail counts
+      each time (seeds: 725109 and two others, all unpinned/random)"
+    summary_line_verbatim: "5 properties, 704 tests, 0 failures"
+    finished_line_verbatim: "Finished in 36.6 / 37.3 / 37.4 seconds across the
+      three runs (1.8-1.9s async, 34.7-35.6s sync)"
+    failures: 0
+
+  new_req049_tests_included_in_run:
+    result: PASS
+    note: >
+      test/letflow/engine/variable_merge_test.exs (16 example-based tests
+      covering Letflow.Engine.VariableMerge.merge/3 — new-key insert,
+      overwrite with variable_overwritten events, no-op merges, validation
+      rejection with execution_error events and byte-for-byte rollback,
+      first-failure-wins ordering, nil/absent variable_validations handling,
+      and integration with InstanceState/Transition.transition/3) executed
+      as part of the full-suite run above. Test count rose from 688 (last
+      recorded full-suite run, REQ-044's report) to 704 — a delta of 16,
+      matching this file's own test count exactly. No isolated/filtered run
+      was needed since the full suite already covers it and reports 0
+      failures.
+
+  known_noise_not_a_failure:
+    - >
+      Verbose SQL query debug logging (`[debug] QUERY OK ...` lines, including
+      tenant-schema DDL/DML from multi-tenant test fixtures) appears in raw
+      mix test output (config/test.exs's default test log level) — expected,
+      not indicative of any problem.
+    - >
+      Repeated `[error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/...` lines (nxdomain) — expected:
+      OIDC discovery is deliberately pointed at an unreachable placeholder
+      host in test config to exercise retry/failure-handling paths, not a
+      real connectivity problem.
+    - >
+      `warning: ExUnit.Case.register_test/4 is deprecated` (5 occurrences,
+      pre-existing StreamData `property` macro usage), `warning: default
+      values for the optional arguments in .../N are never used` (4
+      occurrences, pre-existing test-helper functions), and `warning:
+      redefining module Letflow.Repo.Migrations.CreateEventTypeRegistry`
+      (expected artifact of the `test` alias's ecto.migrate re-running in
+      the same BEAM session) — compiler warnings only, not failures, and not
+      introduced by REQ-049's own changes (grepped: none reference
+      lib/letflow/engine/variable_merge.ex or
+      test/letflow/engine/variable_merge_test.exs; that test file uses only
+      plain `test "..."` blocks, no `property`, no default-arg helpers).
+      Filed as docs/issues/ISS-0044.yaml (GitHub issue #166) since none of
+      these three warning groups had a prior issue record and they are
+      outside this run's own scope — not fixed here per ISSUE_QUEUE.md.
+
+pre_existing_failures_found: none
+issues_filed:
+  - id: ISS-0044
+    severity: MINOR
+    title: "Pre-existing compile warnings in mix test output: register_test/4
+      deprecation (5 occurrences), unused default args (4 occurrences), and a
+      migration module redefinition"
+    github_issue: https://github.com/tvolodi/letflow/issues/166
+    note: "Non-blocking, discovered incidentally, not related to REQ-049's
+      own acceptance criteria — filed and forwarded per ISSUE_QUEUE.md rather
+      than fixed in this run."
+
+diagnosis: "N/A — no failures observed in this run. Nothing routed back to
+  ELIXIR-DEV or TEST-DESIGNER."
+
+regression_check: >
+  704 tests, 5 properties, 0 failures, full suite including REQ-049's new
+  test/letflow/engine/variable_merge_test.exs alongside all pre-existing
+  tests. No pre-existing failure was found masking this result, so
+  Unblock-Everything did not apply — nothing needed fixing before reporting
+  PASS.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-20260818-WF02-REQ049-20260818.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

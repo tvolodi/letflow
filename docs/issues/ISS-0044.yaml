@@ -1,0 +1,75 @@
+id: ISS-0044
+title: "Pre-existing compile warnings in mix test output: ExUnit.Case.register_test/4 deprecation (5 property tests), unused default args (3 test helpers), and a migration module redefinition"
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ049-20260818
+discovered_at: "2026-08-18T07:36:46Z"
+severity: MINOR
+tags:
+  - test-hygiene
+  - deprecation
+description: >
+  Discovered incidentally while running the full suite for REQ-049 (Variable
+  scoping and merge, lib/letflow/engine/variable_merge.ex). Not caused by
+  REQ-049's own changes -- test/letflow/engine/variable_merge_test.exs uses
+  only plain `test "..."` blocks, no `property`, and does not appear in any
+  of these warnings. `mix test` still reports 0 failures across three
+  consecutive runs (704 tests, 5 properties), so none of this blocks
+  REQ-049's own PASS.
+
+  Three distinct warning groups appear in `MIX_TEST_PARTITION=2 mix test`
+  output on this branch (feature/WF02-REQ049-20260818, same on main per the
+  shared history):
+
+  (1) `warning: ExUnit.Case.register_test/4 is deprecated. Use
+  register_test/6 instead`, emitted once per StreamData `property` block,
+  currently at:
+    - test/letflow/oidc/claim_mapping_property_test.exs:57
+    - test/letflow/oidc/claim_mapping_property_test.exs:84
+    - test/letflow/engine/transition_test.exs:52
+    - test/letflow/process_instance_test.exs:64
+    - test/letflow/parallel_approval_test.exs:145
+  This is a StreamData/ExUnit version-compatibility issue (StreamData's
+  `property` macro still calls the 4-arity form; installed ex_unit 1.18.3
+  wants the 6-arity form) -- not something fixable inside these test files
+  themselves without a StreamData upgrade or a local macro override. Worth
+  tracking so a future stream_data version bump can confirm it clears these.
+
+  (2) `warning: default values for the optional arguments in <fun>/N are
+  never used`, i.e. every call site already passes an explicit argument, so
+  the `\\ default` is currently dead code:
+    - test/letflow/sandbox_pool_test.exs:70 (start_pool!/1)
+    - test/letflow/definitions/search_test.exs:107 (create!/2)
+    - test/letflow/sandbox_pool/fixture_loader_test.exs:44 (start_pool!/1)
+    - test/letflow/definitions/service_scope_validator_test.exs:32 (node/3)
+  Cosmetic -- either drop the default or add a call site that omits the
+  argument, whichever better matches each helper's intended use.
+
+  (3) `warning: redefining module Letflow.Repo.Migrations.CreateEventTypeRegistry
+  (current version defined in memory)` at
+  priv/repo/migrations/20260816163103_create_event_type_registry.exs:40.
+  Same category of warning ISS-0020 item (2) already discussed for a
+  different migration (a runtime code-server warning from
+  `mix ecto.migrate`'s own module loading, not a `mix compile
+  --warnings-as-errors` diagnostic) -- confirmed non-blocking there, likely
+  the identical mechanism here, but the migration file itself hasn't been
+  individually inspected for whether this instance is exactly analogous or
+  has a distinct cause (e.g. the migration task re-running compilation
+  against an already-loaded module during the test suite's repeated
+  ecto.migrate --quiet invocations across partitioned test DBs).
+
+  Filed and forwarded per docs/agents/protocols/ISSUE_QUEUE.md rather than
+  fixed in this run: none of these three groups relate to REQ-049's own
+  acceptance criteria or touch lib/letflow/engine/variable_merge.ex or
+  test/letflow/engine/variable_merge_test.exs.
+affected_files:
+  - test/letflow/oidc/claim_mapping_property_test.exs
+  - test/letflow/engine/transition_test.exs
+  - test/letflow/process_instance_test.exs
+  - test/letflow/parallel_approval_test.exs
+  - test/letflow/sandbox_pool_test.exs
+  - test/letflow/definitions/search_test.exs
+  - test/letflow/sandbox_pool/fixture_loader_test.exs
+  - test/letflow/definitions/service_scope_validator_test.exs
+  - priv/repo/migrations/20260816163103_create_event_type_registry.exs
+github_issue: https://github.com/tvolodi/letflow/issues/166
+status: open

@@ -812,6 +812,27 @@
       "queue_agent_id": "tvolodi-orch",
       "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
       "note": "Stage 3 (instance-engine) requirement expansion, triggered by S2 (REQ-022..042) reaching all-done. FALLBACK MODE for task selection: queue-test.ai-dala.com/health returns 200 but $QUEUE_AUTH_TOKEN is unset in this session, so letflow-queue could not be called; stage expansion is not a queue-dispatched implementation task, and no queue tasks were registered for REQ-043..062 -- a later session with the token must register them before WF-02 picks any up. Decomposed R-Co's ~13k-line src/engine/ along its own EE-01..EE-12 behavioural seams plus EXT-01/EXT-03/PIN-01..05/SPC-01, NOT one-requirement-per-file (instance.zig 5550 lines spans 7 EE requirements). REQ-VALIDATOR FAILed the first pass with 3 blocking findings, all real and all independently re-verified by ORCH against R-Co source before rework was routed: (1) REQ-050 rested on a FALSE premise that no reference implementation exists for gateway condition evaluation -- R-Co's src/expr/ (7 files) is wired into transition.zig's evaluateGatewayCondition() at L1118 with catch-false semantics, and vendor/cel/cel.zig is a real 13877-byte evaluator, not a stub; the stale 'stub' wording lives in engine.md itself at L451/L1005/L1020 (ORCH confirmed all three lines directly), so the stage's own primary design doc actively misleads on this point -- future S3 work should distrust engine.md's CEL statements specifically. (2) REQ-052 bundled EE-08 cancellation with EE-10 error handling at 1324 design-doc lines vs the 644-line REQ-044 baseline; split into REQ-052 (EE-08, 658) + REQ-061 (EE-10, 666), with four dependents rewired. (3) SPC-01's runtime half was silently missing although shipped REQ-032's own text and acceptance criteria explicitly hand it to S3 naming src/engine/instance.zig -- added as REQ-062, which also gives REQ-044's Token.waiting_child_instance_id and REQ-059 AC6's pin inheritance the child-creation path they presupposed, and turns R-Co's GH#428 token-copy bug into a required regression test. REQ-051 (EE-06+EE-07) was scrutinised for the same oversizing and deliberately NOT split -- 661 lines, and EE-07's cancelled-branch-exclusion rule is unstateable without the split. transition_source_embed.zig deliberately gets no requirement (Zig @embedFile module-root shim, no Elixir equivalent), stated explicitly rather than dropped. Deferred with reasons: HTTP routes to S4, Lua/WASM runtimes to S5, SCH-03 timers and OBS-05 DLQ to S6, PIN-01 AC1/AC2 + PIN-03 AC3 unsatisfiable until service_catalog (S6) and PLC-01 exist (R-Co holds these at TESTED not RELEASED for the same reason). Append-only verified by ORCH via git diff: zero removed lines in requirements.yaml. ORCH independently re-verified structure after each pass (61 requirements parse, zero duplicate ids, zero orphans, zero dependency cycles) and spot-checked the validator's own citations against R-Co source rather than accepting the PASS at face value. ORCH corrected one stale 'The 18 requirements' count in the stage doc left over from the rework. requirement_status.yaml intentionally NOT appended: WF-01 does not flip status, and these 20 are pending, not started."
+    },
+    {
+      "run_id": "WF02-REQ044-20260818",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-044"
+      ],
+      "stage": "S3",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/engine/"
+      ],
+      "lock_acquired_at": "2026-08-18T05:59:44Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (git setup, worktree variant) PASS -- feature/WF02-REQ044-20260818 branched from origin/main (43e009e), pushed. Requirement status flipped in_progress, started event logged. Routing to CODE-DESIGNER (Step 1).",
+      "backfilled": false,
+      "queue_task_id": 88,
+      "queue_agent_id": "hetzner-wt2-orch",
+      "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
+      "note": "Pure transition kernel core types and dispatch skeleton (transition.zig, EE-02) -- first Stage 3 requirement to enter implementation. Reuses REQ-028's graph structs, builds skeleton + non-gateway node transitions only (gateway bodies deferred to REQ-050/REQ-051)."
     }
   ]
 }

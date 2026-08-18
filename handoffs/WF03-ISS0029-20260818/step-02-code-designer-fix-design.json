@@ -1,0 +1,57 @@
+{
+  "handoff_id": "c4a2e7f1-8b3d-4e9a-a1c6-3f7b8e2d9a44",
+  "run_id": "WF03-ISS0029-20260818",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0029-20260818/step-02-code-designer-fix-design.json",
+  "created_at": "2026-08-18T01:21:00Z",
+  "started_at": "2026-08-18T01:21:00Z",
+  "completed_at": "2026-08-18T01:24:37Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "related_handoff_ids": ["b3f1e6a2-1c4d-4a2e-9c8b-2f6a7d0e5c11"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0029-20260818/step-01-issue-fixer-diagnose.json",
+      "test/letflow/definitions/migrations_test.exs",
+      "test/specs/REQ-027.md",
+      "test/letflow/event_store/migrations_test.exs"
+    ],
+    "owned_modules": [
+      "test/letflow/definitions/migrations_test.exs",
+      "test/specs/REQ-027.md"
+    ]
+  },
+  "task": {
+    "description": "Read ISSUE-FIXER's Step 1 diagnosis in handoffs/WF03-ISS0029-20260818/step-01-issue-fixer-diagnose.json (result.summary has the full root cause and independently-reproduced evidence). Produce a fix design (per docs/agents/workflows/WF-03_issue_resolving.md Step 2, same procedure as WF-02 Step 1/1b) for ISS-0029/GH#87: choose and specify option (a) from the diagnosis -- delete the vacuous `refute table_exists_in_schema?(\"public\", table)` assertion (and its now-misleading inline comment) from test/letflow/definitions/migrations_test.exs's AC1 test (~line 283-300), and correct test/specs/REQ-027.md's lines ~111-113 to point at the section-4 guard test in test/letflow/event_store/migrations_test.exs (~line 484) as the true owner of the :prefix-guard property, rather than the deleted refute. Preferring deletion over rewording per ISS-0029.yaml's own stated preference (a test that cannot fail is worse than no test). Your design artefact goes in lib/letflow/design/ per file-placement rules, and must specify: exactly what lines/text to remove from migrations_test.exs (read the current file first -- do not guess line numbers), exactly what the corrected test/specs/REQ-027.md wording should say, and confirmation that the AC1 test's positive-half assertions (tables DO appear in the tenant schema) are left untouched since ISSUE-FIXER's diagnosis says that half is real coverage. This is a docs/test-only change with no lib/ or migration code touched -- do not write implementation code, only the design artefact per your role's normal constraint.",
+    "acceptance_criteria": [
+      "Design artefact written to lib/letflow/design/ specifying the exact test/letflow/definitions/migrations_test.exs edit (what to remove, what stays)",
+      "Design artefact specifies the exact corrected wording for test/specs/REQ-027.md lines ~111-113",
+      "Design explicitly confirms AC1's positive-half assertions in migrations_test.exs are preserved",
+      "No implementation/test code written by this step -- design only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read migrations_test.exs and REQ-027.md in full (current content, not from memory) and event_store/migrations_test.exs's section-4 guard test (~line 484) before writing the design, per the handoff's requirement for exact line references. Produced lib/letflow/design/iss-0029-req027-migrations-test-fix.md specifying, with exact current-file line numbers (not ISS-0029.yaml's approximate ones): (1) delete lines 297-301 of migrations_test.exs (the 3-line now-misleading inline comment + the 2-line `refute table_exists_in_schema?(\"public\", table)` assertion) from the AC1 test's for-loop; (2) tidy line 293's trailing '...' to a period since its continuation is gone; (3) rename the test's own description on line 285 to drop the now-false ', never in public' clause, since leaving that in the test name would re-create ISS-0029's over-claiming defect one level up even after the assertion itself is deleted -- flagged explicitly as a design decision with rationale, not silently done; (4) preserve lines 292/294-295 (the positive-half `assert table_exists_in_schema?(schema_name, table)`) verbatim, and explicitly confirm no other test in the file references the public-schema helper. For REQ-027.md, specifies the exact full replacement text for test case 1's block (current lines 107-114): drops the 'never in public' claim from both the bolded summary and the verbatim test-name quote (kept byte-exact with the renamed test string per the doc's own quoting convention), and replaces the old 'the public half is what actually proves :prefix is doing the work' sentence with a corrected paragraph naming test/letflow/event_store/migrations_test.exs's section-4 guard test (quoted verbatim, ~line 484) as the true owner of the :prefix-guard property, with the mechanism (Ecto.Migration.__prefix__/1) stated inline. Confirmed via grep that no other test case in REQ-027.md and no other test in migrations_test.exs reference the deleted assertion or its phrasing. Included explicit negative scope (section-4 guard test, both migrations, requirements.yaml, schemas_test.exs left untouched) and regression-test guidance for TEST-DESIGNER's Step 4 fail-then-pass proof. No implementation/test code written -- design doc contains no .ex/.exs code blocks, only line-range instructions and literal replacement text. Zero open questions.",
+    "artifacts_out": [
+      "lib/letflow/design/iss-0029-req027-migrations-test-fix.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0029-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0029-20260818",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH routes to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

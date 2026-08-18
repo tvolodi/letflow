@@ -11,9 +11,12 @@ join, EE-06/EE-07 -- status already `done` in `docs/requirements.yaml`
 per REQ-051's own DOC-UPDATER entry, but this header's pending list had
 not been updated to reflect that; fixed here alongside REQ-045, same
 gap-fix shape REQ-045's own DOC-UPDATER already applied to REQ-043
-above); REQ-046, REQ-047, REQ-048, REQ-052, REQ-053, REQ-054, REQ-055,
-REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062
-(`docs/requirements.yaml`, 15 total) `pending`.
+above); REQ-047 `done` (Task activation persistence, EE-03 -- tasks-row
+insert, instance_projections update and event append committed in one
+transaction via Letflow.Engine.TaskActivation; same header-sync gap-fix
+shape applied by this requirement's own DOC-UPDATER); REQ-046, REQ-048,
+REQ-052, REQ-053, REQ-054, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059,
+REQ-060, REQ-061, REQ-062 (`docs/requirements.yaml`, 14 total) `pending`.
 
 ## Scope
 

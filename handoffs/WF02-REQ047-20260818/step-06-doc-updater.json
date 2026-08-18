@@ -1,0 +1,54 @@
+{
+  "handoff_id": "fd2f8b2c-6fbd-4d1a-3eaf-1b2c3d4e5f60",
+  "run_id": "WF02-REQ047-20260818",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ047-20260818/step-06-doc-updater.json",
+  "created_at": "2026-08-18T22:10:33Z",
+  "started_at": "2026-08-18T22:10:40Z",
+  "completed_at": "2026-08-18T22:11:45Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-047"],
+    "requirement_text": {
+      "REQ-047": "Task activation persistence -- RELEASE-VALIDATOR PASSed all 5 acceptance criteria (see step-05 handoff). 872/872 tests, 0 failures, independently reproduced twice (TEST-RUNNER + RELEASE-VALIDATOR)."
+    },
+    "related_handoff_ids": ["ec1f7a1b-5eac-4c0f-2d9e-0a1b2c3d4e5f"],
+    "artifacts_in": [],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Flip REQ-047's status from in_progress to done in docs/requirements.yaml. Append a 'done' event to docs/status/requirement_status.yaml (real UTC timestamp, append -- do not rewrite prior entries). Check whether README.md needs updating (does this change alter documented current behavior -- the ASCII state diagram, the 'Running it' section, or the 'What's here today' section? Task activation is an internal engine capability with no new HTTP route or process-model change, so likely no README change needed -- confirm by reading README.md's relevant sections, don't assume). Check docs/migration/stage-3-instance-engine.md -- REQ-047 is an S3 requirement; confirm whether its EE-03 section needs a status update or REVIEWER sign-off note.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-047 status flipped pending/in_progress -> done",
+      "docs/status/requirement_status.yaml has a new 'done' event for REQ-047 with a real UTC timestamp, appended not rewritten",
+      "README.md checked explicitly and either updated or confirmed not needing an update, with reasoning stated",
+      "docs/migration/stage-3-instance-engine.md checked for whether it needs an update"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-047 (Task activation persistence, EE-03) flipped in_progress -> done in docs/requirements.yaml. Appended a 'done' event to docs/status/requirement_status.yaml summarizing the shipped work: Letflow.Engine.TaskActivation wired into persist/8's Ecto.Multi so the tasks-row insert, instance_projections update, and REQ-025 event append all commit in one transaction; RELEASE-VALIDATOR PASSed all 5 acceptance criteria; 872/872 tests, 0 failures, independently reproduced twice; plus the incidental ISS-0051 fix (pre-existing test-name-length compile failure that was blocking the suite) and ISS-0052 filing (non-blocking near-miss, left for a later fix run). Checked README.md's 'What's here today' and 'Running it' sections in full -- confirmed no update needed: task activation is an internal engine capability with no new HTTP route and no gen_statem/process-model change, so the ASCII state diagram and both sections still accurately describe only the original pilot slice, same reasoning REQ-045's DOC-UPDATER pass applied. Checked docs/migration/stage-3-instance-engine.md's header: it still listed REQ-047 under the 15-item `pending` clause even though it is now done, so fixed the same header-drift gap in this pass (moved REQ-047 into the `done` clause with a one-line EE-03 summary, corrected the pending count 15 -> 14), matching the precedent REQ-045's own DOC-UPDATER set for REQ-043/REQ-051.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "docs/migration/stage-3-instance-engine.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ047-20260818",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV for Step Final"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

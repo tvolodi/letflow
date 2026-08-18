@@ -727,6 +727,125 @@ defmodule Letflow.Definitions.GraphTest do
   end
 
   # ---------------------------------------------------------------------
+  # validate_edge_conditions/1 — ISS-0056: CHK-14 loosened for HUMAN_TASK
+  # sources, new CHK-19 fallback-edge requirement
+  # (lib/letflow/design/iss-0056-human-task-fallback-edge-validation.md).
+  # ---------------------------------------------------------------------
+
+  describe "validate_edge_conditions/1 — ISS-0056: HUMAN_TASK condition permission" do
+    test "a single conditioned, non-default HUMAN_TASK edge is now permitted (regression fix)" do
+      # Design doc §10 item 1 -- this is the load-bearing regression case:
+      # before the fix, CHK-14 forbade a condition on ANY non-gateway
+      # source, which blocked REQ-048's entire conditioned-task-completion
+      # feature. No fallback needed here: a single outgoing edge is not
+      # "really conditioned + no fallback" (§4.1/§6 row 2 is the blank
+      # case; this is the analogous single-edge conditioned case, §6 row 1
+      # is covered separately below since it DOES fire CHK-19).
+      g =
+        graph(
+          [node("h", :HUMAN_TASK), node("t", :END), node("fb", :END)],
+          [
+            cond_edge("e1", "h", "t", "status == \"approved\"", false),
+            cond_edge("e2", "h", "fb", nil, true)
+          ]
+        )
+
+      assert Graph.validate_edge_conditions(g) == %{valid: true, violations: []}
+    end
+
+    test "two really-conditioned HUMAN_TASK edges, no fallback -> :human_task_no_fallback_edge fires (ISS-0056 reproduction)" do
+      # Design doc §10 item 2 -- the literal scenario filed in ISS-0056:
+      # a HUMAN_TASK with 2+ conditioned edges and nothing to resolve to
+      # if every condition evaluates false at complete_task/3 time.
+      g =
+        graph(
+          [node("h", :HUMAN_TASK), node("a", :END), node("b", :END)],
+          [
+            cond_edge("e1", "h", "a", "status == \"approved\"", false),
+            cond_edge("e2", "h", "b", "status == \"rejected\"", false)
+          ]
+        )
+
+      result = Graph.validate_edge_conditions(g)
+      assert result.valid == false
+      assert codes(result) == [:human_task_no_fallback_edge]
+      [violation] = result.violations
+      assert violation.message =~ "h"
+    end
+
+    test "two really-conditioned HUMAN_TASK edges plus an is_default: true fallback -> valid" do
+      # Design doc §10 item 3 / §6 row 4 -- the legal, intended shape:
+      # REQ-048's own target scenario (multiple conditions + one explicit
+      # fallback edge).
+      g =
+        graph(
+          [node("h", :HUMAN_TASK), node("a", :END), node("b", :END), node("fb", :END)],
+          [
+            cond_edge("e1", "h", "a", "status == \"approved\"", false),
+            cond_edge("e2", "h", "b", "status == \"rejected\"", false),
+            cond_edge("e3", "h", "fb", nil, true)
+          ]
+        )
+
+      assert Graph.validate_edge_conditions(g) == %{valid: true, violations: []}
+    end
+
+    test "two really-conditioned HUMAN_TASK edges plus an implicit (non-default, blank-condition) fallback -> valid" do
+      # Design doc §6 row 5 -- a fallback need not be explicitly
+      # is_default: true; a blank/nil condition on a non-default edge is
+      # also a legitimate fallback candidate per really_conditioned?/1's
+      # own implicit-fallback semantics.
+      g =
+        graph(
+          [node("h", :HUMAN_TASK), node("a", :END), node("b", :END), node("fb", :END)],
+          [
+            cond_edge("e1", "h", "a", "status == \"approved\"", false),
+            cond_edge("e2", "h", "b", "status == \"rejected\"", false),
+            cond_edge("e3", "h", "fb", nil, false)
+          ]
+        )
+
+      assert Graph.validate_edge_conditions(g) == %{valid: true, violations: []}
+    end
+
+    test "single HUMAN_TASK edge, blank condition -> no CHK-19 violation (the common case)" do
+      # Design doc §6 row 2 -- not really-conditioned, so CHK-19 never
+      # fires; this is the everyday single-unconditioned-edge shape.
+      g = graph([node("h", :HUMAN_TASK), node("t", :END)], [cond_edge("e1", "h", "t", nil, false)])
+
+      assert Graph.validate_edge_conditions(g) == %{valid: true, violations: []}
+    end
+
+    test "single HUMAN_TASK edge, real condition, not default -> CHK-19 fires (no precedent in CHK-13/16, §6 row 1)" do
+      # Design doc §6 row 1 -- explicitly called out as a new invariant
+      # category with no equivalent in CHK-13/16 (neither requires a
+      # gateway to have a default/fallback edge to exist at all); worth
+      # its own test given how easy this boundary is to get backwards.
+      g = graph([node("h", :HUMAN_TASK), node("t", :END)], [cond_edge("e1", "h", "t", "status == \"approved\"", false)])
+
+      result = Graph.validate_edge_conditions(g)
+      assert result.valid == false
+      assert codes(result) == [:human_task_no_fallback_edge]
+    end
+
+    test "a SERVICE_TASK source with a condition still fires :unexpected_edge_condition (CHK-14's original guard intact)" do
+      # Design doc §10 item 7 -- confirms §3.2's broadened guard did not
+      # accidentally over-permit a third source type beyond
+      # EXCLUSIVE_GATEWAY/HUMAN_TASK; a plain regression guard on
+      # already-correct pre-fix behavior.
+      g =
+        graph(
+          [node("s", :SERVICE_TASK), node("t", :END)],
+          [cond_edge("e1", "s", "t", "status == \"approved\"", false)]
+        )
+
+      result = Graph.validate_edge_conditions(g)
+      assert result.valid == false
+      assert codes(result) == [:unexpected_edge_condition]
+    end
+  end
+
+  # ---------------------------------------------------------------------
   # validate_edge_conditions/1 — AC3: two default edges on one gateway
   # ---------------------------------------------------------------------
 

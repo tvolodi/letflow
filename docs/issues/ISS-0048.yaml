@@ -122,3 +122,30 @@ cleanup_note: >
   no producer/validator chain applies) and re-confirmed 0 orphaned tenant_*/
   sandbox_* schemas across all three test-partition databases
   (letflow_test/letflow_test2/letflow_test99) afterward.
+recurrence_note: >
+  2026-08-18T23:4x Z, WF02-REQ048-20260818 (TEST-RUNNER Step 4 + RELEASE-VALIDATOR
+  Step 5, hetzner-wt2-orch): test/letflow/identity_migration_test.exs's
+  DropLegacyPublicIdentityTables guard test failed again under full-suite
+  mix test, same test/line as ISS-0050's original report
+  (test/letflow/identity_migration_test.exs:367) -- but a DIFFERENT symptom
+  than ISS-0050's original undefined_table (42P01) crash: this time a plain
+  assertion failure, "expected public.groups to be dropped", i.e. the guard
+  ran without crashing (ISS-0050's fix -- the to_regclass IF/ELSE skip-guard
+  -- still holds) but SKIPPED the drop for a tenant the test didn't expect it
+  to skip for. RELEASE-VALIDATOR confirmed this run's own diff (lib/letflow/
+  engine.ex, engine/task_activation.ex, engine/transition.ex) touches nothing
+  under test/letflow/identity_migration_test.exs or its migration -- not a
+  regression introduced by WF02-REQ048-20260818. Most likely explanation:
+  this issue's own root cause (orphaned/leaked tenant_schemas rows in the
+  shared test DB missing one or more of groups/users/tenant_role) is exactly
+  what ISS-0050's skip-guard now correctly detects and skips on -- so a
+  leaked row from THIS issue is the reason the guard skips a tenant the test
+  expected to be fully copied. NOTE (added during rebase reconciliation):
+  this observation predates awareness of this issue's own concurrent
+  resolution above (resolution_note/cleanup_note, PR #200, merged
+  53b4201 at 2026-08-18T23:07:03Z) -- WF02-REQ048-20260818's TEST-RUNNER/
+  RELEASE-VALIDATOR passes ran against a pre-#200 branch state, so this
+  recurrence may already be moot post-merge. Left here as a data point
+  rather than dropped silently; worth one confirmation run of
+  identity_migration_test.exs against current main before treating this
+  issue as fully closed.

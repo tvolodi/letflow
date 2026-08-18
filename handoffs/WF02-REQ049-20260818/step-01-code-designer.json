@@ -1,0 +1,51 @@
+{
+  "handoff_id": "e6f5d4c3-0001-4a1a-9c00-000000000001",
+  "run_id": "WF02-REQ049-20260818",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ049-20260818/step-01-code-designer.json",
+  "created_at": "2026-08-18T07:05:17Z",
+  "started_at": "2026-08-18T07:05:17Z",
+  "completed_at": "2026-08-18T07:14:57Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-049"],
+    "requirement_text": {
+      "REQ-049": "Port src/engine/instance.zig's InstanceStore.mergeVariables() (per src/design/engine.md 'Section EE-09: Variable Scoping and Merge', L3957) as the variable-merge rule every task completion, service-task response and sub-process output flows through. - A key K absent from the instance variable map is inserted (EE-09 AC1). - A key K already present, whose new value is schema-compatible (or where no variable schema is registered), is overwritten AND a VARIABLE_OVERWRITTEN event is appended recording key, old value and new value (EE-09 AC2). This event append is not optional decoration -- it is the audit record the acceptance criterion requires. - A key K already present whose new value is REJECTED by a registered variable schema is NOT merged: the instance transitions to ERROR via REQ-061's EE-10 path and an EXECUTION_ERROR event is appended (EE-09 AC3). The schema validation reuses REQ-024's validate_payload/3 rather than introducing a second JSON Schema validator -- REQ-024 already resolved the library choice open question at its own WF-02 design time, so follow whatever it settled on rather than re-deciding. - An empty output_variables map merges as a no-op with NO VARIABLE_OVERWRITTEN event appended (EE-09 edge case). - Merged variable state is immediately visible to subsequent CEL condition evaluations (EE-09 AC4) -- i.e. the merge commits before REQ-050's gateway evaluation reads variables, not after. Merge is a pure function over (current_variables, incoming_variables, optional_schema) returning the new map plus the list of events to append, with the actual appending done by the calling transaction -- keeping it testable without a database, the same separation REQ-044 establishes between the pure kernel and its persistence orchestration. IMPORTANT NOTE FROM ORCH: REQ-049's depends_on in docs/requirements.yaml is [REQ-044, REQ-024] (both done) -- NOT REQ-061 (EE-10 error handling, still status: pending, not yet implemented by anyone). AC3 talks about 'the instance transitions to ERROR via REQ-061's EE-10 path' but since this module is PURE (per its own description: 'a pure function... returning the new map plus the list of events to append'), it must NOT call or reference any REQ-061 module that doesn't exist yet -- it should return a result/status value that signals 'rejected, instance should go to ERROR' in a way a future REQ-061 caller can act on, exactly the same dependency-ordering pattern REQ-044 resolved for REQ-043. State this explicitly in the design as its own subsection, same as REQ-044's design doc did."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": ["lib/letflow/engine/transition.ex", "lib/letflow/design/req044-transition-kernel.md"],
+    "owned_modules": ["lib/letflow/engine/"]
+  },
+  "task": {
+    "description": "Produce the design artefact for REQ-049 per WF-02 Step 1. Read docs/guides/backend_developer_guide.md, docs/migration/stage-3-instance-engine.md, lib/letflow/design/req044-transition-kernel.md (REQ-044's design, the precedent for pure-kernel/persistence-orchestration separation this module must match), and REQ-024's event-type-registry module (grep docs/requirements.yaml for REQ-024's implementation location, likely lib/letflow/event_store/ or lib/letflow/events/ -- find validate_payload/3's actual module and arity, read it directly, do not assume its location). Write lib/letflow/design/req049-variable-merge.md covering: the pure merge function's full @spec (current_variables :: map(), incoming_variables :: map(), optional_schema :: term() | nil -> {new_variables :: map(), events :: [term()]} or an {:ok,...}/{:error,...} tagged result -- your call, but state it precisely), the VARIABLE_OVERWRITTEN event shape (key, old_value, new_value), the EXECUTION_ERROR event shape and how the pure function signals 'this batch was rejected, caller should transition to ERROR' WITHOUT calling any REQ-061 module (dependency-ordering resolution, its own subsection, same pattern as req044-transition-kernel.md's REQ-043 section), the empty-map no-op case, and how a caller composes this with REQ-024's validate_payload/3 for the schema-rejection path. Every acceptance criterion must map to a concrete design element.",
+    "acceptance_criteria": [
+      "merging a key absent from the instance map inserts it with no VARIABLE_OVERWRITTEN event; merging a key already present overwrites it AND produces exactly one VARIABLE_OVERWRITTEN event carrying the key, the old value and the new value -- two explicit tests",
+      "merging an empty map is a no-op producing zero events and leaving the variable map unchanged",
+      "merging a value that a registered variable schema rejects leaves the variable map unchanged, transitions the instance to ERROR, and produces an EXECUTION_ERROR event -- verified by reading the variable map back and confirming it did not absorb the rejected value",
+      "schema validation goes through REQ-024's validate_payload/3 rather than a second JSON Schema implementation, confirmed by inspection and stated in the moduledoc",
+      "variables merged by a task completion are visible to a gateway condition evaluated later in the same completion, demonstrated by an explicit test rather than argued"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req049-variable-merge.md: Letflow.Engine.VariableMerge (lib/letflow/engine/variable_merge.ex, single file, no Ecto schema/migration -- pure module). merge/3 spec: (current_variables :: map(), incoming_variables :: map(), variable_validations :: %{optional(String.t()) => :ok | {:rejected, [ValidationFailure.t()]}} | nil) -> {:ok, new_variables, [merge_event()]} | {:rejected, unchanged_variables, [execution_error_event()]}, matching REQ-044's 'legitimate output value, not a function failure' convention rather than an ordinary {:error,_} tag. VARIABLE_OVERWRITTEN event: {:variable_overwritten, key, old_value, new_value} (Sec 4). EXECUTION_ERROR event: {:execution_error, key, rejected_value, :variable_schema_rejected, failures} (Sec 5). Dedicated Sec 6 (mirroring req044 Sec10's REQ-043 note) states REQ-049 depends_on [REQ-044, REQ-024] not REQ-061, and the pure kernel signals rejection purely via its own {:rejected,...} return value, never calling a REQ-061 module. Sec 7/8 resolve AC4's 'goes through REQ-024's validate_payload/3' literally: validate_payload/3 (confirmed via direct read of lib/letflow/event_store/registry.ex -- does Repo I/O, requires an event_type+tenant_id, and requires its payload to decode to a JSON object at the root) cannot be called from inside a pure kernel, so the CALLER invokes it (per-overwrite-candidate-key, wrapping the value in a single-key JSON object) before calling merge/3, and merge/3 only consumes the already-resolved per-key outcome -- satisfying AC4's substance without breaking purity. Sec 7.3/13.1 flag, as an explicit open question (not guessed), that Letflow has no variable_schemas storage anywhere today (confirmed via lib/letflow/design/promotion_plan.md Sec9.3 and req039's design doc). Sec 9 covers the empty-map no-op (falls out of the general algorithm). Sec 11 covers AC5 (CEL visibility) as a synchronous-composition guarantee plus the exact test shape. Sec 14 traces every acceptance criterion to a concrete section. No implementation code bodies anywhere -- only @type/@spec declarations and prose-described algorithm steps, matching req044's own style.",
+    "artifacts_out": ["lib/letflow/design/req049-variable-merge.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ049-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ049-20260818",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

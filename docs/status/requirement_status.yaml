@@ -4007,3 +4007,40 @@ history:
       mergeVariables, EE-09). Depends on REQ-044 (done) and REQ-024 (done).
       Step 00 (git setup, worktree variant) PASS: feature/WF02-REQ049-20260818
       branched from origin/main, pushed.
+  - req: REQ-049
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-18T07:41:56Z"
+    note: >
+      WF02-REQ049-20260818 complete, RELEASE-VALIDATOR PASSed
+      (handoffs/WF02-REQ049-20260818/step-05-release-validator.json):
+      variable scoping and merge shipped (lib/letflow/engine/variable_merge.ex,
+      EE-09) -- merge/3's pure insert-vs-overwrite split with
+      VARIABLE_OVERWRITTEN events carrying key/old/new, empty-map no-op,
+      schema-rejection path leaving the variable map byte-for-byte unchanged
+      and producing an EXECUTION_ERROR event via REQ-061's EE-10 path, reuse
+      of REQ-024's Letflow.EventStore.Registry.validate_payload/3 (confirmed
+      by grep + direct read, no second JSON Schema implementation), and
+      merged-variable visibility to a later gateway condition in the same
+      completion (merge-then-observe composed directly into REQ-044's
+      Transition.transition/3 within one test process). Independently
+      re-run `MIX_TEST_PARTITION=2 mix test`: "5 properties, 704 tests, 0
+      failures" (up from REQ-044's 688). All 5 REQ-049 acceptance criteria
+      individually re-confirmed against variable_merge.ex and
+      variable_merge_test.exs by RELEASE-VALIDATOR (see Step 5 handoff for
+      per-criterion line citations). Flipped docs/requirements.yaml REQ-049
+      status: in_progress -> done. Stage 3 now has 2 of 20 requirements done
+      (REQ-044, REQ-049); the other 18 (REQ-043, REQ-045 through REQ-048,
+      REQ-050 through REQ-062) remain pending.
+      docs/migration/stage-3-instance-engine.md's header updated to add
+      REQ-049 alongside REQ-044 in the done list and drop it from the
+      pending list (19 -> 18 pending). No docs/migration/decisions/*.md
+      file was named in REQ-049's acceptance criteria, so there was nothing
+      to check there. README.md checked directly (not assumed): read "What's
+      here today" and "Running it" in full -- REQ-049 is a purely internal
+      pure-function module (lib/letflow/engine/variable_merge.ex has zero
+      Repo/HTTP/clock calls in executable code, per RELEASE-VALIDATOR's own
+      grep confirmation) with no new HTTP route and no change to the
+      documented curl/mix flow or the ASCII state diagram -- left untouched,
+      consistent with REQ-028/REQ-029/REQ-044's own DOC-UPDATER precedent
+      for similarly internal-only requirements.

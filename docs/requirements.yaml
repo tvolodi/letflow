@@ -2521,7 +2521,7 @@ requirements:
   - id: REQ-049
     title: Variable scoping and merge (instance.zig mergeVariables, EE-09)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S3
     impl_order: 92  # letflow-queue task id
     description: >

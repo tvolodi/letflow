@@ -4270,3 +4270,32 @@ history:
       token-level cancelled-branch exclusion rule lives in REQ-051's pure
       transition logic, REQ-052 only owns instance-level persistence of a
       cancellation triggered elsewhere. Confirmed before starting.
+  - req: REQ-051
+    event: done
+    agent: hetzner-wt2-orch
+    at: "2026-08-18T19:29:48Z"
+    note: >
+      RELEASE-VALIDATOR PASSed at Step 5, independently re-running
+      `mix test test/letflow/engine/parallel_gateway_test.exs` (7/7 green)
+      and the full suite (780/780 green), and re-checking all six
+      acceptance criteria directly against test bodies and
+      lib/letflow/engine/transition.ex: AC1 (3 tokens/3 distinct
+      branch_ids from one transition/3 call), AC2 (join non-firing at 2/3
+      arrivals, firing at the 3rd), AC3 (join fires on remaining active
+      branches without waiting on a cancelled one), AC4 (all-branches-
+      cancelled join cancellation plus instance status CANCELLED), AC5
+      (two arrival orderings produce identical post-join state, exactly-
+      once firing), AC6 (variable collision resolved through REQ-049's
+      VariableMerge.merge, no second collision rule). No
+      docs/migration/stage-N-*.md or docs/migration/decisions/*.md file
+      was named in REQ-051's acceptance criteria, so none required
+      updating this step. README.md's "What's here today" section and
+      ASCII state diagram checked directly: they still describe only the
+      original pilot slice (Letflow.ProcessInstance gen_statem,
+      InstanceSupervisor, TransitionEvent, Router's 3 HTTP endpoints) --
+      REQ-051 is an internal Stage-3 engine transition-dispatch change
+      (transition.ex/join_counter.ex/instance_state.ex) with no new HTTP
+      route and no gen_statem/process-architecture change, so neither
+      section nor the diagram is affected. Left untouched, same reasoning
+      REQ-063/REQ-064's DOC-UPDATER steps applied. Flipped
+      docs/requirements.yaml REQ-051 status to done.

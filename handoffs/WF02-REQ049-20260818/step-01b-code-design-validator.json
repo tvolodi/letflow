@@ -1,0 +1,52 @@
+{
+  "handoff_id": "e6f5d4c3-0001-4a1a-9c00-000000000002",
+  "run_id": "WF02-REQ049-20260818",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ049-20260818/step-01b-code-design-validator.json",
+  "created_at": "2026-08-18T07:16:45Z",
+  "started_at": "2026-08-18T07:16:45Z",
+  "completed_at": "2026-08-18T07:18:09Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-049"],
+    "requirement_text": {
+      "REQ-049": "Variable scoping and merge (instance.zig mergeVariables, EE-09). Pure function over (current_variables, incoming_variables, optional_schema) returning the new map plus events to append. Key absent -> insert, no event. Key present + schema-compatible or no schema -> overwrite + VARIABLE_OVERWRITTEN event (key, old, new). Key present + schema-rejected -> not merged, instance to ERROR via REQ-061 (not yet built), EXECUTION_ERROR event. Empty map -> no-op, zero events. Merged state visible to subsequent CEL evaluation in the same completion. Schema validation reuses REQ-024's validate_payload/3, no second JSON Schema validator. depends_on: [REQ-044, REQ-024] (both done), NOT REQ-061 (pending) -- pure kernel must not call any REQ-061 module."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": ["lib/letflow/design/req049-variable-merge.md", "handoffs/WF02-REQ049-20260818/step-01-code-designer.json"],
+    "owned_modules": ["lib/letflow/engine/"]
+  },
+  "task": {
+    "description": "WF-02 Step 1b hard gate. Read lib/letflow/design/req049-variable-merge.md directly and independently -- do not read CODE-DESIGNER's own summary as a substitute. Also independently verify the REQ-024 validate_payload/3 claim by reading lib/letflow/event_store/registry.ex yourself (the design claims its actual signature is (event_type :: String.t(), payload :: String.t(), tenant_id :: Ecto.UUID.t()) -> :ok | {:error, ...}, does Repo I/O, requires a JSON-object-root payload). Confirm the design's resolution (caller invokes validate_payload/3 per-key before calling the pure merge/3, wrapping each candidate value in a single-key JSON object) actually preserves merge/3's purity and is a coherent, buildable approach -- not just plausible-sounding. Also independently re-derive the REQ-049 depends_on / REQ-061 status claim from docs/requirements.yaml directly.",
+    "acceptance_criteria": [
+      "Every one of REQ-049's 5 acceptance criteria maps to a concrete, findable design element -- no TBD/deferral language",
+      "merge/3's full @spec and all its variant return shapes are fully specified (no implicit error shapes)",
+      "VARIABLE_OVERWRITTEN and EXECUTION_ERROR event shapes are both explicit tagged tuples/structs",
+      "The REQ-024 validate_payload/3 integration is independently verified against the real module (not just trusted from the design doc's own claim) and the purity-preserving composition (caller invokes it, not the pure kernel) is coherent",
+      "The REQ-061 dependency-ordering resolution is present and correct (no reference to a nonexistent REQ-061 module anywhere in the design)",
+      "No implementation code present -- signatures and type shapes only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently read lib/letflow/design/req049-variable-merge.md in full (not CODE-DESIGNER's summary) against all 6 task.acceptance_criteria. (1) All 5 REQ-049 acceptance criteria map to concrete design elements per the traceability table in §14 (insert/overwrite -> §3.1+§4; empty-map no-op -> §9; schema-rejection -> ERROR+EXECUTION_ERROR -> §3.1 step5+§3.2+§5+§6; validate_payload/3 reuse -> §7/§7.2/§12; CEL visibility -> §11) -- no TBD/deferral language on any of the 5; the doc's own §13 'open questions' (variable-schema storage mechanism, tenant_not_provisioned mapping, batch-atomicity/first-failure-wins reconstructions) are explicitly out of REQ-049's own scope, correctly flagged rather than silently resolved, not a dodge of an AC. (2) merge/3's @spec (§3) and merge_result() (§2) fully enumerate both variant shapes -- {:ok, new_variables, events} and {:rejected, unchanged_variables, events} -- no implicit error case. (3) VARIABLE_OVERWRITTEN (§4: {:variable_overwritten, key, old_value, new_value}) and EXECUTION_ERROR (§5: {:execution_error, key, rejected_value, reason, failures}) are both explicit tagged tuples. (4) Independently read lib/letflow/event_store/registry.ex in full: confirmed validate_payload/3's real @spec (event_type :: String.t(), payload :: String.t(), tenant_id :: Ecto.UUID.t()) :: :ok | {:error, :tenant_not_provisioned} | {:error, :unknown_event_type} | {:error, {:payload_validation_failed, [ValidationFailure.t()]}} | {:error, term()} matches the design's §0 claim verbatim; confirmed it performs Repo I/O transitively via its own call to get_type/2 (validate_payload/3 itself has no direct Repo call per the module's own source comment, but get_type/2 does -- 'not pure' as a whole call is accurate); confirmed decode_object_payload/1 unconditionally rejects a non-object JSON root, matching the design's payload-shape claim. Cross-checked json_schema.ex (pure delegate, no I/O, confirmed) and validation_failure.ex (struct shape matches execution_error_event()'s failures type). Also read event_type.ex: EventType.changeset/2 places no restriction tying 'name' to real event types (free-form string, 1-128 chars) -- confirms the design's caller-side reuse of validate_payload/3 under an arbitrary schema_name_for(K) is a genuinely buildable technical mechanism, not just plausible-sounding. The purity-preserving composition (§7/§7.1/§7.2/§8: caller resolves and calls validate_payload/3 before merge/3, wrapping each candidate value in {\"value\": v} to satisfy the object-root requirement, then passes the precomputed variable_validations map into the otherwise database-free merge/3) is coherent and matches the same pure-kernel/persistence-orchestration split req044-transition-kernel.md already established. (5) Independently grepped docs/requirements.yaml: REQ-049 depends_on: [REQ-044, REQ-024] (confirmed, not REQ-061), REQ-061 status: pending (confirmed). Design's §6 states this exactly and states merge/3 must not alias/import/call any REQ-061 module; scanned the full design doc for every REQ-061 reference -- all are either prose describing REQ-061's future role or the caller-composition contract in §8 explicitly marked 'not this module's call' -- no reference to a REQ-061 module from inside merge/3 or Letflow.Engine.VariableMerge itself. (6) Scanned the full design doc for .ex/.exs code blocks: only @type/@spec declarations, a moduledoc text block (§6, prose for ELIXIR-DEV to copy verbatim), and a bash grep/mix xref verification command (§10, a CI check, not module implementation) are present; §3.1's algorithm is explicitly prose ('described, not implemented'), no def/case/function body with real logic anywhere.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ049-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ049-20260818",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (Step 2a)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

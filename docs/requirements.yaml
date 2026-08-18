@@ -2429,7 +2429,7 @@ requirements:
   - id: REQ-047
     title: Task activation persistence (instance.zig applyTransition, EE-03)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S3
     impl_order: 91  # letflow-queue task id
     description: >

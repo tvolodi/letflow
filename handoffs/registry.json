@@ -26,6 +26,26 @@
       "note": "Only step00-git-setup.json exists on disk for this run despite the full WF-02 pipeline having demonstrably executed (design, security review, idiom review, tests, release validation, doc update, merge) -- steps 01 through Final were either never written as handoff files or were not committed. Requirement is confirmed done and merged; this registry entry reflects that outcome, not a step-by-step reconstruction."
     },
     {
+      "run_id": "WF02-REQ047-20260818",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-047"
+      ],
+      "stage": "S3",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/engine/",
+        "lib/letflow/instance*",
+        "priv/repo/migrations/"
+      ],
+      "lock_acquired_at": "2026-08-18T21:41:03Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00",
+      "backfilled": false,
+      "note": "hetzner-wt2-orch, single-host fallback (QUEUE_AUTH_TOKEN unavailable this session). Step 00 git setup PASS, branch feature/WF02-REQ047-20260818."
+    },
+    {
       "run_id": "WF02-REQ019-20260816",
       "workflow_id": "WF-02",
       "requirement_ids": [

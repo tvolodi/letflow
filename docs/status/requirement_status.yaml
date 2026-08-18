@@ -4416,3 +4416,17 @@ history:
       header already lists REQ-045 as `done` from the original Step 6 pass
       and needed no edit. No docs/migration/decisions/*.md changes were
       required by REQ-045's acceptance criteria.
+  - req: REQ-047
+    event: started
+    agent: hetzner-wt2-orch
+    at: "2026-08-18T21:42:02Z"
+    note: >
+      WF02-REQ047-20260818 started (single-host fallback mode -- QUEUE_AUTH_TOKEN
+      not available in this session's environment, so task selection used
+      docs/requirements.yaml directly per TASK_QUEUE.md's fallback, not
+      get_next_task). REQ-045/REQ-063/REQ-064 all done, REQ-047's sole
+      dependency (REQ-045) satisfied. REQ-046 skipped -- origin already carries
+      an active feature/WF02-REQ046-20260818 branch from a concurrent host
+      (commit timestamp ~1 minute old at selection time), so REQ-047 was chosen
+      instead to avoid collision. Step 00 git setup PASS (worktree variant,
+      branch feature/WF02-REQ047-20260818).

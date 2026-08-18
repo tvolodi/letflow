@@ -4226,3 +4226,36 @@ history:
       transition.zig's EXCLUSIVE_GATEWAY branch (EE-05) plus a minimal
       CEL-subset expression evaluator into REQ-044's transition dispatch.
       depends_on REQ-044 (done).
+  - req: REQ-050
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-18T19:05:25Z"
+    note: >
+      EXCLUSIVE_GATEWAY dispatch shipped: outgoing edges evaluated in
+      declared order, first true condition wins, an is_default edge is
+      evaluated last regardless of declared position, a condition that
+      raises a runtime error is treated as false (not an instance error),
+      and no-match-with-no-default transitions the instance to ERROR with
+      a structured reason naming the gateway node_id and the evaluated
+      conditions -- all per EE-05. Ships alongside a new pure CEL-subset
+      expression evaluator (lib/letflow/engine/expr.ex), replacing the
+      REQ-044 stub; zero I/O, deterministic, moduledoc records the ported
+      subset. 813 tests, 0 failures.
+      docs/migration/stage-3-instance-engine.md's own header line (unlike
+      docs/migration/README.md's stages table, which ISS-0022 deliberately
+      keeps free of a per-requirement snapshot) does track individual
+      requirement status by name -- REQ-044 and REQ-049 were already
+      listed `done` there, so REQ-050 was moved from the pending list into
+      that same done-list convention rather than left out or given its own
+      new section; the file's prose "Gateway condition evaluation is not
+      an open question" section already existed pre-implementation and
+      needed no further edit.
+      README.md checked directly: "What's here today" and the ASCII state
+      diagram still describe only the original pilot slice
+      (Letflow.ProcessInstance gen_statem, InstanceSupervisor,
+      TransitionEvent, Router's 3 HTTP endpoints) -- REQ-050 is an
+      internal Stage-3 pure-function addition with no new HTTP route and
+      no gen_statem/process change, so neither section is stale. Left
+      untouched, same reasoning REQ-063/REQ-064's DOC-UPDATER steps
+      applied.
+      Flipped docs/requirements.yaml REQ-050 status to done.

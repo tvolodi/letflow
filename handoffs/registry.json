@@ -985,6 +985,23 @@
       "queue_agent_id": null,
       "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
       "note": "Executed decision 0006's D1 (docs/migration/decisions/0006-identity-tables-schema-per-tenant.md): moved users/groups/tenant_role behind :prefix into per-tenant Postgres schemas. Design gate required 1 rework (identity.ex had no :prefix threading for provision_oidc_user/3, fixed by adding an opts::[prefix:] parameter matching definitions.ex's convention, arity became /4). Test-design gate required 2 rework rounds on a real Sandbox/connection-pooling bug (SET search_path issued outside a real sandboxed transaction after an :auto-mode switch, then a follow-up fix that itself relied on a no-op on_exit checkin -- both diagnosed via direct Ecto/DBConnection source reading plus empirical probes against real Postgres, not assumed). Security review independently re-derived decision 0006 section 3.2's central claim (per-tenant unique-index relocation of the OIDC-identity guarantee to tenants_idp_realm_id_partial_index) rather than trusting the decision record's own text. Two incidental, pre-existing, unrelated issues filed during verification and correctly left out of this run's scope: ISS-0047 (Identity.insert_or_fetch/4 username race) and ISS-0048 (orphaned Postgres schemas). D2 (dropping tenant_id) is REQ-064, not started, depends_on REQ-063 which is now done."
+    },
+    {
+      "run_id": "WF02-REQ064-20260818",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-064"],
+      "stage": "S3",
+      "status": "IN_PROGRESS",
+      "owned_modules": ["priv/repo/migrations", "lib/letflow/engine", "lib/letflow/event_store", "lib/letflow/definitions", "lib/letflow/identity", "lib/letflow/definitions.ex", "lib/letflow/event_store.ex", "lib/letflow/tenant_provisioning.ex"],
+      "lock_acquired_at": "2026-08-18T12:43:35Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (git-setup) PASS -- branch feature/WF02-REQ064-20260818 pushed from main at 881f10c (post REQ-063 merge). Routing to CODE-DESIGNER (Step 1).",
+      "backfilled": false,
+      "queue_task_id": null,
+      "queue_agent_id": null,
+      "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
+      "note": "Executes decision 0006's D2 (docs/migration/decisions/0006-identity-tables-schema-per-tenant.md): drop tenant_id from the ten schema-isolated business tables now that REQ-063 (D1, users/groups/tenant_role schema-per-tenant) is merged. Explicitly does NOT touch the four D3 tables (tenant_schemas, solution_pack_installs, solution_pack_artefact_bases, pack_update_resolutions) where tenant_id is a real FK. depends_on REQ-063, satisfied. owned_modules overlaps with REQ-063's former lock on priv/repo/migrations and lib/letflow/identity, but that run is COMPLETED and released -- no live conflict."
     }
   ]
 }

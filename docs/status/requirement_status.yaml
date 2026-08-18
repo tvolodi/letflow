@@ -4167,3 +4167,13 @@ history:
       uniqueness tests, the public-to-tenant-schema data copy, and an end-to-end
       AuthPipeline test -- no stage doc citation among them.
       Flipped docs/requirements.yaml REQ-063 status to done.
+  - req: REQ-064
+    event: started
+    agent: ORCH
+    at: "2026-08-18T12:43:35Z"
+    note: >
+      WF02-REQ064-20260818. Drop tenant_id from schema-isolated tables,
+      executing decision docs/migration/decisions/0006-identity-tables-
+      schema-per-tenant.md's D2. depends_on REQ-063, which merged as PR #177
+      (5941472) immediately before this run started. Step 00 (git setup)
+      PASS: feature/WF02-REQ064-20260818 branched from main, pushed.

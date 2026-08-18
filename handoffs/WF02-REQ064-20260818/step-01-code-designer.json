@@ -1,0 +1,83 @@
+{
+  "handoff_id": "c3d4e5f6-0064-4a00-9f01-req064step01",
+  "run_id": "WF02-REQ064-20260818",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ064-20260818/step-01-code-designer.json",
+  "created_at": "2026-08-18T12:43:35Z",
+  "started_at": "2026-08-18T12:43:35Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-064"],
+    "requirement_text": {
+      "REQ-064": "Execute Decision 0006's D2 (docs/migration/decisions/0006-identity-tables-schema-per-tenant.md): drop the tenant_id column from every table whose isolation boundary is the Postgres schema itself, and remove the write-path machinery that populates it. MUST run after REQ-063 -- users and groups are only eligible for the drop once they are per-schema tables (REQ-063 merged as PR #177/5941472, this precondition is satisfied). READ FIRST: decision 0006 in full (sections R1-R3 for why the column goes, section 5 for the consumer inventory, section 6 for exactly what of decision 0003 this supersedes and what it deliberately leaves standing). Decision 0003's Dimension B and its Addendum are the records being partially superseded -- read both so the moduledoc/migration comments this requirement writes describe the new state accurately rather than contradicting a record that still stands in part. TABLES LOSING THE COLUMN (ten): events, events_archive, instance_projections, process_definitions, tokens, tasks, promotion_reviews, promotion_assertion_runs (all already schema-isolated), plus users and groups (schema-isolated by REQ-063). TABLES THAT KEEP IT -- DO NOT TOUCH (decision 0006 D3): tenant_schemas, solution_pack_installs, solution_pack_artefact_bases, pack_update_resolutions. On these four, tenant_id is a real references(:tenants) foreign key on a structurally-global public-schema table and is the only scoping the row has. Dropping it there would be a data-model break, not a cleanup. tenant_role never had the column. TWO COMPOSITE INDEXES SIMPLIFY, and the second carries a contract: promotion_reviews' unique_index([:tenant_id, :plan_digest]) becomes unique_index([:plan_digest]), and promotion_assertion_runs' unique_index([:tenant_id, :idempotency_key]) becomes unique_index([:idempotency_key]). Both are semantically identical inside a per-tenant schema (a leading tenant_id has at most one distinct value there -- the shipped migration headers for events_archive and process_definitions say so themselves). The assertion-runs one backs an idempotency contract consumed via Repo.insert(on_conflict: :nothing, conflict_target: ...) -- restate that contract in the new migration's header and update every conflict_target that names tenant_id. CODE CONSUMERS (decision 0006 section 5, verified inventory): roughly 13 TenantProvisioning.tenant_id_for_schema_name/1 call sites exist purely to stamp the column -- 8 in lib/letflow/definitions.ex, 4 in lib/letflow/event_store.ex, 1 in lib/letflow/definitions/promotion_review_store.ex. Sites that bind {:ok, _tenant_id} and discard it are validating the prefix string's shape, not stamping; decide per-site whether that validation is still wanted (a valid_prefix?/1-style guard) or removable, and say which in the moduledoc. DO NOT DELETE tenant_id_for_schema_name/1 itself -- REQ-063's data copy needs it and decision 0006 D4's future reporting mechanism may. Only its stamping call sites go. Ten schema modules drop field(:tenant_id, Ecto.UUID) and its cast/validate_required entries: Engine.Task, Engine.Token (note: REQ-063 renamed the tokens-table schema module to Engine.TokenRecord, and REQ-044 separately claimed Engine.Token for its own in-memory struct -- confirm which module actually owns the tokens table's tenant_id field before editing, do not assume the requirement text's original naming still matches current lib/ state), EventStore.Event, EventStore.ArchivedEvent, EventStore.InstanceProjection, Definitions.ProcessDefinition, Definitions.PromotionReview, Definitions.PromotionAssertionRun, Identity.User, Identity.Group. Moduledoc blocks in Engine.Task/Engine.TokenRecord (\"tenant_id is never caller-supplied\") and Identity.User (\"intra-schema column per Decision B\") document a column that will no longer exist and must be removed with it, not left describing a field that is gone. SCOPE BOUNDARY: does not build decision 0006 D4's cross-tenant reporting mechanism (no consumer exists; a future requirement owns it). Does not revisit Decision B's schema-per-tenant isolation choice, which 0006 section 6 explicitly leaves standing. Does not add a session-GUC tenant context."
+    },
+    "related_handoff_ids": ["c3d4e5f6-0064-4a00-9f01-req064step00"],
+    "artifacts_in": [
+      "docs/migration/decisions/0006-identity-tables-schema-per-tenant.md",
+      "docs/migration/decisions/0003-ecto-schema-strategy.md",
+      "lib/letflow/engine/task.ex",
+      "lib/letflow/engine/token_record.ex",
+      "lib/letflow/engine/token.ex",
+      "lib/letflow/event_store/event.ex",
+      "lib/letflow/event_store/archived_event.ex",
+      "lib/letflow/event_store/instance_projection.ex",
+      "lib/letflow/definitions/process_definition.ex",
+      "lib/letflow/definitions/promotion_review.ex",
+      "lib/letflow/definitions/promotion_assertion_run.ex",
+      "lib/letflow/identity/user.ex",
+      "lib/letflow/identity/group.ex",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/definitions/promotion_review_store.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "priv/repo/migrations/20260819000001_create_groups_tenant_scoped.exs",
+      "priv/repo/migrations/20260819000003_create_users_tenant_scoped.exs"
+    ],
+    "owned_modules": [
+      "priv/repo/migrations",
+      "lib/letflow/engine",
+      "lib/letflow/event_store",
+      "lib/letflow/definitions",
+      "lib/letflow/identity",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/tenant_provisioning.ex"
+    ]
+  },
+  "task": {
+    "description": "Produce lib/letflow/design/req064-drop-tenant-id.md covering every module this requirement touches, per WF-02 Step 1's procedure. Design-only: no implementation code, function signatures and @spec-style shapes only.\n\nFIRST, before designing anything: verify current lib/ state against the requirement text's module names, which were written before REQ-063 shipped and before REQ-044's own naming claims. Specifically confirm what Ecto schema module currently owns the tokens table (the requirement text says Engine.Token but flags that REQ-063 may have renamed it to Engine.TokenRecord to avoid REQ-044's own Engine.Token in-memory struct -- read lib/letflow/engine/ directly and state which module actually has the tenant_id field to drop). Do the same sanity check for every other of the ten named modules -- do not trust the requirement text's module names blindly, confirm each against the real file.\n\nSpecifically design: (1) one migration (or a small number, ELIXIR-DEV's implementation choice within your design's guidance) that drops tenant_id from the ten confirmed tables, applied per-tenant-schema via the same tenant_scoped_migrations/0 mechanism -- state the exact ALTER TABLE ... DROP COLUMN shape and the prefix()-truthiness guard each carries. (2) the two composite-index simplifications (promotion_reviews, promotion_assertion_runs) -- exact before/after index definitions, and the promotion_assertion_runs idempotency contract restated explicitly for the migration header. (3) for each of the ~13 tenant_id_for_schema_name/1 call sites in definitions.ex/event_store.ex/promotion_review_store.ex: state per-site whether it's removed entirely (was stamping the now-gone column) or kept as a lighter-weight validation (was only checking {:ok, _} and discarding) -- do not blanket-decide, the requirement text explicitly asks for a per-site call. (4) the exact field/cast/validate_required removal for each of the ten schema modules, using the CORRECTED module list from your own verification step, not the requirement text's possibly-stale one. (5) the exact moduledoc text changes for Engine.Task/TokenRecord and Identity.User that currently describe a soon-to-not-exist column.\n\nRead decision 0006 in full (sections R1-R3, 5, 6) and decision 0003 (Dimension B + Addendum) before designing -- section 6 states precisely what's superseded and what stands; your design's moduledoc-text guidance must be consistent with both, not contradict either.",
+    "acceptance_criteria": [
+      "Current lib/ module ownership of the tokens table's tenant_id field verified against the requirement text's claim, corrected if stale, stated explicitly in the design",
+      "Migration(s) dropping tenant_id from all ten confirmed tables, each with the prefix() guard, fully specified",
+      "Both composite-index simplifications specified with exact before/after definitions and the idempotency contract restated",
+      "Each of the ~13 tenant_id_for_schema_name/1 call sites has an explicit per-site removed-or-kept-as-validation decision, not a blanket one",
+      "Field/cast/validate_required removal specified for all ten schema modules using the corrected module list",
+      "Moduledoc text updates specified for every module whose moduledoc currently describes tenant_id",
+      "tenant_id_for_schema_name/1 itself is explicitly NOT removed (only its stamping call sites)",
+      "The four D3 tables (tenant_schemas, solution_pack_installs, solution_pack_artefact_bases, pack_update_resolutions) are explicitly named as untouched, not silently omitted"
+    ]
+  },
+  "result": {
+    "status": "",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ064-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ064-20260818",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

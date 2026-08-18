@@ -3468,7 +3468,7 @@ requirements:
   - id: REQ-064
     title: Drop tenant_id from schema-isolated tables (Decision 0006 D2)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S3
     description: >
       Execute Decision 0006's D2

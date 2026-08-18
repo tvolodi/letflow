@@ -1,0 +1,51 @@
+{
+  "handoff_id": "e6c3f4d0-4444-4000-8000-000000000005",
+  "run_id": "WF03-ISS0048-20260818",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0048-20260818/step-03-elixir-dev.json",
+  "created_at": "2026-08-18T22:40:38Z",
+  "started_at": "2026-08-18T22:40:38Z",
+  "completed_at": "2026-08-18T22:43:06Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0048-20260818/step-02-code-designer.json", "handoffs/WF03-ISS0048-20260818/step-02b-code-design-validator.json"],
+    "artifacts_in": ["lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md"],
+    "owned_modules": ["lib/letflow/sandbox_pool.ex"]
+  },
+  "task": {
+    "description": "Implement the validated design at lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md in lib/letflow/sandbox_pool.ex. Note: CODE-DESIGN-VALIDATOR flagged one non-blocking citation slip in the design (SS2.2 point 2 cites 'sandbox_pool.ex:239-243' for the tenant_schemas-exclusion comment; the actual statement is in the moduledoc at lines 9-11) -- the underlying claim is true, just implement against the real source, not the wrong line citation. Do not change claim/2's or release/2's public @spec (the design requires them to stay byte-identical). Do not touch test/letflow/identity_test.exs, test/letflow/identity/user_test.exs, test/letflow/identity/group_test.exs, test/letflow/identity/tenant_role_test.exs, or test/letflow/role_registry_test.exs -- out of scope, already confirmed correct. Run mix compile --warnings-as-errors and the existing test/letflow/sandbox_pool_test.exs suite after implementing to confirm nothing existing broke (TEST-DESIGNER will add the new crash-reclaim regression test in the next step, not you).",
+    "acceptance_criteria": [
+      "lib/letflow/sandbox_pool.ex implements the owner-monitor extension exactly as designed: state.active tracks an owner_ref per claim, established on grant, torn down via demonitor(owner_ref, [:flush]) on release/2, and the existing handle_info({:DOWN, ...}) clause gains the new active-claim-owner branch (best-effort drop_schema/1, remove from active, service_next_waiter/1)",
+      "claim/2 and release/2 public @specs are unchanged from the pre-change source",
+      "mix compile --warnings-as-errors exits clean",
+      "mix test test/letflow/sandbox_pool_test.exs passes (existing tests still green)",
+      "No changes to any of the 5 named-out-of-scope test files"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Implemented the owner-monitor extension in lib/letflow/sandbox_pool.ex exactly per the validated design (state.active entries now {schema_name, owner_ref}; owner_ref established via Process.monitor(elem(from, 0)) in both handle_provision_now/2 (renamed from /1, now takes `from`) and service_next_waiter/1's hand-off path; torn down via Process.demonitor(owner_ref, [:flush]) on release/2's success path; handle_info({:DOWN, ref, ...}) extended with a new find_active_by_owner_ref/2 branch that runs best-effort drop_schema/1, deletes the active entry, and calls service_next_waiter/1). claim/2's and release/2's public @specs are byte-identical to the pre-change source (verified by diff -- only the private handle_provision_now/1->/2 signature and handle_call/handle_info bodies changed). No changes made to any of the 5 named-out-of-scope test files, and no other file besides lib/letflow/sandbox_pool.ex was touched. `mix compile --warnings-as-errors` exits clean: 'Compiling 3 files (.ex)\\nGenerated letflow app' (no warnings, no errors). `mix test test/letflow/sandbox_pool_test.exs` however FAILS: 6 of 7 tests pass, but 'claim/1,2 -- quota exhausted, blocking path (acceptance criterion 2) a queued waiter is served once the held slot frees, before its wait window elapses' (test/letflow/sandbox_pool_test.exs:192) fails deterministically (reproduced 3/3 runs) with 'match (=) failed / code: assert :ok = SandboxPool.release(waiter_id, pool) / left: :ok / right: {:error, :not_found}' at test/letflow/sandbox_pool_test.exs:220. Root cause (traced, not guessed): that test's queued-waiter path issues `SandboxPool.claim/2` from inside `Task.async(fn -> SandboxPool.claim(2_000, pool) end)` (test line 205), then awaits the result and calls `SandboxPool.release/2` from the *test process*, a different process from the one that actually called claim/2. Per the design's own mechanism (SS5.1/SS5.2), the owner_ref monitors `elem(from, 0)` -- the literal GenServer.call-issuing pid, which for a Task.async-wrapped call is the Task's own short-lived process. That process sends its return value and then exits normally essentially immediately after `claim/2` returns, well before Task.await's caller (the test process) gets to call `release/2`. SandboxPool now correctly (per SS5.4/INV-SP-DOWN-2, which explicitly says any exit reason including :normal must reclaim) observes that :DOWN and reclaims the claim as an owner-death leak -- dropping the schema and removing the active entry -- before the test's own explicit release/2 call runs, which then legitimately gets {:error, :not_found}. This is not a flaky race: the Task process's normal exit after replying is inherent to Task.async's semantics, so the failure reproduced 3/3 runs. This is a genuine gap in the validated design, not an implementation bug: the design's SS0/SS7 sources establish the owner-monitor's correctness against Letflow.Definitions' real call pattern (claim/2 called synchronously in the same process that later calls release/2), but this pre-existing regression test exercises a different, also-legitimate Elixir pattern (claim via a helper process, release from the awaiting process) that the 'monitor elem(from,0)' mechanism cannot distinguish from an actual leak. I implemented exactly per the design and did not invent a workaround (e.g. skipping the monitor for short-lived callers, exempting Task processes, or editing the test) because any of those would be silently re-deciding the validated design's mechanism -- explicitly against my own operating rules. Per the handoff's owned_modules (lib/letflow/sandbox_pool.ex only) and its explicit instruction that TEST-DESIGNER, not me, owns test changes, I left test/letflow/sandbox_pool_test.exs untouched.",
+    "artifacts_out": ["lib/letflow/sandbox_pool.ex"],
+    "issues": [
+      "DESIGN GAP: lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md's owner-monitor mechanism (SS5.1/SS5.2: Process.monitor(elem(from, 0))) is indistinguishable, by construction, between 'the calling process died without releasing (a real leak)' and 'the calling process was a short-lived helper (e.g. Task.async) that legitimately handed the claim off to a longer-lived process before exiting normally.' test/letflow/sandbox_pool_test.exs:192-221's existing 'queued waiter served' test exercises exactly the second case and now fails deterministically (3/3 reproductions) with {:error, :not_found} at line 220, because the Task.async-spawned process (the literal claim/2 caller) exits normally immediately after returning its result, before the test process's explicit release/2 call runs. This needs a CODE-DESIGNER decision (e.g. an explicit 'claim ownership transfer' primitive, or accepting the existing test needs to change to call claim/2 and release/2 from the same process) plus REVIEWER sign-off before this can proceed -- not something I should resolve unilaterally by deviating from the validated design or editing a test file outside my owned_modules."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0048-20260818",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route back to CODE-DESIGNER (rework) to resolve the Task.async-caller-vs-eventual-releaser ambiguity the owner-monitor mechanism exposes against test/letflow/sandbox_pool_test.exs:192-221's existing coverage, with REVIEWER sign-off on whichever resolution is chosen (design change, or an explicit decision that the existing test's call pattern is itself the thing that must change) -- do not advance to SECURITY-REVIEWER/REVIEWER on the current implementation, since a hard acceptance criterion (existing sandbox_pool_test.exs suite green) is not met."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

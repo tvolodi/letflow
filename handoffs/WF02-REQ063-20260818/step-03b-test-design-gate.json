@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ063-20260818/step-03b-test-design-gate.json",
   "created_at": "2026-08-18T10:25:30Z",
   "started_at": "2026-08-18T11:28:04Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-18T11:43:53Z",
+  "status": "FAIL",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -49,10 +49,16 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
+    "status": "FAIL",
+    "summary": "RE-GATE FAIL. Original iteration-1 BLOCKER (SET search_path leaking outside a real sandboxed transaction) is genuinely fixed -- confirmed by reading all four files and by 3 of my own full-suite runs (770/770, 770/770, 770/770) plus a real Postgres row-count check after each run (0 leftover req063-* tenant rows every time; the one stray tenant_%% schema present throughout was pre-existing, tied to zero tenant rows, unrelated to this fix). The run-3 TenantStatusTest flake attribution to ISS-0031/GH#90 is independently confirmed correct: that file is async: true, uses an unfiltered node-global :telemetry.attach handler that fires synchronously in whichever process's query triggers it (not scoped to the attaching test's own process), and ISS-0031's own record documents this exact mechanism pre-dating REQ-063 -- none of my 3 runs even hit this flake, and it is structurally unrelated to Sandbox mode-switching in the four rework files (which are all async: false, never running concurrently with anything).\n\nThe BLOCKER is TEST-DESIGNER's second-bug fix mechanism itself, not its observed outcome. Read deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex and deps/db_connection/lib/db_connection/ownership/manager.ex directly, then empirically verified with two standalone probe scripts (run via `mix run` against the real Docker Postgres, not just source-reading) in scratch/checkin_probe.exs and scratch/checkin_probe2.exs: Ecto.Adapters.SQL.Sandbox.checkin/1, called from a process OTHER than the one that ran checkout/2, returns :not_found -- a silent no-op, not a real checkin (confirmed via DBConnection.Ownership.Manager.handle_call(:checkin, {caller, _}, state)'s own proxy_checkin(state, caller, caller) -- it only ever checks in a connection keyed by the CALLING process's own pid). ExUnit.OnExitHandler's own source (on_exit_handler.ex, ships with Elixir at C:/Program Files/Elixir/lib/ex_unit) confirms on_exit/1 callbacks run via spawn_monitor in a dedicated runner process, never the test process that did the checkout. So the fix all four files now ship -- 'Sandbox.mode(Repo, :manual) + checkout, checked back in via an explicit Sandbox.checkin/1 registered in on_exit' -- registers a checkin call that is ALWAYS a no-op in practice, not the 'same-process checkin/checkout, no cross-process handoff' the task description and every one of the four files' moduledocs claim. My probe #2 also showed why no leak is actually observed: when the owning (test) process dies, DBConnection.Ownership.Manager's own :DOWN monitor (handle_info({:DOWN, ref, _, _, _}, state), unconditional, not mode-dependent) already reclaims the connection automatically -- this is the same safety net that protected the ORIGINAL {:shared, self()} code too (owner_down/unshare fire on :DOWN regardless of shared vs manual mode), which casts real doubt on whether the reported 69-row leak was actually caused by the diagnosed 'cross-process on_exit mode-force race' at all, versus some other transient cause never isolated. identity_test.exs's own established, actually-correct pattern (lines 278-354) does the mode restore INLINE IN THE TEST BODY, in the same process, before that process exits -- not deferred into on_exit -- which is why it works for a reason unrelated to what the four rework files' moduledocs now claim.\n\nNet effect: the observed test behavior (no leak, 770/770 x3) is fine, but the checked-in fix ships four moduledocs asserting a false claim about Ecto Sandbox's own documented semantics ('Explicit checkin avoids that race entirely: the same process that checked the connection out also checks it back in' -- user_test.exs line 58-60, mirrored near-verbatim in the other three) as permanent project documentation, and the actual protection mechanism (process-death auto-reclaim, which was already present pre-rework) is never named. This is exactly the kind of unverified-claim-as-fact this gate exists to catch, per core-directives.md's No Speculation rule -- 'confirmed empirically' language throughout TEST-DESIGNER's report and the moduledocs does not hold up under independent re-derivation.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      {
+        "id": "REQ063-GATE-002",
+        "severity": "BLOCKER",
+        "summary": "All four files' (user_test.exs, group_test.exs, tenant_role_test.exs, role_registry_test.exs) on_exit-registered Ecto.Adapters.SQL.Sandbox.checkin(Letflow.Repo) call is a no-op: on_exit/1 callbacks run in a separate ExUnit.OnExitHandler-spawned process, and Sandbox.checkin/1 only checks in a connection owned by the CALLING process (confirmed via deps/db_connection/lib/db_connection/ownership/manager.ex's proxy_checkin(state, caller, caller) and empirically via scratch/checkin_probe.exs / checkin_probe2.exs against real Postgres -- checkin from a non-owning process returns :not_found every time). The moduledoc claim in all four files ('the same process that checked the connection out also checks it back in') is false as written. Required fix: either (a) do the mode-restore-to-:auto/cleanup INLINE in the test body before the test process exits, mirroring identity_test.exs's own actually-correct concurrent-race test (lines 278-354 there), removing the on_exit-based checkin entirely, or (b) if keeping an on_exit-based cleanup step, correct the moduledoc to state the real protection mechanism (DBConnection.Ownership.Manager's unconditional :DOWN-monitor reclaim on owning-process death, deps/db_connection/lib/db_connection/ownership/manager.ex handle_info({:DOWN,...)) instead of the false claim, and re-verify that whichever mechanism is actually documented is the one actually preventing the leak (not simply that no leak was observed, which the untouched :DOWN-based reclaim already explains on its own)."
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ063-20260818",
       "commit_sha_list": [],
@@ -61,8 +67,8 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Rework TEST-DESIGNER"
   },
-  "rework_count": 0,
+  "rework_count": 1,
   "max_rework": 3
 }

@@ -7,9 +7,9 @@
   "to_agent": "CODE-DESIGNER",
   "file": "handoffs/WF02-REQ051-20260818/step-01-code-designer.json",
   "created_at": "2026-08-18T19:00:00Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-08-18T19:06:55Z",
+  "completed_at": "2026-08-18T19:06:55Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -39,10 +39,16 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "Produced lib/letflow/design/req051-parallel-gateway-split-join.md covering EE-06 split and EE-07 join. New Letflow.Engine.JoinCounter struct (join_node_id, origin_token_id, expected_from_branches/received_from_branches/cancelled_branches as MapSet(String.t())) added, keyed by join_node_id on a new InstanceState.join_counters field -- this is the concrete cancelled-branch representation REQ-051 itself introduces (via a new {:cancel_branch, branch_id} transition_event/0 constructor and its own pure dispatch), not deferred to REQ-052. Split: dispatch_parallel_split/4 produces N child tokens from a PARALLEL_GATEWAY's out-edges, id/branch_id derived deterministically as parent_token_id<>\"/\"<>declaration_order_index (never edge.id, since no structural check guarantees edge-id uniqueness) -- necessary because transition/3 cannot call :rand/:crypto and must stay deterministic. A find_matching_join/2 graph walk locates the corresponding join node at split time and seeds its JoinCounter. Join: dispatch_parallel_join/4 plus a shared join_outcome/1 helper (:wait | :fire | :cancel_join, a pure function of the JoinCounter's 3 sets) drive both token-arrival and branch-cancellation dispatch through one decision point -- fire excludes cancelled branches from the wait set (EE-07 AC2/AC3), all-cancelled-with-zero-arrivals triggers :cancel_join -> instance status :cancelled (EE-07 AC4), and Map.delete-ing the cohort on any fire/cancel outcome plus join_outcome/1's pure set-algebra together give exactly-once, order-independent firing (EE-07 AC5). REQ-049's VariableMerge.merge/3 is called (not reimplemented) at every join-fire; documented explicitly as a no-op today given InstanceState has no per-branch variable overlay, flagged as an open question (12.5) rather than silently invented. transition_error/0 gains 3 variants, pending_event/0 is narrowed from REQ-044's term() placeholder to a real 3-constructor union. No implementation code, no Repo/Logger/clock/:rand/:crypto calls -- pure, no-I/O, matching REQ-044's contract. 8 open questions listed explicitly (12.1-12.5 plus 3.2/3.3/4.1's inline flags), none silently resolved. Noted in issues: handoff's artifacts_in names lib/letflow/design/req049-variable-scoping-merge.md, which does not exist -- the actual file is req049-variable-merge.md (read and used instead).",
+    "artifacts_out": ["lib/letflow/design/req051-parallel-gateway-split-join.md"],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "This handoff's context.artifacts_in names 'lib/letflow/design/req049-variable-scoping-merge.md', which does not exist in the repo. The actual REQ-049 design doc is 'lib/letflow/design/req049-variable-merge.md' -- read and used instead. Source of truth (docs/requirements.yaml / whichever agent wrote this handoff's artifacts_in list) should be corrected so future handoffs reference the real filename."
+      }
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR",
     "git_evidence": {
       "branch_name": "feature/WF02-REQ051-20260818",
       "commit_sha_list": []

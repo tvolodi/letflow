@@ -539,3 +539,5 @@
 2026-08-18T06:36:36Z | PASS | WF-02 | WF02-REQ044-20260818 | TEST-DESIGNER -> ORCH | Step 3: test/specs/REQ-044.md + 3 test files under test/letflow/engine/, StreamData property test for determinism (AC2), all 5 node-type dispatch cases, both error paths. mix test 5 properties/688 tests/0 failures. Committed 3c3427f.
 2026-08-18T06:37:29Z | DISPATCH | WF-02 | WF02-REQ044-20260818 | ORCH -> TEST-DESIGN-VALIDATOR | Step 3b hard gate with mutation-verification.
 2026-08-18T06:38:32Z | PASS | WF-02 | WF02-REQ044-20260818 | TEST-DESIGN-VALIDATOR -> ORCH | Step 3b: all checks PASS, mix test 1 property/19 tests/0 failures re-run independently. Mutation drill on unknown_event_type catch-all confirmed real detection (2 failures, exact targets), reverted clean. Committed 4407aeb.
+2026-08-18T06:39:14Z | DISPATCH | WF-02 | WF02-REQ044-20260818 | ORCH -> TEST-RUNNER | Step 4: full suite run.
+2026-08-18T06:41:55Z | PASS | WF-02 | WF02-REQ044-20260818 | TEST-RUNNER -> ORCH | Step 4: MIX_TEST_PARTITION=2 mix test -- 5 properties, 688 tests, 0 failures. Report written. Committed 034f4cb.

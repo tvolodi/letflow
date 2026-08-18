@@ -4358,3 +4358,61 @@ history:
       from 18 to 16, matching the REQ-044/REQ-049 DOC-UPDATER precedent
       for this same header.
       Flipped docs/requirements.yaml REQ-045 status: in_progress -> done.
+  - req: REQ-045
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-18T21:14:03Z
+    note: >
+      WF02-REQ045-20260818 Step 6 follow-up, requested by RELEASE-VALIDATOR
+      after its final PASS: the prior `done` entry above (commit 16da94e,
+      20:07:51Z) was written before two post-rebase rework commits and only
+      describes the pre-rework 797/797 state -- this event fills that gap.
+      Appended per this file's append-only discipline (docs/anti-patterns.md);
+      the prior entry is untouched. docs/requirements.yaml's REQ-045
+      status was already `done` and needed no further edit.
+      What happened: during WF-02 Step Final's rebase onto `main`, ORCH
+      found `main` had concurrently merged REQ-050 and REQ-051, shipping
+      real :EXCLUSIVE_GATEWAY/:PARALLEL_GATEWAY auto-advance dispatch in
+      lib/letflow/engine/transition.ex. This broke Letflow.Engine.create/2's
+      original fixed-2-hop dispatch assumption (valid when written, since
+      gateways didn't exist yet). Two rework cycles followed:
+      (1) commit e4512ef -- ELIXIR-DEV reworked activate/3 into a
+      worklist-based loop (advance_until_stable/4 + tokens_needing_dispatch/3)
+      that dispatches hops until a genuinely stable state, with a defensive
+      hop-limit bound (length(graph.nodes) * 4 + 10) returning
+      {:error, {:activation_failed, {:hop_limit_exceeded, token_id}}} instead
+      of looping forever; REVIEWER re-reviewed and PASSed the loop logic but
+      flagged a real coverage gap -- no test exercised PARALLEL_GATEWAY
+      split/join or the hop-limit path.
+      (2) commit e26b8cb -- TEST-DESIGNER added that coverage (split-to-join,
+      split-to-two-HUMAN_TASKs, and a hop-limit-exceeded fixture via a
+      CHK-06-valid gateway-to-gateway cycle) and found a second real bug
+      while writing it: insert_token_records/4 only handled 0 or exactly 1
+      tokens, crashing FunctionClauseError on a legitimate 2+-token split --
+      left as a red reproducing test per this project's discipline rather
+      than worked around.
+      (3) commit 096b5b3 -- ELIXIR-DEV fixed insert_token_records/4 to
+      handle any number of tokens via Enum.reduce_while/3.
+      (4) commit a1c0b5e -- TEST-RUNNER's final Step 4 re-run: 850 passed
+      (5 properties, 845 tests), 0 failures -- independently reproduced by
+      RELEASE-VALIDATOR's own Step 5 pass and by ORCH twice.
+      lib/letflow/design/req045-instance-start-engine-shell.md section 9
+      OQ-1a updated by the implementing agents: original "only
+      HUMAN_TASK/END first nodes succeed" disclosure marked superseded
+      (original text kept for history, followed by what changed and why) --
+      gateways now work; remaining gap is SERVICE_TASK/TIMER/SUB_PROCESS
+      first nodes, still :node_type_not_yet_implemented.
+      Also filed, not part of REQ-045's own scope: one unrelated
+      pre-existing flaky test (Letflow.IdentityMigrationTest) found during
+      this run's Step 5 re-verification, filed as docs/issues/ISS-0050.yaml
+      (renumbered during this same rebase to avoid a collision with a
+      concurrent host's own ISS-0049).
+      Checked this step, no changes needed: README.md's "What's here today"
+      and "Running it" still describe only the original pilot slice
+      (Letflow.ProcessInstance gen_statem, three Router HTTP endpoints) --
+      the rework was internal to the engine's dispatch loop, added no HTTP
+      route and no gen_statem/process change, so neither section nor the
+      ASCII state diagram is affected. docs/migration/stage-3-instance-engine.md's
+      header already lists REQ-045 as `done` from the original Step 6 pass
+      and needed no edit. No docs/migration/decisions/*.md changes were
+      required by REQ-045's acceptance criteria.

@@ -473,19 +473,29 @@ defmodule Letflow.Engine do
     end
   end
 
-  # M2 -- insert the root tokens row, post-landing-dispatch node_id, branch_id
-  # == instance_id (req043 §3.2's root-branch convention). Must run after M1
-  # (tokens.instance_id's FK target must already exist in the same
-  # transaction). An empty token list means the root token already reached
-  # :END and was removed by dispatch_end/3 (design doc §9 OQ-1a's :END
-  # success case) -- no tokens row at all for this instance, matching the
-  # test's own explicit assertion that a same-call :END completion leaves
-  # zero rows in `tokens`, not one stranded at "end".
+  # M2 -- insert the root/branch tokens row(s), post-landing-dispatch node_id,
+  # branch_id == instance_id for the root branch (req043 §3.2's root-branch
+  # convention) or the branch's own id for each PARALLEL_GATEWAY split branch.
+  # Must run after M1 (tokens.instance_id's FK target must already exist in
+  # the same transaction). An empty token list means the root token already
+  # reached :END and was removed by dispatch_end/3 (design doc §9 OQ-1a's
+  # :END success case) -- no tokens row at all for this instance, matching
+  # the test's own explicit assertion that a same-call :END completion
+  # leaves zero rows in `tokens`, not one stranded at "end". A
+  # PARALLEL_GATEWAY split can legitimately leave two or more live tokens
+  # (one per branch, each parked at its own node) -- inserted here one at a
+  # time, in order, so the first failure short-circuits the rest.
   defp insert_token_records(_repo, _instance_id, [], _prefix), do: {:ok, []}
 
-  defp insert_token_records(repo, instance_id, [%Token{} = token], prefix) do
-    case insert_token_record(repo, instance_id, token, prefix) do
-      {:ok, record} -> {:ok, [record]}
+  defp insert_token_records(repo, instance_id, [%Token{} | _] = tokens, prefix) do
+    Enum.reduce_while(tokens, {:ok, []}, fn %Token{} = token, {:ok, acc} ->
+      case insert_token_record(repo, instance_id, token, prefix) do
+        {:ok, record} -> {:cont, {:ok, [record | acc]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, records} -> {:ok, Enum.reverse(records)}
       {:error, reason} -> {:error, reason}
     end
   end

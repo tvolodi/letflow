@@ -1,0 +1,64 @@
+defmodule Letflow.Engine.InstanceState do
+  @moduledoc """
+  The full state of one running process instance — ports `transition.zig`'s
+  `InstanceState` (EE-02, `lib/letflow/design/req044-transition-kernel.md`
+  §2). Plain struct, not an `Ecto.Schema` — this module has zero
+  `Ecto`/`Letflow.Repo` dependency (see `Letflow.Engine.Transition`'s purity
+  contract, which this module's fields participate in even though the
+  dispatch logic itself lives in that sibling module).
+
+  ## Variable storage: no ObjectMap allocator-ownership equivalent (REQ-044)
+
+  `transition.zig`'s `InstanceState.variables` is a `std.json.ObjectMap`, a
+  mutable hash map whose entries are heap-allocated through an explicit
+  `std.mem.Allocator` the caller owns and must free — Zig's manual-memory
+  model requires every map read/write site to reason about who allocated a
+  given entry and who is responsible for freeing it. This module represents
+  `variables` as a plain Elixir `map()` instead. Elixir has no allocator to
+  own: a map value is immutable, garbage-collected, and copied-on-write by
+  ordinary language semantics, so there is no allocation-ownership discipline
+  to port and none is invented here — the same divergence REQ-029's design
+  (`lib/letflow/design/req029-node-attribute-edge-condition-validators.md`
+  §8) already noted for `GraphError.OutOfMemory`: Zig's allocator-failure
+  error case has no Elixir equivalent, and this module does not fabricate one.
+
+  ## Dependency ordering: this module does not depend on REQ-043
+
+  `InstanceState.status`'s four values (`:active`, `:completed`, `:cancelled`,
+  `:error`) are chosen to be source-compatible with the `status` `Ecto.Enum`
+  `Letflow.EventStore.InstanceProjection` (REQ-023, already shipped) already
+  declares — `values: [active: "ACTIVE", completed: "COMPLETED", cancelled:
+  "CANCELLED", error: "ERROR"]` — and with what REQ-043's own future ALTER-
+  TABLE migration and any instance-engine schema modules will reuse. This
+  module depends on REQ-028 (`Letflow.Definitions.Graph`) and REQ-029, both
+  `status: done`. It does **not** depend on REQ-043 (`instance_projections`
+  ALTER, `tasks`, `tokens` tables — `status: pending` at the time this design
+  was written) or on any not-yet-existing `Ecto.Schema` module REQ-043 will
+  add. This module is pure (see the purity section above) — it performs zero
+  `Letflow.Repo` calls and holds no reference, direct or aliased, to any
+  REQ-043 schema module. `status` is declared here as a plain atom type
+  (`:active | :completed | :cancelled | :error`), not as `Ecto.Enum` and not
+  as a call into a REQ-043-owned module that does not yet exist.
+  """
+
+  alias Letflow.Engine.Token
+
+  @enforce_keys [:instance_id]
+  defstruct [
+    :instance_id,
+    status: :active,
+    tokens: [],
+    variables: %{},
+    pending_task_nodes: []
+  ]
+
+  @type status :: :active | :completed | :cancelled | :error
+
+  @type t :: %__MODULE__{
+          instance_id: String.t(),
+          status: status(),
+          tokens: [Token.t()],
+          variables: map(),
+          pending_task_nodes: [Token.t()]
+        }
+end

@@ -1,0 +1,58 @@
+{
+  "handoff_id": "b3f2a1c0-0001-4a1a-9c00-000000000004",
+  "run_id": "WF02-REQ044-20260818",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ044-20260818/step-02a-elixir-dev.json",
+  "created_at": "2026-08-18T06:15:29Z",
+  "started_at": "2026-08-18T06:15:29Z",
+  "completed_at": "2026-08-18T06:19:11Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-044"],
+    "requirement_text": {
+      "REQ-044": "Port the core value types and top-level dispatch of src/engine/transition.zig's transition() (per src/design/engine.md \"Section EE-02: Pure Transition Function\", L442) as a pure Letflow module -- no Ecto.Repo call, no I/O of any kind, no clock read, matching transition.zig's own header contract (\"All state is passed in; all output is returned. No DB, no network, no clock\") and the same purity bar REQ-028 already established for the graph validator. This requirement builds the SKELETON and its non-gateway node transitions only. The gateway bodies are separate requirements (REQ-050 exclusive, REQ-051 parallel split/join) that plug into the dispatch this requirement defines. Determinism is load-bearing: identical inputs always produce identical outputs. An unknown event type returns an error state, never raises. A token sitting on a node id absent from the snapshot graph returns an error state naming the inconsistency. HUMAN_TASK appends to pending_task_nodes; END moves the instance toward COMPLETED. Reuses REQ-028's DefinitionGraph/GraphNode/GraphEdge/NodeType structs directly (lib/letflow/definitions/graph.ex) -- no redefinition."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": ["lib/letflow/design/req044-transition-kernel.md"],
+    "owned_modules": ["lib/letflow/engine/"]
+  },
+  "task": {
+    "description": "WF-02 Step 2a (docs/agents/workflows/WF-02_requirement_implementation.md 'Step 2a — Backend implementation'). Verify branch first: git branch --show-current must equal feature/WF02-REQ044-20260818 -- if not, STOP and report FAIL before touching any file. Read lib/letflow/design/req044-transition-kernel.md in full and implement it exactly as specified: the InstanceState struct, Token struct, TransitionEvent/PendingEvent shapes, transition_error/0 type, transition/3 and its dispatch_node/4 helper, dispatch_exclusive_gateway/4 and dispatch_parallel_gateway/4 stubs, under lib/letflow/engine/ (module layout per the design doc's §1 file-layout decision). No DB migration is involved (pure module, no priv/repo/migrations changes). Run mix compile --warnings-as-errors, mix format --check-formatted. Follow the design's moduledoc verbatim-text sections (§9 ObjectMap divergence note, §10 REQ-043 dependency-ordering note) exactly as specified -- do not paraphrase them.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "mix format --check-formatted exits 0 (or mix format was run to fix it)",
+      "transition/3's entire call graph contains zero Repo calls, zero HTTP/file access, zero DateTime.utc_now/System.system_time reads -- self-review confirms this by grep, and the moduledoc states it",
+      "calling transition/3 twice with the identical (snapshot, state, event) triple returns byte-identical results (self-review: no hidden mutable/process-dependent state used)",
+      "unknown event type returns {:error, {:unknown_event_type, ...}}-shaped result, never raises; a token on a node_id absent from the snapshot graph returns an {:error, {:unknown_node_id, node_id}}-shaped result naming the offending node_id",
+      "a token entering a HUMAN_TASK node adds that node to pending_task_nodes; tokens entering START/END/EXCLUSIVE_GATEWAY/PARALLEL_GATEWAY do not add to pending_task_nodes",
+      "moduledoc states verbatim (per design doc §9) that Zig's std.json.ObjectMap allocator-ownership contract is deliberately not ported",
+      "the module reuses Letflow.Definitions.Graph/Node from lib/letflow/definitions/graph.ex -- no second copy of those structs defined anywhere in lib/letflow/engine/"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented lib/letflow/design/req044-transition-kernel.md exactly: 3 files under lib/letflow/engine/ (Letflow.Engine.Token, Letflow.Engine.InstanceState, Letflow.Engine.Transition). Token/InstanceState are plain structs (design §2/§3), reusing Letflow.Definitions.Graph/Graph.Node from lib/letflow/definitions/graph.ex directly -- no redefinition of Graph/Node/Edge/NodeType anywhere under lib/letflow/engine/ (confirmed: only `defstruct`/`defmodule` for InstanceState and Token appear there). Transition module implements transition_event/0, pending_event/0 (term(), per design's deliberate-placeholder rationale), transition_error/0 (5 variants), transition/3's full @spec and body, dispatch_node/4's 5-way (+1 catch-all) dispatch, real bodies for :START (§6.1, advance to first outgoing edge in declaration order), :END (§6.2, remove token, status -> :completed iff tokens now empty), :HUMAN_TASK (§6.3, token stays put, appended to pending_task_nodes), and named-function stubs dispatch_exclusive_gateway/4 / dispatch_parallel_gateway/4 each returning {:error, {:gateway_not_yet_implemented, node_type, node_id}} (§6.4/§6.5) plus a generic catch-all for :SERVICE_TASK/:TIMER/:SUB_PROCESS/unknown atoms returning {:error, {:node_type_not_yet_implemented, node_type, node_id}} (§6.6). Both verbatim moduledoc sections (§9 Zig std.json.ObjectMap allocator-ownership divergence note, §10 REQ-043 dependency-ordering note) copied byte-for-byte into Letflow.Engine.InstanceState's @moduledoc, per the design's own 'ELIXIR-DEV's placement choice, content is fixed' instruction.\n\n`mix compile --warnings-as-errors` output: 'Compiling 8 files (.ex)\\nGenerated letflow app' -- exit 0, zero warnings, first try.\n\n`mix format --check-formatted` output: empty (exit 0) -- files were already correctly formatted as written, no reformat needed.\n\nSelf-review (handoff acceptance_criteria):\n- `grep -n \"Repo\\\\.|Logger\\\\.|DateTime\\\\.|System\\\\.os_time|System\\\\.system_time|HTTPoison|Req\\\\.|File\\\\.|:rand\\\\.|:crypto\\\\.\" lib/letflow/engine/*.ex` -- only matches are inside the moduledoc's own prose (documenting the purity contract in words) and the copy-pasted verification grep command itself in the moduledoc; zero matches in actual code.\n- Determinism: ran `mix run --no-start -e` (no DB/app start needed -- pure module) calling `transition/3` twice with an identical (snapshot, state, event) triple -- `r1 == r2` printed `true`.\n- Manually exercised all 5 dispatch cases plus the catch-all plus all 3 error paths via the same `mix run --no-start -e` script: START advances token n1->n2 and leaves pending_task_nodes/status unchanged; HUMAN_TASK leaves token at n2 and appends it to pending_task_nodes; END on a single-token instance removes the token and sets status: :completed; EXCLUSIVE_GATEWAY and PARALLEL_GATEWAY return their {:gateway_not_yet_implemented, ...} stub tuples naming the node id; SERVICE_TASK (an unhandled node_type) returns {:node_type_not_yet_implemented, :SERVICE_TASK, \"n6\"}; a bogus event tuple and a non-tuple event both return {:unknown_event_type, ...} naming the offending event value, never raise; an unknown token_id returns {:unknown_token_id, ...}; a token positioned on a node_id absent from the snapshot graph returns {:unknown_node_id, \"does-not-exist\"}, naming the offending id.\n- No second copy of DefinitionGraph/GraphNode/GraphEdge/NodeType anywhere under lib/letflow/engine/ -- verified via `grep -n \"defstruct|defmodule\" lib/letflow/engine/*.ex`: only Letflow.Engine.InstanceState and Letflow.Engine.Token define structs; Letflow.Engine.Transition defines no struct at all and aliases Letflow.Definitions.Graph / Letflow.Definitions.Graph.Node.\n- No existing state-machine's shape changed (process_instance.ex untouched) -- README.md's ASCII state diagram (draft/submitted/approved) does not apply to this new, not-yet-wired-in pure module, so it was left as-is; noted rather than silently skipped.\n- `mix test` was not run for this pure-module change since no test file exists yet -- TEST-DESIGNER (a later WF-02 step, after SECURITY-REVIEWER/REVIEWER) writes the ExUnit coverage for this module; nothing under test/ was added or touched by this handoff.",
+    "artifacts_out": [
+      "lib/letflow/engine/instance_state.ex",
+      "lib/letflow/engine/token.ex",
+      "lib/letflow/engine/transition.ex"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ044-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ044-20260818",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

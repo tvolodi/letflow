@@ -1,0 +1,120 @@
+---
+id: ISS-0043
+title: "Letflow.Engine.Task.assignee_type is free-text string for a closed USER|GROUP|ROLE set"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ043-20260818
+discovered_at: "2026-08-18T06:56:13Z"
+severity: MINOR
+tags:
+  - type-safety
+description: >
+  Found during REQ-043's REVIEWER gate (Step 2d) on lib/letflow/engine/task.ex.
+
+  Letflow.Engine.Task declares assignee_type as a plain field(:assignee_type,
+  :string) (lib/letflow/engine/task.ex:66), nullable, holding one of exactly
+  three semantic values per EE-03 -- "USER" | "GROUP" | "ROLE" (R-Co's own
+  005_instances.sql column comment, cited in
+  lib/letflow/design/req043-instance-engine-schema.md section 4.1). The
+  design explicitly considered and declined an Ecto.Enum here ("open
+  free-text per EE-03 section 1a's own column comment; no closed-set
+  validation named by any acceptance criterion") -- a reasoned, in-scope
+  choice, not an oversight. Not a REQ-043 defect and not blocking REQ-043's
+  own REVIEWER PASS.
+
+  This is a type-safety gap worth tracking: a caller-supplied typo ("Usre",
+  lowercase "user", "Team" instead of "GROUP") is a class of invalid state
+  that today only a runtime query miss or a future test would catch. An
+  Ecto.Enum (values: [:user, :group, :role], stored uppercase to match this
+  table's own established uppercase-status convention, INV-EE43-4) would
+  make the invalid string unrepresentable at the changeset layer instead --
+  the same pattern already used for tasks.status and tokens.status in this
+  same schema.
+
+  Filed for whichever future requirement first builds a write path through
+  Letflow.Engine.Task.insert_changeset/2 (REQ-045/051) -- the natural point
+  to add the Ecto.Enum, since it requires no new migration (DB column stays
+  plain :string; only the schema-layer type/cast validation change).
+
+  Discovered by REVIEWER during WF02-REQ043-20260818.
+affected_files:
+  - lib/letflow/engine/task.ex
+  - lib/letflow/design/req043-instance-engine-schema.md
+github_issue: https://github.com/tvolodi/letflow/issues/159
+status: resolved
+resolved_by: ISSUE-FIXER
+resolved_in_run: WF03-ISS0043-20260818
+resolved_at: 2026-08-18T07:01:45Z
+resolution_note: >
+  Diagnosed-and-deferred, not resolved-by-code-change, following the same
+  shape as the ISS-0042 precedent (WF03-ISS0042-20260818) -- but with one
+  material difference from that precedent, stated explicitly below: live
+  code verification of lib/letflow/engine/task.ex was not possible in this
+  checkout, and this record explains why that's acceptable for this
+  specific finding.
+
+  Renumbering correction (Step 0.5, registry lookup): this finding was
+  originally filed against GitHub issue #159 with the body stating "Local
+  record: docs/issues/ISS-0042.yaml". That is a cross-host ISS-numbering
+  collision, the same class already documented in
+  docs/anti-patterns.md (ISS-0034/ISS-0035, ISS-0036/ISS-0037/ISS-0039):
+  issue #159 was filed by a concurrent host (WF02-REQ043-20260818) that had
+  not yet seen this host's own WF02-REQ044-20260818 run land ISS-0042.yaml
+  as a *different*, unrelated finding (Letflow.Engine.Transition's
+  Graph.t()/CHK-04 type-safety note, already resolved and closed on this
+  main under WF03-ISS0042-20260818). docs/issues/ISS-0042.yaml on this
+  checkout was read directly and confirmed to be that unrelated,
+  already-resolved entry, not this one. The correct next available local
+  number on this main, per `ls docs/issues/` (highest existing entry is
+  ISS-0042.yaml), is ISS-0043 -- this file. No file content was overwritten;
+  this is a fresh file at the correct number, and the GitHub issue #159
+  comment (closing it) documents this renumbering for anyone following the
+  GH issue back to this repo.
+
+  Step 1 (diagnose): unlike the ISS-0042 precedent, a live read of
+  lib/letflow/engine/task.ex was NOT possible here. `ls lib/letflow/engine/`
+  in this checkout shows only instance_state.ex, token.ex, transition.ex
+  (REQ-044's output) -- no task.ex. REQ-043 (which introduces task.ex) has
+  not merged to main in this checkout yet; this run is a concurrent-host
+  artifact of that same unmerged REQ-043 work. This is judged acceptable,
+  not a violation of "reproduce the issue directly / no diagnosis from
+  prose alone", for a specific reason: the finding is not a claim about
+  currently-broken runtime behavior that could be reproduced or falsified
+  by running code (e.g. "function X raises on input Y") -- it is a
+  forward-looking design-choice note about a write path
+  (insert_changeset/2) that the issue's own text says does not exist yet
+  either ("Filed for whichever future requirement first builds a write path
+  through Letflow.Engine.Task.insert_changeset/2 (REQ-045/051)"). There is
+  no runtime scenario to reproduce today: assignee_type being an open string
+  with no Ecto.Enum is asserted directly by the design doc excerpt quoted in
+  the issue (req043-instance-engine-schema.md section 4.1, "open free-text
+  per EE-03 section 1a's own column comment; no closed-set validation named
+  by any acceptance criterion") and is not disputed by anything in this
+  checkout -- REQ-043's design doc is the artifact the claim rests on, and
+  its content isn't in question here (only whether the *decision it
+  records* is being correctly deferred).
+
+  Conclusion, evaluated purely on the reasoning presented per this run's
+  instructions: deferring the Ecto.Enum addition to REQ-045/051 is the
+  correct call, not a case needing immediate action. Grounds:
+  (1) the issue's own text already reaches this conclusion and states the
+  natural landing point (insert_changeset/2, first built by REQ-045/051);
+  (2) REQ-043's design doc treated this as a reasoned, in-scope choice
+  ("open free-text... no closed-set validation named by any acceptance
+  criterion"), not an oversight -- there is no current acceptance criterion
+  this violates;
+  (3) applying CLAUDE.md's and core-directives.md's anti-scope-creep norms
+  directly: adding an Ecto.Enum now, with no requirement or decision record
+  calling for it and no write path yet exercising insert_changeset/2 at
+  all, would be designing for a hypothetical future requirement ahead of
+  the requirement that actually needs it -- exactly the scope creep these
+  norms forbid, and the same reasoning ISS-0042's resolution applied to its
+  own analogous deferred fix;
+  (4) no ORCHESTRATOR.md section 10 sizing exception applies (this isn't a
+  one-line doc fix; it's a schema/changeset validation change that changes
+  cast/validation behavior and belongs with the requirement that first adds
+  the write path, so it can be designed, gated, and regression-tested
+  together with that path rather than in isolation ahead of it).
+
+  No code fix is filed. This issue is closed as diagnosed-and-correctly-
+  deferred; the Ecto.Enum addition remains recorded above, findable, for
+  REQ-045/051 to pick up when that write path is first built.

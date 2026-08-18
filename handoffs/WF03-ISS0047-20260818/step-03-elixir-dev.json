@@ -49,7 +49,7 @@
     ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0047-20260818",
-      "commit_sha_list": ["PENDING_COMMIT"]
+      "commit_sha_list": ["548c338"]
     }
   }
 }

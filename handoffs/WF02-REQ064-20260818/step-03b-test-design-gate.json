@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ064-20260818/step-03b-test-design-gate.json",
   "created_at": "2026-08-18T14:33:21Z",
   "started_at": "2026-08-18T14:50:02Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-18T15:00:04Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -42,19 +42,21 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "RE-GATE (rework iteration 1) PASS. Verified all four points independently, not from TEST-DESIGNER's self-report: (1) Read test/letflow/tenant_provisioning_test.exs's new describe block directly -- 'round-trips a schema_name_for_tenant/1 output back to the same tenant_id' generates a real Ecto.UUID.generate(), feeds it through schema_name_for_tenant/1 to get a real schema_name, then asserts tenant_id_for_schema_name/1 on that schema_name returns {:ok, ^tenant_id} -- a genuine full round-trip through the function's actual encode/decode contract (hex-reassembly + Ecto.UUID.cast per lib/letflow/tenant_provisioning.ex:102-115), not a shallow/trivial assertion. The second test asserts {:error, :invalid_schema_name} for the literal malformed string 'not_a_valid_schema_name', which genuinely exercises the with/else error path (fails the 'tenant_' <> hex prefix match). (2) test/specs/REQ-064.md's traceability table row for this criterion now reads 'REWORK (test-design-gate iteration 1) -- corrected' and accurately points at the new tenant_provisioning_test.exs describe block instead of the removed event_store_test.exs assertion; the 'What is verified by inspection, not a new runtime test' section was also updated to drop the now-false claim that this criterion is inspection-only. (3) git show --stat c1f6bc2 (the rework commit) touched only test/letflow/tenant_provisioning_test.exs, test/specs/REQ-064.md, and the step-03 handoff JSON -- event_store_test.exs was NOT touched, confirmed via git diff 8502d01 c1f6bc2 --stat across both rework commits (c1f6bc2, dc9c2e6) as well. (4) Ran `mix test` myself twice independently: both runs report 'Result: 777 passed (5 properties, 772 tests)', 0 failures, no @tag :skip found anywhere in tenant_provisioning_test.exs and no excluded tests in the run output. Independently re-derived the 777 figure rather than accepting TEST-DESIGNER's report.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ064-20260818/step-03b-test-design-gate.json"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ064-20260818",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF02-REQ064-20260818",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-RUNNER (4)"
   },
   "rework_count": 0,
   "max_rework": 3

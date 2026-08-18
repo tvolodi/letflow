@@ -143,6 +143,103 @@ defmodule Letflow.EngineTest do
     }
   end
 
+  # START -> PARALLEL_GATEWAY(split) -> PARALLEL_GATEWAY(join, direct edges) -> END.
+  # Mirrors test/letflow/engine/parallel_gateway_test.exs's own split/join fixture
+  # shape exactly (direct split->join edges, no intermediate node) -- the simplest
+  # graph shape that exercises a genuine split producing 2 tokens *and* the matching
+  # join firing, all within create/2's own single synchronous call, since neither
+  # branch has a HUMAN_TASK stop in the way (WF02-REQ045-20260818 addendum).
+  defp graph_start_parallel_split_join_end do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{"id" => "split", "node_type" => "PARALLEL_GATEWAY"},
+        %{"id" => "join", "node_type" => "PARALLEL_GATEWAY"},
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "split"},
+        %{"id" => "e2", "source" => "split", "target" => "join"},
+        %{"id" => "e3", "source" => "split", "target" => "join"},
+        %{"id" => "e4", "source" => "join", "target" => "end"}
+      ]
+    }
+  end
+
+  # START -> PARALLEL_GATEWAY(split into 2 branches) -> HUMAN_TASK(a) / HUMAN_TASK(b),
+  # each branch's own single-outgoing-edge chain continuing on to a shared join -> END.
+  # Both branches genuinely stop at their own HUMAN_TASK (no automatic outgoing
+  # traversal, transition.ex's dispatch_human_task/3 contract) -- create/2's own
+  # activation loop cannot reach the join within one call, and that's deliberate
+  # (WF02-REQ045-20260818 task step 2b): the join/END portion of this graph exists
+  # ONLY so dispatch_parallel_split/4's own find_matching_join/2 call succeeds
+  # structurally (a split with no matching join is REQ-051's own
+  # {:no_matching_join_found, node_id} error, not what this fixture is testing) -- it
+  # is never actually reached by any test using this fixture.
+  defp graph_start_parallel_split_human_tasks do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{"id" => "split", "node_type" => "PARALLEL_GATEWAY"},
+        %{
+          "id" => "task_a",
+          "node_type" => "HUMAN_TASK",
+          "attributes" => %{"role" => "approver_a"}
+        },
+        %{
+          "id" => "task_b",
+          "node_type" => "HUMAN_TASK",
+          "attributes" => %{"role" => "approver_b"}
+        },
+        %{"id" => "join", "node_type" => "PARALLEL_GATEWAY"},
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "split"},
+        %{"id" => "e2", "source" => "split", "target" => "task_a"},
+        %{"id" => "e3", "source" => "split", "target" => "task_b"},
+        %{"id" => "e4", "source" => "task_a", "target" => "join"},
+        %{"id" => "e5", "source" => "task_b", "target" => "join"},
+        %{"id" => "e6", "source" => "join", "target" => "end"}
+      ]
+    }
+  end
+
+  # START -> gw1 <-> gw2 forever. A cycle through 2 EXCLUSIVE_GATEWAY nodes is
+  # explicitly CHK-06-permitted (graph.ex: "a cycle is permitted iff at least one
+  # endpoint of the closing back-edge is a gateway node"). gw1's one non-default edge
+  # (to :END) carries a condition referencing a variable that's never set
+  # ("variables.does_not_exist == 1"), which Expr.evaluate_condition/2 folds to
+  # `false` (transition.ex's own catch-false rule) -- so gw1 always falls through to
+  # its default edge into gw2, and gw2's own single (default) edge always routes
+  # straight back to gw1. This drives the real advance_until_stable/4 loop forever,
+  # hitting its length(graph.nodes) * 4 + 10 == 4 * 4 + 10 == 26 hop bound for real --
+  # not a fabricated unit-level stand-in. A 1-node self-loop does NOT work here:
+  # tokens_needing_dispatch/3 treats a token landing back on the *same* node_id as
+  # "stayed put" (matching :HUMAN_TASK's own genuine-stop rule) and never re-queues
+  # it -- two distinct gateway node_ids are required for the loop to keep advancing.
+  defp graph_start_gateway_cycle_never_exits do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{"id" => "gw1", "node_type" => "EXCLUSIVE_GATEWAY"},
+        %{"id" => "gw2", "node_type" => "EXCLUSIVE_GATEWAY"},
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "gw1"},
+        %{
+          "id" => "e2",
+          "source" => "gw1",
+          "target" => "end",
+          "condition" => "variables.does_not_exist == 1"
+        },
+        %{"id" => "e3", "source" => "gw1", "target" => "gw2", "is_default" => true},
+        %{"id" => "e4", "source" => "gw2", "target" => "gw1", "is_default" => true}
+      ]
+    }
+  end
+
   defp create_definition_attrs(graph, overrides) do
     Map.merge(
       %{
@@ -483,6 +580,76 @@ defmodule Letflow.EngineTest do
       # Same benign snapshot-orphan exception as before (design §5 step 7 /
       # §9 OQ-4): the snapshot call runs -- and commits -- before the pure
       # activate/3 dispatch that fails.
+      assert snapshot_count(schema_name) == 1
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REVIEWER-flagged coverage gap (Step 2d re-review, WF02-REQ045-20260818): the
+  # worklist-based advance_until_stable/4 rework has zero PARALLEL_GATEWAY split/join
+  # coverage in this file -- the exact multi-token-in-flight scenario the rework
+  # exists for. See test/specs/REQ-045.md for the full rationale.
+  # ---------------------------------------------------------------------------------
+
+  describe "create/2 -- :PARALLEL_GATEWAY split/join (REVIEWER-flagged gap, WF02-REQ045-20260818)" do
+    test "a split whose 2 branches both lead directly to the matching join completes create/2 in the same call" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_parallel_split_join_end())
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+
+      assert result.status == :completed
+      assert result.current_nodes == []
+
+      projection = Repo.get!(InstanceProjection, result.instance_id, prefix: schema_name)
+      assert projection.status == :completed
+      assert projection.current_nodes == []
+
+      # Both split-derived tokens and the join's own merged token are all
+      # consumed by :END's own dispatch within the same create/2 call -- no
+      # tokens row survives, matching graph_start_end/0's and
+      # graph_start_gateway_end/0's own "same-call :END completion" shape.
+      assert token_count(schema_name) == 0
+    end
+
+    test "a split whose 2 branches each stop at their own HUMAN_TASK leaves 2 live tokens, one per branch" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_parallel_split_human_tasks())
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+
+      assert result.status == :active
+      assert Enum.sort(result.current_nodes) == ["task_a", "task_b"]
+
+      projection = Repo.get!(InstanceProjection, result.instance_id, prefix: schema_name)
+      assert projection.status == :active
+      assert Enum.sort(projection.current_nodes) == ["task_a", "task_b"]
+
+      assert token_count(schema_name) == 2
+      tokens = Repo.all(TokenRecord, prefix: schema_name)
+      assert Enum.sort(Enum.map(tokens, & &1.node_id)) == ["task_a", "task_b"]
+      assert Enum.all?(tokens, &(&1.instance_id == result.instance_id))
+
+      # Each branch's own derived branch_id (dispatch_parallel_split/4's
+      # `token.token_id <> "/" <> index` convention) is distinct per token --
+      # confirms the split genuinely produced 2 independent tokens, not one
+      # token duplicated.
+      assert tokens |> Enum.map(& &1.branch_id) |> Enum.uniq() |> length() == 2
+    end
+  end
+
+  describe "create/2 -- hop-limit-exceeded (REVIEWER-flagged gap, WF02-REQ045-20260818)" do
+    test "a CHK-06-permitted gateway cycle that never exits returns {:error, {:activation_failed, {:hop_limit_exceeded, _}}}, writing zero rows except the benign snapshot orphan" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_gateway_cycle_never_exits())
+
+      assert {:error, {:activation_failed, {:hop_limit_exceeded, token_id}}} =
+               Engine.create(base_attrs(definition), prefix: schema_name)
+
+      assert is_binary(token_id)
+      assert projection_count(schema_name) == 0
+      assert token_count(schema_name) == 0
+      assert event_count(schema_name) == 0
       assert snapshot_count(schema_name) == 1
     end
   end

@@ -1,0 +1,75 @@
+{
+  "handoff_id": "step-02c-security-reviewer",
+  "run_id": "WF02-REQ040-20260817",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ040-20260817/step-02c-security-reviewer.json",
+  "created_at": "2026-08-18T00:56:12Z",
+  "started_at": "2026-08-18T00:56:12Z",
+  "completed_at": "2026-08-18T01:18:40Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-040"],
+    "related_handoff_ids": [
+      "step-01-code-designer",
+      "step-01-code-designer-rework",
+      "step-01b-code-design-validator-rereview",
+      "step-02a-elixir-dev"
+    ],
+    "artifacts_in": [
+      "priv/repo/migrations/20260818090001_create_promotion_assertion_runs.exs",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/definitions/promotion_assertion_run.ex",
+      "lib/letflow/definitions/promotion_artifact.ex",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/design/req040-promotion-assertion-rerun.md",
+      "handoffs/WF02-REQ040-20260817/step-02a-elixir-dev.json",
+      "docs/requirements.yaml",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": ["lib/letflow/", "priv/repo/migrations/"]
+  },
+  "task": {
+    "description": "WF-02 Step 2c hard gate on REQ-040 (Promotion assertion re-run orchestration, PRM-06/07) against docs/agents/instructions/security-invariants.md, following ELIXIR-DEV's Step 2a implementation. Independently re-derive the verdict from the diff (git diff main...HEAD) rather than trusting ELIXIR-DEV's self-report, including its self-reported Repo.get_by/prefix bug fix.",
+    "acceptance_criteria": [
+      "Scope test run explicitly and recorded",
+      "Every applicable invariant (INV-1..INV-8) checked against the actual diff, not assumed",
+      "INV-1's (a)/(b)/(c) sub-checks each confirmed by reading the migration and apply_promotion_assertion_rerun/6 directly",
+      "The self-reported Repo.get_by prefix bug independently re-verified as fixed in the current code, not taken on the handoff's word",
+      "Sandbox fixture-loading call site confirmed to pass only artifact.fixtures[]",
+      "Unique index and FK confirmed against the actual migration DDL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed git diff main...HEAD (12 files, 2520 insertions / 7 deletions) covering the new promotion_assertion_runs migration, the new PromotionAssertionRun/PromotionArtifact modules, the TenantProvisioning manifest entry, and apply_promotion_assertion_rerun/6 plus its 20 private helpers in lib/letflow/definitions.ex. Scope test: YES, tenant-data path (new migration + new tenant-scoped table + new lookup-by-idempotency-key path) -- SECURITY-REVIEWER applies in full, not the out-of-scope short-circuit. INV-1 (tenant data isolation) APPLIES and PASSES: (a) every Repo call touching promotion_assertion_runs passes prefix explicitly -- Repo.insert(changeset, on_conflict: :nothing, conflict_target: [:tenant_id, :idempotency_key], prefix: prefix), Repo.get(PromotionAssertionRun, attempted_id, prefix: prefix), Repo.get_by(PromotionAssertionRun, [tenant_id: tenant_id, idempotency_key: idempotency_key], prefix: prefix), and run |> PromotionAssertionRun.update_changeset(attrs) |> Repo.update(prefix: prefix) -- no query against this schema reaches the default/public schema; (b) the migration wraps table/index/constraint creation in `if prefix() do` (priv/repo/migrations/20260818090001_create_promotion_assertion_runs.exs), create table(..., prefix: prefix()), both indexes and the CHECK constraint also pass prefix: prefix() -- nothing is left reachable in `public`; (c) tenant_id is derived server-side inside apply_promotion_assertion_rerun/6 via `TenantProvisioning.tenant_id_for_schema_name(prefix)` where prefix = Keyword.get(opts, :prefix) -- read tenant_provisioning.ex's tenant_id_for_schema_name/1 directly and confirmed it parses the UUID embedded in the 'tenant_<hex>' schema-name string itself, with no caller-supplied override path; tenant_id is never accepted as a separate positional argument to apply_promotion_assertion_rerun/6 (its signature is review_id, plan_digest, artifact, sandbox_pool, max_wait_ms, opts -- no tenant_id parameter at all). Self-reported prefix bug independently re-verified: the current fetch_existing_assertion_run/3 in lib/letflow/definitions.ex uses the explicit two-argument clause form Repo.get_by(PromotionAssertionRun, [tenant_id: tenant_id, idempotency_key: idempotency_key], prefix: prefix) -- prefix is a genuine third-argument query option, not merged into the WHERE-clause keyword list; confirmed this is the only Repo.get_by call site introduced by this diff (grepped the full diff, one hit). Fixture-loading path (AC2) verified at its actual call site: run_replay_span/8 calls FixtureLoader.load_fixtures_only(schema_name, artifact.fixtures, []) where schema_name comes from the freshly claimed %SandboxClaim{} (the ephemeral sandbox's own schema, not the tenant's production schema) and artifact.fixtures is exactly the PromotionArtifact struct's fixtures field -- no broader tenant dataset, no additional query, is passed. No new Repo.query/raw SQL: grepped the diff for Repo.query, zero hits; the migration's DDL uses only Ecto's migration DSL (create table/index/constraint), no string-interpolated identifiers. Unique index confirmed genuinely composite: create unique_index(:promotion_assertion_runs, [:tenant_id, :idempotency_key], name: :uq_promotion_assertion_runs_idempotency, prefix: prefix()) -- not idempotency_key alone, so a cross-tenant idempotency_key collision cannot suppress a distinct tenant's insert. FK confirmed correct: review_id references(:promotion_reviews, column: :id, type: :binary_id, on_delete: :nothing) -- checked promotion_reviews' own migration (20260816200001_create_promotion_reviews.exs) and confirmed its id column is also :binary_id and the table is created with the same prefix: prefix() mechanism, so this is a same-tenant-schema FK, not a cross-schema reference; on_delete: :nothing matches the existing instance_definition_snapshots.definition_id precedent cited in the migration's own header. INV-4 (secrets by reference) APPLIES (live invariant) and PASSES: grepped all five changed/new lib+migration files for the hardcoded-secret heuristic pattern, zero hits; nothing in this diff resolves or handles a secret. INV-7 (no SQL string interpolation) APPLIES and PASSES: zero Repo.query call sites in the diff; the one string-concatenation site (build_idempotency_key/2, \"promotion_rerun:\" <> review_id <> \":\" <> plan_digest) builds a plain Elixir string used as a bound Ecto changeset field value, never interpolated into raw SQL text. INV-8 (no unhandled crashes on realistic failure paths) APPLIES and PASSES: the two `{:ok, X} = ` grep hits in this diff are both case-branch patterns inside exhaustive case/do blocks (SandboxClaim and PromotionAssertionRun), not bare assignment matches; independently read lib/letflow/sandbox_pool.ex's actual handle_call({:claim,...}) and handle_call({:release,...}) implementations and confirmed the case statements in claim_sandbox_and_proceed/8 (matching :sandbox_unavailable/:provision_failed) and apply_teardown_precedence/7 (matching :ok/{:error,_}/:not_attempted) are exhaustive against SandboxPool's actual traced return values, not merely its broader @spec -- this matches (and independently confirms, rather than just accepts) ELIXIR-DEV's own inline comment claiming the same. The fixture-load/replay/release span is wrapped in try/rescue (run_replay_span/8) covering raised exceptions including Jason.DecodeError from strip_non_deterministic_fields/2, with a best-effort fail-closed release+row-update in the rescue clause that itself swallows its own failure -- appropriate for a path that touches external I/O (Postgres, the sandbox schema) and tenant/artifact-controlled data. INV-2 (server-side field authorisation), INV-3 (untrusted runtime sandboxing), INV-5 (not-found/forbidden indistinguishability) are NOT-APPLICABLE: no new HTTP route or API response type is introduced (S4 not started), no tenant-authored Lua/WASM script execution is introduced (S5 not started -- the 'sandbox' here is a REQ-039 ephemeral Postgres schema for assertion replay, an unrelated use of the word to INV-3's tenant-script sandboxing), and no lookup-by-ID HTTP endpoint is introduced. INV-6 (new data-access paths prove their scoping) APPLIES and is satisfied by this handoff itself. No BLOCKER or MAJOR findings. Two non-blocking observations recorded below for the record, neither blocking PASS.",
+    "artifacts_out": ["handoffs/WF02-REQ040-20260817/step-02c-security-reviewer.json"],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "claim_sandbox_and_proceed/8's `case SandboxPool.claim(max_wait_ms, sandbox_pool) do ... end` pattern-matches only {:ok, claim} and {:error, reason} when reason in [:sandbox_unavailable, :provision_failed], which is narrower than SandboxPool.claim/2's own published @spec (which also allows {:error, term()}). This is not a defect today -- I independently read sandbox_pool.ex's handle_call({:claim,...}) implementation and confirmed it only ever replies with those two error atoms or the ok tuple, so the case is exhaustive against actual current behavior, matching the inline comment's own claim. Flagging only because this narrowing is implicit (inferred from a second module's internals) rather than a CaseClauseError-proof match against SandboxPool's own declared contract -- if SandboxPool.claim/2's implementation is ever extended to return a different {:error, _} shape without updating this call site, this would silently become a live CaseClauseError crash on a tenant-triggered path. Not a BLOCKER: the current code is correct and I verified it directly rather than trusting the comment.",
+        "affected_requirement": "REQ-040"
+      },
+      {
+        "severity": "MINOR",
+        "description": "GenServer.call(pool, {:claim, max_wait_ms}, max_wait_ms + @call_timeout_buffer_ms) inside SandboxPool.claim/2 (not modified by this diff, pre-existing REQ-039 code) can exit the calling process with reason :timeout if no reply arrives in time -- a process exit, not a raised exception, so it would not be caught by run_replay_span/8's try/rescue even if it occurred inside that span. In this diff's actual control flow the claim call happens in claim_sandbox_and_proceed/8, before run_replay_span/8's try begins, so this is out of that try's scope regardless. Noting for the record since it touches the same crash-safety topic this requirement's design doc explicitly flags as an open question (§11 OQ), not because this diff introduces or worsens it -- SandboxPool.claim/2 itself is REQ-039 scope, already merged, not part of this diff.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ040-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ040-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (Step 2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

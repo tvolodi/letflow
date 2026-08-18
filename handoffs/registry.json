@@ -912,6 +912,28 @@
       "queue_agent_id": "hetzner-wt2-orch",
       "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
       "note": "letflow-queue task 110 / GH#165, filed by another host mid-run (WF02-REQ043-20260818, still unmerged in this checkout) about tenant_id caller-mismatch rejection not yet enforceable on Letflow.Engine.Task/Token since no context module exists yet. Explicitly self-deferred by its own filer (RELEASE-VALIDATOR) to a named future trigger (REQ-045/051/062 landing a real write path); a tripwire test already pins today's real behavior on the originating branch. Cross-host ISS-numbering collision again -- GH#165's referenced ISS-0043.yaml already belongs to this session's own unrelated finding (WF03-ISS0043-20260818). ISSUE-FIXER diagnosed as correctly deferred, nothing actionable now (no live-code read needed or possible -- the finding is about a not-yet-built write path). Filed corrected docs/issues/ISS-0045.yaml, closed GH#165. No code changed."
+    },
+    {
+      "run_id": "WF03-ISS0044-20260818",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "stage": null,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "test/letflow/sandbox_pool_test.exs",
+        "test/letflow/sandbox_pool/fixture_loader_test.exs",
+        "test/letflow/definitions/search_test.exs",
+        "test/letflow/definitions/service_scope_validator_test.exs"
+      ],
+      "lock_acquired_at": "2026-08-18T07:49:57Z",
+      "lock_released_at": "2026-08-18T08:03:35Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (git merge) COMPLETED -- PR #171 squash-merged into main as 174ef771153e2b9a10b395ff9588dfae7a66a13b, queue task 109 released done.",
+      "backfilled": false,
+      "queue_task_id": 109,
+      "queue_agent_id": "hetzner-wt2-orch",
+      "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
+      "note": "ISS-0044/GH#166 (own finding, filed by TEST-RUNNER during this session's WF02-REQ049-20260818 run): 3 groups of pre-existing compiler warnings. ISSUE-FIXER's Steps 0.5/1 diagnosis: Group 2 (4 unused-default-arg warnings) mechanical and fixable now -- every call site already supplies the argument; Group 1 (register_test/4 deprecation) originates entirely inside StreamData 0.6.0's own macro, needs its own scoped version-bump requirement, deferred; Group 3 (migration module redefinition) confirmed same non-blocking mechanism ISS-0020 already established, no fix needed. ORCH applied Group 2's fix directly under ORCHESTRATOR.md sec10's sizing exception (single-concern, exactly-specified, per file), then obtained independent REVIEWER sign-off before merging rather than skipping validation, matching the ISS-0020 precedent. mix test 704 tests/0 failures maintained; all 4 targeted warnings confirmed gone, no new warning introduced. ISS-0044 marked resolved as a whole (its only actionable item fixed+verified; Groups 1/3 documented as permanently deferred, not silently dropped). GH#166 closed."
     }
   ]
 }

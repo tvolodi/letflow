@@ -6,7 +6,17 @@
 only. D2 (dropping `tenant_id`) is explicitly out of scope — reserved for REQ-064.
 **This document produces:** three new tenant-scoped migration shapes, the
 `tenant_scoped_migrations/0` manifest entries for them, the data-copy mechanism's
-function signature, the public-table-drop migration, and an explicit scope boundary.
+function signature, the public-table-drop migration, the `Letflow.Identity`
+`:prefix`-threading fix that is a hard precondition for the drop migration to run
+safely (§5b), and an explicit scope boundary.
+
+**Rework iteration 1 note:** the first version of this design left the
+`Letflow.Identity` prefix-threading gap as an unresolved open question with only an
+illustrative example. §5b below is new in this iteration and resolves it concretely,
+per CODE-DESIGN-VALIDATOR's FAIL (`handoffs/WF02-REQ063-20260818/step-01b-design-gate.json`).
+Everything else (the three migrations in §2, the manifest entries in §3, the data-copy
+mechanism in §4, the drop migration in §5, and the tenant_id-not-dropped scope
+statement) is unchanged from the version that independently passed review.
 
 ---
 
@@ -24,14 +34,23 @@ function signature, the public-table-drop migration, and an explicit scope bound
   public-schema shape, unchanged column/type list carried forward)
 - `lib/letflow/identity/user.ex`, `group.ex`, `tenant_role.ex` (current Ecto schema
   modules — moduledoc/field lists this requirement's implementer must also touch)
-- `lib/letflow/identity.ex` (JIT upsert path — `insert_or_fetch/3`,
-  `re_select_on_conflict/2`, `get_by_external_identity/2` — none of these signatures
-  change under D1, confirmed: they operate on `Repo`/`User` without a `prefix:` today
-  because `users` is public; REQ-063 does not touch `identity.ex` itself, since routing
-  every identity call through a resolved tenant `:prefix` is deferred, see §6 below)
+- `lib/letflow/identity.ex` (JIT upsert path — `provision_oidc_user/3`,
+  `upsert_by_external_identity/3`, `insert_or_fetch/3`, `re_select_on_conflict/2`,
+  `get_by_external_identity/2` — this call chain's signatures **do change** under this
+  design, see §5b: each gains an `opts :: [prefix: String.t()]` argument so its `Repo`
+  calls target the correct tenant schema once `users` moves off `public`)
 - `lib/letflow/tenant_provisioning.ex` (`tenant_scoped_migrations/0`'s current 14-entry
-  manifest, `tenant_id_for_schema_name/1`, `schema_name_for_tenant/1`,
-  `replay_migrations/2`, the `Registration` schema)
+  manifest, `tenant_id_for_schema_name/1`, `schema_name_for_tenant/1` — confirmed
+  `@spec schema_name_for_tenant(tenant_id :: Ecto.UUID.t()) :: {:ok, String.t()} |
+  {:error, :invalid_tenant_id}`, pure/no I/O — `replay_migrations/2`, the
+  `Registration` schema)
+- `lib/letflow/definitions.ex` (grepped for `prefix:`; confirmed the `opts :: [prefix:
+  String.t()]` convention at line 145 and its actual call-site usage, e.g.
+  `Repo.get(ProcessDefinition, uuid, prefix: prefix)` — read directly for this rework,
+  not cited from memory, per the rework instruction)
+- `lib/letflow/plugs/auth_pipeline.ex` (full — confirmed `provision_user/3`'s exact
+  body, its caller `call/2`'s `with`/`else` structure, and that `tenant.id` is resolved
+  at step 2, strictly before `provision_user/3` runs at step 4b)
 - R-Co `migrations/GBL-112_tnt01_drop_legacy_public_business_tables.sql` (guarded-drop
   precedent this design's step 4 migration follows)
 - `docs/anti-patterns.md` (no directly-applicable prior finding for this shape; checked
@@ -65,21 +84,12 @@ function signature, the public-table-drop migration, and an explicit scope bound
   before any `users` query runs. No pipeline change is designed here.
 - **Decision 0006 D4** (cross-tenant reporting mechanism via `tenant_schemas` union).
   No consumer exists; out of scope.
-- **Routing `Letflow.Identity`'s query/write functions through a resolved `:prefix`.**
-  This is a necessary follow-up (once `users` moves per-schema, every
-  `Repo.get_by(User, ...)`/`Repo.insert(changeset, ...)` call in `identity.ex` must gain
-  a `prefix:` option, the same way `definitions.ex` already threads `prefix` through
-  every `Repo` call) but it is **implementation work belonging to whichever
-  requirement wires `AuthPipeline`/`Identity` calls to pass the resolved tenant schema
-  through** — not named as in-scope by REQ-063's own acceptance criteria, which only
-  ask for the migrations/manifest/copy/drop shape. Flagged as an **open question** in
-  §7 rather than silently assumed either way, since leaving `identity.ex` as-is after
-  this migration ships means every `Identity` call would target the *default* Postgres
-  search path (`public`) where the tables no longer exist, producing a hard failure the
-  moment the public tables are dropped (§5) — this is exactly why §7 below states it
-  must be resolved, explicitly, before REQ-063's Step 5 (public-table-drop) is executed
-  against a live target, not left for a future requirement to discover as a production
-  incident.
+- **Dropping `tenant_id` from `identity.ex`'s query filters, or any other D2-territory
+  change.** `identity.ex`'s `prefix:` threading (§5b below) is **in scope** for this
+  design — it is the hard precondition §5's drop migration needs and is now designed
+  concretely (see §5b) — but it changes only how the schema is selected, not what
+  `tenant_id` does inside that schema. `tenant_id` remains present and used as a plain
+  filter in every affected query.
 
 ---
 
@@ -440,6 +450,143 @@ wrong. Whatever mechanism is chosen, the migration must:
 
 ---
 
+## 5b. `Letflow.Identity` prefix-threading (resolves §7 item 1 — REWORK addition)
+
+**Scope of this fix, precisely bounded (do not over-scope):** of `identity.ex`'s three
+public functions, only `provision_oidc_user/3`'s own call chain touches
+`users`/`groups`/`tenant_role`. `resolve_tenant_by_realm/1` and `verify_realm_ownership/2`
+(via its private helper `resolve_realm_by_tenant/1`) both query `Letflow.Identity.Tenant`
+only — `Tenant` is a Decision 0006 D3 table that **stays in the public schema**
+permanently, not moved by this or any future requirement. **These two functions need
+NO change and are confirmed unaffected** — do not add a `prefix:`/`opts` parameter to
+either of them; doing so would be scope creep against a table this design never touches.
+
+**Convention followed:** `lib/letflow/definitions.ex`'s existing `opts :: [prefix:
+String.t()]` (confirmed at `definitions.ex` line 145, used as the last positional
+argument on every public function that issues a tenant-scoped `Repo` call, e.g.
+`Repo.get(ProcessDefinition, uuid, prefix: prefix)` — the option is threaded straight
+into the `Repo` call's own `opts`, not unpacked into a bespoke named parameter).
+`identity.ex`'s fix follows this exact shape: an `opts :: [prefix: String.t()]` keyword
+list, added as each function's new last argument, threaded unchanged into every `Repo`
+call inside the chain.
+
+**New/changed `@type`, added to `identity.ex` alongside the existing `provisioning_error/0`:**
+
+```
+@type opts :: [prefix: String.t()]
+```
+
+**`provision_oidc_user/3` becomes `provision_oidc_user/4`** (arity change — every
+caller must add the new argument; there is exactly one caller, `AuthPipeline`, see
+below):
+
+```
+@spec provision_oidc_user(
+        identity_context :: IdentityContext.t(),
+        tenant_id :: Ecto.UUID.t(),
+        jit_config :: JitProvisioningConfig.t(),
+        opts :: opts()
+      ) ::
+        {:ok, %{user: User.t(), created: boolean()}}
+        | {:error, provisioning_error()}
+```
+
+`opts` is **required** (no default `\\ []`) — a caller that omits it would silently hit
+`Repo`'s own default `prefix: nil` (or actually raise/`ArgumentError`-shape depending on
+adapter, but in any case resolve against `public`, which no longer holds `users` after
+§5's drop runs). Forcing every call site to pass it explicitly is deliberate: a missing
+`prefix:` here is exactly the failure mode this rework closes, and a silent default
+would let a future caller reintroduce it.
+
+**Private call chain, each gaining the same `opts` as its own new last argument, passed
+through unchanged (no repacking, no defaulting) at every hop:**
+
+```
+defp upsert_by_external_identity(identity_context, tenant_id, jit_config, opts)
+defp insert_or_fetch(identity_context, tenant_id, jit_config, opts)
+defp re_select_on_conflict(tenant_id, identity_context, opts)
+defp get_by_external_identity(tenant_id, identity_context, opts)
+```
+
+**The three `Repo` calls inside this chain each gain `prefix: prefix` (extracted from
+`opts` once, via `Keyword.fetch!(opts, :prefix)`, at the top of
+`provision_oidc_user/4` — not re-extracted at each call site — then passed down as part
+of `opts` unchanged, matching how `definitions.ex` itself either threads the raw `opts`
+keyword list straight into a `Repo` call, or destructures `prefix` once near its
+function's top and closes over it for the rest of that function's body):**
+
+- `insert_or_fetch/4`'s `Repo.insert(changeset, on_conflict: :nothing, conflict_target:
+  ..., returning: true, prefix: prefix)` — line 165's call gains `prefix: prefix`.
+- `insert_or_fetch/4`'s `Repo.get(User, id, prefix: prefix)` — line 186's call gains
+  `prefix: prefix` (today's call has no options at all; `prefix:` is the only option
+  added).
+- `get_by_external_identity/3`'s `Repo.get_by(User, [tenant_id: tenant_id, external_realm:
+  ..., external_id: ...], prefix: prefix)` — line 208's call gains `prefix: prefix` as
+  a third argument to `Repo.get_by/3` (today's call is `Repo.get_by/2` with no options).
+
+No other line in `identity.ex` changes. `tenant_id` remains a plain match filter inside
+each query's `where`/keyword-list clause exactly as it is today — D1 does not touch
+`tenant_id`'s presence on the column (that's D2/REQ-064); `prefix:` selects *which
+schema* the query runs against, `tenant_id:` remains an ordinary filter *within* that
+schema, and both continue to co-exist on the same query without conflict.
+
+**`AuthPipeline.provision_user/3` call-site edit** (`lib/letflow/plugs/auth_pipeline.ex`,
+private function, currently at line ~168-175, calling `Identity.provision_oidc_user/3`
+at line 171):
+
+- **New value obtained:** `TenantProvisioning.schema_name_for_tenant(tenant_id)`, called
+  on the `tenant_id` parameter `provision_user/3` already receives (the step-2-resolved,
+  DB-sourced `tenant.id` — the same value the function's existing moduledoc comment
+  already documents as "never `identity_context.tenant_id`"). This tenant is resolved
+  earlier in the pipeline, at step 2 (`resolve_tenant/1`, `call/2`'s third `with` clause),
+  strictly before `provision_user/3` runs (step 4b) — so a valid, already-authenticated
+  `tenant_id` is guaranteed in hand by the time this new call executes; no new DB round
+  trip to re-resolve the tenant is needed, only the pure `schema_name_for_tenant/1`
+  encoding (confirmed pure/no-I/O at `tenant_provisioning.ex`'s own doc comment).
+- **New alias needed:** `alias Letflow.TenantProvisioning` added to `auth_pipeline.ex`'s
+  existing alias block (currently `Identity`, `ClaimMapping`, `ClaimMappingConfig`,
+  `JitProvisioningConfig`).
+- **Concrete new body shape for `provision_user/3`** (signature unchanged — still
+  `defp provision_user(identity_context, tenant_id, realm)`, three arguments; only the
+  body changes to resolve the schema name and pass it through):
+  - Call `TenantProvisioning.schema_name_for_tenant(tenant_id)` first.
+  - On `{:ok, schema_name}`: call `Identity.provision_oidc_user(identity_context,
+    tenant_id, jit_config, prefix: schema_name)` exactly as before, except the call
+    is now arity-4 with the new `[prefix: schema_name]` opts list as the fourth
+    argument, and its result is still mapped through `{:ok, provisioned} -> {:ok,
+    provisioned}` / `{:error, reason} -> {:error, {:provision, reason}}` unchanged.
+  - On `{:error, :invalid_tenant_id}`: **new branch**, not reachable by any existing
+    test today — return `{:error, {:provision, :invalid_tenant_id}}`, reusing the
+    exact same `{:provision, reason}` tagging shape `provision_user/3`'s other branch
+    already uses, so `call/2`'s existing `else` clause's
+    `{:error, {:provision, _reason}} -> reject(conn, 500, "internal_error", ...)`
+    catches it with **no new clause needed in `call/2`'s `else`** — a schema-name
+    derivation failure is exactly the kind of internal/unexpected error that
+    catch-all already exists to cover, not a new distinguishable HTTP status.
+
+**Error-shape impact on `provision_oidc_user/4`'s own return type — answered
+explicitly, per WF-02's error-handling-shape requirement (closes REWORK item (d)):**
+`provision_oidc_user/4` **does not itself gain a new error case.** The
+`schema_name_for_tenant/1` call (and its `{:error, :invalid_tenant_id}` branch above)
+happens in `AuthPipeline.provision_user/3`, **before** `Identity.provision_oidc_user/4`
+is ever invoked — `provision_oidc_user/4` only receives an already-resolved `prefix:`
+string inside `opts`, never a raw `tenant_id` it would need to re-derive a schema name
+from itself. `provisioning_error/0` (`identity.ex`'s existing `@type`) is therefore
+**unchanged** by this fix. The new `:invalid_tenant_id` case is visible only at
+`AuthPipeline`'s `{:provision, reason}`-tagged error tuple, folded into the existing
+`{:error, {:provision, _reason}} -> 500` catch-all as described above — no new
+`call/2` branch, no new HTTP status code, no `identity.ex` type change.
+
+**§7 item 1, disposition:** this sub-section resolves §7 item 1 **in this design** — see
+the replacement text in §7 below. It is judged in-scope for REQ-063 itself (not
+deferred to a follow-up requirement) because §5's drop migration is REQ-063's own
+deliverable and cannot ship safely without it — narrowing REQ-063 to exclude §5 instead
+would just relocate the same problem to a same-sprint follow-up with no benefit, per the
+rework instruction's stated standard that "flag with no plan" is not an acceptable
+disposition here.
+
+---
+
 ## 6. Cross-module dependencies
 
 - `Letflow.TenantProvisioning` (`tenant_scoped_migrations/0`, `Registration`,
@@ -451,15 +598,21 @@ wrong. Whatever mechanism is chosen, the migration must:
   per-schema rather than public — **moduledoc wording update flagged as
   implementation-detail cleanup for ELIXIR-DEV, not a schema/behavior change**, since
   the field itself doesn't move under this requirement.
-- `Letflow.Identity` (`identity.ex`) — **not modified by this requirement's design**
-  (see §1's scope boundary) but becomes functionally broken the moment §5's drop
-  migration runs, unless something threads a `prefix:` option through its `Repo`
-  calls first. This is §7 item 1's open question, restated here as a hard cross-module
-  dependency: §5 must not execute in any environment where `identity.ex` still queries
-  `users`/`groups` unprefixed.
-- `Letflow.Plugs.AuthPipeline` — no code change (Decision 0006 §R5, restated in the
-  requirement text); listed here only because it is the caller that would surface
-  §7 item 1's gap first, at runtime, if that gap ships unresolved.
+- `Letflow.Identity` (`identity.ex`) — **modified by this requirement's design**, per
+  §5b: `provision_oidc_user/3` → `/4` (new `opts :: [prefix: String.t()]` argument),
+  plus the same threading through its private call chain
+  (`upsert_by_external_identity/4`, `insert_or_fetch/4`, `re_select_on_conflict/3`,
+  `get_by_external_identity/3`). `resolve_tenant_by_realm/1` and
+  `verify_realm_ownership/2` are confirmed unchanged (they query `Tenant`, a
+  public-schema D3 table). This closes the hard precondition §5's drop migration
+  needs — see §5b.
+- `Letflow.Plugs.AuthPipeline` — **one call-site edit**, per §5b: `provision_user/3`'s
+  body now calls `TenantProvisioning.schema_name_for_tenant/1` on the already-resolved
+  `tenant_id` and passes the result as `Identity.provision_oidc_user/4`'s new `prefix:`
+  opt; gains a new `alias Letflow.TenantProvisioning`. Signature of `provision_user/3`
+  itself is unchanged (still three arguments). Decision 0006 §R5's pipeline-*ordering*
+  finding still holds unchanged (no step reordering) — only this one call site's
+  argument list changes.
 - `priv/repo/migrations/` — three new tenant-scoped `create table` migrations (§2), one
   new global `DROP TABLE` migration (§5). Does not modify the four existing S1 global
   migrations (`CreateTenants`, `CreateGroups`, `CreateTenantRole`, `CreateUsers`) — they
@@ -476,21 +629,18 @@ wrong. Whatever mechanism is chosen, the migration must:
 ---
 
 ## 7. Open questions (explicit, per Decision 0006 §7 and this requirement's own
-   framing — NOT resolved here)
+   framing — item 1 is now resolved in this design (§5b); items 2-4 remain open)
 
-1. **How does `Letflow.Identity`'s query/write path learn the tenant schema `:prefix`
-   once `users`/`groups` move per-schema?** Decision 0006 does not name this — it is a
-   gap this design surfaced while checking `identity.ex`'s current call sites (none
-   thread a `prefix:` option today, because the tables are public today). Until this is
-   resolved, §5's drop migration must not run against any environment where
-   `AuthPipeline`/`Identity` are expected to keep working — this is a hard
-   precondition, not a nice-to-have, and is the single biggest risk this design
-   surfaced that Decision 0006's text does not already flag. A future requirement (or
-   an amendment to this one, at ELIXIR-DEV's/REVIEWER's discretion during
-   implementation) must design how the resolved tenant schema name reaches
-   `Identity`'s functions — e.g. threading it as an explicit argument the way
-   `definitions.ex`'s `opts :: [prefix: String.t()]` convention already does, called
-   from `AuthPipeline` once the tenant is resolved.
+1. **RESOLVED IN THIS DESIGN (rework iteration 1) — how does `Letflow.Identity`'s
+   query/write path learn the tenant schema `:prefix` once `users`/`groups` move
+   per-schema?** See §5b: `provision_oidc_user/3` becomes `/4` with a new
+   `opts :: [prefix: String.t()]` argument, threaded through its entire private call
+   chain into the three `Repo` calls that touch `users`; `AuthPipeline.provision_user/3`
+   is the one call site, edited to derive the prefix via
+   `TenantProvisioning.schema_name_for_tenant/1` on the already-resolved `tenant_id`.
+   `resolve_tenant_by_realm/1` and `verify_realm_ownership/2` are confirmed to need no
+   change (they query the public-schema `Tenant`, not `users`). This is no longer an
+   open question; §5's drop-migration precondition is satisfied by this design.
 2. **Does `tenants.status == :migrating` gate the D1 cutover?** Restated verbatim from
    Decision 0006 §7 item 2 / `req022` §7's secondary open question — this design does
    not add any check against `Letflow.Identity.Tenant.status` anywhere in §4's copy
@@ -529,4 +679,8 @@ wrong. Whatever mechanism is chosen, the migration must:
 | Data-copy mechanism's function signature and invocation shape specified | §4 — `Letflow.IdentityMigration.copy_all_tenants/0` and `copy_tenant/2` @specs, Mix task file/name, idempotency mechanism, invocation instructions |
 | Public-table-drop step specified as a separate guarded migration, not bundled into the same migration as the per-tenant tables | §5 — separate migration file, not part of §2's three files, GBL-112 guard precedent, guard mechanism named as an open question (§7 item 3) rather than invented |
 | Design explicitly states tenant_id is NOT dropped by this design (reserved for REQ-064) | §1 (scope boundary, top-level statement) and restated in §2.1/§2.3's per-migration header-comment requirements |
-| Open questions from decision 0006 section 7 restated and not silently resolved | §7 items 2 (status == :migrating gate) restates Decision 0006 §7 item 2 verbatim in substance; §7 item 4 restates the requirement text's own AuthPipeline/Identity test-fixture question; §7 items 1 and 3 are two *additional* open questions this design surfaced while checking `identity.ex`'s current call sites and GBL-112's guard mechanism, flagged per this role's standing instruction not to silently resolve a newly-found gap either |
+| Open questions from decision 0006 section 7 restated and not silently resolved | §7 items 2 (status == :migrating gate) restates Decision 0006 §7 item 2 verbatim in substance; §7 item 4 restates the requirement text's own AuthPipeline/Identity test-fixture question; §7 item 3 is an additional open question this design surfaced while checking GBL-112's guard mechanism; §7 item 1 (the identity.ex prefix gap) is now resolved rather than left open — see §5b and the REWORK rows below |
+| REWORK: provision_oidc_user/3's call chain has concrete @spec changes threading a prefix/tenant_schema parameter, not an illustrative example | §5b — `provision_oidc_user/3` → `/4` full `@spec`, plus `upsert_by_external_identity/4`, `insert_or_fetch/4`, `re_select_on_conflict/3`, `get_by_external_identity/3` signatures and the exact three `Repo` call sites (lines 165, 186, 208) each gaining `prefix: prefix` |
+| REWORK: the exact AuthPipeline.provision_user/3 call-site edit is named, including how it obtains the prefix value | §5b — `TenantProvisioning.schema_name_for_tenant/1` called on the already-step-2-resolved `tenant_id`; new `alias`; concrete new body shape with both the success and `{:error, :invalid_tenant_id}` branches stated |
+| REWORK: any new error case this introduces is stated in provision_oidc_user/3's error shape | §5b's "Error-shape impact" paragraph — `provisioning_error/0` is unchanged; the new `:invalid_tenant_id` case surfaces only at `AuthPipeline`'s `{:provision, reason}` tag, absorbed by the pipeline's existing 500 catch-all, no new `call/2` branch |
+| REWORK: resolve_tenant_by_realm/1 and verify_realm_ownership/2 are confirmed unaffected — do not over-scope the fix | §5b's opening paragraph — both confirmed to query only `Tenant` (public, D3), explicitly stated to need no change |

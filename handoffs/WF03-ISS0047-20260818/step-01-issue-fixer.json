@@ -1,0 +1,42 @@
+{
+  "handoff_id": "5f9c9a2e-6c1e-4a2e-8f7d-b0a1c2d3e4f1",
+  "run_id": "WF03-ISS0047-20260818",
+  "workflow_id": "WF-03",
+  "step": "0.5-1",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0047-20260818/step-01-issue-fixer.json",
+  "created_at": "2026-08-18T18:25:44Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/issues/ISS-0047.yaml", "lib/letflow/identity.ex", "test/letflow/identity_test.exs"],
+    "owned_modules": ["lib/letflow/identity.ex", "test/letflow/identity_test.exs"]
+  },
+  "task": {
+    "description": "Step 0.5 (registry lookup) + Step 1 (diagnose) for docs/issues/ISS-0047.yaml, on branch feature/WF03-ISS0047-20260818. ISS-0047: Letflow.Identity.insert_or_fetch/4 (lib/letflow/identity.ex) issues Repo.insert(changeset, on_conflict: :nothing, conflict_target: {:unsafe_fragment, \"(external_realm, external_id) WHERE external_id IS NOT NULL\"}, ...). This only suppresses a conflict on the users_external_identity_partial_index. users also carries unique_index(:users, [:username]). Two genuinely independent Postgres connections racing to insert the same (external_realm, external_id) AND the same username can have the losing insert raise {:error, %Ecto.Changeset{username: [\"has already been taken\"]}} instead of resolving to the same row both callers expect via re_select_on_conflict/3. Reproduced deterministically (3/3 runs) by TEST-DESIGNER during REQ-063 using :auto sandbox mode (genuine independent connections) instead of the original :manual mode + Sandbox.allow/3 (which serializes both inserts onto one connection and never exercises this path). Full history in docs/issues/ISS-0047.yaml.",
+    "acceptance_criteria": [
+      "Step 0.5: search docs/issues/*.yaml with status: resolved for a prior matching fix; state in the handoff summary whether a match was found (expected: none, this is a pre-existing REQ-018 gap never fixed before).",
+      "Step 1: reproduce the race directly against real Postgres (two independent connections, not Sandbox :manual mode) and confirm the actual {:error, %Ecto.Changeset{}} output — do not diagnose from the issue report's prose alone.",
+      "Trace to root cause: confirm on_conflict's conflict_target covers only the external_realm/external_id partial index, not the separate username unique index, and confirm which of the two racing inserts is affected.",
+      "Write diagnosis into result.summary: root cause, affected files/functions, and what a fix needs to change (do NOT implement the fix).",
+      "Set next_action to 'Route to CODE-DESIGNER for fix design'."
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0047-20260818",
+      "commit_sha_list": []
+    }
+  }
+}

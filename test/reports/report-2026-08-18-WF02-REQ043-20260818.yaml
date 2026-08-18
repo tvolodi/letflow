@@ -1,0 +1,157 @@
+# Test run report — WF-02 Step 4
+
+req_id: REQ-043
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ043-20260818
+date_utc: 2026-08-18T07:23:01Z
+
+git:
+  branch: feature/WF02-REQ043-20260818
+  branch_confirmed: true
+  commit: ddea133
+  commit_subject: "WF02-REQ043 Step 3: test design for instance-engine schema"
+  note: >
+    Confirmed via `git branch --show-current` and `git log --oneline -1` at
+    start of this run. This run picked up after TEST-DESIGN-VALIDATOR's
+    Step 3b PASS (handoffs/WF02-REQ043-20260818/step-03b-test-design-gate.json),
+    which followed CODE-DESIGNER/CODE-DESIGN-VALIDATOR/ELIXIR-DEV/REVIEWER
+    each reporting 673/673 then 725/725 green. This Step 4 run reproduces
+    those counts itself from a cold start rather than trusting the prior
+    claims, per Unblock-Everything / "every producing step has a validating
+    step."
+
+environment:
+  toolchain: local (not Docker fallback) -- mix/elixir/erl reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5] ... Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  postgres_container: letflow-postgres-1 (confirmed Up 2 days/healthy via `docker ps`, port 5462 -> 5432)
+  command_run: >
+    `mix test` (full suite, default/unpinned random seed) -- the `test`
+    alias runs ecto.create + ecto.migrate --quiet first automatically.
+    Plus one isolated run of `mix test
+    test/letflow/event_store/json_array_test.exs
+    test/letflow/engine/schemas_test.exs
+    test/letflow/engine/migrations_test.exs --trace` targeting REQ-043's
+    new test files specifically, per this step's task instructions.
+
+verdict: PASS
+
+checks:
+  test_suite_full_run:
+    result: PASS
+    exit_code: 0
+    seed: 514563 (unpinned/random -- ExUnit's own default)
+    summary_line_verbatim: "Result: 725 passed (4 properties, 721 tests)"
+    finished_line_verbatim: "Finished in 145.4 seconds (2.5s async, 142.9s sync)"
+    failures: 0
+    grep_check: >
+      Regex covering "Failures:", "Failure:", "** (", "Excluded:", "Skipped:"
+      and " failure[s]?," / "failed)" (excluding the "0 failures" summary
+      phrasing itself) over the full raw log (16,816 lines, captured to a
+      file, not just the tail) -- zero matches.
+
+  new_files_isolated_run:
+    command_run: >
+      mix test test/letflow/event_store/json_array_test.exs
+      test/letflow/engine/schemas_test.exs
+      test/letflow/engine/migrations_test.exs --trace
+    result: PASS
+    exit_code: 0
+    summary_line_verbatim: "Result: 52 passed"
+    finished_line_verbatim: "Finished in 8.9 seconds (0.3s async, 8.6s sync)"
+    failures: 0
+    file_presence_check: >
+      All three files confirmed present on disk before running
+      (test/letflow/event_store/json_array_test.exs,
+      test/letflow/engine/schemas_test.exs,
+      test/letflow/engine/migrations_test.exs), timestamps consistent with
+      this branch's Step 3 commit.
+
+  count_arithmetic_cross_check:
+    baseline_cited_in_task: "673 passed (4 properties, 669 tests), prior to REQ-043's new test files"
+    expected: "725 - 673 = 52 new example tests added by REQ-043's three new test files, 4 properties unchanged"
+    actual_full_suite: "725 total passed (4 properties, 721 tests), 0 failures"
+    actual_isolated_new_files: "52 passed, 0 failures"
+    result: MATCHES -- 725 (full suite) - 673 (prior baseline) = 52, exactly the isolated run's own count for the three new REQ-043 test files. Verified via actual runs, not assumed from arithmetic alone.
+
+  known_noise_not_a_failure:
+    - >
+      [error] Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/realms/bpm-default. Retrying in
+      NNNN ms. -- REQ-016's Ueberauth OIDC worker attempting to reach a
+      deliberately unreachable placeholder issuer configured in
+      config/test.exs. Pre-existing since REQ-016, already documented as
+      expected noise in every prior WF-02 test report (REQ-038, REQ-040,
+      etc.). Present in this run (7 occurrences); does not fail, skip, or
+      affect any test.
+    - >
+      Verbose SQL query debug logging appears in raw mix test output
+      (config/test.exs's default test log level) for every DB-backed test --
+      established pattern, not itself evidence of failure (confirmed by the
+      zero-match failure-marker grep above and the run's own "0 failures"
+      summary).
+    - >
+      ExUnit.Case.register_test/4 deprecation warnings on the two property
+      tests (test/letflow/parallel_approval_test.exs:145,
+      test/letflow/process_instance_test.exs:64) and a handful of unused
+      default-argument warnings in unrelated pre-existing test files
+      (test/letflow/definitions/service_scope_validator_test.exs:32,
+      test/letflow/definitions/search_test.exs:107,
+      test/letflow/sandbox_pool/fixture_loader_test.exs:44) -- same
+      pre-existing baseline noise documented in prior reports (e.g.
+      REQ-040's), unaffected by REQ-043's changes, not errors or failures.
+
+pre_existing_failures_found: none
+
+issues_filed: none (by this step)
+issues_referenced_not_refiled: >
+  docs/issues/ISS-0042.yaml was filed by REVIEWER during this run's own
+  Step 2d (discovered_in_run: WF02-REQ043-20260818) -- a MINOR type-safety
+  finding on Letflow.Engine.Task.assignee_type (free-text string for a
+  closed USER|GROUP|ROLE set), explicitly scoped by REVIEWER as not a
+  REQ-043 defect and not blocking REQ-043's own gates, deferred to whichever
+  future requirement first builds a write path through
+  Task.insert_changeset/2. Not refiled here; referenced only for audit
+  completeness. Does not block this step's PASS verdict.
+
+test_file_breakdown:
+  new_req_043:
+    items:
+      - file: test/letflow/event_store/json_array_test.exs
+        detail: New file, part of REQ-043's Step 3 test design.
+      - file: test/letflow/engine/schemas_test.exs
+        detail: New file, part of REQ-043's Step 3 test design.
+      - file: test/letflow/engine/migrations_test.exs
+        detail: New file, part of REQ-043's Step 3 test design.
+    subtotal: 52
+  full_suite_grand_total: 725 (721 example tests + 4 properties)
+  cross_check: >
+    725 total (4 properties, 721 example tests) reproduced in this run's
+    full-suite pass, matching the task's cited baseline of 673 passed / 669
+    tests / 4 properties prior to REQ-043 plus this run's 52 new tests
+    across three new files. This Step 4 run is the independent, formal
+    re-verification of CODE-DESIGNER/ELIXIR-DEV/TEST-DESIGNER's prior
+    claims.
+
+diagnosis: "N/A -- no failures observed in this run. Nothing routed back to ELIXIR-DEV or TEST-DESIGNER."
+
+regression_check_vs_baseline: >
+  Task-cited baseline: 673 passed (4 properties, 669 tests), before this
+  branch's REQ-043 changes were added on top of it. This run adds three new
+  test files (test/letflow/event_store/json_array_test.exs,
+  test/letflow/engine/schemas_test.exs,
+  test/letflow/engine/migrations_test.exs, 52 tests total) and reproduces
+  725 passed (4 properties, 721 tests) / 0 failures on a full-suite run,
+  plus 52 passed / 0 failures on the isolated run of the three new files.
+  Zero regressions confirmed. No pre-existing failure was found anywhere in
+  the suite this run (Unblock-Everything rule: N/A, nothing to unblock;
+  ISSUE_QUEUE protocol: N/A, nothing new to file by this step -- ISS-0042
+  was already filed and forwarded by REVIEWER in an earlier step of this
+  same run, and is unrelated to this step's own pass/fail verdict).
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-18-WF02-REQ043-20260818.yaml
+  next_action: "Route to RELEASE-VALIDATOR (WF-02 Step 5) -- no rework needed."

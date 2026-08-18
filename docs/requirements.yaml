@@ -2563,7 +2563,7 @@ requirements:
   - id: REQ-050
     title: Exclusive gateway evaluation and condition expressions (transition.zig, EE-05)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S3
     impl_order: 94  # letflow-queue task id
     description: >

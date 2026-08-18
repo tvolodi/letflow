@@ -1019,6 +1019,23 @@
       "queue_agent_id": "hetzner-wt2-orch",
       "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
       "note": "ISS-0047: Identity.insert_or_fetch/4's on_conflict target only covers (external_realm, external_id); a genuine two-independent-connection race on identical username can raise an Ecto.Changeset username-taken error instead of resolving via re-select-on-conflict. Pre-existing REQ-018 gap, surfaced by REQ-063's test fixture rewrite (needed :auto sandbox mode). Fixed via a three-way branch (username_unique_conflict?/1, get_by_username/2, identity_matches?/2) in insert_or_fetch/4 falling through to re_select_on_conflict/3 only when the racing opponent's identity genuinely matches; genuine unrelated username collisions still error. Design gate 1 MINOR non-blocking note (rescue-framing prose). Security review PASS (INV-1 tenant-scoping verified, no identity-confusion/account-takeover vector). Reviewer PASS. New :auto-mode two-independent-connection regression test added (10-iteration loop) with an independently-reproduced fail-then-pass proof. Full suite 773 tests/0 failures. Along the way, TEST-RUNNER hit and fixed (Unblock-Everything) an unrelated pre-existing SystemLimitError in promotion_review_store_test.exs already fixed on main by ISS-0049/d2be124 -- reconciled as a no-op during Step Final's rebase. ISS-0047 closed (status: resolved), GH#176 closed. queue task 111 released done."
+    },
+    {
+      "run_id": "WF02-REQ050-20260818",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-050"],
+      "stage": "S3",
+      "status": "IN_PROGRESS",
+      "owned_modules": ["lib/letflow/engine/transition.ex", "lib/letflow/engine/expr.ex", "test/letflow/engine", "test/specs"],
+      "lock_acquired_at": "2026-08-18T18:29:11Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (git setup) COMPLETED -- branch feature/WF02-REQ050-20260818 pushed.",
+      "backfilled": false,
+      "queue_task_id": 94,
+      "queue_agent_id": "hetzner-orch",
+      "worktree": "/home/tvolodi/letflow (primary checkout)",
+      "note": "Ports src/engine/transition.zig's EXCLUSIVE_GATEWAY branch (EE-05) into REQ-044's transition dispatch: declared-order edge evaluation, default-edge-last, catch-false on condition errors, ERROR transition when no edge matches. Builds a minimal CEL-subset expression evaluator (translateCelToExpr + expr parse/eval) scoped to the operators the gateway path needs -- not a full src/expr/ port. Depends_on REQ-044 (done). Noting a possible file-overlap watch item: origin also has a concurrent feature/WF02-REQ045-20260818 branch (another host's instance-start/engine-execution-shell run) -- REQ-045's scope is process_instance.ex/instance_supervisor.ex/instance.ex per its description, not transition.ex, so no owned_modules collision expected, but worth re-checking at Step Final if REQ-045 merges first."
     }
   ]
 }

@@ -28,6 +28,17 @@ defmodule Letflow.Engine.TransitionTest do
 
   defp node(id, type), do: %Node{id: id, node_type: type}
   defp edge(id, source, target), do: %Edge{id: id, source: source, target: target}
+
+  defp edge(id, source, target, opts) do
+    %Edge{
+      id: id,
+      source: source,
+      target: target,
+      condition: Keyword.get(opts, :condition),
+      is_default: Keyword.get(opts, :is_default, false)
+    }
+  end
+
   defp graph(nodes, edges), do: %Graph{nodes: nodes, edges: edges}
   defp token(node_id, token_id), do: %Token{node_id: node_id, token_id: token_id}
 
@@ -318,25 +329,148 @@ defmodule Letflow.Engine.TransitionTest do
   end
 
   # ---------------------------------------------------------------------
-  # AC4, case 4/5 -- :EXCLUSIVE_GATEWAY stub: named error, never touches
-  # pending_task_nodes (there is no {:ok, new_state, _} at all to touch it
-  # with -- the point AC4 makes about this node type is trivially true by
-  # construction here, and this test proves the error is the specific named
-  # stub error, not a raised exception or a silent {:ok, ...}).
+  # AC4, case 4/5 -- :EXCLUSIVE_GATEWAY (REQ-050, design doc §5): real
+  # declared-order, default-last, CEL-condition dispatch, replacing the old
+  # :gateway_not_yet_implemented stub. See test/specs/REQ-050.md for the
+  # full rationale behind each test below.
   # ---------------------------------------------------------------------
 
-  describe "transition/3 -- :EXCLUSIVE_GATEWAY node dispatch (5-way case 4/5, stub, design doc §6.4) -- pending_task_nodes unchanged" do
-    test "returns the named :gateway_not_yet_implemented error, never {:ok, ...}" do
-      g = graph([node("gw", :EXCLUSIVE_GATEWAY)], [])
-      state = instance_state([token("gw", "t1")], pending_task_nodes: [])
+  describe "dispatch_exclusive_gateway -- declared order, 2nd edge first match (REQ-050 AC1)" do
+    test "the second declared edge, the first to evaluate true, is the one taken" do
+      g =
+        graph(
+          [node("gw", :EXCLUSIVE_GATEWAY), node("a", :END), node("b", :END), node("c", :END)],
+          [
+            edge("e1", "gw", "a", condition: "variables.x == 1"),
+            edge("e2", "gw", "b", condition: "variables.x == 2"),
+            edge("e3", "gw", "c", condition: "variables.x == 2")
+          ]
+        )
+
+      state = instance_state([token("gw", "t1")], variables: %{"x" => 2})
+
+      assert {:ok, new_state, []} = Transition.transition(g, state, {:advance_token, "t1"})
+      # Exactly one token, positioned at e2's target -- not e1's or e3's
+      # (REQ-050 AC5, asserted directly via list equality).
+      assert new_state.tokens == [%Token{node_id: "b", token_id: "t1"}]
+    end
+  end
+
+  describe "dispatch_exclusive_gateway -- default declared first, evaluated last (REQ-050 AC2)" do
+    test "a default edge declared first is still only taken after every conditioned edge evaluates false" do
+      g =
+        graph(
+          [node("gw", :EXCLUSIVE_GATEWAY), node("d", :END), node("a", :END), node("b", :END)],
+          [
+            edge("e_default", "gw", "d", is_default: true),
+            edge("e1", "gw", "a", condition: "variables.x == 1"),
+            edge("e2", "gw", "b", condition: "variables.x == 1")
+          ]
+        )
+
+      state = instance_state([token("gw", "t1")], variables: %{"x" => 99})
+
+      assert {:ok, new_state, []} = Transition.transition(g, state, {:advance_token, "t1"})
+      assert new_state.tokens == [%Token{node_id: "d", token_id: "t1"}]
+    end
+  end
+
+  describe "dispatch_exclusive_gateway -- runtime-erroring condition falls through, no instance error (REQ-050 AC3)" do
+    test "an undefined-variable condition is treated as false, evaluation continues to the next edge" do
+      g =
+        graph(
+          [node("gw", :EXCLUSIVE_GATEWAY), node("a", :END), node("b", :END)],
+          [
+            edge("e1", "gw", "a", condition: "variables.does_not_exist == 1"),
+            edge("e2", "gw", "b", condition: "variables.x == 2")
+          ]
+        )
+
+      state = instance_state([token("gw", "t1")], variables: %{"x" => 2})
+
+      assert {:ok, new_state, []} = Transition.transition(g, state, {:advance_token, "t1"})
+      assert new_state.tokens == [%Token{node_id: "b", token_id: "t1"}]
+    end
+
+    test "a type-mismatch condition (ordering compare of a string and a number) is treated as false" do
+      g =
+        graph(
+          [node("gw", :EXCLUSIVE_GATEWAY), node("a", :END), node("b", :END)],
+          [
+            edge("e1", "gw", "a", condition: "variables.name > 5"),
+            edge("e2", "gw", "b", condition: "variables.x == 2")
+          ]
+        )
+
+      state = instance_state([token("gw", "t1")], variables: %{"name" => "bob", "x" => 2})
+
+      assert {:ok, new_state, []} = Transition.transition(g, state, {:advance_token, "t1"})
+      assert new_state.tokens == [%Token{node_id: "b", token_id: "t1"}]
+    end
+  end
+
+  describe "dispatch_exclusive_gateway -- unsupported CEL feature falls through via catch-false (REQ-050 AC6)" do
+    test "a macro-call condition (has(...)) evaluates to false, does not raise" do
+      g =
+        graph(
+          [node("gw", :EXCLUSIVE_GATEWAY), node("a", :END), node("b", :END)],
+          [
+            edge("e1", "gw", "a", condition: "has(variables.x)"),
+            edge("e2", "gw", "b", condition: "variables.x == 2")
+          ]
+        )
+
+      state = instance_state([token("gw", "t1")], variables: %{"x" => 2})
+
+      assert {:ok, new_state, []} = Transition.transition(g, state, {:advance_token, "t1"})
+      assert new_state.tokens == [%Token{node_id: "b", token_id: "t1"}]
+    end
+
+    test "a ternary-operator condition evaluates to false, does not raise" do
+      g =
+        graph(
+          [node("gw", :EXCLUSIVE_GATEWAY), node("a", :END), node("b", :END)],
+          [
+            edge("e1", "gw", "a", condition: "variables.x ? variables.y : variables.z"),
+            edge("e2", "gw", "b", condition: "variables.x == 2")
+          ]
+        )
+
+      state = instance_state([token("gw", "t1")], variables: %{"x" => 2})
+
+      assert {:ok, new_state, []} = Transition.transition(g, state, {:advance_token, "t1"})
+      assert new_state.tokens == [%Token{node_id: "b", token_id: "t1"}]
+    end
+  end
+
+  describe "dispatch_exclusive_gateway -- no match, no default -> structured ERROR (REQ-050 AC4)" do
+    test "names the gateway node_id and every evaluated condition, all with result: false" do
+      g =
+        graph(
+          [node("gw", :EXCLUSIVE_GATEWAY), node("a", :END), node("b", :END)],
+          [
+            edge("e1", "gw", "a", condition: "variables.x == 1"),
+            edge("e2", "gw", "b", condition: "variables.x == 2")
+          ]
+        )
+
+      state = instance_state([token("gw", "t1")], variables: %{"x" => 999})
 
       assert Transition.transition(g, state, {:advance_token, "t1"}) ==
-               {:error, {:gateway_not_yet_implemented, :EXCLUSIVE_GATEWAY, "gw"}}
+               {:error,
+                {:no_matching_edge, "gw",
+                 [
+                   %{edge_id: "e1", condition: "variables.x == 1", result: false},
+                   %{edge_id: "e2", condition: "variables.x == 2", result: false}
+                 ]}}
+    end
 
-      # No new InstanceState value is ever produced on this path -- the
-      # caller's own `state` binding is definitionally untouched (Elixir
-      # immutability), so pending_task_nodes did not gain anything.
-      assert state.pending_task_nodes == []
+    test "a gateway with zero outgoing edges also errors, with an empty evaluated_conditions list" do
+      g = graph([node("gw", :EXCLUSIVE_GATEWAY)], [])
+      state = instance_state([token("gw", "t1")])
+
+      assert Transition.transition(g, state, {:advance_token, "t1"}) ==
+               {:error, {:no_matching_edge, "gw", []}}
     end
   end
 

@@ -1,0 +1,64 @@
+{
+  "handoff_id": "a1e2c3d4-0050-4a00-8000-000000000003",
+  "run_id": "WF02-REQ050-20260818",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ050-20260818/step-02a-elixir-dev.json",
+  "created_at": "2026-08-18T18:38:49Z",
+  "started_at": "2026-08-18T18:38:49Z",
+  "completed_at": "2026-08-18T18:41:36Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-050"],
+    "requirement_text": {
+      "REQ-050": "See handoffs/WF02-REQ050-20260818/step-01-code-designer.json's context.requirement_text.REQ-050 for the full requirement text -- read it there, do not open docs/requirements.yaml."
+    },
+    "related_handoff_ids": ["a1e2c3d4-0050-4a00-8000-000000000001", "a1e2c3d4-0050-4a00-8000-000000000002"],
+    "artifacts_in": [
+      "lib/letflow/design/req050-exclusive-gateway-cel.md",
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/engine/token.ex",
+      "lib/letflow/engine/instance_state.ex"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex", "lib/letflow/engine/expr.ex", "test/letflow/engine", "test/specs"]
+  },
+  "task": {
+    "description": "Implement lib/letflow/design/req050-exclusive-gateway-cel.md exactly: rewrite dispatch_exclusive_gateway/4 in lib/letflow/engine/transition.ex per the design's §-cited replacement, and create the new pure expression-evaluator module (lib/letflow/engine/expr.ex per the design's naming) with translate_cel_to_expr/1, parse/1, eval/2, and evaluate_condition/2. Follow the gate-approved design's exact function signatures, type shapes, and error tuples -- do not deviate without flagging it. Preserve REQ-044's purity contract (no Repo/Logger/DateTime/System.os_time/HTTPoison/File/:rand/:crypto/GenServer.call/send/receive anywhere in transition/3's call graph including the new dispatch and Expr module).",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "No migrations needed (this stays pure, no DB) -- confirm no priv/repo/migrations/*.exs was added",
+      "mix format --check-formatted passes",
+      "grep -n \"Repo\\\\.\\|Logger\\\\.\\|DateTime\\\\.\\|System\\\\.os_time\\|System\\\\.system_time\\|HTTPoison\\|Req\\\\.\\|File\\\\.\\|:rand\\\\.\\|:crypto\\\\.\" lib/letflow/engine/instance_state.ex lib/letflow/engine/token.ex lib/letflow/engine/transition.ex lib/letflow/engine/expr.ex returns zero matches",
+      "All 8 of REQ-050's acceptance criteria (declared-order edge evaluation with default-last, catch-false on runtime errors, no-match-and-no-default ERROR tuple naming node_id+evaluated conditions, exactly-one-edge-followed, unsupported-CEL-feature catch-false, all 4 translateCelToExpr rewrites, zero-I/O determinism) are satisfied by the implementation as written -- TEST-DESIGNER writes the tests next, but your own implementation must actually satisfy each one, not just compile",
+      "All existing callers of dispatch_exclusive_gateway/4 and transition/3 still compile"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented REQ-050 per lib/letflow/design/req050-exclusive-gateway-cel.md. Created lib/letflow/engine/expr.ex (Letflow.Engine.Expr): translate_cel_to_expr/1 (strips 'variables.' prefix, '&&'->'and', '||'->'or', '!'->'not ' with '!=' passing through unchanged via negative-lookahead regex; detects the 4 unsupported-CEL-feature categories -- macros, type-conversion functions, collection functions/'in', ternary '?' -- string-literal-aware, before any rewrite), parse/1 (hand-written tokenizer + recursive-descent parser over the or/and/not/cmp/operand grammar), eval/2 (walks the AST against a variables map; undefined variable and type-mismatch are eval errors; ==/!= never error across mismatched types; </<=/>/>= require both operands numeric), and evaluate_condition/2 (the always-boolean catch-false composition of the three: any error at any stage, or a non-true {:ok, _} result, uniformly yields false). Rewrote dispatch_exclusive_gateway/4 in lib/letflow/engine/transition.ex, replacing the {:gateway_not_yet_implemented, :EXCLUSIVE_GATEWAY, node_id} stub at the old transition.ex:256-259: partitions the gateway's outgoing edges into conditioned_edges (declared order) and at-most-one default_edge (relying on REQ-029's CHK-13..CHK-16 invariants, not re-validated); walks conditioned_edges in declared order calling Expr.evaluate_condition/2, short-circuiting on the first true match and advancing the token onto that edge's target; if none match, falls back unconditionally to the default edge if present (never evaluated as a condition, evaluated last by construction regardless of its declared position); if neither matches, returns {:error, {:no_matching_edge, node.id, evaluated_conditions}} where evaluated_conditions is one %{edge_id, condition, result: false} entry per conditioned edge in declared order, condition always the original CEL string. Extended Transition.transition_error/0 with the :no_matching_edge variant and added the evaluated_condition/0 type, per the design's §3. Updated the module's moduledoc paragraph describing which node types REQ-044 vs REQ-050 own. mix compile --warnings-as-errors: 'Compiling 2 files (.ex)\\nGenerated letflow app' -- exit 0, zero warnings. mix format --check-formatted lib/letflow/engine/expr.ex lib/letflow/engine/transition.ex: exit 0 after running mix format on both files (2 pre-existing unrelated files -- test/letflow/event_store_test.exs, lib/letflow/identity_migration.ex, test/letflow/engine/variable_merge_test.exs -- were already unformatted on this branch before my change, confirmed via git stash; left untouched, out of scope). No priv/repo/migrations/*.exs added -- pure module, no DB. Purity grep (Repo.|Logger.|DateTime.|System.os_time|System.system_time|HTTPoison|Req.|File.|:rand.|:crypto.) over instance_state.ex/token.ex/transition.ex/expr.ex: all matches are inside @moduledoc prose (the purity-contract description text and its own embedded grep-command example), identical in kind to matches already present in the REQ-044-shipped transition.ex on main before this change (confirmed via git show HEAD) -- zero matches in actual code bodies/call graphs. Logically walked all 8 ACs against the implementation: declared-order + default-last (edges partitioned before any evaluation, default excluded from the ordering loop by construction); catch-false on both runtime errors and unsupported CEL features (single evaluate_condition/2 composition, one uniform catch-false, no separate branches); no-match-no-default error tuple names node_id and evaluated_conditions (edge_id/condition/result per entry); exactly-one-edge (match short-circuits the loop, default is mutually exclusive with a match, error path takes zero edges); all 4 translateCelToExpr rewrites implemented as specified with the != carve-out; zero I/O confirmed by grep+read. KNOWN FALLOUT (not fixed by me, TEST-DESIGNER's Step 3 scope per this handoff's explicit 'do not write tests' instruction): mix test test/letflow/engine/transition_test.exs test/letflow/engine/variable_merge_test.exs now has 2 pre-existing failures -- both assert the OLD stub error {:error, {:gateway_not_yet_implemented, :EXCLUSIVE_GATEWAY, node_id}} for an :EXCLUSIVE_GATEWAY node, which REQ-050 legitimately supersedes (a gateway with zero outgoing edges now correctly returns {:error, {:no_matching_edge, node_id, []}} instead). The determinism property test and all other transition_test.exs/variable_merge_test.exs cases still pass unchanged.",
+    "artifacts_out": [
+      "lib/letflow/engine/expr.ex",
+      "lib/letflow/engine/transition.ex"
+    ],
+    "issues": [
+      "test/letflow/engine/transition_test.exs (case around line 329) and test/letflow/engine/variable_merge_test.exs (case around line 289) assert the pre-REQ-050 :gateway_not_yet_implemented stub error for :EXCLUSIVE_GATEWAY -- both now fail because the stub is legitimately replaced. TEST-DESIGNER (Step 3) needs to update these two assertions to the new :no_matching_edge shape as part of its REQ-050 test-design pass; not fixed here per this handoff's explicit 'do not write tests yourself' instruction."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ050-20260818",
+      "commit_sha_list": [
+        "a0dc59122b3764077fd1b39d2d6b88a8a38e5f8a"
+      ],
+      "remote_branch": "origin/feature/WF02-REQ050-20260818",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

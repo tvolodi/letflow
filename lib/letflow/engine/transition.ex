@@ -6,14 +6,18 @@ defmodule Letflow.Engine.Transition do
   `transition.zig`'s own header: **"All state is passed in; all output is
   returned. No DB, no network, no clock."**
 
-  This requirement (REQ-044) builds the skeleton plus the 3 non-gateway
-  node-type transitions (`:START`, `:END`, `:HUMAN_TASK`). `:EXCLUSIVE_GATEWAY`
-  (REQ-050) and `:PARALLEL_GATEWAY` (REQ-051) are named stub extension points
-  (`dispatch_exclusive_gateway/4`, `dispatch_parallel_gateway/4`) that a later
-  requirement's `ELIXIR-DEV` replaces without touching `dispatch_node/4`'s
-  outer dispatch structure. `:SERVICE_TASK`, `:TIMER`, and `:SUB_PROCESS`
-  (the 3 remaining variants of `Letflow.Definitions.Graph.node_type()`) fall
-  through a single generic catch-all clause, kept total rather than raising.
+  REQ-044 built the skeleton plus the 3 non-gateway node-type transitions
+  (`:START`, `:END`, `:HUMAN_TASK`). REQ-050 (this requirement) replaces the
+  `:EXCLUSIVE_GATEWAY` stub with the real declared-order, default-last,
+  CEL-condition dispatch (`dispatch_exclusive_gateway/4`, EE-05,
+  `lib/letflow/design/req050-exclusive-gateway-cel.md`), evaluating each
+  condition via `Letflow.Engine.Expr.evaluate_condition/2`. `:PARALLEL_GATEWAY`
+  (REQ-051) remains a named stub extension point (`dispatch_parallel_gateway/4`)
+  that a later requirement's `ELIXIR-DEV` replaces without touching
+  `dispatch_node/4`'s outer dispatch structure. `:SERVICE_TASK`, `:TIMER`,
+  and `:SUB_PROCESS` (the 3 remaining variants of
+  `Letflow.Definitions.Graph.node_type()`) fall through a single generic
+  catch-all clause, kept total rather than raising.
 
   See `Letflow.Engine.InstanceState`'s moduledoc for two verbatim notes this
   design carries forward from the requirement text: the Zig `std.json.ObjectMap`
@@ -66,6 +70,7 @@ defmodule Letflow.Engine.Transition do
 
   alias Letflow.Definitions.Graph
   alias Letflow.Definitions.Graph.Node
+  alias Letflow.Engine.Expr
   alias Letflow.Engine.InstanceState
   alias Letflow.Engine.Token
 
@@ -108,6 +113,22 @@ defmodule Letflow.Engine.Transition do
           | {:unknown_node_id, node_id :: String.t()}
           | {:gateway_not_yet_implemented, node_type :: atom(), node_id :: String.t()}
           | {:node_type_not_yet_implemented, node_type :: atom(), node_id :: String.t()}
+          | {:no_matching_edge, node_id :: String.t(),
+             evaluated_conditions :: [evaluated_condition()]}
+
+  @typedoc """
+  One entry per non-default outgoing edge of an `:EXCLUSIVE_GATEWAY` whose
+  condition was actually evaluated before dispatch gave up (REQ-050 design
+  doc §3). `condition` is always the edge's original CEL-syntax string
+  (`Edge.t().condition`), never the translated expr-syntax string or the
+  parsed AST — an operator reading a persisted error tuple sees the same
+  condition text authored in the definition graph.
+  """
+  @type evaluated_condition :: %{
+          edge_id: String.t(),
+          condition: String.t(),
+          result: boolean()
+        }
 
   @doc """
   Advances one token by one hop according to `event`, resolving its current
@@ -209,7 +230,12 @@ defmodule Letflow.Engine.Transition do
   # violates that upstream invariant, not a literal AC3 case -- flagged here
   # per the design doc's own §7.3 precedent for defensive additions beyond
   # the literal acceptance criteria.
-  defp dispatch_start(definition_snapshot, %InstanceState{} = instance_state, %Token{} = token, node) do
+  defp dispatch_start(
+         definition_snapshot,
+         %InstanceState{} = instance_state,
+         %Token{} = token,
+         node
+       ) do
     case Enum.find(definition_snapshot.edges, &(&1.source == node.id)) do
       nil ->
         {:error, {:unknown_node_id, node.id}}
@@ -246,17 +272,77 @@ defmodule Letflow.Engine.Transition do
     {:ok, %InstanceState{instance_state | pending_task_nodes: new_pending}, []}
   end
 
-  # --- :EXCLUSIVE_GATEWAY stub (design doc §6.4, REQ-050's extension point) --
+  # --- :EXCLUSIVE_GATEWAY (REQ-050 design doc §5, EE-05) ----------------------
 
-  # Named private function, not an inline case-branch literal, so REQ-050's
-  # ELIXIR-DEV can replace this one function's body with the real
-  # CEL-condition-evaluation dispatch without touching dispatch_node/4's
-  # outer pattern-match structure at all. Always returns a clearly-named,
-  # never-`{:ok, ...}` stub result.
+  # Declared-order, default-last, first-true-wins dispatch. Relies on
+  # REQ-029's CHK-13..CHK-16 invariants (design doc §6) without
+  # re-validating them here: a default edge never carries a condition, at
+  # most one default edge exists per gateway, and every non-default
+  # outgoing edge carries a non-empty condition string.
   @spec dispatch_exclusive_gateway(Graph.t(), InstanceState.t(), Token.t(), Node.t()) ::
-          {:error, {:gateway_not_yet_implemented, :EXCLUSIVE_GATEWAY, node_id :: String.t()}}
-  defp dispatch_exclusive_gateway(_definition_snapshot, _instance_state, _token, node) do
-    {:error, {:gateway_not_yet_implemented, :EXCLUSIVE_GATEWAY, node.id}}
+          {:ok, InstanceState.t(), [pending_event()]}
+          | {:error,
+             {:no_matching_edge, node_id :: String.t(),
+              evaluated_conditions :: [evaluated_condition()]}}
+  defp dispatch_exclusive_gateway(
+         definition_snapshot,
+         %InstanceState{} = instance_state,
+         %Token{} = token,
+         node
+       ) do
+    outgoing_edges = Enum.filter(definition_snapshot.edges, &(&1.source == node.id))
+    {conditioned_edges, default_edges} = Enum.split_with(outgoing_edges, &(&1.is_default != true))
+    default_edge = List.first(default_edges)
+
+    case evaluate_conditioned_edges(conditioned_edges, instance_state.variables) do
+      {:match, edge} ->
+        advance_token(instance_state, token, edge.target)
+
+      {:no_match, evaluated_conditions} ->
+        case default_edge do
+          nil ->
+            {:error, {:no_matching_edge, node.id, evaluated_conditions}}
+
+          edge ->
+            advance_token(instance_state, token, edge.target)
+        end
+    end
+  end
+
+  # Walks conditioned_edges in declared order, short-circuiting on the
+  # first edge whose Expr.evaluate_condition/2 call returns true. A
+  # condition that raises a runtime error (translation, parse, or eval
+  # error, including the unsupported-CEL-feature case) is folded into
+  # `false` by Expr.evaluate_condition/2 itself -- there is no separate
+  # "error" branch here, matching design doc §5.2's uniform catch-false
+  # rule.
+  @spec evaluate_conditioned_edges([Graph.Edge.t()], map()) ::
+          {:match, Graph.Edge.t()} | {:no_match, [evaluated_condition()]}
+  defp evaluate_conditioned_edges(conditioned_edges, variables) do
+    evaluate_conditioned_edges(conditioned_edges, variables, [])
+  end
+
+  @spec evaluate_conditioned_edges([Graph.Edge.t()], map(), [evaluated_condition()]) ::
+          {:match, Graph.Edge.t()} | {:no_match, [evaluated_condition()]}
+  defp evaluate_conditioned_edges([], _variables, acc), do: {:no_match, Enum.reverse(acc)}
+
+  defp evaluate_conditioned_edges([edge | rest], variables, acc) do
+    if Expr.evaluate_condition(edge.condition, variables) do
+      {:match, edge}
+    else
+      entry = %{edge_id: edge.id, condition: edge.condition, result: false}
+      evaluate_conditioned_edges(rest, variables, [entry | acc])
+    end
+  end
+
+  # Advances token onto target_node_id, preserving instance_state's other
+  # fields -- same shape as dispatch_start/4's success path.
+  @spec advance_token(InstanceState.t(), Token.t(), String.t()) ::
+          {:ok, InstanceState.t(), [pending_event()]}
+  defp advance_token(%InstanceState{} = instance_state, %Token{} = token, target_node_id) do
+    new_token = %Token{token | node_id: target_node_id}
+    new_tokens = replace_token(instance_state.tokens, new_token)
+    {:ok, %InstanceState{instance_state | tokens: new_tokens}, []}
   end
 
   # --- :PARALLEL_GATEWAY stub (design doc §6.5, REQ-051's extension point) --

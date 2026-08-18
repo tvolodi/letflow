@@ -1,0 +1,60 @@
+{
+  "handoff_id": "a1e2c3d4-0050-4a00-8000-000000000002",
+  "run_id": "WF02-REQ050-20260818",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ050-20260818/step-01b-design-gate.json",
+  "created_at": "2026-08-18T18:36:39Z",
+  "started_at": "2026-08-18T18:36:39Z",
+  "completed_at": "2026-08-18T18:38:06Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-050"],
+    "requirement_text": {
+      "REQ-050": "See handoffs/WF02-REQ050-20260818/step-01-code-designer.json's context.requirement_text.REQ-050 for the full requirement text (including ORCH's clarification notes on the REQ-061 dependency and R-Co source-access unavailability) -- read it there, do not open docs/requirements.yaml."
+    },
+    "related_handoff_ids": ["a1e2c3d4-0050-4a00-8000-000000000001"],
+    "artifacts_in": [
+      "lib/letflow/design/req050-exclusive-gateway-cel.md",
+      "lib/letflow/design/req044-transition-kernel.md",
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/engine/token.ex",
+      "lib/letflow/engine/instance_state.ex"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex", "lib/letflow/engine/expr.ex", "test/letflow/engine", "test/specs"]
+  },
+  "task": {
+    "description": "HARD GATE. Independently validate lib/letflow/design/req050-exclusive-gateway-cel.md against the 8 acceptance criteria below -- read the design artefact itself, not CODE-DESIGNER's handoff result.summary. Per WF-02 Step 1b's checklist: for each AC, does it have a corresponding design element with no TBD/deferral language? Are function signatures fully specified (name, inputs, outputs, error cases)? Is error handling shape stated as tagged tuples, not left implicit? Are cross-module dependencies listed? Is there NO implementation code present (no actual .ex code blocks -- signatures/type shapes only)? FAIL immediately on any single check failure, no partial credit.",
+    "acceptance_criteria": [
+      "a gateway whose second declared edge is the first to evaluate true routes the token down that edge, not the first or third -- an explicit ordering test, not a single-edge case",
+      "a gateway with a default edge declared FIRST and two non-default edges that both evaluate false routes the token down the default edge, proving the default is evaluated last regardless of declared position",
+      "a condition expression that raises a runtime error (undefined variable or type mismatch) is treated as false and evaluation continues to the next edge, rather than transitioning the instance to ERROR -- an explicit test distinguishing this from the no-match case",
+      "a gateway where no condition matches and no default edge exists transitions the instance to ERROR with a structured reason naming the gateway node_id AND the conditions that were evaluated",
+      "exactly one outgoing edge is followed in every passing case, asserted directly rather than inferred",
+      "a condition using an unsupported CEL feature (a macro, a type-conversion function, a collection function, or the ternary operator) evaluates to false via the catch-false rule rather than raising or erroring the instance, matching hasCelUnsupportedFeatures()'s boundary -- at least two such expressions tested explicitly",
+      "the CEL-to-expr translation is tested directly on each of its four documented rewrites (variables. prefix stripped, && -> and, || -> or, ! -> not with != passing through unchanged), rather than only end-to-end through gateway evaluation",
+      "the evaluator performs zero I/O and is deterministic, confirmed by inspection of its call graph and stated in the moduledoc, which cites src/engine/transition.zig's evaluateGatewayCondition() and src/expr/ as the ported reference and records which subset of the expression surface landed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently read lib/letflow/design/req050-exclusive-gateway-cel.md in full (not CODE-DESIGNER's handoff summary), cross-checked against lib/letflow/design/req044-transition-kernel.md and the real code in lib/letflow/engine/transition.ex, token.ex, instance_state.ex, and lib/letflow/definitions/graph.ex. Consistency check: design §1's quoted stub (lines 61-67) is byte-identical to transition.ex:256-259's real code (verified line-by-line); design §3's extended transition_error() 6-variant union is the real 5-variant union in transition.ex:105-110 plus exactly one new :no_matching_edge variant, no drift; Token.t()/InstanceState.t() field names/types the design cites (§0) match token.ex/instance_state.ex exactly; Edge.t()/Node.t() field names (id, source, target, condition, is_default / id, node_type, label, attributes) the design reuses (§0, §5.1, §6) match graph.ex exactly; the CHK-13/14/15/16 citations in design §6 match graph.ex's real violation codes and req029 design doc's own CHK table (:missing_edge_condition/CHK-13, :unexpected_edge_condition/CHK-14, :default_with_condition/CHK-15, :multiple_default_edges/CHK-16) verbatim. Per-AC verification against the 8 ACs in this handoff's task.acceptance_criteria: AC1 (2nd-edge-wins ordering) -> design §5.1 (declared-order conditioned_edges) + §5.2 (first-true-wins loop, explicit short-circuit) -- concrete, no TBD. AC2 (default-first-declared still evaluated last) -> §5.1 (default_edge structurally excluded from conditioned_edges regardless of declared position) + §5.3 -- concrete. AC3 (runtime error treated as false, not instance ERROR) -> §4.6 (eval/2's {:error, {:eval_error, {:undefined_variable,...}}} / {:type_mismatch,...} tagged-tuple shapes) + §4.7/§5.2 (catch-false composition, loop continues) -- concrete, error shapes are explicit tagged tuples, not left implicit. AC4 (no-match+no-default -> ERROR naming node_id AND evaluated conditions) -> §3 (evaluated_condition() type: edge_id/condition/result map) + transition_error() gains {:no_matching_edge, node_id, evaluated_conditions} + §5.4 (exact construction rule) -- concrete tagged-tuple error shape. AC5 (exactly one edge followed, asserted not inferred) -> §5.5 (explicit mutual-exclusivity argument covering match/default/error paths) -- concrete. AC6 (unsupported CEL feature -> false via catch-false, >=2 examples testable) -> §4.4 (4 named categories: macros has()/all()/exists()/exists_one(), type-conversion int()/uint()/double()/string()/bool()/bytes()/duration()/timestamp(), collection size()/in/map()/filter(), ternary ?: ) + §4.2 step 1 ({:error, :unsupported_cel_feature} before any rewrite) + §4.7/§5.2 (uniform catch-false) -- concrete boundary, not TBD; detection *mechanism* (regex vs manual scan) is explicitly left to ELIXIR-DEV's implementation choice in §4.4/§9.1, which is engineering discretion over an already-fully-specified behavioral contract (the categories and their false-outcome are pinned), matching REQ-044 design doc's own established precedent (§12.1/§12.2 in that doc) for what this project's design gate treats as an acceptable open question rather than a TBD/deferral. AC7 (translate_cel_to_expr tested directly on its 4 rewrites) -> §4.2 (public @spec, not buried inside gateway dispatch) + §4.3 (4-row rewrite table, each independently testable, rule 4's != carve-out flagged as load-bearing) -- concrete, function is directly callable/testable. AC8 (zero I/O, deterministic, moduledoc citing evaluateGatewayCondition()/src/expr/, states landed subset) -> §7 (grep/mix xref verification method identical in form to REQ-044's own §8, stdlib-only dependency list) + §4 opening scope note (cites evaluateGatewayCondition() ~L1118 and src/expr/, explicitly states the landed subset -- variable refs, 6 comparison ops, and/or/not, literals -- and that benchmark.zig has no port) -- concrete. Implementation-code check: enumerated all 11 fenced code blocks in the design doc (lines 61-67, 75-79, 106-114, 122-128, 163-175, 187-192, 265-267, 272-282, 293-295, 325-327, 438-440) -- one is the verbatim quote of the existing shipped stub being replaced (citation, not new code), one is a bash grep verification command, one is a plain-text recursive-descent grammar (pseudocode, no Elixir), and the remaining 8 are @type/@spec declarations only -- no fenced block contains a real Elixir function body/implementation anywhere in the document. Error-handling shapes are stated as tagged tuples throughout (§3, §4.2, §4.5, §4.6, §4.7), never left as implicit exceptions/bare atoms. Cross-module dependencies are listed explicitly in §8 (Transition, Expr, Definitions.Graph/.Edge/.Node, none on Repo/Ecto, forward dependent REQ-061 named and scoped out). No 'TBD'/'to be implemented'/'to be determined' language found anywhere in the document (grep confirmed zero matches) -- the §9 open-questions section flags reasoned defaults with explicit rationale, not unresolved gaps, consistent with this project's own established design-doc convention already used and gate-passed in REQ-044/REQ-029. No single check failed across any of the 8 ACs.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (Step 2a)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

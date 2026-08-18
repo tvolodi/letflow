@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ064-20260818/step-05-release-validation.json",
   "created_at": "2026-08-18T15:09:26Z",
   "started_at": "2026-08-18T15:09:26Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-18T15:21:20Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -46,19 +46,21 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Independently re-ran mix test (not the TEST-RUNNER report alone): 777 passed (5 properties, 772 tests), 0 failures, no skipped/excluded, matching the reported 777/777 exactly. mix compile --warnings-as-errors clean. Also re-ran test/letflow/tenant_provisioning_test.exs in isolation: 18 passed, confirming the test-design gate's rework fix (tenant_id_for_schema_name/1 round-trip test + malformed-schema-name error-path test, describe block at line 129) still exists and still passes -- not merely inferred from the gate's earlier PASS.\n\nEach of REQ-064's seven acceptance criteria checked directly against shipped code/tests (read from docs/requirements.yaml, not any step summary): (1) all ten D2 tables' absence of tenant_id confirmed via information_schema.columns against two independently provisioned real tenant schemas (test/letflow/req064_tenant_id_removal_test.exs, 'information_schema.columns' describe block) -- not by code inspection; (2) all four D3 tables (tenant_schemas, solution_pack_installs, solution_pack_artefact_bases, pack_update_resolutions) confirmed to still carry tenant_id with FK intact via the same information_schema query against 'public', plus the pre-existing 'solution_pack_installs rejects a tenant_id matching no tenants row' FK-rejection test (test/letflow/definitions/pack_update_migration_test.exs:552), re-verified green; (3) promotion_assertion_runs' idempotency contract under the simplified [:idempotency_key] index demonstrated by same-key-same-schema-one-row and same-key-different-schema-separate-row tests; (4) promotion_reviews' plan_digest uniqueness under the simplified [:plan_digest] index demonstrated the same way; (5) grep confirms no lib/ module accesses a live .tenant_id field on any of the ten tables (all remaining tenant_id mentions in lib/letflow/definitions.ex, event_store.ex, promotion.ex, promotion_review_store.ex, identity.ex are historical/explanatory comments noting the column no longer exists), and TenantProvisioning.tenant_id_for_schema_name/1 itself is still defined (lib/letflow/tenant_provisioning.ex:102) and still tested; (6) every moduledoc that described tenant_id on a dropped-from table updated -- Engine.Task, Engine.Token, EventStore.Event/ArchivedEvent/InstanceProjection all carry a 'No tenant_id column (Decision 0006 D2)' section, Identity.User and Identity.Group both describe the column in past tense with a Decision 0006 D2 citation; grep hits for 'never caller-supplied'/'intra-schema column' outside these are unrelated fields (definitions.ex's `base`, sandbox_pool.ex's `schema_name`) or process_definition.ex's historical R-Co UpdateParams citation, none stale; (7) mix test green, 777/777, no skips, output quoted above.\n\nDiff scope verified against main via git diff --stat and decision 0006's own D2/D3 boundary: touches only the ten D2 tables' schemas/migrations, tenant_provisioning.ex (consumer call-site removal), identity_migration.ex, and the ~25 fallout test files listed in the TEST-DESIGNER handoff -- no touch to the four D3 tables' schemas/migrations, and no reopening of D1's schema-per-tenant :prefix mechanism (Registration/tenant_schemas untouched except the pre-existing conflict_target: :tenant_id, which is D3's Registration struct, correctly left alone).\n\ndocs/requirements.yaml (REQ-064 status: in_progress) and docs/status/requirement_status.yaml (last event: REQ-064 'started') checked for staleness -- neither is stale: both correctly reflect that DOC-UPDATER, not RELEASE-VALIDATOR, is the role that flips status to done, and this gate is what unblocks that step. No drift found.\n\ndocs/migration/decisions/0006-identity-tables-schema-per-tenant.md's Status line was stale (still read 'D2 not yet executed -- pending REQ-064' despite D2 having just shipped in this run) -- updated to 'decided and fully shipped', naming both D1 (REQ-063) and D2 (REQ-064) with their sign-offs, and clarifying D3/D4's standing status, matching the project's Status-line convention used by 0001-0003.",
+    "artifacts_out": [
+      "docs/migration/decisions/0006-identity-tables-schema-per-tenant.md"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ064-20260818",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF02-REQ064-20260818",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to DOC-UPDATER"
   },
   "rework_count": 0,
   "max_rework": 3

@@ -1,0 +1,78 @@
+{
+  "handoff_id": "6c2aa537-9d33-4bbd-a3cc-0f601140f4f2",
+  "run_id": "WF02-REQ040-20260817",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ040-20260817/step-03-test-designer.json",
+  "created_at": "2026-08-18T01:30:56Z",
+  "started_at": "2026-08-18T01:30:56Z",
+  "completed_at": "2026-08-18T01:41:12Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-040"],
+    "related_handoff_ids": [
+      "step-00-git-setup",
+      "step-01-code-designer",
+      "step-01-code-designer-rework",
+      "step-01b-code-design-validator-rereview",
+      "step-02a-elixir-dev",
+      "step-02c-security-reviewer",
+      "step-02d-reviewer"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req040-promotion-assertion-rerun.md",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/definitions/promotion_assertion_run.ex",
+      "lib/letflow/definitions/promotion_artifact.ex",
+      "priv/repo/migrations/20260818090001_create_promotion_assertion_runs.exs",
+      "lib/letflow/sandbox_pool.ex",
+      "lib/letflow/sandbox_pool/fixture_loader.ex",
+      "handoffs/WF02-REQ040-20260817/step-02d-reviewer.json",
+      "test/letflow/definitions/rollback_test.exs",
+      "test/letflow/sandbox_pool_test.exs",
+      "test/letflow/sandbox_pool/fixture_loader_test.exs",
+      "test/letflow/definitions_test.exs",
+      "test/specs/REQ-038.md",
+      "test/specs/REQ-039.md",
+      "docs/guides/test_developer_guide.md"
+    ],
+    "owned_modules": ["test/specs/REQ-040.md", "test/letflow/definitions/promotion_assertion_rerun_test.exs", "test/letflow/definitions_test.exs"]
+  },
+  "task": {
+    "description": "WF-02 Step 3 for REQ-040 (Promotion assertion re-run orchestration). Write test/specs/REQ-040.md plus real-Postgres ExUnit coverage for Letflow.Definitions.apply_promotion_assertion_rerun/6, covering all 6 acceptance criteria plus the extra coverage the design/review process flagged: the double-run non-determinism self-consistency check, fail_closed_counts/1's guarantee on infrastructure-failure paths, the try/rescue crash-safety span (proven via a genuinely raised exception, not simulated), and an independent claim-count proof for AC1's idempotency.",
+    "acceptance_criteria": [
+      "AC1: calling twice with the same (review_id, plan_digest) returns the cached outcome on the second call and claims no second sandbox, verified by sandbox claim count",
+      "AC2: a sandbox loaded via REQ-039 receives ONLY the artifact's fixtures[] rows, demonstrated by confirming no pre-existing tenant data appears in the sandbox schema",
+      "AC3: a failing replay records status = failed with a non-empty failing_assertion_ids list; a passing replay whose teardown itself fails records status = teardown_failed with assertions_failed = 0 -- both distinct outcomes tested explicitly",
+      "AC4: the moduledoc explicitly states the apply pipeline gate condition is assertions_failed == 0, not status == passed, citing the teardown_failed green-gate case",
+      "AC5: a simulated teardown failure appends a PROMOTION_ASSERTION_TEARDOWN_FAILED event via REQ-025's append and does not change a passing run's outcome from green to failed",
+      "AC6: the moduledoc names the crash-safety/guaranteed-teardown open question explicitly, per this requirement's description and stage-2-event-store-definitions.md's Early findings"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote test/specs/REQ-040.md (all 6 ACs mapped to concrete test cases, plus a 'why each exists' section, plus the extra flagged coverage) and two test code artefacts. test/letflow/definitions/promotion_assertion_rerun_test.exs (new file, 12 tests, DIRECTIVE T-1 -- real Postgres, real Letflow.SandboxPool/FixtureLoader throughout, zero mocking) covers AC1 (idempotency + a pool-quota-exhaustion claim-count proof: after call 1 completes, the test claims the pool's own single slot directly to fully exhaust it, then call 2 with max_wait_ms: 0 and an exploding_event_appender/0 -- a second real claim attempt would be forced to fail deterministically, so the cached {:ok, result} returning at all IS the claim-count proof), AC2 (a custom assertion_evaluator mid-replay hook reads the pool's live :sys.get_state/1 to learn the claimed sandbox_id, then queries that sandbox schema's own process_definitions table directly via real Postgres -- confirming an organic tenant-schema row never appears there, only the artifact's own fixture row), AC3 both branches (an empty-payload assertion -> :failed with a non-empty failing_assertion_ids; a passing assertion whose sandbox release is forced to fail via a REAL, unmocked SandboxPool.release/2 call issued from inside the evaluator -- not a stub -- so finish_replay/8's own subsequent Step 5 release call gets a genuine {:error, :not_found} -> :teardown_failed with assertions_failed == 0), AC5 (the same real-release-failure test independently confirms exactly one PROMOTION_ASSERTION_TEARDOWN_FAILED event is received via a recording_event_appender/1 double, with the run's outcome never demoted from green), plus an INV-AR-6 companion test (a failing replay + release failure stays :failed, not :teardown_failed -- the other half of the precedence rule AC3/AC5 alone wouldn't catch), two double-run self-consistency tests (a deliberately-constructed evaluator whose JSON result differs across the two same-seed replay passes via a process-scoped call counter -- undeclared in non_deterministic_fields it's counted failed with the assertion's own id; declared, it's stripped before comparison and passes -- proving this is genuinely a self-consistency check, not an oracle comparison, per design OQ-4), three fail_closed_counts/1 tests (an exhausted-pool claim failure, its zero-assertion '__infrastructure_failure__' sentinel edge case, and a disallowed-fixture-table load failure with an independent Postgres confirmation the claimed sandbox schema was still genuinely dropped), and one try/rescue crash-safety test (a custom assertion_evaluator that genuinely raises mid-replay -- not a simulated stand-in -- asserting {:error, {:transaction_failed, %RuntimeError{}}} to the caller, never a crash, plus an independent information_schema.schemata query confirming the rescue clause's best-effort release actually ran). test/letflow/definitions_test.exs gained two new describe blocks (4 tests) for AC4/AC6, reusing that file's own established normalized_moduledoc/1 helper (Code.fetch_docs/1, whitespace-normalized) against Letflow.Definitions -- meaningfully specific substring assertions (the literal 'assertions_failed == 0' / 'NOT on status == \"passed\"' / 'teardown_failed... green gate' language for AC4; the try/rescue's three covered exit classes plus the explicitly-disclosed Process.exit(pid, :kill)/BEAM-crash/System.halt/0 uncovered gap for AC6), matching the REQ-030/042 precedent in that same file. Found and fixed two bugs in my own first draft during verification (not implementation bugs): (1) Repo.get_by!(Schema, field: val, prefix: schema_name) was wrongly merging the prefix option into the WHERE-clause keyword list instead of Repo's own opts list -- fixed to Repo.get_by!(Schema, [field: val], prefix: schema_name) at all 4 call sites; (2) my default assertion payload fixture was a plain non-JSON string, which crashed Jason.decode!/1 inside strip_non_deterministic_fields/2 on every successful-replay path -- fixed every non-empty payload fixture to be valid encoded JSON. Also fixed an ExUnit on_exit/1 registration-order bug (callbacks run in registration order, not LIFO -- a SandboxPool.release/2 call registered after start_pool!/1's own GenServer.stop on_exit crashed with 'no process'; replaced with a schema-drop fallback matching sandbox_pool_test.exs's own established idiom) and shortened every describe/test title after the combined describe+test text plus an inline on_exit closure hit Erlang's atom-length limit (SystemLimitError) on first compile. Verified: mix compile --warnings-as-errors clean (test env, 63 files); mix format --check-formatted clean on both files; mix test on just the two touched files: 32/32 passed, 0 failures, 0 warnings from my files; full suite: 673 passed (4 properties, 669 tests), 0 failures -- baseline before this run was 657 passed (4 properties, 653 tests), confirmed unchanged in kind before starting; net +16 tests (12 new file + 4 new definitions_test.exs blocks), 0 removed, 0 regressed, property count unchanged at 4.",
+    "artifacts_out": [
+      "test/specs/REQ-040.md",
+      "test/letflow/definitions/promotion_assertion_rerun_test.exs",
+      "test/letflow/definitions_test.exs"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ040-20260817",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ040-20260817",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

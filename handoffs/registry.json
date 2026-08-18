@@ -1036,6 +1036,23 @@
       "queue_agent_id": "hetzner-orch",
       "worktree": "/home/tvolodi/letflow (primary checkout)",
       "note": "Ported src/engine/transition.zig's EXCLUSIVE_GATEWAY branch (EE-05) into REQ-044's transition dispatch: declared-order edge evaluation, default-edge-last, catch-false on condition errors (including unsupported CEL features), structured {:error,{:no_matching_edge,node_id,evaluated_conditions}} when no edge matches. New pure module lib/letflow/engine/expr.ex (translate_cel_to_expr/1, parse/1, eval/2, evaluate_condition/2) is a minimal CEL-subset evaluator scoped to the operators the gateway path needs -- not a full src/expr/ port, per the requirement's own scope note. Design gate PASSed clean (0 rework). Security review PASS (out of scope, no tenant-data path -- pure in-memory module). Idiom review PASS, explicitly judged the 2 pre-existing stub-assertion test failures as the correct expected consequence of superseding REQ-044's stub, not a regression. Test-design gate needed 1 rework round on an over-broad ORCH-authored check (flagged 4 PRE-EXISTING, untouched describe/test name pairs from REQ-044/REQ-049 as violations of a 200-char guideline this run's OWN new pairs all satisfied at max 199 chars) -- re-adjudicated to PASS once rescoped to this run's actual diff; the pre-existing long-but-compiling names were logged as a non-blocking MINOR observation, not fixed here (renaming unrelated tests would itself be scope creep). Test run 813/813, independently re-verified by RELEASE-VALIDATOR (fresh run, same result) with all 8 ACs traced to specific line numbers in code and tests. Step Final's rebase hit 2 conflicting bookkeeping files (handoffs/orchestrator.log, handoffs/registry.json) against concurrently-merged runs (WF03-ISS0047, REQ-045 already landed) -- composed both sides rather than picking one, verified via a fresh mix test post-rebase (814 tests, +1 from concurrent main merges). Also noted: this run's session-start ISS-0049 fix (3 ExUnit 255-char test-name compile errors) was independently rediscovered fixed by a concurrent run and reconciled as a no-op during rebase."
+    },
+    {
+      "run_id": "WF02-REQ051-20260818",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-051"],
+      "stage": "S3",
+      "status": "ACTIVE",
+      "owned_modules": ["lib/letflow/engine", "test/letflow/engine"],
+      "lock_acquired_at": "2026-08-18T18:57:37Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (git setup) COMPLETED -- branch feature/WF02-REQ051-20260818 pushed. Status flipped in_progress, started event logged.",
+      "backfilled": false,
+      "queue_task_id": 95,
+      "queue_agent_id": "hetzner-wt2-orch",
+      "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
+      "note": "REQ-051: parallel gateway split and join (transition.zig EE-06/EE-07) ported into REQ-044's transition dispatch. depends_on REQ-044, REQ-049 (both done). REQ-052 (instance cancellation) deliberately NOT a dependency -- its own description states the token-level cancelled-branch exclusion rule belongs to REQ-051's pure transition logic, REQ-052 only adds instance-level persistence later. Confirmed before starting rather than assuming the queue's depends_on list was complete."
     }
   ]
 }

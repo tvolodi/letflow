@@ -554,3 +554,5 @@
 2026-08-18T07:00:16Z | DISPATCH | WF-03 | WF03-ISS0043-20260818 | ORCH -> ISSUE-FIXER | Step 0.5+1: diagnose queue task 107/GH#159 (claimed cross-host, references unmerged REQ-043 code).
 2026-08-18T07:01:45Z | PASS | WF-03 | WF03-ISS0043-20260818 | ISSUE-FIXER -> ORCH | Steps 0.5+1: identified cross-host ISS-numbering collision (GH#159's referenced ISS-0042.yaml is a different, unrelated finding already on main). Diagnosed as correctly-deferred (assignee_type Ecto.Enum belongs with REQ-045/051's write path, no code exists yet to fix). Filed corrected docs/issues/ISS-0043.yaml, closed GH#159. Committed 2ecbd2b.
 2026-08-18T07:03:26Z | DONE | WF-03 | WF03-ISS0043-20260818 | ORCH | Step Final: PR #163 squash-merged as 610b9524208af28f58a89f5c9429de07fe010e67. Queue task 107 released done.
+2026-08-18T07:04:44Z | DISPATCH | WF-02 | WF02-REQ049-20260818 | ORCH -> ELIXIR-DEV(self) | Step 00: git setup (worktree variant), claimed via letflow-queue task 92.
+2026-08-18T07:04:44Z | PASS | WF-02 | WF02-REQ049-20260818 | ORCH | Step 00: feature/WF02-REQ049-20260818 branched from origin/main, pushed. REQ-049 status -> in_progress, started event logged.

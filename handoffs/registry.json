@@ -872,6 +872,27 @@
       "queue_agent_id": "hetzner-wt2-orch",
       "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
       "note": "letflow-queue task 107 / GH#159, filed by another host mid-run (WF02-REQ043-20260818, still unmerged in this checkout at the time) about Letflow.Engine.Task.assignee_type being free-text instead of an Ecto.Enum -- itself explicitly framed by its filer as deferred to REQ-045/051's future write path, not a current defect. The GitHub issue's 'Local record: docs/issues/ISS-0042.yaml' reference was a cross-host ISS-numbering collision -- that file already existed on main as a different, unrelated, already-closed finding (this same session's WF03-ISS0042-20260818). ISSUE-FIXER could not do a live code-read (lib/letflow/engine/task.ex not merged yet in this checkout) but judged this acceptable since the finding concerns a write path that doesn't exist yet either -- diagnosed as correctly deferred, no immediate code fix warranted. Filed the corrected record as docs/issues/ISS-0043.yaml (status: resolved, diagnosed-and-deferred), closed GH#159 with the same reasoning plus the renumbering correction. No code changed."
+    },
+    {
+      "run_id": "WF02-REQ049-20260818",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-049"
+      ],
+      "stage": "S3",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/engine/"
+      ],
+      "lock_acquired_at": "2026-08-18T07:04:44Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (git setup, worktree variant) PASS -- feature/WF02-REQ049-20260818 branched from origin/main, pushed. Requirement status flipped in_progress, started event logged. Routing to CODE-DESIGNER (Step 1).",
+      "backfilled": false,
+      "queue_task_id": 92,
+      "queue_agent_id": "hetzner-wt2-orch",
+      "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
+      "note": "Variable scoping and merge (instance.zig mergeVariables, EE-09). Pure function over (current_variables, incoming_variables, optional_schema), reuses REQ-024's validate_payload/3, no second JSON Schema validator. Depends on REQ-044 (done) and REQ-024 (done); does NOT formally depend on REQ-061 (EE-10 error handling, still pending) despite AC3 referencing an ERROR transition -- same dependency-ordering pattern as REQ-044/REQ-043, to be resolved explicitly in the design."
     }
   ]
 }

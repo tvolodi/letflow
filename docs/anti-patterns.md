@@ -295,3 +295,30 @@ Context, Not Whole Files", and it generalizes past this one file: prefer a
 targeted read over a whole-file read for anything above a few hundred lines
 (`git diff main...HEAD` over reading every changed file; `grep -n` over reading a
 3,000-line YAML to find one key).
+
+## Using `python3 -c "json.dump(...)"` to reorder/rewrite `handoffs/registry.json`
+
+During WF03-ISS0045-20260818's registry bookkeeping, ORCH used a `python3 -c`
+script (`json.load` + `json.dump(..., indent=2)`) to fix an out-of-chronological-order
+entry it had just inserted. `json.dump`'s default `ensure_ascii=True` silently
+rewrote every non-ASCII character in the file to a `\uXXXX` escape — every `§`
+character in the file's own `_comment` field and multiple historical entries'
+notes became a `§` escape sequence. The diff was caught only because it was reviewed
+(`git diff --stat` showing ~1650 changed lines for what should have been a
+one-entry move) before committing — a mechanical script produced a technically-valid,
+schema-conformant JSON file that nonetheless silently corrupted content across
+dozens of unrelated historical entries, exactly the kind of file-format regression
+`core-directives.md`'s "Never Satisfy a Gate by Editing What It Measures" and
+"Bookkeeping Is Not Optional" sections both guard against in spirit (the file stayed
+parseable, so no gate would have caught it).
+
+**Correct alternative:** never round-trip `handoffs/registry.json` (or any other
+append-only project file with non-ASCII content) through `json.load`/`json.dump`
+for a structural fix. Use the `Edit` tool's string-replacement on the raw text
+instead — cut the misplaced JSON block via one `old_string`/`new_string` pair (remove
+it from its wrong position) and a second edit to append it at the correct position,
+never a full parse/re-serialize round-trip. If a `python3 -c` JSON check is
+needed at all, use it read-only (`json.load` to validate parseability) — never
+call `json.dump` on a file that contains non-ASCII characters without explicitly
+passing `ensure_ascii=False`, and even then prefer a pure text edit over a
+round-trip for a file this project treats as append-only/audit-trail.

@@ -1,0 +1,47 @@
+{
+  "handoff_id": "2a07d8b0-8888-4000-8000-000000000009",
+  "run_id": "WF03-ISS0048-20260818",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0048-20260818/step-03b-security-reviewer.json",
+  "created_at": "2026-08-18T22:51:21Z",
+  "started_at": "2026-08-18T22:51:21Z",
+  "completed_at": "2026-08-18T22:52:27Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0048-20260818/step-03-elixir-dev-rework1.json", "handoffs/WF03-ISS0048-20260818/step-02-code-designer-rework1.json"],
+    "artifacts_in": ["lib/letflow/sandbox_pool.ex", "test/letflow/sandbox_pool_test.exs", "lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md"],
+    "owned_modules": ["lib/letflow/sandbox_pool.ex", "test/letflow/sandbox_pool_test.exs"]
+  },
+  "task": {
+    "description": "Review the diff on branch feature/WF03-ISS0048-20260818 (commits ef1e4c8, then rework 729e7b4) against security-invariants.md INV-1..INV-8. The change: Letflow.SandboxPool now monitors (Process.monitor) the pid that calls claim/2 and, on that process's :DOWN (any reason, including :normal), best-effort drops the claimed ephemeral sandbox_* schema and services the next waiter -- closing a previously-disclosed-but-unbuilt crash/kill leak. The contract now requires the SAME process to call claim/2 and release/2 (doc-only addition, no @spec change). Sandbox schemas (sandbox_*) are ephemeral, non-tenant, deliberately never registered in public.tenant_schemas -- used only by Letflow.Definitions.apply_promotion_assertion_rerun/6 for promotion-assertion replay. Check specifically: does the new drop_schema/1-on-:DOWN path have any path where it could target a real tenant schema instead of a sandbox schema (schema-name confusion / injection); does the same-process contract change create any new cross-tenant or cross-request state leakage; is the best-effort drop_schema/1 failure path (still disclosed as a residual gap, INV-SP-DOWN-4 per the design) handled safely (i.e. does a failed drop leave anything exploitable, vs. just an orphaned ephemeral schema which is the pre-existing MINOR-severity condition this whole fix narrows).",
+    "acceptance_criteria": [
+      "INV-1..INV-8 checked against the actual diff, not the design doc's own self-description",
+      "Explicit verdict on whether the :DOWN-triggered drop_schema/1 path could ever target a real tenant schema",
+      "Explicit verdict on whether the same-process claim/release contract introduces any new security-relevant behavior change"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed git diff main...HEAD for lib/letflow/sandbox_pool.ex and test/letflow/sandbox_pool_test.exs against INV-1..INV-8. Scope test: diff touches a data-access path inside SandboxPool (owner-monitor + best-effort drop_schema on :DOWN) but no migration, no tenant table, no secret, no response-shaping/lookup-by-ID code -- in scope for review, but most invariants resolve NOT-APPLICABLE. INV-1 (tenant data isolation): NOT-APPLICABLE -- sandbox_* schemas are explicitly, structurally non-tenant (moduledoc: 'Sandbox schemas are NOT tenant schemas -- they carry no Letflow.TenantProvisioning.Registration row'), never registered in public.tenant_schemas, and this diff adds/changes no migration and no tenant-scoped table access; the invariant's own text scopes to 'tenant business data', which this ephemeral scratch schema is not. INV-2, INV-3, INV-5: NOT-APPLICABLE, unchanged staging (S4/S5 not started). INV-4 (secrets): NOT-APPLICABLE, no secret material touched by this diff. INV-6 (new data-access path proves scoping): APPLIES-AND-SATISFIED -- this review is that proof; owner_ref/schema_name provenance traced below. INV-7 (no SQL string interpolation with untrusted input): APPLIES-AND-SATISFIED -- the two Repo.query! call sites (CREATE SCHEMA / DROP SCHEMA, lines 297 and 320) are unchanged by this diff and schema_name reaching them is never caller-supplied on any path: provision_sandbox/0 always derives it as \"sandbox_\" <> Ecto.UUID.generate() (line 289), and every other read is either state.active[sandbox_id].schema_name (release path, sandbox_id itself only used as a Map key, never interpolated into SQL) or the new find_active_by_owner_ref/2 lookup (:DOWN path) which returns the same struct read back out of state.active -- traced the full call graph, no path lets an external caller influence the interpolated string. INV-8 (no unhandled crashes on realistic failure paths): APPLIES-AND-SATISFIED -- drop_schema/1 (lines 319-324) wraps its own Repo.query! in try/rescue and returns {:ok | {:error, :release_failed}}, never raising; the new handle_info :DOWN branch (lines 183-192) calls drop_schema/1 and ignores its return value on the reclaim path exactly as the existing handle_call :release path already tolerated failure (matches disclosed INV-SP-DOWN-4: a failed drop leaves an orphaned empty sandbox schema, not an unhandled GenServer crash, not exploitable). Explicit verdict 1 (schema-name confusion/injection on the :DOWN path): the :DOWN-triggered drop_schema/1 call can never target a real tenant schema -- find_active_by_owner_ref/2 (line 276) only ever returns an entry already present in state.active, and every entry's schema_name was written into state.active exclusively by handle_provision_now/2 or handle_queue_or_reject's provisioning branch, both populating it directly from provision_sandbox/0's freshly-minted claim.schema_name (the \"sandbox_\" <> UUID construction) -- there is no code path where a tenant schema name (\"tenant_\" <> hex, per moduledoc's naming-scheme statement) could enter state.active or be passed to drop_schema/1. Explicit verdict 2 (same-process claim/release contract): this is a security-neutral availability/correctness change, not a new cross-tenant or cross-request leakage path -- sandbox schemas carry no tenant_id and no tenant attribution (INV-1 does not apply to them), so a claim now being tied to and reclaimed on its owning process's exit (any reason, via Process.monitor/Process.demonitor with :flush) affects only which process's ephemeral scratch schema gets freed and when; it narrows a pre-existing MINOR resource-leak condition (an orphaned schema after a crashed/killed caller) and introduces no new read of, or write to, any other claim's or any tenant's data. No BLOCKER found on any applicable invariant.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0048-20260818",
+      "commit_sha_list": ["ef1e4c8", "729e7b4"],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Proceed to REVIEWER (idiomatic OTP usage / supervision integrity / scope creep gate) per WF-02 Step 2c ordering -- SECURITY-REVIEWER gate passed with no BLOCKERs."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -72,7 +72,40 @@ affected_files:
   - test/letflow/definitions/service_scope_validator_test.exs
   - priv/repo/migrations/20260816163103_create_event_type_registry.exs
 github_issue: https://github.com/tvolodi/letflow/issues/166
-status: in_progress
+status: resolved
+resolved_by: ISSUE-FIXER
+resolved_in_run: WF03-ISS0044-20260818
+resolved_at: "2026-08-18T08:02:47Z"
+resolution_note: >
+  Group 2 (4 unused-default-arg warnings) fixed: dropped the unused
+  `\\ default` from start_pool!/1 (test/letflow/sandbox_pool_test.exs,
+  test/letflow/sandbox_pool/fixture_loader_test.exs), create!/2
+  (test/letflow/definitions/search_test.exs), and node/3
+  (test/letflow/definitions/service_scope_validator_test.exs) --
+  independently verified every existing call site already supplied the
+  argument explicitly, so this is behavior-preserving. Applied directly by
+  ORCH per ORCHESTRATOR.md sec10's sizing exception (exactly-specified,
+  mechanical, per-file single-concern change), with independent REVIEWER
+  sign-off obtained before merging rather than skipped, matching the
+  ISS-0020 precedent. mix test re-confirmed 704 tests/0 failures with the 4
+  targeted warnings gone.
+
+  Groups 1 and 3 remain permanently deferred, not fixed, in this same
+  record -- both were independently diagnosed (not assumed) as non-actionable
+  right now: Group 1 (register_test/4 deprecation across 5 property test
+  files) originates entirely inside StreamData 0.6.0's own `property` macro,
+  not any Letflow file; a fix would require a stream_data version bump
+  (0.6.0 -> up to 1.4.0 available, a 4-major-version jump with unverified
+  register_test/6 and generator-API compatibility), which is its own scoped
+  requirement, not a same-shape hygiene fix. Group 3 (migration module
+  redefinition warning) was confirmed to be the same non-blocking mechanism
+  ISS-0020 item 2 already established (a documented, deliberate
+  Code.require_file/1 test workaround for priv/repo/migrations/*.exs being
+  outside :test's elixirc_paths racing against ecto.migrate's own module
+  load) -- no fix needed, `mix compile --warnings-as-errors` can never
+  trigger it. This issue is marked resolved as a whole because its only
+  actionable item (Group 2) is fixed and verified; Groups 1/3 are
+  documented-and-accepted, not silently dropped.
 diagnosis: >
   ISSUE-FIXER (WF03-ISS0044-20260818), Steps 0.5/1, real reproduction performed (not
   diagnosed from prose alone). Step 0.5: docs/issues/ISS-0020.yaml read in full (item 2's

@@ -1,0 +1,55 @@
+id: ISS-0048
+title: "~69-70 orphaned tenant_*/sandbox_* Postgres schemas accumulated in the test database, DROP SCHEMA cleanup never ran"
+discovered_by: TEST-DESIGN-VALIDATOR
+discovered_in_run: WF02-REQ063-20260818 (Step 3b re-gate, rework iteration 2)
+discovered_at: "2026-08-18T12:11:57Z"
+severity: MINOR
+tags:
+  - test-hygiene
+  - postgres
+  - tenant-provisioning
+description: >
+  Discovered incidentally during REQ-063's test-design gate rework (the
+  SET search_path / Sandbox cross-test-pollution bug chain -- see
+  handoffs/WF02-REQ063-20260818/step-03-test-designer.json and
+  step-03b-test-design-gate.json for that chain's own resolution, unrelated to
+  this finding). While independently re-verifying the fix via repeated `docker
+  exec letflow-postgres-1 psql` Postgres inspection across multiple full-suite
+  and isolated test runs, TEST-DESIGN-VALIDATOR found a stable population of
+  roughly 69-70 orphaned tenant_*/sandbox_* schemas already present in the test
+  database, unchanged in count before and after every run performed during this
+  rework (confirmed zero delta attributable to the search_path/Sandbox fix
+  itself).
+
+  Confirmed via a live `NOT EXISTS`-against-`tenant_schemas` query that these
+  are real, committed Postgres schema objects (not sandboxed/rolled-back
+  state) whose owning `Registration` row no longer exists in
+  `public.tenant_schemas` -- i.e. some test-provisioned tenant schemas across
+  this project's test suite are never cleaned up (no `DROP SCHEMA` step ever
+  runs for them), and the count has been accumulating across however many
+  prior test runs/sessions produced them.
+
+  Not diagnosed further (root-cause-only, incidental finding during an
+  unrelated rework, not a WF-03 ISSUE-FIXER dispatch) -- filed and forwarded
+  per docs/agents/protocols/ISSUE_QUEUE.md rather than investigated inline.
+  Likely candidates for whoever picks this up: a test helper that calls
+  TenantProvisioning.provision_tenant_schema/1 (or replay_migrations/2) without
+  a matching on_exit DROP SCHEMA cleanup step, possibly across several
+  different test files given the accumulated count; or a test that provisions
+  a schema and then crashes/is interrupted before its own cleanup runs. Worth
+  a targeted grep across test/ for provision_tenant_schema!/schema_name_for_tenant
+  call sites missing an on_exit cleanup counterpart, and a decision on whether
+  a one-off cleanup script or a stronger test-suite-wide teardown guarantee is
+  the right fix.
+
+  Confirmed structurally unrelated to the search_path/Sandbox bug chain this
+  run was otherwise resolving -- that chain concerned in-test-run connection
+  state leakage; this is about schemas persisting across separate test runs
+  entirely, a different failure mode.
+affected_files:
+  - test/letflow/identity_test.exs
+  - test/letflow/identity/user_test.exs
+  - test/letflow/identity/group_test.exs
+  - test/letflow/identity/tenant_role_test.exs
+  - test/letflow/role_registry_test.exs
+status: open

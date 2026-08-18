@@ -292,14 +292,15 @@ defmodule Letflow.Engine.VariableMergeTest do
       # Transition.transition/3 (REQ-044) accepts the composed InstanceState
       # and dispatches on it -- proving new_variables threads through the
       # ordinary caller-composition path with no separate fetch or refresh
-      # step. EXCLUSIVE_GATEWAY's CEL-condition evaluation is a REQ-050 stub
-      # today (design doc §11's flagged forward dependency), so the dispatch
-      # itself returns the named stub error rather than reading the
-      # variable -- but the merged value is already present and readable on
-      # composed_state, confirmed below, at the exact point a real REQ-050
-      # gateway evaluator would read it from.
+      # step. EXCLUSIVE_GATEWAY's CEL-condition evaluation is now REQ-050's
+      # real dispatch (no longer a stub); this fixture gateway has zero
+      # outgoing edges, so dispatch returns {:error, {:no_matching_edge, ...}}
+      # with an empty evaluated_conditions list rather than the old stub
+      # error -- but the merged value is already present and readable on
+      # composed_state, confirmed below, at the exact point the real
+      # REQ-050 gateway evaluator reads it from.
       assert Transition.transition(g, composed_state, {:advance_token, "t1"}) ==
-               {:error, {:gateway_not_yet_implemented, :EXCLUSIVE_GATEWAY, "gw"}}
+               {:error, {:no_matching_edge, "gw", []}}
 
       assert composed_state.variables["status"] == "approved"
     end

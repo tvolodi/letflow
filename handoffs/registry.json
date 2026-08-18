@@ -853,6 +853,25 @@
       "queue_agent_id": "hetzner-wt2-orch",
       "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
       "note": "docs/issues/ISS-0042.yaml (GH#157), a MINOR non-blocking type-safety observation REVIEWER filed during WF02-REQ044-20260818, surfaced by letflow-queue as the next claimable task (task_type: issue jumps the requirement backlog per TASK_QUEUE.md's two-tier priority). ISSUE-FIXER's Step 0.5/1 diagnosis independently re-verified the claim against the real code (lib/letflow/engine/transition.ex's dispatch_start/4, lib/letflow/definitions/graph.ex's CHK-04 validator) and mix test (1 property, 19 tests, 0 failures), then concluded no code fix is warranted now: the suggested ValidatedGraph.t() phantom-tagged wrapper would itself be scope creep (no requirement/decision record calls for it, fails ORCHESTRATOR.md sec10's sizing checklist), matching REVIEWER's own original deferral recommendation in the issue text. Steps 2-4 (fix design/implement/regression test) deliberately SKIPPED per this diagnosis, same shape as WF-02's own out-of-scope skip pattern -- not a silent workflow bypass, an independently-derived non-defect finding. Issue closed as resolved (diagnosed-and-deferred), GH#157 closed with the same reasoning. No code changed; docs/issues/ISS-0042.yaml + handoffs/ bookkeeping only."
+    },
+    {
+      "run_id": "WF03-ISS0043-20260818",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "stage": null,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "docs/issues/"
+      ],
+      "lock_acquired_at": "2026-08-18T06:59:04Z",
+      "lock_released_at": "2026-08-18T07:03:26Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (git merge) COMPLETED -- PR #163 squash-merged into main as 610b9524208af28f58a89f5c9429de07fe010e67, queue task 107 released done.",
+      "backfilled": false,
+      "queue_task_id": 107,
+      "queue_agent_id": "hetzner-wt2-orch",
+      "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
+      "note": "letflow-queue task 107 / GH#159, filed by another host mid-run (WF02-REQ043-20260818, still unmerged in this checkout at the time) about Letflow.Engine.Task.assignee_type being free-text instead of an Ecto.Enum -- itself explicitly framed by its filer as deferred to REQ-045/051's future write path, not a current defect. The GitHub issue's 'Local record: docs/issues/ISS-0042.yaml' reference was a cross-host ISS-numbering collision -- that file already existed on main as a different, unrelated, already-closed finding (this same session's WF03-ISS0042-20260818). ISSUE-FIXER could not do a live code-read (lib/letflow/engine/task.ex not merged yet in this checkout) but judged this acceptable since the finding concerns a write path that doesn't exist yet either -- diagnosed as correctly deferred, no immediate code fix warranted. Filed the corrected record as docs/issues/ISS-0043.yaml (status: resolved, diagnosed-and-deferred), closed GH#159 with the same reasoning plus the renumbering correction. No code changed."
     }
   ]
 }

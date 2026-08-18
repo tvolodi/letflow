@@ -1,9 +1,10 @@
 # TASK_QUEUE Protocol — multi-host coordination
 
 **Service:** `letflow-queue` — a small standalone Elixir/Phoenix + SQLite service,
-deployed independently of Letflow itself (own repo: `tvolodi/letflow-queue`; deployed
-at `https://queue.ai-dala.com` per `ai-dala-infra`'s app registry once live — see that
-project's `T-0107`/`T-0108` for deploy status).
+deployed independently of Letflow itself (own repo: `tvolodi/letflow-queue`). Deployed
+and live at `https://queue-test.ai-dala.com` (test only — see "Deployment status"
+below). A prod deployment at `queue.ai-dala.com` is not yet planned; every example in
+this file uses the live test URL.
 
 **Read by:** `ORCH` (all four functions), every other agent (read-only via `ORCH`'s
 dispatch — see "Who calls what" below).
@@ -116,7 +117,7 @@ hardcode a token; fall back exactly as documented below instead.
   ORCH, which registers it — an individual agent never calls `register_task` directly.
 
 ```bash
-curl -X POST https://queue.ai-dala.com/tasks \
+curl -X POST https://queue-test.ai-dala.com/tasks \
   -H "Authorization: Bearer $QUEUE_AUTH_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -155,7 +156,7 @@ going") or before dispatching a workflow. This replaces the old "pick the first
 the service now does that filtering, atomically, across every host.
 
 ```bash
-curl -X GET "https://queue.ai-dala.com/tasks/next?agent_id=$HOSTNAME-orch" \
+curl -X GET "https://queue-test.ai-dala.com/tasks/next?agent_id=$HOSTNAME-orch" \
   -H "Authorization: Bearer $QUEUE_AUTH_TOKEN"
 ```
 
@@ -185,7 +186,7 @@ the requirement backlog FIFO exactly as before this priority split existed.
 host already held before a crash/restart, using the same `agent_id`.
 
 ```bash
-curl -X POST https://queue.ai-dala.com/tasks/42/lock \
+curl -X POST https://queue-test.ai-dala.com/tasks/42/lock \
   -H "Authorization: Bearer $QUEUE_AUTH_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"agent_id": "'"$HOSTNAME"'-orch"}'
@@ -208,7 +209,7 @@ below).
   the reasoning in the handoff/log entry when using `force`.
 
 ```bash
-curl -X POST https://queue.ai-dala.com/tasks/42/release \
+curl -X POST https://queue-test.ai-dala.com/tasks/42/release \
   -H "Authorization: Bearer $QUEUE_AUTH_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"agent_id": "'"$HOSTNAME"'-orch", "status": "done"}'
@@ -216,7 +217,7 @@ curl -X POST https://queue.ai-dala.com/tasks/42/release \
 
 ```bash
 # Force-release a task stuck locked by a dead host:
-curl -X POST https://queue.ai-dala.com/tasks/42/release \
+curl -X POST https://queue-test.ai-dala.com/tasks/42/release \
   -H "Authorization: Bearer $QUEUE_AUTH_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"force": true}'

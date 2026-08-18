@@ -2164,6 +2164,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 87  # letflow-queue task id
     description: >
       Add the priv/repo/migrations and Ecto.Schema modules the instance engine
       needs but that S2 deliberately did not build, all schema-per-tenant via
@@ -2235,6 +2236,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 88  # letflow-queue task id
     description: >
       Port the core value types and top-level dispatch of
       src/engine/transition.zig's transition() (per src/design/engine.md
@@ -2291,6 +2293,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 89  # letflow-queue task id
     description: >
       Port src/engine/instance.zig's InstanceStore.create() (per
       src/design/engine.md "Section EE-01: Start Instance", L18) as the
@@ -2383,6 +2386,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 90  # letflow-queue task id
     description: >
       Execute the supersession REQ-045 decides. REQ-045 ports EE-01's start
       path and states in its moduledoc which early module is replaced and
@@ -2427,6 +2431,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 91  # letflow-queue task id
     description: >
       Port src/engine/instance.zig's InstanceStore.applyTransition() (per
       src/design/engine.md "Section EE-03: Task Activation", L1086) as the
@@ -2474,6 +2479,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 93  # letflow-queue task id
     description: >
       Port src/engine/instance.zig's InstanceStore.completeTask() (per
       src/design/engine.md "Section EE-04: Complete Task", L1632) as
@@ -2517,6 +2523,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 92  # letflow-queue task id
     description: >
       Port src/engine/instance.zig's InstanceStore.mergeVariables() (per
       src/design/engine.md "Section EE-09: Variable Scoping and Merge", L3957)
@@ -2558,6 +2565,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 94  # letflow-queue task id
     description: >
       Port src/engine/transition.zig's EXCLUSIVE_GATEWAY branch (per
       src/design/engine.md "Section EE-05: Exclusive Gateway/CEL", L2238) into
@@ -2642,6 +2650,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 95  # letflow-queue task id
     description: >
       Port src/engine/transition.zig's PARALLEL_GATEWAY branches (per
       src/design/engine.md "Section EE-06: Parallel Split", L2638 and "Section
@@ -2691,6 +2700,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 96  # letflow-queue task id
     description: >
       Port src/engine/instance.zig's InstanceStore.cancelInstance() (per
       src/design/engine.md "Section EE-08: Cancellation", L3299) as
@@ -2768,6 +2778,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 98  # letflow-queue task id
     description: >
       Port src/engine/reconstruction.zig's reconstructInstance() (per
       src/design/engine.md "Section EE-11: State Reconstruction", L5237) as
@@ -2826,6 +2837,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 99  # letflow-queue task id
     description: >
       Port src/engine/snapshot_writer.zig (348 lines -- R-Co's ISS-601, design
       artefact src/design/iss601_state_snapshots.md) as
@@ -2886,6 +2898,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 100  # letflow-queue task id
     description: >
       Establish and verify the concurrency-safety property R-Co's EE-12 states
       (per src/design/engine.md "Section EE-12: Concurrent Instance Safety",
@@ -2932,6 +2945,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 101  # letflow-queue task id
     description: >
       Port src/engine/service_task.zig (420 lines, R-Co's EXT-01) as
       Letflow.Engine.ServiceTask -- the engine-side half of SERVICE_TASK node
@@ -2995,6 +3009,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 102  # letflow-queue task id
     description: >
       Port src/engine/plugin_interface.zig (79 lines, the stable handler type)
       and src/engine/plugin_registry.zig (232 lines, the registration and
@@ -3068,6 +3083,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 103  # letflow-queue task id
     description: >
       Port src/engine/lua_script_audit.zig (201 lines, R-Co's ISS-0176/GH#504
       -- LUA-07's second acceptance criterion) as
@@ -3123,6 +3139,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 104  # letflow-queue task id
     description: >
       Port src/engine/pin_resolver.zig (967 lines, R-Co's PIN-01..PIN-04) as
       Letflow.Engine.PinResolver -- the mechanism that freezes every versioned
@@ -3204,6 +3221,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 105  # letflow-queue task id
     description: >
       Port src/engine/pin_rebind.zig (388 lines, R-Co's PIN-05) as
       Letflow.Engine.PinRebind.rebind_pins/N -- the SOLE write path to an
@@ -3256,6 +3274,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 97  # letflow-queue task id
     description: >
       Port src/engine/instance.zig's InstanceStore.setInstanceError() (per
       src/design/engine.md "Section EE-10: Execution Error Handling", L4571)
@@ -3311,6 +3330,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 106  # letflow-queue task id
     description: >
       Port SPC-01's RUNTIME half from src/engine/instance.zig -- the half
       shipped REQ-032 explicitly deferred to this stage. REQ-032's own

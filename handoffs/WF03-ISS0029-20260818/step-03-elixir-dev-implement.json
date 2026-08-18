@@ -9,7 +9,7 @@
   "created_at": "2026-08-18T01:31:00Z",
   "started_at": "2026-08-18T01:31:00Z",
   "completed_at": "2026-08-18T01:33:58Z",
-  "status": "PASS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -42,12 +42,16 @@
       "test/specs/REQ-027.md"
     ],
     "issues": [
-      "Handoff task.acceptance_criteria's 4th item says '13 tests expected, down from 14', which contradicts the validated design's section 5 (test count must stay unchanged at 14, only one assertion is deleted, not a whole test). Actual run: 14 tests, 0 failures, consistent with the design. Flagging for ORCH/REVIEWER rather than silently resolving the discrepancy either way."
+      {
+        "severity": "MINOR",
+        "description": "Handoff task.acceptance_criteria's 4th item said '13 tests expected, down from 14', which contradicted the validated design's section 5 (test count must stay unchanged at 14, only one assertion is deleted, not a whole test). ELIXIR-DEV correctly followed the design over the handoff's own inconsistent parenthetical. Actual run: 14 tests, 0 failures, consistent with the design. ORCH note: this was ORCH's own drafting error in the handoff's acceptance criteria, not a defect in the design or implementation -- no rework needed.",
+        "affected_requirement": null
+      }
     ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0029-20260818",
       "commit_sha_list": [
-        "4c45abd78e4b271dad22efe02107e6561e467df0"
+        "4c45abd"
       ],
       "remote_branch": "origin/feature/WF03-ISS0029-20260818",
       "push_status": "pushed",

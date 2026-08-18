@@ -1,0 +1,46 @@
+id: ISS-0054
+title: "test/letflow/engine_test.exs's AC6 describe+test name pair exceeded ExUnit's 255-char SystemLimitError threshold, blocking the entire suite's compilation (same class as ISS-0030/0033/0040/0049)"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ047-20260818 (Step 2a implementation)
+discovered_at: "2026-08-18T21:53:46Z"
+severity: MAJOR
+tags:
+  - test-hygiene
+  - compilation-blocker
+description: >
+  While implementing REQ-047, `mix test test/letflow/engine_test.exs` failed
+  to compile with `** (SystemLimitError) the computed name of a test ...
+  must be shorter than 255 characters, got: "test AC6 -- moduledoc names the
+  process-vs-row open question, cites the stage doc, leaves later engine
+  subsystems to their own decision names the question as this stage's
+  largest open design question and cites stage-3-instance-engine.md's second
+  Early finding"` at test/letflow/engine_test.exs:718.
+
+  Confirmed pre-existing (not introduced by REQ-047's own diff) via `git
+  stash` -- the failure reproduces identically on the pre-change tree. This
+  is the fourth occurrence of the exact failure class documented in
+  docs/anti-patterns.md's "TEST-DESIGNER writing narratively-detailed
+  describe/test names" entry (ISS-0030, ISS-0033, ISS-0040, ISS-0049 all
+  the same root cause in different files) -- narratively-detailed
+  describe/test name pairs exceeding ExUnit's combined 255-char ceiling,
+  which fails the *whole file's* compilation rather than one test.
+
+  Not caused by REQ-050/051's work directly as far as this run investigated
+  -- ISS-0050 (filed during REQ-045's Step 5) explicitly notes
+  test/letflow/engine_test.exs "passed in full" at that point, so this
+  describe/test pair was introduced sometime between REQ-045's merge and
+  REQ-047's Step 2a, most likely by REQ-050 or REQ-051's own TEST-DESIGNER
+  output (both landed gateway/hop-limit test coverage in this same file per
+  handoffs/registry.json's WF02-REQ051 note) -- not confirmed which commit,
+  not investigated further since this run's own scope is REQ-047.
+
+  Fixed inline by this run (blocking Step 4's full-suite mix test, per
+  core-directives.md's Unblock-Everything): shortened both the describe and
+  test strings to well under 200 combined chars, no behavioral change,
+  verified via `mix test test/letflow/engine_test.exs` -> 24 tests, 0
+  failures (all passing, same assertions, same coverage).
+affected_files:
+  - test/letflow/engine_test.exs
+status: fixed
+fixed_by: WF02-REQ047-20260818
+github_issue: https://github.com/tvolodi/letflow/issues/192

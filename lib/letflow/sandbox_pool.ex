@@ -28,6 +28,21 @@ defmodule Letflow.SandboxPool do
   a claimed sandbox (inert data between `claim` and `release`) is not. See the design
   doc §2 for the full reasoning, including the accepted trade-off that pool state does
   not survive a `SandboxPool` process restart (design doc §11 OQ-3).
+
+  ## Same-process claim/release contract
+
+  A claim belongs to the process that called `claim/2` — it must be that same process
+  which later calls `release/2` for the returned `sandbox_id`. This is enforced by the
+  owner-monitor mechanism, not merely documented: `claim/2` monitors whichever process
+  calls it, so handing the claim to a different process (e.g. via `Task.async`, whose
+  spawned process exits as soon as it returns its value) looks identical, from the
+  pool's perspective, to that process crashing, and the slot is reclaimed accordingly.
+  This mirrors the same idiom OTP itself uses for its own lock-shaped resources — e.g.
+  `:global.set_lock/3`'s lock is likewise tied to the calling process — rather than
+  providing an explicit ownership-transfer primitive (which OTP itself only offers,
+  e.g. `:ets.give_away/3`, when transfer is a genuine requirement; it is not one here).
+  See `lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md` §13 for the full
+  reasoning.
   """
 
   use GenServer
@@ -82,6 +97,11 @@ defmodule Letflow.SandboxPool do
   Claims a sandbox: provisions one immediately if a slot is free, otherwise blocks
   (without busy-polling) until either a slot frees or `max_wait_ms` elapses, in which
   case it returns `{:error, :sandbox_unavailable}`.
+
+  The process that calls `claim/2` must be the same process that later calls
+  `release/2` for the returned `sandbox_id` — handing a claim to a different process
+  and releasing from there is indistinguishable, by design, from that process leaking
+  the claim (see moduledoc's owner-monitor section) and will be reclaimed automatically.
   """
   @spec claim(max_wait_ms :: non_neg_integer(), pool :: GenServer.server()) ::
           {:ok, SandboxClaim.t()}
@@ -115,7 +135,7 @@ defmodule Letflow.SandboxPool do
   @impl true
   def handle_call({:claim, max_wait_ms}, from, state) do
     if map_size(state.active) < state.max_concurrent do
-      handle_provision_now(state)
+      handle_provision_now(from, state)
     else
       handle_queue_or_reject(max_wait_ms, from, state)
     end
@@ -126,9 +146,10 @@ defmodule Letflow.SandboxPool do
       :error ->
         {:reply, {:error, :not_found}, state}
 
-      {:ok, schema_name} ->
+      {:ok, %{schema_name: schema_name, owner_ref: owner_ref}} ->
         case drop_schema(schema_name) do
           :ok ->
+            Process.demonitor(owner_ref, [:flush])
             GenServer.reply(from, :ok)
             new_state = %{state | active: Map.delete(state.active, sandbox_id)}
             {:noreply, service_next_waiter(new_state)}
@@ -152,24 +173,42 @@ defmodule Letflow.SandboxPool do
     end
   end
 
-  def handle_info({:DOWN, caller_ref, :process, _pid, _reason}, state) do
-    case find_waiter(state.waiting, caller_ref) do
-      nil ->
-        {:noreply, state}
-
-      {_from, ^caller_ref, timer_ref} ->
+  def handle_info({:DOWN, ref, :process, _pid, _reason}, state) do
+    case find_waiter(state.waiting, ref) do
+      {_from, ^ref, timer_ref} ->
         Process.cancel_timer(timer_ref)
-        {:noreply, %{state | waiting: remove_waiter(state.waiting, caller_ref)}}
+        {:noreply, %{state | waiting: remove_waiter(state.waiting, ref)}}
+
+      nil ->
+        case find_active_by_owner_ref(state.active, ref) do
+          {sandbox_id, %{schema_name: schema_name}} ->
+            # The owner of an already-granted claim died before release/2 was
+            # called -- best-effort reclaim (design doc §5.4, INV-SP-DOWN-2/3).
+            drop_schema(schema_name)
+            new_active = Map.delete(state.active, sandbox_id)
+            new_state = service_next_waiter(%{state | active: new_active})
+            {:noreply, new_state}
+
+          nil ->
+            {:noreply, state}
+        end
     end
   end
 
   # Immediate-provisioning path: a slot was free at the moment handle_call ran.
   # Returns {:reply, ..., state} directly -- GenServer replies to the caller
   # using handle_call/3's own `from` argument, not one threaded through here.
-  defp handle_provision_now(state) do
+  defp handle_provision_now(from, state) do
     case provision_sandbox() do
       {:ok, %SandboxClaim{} = claim} ->
-        new_active = Map.put(state.active, claim.sandbox_id, claim.schema_name)
+        owner_ref = Process.monitor(elem(from, 0))
+
+        new_active =
+          Map.put(state.active, claim.sandbox_id, %{
+            schema_name: claim.schema_name,
+            owner_ref: owner_ref
+          })
+
         {:reply, {:ok, claim}, %{state | active: new_active}}
 
       {:error, :provision_failed} = error ->
@@ -202,8 +241,15 @@ defmodule Letflow.SandboxPool do
 
         case provision_sandbox() do
           {:ok, %SandboxClaim{} = claim} ->
+            owner_ref = Process.monitor(elem(from, 0))
             GenServer.reply(from, {:ok, claim})
-            new_active = Map.put(state.active, claim.sandbox_id, claim.schema_name)
+
+            new_active =
+              Map.put(state.active, claim.sandbox_id, %{
+                schema_name: claim.schema_name,
+                owner_ref: owner_ref
+              })
+
             %{state | active: new_active, waiting: rest}
 
           {:error, :provision_failed} = error ->
@@ -225,6 +271,10 @@ defmodule Letflow.SandboxPool do
     |> :queue.to_list()
     |> Enum.reject(fn {_from, ref, _timer_ref} -> ref == caller_ref end)
     |> :queue.from_list()
+  end
+
+  defp find_active_by_owner_ref(active, owner_ref) do
+    Enum.find(Map.to_list(active), fn {_sandbox_id, %{owner_ref: ref}} -> ref == owner_ref end)
   end
 
   # Provisioning sequence (design doc §4.4 step 4): mint a fresh sandbox_id,

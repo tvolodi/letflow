@@ -1,0 +1,52 @@
+{
+  "handoff_id": "4c29fac0-aaaa-4000-8000-00000000000b",
+  "run_id": "WF03-ISS0048-20260818",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0048-20260818/step-04-test-designer.json",
+  "created_at": "2026-08-18T22:54:56Z",
+  "started_at": "2026-08-18T22:54:56Z",
+  "completed_at": "2026-08-18T22:57:22Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0048-20260818/step-03c-reviewer.json"],
+    "artifacts_in": ["lib/letflow/sandbox_pool.ex", "lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md"],
+    "owned_modules": ["test/letflow/sandbox_pool_test.exs"]
+  },
+  "task": {
+    "description": "Write a genuine fail-then-pass regression test for ISS-0048's actual fix (the owner-crash-reclaim mechanism), not the existing test that was merely reworked to avoid a false positive. The test must: (1) claim a sandbox schema from a helper process, (2) kill that process via an exit signal the pre-fix code could not have caught (e.g. Process.exit(pid, :kill), or letting a spawned process crash/die without calling release/2 -- NOT a raised exception, since try/rescue already handled that path before this fix), (3) assert the claimed schema is reclaimed (dropped from Postgres, or at minimum removed from the pool's active state so a subsequent claim/2 can succeed / the schema no longer physically exists) within a reasonable wait window. Per WF-03 Step 4's requirement, PROVE this is fail-then-pass: check out the pre-fix commit (before ef1e4c8, i.e. the commit at the start of this run's branch -- find it via git log/git merge-base with main) in a temporary way that doesn't disturb the current branch state (e.g. git worktree add, or git stash + checkout + checkout back, or git show <commit>:lib/letflow/sandbox_pool.ex to a scratch location and run the test against it directly if that's simpler -- your call on the safest mechanical approach), run the new test against pre-fix sandbox_pool.ex and confirm it FAILS, then run it against the current post-fix code on this branch and confirm it PASSES. State both results with real command output in your handoff, not asserted from reading the code.",
+    "acceptance_criteria": [
+      "New test added to test/letflow/sandbox_pool_test.exs that exercises a process kill (not a raised exception) between claim/2 and release/2",
+      "Test proven to FAIL against pre-fix sandbox_pool.ex (real command output quoted)",
+      "Test proven to PASS against post-fix sandbox_pool.ex on this branch (real command output quoted)",
+      "Full test/letflow/sandbox_pool_test.exs suite still green post-fix (all tests, including the new one)",
+      "Does NOT implement or modify lib/letflow/sandbox_pool.ex itself -- test-only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Added a genuine kill-based regression test to test/letflow/sandbox_pool_test.exs, describe \"owning process killed between claim/2 and release/2 (ISS-0048 regression)\": claims from a spawn/1-ed process (not Task.async, not the test process), relays the claim back via send/receive rendezvous, then Process.exit(owner_pid, :kill)s it (an exit signal, NOT a raised exception -- try/rescue already handled that path before this fix) and asserts (1) the schema is dropped from real Postgres (polled via a new wait_until_schema_dropped/2 helper, matching the file's existing wait_until_waiter_queued/2 bounded-polling idiom) and (2) the freed quota slot is immediately claimable again with a different sandbox_id, proving the active map entry itself was removed. Also added test/specs/ISS-0048.md with full criterion/rationale/fail-then-pass evidence.\n\nFAIL-THEN-PASS PROOF (real command output):\n\nPre-fix: checked out merge-base-with-main commit bc7705d (strictly before ef1e4c8, which introduces the owner-monitor fix) into a scratch git worktree at /tmp/sandbox-prefix, copied the current post-fix test/letflow/sandbox_pool_test.exs (including the new test) into it unchanged, symlinked deps/_build from the main checkout, left lib/letflow/sandbox_pool.ex at its pre-fix bc7705d state, and ran the full file against the already-running docker-compose Postgres:\n\n$ cd /tmp/sandbox-prefix && mix test test/letflow/sandbox_pool_test.exs --seed 0\n...\n  1) test owning process killed between claim/2 and release/2 (ISS-0048 regression) a killed owner's claim is reclaimed: schema dropped and quota slot freed for a subsequent claim/2 (Letflow.SandboxPoolTest)\n     test/letflow/sandbox_pool_test.exs:367\n     expected schema sandbox_8d8e0e2042c1442a86e0bbab4f9b851a to be dropped by SandboxPool's owner-crash reclaim, but it still exists in information_schema.schemata\n     code: wait_until_schema_dropped(schema_name)\n     stacktrace:\n       test/letflow/sandbox_pool_test.exs:407: (test)\n\nFinished in 5.6 seconds (0.00s async, 5.6s sync)\n8 tests, 1 failure\n\n(Only the new test failed; the other 7 pre-existing tests passed unchanged pre-fix.) Worktree removed afterward (git worktree remove /tmp/sandbox-prefix --force) -- current branch state was never touched.\n\nPost-fix: ran the same file on this branch (feature/WF03-ISS0048-20260818, ef1e4c8/729e7b4):\n\n$ mix test test/letflow/sandbox_pool_test.exs --seed 0\n...\nFinished in 3.3 seconds (0.00s async, 3.3s sync)\n8 tests, 0 failures\n\nRan twice for stability confirmation, both green (3.2s and 3.3s). All 7 pre-existing REQ-039 acceptance-criterion tests plus the 1 new ISS-0048 regression test pass. lib/letflow/sandbox_pool.ex was not modified -- test-only change, per acceptance criterion 5.",
+    "artifacts_out": [
+      "test/letflow/sandbox_pool_test.exs",
+      "test/specs/ISS-0048.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0048-20260818",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR to gate this coverage before TEST-RUNNER/RELEASE-VALIDATOR."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

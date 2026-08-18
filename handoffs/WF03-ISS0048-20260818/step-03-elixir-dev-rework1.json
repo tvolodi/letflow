@@ -1,0 +1,49 @@
+{
+  "handoff_id": "19f6c7a0-7777-4000-8000-000000000008",
+  "run_id": "WF03-ISS0048-20260818",
+  "workflow_id": "WF-03",
+  "step": "03-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0048-20260818/step-03-elixir-dev-rework1.json",
+  "created_at": "2026-08-18T22:48:57Z",
+  "started_at": "2026-08-18T22:48:57Z",
+  "completed_at": "2026-08-18T22:50:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0048-20260818/step-02b-code-design-validator-rework1.json"],
+    "artifacts_in": ["lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md"],
+    "owned_modules": ["lib/letflow/sandbox_pool.ex", "test/letflow/sandbox_pool_test.exs"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1 (implementation side -- the design itself already passed re-validation): implement §13.2/§13.3 of the validated design (lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md) -- add a one-sentence claim/2 @doc addition and a short moduledoc paragraph stating the same-process claim/release contract (doc-only, claim/2's @spec itself does not change). Then restructure test/letflow/sandbox_pool_test.exs:192-221 (the 'a queued waiter is served once the held slot frees' test) per §13.4's send/receive rendezvous shape: the Task.async-spawned process must itself call release/2 after handing its claim result back to the test process, rather than the test process calling release/2 on a claim it never itself made. Your prior implementation of the owner-monitor mechanism in lib/letflow/sandbox_pool.ex (commit ef1e4c8, already on this branch) is correct and does not need to change -- this rework is doc additions plus the test restructuring only.",
+    "acceptance_criteria": [
+      "lib/letflow/sandbox_pool.ex gains the §13.2 claim/2 @doc sentence and §13.3 moduledoc paragraph (doc-only, no logic change)",
+      "claim/2's @spec remains byte-identical to before",
+      "test/letflow/sandbox_pool_test.exs:192-221 restructured so the Task.async-spawned process calls both claim/2 and release/2 itself, matching §13.4's rendezvous shape",
+      "mix compile --warnings-as-errors exits clean",
+      "mix test test/letflow/sandbox_pool_test.exs passes, all 7 tests green (run at least 3x to confirm it's not a new flake, matching the prior failure's own 3/3 reproduction standard)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Added the §13.2 claim/2 @doc sentence ('The process that calls claim/2 must be the same process that later calls release/2...') and the §13.3 moduledoc '## Same-process claim/release contract' paragraph to lib/letflow/sandbox_pool.ex -- doc-only; `git diff` confirms claim/2's @spec (lines below the new @doc text) is byte-identical to before, only @doc/@moduledoc prose was added. Restructured the 'a queued waiter is served once the held slot frees' test (test/letflow/sandbox_pool_test.exs) per §13.4: the Task.async body now claims, sends {:waiter_claimed, claim} to the test process, blocks on `receive` for a :release_waiter_claim signal, then itself calls SandboxPool.release/2 for that claim before returning the claim struct; the test process asserts via assert_receive, sends the release signal, and asserts on Task.await's return -- release now happens from the same process that claimed, eliminating the owner-monitor false-positive reclaim. `mix compile --warnings-as-errors` -> 'Compiling 1 file (.ex) / Generated letflow app', clean, zero warnings. `mix test test/letflow/sandbox_pool_test.exs` run 3x: run 1 '7 tests, 0 failures' (Finished in 2.8s), run 2 '7 tests, 0 failures' (Finished in 2.8s), run 3 '7 tests, 0 failures' (Finished in 3.2s) -- stable 3/3, no flake. mix format --check-formatted flagged the restructured test block's line-wrapping (plus one pre-existing, unrelated finding in a different test file); ran `mix format` scoped to test/letflow/sandbox_pool_test.exs only, re-verified compile+3x test pass after reformatting.",
+    "artifacts_out": ["lib/letflow/sandbox_pool.ex", "test/letflow/sandbox_pool_test.exs"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0048-20260818",
+      "commit_sha_list": ["729e7b4f85a0ff57aac84e6033b3747d3cf47399"],
+      "remote_branch": null,
+      "push_status": "not_pushed_awaiting_orch",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (tenant-data-adjacent: sandbox schema provisioning) then REVIEWER per WF-03 Step 3 gating; ORCH to push feature/WF03-ISS0048-20260818 (commit 729e7b4) when ready."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

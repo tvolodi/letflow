@@ -121,6 +121,30 @@ defmodule Letflow.SandboxPoolTest do
     end
   end
 
+  # Same bounded-polling idiom as wait_until_waiter_queued/2 above, but for the
+  # owner-crash-reclaim test below (ISS-0048): polls information_schema.schemata
+  # directly until a killed owner's schema has actually been dropped by
+  # SandboxPool's :DOWN handler, rather than assuming a fixed sleep is long
+  # enough. 400 attempts * 5ms = up to 2s, well past a single message-passing
+  # round-trip (design doc INV-SP-DOWN-2's own stated bound).
+  defp wait_until_schema_dropped(schema_name, attempts \\ 400)
+
+  defp wait_until_schema_dropped(schema_name, 0) do
+    flunk(
+      "expected schema #{schema_name} to be dropped by SandboxPool's owner-crash " <>
+        "reclaim, but it still exists in information_schema.schemata"
+    )
+  end
+
+  defp wait_until_schema_dropped(schema_name, attempts) do
+    if schema_exists?(schema_name) do
+      Process.sleep(5)
+      wait_until_schema_dropped(schema_name, attempts - 1)
+    else
+      :ok
+    end
+  end
+
   # ---------------------------------------------------------------------------------
   # Acceptance criterion 1: "claim/1 against an empty pool immediately succeeds and
   # returns a sandbox_id + schema_name for a real, freshly-created Postgres schema"
@@ -202,22 +226,51 @@ defmodule Letflow.SandboxPoolTest do
       # after a slot had already, coincidentally, become free some other way, it
       # would be vacuous. The waiter genuinely blocks (:noreply internally) until
       # release/2 below frees the slot.
-      waiter = Task.async(fn -> SandboxPool.claim(2_000, pool) end)
+      #
+      # The claim and its matching release must happen from the same process (see
+      # SandboxPool's "Same-process claim/release contract" moduledoc section) --
+      # a Task.async process that merely returns its claim and exits looks, to the
+      # owner-monitor, identical to that process leaking/crashing, and the slot
+      # would be reclaimed before the test process's own release/2 call ran. So the
+      # spawned process itself claims, relays the claim back via a send/receive
+      # rendezvous for the test process to assert on, waits for a "go ahead" signal,
+      # and only then calls release/2 itself, before returning.
+      test_pid = self()
+
+      waiter =
+        Task.async(fn ->
+          assert {:ok, %SandboxClaim{} = waiter_claim} = SandboxPool.claim(2_000, pool)
+
+          send(test_pid, {:waiter_claimed, waiter_claim})
+
+          receive do
+            :release_waiter_claim -> :ok
+          after
+            3_000 -> flunk("test process never signalled release for the waiter claim")
+          end
+
+          assert :ok = SandboxPool.release(waiter_claim.sandbox_id, pool)
+
+          waiter_claim
+        end)
 
       wait_until_waiter_queued(pool)
 
       assert :ok = SandboxPool.release(held_id, pool)
       refute schema_exists?(held_schema)
 
-      assert {:ok, %SandboxClaim{sandbox_id: waiter_id, schema_name: waiter_schema}} =
-               Task.await(waiter, 3_000)
+      assert_receive {:waiter_claimed,
+                      %SandboxClaim{sandbox_id: waiter_id, schema_name: waiter_schema}},
+                     3_000
 
       on_exit(fn -> drop_schema!(waiter_schema) end)
 
       assert waiter_id != held_id
       assert schema_exists?(waiter_schema)
 
-      assert :ok = SandboxPool.release(waiter_id, pool)
+      send(waiter.pid, :release_waiter_claim)
+
+      assert %SandboxClaim{sandbox_id: ^waiter_id} = Task.await(waiter, 3_000)
     end
 
     test "when no slot frees within the wait window, returns {:error, :sandbox_unavailable} and the held claim is untouched" do
@@ -297,6 +350,73 @@ defmodule Letflow.SandboxPoolTest do
       pool = start_pool!(max_concurrent: 1)
 
       assert {:error, :not_found} = SandboxPool.release(Ecto.UUID.generate(), pool)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0048 regression: owning process killed (not a raised exception) between
+  # claim/2 and release/2 -- see
+  # lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md and
+  # test/specs/ISS-0048.md for the full rationale. `try/rescue` (the only safety
+  # net that existed before this fix) never runs on an `exit` signal -- only a
+  # process kill genuinely exercises the new owner-monitor path; a raised
+  # exception would prove nothing new here.
+  # ---------------------------------------------------------------------------------
+
+  describe "owning process killed between claim/2 and release/2 (ISS-0048 regression)" do
+    test "a killed owner's claim is reclaimed: schema dropped and quota slot freed for a subsequent claim/2" do
+      pool = start_pool!(max_concurrent: 1)
+      test_pid = self()
+
+      # Claim from a separate, spawned process (not the test process) so that
+      # process -- not the test itself -- can be killed out from under its own
+      # claim. Plain spawn/1, not Task.async/1: Task's own normal-return exit is
+      # already exercised by this file's "queued waiter" test above; this test
+      # needs the process to still be alive, holding its claim, at the moment it
+      # is killed, so it never calls release/2 at all.
+      owner_pid =
+        spawn(fn ->
+          assert {:ok, %SandboxClaim{} = claim} = SandboxPool.claim(1_000, pool)
+          send(test_pid, {:owner_claimed, claim})
+
+          receive do
+            :never -> :ok
+          end
+        end)
+
+      assert_receive {:owner_claimed,
+                       %SandboxClaim{sandbox_id: sandbox_id, schema_name: schema_name}},
+                      2_000
+
+      on_exit(fn -> drop_schema!(schema_name) end)
+
+      # Sanity: the claim is real and the pool's quota is genuinely exhausted
+      # before the kill, so the "slot freed" assertion below isn't vacuous.
+      assert schema_exists?(schema_name)
+      assert {:error, :sandbox_unavailable} = SandboxPool.claim(0, pool)
+
+      # Kill the owner via an exit signal try/rescue structurally cannot catch --
+      # NOT a raised exception (that path was already handled before this fix).
+      owner_monitor_ref = Process.monitor(owner_pid)
+      Process.exit(owner_pid, :kill)
+      assert_receive {:DOWN, ^owner_monitor_ref, :process, ^owner_pid, :killed}, 2_000
+
+      # Core regression assertion: the schema is dropped from real Postgres --
+      # not merely that the function returned a particular value -- once
+      # SandboxPool has processed its own :DOWN message for the dead owner.
+      wait_until_schema_dropped(schema_name)
+      refute schema_exists?(schema_name)
+
+      # The freed quota slot is immediately claimable again -- proves the
+      # `active` entry itself was removed, not just the physical schema.
+      assert {:ok, %SandboxClaim{sandbox_id: id2, schema_name: schema2}} =
+               SandboxPool.claim(1_000, pool)
+
+      on_exit(fn -> drop_schema!(schema2) end)
+
+      assert id2 != sandbox_id
+      assert schema_exists?(schema2)
+      assert :ok = SandboxPool.release(id2, pool)
     end
   end
 

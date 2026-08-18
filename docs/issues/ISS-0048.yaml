@@ -52,7 +52,9 @@ affected_files:
   - test/letflow/identity/group_test.exs
   - test/letflow/identity/tenant_role_test.exs
   - test/letflow/role_registry_test.exs
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0048-20260818
+resolved_at: "2026-08-18T23:02:37Z"
 github_issue: https://github.com/tvolodi/letflow/issues/198
 queue_task_id: 115
 registration_note: >
@@ -61,3 +63,46 @@ registration_note: >
   2026-08-18T22:25Z: filed GH#197 by hand, then register_task (queue task 115) best-effort
   auto-created its own duplicate GH#198 pointing at the same task -- #197 closed as
   duplicate of #198, which is now the canonical linked issue for this task/finding.
+resolution_note: >
+  Scope shifted during WF-03 diagnosis (run WF03-ISS0048-20260818). The
+  originally-suspected affected_files above (the five identity/role_registry
+  test files) were investigated first, on the theory that a missing on_exit
+  DROP SCHEMA step in one of those test files was leaking orphaned
+  tenant_*/sandbox_* schemas. All five were exonerated: each already has
+  correct on_exit cleanup ordering (schema drop runs before/alongside
+  connection teardown, no interruption window found).
+
+  The actual root cause was in Letflow.SandboxPool
+  (lib/letflow/sandbox_pool.ex): the pool disclosed (in its own moduledoc/spec)
+  an owner-crash/kill reaper responsible for reclaiming a sandboxed
+  tenant/schema slot when the owning test process crashed or was killed
+  without running its own on_exit callback, but that reaper was never
+  actually built -- an owner-monitor extension was documented but not
+  implemented. When a test process died abnormally (crash, kill, timeout)
+  before its on_exit ran, SandboxPool had no mechanism to detect the dead
+  owner and reclaim/drop the schema, so the schema was silently orphaned
+  instead of cleaned up. Across many such abnormal exits over time, this
+  produced the observed steady-state population of ~69-70 orphaned schemas.
+
+  Fix: implemented the missing owner-monitor extension in
+  Letflow.SandboxPool (lib/letflow/sandbox_pool.ex) so the pool monitors each
+  slot's owning process and reclaims (drops) the schema on an unexpected
+  owner DOWN, independent of on_exit. Proven via a fail-then-pass regression
+  test at test/letflow/sandbox_pool_test.exs (spec at
+  test/specs/ISS-0048.md): the test first demonstrated the leak against the
+  pre-fix pool (a killed owner left its schema behind), then passed against
+  the fixed pool (the killed owner's schema is reclaimed). Full suite
+  (`mix test`) run clean post-fix: 5 properties, 874 tests, 0 failures
+  (see handoffs/WF03-ISS0048-20260818/step-04c-test-runner.json).
+
+  Open observation, NOT resolved by this fix: the originally-reported
+  ~69-70 orphaned-schema count itself, and specifically a later, separately
+  observed drop of that population from 69 to 0 within roughly a 10-hour
+  window with no identified cause (no matching cleanup script, deploy, or
+  manual intervention found on record). The SandboxPool owner-monitor fix
+  above addresses the ongoing leak mechanism going forward; it does not
+  explain that specific historical drop-to-zero event. If the orphaned-schema
+  count is observed climbing again, or another unexplained population swing
+  occurs, treat this as a possible recurrence/related gap rather than a fresh
+  issue, and check whether the owner-monitor reaper itself is failing
+  silently before assuming a new root cause.

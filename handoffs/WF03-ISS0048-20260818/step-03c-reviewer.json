@@ -1,0 +1,49 @@
+{
+  "handoff_id": "3b18e9c0-9999-4000-8000-00000000000a",
+  "run_id": "WF03-ISS0048-20260818",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0048-20260818/step-03c-reviewer.json",
+  "created_at": "2026-08-18T22:53:13Z",
+  "started_at": "2026-08-18T22:53:13Z",
+  "completed_at": "2026-08-18T22:54:13Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0048-20260818/step-03b-security-reviewer.json", "handoffs/WF03-ISS0048-20260818/step-02-code-designer-rework1.json"],
+    "artifacts_in": ["lib/letflow/sandbox_pool.ex", "test/letflow/sandbox_pool_test.exs", "lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md"],
+    "owned_modules": ["lib/letflow/sandbox_pool.ex", "test/letflow/sandbox_pool_test.exs"]
+  },
+  "task": {
+    "description": "Review git diff main...HEAD on branch feature/WF03-ISS0048-20260818 for idiomatic OTP usage, supervision integrity, scope creep, and decision-record consistency. Check specifically: is Process.monitor/Process.demonitor(ref, [:flush]) used correctly and idiomatically for the new owner-tracking (no monitor leak on the normal release path, no double-monitor); does the new handle_info({:DOWN,...}) three-way dispatch (waiter / active-claim-owner / no-op) read as correct GenServer state-machine logic, not just plausible; is this in scope (ISS-0048 fix only, no drift into unrelated SandboxPool changes); does anything here contradict a docs/migration/decisions/ record. Also sanity-check that the design's own rework (§13, same-process claim/release contract) is a sound engineering call, not just internally self-consistent -- REVIEWER's gate is independent of CODE-DESIGN-VALIDATOR's, so re-derive your own opinion on whether this is idiomatic rather than deferring to the design's own justification.",
+    "acceptance_criteria": [
+      "Process.monitor/demonitor usage verified idiomatic, no leak/double-monitor",
+      "handle_info :DOWN three-way dispatch verified correct against actual source, not assumed",
+      "Confirmed in scope, no drift beyond ISS-0048's fix",
+      "No contradiction with any docs/migration/decisions/ record",
+      "Independent opinion on whether the same-process claim/release contract is sound OTP practice"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed git diff main...HEAD for lib/letflow/sandbox_pool.ex and test/letflow/sandbox_pool_test.exs against the four review questions, re-derived independently rather than deferring to the design doc's own §13 self-justification. (1) Process.monitor/demonitor idiom: verified against the actual source, not assumed. handle_provision_now/2 and service_next_waiter/1's hand-off branch each call Process.monitor(elem(from, 0)) exactly once per granted claim, storing the resulting owner_ref in state.active[sandbox_id]. release/2's success path calls Process.demonitor(owner_ref, [:flush]) before clearing the active entry -- no leak on the normal release path (flush drains any race-window DOWN already in the mailbox). handle_queue_or_reject/3 establishes a separate caller_ref for the *waiting* monitor; service_next_waiter/1 demonitors that waiting-ref (Process.demonitor(caller_ref, [:flush])) before minting a *new*, distinct owner_ref for the granted claim -- so a waiter promoted to owner is never double-monitored under the same ref, and the two monitors (waiting vs. active) never overlap in time for the same logical wait-to-claim transition. handle_info({:claim_timeout,...}) also demonitors with :flush on the reject path. No code path establishes a monitor without a corresponding teardown on every exit route (release success, :DOWN firing, or timeout). (2) handle_info({:DOWN, ref, :process, _pid, _reason}, state)'s three-way dispatch (find_waiter first, then find_active_by_owner_ref, else no-op) is correct against the real source, not just plausible: refs are unique per Process.monitor/1 call, so a waiting-ref and an owner-ref for the same pid (e.g. a process that is simultaneously blocked on one claim/2 call and holding an earlier active claim) never collide -- each fires its own independent :DOWN message routed to the correct branch. The active-owner branch correctly best-effort drops the schema, removes the active entry, and calls service_next_waiter/1 to keep the queue moving, matching design doc §5.4/INV-SP-DOWN-2/3. The no-op branch is reached only for a DOWN with no matching ref in either structure, which is unreachable in practice (every monitor this module creates is recorded in one of the two structures) but is the correct defensive default rather than a crash. (3) Scope: diff is confined to sandbox_pool.ex's owner-monitor/DOWN-dispatch mechanism and the one test (sandbox_pool_test.exs) that was asserting a claim/release-across-processes pattern the new contract disallows -- no drift into definitions.ex, other pool consumers, or unrelated SandboxPool behavior. The test rework (send/receive rendezvous so the Task.async body itself calls release/2) matches design doc §13.4's prescribed shape exactly and still genuinely exercises the queueing/hand-off path (wait_until_waiter_queued/1, distinct sandbox_id assertion) rather than weakening coverage. (4) No contradiction with any docs/migration/decisions/ record found (checked 0001/0002/0003/0004/0006; none constrain GenServer/monitor mechanics) -- SandboxPool's GenServer-not-per-claim-process design was already settled in req039's design doc and restated, not re-litigated, by this diff's moduledoc. Independent opinion on the same-process claim/release contract (§13): sound OTP practice, not merely internally self-consistent. Tying claim ownership to the calling process via Process.monitor is the same idiom :global's own lock semantics and (by contrast, when transfer is genuinely needed) :ets.give_away/3 both reflect -- it requires zero new public API surface, the one real production caller (Letflow.Definitions.apply_promotion_assertion_rerun/6, re-verified in this diff's own review at §13.0/§13.5 to have zero Task.async/spawn between its claim/2 and release/2 calls) already satisfies it natively, and the rejected alternative (an explicit ownership-transfer primitive) would only relocate the same-process requirement to a new call site while adding permanent public API for a need that, per the design's own re-verified grep, no current caller has. This is the correct call, not scope creep in either direction: no premature abstraction was added, and no needed safety was skipped.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0048-20260818",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Proceed to TEST-DESIGNER (WF-03 step 03d) -- REVIEWER gate passed, no rework required."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

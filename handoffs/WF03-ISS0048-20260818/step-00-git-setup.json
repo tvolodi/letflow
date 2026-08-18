@@ -1,0 +1,48 @@
+{
+  "handoff_id": "f91559f0-2025-47ef-bab7-b7b805e22692",
+  "run_id": "WF03-ISS0048-20260818",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0048-20260818/step-00-git-setup.json",
+  "created_at": "2026-08-18T22:27:18Z",
+  "started_at": "2026-08-18T22:27:18Z",
+  "completed_at": "2026-08-18T22:27:46Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/issues/ISS-0048.yaml"],
+    "owned_modules": ["test/letflow/identity_test.exs", "test/letflow/identity/user_test.exs", "test/letflow/identity/group_test.exs", "test/letflow/identity/tenant_role_test.exs", "test/letflow/role_registry_test.exs", "test/support"]
+  },
+  "task": {
+    "description": "Step 00 (git setup) per docs/agents/protocols/GIT_SETUP.md, for WF-03 run WF03-ISS0048-20260818 (fixing ISS-0048: ~69-70 orphaned tenant_*/sandbox_* Postgres schemas accumulated in the test database -- some test-provisioned tenant schemas are never cleaned up via DROP SCHEMA on test teardown, letflow-queue task 115, GH#198). This checkout (~/letflow) is the primary checkout holding local main -- standard (non-worktree) GIT_SETUP.md procedure applies.",
+    "acceptance_criteria": [
+      "git pull --ff-only origin main exits 0",
+      "git checkout -b feature/WF03-ISS0048-20260818 created from up-to-date main",
+      "git branch --show-current outputs feature/WF03-ISS0048-20260818",
+      "git push -u origin feature/WF03-ISS0048-20260818 exits 0"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Primary checkout (~/letflow) confirmed on main, fast-forwarded cleanly from origin/main (already up to date), created feature/WF03-ISS0048-20260818 from up-to-date main, and pushed it to origin with upstream tracking set.",
+    "artifacts_out": ["branch: feature/WF03-ISS0048-20260818"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0048-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0048-20260818",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH routes to next step per active WF-03 workflow"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

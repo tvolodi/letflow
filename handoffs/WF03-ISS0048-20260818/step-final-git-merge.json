@@ -1,0 +1,49 @@
+{
+  "handoff_id": "8064e3a0-eeee-4000-8000-00000000000f",
+  "run_id": "WF03-ISS0048-20260818",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0048-20260818/step-final-git-merge.json",
+  "created_at": "2026-08-18T23:03:37Z",
+  "started_at": "2026-08-18T23:03:37Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0048-20260818/step-05-issue-fixer.json"],
+    "artifacts_in": [],
+    "owned_modules": ["lib/letflow/sandbox_pool.ex", "test/letflow/sandbox_pool_test.exs"]
+  },
+  "task": {
+    "description": "Step Final (git merge) per docs/agents/protocols/GIT_MERGE.md, for WF-03 run WF03-ISS0048-20260818 on branch feature/WF03-ISS0048-20260818. All upstream gates already PASS: CODE-DESIGN-VALIDATOR (02b, incl. rework1 re-gate), SECURITY-REVIEWER (03b), REVIEWER (03c), TEST-DESIGN-VALIDATOR (04b), TEST-RUNNER (04c, full suite 874/874 green), ISSUE-FIXER Step 5 (docs/issues/ISS-0048.yaml resolved, GH#198 closed). Rebase onto origin/main, verify build+tests still pass post-rebase, push, open PR (fix: prefix, this is WF-03), merge, clean up back to local main. After the rebase's own diff-filter=U check reports 0, run it a SECOND time immediately after `git rebase --continue` reports success as a hard re-check (per docs/anti-patterns.md's 'A rebase add/add conflict on docs/issues/ISS-NNNN.yaml can land without git ever flagging it as CONFLICT' entry) -- this run touches docs/issues/ISS-0048.yaml, a collision-prone append-style path other concurrent hosts may also be touching.",
+    "acceptance_criteria": [
+      "git rebase origin/main completes cleanly (or conflicts resolved per protocol, ≤5 files, none in excluded paths)",
+      "git diff --name-only --diff-filter=U | wc -l reports 0 both immediately after rebase --continue AND as a final re-check before push",
+      "mix compile --warnings-as-errors and mix test both green post-rebase",
+      "PR opened (fix: prefix) and merged via gh pr merge --squash --delete-branch",
+      "Local checkout returned to main, git log --oneline -1 shows the squash-merge commit, working tree clean"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

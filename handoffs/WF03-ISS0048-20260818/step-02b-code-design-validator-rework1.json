@@ -1,0 +1,46 @@
+{
+  "handoff_id": "08e5b6f0-6666-4000-8000-000000000007",
+  "run_id": "WF03-ISS0048-20260818",
+  "workflow_id": "WF-03",
+  "step": "02b-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0048-20260818/step-02b-code-design-validator-rework1.json",
+  "created_at": "2026-08-18T22:47:34Z",
+  "started_at": "2026-08-18T22:47:34Z",
+  "completed_at": "2026-08-18T22:48:26Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0048-20260818/step-02-code-designer-rework1.json", "handoffs/WF03-ISS0048-20260818/step-03-elixir-dev.json"],
+    "artifacts_in": ["lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md"],
+    "owned_modules": ["lib/letflow/sandbox_pool.ex", "lib/letflow/definitions.ex", "test/letflow/sandbox_pool_test.exs"]
+  },
+  "task": {
+    "description": "Independently re-validate the revised design (lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md's new §13, REWORK ITERATION 1) against handoffs/WF03-ISS0048-20260818/step-02-code-designer-rework1.json's five acceptance criteria. Re-derive your own verdict from the artefact and current source -- do not accept CODE-DESIGNER's self-report. Specifically re-check: (1) §13 genuinely resolves the Task.async ambiguity ELIXIR-DEV found (test/letflow/sandbox_pool_test.exs:192-221) via a same-process claim/release contract, not a superficial patch; (2) §13 explicitly states test/letflow/sandbox_pool_test.exs needs restructuring and owned_modules reflects that; (3) re-confirm yourself, by reading lib/letflow/definitions.ex directly, that apply_promotion_assertion_rerun/6's call path has no Task.async/spawn around claim/2..release/2, so direction (b) genuinely costs it nothing; (4) claim/2's @spec is confirmed unchanged; (5) §13 is internally consistent with §§1-12 (not contradictory) and gives ELIXIR-DEV/TEST-DESIGNER enough concrete detail (the send/receive rendezvous shape for the test restructuring) to implement without re-deciding design questions themselves.",
+    "acceptance_criteria": [
+      "Each of the five points is independently re-checked against the artefact/source",
+      "Verdict PASS only if all five hold; otherwise FAIL with specifics, routed back to CODE-DESIGNER as rework iteration 2"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-validated §13 of lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md against the five re-check points, re-deriving from the artefact and current source rather than trusting CODE-DESIGNER's self-report. (1) §13.1/§13.4 genuinely resolve the Task.async ambiguity via a same-process claim/release contract (not a superficial patch): the contract is grounded in the existing owner-monitor mechanism (Process.monitor(elem(from,0)), unchanged), (a) was considered and rejected with four concrete module-specific reasons (not a generic preference), and §13.4 gives a concrete prose-level send/receive rendezvous shape for restructuring test/letflow/sandbox_pool_test.exs:192-221 so the release call moves into the Task's own process. (2) §13.4 explicitly states the test needs restructuring and that owned_modules for the next step includes test/letflow/sandbox_pool_test.exs; confirmed context.owned_modules on the CODE-DESIGNER rework1 handoff already reflects this. (3) Independently re-read lib/letflow/definitions.ex directly (not reused from the design's own claim): grep for Task./spawn/GenServer.cast across the whole file returns zero matches; apply_promotion_assertion_rerun/6 (line 795) calls claim_sandbox_and_proceed/8 (line 1472) directly, which calls SandboxPool.claim/2 (line 1482) and, on success, run_replay_span/8 (line 1522), which calls SandboxPool.release/2 directly at three sites (1591, 1633, 1822 via safe_release/2) -- an ordinary synchronous same-process call chain throughout, confirming direction (b) costs this caller nothing. (4) claim/2's @spec is unchanged in sandbox_pool.ex (line 86, byte-identical to §4's original statement); §13.2 confirms only @doc prose and a moduledoc paragraph are added, no new parameter or return variant, consistent with §8's original 'must not change' list (@specs and start_link/1 only, not doc comments). (5) §13 is internally consistent with §§1-12: the REWORK NOTICE under the title (lines 21-32) points to §13 as authoritative, §13.5 restates and does not reopen §7/§8's 'nothing in definitions.ex changes' scope, §13.6's traceability table maps each rework acceptance criterion to a concrete subsection, and §13 contains zero code fences (prose/pseudocode only, matching the document's own no-implementation-code constraint). All five checks hold; no gaps found.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0048-20260818",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV with owned_modules including test/letflow/sandbox_pool_test.exs alongside lib/letflow/sandbox_pool.ex, to implement §13.2/§13.3's doc-only additions (claim/2 @doc sentence, moduledoc paragraph) and restructure test/letflow/sandbox_pool_test.exs:192-221 per §13.4's send/receive rendezvous shape, then re-run mix test test/letflow/sandbox_pool_test.exs to confirm it passes green."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

@@ -1,0 +1,64 @@
+id: ISS-0057
+title: "complete_task/3 never creates a tasks row for the next HUMAN_TASK when the same token continues directly from one HUMAN_TASK to another"
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF02-REQ048-20260818 (Step 3, writing test/letflow/engine_complete_task_test.exs)
+discovered_at: "2026-08-18T23:15:43Z"
+severity: BLOCKER
+tags:
+  - correctness
+  - req-048
+  - task-activation
+description: >
+  REQ-048 AC1 ("complete_task on a PENDING task ... activates the next node") is
+  violated by the shipped implementation for the ordinary, common case of two
+  directly-chained HUMAN_TASK nodes (START -> task_a(HUMAN_TASK) -> task_b(HUMAN_TASK)
+  -> END, single unconditioned edges throughout -- no PARALLEL_GATEWAY, no gateway of
+  any kind). Reproduced deterministically by
+  test/letflow/engine_complete_task_test.exs's "AC1 -- completing a PENDING task at an
+  ordinary unconditioned-edge HUMAN_TASK" test (currently failing, `mix test
+  test/letflow/engine_complete_task_test.exs`: `assert length(tasks) == 2` gets `1`).
+
+  Root cause: `Letflow.Engine.Transition.advance_token/3` (transition.ex, used by the
+  new `{:complete_task, token_id}` dispatch) moves a token to its next node by updating
+  its `node_id` field in place -- the token's own `token_id` never changes. When that
+  next node is itself a `:HUMAN_TASK`, `dispatch_human_task/3` appends this *same*
+  `Token.t()` (same `token_id`, new `node_id`) to `pending_task_nodes`.
+
+  `Letflow.Engine.complete_task/3`'s own `load_pending_task_tokens/3` (engine.ex)
+  builds its "previous" pending-task set from every currently-`PENDING` `tasks` row --
+  by the design doc's own explicit statement (`lib/letflow/design/req048-task-completion.md`
+  §6.4), this deliberately *includes* the completing task's own token, on the stated
+  assumption that "nothing ... removes an entry from pending_task_nodes ... the
+  completing task's token therefore remains in final_instance_state.pending_task_nodes
+  ... unchanged." That assumption is false whenever the token actually moves onward to
+  another HUMAN_TASK within the same call: `TaskActivation.newly_pending_tokens/2`
+  diffs `previous`/`new` pending-task lists **by `token_id` equality only** (unchanged
+  from REQ-047, per that function's own doc), so the continuing token's *new* pending
+  entry (at task_b, correct `node_id`) is filtered out as "already accounted for"
+  purely because its `token_id` matches the stale "previous" entry -- even though that
+  stale entry actually names a different (now-completed) task/node. Net effect: no
+  `tasks` row is ever inserted for task_b. `instance_projections.current_nodes` and the
+  live `tokens` row both correctly show the instance now waiting at task_b, but no
+  `PENDING` task exists for it -- nothing can ever complete it via `complete_task/3`
+  (task_b's own `token_id` never resolves to any `tasks` row via `find_token_for_task/2`
+  either, since no such row exists). This appears to strand every instance that has two
+  or more sequential HUMAN_TASK nodes with no intervening PARALLEL_GATEWAY split -- a
+  very common real-world graph shape, not an edge case.
+
+  Not the same finding as ISS-0056 (REVIEWER's already-filed MINOR finding about
+  no-fallback/all-conditions-false HUMAN_TASK edges) -- that finding is about condition
+  evaluation; this one is about task-row materialization and reproduces even with a
+  single, ordinary, unconditioned edge.
+
+  Candidate fix directions (not evaluated in depth -- ELIXIR-DEV/CODE-DESIGNER's call):
+  build the "previous" pending-task set for `newly_pending_tokens/2` from
+  `(token_id, node_id)` pairs instead of `token_id` alone (so a token's stale
+  "previous" position no longer masks its genuinely-new position), or special-case
+  excluding only the *actually-completing* task's own token from "previous" by task id
+  rather than including every currently-PENDING token unconditionally.
+affected_files:
+  - lib/letflow/engine.ex
+  - lib/letflow/engine/task_activation.ex
+  - lib/letflow/design/req048-task-completion.md
+status: open
+github_issue: https://github.com/tvolodi/letflow/issues/202

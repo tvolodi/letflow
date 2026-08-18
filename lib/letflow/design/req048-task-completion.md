@@ -35,7 +35,9 @@ signatures/shapes only, matching `req043`/`req044`/`req045`/`req047`'s own conve
   `req049-variable-merge.md`, `req050-exclusive-gateway-cel.md`,
   `req051-parallel-gateway-split-join.md` — the six already-shipped designs this one
   extends or reuses without modification.
-- `lib/letflow/engine.ex` (full, current `main`) — `create/2`, `persist/7`,
+- `lib/letflow/engine.ex` (full, current `main`) — `create/2`, `persist/8` (re-verified
+  its actual arity directly against the shipped `defp persist(...)` header during rework —
+  the first submission of this document mis-cited it as `persist/7`),
   `advance_until_stable/4`, `tokens_needing_dispatch/3`, `insert_token_records/4`,
   `finalize_instance_projection/4`. Read directly, not paraphrased, since this design
   extends this exact code.
@@ -81,7 +83,7 @@ signatures/shapes only, matching `req043`/`req044`/`req045`/`req047`'s own conve
 | `Letflow.Engine.TokenRecord` | `advance_changeset/2` (§8) |
 | `Letflow.Engine.InstanceState`, `Letflow.Engine.Token`, `Letflow.Engine.JoinCounter` | Pure structs this design's reconstruction (§6) builds instances of |
 | `Letflow.Engine.VariableMerge` | `merge/3` (§7) |
-| `Letflow.Engine.TaskActivation` | `append_multi/6`, `newly_pending_tokens/2` (§9), reused exactly per REQ-047 §5.1's own stated forward contract for "a future EE-04 caller" |
+| `Letflow.Engine.TaskActivation` | `newly_pending_tokens/2` and `insert_attrs/4` (both already public — §9), reused unchanged. **`append_multi/6` itself is NOT reused** — see §9's revised design and §13 OQ-2b for why, re-derived from the shipped code rather than assumed |
 | `Letflow.Definitions.SnapshotStore` | `get_by_instance_id/2` (§6.1) |
 | `Letflow.EventStore` | `append/2` (§10) |
 | `Letflow.EventStore.InstanceProjection` | `update_changeset/2` (§8) |
@@ -99,7 +101,14 @@ signatures/shapes only, matching `req043`/`req044`/`req045`/`req047`'s own conve
    scoped-reconstruction function (§6), the token-record reconciliation function (§8.2),
    and the projection reconciliation function (§8.3) — all new, none replacing existing
    `create/2` logic.
-3. No new migration, no new table, no new column.
+3. `Letflow.Engine.TaskActivation` gains one new **public** function,
+   `append_multi_from_existing_records/6` (§9) — REQ-048's own "newly-pending HUMAN_TASK"
+   Multi step. **`append_multi/6` itself is left completely unmodified** — this is an
+   addition alongside it, not a change to it or to `create/2`'s own call site. Disclosed
+   as a genuine new design decision at §13 OQ-2b (rework of this design's original,
+   incorrect "reused exactly unchanged" claim — see that section for the full
+   re-derivation against the shipped code).
+4. No new migration, no new table, no new column.
 
 ---
 
@@ -331,7 +340,7 @@ have a live, `:active` `tokens` row) and surfaces as `{:error, {:missing_token_r
 task.token_id}}`, never a `MatchError` — same defensive-but-typed shape REQ-047's own
 `fetch_token_record_id/2` (§0) already establishes for the mirror-image lookup.
 
-### 6.4 Pending-task tokens (for `TaskActivation.append_multi/6`'s "previous" argument)
+### 6.4 Pending-task tokens (for §9's `append_multi_from_existing_records/6`'s "previous" argument)
 
 ```
 @spec load_pending_task_tokens(instance_id :: Ecto.UUID.t(), prefix :: String.t()) :: [Token.t()]
@@ -343,7 +352,8 @@ Multi's own `:task_complete` step, §8.1, runs), mapped to a **minimal** `Token.
 `token_id: to_string(row.token_id)` is populated (`node_id`/`branch_id` left at their
 struct defaults, unused). This is sufficient because `TaskActivation.newly_pending_tokens/2`
 diffs **by `token_id` equality only** (§0, req047 §5.1, confirmed by direct code read) —
-no other field of these entries is ever read by `append_multi/6`.
+no other field of these entries is ever read by `newly_pending_tokens/2` or by §9's
+`append_multi_from_existing_records/6`.
 
 **Why this "previous" set must include the completing task's own token, not exclude it**
 (this design's own resolution of REQ-047 §5.1's forward-looking OQ-4, §0): nothing in
@@ -351,7 +361,7 @@ no other field of these entries is ever read by `append_multi/6`.
 req047 §5.1's own confirmed invariant) — the completing task's token therefore remains in
 `final_instance_state.pending_task_nodes` after this call's hop-chain, unchanged. Passing
 it as part of "previous" too means `newly_pending_tokens/2`'s diff correctly excludes it
-(present in both sides, by `token_id`), so `append_multi/6` never tries to re-insert a
+(present in both sides, by `token_id`), so §9's function never tries to re-insert a
 `tasks` row for a task that already has one.
 
 ### 6.5 Assembling the seed `InstanceState.t()`
@@ -426,7 +436,7 @@ All of the following run inside **one** `Ecto.Multi` / `Repo.transaction/1` call
 | `:snapshot_and_state` (M3) | §6.1-§6.5: fetch snapshot/graph, load active tokens, locate this task's own token, load pending-task tokens, assemble seed `InstanceState.t()` | M1, M2 |
 | `:merge` (M4) | `VariableMerge.merge/3` (§7) — pure | M2 (`.variables`) |
 | `:transition` (M5) | `Transition.transition(graph, seed_state_with_merged_variables, {:complete_task, own_token_id})`, then the **existing** `advance_until_stable/4`/`tokens_needing_dispatch/3` loop (reused unchanged, §1) for every subsequent `{:advance_token, ...}` hop, until the worklist empties or the same defensive hop-limit `create/2` already uses fires | M3, M4 |
-| `:task_records` (M6) | `TaskActivation.append_multi/6` (§9), unchanged — appends new `tasks` rows for any freshly-reached `:HUMAN_TASK` node(s) | M3 (`previous_pending_task_nodes`), M5 (`new_instance_state`) |
+| `:task_records` (M6) | `TaskActivation.append_multi_from_existing_records/6` (§9, **new function**) — appends new `tasks` rows for any freshly-reached `:HUMAN_TASK` node(s), reading only its own explicit arguments, not `changes` | M3 (`previous_pending_task_nodes`), M5 (`new_instance_state`) — **not** any preceding Multi step's `changes` (§9) |
 | `:token_reconciliation` (M7) | §8.2 — advances/completes existing `tokens` rows to match `M5`'s final token positions | M3 (original active-token map), M5 |
 | `:task_complete` (M8) | `Task.complete_changeset/2` on `M1`'s own row: `status: :completed, completed_by: attrs.actor_id, completed_at: <minted once, §8.4>, output_variables: output_variables` (the caller's **original**, unmerged map — the task's own record of what it submitted) | M1, ctx |
 | `:event` (M9) | `EventStore.append/2` — `TASK_COMPLETED` (§10) | M1, M4, M5, ctx |
@@ -436,12 +446,14 @@ Ordering rationale: `:task`/`:instance_projection` lock first (deterministic ord
 `tasks` before `instance_projections`, never the reverse, across every call site, to avoid
 a lock-ordering deadlock between two `complete_task` calls on two different tasks of the
 same instance); `:merge`/`:transition` are pure and cannot fail on I/O; `:task_records`
-mirrors `persist/7`'s own established position (after the tokens work, before the
-event append is not required by any FK here, placed before `:task_complete`/`:event` for a
-stable, documented order matching req047's own precedent, §0); `:event` (M9) needs `:task`'s
-`instance_id` and the final merged variables/instance status for its payload; `:projection`
-(M10) runs last, mirroring `persist/7`'s `:finalize` step's own "last, after the event
-append succeeded" position.
+(§9) has **no** ordering dependency on `:token_reconciliation` (M7) or any other step's
+`changes` — unlike `persist/8`'s own `:task_records` step, which must run after its
+`:token_record` step for the FK zip (§0), this call's `:task_records` step is
+self-contained (§9) and is placed here purely to keep this table's step order legible and
+comparable to `persist/8`'s own, not because anything requires it; `:event` (M9) needs
+`:task`'s `instance_id` and the final merged variables/instance status for its payload;
+`:projection` (M10) runs last, mirroring `persist/8`'s `:finalize` step's own "last, after
+the event append succeeded" position.
 
 ### 8.1 `:task`/`:instance_projection` locking (EE-12, AC4)
 
@@ -533,7 +545,7 @@ against `final_instance_state.tokens` (§6.5's `Token.t()` list, post-`transitio
 
 `last_event_seq` is **not** set here — `EventStore.append/2`'s own `M6`
 (`update_projection/3`, §0) already advances it as part of the `:event` step (M9, §8), the
-same "append/2 owns `last_event_seq`, the engine owns everything else" division `persist/7`
+same "append/2 owns `last_event_seq`, the engine owns everything else" division `persist/8`
 already establishes and this design does not disturb.
 
 ### 8.4 `completed_at` — minted once
@@ -549,24 +561,110 @@ applied here to `completed_at` instead.
 
 ---
 
-## 9. Task activation — reused, not reimplemented
+## 9. Task activation — new adapter function, `TaskActivation.append_multi_from_existing_records/6`
+
+**Correction from this design's first submission (CODE-DESIGN-VALIDATOR rework, iteration
+1):** the first submission of this document claimed `TaskActivation.append_multi/6` (§0)
+is reused "exactly" and "unmodified" as this Multi's `:task_records` step. Re-verified
+directly against the shipped code (`lib/letflow/engine/task_activation.ex:140-165`,
+`lib/letflow/engine.ex`'s `persist/8`) rather than re-asserted: that claim is **wrong**,
+and reusing `append_multi/6` as-is would crash on REQ-048's own main success path. The
+actual shipped body is:
+
+`append_multi/6`'s `Multi.run(:task_records, fn repo, changes -> ... end)` callback, on
+the non-empty branch, calls `token_records = Map.fetch!(changes, :token_record)` and then
+`token_id_to_record_id(new_instance_state.tokens, token_records)` — a **positional
+`Enum.zip/2`** of `new_instance_state.tokens` against a same-order list of freshly
+**inserted** `TokenRecord.t()` structs. The `:token_record`-keyed `changes` entry it reads
+is produced by exactly one place in the whole codebase: `Letflow.Engine.persist/8`'s own
+preceding `Multi.run(:token_record, fn repo, _changes -> insert_token_records(repo,
+instance_id, new_instance_state.tokens, prefix) end)` step (`engine.ex`, confirmed §0),
+which inserts a **brand-new row per token** — the `create/2` call's own root/branch tokens,
+never seen by the database before.
+
+REQ-048's Multi never produces a `:token_record`-keyed step (§8's step table has none), and
+structurally can't the way `append_multi/6` needs it: REQ-048's tokens are **pre-existing**
+rows being advanced/reconciled by this design's own `:token_reconciliation` step (M7, §8.2)
+— never freshly inserted the way `insert_token_records/4` does at instance-start. Calling
+`append_multi/6` unmodified from this Multi would hit `Map.fetch!(changes, :token_record)`
+against a `changes` map with no such key, raising `KeyError` on the ordinary AC1 success
+path (any hop-chain that reaches a newly-pending `:HUMAN_TASK` node) — not an edge case.
+
+**Fix (validator's option (b) — a new, genuinely compatible adapter, not a modification to
+the already-shipped `append_multi/6`):** `Letflow.Engine.TaskActivation` gains one new
+public function, alongside `append_multi/6` (that function is left completely untouched,
+so `create/2`'s own call site is unaffected):
 
 ```
-multi
-|> TaskActivation.append_multi(
-     instance_id,
-     graph,
-     seed_state.pending_task_nodes,      # §6.4 — the "previous" set
-     final_instance_state,               # M5's result — the "new" set
-     prefix
-   )
+@spec append_multi_from_existing_records(
+        multi :: Ecto.Multi.t(),
+        instance_id :: Ecto.UUID.t(),
+        graph :: Graph.t(),
+        previous_pending_task_nodes :: [Token.t()],
+        new_instance_state :: InstanceState.t(),
+        prefix :: String.t()
+      ) :: Ecto.Multi.t()
 ```
 
-Exactly REQ-047's own already-shipped `append_multi/6` (§0), called with this call's own
-reconstructed "previous" set instead of `create/2`'s literal `[]` — precisely the
-extension point req047 §5.1 names in advance ("A future EE-04 caller is expected to pass
-that instance's own `pending_task_nodes` value ... as the 'previous' argument"). No
-modification to `TaskActivation` itself.
+**Why no `:token_record`-style FK lookup is needed here at all** (not merely "resolved a
+different way" — genuinely unnecessary): every `Token.t()` this design's own `transition`
+step (M5) can ever produce already carries, as its `token_id`, the stringified `id` of an
+**existing** `TokenRecord` row — §6.2's own reconstruction invariant
+(`token_id: to_string(record.id)`), and §8.2 point 3's own explicit refusal to persist any
+token this design's dispatch mints fresh mid-resume
+(`{:new_token_during_resume_not_supported, _}`). So for every `Token.t()` this new
+function is ever asked to materialize a `tasks` row for, `token.token_id` **is already**
+the `tasks.token_id` FK value this design needs — no positional zip against a
+freshly-inserted list, and therefore no `:token_record`-keyed Multi step, is required.
+
+Algorithm shape (matching `append_multi/6`'s own structure, minus the FK-map step it no
+longer needs):
+
+1. Appends one `Multi.run(:task_records, fn repo, _changes -> ... end)` step to `multi` —
+   still keyed `:task_records` (same key name `TaskActivation.append_multi/6` uses, so
+   REQ-048's own step table (§8) reads identically to `persist/8`'s), but this callback
+   reads **nothing** from `changes` — it is now a self-contained computation, so unlike
+   the original `:task_records` step this one has **no ordering dependency** on any
+   preceding Multi step's output (§8's table note updated accordingly).
+2. `newly_pending = newly_pending_tokens(previous_pending_task_nodes,
+   new_instance_state.pending_task_nodes)` — `TaskActivation.newly_pending_tokens/2`,
+   called exactly as-is, unmodified (§0's pure diff function, reused genuinely unchanged
+   this time).
+3. `[]` → `{:ok, []}` immediately, same fast path `append_multi/6` already has.
+4. Otherwise, for each `token` in `newly_pending`, in order:
+   a. `Ecto.UUID.cast(token.token_id)` — a `:error` result here means this design's own
+      §6.2/§8.2-point-3 invariant was violated somewhere upstream (a token reached this
+      point whose `token_id` is not an existing record's id — e.g. a derived
+      split-branch id like `"<parent>/0"`, which is not UUID-shaped and therefore fails
+      the cast). Surfaces as `{:error, {:invalid_token_record_id, token.token_id}}`,
+      never a raised exception — a second, defense-in-depth check on top of §8.2 point 3,
+      not this function's sole guard against that case.
+   b. `find_node(graph.nodes, token.node_id)` — the same non-bang lookup
+      `TaskActivation`'s own existing private `find_node/2` already provides (§0);
+      `nil` → `{:error, {:unknown_node_id, token.node_id}}`.
+   c. `insert_attrs(instance_id, token_record_id, token, node)` — `TaskActivation`'s own
+      existing **public** `insert_attrs/4` (§0), called exactly as-is, unmodified; its
+      signature already takes `token_record_id` as an independent argument (never derived
+      internally from a `changes` map), so nothing about that function needed to change
+      for this reuse to be genuine.
+   d. `%Task{} |> Task.insert_changeset(attrs) |> repo.insert(prefix: prefix)` — same
+      insert shape `append_multi/6`'s own private `do_insert/3` already uses (§0).
+5. Short-circuits on the first failure (`Enum.reduce_while/3`-shaped, matching
+   `insert_newly_pending/6`'s own established convention, §0), returning `{:ok,
+   inserted_task_records}` on full success.
+
+**What genuinely is reused unchanged, restated precisely:** `newly_pending_tokens/2` and
+`insert_attrs/4` (both already public on `TaskActivation`, called with no signature change)
+— the diff algorithm and the six-key attrs-mapping algorithm are the same code REQ-047
+shipped. What is **not** reused is `append_multi/6` itself (its `Multi.run/3` wrapper and
+its FK-resolution strategy), because that strategy is bound to `persist/8`'s specific
+freshly-insert-then-zip shape, which REQ-048's advance/reconcile shape does not produce and
+does not need.
+
+Called from REQ-048's own Multi (§8, M6) as:
+`TaskActivation.append_multi_from_existing_records(multi, instance_id, graph,
+seed_state.pending_task_nodes, final_instance_state, prefix)` — same call-site shape as
+the original claim, just naming the new function instead of `append_multi/6`.
 
 ---
 
@@ -646,6 +744,27 @@ text's own bullet list — flagged for REVIEWER to confirm this narrower, `tasks
 `instance_projections`-only reconstruction is the right scope for REQ-048, rather than
 REQ-048 depending on (and therefore blocking on) REQ-053 landing first.
 
+**OQ-2b (MAJOR, disclosed at CODE-DESIGN-VALIDATOR's rework request — iteration 1).**
+This document's first submission claimed `TaskActivation.append_multi/6` was reused
+"exactly" and "unmodified" as this Multi's `:task_records` step. Re-verified directly
+against the shipped code during rework (§9): that claim was wrong — `append_multi/6`'s
+non-empty branch unconditionally reads `Map.fetch!(changes, :token_record)`, a key only
+`persist/8`'s own preceding freshly-insert step (`insert_token_records/4`) ever produces,
+which would `KeyError`-crash on REQ-048's own ordinary AC1 success path (a hop-chain
+reaching a newly-pending `:HUMAN_TASK` node) since this Multi never inserts fresh
+`TokenRecord` rows the way `create/2` does — REQ-048's tokens are pre-existing rows being
+advanced/reconciled (M7, §8.2), not newly minted ones. **Fix adopted:** a new public
+function, `TaskActivation.append_multi_from_existing_records/6` (§9), added *alongside*
+`append_multi/6` (which is left completely unmodified, so `create/2`'s own call site is
+unaffected) — it reuses `newly_pending_tokens/2` and `insert_attrs/4` genuinely unchanged,
+but skips the FK-zip step entirely because this design's own token-id invariant (§6.2,
+§8.2 point 3) already guarantees `token.token_id` **is** the target `TokenRecord.id`,
+stringified, with no lookup needed. Flagged as MAJOR (not merely a bugfix note) because it
+is a new function added to an already-shipped, gate-approved module (`TaskActivation`,
+REQ-047) — the same class of change §5's new `Transition` dispatch clause is, and
+REVIEWER should independently confirm the "no FK-zip needed" reasoning (§9) holds, rather
+than accepting this rework's own re-derivation on faith.
+
 **OQ-3 (MAJOR).** `join_counters: %{}` always (§6.5) means any `complete_task` call whose
 resulting hop-chain reaches an outstanding `:PARALLEL_GATEWAY` join fails with a typed but
 functionally-blocking error (`{:unknown_branch_id, _}`) rather than actually joining.
@@ -683,7 +802,7 @@ type row shape.
 | `Letflow.Engine.Task`, `Letflow.Engine.TokenRecord` (req043, shipped) | This code → those | `complete_changeset/2`, `advance_changeset/2` (both previously unused, now called) |
 | `Letflow.Engine.Transition`, `InstanceState`, `Token` (req044/050/051, shipped, **extended by this requirement**) | Mutual | New `{:complete_task, token_id}` event + `dispatch_task_completion/4` clause added to `Transition`; this design's own reconstruction (§6) builds `InstanceState.t()`/`Token.t()` instances |
 | `Letflow.Engine.VariableMerge` (req049, shipped) | This code → that | `merge/3`, called with `variable_validations: nil` (§7) |
-| `Letflow.Engine.TaskActivation` (req047, shipped) | This code → that | `append_multi/6` reused exactly per req047 §5.1's own stated forward contract |
+| `Letflow.Engine.TaskActivation` (req047, shipped, **gains a new public function, `append_multi_from_existing_records/6`, §9/§13 OQ-2b**) | This code → that | `newly_pending_tokens/2` and `insert_attrs/4` reused genuinely unchanged; `append_multi/6` itself is NOT called by this design (§9) — it remains exclusively `create/2`'s own, untouched |
 | `Letflow.Definitions.SnapshotStore` (req027/033, shipped) | This code → that | `get_by_instance_id/2` (read-only; this design never calls `create/3`) |
 | `Letflow.EventStore` (req025, shipped) | This code → that | `append/2` for `TASK_COMPLETED` |
 | `Letflow.EventStore.InstanceProjection` (req023/043, shipped) | This code → that | `update_changeset/2` (§8.3) |
@@ -699,7 +818,7 @@ type row shape.
 
 | Table | Columns this design reads | Columns this design writes | Migration/schema (unchanged) |
 |---|---|---|---|
-| `tasks` | `id`, `instance_id`, `token_id`, `node_id`, `status` (locked `FOR UPDATE`) | `status`, `output_variables`, `completed_by`, `completed_at` (via `complete_changeset/2`); plus any new rows via `TaskActivation.append_multi/6`, unchanged | `…110003_create_tasks.exs`, `task.ex` |
+| `tasks` | `id`, `instance_id`, `token_id`, `node_id`, `status` (locked `FOR UPDATE`) | `status`, `output_variables`, `completed_by`, `completed_at` (via `complete_changeset/2`); plus any new rows via `TaskActivation.append_multi_from_existing_records/6` (§9, new function) | `…110003_create_tasks.exs`, `task.ex` |
 | `tokens` | `id`, `instance_id`, `node_id`, `branch_id`, `status`, `waiting_child_instance_id` for every `:active` row of the instance | `node_id` (advance) or `status`/`completed_at` (consume), via `advance_changeset/2` (§8.2) — **no new rows inserted by this design** (§8.2 point 3, OQ-2) | `…110002_create_tokens.exs`, `token_record.ex` |
 | `instance_projections` | Full row (locked `FOR UPDATE`) | `status`, `current_nodes`, `variables`, `completed_at` (§8.3); `last_event_seq` via `EventStore.append/2`'s own existing M6 (§0) | `…110001_alter_instance_projections_add_engine_columns.exs`, `instance_projection.ex` |
 | `instance_definition_snapshots` | `graph` (read-only, via `SnapshotStore.get_by_instance_id/2`) | — | Unchanged (req027/033) |

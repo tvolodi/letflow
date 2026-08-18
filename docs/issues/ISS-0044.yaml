@@ -73,3 +73,97 @@ affected_files:
   - priv/repo/migrations/20260816163103_create_event_type_registry.exs
 github_issue: https://github.com/tvolodi/letflow/issues/166
 status: in_progress
+diagnosis: >
+  ISSUE-FIXER (WF03-ISS0044-20260818), Steps 0.5/1, real reproduction performed (not
+  diagnosed from prose alone). Step 0.5: docs/issues/ISS-0020.yaml read in full (item 2's
+  "redefining module" precedent, resolved WF03-ISS0020-20260817), plus a closer precedent
+  found by widening the search per WF-03 Step 0.5 -- docs/issues/ISS-0036.yaml, an
+  identically-shaped unused-default-arg-in-test-helper warning
+  (valid_review_attrs/1), resolved ADHOC-20260817-002 by dropping the default. Neither
+  is a recurrence (new instances of the same warning classes, not a fix that failed to
+  hold), so severity stays MINOR.
+
+  GROUP 1 (register_test/4, 5 property blocks) -- CONFIRMED, DEFER.
+  mix.exs pins {:stream_data, "~> 0.6", only: :test}; mix.lock resolves to stream_data
+  0.6.0. deps/stream_data/lib/ex_unit_properties.ex:174 and :223 call
+  ExUnit.Case.register_test(__ENV__, :property, message, [...]) -- the deprecated
+  4-arity form -- inside stream_data's own `property` macro; none of Letflow's 5
+  property test files call register_test directly. Installed toolchain: Elixir/ExUnit
+  1.18.3 (`mix --version`), which deprecated the 4-arity form. Reproduced directly:
+  `mix test` on the 5 named files emits exactly these 5 warnings at exactly the
+  reported lines. Also directly verified: `MIX_ENV=test mix compile
+  --warnings-as-errors --force` exits 0, zero warnings -- test/*.exs is outside
+  :test's elixirc_paths (["lib","test/support"]), so `mix compile` never touches these
+  files at all; only `mix test`'s own ExUnit file-loading does. Issue's own claim
+  CONFIRMED: not fixable inside Letflow's test files, cannot fail
+  --warnings-as-errors. New finding: `mix hex.info stream_data` (network reachable
+  here) shows hex releases up to 1.4.0 against a locked 0.6.0 -- a real upgrade path
+  may exist, but 0.6 -> 1.4 is a 4-major-version jump; whether 1.4.0's `property`
+  macro calls register_test/6, and whether its generator API stays compatible with
+  all 5 property test files, is UNVERIFIED (only 0.6.0's source is vendored under
+  deps/). DEFER: not a same-file mechanical fix; a stream_data bump is its own scoped
+  requirement (deps.update + full compatibility pass across 5 files), not a
+  same-shape hygiene fix.
+
+  GROUP 2 (unused default args, 4 call sites) -- CONFIRMED, FIXABLE NOW (mechanical).
+  Every defp is file-local, so grepping each file's own call sites is the complete
+  set, not a sample:
+    - test/letflow/sandbox_pool_test.exs:70 start_pool!(opts \\ []) -- 7 call sites
+      (131,157,193,224,244,267,297), every one passes explicit opts.
+    - test/letflow/sandbox_pool/fixture_loader_test.exs:44 start_pool!(opts \\ [])
+      -- 1 call site (60), passes max_concurrent: 2 explicitly.
+    - test/letflow/definitions/search_test.exs:107 create!(schema_name, overrides \\
+      %{}) -- 7 call sites (123,124,127,202,204,229,256), every one passes an
+      explicit overrides map.
+    - test/letflow/definitions/service_scope_validator_test.exs:32 node(id, type,
+      attributes \\ nil) -- 1 call site (385), passes attributes explicitly.
+  Reproduced directly: mix test emits exactly these 4 "default values ... never used"
+  warnings at exactly the reported lines. Same shape as the already-resolved ISS-0036
+  precedent. Correct minimal fix per site: drop the `\\ <default>` (defp
+  start_pool!(opts) do / defp create!(schema_name, overrides) do / defp node(id, type,
+  attributes) do) -- do NOT manufacture a new short-arg call site, which would add new
+  test behavior as a side effect of a warning cleanup (TEST-DESIGNER's lane, not this
+  fix's). Each site individually satisfies all six of ORCHESTRATOR.md sec10's
+  direct-action checks (single file, no new public function/module/@spec, no
+  migration, no supervision file, no tenant-data path, no test-asserted value changes
+  -- every call already supplied the argument). Bundled as one 4-file fix it fails
+  check 1 ("exactly one file"); ORCH's call whether to run 4 single-file direct
+  actions or one CODE-DESIGNER-routed batch.
+
+  GROUP 3 (migration module redefinition) -- CONFIRMED, SAME MECHANISM AS ISS-0020
+  ITEM 2, DEFER (non-blocking, no fix needed).
+  priv/repo/migrations/20260816163103_create_event_type_registry.exs read in full:
+  ordinary tenant-scoped migration, standard prefix()-guard pattern, nothing
+  structurally unusual. Traced the actual call path (not assumed identical to
+  ISS-0020): mix.exs's `test:` alias runs `ecto.migrate --quiet` before `test`, which
+  loads this migration module via Ecto's own migrator (Code.compile_file/1,
+  deps/ecto_sql, no ensure-loaded guard) on its first pass. Separately,
+  test/letflow/event_store/registry_test.exs:131-138 carries a documented, deliberate
+  workaround (ensure_migration_module_loaded!/0 -> Code.require_file/1 on this exact
+  file) for a real functional gap already described in both that file's own comment
+  (lines 101-130) and lib/letflow/tenant_provisioning.ex's
+  tenant_scoped_migrations/0 moduledoc: priv/repo/migrations/*.exs is outside
+  :test's elixirc_paths, so the {version, module} form Ecto.Migrator.run/4 needs
+  raises Ecto.MigrationError unless something loads the module first.
+  registry_test.exs's Code.require_file/1 is idempotent against *itself* (its own
+  comment) but has no visibility into ecto.migrate's earlier, separate load of the
+  same module -- so its first call in a given run still recompiles an
+  already-defined module, producing the observed warning. Reproduced directly: ran
+  the full suite (MIX_TEST_PARTITION=2 mix test: 704 tests / 5 properties / 0
+  failures, matching the issue's own reported count) and captured the warning
+  verbatim at priv/repo/migrations/20260816163103_create_event_type_registry.exs:40,
+  firing exactly once, interleaved immediately before a test provisioning a
+  "req024-*" tenant -- consistent with registry_test.exs's workaround firing for the
+  first time in that run. Compared directly against ISS-0020 item 2's resolution text
+  and independently re-verified its central claim myself in this environment:
+  `MIX_ENV=test mix compile --warnings-as-errors --force` exits 0, zero warnings
+  (priv/repo/migrations/ is outside elixirc_paths entirely, so mix compile never
+  touches it -- group 3's warning cannot occur during that command, ever). DEFER:
+  non-blocking by the same mechanism ISS-0020 already established; this instance's
+  cause is a documented, deliberate test-file workaround, not an oversight. No fix
+  required.
+
+  Repro commands (this environment, Postgres already running via the primary
+  checkout's docker compose, per anti-patterns.md): `MIX_TEST_PARTITION=2 mix test`
+  (full suite); `MIX_ENV=test mix compile --warnings-as-errors --force` (confirms
+  none of the 3 groups can ever fail that gate).

@@ -566,3 +566,5 @@
 2026-08-18T07:23:17Z | PASS | WF-02 | WF02-REQ049-20260818 | SECURITY-REVIEWER -> ORCH | Step 2c: out of scope, no tenant-data path touched. Committed 360c09c.
 2026-08-18T07:23:54Z | DISPATCH | WF-02 | WF02-REQ049-20260818 | ORCH -> REVIEWER | Step 2d hard gate.
 2026-08-18T07:25:01Z | PASS | WF-02 | WF02-REQ049-20260818 | REVIEWER -> ORCH | Step 2d: idiomatic, no supervision concern, no scope creep. Batch-rejection semantics confirmed matching design (all-or-nothing, not a divergence). Committed a98434a.
+2026-08-18T07:25:45Z | DISPATCH | WF-02 | WF02-REQ049-20260818 | ORCH -> TEST-DESIGNER | Step 3: test spec + code.
+2026-08-18T07:30:35Z | PASS | WF-02 | WF02-REQ049-20260818 | TEST-DESIGNER -> ORCH | Step 3: test/specs/REQ-049.md + variable_merge_test.exs, 20 tests covering all 5 ACs + whole-batch atomicity. 1 MINOR non-blocking issue (design doc's grep verification recipe self-matches its own prose). Committed 2dc5a3f.

@@ -21,8 +21,9 @@ defmodule Letflow.Definitions.PromotionAssertionRun do
 
   ## Two changesets, not one — mirroring `PromotionReview`'s own split
 
-  `insert_changeset/2` casts only the four columns present at idempotency-claim time
-  (`tenant_id`, `review_id`, `idempotency_key`, `plan_digest`); `status`,
+  `insert_changeset/2` casts only the three columns present at idempotency-claim time
+  (`review_id`, `idempotency_key`, `plan_digest` — `tenant_id` was a fourth column here
+  until Decision 0006 D2 dropped it, see the migration file's own header); `status`,
   `assertions_*`, `failing_assertion_ids`, `sandbox_id`, `teardown_error` and
   `completed_at` are never castable there — a freshly-inserted row always starts at
   its column defaults. `update_changeset/2` is the only place any of those fields is

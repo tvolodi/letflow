@@ -201,7 +201,6 @@ defmodule Letflow.Definitions.MigrationsTest do
 
   defp insert_definition!(schema_name, attrs) do
     base = %{
-      tenant_id: Ecto.UUID.generate(),
       version: "1.0.0",
       graph: %{"nodes" => [], "edges" => []},
       created_by: Ecto.UUID.generate()
@@ -221,11 +220,10 @@ defmodule Letflow.Definitions.MigrationsTest do
 
     Repo.query!(
       ~s(INSERT INTO "#{schema_name}"."process_definitions" ) <>
-        "(id, tenant_id, name, version, created_by, created_at, updated_at) " <>
-        "VALUES ($1, $2, $3, $4, $5, $6, $6)",
+        "(id, name, version, created_by, created_at, updated_at) " <>
+        "VALUES ($1, $2, $3, $4, $5, $5)",
       [
         Ecto.UUID.dump!(id),
-        Ecto.UUID.dump!(Ecto.UUID.generate()),
         "req027-raw-#{System.unique_integer([:positive, :monotonic])}",
         "1.0.0",
         Ecto.UUID.dump!(Ecto.UUID.generate()),
@@ -376,7 +374,6 @@ defmodule Letflow.Definitions.MigrationsTest do
       assert {:error, changeset} =
                %ProcessDefinition{}
                |> ProcessDefinition.create_changeset(%{
-                 tenant_id: Ecto.UUID.generate(),
                  name: name,
                  version: "1.0.0",
                  graph: %{"nodes" => [], "edges" => []},

@@ -105,21 +105,20 @@ defmodule Letflow.Identity.GroupTest do
 
   # No changeset function exists yet on `Group` (design §3.3 — no requirement
   # in the REQ-015..021 batch owns groups CRUD) — insert the struct directly.
-  test "a group can reference a tenant_id with no matching tenants row (no DB-level FK enforced)",
-       %{tenant: tenant} do
-    # Same deliberate omission as users.tenant_id (identity-schema.md §2.3):
-    # groups.tenant_id carries no DB-level FK to tenants.id. This UUID
-    # matches no real tenants row by construction; if a future migration
-    # accidentally added references(:tenants) here, this insert would start
-    # raising and this test would catch it. Deliberately NOT tenant.id itself
-    # (which DOES exist) — a fresh, unrelated UUID.
-    orphan_tenant_id = Ecto.UUID.generate()
-    refute orphan_tenant_id == tenant.id
+  #
+  # REQ-064 (Decision 0006 D2) dropped `groups.tenant_id` outright -- the
+  # per-tenant Postgres schema (Decision 0006 D1) already identifies the
+  # owning tenant, so there is no longer a `tenant_id` field on this schema
+  # to test FK-omission against at all (the previous version of this test
+  # asserted exactly that omission). What remains structurally true and
+  # worth covering: `Group.__struct__/0` has no `:tenant_id` key, and a
+  # plain insert with no `tenant_id` in `attrs` succeeds and round-trips
+  # correctly scoped to this tenant's own schema via `search_path`.
+  test "Group has no tenant_id field, and inserts correctly without one (Decision 0006 D2)" do
+    refute Map.has_key?(%Group{}, :tenant_id)
 
-    assert {:ok, %Group{tenant_id: ^orphan_tenant_id}} =
-             Repo.insert(%Group{
-               tenant_id: orphan_tenant_id,
-               name: "Group #{Ecto.UUID.generate()}"
-             })
+    name = "Group #{Ecto.UUID.generate()}"
+    assert {:ok, %Group{id: id, name: ^name}} = Repo.insert(%Group{name: name})
+    assert %Group{id: ^id} = Repo.get!(Group, id)
   end
 end

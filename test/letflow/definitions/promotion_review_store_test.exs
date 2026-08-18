@@ -14,10 +14,10 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
   (`promotion_plan_test.exs`/`promotion_conflict_test.exs`)
 
   Every transition function in this module writes to `promotion_reviews`, a
-  table with no `@schema_prefix` (schema-per-tenant) and, since
-  `insert_review/2` derives `tenant_id` from `opts[:prefix]` (design §2.3,
-  the rework-iteration fix), each test only needs to provision ONE real
-  tenant schema (`provisioned_tenant/0`) -- unlike `promotion_plan_test.exs`,
+  table with no `@schema_prefix` (schema-per-tenant); `promotion_reviews`
+  carries no `tenant_id` column at all (Decision 0006 D2 / REQ-064 -- the
+  per-tenant schema alone identifies the tenant), so each test only needs to
+  provision ONE real tenant schema (`provisioned_tenant/0`) -- unlike `promotion_plan_test.exs`,
   which needs two (source + target). Real `CREATE SCHEMA` +
   `TenantProvisioning.replay_migrations/1`, Sandbox `:auto` mode + manual
   `on_exit/1` cleanup (an `Ecto.Migrator` run needs a second real DB
@@ -197,12 +197,12 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
 
   # ---------------------------------------------------------------------------------
   # Acceptance criterion 1: "insert_review/1 followed by a second insert_review/1
-  # with the identical (tenant_id, plan_digest) while the first is still
+  # with the identical plan_digest while the first is still
   # pending_review returns the duplicate-review error, not a second row"
   # ---------------------------------------------------------------------------------
 
   describe "insert_review/2 -- acceptance criterion 1 (duplicate review)" do
-    test "a second insert_review/2 with the identical (tenant_id, plan_digest) while the first is pending_review -> :duplicate_review, not a second row" do
+    test "a second insert_review/2 with the identical plan_digest while the first is pending_review -> :duplicate_review, not a second row" do
       %{tenant_id: tenant_id, schema_name: schema_name} = provisioned_tenant()
 
       plan = sample_plan(tenant_id)
@@ -217,7 +217,8 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
                )
 
       # A second call, even with a DIFFERENT requested_by, must still collide --
-      # the unique index is on (tenant_id, plan_digest) only.
+      # the unique index is on (plan_digest) alone, per Decision 0006 D2
+      # (REQ-064 dropped promotion_reviews.tenant_id).
       assert {:error, :duplicate_review} =
                PromotionReviewStore.insert_review(
                  %{plan: plan, digest: digest, requested_by: requested_by_2},
@@ -227,7 +228,7 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
       rows =
         Repo.all(
           from(p in PromotionReview,
-            where: p.tenant_id == ^tenant_id and p.plan_digest == ^digest
+            where: p.plan_digest == ^digest
           ),
           prefix: schema_name
         )
@@ -237,7 +238,7 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
       assert hd(rows).requested_by == requested_by_1
     end
 
-    test "a duplicate (tenant_id, plan_digest) is accepted again once the first row is no longer pending_review/approved (rejected)" do
+    test "a duplicate plan_digest is accepted again once the first row is no longer pending_review/approved (rejected)" do
       %{tenant_id: tenant_id, schema_name: schema_name} = provisioned_tenant()
 
       plan = sample_plan(tenant_id)
@@ -256,7 +257,7 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
 
       # The partial unique index only covers status IN ('pending_review',
       # 'approved') -- once the first row is rejected, an identical
-      # (tenant_id, plan_digest) pair is no longer a duplicate.
+      # plan_digest is no longer a duplicate.
       assert {:ok, second} =
                PromotionReviewStore.insert_review(
                  %{plan: plan, digest: digest, requested_by: Ecto.UUID.generate()},
@@ -268,17 +269,22 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
   end
 
   # ---------------------------------------------------------------------------------
-  # insert_review/2's post-rework tenant_id derivation: opts[:prefix], never
-  # plan.target_tenant_id (design §2.3, INV-PRM04-6).
+  # insert_review/2's prefix-validity guard (design §2.3, post-REQ-064 note in
+  # promotion_review_store.ex's own moduledoc): `promotion_reviews.tenant_id` no
+  # longer exists (Decision 0006 D2) -- the per-tenant Postgres schema alone
+  # identifies the tenant, so insert_review/2 no longer derives or stamps any
+  # tenant_id value. `opts[:prefix]` is still resolved via
+  # TenantProvisioning.tenant_id_for_schema_name/1 purely as an early
+  # prefix-validity guard before Repo.insert/2.
   # ---------------------------------------------------------------------------------
 
-  describe "insert_review/2 -- tenant_id is derived from opts[:prefix], never from plan.target_tenant_id" do
-    test "a plan.target_tenant_id that disagrees with opts[:prefix]'s real tenant is ignored -- the stored row's tenant_id is the prefix's tenant" do
+  describe "insert_review/2 -- prefix validity is still checked, even though no tenant_id is stamped" do
+    test "plan.target_tenant_id disagreeing with opts[:prefix]'s real tenant has no bearing on where the row is written -- it is stored verbatim only inside serialised_plan" do
       %{tenant_id: real_tenant_id, schema_name: schema_name} = provisioned_tenant()
 
       # Deliberately a DIFFERENT, unrelated tenant_id -- never provisioned, never
-      # related to schema_name at all. If insert_review/2 regressed to trusting
-      # this value, the stored row would carry it instead of real_tenant_id.
+      # related to schema_name at all. insert_review/2 never reads this value for
+      # anything beyond echoing it back inside the serialised plan.
       disagreeing_target_tenant_id = Ecto.UUID.generate()
       refute disagreeing_target_tenant_id == real_tenant_id
 
@@ -291,18 +297,16 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
                  prefix: schema_name
                )
 
-      assert review.tenant_id == real_tenant_id
-      refute review.tenant_id == disagreeing_target_tenant_id
-
-      # Re-read from Postgres directly -- not just trusting the in-memory reply.
-      persisted = Repo.get!(PromotionReview, review.id, prefix: schema_name)
-      assert persisted.tenant_id == real_tenant_id
-      refute persisted.tenant_id == disagreeing_target_tenant_id
+      # The row landed in the prefix's own schema -- the only place "which tenant"
+      # is recorded now that promotion_reviews carries no tenant_id column.
+      assert Repo.get!(PromotionReview, review.id, prefix: schema_name).id == review.id
 
       # The plan's own (disagreeing) copy of target_tenant_id is still stored
       # verbatim inside serialised_plan (design §2.3 step 4 -- it stays part of
       # the JSON envelope), so this assertion also proves the disagreement was a
       # genuine one, not an accidental match.
+      persisted = Repo.get!(PromotionReview, review.id, prefix: schema_name)
+
       assert Jason.decode!(persisted.serialised_plan)["target_tenant_id"] ==
                disagreeing_target_tenant_id
     end

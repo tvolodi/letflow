@@ -71,7 +71,6 @@ defmodule Letflow.Definitions.SchemasTest do
   # never an RNG and never a clock.
   defp valid_definition_attrs do
     %{
-      tenant_id: Ecto.UUID.generate(),
       name: "req027-def-#{System.unique_integer([:positive, :monotonic])}",
       version: "1.0.0",
       graph: %{"nodes" => [], "edges" => []},
@@ -428,7 +427,7 @@ defmodule Letflow.Definitions.SchemasTest do
 
       errors = errors_on(changeset)
 
-      for field <- [:tenant_id, :name, :version, :created_by] do
+      for field <- [:name, :version, :created_by] do
         assert Map.has_key?(errors, field),
                "expected #{field} to be required, errors: #{inspect(errors)}"
       end
@@ -454,16 +453,14 @@ defmodule Letflow.Definitions.SchemasTest do
       assert %{name: [_ | _]} = errors_on(too_long)
     end
 
-    test "ProcessDefinition.update_changeset/2 structurally cannot re-point a definition at another tenant or creator" do
+    test "ProcessDefinition.update_changeset/2 structurally cannot re-point a definition at another creator" do
       definition = %ProcessDefinition{
         id: Ecto.UUID.generate(),
-        tenant_id: Ecto.UUID.generate(),
         created_by: Ecto.UUID.generate()
       }
 
       changeset =
         ProcessDefinition.update_changeset(definition, %{
-          tenant_id: Ecto.UUID.generate(),
           created_by: Ecto.UUID.generate(),
           name: "renamed-#{System.unique_integer([:positive, :monotonic])}",
           version: "2.0.0",
@@ -471,7 +468,6 @@ defmodule Letflow.Definitions.SchemasTest do
         })
 
       assert changeset.valid?
-      refute Map.has_key?(changeset.changes, :tenant_id)
       refute Map.has_key?(changeset.changes, :created_by)
       assert changeset.changes.version == "2.0.0"
     end

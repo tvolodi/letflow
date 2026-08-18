@@ -95,7 +95,7 @@ defmodule Letflow.Definitions.PromotionReviewMigrationTest do
     Map.new(rows, fn [name, definition] -> {name, definition} end)
   end
 
-  # The btree column list of an index definition, e.g. "tenant_id, plan_digest".
+  # The btree column list of an index definition, e.g. "plan_digest".
   defp indexed_columns(definition) do
     [_, columns] = Regex.run(~r/USING btree \(([^)]*)\)/, definition)
     columns
@@ -125,7 +125,6 @@ defmodule Letflow.Definitions.PromotionReviewMigrationTest do
   defp valid_review_attrs(overrides) do
     Map.merge(
       %{
-        tenant_id: Ecto.UUID.generate(),
         plan_digest: unique_plan_digest(),
         def_id: "req035-proc-#{System.unique_integer([:positive, :monotonic])}",
         serialised_plan: ~s({"nodes":[],"edges":[]}),
@@ -165,11 +164,10 @@ defmodule Letflow.Definitions.PromotionReviewMigrationTest do
 
     Repo.query!(
       ~s(INSERT INTO "#{schema_name}"."promotion_reviews" ) <>
-        "(id, tenant_id, plan_digest, def_id, serialised_plan, requested_by, inserted_at, updated_at) " <>
-        "VALUES ($1, $2, $3, $4, $5, $6, $7, $7)",
+        "(id, plan_digest, def_id, serialised_plan, requested_by, inserted_at, updated_at) " <>
+        "VALUES ($1, $2, $3, $4, $5, $6, $6)",
       [
         Ecto.UUID.dump!(id),
-        Ecto.UUID.dump!(Ecto.UUID.generate()),
         unique_plan_digest(),
         "req035-raw-proc",
         ~s({"nodes":[],"edges":[]}),
@@ -188,11 +186,10 @@ defmodule Letflow.Definitions.PromotionReviewMigrationTest do
 
     Repo.query!(
       ~s(INSERT INTO "#{schema_name}"."promotion_reviews" ) <>
-        "(id, tenant_id, plan_digest, def_id, serialised_plan, requested_by, status, inserted_at, updated_at) " <>
-        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)",
+        "(id, plan_digest, def_id, serialised_plan, requested_by, status, inserted_at, updated_at) " <>
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $7)",
       [
         Ecto.UUID.dump!(id),
-        Ecto.UUID.dump!(Ecto.UUID.generate()),
         unique_plan_digest(),
         "req035-raw-proc",
         ~s({"nodes":[],"edges":[]}),
@@ -284,11 +281,16 @@ defmodule Letflow.Definitions.PromotionReviewMigrationTest do
     end
 
     # -------------------------------------------------------------------------------
-    # Acceptance criterion 2: partial unique index on (tenant_id, plan_digest) WHERE
+    # Acceptance criterion 2: partial unique index on (plan_digest) WHERE
     # status IN ('pending_review', 'approved')
+    #
+    # REQ-064 (Decision 0006 D2) dropped promotion_reviews.tenant_id -- the tenant
+    # boundary is now the per-tenant schema itself, so this index's column list
+    # simplified from (tenant_id, plan_digest) to (plan_digest) alone. See
+    # lib/letflow/design/req064-drop-tenant-id.md §2.3.
     # -------------------------------------------------------------------------------
 
-    test "uq_promotion_review_active_digest is a PARTIAL unique index over (tenant_id, plan_digest) predicated on status IN (pending_review, approved)",
+    test "uq_promotion_review_active_digest is a PARTIAL unique index over (plan_digest) predicated on status IN (pending_review, approved)",
          %{schema_name: schema_name} do
       indexes = indexes_on(schema_name, "promotion_reviews")
 
@@ -300,8 +302,8 @@ defmodule Letflow.Definitions.PromotionReviewMigrationTest do
       assert String.starts_with?(definition, "CREATE UNIQUE INDEX"),
              "uq_promotion_review_active_digest is not UNIQUE: #{definition}"
 
-      assert indexed_columns(definition) == "tenant_id, plan_digest",
-             "uq_promotion_review_active_digest does not cover exactly (tenant_id, plan_digest): #{definition}"
+      assert indexed_columns(definition) == "plan_digest",
+             "uq_promotion_review_active_digest does not cover exactly (plan_digest): #{definition}"
 
       predicate = index_predicate(definition)
 
@@ -319,7 +321,7 @@ defmodule Letflow.Definitions.PromotionReviewMigrationTest do
       end
     end
 
-    test "idx_promotion_review_rollback_lookup is a non-unique PARTIAL index over (tenant_id, status) predicated on status IN (applied, superseded)",
+    test "idx_promotion_review_rollback_lookup is a non-unique PARTIAL index over (status) predicated on status IN (applied, superseded)",
          %{schema_name: schema_name} do
       indexes = indexes_on(schema_name, "promotion_reviews")
 
@@ -331,8 +333,8 @@ defmodule Letflow.Definitions.PromotionReviewMigrationTest do
       refute String.starts_with?(definition, "CREATE UNIQUE INDEX"),
              "idx_promotion_review_rollback_lookup must be non-unique: #{definition}"
 
-      assert indexed_columns(definition) == "tenant_id, status",
-             "idx_promotion_review_rollback_lookup does not cover exactly (tenant_id, status): #{definition}"
+      assert indexed_columns(definition) == "status",
+             "idx_promotion_review_rollback_lookup does not cover exactly (status): #{definition}"
 
       predicate = index_predicate(definition)
 
@@ -343,15 +345,14 @@ defmodule Letflow.Definitions.PromotionReviewMigrationTest do
       assert predicate =~ "superseded"
     end
 
-    test "a second pending_review insert with the same (tenant_id, plan_digest) is rejected while the first is still pending_review",
+    test "a second pending_review insert with the same plan_digest is rejected while the first is still pending_review",
          %{schema_name: schema_name} do
-      tenant_id = Ecto.UUID.generate()
       plan_digest = unique_plan_digest()
 
       assert {:ok, %PromotionReview{}} =
                insert_review!(
                  schema_name,
-                 valid_review_attrs(%{tenant_id: tenant_id, plan_digest: plan_digest})
+                 valid_review_attrs(%{plan_digest: plan_digest})
                )
 
       # The error SHAPE matters: if insert_changeset/2's declared constraint name and
@@ -361,13 +362,13 @@ defmodule Letflow.Definitions.PromotionReviewMigrationTest do
       assert {:error, changeset} =
                insert_review!(
                  schema_name,
-                 valid_review_attrs(%{tenant_id: tenant_id, plan_digest: plan_digest})
+                 valid_review_attrs(%{plan_digest: plan_digest})
                )
 
       refute changeset.valid?
 
       assert Enum.any?(changeset.errors, fn
-               {:tenant_id, {_, opts}} ->
+               {:plan_digest, {_, opts}} ->
                  opts[:constraint_name] == "uq_promotion_review_active_digest"
 
                _ ->
@@ -376,15 +377,14 @@ defmodule Letflow.Definitions.PromotionReviewMigrationTest do
              "expected a uq_promotion_review_active_digest constraint error, got #{inspect(changeset.errors)}"
     end
 
-    test "a second insert with the same (tenant_id, plan_digest) is also rejected while the first is approved",
+    test "a second insert with the same plan_digest is also rejected while the first is approved",
          %{schema_name: schema_name} do
-      tenant_id = Ecto.UUID.generate()
       plan_digest = unique_plan_digest()
 
       first =
         insert_review_ok!(
           schema_name,
-          valid_review_attrs(%{tenant_id: tenant_id, plan_digest: plan_digest})
+          valid_review_attrs(%{plan_digest: plan_digest})
         )
 
       move_status!(schema_name, first.id, "approved")
@@ -392,19 +392,18 @@ defmodule Letflow.Definitions.PromotionReviewMigrationTest do
       assert {:error, _changeset} =
                insert_review!(
                  schema_name,
-                 valid_review_attrs(%{tenant_id: tenant_id, plan_digest: plan_digest})
+                 valid_review_attrs(%{plan_digest: plan_digest})
                )
     end
 
-    test "a second insert with the same (tenant_id, plan_digest) succeeds once the first review is no longer pending_review or approved",
+    test "a second insert with the same plan_digest succeeds once the first review is no longer pending_review or approved",
          %{schema_name: schema_name} do
-      tenant_id = Ecto.UUID.generate()
       plan_digest = unique_plan_digest()
 
       first =
         insert_review_ok!(
           schema_name,
-          valid_review_attrs(%{tenant_id: tenant_id, plan_digest: plan_digest})
+          valid_review_attrs(%{plan_digest: plan_digest})
         )
 
       # Moves the first row outside {pending_review, approved} via Repo.update_all,
@@ -417,21 +416,20 @@ defmodule Letflow.Definitions.PromotionReviewMigrationTest do
       assert {:ok, %PromotionReview{}} =
                insert_review!(
                  schema_name,
-                 valid_review_attrs(%{tenant_id: tenant_id, plan_digest: plan_digest})
+                 valid_review_attrs(%{plan_digest: plan_digest})
                )
     end
 
-    test "a second pending_review insert with a different plan_digest for the same tenant succeeds",
+    test "a second pending_review insert with a different plan_digest succeeds",
          %{schema_name: schema_name} do
-      tenant_id = Ecto.UUID.generate()
-
       assert {:ok, %PromotionReview{}} =
-               insert_review!(schema_name, valid_review_attrs(%{tenant_id: tenant_id}))
+               insert_review!(schema_name, valid_review_attrs(%{}))
 
-      # Different plan_digest, same tenant -- proves plan_digest is really part of the
-      # uniqueness scope, not just tenant_id alone.
+      # Different plan_digest -- proves plan_digest alone is enough to distinguish two
+      # rows now that the uniqueness scope is per-tenant-schema rather than
+      # (tenant_id, plan_digest).
       assert {:ok, %PromotionReview{}} =
-               insert_review!(schema_name, valid_review_attrs(%{tenant_id: tenant_id}))
+               insert_review!(schema_name, valid_review_attrs(%{}))
     end
 
     # -------------------------------------------------------------------------------

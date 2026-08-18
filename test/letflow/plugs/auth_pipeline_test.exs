@@ -132,8 +132,11 @@ defmodule Letflow.Plugs.AuthPipelineTest do
     })
   end
 
-  defp user_count_for_tenant(tenant_id, schema_name) do
-    User |> where(tenant_id: ^tenant_id) |> Repo.aggregate(:count, :id, prefix: schema_name)
+  defp user_count_for_tenant(_tenant_id, schema_name) do
+    # REQ-064 (Decision 0006 D2) dropped `users.tenant_id` -- the tenant boundary is
+    # now the provisioned schema itself (`prefix: schema_name`), so counting all rows
+    # in that schema is already tenant-scoped without an extra `where`.
+    User |> Repo.aggregate(:count, :id, prefix: schema_name)
   end
 
   defp call_pipeline(method, headers) do
@@ -165,7 +168,6 @@ defmodule Letflow.Plugs.AuthPipelineTest do
       # public.
       persisted = Repo.get(User, user_id, prefix: schema_name)
       assert persisted != nil
-      assert persisted.tenant_id == tenant.id
       assert persisted.auth_source == :oidc
     end
 

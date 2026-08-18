@@ -80,8 +80,7 @@ defmodule Letflow.EventStore.SchemasTest do
       payload: %{"hello" => "world"},
       actor_id: Ecto.UUID.generate(),
       sequence_number: 1,
-      idempotency_key: "idem-#{System.unique_integer([:positive, :monotonic])}",
-      tenant_id: Ecto.UUID.generate()
+      idempotency_key: "idem-#{System.unique_integer([:positive, :monotonic])}"
     }
   end
 
@@ -335,8 +334,7 @@ defmodule Letflow.EventStore.SchemasTest do
             :payload,
             :actor_id,
             :sequence_number,
-            :idempotency_key,
-            :tenant_id
+            :idempotency_key
           ] do
         assert Map.has_key?(errors, field),
                "expected #{field} to be required, errors: #{inspect(errors)}"
@@ -420,23 +418,20 @@ defmodule Letflow.EventStore.SchemasTest do
       assert %{byte_size: [_ | _]} = errors_on(zero_bytes)
     end
 
-    test "InstanceProjection.update_changeset/2 structurally cannot re-point a projection at another instance or tenant" do
+    test "InstanceProjection.update_changeset/2 structurally cannot re-point a projection at another instance" do
       projection = %InstanceProjection{
-        instance_id: Ecto.UUID.generate(),
-        tenant_id: Ecto.UUID.generate()
+        instance_id: Ecto.UUID.generate()
       }
 
       changeset =
         InstanceProjection.update_changeset(projection, %{
           instance_id: Ecto.UUID.generate(),
-          tenant_id: Ecto.UUID.generate(),
           status: :completed,
           last_event_seq: 7
         })
 
       assert changeset.valid?
       refute Map.has_key?(changeset.changes, :instance_id)
-      refute Map.has_key?(changeset.changes, :tenant_id)
       assert changeset.changes.status == :completed
       assert changeset.changes.last_event_seq == 7
     end

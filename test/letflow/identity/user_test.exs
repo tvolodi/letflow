@@ -197,9 +197,8 @@ defmodule Letflow.Identity.UserTest do
     provisioned_tenant_with_search_path!()
   end
 
-  defp base_attrs(%{tenant: tenant}) do
+  defp base_attrs(_ctx) do
     %{
-      tenant_id: tenant.id,
       username: unique_username(),
       display_name: "A User",
       email: "user-#{Ecto.UUID.generate()}@example.com",
@@ -251,7 +250,7 @@ defmodule Letflow.Identity.UserTest do
   end
 
   test "two users with the SAME username in TWO DIFFERENT tenant schemas both succeed (per-tenant-unique, not global-unique — Decision 0006 §3.1, REQ-063 acceptance criteria)",
-       %{tenant: tenant_a, schema_name: schema_a} do
+       %{schema_name: schema_a} do
     # This test genuinely needs TWO real, independently-queryable tenant schemas
     # alive at the same time, which a single {:shared, self()} sandboxed
     # transaction cannot provide (each checkout/mode-restore discards whatever
@@ -268,7 +267,6 @@ defmodule Letflow.Identity.UserTest do
     username = unique_username()
 
     attrs_a = %{
-      tenant_id: tenant_a.id,
       username: username,
       display_name: "User A",
       email: "user-a-#{Ecto.UUID.generate()}@example.com",
@@ -289,11 +287,10 @@ defmodule Letflow.Identity.UserTest do
     # committed Postgres state (a CREATE SCHEMA can't happen inside a transaction
     # that later rolls back and still persist), same as schema_a's own
     # provisioning under `setup`.
-    %{tenant: tenant_b, schema_name: schema_b} = provision_tenant_schema!()
+    %{schema_name: schema_b} = provision_tenant_schema!()
     Repo.query!(~s(SET search_path TO "#{schema_b}", public))
 
     attrs_b = %{
-      tenant_id: tenant_b.id,
       username: username,
       display_name: "User B",
       email: "user-b-#{Ecto.UUID.generate()}@example.com",
@@ -313,19 +310,20 @@ defmodule Letflow.Identity.UserTest do
     assert %User{username: ^username} = Repo.get(User, id_b, prefix: schema_b)
   end
 
-  test "a user can reference a tenant_id with no matching tenants row (no DB-level FK enforced)",
+  test "User has no tenant_id field (Decision 0006 D2 -- per-tenant schema already identifies the owning tenant)",
        ctx do
-    # Deliberate design decision (identity-schema.md §2.2): users.tenant_id
-    # carries no DB-level FK to tenants.id. A freshly-generated UUID here
-    # matches no real tenants row by construction (UUIDv4 collision is not a
-    # real-world concern) — if a future migration accidentally added
-    # references(:tenants) back onto this column, this insert would start
-    # raising Ecto.ConstraintError and this test would fail, catching the
-    # regression.
-    orphan_tenant_id = Ecto.UUID.generate()
+    # REQ-064 (Decision 0006 D2) dropped `users.tenant_id` outright, so
+    # there is no longer a `tenant_id` column to test FK-omission against
+    # (the previous version of this test asserted exactly that omission —
+    # see identity-schema.md §2.2 for the historical reasoning that field's
+    # removal supersedes). What remains structurally true: the struct has no
+    # `:tenant_id` key, and a plain insert with no `tenant_id` in `attrs`
+    # succeeds, scoped correctly to this tenant's own schema via `search_path`.
+    refute Map.has_key?(%User{}, :tenant_id)
 
-    assert {:ok, %User{tenant_id: ^orphan_tenant_id}} =
-             Repo.insert(struct(User, Map.put(base_attrs(ctx), :tenant_id, orphan_tenant_id)))
+    assert {:ok, %User{} = user} = Repo.insert(struct(User, base_attrs(ctx)))
+    assert %User{id: user_id} = Repo.get!(User, user.id)
+    assert user_id == user.id
   end
 
   test "casting an invalid auth_source value is rejected by the Ecto.Enum declaration", ctx do
@@ -333,7 +331,7 @@ defmodule Letflow.Identity.UserTest do
       Ecto.Changeset.cast(
         %User{},
         Map.put(base_attrs(ctx), :auth_source, "bogus"),
-        [:tenant_id, :username, :display_name, :email, :password_hash, :auth_source]
+        [:username, :display_name, :email, :password_hash, :auth_source]
       )
 
     refute changeset.valid?

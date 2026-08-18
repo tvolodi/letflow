@@ -94,7 +94,6 @@ defmodule Letflow.Definitions.SnapshotStoreTest do
 
   defp insert_definition!(schema_name, overrides \\ %{}) do
     base = %{
-      tenant_id: Ecto.UUID.generate(),
       name: unique_name(),
       version: "1.0.0",
       graph: %{"nodes" => [], "edges" => []},

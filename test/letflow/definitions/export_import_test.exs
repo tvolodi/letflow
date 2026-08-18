@@ -178,11 +178,10 @@ defmodule Letflow.Definitions.ExportImportTest do
   # struct's `:id` field is nil at insert time (confirmed by direct reading,
   # `lib/letflow/definitions/process_definition.ex`) -- a pre-set non-nil `:id` on the
   # struct passed into the changeset is preserved verbatim through `Repo.insert!/2`.
-  defp insert_row_with_id!(schema_name, tenant_id, id, overrides) do
+  defp insert_row_with_id!(schema_name, id, overrides) do
     attrs =
       Map.merge(
         %{
-          tenant_id: tenant_id,
           name: unique_name("req034-collision"),
           version: "9.9.9",
           graph: valid_graph(),
@@ -257,14 +256,14 @@ defmodule Letflow.Definitions.ExportImportTest do
       source_definition = create!(source_schema)
       document = export!(source_schema, source_definition.id)
 
-      %{schema_name: target_schema, tenant_id: target_tenant_id} = provisioned_tenant()
+      %{schema_name: target_schema} = provisioned_tenant()
 
       # Deliberately construct the collision precondition: a row already exists in
       # the TARGET tenant whose id is exactly document.id (source's id), under an
       # unrelated name/version so the import below can't fail on the unrelated
       # uq_definition_version constraint instead.
       collision_row =
-        insert_row_with_id!(target_schema, target_tenant_id, document.id, %{
+        insert_row_with_id!(target_schema, document.id, %{
           name: unique_name("req034-ac2-pre-existing"),
           version: "9.9.9"
         })

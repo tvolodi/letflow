@@ -162,10 +162,9 @@ defmodule Letflow.Identity.RoleRegistryTest do
     %{tenant: tenant, schema_name: schema_name}
   end
 
-  defp insert_group!(%{tenant: tenant}) do
+  defp insert_group!(_ctx) do
     %Group{}
     |> Ecto.Changeset.change(%{
-      tenant_id: tenant.id,
       name: "group-#{System.unique_integer([:positive, :monotonic])}"
     })
     |> Repo.insert!()

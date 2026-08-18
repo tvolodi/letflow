@@ -399,12 +399,23 @@ defmodule Letflow.Definitions.StoreTest do
   # ---------------------------------------------------------------------------------
 
   describe "create/2 (AC9) -- tenant_id always derived internally, never caller-supplied" do
-    test "a created row's tenant_id equals the tenant whose schema was written into" do
-      %{schema_name: schema_name, tenant_id: tenant_id} = provisioned_tenant()
+    # REQ-064 (Decision 0006 D2) dropped process_definitions.tenant_id -- there is no
+    # longer a tenant_id field on ProcessDefinition to assert against. The underlying
+    # acceptance criterion this test proves -- a created row belongs to the tenant
+    # whose schema was written into, not some other tenant -- is restated below via
+    # schema-prefix reachability: the row is found under its own tenant's schema and
+    # genuinely NOT FOUND under a second, independently provisioned tenant's schema
+    # (the same technique test/letflow/req064_tenant_id_removal_test.exs and
+    # event_store_test.exs's "tenant_id (AC6)" describe block already use for the
+    # analogous cross-schema-isolation claim on other D2 tables).
+    test "a created row is reachable under its own tenant's schema and NOT under a different tenant's schema" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      %{schema_name: other_schema_name} = provisioned_tenant()
+
       definition = create!(schema_name)
 
-      assert definition.tenant_id == tenant_id
-      assert reread!(schema_name, definition.id).tenant_id == tenant_id
+      assert reread!(schema_name, definition.id).id == definition.id
+      refute Repo.get(ProcessDefinition, definition.id, prefix: other_schema_name)
     end
 
     test "a disagreeing atom :tenant_id key is rejected with :tenant_id_not_accepted, writes zero rows" do

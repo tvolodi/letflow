@@ -106,3 +106,19 @@ resolution_note: >
   occurs, treat this as a possible recurrence/related gap rather than a fresh
   issue, and check whether the owner-monitor reaper itself is failing
   silently before assuming a new root cause.
+cleanup_note: >
+  Post-merge (main at 53b4201), ORCH (hetzner-orch) independently re-checked the
+  fix's own acceptance criteria per this project's "no agent's claim that it
+  finished a task is itself evidence" discipline and found one criterion the
+  merged fix does not itself satisfy: "existing orphaned schemas in the shared
+  test database cleaned up." The owner-monitor mechanism only reclaims schemas
+  from FUTURE owner deaths going forward -- it does not retroactively act on a
+  schema already orphaned before the fix was deployed. One such pre-existing
+  orphan remained (sandbox_5050499590a9426186656f72f7296622 in letflow_test,
+  the same one ISSUE-FIXER identified live during diagnosis). Dropped directly
+  via `docker exec letflow-postgres-1 psql -U letflow -d letflow_test -c "DROP
+  SCHEMA IF EXISTS sandbox_5050499590a9426186656f72f7296622 CASCADE;"` at
+  2026-08-18T23:10Z (a one-off DB operation, not a tracked-file/code change, so
+  no producer/validator chain applies) and re-confirmed 0 orphaned tenant_*/
+  sandbox_* schemas across all three test-partition databases
+  (letflow_test/letflow_test2/letflow_test99) afterward.

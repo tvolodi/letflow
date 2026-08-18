@@ -1,0 +1,61 @@
+{
+  "handoff_id": "d1a4e8c7-6b3f-4a9c-9e2d-7f0b5c8a3e91",
+  "run_id": "WF03-ISS0056-20260818",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0056-20260818/step-02b-code-design-validator.json",
+  "created_at": "2026-08-18T23:28:17Z",
+  "started_at": "2026-08-18T23:28:17Z",
+  "completed_at": "2026-08-18T23:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-029"],
+    "requirement_text": {
+      "REQ-029": "Extend REQ-028's graph module with src/definition/graph.zig's validateNodeAttributes() (PD-05) and the edge-condition rules (PD-06). Edge condition rules (PD-06): condition MUST be present (non-null, non-empty) on every non-default outgoing edge from an EXCLUSIVE_GATEWAY, MUST be null on every other edge; is_default MUST NOT coexist with a non-null condition; at most one outgoing edge per EXCLUSIVE_GATEWAY may be default. Also port isValidCelSyntax's minimal structural CEL check as a pure syntax-only validator."
+    },
+    "related_handoff_ids": ["ac56cb21-fe6a-4701-a64b-fc545c2e256f"],
+    "artifacts_in": [
+      "lib/letflow/design/iss-0056-human-task-fallback-edge-validation.md",
+      "handoffs/WF03-ISS0056-20260818/step-02-code-designer.json",
+      "handoffs/WF03-ISS0056-20260818/step-01-issue-fixer.json",
+      "docs/issues/ISS-0056.yaml",
+      "lib/letflow/definitions/graph.ex"
+    ],
+    "owned_modules": ["lib/letflow/definitions/graph.ex", "test/letflow/definitions/graph_test.exs"]
+  },
+  "task": {
+    "description": "Independently validate CODE-DESIGNER's design artefact for ISS-0056 against the actual current lib/letflow/definitions/graph.ex, not against the producer's own self-report.",
+    "acceptance_criteria": [
+      "Design fully covers the diagnosed root cause (CHK-14's over-broad guard) without over-permitting conditions on other node types",
+      "Claimed next-unused CHK number (CHK-19) verified independently by grep of graph.ex",
+      "No implementation code (.ex/.exs function bodies) present anywhere in the design artefact",
+      "Violation code/message shape for the new check is fully and unambiguously specified",
+      "Design stays entirely confined to lib/letflow/definitions/graph.ex and its test file, zero required changes to lib/letflow/engine/",
+      "Edge cases claimed as worked through are spot-checked against actual CHK-13/15/16 code and found correct",
+      "Design is unambiguous enough for ELIXIR-DEV to implement without inventing anything; no TBD/deferral on anything that should be decided now"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-derived verdict by reading lib/letflow/definitions/graph.ex directly (not CODE-DESIGNER's summary) and cross-checking every claim in lib/letflow/design/iss-0056-human-task-fallback-edge-validation.md against it. (1) Root cause: confirmed check_non_gateway_condition_absence/1 (CHK-14, graph.ex:919-935) forbids a non-nil condition on ANY edge except a non-default EXCLUSIVE_GATEWAY-sourced one -- the design's new guard (SS3.2) permits exactly two source types (EXCLUSIVE_GATEWAY non-default, unchanged; HUMAN_TASK, new, unconditional on is_default) and forbids every other case, matching the diagnosis's two-part fix precisely with no over-permission of a third node type. (2) CHK numbering: grepped graph.ex myself for every 'CHK-' occurrence -- CHK-01 through CHK-18 are all present and assigned (CHK-18 = check_sub_process_interface/1), confirming CHK-19 is genuinely the next unused number, independent of the design doc's own grep claim. (3) No implementation code: grepped the design doc for 'def '/'defp '/trailing 'do' -- zero matches; all algorithm content is @spec-shaped signatures or FOR/IF/EMIT pseudocode embedding real function-call names (Enum.any?, &fn/1), which mirrors this project's own established precedent (lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md SS5.2's explicitly-disclaimed 'shown here as prose/shape, not literal Elixir source' CASE-block convention, itself already gate-approved) -- not a violation of the design-only constraint. (4) Violation shape: CHK-14's half keeps the existing :unexpected_edge_condition code unchanged (only the guard and message text change, and the design explicitly marks the message as prose guidance, matching REQ-029's own established code-exact/message-flexible convention); CHK-19's new :human_task_no_fallback_edge code and message are both fully specified in SS4.2, no ambiguity. (5) Scope: grepped the design doc for every transition.ex/Transition reference -- all are explicitly read-only/context-only, none implies an edit; SS0's confirmation table and SS8's 'what ELIXIR-DEV must NOT change' list both correctly enumerate lib/letflow/engine/ as untouched. (6) Spot-checked 3 of the 7 edge-case rows in SS6 against the actual CHK-13 (graph.ex:896-914, confirmed it only requires a condition on every non-default gateway edge with no fallback/default-existence requirement at all -- so the design's 'no precedent in CHK-13/16' claim for the single-edge-fires case is correct), CHK-15 (graph.ex:937-950, confirmed genuinely source-independent, fires on any is_default:true + non-null condition combination regardless of node type -- matching the design's claimed CHK-19/CHK-15 co-fire-without-suppression row), and CHK-16 (graph.ex:952-978, confirmed gated only to exclusive_gateway_source?/3, so a HUMAN_TASK node with two is_default:true edges genuinely passes CHK-16 silently today, matching SS7's stated status quo). All three checked out correct. (7) No TBD/deferral language on anything decided-now-required: the two explicitly-flagged open items (SS4.1's really_conditioned?/1 trim-vs-no-trim semantic gap, SS7's CHK-16-not-extended decision) are both out-of-this-run's-scope items with an explicit, reasoned decision already made (not left open), correctly named per the project's 'flag, don't silently resolve' convention rather than left ambiguous for ELIXIR-DEV to invent an answer to. Design is implementation-ready.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0056-20260818/step-02b-code-design-validator.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0056-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0056-20260818",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV for implementation"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

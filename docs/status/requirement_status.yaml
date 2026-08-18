@@ -3950,6 +3950,15 @@ history:
       recorded. Immediately released back to status open (not claimed
       for real work) so no lock was left dangling from this
       verification call.
+  - req: REQ-043
+    event: started
+    agent: ORCH
+    at: 2026-08-18T05:53:09Z
+    note: >
+      WF02-REQ043-20260818 Step 00 (git-setup) PASS. Claimed queue task
+      87 via get_next_task (agent_id tvolodi-orch, locked_at
+      2026-08-18T05:52:05Z). Branched feature/WF02-REQ043-20260818 from
+      origin/main and pushed. Status flipped pending -> in_progress.
   - req: REQ-044
     event: started
     agent: ORCH

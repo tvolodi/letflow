@@ -322,3 +322,45 @@ needed at all, use it read-only (`json.load` to validate parseability) — never
 call `json.dump` on a file that contains non-ASCII characters without explicitly
 passing `ensure_ascii=False`, and even then prefer a pure text edit over a
 round-trip for a file this project treats as append-only/audit-trail.
+
+## Two branches picking the same module name is a real rebase-time collision class, not just an ISS-number collision
+
+WF02-REQ043-20260818 (schema module `Letflow.Engine.Token`, an `Ecto.Schema` for
+the `tokens` table) and WF02-REQ044-20260818 (`Letflow.Engine.Token`, a pure
+in-memory struct for the transition kernel, EE-02) were developed in parallel from
+the same base commit, each unaware of the other. REQ-044 merged to `main` first.
+When REQ-043's branch was later rebased onto that updated `main` (after a host
+power interruption mid-rebase), `git` reported an add/add conflict on
+`lib/letflow/engine/token.ex` — same path, same module name, two structurally
+different things (persisted lifecycle row vs. transient pure-function value) that
+cannot share one name. The same rebase also hit the already-documented
+ISS-number-collision class (this file, above) a second time, independently: main
+had already renumbered REQ-043's own `assignee_type` finding from ISS-0042 to
+ISS-0043 (`docs/issues/ISS-0043.yaml`, GH#159) after an earlier cross-host
+collision with REQ-044's ISS-0042 — so REQ-043's *other* finding (tenant_id
+caller-mismatch, originally filed as its own ISS-0043) collided a second time.
+A local resolution renumbered it to ISS-0044 first, but a concurrent host
+independently ran the identical recovery for the identical branch/finding
+moments later and reached `main` first with its own resolution (ISS-0045,
+`docs/issues/ISS-0045.yaml`, WF03-ISS0045-20260818) — since `main` already had
+an equivalent, fully-diagnosed record of the same finding, the losing side's
+own duplicate was dropped entirely on its next rebase rather than filed under
+yet another number. This is the concurrent-host race itself as an addition to
+the ISS-numbering-collision class, not just a numbering mechanic: two hosts
+recovering the *same* interrupted branch independently can each do the
+"correct" renumbering and still collide with each other, and the answer is to
+check whether `main` already carries an equivalent record before re-filing
+one, not to just take the next free number on faith.
+
+**Correct alternative:** don't silently let the later-merged branch's name win by
+accident of rebase order. Confirm which module is already shipped and load-bearing
+on `main` (`grep -rl` its call sites — REQ-044's `Token` was aliased from
+`instance_state.ex`/`transition.ex`/its own test, i.e. genuinely in use) and rename
+the *unmerged* side instead, moving it to a new file/module name
+(`token_record.ex` / `Letflow.Engine.TokenRecord`) rather than editing the
+already-shipped one. Record the rename's reasoning in the new module's own
+moduledoc (not just the commit message) so a future reader who only opens the file
+sees why the name doesn't match the original design doc. This is the same
+"confirm what's on disk, don't trust the branch's own narrative" discipline the
+ISS-0036 incident above establishes, applied to module names instead of issue
+numbers.

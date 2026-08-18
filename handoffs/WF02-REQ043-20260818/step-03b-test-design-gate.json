@@ -1,0 +1,50 @@
+{
+  "handoff_id": "b1e2f3a4-003b-4c1a-9f01-req043step03b",
+  "run_id": "WF02-REQ043-20260818",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ043-20260818/step-03b-test-design-gate.json",
+  "created_at": "2026-08-18T07:15:44Z",
+  "started_at": "2026-08-18T07:15:44Z",
+  "completed_at": "2026-08-18T07:17:30Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-043"],
+    "requirement_text": {
+      "REQ-043": "Add the priv/repo/migrations and Ecto.Schema modules the instance engine needs but that S2 deliberately did not build, all schema-per-tenant via REQ-022's :prefix mechanism. See test/specs/REQ-043.md and lib/letflow/design/req043-instance-engine-schema.md for full detail."
+    },
+    "related_handoff_ids": ["b1e2f3a4-0003-4c1a-9f01-req043step03"],
+    "artifacts_in": [
+      "test/specs/REQ-043.md",
+      "test/letflow/event_store/json_array_test.exs",
+      "test/letflow/engine/schemas_test.exs",
+      "test/letflow/engine/migrations_test.exs",
+      "lib/letflow/design/req043-instance-engine-schema.md"
+    ],
+    "owned_modules": ["test/letflow", "test/specs"]
+  },
+  "task": {
+    "description": "WF-02 Step 3b HARD GATE. Read test/specs/REQ-043.md and all three new test files independently (not TEST-DESIGNER's handoff summary). TEST-DESIGNER's own handoff (handoffs/WF02-REQ043-20260818/step-03-test-design.json result.issues) flags one MINOR item: acceptance criterion 3's 'caller-supplied tenant_id disagreement fails loudly' half is not literally satisfiable against REQ-043's schema-only scope (no context-module function exists yet to reject it -- that's REQ-045/051/062's job per the design's own section 6 point 2). TEST-DESIGNER instead wrote three tests: a positive derivation case, a storage-isolation case, and an explicit tripwire pinning today's real (accept, not reject) behavior. Assess whether this is a legitimate, honestly-flagged scope boundary (not a coverage gap to fail on) or whether it should have been handled differently.",
+    "acceptance_criteria": [
+      "a: every acceptance criterion has a runnable test targeting it (not @tag :skip without a passing counterpart) -- except the one MINOR item above, verify TEST-DESIGNER's reasoning for why it's not literally satisfiable is sound rather than an excuse to skip real coverage",
+      "b: no 'TODO: implement test' left in the spec",
+      "c: test fixtures use per-test unique data, not shared hardcoded IDs",
+      "d: tests are self-sufficient -- don't depend on other tests running first",
+      "e: no hardcoded secrets/connection strings in test files",
+      "FAIL immediately on any check failure"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently read test/specs/REQ-043.md and all three test files (json_array_test.exs, engine/schemas_test.exs, engine/migrations_test.exs) directly, plus lib/letflow/design/req043-instance-engine-schema.md and the actual lib/letflow/engine/token.ex and task.ex sources (not TEST-DESIGNER's summary alone). All 5 checks pass: (a) every acceptance criterion (AC2 uq_instance_correlation, AC4 status enum, AC5 JSONArray round-trip, AC6 migrations/schema-per-tenant) has >=1 runnable, non-skipped test with a real failure mode -- confirmed by reading the assertions themselves, not just the spec's claims table; (b) grepped all three test files and the spec for '@tag :skip' / 'TODO' -- zero matches; (c) fixtures use Ecto.UUID.generate()/System.unique_integer per test, provisioned_tenant/0 provisions a fresh tenant+schema per call (not shared across a describe block) -- no hardcoded shared IDs; (d) every DB-touching test calls provisioned_tenant() itself and cleans up via on_exit/1, no test reads state another test wrote; (e) grepped for password/secret/postgres:// literals -- zero matches, DB access goes through Letflow.Repo/config/test.exs only. Also ran mix compile --warnings-as-errors myself (exit 0) as a cheap independent corroboration that the artefacts are real and consistent, not fabricated.\n\nVerdict on the flagged MINOR item (AC3's 'rejects a disagreeing caller-supplied tenant_id' half): legitimate, honestly-handled scope boundary, not an excuse. Verified independently by reading lib/letflow/engine/token.ex and task.ex directly and via `ls lib/letflow/engine/` -- the directory contains only token.ex and task.ex, no engine.ex context module, confirming the design doc's own §6 point 2 claim that no public attrs-accepting function exists yet for a rejection test to exercise. Writing a test asserting Token.insert_changeset/2 rejects a disagreeing tenant_id would assert something false about the shipped code (the changeset has no FK/check-constraint/comparison logic on tenant_id at all) -- a real 'No Speculation' violation if written literally. The three substitute tests in migrations_test.exs's 'tenant_id internal-derivation contract' describe block are a sound handling of the gap: (1) positive derivation case proves the 'derived internally' half literally: (2) storage-isolation case proves schema-per-tenant does real isolation work independent of the tenant_id column; (3) the tripwire test explicitly asserts today's real accept-not-reject behavior with a comment stating it must fail the moment enforcement is added without updating it -- this is a deliberate regression guard, not a shrug. The gap is filed as a MINOR issue on the Step 3 handoff with a concrete recommendation (REQ-045's TEST-DESIGNER adds the literal test once a context-module function exists), matching core-directives.md's Instruction Precedence rule ('never resolve a conflict silently... record it in result.issues'). This is the correct behavior for a schema-only requirement, not a coverage gap.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Route to TEST-RUNNER (Step 4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,63 @@
+{
+  "handoff_id": "b1e2f3a4-001b-4c1a-9f01-req043step01b",
+  "run_id": "WF02-REQ043-20260818",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ043-20260818/step-01b-design-gate.json",
+  "created_at": "2026-08-18T06:05:07Z",
+  "started_at": "2026-08-18T06:12:24Z",
+  "completed_at": "2026-08-18T06:15:04Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-043"],
+    "requirement_text": {
+      "REQ-043": "Add the priv/repo/migrations and Ecto.Schema modules the instance engine needs but that S2 deliberately did not build, all schema-per-tenant via REQ-022's :prefix mechanism (Decision B's general rule for business tables -- none of these three is GLOBAL, and none needs REQ-041's GLOBAL-exception flagging, since R-Co's own 005_instances.sql tables are per-tenant like events/events_archive): (a) an ALTER TABLE migration on REQ-023's instance_projections adding exactly the columns REQ-023's own migration header (priv/repo/migrations/20260816120003_create_instance_projections.exs, \"COLUMNS DELIBERATELY NOT CREATED HERE\") names as S3/EE-01's job: definition_id (binary_id, not null), correlation_key (string, nullable), current_nodes (jsonb, default \"[]\" -- active token positions), variables (jsonb, default \"{}\" -- the merged variable map, seeded from EE-01's initial_variables per engine.md section EE-01 1a's \"Note on initial_variables\"), error_detail (jsonb, nullable -- set on ERROR status by EE-10), completed_at and cancelled_at (utc_datetime_usec, nullable), plus the two indexes REQ-023 names: uq_instance_correlation (UNIQUE on (definition_id, correlation_key) WHERE correlation_key IS NOT NULL -- the index that structurally enforces EE-01's correlation-key uniqueness acceptance criterion) and idx_proj_definition. The existing status Ecto.Enum already carries ERROR (REQ-023 included it deliberately, per that migration's header), so no enum migration is needed here -- confirm that rather than adding one. (b) a tasks table per engine.md section EE-03 1a (R-Co migrations/005_instances.sql): id (binary_id), instance_id (binary_id, not null, indexed), token_id (binary_id, not null), node_id (string, not null), node_name (string, not null), status (Ecto.Enum: PENDING/COMPLETED/CANCELLED, default PENDING), assignee_type (string, nullable -- USER|GROUP|ROLE), assignee_ref (string, nullable), form_schema (jsonb, nullable), output_variables (jsonb, nullable), completed_by (binary_id, nullable), completed_at/cancelled_at (utc_datetime_usec, nullable), timestamps(). R-Co's tasks logic lives in src/tasks/store.zig (1202 lines), a directory OUTSIDE this stage's src/engine/ scope -- this requirement builds only the table + schema module that src/engine/instance.zig writes into at EE-03 activation and EE-04 completion time; the standalone task query/list surface (src/tasks/store.zig's own list/filter operations) is NOT ported here and belongs with S4's tasks routes or its own later requirement. State that boundary in the moduledoc. (c) a tokens table: id (binary_id), instance_id (binary_id, not null), node_id (string), branch_id (string), plus whatever the EE-06/EE-07 parallel token model needs -- tasks.token_id references it. Because engine.md section EE-02 2 defines Token as an in-memory value (node_id/branch_id/token_id/waiting_child_instance_id) and instance_projections.current_nodes already persists active token positions as jsonb, flag explicitly in the moduledoc whether a separate tokens TABLE is genuinely required in Letflow or whether current_nodes subsumes it -- R-Co has both, but R-Co's tasks.token_id FK is the only thing that forces the separate table there. Do NOT silently drop the table or silently keep it; state which and why, since REQ-051's join counters and REQ-044's tasks FK both depend on the answer. tenant_id on every table above is NOT NULL with no DB default and is derived from the Ecto :prefix the write targets by reversing REQ-022's Letflow.TenantProvisioning.schema_name_for_tenant/1, exactly as REQ-025 and REQ-030 established for their own tables -- never a caller-supplied field."
+    },
+    "related_handoff_ids": ["b1e2f3a4-0001-4c1a-9f01-req043step01"],
+    "artifacts_in": [
+      "lib/letflow/design/req043-instance-engine-schema.md",
+      "priv/repo/migrations/20260816120003_create_instance_projections.exs",
+      "docs/migration/decisions/"
+    ],
+    "owned_modules": ["priv/repo/migrations", "lib/letflow/schemas"]
+  },
+  "task": {
+    "description": "WF-02 Step 1b HARD GATE. Independently validate lib/letflow/design/req043-instance-engine-schema.md against REQ-043's acceptance criteria -- read the design file directly, not CODE-DESIGNER's handoff summary. Run all five checks from WF-02 Step 1b.",
+    "acceptance_criteria": [
+      "a: every REQ-043 acceptance criterion has a corresponding design element, no TBD/to-be-implemented deferrals",
+      "b: function signatures fully specified (name, inputs, outputs, error cases)",
+      "c: error handling shape stated as tagged tuples, not left implicit",
+      "d: cross-module dependencies listed",
+      "e: no implementation code present -- signatures and type shapes only, no .ex/.exs code blocks with bodies",
+      "Specifically verify: the tokens-table decision is genuinely justified (not asserted without reasoning), the tenant_id derivation reuses REQ-025/REQ-030's existing convention rather than inventing a new function, and the tasks moduledoc content is specific enough that ELIXIR-DEV cannot omit the src/tasks/store.zig-not-ported boundary statement"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-gate, iteration 1. Read lib/letflow/design/req043-instance-engine-schema.md in full, independently, and re-ran check (e) against the exact six sections named in gate_history[0]'s FAIL (2.1, 2.3, 3.3, 4.2, 4.4, 5.2). All six are now prose/pseudocode descriptions of migration and schema shape -- no literal `add :col, :type`, `create table(...)`, `create unique_index(...)`, `create index(...)`, `alter table(...)`, or `field(...)`/`schema \"...\" do ... end` DSL bodies remain anywhere in the document (confirmed by grepping the file for these patterns directly, not by trusting CODE-DESIGNER's claim). The only literal-looking fragments left are: (i) @spec/@type declarations (SS4.4, SS5.2, SS6) and single-line @primary_key attribute citations (SS4.4 line ~537, SS0 lines ~44 citing the already-shipped InstanceProjection module), both within the precedent's tolerance for signature/type-shape content; (ii) SS0's citations of what was read in the existing shipped migration/schema files ('if prefix() do' at line 40, '@primary_key {:instance_id, ...}' at line 44) -- these describe an already-merged file, not new design content; (iii) SS7's three-tuple manifest-entry list, which is a config data literal (not a migration/schema function body) and was never flagged in iteration 0. Checks (a)-(d) re-verified sound and unchanged in substance: SS1 (scope boundary table), SS3.1 (tokens-table decision, three independent reasons still present and load-bearing), SS4.3 (Task moduledoc's src/tasks/store.zig-not-ported boundary, quoted verbatim in blockquote form), SS6 (tenant_id derivation reuses tenant_id_for_schema_name/1 unchanged, no new function), SS8 (8 invariants, no TBD), SS9 (OQ-1..OQ-6, explicitly flagged not silently resolved), SS10 (cross-module dependency table) are all intact. The three 'specifically verify' items from task.acceptance_criteria all still hold: tokens-table decision is reasoned (not asserted), tenant_id derivation reuses the existing REQ-025/REQ-030 function rather than inventing one, and the tasks moduledoc content is specific enough (verbatim quoted boundary statement) that ELIXIR-DEV cannot omit it.",
+    "artifacts_out": ["lib/letflow/design/req043-instance-engine-schema.md"],
+    "issues": [],
+    "next_action": "Route to ELIXIR-DEV (Step 2a)"
+  },
+  "rework_count": 1,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-08-18T06:07:55Z",
+      "status": "FAIL",
+      "summary": "Read lib/letflow/design/req043-instance-engine-schema.md in full, independently (not CODE-DESIGNER's summary), and cross-checked it directly against priv/repo/migrations/20260816120003_create_instance_projections.exs, lib/letflow/event_store/instance_projection.ex, lib/letflow/tenant_provisioning.ex:100-115/250-273 (tenant_id_for_schema_name/1 and @tenant_scoped_migration_manifest), and the two designs it cites as its own precedent (lib/letflow/design/req025-event-append.md, lib/letflow/design/req030-definition-store-crud.md), plus the actual precedent for a migration/schema design, lib/letflow/design/req023-event-store-schema.md §2.2. Checks (a)-(d) and the task's 'specifically verify' items PASS. Check (e) FAILS: the design contains complete, literal Elixir/Ecto implementation code, not signatures/type shapes only.",
+      "issues": [
+        "BLOCKER (check e): §2.1's migration block is a complete, literal Ecto.Migration DSL body -- 'if prefix() do / alter table(:instance_projections, prefix: prefix()) do / add :definition_id, :binary_id, null: false / ... / create unique_index(...) / create index(...) / end' -- ELIXIR-DEV could paste this directly into the .exs file, adding only defmodule/use Ecto.Migration/def change do. This is implementation code, not a shape description.",
+        "BLOCKER (check e): §3.3 and §4.2 do the same for the new tokens and tasks table migrations -- complete 'create table(...) do add :col, :type, opts ... end' bodies plus index-creation calls, fully executable as written.",
+        "BLOCKER (check e): §2.3's field-addition block and §4.4/§5.2's schema blocks ('@primary_key {:id, :binary_id, autogenerate: true}; schema \"tasks\" do field(:tenant_id, Ecto.UUID) ... end; @type t :: %__MODULE__{}') are complete schema-module bodies, not type shapes -- this is literally the non-function content of the real .ex files.",
+        "BLOCKER (check e): this contradicts the design's own claimed precedent. req023-event-store-schema.md §2.2 -- the actual accepted precedent for a migration-scoped design -- writes migrations as prose pseudocode and states explicitly: \"this is the shape, not literal code; ELIXIR-DEV writes the real file,\" using indented English (`change/0: if ... : create table(<name>, ...) with the columns in §3`), never literal `if prefix() do` / `add :col, :type` / `create unique_index(...)` Elixir syntax. req025-event-append.md and req030-definition-store-crud.md (also cited by this design as its precedent) likewise confine literal code blocks to @spec/@type declarations and short 3-5 line illustrative query fragments, never full migration or full schema bodies. req043's blocks are categorically more complete and literal than any design this project has actually accepted through this gate."
+      ],
+      "next_action": "Rework CODE-DESIGNER: rewrite §2.1, §2.3, §3.3, §4.2, §4.4, §5.2's code blocks as prose/pseudocode, matching req023-event-store-schema.md §2.2's convention. Preserve everything else unchanged."
+    }
+  ]
+}

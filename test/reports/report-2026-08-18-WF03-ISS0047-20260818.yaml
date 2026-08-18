@@ -1,0 +1,83 @@
+run_id: WF03-ISS0047-20260818
+agent: TEST-RUNNER
+step: "04c"
+date: "2026-08-18"
+branch: feature/WF03-ISS0047-20260818
+
+commands_run:
+  - "docker compose up -d  # no-op: letflow-postgres-1 (port 5462) already
+    healthy from the parent worktree; the wt2-specific container name
+    collided on the same port and was removed rather than started"
+  - "mix compile --warnings-as-errors --force"
+  - "MIX_TEST_PARTITION=2 mix test  (run twice, independently, for
+    reproducibility)"
+
+compile_result:
+  status: PASS
+  output: "Compiling 68 files (.ex) / Generated letflow app -- 0 warnings,
+    exit 0, both before and after the fix below"
+
+test_result_run1:
+  status: PASS
+  summary: "5 properties, 773 tests, 0 failures"
+  finished_in: "85.1 seconds (2.1s async, 83.0s sync)"
+
+test_result_run2:
+  status: PASS
+  summary: "5 properties, 773 tests, 0 failures"
+  finished_in: "91.3 seconds (2.1s async, 89.2s sync)"
+
+match: true
+
+pre_existing_failure_found_and_resolved:
+  description: >
+    First invocation failed at compile stage (0 tests ran) with
+    SystemLimitError in test/letflow/definitions/promotion_review_store_test.exs:282
+    -- a describe+test name pair exceeding ExUnit's hard 255-char cap.
+    This file is untouched by this branch's own diff (identity.ex +
+    identity_test.exs only) and unrelated to ISS-0047's tenant/identity
+    change.
+  root_cause_diagnosis: >
+    Pre-existing on `main`, already fixed there by commit d2be124
+    ("fix: shorten 3 ExUnit test names exceeding 255-char compile limit
+    (ISS-0049)", logged in docs/issues/ISS-0049.yaml as resolved, mix
+    test: 772 tests, 0 failures at that point). This feature branch was
+    cut from main before d2be124 landed, so the branch never had the fix.
+    `git merge-base --is-ancestor d2be124 HEAD` returns false, confirming
+    the branch predates the fix.
+  action_taken: >
+    Attempted `git merge main` to pick up the fix generically, but it
+    produced conflicts in handoffs/orchestrator.log and (separately)
+    test/letflow/identity_test.exs -- this branch's own owned file, whose
+    content has diverged from main's post-merge version. Aborted the
+    merge as too invasive for this step's scope. Instead applied d2be124's
+    exact, already-verified textual change to the one file actually
+    blocking compilation here (promotion_review_store_test.exs only,
+    2-line describe/test-name shortening, no assertion or behavior
+    change) -- not a new fix, a re-application of an upstream-approved
+    fix to unblock this branch's own build per core-directives.md's
+    Unblock-Everything ("unrelated compile errors blocking the build ->
+    fix them"). identity_test.exs was left untouched since it compiled
+    clean on this branch as-is.
+  issues_filed: >
+    None filed -- filing a new docs/issues/ISS-NNNN.yaml would duplicate
+    the already-resolved docs/issues/ISS-0049.yaml. The residual item is
+    that this branch is stale relative to main and should be rebased/
+    merged before merge to pick up d2be124 and future main fixes; noted
+    here for ORCH/RELEASE-VALIDATOR rather than filed as a new issue.
+  non_blocking: true
+
+diagnosis_for_iss0047_scope: >
+  No failures attributable to lib/letflow/identity.ex or
+  test/letflow/identity_test.exs in either run. identity_test.exs
+  compiled and ran clean both times, contributing its tests to the 773
+  total with 0 failures.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-18-WF03-ISS0047-20260818.yaml
+    - test/letflow/definitions/promotion_review_store_test.exs (2-line
+      test-name fix, re-applied from main's d2be124, needed to unblock
+      compilation)
+  next_action: "ORCH routes to RELEASE-VALIDATOR for independent re-verification"

@@ -570,3 +570,5 @@
 2026-08-18T07:30:35Z | PASS | WF-02 | WF02-REQ049-20260818 | TEST-DESIGNER -> ORCH | Step 3: test/specs/REQ-049.md + variable_merge_test.exs, 20 tests covering all 5 ACs + whole-batch atomicity. 1 MINOR non-blocking issue (design doc's grep verification recipe self-matches its own prose). Committed 2dc5a3f.
 2026-08-18T07:31:59Z | DISPATCH | WF-02 | WF02-REQ049-20260818 | ORCH -> TEST-DESIGN-VALIDATOR | Step 3b hard gate with mutation-verification.
 2026-08-18T07:32:53Z | PASS | WF-02 | WF02-REQ049-20260818 | TEST-DESIGN-VALIDATOR -> ORCH | Step 3b: all checks PASS, mix test 16/16 re-run independently. Mutation drill on whole-batch atomicity confirmed real detection, reverted clean. Committed 2ad0e5e.
+2026-08-18T07:33:47Z | DISPATCH | WF-02 | WF02-REQ049-20260818 | ORCH -> TEST-RUNNER | Step 4: full suite run.
+2026-08-18T07:37:44Z | PASS | WF-02 | WF02-REQ049-20260818 | TEST-RUNNER -> ORCH | Step 4: MIX_TEST_PARTITION=2 mix test -- 5 properties, 704 tests, 0 failures (run 3x for stability). Incidental pre-existing warnings filed as ISS-0044/GH#166, not fixed here. Committed b9b2a2d.

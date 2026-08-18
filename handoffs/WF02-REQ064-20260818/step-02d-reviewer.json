@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ064-20260818/step-02d-reviewer.json",
   "created_at": "2026-08-18T13:26:30Z",
   "started_at": "2026-08-18T13:26:30Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-18T13:31:04Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -44,19 +44,19 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
+    "status": "PASS",
+    "summary": "Reviewed git diff main...HEAD for REQ-064 (Decision 0006 D2 -- drop tenant_id from ten schema-isolated tables) against the four standard REVIEWER questions plus this handoff's five specific checks. All PASS, no crutches or scope creep found; three non-blocking notes recorded. (1) Decision-record consistency: moduledoc updates on Engine.Task, Engine.TokenRecord, Identity.User, Identity.Group, and the three EventStore modules (Event, ArchivedEvent, InstanceProjection) all correctly frame this as 0006 D2 superseding only 0003 Dimension B's tenant_id-retention clause -- none contradicts or reopens the schema-per-tenant isolation choice itself (0003 Dimensions A/C, and D1's per-tenant boundary), and each cites 0006 by path rather than restating a paraphrase that could drift. EventStore.insert_event/3's added comment explaining why ctx still carries a now-unused tenant_id key (left as harmless dead data, not restructured) is a good idiom note, not scope creep. (2) Migration idiom: spot-checked 3 of 10 (drop_tenant_id_events.exs -- plain column drop; drop_tenant_id_promotion_reviews.exs -- column drop + two index rebuilds, index names preserved, WHERE predicates unchanged; drop_tenant_id_users.exs -- column drop + drop_if_exists on a third undocumented composite index found during design, correctly not replaced since no consumer exists). All three: correct if prefix() do guard, remove(:tenant_id, :binary_id) three-arg form for reversibility, registered in tenant_scoped_migration_manifest (verified all 10 present, count updated 17->27 in both the manifest comment and the doc comment above tenant_scoped_migrations/0). Consistent shape across all three. (3) Scope creep: all 4 beyond-design fixes verified as forced, not discretionary. definitions.ex's run_rollback_transaction/3 and supersede_matching_review/3 (arity actually dropped by one param each, not /4 as the task description assumed) previously filtered on d.tenant_id == ^tenant_id / r.tenant_id == ^tenant_id inside queries already scoped by prefix: -- since ProcessDefinition/PromotionReview no longer declare a :tenant_id field, these predicates would raise Ecto.QueryError at compile/query-build time, not just become redundant. Removing them is the minimum fix. identity.ex's get_by_external_identity/3 is the same pattern (Repo.get_by filter referencing a dropped field) -- forced. promotion.ex's target_tenant_id source change (review.tenant_id -> plan[\"target_tenant_id\"]) is forced because review.tenant_id no longer exists, and the replacement is the same trusted value already embedded in serialised_plan (PromotionPlan.t().target_tenant_id), not a new input channel. identity_migration.ex's switch to fragment/2 in copy_groups/2, copy_users/2, and the TenantRole join query is the correct minimal idiom for querying a column (public.groups/users.tenant_id) that still exists physically on the legacy source tables during the cutover copy but is no longer a field on the Group/User schema modules -- a direct g.tenant_id reference would no longer compile. None of the four does more than the column drop forces; none introduces new abstraction or generalizes beyond its call site. (4) Supervision integrity: verified via git diff --stat file list, not assumed -- zero supervision-tree files (process_instance.ex, instance_supervisor.ex, or any other) appear in the changed-file list. All 38 changed files are schema modules, migrations, query modules, and handoff/status docs. (5) TokenRecord vs Token: Engine.TokenRecord (real Ecto schema for `tokens` table) correctly stripped of :tenant_id field, cast list, validate_required, and moduledoc updated. Engine.Token (REQ-044's separate pure in-memory struct, defstruct [:node_id, :token_id, branch_id: nil, waiting_child_instance_id: nil]) has zero diff on this branch and never carried tenant_id -- confirmed untouched by git diff and git log. PromotionDigest observation: lib/letflow/definitions/promotion_digest.ex has zero diff on this branch (git log shows its last touch was REQ-036) -- the digest-scope gap SECURITY-REVIEWER flagged (compute_plan_digest/1 covers only plan.entries, not target_tenant_id) is confirmed genuinely pre-existing, not introduced by this diff. Agree this diff does not newly expose or worsen it: promotion.ex's target_tenant_id source change moves the read from a separate, entirely unguarded DB column (review.tenant_id, never covered by any digest) to a field inside the same serialised_plan JSON blob the rest of the plan already reads from -- also outside compute_plan_digest/1's entries-only coverage, so the exposure shape is unchanged, arguably clarified (single source of truth for the plan payload) rather than worsened. No live exploitable path pre-S4 either way, matching SECURITY-REVIEWER's assessment. Non-blocking notes (not required for PASS): (a) the digest-scope gap remains worth a future ISS-xxxx entry once an API surface exists at S4 that could actually tamper with serialised_plan in transit/storage -- flagging for TEST-DESIGNER/future work, not filing now since SECURITY-REVIEWER already logged the observation and no live path exists; (b) fragment/2 in identity_migration.ex is correctly scoped to the one legitimate remaining tenant_id-querying site (legacy public tables mid-cutover) -- worth a grep sweep once 20260819000004_drop_legacy_public_identity_tables.exs actually runs in production data, to confirm no other fragment-based tenant_id reference lingers past its usefulness.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ064-20260818",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF02-REQ064-20260818",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-DESIGNER (3)"
   },
   "rework_count": 0,
   "max_rework": 3

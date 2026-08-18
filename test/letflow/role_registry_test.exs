@@ -34,10 +34,28 @@ defmodule Letflow.Identity.RoleRegistryTest do
   This file therefore now provisions a real tenant schema per test (`Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)`
   + `TenantProvisioning.provision_tenant_schema/1` + `replay_migrations/2`) and
   issues `SET search_path TO "<schema>", public` on that connection before each
-  test body runs — see `test/letflow/identity/user_test.exs`'s own moduledoc for the
-  full reasoning behind this mechanism (verified directly against real Postgres:
-  transaction-scoped, reverted by rollback, no manual cleanup of the GUC itself
-  needed). `Ecto.Migrator` cannot run under the sandbox's single shared connection
+  test body runs — see `test/letflow/identity/user_test.exs`'s own moduledoc,
+  "Sandbox mode: what ACTUALLY protects against cross-test leakage" section, for
+  the full reasoning. In short: switching to `:auto` mode above checks in
+  (discards) whatever sandboxed transaction `Letflow.DataCase`'s own setup had
+  already checked out, so `SET search_path` is NOT automatically reverted by any
+  rollback at that point — an earlier version of this moduledoc wrongly claimed
+  it was. What actually protects against leakage is that this file's `setup`
+  below explicitly restores a real sandboxed transaction
+  (`Sandbox.mode(Repo, :manual)` + fresh `Sandbox.checkout/1`, checked back in via
+  an explicit `Sandbox.checkin/1` registered in `on_exit/1` right after the
+  checkout) immediately after the migration-replay work finishes and BEFORE
+  issuing `SET search_path`, so the `SET search_path` call and everything the
+  test body does afterward run inside a transaction that gets rolled back at
+  teardown. Deliberately NOT `{:shared, self()}` mode: this file's tests are
+  single-process (no `Task.async` spawns needing to share the connection), and an
+  earlier version of this fix that used `{:shared, self()}` + force-switching the
+  whole pool back to `:auto` from `on_exit`'s own process (a different process
+  than the one that owns the checked-out connection) was empirically observed to
+  leave orphaned `req063-rolereg-*` tenant rows behind across suite runs —
+  confirmed via direct Postgres inspection while debugging this rework. Explicit
+  `checkin` from the SAME process that checked out avoids that race.
+  `Ecto.Migrator` cannot run under the sandbox's single shared connection
   (`lib/letflow/design/req022-tenant-schema-provisioning.md` §6's testing-
   environment caveat), so this file is now `async: false` for its entire module
   (ExUnit's `async` setting is module-wide) — unlike its pre-REQ-063 version, which
@@ -82,6 +100,14 @@ defmodule Letflow.Identity.RoleRegistryTest do
       |> Repo.insert!()
 
     on_exit(fn ->
+      # This callback runs AFTER the test process (and thus the {:shared, self()}
+      # ownership set up below) is gone -- so it must not assume that mode is still
+      # in effect. Force :auto mode first so the DROP SCHEMA / DELETE cleanup below
+      # always gets a real, checked-in connection regardless of what mode the test
+      # body left the pool in (mirrors identity_test.exs's own on_exit/1 handling
+      # of this exact hazard, confirmed empirically there).
+      Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+
       case TenantProvisioning.schema_name_for_tenant(tenant.id) do
         {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
         {:error, :invalid_tenant_id} -> :ok
@@ -95,6 +121,31 @@ defmodule Letflow.Identity.RoleRegistryTest do
              TenantProvisioning.provision_tenant_schema(tenant.id)
 
     assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+
+    # REQ-063 rework: restore a REAL sandboxed transaction before issuing
+    # SET search_path -- :auto mode above checked in (discarded) whatever
+    # transaction Letflow.DataCase's setup had checked out, so without this
+    # restore, SET search_path (a session-level GUC, not SET LOCAL) would commit
+    # against a bare pooled connection and leak into whichever later test reuses
+    # that connection. Mirrors identity_test.exs's "provision_oidc_user/4 --
+    # concurrent-insert race" test (same underlying constraint, same fix). See
+    # this file's moduledoc and user_test.exs's moduledoc.
+    #
+    # Uses plain :manual mode + a bare checkout (NOT {:shared, self()}) -- this
+    # file's tests are single-process (no Task.async spawns needing to share the
+    # connection), so there is no need for shared ownership, and explicit
+    # single-owner :manual mode lets on_exit/1 below checkin the SAME connection
+    # deterministically rather than force-switching the whole pool's global mode
+    # from a different process (the OnExitHandler process, not this test's own),
+    # which was empirically observed to leave orphaned tenant/schema rows behind
+    # across test runs (leftover `req063-rolereg-*` rows in `public.tenants`,
+    # confirmed via direct Postgres inspection while debugging this rework).
+    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :manual)
+    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Letflow.Repo)
+
+    on_exit(fn ->
+      Ecto.Adapters.SQL.Sandbox.checkin(Letflow.Repo)
+    end)
 
     Repo.query!(~s(SET search_path TO "#{schema_name}", public))
 

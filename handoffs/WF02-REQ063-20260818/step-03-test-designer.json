@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ063-20260818/step-03-test-designer.json",
   "created_at": "2026-08-18T09:39:43Z",
   "started_at": "2026-08-18T10:33:22Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-18T11:26:28Z",
+  "status": "PASS",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -55,8 +55,8 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
+    "status": "PASS",
+    "summary": "REWORK ITERATION 1 complete. Fixed the BLOCKER in all four flagged files (test/letflow/identity/user_test.exs, group_test.exs, tenant_role_test.exs, test/letflow/role_registry_test.exs): each now restores a real, properly-checked-out sandboxed transaction (Sandbox.mode(Repo, :manual) + fresh Sandbox.checkout/1) immediately after the :auto-mode migration-replay step and before issuing SET search_path, so search_path and the test body's own inserts run inside a transaction rather than on a bare pooled connection. Each moduledoc's false 'automatic rollback' claim is corrected to describe the actual mechanism. Applying the fix exactly as directed (mirroring identity_test.exs's {:shared, self()} pattern) initially introduced a NEW bug, caught by my own multi-run verification per the task's instructions: {:shared, self()} mode ties connection ownership to the test process, and on_exit (running in a different process, ExUnit.OnExitHandler) force-switching the pool back to :auto to run its own DROP SCHEMA/DELETE cleanup raced against that ownership teardown, silently leaving orphaned req063-* tenant rows in public.tenants across suite runs -- confirmed empirically via direct Postgres inspection (69 leftover rows found after 2 full-suite runs) and reproduced as a real, visible test failure (tenants_slug_index collision) on a 3rd run. Root-caused and fixed by switching all four files from {:shared, self()} to plain :manual mode + a bare checkout, checked back in via an explicit Sandbox.checkin/1 registered in on_exit/1 (same process checks in that checked out -- no cross-process race). Also had to split user_test.exs's fixture helper into provision_tenant_schema!/0 and point_search_path_at!/1 and restructure its 'two different tenant schemas' test, because that test's second provisioning call was discarding the first call's sandboxed transaction (and thus its insert) under the original single-helper design -- now provisions both schemas up front under :auto mode (real committed rows, explicit on_exit DELETE cleanup) rather than interleaving provisioning with a sandboxed transaction, mirroring identity_test.exs's own established pattern for its equivalent two-schema test. Verified via 4 full-suite runs (770/770, 770/770, 769/770 with one failure entirely unrelated to this fix, 770/770) plus 8 additional isolated runs of the four fixed files (24/24 every time) and repeated direct Postgres row-count checks confirming zero leftover req063-* tenant rows after every run. The one run-3 failure (Letflow.Plugs.TenantStatusTest, a Process.monitor/assert_receive timing race) is in a file this rework never touched, pre-existing (its own prior fix references ISS-0031/GH#90 for a related flake), and reproduced as 5/5 stable passes in isolation -- confirmed unrelated to the search_path/Sandbox fix.",
     "artifacts_out": [
       "test/letflow/identity_test.exs",
       "test/letflow/plugs/auth_pipeline_test.exs",
@@ -80,11 +80,11 @@
       "branch_name": "feature/WF02-REQ063-20260818",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF02-REQ063-20260818",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
   },
   "rework_count": 1,
   "max_rework": 3

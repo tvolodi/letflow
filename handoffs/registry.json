@@ -1008,17 +1008,17 @@
       "workflow_id": "WF-03",
       "requirement_ids": [],
       "stage": null,
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "owned_modules": ["lib/letflow/identity.ex", "test/letflow/identity_test.exs"],
       "lock_acquired_at": "2026-08-18T18:25:44Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 (git setup) COMPLETED -- branch feature/WF03-ISS0047-20260818 pushed.",
+      "lock_released_at": "2026-08-18T18:54:54Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (git merge) COMPLETED -- PR #179 squash-merged into main as 8cf1447a13937457c4a3ee70a2ecb5517971fa8e. Independently re-verified by ORCH: gh pr view 179 confirms state MERGED, mergedAt 2026-08-18T18:54:54Z, mergeCommit 8cf1447; origin/main's HEAD matches.",
       "backfilled": false,
       "queue_task_id": 111,
       "queue_agent_id": "hetzner-wt2-orch",
       "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
-      "note": "ISS-0047: Identity.insert_or_fetch/4's on_conflict target only covers (external_realm, external_id); a genuine two-independent-connection race on identical username can raise an Ecto.Changeset username-taken error instead of resolving via re-select-on-conflict. Pre-existing REQ-018 gap, surfaced by REQ-063's test fixture rewrite (needed :auto sandbox mode). github_issue #176."
+      "note": "ISS-0047: Identity.insert_or_fetch/4's on_conflict target only covers (external_realm, external_id); a genuine two-independent-connection race on identical username can raise an Ecto.Changeset username-taken error instead of resolving via re-select-on-conflict. Pre-existing REQ-018 gap, surfaced by REQ-063's test fixture rewrite (needed :auto sandbox mode). Fixed via a three-way branch (username_unique_conflict?/1, get_by_username/2, identity_matches?/2) in insert_or_fetch/4 falling through to re_select_on_conflict/3 only when the racing opponent's identity genuinely matches; genuine unrelated username collisions still error. Design gate 1 MINOR non-blocking note (rescue-framing prose). Security review PASS (INV-1 tenant-scoping verified, no identity-confusion/account-takeover vector). Reviewer PASS. New :auto-mode two-independent-connection regression test added (10-iteration loop) with an independently-reproduced fail-then-pass proof. Full suite 773 tests/0 failures. Along the way, TEST-RUNNER hit and fixed (Unblock-Everything) an unrelated pre-existing SystemLimitError in promotion_review_store_test.exs already fixed on main by ISS-0049/d2be124 -- reconciled as a no-op during Step Final's rebase. ISS-0047 closed (status: resolved), GH#176 closed. queue task 111 released done."
     }
   ]
 }

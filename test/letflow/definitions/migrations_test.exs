@@ -293,7 +293,6 @@ defmodule Letflow.Definitions.MigrationsTest do
         # The table exists under the tenant's own schema.
         assert table_exists_in_schema?(schema_name, table),
                "#{table} is missing from tenant schema #{schema_name}"
-
       end
 
       # REQ-022's own observable that the replay ran to completion rather than partially.

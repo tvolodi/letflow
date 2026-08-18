@@ -1,0 +1,55 @@
+{
+  "handoff_id": "d1a4f7c6-8b5e-4d9f-c3a6-9b4d5f7c8e22",
+  "run_id": "WF03-ISS0029-20260818",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0029-20260818/step-04b-test-design-validator.json",
+  "created_at": "2026-08-18T01:46:00Z",
+  "started_at": "2026-08-18T01:46:00Z",
+  "completed_at": "2026-08-18T01:48:23Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "related_handoff_ids": ["c9f2e5b3-6a4d-4c8e-b2f5-7a3c8e1f4b11"],
+    "artifacts_in": [
+      "test/specs/REQ-027.md",
+      "lib/letflow/design/iss-0029-req027-migrations-test-fix.md"
+    ],
+    "owned_modules": [
+      "test/letflow/definitions/migrations_test.exs",
+      "test/specs/REQ-027.md"
+    ]
+  },
+  "task": {
+    "description": "Hard gate on TEST-DESIGNER's Step 4 output. TEST-DESIGNER claims to have reproduced a fail-then-pass proof (mutating priv/repo/migrations/20260816193001_create_process_definitions.exs's `if prefix() do` to `if true do`, showing test/letflow/event_store/migrations_test.exs's section-4 guard test fails naming CreateProcessDefinitions, then reverting and showing it passes) and documented it in test/specs/REQ-027.md's new Regression note. Do NOT trust the handoff's quoted output as sufficient -- re-run the mutation yourself, independently, and confirm the same fail/pass behavior with your own eyes. Also confirm: the migration file and migrations_test.exs are actually byte-identical to HEAD (no leftover mutation), the full suite is actually green right now on this branch, and the new Regression note in test/specs/REQ-027.md accurately describes what you just independently observed (not just what TEST-DESIGNER claimed).",
+    "acceptance_criteria": [
+      "Mutation independently re-applied and re-reverted by you, not just re-read from the handoff",
+      "Section-4 guard test independently confirmed to FAIL with the mutation in place, naming CreateProcessDefinitions",
+      "Section-4 guard test independently confirmed to PASS after revert",
+      "git diff empty on the migration file and migrations_test.exs after your own revert",
+      "Full suite (MIX_ENV=test mix test) independently confirmed green",
+      "test/specs/REQ-027.md's new Regression note checked for accuracy against what you observed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-derived, not trusted from the handoff. Read lib/letflow/design/iss-0029-req027-migrations-test-fix.md, test/specs/REQ-027.md, priv/repo/migrations/20260816193001_create_process_definitions.exs, test/letflow/definitions/migrations_test.exs and test/letflow/event_store/migrations_test.exs directly. Confirmed via my own `grep -n 'table_exists_in_schema?(\"public\"' test/letflow/definitions/migrations_test.exs` -- zero matches; the only remaining call is the positive-half assertion at line 294 against the tenant's own schema, and the test at line 285 is renamed to drop ', never in public' exactly as the design doc specifies. Baseline (tree clean, confirmed via `git diff --stat` empty): ran `MIX_ENV=test mix test test/letflow/event_store/migrations_test.exs:484` myself -> '13 tests, 0 failures, 12 excluded'. Applied the mutation myself with the Edit tool (`if prefix() do` -> `if true do` in priv/repo/migrations/20260816193001_create_process_definitions.exs's `def change do`), confirmed via `git diff` the one-line change, then re-ran the same test -> FAILED: '1) test §4 guard pattern -- every registered tenant-scoped migration is a real no-op without a prefix ... (Letflow.EventStore.MigrationsTest) test/letflow/event_store/migrations_test.exs:484 / a registered tenant-scoped migration created something in public when run with no :prefix -- §4's guard pattern is missing or broken in one of: [Letflow.Repo.Migrations.CreateEvents, Letflow.Repo.Migrations.CreateInstanceSequence, Letflow.Repo.Migrations.CreateInstanceProjections, Letflow.Repo.Migrations.CreateEventPayloadStore, Letflow.Repo.Migrations.CreateEventsArchive, Letflow.Repo.Migrations.CreateEventIdempotency, Letflow.Repo.Migrations.CreateEventTypeRegistry, Letflow.Repo.Migrations.CreateProcessDefinitions, Letflow.Repo.Migrations.CreateInstanceDefinitionSnapshots, Letflow.Repo.Migrations.CreatePromotionReviews] / 13 tests, 1 failure, 12 excluded'. CreateProcessDefinitions (REQ-027's own migration) is named, matching the design doc's and TEST-DESIGNER's claim. Reverted myself (`if true do` -> `if prefix() do`), confirmed `git diff priv/repo/migrations/20260816193001_create_process_definitions.exs` empty (exit 0, no output) and `git status --short` shows no tracked-file changes (only this new handoff file, untracked), re-ran the same test -> '13 tests, 0 failures, 12 excluded', pass restored. Ran the full suite myself with the tree clean: `MIX_ENV=test mix test` -> '4 properties, 653 tests, 0 failures'. Ran migrations_test.exs alone: '14 tests, 0 failures' (test count unchanged from pre-fix, matching TEST-DESIGNER's claim of one assertion removed, zero tests removed/added). Checked test/specs/REQ-027.md's 'Regression note' subsection (lines 142-187) line-by-line against my own independent output above: every quoted number (13 tests/1 failure/12 excluded on fail, 13 tests/0 failures/12 excluded on pass, 4 properties/653 tests/0 failures full suite, 14 tests/0 failures for migrations_test.exs alone) and the full CreateProcessDefinitions candidate list match my own reproduction verbatim -- the note is accurate, not just asserted. Also independently checked the broader TEST-DESIGN-VALIDATOR checklist: `grep -n 'tag :skip\\|TODO' test/letflow/definitions/migrations_test.exs test/letflow/definitions/schemas_test.exs test/specs/REQ-027.md` returns only the spec's own prose line stating none exist -- no actual skip tags or TODOs found. No hardcoded secrets/connection strings in either test file (Repo access goes through config/test.exs per the spec's own 'Determinism and isolation' section, independently spot-checked). Fixtures are per-test (own Tenant/schema/Registration row per the file's setup block read at lines ~260-277), no shared mutable state, no test-ordering dependency observed. All six acceptance criteria on this handoff are independently satisfied.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0029-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0029-20260818",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH routes to TEST-RUNNER for full suite run"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

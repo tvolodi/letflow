@@ -354,6 +354,88 @@ defmodule Letflow.IdentityTest do
     end
   end
 
+  describe "provision_oidc_user/4 — ISS-0047 regression: username-index race resolves cleanly" do
+    test "two genuinely independent connections racing an identical (realm, external_id, username) identity always resolve to {:ok, same id}, looped" do
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
+      config = jit_config()
+
+      # :auto mode (already set by provisioned_tenant!/0 above) gives each spawned
+      # Task its own genuinely independent, automatically-checked-out connection --
+      # unlike the acceptance-criterion-3 race test above, which deliberately
+      # switches to :manual mode + Sandbox.allow/3 so both Tasks share ONE
+      # connection/transaction (see that test's own inline comment). A single
+      # shared connection serializes the two INSERTs and never lets Postgres's
+      # own conflict-check ordering across the two DIFFERENT unique indexes
+      # (`(external_realm, external_id)` and `username`) vary -- which is exactly
+      # the gap ISS-0047 depends on. Two real, independent connections are
+      # required to exercise it at all -- see
+      # lib/letflow/design/iss-0047-username-race-conflict-target.md §5.
+      #
+      # ISSUE-FIXER's own repro only reproduced the pre-fix bug 4/6 runs
+      # (nondeterministic, depends on which unique index Postgres's constraint
+      # checker happens to evaluate first for the losing insert) -- looping 10
+      # independent race attempts, each with a fresh identity so no attempt's
+      # result can be masked by a prior attempt's already-committed row, gives
+      # strong confidence this is a reliable proof rather than a flaky one-shot.
+      for attempt <- 1..10 do
+        ctx = identity_context()
+        parent = self()
+
+        run_task = fn ->
+          # Barrier: both tasks announce readiness, then wait for the parent's
+          # go-ahead, so both reach provision_oidc_user/4's own select-first step
+          # at effectively the same time and genuinely race into the INSERT
+          # together, rather than being serialized by Task.async/1's own
+          # scheduling. Same pattern as the acceptance-criterion-3 race test
+          # above (lines 284-301), reused per design §5's guidance.
+          send(parent, {:ready, attempt, self()})
+
+          receive do
+            :go -> :ok
+          after
+            5000 -> flunk("attempt #{attempt}: barrier release never arrived")
+          end
+
+          Identity.provision_oidc_user(ctx, tenant.id, config, prefix: schema_name)
+        end
+
+        task1 = Task.async(run_task)
+        task2 = Task.async(run_task)
+
+        assert_receive {:ready, ^attempt, pid1}, 5000
+        assert_receive {:ready, ^attempt, pid2}, 5000
+        assert pid1 != pid2
+
+        send(pid1, :go)
+        send(pid2, :go)
+
+        result1 = Task.await(task1, 5000)
+        result2 = Task.await(task2, 5000)
+
+        # The ISS-0047 bug surfaced as {:error, %Ecto.Changeset{}} for the losing
+        # racer here (a username-uniqueness violation treated as permanent
+        # instead of being recognized as this call's own race opponent) --
+        # asserting {:ok, ...} for BOTH results is this regression test's core
+        # proof.
+        assert {:ok, %{user: %User{id: id1}, created: created1}} = result1
+        assert {:ok, %{user: %User{id: id2}, created: created2}} = result2
+
+        assert id1 == id2,
+               "attempt #{attempt}: both racers must resolve to the same user id, got #{inspect(result1)} / #{inspect(result2)}"
+
+        assert [created1, created2] |> Enum.count(& &1) == 1,
+               "attempt #{attempt}: exactly one of the two calls should have inserted"
+
+        rows =
+          User
+          |> where(external_realm: ^ctx.realm, external_id: ^ctx.external_user_id)
+          |> Repo.all(prefix: schema_name)
+
+        assert length(rows) == 1, "attempt #{attempt}: exactly one row should exist afterward"
+      end
+    end
+  end
+
   describe "provision_oidc_user/4 — jit_config.enabled == false (design-flagged, not a numbered AC)" do
     test "jit_config.enabled == false returns {:error, :jit_disabled} without writing to the database" do
       %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()

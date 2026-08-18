@@ -4215,3 +4215,14 @@ history:
       precedent holds for this two-part requirement pair too, so left
       alone. No docs/migration/stage-3-*.md file exists to check.
       Flipped docs/requirements.yaml REQ-064 status to done.
+  - req: REQ-050
+    event: started
+    agent: ORCH
+    at: "2026-08-18T18:29:11Z"
+    note: >
+      Claimed via letflow-queue get_next_task (agent_id hetzner-orch, queue
+      task id 94). WF02-REQ050-20260818 started, branch
+      feature/WF02-REQ050-20260818 pushed (Step 00 PASS). Ports
+      transition.zig's EXCLUSIVE_GATEWAY branch (EE-05) plus a minimal
+      CEL-subset expression evaluator into REQ-044's transition dispatch.
+      depends_on REQ-044 (done).

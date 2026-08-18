@@ -1,0 +1,53 @@
+{
+  "handoff_id": "6e3a4b5c-0d7f-4bae-c3b2-8f9e0d1c2a3b",
+  "run_id": "WF02-REQ051-20260818",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ051-20260818/step-02a-elixir-dev.json",
+  "created_at": "2026-08-18T19:40:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-051"],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ051-20260818/step-01-code-designer.json",
+      "handoffs/WF02-REQ051-20260818/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req051-parallel-gateway-split-join.md",
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/engine/instance_state.ex",
+      "lib/letflow/engine/token.ex",
+      "lib/letflow/design/req049-variable-merge.md"
+    ],
+    "owned_modules": ["lib/letflow/engine"]
+  },
+  "task": {
+    "description": "Implement the validated design at lib/letflow/design/req051-parallel-gateway-split-join.md (design gate PASSed, see handoffs/WF02-REQ051-20260818/step-01b-code-design-validator.json). Implements PARALLEL_GATEWAY split and join in lib/letflow/engine/transition.ex per the design's exact function/module specification: new Letflow.Engine.JoinCounter struct, InstanceState.join_counters field, deterministic branch_id/token_id derivation for split, {:cancel_branch, branch_id} event handling, join_outcome/1 pure helper implementing the :wait|:fire|:cancel_join set-algebra, and reuse of Letflow.Engine.VariableMerge.merge/3 (REQ-049) at join-fire time. Stay within Transition's pure, no-I/O contract -- no Ecto/Repo/Letflow.Repo anywhere in this diff. Follow the design doc's exact shape; do not deviate without flagging why. Implement in lib/ only -- do not write tests yourself (TEST-DESIGNER's job at Step 3).",
+    "acceptance_criteria": [
+      "PARALLEL_GATEWAY split with N outgoing edges produces exactly N tokens with distinct branch_ids in one dispatch call, per the design's deterministic derivation scheme.",
+      "JoinCounter (received_from_branches/expected_from_branches/cancelled_branches) implemented as pure InstanceState.join_counters data -- no process/GenServer.",
+      "join_outcome/1 implements :wait|:fire|:cancel_join correctly for: all-received (fire), all-cancelled-zero-received (cancel_join -> instance :cancelled), mixed active+cancelled (fire once remaining active arrive), any arrival order (still exactly-once, cohort removed on resolution).",
+      "{:cancel_branch, branch_id} handling is entirely self-contained in this module -- no dependency on any REQ-052 module (which doesn't exist yet).",
+      "Variable merge at join-fire reuses Letflow.Engine.VariableMerge.merge/3 (REQ-049) -- no second collision rule defined.",
+      "mix compile --warnings-as-errors passes.",
+      "Existing engine test suite (MIX_TEST_PARTITION=2 mix test test/letflow/engine/) still passes unchanged."
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ051-20260818",
+      "commit_sha_list": []
+    }
+  }
+}

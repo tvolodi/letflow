@@ -1,0 +1,49 @@
+{
+  "handoff_id": "d5c3f6a9-1b4e-4f8c-ad3f-3e4f5a6b7c8d",
+  "run_id": "WF03-ISS0047-20260818",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0047-20260818/step-03-elixir-dev.json",
+  "created_at": "2026-08-18T18:52:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0047-20260818/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0047-20260818/step-02-code-designer.json",
+      "handoffs/WF03-ISS0047-20260818/step-02b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss-0047-username-race-conflict-target.md",
+      "lib/letflow/identity.ex"
+    ],
+    "owned_modules": ["lib/letflow/identity.ex"]
+  },
+  "task": {
+    "description": "Implement the validated design at lib/letflow/design/iss-0047-username-race-conflict-target.md (design gate PASSed, see handoffs/WF03-ISS0047-20260818/step-02b-code-design-validator.json). Fixes ISS-0047 in lib/letflow/identity.ex's insert_or_fetch/4: replace the {:error, %Ecto.Changeset{}} passthrough with the three-way branch specified in the design (username_unique_conflict?/1, get_by_username/2, identity_matches?/2 helpers), falling through to the existing unmodified re_select_on_conflict/3 when the losing racer's identity matches, otherwise propagating the original error unchanged. Follow the design doc's exact function/line-level specification -- do not deviate from its logic shape without flagging why. Implement in lib/ only; do NOT write the new :auto-mode regression test yourself (that's TEST-DESIGNER's job at Step 4) -- but you may sanity-check your own implementation against a throwaway scratch script if useful, per core-directives.md's No Speculation rule, then delete the scratch script.",
+    "acceptance_criteria": [
+      "insert_or_fetch/4 implements the three-way branch exactly as designed: identical-identity race resolves via re_select_on_conflict/3; genuine unrelated username collision still propagates {:error, changeset}.",
+      "New helpers (username_unique_conflict?/1, get_by_username/2, identity_matches?/2 or equivalently named per the design) added with @spec, matching the module's existing typespec/documentation conventions.",
+      "mix compile --warnings-as-errors passes.",
+      "Existing test/letflow/identity_test.exs suite (MIX_TEST_PARTITION=2 mix test test/letflow/identity_test.exs) passes unchanged -- especially the genuine-collision test at lines 379-394 and the existing REQ-018 race test.",
+      "No changes to upsert_by_external_identity/4's or re_select_on_conflict/3's existing logic (design specifies they stay untouched)."
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0047-20260818",
+      "commit_sha_list": []
+    }
+  }
+}

@@ -3961,3 +3961,39 @@ history:
       requirement to enter implementation. Step 00 (git setup, worktree
       variant) PASS: feature/WF02-REQ044-20260818 branched from
       origin/main (43e009e), pushed.
+  - req: REQ-044
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-18T06:46:26Z"
+    note: >
+      WF02-REQ044-20260818 complete, RELEASE-VALIDATOR PASSed
+      (handoffs/WF02-REQ044-20260818/step-05-release-validator.json):
+      pure transition kernel core types and dispatch skeleton shipped
+      (transition.zig, EE-02) -- InstanceState, Token, TransitionEvent/
+      PendingEvent, and transition/3 itself, reusing REQ-028's
+      DefinitionGraph/GraphNode/GraphEdge/NodeType structs from
+      lib/letflow/definitions/graph.ex rather than a second copy, plus
+      the non-gateway node transitions (HUMAN_TASK -> pending_task_nodes,
+      END -> instance moves toward COMPLETED). All gates PASS:
+      CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER (out of scope -- no
+      tenant-data path touched, this is a pure in-memory module),
+      REVIEWER, TEST-DESIGN-VALIDATOR (with mutation testing),
+      TEST-RUNNER (5 properties/688 tests/0 failures), RELEASE-VALIDATOR
+      (independently re-verified, 5 properties/688 tests/0 failures).
+      Flipped docs/requirements.yaml REQ-044 status: in_progress -> done.
+      This is Stage 3's first requirement to reach done -- the other 19
+      (REQ-043, REQ-045 through REQ-062) remain pending.
+      docs/migration/stage-3-instance-engine.md's header updated from
+      "Status: expanded, not started. ... Requirements: REQ-043 ...
+      REQ-062 (20 total) all pending." to "Status: in progress. ...
+      Requirements: REQ-044 done (...); REQ-043, REQ-045 ... REQ-062
+      (19 total) pending." -- both the stale "not started" claim and the
+      stale "none expanded yet"-class framing corrected to match reality
+      (the 20 requirements were expanded in a prior WF-01 run; REQ-044 is
+      the first actually implemented). README.md checked directly (not
+      assumed): read "What's here today" and "Running it" in full --
+      REQ-044 is a purely internal pure-function module (zero Repo/HTTP/
+      clock calls, per its own acceptance criteria) with no new HTTP
+      route and no change to the documented curl/mix flow or the ASCII
+      state diagram -- left untouched, consistent with REQ-028/REQ-029's
+      own DOC-UPDATER precedent for similarly internal-only requirements.

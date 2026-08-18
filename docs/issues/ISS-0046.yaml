@@ -1,0 +1,65 @@
+id: ISS-0046
+title: "mix compile --warnings-as-errors fails on lib/letflow/engine/transition.ex -- struct-update type-inference gap in dispatch_start/4, dispatch_end/3, dispatch_human_task/3"
+discovered_by: ORCH
+discovered_in_run: WF02-REQ043-20260818 (Step Final, resuming an interrupted prior session)
+discovered_at: "2026-08-18T08:20:06Z"
+severity: MAJOR
+tags:
+  - compile-warning
+  - type-checking
+  - blocks-ci-gate
+description: >
+  Discovered while resuming REQ-043's WF-02 run at Step Final (git merge) after an
+  interrupted prior session left the local feature branch mid-rebase against main.
+  Not caused by REQ-043's own diff -- lib/letflow/engine/transition.ex belongs to
+  REQ-044 (merged to main at ca59c75) and REQ-049; REQ-043 only added
+  lib/letflow/engine/task.ex, lib/letflow/engine/token_record.ex, three migrations,
+  and InstanceProjection field additions. Forwarded per
+  docs/agents/protocols/ISSUE_QUEUE.md rather than fixed inside this run.
+
+  `mix compile --warnings-as-errors` (Elixir 1.20.3 / OTP 29) fails with three type
+  warnings, all "a struct for Letflow.Engine.InstanceState is expected on struct
+  update ... but got type: dynamic(...)", all instructing "you must also pattern
+  match on %Letflow.Engine.InstanceState{}":
+
+    - lib/letflow/engine/transition.ex:220 (dispatch_start/4) -- struct update on
+      `instance_state` at `%InstanceState{instance_state | tokens: new_tokens}`
+    - lib/letflow/engine/transition.ex:235 (dispatch_end/3) -- struct update at
+      `%InstanceState{instance_state | tokens: remaining_tokens, status: new_status}`
+    - lib/letflow/engine/transition.ex:246 (dispatch_human_task/3) -- struct update
+      at `%InstanceState{instance_state | pending_task_nodes: new_pending}`
+
+  Root cause, read directly from the source (not assumed): `dispatch_node/4`
+  (transition.ex:154-197) dispatches on `node.node_type` across six clauses. Every
+  clause's `instance_state` parameter is left as a bare variable, never
+  destructured against `%InstanceState{}` -- including the catch-all clause at
+  line 190-196, which pattern-matches only `%Node{node_type: node_type, id:
+  node_id}` and leaves `_instance_state`/`_token` as untyped wildcards. Elixir
+  1.20's set-theoretic type checker cannot narrow `instance_state`'s type to the
+  `InstanceState` struct through that dispatch without an explicit struct pattern
+  match somewhere in the call chain, so every downstream struct-update syntax
+  (`%InstanceState{instance_state | ...}`) in the three affected private functions
+  degrades to a warning rather than a confirmed-safe update.
+
+  Whether this is new in Elixir 1.20 specifically (vs. already present under
+  whatever toolchain version REQ-044/049 were originally verified against) is
+  UNCONFIRMED -- this environment only has 1.20.3 available to check against; no
+  older Elixir install was reachable to compare. ISS-0044's own diagnosis
+  (WF03-ISS0044-20260818) independently verified `mix compile --warnings-as-errors
+  --force` exiting 0 on its branch at the time, which is inconsistent with this
+  finding unless the toolchain changed between then and now, or ISS-0044's check
+  ran before REQ-049's dispatch_human_task/3 (pending_task_nodes) landed. Flagging
+  the discrepancy explicitly rather than assuming either explanation.
+
+  Not diagnosed further (root-cause-only per this being a same-session forward,
+  not a WF-03 ISSUE-FIXER dispatch) -- likely fix shape, for whoever picks this up:
+  either give dispatch_node/4's clauses (or its catch-all specifically) a leading
+  `%InstanceState{} = instance_state` pattern, or restructure the three affected
+  private functions to destructure `instance_state`'s needed fields at the call
+  boundary rather than relying on struct-update syntax against a
+  type-checker-opaque variable. REVIEWER should confirm which approach matches
+  this module's own established idiom (design doc
+  lib/letflow/design/req044-transition-kernel.md) before either is applied.
+affected_files:
+  - lib/letflow/engine/transition.ex
+status: open

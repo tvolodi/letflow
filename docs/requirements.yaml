@@ -3402,3 +3402,140 @@ requirements:
       - "child instance creation is not reachable through REQ-045's public create/1 path, matching R-Co's internal-only createWithParentInheritance shape, confirmed by inspection and stated in the moduledoc"
       - "cancelling a parent instance does not cancel its running child, matching R-Co's documented EE-08 behaviour, demonstrated by an explicit test rather than assumed"
     depends_on: [REQ-061, REQ-049, REQ-032]
+
+  - id: REQ-063
+    title: Move users/groups/tenant_role behind :prefix (identity tables schema-per-tenant)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Execute Decision 0006's D1
+      (docs/migration/decisions/0006-identity-tables-schema-per-tenant.md):
+      relocate REQ-015's users, groups and tenant_role tables out of the public
+      default schema and into each tenant's own Postgres schema, via the same
+      :prefix mechanism and the same TenantProvisioning.tenant_scoped_migrations/0
+      registry every business table already uses. This resolves the open question
+      lib/letflow/design/req022-tenant-schema-provisioning.md section 7 has held
+      open since REQ-022, and which identity-schema.md section 1 originally
+      deferred.
+      READ FIRST, IN FULL, BEFORE ANY CODE: decision 0006 (all of it, but
+      section 3 especially), decision 0003 Dimension B plus its 2026-08-17
+      Addendum, and req022-tenant-schema-provisioning.md sections 3.4/4/7.
+      Section 4 of REQ-022's design is mandatory reading -- every migration this
+      requirement writes MUST carry its prefix()-truthiness guard, or a plain
+      mix ecto.migrate silently creates stray public-schema tables.
+      THE SECURITY-SENSITIVE CORE is decision 0006 section 3: moving users
+      per-schema changes the meaning of TWO shipped unique indexes.
+      unique_index(:users, [:username]) becomes per-tenant rather than global
+      (deliberate -- globally-unique usernames across tenants is a
+      multi-tenancy defect, see 0006 section 3.1). The partial index
+      users_external_identity_partial_index on (external_realm, external_id)
+      likewise becomes per-tenant; 0006 section 3.2 argues the global
+      one-OIDC-identity-per-user guarantee is RELOCATED to
+      tenants_idp_realm_id_partial_index rather than lost, because a realm binds
+      to exactly one tenant immutably. That argument must be independently
+      re-derived by SECURITY-REVIEWER, not accepted on this requirement's say-so.
+      Also record in the users migration header the pre-existing divergence 0006
+      section 3.2 documents: 0003 line 132 and identity.ex:41 both describe the
+      JIT upsert key as (tenant_id, external_realm, external_id) while the
+      shipped index omits tenant_id -- this requirement closes that divergence
+      rather than introducing a weakening.
+      ORDERING IS NOT OPTIONAL (0006 section 4): register the three tables in
+      tenant_scoped_migrations/0 with the section-4 guard; replay migrations
+      across every registered tenant schema; copy each public row into the
+      schema its tenant_id names (the last legitimate read of that column);
+      drop the three public tables as a separate guarded step following
+      GBL-112's precedent. Dropping tenant_id from users/groups is NOT this
+      requirement -- it is REQ-064, and it must come after this one.
+      tenant_role needs no constraint redesign: its own migration header
+      (20260816000003) already anticipates this exact move and states its name
+      index becomes unique-per-tenant-schema automatically.
+      SCOPE BOUNDARY: this requirement does not touch AuthPipeline's step
+      ordering -- 0006 section R5 verifies the existing realm -> tenant -> user
+      order already resolves the tenant before any users query, so no pipeline
+      rework is needed. It does not build 0006's D4 cross-tenant reporting
+      mechanism. It does not drop any tenant_id column.
+    acceptance_criteria:
+      - "users, groups and tenant_role each exist inside at least two distinct provisioned tenant schemas, confirmed by querying information_schema.tables scoped to each schema name, and the same query returns false for the public schema after the cutover step"
+      - "each of the three migrations carries REQ-022 section 4's prefix()-truthiness guard, demonstrated by running a plain mix ecto.migrate against a clean database and confirming ZERO of the three tables appears in the public schema"
+      - "two users with the same username can be created in two different tenant schemas without a constraint violation, and a duplicate username within a single tenant schema still raises one -- both demonstrated by explicit tests"
+      - "the same (external_realm, external_id) pair cannot be bound to two tenants, demonstrated by a test that attempts to bind one realm to a second tenant and is rejected by tenants_idp_realm_id_partial_index"
+      - "existing public-schema rows are copied into the correct per-tenant schema before the public tables are dropped, verified by row-count equality per tenant plus a spot-check that a specific known user landed in the schema its tenant_id named"
+      - "AuthPipeline's full flow (token -> realm -> tenant -> per-schema user lookup/JIT provisioning) passes end to end against a per-tenant users table, demonstrated by an existing-or-new test exercising the plug, not by inspection"
+      - "mix test is green with no skipped or excluded identity tests, and the actual output is quoted in the completion report"
+    depends_on: []
+
+  - id: REQ-064
+    title: Drop tenant_id from schema-isolated tables (Decision 0006 D2)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Execute Decision 0006's D2
+      (docs/migration/decisions/0006-identity-tables-schema-per-tenant.md):
+      drop the tenant_id column from every table whose isolation boundary is the
+      Postgres schema itself, and remove the write-path machinery that populates
+      it. MUST run after REQ-063 -- users and groups are only eligible for the
+      drop once they are per-schema tables.
+      READ FIRST: decision 0006 in full (sections R1-R3 for why the column goes,
+      section 5 for the consumer inventory, section 6 for exactly what of
+      decision 0003 this supersedes and what it deliberately leaves standing).
+      Decision 0003's Dimension B and its Addendum are the records being
+      partially superseded -- read both so the moduledoc/migration comments this
+      requirement writes describe the new state accurately rather than
+      contradicting a record that still stands in part.
+      TABLES LOSING THE COLUMN (ten): events, events_archive,
+      instance_projections, process_definitions, tokens, tasks,
+      promotion_reviews, promotion_assertion_runs (all already schema-isolated),
+      plus users and groups (schema-isolated by REQ-063).
+      TABLES THAT KEEP IT -- DO NOT TOUCH (decision 0006 D3): tenant_schemas,
+      solution_pack_installs, solution_pack_artefact_bases,
+      pack_update_resolutions. On these four, tenant_id is a real
+      references(:tenants) foreign key on a structurally-global public-schema
+      table and is the only scoping the row has. Dropping it there would be a
+      data-model break, not a cleanup. tenant_role never had the column.
+      TWO COMPOSITE INDEXES SIMPLIFY, and the second carries a contract:
+      promotion_reviews' unique_index([:tenant_id, :plan_digest]) becomes
+      unique_index([:plan_digest]), and promotion_assertion_runs'
+      unique_index([:tenant_id, :idempotency_key]) becomes
+      unique_index([:idempotency_key]). Both are semantically identical inside a
+      per-tenant schema (a leading tenant_id has at most one distinct value
+      there -- the shipped migration headers for events_archive and
+      process_definitions say so themselves). The assertion-runs one backs an
+      idempotency contract consumed via Repo.insert(on_conflict: :nothing,
+      conflict_target: ...) -- restate that contract in the new migration's
+      header and update every conflict_target that names tenant_id.
+      CODE CONSUMERS (decision 0006 section 5, verified inventory): roughly 13
+      TenantProvisioning.tenant_id_for_schema_name/1 call sites exist purely to
+      stamp the column -- 8 in lib/letflow/definitions.ex, 4 in
+      lib/letflow/event_store.ex, 1 in
+      lib/letflow/definitions/promotion_review_store.ex. Sites that bind
+      {:ok, _tenant_id} and discard it are validating the prefix string's shape,
+      not stamping; decide per-site whether that validation is still wanted (a
+      valid_prefix?/1-style guard) or removable, and say which in the moduledoc.
+      DO NOT DELETE tenant_id_for_schema_name/1 itself -- REQ-063's data copy
+      needs it and decision 0006 D4's future reporting mechanism may. Only its
+      stamping call sites go.
+      Ten schema modules drop field(:tenant_id, Ecto.UUID) and its
+      cast/validate_required entries: Engine.Task, Engine.Token,
+      EventStore.Event, EventStore.ArchivedEvent, EventStore.InstanceProjection,
+      Definitions.ProcessDefinition, Definitions.PromotionReview,
+      Definitions.PromotionAssertionRun, Identity.User, Identity.Group.
+      Moduledoc blocks in Engine.Task and Engine.Token ("tenant_id is never
+      caller-supplied") and Identity.User ("intra-schema column per Decision B")
+      document a column that will no longer exist and must be removed with it,
+      not left describing a field that is gone.
+      SCOPE BOUNDARY: does not build decision 0006 D4's cross-tenant reporting
+      mechanism (no consumer exists; a future requirement owns it). Does not
+      revisit Decision B's schema-per-tenant isolation choice, which 0006
+      section 6 explicitly leaves standing. Does not add a session-GUC tenant
+      context.
+    acceptance_criteria:
+      - "none of the ten named tables has a tenant_id column, confirmed by querying information_schema.columns scoped to a provisioned tenant schema rather than by inspection"
+      - "all four D3 tables (tenant_schemas, solution_pack_installs, solution_pack_artefact_bases, pack_update_resolutions) still have tenant_id WITH its references(:tenants) foreign key intact, confirmed by the same information_schema query plus a test that a bad tenant_id is still rejected by the FK"
+      - "the promotion_assertion_runs idempotency contract still holds with the simplified single-column index: inserting the same idempotency_key twice within one tenant schema yields one row, and the same key in a different tenant schema yields a separate row -- both demonstrated by explicit tests"
+      - "the promotion_reviews plan_digest uniqueness still holds per-tenant under the simplified index, demonstrated the same way"
+      - "no lib/ module references a tenant_id field on any of the ten tables, confirmed by grep, and TenantProvisioning.tenant_id_for_schema_name/1 itself still exists and is still tested"
+      - "every moduledoc that described tenant_id on a dropped-from table has been updated rather than left describing a nonexistent field, confirmed by grep for the phrase 'never caller-supplied' and 'intra-schema column'"
+      - "mix test is green with no skipped or excluded tests, and the actual output is quoted in the completion report"
+    depends_on: [REQ-063]

@@ -1,0 +1,51 @@
+{
+  "handoff_id": "b3a1d4e7-9f2c-4d6a-8b1e-1c2d3e4f5a6b",
+  "run_id": "WF03-ISS0047-20260818",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0047-20260818/step-02-code-designer.json",
+  "created_at": "2026-08-18T18:36:00Z",
+  "started_at": "2026-08-18T18:31:54Z",
+  "completed_at": "2026-08-18T18:31:54Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0047-20260818/step-01-issue-fixer.json"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0047-20260818/step-01-issue-fixer.json",
+      "docs/issues/ISS-0047.yaml",
+      "lib/letflow/identity.ex",
+      "test/letflow/identity_test.exs"
+    ],
+    "owned_modules": ["lib/letflow/identity.ex", "test/letflow/identity_test.exs"]
+  },
+  "task": {
+    "description": "Design a fix for ISS-0047 based on ISSUE-FIXER's diagnosis in handoffs/WF03-ISS0047-20260818/step-01-issue-fixer.json's result.summary (read it in full). Root cause: lib/letflow/identity.ex's insert_or_fetch/4 (lines 174-219) uses Repo.insert(changeset, on_conflict: :nothing, conflict_target: {:unsafe_fragment, \"(external_realm, external_id) WHERE external_id IS NOT NULL\"}, ...) which only arbitrates conflicts on the (external_realm, external_id) partial index, not the separate unique_index(:users, [:username]). A genuine two-independent-connection race on identical (external_realm, external_id) AND identical username can have the losing insert raise {:error, %Ecto.Changeset{}} with a username-taken error at line 216-217, instead of falling through to re_select_on_conflict/3 like the covered-index case does.\n\nDesign a fix that: distinguishes 'opponent raced us with the IDENTICAL identity+username' (must resolve via re_select_on_conflict/3 to {:ok, created: false}) from 'genuine unrelated username collision' (a different external identity picked a username already taken by someone else — must keep propagating {:error, %Ecto.Changeset{}}, per the existing passing test at test/letflow/identity_test.exs lines 379-394, which this fix must not break). ISSUE-FIXER's suggested fix shapes (evaluate and pick/adapt one, or propose a better one): (a) a second chained on_conflict/conflict_target covering username via a raw ON CONFLICT ON CONSTRAINT/expression, or (b) catching the specific username-constraint Ecto.Changeset error in insert_or_fetch/4 and checking whether the existing row-with-that-username also matches this identity_context's (external_realm, external_id) before falling through to re_select_on_conflict/3, else re-raising the original error for the genuine-collision case.\n\nDesign artifact goes in lib/letflow/design/ per this project's convention (see existing req018-jit-provisioning.md and req063-identity-tables-schema-per-tenant.md for the expected shape/depth). No implementation code — interfaces, @specs, and the exact conditional logic shape only.",
+    "acceptance_criteria": [
+      "Design document written to lib/letflow/design/ (issue-fix design, filename should reference iss0047 or similar, matching existing naming conventions in that directory).",
+      "Design explicitly covers both the race-resolves-cleanly case and the genuine-unrelated-collision case (must not weaken or break the existing test at identity_test.exs:379-394).",
+      "Design does not require Ecto.Multi or change the existing 'not a naive insert-then-rescue' constraint already documented in identity.ex's own moduleattribute comment above upsert_by_external_identity/4, unless it explicitly justifies why deviating is necessary.",
+      "Design specifies exactly which function(s)/lines in lib/letflow/identity.ex change and how, precisely enough for ELIXIR-DEV to implement without further judgment calls.",
+      "No implementation code in the design artifact — @specs/interfaces/logic description only.",
+      "next_action set to 'Route to CODE-DESIGN-VALIDATOR'."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/iss-0047-username-race-conflict-target.md. Fix mechanism: option (b) from ISSUE-FIXER's diagnosis, adapted -- a second on_conflict/raw ON CONFLICT ON CONSTRAINT clause (option (a)) is ruled out as structurally unavailable (Postgres INSERT ... ON CONFLICT accepts only one arbiter per statement). Instead, insert_or_fetch/4's existing {:error, %Ecto.Changeset{}} passthrough branch (identity.ex lines 216-217) is replaced with a three-way branch: a new username_unique_conflict?/1 helper inspects the returned changeset's errors for the :username field tagged constraint: :unique (not the message string); if present, a new get_by_username/2 helper (Repo.get_by keyed on username, same prefix:-scoping discipline as get_by_external_identity/3) re-queries the row that now holds that username, and a new identity_matches?/2 helper compares its (external_realm, external_id) against this call's own identity_context -- a match means the opponent racer had an IDENTICAL identity, so the design falls through to the existing, unchanged re_select_on_conflict/3 (resolving to {:ok, created: false}); a non-match (or a defensive nil) propagates the original {:error, changeset} unchanged, preserving identity_test.exs:379-394's genuine-collision contract. No Ecto.Multi, no rescue/try, and the design's own S2.1 argues explicitly why this is changeset-error pattern-matching on an already-typed return value rather than the forbidden naive insert-then-rescue pattern identity.ex's own module comment prohibits. Section 5 specifies a new :auto-mode (genuine two-connection) race test TEST-DESIGNER must add, since the existing :manual-mode race test structurally cannot exercise this path. Design worked through both the race case (S3.1) and the genuine-collision case (S3.2) against the exact pinned test. Acceptance-criteria traceability table in S7. next_action: Route to CODE-DESIGN-VALIDATOR.",
+    "artifacts_out": [
+      "lib/letflow/design/iss-0047-username-race-conflict-target.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0047-20260818",
+      "commit_sha_list": []
+    }
+  },
+  "next_action": "Route to CODE-DESIGN-VALIDATOR"
+}

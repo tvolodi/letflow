@@ -213,9 +213,51 @@ defmodule Letflow.Identity do
           re_select_on_conflict(tenant_id, identity_context, opts)
         end
 
-      {:error, %Ecto.Changeset{}} = error ->
-        error
+      {:error, %Ecto.Changeset{} = changeset} ->
+        if username_unique_conflict?(changeset) do
+          # Opponent may have raced us with the identical (external_realm,
+          # external_id, username) triple -- find out who actually holds
+          # that username now. Postgres's on_conflict: :nothing above only
+          # names the (external_realm, external_id) arbiter, so a losing
+          # racer can raise on the separate `username` unique index instead
+          # -- see lib/letflow/design/iss-0047-username-race-conflict-target.md.
+          case get_by_username(identity_context.preferred_username, opts) do
+            %User{} = holder ->
+              if identity_matches?(holder, identity_context) do
+                # Same identity as ours -> this is our own race opponent,
+                # already persisted. Resolve exactly like the
+                # already-working on_conflict path does.
+                re_select_on_conflict(tenant_id, identity_context, opts)
+              else
+                # A DIFFERENT identity already holds this username ->
+                # genuine, unrelated collision. Propagate the original
+                # changeset error unchanged.
+                {:error, changeset}
+              end
+
+            nil ->
+              # Should not happen (Repo.insert/2 just told us a username
+              # conflict occurred) but handled defensively rather than
+              # assumed unreachable, matching this module's existing
+              # defensive-fallback discipline. Propagate the original
+              # error -- do not fabricate a {:ok, _} result for a row this
+              # call cannot actually locate.
+              {:error, changeset}
+          end
+        else
+          # Not a username-constraint error at all -> unchanged existing
+          # behavior.
+          {:error, changeset}
+        end
     end
+  end
+
+  @spec username_unique_conflict?(changeset :: Ecto.Changeset.t()) :: boolean()
+  defp username_unique_conflict?(%Ecto.Changeset{errors: errors}) do
+    Enum.any?(errors, fn
+      {:username, {_message, keyword}} -> Keyword.get(keyword, :constraint) == :unique
+      _other -> false
+    end)
   end
 
   defp re_select_on_conflict(tenant_id, identity_context, opts) do
@@ -247,5 +289,22 @@ defmodule Letflow.Identity do
       ],
       prefix: prefix
     )
+  end
+
+  # Same tenant-scoping discipline as get_by_external_identity/3, keyed on
+  # `username` instead of `(external_realm, external_id)`. users.username's
+  # unique index is per-schema (Decision 0006/REQ-063), so this lookup is
+  # automatically tenant-scoped by virtue of targeting the same `prefix:`
+  # the failed insert itself used.
+  @spec get_by_username(username :: String.t(), opts :: opts()) :: User.t() | nil
+  defp get_by_username(username, opts) do
+    Repo.get_by(User, [username: username], prefix: Keyword.fetch!(opts, :prefix))
+  end
+
+  @spec identity_matches?(user :: User.t(), identity_context :: IdentityContext.t()) ::
+          boolean()
+  defp identity_matches?(%User{} = user, %IdentityContext{} = identity_context) do
+    user.external_realm == identity_context.realm and
+      user.external_id == identity_context.external_user_id
   end
 end

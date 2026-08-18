@@ -89,4 +89,6 @@ affected_files:
   - lib/letflow/identity.ex
   - test/letflow/identity_test.exs
 github_issue: https://github.com/tvolodi/letflow/issues/176
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0047-20260818
+resolved_at: "2026-08-18T18:51:32Z"

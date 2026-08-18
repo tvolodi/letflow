@@ -1,0 +1,54 @@
+{
+  "handoff_id": "08f6c9dc-4e7b-4cbf-d06c-6b7c8d9e0f1a",
+  "run_id": "WF03-ISS0047-20260818",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0047-20260818/step-04-test-designer.json",
+  "created_at": "2026-08-18T19:48:00Z",
+  "started_at": "2026-08-18T19:55:00Z",
+  "completed_at": "2026-08-18T20:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0047-20260818/step-02-code-designer.json",
+      "handoffs/WF03-ISS0047-20260818/step-03-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss-0047-username-race-conflict-target.md",
+      "lib/letflow/identity.ex",
+      "test/letflow/identity_test.exs"
+    ],
+    "owned_modules": ["test/letflow/identity_test.exs"]
+  },
+  "task": {
+    "description": "WF-03 Step 4: write the regression test for ISS-0047 per the validated design's §5 (lib/letflow/design/iss-0047-username-race-conflict-target.md) -- a NEW, additive test using :auto sandbox mode with two genuinely independent Postgres connections (not :manual + Sandbox.allow/3, which cannot exercise this path -- see the existing REQ-018 race test at test/letflow/identity_test.exs lines ~259-355 for what NOT to reuse for this new test's mechanism, though its barrier-sync pattern can be reused for coordinating the two tasks). The test must provision two identical (external_realm, external_id) + identical preferred_username identities concurrently from two real independent connections, and prove both resolve to {:ok, ...} for the SAME user id (i.e. the race resolves cleanly via ISS-0047's fix), not an {:error, %Ecto.Changeset{}}. ISSUE-FIXER's own repro only reproduced the bug 4/6 runs (nondeterministic) -- the design's §5 notes this; structure the test to loop multiple attempts within one test (see design doc for exact guidance) so it's a reliable proof, not a flaky one-shot.\n\nThis is a WF-03 regression test: per WF-03_issue_resolving.md's Step 2-4 addition, you must show the test FAILS against the pre-fix code and PASSES against the post-fix code. Pre-fix commit is the one immediately before 548c338 on this branch (check git log). State this fail-then-pass verification explicitly in your handoff result, with actual command output from both states.",
+    "acceptance_criteria": [
+      "New test added to test/letflow/identity_test.exs (or a new file if cleaner -- your judgment) using :auto sandbox mode with two real independent connections for the race itself.",
+      "Test loops enough race attempts to be a reliable proof given the 4/6 nondeterministic reproduction rate ISSUE-FIXER observed.",
+      "Test asserts both concurrent calls resolve to {:ok, ...} with the same underlying user id -- not an error.",
+      "Verified FAIL against pre-fix code (git stash or checkout the commit before 548c338), verified PASS against post-fix code -- both with actual quoted output.",
+      "Existing identity_test.exs suite (all other tests) still passes: MIX_TEST_PARTITION=2 mix test test/letflow/identity_test.exs.",
+      "Does not modify lib/letflow/identity.ex."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Added a new, additive describe block/test to test/letflow/identity_test.exs (\"provision_oidc_user/4 — ISS-0047 regression: username-index race resolves cleanly\", after the existing acceptance-criterion-3 race test, before the jit_config.enabled==false block). Test provisions one tenant schema, then loops 10 independent race attempts, each with a freshly-generated identity_context() (unique realm/external_id/username per attempt), racing two barrier-synchronized Task.async/1 calls to provision_oidc_user/4 under real :auto sandbox mode (two genuinely independent, automatically-checked-out Postgres connections -- provisioned_tenant!/0 already leaves the sandbox in :auto mode; this test deliberately does NOT switch to :manual+Sandbox.allow/3 the way the existing REQ-018 race test does, since that routes both Tasks through one shared connection and cannot expose this bug). Per attempt, asserts both results are {:ok, %{user: %User{id: _}, created: _}} (never {:error, %Ecto.Changeset{}}), same id on both, exactly one created: true, and exactly one row in the DB.\n\nFail-then-pass verification performed: found pre-fix commit 3d19e8c (immediately before 548c338 on this branch, confirmed by `git log --oneline -- lib/letflow/identity.ex`). Extracted `git show 3d19e8c:lib/letflow/identity.ex` to /tmp, diffed against HEAD's identity.ex to confirm the only difference is exactly the {:error, %Ecto.Changeset{}} branch + 3 new helper functions the design specifies (no unrelated drift). Temporarily copied the pre-fix content into lib/letflow/identity.ex, recompiled, and ran only the new test 3 times: `MIX_TEST_PARTITION=2 mix test test/letflow/identity_test.exs:357` -> `31 tests, 1 failure, 30 excluded` on all 3 runs, with failure output showing `match (=) failed ... left: {:ok, %{user: %Letflow.Identity.User{id: id2}, ...}} right: {:error, #Ecto.Changeset<... errors: [username: {\"has already been taken\", [constraint: :unique, constraint_name: \"users_username_index\"]}] ...>}` -- exactly the ISS-0047 failure mode (username-index loser surfaces a raw changeset error instead of resolving cleanly). Restored the post-fix identity.ex (git diff confirmed zero diff against committed HEAD), recompiled, and ran the full file 3 times: `MIX_TEST_PARTITION=2 mix test test/letflow/identity_test.exs` -> `31 tests, 0 failures` on all 3 runs, confirming both the new test and every pre-existing test (REQ-018, REQ-019, REQ-063, the untouched genuine-collision test at former lines 379-394) still pass. lib/letflow/identity.ex was never left modified (git status confirms only test/letflow/identity_test.exs changed plus the new test/specs/ISS-0047.md spec file). Wrote test/specs/ISS-0047.md documenting the criterion, the test case, why it exists (existing race test structurally cannot exercise this bug), and the full fail/pass verification transcript.",
+    "artifacts_out": [
+      "test/letflow/identity_test.exs",
+      "test/specs/ISS-0047.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0047-20260818",
+      "commit_sha_list": []
+    }
+  },
+  "next_action": "Route to TEST-DESIGN-VALIDATOR"
+}

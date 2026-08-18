@@ -1,0 +1,50 @@
+{
+  "handoff_id": "e6d4a7ba-2c5f-4a9d-be4a-4f5a6b7c8d9e",
+  "run_id": "WF03-ISS0047-20260818",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0047-20260818/step-03b-security-reviewer.json",
+  "created_at": "2026-08-18T18:58:00Z",
+  "started_at": "2026-08-18T19:05:00Z",
+  "completed_at": "2026-08-18T19:20:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0047-20260818/step-02-code-designer.json",
+      "handoffs/WF03-ISS0047-20260818/step-03-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss-0047-username-race-conflict-target.md",
+      "lib/letflow/identity.ex"
+    ],
+    "owned_modules": ["lib/letflow/identity.ex"]
+  },
+  "task": {
+    "description": "Security review of the ISS-0047 fix in lib/letflow/identity.ex (commit 548c338 on branch feature/WF03-ISS0047-20260818). This touches the tenant-scoped identity/JIT-provisioning path (insert_or_fetch/4 and new helpers username_unique_conflict?/1, get_by_username/2, identity_matches?/2). The new get_by_username/2 helper queries users by username within a caller-supplied :prefix (per-tenant Postgres schema, Decision 0006). Verify this does not introduce a cross-tenant leak, an identity-confusion vector, or an authentication bypass -- specifically: could identity_matches?/2's comparison ever incorrectly treat two DIFFERENT external identities as the same, letting an attacker-controlled JIT provisioning request resolve to (and thus authenticate as) another user's existing account? Check security-invariants.md's INV list for anything applicable to identity/auth paths.",
+    "acceptance_criteria": [
+      "get_by_username/2 is correctly scoped to the same :prefix (tenant schema) as the rest of insert_or_fetch/4 -- no cross-tenant query possible.",
+      "identity_matches?/2's comparison logic cannot be satisfied by two genuinely different external identities (verify the exact fields compared and their semantics).",
+      "The fix does not create a path where an unauthenticated or wrong caller can cause provision_oidc_user/4 to resolve to an existing, unrelated user's account (account-takeover-via-race check).",
+      "No new information disclosure (e.g. username existence across tenants) introduced.",
+      "Applicable security-invariants.md INV items checked explicitly, not assumed satisfied."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: this diff modifies lib/letflow/identity.ex's insert_or_fetch/4 (JIT user-provisioning upsert), a tenant-scoped identity path reading/writing the per-tenant-schema `users` table via get_by_username/2 and get_by_external_identity/3 -- in scope for INV-1. No migration, secret-resolution, response-shaping, or lookup-by-ID-handler code touched.\n\nINV-1 (tenant isolation) -- APPLIES, PASS. get_by_username/2 (identity.ex:299-302) issues `Repo.get_by(User, [username: username], prefix: Keyword.fetch!(opts, :prefix))`, threaded from the exact same `opts` insert_or_fetch/4 received and already used for the preceding Repo.insert/2 and Repo.get/2 calls in the same function (identity.ex:175, 193, 210) -- no alternate/caller-derived prefix path exists, no way for the new helper to target a different tenant schema than the rest of the call. `opts[:prefix]` has no default (per this module's own moduledoc) and its sole caller resolves it authoritatively via Letflow.TenantProvisioning.schema_name_for_tenant/1, not from client input. users.username's unique index is per-schema (Decision 0006/REQ-063), so the lookup is inherently single-tenant. (a)/(b)/(c) of INV-1's verify procedure: (a) confirmed -- prefix-scoped Repo call; (b) N/A, no migration in this diff; (c) N/A, users.tenant_id column was dropped per Decision 0006 D2, not reintroduced here.\n\nIdentity-confusion / cross-account-resolution check (adversarial, per handoff task): identity_matches?/2 (identity.ex:304-309) compares user.external_realm == identity_context.realm AND user.external_id == identity_context.external_user_id -- both fields of the (external_realm, external_id) tuple that is this module's actual, unforgeable identity key (verified against the users_external_identity_partial_index arbiter named in insert_or_fetch/4's own Repo.insert/2 call). Two genuinely different external identities cannot satisfy this predicate: by definition of 'different external identity' at least one of (realm, external_id) differs, and the comparison is a straight equality AND, not a partial/fuzzy match. Confirmed IdentityContext (lib/letflow/oidc/identity_context.ex) types external_user_id and realm as non-nil String.t() in its @type spec and defstruct, so the nil-vs-nil coincidence the design doc flags (an internal, non-OIDC user's null external_realm/external_id) cannot occur on the identity_context side -- an internal user's row can never satisfy identity_matches?/2 against a JIT-provisioning identity_context. Crucially, `preferred_username` (the field an IdP/attacker has the most influence over) is NOT part of this comparison -- get_by_username/2 uses it only to locate the row that raised the unique-constraint error; identity_matches?/2 then re-validates against realm+external_id before treating it as 'this caller's own race opponent'. An attacker cannot cause a JIT request to resolve to a different, unrelated user's account merely by choosing a colliding preferred_username: the fallthrough to re_select_on_conflict/3 (which returns the existing user) only fires when realm+external_id ALSO match, i.e. when it genuinely is the same identity's own already-persisted row from a real race, not a spoofed username collision. No account-takeover-via-race path found.\n\nInformation disclosure: get_by_username/2's result is only compared internally (identity_matches?/2) or used to select an existing row to return to the identity's own rightful caller (re_select_on_conflict/3, which re-queries by (external_realm, external_id) again rather than returning the get_by_username/2 row directly) -- no username-existence signal crosses a tenant boundary (single-prefix scoped) or reaches an unrelated caller (the {:error, changeset} branch propagates the pre-existing, unchanged 'username has already been taken' error, which already existed in the code before this fix for the genuine-collision case -- not a new disclosure).\n\nINV-2, INV-3, INV-5 -- NOT-APPLICABLE (S4/S5 not started; no API response-shaping or lookup-by-ID HTTP handler in this diff).\n\nINV-4 (secrets by reference only) -- NOT-APPLICABLE. No secret material, config, env var, or token resolution touched by this diff.\n\nINV-6 (new data-access paths prove their scoping) -- satisfied by this handoff itself (this document).\n\nINV-7 (no SQL string interpolation) -- APPLIES, PASS. `grep -rn \"Repo.query\" lib/letflow/identity.ex` returns no hits; both new helpers use Ecto.Repo.get_by/3 with keyword-list filters, fully parameterised, no raw SQL anywhere in the diff.\n\nINV-8 (no unhandled crashes on realistic failure paths) -- APPLIES, PASS. All three new helpers (username_unique_conflict?/1, get_by_username/2, identity_matches?/2) are pure/typed functions returning boolean or User.t() | nil, no new raise/rescue/bang-call introduced; every branch of the new three-way case in insert_or_fetch/4 terminates in {:ok, _} or {:error, _}, consistent with the module's existing discipline. The get_by_username/2 nil branch (should-not-happen per Repo.insert/2 having just reported the conflict) is handled defensively by propagating {:error, changeset} rather than crashing or fabricating a success.\n\nConclusion: no cross-tenant leak, no identity-confusion/account-takeover vector, no new information disclosure. All applicable invariants (INV-1, INV-4, INV-6, INV-7, INV-8) PASS; INV-2/3/5 correctly NOT-APPLICABLE at this stage.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0047-20260818/step-03b-security-reviewer.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0047-20260818",
+      "commit_sha_list": ["548c338", "3b4a562"]
+    }
+  }
+}

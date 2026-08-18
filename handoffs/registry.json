@@ -1002,6 +1002,23 @@
       "queue_agent_id": null,
       "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
       "note": "Executed decision 0006's D2 (docs/migration/decisions/0006-identity-tables-schema-per-tenant.md): dropped tenant_id from the ten schema-isolated business tables. Design gate PASSed clean (0 rework) -- correctly identified REQ-063's Engine.Token -> Engine.TokenRecord rename, a third unnamed users index, and two functionally-live definitions.ex call sites needing to stay unchanged. Security review (HIGH priority) traced 3 implementation fixes beyond the approved design's own scope (definitions.ex's two prefix-only queries, identity.ex's auth-path get_by_external_identity/3, promotion.ex's target_tenant_id source change) back to their origins, confirming none introduced cross-tenant risk -- one was confirmed mandatory (the old query would have raised Ecto.QueryError once the column was gone), not just a cleanup. Test-design gate required 1 rework round: a test restructure had silently dropped the only assertion covering TenantProvisioning.tenant_id_for_schema_name/1's own contract, caught because REQ-064's own acceptance criteria required that function stay tested -- fixed via a new direct unit test in tenant_provisioning_test.exs. Also found and fixed, along the way, a genuine production bug in lib/letflow/identity_migration.ex (a fragment/2 query lost its UUID type inference once the backing Ecto field was dropped, causing a real DBConnection.EncodeError) -- filed nowhere separately since it was fixed inline as a direct, mandatory consequence of this same diff. This is the second and final half of Decision 0006 -- together with REQ-063 (D1, PR #177), the identity-tables-schema-per-tenant migration is now fully executed; decision 0006's own Status line was updated during this run's release validation to reflect both halves shipped."
+    },
+    {
+      "run_id": "WF03-ISS0047-20260818",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "stage": null,
+      "status": "ACTIVE",
+      "owned_modules": ["lib/letflow/identity.ex", "test/letflow/identity_test.exs"],
+      "lock_acquired_at": "2026-08-18T18:25:44Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (git setup) COMPLETED -- branch feature/WF03-ISS0047-20260818 pushed.",
+      "backfilled": false,
+      "queue_task_id": 111,
+      "queue_agent_id": "hetzner-wt2-orch",
+      "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
+      "note": "ISS-0047: Identity.insert_or_fetch/4's on_conflict target only covers (external_realm, external_id); a genuine two-independent-connection race on identical username can raise an Ecto.Changeset username-taken error instead of resolving via re-select-on-conflict. Pre-existing REQ-018 gap, surfaced by REQ-063's test fixture rewrite (needed :auto sandbox mode). github_issue #176."
     }
   ]
 }

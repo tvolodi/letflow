@@ -1,0 +1,49 @@
+{
+  "handoff_id": "19a7dad3-5f8c-4dc0-e17d-7c8d9e0f1a2b",
+  "run_id": "WF03-ISS0047-20260818",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0047-20260818/step-04b-test-design-validator.json",
+  "created_at": "2026-08-18T20:25:00Z",
+  "started_at": "2026-08-18T20:40:00Z",
+  "completed_at": "2026-08-18T20:55:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0047-20260818/step-02-code-designer.json",
+      "handoffs/WF03-ISS0047-20260818/step-04-test-designer.json"
+    ],
+    "artifacts_in": [
+      "test/letflow/identity_test.exs",
+      "test/specs/ISS-0047.md",
+      "lib/letflow/design/iss-0047-username-race-conflict-target.md"
+    ],
+    "owned_modules": ["test/letflow/identity_test.exs"]
+  },
+  "task": {
+    "description": "Validate TEST-DESIGNER's new regression test for ISS-0047 in test/letflow/identity_test.exs (a new describe/test block after the existing REQ-018 race test) and test/specs/ISS-0047.md. Independently confirm the fail-then-pass claim (don't trust the handoff summary alone) by re-running the same before/after procedure: extract pre-fix lib/letflow/identity.ex from commit 3d19e8c, swap it in, run the new test, confirm it fails with the username-race error; restore post-fix identity.ex, confirm it passes. Also confirm the test uses genuinely independent :auto-mode connections (not :manual + Sandbox.allow/3) and loops enough attempts (10) to be a reliable, non-flaky proof.",
+    "acceptance_criteria": [
+      "Fail-then-pass claim independently re-verified with actual command output, not trusted from the prior handoff.",
+      "Test genuinely uses two independent Postgres connections under :auto mode -- confirm no Sandbox.allow/3 call in the new test.",
+      "Test is not flaky -- assess whether 10 loop iterations is adequate given the observed 4/6 nondeterministic reproduction rate, and that the test doesn't silently pass on a lucky run (i.e. per-iteration assertions, not just an aggregate).",
+      "No existing test's coverage was weakened or removed.",
+      "test/specs/ISS-0047.md accurately documents the test."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified the fail-then-pass claim: swapped lib/letflow/identity.ex for git show 3d19e8c's pre-fix content, recompiled, ran `mix test test/letflow/identity_test.exs:357` -- got '31 tests, 1 failure, 30 excluded' with the exact ISS-0047 failure mode (result1 = {:ok, ...}, result2 = {:error, %Ecto.Changeset{errors: [username: {\"has already been taken\", [constraint: :unique, constraint_name: \"users_username_index\"]}]}}). Restored lib/letflow/identity.ex from the postfix backup (verified `git diff --stat lib/letflow/identity.ex` was empty, i.e. byte-identical to HEAD), recompiled, ran `mix test test/letflow/identity_test.exs` full file -- got '31 tests, 0 failures'. Confirmed no Sandbox.allow/3 call inside the new ISS-0047 describe block (grep only finds it in an explanatory comment contrasting with the existing :manual-mode race test). Confirmed 10-iteration loop is adequate: each of the 10 attempts uses a freshly generated identity_context() (no cross-attempt masking), and all 5 assertions (both {:ok,...}, matching ids, exactly-one-created, exactly-one-row) are inside the loop body per attempt, not aggregated after -- so a single bad attempt fails the whole test regardless of the other 9, addressing the 4/6 nondeterministic reproduction rate ISSUE-FIXER observed (P(missing the bug across 10 independent ~2/3-reproduction attempts) is very low). Diffed test/letflow/identity_test.exs against origin/main: the only changes are the new ISS-0047 describe/test block (additive) and two describe/test name string tweaks (REQ-063 collision tests) with unchanged bodies/assertions -- no coverage removed or weakened. test/specs/ISS-0047.md accurately documents the test's mechanism and its own fail-then-pass runs, which now match my independent reproduction.",
+    "artifacts_out": ["handoffs/WF03-ISS0047-20260818/step-04b-test-design-validator.json"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0047-20260818",
+      "commit_sha_list": ["efca6d9"]
+    }
+  }
+}

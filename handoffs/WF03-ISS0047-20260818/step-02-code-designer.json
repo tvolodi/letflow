@@ -7,9 +7,9 @@
   "to_agent": "CODE-DESIGNER",
   "file": "handoffs/WF03-ISS0047-20260818/step-02-code-designer.json",
   "created_at": "2026-08-18T18:36:00Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-08-18T18:31:54Z",
+  "completed_at": "2026-08-18T18:31:54Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -36,13 +36,16 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/iss-0047-username-race-conflict-target.md. Fix mechanism: option (b) from ISSUE-FIXER's diagnosis, adapted -- a second on_conflict/raw ON CONFLICT ON CONSTRAINT clause (option (a)) is ruled out as structurally unavailable (Postgres INSERT ... ON CONFLICT accepts only one arbiter per statement). Instead, insert_or_fetch/4's existing {:error, %Ecto.Changeset{}} passthrough branch (identity.ex lines 216-217) is replaced with a three-way branch: a new username_unique_conflict?/1 helper inspects the returned changeset's errors for the :username field tagged constraint: :unique (not the message string); if present, a new get_by_username/2 helper (Repo.get_by keyed on username, same prefix:-scoping discipline as get_by_external_identity/3) re-queries the row that now holds that username, and a new identity_matches?/2 helper compares its (external_realm, external_id) against this call's own identity_context -- a match means the opponent racer had an IDENTICAL identity, so the design falls through to the existing, unchanged re_select_on_conflict/3 (resolving to {:ok, created: false}); a non-match (or a defensive nil) propagates the original {:error, changeset} unchanged, preserving identity_test.exs:379-394's genuine-collision contract. No Ecto.Multi, no rescue/try, and the design's own S2.1 argues explicitly why this is changeset-error pattern-matching on an already-typed return value rather than the forbidden naive insert-then-rescue pattern identity.ex's own module comment prohibits. Section 5 specifies a new :auto-mode (genuine two-connection) race test TEST-DESIGNER must add, since the existing :manual-mode race test structurally cannot exercise this path. Design worked through both the race case (S3.1) and the genuine-collision case (S3.2) against the exact pinned test. Acceptance-criteria traceability table in S7. next_action: Route to CODE-DESIGN-VALIDATOR.",
+    "artifacts_out": [
+      "lib/letflow/design/iss-0047-username-race-conflict-target.md"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0047-20260818",
       "commit_sha_list": []
     }
-  }
+  },
+  "next_action": "Route to CODE-DESIGN-VALIDATOR"
 }

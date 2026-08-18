@@ -2477,7 +2477,7 @@ requirements:
   - id: REQ-048
     title: Task completion (instance.zig completeTask, EE-04)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S3
     impl_order: 93  # letflow-queue task id
     description: >

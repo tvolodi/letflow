@@ -1,0 +1,119 @@
+# Test run report — WF-03 Step 4 (test run) for ISS-0064
+
+issue_id: ISS-0064
+workflow: WF-03
+step: "04"
+agent: TEST-RUNNER
+run_id: WF03-ISS0064-20260819
+date_utc: 2026-08-19T02:56:07Z
+
+git:
+  branch: fix/WF03-ISS0064-20260819
+  branch_confirmed: true
+  commit: 1851e0bc7031504a8ac908b522ae3b101f244a6e
+  commit_subject: "test(WF03-ISS0064): regression coverage for tenant schema reaper"
+  worktree: true
+  diff_stat_main_to_head: >
+    docs/issues/ISS-0064.yaml (new, 35 lines),
+    lib/letflow/design/iss064-orphaned-tenant-schemas-fix.md (new, 615 lines),
+    test/specs/ISS-0064.md (new, 153 lines),
+    test/support/tenant_schema_reaper.ex (new, 120 lines),
+    test/support/tenant_schema_reaper_test.exs (new, 279 lines),
+    test/test_helper.exs (+4 lines, wires sweep_orphans/2 before ExUnit.start()
+    and via ExUnit.after_suite/1).
+    6 files changed, 1206 insertions(+).
+
+environment:
+  postgres_container: >
+    letflow-postgres-1 (shared, pre-existing container from another worktree
+    on this host), confirmed via docker ps — 0.0.0.0:5462->5432/tcp,
+    status Up (healthy), pg_isready succeeded. `docker compose up -d` in this
+    worktree attempted to recreate letflow-wt2-postgres-1 but failed with
+    "port is already allocated" (5462 already bound by the running
+    letflow-postgres-1 container); the stray "Created" (never started)
+    container was removed with `docker rm` and the already-healthy shared
+    container was used directly — same port/service, no functional impact.
+  partition: "MIX_TEST_PARTITION=2 (as instructed for this run)"
+  command_run: "MIX_TEST_PARTITION=2 mix test (full suite, unpinned/default
+    random seed — the `test` alias runs ecto.create + ecto.migrate --quiet
+    first automatically)"
+
+verdict: PASS
+
+checks:
+  test_suite_full_run_1:
+    result: PASS — all green, no failures
+    exit_code: "0 (implied — no failure output, summary line reports 0 failures)"
+    summary_line_verbatim: "5 properties, 925 tests, 0 failures"
+    finished_line_verbatim: "Finished in 105.5 seconds (4.3s async, 101.2s sync)"
+    failures: 0
+    post_suite_sweep_confirmed: >
+      A `SELECT id, tenant_id, schema_name FROM tenant_schemas WHERE
+      provisioned_at < $1` query ran immediately after the "Finished" line,
+      confirming ExUnit.after_suite/1's orphan sweep executed as wired in
+      test/test_helper.exs.
+
+  test_suite_full_run_2:
+    result: PASS — all green, no failures (second run, per instruction to
+      re-run once for stronger confidence against this issue's intermittent
+      failure class)
+    exit_code: "0 (implied)"
+    summary_line_verbatim: "5 properties, 925 tests, 0 failures"
+    finished_line_verbatim: "Finished in 107.8 seconds (4.2s async, 103.6s sync)"
+    failures: 0
+    post_suite_sweep_confirmed: >
+      Same after_suite orphan-sweep SELECT observed immediately following the
+      "Finished" line in this run too.
+
+  original_iss0064_symptom_identity_migration_test:
+    result: PASS
+    note: >
+      test/letflow/identity_migration_test.exs's
+      "DropLegacyPublicIdentityTables migration guard (REQ-063 §5)" describes
+      (including the "skip-on-uncopied-row" ISS-0050-regression guard tests
+      at lines 318-471, e.g. "a tenant schema missing one identity table
+      makes the guard SKIP the drop, not raise 42P01") executed as part of
+      both full-suite runs above with zero failures anywhere in either run's
+      output. This is the exact symptom ISS-0064 reports as intermittently
+      failing due to orphaned public.tenant_schemas rows accumulating across
+      runs — it passed cleanly in both runs.
+
+  new_iss0064_tests_included_in_run:
+    result: PASS
+    note: >
+      test/support/tenant_schema_reaper_test.exs (279 lines, new regression
+      coverage for Letflow.TenantSchemaReaper.sweep_orphans/2) executed as
+      part of both full-suite runs above with 0 failures reported anywhere.
+
+  known_noise_not_a_failure:
+    - >
+      Verbose SQL query debug logging (`[debug] QUERY OK ...` lines,
+      including tenant-schema DDL/DML from multi-tenant test fixtures and the
+      EXECUTION_ERROR event-payload inserts from an unrelated engine-error
+      test) appears in raw mix test output (config/test.exs's default test
+      log level) — expected, not indicative of any problem. Confirmed via
+      grep that no "[failure]" or "Finished...failures: [1-9]" pattern
+      appears anywhere in either run's output.
+
+  pre_existing_failures_found: []
+
+  regression_check: >
+    Both runs: 5 properties, 925 tests, 0 failures. No regressions
+    attributable to this branch's diff, no unrelated pre-existing failures
+    surfaced in either run. No issue needs to be filed to the queue this
+    time — the suite was fully green both times.
+
+diagnosis: >
+  Full suite passed cleanly twice in a row (925 tests, 0 failures each run),
+  with the after_suite orphan-sweep query confirmed to run after both.
+  identity_migration_test.exs's DropLegacyPublicIdentityTables guard tests —
+  the original ISS-0064 symptom — passed in both runs. This is consistent
+  with (though, being only two runs, not conclusive proof of) the fix
+  resolving the intermittent orphaned-tenant_schemas-row failure class. No
+  rework needed; nothing to route to ELIXIR-DEV.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-20260819-WF03-ISS0064-20260819.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

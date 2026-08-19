@@ -1,0 +1,204 @@
+# Test run report — WF-03 Step 4 (test run) for ISS-0067
+
+issue_id: ISS-0067
+related_issues: []
+workflow: WF-03
+step: "04"
+agent: TEST-RUNNER
+run_id: WF03-ISS0067-20260819
+date_utc: 2026-08-19T17:44:54Z
+
+git:
+  branch: feature/WF03-ISS0067-20260819
+  branch_confirmed: true
+  head: 40b7979
+  worktree: false (primary checkout at c:\Users\tvolo\dev\ai-dala\letflow)
+  diff_summary: >
+    ISS-0067 (GH#228, MINOR/type-safety): lib/letflow/engine.ex's
+    cast_parent_token_record_id/1 (an Ecto.UUID.cast/1 string-shape
+    heuristic) replaced with resolve_parent_token_record_id/2 (a real
+    MapSet.member?/2 check against the persisted token-id set) --
+    mechanism swap proven outcome-equivalent for the current split/join
+    minting scheme. REVIEWER and TEST-DESIGN-VALIDATOR both PASSed prior
+    to this run. `git diff main...HEAD -- lib/letflow/engine.ex`
+    confirmed in this run: dispatch_task_completion_hop_chain/6 and
+    prepare_sub_process_children_for_completion/7 now thread
+    original_active_tokens through to build a persisted_token_ids
+    MapSet, and cast_parent_token_record_id/1 is replaced by
+    resolve_parent_token_record_id/2 (with a @spec) which does
+    MapSet.member?/2 against that set instead of Ecto.UUID.cast/1.
+
+environment:
+  postgres_container: >
+    letflow-postgres-1 confirmed Running via `docker compose up -d` at
+    start of this run.
+  connection_contention: >
+    pg_stat_activity checked before the full run (count=6, well under
+    the 100-connection threshold); full suite ran clean on the first
+    attempt, no too_many_connections retry needed this time.
+  command_run: "mix test (full suite; the `test` alias runs ecto.create + ecto.migrate --quiet first automatically)"
+
+verdict: PASS
+
+checks:
+  test_suite_full_run:
+    result: "PARTIAL PASS -- 1125/1137 tests passed; all 12 failures match the documented pre-existing/environmental classes, none attributable to this branch's diff"
+    exit_code: "mix test exits nonzero on any failure (12 failures present); this matches the known baseline pattern, not a new regression"
+    summary_line_verbatim: "Result: 1125/1137 passed (5/5 properties, 1120/1132 tests)"
+    failed_line_verbatim: "Failed: 12 tests"
+    finished_line_verbatim: "Finished in 380.6 seconds (6.6s async, 374.0s sync)"
+
+  pre_existing_failures_found:
+    - class: "Letflow.IdentityMigrationTest (FK/guard-race)"
+      count: 10
+      confirmation: >
+        10 failing tests, all in Letflow.IdentityMigrationTest: ISS-0060
+        self-heal / guard-fix tests (2), DropLegacyPublicIdentityTables
+        migration guard tests (4), copy_tenant/2 / copy_all_tenants/0
+        tests (4). Matches the run brief's named pre-existing class
+        exactly (brief said ~10).
+    - class: "Mix.Tasks.Letflow.Check.TestTest (subprocess timeout)"
+      count: 2
+      confirmation: >
+        2 of the 3 "detects a recurrence of ISS-0069's own warning
+        class" variants failed this run (the "raises and reports the
+        offending line" and "passes (no raise) when the subprocess
+        exits 0" variants); the third variant in this describe block
+        did not fail this run. This is the same documented flaky
+        subprocess-timeout class (brief said ~3, actual observed count
+        varies run to run since it's a timing-sensitive subprocess
+        test); not a new class.
+    - class: "tenant-schema-provisioning race under concurrent load"
+      count: 0
+      confirmation: >
+        Not observed this run -- full failure list (12 tests) was
+        grepped by name/module and contains only the two classes above,
+        no IdentityTest / MigrationsTest schema-race member this time.
+        Consistent with this being a timing-sensitive race that doesn't
+        reproduce every run.
+    note: >
+      Total failure count this run (12) is lower than the previously
+      documented baseline (14) purely because the third (race) class
+      didn't manifest this time and only 2/3 of the check.test class
+      fired -- both are known-flaky/timing-sensitive classes, not
+      deterministic counts. Verified by name/module inspection of all
+      12 failure headers that none touch engine.ex,
+      resolve_parent_token_record_id, cast_parent_token_record_id, or
+      sub_process.ex in any way.
+
+  branch_own_change_caused_failures: none
+
+  sub_process_specific_tests:
+    result: PASS
+    command_run: "mix test test/letflow/engine_sub_process_test.exs test/letflow/engine/sub_process_test.exs test/letflow/engine_test.exs"
+    summary_line_verbatim: "Result: 74 passed"
+    finished_line_verbatim: "Finished in 44.9 seconds (0.7s async, 44.1s sync)"
+    exit_code: 0
+    count_note: >
+      74 tests passed across all three files combined, 0 failed, 0
+      excluded/skipped. Reporting the real `mix test` summary line
+      rather than an assumed count, per the no-speculation rule.
+    iss0067_assertions_confirmed_present: >
+      Grepped test/letflow/engine_sub_process_test.exs for "ISS-0067"
+      and "sub_process_after_split_join_not_supported" -- found the
+      describe block "ISS-0067 -- resolve_parent_token_record_id/2
+      rejects a derived split/join branch token_id" (negative case,
+      asserting the exact
+      `{:error, {:sub_process_after_split_join_not_supported,
+      "#{gate_token.id}/0"}}` rejection with rollback assertions) and
+      "ISS-0067 -- resolve_parent_token_record_id/2 accepts a
+      genuinely persisted parent token_id" (positive case, asserting a
+      real child instance gets created). Both are included in the
+      74/74 passing count above.
+
+  format_check:
+    command_run: "mix format --check-formatted"
+    exit_code: 0
+    result: PASS
+
+  compile_warnings_as_errors:
+    command_run: "mix compile --warnings-as-errors"
+    exit_code: 1
+    result: >
+      FAILS, as expected/documented -- 14 warnings, all in the same
+      pre-existing InstanceState/Token/JoinCounter struct-update
+      type-checker class (the Elixir set-theoretic type checker
+      complaining that a bare local variable isn't provably a given
+      struct type before a struct-update `%X{var | field: val}`
+      expression). Documented as present on origin/main itself
+      independent of this branch's diff; not treated as a blocker.
+    warning_locations:
+      - "lib/letflow/engine.ex:1609 (dispatch_task_completion_hop_chain/6)"
+      - "lib/letflow/engine/sub_process.ex:816 (build_completion_multi_from_merge/11)"
+      - "lib/letflow/engine/reconstruction.ex:563 (apply_event/4)"
+      - "lib/letflow/engine/reconstruction.ex:602 (apply_event/4)"
+      - "lib/letflow/engine/reconstruction.ex:619 (apply_event/4)"
+      - "lib/letflow/engine/reconstruction.ex:630 (apply_event/4)"
+      - "lib/letflow/engine/reconstruction.ex:652 (apply_event/4)"
+      - "lib/letflow/engine/reconstruction.ex:820 (resolve_pending_events/1)"
+      - "lib/letflow/engine/transition.ex:619 (dispatch_parallel_gateway/4)"
+      - "lib/letflow/engine/transition.ex:691 (dispatch_parallel_split/4)"
+      - "lib/letflow/engine/transition.ex:779 (dispatch_parallel_join/4)"
+      - "lib/letflow/engine/transition.ex:845 (fire_join/5)"
+      - "lib/letflow/engine/transition.ex:876 (dispatch_cancel_branch/3)"
+      - "lib/letflow/engine/transition.ex:881 (dispatch_cancel_branch/3)"
+    engine_ex_warning_analysis: >
+      One of the 14 warnings is in lib/letflow/engine.ex, now at line
+      1609 (dispatch_task_completion_hop_chain/6's struct-update on
+      seed_state, an InstanceState) -- shifted 5 lines down from the
+      previously documented line 1604, exactly matching this branch's
+      diff which adds a 5-argument map-pattern expansion
+      (`original_active_tokens` added to the function head's map
+      pattern) immediately above that struct-update line. The run
+      brief noted this shift was independently confirmed pre-existing
+      (present at the equivalent pre-fix line 1604 on a throwaway
+      worktree check in a prior session); this run's own inspection of
+      `git diff main...HEAD -- lib/letflow/engine.ex` confirms the
+      struct-update expression itself (`%{seed_state | ...}`, if
+      present at that site) is untouched by ISS-0067's diff -- the
+      diff only adds the `original_active_tokens` field to the
+      function-head map pattern, threads it through as a new
+      parameter, adds the MapSet.new/2 call, and replaces
+      cast_parent_token_record_id/1 with
+      resolve_parent_token_record_id/2. No new struct-update
+      expressions are introduced by this diff.
+
+regression_check: >
+  1125/1137 on the full suite. All 12 failures fall into the two
+  previously documented flaky/environmental classes by test name/module
+  (Letflow.IdentityMigrationTest FK/guard-race x10,
+  Mix.Tasks.Letflow.Check.TestTest subprocess timeout x2); the third
+  documented class (tenant-schema-provisioning race) did not manifest
+  this run, consistent with it being a non-deterministic timing race.
+  74/74 on the engine/sub_process-specific test files (engine_sub_process_test.exs,
+  engine/sub_process_test.exs, engine_test.exs combined), including the
+  2 new ISS-0067 describe blocks (negative rejection case, positive
+  child-instance-creation case). `mix format --check-formatted` clean
+  (exit 0). `mix compile --warnings-as-errors` fails with the same
+  pre-existing 14-warning InstanceState/Token/JoinCounter struct-update
+  class documented as present on origin/main itself, including one
+  warning in engine.ex whose line number (1609, shifted from the
+  previously documented 1604) is fully explained by this diff's own
+  line insertions above the pre-existing warning site. No new
+  regressions attributable to this branch.
+
+diagnosis: >
+  ISS-0067's resolve_parent_token_record_id/2 mechanism swap is
+  verified clean: zero failures anywhere in the suite touch engine.ex,
+  parent-token-id resolution, or sub_process.ex, and the
+  engine/sub_process-specific test files (which carry the 2 new
+  ISS-0067 describe blocks pinning both the rejection and acceptance
+  paths) pass 74/74. All 12 full-suite failures are accounted for by
+  the previously-documented flaky/environmental classes
+  (IdentityMigrationTest FK/guard-race, Mix.Tasks.Letflow.Check.TestTest
+  subprocess timeout); the third documented race class simply didn't
+  fire this run. The one warning under --warnings-as-errors that
+  happens to be in engine.ex predates this branch's diff by inspection
+  of the diff's actual line insertions. Nothing to route to
+  ELIXIR-DEV.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-19-WF03-ISS0067-20260819.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

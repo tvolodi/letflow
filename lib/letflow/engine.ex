@@ -1594,7 +1594,12 @@ defmodule Letflow.Engine do
   end
 
   defp dispatch_task_completion_hop_chain(
-         %{graph: graph, seed_instance_state: seed_state, own_token_id: own_token_id},
+         %{
+           graph: graph,
+           seed_instance_state: seed_state,
+           own_token_id: own_token_id,
+           original_active_tokens: original_active_tokens
+         },
          projection,
          actor_id,
          idempotency_key,
@@ -1617,6 +1622,7 @@ defmodule Letflow.Engine do
           {:ok, advanced_state, pending_events} ->
             prepare_sub_process_children_for_completion(
               advanced_state,
+              original_active_tokens,
               graph,
               pending_events,
               projection,
@@ -1684,6 +1690,7 @@ defmodule Letflow.Engine do
   # new gap this requirement introduces.
   defp prepare_sub_process_children_for_completion(
          advanced_state,
+         original_active_tokens,
          graph,
          pending_events,
          projection,
@@ -1692,10 +1699,12 @@ defmodule Letflow.Engine do
          prefix
        ) do
     sub_process_starts = Enum.filter(pending_events, &match?({:sub_process_start, _, _}, &1))
+    persisted_token_ids = MapSet.new(original_active_tokens, &to_string(&1.id))
 
     sub_process_starts
     |> Enum.reduce_while({:ok, []}, fn {:sub_process_start, token_id, node_id}, {:ok, acc} ->
-      with {:ok, parent_token_record_id} <- cast_parent_token_record_id(token_id),
+      with {:ok, parent_token_record_id} <-
+             resolve_parent_token_record_id(token_id, persisted_token_ids),
            %Graph.Node{} = node <- Enum.find(graph.nodes, &(&1.id == node_id)) || :unknown_node,
            {:ok, prepared} <-
              SubProcess.prepare_child_activation(
@@ -1733,10 +1742,17 @@ defmodule Letflow.Engine do
     end
   end
 
-  defp cast_parent_token_record_id(token_id) do
-    case Ecto.UUID.cast(token_id) do
-      {:ok, uuid} -> {:ok, uuid}
-      :error -> {:error, {:sub_process_after_split_join_not_supported, token_id}}
+  @spec resolve_parent_token_record_id(
+          token_id :: String.t(),
+          persisted_token_ids :: MapSet.t(String.t())
+        ) ::
+          {:ok, String.t()}
+          | {:error, {:sub_process_after_split_join_not_supported, String.t()}}
+  defp resolve_parent_token_record_id(token_id, persisted_token_ids) do
+    if MapSet.member?(persisted_token_ids, token_id) do
+      {:ok, token_id}
+    else
+      {:error, {:sub_process_after_split_join_not_supported, token_id}}
     end
   end
 

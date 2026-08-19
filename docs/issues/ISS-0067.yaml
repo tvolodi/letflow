@@ -46,4 +46,24 @@ affected_files:
   - lib/letflow/engine.ex
   - lib/letflow/engine/transition.ex
 github_issue: https://github.com/tvolodi/letflow/issues/228
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0067-20260819
+resolved_at: "2026-08-19T18:27:54Z"
+fix_note: >
+  Fixed in `lib/letflow/engine.ex` (commit 9e65bf7): the runtime
+  `Ecto.UUID.cast/1` string-shape heuristic (`cast_parent_token_record_id/1`)
+  replaced with `resolve_parent_token_record_id/2`, a real `MapSet.member?/2`
+  check of the candidate token_id against the persisted token-id set --
+  removing the incidental "derived branch ids happen not to be UUID-shaped"
+  assumption this issue flagged. Gate chain: CODE-DESIGNER (1 rework) ->
+  CODE-DESIGN-VALIDATOR PASS -> ELIXIR-DEV -> SECURITY-REVIEWER PASS
+  (INV-1/INV-8) -> REVIEWER PASS -> TEST-DESIGNER -> TEST-DESIGN-VALIDATOR
+  PASS -> TEST-RUNNER PASS (1125/1137 full suite) -> RELEASE-VALIDATOR PASS
+  (rendered directly by ORCH after the delegated subagent stalled in a defer
+  loop; independently confirmed scope via `git diff origin/main...HEAD
+  --stat`, reran `test/letflow/engine_sub_process_test.exs` fresh at 12/12
+  including both new accept/reject correctness-property cases, and
+  reconfirmed the mechanism-equivalence claim against `transition.ex`).
+  Design doc: lib/letflow/design/iss067-token-id-persisted-check.md. Test
+  additions: test/letflow/engine_sub_process_test.exs (2 new describe
+  blocks), test/specs/ISS-0067.md.

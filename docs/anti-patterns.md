@@ -157,6 +157,21 @@ directly by the user remains fine to work on without the queue (the
 human made the selection, not ORCH), but ORCH should still attempt to
 register/lock it against the queue once reachable.
 
+**Addendum, same day:** the queue was likely never actually unreachable
+for either session. `QUEUE_AUTH_TOKEN` lives in two possible places —
+the shell environment, and a `.env` file at the repo root (gitignored,
+sanctioned local-dev convenience, confirmed with the project owner) —
+and both duplicate-run sessions evidently checked only the former. A
+live test the same day showed the `.env` token authenticating
+successfully against `queue-test.ai-dala.com`. So the proximate cause
+wasn't "the queue was down," it was "the check for the token was
+incomplete" — `TASK_QUEUE.md` §"The four functions" now says explicitly
+to check `.env` before concluding the token is unavailable. The
+fallback-forbidden fix above is still correct defense in depth (a
+*genuinely* unreachable queue should never trigger self-selection
+either), but don't assume every future "queue unreachable" report is
+real without first confirming `.env` was checked.
+
 ## Running `docker compose up` from a secondary worktree checkout
 
 During WF02-REQ037-20260817's Step 3b (TEST-DESIGN-VALIDATOR, running from

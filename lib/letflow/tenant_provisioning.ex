@@ -274,8 +274,10 @@ defmodule Letflow.TenantProvisioning do
   # REQ-064's ten Decision-0006-D2 tenant_id-drop migrations -- events,
   # events_archive, instance_projections, process_definitions, tokens, tasks,
   # promotion_reviews, promotion_assertion_runs, users, groups
-  # (lib/letflow/design/req064-drop-tenant-id.md §2) — twenty-seven entries in
-  # total. Each of these files carries the §4 guard pattern; registration here
+  # (lib/letflow/design/req064-drop-tenant-id.md §2), and REQ-054's
+  # instance_state_snapshots migration
+  # (lib/letflow/design/req054-instance-state-snapshots.md §3) — twenty-eight
+  # entries in total. Each of these files carries the §4 guard pattern; registration here
   # is the other mandatory half. REQ-063's own guarded DROP migration
   # (20260819000004_drop_legacy_public_identity_tables.exs) is deliberately NOT
   # listed here -- it is a global-schema migration, not tenant-scoped, per that
@@ -335,7 +337,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_820_000_010, Letflow.Repo.Migrations.DropTenantIdGroups,
      "20260820000010_drop_tenant_id_groups.exs"},
     {20_260_820_000_011, Letflow.Repo.Migrations.CreateLuaScriptExecutionAudit,
-     "20260820000011_create_lua_script_execution_audit.exs"}
+     "20260820000011_create_lua_script_execution_audit.exs"},
+    {20_260_821_000_001, Letflow.Repo.Migrations.CreateInstanceStateSnapshots,
+     "20260821000001_create_instance_state_snapshots.exs"}
   ]
 
   @doc """
@@ -356,12 +360,14 @@ defmodule Letflow.TenantProvisioning do
   more: the `instance_projections` engine-columns `ALTER TABLE`, `tokens`, and
   `tasks` (`lib/letflow/design/req043-instance-engine-schema.md` §7), REQ-063
   three more: `groups`, `tenant_role`, and `users` moved behind schema-per-tenant
-  (`lib/letflow/design/req063-identity-tables-schema-per-tenant.md` §2/§3), and
+  (`lib/letflow/design/req063-identity-tables-schema-per-tenant.md` §2/§3),
   REQ-064 ten more: the `tenant_id`-drop migrations for `events`,
   `events_archive`, `instance_projections`, `process_definitions`, `tokens`,
   `tasks`, `promotion_reviews`, `promotion_assertion_runs`, `users`, and
-  `groups` (`lib/letflow/design/req064-drop-tenant-id.md` §2) —
-  twenty-seven entries in total, ordered by version. Every future tenant-scoped migration must append its
+  `groups` (`lib/letflow/design/req064-drop-tenant-id.md` §2), and REQ-054 one
+  more: `instance_state_snapshots`
+  (`lib/letflow/design/req054-instance-state-snapshots.md` §3) —
+  twenty-eight entries in total, ordered by version. Every future tenant-scoped migration must append its
   own entry to `@tenant_scoped_migration_manifest`, in addition to following the
   required guard pattern in its own migration file (see this module's design doc
   §4) — a migration file that does one without the other is either inert

@@ -2835,7 +2835,7 @@ requirements:
   - id: REQ-054
     title: Periodic instance state snapshots (snapshot_writer.zig, ISS-601)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S3
     impl_order: 99  # letflow-queue task id
     description: >

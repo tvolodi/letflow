@@ -75,8 +75,16 @@ test/letflow/engine_concurrency_test.exs verifying 100-concurrent-
 instance completion, same-instance conflict resolution, and post-
 concurrency reconstruction match; REQ-045's row-based state resolution
 made AC5's process-kill scenario N/A; same header-sync gap-fix shape
-applied by this requirement's own DOC-UPDATER); REQ-054, REQ-059,
-REQ-060, REQ-062 (`docs/requirements.yaml`, 4 total) `pending`.
+applied by this requirement's own DOC-UPDATER); REQ-054 `done`
+(Periodic instance state snapshots, ISS-601 --
+Letflow.Engine.SnapshotWriter with a schema-per-tenant
+instance_state_snapshots migration, extending REQ-053's reconstruct
+path to replay from the latest snapshot forward instead of from
+sequence 1 when one exists; a rework cycle wired the writer's four
+call sites into lib/letflow/engine.ex after REVIEWER's first pass
+caught them as dead code; same header-sync gap-fix shape applied by
+this requirement's own DOC-UPDATER); REQ-059, REQ-060, REQ-062
+(`docs/requirements.yaml`, 3 total) `pending`.
 
 ## Scope
 

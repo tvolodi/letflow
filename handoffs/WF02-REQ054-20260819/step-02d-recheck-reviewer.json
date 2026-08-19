@@ -1,0 +1,57 @@
+{
+  "handoff_id": "b3e2f1a0-0001-4a00-9c00-000000000007",
+  "run_id": "WF02-REQ054-20260819",
+  "workflow_id": "WF-02",
+  "step": "02d-recheck",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ054-20260819/step-02d-recheck-reviewer.json",
+  "created_at": "2026-08-19T04:55:00Z",
+  "started_at": "2026-08-19T04:21:28Z",
+  "completed_at": "2026-08-19T04:35:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [
+      "REQ-054"
+    ],
+    "requirement_text": {
+      "REQ-054": "Port src/engine/snapshot_writer.zig (348 lines -- R-Co's ISS-601, design artefact src/design/iss601_state_snapshots.md) as Letflow.Engine.SnapshotWriter, plus its instance_state_snapshots migration and Ecto.Schema module (schema-per-tenant per REQ-022, same as every other table this stage adds). THIS REQUIREMENT EXTENDS REQ-053's already-shipped reconstruct path -- it is not a standalone module. REQ-053 builds full-log replay from sequence 1; this requirement adds the snapshot table, the writer, and the replay-source selection that lets that same reconstruct function start from the latest snapshot instead. The deliverable is therefore a modification of REQ-053's function plus new supporting code, and the correctness bar below is that both paths agree. Purpose: reconstruction (REQ-053) replaying the FULL event log from sequence 1 is O(events) and gets slower forever. A periodic snapshot of the InstanceState as a jsonb blob lets reconstruction replay only the events SINCE the latest snapshot. - take_snapshot/N: serialises REQ-044's InstanceState (status, tokens, variables, pending task nodes, error_detail) plus the sequence_number it is current as of, into an instance_state_snapshots row. - maybe_take_snapshot/N: the cadence check -- snapshot every N events, default 1000 per snapshot_writer.zig's DEFAULT_SNAPSHOT_INTERVAL. Called after event appends and on instance completion. - REQ-053's replay-source selection: given a latest snapshot at sequence S, replay only events with sequence_number > S on top of the deserialised snapshot state, versus replaying from 1 when no snapshot exists (reconstruction.zig's determineReplaySourceForSnapshot()). This requirement extends REQ-053's reconstruct path to use snapshots when present -- and the correctness bar is that BOTH paths produce the identical state, since a snapshot that diverges from full replay is worse than no snapshot at all. - This table is NOT the same thing as REQ-027/REQ-033's instance_definition_snapshots (the immutable PD-08 DEFINITION graph bound to an instance at start). These are periodic EXECUTION STATE snapshots, mutable in the sense that new rows accumulate over an instance's life. Say so explicitly in the moduledoc -- the two names are one word apart and confusing them would be a silent data-model error. OPEN QUESTION (flag, do not silently resolve): where the events-since-last-snapshot counter lives. instance_projections.last_event_seq (REQ-023) already tracks the latest sequence per instance, which makes a pure row-based cadence check possible with no in-memory counter at all; R-Co's own SnapshotWriter is a struct holding a pool handle. If REQ-045 resolved to supervised processes, an in-process counter is available but is exactly the kind of state stage-3-instance-engine.md's second Early finding warns is NOT automatically worth a process. Leave the choice to CODE-DESIGNER, citing that finding and REQ-045's resolution."
+    },
+    "related_handoff_ids": [
+      "b3e2f1a0-0001-4a00-9c00-000000000000"
+    ],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/engine/",
+      "priv/repo/migrations/",
+      "lib/letflow/design/"
+    ]
+  },
+  "task": {
+    "description": "Re-check idiom gate on REQ-054 after rework iteration 1 (commit 3207741, security re-checked PASS in step-02c-recheck-security-reviewer.json). ELIXIR-DEV wired SnapshotWriter.maybe_take_snapshot/4 into engine.ex's create/2, complete_task/3, and set_instance_error/2. SECURITY-REVIEWER PASSed but noted a non-blocking item for REVIEWER: set_instance_error/2's new call into Reconstruction.reconstruct_instance/2 introduces a new Engine <-> Reconstruction two-way module coupling (Reconstruction already depended on Engine.build_graph/1 / find_start_node/1 / advance_until_stable/4; now Engine also depends on Reconstruction). Confirm whether this is a genuine circular-dependency/idiom concern or acceptable, and whether the failure-swallowing pattern (Logger.warning + continue on snapshot write failure) at all four call sites is idiomatic OTP practice or a crutch masking a real error path.",
+    "acceptance_criteria": []
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wiring gap from the prior FAIL is closed. Grepped lib/letflow/engine.ex directly (not trusting ELIXIR-DEV's or SECURITY-REVIEWER's reports): maybe_snapshot_after_create/4 is threaded into create/2 (line 540, after Repo.transaction/1), maybe_snapshot_after_complete_task/2 into complete_task/3 (line 990, after its Repo.transaction/1, with two exhaustive clauses covering :completed's {:advanced, state} transition and {:execution_error, error_args}'s snapshot_and_state.seed_instance_state -- confirmed those are the only two transition shapes produced anywhere in this Multi by grepping `transition: {` across engine.ex), and maybe_snapshot_after_set_instance_error/3 into set_instance_error/2 (line 2043). All three delegate to the shared snapshot_instance/4 helper, which calls SnapshotWriter.maybe_take_snapshot/4 and logs+swallows {:error, reason} via Logger.warning without altering the already-committed transaction result -- confirmed by reading each defp body, not just the grep hits. This resolves the FAIL from step-02d (commit d7f4367): every instance write path now actually accumulates snapshots. On the Engine<->Reconstruction coupling SECURITY-REVIEWER routed here: this is not a genuine circular-dependency problem. Elixir/mix compiles the whole application module graph together and resolves remote calls (Engine.build_graph/1, Reconstruction.reconstruct_instance/2, etc.) by MFA at the BEAM level, not via textual/header-style forward declarations -- two modules calling each other's plain functions is unproblematic and common (see also Letflow.Engine <-> Letflow.Engine.ExecutionError already doing this pre-existing). Verified empirically too: `mix compile --warnings-as-errors` is clean with no cycle/undefined-function diagnostics. The only way this would be a real problem is a macro-expansion-time or `use`/behaviour-callback cycle (module A's macro needs module B's already-compiled AST and vice versa), which does not apply here -- both directions are ordinary function calls. Architecturally it is a minor smell worth a note (Engine now reaches into a module that itself models Engine's own graph-walking primitives, so the dependency graph is no longer a clean DAG), but it is narrow and well-justified: reconstruct_instance/2 is called from exactly one site (set_instance_error/2, a rare non-hot-path write), specifically because fabricating a partial InstanceState from instance_projections would risk snapshot/full-replay divergence (INV-ISS-1) -- the comment at maybe_snapshot_after_set_instance_error/3 states this tradeoff explicitly. Not a FAIL; noted as a MINOR observation, not a blocking architecture defect. On the failure-swallowing pattern (Logger.warning + continue on SnapshotWriter/Reconstruction failure at all three call sites, four logical sites counting complete_task/3's two branches): idiomatic, not a crutch. The requirement's own purpose statement and SnapshotWriter's moduledoc establish the snapshot table as a read-side performance cache over the durable event log -- REQ-053's full-log replay from sequence 1 always produces the correct InstanceState with or without a snapshot row present, so a failed snapshot write degrades reconstruction back to its pre-REQ-054 O(events) cost, never correctness. Swallowing here is the same durability-over-optimization judgment call OTP idiom expects (log-and-continue instead of crashing a request-serving transaction over a non-critical write); crucially, snapshot_instance/4 is only ever invoked after `|> Repo.transaction()` has already committed the event-log write in all three call sites (confirmed by pipe placement), so no correctness-critical write is ever suppressed by this pattern -- it can only suppress a future optimization. This would be a crutch if it silently swallowed an error on the primary event-log Multi itself; it does not. No supervision concerns: SnapshotWriter remains a stateless module of plain Repo calls per the already-settled REQ-045 process-vs-row resolution, not a process, so InstanceSupervisor's per-instance isolation is untouched by this diff. No scope creep in the delta: the four call sites match the design doc's named list 1:1, no new abstraction (behaviour, macro, generic plumbing) was introduced beyond the shared snapshot_instance/4 helper, which is a plain private function doing exactly what its three callers need and nothing more.",
+    "artifacts_out": [],
+    "issues": [
+      "MINOR, non-blocking: maybe_snapshot_after_set_instance_error/3's call into Reconstruction.reconstruct_instance/2 creates a two-way Engine<->Reconstruction module dependency (Reconstruction already calls Engine.build_graph/1, find_start_node/1, advance_until_stable/4). No compile cycle exists and mix compile --warnings-as-errors is clean, so this is not a blocking defect -- but it is worth watching if a third module joins this circle, or if the coupling widens beyond this single, narrow, well-justified call site."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ054-20260819",
+      "commit_sha_list": [
+        "3207741"
+      ],
+      "remote_branch": "origin/feature/WF02-REQ054-20260819",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (3)"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

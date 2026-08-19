@@ -509,21 +509,25 @@ defmodule Letflow.Engine.TransitionTest do
   end
 
   # ---------------------------------------------------------------------
-  # Beyond REQ-044's 6 bare acceptance criteria -- the catch-all for the 3
-  # remaining node_type() variants outside the 5-way dispatch, plus a bogus
-  # atom. Not separately named by an AC (only the 5-way dispatch is), but
-  # necessary for transition/3's own "never raises" totality bar (design doc
-  # §6.6) and cheap to lock in as a regression test, matching the
+  # Beyond REQ-044's 6 bare acceptance criteria -- the catch-all for the 2
+  # remaining node_type() variants outside the 6-way dispatch (REQ-062 gave
+  # :SUB_PROCESS its own real dispatch clause -- design doc §2.3/§2.4 --
+  # narrowing the catch-all from 3 types down to 2; see the
+  # "-- :SUB_PROCESS entry/completion (REQ-062)" describe blocks below for
+  # :SUB_PROCESS's own real coverage, and test/letflow/engine/sub_process_test.exs
+  # for the fuller REQ-062 dispatch/regression suite), plus a bogus atom. Not
+  # separately named by an AC (only the 5-way dispatch is), but necessary for
+  # transition/3's own "never raises" totality bar (design doc §6.6) and
+  # cheap to lock in as a regression test, matching the
   # test/letflow/definitions/graph_test.exs precedent of testing beyond the
   # bare AC list where the design doc flags a real, deliberate behavior.
   # ---------------------------------------------------------------------
 
-  describe "transition/3 -- catch-all for node types outside the 5-way dispatch (design doc §6.6, beyond the bare AC list)" do
-    test "SERVICE_TASK, TIMER, SUB_PROCESS, and an unrecognized node_type atom all return a named error, never raise" do
+  describe "transition/3 -- catch-all for node types outside the 6-way dispatch (design doc §6.6, beyond the bare AC list)" do
+    test "SERVICE_TASK, TIMER, and an unrecognized node_type atom all return a named error, never raise" do
       for {node_type, node_id} <- [
             {:SERVICE_TASK, "svc"},
             {:TIMER, "tmr"},
-            {:SUB_PROCESS, "sub"},
             {:NOT_A_REAL_TYPE, "bogus"}
           ] do
         g = graph([node(node_id, node_type)], [])
@@ -532,6 +536,26 @@ defmodule Letflow.Engine.TransitionTest do
         assert Transition.transition(g, state, {:advance_token, "t1"}) ==
                  {:error, {:node_type_not_yet_implemented, node_type, node_id}}
       end
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-062 (SPC-01) -- :SUB_PROCESS is no longer part of the catch-all above;
+  # it has its own real dispatch clauses (design doc §2.3/§2.4). Full
+  # coverage (entry/completion/defensive guards/AC5 GH-428 struct-update
+  # regression) lives in test/letflow/engine/sub_process_test.exs -- this one
+  # test here exists only to lock in, at this file's own "beyond the bare AC
+  # list" catch-all boundary, that :SUB_PROCESS genuinely left the catch-all
+  # (a regression here would otherwise only be caught in a different file).
+  # ---------------------------------------------------------------------
+
+  describe "transition/3 -- :SUB_PROCESS entry (REQ-062, design doc §2.3)" do
+    test "a token freshly arriving at a SUB_PROCESS node is NOT caught by the node_type_not_yet_implemented catch-all" do
+      g = graph([node("sp1", :SUB_PROCESS)], [])
+      state = instance_state([token("sp1", "t1")])
+
+      assert {:ok, ^state, [{:sub_process_start, "t1", "sp1"}]} =
+               Transition.transition(g, state, {:advance_token, "t1"})
     end
   end
 

@@ -4631,8 +4631,8 @@ history:
       acceptance criteria (including the rework-added prefix-fail-closed
       one) independently confirmed against actual code/tests, not
       summaries. Two incidentally-discovered issues forwarded to the
-      queue, unrelated to this change: ISS-0057/GH#205 (a migration-version
-      collision) and ISS-0058/GH#206 (an intermittent flaky
+      queue, unrelated to this change: ISS-0058/GH#205 (a migration-version
+      collision) and ISS-0059/GH#206 (an intermittent flaky
       migrations_test.exs failure that did not reproduce on
       RELEASE-VALIDATOR's own run and was confirmed via `git diff
       main...HEAD --stat` to touch no file this branch changed).

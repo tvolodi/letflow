@@ -26,7 +26,7 @@
     "owned_modules": ["lib/letflow/engine/lua_script_audit.ex", "priv/repo/migrations/*lua_script_execution_audit*"]
   },
   "task": {
-    "description": "Run the REVIEWER idiom/scope gate against git diff main...HEAD on branch feature/WF02-REQ058-20260818, per .claude/agents/reviewer.md's four questions (idiomatic vs. crutch, supervision integrity -- N/A here, no process/supervision touched, type-safety gaps, scope creep) and docs/anti-patterns.md. Also check consistency with docs/migration/decisions/ -- this requirement deliberately does NOT add a Lua runtime or pick S5's build-vs-bind choice; confirm the diff actually honors that boundary (no Lua dependency in mix.exs, Executor stays an uninstantiated injected behaviour). Note ISS-0057 (pre-existing, unrelated migration-version collision, already filed GH#205) -- not this run's scope.",
+    "description": "Run the REVIEWER idiom/scope gate against git diff main...HEAD on branch feature/WF02-REQ058-20260818, per .claude/agents/reviewer.md's four questions (idiomatic vs. crutch, supervision integrity -- N/A here, no process/supervision touched, type-safety gaps, scope creep) and docs/anti-patterns.md. Also check consistency with docs/migration/decisions/ -- this requirement deliberately does NOT add a Lua runtime or pick S5's build-vs-bind choice; confirm the diff actually honors that boundary (no Lua dependency in mix.exs, Executor stays an uninstantiated injected behaviour). Note ISS-0058 (pre-existing, unrelated migration-version collision, already filed GH#205) -- not this run's scope.",
     "acceptance_criteria": [
       "No genuine OTP crutch, broken supervision, or scope creep found",
       "S3/S5 scope boundary genuinely honored (no Lua dep added, no S5 runtime decision pre-empted)",

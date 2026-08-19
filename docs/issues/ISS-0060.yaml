@@ -56,5 +56,24 @@ affected_files:
   - test/letflow/identity_migration_test.exs
   - lib/letflow/tenant_provisioning.ex
   - lib/letflow/sandbox_pool.ex
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0060-20260819
+resolved_at: "2026-08-19T02:25:28Z"
+resolution_note: >
+  Third recurrence of this failure class (ISS-0048 -> ISS-0050 -> ISS-0060). The
+  prior two resolutions each patched a downstream symptom (reaper/orphan-cleanup
+  timing) without touching the actual race window, which is why the class kept
+  recurring under full-suite runs. This fix instead targets the real race: the
+  DropLegacyPublicIdentityTables guard test's assertion was racing against OTHER
+  tenants concurrently provisioning/deprovisioning in the shared, non-sandboxed
+  test DB -- the migration's global tenant_schemas scan is correctly unscoped for
+  production, but the test only cares about its own tenant's row. Fixed by
+  snapshotting/restoring the test's view of tenant_schemas visibility around the
+  guarded migration call via with_only_this_tenant_visible!/2, with a crash-safe
+  self-heal check in setup so a prior crashed run can't leave the snapshot
+  applied and poison later tests. Design:
+  lib/letflow/design/iss060-migration-guard-test-race-fix.md. Regression test:
+  test/specs/ISS-0060.md. Passed CODE-DESIGN-VALIDATOR (1 rework: column-shape
+  defect), SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR (1 rework: naming
+  length), TEST-RUNNER (914 tests, 0 failures). Run-id: WF03-ISS0060-20260819.
 github_issue: https://github.com/tvolodi/letflow/issues/207

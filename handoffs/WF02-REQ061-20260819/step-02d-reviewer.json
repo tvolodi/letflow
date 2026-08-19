@@ -1,0 +1,61 @@
+{
+  "handoff_id": "9h7f5g14-3g42-4865-7f8n-req061step02d",
+  "run_id": "WF02-REQ061-20260819",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ061-20260819/step-02d-reviewer.json",
+  "created_at": "2026-08-19T01:19:12Z",
+  "started_at": "2026-08-19T01:19:12Z",
+  "completed_at": "2026-08-19T01:20:09Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-061"],
+    "requirement_text": {
+      "REQ-061": "See handoffs/WF02-REQ061-20260819/step-01-code-designer.json context.requirement_text for the full verbatim requirement text."
+    },
+    "related_handoff_ids": ["step-01-code-designer.json", "step-01b-code-design-validator.json", "step-02a-elixir-dev.json", "step-02c-security-reviewer.json"],
+    "artifacts_in": ["lib/letflow/design/req061-execution-error-handling.md", "lib/letflow/engine.ex", "lib/letflow/engine/execution_error.ex"],
+    "owned_modules": ["lib/letflow/engine.ex", "lib/letflow/engine/execution_error.ex"]
+  },
+  "task": {
+    "description": "Idiom/OTP/scope-creep/decision-record review of git diff main...HEAD on branch feature/WF02-REQ061-20260819. Two items specifically need your sign-off: (1) the design doc's own interim reading of AC4 -- 'at least three of five calling paths' is satisfied for now by wiring REQ-049 and REQ-050 (the only two that exist in shipped code), with REQ-056/057/062 named as future call sites -- decide if this is an acceptable reading of the AC or if it should block; (2) ELIXIR-DEV's flagged deviation from the design doc's literal @spec (widened merge_output_variables/2 and dispatch_task_completion_hop_chain/2 from the design's shown 2-arg signature to 5-arg, to thread instance_id/actor_id/idempotency_key through) -- decide if this is a safe, reasoned deviation or a problem.",
+    "acceptance_criteria": [
+      "Idiomatic OTP usage vs. crutch",
+      "Supervision integrity (no change expected here, confirm)",
+      "No scope creep beyond REQ-061's acceptance criteria",
+      "Consistency with docs/migration/decisions/",
+      "Explicit sign-off or FAIL on the AC4 interim-reading",
+      "Explicit sign-off or FAIL on the arity-widening deviation"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. Reviewed git diff main...HEAD (lib/letflow/engine.ex, lib/letflow/engine/execution_error.ex) against the four idiom questions: (1) Idiomatic vs crutch -- ExecutionError.append_multi/3 is a pure, composable Ecto.Multi appender (zero Repo calls of its own, INV-EE61-7), matching TaskActivation's existing composable shape exactly; complete_task/3's rewired Multi.merge/2 branch point (build_complete_task_tail_multi/6) is the same idiomatic mechanism the module already used pre-REQ-061 for its normal-path tail, extended to two branches rather than one -- no hand-rolled state machine, no case-on-atom masquerading as a state machine. (2) Supervision -- confirmed no process/supervision-tree changes in this diff (grep for InstanceSupervisor/gen_statem/GenServer shows only pre-existing references); this requirement is transactional DB/business logic only, isolation model untouched. (3) Type-safety -- error_type()'s open union (trailing atom()) and the {:merged,_}/{:execution_error,_} and {:advanced,_}/{:execution_error,_} tagged-tuple outcomes are a reasonable typed-union upgrade over the prior bare {:error,_}; no new representable-invalid-state gap introduced worth a docs/issues/ filing. (4) Scope creep -- none found; set_instance_error/2 and ExecutionError.append_multi/3 build exactly the design doc's two entry-point shapes and no more, with REQ-056/057/062 left as named future callers rather than stubbed early. No docs/anti-patterns.md entry applies. TWO FLAGGED ITEMS, both signed off: (A) AC4 interim reading ACCEPTED -- REQ-061's own depends_on: [REQ-048, REQ-050] (not REQ-056/057/062) confirms this requirement was never sequenced to require those three to exist first; they are listed 'pending' with zero shipped code in stage-3-instance-engine.md, verified independently by REVIEWER, not taken on the design doc's word. REQ-061 is explicitly the shared-sink infrastructure other requirements build call sites against, so blocking it on callers that don't exist yet would invert the intended build order. '2 of 2 currently-shippable callers wired, 3 named as future call sites with open questions recorded' is accepted as satisfying AC4's intent for this run; flagging for RELEASE-VALIDATOR/ORCH that AC4's literal 'at least three' wording should be mechanically re-verified once REQ-056/057/062 each land (non-blocking follow-up, not a condition of this PASS). (B) Arity-widening deviation ACCEPTED as safe and reasoned, not a problem -- the design doc's own §5.1/§5.2 prose (not just its @spec line) already specifies error_args() needs instance_id from the M2-locked InstanceProjection plus the caller's actor_id/idempotency_key 'threaded through', which a literal 2-arg pure function cannot access; the design's own @spec text (using a different name, merge_outcome_for/2, than the actual function) was itself the inconsistent artifact, not the implementation. ELIXIR-DEV's fix -- extra explicit parameters rather than a closure or process dictionary -- is the idiomatic Elixir choice, keeps the functions pure and testable, and was explicitly flagged rather than silently diverged. Non-blocking note: consider updating the design doc's §5.1/§5.2 @spec blocks in a follow-up doc pass so future readers aren't misled by the stale 2-arg signature, but this does not block PASS since the deviation is well-reasoned and disclosed.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Design doc lib/letflow/design/req061-execution-error-handling.md §5.1/§5.2 still show a literal 2-arg @spec (merge_outcome_for/2) that no longer matches the shipped 5-arg merge_output_variables/5 / dispatch_task_completion_hop_chain/5. Non-blocking; recommend a follow-up doc-sync pass so the design doc doesn't mislead a future reader."
+      },
+      {
+        "severity": "MINOR",
+        "description": "AC4's literal 'at least three of five calling paths' wording is satisfied only under an interim reading (2 of 2 shippable callers today). Recommend RELEASE-VALIDATOR/ORCH schedule a mechanical re-check of AC4 once REQ-056, REQ-057, or REQ-062 lands, per the design doc's own §15 recommendation."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ061-20260819",
+      "commit_sha_list": ["00b58b6", "5d238e1", "1706a6d", "5079981"],
+      "remote_branch": "origin/feature/WF02-REQ061-20260819",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

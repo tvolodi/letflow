@@ -1,0 +1,145 @@
+# Test run report — WF-02 Step 4 (test run) for REQ-061
+
+req_id: REQ-061
+workflow: WF-02
+step: "04"
+agent: TEST-RUNNER
+run_id: WF02-REQ061-20260819
+date_utc: 2026-08-19T01:59:32Z
+
+git:
+  branch: feature/WF02-REQ061-20260819
+  branch_confirmed: true
+  worktree: true
+  note: >
+    ~/letflow-wt2 secondary worktree. `docker compose up -d` was run
+    (letflow-wt2-postgres-1 started; already-running container reused if
+    present). Tests invoked with MIX_TEST_PARTITION=2, this host's mandatory
+    convention.
+
+environment:
+  command_run: "MIX_TEST_PARTITION=2 mix test (full suite, unpinned/default
+    random seed -- the \`test\` alias runs ecto.create + ecto.migrate --quiet
+    first automatically)"
+
+verdict: PASS
+
+checks:
+  test_suite_full_run:
+    result: PARTIAL (1 pre-existing, unrelated failure -- see below)
+    exit_code: 2 (mix test reports failures)
+    summary_line_verbatim: "3 properties, 916 tests, 1 failure"
+    finished_line_verbatim: "Finished in 104.4 seconds (2.2s async, 102.2s sync)"
+    failures: 1
+
+  new_req061_tests_isolated_run:
+    result: PASS
+    command: "MIX_TEST_PARTITION=2 mix test test/letflow/engine_execution_error_test.exs"
+    summary_line_verbatim: "8 tests, 0 failures"
+    note: >
+      All 8 new execution-error tests (Engine.set_instance_error/2,
+      ExecutionError.append_multi/3, AC4a no-matching-edge-downstream-of-
+      completing-task, AC4b variable_schema_rejected via set_instance_error/2
+      directly) pass.
+
+  highest_risk_regression_surface_isolated_run:
+    result: PASS
+    command: "MIX_TEST_PARTITION=2 mix test test/letflow/engine_complete_task_test.exs"
+    summary_line_verbatim: "8 tests, 0 failures"
+    note: "complete_task/3 rewiring (REQ-061's highest-risk change) -- all pass."
+
+  cancel_instance_isolated_run:
+    result: PASS
+    command: "MIX_TEST_PARTITION=2 mix test test/letflow/engine_cancel_instance_test.exs"
+    summary_line_verbatim: "9 tests, 0 failures"
+
+  the_one_failure:
+    test: "test DropLegacyPublicIdentityTables migration guard (REQ-063 §5)
+      -- skip-on-uncopied-row once the copy is completed for every
+      registered tenant, the guard PROCEEDS and drops all three public
+      tables (Letflow.IdentityMigrationTest)"
+    location: "test/letflow/identity_migration_test.exs:367"
+    assertion_output_verbatim: "expected public.groups to be dropped"
+    classification: "pre-existing, unrelated to REQ-061"
+    reasoning: >
+      `git diff main...HEAD --stat` for this branch touches only:
+      docs/issues/ISS-0063.yaml (new, filed as ISS-0061, renumbered during
+      Step Final's rebase after an unrelated ISS-0061 landed on main
+      independently), docs/requirements.yaml,
+      docs/status/requirement_status.yaml, handoffs/WF02-REQ061-20260819/*,
+      lib/letflow/design/req061-execution-error-handling.md (new),
+      lib/letflow/engine.ex (Engine.set_instance_error/2,
+      ExecutionError.append_multi/3 call sites, complete_task/3 rewiring),
+      lib/letflow/engine/execution_error.ex (new),
+      test/letflow/engine_execution_error_test.exs (new),
+      test/specs/REQ-061.md (new). Nothing touches
+      test/letflow/identity_migration_test.exs, lib/letflow/tenant_provisioning.ex,
+      or lib/letflow/sandbox_pool.ex. This is the same test/line/assertion
+      shape already documented under ISS-0048/ISS-0050 (both `status:
+      resolved`) and ISS-0060 (observed WF02-REQ052-20260819, still `status:
+      open`) -- an order/isolation-dependent full-suite failure of this
+      guard test that passes in isolation. Filed as a fresh recurrence
+      (ISS-0062) per docs/agents/protocols/ISSUE_QUEUE.md rather than
+      treated as blocking this run's own PASS verdict, per
+      Unblock-Everything's scope boundary (this failure is not one of
+      REQ-061's own acceptance criteria).
+
+  known_noise_not_a_failure:
+    - >
+      Verbose SQL query debug logging (`[debug] QUERY OK ...` lines,
+      including tenant-schema DDL/DML from multi-tenant test fixtures)
+      appears in raw mix test output (config/test.exs's default test log
+      level) -- expected, not indicative of any problem.
+
+pre_existing_failures_found:
+  - id: ISS-0062
+    test: "test/letflow/identity_migration_test.exs:367"
+    classification: "recurrence of ISS-0048/ISS-0050/ISS-0060 class (order/
+      isolation-dependent full-suite failure), not caused by this run's
+      changes"
+
+issues_filed:
+  - id: ISS-0062
+    severity: MINOR
+    title: "Letflow.IdentityMigrationTest's DropLegacyPublicIdentityTables
+      guard test failed again under full-suite mix test (recurrence of
+      ISS-0048/ISS-0050/ISS-0060 class)"
+    github_issue: null
+    note: "Non-blocking, discovered incidentally, not related to REQ-061's
+      own acceptance criteria -- filed and forwarded per ISSUE_QUEUE.md
+      rather than fixed in this run. Fourth observed occurrence of this
+      class; flagged in the issue body as possibly warranting an actual
+      fix rather than continued filing."
+  - id: ISS-0063
+    note: "Filed as ISS-0061, renumbered to ISS-0063 during Step Final's
+      rebase (main independently gained an unrelated ISS-0061 via a
+      concurrent branch). Pre-existing, filed by ELIXIR-DEV during this run's Step 2a
+      rework (not a TEST-RUNNER finding) -- merge_output_variables/5
+      always passes nil for VariableMerge.merge/3's variable_validations
+      argument, so REQ-049's schema-rejection ExecutionError branch can
+      never fire via complete_task/3 today. Out of scope for this run;
+      already covered by test/letflow/engine_execution_error_test.exs's
+      AC4b, which exercises the identical error_args() shape directly
+      through Engine.set_instance_error/2 instead."
+
+diagnosis: >
+  The single full-suite failure (identity_migration_test.exs:367) is
+  confirmed pre-existing and unrelated to REQ-061's diff (see
+  `the_one_failure.reasoning` above) -- no rework routed back to ELIXIR-DEV
+  or TEST-DESIGNER. All 8 of REQ-061's new execution-error tests passed, and
+  the highest-risk regression surface (complete_task/3 rewiring, verified
+  via engine_complete_task_test.exs and engine_cancel_instance_test.exs)
+  shows no regression.
+
+regression_check: >
+  916 tests, 3 properties, 1 failure -- the one failure is the pre-existing,
+  order/isolation-dependent identity_migration_test.exs guard test
+  (ISS-0062, same class as ISS-0048/ISS-0050/ISS-0060), not attributable to
+  REQ-061's own changes. No regression found in REQ-061's own scope.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-20260819-WF02-REQ061-20260819.yaml
+    - docs/issues/ISS-0062.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

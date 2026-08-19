@@ -1,0 +1,50 @@
+{
+  "handoff_id": "8g6e4f03-2f31-4754-6e7m-req061step02c",
+  "run_id": "WF02-REQ061-20260819",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ061-20260819/step-02c-security-reviewer.json",
+  "created_at": "2026-08-19T01:17:48Z",
+  "started_at": "2026-08-19T01:17:48Z",
+  "completed_at": "2026-08-19T01:18:39Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-061"],
+    "requirement_text": {
+      "REQ-061": "See handoffs/WF02-REQ061-20260819/step-01-code-designer.json context.requirement_text for the full verbatim requirement text."
+    },
+    "related_handoff_ids": ["step-01-code-designer.json", "step-01b-code-design-validator.json", "step-02a-elixir-dev.json"],
+    "artifacts_in": ["lib/letflow/design/req061-execution-error-handling.md", "lib/letflow/engine.ex", "lib/letflow/engine/execution_error.ex"],
+    "owned_modules": ["lib/letflow/engine.ex", "lib/letflow/engine/execution_error.ex"]
+  },
+  "task": {
+    "description": "Security-review the diff on branch feature/WF02-REQ061-20260819 (git diff main...HEAD). Adds Letflow.Engine.ExecutionError.append_multi/3 and set_instance_error/2, both tenant-data-scoped write paths writing EXECUTION_ERROR events carrying a full instance variable-map snapshot (per REQ-061's AC1). Pay particular attention to whether the variable-map snapshot could leak cross-tenant data or sensitive values into the event payload/error_detail column beyond what's already permitted for tenant-scoped data. Run the full INV-1..INV-8 checklist per docs/agents/instructions/security-invariants.md.",
+    "acceptance_criteria": [
+      "Scope test correctly determines this diff touches a tenant-data path",
+      "Every applicable invariant (INV-1..INV-8) explicitly verdicted APPLIES/NOT-APPLICABLE with reasoning",
+      "For each APPLIES invariant, the 'How to verify' check is actually run against the diff, not asserted",
+      "No BLOCKER-severity finding left unaddressed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: APPLIES (tenant-data path) -- diff adds Letflow.Engine.ExecutionError.append_multi/3 and Letflow.Engine.set_instance_error/2, both writing EXECUTION_ERROR events and instance_projections.error_detail (schema-isolated per Decision 0003/0006), plus rewires Engine.complete_task/3's merge/transition steps to route into them. Verdicts: INV-1 APPLIES/PASS -- (a) every query/write against instance_projections uses repo.one/repo.update with prefix: prefix (fetch_and_lock_projection, update_projection_to_error), and EventStore.append/2 is called with prefix: prefix; set_instance_error/2 validates the prefix via TenantProvisioning.tenant_id_for_schema_name/1 before proceeding. (b) no new migration in this diff -- instance_projections.error_detail/status:error already exist from prior REQ-023/043 migrations, confirmed via `git diff main...HEAD --stat -- priv/repo/migrations/` (empty). (c) tenant_id is never caller-supplied here: event_attrs built in append_execution_error_event/2 carries no :tenant_id key at all, and EventStore.append/2 (unmodified by this diff) derives tenant_id solely from opts[:prefix] via TenantProvisioning.tenant_id_for_schema_name/1 and hard-rejects any attrs-supplied :tenant_id (reject_tenant_id/1) -- confirmed by reading lib/letflow/event_store.ex. INV-2 NOT-APPLICABLE (S4 not started, no API response shaping in this diff). INV-3 NOT-APPLICABLE (S5 not started). INV-4 APPLIES/PASS -- grep for System.get_env and hardcoded-secret heuristic pattern against both changed files: no hits; the persisted variable-map snapshot (AC1) is tenant-authored process/business data flowing through the same schema-scoped path as every other tenant record, not platform secret material (API keys/DB URLs/signing keys) that INV-4 targets -- no secret-resolution code touched. INV-5 NOT-APPLICABLE (S4 not started, no lookup-by-ID endpoint in this diff). INV-6 APPLIES/PASS -- this handoff itself is the required proof-of-scoping artifact. INV-7 APPLIES/PASS -- grep for Repo.query against both changed files: zero hits; all access goes through Ecto.Query composition (where/lock/prefix). INV-8 APPLIES/PASS -- grep for bare `{:ok, x} = ...` assignment pattern against both files: all hits are `case`-clause pattern matches (safe, exhaustive via other clauses), not unguarded assignments; new error paths (VariableMerge :rejected, Transition {:error, {:no_matching_edge, ...}}) are explicitly routed into typed {:execution_error, error_args} tuples rather than raising, and the ExecutionError module's own Multi.run/2 steps all return {:ok,_}/{:error,_} tagged tuples. No BLOCKER findings on any applicable invariant.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ061-20260819",
+      "commit_sha_list": ["00b58b6", "5d238e1", "1706a6d"],
+      "remote_branch": "origin/feature/WF02-REQ061-20260819",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

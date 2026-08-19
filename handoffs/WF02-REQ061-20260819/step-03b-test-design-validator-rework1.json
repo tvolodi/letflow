@@ -1,0 +1,49 @@
+{
+  "handoff_id": "4m2k0l69-8l97-431a-2k3s-req061step03brw1",
+  "run_id": "WF02-REQ061-20260819",
+  "workflow_id": "WF-02",
+  "step": "03b-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ061-20260819/step-03b-test-design-validator-rework1.json",
+  "created_at": "2026-08-19T01:53:47Z",
+  "started_at": "2026-08-19T01:53:47Z",
+  "completed_at": "2026-08-19T01:54:19Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-061"],
+    "requirement_text": {
+      "REQ-061": "See handoffs/WF02-REQ061-20260819/step-01-code-designer.json context.requirement_text for the full verbatim requirement text."
+    },
+    "related_handoff_ids": ["step-03-test-designer.json (rework iteration 1)", "step-03b-test-design-validator.json (original FAIL)"],
+    "artifacts_in": ["test/specs/REQ-061.md", "test/letflow/engine_execution_error_test.exs"],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Re-validate test/specs/REQ-061.md after TEST-DESIGNER's doc-only rework (your previous pass FAILed solely because the spec's 'CONFIRMED GAP' and AC4/AC4a sections were stale, describing an already-fixed bug as still open). Confirm the spec now accurately states REQ-050's scenario is fixed and demonstrated end-to-end, cites the fix correctly, and still honestly discloses REQ-049's separate pre-existing gap (docs/issues/ISS-0061.yaml) without softening it. Confirm test/letflow/engine_execution_error_test.exs was NOT modified in this rework (should be identical to what you already validated the test-code-quality of).",
+    "acceptance_criteria": [
+      "test/specs/REQ-061.md no longer describes the REQ-050 downstream-gateway bug as open/unfixed",
+      "The REQ-049 disclosure (ISS-0061, out of scope) is preserved accurately, not softened or removed",
+      "test/letflow/engine_execution_error_test.exs is unchanged from the version already validated for test-code quality"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-validated test/specs/REQ-061.md after TEST-DESIGNER's doc-only rework (commit ab5af10). The spec's STATUS section and AC4/AC4a no longer describe REQ-050's downstream-gateway scenario as open -- it now states it is fixed, cites commit d91e97d, and AC4a's test-case description matches the actual asserted fixed behavior ({:error, {:instance_execution_error, :no_matching_gateway_edge, {:node, \"gw\"}}}, status :error, event appended, task stays :pending). REQ-049's separate pre-existing gap (merge_output_variables/5 always passing nil for variable_validations) is still fully and accurately disclosed via ISS-0061/GitHub #212, not softened or removed, in both the STATUS section and AC4b. Confirmed via `git show --stat ab5af10` that this rework commit touched only test/specs/REQ-061.md and the step-03 handoff -- test/letflow/engine_execution_error_test.exs was not modified in it; its content is identical to the version already validated for test-code quality (8 tests: AC1, AC2, AC3, AC4a, AC4b, AC5, AC6 x2), matching what commit d91e97d introduced. All 6 ACs have runnable coverage, no @tag :skip, no TODO-implement markers, fixtures are self-contained (provisioned_tenant/0 per test, on_exit cleanup, no shared hardcoded state), no cross-test ordering dependency, no hardcoded secrets.",
+    "artifacts_out": ["test/specs/REQ-061.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ061-20260819",
+      "commit_sha_list": ["ab5af10"],
+      "remote_branch": "origin/feature/WF02-REQ061-20260819",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

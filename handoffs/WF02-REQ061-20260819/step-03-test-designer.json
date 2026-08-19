@@ -1,0 +1,64 @@
+{
+  "handoff_id": "0i8g6h25-4h53-4976-8g9o-req061step03",
+  "run_id": "WF02-REQ061-20260819",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ061-20260819/step-03-test-designer.json",
+  "created_at": "2026-08-19T01:20:55Z",
+  "started_at": "2026-08-19T01:20:55Z",
+  "completed_at": "2026-08-19T01:52:52Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-061"],
+    "requirement_text": {
+      "REQ-061": "See handoffs/WF02-REQ061-20260819/step-01-code-designer.json context.requirement_text for the full verbatim requirement text."
+    },
+    "related_handoff_ids": ["step-01-code-designer.json", "step-02a-elixir-dev.json", "step-02d-reviewer.json"],
+    "artifacts_in": ["lib/letflow/design/req061-execution-error-handling.md", "lib/letflow/engine.ex", "lib/letflow/engine/execution_error.ex"],
+    "owned_modules": ["test/letflow/engine_test.exs", "test/specs/REQ-061.md"]
+  },
+  "task": {
+    "description": "Write test coverage for Letflow.Engine.set_instance_error/2, Letflow.Engine.ExecutionError.append_multi/3, and the rewired complete_task/3 (REQ-049/REQ-050 paths now routing into the shared sink) per lib/letflow/design/req061-execution-error-handling.md and REQ-061's 6 acceptance criteria. Add tests following test/letflow/engine_cancel_instance_test.exs's and engine_complete_task_test.exs's established conventions (provisioned_tenant/0 helper, Sandbox :auto, real Postgres). Write test/specs/REQ-061.md per your role's format. IMPORTANT (anti-pattern, docs/anti-patterns.md): keep every combined describe+test name comfortably under 200 characters -- this exact defect class has recurred repeatedly on this project.\n\nREWORK ITERATION 1: TEST-DESIGN-VALIDATOR FAILed this step -- not on test code (test/letflow/engine_execution_error_test.exs is correct and passing, do not touch it) but because test/specs/REQ-061.md is now stale. Since your original PASS, ELIXIR-DEV did a rework that fixed a real bug you found: REQ-050's downstream-gateway no-match now correctly routes into the shared sink (see the AC4a test, lines ~396-428, which asserts the FIXED behavior -- EXECUTION_ERROR event appended, status :error -- not the old bug). FIX: rewrite ONLY test/specs/REQ-061.md's 'CONFIRMED GAP' section (~lines 23-71) and its AC4/AC4a section (~lines 139-158), which still describe the OLD pre-fix bug as open and instruct a future ORCH to route back for a fix that already shipped. Update them to state accurately: REQ-050's downstream-gateway scenario is now genuinely fixed and demonstrated end-to-end through complete_task/3 (cite the fix: lib/letflow/engine.ex's dispatch_task_completion_hop_chain/5 gained a clause matching {:error, {:activation_failed, {:no_matching_edge, ...}}} from advance_until_stable/4's internal loop, commit d91e97d). Keep the still-accurate part: REQ-049's call site remains genuinely unreachable due to a separate pre-existing gap in already-shipped REQ-049 code, filed as docs/issues/ISS-0061.yaml (not fixed under REQ-061's scope, per REVIEWER's sign-off in handoffs/WF02-REQ061-20260819/step-02d-reviewer-rework1.json). Do not touch the test code.",
+    "acceptance_criteria": [
+      "an EXECUTION_ERROR event carries error type, affected node or field, a human-readable reason, and the instance variable map as it stood at the moment of the error -- all four verified by reading the event payload back",
+      "the status flip to ERROR and the EXECUTION_ERROR append commit together: forcing the append to fail leaves the instance status unchanged, verified by reading both back",
+      "an instance in ERROR rejects task completion with a distinct conflict error and remains in ERROR afterwards",
+      "at least the two currently-shipped calling paths (REQ-049 schema violation, REQ-050 gateway no-match) are demonstrated routing into set_instance_error/append_multi rather than writing their own ERROR transition, confirmed by test -- per REVIEWER's sign-off on AC4's interim reading, this is the achievable scope now (REQ-056/057/062 don't exist yet)",
+      "two concurrent operations both triggering EE-10 on the same instance result in exactly one committed EXECUTION_ERROR and one rejection, run concurrently rather than sequentially",
+      "the moduledoc names OBS-05's dead-letter retry/discard path (S6/S4) as the out-of-scope operator action, confirms no partial DLQ was built, and states that ERROR is non-terminal in a way CANCELLED and COMPLETED are not"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REWORK ITERATION 1 (doc-only fix): rewrote test/specs/REQ-061.md's 'CONFIRMED GAP' section (now 'STATUS (post rework iteration 1)') and its AC4/AC4a section, which had gone stale describing an OLD pre-fix bug as still open. Since the original PASS/PARTIAL, ELIXIR-DEV's rework (commit d91e97d) fixed the real defect this test-design pass had found: dispatch_task_completion_hop_chain/5 gained a clause matching {:error, {:activation_failed, {:no_matching_edge, node_id, evaluated_conditions}}} (from advance_until_stable/4's internal worklist loop), routing REQ-050's realistic downstream-gateway no-match into the shared ExecutionError sink instead of aborting the transaction. Verified against the actual test body (test/letflow/engine_execution_error_test.exs lines ~396-428): AC4a now asserts complete_task/3 returns {:error, {:instance_execution_error, :no_matching_gateway_edge, {:node, \"gw\"}}}, instance_projections.status is :error with error_detail set, exactly one EXECUTION_ERROR event is appended, and the task stays :pending. Spec now states REQ-050's scenario is genuinely fixed and demonstrated end-to-end, citing commit d91e97d. Did NOT touch test/letflow/engine_execution_error_test.exs (already correct and passing -- reran it standalone: 8 tests, 0 failures). Kept unchanged and accurate: REQ-049's call site (merge_output_variables/5) remains genuinely unreachable via complete_task/3 today due to a separate, pre-existing gap in already-shipped REQ-049 code (always passes nil for variable_validations), filed as docs/issues/ISS-0061.yaml, out of REQ-061's scope per REVIEWER's sign-off in handoffs/WF02-REQ061-20260819/step-02d-reviewer-rework1.json. Also touched two smaller cross-references (AC1's rationale paragraph, the coverage-check bullet) that pointed at the old 'CONFIRMED GAP' language, for internal consistency.",
+    "artifacts_out": [
+      "test/specs/REQ-061.md",
+      "test/letflow/engine_execution_error_test.exs"
+    ],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "summary": "complete_task/3's rewired REQ-050 no-matching-edge call site (lib/letflow/engine.ex dispatch_task_completion_hop_chain/5, ~line 1157) only intercepts a no-match on the completing task's OWN outgoing edges, not a downstream EXCLUSIVE_GATEWAY reached via advance_until_stable/4's own internal loop -- which is REQ-050's actual, realistic scenario. Confirmed by test AC4a (test/letflow/engine_execution_error_test.exs): completing a task that feeds a no-match gateway one hop later still returns {:error, {:activation_failed, {:no_matching_edge, ...}}}, the pre-REQ-061 shape -- the transaction aborts, instance stays :active, zero EXECUTION_ERROR event is appended. Recommend routing to CODE-DESIGNER/ELIXIR-DEV for rework: the fix likely needs advance_until_stable/4's own {:error, reason} branch (line 383) to also route a {:no_matching_edge,...} reason into ExecutionError.append_multi/3, not just the first {:complete_task, token_id} hop's own direct result."
+      },
+      {
+        "severity": "MAJOR",
+        "summary": "merge_output_variables/5 (REQ-049's call site, lib/letflow/engine.ex ~line 1089) always calls VariableMerge.merge(current_variables, output_variables, nil) -- variable_validations is a literal nil, so VariableMerge.merge/3's own {:rejected,...} branch (which requires a {:rejected, failures} entry in variable_validations) can never fire. REQ-049's own :variable_schema_rejected EE-10 path is therefore unreachable via complete_task/3's public API as shipped -- a pre-existing gap inherited from REQ-049 (which never wired Registry.validate_payload/3's own outcome into this call site), not introduced by REQ-061, but REQ-061's own AC4 sign-off assumed this call site was reachable. merge_output_variables/5 is also private (defp), confirmed via Letflow.Engine.module_info(:exports), so it cannot be unit-tested directly either -- only demonstrable indirectly, via ExecutionError.append_multi/3 fed the same error_args() shape (test AC4b)."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ061-20260819",
+      "commit_sha_list": ["00b58b6", "5d238e1", "1706a6d", "5079981", "a8e02a0"],
+      "remote_branch": "origin/feature/WF02-REQ061-20260819",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (3b) for re-check"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

@@ -1,0 +1,68 @@
+id: ISS-0062
+title: "Letflow.IdentityMigrationTest's DropLegacyPublicIdentityTables guard test failed again under full-suite mix test (recurrence of ISS-0048/ISS-0050/ISS-0060 class)"
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ061-20260819 (Step 4 test run)
+discovered_at: "2026-08-19T01:59:32Z"
+severity: MINOR
+tags:
+  - test-hygiene
+  - postgres
+  - tenant-provisioning
+  - identity-migration
+description: >
+  While running the full suite (`MIX_TEST_PARTITION=2 mix test`) per this
+  host's Step 4 procedure for WF02-REQ061-20260819 (Engine.set_instance_error/2,
+  ExecutionError.append_multi/3, complete_task/3 rewiring), one failure was
+  observed:
+
+    1) test DropLegacyPublicIdentityTables migration guard (REQ-063 §5) --
+       skip-on-uncopied-row once the copy is completed for every registered
+       tenant, the guard PROCEEDS and drops all three public tables
+       (Letflow.IdentityMigrationTest)
+       test/letflow/identity_migration_test.exs:367
+       expected public.groups to be dropped
+
+  This is the same test/line/assertion-shape already documented under
+  ISS-0048's `recurrence_note` (observed during WF02-REQ048-20260818),
+  structurally the same class as ISS-0050 (order/isolation-dependent
+  full-suite failure of this same guard test, passes in isolation), and a
+  further recurrence of ISS-0060 (observed WF02-REQ052-20260819, still
+  `status: open`).
+
+  Confirmed NOT caused by this run's own diff: `git diff main...HEAD --stat`
+  for feature/WF02-REQ061-20260819 touches only: docs/issues/ISS-0063.yaml
+  (new, filed by ELIXIR-DEV as ISS-0061, renumbered to ISS-0063 during
+  Step Final's rebase after main independently gained an unrelated
+  ISS-0061 via a concurrent branch), docs/requirements.yaml, docs/status/,
+  handoffs/*, lib/letflow/design/req061-execution-error-handling.md (new),
+  lib/letflow/engine.ex (Engine.set_instance_error/2,
+  ExecutionError.append_multi/3 call sites, complete_task/3 rewiring),
+  lib/letflow/engine/execution_error.ex (new),
+  test/letflow/engine_execution_error_test.exs (new), test/specs/REQ-061.md
+  (new). Nothing under test/letflow/identity_migration_test.exs or its
+  migration/provisioning code.
+
+  All 8 of REQ-061's own new execution-error tests
+  (test/letflow/engine_execution_error_test.exs) passed, plus the
+  highest-risk regression surface (engine_complete_task_test.exs: 8/8,
+  engine_cancel_instance_test.exs: 9/9) -- this identity-migration test is
+  the suite's only failure (3 properties, 916 tests, 1 failure). Did not
+  block this run's own PASS verdict per Unblock-Everything's scope boundary
+  (not this run's own acceptance criteria) -- filed and forwarded per
+  docs/agents/protocols/ISSUE_QUEUE.md instead.
+
+  Not diagnosed further by this run (TEST-RUNNER scope, not WF-03
+  diagnosis). This is now the third full-suite recurrence after ISS-0048 and
+  ISS-0050 (both `status: resolved`) and ISS-0060 (still `status: open`) --
+  whoever picks this up next should treat the ISS-0060 recurrence guidance
+  (check lib/letflow/sandbox_pool.ex's owner-monitor reaper for orphaned
+  tenant schemas) as the starting point rather than re-deriving root cause
+  from scratch, and consider whether the repeat recurrence rate itself
+  (4 runs now) means this needs to stop being filed-and-forwarded and
+  instead get prioritized for an actual fix.
+affected_files:
+  - test/letflow/identity_migration_test.exs
+  - lib/letflow/tenant_provisioning.ex
+  - lib/letflow/sandbox_pool.ex
+status: open
+github_issue: null

@@ -139,6 +139,7 @@ defmodule Letflow.Engine do
   alias Letflow.Definitions
   alias Letflow.Definitions.Graph
   alias Letflow.Definitions.SnapshotStore
+  alias Letflow.Engine.ExecutionError
   alias Letflow.Engine.InstanceState
   alias Letflow.Engine.Task
   alias Letflow.Engine.TaskActivation
@@ -758,6 +759,9 @@ defmodule Letflow.Engine do
           | {:error, {:event_append_failed, term()}}
           | {:error, :missing_actor_id}
           | {:error, :missing_idempotency_key}
+          | {:error,
+             {:instance_execution_error, error_type :: ExecutionError.error_type(),
+              affected :: ExecutionError.affected()}}
           | {:error, Ecto.Changeset.t()}
           | {:error, term()}
 
@@ -871,25 +875,42 @@ defmodule Letflow.Engine do
     |> Multi.run(:snapshot_and_state, fn repo, %{task: task, instance_projection: projection} ->
       build_snapshot_and_state(repo, task, projection, prefix)
     end)
-    |> Multi.run(:merge, fn _repo, %{snapshot_and_state: %{seed_instance_state: seed_state}} ->
-      merge_output_variables(seed_state.variables, output_variables)
+    |> Multi.run(:merge, fn _repo,
+                            %{
+                              snapshot_and_state: %{seed_instance_state: seed_state},
+                              instance_projection: projection
+                            } ->
+      merge_output_variables(
+        projection,
+        actor_id,
+        idempotency_key,
+        seed_state.variables,
+        output_variables
+      )
     end)
     |> Multi.run(:transition, fn _repo,
-                                 %{snapshot_and_state: snapshot_and_state, merge: merge_result} ->
-      dispatch_task_completion_hop_chain(snapshot_and_state, merge_result)
+                                 %{
+                                   snapshot_and_state: snapshot_and_state,
+                                   merge: merge_outcome,
+                                   instance_projection: projection
+                                 } ->
+      dispatch_task_completion_hop_chain(
+        snapshot_and_state,
+        projection,
+        actor_id,
+        idempotency_key,
+        merge_outcome
+      )
     end)
     |> Multi.merge(fn changes ->
-      build_task_activation_and_reconciliation_multi(changes, completed_at, prefix)
-    end)
-    |> Multi.run(:task_complete, fn repo, %{task: task} ->
-      complete_task_row(repo, task, actor_id, output_variables, completed_at, prefix)
-    end)
-    |> Multi.run(:event, fn _repo, changes ->
-      append_task_completed_event(changes, output_variables, actor_id, idempotency_key, prefix)
-    end)
-    |> Multi.run(:projection, fn repo,
-                                 %{instance_projection: projection, transition: final_state} ->
-      reconcile_projection(repo, projection, final_state, completed_at, prefix)
+      build_complete_task_tail_multi(
+        changes,
+        actor_id,
+        output_variables,
+        completed_at,
+        idempotency_key,
+        prefix
+      )
     end)
     |> Repo.transaction()
     |> interpret_complete_result()
@@ -1036,26 +1057,93 @@ defmodule Letflow.Engine do
     }
   end
 
-  # M4 -- EE-09 variable merge (design doc §7), pure. variable_validations:
-  # nil means the {:rejected, ...} branch is provably unreachable (§7) --
-  # handled here anyway (never a non-exhaustive match / raise on this
-  # call's own totality discipline).
-  defp merge_output_variables(current_variables, output_variables) do
+  # M4 -- EE-09 variable merge (design doc §7 / req061 §5.1), pure. Never
+  # returns {:error, _} itself (req061 §5.1) -- a VariableMerge.merge/3
+  # rejection is routed into an ExecutionError.error_args() tagged
+  # {:execution_error, _} instead of aborting this Multi.run/3 step, so the
+  # enclosing Ecto.Multi can still commit an ERROR-transition tail
+  # (req061 §5.3) rather than rolling back everything. `projection`,
+  # `actor_id`, `idempotency_key` are threaded through here (widening this
+  # function's own arity beyond req061 design doc §5.1's literal 2-arg
+  # `merge_outcome_for/2` @spec -- flagged as a deliberate, safe deviation
+  # for REVIEWER: error_args() needs `instance_id` (from the already-locked
+  # `instance_projection`) and the caller's own `actor_id`/`idempotency_key`,
+  # neither of which the design's own 2-arg signature has access to).
+  @spec merge_output_variables(
+          InstanceProjection.t(),
+          Ecto.UUID.t() | nil,
+          String.t(),
+          current_variables :: map(),
+          output_variables :: map()
+        ) ::
+          {:ok,
+           {:merged, %{new_variables: map(), merge_events: [VariableMerge.merge_event()]}}
+           | {:execution_error, ExecutionError.error_args()}}
+  defp merge_output_variables(
+         projection,
+         actor_id,
+         idempotency_key,
+         current_variables,
+         output_variables
+       ) do
     case VariableMerge.merge(current_variables, output_variables, nil) do
       {:ok, new_variables, merge_events} ->
-        {:ok, %{new_variables: new_variables, merge_events: merge_events}}
+        {:ok, {:merged, %{new_variables: new_variables, merge_events: merge_events}}}
 
-      {:rejected, _unchanged_variables, events} ->
-        {:error, {:unexpected_variable_rejection, events}}
+      {:rejected, unchanged_variables,
+       [{:execution_error, key, rejected_value, :variable_schema_rejected, failures}]} ->
+        error_args = %{
+          instance_id: projection.instance_id,
+          error_type: :variable_schema_rejected,
+          affected: {:field, key},
+          reason: "variable '#{key}' failed schema validation",
+          variables: unchanged_variables,
+          details: %{rejected_value: rejected_value, failures: failures},
+          actor_id: actor_id,
+          idempotency_key: idempotency_key
+        }
+
+        {:ok, {:execution_error, error_args}}
     end
   end
 
   # M5 -- the first {:complete_task, token_id} hop, then the existing
   # advance_until_stable/4 / tokens_needing_dispatch/3 worklist loop (reused
   # unchanged, design doc §1) for every subsequent {:advance_token, ...} hop.
+  # Never returns a bare {:error, _} for REQ-050's own no-matching-edge case
+  # (req061 §5.2) -- routed into an ExecutionError.error_args() tagged
+  # {:execution_error, _} instead, same reasoning as merge_output_variables/2
+  # above. This applies whether the no-matching-edge is discovered on the
+  # completing task's own first Transition.transition/3 call (below) OR one
+  # or more hops later inside advance_until_stable/4's internal worklist loop
+  # (wrapped there as {:error, {:activation_failed, {:no_matching_edge, ...}}},
+  # unwrapped and rewired in the `case advance_until_stable(...)` below) --
+  # REQ-050's realistic trigger is a downstream gateway, so both call sites
+  # must be covered, not just the same-hop case (rework iteration 1, was
+  # previously only rewired for the same-hop case). Any *other*
+  # Transition.transition/3 error (hop-limit, unimplemented node type, etc.)
+  # is intentionally left unrewired (req061 §5.2/§12 OQ-4 -- only
+  # {:no_matching_edge, ...} is in this requirement's named scope) and still
+  # aborts the transaction via {:error, {:transition_failed, reason}} or
+  # {:error, {:activation_failed, reason}} exactly as before.
+  defp dispatch_task_completion_hop_chain(
+         _snapshot_and_state,
+         _projection,
+         _actor_id,
+         _idempotency_key,
+         {:execution_error, error_args}
+       ) do
+    # M4 already fired (REQ-049's own rejection) -- pass-through, no
+    # transition dispatched on top of a rejected merge (req061 §5.2).
+    {:ok, {:execution_error, error_args}}
+  end
+
   defp dispatch_task_completion_hop_chain(
          %{graph: graph, seed_instance_state: seed_state, own_token_id: own_token_id},
-         %{new_variables: merged_variables}
+         projection,
+         actor_id,
+         idempotency_key,
+         {:merged, %{new_variables: merged_variables}}
        ) do
     state_with_merged_variables = %InstanceState{seed_state | variables: merged_variables}
     hop_limit = length(graph.nodes) * 4 + 10
@@ -1069,11 +1157,131 @@ defmodule Letflow.Engine do
             own_token_id
           )
 
-        advance_until_stable(graph, new_instance_state, newly_pending, hop_limit - 1)
+        case advance_until_stable(graph, new_instance_state, newly_pending, hop_limit - 1) do
+          {:ok, advanced_state} ->
+            {:ok, {:advanced, advanced_state}}
+
+          {:error, {:activation_failed, {:no_matching_edge, node_id, evaluated_conditions}}} ->
+            error_args = %{
+              instance_id: projection.instance_id,
+              error_type: :no_matching_gateway_edge,
+              affected: {:node, node_id},
+              reason:
+                "no outgoing edge matched conditions and no default edge configured for gateway node '#{node_id}'",
+              variables: state_with_merged_variables.variables,
+              details: %{evaluated_conditions: evaluated_conditions},
+              actor_id: actor_id,
+              idempotency_key: idempotency_key
+            }
+
+            {:ok, {:execution_error, error_args}}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+
+      {:error, {:no_matching_edge, node_id, evaluated_conditions}} ->
+        error_args = %{
+          instance_id: projection.instance_id,
+          error_type: :no_matching_gateway_edge,
+          affected: {:node, node_id},
+          reason:
+            "no outgoing edge matched conditions and no default edge configured for gateway node '#{node_id}'",
+          variables: state_with_merged_variables.variables,
+          details: %{evaluated_conditions: evaluated_conditions},
+          actor_id: actor_id,
+          idempotency_key: idempotency_key
+        }
+
+        {:ok, {:execution_error, error_args}}
 
       {:error, reason} ->
         {:error, {:transition_failed, reason}}
     end
+  end
+
+  # The req061 §5.3 Multi.merge/2 branch point -- replaces
+  # build_task_activation_and_reconciliation_multi/3's former unconditional
+  # call site. Inspects changes.transition first:
+  #
+  #   * {:execution_error, error_args} -- routes into
+  #     ExecutionError.append_multi/3, reusing M2's own already-locked
+  #     instance_projection (no second lock). None of the normal-path steps
+  #     run: no task activation, no token reconciliation, no
+  #     complete_task_row/5, no TASK_COMPLETED event, no reconcile_projection/5
+  #     call. The task stays :pending; only the instance flips to :error.
+  #   * {:advanced, final_instance_state} -- returns exactly the former
+  #     unconditional tail (task activation, token reconciliation,
+  #     complete_task_row/5, append_task_completed_event/5,
+  #     reconcile_projection/5), each function's own body untouched --
+  #     `normalized_changes` below unwraps the :merge/:transition tags those
+  #     functions' own destructuring clauses were already written against,
+  #     so none of them need editing.
+  #
+  # Both branches append one :complete_task_outcome marker step so
+  # interpret_complete_result/1 can tell the two committed paths apart
+  # without re-deriving it from which optional keys are present in the final
+  # changes map.
+  defp build_complete_task_tail_multi(
+         %{transition: {:execution_error, error_args}, instance_projection: projection},
+         _actor_id,
+         _output_variables,
+         _completed_at,
+         _idempotency_key,
+         prefix
+       ) do
+    Multi.new()
+    |> ExecutionError.append_multi(error_args, prefix: prefix, locked_projection: projection)
+    |> Multi.run(:complete_task_outcome, fn _repo, _changes ->
+      {:ok, {:execution_error, error_args}}
+    end)
+  end
+
+  defp build_complete_task_tail_multi(
+         %{merge: {:merged, merge_outcome}, transition: {:advanced, final_instance_state}} =
+           changes,
+         actor_id,
+         output_variables,
+         completed_at,
+         idempotency_key,
+         prefix
+       ) do
+    normalized_changes =
+      changes
+      |> Map.put(:merge, merge_outcome)
+      |> Map.put(:transition, final_instance_state)
+
+    normalized_changes
+    |> build_task_activation_and_reconciliation_multi(completed_at, prefix)
+    |> Multi.run(:task_complete, fn repo, _changes ->
+      complete_task_row(
+        repo,
+        normalized_changes.task,
+        actor_id,
+        output_variables,
+        completed_at,
+        prefix
+      )
+    end)
+    |> Multi.run(:event, fn _repo, _changes ->
+      append_task_completed_event(
+        normalized_changes,
+        output_variables,
+        actor_id,
+        idempotency_key,
+        prefix
+      )
+    end)
+    |> Multi.run(:projection, fn repo, _changes ->
+      reconcile_projection(
+        repo,
+        normalized_changes.instance_projection,
+        final_instance_state,
+        completed_at,
+        prefix
+      )
+    end)
+    |> Multi.run(:complete_task_outcome, fn _repo, _changes -> {:ok, :completed} end)
   end
 
   # M6/M7 -- built together via Multi.merge/2 (the idiomatic Ecto mechanism
@@ -1271,11 +1479,22 @@ defmodule Letflow.Engine do
   # Result assembly (design doc §8's table + §3's complete_result()).
   # ---------------------------------------------------------------------
 
+  # req061 §5.4 -- the new leading clause: the Multi as a whole still
+  # resolves as {:ok, %{...}} from Ecto.Multi's own perspective on this
+  # branch too (it commits -- that is the entire point: ERROR state must
+  # durably persist, not roll back). Distinguished from the success clause
+  # below purely via :complete_task_outcome's own tag, not by which optional
+  # keys are present.
+  defp interpret_complete_result({:ok, %{complete_task_outcome: {:execution_error, error_args}}}) do
+    {:error, {:instance_execution_error, error_args.error_type, error_args.affected}}
+  end
+
   defp interpret_complete_result(
          {:ok,
           %{
+            complete_task_outcome: :completed,
             task: %Task{} = task,
-            transition: %InstanceState{} = final_instance_state,
+            transition: {:advanced, %InstanceState{} = final_instance_state},
             task_complete: %Task{} = completed_task
           }}
        ) do
@@ -1613,6 +1832,140 @@ defmodule Letflow.Engine do
          {:error, _failed_step, reason, _changes},
          _instance_id,
          _cancelled_at
+       ) do
+    {:error, reason}
+  end
+
+  # =========================================================================
+  # set_instance_error/2 (EE-10, REQ-061) -- see
+  # lib/letflow/design/req061-execution-error-handling.md §4 for the full
+  # design this section implements. The standalone public entry point onto
+  # Letflow.Engine.ExecutionError.append_multi/3, the shared composable sink;
+  # complete_task/3's own REQ-049/050 call sites (above) call
+  # ExecutionError.append_multi/3 directly instead, already inside their own
+  # open Multi -- set_instance_error/2 is for a caller with no other Multi of
+  # its own open (design doc §4's own future REQ-056/057/062 callers).
+  # =========================================================================
+
+  @type standalone_error_attrs :: %{
+          required(:instance_id) => Ecto.UUID.t(),
+          required(:error_type) => ExecutionError.error_type(),
+          required(:affected) => ExecutionError.affected(),
+          required(:reason) => String.t(),
+          required(:variables) => map(),
+          optional(:details) => map(),
+          required(:actor_id) => Ecto.UUID.t() | nil,
+          required(:idempotency_key) => String.t()
+        }
+
+  @type set_error_opts :: [prefix: String.t()]
+
+  @type set_error_result :: %{
+          instance_id: Ecto.UUID.t(),
+          status: :error,
+          error_type: ExecutionError.error_type(),
+          error_detail: map()
+        }
+
+  @type set_error_error ::
+          {:error, :invalid_instance_id}
+          | {:error, :invalid_schema_name}
+          | {:error, :missing_actor_id_or_idempotency_key}
+          | {:error, :instance_not_found}
+          | {:error, {:instance_terminal, status :: :completed | :cancelled}}
+          | {:error, {:instance_already_error, error_detail :: map()}}
+          | {:error, {:event_append_failed, term()}}
+          | {:error, Ecto.Changeset.t()}
+          | {:error, term()}
+
+  @doc """
+  Standalone entry point for setting an instance to `ERROR` (EE-10) from
+  outside any other function's own open `Ecto.Multi` -- the shape
+  `attrs[:instance_id]` and every other `error_args()` field is supplied by
+  the caller. Unlike `cancel_instance/3`, `attrs[:actor_id]` may be
+  explicitly `nil` (structurally legal here) for a future actor-less caller
+  (design doc §12 OQ-3) -- `attrs[:idempotency_key]` is still required,
+  non-nilable, matching every other event-appending call in this module.
+
+  Delegates the actual `ERROR`-transition work to
+  `Letflow.Engine.ExecutionError.append_multi/3` -- the shared, composable
+  sink every engine-internal failure funnels into (design doc §3). See that
+  module's moduledoc for the OBS-05 dead-letter (S6) scope boundary and the
+  "ERROR is not terminal" invariant this function's own callers should not
+  assume otherwise.
+  """
+  @spec set_instance_error(
+          attrs :: standalone_error_attrs(),
+          opts :: set_error_opts()
+        ) :: {:ok, set_error_result()} | set_error_error()
+  def set_instance_error(attrs, opts) when is_map(attrs) and is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+
+    with {:ok, instance_id} <- cast_instance_id(Map.get(attrs, :instance_id)),
+         {:ok, idempotency_key} <- fetch_idempotency_key_for_error(attrs),
+         {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      error_args = %{
+        instance_id: instance_id,
+        error_type: Map.fetch!(attrs, :error_type),
+        affected: Map.fetch!(attrs, :affected),
+        reason: Map.fetch!(attrs, :reason),
+        variables: Map.fetch!(attrs, :variables),
+        details: Map.get(attrs, :details, %{}),
+        actor_id: Map.get(attrs, :actor_id),
+        idempotency_key: idempotency_key
+      }
+
+      Multi.new()
+      |> ExecutionError.append_multi(error_args, prefix: prefix)
+      |> Repo.transaction()
+      |> interpret_set_instance_error_result(instance_id, error_args.error_type)
+    end
+  end
+
+  # idempotency_key is the one field this pre-transaction phase itself
+  # validates non-nil/non-empty (matching EventStore.append/2's own
+  # fetch_idempotency_key/1 requirement) -- actor_id is deliberately not
+  # rejected when nil (design doc §4, §12 OQ-3).
+  defp fetch_idempotency_key_for_error(attrs) do
+    case Map.get(attrs, :idempotency_key) do
+      key when is_binary(key) and byte_size(key) > 0 -> {:ok, key}
+      _other -> {:error, :missing_actor_id_or_idempotency_key}
+    end
+  end
+
+  defp interpret_set_instance_error_result(
+         {:ok, %{execution_error_projection_update: %InstanceProjection{} = projection}},
+         instance_id,
+         error_type
+       ) do
+    {:ok,
+     %{
+       instance_id: instance_id,
+       status: :error,
+       error_type: error_type,
+       error_detail: projection.error_detail
+     }}
+  end
+
+  # ExecutionError.append_multi/3's own :execution_error_projection_lock step
+  # returns {:error, {:instance_not_found}} (a tuple-wrapped atom, design doc
+  # §2's eligibility_error() shape) -- flattened here to the bare
+  # :instance_not_found atom this function's own set_error_error() promises
+  # (design doc §4). Every other reason (e.g. {:instance_terminal, _},
+  # {:instance_already_error, _}) already matches its own set_error_error()
+  # member shape verbatim and passes through unchanged.
+  defp interpret_set_instance_error_result(
+         {:error, _failed_step, {:instance_not_found}, _changes},
+         _instance_id,
+         _error_type
+       ) do
+    {:error, :instance_not_found}
+  end
+
+  defp interpret_set_instance_error_result(
+         {:error, _failed_step, reason, _changes},
+         _instance_id,
+         _error_type
        ) do
     {:error, reason}
   end

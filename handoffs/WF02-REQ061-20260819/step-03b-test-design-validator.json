@@ -1,0 +1,55 @@
+{
+  "handoff_id": "3l1j9k58-7k86-4209-1j2r-req061step03b",
+  "run_id": "WF02-REQ061-20260819",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ061-20260819/step-03b-test-design-validator.json",
+  "created_at": "2026-08-19T01:48:46Z",
+  "started_at": "2026-08-19T01:48:46Z",
+  "completed_at": "2026-08-19T01:49:56Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-061"],
+    "requirement_text": {
+      "REQ-061": "See handoffs/WF02-REQ061-20260819/step-01-code-designer.json context.requirement_text for the full verbatim requirement text."
+    },
+    "related_handoff_ids": ["step-03-test-designer.json", "step-02a-elixir-dev.json (rework iteration 1, edited the test file directly)", "step-02d-reviewer-rework1.json"],
+    "artifacts_in": ["test/specs/REQ-061.md", "test/letflow/engine_execution_error_test.exs"],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently validate test/specs/REQ-061.md and test/letflow/engine_execution_error_test.exs against REQ-061's 6 acceptance criteria, AS THEY STAND NOW after ELIXIR-DEV's rework-iteration-1 edit to the test file (it was originally written by TEST-DESIGNER, then ELIXIR-DEV modified AC4a/AC4b during rework to reflect the fixed behavior -- REVIEWER already re-checked this once, but this is your independent validator pass, do not just trust REVIEWER's re-check). Specifically verify AC4a now asserts the CORRECT fixed behavior (EXECUTION_ERROR event appended, status :error) and was not weakened. Run the standard checklist plus the mandatory mechanical 255-char describe+test name check.",
+    "acceptance_criteria": [
+      "At least one runnable test targets each of REQ-061's 6 acceptance criteria (AC4's interim scope per REVIEWER's sign-off: REQ-050 demonstrated for real, REQ-049 honestly documented as currently unreachable via a separate filed issue)",
+      "No TODO: implement test left in the spec",
+      "Test fixtures use per-test unique data, no cross-test pollution",
+      "Tests are self-sufficient, no ordering dependency",
+      "No hardcoded secrets/connection strings",
+      "Every describe+test combined name is mechanically verified under 255 chars",
+      "AC4a specifically asserts the fixed behavior (EXECUTION_ERROR event + status :error), not the pre-fix bug behavior, and was not weakened to trivially pass"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Test code itself passes every mechanical/isolation check: mix test test/letflow/engine_execution_error_test.exs -> 8 tests, 0 failures (real Postgres, seed 1). Mechanical 255-char describe+test combined-name check run via script over every describe/test pair in the file -- max observed length 158 chars (AC4a), well under 255, none close to the limit. No 'TODO: implement test' anywhere in the spec or test file (grepped). No hardcoded secrets/connection strings (grepped password|secret|api_key|connection string -- zero hits; DB config comes from Letflow.DataCase/app config, not literals in this file). Fixtures are per-test-unique: every test calls provisioned_tenant()/provisioned_tenant_without_execution_error_type() itself (own tenant + own dynamically-provisioned schema, unique_integer-suffixed slug), inserts its own definition/instance, and on_exit/1 drops that tenant's schema and rows -- no shared/global fixture state, no test depends on another having run first (each is a self-contained ExUnit test with async: false but no cross-test data reuse). AC4a's test body ('complete_task/3 routes it into ExecutionError.append_multi/3: EXECUTION_ERROR appended, status :error') now asserts the CORRECT fixed behavior verbatim: return value {:error, {:instance_execution_error, :no_matching_gateway_edge, {:node, \"gw\"}}}, instance_projections.status == :error, error_detail != nil, events count +1, one EXECUTION_ERROR event row with error_type 'no_matching_gateway_edge', task stays :pending. Cross-checked against lib/letflow/engine.ex: interpret_complete_result/1's leading clause (~line 1488) and dispatch_task_completion_hop_chain/5's advance_until_stable/4 {:error,{:activation_failed,{:no_matching_edge,...}}} clause (~line 1163-1173) genuinely implement this rewiring -- not a trivially-passing or weakened assertion. AC4a was NOT weakened and does NOT assert the old pre-fix bug. HOWEVER: FAIL on documentation-accuracy grounds -- test/specs/REQ-061.md was not updated to match this rework. Its 'CONFIRMED GAP' section (lines 23-71) and its AC4/AC4a section (lines 139-158) still assert, in the present tense, that 'complete_task/3's own rewired REQ-050 call site does not actually intercept the realistic case', that AC4a's test 'asserts the return value is the pre-REQ-061 shape ({:error, {:activation_failed, ...}})... This test passes today because it correctly documents the actual shipped behavior -- it is not an assertion that AC4 is satisfied for this scenario', and instructs (line 68-71) 'Flagged in this run's handoff result.issues for ORCH to route... back to CODE-DESIGNER/ELIXIR-DEV for complete_task/3's own rewiring'. All of this is now false: the actual test code and the actual engine.ex code both implement and assert the fixed behavior, and the bug the spec describes as still-open has been fixed. A spec document that actively asserts the opposite of what the code and tests now do -- including telling a future ORCH to route a phantom bug back for a fix that already shipped -- is a genuine defect in the test-design artifact, not a cosmetic nit: it will mislead the next agent (ORCH, RELEASE-VALIDATOR, or a future maintainer) who reads the spec as the source of truth instead of re-deriving from code. Per WF-02 Step 3b this is a hard-gate FAIL requiring rework, routed to TEST-DESIGNER (not ELIXIR-DEV, not a rewrite by this validator) to update test/specs/REQ-061.md's CONFIRMED GAP / AC4 / AC4a sections and moduledoc-comment cross-references so the spec matches the current, fixed, passing test code -- test code itself needs no changes.",
+    "artifacts_out": [],
+    "issues": [
+      "test/specs/REQ-061.md lines 23-71 (CONFIRMED GAP section) and lines 139-158 (AC4/AC4a section) describe complete_task/3's REQ-050 downstream-gateway rewiring as still broken and AC4a as documenting the pre-fix bug shape ({:error, {:activation_failed, ...}}), and instruct ORCH to route back to CODE-DESIGNER/ELIXIR-DEV for a fix. This is stale: the actual test/letflow/engine_execution_error_test.exs AC4a (lines 396-428) and lib/letflow/engine.ex (interpret_complete_result/1 ~line 1488, dispatch_task_completion_hop_chain/5's advance_until_stable clause ~line 1163) both now implement and assert the FIXED behavior (EXECUTION_ERROR event appended, status :error, {:error, {:instance_execution_error, ...}} return). Route to TEST-DESIGNER to rewrite the spec's CONFIRMED GAP and AC4/AC4a narrative to match the current (fixed) code -- do not touch the test code, which is correct as-is."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ061-20260819",
+      "commit_sha_list": ["00b58b6", "5d238e1", "1706a6d", "5079981", "a8e02a0", "d91e97d", "100e3bc", "bb5326b"],
+      "remote_branch": "origin/feature/WF02-REQ061-20260819",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER: update test/specs/REQ-061.md (CONFIRMED GAP section and AC4/AC4a section) to reflect that REQ-050's downstream-gateway trigger is now fixed and demonstrated end to end through complete_task/3, matching the already-correct test code and moduledoc in test/letflow/engine_execution_error_test.exs. Then re-route to TEST-DESIGN-VALIDATOR for re-check before proceeding to TEST-RUNNER (4)."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

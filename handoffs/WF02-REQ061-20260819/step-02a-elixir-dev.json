@@ -1,0 +1,61 @@
+{
+  "handoff_id": "7f5d3ef2-1e20-4643-5d6l-req061step02a",
+  "run_id": "WF02-REQ061-20260819",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ061-20260819/step-02a-elixir-dev.json",
+  "created_at": "2026-08-19T00:59:12Z",
+  "started_at": "2026-08-19T00:59:12Z",
+  "completed_at": "2026-08-19T01:46:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-061"],
+    "requirement_text": {
+      "REQ-061": "See handoffs/WF02-REQ061-20260819/step-01-code-designer.json context.requirement_text for the full verbatim requirement text."
+    },
+    "related_handoff_ids": ["step-01-code-designer.json", "step-01b-code-design-validator.json"],
+    "artifacts_in": ["lib/letflow/design/req061-execution-error-handling.md"],
+    "owned_modules": ["lib/letflow/engine.ex"]
+  },
+  "task": {
+    "description": "Implement lib/letflow/design/req061-execution-error-handling.md exactly: add Letflow.Engine.ExecutionError.append_multi/3 (the Multi-composable shared sink) and Letflow.Engine.set_instance_error/2 (standalone wrapper) to lib/letflow/engine.ex per the design's Multi step table -- reusing the already-existing instance_projections.error_detail column (no migration needed, confirm this). Rewire merge_output_variables/2 and dispatch_task_completion_hop_chain/2 (both in complete_task/3's Multi chain) per the design's §5 Multi.merge/2 branch-point specification: they must stop aborting the whole Multi on schema-violation/no-matching-edge and instead route into ExecutionError.append_multi/3, reusing complete_task/3's already-locked instance_projection (no second lock). complete_error()'s type gains the {:error, {:instance_execution_error, error_type, affected}} member per the design.\n\nREWORK ITERATION 1: TEST-DESIGNER found (docs/issues/ pending filing, see this handoff's new context) that dispatch_task_completion_hop_chain/5's rewiring only intercepts a :no_matching_edge on the COMPLETING TASK's own first Transition.transition/3 call (engine.ex ~line 1157) -- it does NOT catch the same error when it occurs one or more hops later inside advance_until_stable/4's own internal worklist loop (engine.ex line 372-385), which is REQ-050's actual, realistic scenario (a downstream EXCLUSIVE_GATEWAY reached via a chain of advances). advance_until_stable/4 wraps every Transition error as {:error, {:activation_failed, reason}} (line 383) and this wrapped error propagates untouched through dispatch_task_completion_hop_chain/5's `case advance_until_stable(...) do {:error, reason} -> {:error, reason} end` branch (line 1152-1154) -- confirmed by a real Postgres integration test (test/letflow/engine_execution_error_test.exs, test 'AC4a') that reproduces the pre-REQ-061 abort: instance stays :active, zero EXECUTION_ERROR event appended, {:error, {:activation_failed, {:no_matching_edge, ...}}} returned raw. FIX: in dispatch_task_completion_hop_chain/5's `case advance_until_stable(graph, new_instance_state, newly_pending, hop_limit - 1) do` (line 1152), add a clause matching `{:error, {:activation_failed, {:no_matching_edge, node_id, evaluated_conditions}}}` BEFORE the generic `{:error, reason} -> {:error, reason}` fallback, building the same error_args() shape the existing line-1157 clause builds (using state_with_merged_variables.variables for the snapshot, since that's the last known-good variable state before the failed hop) and returning {:ok, {:execution_error, error_args}}. Leave every other advance_until_stable/4 error reason (hop_limit_exceeded, unimplemented node type, etc.) unrewired, matching the existing design-doc-authorized scope boundary (req061 §5.2/§12 OQ-4). Separately: TEST-DESIGNER also found merge_output_variables/5 (REQ-049's call site, line ~1089) always passes `nil` for VariableMerge.merge/3's variable_validations argument, so its own {:rejected,...}/execution-error branch can never fire -- this is a genuinely pre-existing gap inherited from REQ-049's own shipped code (REQ-049 never wired a validation-outcome producer into this call site), not something this rework should fix under REQ-061's scope. File it as a new docs/issues/ISS-NNNN.yaml (Unblock-Everything's scope boundary -- notice, don't silently fix an unrelated already-shipped requirement's gap) and reference it in your handoff's result.issues; do not attempt to make REQ-049's path reachable in this rework. After the fix, re-verify AC4's test (test/letflow/engine_execution_error_test.exs) passes for the REQ-050 case; AC4's overall characterization (now: 1 of 2 currently-reachable callers demonstrated for real, REQ-049 blocked by a filed pre-existing gap, REQ-056/057/062 still future) will be re-assessed by REVIEWER on this rework's next pass, not decided by you.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "No new migration needed (design confirms instance_projections.error_detail already exists -- verify this claim against the actual schema before proceeding)",
+      "No SQL string interpolation of tenant/user data",
+      "All callers of merge_output_variables/2 and dispatch_task_completion_hop_chain/2 (i.e. complete_task/3) still compile and their existing tests still pass",
+      "set_instance_error/2 and ExecutionError.append_multi/3 match the design's @spec exactly",
+      "REQ-049's schema-violation path and REQ-050's no-matching-edge path both now route through ExecutionError.append_multi/3 instead of aborting the Multi with a bare error tuple"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REWORK ITERATION 1 fix applied. Root cause: dispatch_task_completion_hop_chain/5's `case advance_until_stable(graph, new_instance_state, newly_pending, hop_limit - 1) do` (engine.ex, was line 1152-1154) only had `{:ok, advanced_state} -> {:ok, {:advanced, advanced_state}}` and a generic `{:error, reason} -> {:error, reason}` fallback -- so a {:no_matching_edge, ...} discovered one or more hops downstream of the completing task (wrapped by advance_until_stable/4's own {:error, reason} -> {:error, {:activation_failed, reason}} clause, line 383) propagated unrewired, aborting the whole Multi. Fixed by inserting a new clause between the two, matching {:error, {:activation_failed, {:no_matching_edge, node_id, evaluated_conditions}}}, building the identical error_args() shape the existing same-hop clause (line ~1157, now ~1170) builds -- using state_with_merged_variables.variables for the variable snapshot -- and returning {:ok, {:execution_error, error_args}}. All other advance_until_stable/4 error reasons (hop_limit_exceeded, unimplemented node type) remain unrewired and still abort via the untouched generic fallback, matching req061 §5.2/§12 OQ-4's scope boundary. Updated the dispatch_task_completion_hop_chain/5 moduledoc comment to describe both call sites. Updated test/letflow/engine_execution_error_test.exs: rewrote the file's moduledoc (removed the 'CONFIRMED GAP' framing, now documents the fix), rewrote AC4a's test from 'documents the bug' (asserted raw {:error, {:activation_failed, {:no_matching_edge, ...}}}, instance stays :active, zero events) to 'demonstrates the fix' (asserts {:error, {:instance_execution_error, :no_matching_gateway_edge, {:node, \"gw\"}}} -- interpret_complete_result/1's leading clause maps a committed {:execution_error,_} Multi outcome to this shape for the caller -- instance status :error, error_detail set, one EXECUTION_ERROR event appended with payload error_type 'no_matching_gateway_edge', task stays :pending). Updated AC4b's and the graph_task_then_gateway_no_match/0 helper's comments to stop cross-referencing AC4a as 'the confirmed gap' since AC4a now demonstrates correct behavior; AC4b still exercises REQ-049's shape and REQ-050's same-hop shape directly via set_instance_error/2 since both remain structurally unreachable via complete_task/3 for reasons unrelated to this fix (REQ-049's own gap, filed as ISS-0061; REQ-050's same-hop trigger is CHK-19-blocked at definition-creation time, unrelated to REQ-050's own realistic downstream-hop scenario which AC4a now covers directly). `mix compile --warnings-as-errors` exits 0. `mix format --check-formatted` clean on lib/letflow/engine.ex and test/letflow/engine_execution_error_test.exs (ran `mix format` on the test file once to also clear two pre-existing unrelated formatting-drift lines it already contained). `mix test test/letflow/engine_execution_error_test.exs`: 8 tests, 0 failures (AC4a now green with the correct assertions). `mix test test/letflow/engine_complete_task_test.exs test/letflow/engine_cancel_instance_test.exs test/letflow/engine_test.exs test/letflow/engine/`: 1 property, 209 tests, 0 failures. Full `mix test`: 3 properties, 916 tests, 0 failures (single run, no flakiness observed this time).",
+    "artifacts_out": [
+      "lib/letflow/engine.ex",
+      "test/letflow/engine_execution_error_test.exs",
+      "docs/issues/ISS-0061.yaml"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Filed docs/issues/ISS-0061.yaml (GitHub issue https://github.com/tvolodi/letflow/issues/212): merge_output_variables/5 (lib/letflow/engine.ex ~line 1089, REQ-049's own call site) always passes nil for VariableMerge.merge/3's variable_validations argument, so its own {:rejected, ...} schema-violation branch -- the branch REQ-061 rewired into ExecutionError.append_multi/3 -- can never actually fire via complete_task/3. Pre-existing gap inherited from REQ-049's own shipped code, not introduced or fixable within REQ-061's scope; noticed and filed per Unblock-Everything's scope boundary and docs/agents/protocols/ISSUE_QUEUE.md, not fixed in this rework."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ061-20260819",
+      "commit_sha_list": ["00b58b6", "5d238e1"],
+      "remote_branch": "origin/feature/WF02-REQ061-20260819",
+      "push_status": "pending (this rework's commit not yet pushed)",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (2c) for re-review of the rework"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

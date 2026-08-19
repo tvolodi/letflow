@@ -35,9 +35,18 @@ sets instance status to CANCELLED in one transaction; supersedes and
 deletes lib/letflow/parallel_approval.ex and
 lib/letflow/approval_supervisor.ex, superseded by REQ-051's
 PARALLEL_GATEWAY split/join; same header-sync gap-fix shape applied by
-this requirement's own DOC-UPDATER); REQ-053, REQ-054, REQ-055,
-REQ-056, REQ-057, REQ-059, REQ-060, REQ-061, REQ-062
-(`docs/requirements.yaml`, 9 total) `pending`.
+this requirement's own DOC-UPDATER); REQ-061 `done` (Execution error
+handling, EE-10 -- Letflow.Engine.set_instance_error/2 and
+Letflow.Engine.ExecutionError.append_multi/3, the single shared sink
+every engine-internal failure funnels into; REQ-050's gateway-no-match
+path fixed to route into it during a rework iteration, REQ-049's own
+pre-existing gap filed separately as docs/issues/ISS-0063.yaml
+(renumbered from ISS-0061 during Step Final's rebase; main
+independently gained an unrelated ISS-0061 via a concurrent branch),
+out of scope per REVIEWER sign-off; same header-sync gap-fix shape
+applied by this requirement's own DOC-UPDATER); REQ-053, REQ-054,
+REQ-055, REQ-056, REQ-057, REQ-059, REQ-060, REQ-062
+(`docs/requirements.yaml`, 8 total) `pending`.
 
 ## Scope
 

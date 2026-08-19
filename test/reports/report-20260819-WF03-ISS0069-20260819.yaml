@@ -1,0 +1,106 @@
+# Test run report — WF-03 Step 4 (test run) for ISS-0069
+
+issue_id: ISS-0069
+workflow: WF-03
+step: "04"
+agent: TEST-RUNNER
+run_id: WF03-ISS0069-20260819
+date_utc: 2026-08-19T07:14:07Z
+
+git:
+  branch: feature/WF03-ISS0069-20260819
+  branch_confirmed: true
+  commit: f41daf5
+  commit_subject: "style: apply mix format to ISS-0069 Step 4 test file"
+  prior_commits_this_run:
+    - "9a5a551 test: add ISS-0069 Step 4 coverage for letflow.check gate"
+    - "f41daf5 style: apply mix format to ISS-0069 Step 4 test file"
+  worktree: false (primary checkout at ~/letflow)
+  diff_summary: >
+    TEST-DESIGNER's TEST-DESIGN-VALIDATOR-passed coverage for the
+    `mix letflow.check.test` gate task (test/mix/tasks/letflow_check_test_test.exs,
+    test/specs/ISS-0069.md) committed this step, on top of ISS-0069 Part 1
+    (unused defp default sweep, commits 7094c30/e95746e) and Part 2
+    (targeted letflow.check.test gate, commit 1b969c0).
+
+environment:
+  postgres_container: >
+    letflow-postgres-1 confirmed Running via `docker compose up -d` at start
+    of this run.
+  command_run: >
+    mix test (full suite); mix letflow.check (which itself invokes
+    mix format --check-formatted, mix compile --warnings-as-errors,
+    and a full mix test run internally). The `test` alias runs
+    ecto.create + ecto.migrate --quiet first automatically.
+
+verdict: PASS
+
+checks:
+  test_suite_full_run:
+    result: PASS — all green, no failures
+    exit_code: 0
+    summary_line_verbatim: "5 properties, 1032 tests, 0 failures"
+    finished_line_verbatim: "Finished in 131.2 seconds (5.5s async, 125.6s sync)"
+    failures: 0
+
+  letflow_check_gate:
+    result: >
+      Initial run FAILED at the `mix format --check-formatted` sub-step:
+      test/mix/tasks/letflow_check_test_test.exs (the file just committed
+      this step) had one unformatted line (81-83, a Path.join call too
+      long for the formatter's line width). Root-caused as a TEST-RUNNER
+      commit-time gap (file was committed without running `mix format`
+      first), not an application bug — no upstream code issue. Fixed via
+      `mix format test/mix/tasks/letflow_check_test_test.exs` and
+      committed as f41daf5. Re-run after the fix:
+    exit_code: 0
+    final_output_line_verbatim: >
+      "mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings."
+    internal_test_run_summary_verbatim: "5 properties, 1032 tests, 0 failures"
+
+  branch_own_change_caused_failures: >
+    One: the unformatted new test file caught by `mix letflow.check`'s
+    format gate. Fixed on this branch (commit f41daf5), not filed to the
+    issue queue — this run's own defect, per Unblock-Everything.
+
+  pre_existing_failures_found: []
+
+  known_noise_not_a_failure:
+    - >
+      Verbose SQL [debug] QUERY OK logging and one expected Keycloak
+      metadata-load connection error (placeholder OIDC issuer:
+      "Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/...") appear in raw mix test
+      output — expected, not a failure.
+    - >
+      `** (RuntimeError) boom`, `** (stop) :deliberate_exit`, and
+      `** (RuntimeError) plugin blew up` lines appear in the raw
+      mix letflow.check output (which re-runs the full suite internally)
+      — these are expected error-path fixtures from existing
+      engine_execution_error_test.exs-style tests deliberately exercising
+      failure handling, not real failures. Both full-suite runs finished
+      with "0 failures".
+
+  regression_check: >
+    Two full-suite runs this session (plain `mix test` and the internal
+    run inside `mix letflow.check`), both 1032 tests / 5 properties / 0
+    failures. No regressions attributable to this branch's diff. No new
+    issue needs filing to the queue.
+
+diagnosis: >
+  `mix test` passed clean on the first run (1032 tests, 5 properties, 0
+  failures). `mix letflow.check` failed on its first invocation solely
+  because the just-committed test/mix/tasks/letflow_check_test_test.exs
+  was not run through `mix format` before commit — a formatting gap in
+  this step's own commit, not a pre-existing or application-level issue.
+  Fixed by formatting the file and committing the fix (f41daf5); the
+  re-run of `mix letflow.check` then passed with exit 0 and
+  "mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings."
+  Nothing routes to ELIXIR-DEV; the ISS-0069 gate itself (Part 1 sweep +
+  Part 2 letflow.check.test task) is verified working end-to-end.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-20260819-WF03-ISS0069-20260819.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

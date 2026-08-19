@@ -97,7 +97,7 @@ defmodule Letflow.Engine.ServiceTaskRoutingTest do
     prefix <> "-" <> to_string(System.unique_integer([:positive, :monotonic]))
   end
 
-  defp unique_idempotency_key(prefix \\ "req056-idk") do
+  defp unique_idempotency_key(prefix) do
     prefix <> "-" <> to_string(System.unique_integer([:positive, :monotonic]))
   end
 
@@ -172,7 +172,7 @@ defmodule Letflow.Engine.ServiceTaskRoutingTest do
     |> Repo.all(prefix: schema_name)
   end
 
-  defp give_up_context(instance_id, overrides \\ %{}) do
+  defp give_up_context(instance_id, overrides) do
     Map.merge(
       %{
         instance_id: instance_id,

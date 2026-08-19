@@ -33,7 +33,6 @@ defmodule Letflow.EngineCancelInstanceTest do
   alias Letflow.EventStore
   alias Letflow.EventStore.Event
   alias Letflow.EventStore.InstanceProjection
-  alias Letflow.EventStore.Registry
   alias Letflow.Identity.Tenant
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
@@ -58,21 +57,6 @@ defmodule Letflow.EngineCancelInstanceTest do
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
   end
 
-  defp register_event_type!(name, tenant_id) do
-    assert {:ok, _event_type} =
-             Registry.register_type(
-               %{
-                 "name" => name,
-                 "schema_version" => 1,
-                 "json_schema" => %{"type" => "object"},
-                 "description" => "REQ-052 test fixture -- permissive schema"
-               },
-               tenant_id
-             )
-
-    :ok
-  end
-
   defp provisioned_tenant do
     Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
 
@@ -93,9 +77,14 @@ defmodule Letflow.EngineCancelInstanceTest do
 
     assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
-    :ok = register_event_type!("TASK_COMPLETED", tenant.id)
-    :ok = register_event_type!("INSTANCE_CANCELLED", tenant.id)
-
+    # TASK_COMPLETED and INSTANCE_CANCELLED are now auto-seeded by
+    # replay_migrations/2's default manifest (REQ-045 §9 OQ-3a, extended by
+    # ISS-0072/GH#257) -- this fixture used to self-register both again against a
+    # permissive `%{"type" => "object"}` schema (ISS-0073/GH#267: that duplicate
+    # registration now collides with provisioning's own seed and hard-fails).
+    # Removed rather than reconciled: every payload this file writes goes through
+    # the real Engine.complete_task/3 / Engine.cancel_instance/3 writers
+    # provisioning's stricter schemas were written to validate.
     %{tenant_id: tenant.id, schema_name: schema_name}
   end
 
@@ -359,10 +348,18 @@ defmodule Letflow.EngineCancelInstanceTest do
       assert {:ok, _cancelled} =
                Engine.cancel_instance(instance_id, cancel_attrs(), prefix: schema_name)
 
+      # The payload must satisfy INSTANCE_CANCELLED's own real json_schema (now
+      # provisioning's stricter seed, not a permissive test-fixture stand-in --
+      # ISS-0073/GH#267) so this append reaches the :instance_terminated check
+      # inside EventStore.append/2's Multi at all -- Registry.validate_payload/3
+      # runs in the pre-transaction phase, before that check (event_store.ex's own
+      # P4 comment), so a schema-invalid payload like the prior bare `%{probe: true}`
+      # now fails validation before :instance_terminated is ever reached, proving
+      # the wrong thing.
       append_attrs = %{
         instance_id: instance_id,
         event_type: "INSTANCE_CANCELLED",
-        payload: Jason.encode!(%{probe: true}),
+        payload: Jason.encode!(%{cancelled_task_ids: [], cancelled_token_ids: []}),
         actor_id: Ecto.UUID.generate(),
         idempotency_key: unique_idempotency_key("post-cancel-append")
       }

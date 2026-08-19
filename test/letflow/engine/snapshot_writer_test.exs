@@ -25,7 +25,6 @@ defmodule Letflow.Engine.SnapshotWriterTest do
   alias Letflow.Engine.Task, as: EngineTask
   alias Letflow.Engine.Token
   alias Letflow.EventStore.Event
-  alias Letflow.EventStore.Registry
   alias Letflow.Identity.Tenant
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
@@ -50,21 +49,6 @@ defmodule Letflow.Engine.SnapshotWriterTest do
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
   end
 
-  defp register_event_type!(name, tenant_id) do
-    assert {:ok, _event_type} =
-             Registry.register_type(
-               %{
-                 "name" => name,
-                 "schema_version" => 1,
-                 "json_schema" => %{"type" => "object"},
-                 "description" => "REQ-054 test fixture -- permissive schema"
-               },
-               tenant_id
-             )
-
-    :ok
-  end
-
   defp provisioned_tenant do
     Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
 
@@ -85,10 +69,14 @@ defmodule Letflow.Engine.SnapshotWriterTest do
 
     assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
-    # "INSTANCE_STARTED" is auto-seeded by replay_migrations/2 (REQ-045 §9 OQ-3a).
-    :ok = register_event_type!("TASK_COMPLETED", tenant.id)
-    :ok = register_event_type!("EXECUTION_ERROR", tenant.id)
-
+    # "INSTANCE_STARTED", "TASK_COMPLETED", and "EXECUTION_ERROR" are all now
+    # auto-seeded by replay_migrations/2's default manifest (REQ-045 §9 OQ-3a,
+    # extended by ISS-0072/GH#257) -- this fixture used to self-register the latter
+    # two again against a permissive `%{"type" => "object"}` schema (ISS-0073/GH#267:
+    # that duplicate registration now collides with provisioning's own seed and
+    # hard-fails). Removed rather than reconciled: every payload this file writes
+    # goes through the real Engine.complete_task/3 / ExecutionError writers
+    # provisioning's stricter schemas were written to validate.
     %{tenant_id: tenant.id, schema_name: schema_name}
   end
 

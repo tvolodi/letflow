@@ -1,0 +1,66 @@
+id: ISS-0074
+title: >
+  tenant_provisioning.ex's seeded json_schema for INSTANCE_PINS_REBOUND types
+  prior_version/new_version as "integer", but Engine.PinRebind's real payload
+  writes them as strings -- every real rebind_pins/3 call fails schema
+  validation
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF03-ISS0072-20260819
+discovered_at: "2026-08-19T11:39:26Z"
+severity: BLOCKER
+tags:
+  - event-store
+  - schema-mismatch
+  - pin-rebind
+description: >
+  Discovered while resolving ISS-0073 (test-fixture collisions caused by
+  ISS-0072/GH#257's `TenantProvisioning.maybe_seed_platform_event_types/2`
+  seeding 6 event types at tenant provisioning time).
+
+  `lib/letflow/tenant_provisioning.ex`'s `@platform_event_type_seed_attrs`
+  entry for `"INSTANCE_PINS_REBOUND"` (lines ~603-630) declares:
+
+    "entries" => %{
+      "items" => %{
+        "properties" => %{
+          "prior_version" => %{"type" => "integer"},
+          "new_version" => %{"type" => "integer"}
+        }
+      }
+    }
+
+  But `Letflow.Engine.PinRebind`'s own `@type rebind_entry`/`@type changed_entry`
+  (lib/letflow/engine/pin_rebind.ex lines 87-107) define `version`,
+  `prior_version`, and `new_version` as `String.t()` throughout -- pin refs use
+  version *strings* (e.g. "v1", or a semver-like definition version such as
+  "1.0.0"), never integers. `PinRebind.rebind_pins/3`'s own M6 step
+  (pin_rebind.ex line ~462) appends its `INSTANCE_PINS_REBOUND` event with
+  `prior_version`/`new_version` taken directly from those string-typed fields.
+
+  Net effect: `Registry.validate_payload/3` (event_store.ex's pre-transaction
+  P4 step) rejects every real `PinRebind.rebind_pins/3` payload against the
+  provisioning-seeded schema with `{:payload_validation_failed, [...type
+  mismatch on prior_version/new_version...]}` -- the feature is provably
+  broken end-to-end for any tenant provisioned through the default manifest,
+  not just a test artifact. Confirmed directly: `mix test
+  test/letflow/engine/pin_rebind_test.exs` failed with exactly this
+  validation-failure shape before this test file was updated to work around it
+  (see test/letflow/engine/pin_rebind_test.exs's own `provisioned_tenant/0`,
+  which now deletes the wrongly-typed auto-seeded row and re-registers a
+  corrected string-typed schema at the same name/version, purely to keep
+  testing the real "INSTANCE_PINS_REBOUND" name end to end -- a test-only
+  workaround, not a fix).
+
+  Not fixed here: this run's own directive was test/-only (ISS-0073's
+  resolution explicitly excluded touching `lib/letflow/tenant_provisioning.ex`,
+  since that file is ISS-0072's own already-reviewed, already-passed fix).
+  Fixing this properly means correcting the seeded schema in
+  `tenant_provisioning.ex`'s `@platform_event_type_seed_attrs` (change
+  `"prior_version"`/`"new_version"`'s `"type"` from `"integer"` to `"string"`)
+  -- a small, contained lib/ change, but one this run is not scoped to make.
+affected_files:
+  - lib/letflow/tenant_provisioning.ex
+  - lib/letflow/engine/pin_rebind.ex
+  - test/letflow/engine/pin_rebind_test.exs
+github_issue: https://github.com/tvolodi/letflow/issues/269
+status: open

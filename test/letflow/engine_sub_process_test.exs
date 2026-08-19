@@ -29,7 +29,6 @@ defmodule Letflow.EngineSubProcessTest do
   alias Letflow.Engine.TokenRecord
   alias Letflow.EventStore.Event
   alias Letflow.EventStore.InstanceProjection
-  alias Letflow.EventStore.Registry
   alias Letflow.Identity.Tenant
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
@@ -54,21 +53,6 @@ defmodule Letflow.EngineSubProcessTest do
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
   end
 
-  defp register_event_type!(name, tenant_id) do
-    assert {:ok, _event_type} =
-             Registry.register_type(
-               %{
-                 "name" => name,
-                 "schema_version" => 1,
-                 "json_schema" => %{"type" => "object"},
-                 "description" => "REQ-062 test fixture -- permissive schema"
-               },
-               tenant_id
-             )
-
-    :ok
-  end
-
   defp provisioned_tenant do
     Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
 
@@ -89,15 +73,18 @@ defmodule Letflow.EngineSubProcessTest do
 
     assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
-    # INSTANCE_STARTED is auto-seeded (REQ-045 §9 OQ-3a). TASK_COMPLETED/EXECUTION_ERROR/
-    # SUB_PROCESS_COMPLETED are not -- every test in this file needs all three since a
-    # single test may create a parent+child, complete the child's task, and (for the
-    # failure-mode tests) route into ExecutionError.
-    :ok = register_event_type!("TASK_COMPLETED", tenant.id)
-    :ok = register_event_type!("EXECUTION_ERROR", tenant.id)
-    :ok = register_event_type!("SUB_PROCESS_COMPLETED", tenant.id)
-    :ok = register_event_type!("INSTANCE_CANCELLED", tenant.id)
-
+    # INSTANCE_STARTED, TASK_COMPLETED, EXECUTION_ERROR, SUB_PROCESS_COMPLETED, and
+    # INSTANCE_CANCELLED are now all auto-seeded by replay_migrations/2's default
+    # manifest (REQ-045 §9 OQ-3a, extended by ISS-0072/GH#257) -- this fixture used to
+    # self-register the latter four against a permissive `%{"type" => "object"}`
+    # schema (ISS-0073/GH#267: that duplicate registration now collides with
+    # provisioning's own seed and hard-fails). Removed rather than reconciled: this
+    # file's actual event payloads are produced by the same production writers
+    # (Engine.complete_task/3, ExecutionError.append_execution_error_event/2, the
+    # SUB_PROCESS_COMPLETED and cancel_instance/3 paths) that provisioning's own
+    # stricter schema was written to validate, so relying on the real seed here isn't
+    # a coverage loss -- see this module's own passing runs post-ISS-0073-fix as
+    # confirmation the stricter schema still accepts every payload this file writes.
     %{tenant_id: tenant.id, schema_name: schema_name}
   end
 

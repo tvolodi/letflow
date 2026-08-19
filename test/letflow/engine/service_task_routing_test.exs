@@ -27,7 +27,6 @@ defmodule Letflow.Engine.ServiceTaskRoutingTest do
   alias Letflow.Engine.ServiceTask
   alias Letflow.EventStore.Event
   alias Letflow.EventStore.InstanceProjection
-  alias Letflow.EventStore.Registry
   alias Letflow.Identity.Tenant
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
@@ -53,21 +52,6 @@ defmodule Letflow.Engine.ServiceTaskRoutingTest do
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
   end
 
-  defp register_event_type!(name, tenant_id) do
-    assert {:ok, _event_type} =
-             Registry.register_type(
-               %{
-                 "name" => name,
-                 "schema_version" => 1,
-                 "json_schema" => %{"type" => "object"},
-                 "description" => "REQ-056 test fixture -- permissive schema"
-               },
-               tenant_id
-             )
-
-    :ok
-  end
-
   defp provisioned_tenant do
     Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
 
@@ -88,8 +72,14 @@ defmodule Letflow.Engine.ServiceTaskRoutingTest do
 
     assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
-    :ok = register_event_type!("EXECUTION_ERROR", tenant.id)
-
+    # EXECUTION_ERROR is now auto-seeded by replay_migrations/2's default manifest
+    # (REQ-045 §9 OQ-3a, extended by ISS-0072/GH#257) -- this fixture used to
+    # self-register it again against a permissive `%{"type" => "object"}` schema
+    # (ISS-0073/GH#267: that duplicate registration now collides with provisioning's
+    # own seed and hard-fails). Removed rather than reconciled: every EXECUTION_ERROR
+    # payload this file writes goes through the real
+    # ExecutionError.append_execution_error_event/2 writer provisioning's stricter
+    # schema was written to validate.
     %{tenant_id: tenant.id, schema_name: schema_name}
   end
 

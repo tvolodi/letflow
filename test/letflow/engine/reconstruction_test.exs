@@ -84,15 +84,17 @@ defmodule Letflow.Engine.ReconstructionTest do
 
     assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
-    # "INSTANCE_STARTED" is auto-seeded by replay_migrations/2 (REQ-045 §9 OQ-3a). The
-    # other 3 event types this module replays are NOT auto-seeded.
-    :ok = register_event_type!("TASK_COMPLETED", tenant.id)
-    :ok = register_event_type!("INSTANCE_CANCELLED", tenant.id)
-    :ok = register_event_type!("EXECUTION_ERROR", tenant.id)
+    # "INSTANCE_STARTED", "TASK_COMPLETED", "INSTANCE_CANCELLED", "EXECUTION_ERROR",
+    # and "SUB_PROCESS_COMPLETED" are all now auto-seeded by replay_migrations/2's
+    # default manifest (REQ-045 §9 OQ-3a, extended by ISS-0072/GH#257) -- this
+    # fixture used to self-register the latter four again against a permissive
+    # `%{"type" => "object"}` schema (ISS-0073/GH#267: that duplicate registration
+    # now collides with provisioning's own seed and hard-fails). Removed rather than
+    # reconciled: every payload this file replays for these 4 types is produced by
+    # the same real production writers provisioning's stricter schemas were written
+    # to validate. "BOGUS_EVENT_TYPE" has no production writer and is NOT auto-seeded
+    # -- still registered explicitly below, no collision.
     :ok = register_event_type!("BOGUS_EVENT_TYPE", tenant.id)
-    # req062 (SPC-01) -- the 5th persisted event type this module's own rework now
-    # replays (moduledoc finding list above); not auto-seeded, same as the 3 above it.
-    :ok = register_event_type!("SUB_PROCESS_COMPLETED", tenant.id)
 
     %{tenant_id: tenant.id, schema_name: schema_name}
   end
@@ -448,7 +450,18 @@ defmodule Letflow.Engine.ReconstructionTest do
       definition = active_definition!(schema_name, graph_single_task())
       assert {:ok, created} = Engine.create(start_attrs(definition), prefix: schema_name)
 
-      error_payload = Jason.encode!(%{variables: %{"a" => 1, "error_snapshot" => true}})
+      # Satisfies EXECUTION_ERROR's real json_schema (now provisioning's stricter
+      # seed, not a permissive test-fixture stand-in -- ISS-0073/GH#267): "error_type",
+      # "affected", and "reason" are all required. This AC only cares about the
+      # `variables` snapshot surviving reconstruction, so the other required fields
+      # are filled with minimal-but-valid placeholder values.
+      error_payload =
+        Jason.encode!(%{
+          error_type: "test_forced_error",
+          affected: %{kind: "node", node_id: "task"},
+          reason: "REQ-053 AC4 test fixture -- forced error for reconstruction coverage",
+          variables: %{"a" => 1, "error_snapshot" => true}
+        })
 
       assert {:ok, _event} =
                EventStore.append(

@@ -13,14 +13,17 @@ defmodule Letflow.EngineCompleteTaskTest do
   fixtures expectation -- each test file provisions its own tenant schema.
 
   Mirrors `engine_test.exs`'s own `provisioned_tenant/0` + Sandbox `:auto` +
-  `async: false` pattern exactly, with one addition load-bearing for every test in this
-  file: `Letflow.EventStore.Registry.register_type/2` registers a permissive
-  `"TASK_COMPLETED"` event type immediately after tenant provisioning, because
+  `async: false` pattern exactly. `"TASK_COMPLETED"` no longer needs a fixture-local
+  registration here: `TenantProvisioning.replay_migrations/2`'s default manifest now
+  auto-seeds it (REQ-045 §9 OQ-3a, extended by ISS-0072/GH#257), so
   `EventStore.append/2`'s own `Registry.validate_payload/3` call (M9 of
-  `Engine.complete_task/3`'s own `Ecto.Multi`) fails the whole call with
-  `{:error, :unknown_event_type}` otherwise -- see `lib/letflow/design/req048-task-completion.md`
-  OQ-6 ("inherited not new": the same pre-existing pattern `test/letflow/event_store_test.exs`'s
-  own `register_event_type!/2` fixture already establishes for REQ-025).
+  `Engine.complete_task/3`'s own `Ecto.Multi`) already has a registered type to
+  validate against by the time `provisioned_tenant/0` returns. A prior version of this
+  fixture self-registered a second, permissive `%{"type" => "object"}` copy of
+  `"TASK_COMPLETED"`; that duplicate registration started colliding with
+  provisioning's own seed once ISS-0072 landed (ISS-0073/GH#267) and was removed
+  rather than reconciled, since production's own `Engine.complete_task/3` writer is
+  exactly what provisioning's stricter schema was written to validate.
   """
 
   use Letflow.DataCase, async: false
@@ -33,7 +36,6 @@ defmodule Letflow.EngineCompleteTaskTest do
   alias Letflow.Engine.TokenRecord
   alias Letflow.EventStore.Event
   alias Letflow.EventStore.InstanceProjection
-  alias Letflow.EventStore.Registry
   alias Letflow.Identity.Tenant
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
@@ -58,21 +60,6 @@ defmodule Letflow.EngineCompleteTaskTest do
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
   end
 
-  defp register_task_completed_event_type!(tenant_id) do
-    assert {:ok, _event_type} =
-             Registry.register_type(
-               %{
-                 "name" => "TASK_COMPLETED",
-                 "schema_version" => 1,
-                 "json_schema" => %{"type" => "object"},
-                 "description" => "REQ-048 test fixture -- permissive schema"
-               },
-               tenant_id
-             )
-
-    :ok
-  end
-
   defp provisioned_tenant do
     Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
 
@@ -93,8 +80,14 @@ defmodule Letflow.EngineCompleteTaskTest do
 
     assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
-    :ok = register_task_completed_event_type!(tenant.id)
-
+    # TASK_COMPLETED is now auto-seeded by replay_migrations/2's default manifest
+    # (REQ-045 §9 OQ-3a, extended by ISS-0072/GH#257) -- this fixture used to
+    # self-register it again against a permissive `%{"type" => "object"}` schema
+    # (ISS-0073/GH#267: that duplicate registration now collides with provisioning's
+    # own seed and hard-fails). Removed rather than reconciled: every payload this
+    # file writes is produced by the real Engine.complete_task/3 path
+    # (lib/letflow/engine.ex M9), the exact writer provisioning's stricter schema was
+    # written to validate, so relying on the real seed here isn't a coverage loss.
     %{tenant_id: tenant.id, schema_name: schema_name}
   end
 

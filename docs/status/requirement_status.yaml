@@ -5029,3 +5029,21 @@ history:
       fourth implementation attempt). Branch feature/WF02-REQ062-20260819
       pushed to origin, not merged, not deleted. Requirement status
       stays in_progress, not done.
+  - req: REQ-062
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-19T08:22:56Z
+    note: >
+      WF02-REQ062-20260819. Escalated at max_rework (3/3) on Step 2a
+      (see this file's own REQ-062 `blocked` entry above and
+      handoffs/escalations.yaml for full detail) -- recovered via a
+      design-amendment pass rather than a blind fourth implementation
+      retry: sec 10/11/12 addenda to
+      lib/letflow/design/req062-sub-process-runtime.md fixed the
+      Multi-key/idempotency-key shape underlying the three successive
+      latent-bug surfacings. Final commit 43084c6. RELEASE-VALIDATOR
+      independently re-verified all 8 acceptance criteria and its own
+      full-suite re-run: 1051 tests, 0 failures. status flipped
+      in_progress -> done in docs/requirements.yaml; stage-3 header
+      pending count corrected 4 -> 3 in
+      docs/migration/stage-3-instance-engine.md.

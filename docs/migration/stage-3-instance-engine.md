@@ -75,8 +75,19 @@ test/letflow/engine_concurrency_test.exs verifying 100-concurrent-
 instance completion, same-instance conflict resolution, and post-
 concurrency reconstruction match; REQ-045's row-based state resolution
 made AC5's process-kill scenario N/A; same header-sync gap-fix shape
+applied by this requirement's own DOC-UPDATER); REQ-062 `done`
+(Sub-process invocation runtime half, SPC-01 -- child instance creation
+via createWithParentInheritance, parent-token waiting_child_instance_id
+wait/clear (R-Co GH #428 field-dropping regression test included),
+input filtering and output-merge per interface, all four SPC-01 failure
+modes routed through REQ-061's set_instance_error/2 rather than a local
+ERROR transition, closing REQ-061's own AC8 obligation deferred forward
+at build time; Step 2a hit max_rework (3/3) and was escalated PARTIAL,
+recovered via a design-amendment pass (Multi-key/idempotency-key shape
+addenda, lib/letflow/design/req062-sub-process-runtime.md §10-12)
+rather than a blind fourth retry; same header-sync gap-fix shape
 applied by this requirement's own DOC-UPDATER); REQ-054, REQ-059,
-REQ-060, REQ-062 (`docs/requirements.yaml`, 4 total) `pending`.
+REQ-060 (`docs/requirements.yaml`, 3 total) `pending`.
 
 ## Scope
 

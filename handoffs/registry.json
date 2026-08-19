@@ -1284,7 +1284,7 @@
         "REQ-062"
       ],
       "stage": "S3",
-      "status": "ESCALATED",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/engine/",
         "lib/letflow/instance*",
@@ -1293,14 +1293,14 @@
         "test/specs/"
       ],
       "lock_acquired_at": "2026-08-19T04:35:42Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 2a (ELIXIR-DEV backend implementation) ESCALATED after hitting max_rework (3/3), still PARTIAL. Steps 00 (git setup), 1 (design), 1b (design gate PASS), 2c (security gate PASS), 2d (idiom gate PASS), 3 (test design, rework 1 in progress in parallel) all otherwise complete/passing on this branch; Step 4 (test run) reported FAIL (86/1051 failures) which triggered the rework chain. See handoffs/escalations.yaml's WF02-REQ062-20260819 entry for full diagnosis and recommended next step.",
+      "lock_released_at": "2026-08-19T08:22:56Z",
+      "released_lock": true,
+      "last_known_step": "Step 2a (ELIXIR-DEV backend implementation) escalated after hitting max_rework (3/3), still PARTIAL -- recovered via a design-amendment pass (sec 10/11/12 addenda to lib/letflow/design/req062-sub-process-runtime.md fixing the Multi-key/idempotency-key shape) rather than a blind fourth retry, then rework iteration 4 (commit d370849) and a full-suite PASS report (commit 43084c6, 1051 tests/0 failures). RELEASE-VALIDATOR independently re-verified all 8 acceptance criteria plus its own full-suite re-run. DOC-UPDATER flipped REQ-062 to done in docs/requirements.yaml and corrected the stage-3 header pending count. See handoffs/escalations.yaml's WF02-REQ062-20260819 entry for the original escalation diagnosis.",
       "backfilled": false,
       "queue_task_id": 106,
       "queue_agent_id": "hetzner-wt2-orch",
       "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
-      "note": "Scoped run (test/letflow/engine_sub_process_test.exs + test/letflow/engine_test.exs) 36/42 passing; engine_test.exs itself fully green (32/32), no regression to any already-shipped requirement. Branch feature/WF02-REQ062-20260819 pushed to origin, left as-is (not merged, not deleted) for the next session to resume. Queue task 106 left locked to hetzner-wt2-orch -- not released, since the requirement is not done; a fresh session resuming this work should either continue as this same agent_id or have ORCH explicitly re-lock/hand off, not treat the lock as stale."
+      "note": "Recovered from the Step 2a max_rework escalation via a design-amendment pass rather than a blind retry. Final commit 43084c6 on branch feature/WF02-REQ062-20260819 (not yet merged to main by DOC-UPDATER -- that is ORCH's Step Final). Queue task 106 lock released."
     }
   ]
 }

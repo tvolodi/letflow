@@ -1,0 +1,85 @@
+# Test run report — WF-02 Step 4 (test run) for REQ-059
+
+req_id: REQ-059
+workflow: WF-02
+step: "04"
+agent: TEST-RUNNER
+run_id: WF02-REQ059-20260819
+date_utc: 2026-08-19T08:49:59Z
+
+git:
+  branch: feature/WF02-REQ059-20260819
+  branch_confirmed: true
+  worktree: false
+  commit_at_run_start: d2e401a07141c7c1b5b382e22a2d6ad26ee54648
+
+environment:
+  postgres: "docker compose up -d -- letflow-postgres-1 already Running, port 5462"
+  db_confirmed_env: "LETFLOW_DEV_DB_CONFIRMED=1"
+  command_run_compile: "LETFLOW_DEV_DB_CONFIRMED=1 mix compile --warnings-as-errors"
+  command_run_full_suite: "LETFLOW_DEV_DB_CONFIRMED=1 mix test (full suite, unpinned/default
+    random seed -- the `test` alias runs ecto.create + ecto.migrate --quiet first
+    automatically)"
+
+verdict: PASS
+
+checks:
+  compile_warnings_as_errors:
+    result: PASS
+    summary: "No output (clean) -- mix compile --warnings-as-errors succeeded with zero
+      warnings."
+
+  test_suite_full_run:
+    result: PASS
+    exit_code: 0
+    summary_line_verbatim: "5 properties, 1073 tests, 0 failures"
+    finished_line_verbatim: "Finished in 135.1 seconds (5.4s async, 129.6s sync)"
+    failures: 0
+    note: >
+      No pre-existing/unrelated failures observed this run (the
+      identity_migration_test.exs order-dependent guard test flagged in
+      prior runs -- ISS-0048/ISS-0050/ISS-0060/ISS-0062 -- did NOT recur
+      here; full suite is fully green). No issue filed.
+
+  req059_scoped_isolated_run:
+    result: PASS
+    command: "LETFLOW_DEV_DB_CONFIRMED=1 mix test test/letflow/engine/pin_resolver_test.exs
+      test/letflow/engine_test.exs"
+    summary_line_verbatim: "73 tests, 0 failures"
+    note: >
+      All REQ-059 PinResolver tests (31 pure-function tests in
+      pin_resolver_test.exs covering AC1/AC3/AC5/AC7/AC8, plus 42 tests
+      appended to engine_test.exs covering AC2/AC3/AC4/AC6/AC7 through the
+      real Engine.create/2 + Postgres pipeline) pass.
+
+  known_noise_not_a_failure:
+    - >
+      Verbose SQL query debug logging (`[debug] QUERY OK ...` lines,
+      including tenant-schema DDL/DML from multi-tenant test fixtures)
+      appears in raw mix test output (config/test.exs's default test log
+      level) -- expected, not indicative of any problem.
+
+pre_existing_failures_found: []
+
+issues_filed: []
+
+diagnosis: >
+  Full suite (1073 tests, 5 properties) passes with zero failures, and
+  mix compile --warnings-as-errors is clean. The scoped REQ-059 isolated
+  run (73 tests across pin_resolver_test.exs and engine_test.exs) also
+  passes with zero failures, confirming all 8 REQ-059 acceptance criteria
+  (already independently verified by TEST-DESIGN-VALIDATOR) have real,
+  passing test coverage. No rework needed; no root-causing required since
+  nothing failed.
+
+regression_check: >
+  1073 tests, 5 properties, 0 failures across the full suite -- no
+  regression anywhere, including no recurrence of the
+  identity_migration_test.exs order-dependent flake seen in several prior
+  runs (ISS-0048/ISS-0050/ISS-0060/ISS-0062 class).
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-20260819-WF02-REQ059-20260819.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

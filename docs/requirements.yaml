@@ -3140,7 +3140,7 @@ requirements:
   - id: REQ-059
     title: Dependency pin resolution, recording and inheritance (pin_resolver.zig, PIN-01/02/03/04)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S3
     impl_order: 104  # letflow-queue task id
     description: >

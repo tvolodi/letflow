@@ -1,0 +1,13 @@
+{
+  "run_id": "WF02-REQ059-20260819",
+  "workflow_id": "WF-02",
+  "requirement_ids": ["REQ-059"],
+  "stage": "S3",
+  "branch": "feature/WF02-REQ059-20260819",
+  "owned_modules": ["lib/letflow/engine/pin_resolver.ex", "lib/letflow/engine.ex (call sites only)"],
+  "step": "00-git-setup",
+  "agent_id": "hetzner-orch",
+  "queue_task_id": 104,
+  "lock_recovery": "force-released stale lock at 2026-08-19T08:01:16Z, see handoffs/orchestrator.log",
+  "timestamp": "2026-08-19T08:01:16Z"
+}

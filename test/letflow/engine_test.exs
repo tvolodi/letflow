@@ -30,6 +30,9 @@ defmodule Letflow.EngineTest do
   alias Letflow.Engine
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Definitions.InstanceDefinitionSnapshot
+  alias Letflow.Engine.PinResolver
+  alias Letflow.Engine.PinResolver.Lookup
+  alias Letflow.Engine.Reconstruction
   alias Letflow.Engine.Task
   alias Letflow.Engine.TokenRecord
   alias Letflow.Identity.Tenant
@@ -923,6 +926,306 @@ defmodule Letflow.EngineTest do
       projection = Repo.get!(InstanceProjection, result.instance_id, prefix: schema_name)
       assert projection.status == :completed
       assert task_count(schema_name) == 0
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-059 (PIN-01..PIN-04) -- pin resolution, recording, and inheritance,
+  # integration-level: real Postgres, real Engine.create/2, real
+  # INSTANCE_STARTED event payloads. See test/specs/REQ-059.md for the full
+  # rationale; the pure-function-level coverage (resolve/4's ordering,
+  # validate_initial_variables/2, merge_effective_pins/2, apply_inheritance/2,
+  # pin_for/3, the moduledoc, and the AC5 inspection-based no-fallback check)
+  # lives in test/letflow/engine/pin_resolver_test.exs instead.
+  # ---------------------------------------------------------------------------------
+
+  # START -> SERVICE_TASK(service_id: given) -> END. Structurally valid (CHK-10/
+  # CHK-11 satisfied by endpoint/timeout_ms), reached immediately off START so
+  # its dispatch would fail today (no :SERVICE_TASK dispatch clause exists yet,
+  # engine_test.exs:580's own finding) -- but that dispatch is never reached in
+  # any REQ-059 test below, since pin resolution (which halts on an unresolved
+  # service_id under PinResolver.default_lookup/0) runs BEFORE create_snapshot/3
+  # and BEFORE activate/3 in the new start_instance/5 ordering (design doc §3).
+  defp graph_start_service_task_end(service_id) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "svc",
+          "node_type" => "SERVICE_TASK",
+          "attributes" => %{
+            "endpoint" => "https://example.test/svc",
+            "timeout_ms" => 5000,
+            "service_id" => service_id
+          }
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "svc"},
+        %{"id" => "e2", "source" => "svc", "target" => "end"}
+      ]
+    }
+  end
+
+  defp default_variable_schema_lookup(_tenant_id, _process_key),
+    do: {:ok, %{version: "unversioned", json_schema: nil}}
+
+  defp const_pin_lookup(catalog_result, module_result) do
+    %Lookup{
+      catalog_lookup: fn _ref -> catalog_result end,
+      module_lookup: fn _ref -> module_result end,
+      variable_schema_lookup: &default_variable_schema_lookup/2
+    }
+  end
+
+  defp variable_schema_pin_lookup(json_schema) do
+    %Lookup{
+      catalog_lookup: fn _ref -> {:error, :not_found} end,
+      module_lookup: fn _ref -> {:error, :not_found} end,
+      variable_schema_lookup: fn _tenant_id, _process_key ->
+        {:ok, %{version: "1.0.0", json_schema: json_schema}}
+      end
+    }
+  end
+
+  describe "create/2 (REQ-059 AC2) -- failed pin resolution writes zero rows" do
+    test "an unresolvable service_id (default lookup) returns {:error, {:unresolved_catalog_ref, ref}} and writes zero projection/snapshot/token/event rows" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_service_task_end("unregistered-svc"))
+
+      assert {:error, {:unresolved_catalog_ref, "unregistered-svc"}} =
+               Engine.create(base_attrs(definition), prefix: schema_name)
+
+      assert projection_count(schema_name) == 0
+      assert snapshot_count(schema_name) == 0
+      assert token_count(schema_name) == 0
+      assert event_count(schema_name) == 0
+    end
+
+    # No "unresolvable module_ref" counterpart test exists at THIS (real
+    # Definitions/Engine pipeline) level: `Letflow.Definitions.Graph`'s own
+    # `@node_type_map` (graph.ex:203-211) does not include "SUB_PROCESS" at
+    # all yet -- a "SUB_PROCESS" node built via `Definitions.create/2`'s real
+    # JSON-graph path silently becomes `:unknown_node_type`, not `:SUB_PROCESS`,
+    # so `PinResolver.collect_refs/3`'s `node.node_type == :SUB_PROCESS` filter
+    # (pin_resolver.ex's `resolve/4`) can never match a node built this way --
+    # the module_ref path is confirmed dead code through the real pipeline
+    # today, a Graph-level gap one layer beneath REQ-059's own SCOPE GAP
+    # (service_catalog/PLC-01 not existing), not something this requirement
+    # introduces or is responsible for fixing. `resolve/4`'s own module_ref
+    # halt-on-unresolved behavior is still fully covered at the pure-function
+    # level against a hand-built `%Node{node_type: :SUB_PROCESS}` struct -- see
+    # test/letflow/engine/pin_resolver_test.exs's "an unresolvable module ref
+    # returns {:error, {:unresolved_module_ref, ref}}" test.
+    test "a resolvable service_id proceeds past resolution -- later activation failure, snapshot-orphan reappears" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_service_task_end("known-svc"))
+
+      attrs =
+        base_attrs(definition, %{
+          pin_lookup: const_pin_lookup({:ok, %{resolved_id: "sid", version: "1.0.0"}}, {:error, :not_found})
+        })
+
+      assert {:error, {:activation_failed, {:node_type_not_yet_implemented, :SERVICE_TASK, "svc"}}} =
+               Engine.create(attrs, prefix: schema_name)
+
+      assert projection_count(schema_name) == 0
+      assert event_count(schema_name) == 0
+      # unlike the AC2 unresolved-ref cases above, pin resolution itself
+      # SUCCEEDED here, so create_snapshot/3 ran before activate/3's own
+      # (pre-existing, REQ-059-independent) dispatch failure -- same benign
+      # orphan engine_test.exs:580's own test documents.
+      assert snapshot_count(schema_name) == 1
+    end
+  end
+
+  describe "create/2 (REQ-059 AC3) -- variables violating the resolved variable_schema are rejected" do
+    test "violating variables return {:error, {:variable_schema_violation, failures}} listing every failing field, zero rows written" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_human_task_end())
+
+      schema = %{
+        "type" => "object",
+        "required" => ["approver", "amount"],
+        "properties" => %{"amount" => %{"type" => "number", "minimum" => 0}}
+      }
+
+      attrs =
+        base_attrs(definition, %{
+          initial_variables: %{"amount" => -5},
+          pin_lookup: variable_schema_pin_lookup(schema)
+        })
+
+      assert {:error, {:variable_schema_violation, failures}} = Engine.create(attrs, prefix: schema_name)
+
+      assert length(failures) == 2
+      assert Enum.any?(failures, &(&1.field_path == "/approver" and &1.constraint == "required"))
+      assert Enum.any?(failures, &(&1.field_path == "/amount" and &1.constraint == "minimum"))
+
+      assert projection_count(schema_name) == 0
+      assert snapshot_count(schema_name) == 0
+      assert event_count(schema_name) == 0
+    end
+
+    test "initial_variables conforming to the resolved schema are accepted" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_human_task_end())
+
+      schema = %{"type" => "object", "required" => ["approver"]}
+
+      attrs =
+        base_attrs(definition, %{
+          initial_variables: %{"approver" => "alice"},
+          pin_lookup: variable_schema_pin_lookup(schema)
+        })
+
+      assert {:ok, result} = Engine.create(attrs, prefix: schema_name)
+      assert result.variables == %{"approver" => "alice"}
+    end
+  end
+
+  describe "create/2 (REQ-059 AC4) -- INSTANCE_STARTED payload carries pinned_versions, no separate pin table" do
+    test "zero catalog/module references still records exactly one variable_schema pinned_versions entry" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_human_task_end())
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+
+      assert {:ok, events} = Reconstruction.read_full_log(result.instance_id, schema_name, 1)
+      started = Enum.find(events, &(&1.event_type == "INSTANCE_STARTED"))
+
+      assert [%{"kind" => "variable_schema"}] = started.payload["pinned_versions"]
+      refute Map.has_key?(started.payload, "pin_conflicts")
+    end
+
+    test "no priv/repo/migrations file creates a separate pin table -- the event log is the only record of a pin" do
+      migrations_dir = Path.join([File.cwd!(), "priv", "repo", "migrations"])
+
+      pin_table_migrations =
+        migrations_dir
+        |> File.ls!()
+        |> Enum.filter(&String.ends_with?(&1, ".exs"))
+        |> Enum.filter(fn filename ->
+          contents = File.read!(Path.join(migrations_dir, filename))
+          contents =~ ~r/create\s+table\([:"]?[a-z_]*pin/i
+        end)
+
+      assert pin_table_migrations == [],
+             "found migration(s) creating a pin-shaped table, contradicting PIN-02 AC3's " <>
+               "\"event log is the record of record\": #{inspect(pin_table_migrations)}"
+    end
+  end
+
+  describe "create/2 (REQ-059 AC6) -- child pin inheritance and conflict recording" do
+    test "a child with a differing pin than its parent inherits the PARENT's version, records the conflict" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_human_task_end())
+
+      parent_attrs =
+        base_attrs(definition, %{
+          pin_lookup: variable_schema_pin_lookup(nil),
+          pin_overrides: [
+            %{kind: :variable_schema, ref: definition.name, resolved_id: nil, version: "parent-v1"}
+          ]
+        })
+
+      assert {:ok, parent} = Engine.create(parent_attrs, prefix: schema_name)
+
+      assert {:ok, parent_events} = Reconstruction.read_full_log(parent.instance_id, schema_name, 1)
+      parent_started = Enum.find(parent_events, &(&1.event_type == "INSTANCE_STARTED"))
+      assert [%{"version" => "parent-v1", "source" => "override"}] = parent_started.payload["pinned_versions"]
+      refute Map.has_key?(parent_started.payload, "pin_conflicts")
+
+      child_attrs =
+        base_attrs(definition, %{parent_instance_id: parent.instance_id})
+
+      assert {:ok, child} = Engine.create(child_attrs, prefix: schema_name)
+
+      assert {:ok, child_events} = Reconstruction.read_full_log(child.instance_id, schema_name, 1)
+      child_started = Enum.find(child_events, &(&1.event_type == "INSTANCE_STARTED"))
+
+      assert [%{"version" => "parent-v1", "source" => "inherited"}] = child_started.payload["pinned_versions"]
+
+      expected_ref = definition.name
+
+      assert [
+               %{
+                 "kind" => "variable_schema",
+                 "ref" => ^expected_ref,
+                 "child_resolved_version" => "unversioned",
+                 "inherited_version" => "parent-v1"
+               }
+             ] = child_started.payload["pin_conflicts"]
+    end
+
+    test "a child agreeing with its parent's pin has zero conflicts, but pin_conflicts: [] is still present (vs. root's omitted key)" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_human_task_end())
+
+      parent_attrs =
+        base_attrs(definition, %{
+          pin_overrides: [
+            %{kind: :variable_schema, ref: definition.name, resolved_id: nil, version: "unversioned"}
+          ]
+        })
+
+      assert {:ok, parent} = Engine.create(parent_attrs, prefix: schema_name)
+
+      child_attrs = base_attrs(definition, %{parent_instance_id: parent.instance_id})
+      assert {:ok, child} = Engine.create(child_attrs, prefix: schema_name)
+
+      assert {:ok, child_events} = Reconstruction.read_full_log(child.instance_id, schema_name, 1)
+      child_started = Enum.find(child_events, &(&1.event_type == "INSTANCE_STARTED"))
+
+      assert child_started.payload["pin_conflicts"] == []
+    end
+  end
+
+  describe "create/2 (REQ-059 AC7) -- replay derives pins from events only, zero catalog/module reads" do
+    test "reconstruct_effective_pins/2, called after a call-counted create/2, never increments that counter (no Lookup param to reach it)" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_human_task_end())
+
+      {:ok, counter} = Agent.start_link(fn -> 0 end)
+
+      counting_lookup = %Lookup{
+        catalog_lookup: fn ref ->
+          Agent.update(counter, &(&1 + 1))
+          {:ok, %{resolved_id: ref, version: "1.0.0"}}
+        end,
+        module_lookup: fn ref ->
+          Agent.update(counter, &(&1 + 1))
+          {:ok, %{resolved_id: ref, version: "1.0.0"}}
+        end,
+        variable_schema_lookup: fn tenant_id, process_key ->
+          Agent.update(counter, &(&1 + 1))
+          default_variable_schema_lookup(tenant_id, process_key)
+        end
+      }
+
+      attrs = base_attrs(definition, %{pin_lookup: counting_lookup})
+      assert {:ok, result} = Engine.create(attrs, prefix: schema_name)
+
+      count_after_create = Agent.get(counter, & &1)
+      assert count_after_create == 1, "expected exactly the one variable_schema lookup call create/2 itself makes"
+
+      assert {:ok, effective_pins} =
+               PinResolver.reconstruct_effective_pins(result.instance_id, prefix: schema_name)
+
+      assert [%{kind: :variable_schema, version: "unversioned"}] = effective_pins
+      assert Agent.get(counter, & &1) == count_after_create,
+             "reconstruct_effective_pins/2 must issue zero catalog/module/variable_schema lookup calls -- " <>
+               "the counter changed after replay"
+
+      Agent.stop(counter)
+    end
+
+    test "reconstruct_effective_pins/2 on an instance with no events returns {:error, :instance_not_found}" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:error, :instance_not_found} =
+               PinResolver.reconstruct_effective_pins(Ecto.UUID.generate(), prefix: schema_name)
     end
   end
 end

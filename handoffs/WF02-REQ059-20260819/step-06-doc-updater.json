@@ -1,0 +1,61 @@
+{
+  "handoff_id": "f1e2d3c4-0059-4a06-9c06-req059step06",
+  "run_id": "WF02-REQ059-20260819",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ059-20260819/step-06-doc-updater.json",
+  "created_at": "2026-08-19T08:58:00Z",
+  "started_at": "2026-08-19T08:58:00Z",
+  "completed_at": "2026-08-19T09:02:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-059"],
+    "requirement_text": {
+      "REQ-059": "Dependency pin resolution, recording and inheritance (pin_resolver.zig port, PIN-01..04). RELEASE-VALIDATOR PASSed (Step 5), independently re-verifying all eight acceptance criteria and re-running mix test (5 properties, 1073 tests, 0 failures) plus a 3-claim design-doc-vs-shipped-code spot check."
+    },
+    "related_handoff_ids": ["handoffs/WF02-REQ059-20260819/step-05-release-validator.json"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "docs/migration/stage-3-instance-engine.md",
+      "lib/letflow/design/req059-pin-resolver.md",
+      "README.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "1. Flip REQ-059's status in docs/requirements.yaml from pending to done. 2. Append a done event to docs/status/requirement_status.yaml (real UTC timestamp from the clock, not memory). 3. Check whether the design doc's SCOPE GAP notes (service_catalog/PLC-01, ISS-0672/GH-306) and the new PIN_RETRY_EXHAUSTED reserved-hook note (design doc section 12) warrant a mention in docs/migration/stage-3-instance-engine.md or docs/anti-patterns.md, without inventing new sections if existing coverage is adequate. 4. Check README.md for any documented-behavior impact. 5. List every file actually touched in artifacts_out.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-059 status flipped pending -> done",
+      "docs/status/requirement_status.yaml has a new done event with a real UTC timestamp, appended not rewritten",
+      "SCOPE GAP / PIN_RETRY_EXHAUSTED coverage in stage-3-instance-engine.md checked and confirmed adequate or extended minimally",
+      "README.md checked directly, left untouched or updated with an explicit reason stated either way",
+      "Every file actually touched is named explicitly in artifacts_out"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-059 flipped pending -> done in docs/requirements.yaml (line 3143). Appended a done event to docs/status/requirement_status.yaml with real UTC timestamp 2026-08-19T08:58:00Z, matching the file's existing req/event/agent/at/note schema, append-only (no prior entries touched). Checked lib/letflow/design/req059-pin-resolver.md's SCOPE GAP notes (PIN-01 AC1/AC2 service_catalog/PLC-01 resolution, PIN-03 AC3 post-DEPRECATED execution, ISS-0672/GH-306) against docs/migration/stage-3-instance-engine.md: the gap was already documented in that file's 'Scope boundaries with S4 and S5' section (lines 174-182, pre-existing text explicitly naming REQ-059 and the service_catalog/PLC-01 absence) -- adequate, no new section invented. The design doc's PIN_RETRY_EXHAUSTED reserved-hook note (section 12, PIN-03 AC4's exhausted-retry-budget DLQ routing) was not yet mentioned anywhere in stage-3-instance-engine.md, so a brief pointer was folded into the header's REQ-059 done-clause entry itself rather than a new standalone section. docs/migration/stage-3-instance-engine.md's header still listed REQ-059 in its `pending` list -- fixed in this same pass (moved REQ-059 into the `done` clause with a PIN-01..04 summary covering both the already-documented service_catalog/PLC-01 scope gap and the PIN_RETRY_EXHAUSTED hook, pending count corrected 3 -> 2), same header-sync gap-fix shape prior REQ-045/047/048/052/053/054/055/056/057/061 DOC-UPDATER passes already applied. README.md checked directly (grep for pin/PIN/REQ-059/snapshot count): no changes needed -- REQ-059 adds no new HTTP route (GET /instances/{id}/pins remains REQ-059's own documented S4 scope boundary, not shipped here), no change to the gen_statem/process-model diagram, and no change to the 'Running it' section; only an unrelated pre-existing 'snapshot count' mention exists and does not concern this requirement. docs/anti-patterns.md: no new entry needed, the SCOPE GAP handling here follows the same established pattern as REQ-056's DLQ gap, not a new mistake class.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "docs/migration/stage-3-instance-engine.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ059-20260819",
+      "commit_sha_list": ["d2bb51b"],
+      "remote_branch": "origin/feature/WF02-REQ059-20260819",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH: proceed to stage-gate/merge checks for REQ-059."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,44 @@
+{
+  "handoff_id": "c2f1a1a0-0002-4a00-9000-000000000059",
+  "run_id": "WF02-REQ059-20260819",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ059-20260819/step-01b-code-design-validator.json",
+  "created_at": "2026-08-19T08:13:39Z",
+  "started_at": "2026-08-19T08:13:39Z",
+  "completed_at": "2026-08-19T08:45:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-059"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ059-20260819/step-01-code-designer.json",
+      "handoffs/WF02-REQ059-20260819/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": ["lib/letflow/design/req059-pin-resolver.md", "handoffs/WF02-REQ059-20260819/step-01-code-designer.json"],
+    "owned_modules": ["lib/letflow/engine/pin_resolver.ex", "lib/letflow/engine.ex (call sites only)"]
+  },
+  "task": {
+    "description": "WF-02 Step 1b hard gate, rework re-check of commit 6e35ea9 against the two findings from this same handoff's prior FAIL: (1) section 3's real Elixir function body, (2) PIN-03 AC4 gap. Re-verify no implementation code present, PIN-03 AC4 genuinely covered by new section 12, and nothing else regressed (resolve/4's @spec 3-tuple fix in section 4, cross-reference cleanup in section 5).",
+    "acceptance_criteria": [
+      "Section 3 contains zero real Elixir function bodies -- call-order spec by function name/contract only",
+      "Section 12 provides a genuine, non-deferred design element for PIN-03 AC4 (named hook, moduledoc requirement, AC-map row)",
+      "resolve/4's @spec in section 4 matches the 3-tuple form section 5's INV-PIN-5 requires",
+      "Section 5's stray reference to 'section 3's pseudocode' is corrected now that section 3 is prose",
+      "No other content regressed from the previously-approved (non-failing) parts of the document"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-read lib/letflow/design/req059-pin-resolver.md in full, independently, post-rework commit 6e35ea9. Both prior findings verified fixed, not merely claimed fixed. (1) Section 3 (now titled 'the exact reordering') is a 7-step numbered prose specification -- each step names the existing/new function called, its inputs (already in scope), and its {:ok, ...}/error-shape contract, plus prose stating the with-chain short-circuit discipline by reference rather than by literal with/case syntax. Ran `grep -nE '^\\s*(def|defp|case .* do$|with .* <-)'` across the whole 637-line file myself: the only match is the pre-existing, previously-approved `defmodule Letflow.Engine.PinResolver.Lookup do` / `defstruct [...]` block (lines 239/241) -- a bare field-list struct definition (schema/type shape, no logic), which was already the correct precedent in the prior FAIL verdict and is unchanged. Zero function bodies, zero with-chains, zero case statements anywhere in the document. (2) New section 12 ('PIN-03 AC4 -- exhausted retry budget, named hook') is a genuine design element, not a deferral: states no retry loop/budget/DLQ exists in this module, reserves the concrete event-type name PIN_RETRY_EXHAUSTED as the documented S6 DLQ attachment point, cites REQ-056's identical gap and the ServiceScopeValidator/PromotionPlan/dispatch_exclusive_gateway/4 SCOPE-GAP-naming precedent already used correctly elsewhere in this doc, adds moduledoc item 7 (section 2) requiring this be stated, and adds a PIN-03 AC4 row to section 10's AC-to-design-element map. This matches REQ-059's own requirement text ('leave a named hook rather than a partial DLQ') exactly -- covered, not gapped. No regressions found elsewhere: section 4's resolve/4 @spec now reads `{:ok, [pinned_version()], variable_json_schema :: map() | nil} | resolve_error()` (3-tuple), matching section 5's INV-PIN-5 explanation which previously referenced a 2-tuple/section-3-pseudocode inconsistency; section 5's stray 'section 3's pseudocode is corrected accordingly' sentence now reads 'section 3's step 2/3 sequence above already reflects this' -- consistent with section 3 no longer being pseudocode. Diffed 98a464b..6e35ea9 directly: only section 3, section 4's @spec line, section 5's one sentence, section 2's new moduledoc item 7, and the new section 12 changed; sections 1, 6, 7, 8, 9 (all six open questions), and 11 are byte-identical to the version already independently verified correct in the prior PASS-eligible findings. No new TBD/deferral language introduced, no cross-module dependency list changed, no new implementation code anywhere.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {"branch_name": "feature/WF02-REQ059-20260819", "commit_sha_list": ["6e35ea9"], "remote_branch": "origin/feature/WF02-REQ059-20260819", "push_status": "pending", "pr_url": null, "pr_create_error": null},
+    "next_action": "Route to next WF-02 step (ELIXIR-DEV implementation) -- design gate cleared"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

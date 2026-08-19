@@ -539,7 +539,9 @@ defmodule Letflow.EventStoreTest do
       assert Repo.get_by(Event, [event_id: event.event_id], prefix: schema_name)
       refute Repo.get_by(Event, [event_id: event.event_id], prefix: other_schema_name)
 
-      assert %InstanceProjection{} = Repo.get(InstanceProjection, instance_id, prefix: schema_name)
+      assert %InstanceProjection{} =
+               Repo.get(InstanceProjection, instance_id, prefix: schema_name)
+
       refute Repo.get(InstanceProjection, instance_id, prefix: other_schema_name)
     end
 

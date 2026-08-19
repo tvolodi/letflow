@@ -1,0 +1,64 @@
+{
+  "handoff_id": "f1e2d3c4-0059-4a05-9c05-req059step05",
+  "run_id": "WF02-REQ059-20260819",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ059-20260819/step-05-release-validator.json",
+  "created_at": "2026-08-19T08:53:00Z",
+  "started_at": "2026-08-19T08:53:00Z",
+  "completed_at": "2026-08-19T08:56:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-059"],
+    "requirement_text": {
+      "REQ-059": "See docs/requirements.yaml id: REQ-059 (line 3140) for the full verbatim requirement text and its 8 acceptance_criteria."
+    },
+    "related_handoff_ids": [
+      "step-02a-elixir-dev.json",
+      "step-02d-reviewer.json",
+      "step-03-test-designer.json",
+      "step-03b-test-design-validator.json",
+      "step-04-test-runner.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/pin_resolver.ex",
+      "lib/letflow/design/req059-pin-resolver.md",
+      "lib/letflow/engine.ex",
+      "test/letflow/engine/pin_resolver_test.exs",
+      "test/letflow/engine_test.exs",
+      "test/reports/report-20260819-WF02-REQ059-20260819.yaml"
+    ],
+    "owned_modules": ["lib/letflow/engine/"]
+  },
+  "task": {
+    "description": "WF-02 Step 5. Independently re-run LETFLOW_DEV_DB_CONFIRMED=1 mix test (full suite) and mix compile --warnings-as-errors, not trusting TEST-RUNNER's report. Confirm each of REQ-059's 8 acceptance criteria against actual current code/tests, cited by file/line or test name. Spot-check 2-3 non-trivial design-doc claims against the shipped code. Check docs/status/requirement_status.yaml and docs/requirements.yaml for staleness.",
+    "acceptance_criteria": [
+      "mix test independently re-run, real output quoted",
+      "mix compile --warnings-as-errors independently re-run, clean",
+      "All 8 REQ-059 acceptance criteria individually confirmed against actual code/tests",
+      "Design-doc-vs-shipped-code spot check performed on 2-3 non-trivial claims",
+      "docs/status/requirement_status.yaml and docs/requirements.yaml checked for staleness"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-ran on feature/WF02-REQ059-20260819 (commit 0a39b58). `mix compile --warnings-as-errors`: clean, zero output. `LETFLOW_DEV_DB_CONFIRMED=1 mix test` (full suite, foreground re-run, not copied from TEST-RUNNER): 'Finished in 130.0 seconds (5.5s async, 124.5s sync) / 5 properties, 1073 tests, 0 failures' -- matches TEST-RUNNER's Step 4 claim independently. All 8 REQ-059 acceptance criteria re-checked against lib/letflow/engine/pin_resolver.ex and both test files: AC1 (deterministic {kind,ref} ordering, byte-identical output) -- sort_pins/1 (pin_resolver.ex:383-385, {Atom.to_string(kind), ref} ascending) confirmed by pin_resolver_test.exs describe block at line 91 doing an explicit two-resolution serialised-payload comparison. AC2 (zero rows on failed resolution) -- engine.ex's start_instance/5 sequence (lines 400-435) runs PinResolver.resolve/4 before create_snapshot/3, confirmed by engine_test.exs:992-1042 'create/2 (REQ-059 AC2)' asserting projection_count/snapshot_count/token_count/event_count all == 0 after a deliberately unresolvable service_id. AC3 (variable_schema violation reuses REQ-024's validator) -- validate_initial_variables/2 (pin_resolver.ex:401-411) calls Letflow.EventStore.Registry.JsonSchema.validate/2 directly (not a second implementation), confirmed by pin_resolver_test.exs:261-300 (multi-field-failure test) and engine_test.exs:1043-1087 integration test. AC4 (INSTANCE_STARTED payload carries pinned_versions; exactly one variable_schema entry unconditionally; no separate pin table) -- confirmed by engine.ex:882-896 embedding pins as payload.pinned_versions, engine_test.exs:1089-1099 (zero-refs graph still yields exactly one variable_schema entry) and engine_test.exs:1101-1117's migrations-directory scan asserting no pin-shaped CREATE TABLE exists anywhere in priv/repo/migrations. AC5 (PinMissing error, no fallback) -- pin_for/3 (pin_resolver.ex:625-630) returns {:error,{:pin_missing,kind,ref}} only, confirmed by pin_resolver_test.exs:303-337 (present/absent/empty-list cases) plus the inspection-based test at line 338 that source-scans the file past resolve/4's own body for any catalog_lookup/module_lookup reference and finds none. AC6 (child inherits parent pins with source: inherited; differing version -> inherited wins + conflict recorded) -- apply_inheritance/2 (pin_resolver.ex:553-608) confirmed by pin_resolver_test.exs:441-529 (unit-level, including the OQ-6 override-vs-inheritance case) and engine_test.exs:1120-1183 (two real instances, parent then child, INSTANCE_STARTED payload literally inspected for pin_conflicts). AC7 (replay derives effective pins from events only, zero catalog reads) -- reconstruct_effective_pins/2 (pin_resolver.ex:501-524) takes no Lookup.t() parameter at all (structural guarantee), confirmed by engine_test.exs:1185-1226's counting-lookup test showing the call counter is unchanged after replay, plus the not-found case. AC8 (moduledoc names service_catalog/PLC-01 gap, cites ISS-0672/GH-306) -- confirmed present verbatim in pin_resolver.ex:22-36 moduledoc and re-checked by pin_resolver_test.exs's moduledoc-content test (line 530 describe block, via Code.fetch_docs/1 normalized-whitespace match), not merely eyeballed. Design-doc spot check (3 non-trivial claims): (1) design doc says AC2 requires reordering start_instance/5 so pin resolution runs before create_snapshot/3 -- confirmed in engine.ex:400-435, resolve/4 (step 2) precedes create_snapshot (step 5), matching design doc section 3 exactly. (2) design doc INV-PIN-5 says resolve/4 returns a 3-tuple {:ok, pins, variable_json_schema} rather than embedding json_schema in pinned_version() -- confirmed pin_resolver.ex:262-280's resolve/4 spec and body return exactly this 3-tuple shape, and validate_initial_variables/2 takes variable_json_schema as its own second argument (not re-derived from pins), matching the design's explicit correction of its own earlier 2-arg prose. (3) design doc section 6 (OQ-2) says merge_effective_pins/2 must fold ALL INSTANCE_PINS_REBOUND events, not just the most recent, despite REQ-059's own prose saying 'most recent' -- confirmed pin_resolver.ex:433-448 folds via Enum.reduce over the full pins_rebound_events list (no take/1 or List.last), and pin_resolver_test.exs:404-431 has an explicit test proving an earlier rebind of one ref survives a later, unrelated rebind of a different ref. No design/code divergence found in any of the three spot-checked claims. Staleness check: docs/requirements.yaml:3143 shows REQ-059 status: pending (not yet flipped -- correct, DOC-UPDATER step has not run) and its acceptance_criteria (lines 3182-3189) match what was tested verbatim, word for word. docs/status/requirement_status.yaml has no REQ-059 'done' event yet (only the impl_order=104 queue-task mapping comment at line 3931) -- consistent, no staleness found in either file.",
+    "artifacts_out": ["handoffs/WF02-REQ059-20260819/step-05-release-validator.json"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ059-20260819",
+      "commit_sha_list": ["0a39b58ec5b42c3f255943bc55143d373a0e3704"],
+      "remote_branch": "origin/feature/WF02-REQ059-20260819",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER (Step 6)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

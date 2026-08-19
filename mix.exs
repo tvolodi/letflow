@@ -5,7 +5,7 @@ defmodule Letflow.MixProject do
     [
       app: :letflow,
       version: "0.1.0",
-      elixir: "~> 1.14",
+      elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
@@ -53,7 +53,11 @@ defmodule Letflow.MixProject do
       # measure — this alias needs neither (it wants `mix compile` to run as one of its
       # own steps regardless, and reads from `mix.exs` data, never from a compiled
       # `lib/` module), so the concern doesn't apply.
-      "letflow.check": ["format --check-formatted", "compile --warnings-as-errors", "test"]
+      "letflow.check": [
+        "format --check-formatted",
+        "compile --warnings-as-errors",
+        "letflow.check.test"
+      ]
     ]
   end
 end

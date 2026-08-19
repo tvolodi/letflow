@@ -146,7 +146,10 @@ defmodule Letflow.Engine.VariableMergeTest do
       current = %{}
       incoming = %{"new_and_rejected" => "bad_value"}
 
-      failures = [%ValidationFailure{field_path: "/value", constraint: "type", actual: "bad_value"}]
+      failures = [
+        %ValidationFailure{field_path: "/value", constraint: "type", actual: "bad_value"}
+      ]
+
       # "new_and_rejected" is absent from current_variables, so it is a
       # new_keys member -- design doc §3.1 step 3 says new_keys are NEVER
       # looked up in variable_validations, even if an entry happens to exist.
@@ -205,7 +208,10 @@ defmodule Letflow.Engine.VariableMergeTest do
       incoming = %{"zeta" => 2, "alpha" => 2}
 
       zeta_failures = [%ValidationFailure{field_path: "/value", constraint: "type", actual: 2}]
-      alpha_failures = [%ValidationFailure{field_path: "/value", constraint: "minimum", actual: 2}]
+
+      alpha_failures = [
+        %ValidationFailure{field_path: "/value", constraint: "minimum", actual: 2}
+      ]
 
       validations = %{
         "zeta" => {:rejected, zeta_failures},

@@ -385,8 +385,8 @@ defmodule Letflow.SandboxPoolTest do
         end)
 
       assert_receive {:owner_claimed,
-                       %SandboxClaim{sandbox_id: sandbox_id, schema_name: schema_name}},
-                      2_000
+                      %SandboxClaim{sandbox_id: sandbox_id, schema_name: schema_name}},
+                     2_000
 
       on_exit(fn -> drop_schema!(schema_name) end)
 

@@ -101,7 +101,7 @@ defmodule Letflow.Engine.ReconstructionTest do
     prefix <> "-" <> to_string(System.unique_integer([:positive, :monotonic]))
   end
 
-  defp unique_idempotency_key(prefix \\ "req053-idk") do
+  defp unique_idempotency_key(prefix) do
     prefix <> "-" <> to_string(System.unique_integer([:positive, :monotonic]))
   end
 

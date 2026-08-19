@@ -1,0 +1,62 @@
+{
+  "handoff_id": "b3e2f1a0-0001-4a00-9c00-00000000000c",
+  "run_id": "WF02-REQ054-20260819",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ054-20260819/step-06-doc-updater.json",
+  "created_at": "2026-08-19T06:05:00Z",
+  "started_at": "2026-08-19T04:41:48Z",
+  "completed_at": "2026-08-19T04:42:16Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [
+      "REQ-054"
+    ],
+    "requirement_text": {
+      "REQ-054": "Port src/engine/snapshot_writer.zig (348 lines -- R-Co's ISS-601, design artefact src/design/iss601_state_snapshots.md) as Letflow.Engine.SnapshotWriter, plus its instance_state_snapshots migration and Ecto.Schema module (schema-per-tenant per REQ-022, same as every other table this stage adds). THIS REQUIREMENT EXTENDS REQ-053's already-shipped reconstruct path -- it is not a standalone module. REQ-053 builds full-log replay from sequence 1; this requirement adds the snapshot table, the writer, and the replay-source selection that lets that same reconstruct function start from the latest snapshot instead. The deliverable is therefore a modification of REQ-053's function plus new supporting code, and the correctness bar below is that both paths agree. Purpose: reconstruction (REQ-053) replaying the FULL event log from sequence 1 is O(events) and gets slower forever. A periodic snapshot of the InstanceState as a jsonb blob lets reconstruction replay only the events SINCE the latest snapshot. - take_snapshot/N: serialises REQ-044's InstanceState (status, tokens, variables, pending task nodes, error_detail) plus the sequence_number it is current as of, into an instance_state_snapshots row. - maybe_take_snapshot/N: the cadence check -- snapshot every N events, default 1000 per snapshot_writer.zig's DEFAULT_SNAPSHOT_INTERVAL. Called after event appends and on instance completion. - REQ-053's replay-source selection: given a latest snapshot at sequence S, replay only events with sequence_number > S on top of the deserialised snapshot state, versus replaying from 1 when no snapshot exists (reconstruction.zig's determineReplaySourceForSnapshot()). This requirement extends REQ-053's reconstruct path to use snapshots when present -- and the correctness bar is that BOTH paths produce the identical state, since a snapshot that diverges from full replay is worse than no snapshot at all. - This table is NOT the same thing as REQ-027/REQ-033's instance_definition_snapshots (the immutable PD-08 DEFINITION graph bound to an instance at start). These are periodic EXECUTION STATE snapshots, mutable in the sense that new rows accumulate over an instance's life. Say so explicitly in the moduledoc -- the two names are one word apart and confusing them would be a silent data-model error. OPEN QUESTION (flag, do not silently resolve): where the events-since-last-snapshot counter lives. instance_projections.last_event_seq (REQ-023) already tracks the latest sequence per instance, which makes a pure row-based cadence check possible with no in-memory counter at all; R-Co's own SnapshotWriter is a struct holding a pool handle. If REQ-045 resolved to supervised processes, an in-process counter is available but is exactly the kind of state stage-3-instance-engine.md's second Early finding warns is NOT automatically worth a process. Leave the choice to CODE-DESIGNER, citing that finding and REQ-045's resolution."
+    },
+    "related_handoff_ids": [
+      "b3e2f1a0-0001-4a00-9c00-000000000000"
+    ],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/engine/",
+      "priv/repo/migrations/",
+      "lib/letflow/design/"
+    ]
+  },
+  "task": {
+    "description": "REQ-054 passed RELEASE-VALIDATOR (handoffs/WF02-REQ054-20260819/step-05-release-validator.json). Flip docs/requirements.yaml REQ-054 status in_progress -> done. Append a 'done' event to docs/status/requirement_status.yaml with a real UTC timestamp and a note summarizing what shipped (SnapshotWriter, migration, Reconstruction modification, engine.ex wiring, the rework cycle REVIEWER caught over missing wiring and how it was resolved). Check README.md for whether anything needs updating (this is an internal engine capability with no new HTTP route, similar reasoning to REQ-045/047/048/052/053/061's DOC-UPDATER passes -- verify that reasoning still holds rather than assuming it). Check docs/migration/stage-3-instance-engine.md's header for REQ-054 in its pending list needing to move to done, matching the pattern established by prior stage-3 requirements' DOC-UPDATER passes.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-054 status flipped to done",
+      "requirement_status.yaml done event appended with real timestamp",
+      "README.md checked for staleness",
+      "stage-3-instance-engine.md header checked for REQ-054 pending->done move"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Flipped docs/requirements.yaml REQ-054 status in_progress -> done. Appended a 'done' event to docs/status/requirement_status.yaml (UTC 2026-08-19T04:41:48Z) summarizing SnapshotWriter + instance_state_snapshots migration (schema-per-tenant, no tenant_id per Decision 0006 D2) + the Reconstruction.reconstruct_instance/2 snapshot-aware modification + the four engine.ex wiring call sites, plus the REVIEWER-caught missing-wiring rework cycle (fixed in commit 3207741) and RELEASE-VALIDATOR's independent 952/952 re-verification. Checked README.md: no changes needed -- the only 'snapshot' hit (line 27) is an unrelated reference to a requirement-progress count, not instance-state snapshots; no new HTTP route or process-model change. Updated docs/migration/stage-3-instance-engine.md's header: moved REQ-054 from the `pending` list into the `done` clause with an ISS-601 one-line summary, pending count corrected 7 -> 6.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "docs/migration/stage-3-instance-engine.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ054-20260819",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ054-20260819",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV for Step Final (git merge)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -63,7 +63,9 @@ defmodule Letflow.TenantSchemaReaperTest do
   end
 
   defp tenant_schemas_row_exists?(id) do
-    %{rows: rows} = Repo.query!("SELECT 1 FROM tenant_schemas WHERE id = $1", [Ecto.UUID.dump!(id)])
+    %{rows: rows} =
+      Repo.query!("SELECT 1 FROM tenant_schemas WHERE id = $1", [Ecto.UUID.dump!(id)])
+
     rows != []
   end
 

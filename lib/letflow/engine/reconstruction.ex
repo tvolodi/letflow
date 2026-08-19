@@ -144,6 +144,30 @@ defmodule Letflow.Engine.Reconstruction do
      fact) surfaces as a named, pattern-matchable replay failure instead of
      crashing or being silently absorbed.
 
+  ## REQ-054 — snapshot-aware replay-source selection
+
+  `read_full_log/2` is widened to `read_full_log/3`, taking a new
+  `min_sequence_number` argument (defaulting to `1` for every existing
+  full-replay caller) — the same class of deliberate, additive-arity
+  divergence as `write_back/3`'s opts-list widening above, not a change to
+  the merge/dedup logic itself. `replay/3` becomes `replay/4`: its new
+  first step, `select_replay_source/2` (ports `reconstruction.zig`'s
+  `determineReplaySourceForSnapshot()`), asks
+  `Letflow.Engine.SnapshotWriter.latest_snapshot/2` — a **different**
+  snapshot table from the `SnapshotStore.get_by_instance_id/2` call
+  immediately below it in `replay/4`'s body (`instance_state_snapshots`,
+  periodic execution state, vs. `instance_definition_snapshots`, the
+  immutable PD-08 graph — see `Letflow.Engine.SnapshotWriter`'s moduledoc
+  for the full distinction) — whether a prior execution-state snapshot
+  exists for this instance. When one does, `replay/4` seeds `fold_events/3`
+  from that snapshot's deserialised `InstanceState.t()` instead of a fresh
+  `:START` token, and folds only events with `sequence_number` greater than
+  the snapshot's own — `fold_events/3` and every `apply_event/3` clause are
+  unchanged, so a divergence between the snapshot-sourced and full-replay
+  results (INV-ISS-1, `lib/letflow/design/req054-instance-state-snapshots.md`
+  §5.4) can only come from the snapshot's serialise/deserialise round-trip,
+  never from two different fold implementations drifting apart.
+
   ## OQ-1 (two-query race, design doc §9) — not closed by this
   ## implementation
 
@@ -160,6 +184,7 @@ defmodule Letflow.Engine.Reconstruction do
   alias Letflow.Definitions.SnapshotStore
   alias Letflow.Engine
   alias Letflow.Engine.InstanceState
+  alias Letflow.Engine.SnapshotWriter
   alias Letflow.Engine.Token
   alias Letflow.Engine.Transition
   alias Letflow.Engine.VariableMerge
@@ -192,6 +217,10 @@ defmodule Letflow.Engine.Reconstruction do
           last_sequence_number: non_neg_integer() | nil,
           write_back: :skipped | :written
         }
+
+  @type replay_source ::
+          {:full_replay, min_sequence_number :: 1}
+          | {:from_snapshot, InstanceState.t(), min_sequence_number :: pos_integer()}
 
   @type merged_event :: %{
           event_id: Ecto.UUID.t(),
@@ -238,8 +267,10 @@ defmodule Letflow.Engine.Reconstruction do
 
     with {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
          {:ok, cast_instance_id} <- cast_instance_id(instance_id),
-         {:ok, merged_events} <- read_full_log(cast_instance_id, prefix),
-         {:ok, instance_state} <- replay(cast_instance_id, merged_events, prefix) do
+         replay_source <- select_replay_source(cast_instance_id, prefix),
+         {:ok, merged_events} <-
+           read_full_log(cast_instance_id, prefix, min_sequence_number(replay_source)),
+         {:ok, instance_state} <- replay(cast_instance_id, merged_events, prefix, replay_source) do
       last_sequence_number = last_sequence_number(merged_events)
 
       result = %{
@@ -275,9 +306,26 @@ defmodule Letflow.Engine.Reconstruction do
   # Step 1 (design doc §4) -- merged event read across events/events_archive.
   # ---------------------------------------------------------------------
 
-  @spec read_full_log(instance_id :: Ecto.UUID.t(), prefix :: String.t()) ::
-          {:ok, [merged_event()]} | {:error, term()}
-  defp read_full_log(instance_id, prefix) do
+  # REQ-054 widening: min_sequence_number defaults to 1 for the full-replay
+  # path (every event), so this stays the identical query REQ-053 built for
+  # every caller that still passes 1 -- see moduledoc "REQ-054 --
+  # snapshot-aware replay-source selection". Both Event and ArchivedEvent
+  # queries gain a `sequence_number > min_sequence_number - 1` clause
+  # (design doc §5.1), i.e. `>= min_sequence_number`.
+  #
+  # Public/`@doc false` (REQ-059 widening) for the same precedent
+  # `Letflow.Engine.advance_until_stable/4` etc. already set (see that
+  # module's own comment) -- `Letflow.Engine.PinResolver.reconstruct_effective_pins/2`
+  # (req059-pin-resolver.md §6) reuses this exact merged, archive-aware read
+  # rather than writing a second, independently-drifting copy of the same
+  # events/events_archive merge logic.
+  @doc false
+  @spec read_full_log(
+          instance_id :: Ecto.UUID.t(),
+          prefix :: String.t(),
+          min_sequence_number :: pos_integer()
+        ) :: {:ok, [merged_event()]} | {:error, term()}
+  def read_full_log(instance_id, prefix, min_sequence_number) do
     Repo.transaction(fn ->
       # events_archive queried first -- the design doc §9 OQ-1's own
       # argued-safe ordering under READ COMMITTED (archive/1 only ever moves
@@ -285,6 +333,7 @@ defmodule Letflow.Engine.Reconstruction do
       archived_events =
         ArchivedEvent
         |> where([e], e.instance_id == ^instance_id)
+        |> where([e], e.sequence_number > ^(min_sequence_number - 1))
         |> order_by([e], asc: e.sequence_number)
         |> Repo.all(prefix: prefix)
         |> Enum.map(&normalize_merged_event/1)
@@ -292,6 +341,7 @@ defmodule Letflow.Engine.Reconstruction do
       live_events_result =
         Event
         |> where([e], e.instance_id == ^instance_id)
+        |> where([e], e.sequence_number > ^(min_sequence_number - 1))
         |> order_by([e], asc: e.sequence_number)
         |> Repo.all(prefix: prefix)
         |> resolve_live_payloads(prefix)
@@ -389,15 +439,42 @@ defmodule Letflow.Engine.Reconstruction do
   # Step 2 (design doc §5) -- fold the merged log into an InstanceState.
   # ---------------------------------------------------------------------
 
-  @spec replay(instance_id :: Ecto.UUID.t(), events :: [merged_event()], prefix :: String.t()) ::
+  # REQ-054's own new lookup, against a different table (`instance_state_snapshots`,
+  # execution state) than the `SnapshotStore.get_by_instance_id/2` call below
+  # (`instance_definition_snapshots`, the graph) -- state seed vs. graph
+  # seed, two independent axes. Ports `reconstruction.zig`'s
+  # `determineReplaySourceForSnapshot()` (design doc §5.2). Cannot itself
+  # fail: `SnapshotWriter.latest_snapshot/2`'s only two outcomes are
+  # `{:error, :snapshot_not_found}` and `{:ok, {state, sequence_number}}`.
+  @spec select_replay_source(instance_id :: Ecto.UUID.t(), prefix :: String.t()) ::
+          replay_source()
+  defp select_replay_source(instance_id, prefix) do
+    case SnapshotWriter.latest_snapshot(instance_id, prefix: prefix) do
+      {:error, :snapshot_not_found} ->
+        {:full_replay, 1}
+
+      {:ok, {state_snapshot, snapshot_sequence_number}} ->
+        {:from_snapshot, state_snapshot, snapshot_sequence_number + 1}
+    end
+  end
+
+  defp min_sequence_number({:full_replay, min_sequence_number}), do: min_sequence_number
+  defp min_sequence_number({:from_snapshot, _state, min_sequence_number}), do: min_sequence_number
+
+  @spec replay(
+          instance_id :: Ecto.UUID.t(),
+          events :: [merged_event()],
+          prefix :: String.t(),
+          replay_source()
+        ) ::
           {:ok, InstanceState.t()}
           | {:error, :instance_not_found}
           | {:error, {:replay_failed, replay_failure_reason()}}
-  defp replay(instance_id, events, prefix) do
+  defp replay(instance_id, events, prefix, replay_source) do
     case SnapshotStore.get_by_instance_id(instance_id, prefix: prefix) do
-      {:ok, snapshot} ->
-        with {:ok, graph} <- build_graph_for_replay(snapshot.graph),
-             {:ok, seed_state} <- seed_instance_state(instance_id, graph) do
+      {:ok, graph_snapshot} ->
+        with {:ok, graph} <- build_graph_for_replay(graph_snapshot.graph),
+             {:ok, seed_state} <- seed_state_for_replay(instance_id, graph, replay_source) do
           case fold_events(graph, seed_state, events, prefix) do
             {:ok, final_state} -> {:ok, final_state}
             {:error, reason} -> {:error, {:replay_failed, reason}}
@@ -410,7 +487,10 @@ defmodule Letflow.Engine.Reconstruction do
       # having a row for instance_id is not, by itself, :instance_not_found
       # -- a zero-event, snapshot-committed instance is a real,
       # reconstructible instance (AC4). instance_not_found is returned only
-      # when the merged event list is ALSO empty.
+      # when the merged event list is ALSO empty. REQ-054 (design doc §5.3):
+      # a {:full_replay, 1} replay_source (no state snapshot yet -- the
+      # common, zero-events-so-far case) is normal here too, not evidence of
+      # a missing instance -- this rule's inputs are unchanged by REQ-054.
       {:error, :snapshot_not_found} when events == [] ->
         {:error, :instance_not_found}
 
@@ -420,6 +500,19 @@ defmodule Letflow.Engine.Reconstruction do
       {:error, other} ->
         {:error, {:replay_failed, {:snapshot_unavailable, other}}}
     end
+  end
+
+  # design doc §5.2: {:full_replay, 1} still seeds fresh from :START
+  # (unchanged from REQ-053); {:from_snapshot, state_snapshot, _} seeds the
+  # fold directly from the deserialised snapshot state instead --
+  # fold_events/3 and every apply_event/3 clause below are identical either
+  # way (INV-ISS-1's correctness bar, design doc §5.4).
+  defp seed_state_for_replay(instance_id, graph, {:full_replay, 1}) do
+    seed_instance_state(instance_id, graph)
+  end
+
+  defp seed_state_for_replay(_instance_id, _graph, {:from_snapshot, state_snapshot, _min_seq}) do
+    {:ok, state_snapshot}
   end
 
   defp build_graph_for_replay(graph_map) do
@@ -564,7 +657,11 @@ defmodule Letflow.Engine.Reconstruction do
               tokens: replace_token(state.tokens, resolved_token)
           }
 
-          dispatch_sub_process_completion(graph, state_with_merged_variables, resolved_token.token_id)
+          dispatch_sub_process_completion(
+            graph,
+            state_with_merged_variables,
+            resolved_token.token_id
+          )
 
         {:rejected, _unchanged_variables,
          [{:execution_error, key, _rejected_value, :variable_schema_rejected, _failures}]} ->

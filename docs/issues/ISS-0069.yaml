@@ -1,0 +1,73 @@
+id: ISS-0069
+title: >
+  Unused default-value warnings in service_task_routing_test.exs and
+  engine_plugin_error_routing_test.exs surfaced during ISS-0068's post-fix
+  mix test run
+discovered_by: TEST-RUNNER
+discovered_in_run: WF03-ISS0068-20260819
+discovered_at: 2026-08-19T05:31:00Z
+severity: MINOR
+description: >
+  While re-running the full suite to verify ISS-0068's format-only fix,
+  TEST-RUNNER observed two pre-existing compiler warnings of the form
+  "default values ... never used" surfacing during the test-file compile
+  pass (not the app-code `mix compile --warnings-as-errors` pass, so they
+  don't fail that gate):
+
+    test/letflow/engine/service_task_routing_test.exs
+    test/letflow/engine_plugin_error_routing_test.exs
+
+  Not introduced by ISS-0068 (that run only reformatted whitespace in 14
+  unrelated files). Filed per ISSUE_QUEUE.md as an incidental,
+  not-blocking finding rather than expanding ISS-0068's own scope. Needs
+  a real diagnosis run (re-run `mix test test/letflow/engine/service_task_routing_test.exs
+  test/letflow/engine_plugin_error_routing_test.exs --warnings-as-errors`
+  or similar to capture the exact function/line each warning points at)
+  before a fix can be designed -- this record only captures that the
+  warnings exist and where TEST-RUNNER saw them, not their root cause.
+affected_files:
+  - test/letflow/engine/service_task_routing_test.exs
+  - test/letflow/engine_plugin_error_routing_test.exs
+  - test/letflow/engine_cancel_instance_test.exs
+github_issue: 231
+status: resolved
+resolved_in_run: WF03-ISS0069-20260819
+resolved_at: 2026-08-19T07:14:50Z
+update_20260819T054500Z: >
+  TEST-RUNNER (WF03-ISS0070-20260819, applying Decision 0005) observed a
+  third instance of the same warning class: an unused default-arg warning
+  at test/letflow/engine_cancel_instance_test.exs:106, again test-file-only
+  (does not fail mix compile --warnings-as-errors, unrelated to that run's
+  toolchain-pin diff). Added to affected_files above rather than filed as
+  a separate issue -- same symptom class, same non-blocking severity.
+resolution_note: >
+  Fixed in two parts, design in
+  lib/letflow/design/iss0069-unused-default-warnings-fix.md.
+
+  Part 1 (full sweep, commit e95746e / squashed into 7094c30 on this
+  branch): rather than fixing the 3 files named in affected_files
+  incrementally, TEST-DESIGN-VALIDATOR directed a full repo-wide sweep
+  instead. Found and fixed 9 total `defp` functions with unused
+  `\\ default` arguments across 9 test files (not just the 3 originally
+  named) -- mechanical, behavior-preserving removal of the default value
+  where no caller relied on it. Confirmed zero "default values" warnings
+  remain; 1029 tests passing at that point.
+
+  Part 2 (gate closure, two rounds):
+  round 1 attempted a blanket `test --warnings-as-errors` step in the
+  `letflow.check` alias, then reverted it after ELIXIR-DEV proved it could
+  never exit 0 -- docs/issues/ISS-0044.yaml (already resolved) had
+  independently diagnosed two other warning classes (ExUnit.Case.register_test/4
+  deprecation from stream_data 0.6.0's property macro; a deliberate
+  Code.require_file/1 module-redefinition workaround in
+  test/letflow/event_store/registry_test.exs) as permanently deferred, both
+  surfacing only under `mix test` and both out of this issue's scope.
+  round 2 (this run, commit 7094c30) replaced the blanket flag with a
+  targeted custom Mix task, lib/mix/tasks/letflow.check.test.ex, that runs
+  `mix test` and fails only on real test failures or output containing the
+  specific "default values for the optional arguments" substring --
+  ignoring the two known-deferred classes. Regression test at
+  test/mix/tasks/letflow_check_test_test.exs proves fail-then-pass
+  (synthetic default-arg warning fails the task; removing it passes).
+  Full suite verified by TEST-RUNNER: 5 properties, 1032 tests, 0
+  failures; `mix letflow.check` exits 0 clean. GitHub issue 231 closed.

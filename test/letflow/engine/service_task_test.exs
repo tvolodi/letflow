@@ -32,7 +32,9 @@ defmodule Letflow.Engine.ServiceTaskTest do
   describe "AC1 -- parse_config_from_node_attributes/1 defaults and warning" do
     test "defaults timeout_ms to 30000 and retry_limit to 3 when omitted" do
       assert {:ok, %Config{} = config} =
-               ServiceTask.parse_config_from_node_attributes(svc_node(%{"endpoint" => "http://x"}))
+               ServiceTask.parse_config_from_node_attributes(
+                 svc_node(%{"endpoint" => "http://x"})
+               )
 
       assert config.timeout_ms == 30_000
       assert config.retry_limit == 3
@@ -64,7 +66,9 @@ defmodule Letflow.Engine.ServiceTaskTest do
 
     test "url only (no service_id) never records the warning" do
       assert {:ok, %Config{} = config} =
-               ServiceTask.parse_config_from_node_attributes(svc_node(%{"endpoint" => "http://x"}))
+               ServiceTask.parse_config_from_node_attributes(
+                 svc_node(%{"endpoint" => "http://x"})
+               )
 
       assert config.warnings == []
       assert config.route_kind == :inline_url

@@ -336,7 +336,9 @@ defmodule Letflow.EngineSubProcessTest do
       child_def = active_definition!(schema_name, graph_child_two_step())
 
       interface = %{
-        "inputs" => [%{"name" => "amount", "required" => true, "json_schema" => %{"type" => "number"}}]
+        "inputs" => [
+          %{"name" => "amount", "required" => true, "json_schema" => %{"type" => "number"}}
+        ]
       }
 
       parent_def =
@@ -356,7 +358,8 @@ defmodule Letflow.EngineSubProcessTest do
       # mirrors AC4a's own shape/style, engine_execution_error_test.exs:410). There is no
       # code path that returns {:ok, %{instance_status: :error, ...}} -- complete_result()'s
       # own @spec restricts instance_status to :active | :completed, never :error.
-      assert {:error, {:instance_execution_error, :subprocess_interface_violation, {:field, "amount"}}} =
+      assert {:error,
+              {:instance_execution_error, :subprocess_interface_violation, {:field, "amount"}}} =
                Engine.complete_task(gate_task.id, complete_attrs(), prefix: schema_name)
 
       projection = Repo.get!(InstanceProjection, created.instance_id, prefix: schema_name)
@@ -405,7 +408,8 @@ defmodule Letflow.EngineSubProcessTest do
       # complete_task/3 itself returns {:error, {:instance_execution_error, ...}} directly
       # -- same shape/rationale as the SUB_PROCESS_MISSING_REQUIRED_INPUT case above
       # (mirrors AC4a's own shape/style, engine_execution_error_test.exs:410).
-      assert {:error, {:instance_execution_error, :subprocess_interface_violation, {:field, "amount"}}} =
+      assert {:error,
+              {:instance_execution_error, :subprocess_interface_violation, {:field, "amount"}}} =
                Engine.complete_task(gate_task.id, complete_attrs(), prefix: schema_name)
 
       projection = Repo.get!(InstanceProjection, created.instance_id, prefix: schema_name)
@@ -429,7 +433,9 @@ defmodule Letflow.EngineSubProcessTest do
       child_def = active_definition!(schema_name, graph_child_two_step())
 
       interface = %{
-        "outputs" => [%{"name" => "result", "required" => true, "json_schema" => %{"type" => "boolean"}}]
+        "outputs" => [
+          %{"name" => "result", "required" => true, "json_schema" => %{"type" => "boolean"}}
+        ]
       }
 
       parent_def =
@@ -460,6 +466,7 @@ defmodule Letflow.EngineSubProcessTest do
       parent_projection = Repo.get!(InstanceProjection, created.instance_id, prefix: schema_name)
       assert parent_projection.status == :error
       assert parent_projection.variables == parent_initial_variables
+
       assert parent_projection.error_detail["details"]["code"] ==
                "SUB_PROCESS_MISSING_REQUIRED_OUTPUT"
 
@@ -500,12 +507,16 @@ defmodule Letflow.EngineSubProcessTest do
       child_task = pending_task_for_instance!(schema_name, child.instance_id)
 
       output_attrs = complete_attrs(%{output_variables: %{"result" => "not-a-boolean"}})
-      assert {:ok, child_result} = Engine.complete_task(child_task.id, output_attrs, prefix: schema_name)
+
+      assert {:ok, child_result} =
+               Engine.complete_task(child_task.id, output_attrs, prefix: schema_name)
+
       assert child_result.instance_status == :completed
 
       parent_projection = Repo.get!(InstanceProjection, created.instance_id, prefix: schema_name)
       assert parent_projection.status == :error
       assert parent_projection.variables == parent_initial_variables
+
       assert parent_projection.error_detail["details"]["code"] ==
                "SUB_PROCESS_OUTPUT_SCHEMA_VIOLATION"
     end
@@ -564,7 +575,9 @@ defmodule Letflow.EngineSubProcessTest do
       %{schema_name: schema_name} = provisioned_tenant()
 
       child_def = active_definition!(schema_name, graph_child_two_step())
-      parent_def = active_definition!(schema_name, graph_parent_subprocess_then_task(child_def.name))
+
+      parent_def =
+        active_definition!(schema_name, graph_parent_subprocess_then_task(child_def.name))
 
       assert {:ok, created} = Engine.create(start_attrs(parent_def), prefix: schema_name)
 
@@ -578,7 +591,9 @@ defmodule Letflow.EngineSubProcessTest do
       assert parent_token_while_running.node_id == "sp"
 
       child_task = pending_task_for_instance!(schema_name, child.instance_id)
-      assert {:ok, _result} = Engine.complete_task(child_task.id, complete_attrs(), prefix: schema_name)
+
+      assert {:ok, _result} =
+               Engine.complete_task(child_task.id, complete_attrs(), prefix: schema_name)
 
       parent_token_after =
         Repo.get!(TokenRecord, parent_token_while_running.id, prefix: schema_name)
@@ -601,7 +616,25 @@ defmodule Letflow.EngineSubProcessTest do
 
       definition = active_definition!(schema_name, graph_child_two_step())
 
-      forged_parent_id = Ecto.UUID.generate()
+      # REQ-059 (merged into this branch after this test was originally
+      # written) reads attrs[:parent_instance_id] for pin-inheritance lookup
+      # (Letflow.Engine.PinResolver.reconstruct_effective_pins/2, design doc
+      # §8/§9 OQ-4's own admittedly-speculative seam) -- a value that does not
+      # resolve to a real instance now fails create/2 outright with
+      # {:parent_pin_lookup_failed, :instance_not_found} before ever reaching
+      # instance_projections insertion, which is a different failure mode
+      # than the one this test exercises. Using a real (but otherwise
+      # unrelated) instance's id keeps this test's actual invariant intact --
+      # create/2's own insert_instance_projection/8 never reads
+      # attrs[:parent_instance_id] to populate the parent_instance_id/
+      # parent_token_id columns, regardless of whether pin resolution itself
+      # consults that key for an unrelated purpose.
+      unrelated_definition = active_definition!(schema_name, graph_child_two_step())
+
+      assert {:ok, unrelated} =
+               Engine.create(start_attrs(unrelated_definition), prefix: schema_name)
+
+      forged_parent_id = unrelated.instance_id
 
       attrs =
         start_attrs(definition)
@@ -631,15 +664,23 @@ defmodule Letflow.EngineSubProcessTest do
       child = child_projection!(schema_name, created.instance_id)
       child_task = pending_task_for_instance!(schema_name, child.instance_id)
 
-      cancel_attrs = %{actor_id: Ecto.UUID.generate(), idempotency_key: unique_idempotency_key("cancel")}
-      assert {:ok, cancel_result} = Engine.cancel_instance(created.instance_id, cancel_attrs, prefix: schema_name)
+      cancel_attrs = %{
+        actor_id: Ecto.UUID.generate(),
+        idempotency_key: unique_idempotency_key("cancel")
+      }
+
+      assert {:ok, cancel_result} =
+               Engine.cancel_instance(created.instance_id, cancel_attrs, prefix: schema_name)
+
       assert cancel_result.status == :cancelled
 
       parent_projection = Repo.get!(InstanceProjection, created.instance_id, prefix: schema_name)
       assert parent_projection.status == :cancelled
 
       # The child is entirely untouched: still active, its own task still pending.
-      child_projection_after = Repo.get!(InstanceProjection, child.instance_id, prefix: schema_name)
+      child_projection_after =
+        Repo.get!(InstanceProjection, child.instance_id, prefix: schema_name)
+
       assert child_projection_after.status == :active
 
       child_task_after = Repo.get!(EngineTask, child_task.id, prefix: schema_name)

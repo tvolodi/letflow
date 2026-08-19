@@ -4851,7 +4851,6 @@ history:
       with an EE-11 one-line summary, pending count corrected 8 -> 7),
       same header-sync gap-fix shape REQ-045/047/048/052/061's
       DOC-UPDATER passes already applied.
-
   - req: REQ-057
     event: done
     agent: DOC-UPDATER
@@ -5047,3 +5046,100 @@ history:
       in_progress -> done in docs/requirements.yaml; stage-3 header
       pending count corrected 4 -> 3 in
       docs/migration/stage-3-instance-engine.md.
+
+  - req: REQ-054
+    event: started
+    agent: ORCH
+    at: "2026-08-19T03:50:35Z"
+
+  - req: REQ-054
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-19T04:41:48Z"
+    note: >
+      WF02-REQ054-20260819. Periodic instance state snapshots (ISS-601)
+      shipped as Letflow.Engine.SnapshotWriter, plus its schema-per-tenant
+      instance_state_snapshots migration and Ecto.Schema module (no
+      tenant_id column per Decision 0006 D2, same as every other
+      schema-per-tenant table this stage adds) and a modification to
+      REQ-053's Reconstruction.reconstruct_instance/2 so it replays from
+      the latest snapshot's sequence_number forward instead of always
+      from sequence 1 when one exists, with both replay paths verified
+      to agree. First pass through the gate cycle FAILed at REVIEWER's
+      step-02d: SnapshotWriter and the snapshot-aware replay selection
+      existed as code but were never actually called from
+      lib/letflow/engine.ex, so maybe_take_snapshot/N would never fire
+      in real instance execution. ELIXIR-DEV wired the four call sites
+      -- create/2, complete_task/3, set_instance_error/2, and the
+      instance-completion path -- into engine.ex (commit 3207741), and
+      SECURITY-REVIEWER and REVIEWER both re-ran and passed the second
+      time. RELEASE-VALIDATOR then independently re-verified every
+      acceptance criterion against the live code (not against any prior
+      step's report) and re-ran the full suite itself: 952/952 tests,
+      0 failures. docs/requirements.yaml REQ-054 flipped in_progress ->
+      done. Checked README.md: no changes needed, same reasoning
+      REQ-045/047/048/052/053/061's DOC-UPDATER passes applied --
+      SnapshotWriter and the replay-source selection are internal engine
+      capabilities with no new HTTP route and no process-model change,
+      so neither the ASCII state diagram nor "Running it" section is
+      affected -- verified by grep, only an unrelated pre-existing
+      "snapshot count" mention in README.md exists and does not concern
+      this table. docs/migration/stage-3-instance-engine.md's header
+      listed REQ-054 in its `pending` list -- fixed in this same pass
+      (moved REQ-054 into the `done` clause with an ISS-601 one-line
+      summary, pending count corrected 7 -> 6), same header-sync gap-fix
+      shape REQ-045/047/048/052/053/061's DOC-UPDATER passes already
+      applied.
+
+  - req: REQ-059
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-19T08:58:00Z"
+    note: >
+      WF02-REQ059-20260819. Dependency pin resolution, recording and
+      inheritance (pin_resolver.zig port, PIN-01..04) shipped as
+      Letflow.Engine.PinResolver: resolve/4 enumerates every versioned
+      reference and resolves it to a deterministically-ordered
+      {kind, ref, resolved_id, version, source} pin BEFORE the instance
+      row is written (PIN-01 AC1/AC4/AC5); the resolved pin set is
+      recorded as INSTANCE_STARTED's pinned_versions payload field in the
+      same transaction as the instance insert, with no side table
+      (PIN-02); a missing pin raises PinMissing with no fallback to the
+      current active version (PIN-03 AC1/AC5); replay derives the
+      effective pin set from INSTANCE_STARTED plus folded
+      INSTANCE_PINS_REBOUND events only, never a live catalog (PIN-04
+      AC1/AC5), and REQ-062 sub-process children inherit the parent's
+      pins with source: inherited, inheritance winning over a differing
+      resolved version and the conflict recorded (PIN-04 AC2/AC3). Gate
+      chain: SECURITY-REVIEWER (out of scope, PASS), REVIEWER (PASS,
+      explicit sign-off on the stage-3-doc SCOPE GAP tension question),
+      TEST-DESIGN-VALIDATOR (2 reworks, spec-code mismatches),
+      TEST-RUNNER (1 rework, AC1 timing-window bug fixed),
+      RELEASE-VALIDATOR (independent re-verification of all 8 ACs
+      against real mix test output: 5 properties, 1073 tests, 0
+      failures, plus a 3-claim design-doc-vs-shipped-code spot check,
+      all matching). docs/requirements.yaml REQ-059 flipped pending ->
+      done. lib/letflow/design/req059-pin-resolver.md's SCOPE GAP
+      notes (PIN-01 AC1/AC2 service_catalog/PLC-01 resolution and PIN-03
+      AC3's post-DEPRECATED execution, both unsatisfiable in Letflow for
+      the same reason R-Co itself holds them at TESTED rather than
+      RELEASED, ISS-0672/GH-306) and the PIN_RETRY_EXHAUSTED
+      reserved-hook note for PIN-03 AC4's exhausted-retry DLQ routing
+      (S6, same gap shape REQ-056 already flagged) were checked against
+      docs/migration/stage-3-instance-engine.md: the service_catalog/
+      PLC-01 gap was already covered under that doc's "Scope boundaries
+      with S4 and S5" section, so no new prose was needed there: only a
+      pointer was added to the REQ-059 entry itself. docs/migration/
+      stage-3-instance-engine.md's header still listed REQ-059 in its
+      `pending` list -- fixed in this same pass (moved REQ-059 into the
+      `done` clause with a PIN-01..04 summary covering both the
+      already-documented scope gap and the PIN_RETRY_EXHAUSTED hook,
+      pending count corrected 3 -> 2), same header-sync gap-fix shape
+      REQ-045/047/048/052/053/054/055/056/057/061's DOC-UPDATER passes
+      already applied. README.md: no changes needed -- this change added
+      no new HTTP route (GET /instances/{id}/pins is REQ-059's own
+      documented S4 scope boundary, not shipped here), no change to the
+      documented gen_statem/process-model diagram, and no change to the
+      "Running it" section; verified by grep, only an unrelated
+      pre-existing "snapshot count" mention in README.md exists and does
+      not concern this table.

@@ -277,7 +277,12 @@ defmodule Letflow.Engine.SubProcessTest do
                Transition.transition(g, state, {:sub_process_completed, "t1"})
 
       assert new_state.tokens == [
-               %Token{token_id: "t1", node_id: "after", waiting_child_instance_id: nil, branch_id: nil}
+               %Token{
+                 token_id: "t1",
+                 node_id: "after",
+                 waiting_child_instance_id: nil,
+                 branch_id: nil
+               }
              ]
 
       # Second hop, mirroring transition_test.exs's own ":END node dispatch" test

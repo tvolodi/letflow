@@ -703,6 +703,18 @@ defmodule Letflow.Engine.SubProcess do
     actor_id = Keyword.get(opts, :actor_id)
     idempotency_key = Keyword.get(opts, :idempotency_key)
 
+    # Derived, not the caller's own `idempotency_key` verbatim -- same
+    # collision reason as append_instance_started_event_for_child/8's and
+    # append_sub_process_completed_event/8's own comments: the caller's
+    # idempotency_key is also used, in the same transaction, for the
+    # completing task's own TASK_COMPLETED event. Reusing it unchanged for
+    # this cascade's own ExecutionError event would collide against the
+    # schema-wide-unique event_idempotency.idempotency_key index. Distinct
+    # from both ::sub_process_start:: and ::sub_process_completed:: so it
+    # can never collide with either.
+    error_idempotency_key =
+      "#{idempotency_key}::sub_process_completion_error::#{parent_token.instance_id}::#{child_instance_id}"
+
     case load_parent_context(parent_token, prefix) do
       {:error, reason} ->
         {:error,
@@ -712,7 +724,7 @@ defmodule Letflow.Engine.SubProcess do
            parent_token.node_id,
            %{},
            actor_id,
-           idempotency_key
+           error_idempotency_key
          )}
 
       {:ok, graph, node, seed_state, token_records} ->
@@ -733,7 +745,7 @@ defmodule Letflow.Engine.SubProcess do
                parent_token.node_id,
                seed_state.variables,
                actor_id,
-               idempotency_key
+               error_idempotency_key
              )}
 
           {:ok, merge_variables} ->
@@ -747,6 +759,7 @@ defmodule Letflow.Engine.SubProcess do
               token_records,
               actor_id,
               idempotency_key,
+              error_idempotency_key,
               prefix
             )
         end
@@ -763,6 +776,7 @@ defmodule Letflow.Engine.SubProcess do
          token_records,
          actor_id,
          idempotency_key,
+         error_idempotency_key,
          prefix
        ) do
     {:ok, new_variables, merge_events} =
@@ -784,7 +798,7 @@ defmodule Letflow.Engine.SubProcess do
            parent_token.node_id,
            state_with_merged.variables,
            actor_id,
-           idempotency_key
+           error_idempotency_key
          )}
 
       {:ok, new_instance_state, _pending_events} ->
@@ -811,7 +825,7 @@ defmodule Letflow.Engine.SubProcess do
                parent_token.node_id,
                state_with_merged.variables,
                actor_id,
-               idempotency_key
+               error_idempotency_key
              )}
 
           {:ok, final_instance_state, _more_pending} ->

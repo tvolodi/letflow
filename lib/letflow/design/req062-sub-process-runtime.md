@@ -712,3 +712,422 @@ resolve fresh," which is REQ-059's own concern to state, not this one's.
   named) — this is a known, honestly-flagged gap parallel to R-Co's own
   documented SCH-03/timer gaps elsewhere in this engine, not silently
   patched over here.
+
+## 10. Design amendment — post-escalation fix for issues (i)/(ii)/(iii)
+
+Written after ELIXIR-DEV's WF-02 Step 2a handoff (`handoffs/WF02-REQ062-20260819/step-02a-elixir-dev.json`)
+exhausted `max_rework` (3/3) and ESCALATED with a scoped run
+(`test/letflow/engine_sub_process_test.exs` + `test/letflow/engine_test.exs`)
+standing at 36/42 — `engine_test.exs` itself fully green (32/32, no
+regression), all 6 remaining failures inside `EngineSubProcessTest`, tracing
+to three distinct root causes. This section reasons from the **actually
+committed code** (post rework-iteration-3, commits `d437e299`/`d370849c` on
+this branch), not from the original §1–§9 text above where the two diverge —
+§1–§9 are otherwise still authoritative and are not restated here.
+
+### 10.1 Issue (i) — `Ecto.Multi` `:task_records` key collision
+
+**Root cause, confirmed against the real code:**
+`Letflow.Engine.TaskActivation.append_multi_from_existing_records/6`
+(`lib/letflow/engine/task_activation.ex:246`) appends its step via
+`Multi.run(multi, :task_records, fn repo, _changes -> ... end)` — a fixed
+atom key, identical on every call, regardless of which `instance_id` the
+call is for. It has exactly two call sites, both already inside this
+requirement's own cascade:
+
+1. `lib/letflow/engine.ex:1735`, inside
+   `build_task_activation_and_reconciliation_multi/3` (M6/M7 of
+   `complete_task/3`'s own tail, built onto the **same outer Multi**
+   `Repo.transaction/1` eventually commits) — called with `task.instance_id`,
+   i.e. the completing task's own (child, in the sub-process case) instance.
+2. `lib/letflow/engine/sub_process.ex:861`, inside
+   `build_completion_write_steps/12` (called from
+   `append_completion_multi/6`, §3.4) — called with `parent_instance_id`.
+
+When a child's completion cascades to its parent in the same transaction
+(`Letflow.Engine.append_sub_process_completion_cascade_multi/6`,
+`engine.ex:1663`, chained via `Multi.merge/2` onto the same outer Multi that
+call site 1 already populated), Ecto's own static merge-key-collision check
+in `Multi.merge/2` sees `:task_records` present on both sides and raises.
+
+**Fix — key-naming convention.** Namespace the step key by instance_id using
+a composite tuple, matching the tuple-key convention this exact call graph
+already uses everywhere else it needs per-instance/per-token uniqueness in
+the same transaction — precedent already in the codebase, not invented here:
+`{:sub_process_parent_token_reconciliation, parent_token.id}`,
+`{:sub_process_completed_event, parent_token.id}`,
+`{:sub_process_parent_projection, parent_token.id}`,
+`{:sub_process_grandparent_lookup, parent_instance_id}` (all in
+`sub_process.ex`'s `build_completion_write_steps/12` /
+`maybe_cascade_to_grandparent/7`), and `{:sub_process_parent_lookup,
+instance_id}` (`engine.ex`'s `append_sub_process_completion_cascade_multi/6`).
+
+**Exact change:** in `append_multi_from_existing_records/6`
+(`task_activation.ex:246`) only, change
+
+```
+Multi.run(multi, :task_records, fn repo, _changes -> ...
+```
+to
+```
+Multi.run(multi, {:task_records, instance_id}, fn repo, _changes -> ...
+```
+
+`instance_id` is already this function's own second positional parameter —
+**no `@spec`/argument signature change is needed anywhere.** Both existing
+call sites (`engine.ex:1735`, `sub_process.ex:861`) already pass the correct,
+distinct `instance_id`/`parent_instance_id` value positionally; neither needs
+editing beyond this one line inside `task_activation.ex` itself. Confirmed
+by `grep -rn "task_records" lib/letflow/`: no other code reads
+`changes.task_records` (or `changes[:task_records]`) by the literal atom
+key anywhere in the codebase, so no downstream reader needs updating either.
+
+**`append_multi/6`** (`task_activation.ex:165`, the sibling function
+`Letflow.Engine.create/2`'s own `persist/8` path calls, still under the
+fixed atom key `:task_records`) is **deliberately left unchanged.** It has
+exactly one call site per Multi (`create/2`'s own top-level persist), so no
+two `append_multi/6` steps ever land on the same Multi in one transaction —
+no collision is possible, so namespacing it fixes nothing and only widens
+REVIEWER's diff for no reason. This is a stated decision, not an oversight.
+
+**Grandparent-cascade recursion (design §3.4 point 3) — confirmed
+self-resolving, no extra plumbing needed.** The real recursion point is
+`Letflow.Engine.SubProcess.maybe_cascade_to_grandparent/7`
+(`sub_process.ex:908`), which — when the parent instance itself completes
+as a side effect of this cascade and has its own waiting grandparent
+token — calls `append_completion_multi/6` again with a **freshly resolved**
+`grandparent_token` (from `find_waiting_parent_token/3`'s own row lookup),
+whose `instance_id` is structurally the grandparent's own, distinct from
+both the child's and the parent's. Each recursion depth therefore produces
+its own distinct `{:task_records, instance_id}` key automatically, with zero
+depth-counter or additional argument needed — the fix is sufficient at
+unbounded cascade depth (subject to OQ-3's separate, already-flagged
+recursion-depth-guard gap, unrelated to this collision).
+
+**Why the tuple key alone is sufficient (the invariant that makes this
+correct, not just a lucky escape):** within one transaction,
+`append_multi_from_existing_records/6` is called **at most once per
+`instance_id`** — once for the hop chain's own completing instance (call
+site 1) and, per cascade level, once for that level's newly-implicated
+ancestor instance (call site 2, one call per `maybe_cascade_to_grandparent/7`
+recursion). No code path calls it twice for the same `instance_id` within
+one transaction, so a per-instance-id key can never itself collide with a
+second use of the same key for the same instance.
+
+### 10.2 Issue (ii) — `idempotency_key` collision on the `ExecutionError` event path (completion side)
+
+**Root cause, confirmed against the real code — broader than the escalation
+record's own framing.** `Letflow.Engine.SubProcess.to_error_args/6`
+(`sub_process.ex:200`) stores whatever `idempotency_key` it is handed
+verbatim into `error_args.idempotency_key`, which
+`Letflow.Engine.ExecutionError.append_execution_error_event/2`
+(`execution_error.ex:192`) then passes straight into
+`EventStore.append/2`'s own `idempotency_key` field — the same
+schema-wide-unique `event_idempotency.idempotency_key` index the two
+already-fixed paths (rework iteration 2) collide against. `to_error_args/6`
+is called from **four** sites, all inside `append_completion_multi/6`'s own
+call graph (§3.4) — **not just the output-filter-rejection one** the
+escalation record named:
+
+| Line | Failure branch |
+|---|---|
+| `sub_process.ex:709` | `load_parent_context/2` failure (`:definition_not_found`) |
+| `sub_process.ex:730` | `build_parent_merge_variables/2` rejection (the escalation's named case — `SUB_PROCESS_MISSING_REQUIRED_OUTPUT`/`SUB_PROCESS_OUTPUT_SCHEMA_VIOLATION`) |
+| `sub_process.ex:781` | `Transition.transition/3` failure inside `build_completion_multi_from_merge/10` |
+| `sub_process.ex:808` | `advance_until_stable/4` failure inside `build_completion_multi_from_merge/10` |
+
+All four are reachable only after the child's own `TASK_COMPLETED` event has
+already claimed the caller's raw `idempotency_key` in the **same**
+transaction — confirmed by tracing `engine.ex`'s
+`build_complete_task_tail_multi/6` second clause (`engine.ex:1564`): its
+`:event` step (`append_task_completed_event/5`, raw `idempotency_key`) runs
+*before* `append_sub_process_completion_cascade_multi/6` (`engine.ex:1619`),
+which is one of `append_completion_multi/6`'s two callers. Its other caller,
+`maybe_chain_synchronous_completion/6` (`sub_process.ex:449`, reached via
+`append_start_multi/6`'s own §3.3-step-6 synchronous-completion chaining),
+is likewise always reached from `append_sub_process_children_creation_multi/6`
+(`engine.ex:1612`), which — inside the same `build_complete_task_tail_multi/6`
+tail — also runs *after* that same `:event` step. So every one of the four
+`to_error_args/6` call sites needs the same fix, not only the one the
+escalation record singled out; leaving the other three unfixed would just
+surface the identical "transaction rolling back" failure the next time one
+of those specific branches is actually exercised (none of the 6 currently
+failing tests happens to hit them, but that is incidental, not a guarantee).
+
+**Fix — derivation formula, mirroring the two already-established
+conventions exactly (`sub_process.ex:616-617`'s
+`"#{idempotency_key}::sub_process_start::#{child_instance_id}"` and
+`sub_process.ex:1109-1110`'s
+`"#{idempotency_key}::sub_process_completed::#{parent_instance_id}::#{child_instance_id}"`).**
+A third, equally-shaped, equally-distinct suffix for the completion-cascade
+error path:
+
+```
+"#{idempotency_key}::sub_process_completion_error::#{parent_instance_id}::#{child_instance_id}"
+```
+
+Distinct from both existing suffixes (`::sub_process_start::`,
+`::sub_process_completed::`) so it can never collide with either of them,
+and — like both precedents — derived from `child_instance_id` (always a
+freshly-minted or already-durable, and in-scope, UUID at every one of the
+four call sites) plus `parent_instance_id`, so it is unique per
+child/parent pair even across a multi-level cascade.
+
+**Exact call-site change:** compute this once, as a new local binding
+`error_idempotency_key`, near the top of `append_completion_multi/6`
+(`sub_process.ex:695`), immediately after the existing
+`idempotency_key = Keyword.get(opts, :idempotency_key)` line — `parent_token`
+and `child_instance_id` are both already in scope there. Use
+`error_idempotency_key` (not the raw `idempotency_key`) as the 6th argument
+to `to_error_args/6` at line 709 (this function's own local error branch)
+and thread it as one new parameter to `build_completion_multi_from_merge/10`
+(`sub_process.ex:756`), which needs it for its own two `to_error_args/6`
+calls at lines 781 and 808. **`to_error_args/6`'s own `@spec` is unchanged**
+(still a plain `idempotency_key :: String.t()` 6th argument, per §3.2.3) —
+only the value passed at each of the four sites changes. The **success**
+path (`append_sub_process_completed_event/8`, `sub_process.ex:1080`, whose
+own `::sub_process_completed::` derivation already exists and is already
+correct) is untouched by this fix — it keeps deriving from the raw
+`idempotency_key`, unchanged.
+
+### 10.3 Issue (iii) — input-side interface violations: NOT an implementation bug
+
+**This is the one place this addendum's actual finding diverges from the
+escalation record's own framing, not just its file/line detail — the
+committed implementation is correct here; the test file is wrong.**
+
+The escalation record states the established convention (attributed to
+REQ-050/REQ-056) is that `complete_task/3` itself absorbs an EE-10 routing
+outcome into `{:ok, _}`. **Checked directly against the real, already-shipped,
+already-passing test for that exact claim
+(`test/letflow/engine_execution_error_test.exs:410`, `describe "AC4a --
+REQ-050's realistic downstream-gateway no-match"`) and it asserts the
+opposite:**
+
+```elixir
+assert {:error, {:instance_execution_error, :no_matching_gateway_edge, {:node, "gw"}}} =
+         Engine.complete_task(task.id, complete_attrs(), prefix: schema_name)
+```
+
+— with that same test file's own comment (line ~406) explaining exactly why:
+`interpret_complete_result/1`'s leading clause (`engine.ex:1916-1918`)
+`{:ok, %{complete_task_outcome: {:execution_error, error_args}}} -> {:error,
+{:instance_execution_error, error_args.error_type, error_args.affected}}` is
+the **one, single, uniform** conversion every EE-10-routed
+`complete_task/3` call already goes through — REQ-050's gateway-condition
+failure included. There is no code path, old or new, that returns `{:ok,
+%{instance_status: :error, ...}}` from `complete_task/3`: `complete_result()`'s
+own `@spec` (`engine.ex:1005-1012`) restricts `instance_status` to `:active
+| :completed`, never `:error`.
+
+The two currently-failing input-side tests in
+`test/letflow/engine_sub_process_test.exs` —
+`describe "AC3/AC8 -- SUB_PROCESS_MISSING_REQUIRED_INPUT..."` (lines 332–378)
+and `describe "AC3/AC8 -- SUB_PROCESS_INPUT_SCHEMA_VIOLATION..."` (lines
+380–413) — both assert `{:ok, result} = Engine.complete_task(gate_task.id,
+...)` followed by `result.instance_status == :error` (lines 353–359,
+404–407), with an inline comment claiming this "still returns `{:ok, _}`"
+per "req061's own established channel." That premise is what's wrong, not
+the implementation: it contradicts REQ-050's own already-shipped precedent
+it claims consistency with.
+
+**AC8's actual wording** ("each of the four SPC-01 failure modes is
+demonstrated routing into REQ-061's `set_instance_error` rather than
+writing its own ERROR transition, confirmed by inspection and by test")
+requires only that the *internal write path* go through
+`ExecutionError.append_multi/3` (the same steps `set_instance_error/2`
+itself performs) — which the current implementation **already does**,
+structurally, for the input-side case: `prepare_sub_process_children_for_completion/7`
+(`engine.ex:1469`) converts `SubProcess.prepare_child_activation/4`'s
+`{:error, activation_failure()}` into `{:halt, {:execution_error,
+error_args}}` (line 1499-1510), which its own outer `case` converts to `{:ok,
+{:execution_error, error_args}}` (line 1515) — the exact same tagged shape
+REQ-050's gateway-failure path produces (`engine.ex:1424`) — which
+`build_complete_task_tail_multi/6`'s first clause (`engine.ex:1549-1562`)
+then routes into `ExecutionError.append_multi/3`. AC8 does **not** require
+`complete_task/3`'s own external return shape to be `{:ok, _}`.
+
+**Required fix, and its owner:** this is a **test-expectation correction**,
+routed to **TEST-DESIGNER** on the next WF-02 cycle, not another
+ELIXIR-DEV rework iteration. Both tests' initial assertion should become:
+
+```elixir
+assert {:error, {:instance_execution_error, :subprocess_interface_violation, {:field, "amount"}}} =
+         Engine.complete_task(gate_task.id, complete_attrs(), prefix: schema_name)
+```
+
+— exactly mirroring AC4a's own shape/style — with the `result.`-based
+assertions removed (there is no `result` on this branch) and every
+following independent-re-fetch assertion (`Repo.get!(InstanceProjection,
+...)`, `projection.status == :error`, `projection.error_detail[...]`,
+`still_pending.status == :pending`, `execution_error_events(...)`) left
+exactly as already written — those already correctly follow AC4a's own
+"assert the return, then independently re-fetch and re-verify" pattern and
+need no change.
+
+**No change to `lib/letflow/engine.ex`, `lib/letflow/engine/sub_process.ex`,
+or `lib/letflow/engine/execution_error.ex` is needed for issue (iii).**
+
+## 11. Design amendment — `execution_error.ex` `error_detail.details` gap
+
+Written after ELIXIR-DEV's §10.1/§10.2 rework brought the scoped run
+(`test/letflow/engine_sub_process_test.exs`) from 42 tests/6 failures to
+42 tests/4 failures. Two of the four remaining failures are §10.3's
+already-routed test-assertion issue (TEST-DESIGNER's scope, untouched by
+this section). The other two are a newly discovered gap in **already-shipped
+REQ-061 code**, found by ELIXIR-DEV while implementing §10.2 and not covered
+by §1–§10 above.
+
+### 11.1 Root cause, confirmed against the real code
+
+`Letflow.Engine.ExecutionError.update_projection_to_error/4`
+(`lib/letflow/engine/execution_error.ex:220-231`) builds the `error_detail`
+map it writes onto `instance_projections.error_detail` from exactly four
+keys — `"error_type"`, `"affected"`, `"reason"`, `"occurred_at"` — and never
+reads `error_args.details` at all, even though:
+
+- `error_args()`'s own `@type` (`execution_error.ex:82-91`) already declares
+  `optional(:details) => map()`.
+- The sibling function on the same `append_multi/3` cascade,
+  `append_execution_error_event/2` (`execution_error.ex:192-214`), already
+  does copy it into the **event** payload: `details: Map.get(error_args,
+  :details, %{})` (line 199).
+- `Letflow.Engine.SubProcess.to_error_args/6` (`lib/letflow/engine/sub_process.ex:200-211`,
+  §10.3's own subject) is the caller that first populates `error_args.details`
+  with content a test asserts on: `%{code: code, failures: failures}` — e.g.
+  `%{code: "SUB_PROCESS_OUTPUT_SCHEMA_VIOLATION", failures: [...]}`.
+
+So the `EXECUTION_ERROR` event's payload has always correctly carried
+`details` (confirmed: §3.4 point 4 / the AC1 event test at
+`test/letflow/engine_execution_error_test.exs:305-327` already asserts
+event-payload fields, though not `details` specifically) — it is
+specifically the **projection-column copy** inside
+`update_projection_to_error/4` that drops it on the floor. This is a gap in
+REQ-061's original implementation that had no prior caller supplying
+`details`-bearing content a test asserted against on the *projection* side
+until REQ-062's `to_error_args/6` did.
+
+**Confirmed failing tests (both already pass through §10.1/§10.2's fixed
+event-append path — this is not a re-occurrence of the earlier
+transaction-rollback crash):**
+
+- `test/letflow/engine_sub_process_test.exs:459` (`SUB_PROCESS_MISSING_REQUIRED_OUTPUT`
+  describe block, lines 421-469) — `parent_projection.error_detail["details"]["code"]`
+  reads `nil` instead of `"SUB_PROCESS_MISSING_REQUIRED_OUTPUT"`.
+- `test/letflow/engine_sub_process_test.exs:505` (`SUB_PROCESS_OUTPUT_SCHEMA_VIOLATION`
+  describe block, lines 471-508) — same assertion shape, `nil` instead of
+  `"SUB_PROCESS_OUTPUT_SCHEMA_VIOLATION"`.
+
+Note two *other* assertions of the identical shape already exist and are
+**not** in the failing set —
+`test/letflow/engine_sub_process_test.exs:364` and `:410`
+(`SUB_PROCESS_MISSING_REQUIRED_INPUT` / `SUB_PROCESS_INPUT_SCHEMA_VIOLATION`).
+Those two tests fail earlier in the same test body, on the `complete_task/3`
+return-value match itself (§10.3's issue) — they never reach the
+`error_detail["details"]` assertion line at all under the current code, so
+they do not currently exercise this gap. Once §10.3's test-assertion fix
+lands (TEST-DESIGNER, separate cycle) and those two tests' leading match is
+corrected to the `{:error, {:instance_execution_error, ...}}` shape, they
+will reach their own `error_detail["details"]["code"]` assertion
+(lines 364, 410) — which requires this §11 fix to pass too. This section's
+fix is therefore a prerequisite for §10.3's corrected tests to go green, not
+an independent, unrelated change.
+
+### 11.2 Safety check — is copying `details` unconditionally safe for every existing `error_type`? **Yes, confirmed safe.**
+
+`grep -rn "error_detail" test/` (run directly, not inferred) surfaces every
+existing assertion against `instance_projections.error_detail` across the
+suite:
+
+- `test/letflow/engine_execution_error_test.exs:319-320` — field-level:
+  `error_detail["error_type"] == ...`, `error_detail["affected"] == ...`.
+  Note this test's own `error_attrs/2` helper (line 213-227) **already
+  defaults `details: %{rejected_value: 999_999, failures: []}`** on every
+  call unless overridden — i.e. a `details`-bearing `error_args` has already
+  been flowing through `update_projection_to_error/4` since REQ-061 shipped,
+  silently dropped; this test simply never asserted on the `details` key one
+  way or the other, so it was never in a position to catch the drop.
+- `test/letflow/engine_execution_error_test.exs:351` —
+  `error_detail == nil` (asserts the whole *column* is nil after a rolled-back
+  transaction — `details` was never involved, this is the AC2 abort case
+  where `error_detail` is never set at all).
+- `test/letflow/engine_execution_error_test.exs:415` — `error_detail != nil`
+  (existence check only).
+- `test/letflow/engine_plugin_error_routing_test.exs:273` — field-level:
+  `error_detail["error_type"] == "plugin_error_outcome"`.
+- `test/letflow/engine/service_task_routing_test.exs:228,278` — field-level:
+  `error_detail["error_type"] == "..."`.
+- `test/letflow/engine_sub_process_test.exs:363-364,410,459,505` — field-level,
+  including the two `["details"][...]` assertions this section fixes.
+
+**No test anywhere in the suite asserts `error_detail` via exact map
+equality** (`assert error_detail == %{...fixed set of keys...}`) — every
+existing assertion is field-level (`error_detail["some_key"] == ...`) or a
+presence/absence check (`== nil` / `!= nil`) on the column as a whole.
+Adding a `"details"` key to the map therefore cannot break any existing
+exact-match assertion, because none exists. Three other call sites already
+build `error_args.details` today —
+`lib/letflow/engine/plugin_interface.ex:252`,
+`lib/letflow/engine/service_task.ex:323,477` — and none of their own tests
+assert on `error_detail["details"]`, so none of them are relying on its
+current absence either.
+
+**Conclusion: this is a strictly additive fix, safe to apply
+unconditionally to every `error_type`, not scoped to `:subprocess_interface_violation`.**
+Making it conditional (e.g. only for `error_type == :subprocess_interface_violation`)
+would be *more* code than the unconditional form for zero additional safety,
+and would leave the same gap open for `plugin_error_outcome` /
+`service_task_retries_exhausted` / `service_task_url_rendered_empty`'s own
+`details` payloads (already built, already silently dropped from the
+projection, just not yet asserted on by any test) — an unnecessary and
+strictly worse design.
+
+### 11.3 Exact fix
+
+**File:** `lib/letflow/engine/execution_error.ex`.
+**Function:** `update_projection_to_error/4` (private, lines 220-231).
+
+Change the `error_detail` map literal to include a `"details"` key, sourced
+the same way `append_execution_error_event/2` (line 199) already sources it
+— `Map.get(error_args, :details, %{})`, i.e. present-when-supplied,
+`%{}`-default when the caller omits it (matches `error_args()`'s own
+`optional(:details)`, no caller is required to change). No other field in
+the existing map literal changes; no function signature changes; no
+`@spec` changes (`error_args()` already declares `optional(:details) =>
+map()`, this fix only starts *reading* a field the type already allows).
+
+Resulting `error_detail` shape (four existing keys, `+1` new):
+
+```
+%{
+  "error_type"  => String.t(),      # unchanged
+  "affected"    => map(),           # unchanged, encode_affected/1 shape
+  "reason"      => String.t(),      # unchanged
+  "occurred_at" => String.t(),      # unchanged, ISO8601
+  "details"     => map()            # NEW — error_args.details verbatim, %{} if absent
+}
+```
+
+The module doc comment immediately above the function (`execution_error.ex:216-219`,
+"error_detail (design doc §8) deliberately excludes the variable-map
+snapshot...") stays accurate as-is — `details` is not the variable-map
+snapshot it is warning against, and the comment does not claim `error_detail`
+is limited to exactly four keys, so no comment rewrite is required beyond
+what ELIXIR-DEV naturally adds documenting the new key.
+
+**No migration needed** — `instance_projections.error_detail` is already a
+`jsonb`/map-typed column (REQ-061, already shipped); this fix changes only
+the map's contents, not its column type or the `InstanceProjection` schema's
+field list.
+
+**No changes needed to:** `append_execution_error_event/2` (already correct,
+§10.2 confirmed the event path works), `SubProcess.to_error_args/6`, or any
+other `error_args`-constructing call site (`plugin_interface.ex`,
+`service_task.ex`) — this is a single, minimal, additive change at the one
+place the copy was missing.
+
+### 11.4 Open question
+
+None — §11.2's grep is exhaustive over `test/` and finds no exact-match
+assertion that would be broken; this fix is unconditional and has no
+remaining ambiguity for ELIXIR-DEV to resolve.

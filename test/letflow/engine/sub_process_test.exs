@@ -266,14 +266,31 @@ defmodule Letflow.Engine.SubProcessTest do
       token = %Token{node_id: "sp1", token_id: "t1", waiting_child_instance_id: "child-1"}
       state = instance_state([token])
 
+      # `Transition.transition/3` performs exactly ONE dispatch per call --
+      # `advance_off_completed_node/4` -> `advance_token/3` only repositions the token
+      # onto the edge's target node_id, it does not recurse into that target node's own
+      # type-specific dispatch. So this first call proves the wait was cleared
+      # (struct-update, not a fresh literal that drops other fields) AND the token moved
+      # off "sp1" onto "after", in one hop -- but "after" being a :END node is not yet
+      # dispatched.
       assert {:ok, new_state, []} =
                Transition.transition(g, state, {:sub_process_completed, "t1"})
 
-      # dispatch_end/3's own "removes the affected token, :END has no live token left ->
-      # :completed" -- confirms the token really did leave sp1 (not just have its wait
-      # field cleared in place).
-      assert new_state.tokens == []
-      assert new_state.status == :completed
+      assert new_state.tokens == [
+               %Token{token_id: "t1", node_id: "after", waiting_child_instance_id: nil, branch_id: nil}
+             ]
+
+      # Second hop, mirroring transition_test.exs's own ":END node dispatch" test
+      # ("the last live token reaching END is removed and status becomes :completed"),
+      # which likewise drives :END's removal-and-complete behavior via a second,
+      # separate `{:advance_token, token_id}` call rather than getting it "for free"
+      # from the prior edge-traversal call. dispatch_end/3's "removes the affected
+      # token, :END has no live token left -> :completed" fires here.
+      assert {:ok, final_state, []} =
+               Transition.transition(g, new_state, {:advance_token, "t1"})
+
+      assert final_state.tokens == []
+      assert final_state.status == :completed
     end
 
     test "defensive guard: a token with no waiting child at a :SUB_PROCESS node -> {:token_not_waiting_on_child, ...}" do

@@ -1,0 +1,48 @@
+id: ISS-0068
+title: >
+  Derived idempotency-key suffixes in sub_process.ex are ad hoc string
+  interpolation with no shared constant/helper -- a typo'd suffix would
+  silently produce a wrong key instead of failing to compile
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ062-20260819
+discovered_at: 2026-08-19T07:45:34Z
+severity: MINOR
+category: type-safety
+description: >
+  lib/letflow/engine/sub_process.ex now derives three distinct idempotency
+  keys, one per call site, each built by hand-interpolating a literal
+  "::<suffix>::" string between the caller's raw idempotency_key and one or
+  two instance-id values:
+
+    - "#{idempotency_key}::sub_process_start::#{child_instance_id}"
+      (sub_process.ex:616-617, pre-existing)
+    - "#{idempotency_key}::sub_process_completed::#{parent_instance_id}::#{child_instance_id}"
+      (sub_process.ex:1109-1110/1124, pre-existing)
+    - "#{idempotency_key}::sub_process_completion_error::#{parent_token.instance_id}::#{child_instance_id}"
+      (sub_process.ex:715-716, new in this rework cycle -- REQ-062 design
+      addendum §10.2)
+
+  All three are required to be pairwise-distinct for correctness (each
+  guards a separate schema-wide-unique event_idempotency.idempotency_key
+  index write within the same transaction) -- this is exactly the invariant
+  §10.2's own reasoning depends on. Today that distinctness is guaranteed
+  only by each suffix literal being spelled differently by hand at three
+  separate call sites, with no shared module attribute, no enum/type, and
+  no compile-time or Dialyzer check that a fourth future call site's suffix
+  doesn't accidentally collide with (or typo into) one of the existing
+  three. A typo (e.g. "sub_process_completed" vs "sub_process_completion")
+  would not fail to compile and would not necessarily fail any existing
+  test -- it would only surface as a runtime unique-constraint violation
+  the next time two of the mistyped/colliding keys' inputs happened to
+  coincide, which could be far from where the typo was introduced.
+
+  This is not a defect in the current, already-verified-distinct three
+  suffixes (confirmed distinct by direct string comparison during this
+  review) -- it is a structural gap: nothing about the type system makes a
+  fourth call site's suffix choice safe by construction. Doesn't rise to a
+  blocking finding (REVIEWER's four questions explicitly note type-safety
+  gaps are non-blocking, filed for later claimable work instead).
+affected_files:
+  - lib/letflow/engine/sub_process.ex
+github_issue: https://github.com/tvolodi/letflow/issues/255
+status: open

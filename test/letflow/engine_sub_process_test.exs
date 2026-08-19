@@ -350,13 +350,14 @@ defmodule Letflow.EngineSubProcessTest do
 
       before_count = instance_projection_count(schema_name)
 
-      assert {:ok, result} =
+      # complete_task/3 itself returns {:error, {:instance_execution_error, ...}} directly
+      # -- the same, single conversion every EE-10-routed complete_task/3 call goes
+      # through (interpret_complete_result/1's leading clause, engine.ex:1916-1918;
+      # mirrors AC4a's own shape/style, engine_execution_error_test.exs:410). There is no
+      # code path that returns {:ok, %{instance_status: :error, ...}} -- complete_result()'s
+      # own @spec restricts instance_status to :active | :completed, never :error.
+      assert {:error, {:instance_execution_error, :subprocess_interface_violation, {:field, "amount"}}} =
                Engine.complete_task(gate_task.id, complete_attrs(), prefix: schema_name)
-
-      # complete_task/3 itself still returns {:ok, _} -- the failure is routed into
-      # ExecutionError, not surfaced as a bare {:error, _} from complete_task/3 (req061's
-      # own established channel, design doc §3.3).
-      assert result.instance_status == :error
 
       projection = Repo.get!(InstanceProjection, created.instance_id, prefix: schema_name)
       assert projection.status == :error
@@ -401,12 +402,15 @@ defmodule Letflow.EngineSubProcessTest do
 
       gate_task = pending_task_for_instance!(schema_name, created.instance_id)
 
-      assert {:ok, result} =
+      # complete_task/3 itself returns {:error, {:instance_execution_error, ...}} directly
+      # -- same shape/rationale as the SUB_PROCESS_MISSING_REQUIRED_INPUT case above
+      # (mirrors AC4a's own shape/style, engine_execution_error_test.exs:410).
+      assert {:error, {:instance_execution_error, :subprocess_interface_violation, {:field, "amount"}}} =
                Engine.complete_task(gate_task.id, complete_attrs(), prefix: schema_name)
 
-      assert result.instance_status == :error
-
       projection = Repo.get!(InstanceProjection, created.instance_id, prefix: schema_name)
+      assert projection.status == :error
+      assert projection.error_detail["error_type"] == "subprocess_interface_violation"
       assert projection.error_detail["details"]["code"] == "SUB_PROCESS_INPUT_SCHEMA_VIOLATION"
       assert child_projections(schema_name, created.instance_id) == []
     end

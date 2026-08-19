@@ -1,0 +1,27 @@
+id: ISS-0058
+title: "Duplicate migration version 20260819000001 breaks mix ecto.migrate against a fresh DB"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ058-20260818
+discovered_at: "2026-08-19T00:02:00Z"
+severity: MAJOR
+description: >
+  priv/repo/migrations/20260819000001_create_groups_tenant_scoped.exs (PR #177) and
+  priv/repo/migrations/20260819000001_drop_transition_events.exs (PR #199) were merged
+  independently and both carry the version timestamp 20260819000001. Ecto.Migrator
+  requires unique version numbers -- any `mix ecto.migrate` run against a from-scratch
+  (unmigrated) database fails outright with
+  `** (Ecto.MigrationError) migrations can't be executed, migration version
+  20260819000001 is duplicated`. Discovered incidentally while verifying REQ-058's own
+  new migration (20260820000011_create_lua_script_execution_audit.exs) against a fresh
+  tenant schema/DB -- confirmed via `git stash` that this reproduces identically on
+  main with REQ-058's own changes removed, i.e. pre-existing, unrelated to REQ-058.
+  Any environment that runs migrations from empty (a fresh dev DB, a new CI runner, a
+  fresh Docker-based verification per docs/anti-patterns.md's documented fallback) hits
+  this immediately. Not yet blocking day-to-day work on already-migrated
+  checkouts/DBs (which never re-run migrations from scratch), which is presumably why
+  it hasn't surfaced before now.
+affected_files:
+  - priv/repo/migrations/20260819000001_create_groups_tenant_scoped.exs
+  - priv/repo/migrations/20260819000001_drop_transition_events.exs
+github_issue: 205
+status: open

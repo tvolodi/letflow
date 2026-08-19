@@ -206,6 +206,80 @@ defmodule Letflow.EngineSubProcessTest do
     }
   end
 
+  # ISS-0067: START -> HUMAN_TASK("gate") -> PARALLEL_GATEWAY("split") ->
+  # {SUB_PROCESS("sp1"), SUB_PROCESS("sp2")} -> PARALLEL_GATEWAY("join") -> END.
+  # Completing "gate" mints two derived split-branch token_ids
+  # ("#{gate_token.id}/0", "#{gate_token.id}/1") purely in-memory
+  # (Transition.dispatch_parallel_split/4) that land directly on sp1/sp2
+  # within the SAME hop chain, before either branch ever gets its own
+  # persisted `tokens` row -- exactly the "parent token_id is a derived
+  # split/join branch id, not a persisted one" scenario
+  # resolve_parent_token_record_id/2 must reject. sp1/sp2's own edges both
+  # converge on "join" (single-hop, so find_matching_join/2's
+  # walk_to_gateway/3 accepts this as a legal block-structured split) so the
+  # split itself dispatches successfully -- the rejection happens one hop
+  # later, when advance_until_stable/4 dispatches sp1/sp2 themselves.
+  defp graph_parent_split_then_subprocess(child_definition_name) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{"id" => "gate", "node_type" => "HUMAN_TASK", "attributes" => %{"role" => "gater"}},
+        %{"id" => "split", "node_type" => "PARALLEL_GATEWAY"},
+        %{
+          "id" => "sp1",
+          "node_type" => "SUB_PROCESS",
+          "attributes" => %{"definition_name" => child_definition_name}
+        },
+        %{
+          "id" => "sp2",
+          "node_type" => "SUB_PROCESS",
+          "attributes" => %{"definition_name" => child_definition_name}
+        },
+        %{"id" => "join", "node_type" => "PARALLEL_GATEWAY"},
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "gate"},
+        %{"id" => "e2", "source" => "gate", "target" => "split"},
+        %{"id" => "e3", "source" => "split", "target" => "sp1"},
+        %{"id" => "e4", "source" => "split", "target" => "sp2"},
+        %{"id" => "e5", "source" => "sp1", "target" => "join"},
+        %{"id" => "e6", "source" => "sp2", "target" => "join"},
+        %{"id" => "e7", "source" => "join", "target" => "end"}
+      ]
+    }
+  end
+
+  # ISS-0067's positive counterpart to graph_parent_split_then_subprocess/1
+  # above: START -> HUMAN_TASK("gate") -> SUB_PROCESS("sp") -> END, no
+  # split/join anywhere on the graph, so the token reaching "sp" is exactly
+  # "gate"'s own genuinely persisted `tokens.id`. Deliberately not
+  # graph_parent_task_then_subprocess/2 (already in use by the AC3 interface-
+  # violation tests, which fail at SubProcess.prepare_child_activation/4,
+  # AFTER resolve_parent_token_record_id/2 already accepted the id) -- this
+  # helper's whole point is a hop chain that also succeeds, so the accept
+  # branch is asserted at the public Engine.complete_task/3 boundary, not
+  # just implied by a later, unrelated failure.
+  defp graph_parent_task_then_subprocess_no_split(child_definition_name) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{"id" => "gate", "node_type" => "HUMAN_TASK", "attributes" => %{"role" => "gater"}},
+        %{
+          "id" => "sp",
+          "node_type" => "SUB_PROCESS",
+          "attributes" => %{"definition_name" => child_definition_name}
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "gate"},
+        %{"id" => "e2", "source" => "gate", "target" => "sp"},
+        %{"id" => "e3", "source" => "sp", "target" => "end"}
+      ]
+    }
+  end
+
   defp start_attrs(definition, overrides \\ %{}) do
     Map.merge(
       %{
@@ -717,6 +791,109 @@ defmodule Letflow.EngineSubProcessTest do
         |> Repo.one!(prefix: schema_name)
 
       assert child_token.status == :active
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0067 -- resolve_parent_token_record_id/2's own correctness property
+  # (GH#228): a genuinely persisted parent token_id is accepted, a derived
+  # split/join branch token_id reaching a SUB_PROCESS node within the SAME hop
+  # chain is rejected. Confirmed by ISSUE-FIXER: before this pair, zero tests
+  # anywhere in the suite referenced resolve_parent_token_record_id (nor its
+  # pre-fix name cast_parent_token_record_id) or the
+  # {:sub_process_after_split_join_not_supported, _} tuple by name -- every
+  # other SUB_PROCESS test either never reaches this classification at all
+  # (create/2's root-SUB_PROCESS path uses a different function,
+  # prepare_sub_process_children/5) or reaches it only to have it *accept*
+  # incidentally, on the way to an unrelated interface-validation failure
+  # (the AC3 tests above). See lib/letflow/design/iss067-token-id-persisted-check.md.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0067 -- resolve_parent_token_record_id/2 rejects a derived split/join branch token_id" do
+    test "a SUB_PROCESS node reached directly off a PARALLEL_GATEWAY split, within the completing task's own hop chain, is rejected -- zero children created, transaction rolled back" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      child_def = active_definition!(schema_name, graph_child_two_step())
+
+      parent_def =
+        active_definition!(schema_name, graph_parent_split_then_subprocess(child_def.name))
+
+      assert {:ok, created} = Engine.create(start_attrs(parent_def), prefix: schema_name)
+      gate_task = pending_task_for_instance!(schema_name, created.instance_id)
+
+      gate_token =
+        TokenRecord
+        |> where([t], t.instance_id == ^created.instance_id and t.node_id == "gate")
+        |> Repo.one!(prefix: schema_name)
+
+      before_count = instance_projection_count(schema_name)
+
+      # dispatch_parallel_split/4's own Enum.with_index order
+      # (transition.ex:656-658) mints "#{gate_token.id}/0" for the first
+      # declared outgoing edge (e3, "split" -> "sp1") -- the first
+      # {:sub_process_start, ...} pending event Enum.reduce_while/3 in
+      # prepare_sub_process_children_for_completion/8 hits, so this is the
+      # exact token_id the rejection must carry. Neither branch id was ever
+      # written to a `tokens` row before this check runs.
+      expected_rejected_token_id = "#{gate_token.id}/0"
+
+      assert {:error, {:sub_process_after_split_join_not_supported, ^expected_rejected_token_id}} =
+               Engine.complete_task(gate_task.id, complete_attrs(), prefix: schema_name)
+
+      # Whole transaction rolled back -- unlike the SUB_PROCESS_MISSING_REQUIRED_INPUT
+      # family above (routed through set_instance_error, a *committed* ERROR
+      # state), {:sub_process_after_split_join_not_supported, _} is returned
+      # as a bare {:error, reason} from the "transition" Multi.run/3 step
+      # (engine.ex's prepare_sub_process_children_for_completion/8's own
+      # `else` clause halts with {:error, reason}, not an :execution_error
+      # tuple), which Ecto.Multi aborts wholesale: the gate task is still
+      # pending, the instance is still :active (never :error), and zero
+      # child instances exist.
+      still_pending = Repo.get!(EngineTask, gate_task.id, prefix: schema_name)
+      assert still_pending.status == :pending
+
+      projection = Repo.get!(InstanceProjection, created.instance_id, prefix: schema_name)
+      assert projection.status == :active
+
+      assert instance_projection_count(schema_name) == before_count
+      assert child_projections(schema_name, created.instance_id) == []
+    end
+  end
+
+  describe "ISS-0067 -- resolve_parent_token_record_id/2 accepts a genuinely persisted parent token_id" do
+    test "a SUB_PROCESS node reached via a normal (non-split) task-completion hop chain succeeds -- child instance created" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      child_def = active_definition!(schema_name, graph_child_two_step())
+
+      parent_def =
+        active_definition!(
+          schema_name,
+          graph_parent_task_then_subprocess_no_split(child_def.name)
+        )
+
+      assert {:ok, created} = Engine.create(start_attrs(parent_def), prefix: schema_name)
+      gate_task = pending_task_for_instance!(schema_name, created.instance_id)
+
+      gate_token =
+        TokenRecord
+        |> where([t], t.instance_id == ^created.instance_id and t.node_id == "gate")
+        |> Repo.one!(prefix: schema_name)
+
+      # gate_token.id is a real, already-persisted tokens.id -- no split/join
+      # anywhere on this graph to derive a branch id from it.
+      assert {:ok, result} =
+               Engine.complete_task(gate_task.id, complete_attrs(), prefix: schema_name)
+
+      assert result.instance_status == :active
+      assert result.current_nodes == ["sp"]
+
+      child = child_projection!(schema_name, created.instance_id)
+      assert child.parent_instance_id == created.instance_id
+
+      parent_token_after = Repo.get!(TokenRecord, gate_token.id, prefix: schema_name)
+      assert parent_token_after.status == :waiting
+      assert parent_token_after.waiting_child_instance_id == child.instance_id
     end
   end
 end

@@ -1,0 +1,56 @@
+{
+  "handoff_id": "7a2c5d9e-0059-4b03-8f01-req059step03b",
+  "run_id": "WF02-REQ059-20260819",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ059-20260819/step-03b-test-design-validator.json",
+  "created_at": "2026-08-19T08:30:09Z",
+  "started_at": "2026-08-19T08:44:00Z",
+  "completed_at": "2026-08-19T08:46:05Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-059"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ059-20260819/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "test/specs/REQ-059.md",
+      "test/letflow/engine/pin_resolver_test.exs",
+      "test/letflow/engine_test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently validate TEST-DESIGNER's coverage of REQ-059's 8 acceptance criteria: at least one runnable test per AC, no skipped coverage, no TODOs, isolated/self-sufficient fixtures, no hardcoded secrets, and genuine (non-trivial) assertions. Specifically judge (1) whether the AC5 inspection-based source-split test is a legitimate way to verify the no-fallback guarantee or too fragile/gameable, and (2) whether the SUB_PROCESS/module_ref-unreachable-through-real-pipeline finding is a genuine out-of-scope gap rather than an excused coverage hole.",
+    "acceptance_criteria": [
+      "AC1-AC8 each have >=1 runnable test, mapped in test/specs/REQ-059.md's coverage table",
+      "No @tag :skip / TODO: implement test anywhere",
+      "Fixtures use per-test unique data (Ecto.UUID.generate/System.unique_integer), no shared hardcoded IDs, no cross-test ordering dependency",
+      "No hardcoded secrets/connection strings",
+      "Tests actually assert the right thing, not trivially passing",
+      "Judgment call on AC5's inspection-based test legitimacy",
+      "Judgment call on SUB_PROCESS/module_ref scope-boundary claim"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-ran the suite (did not trust TEST-DESIGNER's report): `LETFLOW_DEV_DB_CONFIRMED=1 mix test test/letflow/engine/pin_resolver_test.exs test/letflow/engine_test.exs` -> 73 tests, 0 failures, real Postgres. `mix compile --warnings-as-errors` clean. All 8 REQ-059 ACs traced against docs/requirements.yaml's REQ-059 entry: each has >=1 non-trivial test (AC1 ordering+byte-identical Jason output via double resolve/4 call and equality assert; AC2 zero-row write verified by reading back instance_projections/instance_definition_snapshots/tokens/events counts, contrasted against a resolvable-pin case to prove causation; AC3 reuses REQ-024's JsonSchema.validate/2, asserts length(failures)==2 for a two-violation schema; AC4 reads the real INSTANCE_STARTED payload via Reconstruction.read_full_log/3 plus a migrations-directory grep proving no pin table exists; AC5 covered both behaviorally (pin_for/3 halt-on-first-unresolved with a counting lookup) and by inspection; AC6 threads two real Engine.create/2 instances with a real parent_instance_id, reads the child's real payload; AC7 uses an Agent-backed call-counting lookup proving the counter is unchanged after reconstruct_effective_pins/2; AC8 checked via a normalized_moduledoc/1 helper asserting ISS-0672/GH-306/S6/PLC-01 text). No @tag :skip, no 'TODO: implement test' (grepped both test files and the spec). No hardcoded secrets/connection strings (grepped). Fixtures are per-test unique (Ecto.UUID.generate/System.unique_integer([:positive,:monotonic]) throughout, matching this codebase's established convention) with no shared mutable state and no test depending on another having run first (each Engine.create/2 test provisions and tears down its own tenant schema).\n\nJudgment call 1 (AC5 inspection test): legitimate, not excessive gaming risk. REQ-059's own AC5 text literally demands 'confirmed by inspection ... stated in the moduledoc' -- an inspection-based check is what the AC asks for, not a substitute dodging behavioral testing (behavioral halt-on-first-unresolved coverage exists separately, cases 5-7/23). Verified the three-pronged inspection is sound: (a) splits raw source at 'def merge_effective_pins(' and asserts nothing after that marker contains 'catalog_lookup'/'module_lookup' -- a rename of merge_effective_pins would fail the marker-presence assertion loudly (not silently pass), so this is fail-safe, not fail-open, against renames; (b) a whole-file regex count asserting exactly one `lookup.catalog_lookup` and one `lookup.module_lookup` occurrence -- confirmed directly against lib/letflow/engine/pin_resolver.ex (grep) that these two qualified references occur exactly once each, both inside resolve/4 (lines 268/270), matching the assertion; (c) a structural arity check that reconstruct_effective_pins/2 takes no Lookup.t() parameter at all. Residual theoretical gap noted but not disqualifying: a deliberately obfuscated rebind (e.g. destructuring `%Lookup{catalog_lookup: cl}` and calling `cl.()` under a different local name), or a wholly new catalog-access path bypassing the Lookup struct entirely, would not be caught by the substring checks. This is a known limitation of any textual-inspection test, not a defect in this one, and REVIEWER/SECURITY-REVIEWER already gated the actual implementation before TEST-DESIGNER wrote this; not grounds for FAIL.\n\nJudgment call 2 (SUB_PROCESS/module_ref scope claim): confirmed genuine, not an excuse. Grepped lib/letflow/definitions/graph.ex directly: @node_type_map (line 203) has no 'SUB_PROCESS' key, and Graph.build (line 237) falls back to :unknown_node_type for any unmapped node_type_str -- so a real Definitions.create/2 JSON-graph path genuinely cannot produce a %Node{node_type: :SUB_PROCESS} today; that node type only exists in this codebase via a hand-built struct (as the pure-function tests correctly do at pin_resolver_test.exs's sub_process/2 helper) or via a future SUB_PROCESS-adding requirement (REQ-062, not yet merged per the task brief). This is a Graph-level gap strictly beneath REQ-059's own scope, not something REQ-059 introduces, and REQ-059's design doc already documents an adjacent SCOPE GAP (service_catalog/PLC-01) at the requirement level -- the test spec's honest inline note plus a comment in place of an unwritable integration test is the correct handling, not a hidden coverage hole. module_ref halt behavior remains fully covered at the pure-function level.\n\nNo issues found requiring rework.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ059-20260819",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ059-20260819",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

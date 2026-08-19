@@ -114,9 +114,16 @@ without colliding.
 
 ## Notes
 
-- Elixir 1.14 / OTP 25 via apt was used to scaffold this — use whatever
-  current version you have locally (1.17+ recommended) once you pull
-  this down; nothing here depends on 1.14 specifically.
+- Elixir 1.18.3 / OTP 27 is the pinned toolchain for this repo (see
+  `docs/migration/decisions/0005-pin-formatting-toolchain.md`) — install
+  it via `asdf install` after `asdf plugin add elixir` /
+  `asdf plugin add erlang` if you don't already have those plugins; the
+  root `.tool-versions` file selects the exact version automatically on
+  `cd` into this repo. `mix.exs`'s `elixir: "~> 1.18"` requirement is a
+  compile-time backstop only — it accepts any 1.18.x patch, so it will
+  not itself catch formatter drift; running `mix format` (and
+  `mix letflow.check`) under the `.tool-versions`-selected toolchain is
+  what actually keeps formatting deterministic across hosts.
 - `mix deps.get` needs network access to hex.pm, which this sandbox
   doesn't have — dependencies are declared in `mix.exs` but not
   fetched. Run it locally.

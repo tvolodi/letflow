@@ -1,0 +1,140 @@
+# Test run report — WF-02 Step 4 (test run) for REQ-052
+
+req_id: REQ-052
+workflow: WF-02
+step: "04"
+agent: TEST-RUNNER
+run_id: WF02-REQ052-20260819
+date_utc: 2026-08-19T00:32:36Z
+
+git:
+  branch: feature/WF02-REQ052-20260819
+  branch_confirmed: true
+  commit: 55b430e0b21c809555ff7e340f68fc8f968ac9ff
+  commit_subject: "test(WF02-REQ052): TEST-DESIGN-VALIDATOR PASS on REQ-052 test spec/code"
+  worktree: true
+  note: >
+    This checkout is a secondary git worktree (~/letflow-wt2), sharing its
+    Postgres container with the primary ~/letflow checkout. Per
+    docs/anti-patterns.md's "Running `docker compose up` from a secondary
+    worktree checkout" entry, `docker compose up` was NOT run here (Postgres
+    was already running, container letflow-postgres-1, confirmed via
+    `docker ps` — 0.0.0.0:5462->5432/tcp, [::]:5462->5432/tcp). Tests were
+    invoked with MIX_TEST_PARTITION=2 as this worktree requires, to avoid
+    colliding with the primary checkout's own test database.
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 27 [erts-15.2.7.4] ... Elixir 1.18.3 (compiled with Erlang/OTP 27)"
+  postgres_container: "letflow-postgres-1 (already running, confirmed via
+    \`docker ps\` only — 0.0.0.0:5462->5432/tcp and [::]:5462->5432/tcp;
+    \`docker compose up\` was NOT run per this worktree's standing
+    instructions, container is shared with the primary ~/letflow checkout)."
+  partition: "MIX_TEST_PARTITION=2 (required for this worktree, per standing
+    session instructions, to avoid colliding with the primary checkout's
+    concurrently-running test database)"
+  command_run: "MIX_TEST_PARTITION=2 mix test (full suite, unpinned/default
+    random seed — the \`test\` alias runs ecto.create + ecto.migrate --quiet
+    first automatically)"
+
+verdict: PASS
+
+checks:
+  test_suite_full_run:
+    result: PARTIAL (1 pre-existing, unrelated failure — see below)
+    exit_code: nonzero (mix test reports failures)
+    summary_line_verbatim: "3 properties, 892 tests, 1 failure"
+    finished_line_verbatim: "Finished in 96.1 seconds (2.1s async, 93.9s sync)"
+    failures: 1
+
+  new_req052_tests_included_in_run:
+    result: PASS
+    note: >
+      test/letflow/engine_cancel_instance_test.exs (9 new tests covering
+      Letflow.Engine.cancel_instance/3 — AC1 cancels an ACTIVE instance with
+      2 open tasks; AC2 already-terminal instances rejected with a distinct
+      conflict / zero-open-tasks ACTIVE still cancels; AC3 a further
+      EventStore.append/2 call after cancellation returns
+      {:error, {:instance_terminated, :cancelled}}; AC4 cancel_instance/3
+      racing complete_task/3 concurrently — exactly one commits; AC5
+      REQ-051 join-path :cancel_join vs. a direct cancel_instance/3 call
+      agree on :cancelled; AC6/AC7 moduledoc scope-gap and
+      ApprovalSupervisor/ParallelApproval-deletion assertions) executed as
+      part of the full-suite run above. All 9 tests passed — none appear
+      among the run's single reported failure.
+
+  the_one_failure:
+    test: "test DropLegacyPublicIdentityTables migration guard (REQ-063 §5)
+      -- skip-on-uncopied-row once the copy is completed for every
+      registered tenant, the guard PROCEEDS and drops all three public
+      tables (Letflow.IdentityMigrationTest)"
+    location: "test/letflow/identity_migration_test.exs:367"
+    assertion_output_verbatim: "expected public.groups to be dropped"
+    classification: "pre-existing, unrelated to REQ-052"
+    reasoning: >
+      `git diff main...HEAD --stat` for this branch touches only:
+      docs/requirements.yaml, docs/status/requirement_status.yaml,
+      handoffs/*, lib/letflow/application.ex (removes
+      Letflow.ApprovalSupervisor from the supervision tree),
+      lib/letflow/approval_supervisor.ex (deleted),
+      lib/letflow/design/req052-instance-cancellation.md (new),
+      lib/letflow/engine.ex (new cancel_instance/3),
+      lib/letflow/parallel_approval.ex (deleted),
+      lib/letflow/sandbox_pool.ex (moduledoc-comment-only edit, no
+      functional change — verified via `git diff`),
+      test/letflow/engine_cancel_instance_test.exs (new),
+      test/letflow/parallel_approval_test.exs (deleted),
+      test/specs/REQ-052.md (new). Nothing touches
+      test/letflow/identity_migration_test.exs or its migration. This is
+      the same test/line/assertion-shape already documented under
+      docs/issues/ISS-0048.yaml's recurrence_note (observed during
+      WF02-REQ048-20260818) and structurally the same class as
+      docs/issues/ISS-0050.yaml (both already status: resolved) — an
+      order/isolation-dependent full-suite failure of this guard test that
+      passes in isolation. Filed as a fresh recurrence per
+      docs/agents/protocols/ISSUE_QUEUE.md rather than treated as blocking
+      this run's own PASS verdict, per Unblock-Everything's scope boundary
+      (this failure is not one of REQ-052's own acceptance criteria).
+
+  known_noise_not_a_failure:
+    - >
+      Verbose SQL query debug logging (`[debug] QUERY OK ...` lines,
+      including tenant-schema DDL/DML from multi-tenant test fixtures)
+      appears in raw mix test output (config/test.exs's default test log
+      level) — expected, not indicative of any problem.
+
+pre_existing_failures_found:
+  - id: ISS-0060
+    test: "test/letflow/identity_migration_test.exs:367"
+    classification: "recurrence of ISS-0048/ISS-0050 class (order/isolation-
+      dependent full-suite failure), not caused by this run's changes"
+
+issues_filed:
+  - id: ISS-0060
+    severity: MINOR
+    title: "Letflow.IdentityMigrationTest's DropLegacyPublicIdentityTables
+      guard test failed again under full-suite mix test (recurrence of
+      ISS-0048/ISS-0050 class)"
+    github_issue: https://github.com/tvolodi/letflow/issues/207
+    note: "Non-blocking, discovered incidentally, not related to REQ-052's
+      own acceptance criteria — filed and forwarded per ISSUE_QUEUE.md
+      rather than fixed in this run."
+
+diagnosis: >
+  The single full-suite failure (identity_migration_test.exs:367) is
+  confirmed pre-existing and unrelated to REQ-052's diff (see
+  `the_one_failure.reasoning` above) — no rework routed back to ELIXIR-DEV
+  or TEST-DESIGNER. All 9 of REQ-052's new cancel_instance tests passed.
+
+regression_check: >
+  892 tests, 3 properties, 1 failure — the one failure is the pre-existing,
+  order/isolation-dependent identity_migration_test.exs guard test
+  (ISS-0060, same class as ISS-0048/ISS-0050), not attributable to
+  REQ-052's own changes. No regression found in REQ-052's own scope.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-20260819-WF02-REQ052-20260819.yaml
+    - docs/issues/ISS-0060.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

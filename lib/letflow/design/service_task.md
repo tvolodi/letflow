@@ -271,7 +271,7 @@ out of scope, §1) and **before** any dispatch attempt.
 }
 ```
 
-Pure. AC6's concrete routing element, built the same way `build_retries_exhausted_error_attrs/1`
+Pure. AC6's concrete routing element, built the same way `build_service_task_give_up_error_attrs/1`
 (§4 above) builds AC8's — the design does not leave "how does an empty rendered URL reach the
 ERROR path" as an open question. `error_type: :service_task_url_rendered_empty` — a new,
 concrete member of `ExecutionError.error_type()`'s already-open union (its trailing `atom()`,
@@ -341,10 +341,10 @@ identical key — a redelivery of the *same* attempt collides against `EventStor
 values produce distinct keys, so a genuine retry is not blocked by the same constraint.
 
 ```
-@spec build_retries_exhausted_error_attrs(retries_exhausted_context()) ::
+@spec build_service_task_give_up_error_attrs(service_task_give_up_context()) ::
   Letflow.Engine.standalone_error_attrs()
 
-@type retries_exhausted_context :: %{
+@type service_task_give_up_context :: %{
   required(:instance_id) => Ecto.UUID.t(),
   required(:node_id) => String.t(),
   required(:actor_id) => Ecto.UUID.t() | nil,
@@ -356,19 +356,37 @@ values produce distinct keys, so a genuine retry is not blocked by the same cons
 }
 ```
 
-Pure. The AC8 closer: builds the exact map shape `Letflow.Engine.set_instance_error/2` (REQ-061,
-already shipped) requires as its own `attrs` argument (§0) — `error_type:
-:service_task_retries_exhausted` (already a named member of `ExecutionError.error_type()`, no
-change needed there), `affected: {:node, node_id}`, a `reason` string naming `retry_limit` and
-`last_failure_kind`, `variables` passed through unchanged, `details: %{last_failure_kind:,
-attempt_index:, retry_limit:}`. **This module never calls `ExecutionError.append_multi/3`
-directly and never writes its own `instance_projections` update** — a future dispatch-orchestration
-caller (not built here, §1) is expected to call `Letflow.Engine.set_instance_error/2` with this
-function's return value directly, exactly the calling shape `engine.ex`'s own comment names this
-requirement for (§0). This is the concrete design element AC8 requires "confirmed by inspection"
-— the inspection target is this function's `@spec` return type matching
-`Letflow.Engine.standalone_error_attrs()` field-for-field, and its moduledoc/§6 stating the
-routing explicitly.
+Pure. **The single routing target for every `decide_failure/3` `:give_up` outcome, regardless
+of cause** (renamed and generalized in rework iteration 2 — CODE-DESIGN-VALIDATOR's AC5 FAIL:
+the design originally named this function `build_retries_exhausted_error_attrs/1`, whose
+name/type implied multi-attempt exhaustion specifically, leaving `:invalid_2xx_body`'s
+immediate, first-attempt give-up unrouted, AC5(b)'s own gap. A `:give_up` verdict from
+`decide_failure/3` has exactly one meaning downstream — "this dispatch attempt is over,
+transition the instance to ERROR" — whether the cause was a non-retriable kind on attempt 0
+(`:http_redirect_3xx`, `:invalid_2xx_body`, `:request_build_error`) or a retriable kind whose
+`attempt_index` reached `retry_limit` (`:timeout`, `:network`, `:rate_limited_429`); one
+function, one shape, no cause-specific branching needed by a caller — a second, near-duplicate
+function was considered and rejected for exactly this reason.)
+
+Builds the exact map shape `Letflow.Engine.set_instance_error/2` (REQ-061, already shipped)
+requires as its own `attrs` argument (§0): `error_type: :service_task_retries_exhausted` in
+every case (already a named member of `ExecutionError.error_type()`, no change needed there —
+its own moduledoc, §0, states this one atom maps 1:1 onto REQ-056's entire calling path, not
+onto "retry-exhaustion" specifically, so reusing it for every REQ-056-sourced give-up is the
+design already on record, not a new choice), `affected: {:node, node_id}`, a `reason` string
+that names `last_failure_kind` and states whether the cause was "not retriable" (when
+`is_retriable_failure(last_failure_kind) == false`) or "retries exhausted after `retry_limit`
+attempts" (when it is) — so the human-readable text still distinguishes the two causes even
+though the machine-matchable `error_type` atom does not — `variables` passed through unchanged,
+`details: %{last_failure_kind:, attempt_index:, retry_limit:}`. **This module never calls
+`ExecutionError.append_multi/3` directly and never writes its own `instance_projections`
+update** — a future dispatch-orchestration caller (not built here, §1) is expected to call
+`Letflow.Engine.set_instance_error/2` with this function's return value directly, exactly the
+calling shape `engine.ex`'s own comment names this requirement for (§0). This is the concrete
+design element AC5(b) and AC8 both require "confirmed by inspection" — the inspection target is
+this function's `@spec` return type matching `Letflow.Engine.standalone_error_attrs()`
+field-for-field, its being the *only* function this module offers for a `:give_up` outcome
+(§6), and its moduledoc/§6 stating the routing explicitly.
 
 ---
 
@@ -436,30 +454,49 @@ clock, no randomness (mirrors `VariableMerge`'s own determinism contract, §0).
 
 ---
 
-## 6. ERROR-path routing — closes REQ-061's own AC8 obligation, and AC6's empty-URL case
+## 6. ERROR-path routing — closes REQ-061's own AC8 obligation, AC6's empty-URL case, and AC5(b)'s invalid-2xx-body case
 
-Two distinct SERVICE_TASK failure shapes route into REQ-061's ERROR path, and **both** route
-through the exact same standalone entry point, `Letflow.Engine.set_instance_error/2` — neither
-one is a separate ERROR transition written by this module:
+Two distinct SERVICE_TASK failure *entry points* route into REQ-061's ERROR path, and **both**
+route through the exact same standalone entry point, `Letflow.Engine.set_instance_error/2` —
+neither one is a separate ERROR transition written by this module:
 
-1. **Exhausted retries (AC8).** `decide_failure/3` returning `:give_up` for a
-   retriable-but-exhausted kind is the "exhausted retry" case AC8 names. This module's
-   contribution stops at `build_retries_exhausted_error_attrs/1` (§4) producing the exact
+1. **Every `decide_failure/3` `:give_up` verdict (AC8's exhausted-retries case, AND AC5(b)'s
+   invalid-2xx-body case).** `decide_failure/3` returns `:give_up` for two structurally
+   different reasons (§5.3): a *retriable* kind (`:timeout`, `:network`, `:rate_limited_429`)
+   whose `attempt_index` reached `retry_limit` — the "exhausted retry" case AC8 names — **or**
+   a kind that `is_retriable_failure/1` says is not retriable at all
+   (`:http_redirect_3xx`, `:invalid_2xx_body`, `:request_build_error`), which gives up on
+   attempt 0 regardless of `retry_limit` — the case that covers AC5(b)'s "2xx JSON array/bare
+   string does not merge and routes to REQ-061's ERROR path." Both reasons produce the exact
+   same `retry_decision()` value (`:give_up`) and route through the exact same function —
+   rework iteration 2 generalized what was previously a retry-exhaustion-only-named function
+   into this single sink specifically so a caller never has to branch on *why* `:give_up` was
+   returned before routing it (§4's full rationale). This module's contribution stops at
+   `build_service_task_give_up_error_attrs/1` (§4) producing the exact
    `Letflow.Engine.standalone_error_attrs()` shape — the future dispatch-orchestration caller
    (not built by this requirement, §1) is required to invoke:
 
    ```
    Letflow.Engine.set_instance_error(
-     ServiceTask.build_retries_exhausted_error_attrs(context),
+     ServiceTask.build_service_task_give_up_error_attrs(context),
      prefix: schema_name
    )
    ```
 
+   This is the one call site every `:give_up` verdict reaches — a 2xx JSON-array/bare-string
+   body (AC5(b)) is classified `:invalid_2xx_body` by `classify_failure_kind/1` (§5.2 row 4),
+   found non-retriable by `is_retriable_failure/1` (§5.3), and `decide_failure/3` returns
+   `:give_up` on the very first evaluation (§5.3 step 1) — there is no separate "body shape
+   rejected" code path anywhere in this module; it is the same `:give_up` verdict AC8's
+   exhausted-retry case produces, built into the same `standalone_error_attrs()` shape, handed
+   to the same `set_instance_error/2` call.
+
 2. **Empty rendered URL (AC6).** `validate_rendered_url/1` returning `{:error,
    :empty_rendered_url}` at activation time is the "URL template rendering to an empty string"
-   case AC6 names. This module's contribution stops at `build_empty_url_error_attrs/1` (§4)
-   producing the same `Letflow.Engine.standalone_error_attrs()` shape — the future
-   activation-time caller is required to invoke it exactly the same way:
+   case AC6 names — structurally separate from `decide_failure/3`'s domain, since it fires
+   *before* any dispatch attempt exists to classify (§4). This module's contribution stops at
+   `build_empty_url_error_attrs/1` (§4) producing the same `Letflow.Engine.standalone_error_attrs()`
+   shape — the future activation-time caller is required to invoke it exactly the same way:
 
    ```
    Letflow.Engine.set_instance_error(
@@ -468,14 +505,14 @@ one is a separate ERROR transition written by this module:
    )
    ```
 
-Neither case calls `Ecto.Multi`/`Repo.update` against `instance_projections` directly, and
-neither calls `Letflow.Engine.ExecutionError.append_multi/3` directly (that path is reserved
-for a caller that already has its own open `Multi` — REQ-061's own comment, §0 — which neither
-a standalone service-task dispatch loop nor an activation-time URL check has). This is the
-concrete, inspectable design element AC6 and AC8 both require: no alternate ERROR-transition
-code path exists anywhere in this module's own signatures, and every give-up/rejection-shaped
-output this module produces is typed exactly as REQ-061's already-shipped standalone entry
-point's own input type.
+Neither entry point calls `Ecto.Multi`/`Repo.update` against `instance_projections` directly,
+and neither calls `Letflow.Engine.ExecutionError.append_multi/3` directly (that path is
+reserved for a caller that already has its own open `Multi` — REQ-061's own comment, §0 —
+which neither a standalone service-task dispatch loop nor an activation-time URL check has).
+This is the concrete, inspectable design element AC5(b), AC6, and AC8 all require: no
+alternate ERROR-transition code path exists anywhere in this module's own signatures, and
+every give-up/rejection-shaped output this module produces is typed exactly as REQ-061's
+already-shipped standalone entry point's own input type.
 
 ---
 
@@ -497,9 +534,10 @@ INJECTABLE (`catalog_lookup_fun/0`) -- no concrete, DB-backed catalog exists in 
 yet (the same gap `Letflow.Definitions.ServiceScopeValidator`'s own moduledoc names for its
 own `ServiceCatalog` dependency).
 
-An exhausted-retry outcome (`decide_failure/3` returning `:give_up`) is handed to
-`Letflow.Engine.set_instance_error/2` (REQ-061) via `build_retries_exhausted_error_attrs/1` --
-it does NOT land in a dead-letter queue here. R-Co's OBS-05 dead-letter API (`src/dlq/`) is
+Every `decide_failure/3` `:give_up` outcome (whether from exhausted retries or an immediately
+non-retriable failure) is handed to `Letflow.Engine.set_instance_error/2` (REQ-061) via
+`build_service_task_give_up_error_attrs/1` -- it does NOT land in a dead-letter queue here.
+R-Co's OBS-05 dead-letter API (`src/dlq/`) is
 the eventual operator-facing retry/discard surface for an instance parked in `ERROR`, and it
 belongs to stage S6 (operational cross-cutting) -- NOT YET BUILT. No partial DLQ (no
 retry-queue table, no discard endpoint, no background sweep of `ERROR`-status instances) is
@@ -515,7 +553,7 @@ dead-letter listing will query -- no additional table is needed for S6 to find e
 
 | id | Invariant | Enforced where |
 |---|---|---|
-| INV-ST-1 | `parse_config_from_node_attributes/1`, `validate_rendered_url/1`, `classify_failure_kind/1`, `is_retriable_failure/1`, `compute_service_task_backoff_ms/3`, `decide_failure/3`, `build_idempotency_key/4`, `build_retries_exhausted_error_attrs/1` are all pure — no `Letflow.Repo`, no `Logger.*`, no HTTP/file call, no clock read except where a caller supplies a value explicitly (none of these functions read a clock internally). | Whole module — mirrors `VariableMerge`'s/`ServiceScopeValidator`'s own "Purity" sections (§0) |
+| INV-ST-1 | `parse_config_from_node_attributes/1`, `validate_rendered_url/1`, `classify_failure_kind/1`, `is_retriable_failure/1`, `compute_service_task_backoff_ms/3`, `decide_failure/3`, `build_idempotency_key/4`, `build_service_task_give_up_error_attrs/1`, `build_empty_url_error_attrs/1` are all pure — no `Letflow.Repo`, no `Logger.*`, no HTTP/file call, no clock read except where a caller supplies a value explicitly (none of these functions read a clock internally). | Whole module — mirrors `VariableMerge`'s/`ServiceScopeValidator`'s own "Purity" sections (§0) |
 | INV-ST-2 | A 3xx response is never followed automatically and is always classified as a failure, never a success. | §5.2 row 6; §5.3 (`http_redirect_3xx` non-retriable) |
 | INV-ST-3 | A 429 response is always classified as `:rate_limited_429` and is always retriable (subject to `retry_limit`). | §5.2 row 5; §5.3 |
 | INV-ST-4 | A 2xx response merges into instance variables only when its body decodes as a JSON object; any other 2xx body shape (array, bare string/number/bool/null, or undecodable) is `:invalid_2xx_body`, never merged. | §5.2 rows 3-4 |
@@ -582,7 +620,7 @@ flagged for REVIEWER in case R-Co's real behavior special-cases 5xx.
 | Dependency | Direction | Nature |
 |---|---|---|
 | `Letflow.Definitions.Graph`/`.Node` (REQ-028/029) | this design -> REQ-028/029 | Reads `Graph.Node.t()`'s `id`/`attributes` fields only. Zero code added to `graph.ex`. |
-| `Letflow.Engine.ExecutionError.error_type()`/`error_args()`/`affected()` (REQ-061) | this design -> REQ-061 | `build_retries_exhausted_error_attrs/1` and `build_empty_url_error_attrs/1`'s return types are both built to match `Letflow.Engine.standalone_error_attrs()` field-for-field — the former reuses the already-shipped `:service_task_retries_exhausted` atom, the latter introduces `:service_task_url_rendered_empty` as a new (legal, since the union is open) member. Zero code added to `execution_error.ex`. |
+| `Letflow.Engine.ExecutionError.error_type()`/`error_args()`/`affected()` (REQ-061) | this design -> REQ-061 | `build_service_task_give_up_error_attrs/1` and `build_empty_url_error_attrs/1`'s return types are both built to match `Letflow.Engine.standalone_error_attrs()` field-for-field — the former reuses the already-shipped `:service_task_retries_exhausted` atom for every `:give_up` cause (exhausted retries AND immediate non-retriable failure), the latter introduces `:service_task_url_rendered_empty` as a new (legal, since the union is open) member. Zero code added to `execution_error.ex`. |
 | `Letflow.Engine.set_instance_error/2` (REQ-061) | REQ-061 -> this design (this design is a documented, not-yet-wired caller) | The routing target §6 names for both the exhausted-retry and empty-rendered-URL cases — no call site exists inside this module itself; a future dispatch-orchestration/activation-time requirement is expected to make the actual call. |
 | `Letflow.Engine.VariableMerge.merge/3` (REQ-049) | REQ-049 -> this design (documented, not-yet-wired caller) | `classify_failure_kind/1`'s `{:success, decoded_map}` result is the input a future caller passes as `incoming_variables` to `VariableMerge.merge/3` (AC5) — this module does not call `merge/3` itself, since merging also needs `current_variables`/`variable_validations` this module has no access to. |
 | A future `transport_fun()` implementation | future -> this design | Supplies a real HTTP client call. Not built here (§1, §3.4, §7). |
@@ -599,7 +637,7 @@ flagged for REVIEWER in case R-Co's real behavior special-cases 5xx.
 | 2. HTTP 3xx classified as failure, never followed; HTTP 429 classified as retriable failure — two explicit tests | §5.2 rows 5-6; §5.3 table (`http_redirect_3xx: false`, `rate_limited_429: true`); INV-ST-2, INV-ST-3 |
 | 3. Each of the 7 failure kinds has an explicit test mapping condition -> kind; `is_retriable_failure`/`decide_failure` tested at attempt_index below/equal/above retry_limit | §5.2 (full 7-row table); §5.3's `decide_failure/3` three-step algorithm and its worked boundary example |
 | 4. `compute_service_task_backoff_ms` grows exponentially, clamped at cap, verified across ≥4 successive attempt indices without sleeping | §4 spec (`min(base_ms * 2^attempt_index, cap_ms)`); INV-ST-6; §5.2/§5.3 purity note ("no sleep, no clock read") |
-| 5. 2xx JSON-object body merges via REQ-049's merge; 2xx JSON array/bare string does not merge, routes to REQ-061 ERROR — two explicit tests | §5.2 rows 3-4 (`{:success, decoded_map}` vs. `:invalid_2xx_body`); §10's `VariableMerge.merge/3` cross-reference; INV-ST-4 |
-| 6. URL template rendering to empty string rejected at activation, routes to ERROR path rather than dispatching | `validate_rendered_url/1` (§4); `build_empty_url_error_attrs/1` (§4, `:service_task_url_rendered_empty`); §6's routing statement; INV-ST-8 |
+| 5. 2xx JSON-object body merges via REQ-049's merge; 2xx JSON array/bare string does not merge, routes to REQ-061 ERROR — two explicit tests | (a) §5.2 row 3 (`{:success, decoded_map}`) + §10's `VariableMerge.merge/3` cross-reference; (b) §5.2 row 4 (`:invalid_2xx_body`) -> §5.3 (non-retriable) -> `decide_failure/3` step 1 gives up on attempt 0 -> `build_service_task_give_up_error_attrs/1` (§4) -> §6 case 1's routing statement, explicitly naming AC5(b) -> `Letflow.Engine.set_instance_error/2`; INV-ST-4, INV-ST-8 |
+| 6. URL template rendering to empty string rejected at activation, routes to ERROR path rather than dispatching | `validate_rendered_url/1` (§4); `build_empty_url_error_attrs/1` (§4, `:service_task_url_rendered_empty`); §6 case 2's routing statement; INV-ST-8 |
 | 7. Moduledoc states HTTP transport and service_catalog lookup are injectable, names OBS-05's DLQ (S6) as unbuilt destination, confirms no partial DLQ built | §7 (required verbatim moduledoc text) |
-| 8. Exhausted-retry outcome (`decide_failure` -> give-up) demonstrated routing into `set_instance_error` rather than its own ERROR transition, confirmed by inspection and by test | §4 `build_retries_exhausted_error_attrs/1`; §6 (full routing section); INV-ST-8; §10's `set_instance_error/2` cross-reference |
+| 8. Exhausted-retry outcome (`decide_failure` -> give-up) demonstrated routing into `set_instance_error` rather than its own ERROR transition, confirmed by inspection and by test | §4 `build_service_task_give_up_error_attrs/1`; §6 case 1 (full routing section, also covers AC5(b) as the same `:give_up` sink); INV-ST-8; §10's `set_instance_error/2` cross-reference |

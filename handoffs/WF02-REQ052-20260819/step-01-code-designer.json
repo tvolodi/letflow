@@ -1,0 +1,53 @@
+{
+  "handoff_id": "b3f1c2a0-52a0-4e21-9c1a-req052step01",
+  "run_id": "WF02-REQ052-20260819",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ052-20260819/step-01-code-designer.json",
+  "created_at": "2026-08-19T00:00:01Z",
+  "started_at": "2026-08-19T00:00:01Z",
+  "completed_at": "2026-08-19T00:11:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-052"],
+    "requirement_text": {
+      "REQ-052": "Port src/engine/instance.zig's InstanceStore.cancelInstance() (per src/design/engine.md \"Section EE-08: Cancellation\", L3299) as cancel_instance/N. This is the caller-initiated path that drives a running instance to the terminal CANCELLED status. Split note: this requirement originally also carried EE-10 execution error handling. The two were separated because they are different in kind, not merely large together -- EE-08 is caller-initiated and terminal (CANCELLED admits no further operation), while EE-10 (REQ-061) is engine-internal, driven by REQ-049/050/056/057's failure paths, and halts NON-terminally at ERROR pending an operator retry/discard through S6's dead-letter path. Their shared row-locking shape was not sufficient justification to keep them in one agent turn. - Sets all open tasks to CANCELLED, appends an INSTANCE_CANCELLED event, and sets the instance status to CANCELLED -- all in ONE transaction (EE-08 AC3). - An instance already CANCELLED or COMPLETED returns a distinct conflict error (EE-08 AC2). Cancelled instances are terminal: no further task completion or event append is permitted (EE-08 AC4) -- and REQ-025's append/1 already enforces exactly this at the event-store layer via its active-instance guard on instance_projections.status, so verify that guard now actually fires for engine-driven appends rather than duplicating the check. - Cancelling an instance with no open tasks or timers still appends INSTANCE_CANCELLED (EE-08 edge case). - Concurrent cancellation racing a task completion: the first operation to acquire the row-level lock wins, the other gets a conflict error (EE-08 edge case) -- the same locking discipline REQ-048 uses and REQ-055 verifies globally. - R-Co's EE-08 also cancels pending timers atomically via SCH-03 (src/scheduler/, S6) and abandons in-flight SERVICE_TASK HTTP calls best-effort (REQ-056's transport, whose real client is out of S3 scope). Neither dependency exists in Letflow yet: port the cancellation of what DOES exist (tasks, status, event) and leave named, documented hooks for both, identifying S6 and REQ-056 respectively -- do not silently omit them from the moduledoc as if EE-08 were fully covered. BRANCH CANCELLATION: REQ-051's parallel join excludes cancelled branches from its join count (EE-07 AC2/AC3), and cancelling every branch of a split cancels the join node and the instance (EE-07 AC4). That token-level rule lives in REQ-051's pure transition logic; this requirement owns the instance-level persistence of a cancellation. Confirm the two agree -- an instance CANCELLED by the all-branches-cancelled path and one CANCELLED by a direct caller request must reach the same persisted state. SUPERSESSION: lib/letflow/parallel_approval.ex is superseded by this requirement together with REQ-051 -- its two-approver :gen_statem (a single :pending state holding approver progress as genuine gen_statem data, with Letflow.ApprovalSupervisor as a deliberately separate DynamicSupervisor) is the hand-written special case of what REQ-051's PARALLEL_GATEWAY split/join now expresses as definition data. State in the moduledoc whether it is deleted or retained-with-a-reason, and do the same for Letflow.ApprovalSupervisor, the same way REQ-046 handles ProcessInstance/InstanceSupervisor. Its first Early finding remains the quality bar for whatever replaces it: real per-state callbacks and real supervised isolation, never a GenServer simulating a state machine. OPEN QUESTION (flag, do not silently resolve): if REQ-045's process-vs-row resolution chose supervised processes, cancellation must terminate a live process, and killing a process is exactly the exit path that Elixir's try/after does not cover -- the same crash-safety question REQ-040 flagged for sandbox teardown. Leave the concrete mechanism to CODE-DESIGNER, citing REQ-040's precedent. SCOPE BOUNDARY: POST /api/v1/instances/:id/cancel is S4 (api-surface). This requirement returns tagged tuples; S4 owns the status mapping."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": ["lib/letflow/engine.ex", "lib/letflow/parallel_approval.ex", "lib/letflow/approval_supervisor.ex", "lib/letflow/design/req052-instance-cancellation.md"]
+  },
+  "task": {
+    "description": "Design REQ-052: instance cancellation (EE-08). Port instance.zig's cancelInstance() as cancel_instance/N. Read REQ-045 (process-vs-row resolution -- this determines whether cancellation must terminate a live process), REQ-048 (row-locking discipline for task completion, which this requirement's concurrent-cancellation-vs-completion race must match), and REQ-051 (parallel gateway join/branch-cancellation semantics that this requirement's persistence layer must agree with) design docs and shipped code in lib/letflow/ before designing. Also read lib/letflow/parallel_approval.ex and lib/letflow/approval_supervisor.ex (the two modules this requirement supersedes) to determine and state whether they are deleted or retained-with-a-reason.",
+    "acceptance_criteria": [
+      "cancelling an ACTIVE instance sets every open task to CANCELLED, appends exactly one INSTANCE_CANCELLED event, and sets the instance status to CANCELLED -- all committed together, verified by reading tasks, instance_projections and events back",
+      "cancelling an already-CANCELLED or already-COMPLETED instance returns a distinct conflict error and changes nothing; cancelling an ACTIVE instance with zero open tasks still appends INSTANCE_CANCELLED",
+      "after cancellation, a further append via REQ-025's append/1 is rejected by its existing active-instance guard -- demonstrated against the real event store rather than asserted from the code",
+      "a cancellation racing a task completion on the same instance resolves with exactly one winner and a distinct conflict error for the loser, run concurrently rather than sequentially",
+      "an instance cancelled via REQ-051's all-branches-cancelled join path and one cancelled by a direct cancel_instance call reach the same persisted state (status, task statuses, appended event), compared explicitly",
+      "the moduledoc names the SCH-03 timer-cancellation hook (S6) and the in-flight SERVICE_TASK abandonment hook (REQ-056) as explicitly out of scope, rather than implying EE-08 is fully covered",
+      "the moduledoc states concretely whether lib/letflow/parallel_approval.ex and Letflow.ApprovalSupervisor are deleted or retained-with-a-stated-reason, and mix test passes with the actual output quoted after the change"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Designed REQ-052 (cancel_instance/3, EE-08) in lib/letflow/design/req052-instance-cancellation.md. cancel_instance/3 is a new function on the already-shipped Letflow.Engine, structured as a single Ecto.Multi that locks open tasks (deterministic order) before instance_projections -- matching complete_task/3's own stated global lock-ordering rule to avoid an AB-BA deadlock between the two call sites -- reuses InstanceProjection.terminal?/1 (shared with EventStore.append/2's own active_instance_guard) for the already-cancelled/completed conflict check, cancels all open tasks and live tokens via the already-shipped Task.complete_changeset/2 and TokenRecord.advance_changeset/2 (both already support :cancelled/cancelled_at, no migration needed), and appends exactly one INSTANCE_CANCELLED event via EventStore.append/2 before writing the instance's own :cancelled status (so append/2's own guard doesn't self-reject). SUPERSESSION: both lib/letflow/parallel_approval.ex and Letflow.ApprovalSupervisor are designed as DELETED (not retained-with-a-reason like InstanceSupervisor was under REQ-046) -- reasoning given in doc section 2 for why ApprovalSupervisor has no distinct future consumer the way InstanceSupervisor does. The concurrent cancel-vs-complete_task race is traced in both directions with the exact resulting error tuple each side gets. The OPEN QUESTION about process termination is flagged explicitly: its premise (a live process to kill) does not hold under REQ-045's actual no-process resolution, restated rather than silently dropped, with the future REQ-056/057 case named as where it becomes live. Section 4 explains and flags (OQ-2) the design decision NOT to drive REQ-051's {:cancel_branch, _} through Transition for this requirement's own whole-instance cancel, since join_counters is never persisted (inherited gap from REQ-048's own OQ-3) so it would always hit the pure no-op branch -- and states precisely how the 'same persisted state' acceptance criterion is satisfied by construction instead. No implementation code written -- signatures, @spec/@type blocks, Multi step tables, and algorithm-shape prose only, matching req045/048/051's own convention.",
+    "artifacts_out": ["lib/letflow/design/req052-instance-cancellation.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ052-20260819",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ052-20260819",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (WF-02 Step 1b) to independently gate this design before ELIXIR-DEV implements cancel_instance/3 and the parallel_approval.ex/approval_supervisor.ex deletion."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

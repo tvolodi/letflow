@@ -30,8 +30,10 @@ description: >
   `status: open`).
 
   Confirmed NOT caused by this run's own diff: `git diff main...HEAD --stat`
-  for feature/WF02-REQ061-20260819 touches only: docs/issues/ISS-0061.yaml
-  (new, filed by ELIXIR-DEV), docs/requirements.yaml, docs/status/,
+  for feature/WF02-REQ061-20260819 touches only: docs/issues/ISS-0063.yaml
+  (new, filed by ELIXIR-DEV as ISS-0061, renumbered to ISS-0063 during
+  Step Final's rebase after main independently gained an unrelated
+  ISS-0061 via a concurrent branch), docs/requirements.yaml, docs/status/,
   handoffs/*, lib/letflow/design/req061-execution-error-handling.md (new),
   lib/letflow/engine.ex (Engine.set_instance_error/2,
   ExecutionError.append_multi/3 call sites, complete_task/3 rewiring),

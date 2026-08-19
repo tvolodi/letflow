@@ -63,7 +63,9 @@ checks:
     classification: "pre-existing, unrelated to REQ-061"
     reasoning: >
       `git diff main...HEAD --stat` for this branch touches only:
-      docs/issues/ISS-0061.yaml (new), docs/requirements.yaml,
+      docs/issues/ISS-0063.yaml (new, filed as ISS-0061, renumbered during
+      Step Final's rebase after an unrelated ISS-0061 landed on main
+      independently), docs/requirements.yaml,
       docs/status/requirement_status.yaml, handoffs/WF02-REQ061-20260819/*,
       lib/letflow/design/req061-execution-error-handling.md (new),
       lib/letflow/engine.ex (Engine.set_instance_error/2,
@@ -108,8 +110,10 @@ issues_filed:
       rather than fixed in this run. Fourth observed occurrence of this
       class; flagged in the issue body as possibly warranting an actual
       fix rather than continued filing."
-  - id: ISS-0061
-    note: "Pre-existing, filed by ELIXIR-DEV during this run's Step 2a
+  - id: ISS-0063
+    note: "Filed as ISS-0061, renumbered to ISS-0063 during Step Final's
+      rebase (main independently gained an unrelated ISS-0061 via a
+      concurrent branch). Pre-existing, filed by ELIXIR-DEV during this run's Step 2a
       rework (not a TEST-RUNNER finding) -- merge_output_variables/5
       always passes nil for VariableMerge.merge/3's variable_validations
       argument, so REQ-049's schema-rejection ExecutionError branch can

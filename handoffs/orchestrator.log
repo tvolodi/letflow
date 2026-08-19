@@ -802,3 +802,4 @@
 2026-08-19T02:19:54Z | RELEASE_DONE_DUPLICATE | - | queue-task-118 | ORCH → ORCH | duplicate of ISS-0059 (GH#206), already resolved in commit 8870068/PR#213; released done without rework
 2026-08-19T02:29:01Z | DONE | WF-03 | WF03-ISS0060-20260819 | ELIXIR-DEV → ORCH | PASS
 2026-08-19T02:29:38Z | RECONCILE | WF-02 | queue-task-96 (REQ-052) | ORCH | already done on main (PR #209, DOC-UPDATER flip 2026-08-19T00:40:22Z) -- stale queue task never released, released now with status:done, no rework performed
+2026-08-19T02:29:52Z | RECONCILE | WF-02 | queue-task-97 (REQ-061) | ORCH | already done on main (PR #215, DOC-UPDATER flip 2026-08-19T02:07:17Z) -- stale queue task never released, released now with status:done, no rework performed

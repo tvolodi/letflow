@@ -56,8 +56,12 @@ defmodule Letflow.TenantSlugFixtureTest do
   # used: the first `unique_integer/1` call in a fresh VM.
   @old_mechanism_script "IO.write(System.unique_integer([:positive, :monotonic]))"
 
-  describe "regression: pre-fix unique_integer/1 slug mechanism collides across VM runs (ISS-0059)" do
-    test "three independent, freshly-started BEAM VMs produce the identical first unique_integer/1 value -> identical slug" do
+  # Regression for ISS-0059: proves the pre-fix `unique_integer/1` slug
+  # mechanism collides across independent BEAM VM runs.
+  describe "pre-fix mechanism collides across VM runs" do
+    # Three independent, freshly-started BEAM VMs produce the identical
+    # first unique_integer/1 value, i.e. the identical slug.
+    test "collides across three fresh VMs" do
       # Each System.cmd call below launches a brand-new OS process running a
       # brand-new BEAM VM -- this is a real VM restart, not a stand-in for
       # one.
@@ -82,8 +86,19 @@ defmodule Letflow.TenantSlugFixtureTest do
     end
   end
 
-  describe "post-fix unique_slug/1 does not exhibit the same cross-VM collision (identical spawn-independent-VMs method)" do
-    test "three independent, freshly-started BEAM VMs each computing unique_slug/1 produce three distinct slugs" do
+  # Proves the POST-FIX mechanism does not exhibit the same failure, using
+  # the identical "spawn independent fresh VMs" method as the pre-fix case
+  # above, applied to Letflow.TenantSlugFixture.unique_slug/1 instead.
+  describe "post-fix unique_slug/1 avoids the cross-VM collision" do
+    # Three independent, freshly-started BEAM VMs each computing
+    # unique_slug/1 produce three distinct slugs.
+    #
+    # Heavier than the pre-fix case's bare `elixir -e` script because
+    # Ecto.UUID.generate/0 needs `:ecto` on the code path, so each of the
+    # three subprocesses boots via `mix run --no-start` instead of a raw
+    # `elixir` invocation. Tagged :slow so a leaner CI profile can exclude it.
+    @tag :slow
+    test "distinct slugs across three fresh VMs" do
       script = ~s|IO.write(Letflow.TenantSlugFixture.unique_slug("req027"))|
 
       results =
@@ -106,8 +121,12 @@ defmodule Letflow.TenantSlugFixtureTest do
     end
   end
 
-  describe "unique_slug/1 -- property: no collisions across a large number of calls within a single VM run" do
-    property "generating thousands of slugs from arbitrary prefixes never produces a duplicate" do
+  # Property coverage: no collisions across a large number of calls within a
+  # single VM run (complements the cross-VM cases above).
+  describe "unique_slug/1 property coverage" do
+    # Generating thousands of slugs from arbitrary prefixes never produces a
+    # duplicate.
+    property "no duplicates across thousands of calls" do
       check all(
               prefixes <-
                 StreamData.list_of(
@@ -122,7 +141,9 @@ defmodule Letflow.TenantSlugFixtureTest do
       end
     end
 
-    property "unique_slug/1 always returns \"<prefix>-<36-char UUID>\", never depending on call order or repetition count" do
+    # unique_slug/1 always returns "<prefix>-<36-char UUID>", regardless of
+    # call order or repetition count.
+    property "stable \"<prefix>-<uuid>\" format regardless of call order/count" do
       check all(prefix <- StreamData.string(:alphanumeric, min_length: 1, max_length: 20),
                 repeat_count <- StreamData.integer(1..25),
                 max_runs: 30) do

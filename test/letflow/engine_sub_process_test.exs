@@ -287,6 +287,23 @@ defmodule Letflow.EngineSubProcessTest do
       assert child.variables == %{"amount" => 5}
       refute Map.has_key?(child.variables, "secret")
       assert child.parent_instance_id == result.instance_id
+
+      # ISS-0071: exact composition check for derive_idempotency_key/3's call site 1
+      # (append_instance_started_event_for_child/8) -- proves the private helper still
+      # emits `base::sub_process_start::child_instance_id` byte-for-byte, not merely
+      # that INSTANCE_STARTED got appended at all. derive_idempotency_key/3 is `defp`
+      # and unreachable from outside Letflow.Engine.SubProcess, so this is the closest
+      # available direct assertion on its exact join format.
+      child_started_event =
+        Event
+        |> where(
+          [e],
+          e.instance_id == ^child.instance_id and e.event_type == "INSTANCE_STARTED"
+        )
+        |> Repo.one!(prefix: schema_name)
+
+      assert child_started_event.idempotency_key ==
+               "#{attrs.idempotency_key}::sub_process_start::#{child.instance_id}"
     end
   end
 
@@ -443,8 +460,10 @@ defmodule Letflow.EngineSubProcessTest do
       child_task = pending_task_for_instance!(schema_name, child.instance_id)
 
       # "result" deliberately omitted from the child's own output_variables.
+      child_complete_attrs = complete_attrs()
+
       assert {:ok, child_result} =
-               Engine.complete_task(child_task.id, complete_attrs(), prefix: schema_name)
+               Engine.complete_task(child_task.id, child_complete_attrs, prefix: schema_name)
 
       # The child itself completes successfully -- only the PARENT's own merge is
       # rejected; the two are not the same transaction's success/failure verdict.
@@ -459,6 +478,16 @@ defmodule Letflow.EngineSubProcessTest do
 
       assert [event] = execution_error_events(schema_name, created.instance_id)
       assert event.payload["error_type"] == "subprocess_interface_violation"
+
+      # ISS-0071: exact composition check for derive_idempotency_key/3's call site 2
+      # (append_completion_multi/4's error_idempotency_key) -- proves the private
+      # helper still emits `base::sub_process_completion_error::parent_id::child_id`
+      # byte-for-byte at the one call site whose derived value is otherwise never
+      # observed by any assertion. derive_idempotency_key/3 is `defp` and unreachable
+      # from outside Letflow.Engine.SubProcess, so this is the closest available
+      # direct assertion on its exact join format.
+      assert event.idempotency_key ==
+               "#{child_complete_attrs.idempotency_key}::sub_process_completion_error::#{created.instance_id}::#{child.instance_id}"
 
       # No SUB_PROCESS_COMPLETED event on the parent's own stream -- the completion
       # event is only appended on the success path (design doc §3.4 point 4).
@@ -550,6 +579,15 @@ defmodule Letflow.EngineSubProcessTest do
       assert event.payload["child_instance_id"] == child.instance_id
       assert event.payload["output_variables"] == %{"result" => true}
       refute Map.has_key?(event.payload["output_variables"], "junk")
+
+      # ISS-0071: exact composition check for derive_idempotency_key/3's call site 3
+      # (append_sub_process_completed_event/8) -- proves the private helper still
+      # emits `base::sub_process_completed::parent_id::child_id` byte-for-byte.
+      # derive_idempotency_key/3 is `defp` and unreachable from outside
+      # Letflow.Engine.SubProcess, so this is the closest available direct
+      # assertion on its exact join format.
+      assert event.idempotency_key ==
+               "#{output_attrs.idempotency_key}::sub_process_completed::#{created.instance_id}::#{child.instance_id}"
     end
   end
 

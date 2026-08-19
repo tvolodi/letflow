@@ -546,8 +546,22 @@ defmodule Letflow.IdentityMigrationTest do
         assert regclass != nil, "expected public.#{table} to survive the skipped drop"
       end
     end
+  end
 
-    test "ISS-0060: unwrapped guard SKIPs with a racer tenant visible; with_only_this_tenant_visible!/2 hides it and the guard PROCEEDS" do
+  # ISS-0060: end-to-end proof that with_only_this_tenant_visible!/2 fixes the
+  # reported bug, not just that its helper functions individually behave.
+  # Reproduces the exact race first: a second, real (FK-satisfying) tenant row
+  # registered in public.tenant_schemas with migrations_applied_at still NULL
+  # (i.e. mid-copy, exactly what a concurrently-running provisioning test looks
+  # like) makes the unwrapped guard's global per-tenant scan see an uncopied
+  # row that has nothing to do with this test and false-SKIP the drop. Then
+  # re-runs the identical scenario wrapped in with_only_this_tenant_visible!/2
+  # and shows the guard now PROCEEDS, and that the racer's row is restored
+  # to public.tenant_schemas afterward, untouched (still NULL), with the
+  # backup table left empty. See
+  # lib/letflow/design/iss060-migration-guard-test-race-fix.md.
+  describe "ISS-0060: with_only_this_tenant_visible!/2 guard fix" do
+    test "hides the racer tenant, flips guard SKIP into PROCEED" do
       %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
 
       group_id = insert_legacy_group!(tenant.id)
@@ -682,10 +696,14 @@ defmodule Letflow.IdentityMigrationTest do
 
       assert backup_count == 0
     end
+  end
 
-    test "re-running the drop migration after it already succeeded is a clean no-op (idempotent, per its own to_regclass IS NULL guard)" do
-      # No tenant/copy needed for this one -- exercises the migration's own
-      # "already absent -- nothing to do" RAISE NOTICE branch directly.
+  describe "DropLegacyPublicIdentityTables migration guard (REQ-063 §5) -- idempotency" do
+    # No tenant/copy needed for this one -- exercises the migration's own
+    # "already absent -- nothing to do" RAISE NOTICE branch directly, i.e.
+    # re-running the drop after it already succeeded is a clean no-op per its
+    # own to_regclass IS NULL guard.
+    test "re-running after it already succeeded is a no-op" do
       Repo.query!("DROP TABLE IF EXISTS public.tenant_role")
       Repo.query!("DROP TABLE IF EXISTS public.users")
       Repo.query!("DROP TABLE IF EXISTS public.groups")
@@ -715,8 +733,15 @@ defmodule Letflow.IdentityMigrationTest do
     end
   end
 
-  describe "ISS-0060: self-heal of an interrupted with_only_this_tenant_visible!/2 run" do
-    test "restore_orphaned_guard_backup_rows!/0 (the exact helper this file's setup calls) restores a stale backup row to public.tenant_schemas and empties the backup table" do
+  # ISS-0060: restore_orphaned_guard_backup_rows!/0 is the exact helper this
+  # file's own test setup calls to self-heal after a crash mid-guard (one that
+  # dies after moving a row into the backup table but before restoring it).
+  # Proves it restores a stale backup row back to public.tenant_schemas and
+  # leaves the backup table empty afterward -- exercised directly here rather
+  # than only indirectly via setup, so a regression in the helper itself fails
+  # with a clear signal instead of surfacing as unrelated failures elsewhere.
+  describe "ISS-0060: self-heal of an interrupted guard run" do
+    test "restore_orphaned_guard_backup_rows!/0 restores the stale row" do
       # A real, FK-satisfying tenant with no tenant_schemas row of its own yet
       # (deliberately NOT provisioned_tenant!/0 -- provisioning would insert
       # tenant_schemas' own row for it, and tenant_schemas has a unique index

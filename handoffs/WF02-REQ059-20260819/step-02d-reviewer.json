@@ -1,0 +1,52 @@
+{
+  "handoff_id": "75f57b3f-9dc4-43c9-8403-67f0cd98ccf6",
+  "run_id": "WF02-REQ059-20260819",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ059-20260819/step-02d-reviewer.json",
+  "created_at": "2026-08-19T08:30:09Z",
+  "started_at": "2026-08-19T08:30:09Z",
+  "completed_at": "2026-08-19T08:30:09Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-059"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ059-20260819/step-01-code-designer.json",
+      "handoffs/WF02-REQ059-20260819/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ059-20260819/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ059-20260819/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/pin_resolver.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/reconstruction.ex",
+      "lib/letflow/design/req059-pin-resolver.md"
+    ],
+    "owned_modules": ["lib/letflow/engine/", "lib/letflow/design/"]
+  },
+  "task": {
+    "description": "Idiom/scope-creep/decision-consistency review gate on REQ-059's PinResolver implementation (git diff main...feature/WF02-REQ059-20260819 for engine.ex, engine/pin_resolver.ex, engine/reconstruction.ex). Verify implementation matches the gate-approved design, every AC is genuinely covered, judge the two ELIXIR-DEV-flagged deviations (tenant_id-as-nil in variable_schema_lookup, parent_pins/2's tagged-tuple return), and trace start_instance/5's zero-partial-write ordering and merge_effective_pins/2's zero-catalog-I/O claim in the actual code rather than trusting the design doc.",
+    "acceptance_criteria": []
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implementation matches the gate-approved design (req059-pin-resolver.md) closely; all 8 REQ-059 ACs are genuinely covered, not just claimed. No process/supervision question is in play (PinResolver is a stateless module of pure functions plus one Repo-reading call via Reconstruction.read_full_log/3, consistent with REQ-045's process-vs-row resolution) -- N/A on the supervision check.\n\nTraced start_instance/5 (engine.ex ~409-450) directly: the `with` chain is build_graph/1 -> PinResolver.resolve/4 -> validate_initial_variables/2 -> parent_pins/2 -> apply_inheritance/2 -> create_snapshot/3 -> activate/3 -> persist/10. Every step before create_snapshot/3 is pure or reads only the parent's own event stream (parent_pins/2 -> reconstruct_effective_pins/2 -> read_full_log/3, no catalog/module lookup capability in that call path). A `with` clause failure at any pre-create_snapshot/3 step returns immediately -- create_snapshot/3 (the first Repo write) never runs. PIN-01 AC1/AC4 and PIN-02 AC2's zero-partial-write bar is satisfied by construction, confirmed by direct code read, not by trusting the design doc's claim.\n\nmerge_effective_pins/2 (pin_resolver.ex ~429-448) and reconstruct_effective_pins/2 (~499-524): neither function nor its Lookup.t() has any catalog/module-lookup parameter at all -- there is no capability to reach a catalog anywhere in the replay path, a stronger guarantee than 'injected but unused.' PIN-04 AC1/AC5/AC7 hold by construction.\n\nresolve/4's ordering (kind then ref): sort_pins/1 sorts by {Atom.to_string(kind), ref} ascending; \"catalog_entry\" < \"module\" < \"variable_schema\" as plain strings -- confirmed correct and the sort is total/deterministic, satisfying PIN-01 AC5's byte-identical-payload requirement.\n\nBoth ELIXIR-DEV-flagged deviations are reasonable engineering judgment calls, correctly surfaced rather than silently resolved, and neither blocks PASS:\n  - Deviation 1 (tenant_id passed as nil to variable_schema_lookup): this is a genuine gap in the gate-approved DESIGN itself, not an implementation shortcut -- resolve/4's own 4-arg @spec (design SS4, reused verbatim by the SS3 call site) has no tenant_id parameter despite SS4.2 requiring one. ELIXIR-DEV had no 5th argument to draw from and correctly declined to invent one outside the approved signature, instead passing nil (consistent with default_lookup/0's own tenant_id-ignoring stub) and flagging it in both the moduledoc and an inline comment. No AC requires tenant-specific variable_schema resolution today, so this does not block PASS -- but it is a real seam a future tenant-aware variable_schema_lookup implementation will need to close, and the fix belongs in a future design revision (widen resolve/4's arity or thread tenant_id through ProcessDefinition), not in this implementation.\n  - Deviation 2 (parent_pins/2 returns {:ok, _} | {:error, _} instead of a bare nullable list): correct call. The design's own SS8 prose requires a reconstruct_effective_pins/2 failure to propagate as create/2's {:error, {:parent_pin_lookup_failed, reason}}, which a bare nullable return cannot carry through a `with` chain, and this codebase's INV-8 no-raise discipline rules out solving it by raising. The tagged-tuple form is the idiomatic fix and matches every sibling step in the same `with` chain (build_graph/1, create_snapshot/3, activate/3 all return tagged tuples). This is a correction of an inconsistency in the design doc's own SS8 sketch, not a deviation to send back.\n\nNo scope creep: no new behaviour, abstraction, or generic plumbing beyond what PIN-01..PIN-04 and the design doc's SS2-SS12 call for. pin_lookup/2's unused prefix parameter is explicitly speculative per the design's own 2-arity spec and code comment, not an unrequested abstraction. No decision-record conflict: the injectable-Lookup pattern is a direct, cited reuse of ServiceScopeValidator's precedent (Decision-consistent), and the SCOPE GAP moduledoc content (ISS-0672/GH-306, service_catalog=S6, PLC-01=unscoped) is present and accurate. docs/anti-patterns.md has no entries this diff repeats.\n\nOne non-blocking observation for the record, not filed as a type-safety issue since it names no invalid-state class a struct could prevent: append_instance_started_event/8 (engine.ex) decides whether to embed pin_conflicts using Map.has_key?(attrs, :parent_instance_id) rather than parent_pins/2's own {:ok, nil | [...]} result -- if a caller ever sets attrs[:parent_instance_id] to an explicit nil (key present, value nil) rather than omitting the key, pin_conflicts: [] would be embedded for what is actually a root instance, diverging from the design's stated 'omitted entirely when the instance has no parent' rule. No current caller does this (today: only tests; REQ-062's future child-creation call site will always supply a real id), so this is a latent inconsistency worth a one-line comment/guard when REQ-062 lands, not a rework trigger now.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ059-20260819",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ059-20260819",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

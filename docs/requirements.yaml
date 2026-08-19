@@ -3008,7 +3008,7 @@ requirements:
   - id: REQ-057
     title: Plugin handler interface and registry contract (plugin_interface.zig + plugin_registry.zig, EXT-03)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S3
     impl_order: 102  # letflow-queue task id
     description: >

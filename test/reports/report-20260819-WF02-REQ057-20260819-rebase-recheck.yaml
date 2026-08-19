@@ -1,0 +1,114 @@
+# Test run report — WF-02 Step 4 / WF-04 Step 1 (test run) for REQ-057, rebase recheck
+
+requirement_id: REQ-057
+workflow: WF-02
+step: "04"
+agent: TEST-RUNNER
+run_id: WF02-REQ057-20260819-rebase-recheck
+date_utc: 2026-08-19T03:49:51Z
+
+context: >
+  Re-verification requested after feature/WF02-REQ057-20260819 was rebased
+  onto current origin/main, which now includes REQ-053's state-reconstruction
+  feature (commit 4e13653, "reconstruct instance state from event log on
+  restart") and ISS-0065's fix (commit d9bd370, Windows cmd.exe argv-mangling
+  fix in tenant_slug_test.exs), both merged concurrently by other hosts.
+
+git:
+  branch: feature/WF02-REQ057-20260819
+  head_commit: 38c7230f1760bd897e825d17497bb1f5db84505b
+  head_commit_subject: "docs(WF02-REQ057): mark done, append status history, sync stage-3 header"
+  contains_req053: true   # verified: git merge-base --is-ancestor 4e13653 HEAD
+  contains_iss0065: true  # verified: git merge-base --is-ancestor d9bd370 HEAD
+  working_tree: clean
+  note: >
+    `git status` reports local branch and 'origin/feature/WF02-REQ057-20260819'
+    have diverged (11 vs 5 commits) — this is a comparison against that
+    feature branch's own remote tracking ref, not against main; ancestor
+    checks above confirm both concurrent merges are present in HEAD's history,
+    so this run genuinely exercises the post-rebase, post-merge combined state.
+
+environment:
+  postgres_container: "letflow-wt2-postgres-1, started via `docker compose up -d` (already existing container, restarted cleanly)."
+  command_run: "MIX_TEST_PARTITION=2 mix test (full suite; the `test` alias runs ecto.create + ecto.migrate --quiet first automatically)"
+  note_on_partition_var: >
+    MIX_TEST_PARTITION only selects the test database name
+    (config/test.exs: database: "letflow_test#{System.get_env("MIX_TEST_PARTITION")}"),
+    confirmed by grep — there is no mix.exs `--partitions` config, so this run
+    executed the entire suite in one process rather than a subset.
+
+verdict: PASS
+
+checks:
+  test_suite_full_run:
+    result: PASS — all green, no failures
+    summary_line_verbatim: "5 properties, 972 tests, 0 failures"
+    finished_line_verbatim: "Finished in 130.9 seconds (5.1s async, 125.8s sync)"
+    failures: 0
+
+  target_files_specifically_confirmed:
+    result: PASS
+    note: >
+      Re-ran the three requested files in isolation with --trace for explicit
+      per-test confirmation:
+        test/letflow/engine/plugin_interface_test.exs
+        test/letflow/engine/plugin_registry_test.exs
+        test/letflow/engine_plugin_error_routing_test.exs
+      Isolated summary line: "30 tests, 0 failures"
+      Finished in 1.7 seconds (0.2s async, 1.5s sync)
+      All 30 individual tests listed in --trace output show PASS with timing.
+      Three tests in this set deliberately trigger crashes as their own
+      test subject (asserting the plugin interface catches/converts them
+      rather than propagating): "a handler that raises is treated as ERROR"
+      (RuntimeError: boom), "a handler that exits is ALSO treated as ERROR"
+      (stop: :deliberate_exit), and "a raising handler's crash also reaches
+      set_instance_error/2" (RuntimeError: plugin blew up) — these
+      stack-trace-like lines in stderr are expected negative-path fixture
+      output, not failures; each such test's own PASS line follows
+      immediately after.
+      Both the full-suite context (these 3 files' tests are a subset of the
+      972) and the isolated re-run agree: all pass.
+
+  branch_own_change_caused_failures: none
+
+  concurrent_merge_interaction: >
+    No interaction/regression found between this branch's plugin-interface
+    work and either concurrently-merged change. REQ-053's state-reconstruction
+    feature and ISS-0065's Windows argv-mangling fix are both present in HEAD
+    (confirmed via merge-base ancestor checks above) and the full suite,
+    which necessarily exercises both areas' own test files alongside this
+    branch's plugin tests, is fully green.
+
+  pre_existing_failures_found: []
+
+  known_noise_not_a_failure:
+    - >
+      Verbose SQL query debug logging ([debug] QUERY OK ...) throughout raw
+      mix test output — expected, not indicative of any problem.
+    - >
+      Deliberate crash traces (RuntimeError: boom / :deliberate_exit /
+      RuntimeError: plugin blew up) printed by plugin_interface_test.exs and
+      engine_plugin_error_routing_test.exs's own negative-path fixtures —
+      these are the tests' subject matter (asserting invoke/2 converts a
+      raise/exit into {:error, _} without crashing the caller), not failures.
+      Each is immediately followed by that test's own PASS line.
+
+  regression_check: >
+    972 tests, 0 failures, single full-suite run, plus an isolated 30/30 pass
+    on the three specifically-named target files. No regressions attributable
+    to this branch's changes or to interaction with the concurrently merged
+    REQ-053/ISS-0065 work.
+
+diagnosis: >
+  Full suite passed cleanly (972 tests, 5 properties, 0 failures) after the
+  rebase onto current main. The three specifically-requested plugin test
+  files (plugin_interface_test.exs, plugin_registry_test.exs,
+  engine_plugin_error_routing_test.exs) were independently re-run in
+  isolation and all 30 tests pass. No rework needed; nothing to route to
+  ELIXIR-DEV.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-20260819-WF02-REQ057-20260819-rebase-recheck.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

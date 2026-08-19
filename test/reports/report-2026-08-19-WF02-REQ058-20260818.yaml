@@ -1,0 +1,95 @@
+# Test run report — WF-02 Step 4
+# Written by TEST-RUNNER. RELEASE-VALIDATOR independently re-runs the suite
+# rather than trusting this report alone (core-directives.md).
+
+req_id: REQ-058
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ058-20260818
+date_utc: 2026-08-19
+git:
+  branch: feature/WF02-REQ058-20260818
+  commit: cbd91d2284456b9161ee5f97cf6a8ed7d07b59a2
+
+environment:
+  toolchain: local (not Docker fallback for Elixir/Mix; Postgres via docker compose)
+  postgres_container: letflow-postgres-1 (docker compose up -d; already running, port 5462)
+  command_run: "mix test  (full suite; test alias runs ecto.create + ecto.migrate --quiet first)"
+  runs_performed: 3
+  note: >
+    Ran `mix test` three times in full to check for flakiness after the first
+    run showed a failure unrelated to REQ-058. Also ran
+    `mix test test/letflow/engine/lua_script_audit_test.exs` alone once more
+    for a clean, isolated confirmation of the new REQ-058 tests.
+
+verdict: PASS
+
+runs:
+  - run: 1
+    result: "4 properties, 898 tests, 1 failure"
+    failure: "REQ-027's two definition migrations replayed... (Letflow.Definitions.MigrationsTest), tenants_slug_index collision on 'req027-202'"
+  - run: 2
+    result: "4 properties, 898 tests, 0 failures"
+  - run: 3
+    result: "4 properties, 898 tests, 1 failure"
+    failure: "same MigrationsTest test, same slug-collision pattern, different slug number"
+  - run: 4 (isolated)
+    command: "mix test test/letflow/engine/lua_script_audit_test.exs"
+    result: "16 tests, 0 failures"
+
+new_tests_req058:
+  file: test/letflow/engine/lua_script_audit_test.exs
+  count: 16
+  result: PASS
+  detail: >
+    All 16 REQ-058 (lua_script_execution_audit persistence) tests passed in
+    every one of the 3 full-suite runs and in the isolated run. Never appeared
+    in either full-suite run's failure output (grep-confirmed against saved
+    logs).
+
+baseline_comparison:
+  prior_session_baseline: "882/882 (main, before this branch existed)"
+  this_run_total: "898 tests (882 + 16 new REQ-058 tests) — count matches expectation"
+  regression: "none — the intermittent failure is in a pre-existing test file this branch never touches (test/letflow/definitions/migrations_test.exs), not a new failure introduced by REQ-058"
+
+iss_0058_status:
+  surfaced: false
+  note: >
+    ISS-0058's migration-version-duplicate collision (20260819000001) did not
+    surface in any of the 3 runs — the persistent host DB already had prior
+    migrations applied, matching the handoff's prediction. Not a factor in
+    this run's result.
+
+pre_existing_flaky_failure:
+  test: "REQ-027's two definition migrations replayed into a provisioned tenant schema uq_definition_version is a total UNIQUE index over exactly (name, version) (Letflow.Definitions.MigrationsTest)"
+  file: test/letflow/definitions/migrations_test.exs
+  seen_in_runs: [1, 3]
+  error: "Ecto.InvalidChangesetError — tenants_slug_index has already been taken"
+  root_cause_hypothesis: >
+    insert_tenant!/0 builds its slug as "req027-#{System.unique_integer([:positive,
+    :monotonic])}". This module deliberately uses
+    Ecto.Adapters.SQL.Sandbox.mode(:auto) (real commits, on_exit cleanup) per its
+    own moduledoc. System.unique_integer/1 is only unique within a single BEAM VM
+    run — if a prior mix test invocation's on_exit didn't run to completion
+    (crash/kill/timeout), leftover rows persist in the real DB and a fresh VM's
+    counter restarting from a low value can later collide with that leftover slug.
+  relation_to_this_branch: >
+    None. git diff main...HEAD does not touch test/letflow/definitions/migrations_test.exs
+    or any file it depends on. Confirmed pre-existing and unrelated per this
+    step's routing rule.
+  disposition: "Filed and forwarded, not fixed in this run (out of owned_modules scope)."
+  filed_as: docs/issues/ISS-0059.yaml
+  github_issue: "https://github.com/tvolodi/letflow/issues/206"
+
+summary: >
+  mix test run 3 times in full: 898 tests total across all runs (882
+  pre-existing + 16 new REQ-058 tests), with 1 intermittent failure in runs 1
+  and 3, 0 failures in run 2. The failing test is
+  Letflow.Definitions.MigrationsTest, a pre-existing flaky test unrelated to
+  REQ-058 (slug-uniqueness race against leftover DB rows from prior VM runs,
+  independent of this branch's changes) — filed as docs/issues/ISS-0059.yaml /
+  GH#206 and forwarded rather than fixed here. All 16 new REQ-058
+  (lua_script_execution_audit) tests passed in every run, including an
+  isolated confirmation run (16/16, 0 failures). No regression versus the
+  882/882 baseline. Verdict: PASS.

@@ -52,8 +52,16 @@ existing pure kernel to reconstruct state independent of the
 projection, with opt-in write-back under SELECT ... FOR UPDATE NOWAIT
 and a three-way instance-not-found/lock-contention/replay-failed error
 taxonomy; same header-sync gap-fix shape applied by this requirement's
-own DOC-UPDATER); REQ-054, REQ-055, REQ-056, REQ-057, REQ-059, REQ-060,
-REQ-062 (`docs/requirements.yaml`, 7 total) `pending`.
+own DOC-UPDATER); REQ-057 `done` (Plugin handler interface and
+registry contract, EXT-03 -- Letflow.Engine.PluginInterface behaviour +
+Letflow.Engine.PluginRegistry GenServer/ETS registry; a crash/exit in a
+handler is treated as an ERROR outcome routed through REQ-061's
+set_instance_error/2, closing that requirement's own AC8 obligation
+deferred forward at the time; wires REQ-031's plugin_lookup_fun and
+REQ-049's variable merge; registry contract only, WASM plugin host is
+S5 scope; same header-sync gap-fix shape applied by this requirement's
+own DOC-UPDATER); REQ-054, REQ-055, REQ-056, REQ-059, REQ-060, REQ-062
+(`docs/requirements.yaml`, 6 total) `pending`.
 
 ## Scope
 

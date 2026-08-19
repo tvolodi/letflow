@@ -4851,3 +4851,46 @@ history:
       with an EE-11 one-line summary, pending count corrected 8 -> 7),
       same header-sync gap-fix shape REQ-045/047/048/052/061's
       DOC-UPDATER passes already applied.
+
+  - req: REQ-057
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-19T03:44:43Z
+    note: >
+      Plugin handler interface and registry contract for EXT-03 --
+      Letflow.Engine.PluginInterface (behaviour: handler receives a
+      PluginExecutionContext and returns COMPLETE with optional output
+      variables or ERROR with a reason string) and
+      Letflow.Engine.PluginRegistry (GenServer/ETS registration and
+      resolution table: register_plugin_handler/1 rejects duplicate
+      node_type, invalid node_type, nil handler, incompatible API
+      version, and registration after freeze; freeze_plugin_registry/1
+      makes the registry immutable, startup-only with no dynamic
+      loading at runtime). A crashing handler is treated as ERROR and
+      routed to REQ-061's EE-10 set_instance_error path via a
+      monitored call rather than a bare try/rescue. Wires into
+      REQ-061 (EE-10 error sink), REQ-049, and REQ-031. All gates
+      passed: CODE-DESIGN-VALIDATOR PASS (after 1 rework),
+      SECURITY-REVIEWER PASS, REVIEWER PASS, TEST-DESIGN-VALIDATOR
+      PASS, TEST-RUNNER PASS (957 tests, 0 failures, 2 runs),
+      RELEASE-VALIDATOR PASS (independently re-verified all 8
+      acceptance criteria). docs/requirements.yaml REQ-057 flipped
+      pending -> done. No requirement's depends_on field lists
+      REQ-057 (checked via grep across docs/requirements.yaml), so no
+      requirement becomes newly eligible on REQ-057 alone; only
+      docs/requirements.yaml:3327 mentions REQ-057 in free text (as a
+      requirement that itself depends on REQ-061, already satisfied).
+      README.md: no changes needed -- PluginInterface/PluginRegistry
+      are internal engine capabilities with no new HTTP route and no
+      change to the documented gen_statem/process-model diagram or
+      "Running it" section, same reasoning as REQ-045/047/048/052/061.
+      GAP FLAGGED, NOT FIXED (out of this step's scope per explicit
+      run instruction restricting this pass to
+      docs/requirements.yaml + docs/status/requirement_status.yaml
+      only): docs/migration/stage-3-instance-engine.md's header (~line
+      48) still lists REQ-057 among the 8 `pending` requirements and
+      its pending count of 8 -- now stale, needs REQ-057 moved into
+      the `done` clause with a one-line EXT-03 summary and the count
+      corrected 8 -> 7, same header-sync shape REQ-061's DOC-UPDATER
+      pass already applied for REQ-061 itself. Left for a follow-up
+      pass.

@@ -547,6 +547,142 @@ defmodule Letflow.IdentityMigrationTest do
       end
     end
 
+    test "ISS-0060: unwrapped guard SKIPs with a racer tenant visible; with_only_this_tenant_visible!/2 hides it and the guard PROCEEDS" do
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
+
+      group_id = insert_legacy_group!(tenant.id)
+      insert_legacy_user!(tenant.id)
+      insert_legacy_tenant_role!(group_id)
+
+      assert {:ok, %{groups: 1, users: 1, tenant_roles: 1}} =
+               IdentityMigration.copy_tenant(tenant.id, schema_name)
+
+      # ISS-0060's exact race condition, constructed directly rather than
+      # relying on genuine test-suite concurrency to hit the window by luck:
+      # a second, real (FK-satisfying) tenant row is registered in
+      # public.tenant_schemas but its copy is still in flight --
+      # migrations_applied_at is NULL, exactly what a concurrently-running
+      # provisioning test looks like mid-flight.
+      racer_tenant =
+        %Tenant{}
+        |> Tenant.create_changeset(
+          %{slug: unique_slug(), display_name: "ISS-0060 racer"},
+          :disabled
+        )
+        |> Repo.insert!()
+
+      on_exit(fn ->
+        # tenant_schemas.tenant_id carries a real DB foreign key to
+        # tenants.id -- delete the (by then restored) tenant_schemas row
+        # first, or this Tenant delete would raise a foreign-key violation.
+        Repo.query!("DELETE FROM public.tenant_schemas WHERE tenant_id = $1", [
+          Ecto.UUID.dump!(racer_tenant.id)
+        ])
+
+        Repo.delete_all(from(t in Tenant, where: t.id == ^racer_tenant.id))
+      end)
+
+      racer_schema_row_id = Ecto.UUID.generate()
+
+      Repo.query!(
+        """
+        INSERT INTO public.tenant_schemas
+          (id, tenant_id, schema_name, migrations_applied_at, provisioned_at)
+        VALUES ($1, $2, $3, NULL, now())
+        """,
+        [
+          Ecto.UUID.dump!(racer_schema_row_id),
+          Ecto.UUID.dump!(racer_tenant.id),
+          "iss0060_fake_racer_schema"
+        ]
+      )
+
+      ensure_drop_migration_loaded!()
+
+      # Step 1: reproduce the bug, live. With the racer's incomplete row
+      # genuinely visible in public.tenant_schemas and nothing hiding it, the
+      # guard's own global per-tenant scan sees an uncopied tenant that has
+      # NOTHING to do with this test and folds it into v_all_copied := FALSE
+      # -- a false SKIP, exactly ISS-0060's reported failure mode, reproduced
+      # on demand rather than asserted from memory or from suite-timing luck.
+      version_unwrapped = unique_drop_migration_version()
+
+      on_exit(fn ->
+        Repo.query!("DELETE FROM schema_migrations WHERE version = $1", [version_unwrapped])
+      end)
+
+      assert [^version_unwrapped] =
+               Ecto.Migrator.run(
+                 Letflow.Repo,
+                 [{version_unwrapped, Letflow.Repo.Migrations.DropLegacyPublicIdentityTables}],
+                 :up,
+                 all: true,
+                 log: false
+               )
+
+      for table <- ["groups", "users", "tenant_role"] do
+        %{rows: [[regclass]]} = Repo.query!("SELECT to_regclass('public.#{table}')::text")
+
+        assert regclass != nil,
+               "expected public.#{table} to survive -- unwrapped guard should have " <>
+                 "false-SKIPped because of the racer's uncopied row"
+      end
+
+      # Step 2: same fake racer row, still sitting in public.tenant_schemas,
+      # completely untouched -- but this run is wrapped in the fix's
+      # with_only_this_tenant_visible!/2. The guard now PROCEEDS, because the
+      # racer's row is moved out of public.tenant_schemas for the duration of
+      # the guarded call, so the guard's scan only ever sees this test's own
+      # fully-copied tenant.
+      version_wrapped = unique_drop_migration_version()
+
+      on_exit(fn ->
+        Repo.query!("DELETE FROM schema_migrations WHERE version = $1", [version_wrapped])
+      end)
+
+      with_only_this_tenant_visible!(tenant.id, fn ->
+        assert [^version_wrapped] =
+                 Ecto.Migrator.run(
+                   Letflow.Repo,
+                   [{version_wrapped, Letflow.Repo.Migrations.DropLegacyPublicIdentityTables}],
+                   :up,
+                   all: true,
+                   log: false
+                 )
+
+        for table <- ["groups", "users", "tenant_role"] do
+          %{rows: [[regclass]]} = Repo.query!("SELECT to_regclass('public.#{table}')::text")
+
+          assert regclass == nil,
+                 "expected public.#{table} to be dropped -- with_only_this_tenant_visible!/2 " <>
+                   "should have hidden the racer's row for the duration of this call"
+        end
+      end)
+
+      recreate_legacy_public_tables!()
+
+      # The racer's row must be exactly as it was before the wrap -- restored
+      # to public.tenant_schemas, migrations_applied_at still NULL (untouched,
+      # not silently "completed"), and the backup table left empty. This is
+      # the exact behavior the pre-fix code had no mechanism for at all (it
+      # never moved anything, so there was nothing to restore).
+      %{rows: [[restored_count]]} =
+        Repo.query!(
+          """
+          SELECT count(*) FROM public.tenant_schemas
+          WHERE id = $1 AND tenant_id = $2 AND migrations_applied_at IS NULL
+          """,
+          [Ecto.UUID.dump!(racer_schema_row_id), Ecto.UUID.dump!(racer_tenant.id)]
+        )
+
+      assert restored_count == 1
+
+      %{rows: [[backup_count]]} =
+        Repo.query!("SELECT count(*) FROM public.iss060_tenant_schemas_guard_backup")
+
+      assert backup_count == 0
+    end
+
     test "re-running the drop migration after it already succeeded is a clean no-op (idempotent, per its own to_regclass IS NULL guard)" do
       # No tenant/copy needed for this one -- exercises the migration's own
       # "already absent -- nothing to do" RAISE NOTICE branch directly.
@@ -576,6 +712,88 @@ defmodule Letflow.IdentityMigrationTest do
       end
 
       recreate_legacy_public_tables!()
+    end
+  end
+
+  describe "ISS-0060: self-heal of an interrupted with_only_this_tenant_visible!/2 run" do
+    test "restore_orphaned_guard_backup_rows!/0 (the exact helper this file's setup calls) restores a stale backup row to public.tenant_schemas and empties the backup table" do
+      # A real, FK-satisfying tenant with no tenant_schemas row of its own yet
+      # (deliberately NOT provisioned_tenant!/0 -- provisioning would insert
+      # tenant_schemas' own row for it, and tenant_schemas has a unique index
+      # on tenant_id, which would make the restore below collide).
+      orphan_owner =
+        %Tenant{}
+        |> Tenant.create_changeset(
+          %{slug: unique_slug(), display_name: "ISS-0060 self-heal owner"},
+          :disabled
+        )
+        |> Repo.insert!()
+
+      on_exit(fn ->
+        # tenant_schemas.tenant_id carries a real DB foreign key to
+        # tenants.id -- delete the (by then restored) tenant_schemas row
+        # first, or this Tenant delete would raise a foreign-key violation.
+        # Single on_exit callback covering both deletes in the correct order
+        # so this cleanup does not depend on ExUnit's on_exit ordering.
+        Repo.query!("DELETE FROM public.tenant_schemas WHERE tenant_id = $1", [
+          Ecto.UUID.dump!(orphan_owner.id)
+        ])
+
+        Repo.delete_all(from(t in Tenant, where: t.id == ^orphan_owner.id))
+      end)
+
+      ensure_backup_table!()
+
+      stale_id = Ecto.UUID.generate()
+
+      # Simulate exactly the crash window design section 5 describes: a
+      # process died between with_only_this_tenant_visible!/2's move-out
+      # (which already committed, atomically, per its own single CTE) and its
+      # move-back -- leaving a row sitting in the backup table with no
+      # corresponding row in public.tenant_schemas.
+      Repo.query!(
+        """
+        INSERT INTO public.iss060_tenant_schemas_guard_backup
+          (id, tenant_id, schema_name, migrations_applied_at, provisioned_at)
+        VALUES ($1, $2, $3, NULL, now())
+        """,
+        [
+          Ecto.UUID.dump!(stale_id),
+          Ecto.UUID.dump!(orphan_owner.id),
+          "iss0060_stale_backup_schema"
+        ]
+      )
+
+      %{rows: [[pre_heal_visible_count]]} =
+        Repo.query!("SELECT count(*) FROM public.tenant_schemas WHERE id = $1", [
+          Ecto.UUID.dump!(stale_id)
+        ])
+
+      assert pre_heal_visible_count == 0,
+             "sanity check: the stale row must not already be visible in tenant_schemas"
+
+      # This file's own `setup` block (see setup/0 above) calls
+      # restore_orphaned_guard_backup_rows!/0 unconditionally before every
+      # test in this file -- this call exercises that exact same helper
+      # directly, rather than relying on a second, later test run to observe
+      # its effect, since the stale row above could only be constructed
+      # *after* this test's own setup had already run once.
+      restore_orphaned_guard_backup_rows!()
+
+      %{rows: [[post_heal_visible_count]]} =
+        Repo.query!(
+          "SELECT count(*) FROM public.tenant_schemas WHERE id = $1 AND tenant_id = $2 AND migrations_applied_at IS NULL",
+          [Ecto.UUID.dump!(stale_id), Ecto.UUID.dump!(orphan_owner.id)]
+        )
+
+      assert post_heal_visible_count == 1
+
+      %{rows: [[backup_count]]} =
+        Repo.query!("SELECT count(*) FROM public.iss060_tenant_schemas_guard_backup WHERE id = $1", [
+          Ecto.UUID.dump!(stale_id)
+        ])
+
+      assert backup_count == 0
     end
   end
 end

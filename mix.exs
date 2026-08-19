@@ -56,7 +56,7 @@ defmodule Letflow.MixProject do
       "letflow.check": [
         "format --check-formatted",
         "compile --warnings-as-errors",
-        "test --warnings-as-errors"
+        "letflow.check.test"
       ]
     ]
   end

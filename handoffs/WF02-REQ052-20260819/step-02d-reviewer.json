@@ -1,0 +1,56 @@
+{
+  "handoff_id": "f7d5a6e4-96e4-4f65-df5e-req052step02d",
+  "run_id": "WF02-REQ052-20260819",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ052-20260819/step-02d-reviewer.json",
+  "created_at": "2026-08-19T00:20:19Z",
+  "started_at": "2026-08-19T00:20:19Z",
+  "completed_at": "2026-08-19T00:21:20Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-052"],
+    "requirement_text": {
+      "REQ-052": "See handoffs/WF02-REQ052-20260819/step-01-code-designer.json context.requirement_text for the full verbatim requirement text."
+    },
+    "related_handoff_ids": ["step-01-code-designer.json", "step-01b-code-design-validator.json", "step-02a-elixir-dev.json", "step-02c-security-reviewer.json"],
+    "artifacts_in": ["lib/letflow/design/req052-instance-cancellation.md", "lib/letflow/engine.ex", "lib/letflow/application.ex", "lib/letflow/sandbox_pool.ex"],
+    "owned_modules": ["lib/letflow/engine.ex", "lib/letflow/application.ex", "lib/letflow/sandbox_pool.ex"]
+  },
+  "task": {
+    "description": "Idiom/OTP/scope-creep/decision-record review of git diff main...HEAD on branch feature/WF02-REQ052-20260819. Particular attention: (1) the SUPERSESSION decision to DELETE lib/letflow/parallel_approval.ex and lib/letflow/approval_supervisor.ex entirely (design doc diverges from a literal reading of 'handle it the same way REQ-046 handled ProcessInstance/InstanceSupervisor', which retained InstanceSupervisor -- CODE-DESIGN-VALIDATOR flagged this for your explicit sign-off) -- confirm the reasoning holds (ApprovalSupervisor has no stated future consumer the way InstanceSupervisor does for REQ-056/057) or FAIL if it doesn't; (2) MAJOR open question OQ-2 flagged by ELIXIR-DEV's handoff (join_counters never persisted, so the 'agreement by construction' argument for AC5 is asserted rather than mechanically enforced) -- determine whether this is acceptable to ship as a documented open question or whether it's a scope gap that must block; (3) standard idiom checks per your role file.",
+    "acceptance_criteria": [
+      "Idiomatic OTP usage vs. crutch (does this diff introduce any GenServer-simulating-state-machine pattern, any manual process management that should be supervised?)",
+      "Supervision integrity (does removing ApprovalSupervisor leave anything orphaned in application.ex's tree?)",
+      "No scope creep beyond REQ-052's acceptance criteria",
+      "Consistency with docs/migration/decisions/ (especially Decision 0006's :prefix mechanism, correctly used throughout)",
+      "Explicit sign-off or FAIL on the parallel_approval.ex/approval_supervisor.ex full-deletion divergence from REQ-046's retention precedent"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed git diff main...HEAD, lib/letflow/design/req052-instance-cancellation.md, and Letflow.Engine.cancel_instance/3 against the four REVIEWER questions. (1) Idiomatic vs. crutch: cancel_instance/3 is a plain function using one Ecto.Multi (M1-M7), matching create/2's and complete_task/3's established pre-transaction-with-chain / single-Multi shape verbatim -- no gen_statem-simulating case/if, no manual process management. terminal?/1, Task.complete_changeset/2, and TokenRecord.advance_changeset/2 are reused unchanged rather than re-derived. (2) Supervision: verified lib/letflow/application.ex's diff removes only the Letflow.ApprovalSupervisor children entry, leaving Letflow.InstanceSupervisor (still supervising future REQ-056/057 consumers) untouched -- no orphaned child spec, no dangling process. Grepped lib/ and test/ for ApprovalSupervisor/ParallelApproval: only remaining hits are prose/historical cross-references (lib/letflow/sandbox_pool.ex's updated comparison sentence, lib/letflow/row_approval.ex's and lib/letflow/row_approval/approval.ex's 'what we deliberately chose not to do' commentary, engine.ex's own moduledoc/doc citing the SUPERSESSION) -- none reference a load-bearing call into a deleted module. `mix compile --warnings-as-errors` clean. (3) Type-safety: cancel_error()'s tagged-tuple taxonomy is exhaustive and no new class of invalid state is representable only via runtime/property-test failure; no docs/issues/ entry filed. (4) Scope: no abstraction/behaviour/macro introduced ahead of REQ-052's own AC; cancel_instance/3 stays within the persistence-layer boundary create/2 and complete_task/3 already established, correctly declines to wire {:cancel_branch, _} through Transition (would only ever hit a defensive no-op given the undisputed join_counters persistence gap), and correctly declines to implement SCH-03 timer cancellation or REQ-056 HTTP-abort (named out-of-scope, S6/future-REQ-056 respectively). Decision 0006's :prefix mechanism is threaded through every Multi step and TenantProvisioning.tenant_id_for_schema_name/1 call, consistent with every other Engine function. FLAGGED ITEM 1 (ApprovalSupervisor full deletion, diverging from REQ-046's InstanceSupervisor-retention precedent): SIGN-OFF. The design doc's §2 reasoning is sound and traceable, not asserted: InstanceSupervisor was retained specifically because stage-3-instance-engine.md names two distinct, still-open future consumers (REQ-056 service-task dispatch, REQ-057 plugin registry) for a supervised per-instance process; ApprovalSupervisor has no analogous named future consumer -- REQ-045 already settled 'no process, plain transactional context module' for the general running-instance shape, and REQ-051 explicitly frames ParallelApproval/ApprovalSupervisor as 'the hand-written special case of what PARALLEL_GATEWAY split/join now expresses as definition data.' Keeping a second idle DynamicSupervisor around on a symmetry argument alone would itself be the kind of speculative surface this project's anti-scope-creep stance warns against. This is a reasoned divergence, not a shortcut. FLAGGED ITEM 2 (OQ-2, join_counters never persisted so AC5 'agreement by construction' is asserted not mechanically enforced): ACCEPTABLE to ship as a documented open question, not a blocking scope gap. The 'agreement by construction' argument is logically sound as stated, not hand-waved: cancel_instance/3 is, by the design doc's own traced audit (§4), the only code path in the shipped codebase that ever persists instance_projections.status = :cancelled -- Transition's {:cancel_branch, _}/:cancel_join outcome is pure, in-memory-only, and no caller persists it today -- so there is no second exercised persistence path for it to diverge from; the AC's 'compared explicitly' requirement is satisfiable by TEST-DESIGNER against the single reachable path. Building the scoped join_counters reconstruction now would add real complexity for a code path that would always take the 'no cohort tracked' no-op branch given the same undisputed persistence gap req048's own MAJOR OQ-3 already disclosed -- REQ-053 (event-replay reconstruction) and REQ-054 (snapshots) are already pending, named requirements in docs/requirements.yaml expected to close this gap; no separate docs/issues/ entry is needed since it is already tracked there and in OQ-2/OQ-3 rather than silently dropped. No anti-patterns.md entries apply to this diff.",
+    "artifacts_out": ["handoffs/WF02-REQ052-20260819/step-02d-reviewer.json"],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "note": "OQ-1 (cancel_attrs() carries no cancellation-reason/note field) and OQ-3 (pre-validating actor_id/idempotency_key before the transaction, diverging from complete_task/3's 'let append/2 validate' convention) are both reasonable, low-risk, explicitly-stated divergences -- no objection, not blocking, recorded here so they are not silently dropped between REVIEWER and TEST-DESIGNER/RELEASE-VALIDATOR."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ052-20260819",
+      "commit_sha_list": ["f888c69", "b8115e3", "5fbede8", "a3035ce"],
+      "remote_branch": "origin/feature/WF02-REQ052-20260819",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

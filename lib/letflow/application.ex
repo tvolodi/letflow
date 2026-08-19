@@ -22,7 +22,9 @@ defmodule Letflow.Application do
          }},
         {Registry, keys: :unique, name: Letflow.Registry},
         Letflow.InstanceSupervisor,
-        {Letflow.SandboxPool, []}
+        {Letflow.SandboxPool, []},
+        {Task.Supervisor, name: Letflow.Engine.PluginTaskSupervisor},
+        {Letflow.Engine.PluginRegistry, plugin_registrations_from_config()}
       ] ++ http_child()
 
     # See https://hexdocs.pm/elixir/Supervisor.html
@@ -49,6 +51,15 @@ defmodule Letflow.Application do
     else
       []
     end
+  end
+
+  # REQ-057 §4.4/§6.4 — the seed list `Letflow.Engine.PluginRegistry.start_link/1`
+  # registers at boot, then freezes automatically. Ordinary config/*.exs (or
+  # runtime.exs) data, matching this module's own oidc_config/start_http
+  # convention above -- empty by default since no plugin handler module ships
+  # yet.
+  defp plugin_registrations_from_config do
+    Application.get_env(:letflow, :plugin_handlers, [])
   end
 
   # Migrations run automatically on boot, but only inside a compiled

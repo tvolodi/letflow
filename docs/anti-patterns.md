@@ -24,6 +24,20 @@ the environment can't run it (no toolchain, no network for
 
 ## No Elixir/mix toolchain on PATH in this sandbox
 
+**SUPERSEDED 2026-08-19 on this host — CHECK BEFORE ASSUMING.** A local
+toolchain IS installed and on disk: `/c/Program Files/Elixir/bin/mix`,
+Mix 1.20.3 (compiled with Erlang/OTP 29). Verified this session by running
+`mix compile --force` directly (`Generated letflow app`, 0 errors). Bare
+`mix` may not be on `PATH` in every shell — invoke it by full path,
+quoted, rather than concluding it is absent. **Run
+`ls "/c/Program Files/Elixir/bin/mix"` before reporting "no toolchain";
+this entry itself went stale and was believed for multiple runs.** The
+Docker route below remains valid as a fallback (and is still the way to get
+a real Postgres for `mix ecto.*` / integration tests), but it is no longer
+the first resort for `mix compile` / `mix format` / unit-level `mix test`.
+
+Original entry, kept for the Docker recipe:
+
 Agents repeatedly discover (correctly, per the No Speculation rule)
 that there's no local Elixir/mix toolchain, and stop at "can't verify."
 There's a working alternative: Docker is available. Run a throwaway
@@ -638,3 +652,40 @@ in for N per-location ones, which is exactly what hides a single wrong rule amon
 right ones. Where a disposition could become a lazy catch-all, fence it by requiring the
 specific source `file:line` consulted *and* why it doesn't settle the question — a shrug
 can't produce either.
+
+## Picking the next `ISS-NNNN` with `ls docs/issues/ | tail -1` is not atomic — it silently destroyed a record
+
+**Happened for real on 2026-08-19, not hypothetically.** Two agents were running
+concurrently on the same host. REQ-110's ISSUE-FIXER wrote its pin-override finding as
+`docs/issues/ISS-0077.yaml` and filed GH#298 under that id. A concurrent
+`WF02-REQ109-20260819` CODE-DESIGNER independently picked the same next-free number for an
+unrelated `VariableMerge` finding, and **its file landed second, overwriting the first**.
+No git conflict, no error, no warning — the second `Write` simply replaced the first
+agent's file. It was recovered only because the first agent still had the content in its
+own context and could renumber to `ISS-0079` and repoint GH#298's body. Had it been
+compacted out, or had the agent finished earlier, the record would have been gone with a
+live GitHub issue pointing at a file describing something else entirely.
+
+**Why the usual defences don't catch it:** this is an add/add of the *same path*, so it
+isn't the rebase-collision class already documented above — both writes happen in one
+working tree, seconds apart, before either is committed. `git status` shows one untracked
+file, which looks correct. Nothing in `docs/agents/protocols/ISSUE_QUEUE.md` serialises
+id allocation, and the "highest existing + 1" convention is a read-then-write race with no
+lock between the two halves. The risk scales with exactly the thing this pipeline
+encourages — running producing agents in parallel.
+
+**Correct alternative — for whoever is coordinating, not the sub-agent:**
+
+* **Allocate ids centrally.** When dispatching concurrent agents that may file issues,
+  hand each a *reserved, disjoint* range in its brief ("use ISS-0081 and upward"), rather
+  than letting each derive its own from the directory. The coordinator knows what is in
+  flight; a sub-agent does not.
+* **Never overwrite an existing `docs/issues/ISS-NNNN.yaml`.** If the target path already
+  exists, that is a collision — take the next free id, do not merge and do not replace.
+  A `Write` to an existing issue path should be treated as a bug regardless of content.
+* **File the local record before opening the GitHub issue**, and put the id in the GH
+  title. A GH issue whose body cites a local file that has since been overwritten is the
+  worst end state, because the two records disagree while both look authoritative.
+* **When you do hit a collision, renumber your own and leave the other intact** — that is
+  what happened here and it was the right call. Then fix the GH body, and say so in the
+  handoff so the coordinator knows the numbering is no longer dense.

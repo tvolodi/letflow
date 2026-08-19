@@ -1,0 +1,76 @@
+id: ISS-0080
+title: "Letflow.Engine.VariableMerge's own purity self-check at variable_merge.ex:63 asserts its grep 'returns zero matches' -- it returns four; the claim is false today, independent of any pending requirement"
+discovered_by: CODE-DESIGN-VALIDATOR
+discovered_in_run: WF02-REQ109-20260819 (Step 1b design gate)
+discovered_at: "2026-08-19T20:22:38Z"
+severity: MINOR
+tags:
+  - stale-doc
+  - self-check
+  - req-049
+  - variable-merge
+description: >
+  `lib/letflow/engine/variable_merge.ex`'s moduledoc carries a
+  grep-checkable purity contract (~lines 48-66) whose stated expectation is
+  that the grep returns ZERO matches. It does not. Verified this session by
+  running the module's own grep string against the module:
+
+    26:  ...by calling `Letflow.EventStore.Registry.validate_payload/3`
+    56:  `Letflow.EventStore.Registry.validate_payload/3` or `.get_type/2`
+    63:  grep -n "Repo\.\|...\|Registry\.validate_payload\|..."   <- the
+         self-check line itself
+    106: `Letflow.EventStore.Registry.validate_payload/3` (REQ-024).
+
+  Lines 26, 56 and 106 are prose OUTSIDE the fenced block (the fence spans
+  61-65); line 63 is the grep string itself. So the self-check has never
+  held as literally written.
+
+  THE UNDERLYING PURITY PROPERTY IS TRUE AND IS NOT IN QUESTION. The module
+  genuinely performs no `Repo` I/O and calls neither `validate_payload/3`
+  nor `get_type/2` -- confirmed by reading the module body. Every match is a
+  prose MENTION of those functions (documenting what the caller does), not a
+  CALL SITE. What is wrong is only the verification instruction: it greps
+  for a bare symbol name across the whole file including its own moduledoc,
+  so documentation that correctly describes the caller's responsibility
+  registers as a purity violation.
+
+  WHY IT MATTERS RATHER THAN BEING COSMETIC. An agent that trusts the stated
+  expectation and tries to make the grep return zero must delete or reword
+  the matching prose. Lines 24-29 are REQ-049 AC4's own evidence artifact
+  (that AC is satisfied BY that sentence existing), and REQ-109's AC9
+  requires those lines corrected IN PLACE, explicitly not deleted. So the
+  false baseline actively steers an implementer into destroying the evidence
+  for a shipped requirement's acceptance criterion, and into
+  core-directives.md's "Never Satisfy a Gate by Editing What It Measures."
+  This is not theoretical: REQ-109's design doc asserted the zero baseline as
+  re-confirmed and built an instruction on it, which is what the Step 1b gate
+  FAILed it for.
+affected_files:
+  - lib/letflow/engine/variable_merge.ex
+status: open
+github_issue: https://github.com/tvolodi/letflow/issues/301
+related:
+  - ISS-0075
+  - ISS-0077
+scoping_note: >
+  Filed separately rather than absorbed into REQ-109. REQ-109's AC9 makes
+  three in-place corrections to this same moduledoc and its design rework
+  must state the TRUE grep result -- but repairing the self-check ITSELF is
+  a different change with a different owner, and folding it in would grow a
+  gate-passed requirement and entangle two unrelated diffs in one docstring.
+
+  RECOMMENDED FIX -- do not simply delete the self-check; it documents a real
+  and valuable property. Make the instruction measure what it means:
+  restrict the grep to non-comment lines (the property is about CALL SITES,
+  not mentions), or state the expected non-zero match set explicitly with
+  each match justified as prose, or assert the property positively against
+  the module body rather than by absence-grep over the whole file. Whichever
+  is chosen, the corrected text must survive REQ-109's AC9 edits to the same
+  moduledoc -- so SEQUENCE THIS AFTER REQ-109 LANDS, or coordinate, to avoid
+  two runs editing the same docstring concurrently. That collision class has
+  already bitten once this session (see docs/anti-patterns.md on ISS-NNNN id
+  allocation).
+
+  NOT A BLOCKER for REQ-109: the rework only needs to stop asserting the
+  false baseline and stop instructing anyone to chase it. It does not need
+  this issue resolved first.

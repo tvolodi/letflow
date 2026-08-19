@@ -204,7 +204,8 @@ defmodule Letflow.Engine.PinRebindTest do
           actor_id: actor_id
         })
 
-      assert {:ok, result} = PinRebind.rebind_pins(instance.instance_id, attrs, prefix: schema_name)
+      assert {:ok, result} =
+               PinRebind.rebind_pins(instance.instance_id, attrs, prefix: schema_name)
 
       assert result.changed == [
                %{
@@ -314,7 +315,10 @@ defmodule Letflow.Engine.PinRebindTest do
       assert {:ok, _cancel_result} =
                Engine.cancel_instance(
                  instance.instance_id,
-                 %{actor_id: Ecto.UUID.generate(), idempotency_key: unique_idempotency_key("req060-cancel")},
+                 %{
+                   actor_id: Ecto.UUID.generate(),
+                   idempotency_key: unique_idempotency_key("req060-cancel")
+                 },
                  prefix: schema_name
                )
 
@@ -402,7 +406,10 @@ defmodule Letflow.Engine.PinRebindTest do
                PinRebind.rebind_pins(instance.instance_id, attrs, prefix: schema_name)
     end
 
-    test "malformed entry -- missing :version key", %{schema_name: schema_name, instance: instance} do
+    test "malformed entry -- missing :version key", %{
+      schema_name: schema_name,
+      instance: instance
+    } do
       attrs = rebind_attrs(%{entries: [%{kind: :variable_schema, ref: "x"}]})
 
       assert {:error, {:malformed_entry, 0, :missing_or_unexpected_keys}} =

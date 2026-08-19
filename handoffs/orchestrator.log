@@ -803,3 +803,4 @@
 2026-08-19T02:29:01Z | DONE | WF-03 | WF03-ISS0060-20260819 | ELIXIR-DEV → ORCH | PASS
 2026-08-19T02:29:38Z | RECONCILE | WF-02 | queue-task-96 (REQ-052) | ORCH | already done on main (PR #209, DOC-UPDATER flip 2026-08-19T00:40:22Z) -- stale queue task never released, released now with status:done, no rework performed
 2026-08-19T02:29:52Z | RECONCILE | WF-02 | queue-task-97 (REQ-061) | ORCH | already done on main (PR #215, DOC-UPDATER flip 2026-08-19T02:07:17Z) -- stale queue task never released, released now with status:done, no rework performed
+2026-08-19T03:02:18Z | RUN_DONE | WF-03 | WF03-ISS0064-20260819 | ORCH → ORCH | PASS - ISS-0064 resolved, PR #218 merged (4a551e2), queue task 117 released done

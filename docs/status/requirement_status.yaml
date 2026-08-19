@@ -4588,3 +4588,62 @@ history:
       EE-04 one-line summary, pending count corrected 14 -> 13), same
       header-sync shape REQ-045's and REQ-047's DOC-UPDATER passes already
       applied.
+  - req: REQ-058
+    event: started
+    agent: ORCH
+    at: "2026-08-18T23:51:22Z"
+    note: >
+      WF02-REQ058-20260818. Single-host fallback mode (QUEUE_AUTH_TOKEN unset,
+      get_next_task returned 401). Read docs/requirements.yaml directly:
+      first pending Stage 3 requirement in file order with all depends_on
+      satisfied (REQ-045, done) that isn't already claimed elsewhere --
+      REQ-048 (also dependency-satisfied) confirmed actively in-progress on
+      sibling worktree hetzner-wt2-orch, PR #204 open, so skipped in favor
+      of REQ-058. Step 00 git setup complete: branch
+      feature/WF02-REQ058-20260818 created from up-to-date main, pushed.
+      owned_modules: lib/letflow/engine/lua_script_audit.ex,
+      priv/repo/migrations/*lua_script_execution_audit*.
+  - req: REQ-058
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-19T00:30:04Z"
+    note: >
+      WF02-REQ058-20260818. Shipped Letflow.Engine.LuaScriptAudit (LUA-07's
+      minimal audit persistence path, R-Co's lua_script_audit.zig): a
+      deliberately narrow injectable-executor call path that validates
+      instance_id, validates a non-empty prefix, invokes an injected
+      executor behaviour, verifies the returned manifest hash against the
+      supplied registered_hash as a distinct pattern-matchable
+      mismatch error, and persists exactly one audit row (instance_id,
+      manifest_hash, actor_id, timestamp) -- explicitly NOT the
+      SERVICE_TASK script-execution handler; the real Lua runtime remains
+      S5 scope pending stage-5-scripting-plugins.md's build-vs-bind
+      decision. Plus a schema-per-tenant lua_script_execution_audit
+      migration (REQ-022 pattern). One INV-1 rework cycle:
+      SECURITY-REVIEWER caught a missing fail-closed guard for a
+      missing/nil/empty prefix (executor could otherwise be invoked before
+      validation) -- fixed by adding validate_prefix/1 as Step 0 of the
+      `with` chain, ahead of instance_id validation and the executor call,
+      and re-passed. RELEASE-VALIDATOR independently re-ran mix test:
+      targeted `mix test test/letflow/engine/lua_script_audit_test.exs
+      --seed 0` -> 16 tests, 0 failures; full suite -> 4 properties, 898
+      tests, 0 failures; `mix compile --warnings-as-errors` clean. All 7
+      acceptance criteria (including the rework-added prefix-fail-closed
+      one) independently confirmed against actual code/tests, not
+      summaries. Two incidentally-discovered issues forwarded to the
+      queue, unrelated to this change: ISS-0058/GH#205 (a migration-version
+      collision) and ISS-0059/GH#206 (an intermittent flaky
+      migrations_test.exs failure that did not reproduce on
+      RELEASE-VALIDATOR's own run and was confirmed via `git diff
+      main...HEAD --stat` to touch no file this branch changed).
+      RELEASE-VALIDATOR left one non-blocking AC-completeness note: the
+      7th, rework-added missing/nil/empty-prefix-fails-closed criterion
+      was implemented and tested but not yet itemized as its own bullet
+      in docs/requirements.yaml's acceptance_criteria list.
+      DOC-UPDATER Step 6: flipped docs/requirements.yaml REQ-058 status
+      in_progress -> done, and added that 7th acceptance_criteria bullet
+      so the file matches what actually shipped. Updated
+      docs/migration/stage-3-instance-engine.md's header to move REQ-058
+      from the pending list into the done list. Checked README.md for
+      staleness -- no update needed; this change adds no HTTP route, no
+      process/supervision change, and nothing user-facing.

@@ -1,0 +1,61 @@
+{
+  "handoff_id": "8f1e6b1a-1a2d-4a3e-9b0a-000000000004",
+  "run_id": "WF02-REQ058-20260818",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ058-20260818/step-02c-security-reviewer.json",
+  "created_at": "2026-08-19T00:04:10Z",
+  "started_at": "2026-08-19T00:05:00Z",
+  "completed_at": "2026-08-19T00:12:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-058"],
+    "requirement_text": {
+      "REQ-058": "See handoffs/WF02-REQ058-20260818/step-01-code-designer.json context.requirement_text for full text -- Lua script execution audit persistence path, MINIMAL narrow injectable-executor audit path, S3/S5 scope boundary, manifest-hash-mismatch as distinct error, instance_id validated before executor invocation."
+    },
+    "related_handoff_ids": ["step-01-code-designer.json", "step-01b-code-design-validator.json", "step-02a-elixir-dev.json"],
+    "artifacts_in": [
+      "lib/letflow/engine/lua_script_audit.ex",
+      "priv/repo/migrations/20260820000011_create_lua_script_execution_audit.exs",
+      "lib/letflow/tenant_provisioning.ex"
+    ],
+    "owned_modules": ["lib/letflow/engine/lua_script_audit.ex", "priv/repo/migrations/*lua_script_execution_audit*"]
+  },
+  "task": {
+    "description": "Run the SECURITY-REVIEWER hard gate against git diff main...HEAD on branch feature/WF02-REQ058-20260818. This diff adds a new tenant-scoped audit-persistence table and its schema-per-tenant migration -- a tenant-data path per security-invariants.md's applicability notes. For each of INV-1..INV-8, determine APPLIES or NOT-APPLICABLE against this diff, and run the 'How to verify' check for each APPLIES invariant. Note also ISS-0058 (docs/issues/ISS-0058.yaml, GH#205), a pre-existing unrelated migration-version collision discovered incidentally during this run's own verification -- already filed, not this run's scope, no action needed from you beyond being aware it exists if you check migration versions.",
+    "acceptance_criteria": [
+      "Every applicable INV-1..INV-8 invariant independently verified against the actual diff, not against the producer's self-report",
+      "FAIL immediately (all BLOCKER) if any applicable invariant fails, no partial credit"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "INV-1 (Tenant data isolation): APPLIES and FAILS. `Letflow.Engine.LuaScriptAudit.execute_script_for_audit/6` writes via `Repo.insert(prefix: opts[:prefix])` with no runtime check that `opts[:prefix]` is present/non-nil before the insert. `AuditRecord` has no `@schema_prefix`, so Ecto's own fallback (`Keyword.get(opts, :prefix, schema.__schema__(:prefix))`, confirmed in deps/ecto/lib/ecto/repo/schema.ex:921) resolves to `nil` when a caller omits `:prefix` or passes `prefix: nil`, which writes the row into the connection's default/public schema -- exactly the cross-tenant leak INV-1 exists to prevent. The moduledoc and design doc (req058-lua-script-audit.md, INV-LSA-6) both assert 'no public-schema fallback', but nothing in the code enforces it: no guard clause, no `Keyword.fetch!`, no equivalent of `Letflow.EventStore.append/2`'s own pattern (lib/letflow/event_store.ex:176, `TenantProvisioning.tenant_id_for_schema_name(prefix)` inside a `with` chain, which fails closed on a bad/missing prefix before any write). The migration itself is correctly guarded (`if prefix() do`, prefix() on table/index, tenant_provisioning.ex manifest entry present and correctly ordered after 20260820000010) -- (b) passes -- and (c) is N/A (no tenant_id column, consistent with decision 0006 D2). Only (a) -- proof that the write path itself cannot reach public -- fails, and it fails because 'no fallback' is documented intent, not enforced code. INV-2 (server-side field authorisation): NOT-APPLICABLE -- no API response/serialization surface added, S4 not started, and this function has no caller yet. INV-3 (untrusted runtime sandboxing): NOT-APPLICABLE -- diff explicitly excludes the Lua execution runtime itself (Executor is an injected behaviour with no implementation shipped here); S5 has not started. INV-4 (secrets by reference only): APPLIES and PASSES -- `grep -rn System.get_env` / hardcoded-secret heuristic against the three changed files returned no hits; no secret material is read, logged, or persisted anywhere in this diff. INV-5 (not-found/forbidden indistinguishability): NOT-APPLICABLE -- no lookup-by-ID endpoint added. INV-6 (new data-access paths prove their scoping): APPLIES -- this handoff is that proof; verdict tracks INV-1's outcome, so overall FAIL. INV-7 (no SQL string interpolation): APPLIES and PASSES -- `grep -rn Repo.query` against the three changed files returned zero hits; the only write is `Repo.insert/2` via an `Ecto.Changeset`, parameterised by construction. INV-8 (no unhandled crashes on realistic failure paths): APPLIES and PASSES -- the sole `{:ok, ...} ->` construct is a `case` clause (line 161), not a bare pattern-match assignment; `execute_script_for_audit/6` uses a `with` chain covering instance-id validation, executor invocation, hash comparison, and insert, with every branch returning a tagged tuple; the executor's `{:error, reason}` result is caught and wrapped rather than crashing.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "invariant": "INV-1",
+        "severity": "BLOCKER",
+        "file": "lib/letflow/engine/lua_script_audit.ex",
+        "location": "insert_audit_record/4 (Repo.insert(prefix: opts[:prefix]))",
+        "description": "opts[:prefix] is never validated as present/non-nil before the insert. A caller that omits :prefix or passes prefix: nil silently writes the audit row into the default/public Postgres schema instead of failing closed, contradicting this module's own moduledoc and the design doc's INV-LSA-6 claim that there is 'no public-schema fallback'.",
+        "required_fix": "Add an explicit guard before executor invocation or insert (mirroring lib/letflow/event_store.ex:176's TenantProvisioning.tenant_id_for_schema_name(prefix) pattern, or at minimum Keyword.fetch(opts, :prefix) with a distinct {:error, :missing_prefix} on :error) so a missing/nil prefix returns a typed error and performs zero writes, instead of silently resolving to the default schema."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ058-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ058-20260818",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route back to ELIXIR-DEV: fix INV-1 BLOCKER (enforce opts[:prefix] presence/validity before any executor invocation or insert; fail closed with a distinct typed error) in lib/letflow/engine/lua_script_audit.ex, then resubmit to SECURITY-REVIEWER (step 02c) before REVIEWER (2d)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

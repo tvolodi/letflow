@@ -3081,7 +3081,7 @@ requirements:
   - id: REQ-058
     title: Lua script execution audit persistence path (lua_script_audit.zig, LUA-07 minimal path)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S3
     impl_order: 103  # letflow-queue task id
     description: >
@@ -3132,6 +3132,7 @@ requirements:
       - "a manifest hash differing from the supplied registered_hash returns a distinct, pattern-matchable mismatch error and writes no audit row"
       - "mix.exs gains no Lua/NIF dependency, and the moduledoc states that the Lua execution runtime is S5 scope pending stage-5-scripting-plugins.md's build-vs-bind decision record"
       - "the moduledoc carries R-Co's own narrowness statement in substance: this is not the SERVICE_TASK script-execution handler, must not be called from normal process-execution flow, and will be superseded (not extended) by the real scripting integration when it lands"
+      - "a missing, nil, or empty prefix fails closed with a distinct error and writes no audit row, demonstrated by a test-double executor confirmed not to have been called"
     depends_on: [REQ-045]
 
   - id: REQ-059

@@ -333,7 +333,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_820_000_009, Letflow.Repo.Migrations.DropTenantIdUsers,
      "20260820000009_drop_tenant_id_users.exs"},
     {20_260_820_000_010, Letflow.Repo.Migrations.DropTenantIdGroups,
-     "20260820000010_drop_tenant_id_groups.exs"}
+     "20260820000010_drop_tenant_id_groups.exs"},
+    {20_260_820_000_011, Letflow.Repo.Migrations.CreateLuaScriptExecutionAudit,
+     "20260820000011_create_lua_script_execution_audit.exs"}
   ]
 
   @doc """

@@ -1,0 +1,53 @@
+{
+  "handoff_id": "8f1e6b1a-1a2d-4a3e-9b0a-000000000005",
+  "run_id": "WF02-REQ058-20260818",
+  "workflow_id": "WF-02",
+  "step": "02a-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ058-20260818/step-02a-elixir-dev-rework1.json",
+  "created_at": "2026-08-19T00:06:25Z",
+  "started_at": "2026-08-19T00:07:00Z",
+  "completed_at": "2026-08-19T00:08:38Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-058"],
+    "requirement_text": {
+      "REQ-058": "See handoffs/WF02-REQ058-20260818/step-01-code-designer.json context.requirement_text for full text -- Lua script execution audit persistence path, MINIMAL narrow injectable-executor audit path, S3/S5 scope boundary, manifest-hash-mismatch as distinct error, instance_id validated before executor invocation."
+    },
+    "related_handoff_ids": ["step-02a-elixir-dev.json", "step-02c-security-reviewer.json"],
+    "artifacts_in": [
+      "lib/letflow/engine/lua_script_audit.ex",
+      "handoffs/WF02-REQ058-20260818/step-02c-security-reviewer.json"
+    ],
+    "owned_modules": ["lib/letflow/engine/lua_script_audit.ex", "priv/repo/migrations/*lua_script_execution_audit*"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1: SECURITY-REVIEWER FAILed step-02c with an INV-1 BLOCKER on lib/letflow/engine/lua_script_audit.ex. Read handoffs/WF02-REQ058-20260818/step-02c-security-reviewer.json's issues array in full for the exact finding: insert_audit_record/4's Repo.insert(prefix: opts[:prefix]) never validates opts[:prefix] is present/non-nil before the insert -- a caller omitting :prefix or passing prefix: nil silently resolves to Ecto's default/public schema instead of failing closed, contradicting the module's own moduledoc/design-doc claim (INV-LSA-6) that there is no public-schema fallback. Fix: add an explicit fail-closed guard before the executor is invoked or any insert happens -- mirror the established codebase pattern in lib/letflow/event_store.ex:176 (a with-chain step that validates the prefix/tenant reference and returns a distinct typed error on failure, performing zero writes), or at minimum Keyword.fetch(opts, :prefix) with a distinct {:error, :missing_prefix} on :error. After the fix, re-run mix compile --warnings-as-errors and mix format --check-formatted on the changed file, and re-verify AC2/AC3/AC4 still hold (a test-double run same as step-02a's original verification) plus a new case proving a missing/nil prefix now returns the typed error with zero rows written.",
+    "acceptance_criteria": [
+      "opts[:prefix] (or equivalent) is validated present and non-nil BEFORE the executor is invoked or any Repo.insert happens; a missing/nil prefix returns a distinct typed error (e.g. {:error, :missing_prefix}) and performs zero writes",
+      "mix compile --warnings-as-errors exits 0",
+      "mix format --check-formatted passes on the changed file",
+      "AC2/AC3/AC4 from the original requirement still hold after the fix (re-verified)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Fixed the INV-1 BLOCKER: added a private validate_prefix/1 as Step 0 of execute_script_for_audit/6's `with` chain, placed BEFORE validate_instance_id/1, executor invocation, or any Repo.insert. It does Keyword.fetch(opts, :prefix) and requires the value to be a non-empty binary; anything else (missing key, prefix: nil, prefix: \"\") returns {:error, :missing_prefix} and short-circuits the whole with-chain, so the executor is never called and insert_audit_record/4 (now insert_audit_record/4 taking the already-validated `prefix` directly, not `opts`) never runs. Added :missing_prefix to @type error_reason. insert_audit_record's Repo.insert now uses the pre-validated `prefix` binding instead of opts[:prefix], removing the implicit-Ecto-default-schema path entirely.\n\nVerification (real commands, real output):\n1. `mix compile --warnings-as-errors` -> 'Compiling 1 file (.ex)' / 'Generated letflow app', exit 0, zero warnings.\n2. `mix format --check-formatted lib/letflow/engine/lua_script_audit.ex` -> no output (formatted).\n3. Empirical mix run -e verification against real Postgres (MIX_ENV=test, MIX_TEST_PARTITION=req058rework; worked around the pre-existing, unrelated ISS-0058 migration-version collision the same way step-02a did, by temporarily moving priv/repo/migrations/20260819000001_drop_transition_events.exs out and restoring it immediately after -- confirmed clean via `git status --short priv/repo/migrations/` afterward): created a real Tenant, provisioned its tenant schema, replayed migrations (28 versions including 20260820000011). AC2: OkExecutor double with matching hash -> {:ok, %AuditRecord{...}}, independently read back via Repo.get/3 with identical fields, Repo.aggregate(:count) == 1. AC3: instance_id nil and \"not-a-uuid\" against a call-recording double -> both {:error, :invalid_instance_id}, `receive after 0` confirmed :executor_called never sent (executor never invoked), row count stayed 1. AC4: MismatchExecutor returning manifest_hash \"actual-hash\" against registered_hash \"different-hash\" -> {:error, {:manifest_hash_mismatch, \"different-hash\", \"actual-hash\"}}, row count stayed 1 (no new row). NEW missing-prefix case: opts of [], [prefix: nil], and [prefix: \"\"] against a call-recording double all returned {:error, :missing_prefix}; `receive after 0` confirmed :executor_called never sent in all three cases (executor never invoked); final Repo.aggregate(:count) stayed 1 (zero rows written across all three missing-prefix attempts). Scratch DB dropped afterward (`mix ecto.drop`).",
+    "artifacts_out": ["lib/letflow/engine/lua_script_audit.ex"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ058-20260818",
+      "commit_sha_list": ["70d33ac68fcc4057fc1e5891fb9a0ed1c1e61a68"],
+      "remote_branch": "origin/feature/WF02-REQ058-20260818",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (2c) for re-check"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

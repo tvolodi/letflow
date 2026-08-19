@@ -1,0 +1,56 @@
+{
+  "handoff_id": "8f1e6b1a-1a2d-4a3e-9b0a-00000000000b",
+  "run_id": "WF02-REQ058-20260818",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ058-20260818/step-05-release-validator.json",
+  "created_at": "2026-08-19T00:25:35Z",
+  "started_at": "2026-08-19T00:28:24Z",
+  "completed_at": "2026-08-19T00:28:26Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-058"],
+    "requirement_text": {
+      "REQ-058": "See handoffs/WF02-REQ058-20260818/step-01-code-designer.json context.requirement_text for full text -- Lua script execution audit persistence path, MINIMAL narrow injectable-executor audit path, S3/S5 scope boundary, manifest-hash-mismatch as distinct error, instance_id validated before executor invocation. The 7th, added-during-rework criterion: a missing/nil/empty prefix must fail closed with a distinct error and zero writes."
+    },
+    "related_handoff_ids": ["step-04-test-runner.json"],
+    "artifacts_in": [
+      "lib/letflow/engine/lua_script_audit.ex",
+      "priv/repo/migrations/20260820000011_create_lua_script_execution_audit.exs",
+      "test/letflow/engine/lua_script_audit_test.exs",
+      "test/reports/report-2026-08-19-WF02-REQ058-20260818.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently re-run mix test yourself -- do not trust TEST-RUNNER's report alone. Confirm every one of REQ-058's acceptance criteria (7, including the rework-added prefix-fail-closed one) is satisfied by checking the actual code/tests directly, not by re-reading summaries. Check docs/requirements.yaml and docs/status/requirement_status.yaml for staleness relative to what actually shipped. Be aware TEST-RUNNER observed an intermittent, already-filed, unrelated flaky failure in migrations_test.exs (ISS-0059/GH#206) -- if you see it too, don't treat it as this run's blocker, but do independently confirm it's genuinely unrelated (git diff main...HEAD doesn't touch that file) rather than taking that on faith either.",
+    "acceptance_criteria": [
+      "mix test independently re-run, real output quoted",
+      "Every REQ-058 acceptance criterion (7 total) independently confirmed against actual code/tests",
+      "docs/requirements.yaml and requirement_status.yaml checked for staleness"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-ran mix test (not just read TEST-RUNNER's report). Targeted run: `mix test test/letflow/engine/lua_script_audit_test.exs --seed 0` -> '16 tests, 0 failures'. Full suite: `mix test` -> '4 properties, 898 tests, 0 failures' (the ISS-0059/GH#206 migrations_test.exs flake TEST-RUNNER previously observed did NOT reproduce this run; confirmed via `git diff main...HEAD --stat` that this branch touches no file named migrations_test.exs regardless, so it would be unrelated even if it had appeared). `mix compile --warnings-as-errors` -> clean, no output/warnings.\n\nAll 7 ACs independently verified by reading the actual code/tests, not prior summaries:\nAC1 (migration applies cleanly, schema-per-tenant): read priv/repo/migrations/20260820000011_create_lua_script_execution_audit.exs directly -- `if prefix() do` guard present, table+index created only inside it; confirmed registered in lib/letflow/tenant_provisioning.ex:337-338 @tenant_scoped_migration_manifest, sorts after 20260820000010 per `ls priv/repo/migrations | tail`; test file's 'migration applies to a provisioned tenant schema' describe block (4 tests) passed in my own run.\nAC2 (exactly one row, instance_id/manifest_hash/actor_id/timestamp, read back): read lua_script_audit.ex:136-145,191-201 (insert_audit_record/4, single Repo.insert path) and the success-path test (lines 182-211) which independently Repo.get/3's the row back separately from the function's return value -- passed.\nAC3 (instance_id validated before executor, proven via a call-recorder double): read validate_instance_id/1 (lines 161-170) placed before executor_result/3 in the `with` chain; test file's RaiseIfCalledExecutor + RecordingExecutor with refute_received (lines 218-269) -- passed.\nAC4 (mismatch is distinct error, zero rows): read verify_manifest_hash/2 (lines 183-187) returning {:manifest_hash_mismatch, registered, actual} before any insert; test lines 275-292 asserts zero rows via audit_rows/1 -- passed.\nAC5 (no Lua/NIF dep in mix.exs): read mix.exs deps list myself -- no lua-shaped entry; test lines 420-427 asserts programmatically against Mix.Project.config()[:deps] -- passed.\nAC6 (moduledoc narrowness statement in substance): read the moduledoc directly (lua_script_audit.ex:1-41) -- contains 'NOT the SERVICE_TASK script-execution handler', 'must not be called from processServiceTaskRuntimeInTx', 'supersedes...rather than building on it', 'S5', 'stage-5-scripting-plugins.md' verbatim in substance; test lines 429-441 assert the same strings -- passed.\nAC7/rework AC (missing/nil/empty prefix fails closed, zero writes, zero executor calls): read validate_prefix/1 (lines 153-158), confirmed it is Step 0 of the `with` chain in execute_script_for_audit/6 (line 138), executed before validate_instance_id and executor_result; test lines 300-371 cover [], prefix: nil, prefix: \"\" against both RaiseIfCalledExecutor and RecordingExecutor with refute_received -- passed.\n\nStaleness check: docs/status/requirement_status.yaml's only REQ-058 event is 'started' (2026-08-18T23:51:22Z, agent ORCH) -- no premature 'done' event exists. docs/requirements.yaml REQ-058 entry (line 3081-3086) shows status: in_progress, matching reality (not yet flipped -- correctly left for DOC-UPDATER at step 6). One staleness gap found: requirements.yaml's acceptance_criteria list (lines 3129-3134, 6 items) has not been updated to add the 7th, rework-added missing-prefix criterion as its own explicit bullet -- it's implicitly covered by the existing INV-6/no-public-fallback framing in the description text but isn't itemized as its own AC the way it is in the design doc and test suite. Not a blocker (the criterion IS implemented and tested; this is a documentation-completeness note), but flagging for DOC-UPDATER to consider adding an explicit 7th bullet when it updates this entry at step 6, so the file matches what actually shipped.",
+    "artifacts_out": [],
+    "issues": [
+      "docs/requirements.yaml REQ-058 acceptance_criteria (6 bullets) doesn't yet itemize the rework-added missing/nil/empty-prefix-fails-closed criterion as its own explicit bullet, though it is implemented and tested -- non-blocking documentation-completeness note for DOC-UPDATER"
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ058-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ058-20260818",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

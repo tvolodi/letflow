@@ -1,0 +1,54 @@
+{
+  "handoff_id": "8f1e6b1a-1a2d-4a3e-9b0a-000000000001",
+  "run_id": "WF02-REQ058-20260818",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ058-20260818/step-01-code-designer.json",
+  "created_at": "2026-08-18T23:51:35Z",
+  "started_at": "2026-08-18T23:55:43Z",
+  "completed_at": "2026-08-18T23:55:48Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-058"],
+    "requirement_text": {
+      "REQ-058": "Port src/engine/lua_script_audit.zig (201 lines, R-Co's ISS-0176/GH#504 -- LUA-07's second acceptance criterion) as Letflow.Engine.LuaScriptAudit, plus its lua_script_execution_audit migration and Ecto.Schema module (schema-per-tenant per REQ-022). What this is: a MINIMAL, deliberately narrow engine-side call path that (a) invokes a script executor and (b) persists the resulting manifest_hash to a queryable audit record. R-Co's own file header is unusually explicit about the narrowness, and porting it without carrying that framing across would misrepresent what ships: \"It is **not** the SERVICE_TASK script-execution handler and must not be called from processServiceTaskRuntimeInTx or any other normal process-execution flow... The general SERVICE_TASK-with-script integration described in src/design/lua-integration.md section 25 remains unbuilt; when it lands, that work supersedes this function rather than building on it.\" Carry that statement into the Elixir moduledoc verbatim in substance -- a future reader must not mistake this for the real scripting integration. execute_script_for_audit/N: validates the instance_id BEFORE invoking the executor (R-Co's own ordering rationale: the function's entire purpose is producing an ATTRIBUTABLE audit row, so an unparseable instance_id is rejected up front rather than after a script has already run), invokes the executor, and writes the audit row carrying at minimum instance_id, manifest_hash, actor_id and a timestamp. The registered_hash parameter versus the executed manifest's hash: a mismatch is a distinct, pattern-matchable error, not a silently-recorded row -- this is the whole point of persisting a manifest hash. SCOPE BOUNDARY -- state explicitly, this is the S3/S5 line: the LUA EXECUTION RUNTIME ITSELF is S5 (scripting-and-plugins). R-Co's file imports ../lua/executor.zig, ../lua/manifest.zig and ../lua/errors.zig -- all three are in src/lua/ (29 files), which docs/migration/stage-5-scripting-plugins.md scopes to S5 and which explicitly needs its own build-vs-bind decision record (Elixir NIF/Port wrapping a real Lua runtime vs. reimplementing) before its requirements are expanded. S3 therefore ports the AUDIT PERSISTENCE PATH against an INJECTED executor interface (a behaviour with an execute-with-manifest callback), exactly the injectable-lookup pattern REQ-031 established for its own missing dependencies -- so the audit path is testable and correct in isolation now with a test-double executor, and S5 supplies the real Lua host later. Do NOT add a Lua dependency to mix.exs in this requirement, and do NOT pre-empt S5's build-vs-bind decision by implicitly choosing a runtime."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF02-REQ058-20260818/step-00-git-setup.json"
+    ],
+    "owned_modules": ["lib/letflow/engine/lua_script_audit.ex", "priv/repo/migrations/*lua_script_execution_audit*"]
+  },
+  "task": {
+    "description": "On branch feature/WF02-REQ058-20260818 (already checked out — do not re-run git setup). Read docs/guides/backend_developer_guide.md, docs/migration/stage-3-instance-engine.md, docs/migration/stage-5-scripting-plugins.md (for the S3/S5 scope boundary this requirement draws), and REQ-022's/REQ-031's already-shipped modules in lib/letflow/ for the schema-per-tenant :prefix convention and the injectable-lookup pattern this requirement must reuse (grep for existing Ecto.Migration schema-per-tenant migrations and any existing @behaviour-based injectable-lookup module for a concrete precedent to follow, rather than inventing a new shape). Produce lib/letflow/design/req058-lua-script-audit.md per WF-02 Step 1's standard shape: public function signatures with @spec-style types, the LuaScriptAudit Ecto schema (table lua_script_execution_audit, schema-per-tenant, fields: instance_id, manifest_hash, actor_id, timestamp, plus whatever else the audit row needs), the injected executor behaviour's callback contract, the distinct pattern-matchable error for a manifest-hash mismatch, invariants, and open questions. Map every acceptance criterion below to a concrete design element -- no acceptance criterion left unaddressed, no 'TBD'.",
+    "acceptance_criteria": [
+      "priv/repo/migrations gains a lua_script_execution_audit migration, schema-per-tenant per REQ-022, applying cleanly against a provisioned tenant schema",
+      "execute_script_for_audit with a test-double executor writes exactly one audit row carrying instance_id, manifest_hash, actor_id and a timestamp, verified by reading the row back",
+      "an unparseable or absent instance_id is rejected BEFORE the injected executor is invoked, demonstrated by a test-double that records whether it was called at all",
+      "a manifest hash differing from the supplied registered_hash returns a distinct, pattern-matchable mismatch error and writes no audit row",
+      "mix.exs gains no Lua/NIF dependency, and the moduledoc states that the Lua execution runtime is S5 scope pending stage-5-scripting-plugins.md's build-vs-bind decision record",
+      "the moduledoc carries R-Co's own narrowness statement in substance: this is not the SERVICE_TASK script-execution handler, must not be called from normal process-execution flow, and will be superseded (not extended) by the real scripting integration when it lands"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "lib/letflow/design/req058-lua-script-audit.md produced, covering all 6 acceptance criteria: AC1 (migration + tenant_provisioning.ex manifest registration, design §6/§6.3) -> priv/repo/migrations/20260820000011_create_lua_script_execution_audit.exs, schema-per-tenant `if prefix() do` guard, indexed on instance_id; AC2 (exactly-one-row write, read back) -> AuditRecord schema (design §3: instance_id, manifest_hash, actor_id, executed_at) + execute_script_for_audit/6's single insert path (design §5 step 3); AC3 (instance_id validated before executor invoked) -> design §5 step 1, ordering strictly precedes step 2's executor call, INV-LSA-1; AC4 (manifest-hash-mismatch distinct error, no row written) -> design §5 step 3's {:manifest_hash_mismatch, registered_hash, actual_hash} tag, INV-LSA-2; AC5 (no mix.exs Lua/NIF dependency, moduledoc states S5 scope) -> design §7 Block 2 required verbatim moduledoc text, INV-LSA-4; AC6 (moduledoc narrowness statement in substance) -> design §7 Block 1, sourced directly from the requirement text's own R-Co quotation. No implementation code included -- signatures, @spec/@type shapes, and migration column tables only. 4 open questions (actor_id FK, manifest_hash format constraint, script_ref narrowing, future caller) flagged explicitly at design §9, none silently resolved.",
+    "artifacts_out": ["lib/letflow/design/req058-lua-script-audit.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ058-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ058-20260818",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

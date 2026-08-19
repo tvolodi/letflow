@@ -884,3 +884,4 @@
 [2026-08-19T10:35:00Z] WF03-ISS0072-20260819 CODE-DESIGNER PASS lib/letflow/design/iss072-event-type-registration.md, 5 EventType json_schemas fully specified, scope confined to tenant_provisioning.ex -> CODE-DESIGN-VALIDATOR
 [2026-08-19T10:48:00Z] WF03-ISS0072-20260819 CODE-DESIGN-VALIDATOR PASS all 7 checks verified, 5/5 json_schemas spot-checked against real payload-construction code -> ELIXIR-DEV
 [2026-08-19T11:00:00Z] WF03-ISS0072-20260819 ELIXIR-DEV PASS lib/letflow/tenant_provisioning.ex extended to seed 6 event types (verified independently: mix compile only pre-existing transition.ex warnings, zero tenant_provisioning.ex warnings) -> SECURITY-REVIEWER
+[2026-08-19T11:10:00Z] WF03-ISS0072-20260819 SECURITY-REVIEWER PASS INV-1/4/7/8 verified, tenant_id scoping mechanically extended from already-passed INSTANCE_STARTED pattern -> REVIEWER

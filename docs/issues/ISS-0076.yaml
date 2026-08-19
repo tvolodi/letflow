@@ -99,10 +99,65 @@ description: >
   shipped code is a behavioural finding and MUST be filed as its own issue
   and routed through WF-03, never quietly corrected inside a documentation
   sweep.
+correction: >
+  CORRECTED 2026-08-19T20:05Z by ORCH, after REQ-ANALYST re-measured while
+  scoping REQ-110/111/112. THIS ISSUE'S ORIGINAL FILE LIST AND HIT COUNT
+  WERE BOTH WRONG, and the cause is the exact trap this issue warns about,
+  one level up: the file list was derived FROM the recommended grep
+  pattern, so the two were self-consistent and neither could reveal the
+  other's blind spot. An issue about circular verification was itself
+  circularly verified.
+
+  COUNT. The original "30 occurrences across 11 files" is not reproducible
+  by any pattern. It came from grepping lib/ AND docs/, so it counted this
+  issue file, ISS-0075, and docs/requirements.yaml -- the record counting
+  itself. Re-measured against lib/ only: 21 hits / 11 files under this
+  issue's own recommended pattern; 29 hits / 15 files under a broadened
+  one. Do not trust any of 30, 29 or 21 -- REQ-112's first AC makes the
+  count an OUTPUT of the run, re-derived rather than inherited.
+
+  BROADENED PATTERN (the recommended one misses four files). Add these
+  alternations: `R-Co source (was|is) not`, `unreachable in this
+  environment`, `unverifiable without R-Co`.
+
+  FOUR FILES ONLY THE BROADER PATTERN FINDS:
+    - lib/letflow/design/req050-exclusive-gateway-cel.md
+    - lib/letflow/design/req052-instance-cancellation.md
+    - lib/letflow/design/req061-execution-error-handling.md
+    - lib/letflow/engine/execution_error.ex  <-- A FOURTH SHIPPED MODULEDOC
+
+  execution_error.ex:5 IS THE MOST CONSEQUENTIAL MISS, for a reason
+  neither this issue nor REQ-ANALYST stated. Its moduledoc ports
+  `setInstanceError()` citing R-Co `~L3078` and its ERROR-CODE TABLE at
+  `~L4067` as "unreachable in this environment" -- note the `~` on both:
+  these are approximate citations by their own admission, drift built in
+  from the start. That module is REQ-061's. REQ-061 owns the
+  ExecutionError branch that REQ-109 exists to make reachable (ISS-0063 /
+  GH#212). So the error-code table backing the very branch about to be
+  lit up for the first time was never verified against R-Co, and REQ-109
+  will make its output observable in production. This is a direct
+  REQ-109 adjacency, not a generic docs nit -- whoever runs REQ-110/111
+  should treat it as higher priority than its MINOR severity suggests.
+
+  req050-exclusive-gateway-cel.md IS SELF-FLAGGING. Line 19 takes CEL's
+  `translateCelToExpr()` literal rewrite/boundary rules without R-Co
+  verification on a shipped S3 gateway path, and line 490 states:
+  "Flagged for REVIEWER/RELEASE-VALIDATOR re-check if R-Co source access
+  becomes available." That condition is now met. The document asked to be
+  re-checked under exactly today's circumstances.
+
+  DISPOSITION: REQ-110/111/112 (committed 66faa2c) are written against
+  the broadened pattern and require the count be re-derived, with a
+  dedicated AC naming execution_error.ex:5 so this gap is demonstrably
+  closed rather than inherited. affected_files below is corrected to the
+  15-file measurement.
 affected_files:
   - lib/letflow/design/req059-pin-resolver.md
   - lib/letflow/design/req060-pin-rebind.md
   - lib/letflow/design/req062-sub-process-runtime.md
+  - lib/letflow/design/req050-exclusive-gateway-cel.md
+  - lib/letflow/design/req052-instance-cancellation.md
+  - lib/letflow/design/req061-execution-error-handling.md
   - lib/letflow/design/promotion_plan.md
   - lib/letflow/design/req018-jit-provisioning.md
   - lib/letflow/design/req041-pack-update-diff-schema.md
@@ -110,6 +165,7 @@ affected_files:
   - lib/letflow/engine/pin_resolver.ex
   - lib/letflow/engine/pin_rebind.ex
   - lib/letflow/engine/sub_process.ex
+  - lib/letflow/engine/execution_error.ex
 status: open
 github_issue: https://github.com/tvolodi/letflow/issues/297
 related:

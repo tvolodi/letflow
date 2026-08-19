@@ -4375,7 +4375,7 @@ requirements:
       - "the moduledoc distinguishes routes/validation.zig (definition-graph validation endpoint, ported here) from src/api/validation.zig (request-body validator, ported by REQ-068), so the two are not conflated"
       - "metrics.zig's moduledoc states that no metrics subsystem is built here and names S6 observability as its owner"
       - "installing a solution pack whose document carries variable_schemas entries writes the corresponding rows into the CALLING tenant's variable_schemas table (REQ-109's table) and none into any other tenant's schema, verified by reading both schemas back; and that write goes through the single shared Letflow.Definitions registration function REQ-082's import also calls, with grep confirming no second insert path into variable_schemas anywhere in the route layer"
-    depends_on: [REQ-072]
+    depends_on: [REQ-072, REQ-030, REQ-109]
 
   - id: REQ-079
     title: Instance routes 1/2 -- write path (instances.zig handleCreate/handleCancel/handleReconstruct)
@@ -4548,7 +4548,8 @@ requirements:
       - "a definition id belonging to another tenant returns the same response as a nonexistent id on every write verb, and no write occurs -- verified by reading the target row (INV-5)"
       - "a caller without DefinitionsWrite receives 403 on all eight endpoints with no state change in any case"
       - "importing a definition document carrying variable_schemas entries writes the corresponding rows into the calling tenant's variable_schemas table (REQ-109's table), and re-importing onto the SAME definition_id replaces those rows inside one transaction rather than failing on UNIQUE (definition_id, variable_key) or accumulating duplicates -- both verified by reading the rows back; and that write goes through the single shared Letflow.Definitions registration function REQ-078's install also calls, with grep confirming no second insert path into variable_schemas anywhere in the route layer"
-    depends_on: [REQ-081]
+      - "a re-import onto the SAME definition_id whose document OMITS a previously-registered variable_key leaves no row for that key -- verified by reading the rows back and asserting the omitted key is absent, not merely that the remaining keys are correct. A key removed from the document must stop being validated against; an upsert that leaves the stale row behind would keep REQ-109's merge rejecting values the definition no longer constrains"
+    depends_on: [REQ-081, REQ-109]
 
   - id: REQ-083
     title: Task routes 1/2 -- read path (tasks.zig handleList/handleGetById/handleInbox)

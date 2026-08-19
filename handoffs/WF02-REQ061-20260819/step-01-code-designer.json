@@ -1,0 +1,52 @@
+{
+  "handoff_id": "5d3b1ce0-fc0e-4421-3b4j-req061step01",
+  "run_id": "WF02-REQ061-20260819",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ061-20260819/step-01-code-designer.json",
+  "created_at": "2026-08-19T00:48:56Z",
+  "started_at": "2026-08-19T00:48:56Z",
+  "completed_at": "2026-08-19T00:56:56Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-061"],
+    "requirement_text": {
+      "REQ-061": "Port src/engine/instance.zig's InstanceStore.setInstanceError() (per src/design/engine.md \"Section EE-10: Execution Error Handling\", L4571) as set_instance_error/N -- the single, shared path every engine-internal failure funnels into. Split out of REQ-052 (which keeps EE-08 cancellation): EE-08 is caller-initiated and drives to a terminal CANCELLED, while this requirement is engine-internal and halts the instance NON-terminally at ERROR, pending an operator retry or discard. - Sets status to ERROR and appends an EXECUTION_ERROR event atomically (EE-10 AC4), carrying error type, the affected node or field, a human-readable reason, AND the instance variable state at the time of the error (EE-10 AC1/AC5 -- an operator must be able to diagnose without replaying the instance, so the variable snapshot is load-bearing, not optional decoration). - This is deliberately a shared sink with several callers, which is why it is its own requirement rather than duplicated logic in each: REQ-050's no-matching-gateway-edge-and-no-default case, REQ-049's schema-violation-on-merge case, REQ-056's exhausted-service-task-retries case, REQ-057's plugin-ERROR-outcome case, and REQ-062's four SPC-01 sub-process interface violations. Each caller supplies its own error type and affected node; the transition-to-ERROR, the event shape, and the atomicity are this requirement's. R-Co models exactly this as a single setInstanceError() with a SetInstanceErrorArgs struct and an error-code mapping (instance.zig ~L3078, with the code table at ~L4067) -- port that shape rather than scattering ad-hoc error writes. - An instance in ERROR rejects task completion with a distinct conflict error (EE-10 AC2) and STAYS in ERROR until an operator retries or discards it (EE-10 AC3). That operator retry/discard path is R-Co's OBS-05 dead-letter API (src/dlq/, S6 operational-cross-cutting plus S4's route layer) -- explicitly out of this stage's scope. Leave a named hook and state the boundary; do NOT build a partial DLQ. - Two concurrent operations that both trigger EE-10 on one instance: the first to commit wins, the second sees status ERROR and is rejected (EE-10 edge case). - ERROR is NOT terminal in the way CANCELLED and COMPLETED are: REQ-060's pin rebind treats it as non-rebindable and REQ-052's cancellation treats CANCELLED/COMPLETED as already-finished, but an operator action can still move an instance out of ERROR once S6 lands. State that distinction explicitly in the moduledoc -- reading ERROR as terminal is the easy mistake, and REQ-023's status enum already carries all four values. IMPORTANT TENSION FLAGGED BY ORCH (do not silently resolve): AC4 asks for 'at least three of the five calling paths' (REQ-049, REQ-050, REQ-056, REQ-057, REQ-062) to be demonstrated routing into set_instance_error, but only REQ-049 and REQ-050 are shipped today -- REQ-056/057/062 are still pending requirements with no code yet. Your design must state explicitly how this AC can be satisfied now (e.g. wiring the two existing callers, REQ-049 and REQ-050, into the shared sink, with the remaining three left as named future call sites) rather than silently assuming three exist."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": ["lib/letflow/engine.ex", "lib/letflow/design/req061-execution-error-handling.md"]
+  },
+  "task": {
+    "description": "Design REQ-061: execution error handling (EE-10), a shared set_instance_error/N sink. Read REQ-052's shipped cancel_instance/3 (lib/letflow/engine.ex) for the sibling terminal-transition shape (this one is non-terminal at ERROR, not CANCELLED, but shares the Multi/lock-ordering discipline). Read REQ-049 and REQ-050's design docs and shipped code (grep lib/letflow/engine.ex or wherever their gateway/merge logic landed) to find their current schema-violation and no-matching-gateway-edge error handling -- your design must specify how those two existing call sites get rewired to call set_instance_error instead of whatever ad-hoc error path they currently use (if any -- they may currently just return an error tuple without persisting an ERROR state, check). Address the AC4 tension named in the requirement text explicitly: state how 'at least three of five' is satisfiable given only two callers currently exist in shipped code.",
+    "acceptance_criteria": [
+      "an EXECUTION_ERROR event carries error type, affected node or field, a human-readable reason, and the instance variable map as it stood at the moment of the error -- all four verified by reading the event payload back",
+      "the status flip to ERROR and the EXECUTION_ERROR append commit together: forcing the append to fail leaves the instance status unchanged, verified by reading both back",
+      "an instance in ERROR rejects task completion with a distinct conflict error and remains in ERROR afterwards",
+      "at least three of the five calling paths (REQ-049 schema violation, REQ-050 gateway no-match, REQ-056 exhausted retries, REQ-057 plugin ERROR, REQ-062 sub-process interface violation) are demonstrated routing into this one function rather than writing their own ERROR transition, confirmed by inspection and by test",
+      "two concurrent operations both triggering EE-10 on the same instance result in exactly one committed EXECUTION_ERROR and one rejection, run concurrently rather than sequentially",
+      "the moduledoc names OBS-05's dead-letter retry/discard path (S6/S4) as the out-of-scope operator action, confirms no partial DLQ was built, and states that ERROR is non-terminal in a way CANCELLED and COMPLETED are not"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req061-execution-error-handling.md (EE-10). Design adds Letflow.Engine.ExecutionError.append_multi/3 (the shared, Repo-call-free, Multi-composable sink -- copies TaskActivation's existing append_multi_from_existing_records/6 pattern) plus Letflow.Engine.set_instance_error/2 (its standalone wrapper). error_args() carries error_type/affected/reason/variables/details/actor_id/idempotency_key -- all four AC1 fields land in one EXECUTION_ERROR event payload; instance_projections.error_detail (already existing, unused column, no migration needed) gets a compact summary. Traced REQ-049 (merge_output_variables/2, engine.ex:1043) and REQ-050 (dispatch_task_completion_hop_chain/2, engine.ex:1056) in shipped code and confirmed neither persists any ERROR state today -- both currently just abort complete_task/3's whole Multi and return an ad-hoc error tuple. Design rewires both: they now return {:ok, tagged} instead of {:error, _} so their Multi.run steps never abort the transaction, and a new Multi.merge branch point (replacing the existing build_task_activation_and_reconciliation_multi/3 call site) routes an {:execution_error, error_args} outcome into ExecutionError.append_multi/3 (reusing complete_task/3's own M2-locked instance_projection, no second lock) instead of the normal completion tail. complete_error()'s union gains one member: {:error, {:instance_execution_error, error_type, affected}}. AC3 (ERROR rejects task completion) confirmed already satisfied by shipped REQ-048 code (fetch_and_lock_instance_projection/3 already rejects non-:active including :error with a distinct {:instance_not_active, :error} tuple, and complete_error()'s type already names :error in that union) -- no new logic needed, documented in design section 6 rather than left undiscovered. AC4 TENSION addressed explicitly in design section 15, not resolved unilaterally: verified independently against stage-3-instance-engine.md that REQ-056/057/062 are genuinely still pending/unimplemented (only REQ-049/050 done), so only 2 of the 5 named calling paths can be demonstrated today. Design's own recommendation offered for REVIEWER's sign-off: accept '2 of 2 currently-shippable callers wired, with REQ-056/057/062 named as future call sites plus their own open questions (error-type granularity for REQ-062, actor-less-caller convention for REQ-056/057)' as an interim satisfaction of AC4's intent, re-verified mechanically once those three requirements ship -- flagged as the design's recommendation, not a unilateral decision. Six other open questions recorded (OQ-1 through OQ-7, section 12) including R-Co source inaccessibility (inherited access gap, same as req051/req052), the pre-merge-vs-post-merge variable-snapshot asymmetry between REQ-049's and REQ-050's own error_args.variables values, and error_detail's deliberate exclusion of the full variable snapshot (kept in the event payload only). No implementation code written -- signatures, type shapes, and Multi step tables only, matching req052's own convention.",
+    "artifacts_out": ["lib/letflow/design/req061-execution-error-handling.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ061-20260819",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ061-20260819",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b). Pay particular attention to Section 15's AC4 interim reading (2-of-2-shippable-callers-today vs. literal 'at least three') and Section 5's Multi.merge branch-point/interpret_complete_result rewiring of complete_task/3 -- both are the load-bearing, non-obvious parts of this design."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -5035,79 +5035,149 @@ requirements:
       - "git diff shows ZERO changes under lib/letflow/ outside @moduledoc/comment prose -- no function body, guard, @spec, lock mode or return value altered -- verified by inspecting the diff, so that a behavioural finding cannot have been silently repaired instead of reported"
       - "every divergent_behavioural finding (if any) has a corresponding docs/issues/ISS-NNNN.yaml naming the R-Co file:line, the Letflow file:line, and the behavioural delta, plus a filed GitHub issue or an explicit `github_issue: null # gh unavailable` note; and if there are ZERO such findings the handoff states that explicitly as a result rather than leaving it inferred from the absence of issue files"
       - "req060-pin-rebind.md:134 no longer prescribes the no-R-Co-source caveat as required moduledoc content for future implementations, verified by reading that section back"
-      - "lib/letflow/engine/pin_resolver.ex:106's shipped moduledoc and req059-pin-resolver.md:538's OQ-1 agree with each other after the change -- neither still asserts R-Co is unavailable to verify source: :override if OQ-1 was dispositioned confirmed or divergent, verified by reading both files"
+      - "NEITHER lib/letflow/engine/pin_resolver.ex:106's shipped moduledoc NOR req059-pin-resolver.md:538's OQ-1 still asserts that R-Co is unavailable to verify source: :override, and the two agree with each other afterwards -- this holds under ALL FOUR dispositions including unsettled_by_source, because once the source has been read the claim that it is unavailable is false even when it failed to answer the question; verified by reading both files"
       - "no acceptance criterion above was satisfied by asserting a global verdict over the six locations: each disposition is justified at its own location with its own citation, confirmed by inspection"
     depends_on: [REQ-059, REQ-060]
 
   - id: REQ-111
-    title: Audit REQ-062's sub-process design citations against the now-readable instance.zig/transition.zig (ISS-0076 item 3)
+    title: Verify REQ-050's CEL translation rules against transition.zig, and close out REQ-062's standing R-Co disclaimer (ISS-0076 item 3)
     owner: ISSUE-FIXER
     status: pending
     stage: S3
     impl_order: 155  # letflow-queue task id
     description: >
-      lib/letflow/design/req062-sub-process-runtime.md:11 states plainly that
-      EVERY `instance.zig`/`transition.zig` line citation in that document was
-      "taken verbatim from this run's own handoff text ... not from a second
-      independent read of R-Co." REQ-062 is `done` and SHIPPED, so those
-      citations are load-bearing for every future reader of that design. Both
-      sources are readable now (verified this run: R-Co/src/engine/instance.zig
-      5547 lines, R-Co/src/engine/transition.zig 3323 lines). Part of
-      ISS-0076 / GH#297.
-      WHY THIS IS WORTH A TURN. A WRONG citation in shipped design rationale
-      is worse than an absent one, because it reads as verified and the next
-      reader follows it instead of re-deriving. Line citations demonstrably
-      drift: during WF01-REQ109-20260819 two separate R-Co citations supplied
-      to REQ-ANALYST were off by two lines (`extractFormSchemaJson` at
-      instance.zig:5490 not :5488; the tasks.zig field read at :896 not :894).
-      Neither mattered, and both were caught only because someone re-read the
-      source -- luck, not method. This requirement replaces the luck.
-      SCOPE -- CITATIONS, plus one substantive location:
-      (a) Every `instance.zig` / `transition.zig` file:line citation appearing
-      in req062-sub-process-runtime.md. ENUMERATE THEM FIRST and state the
-      count, then check each. Do not sample.
-      (b) req062-sub-process-runtime.md:674, which is a substantive deferral
-      rather than a citation: the design ASSUMES, but explicitly "does not
-      verify against unreachable R-Co source", a
+      Two shipped S3 designs carry deferrals that exist only because the R-Co
+      source tree could not be read at design time. It can be read now. This
+      requirement resolves both against the real sources and RECORDS what it
+      finds. Part of ISS-0076 / GH#297.
+      THIS IS AN AUDIT. ITS DELIVERABLE IS FINDINGS, NOT A FIX. The dispositions,
+      the NON-NEGOTIABLE clause and the no-prior caution below are identical in
+      force to REQ-110's; read that entry's equivalents if anything here is
+      ambiguous.
+      NO PRIOR, IN EITHER DIRECTION. ISS-0075 checked one reconstruction of this
+      family and it turned out CORRECT. That is evidence about one guess, not
+      about the method. Do not approach these expecting them to be fine, and do
+      not approach them expecting breakage. The acceptance criteria are written
+      so this requirement PASSES whether every location confirms or every
+      location diverges.
+      PART 1 -- REQ-050's CEL TRANSLATION RULES. This is the substantive half
+      and the higher-risk one. lib/letflow/design/req050-exclusive-gateway-cel.md
+      is `done` and SHIPPED, and its section 0 (line 19) states that
+      `evaluateGatewayCondition()`'s and `translateCelToExpr()`'s literal
+      rewrite/boundary rules were taken verbatim from REQ-050's own requirement
+      text "since R-Co source is not reachable on this host." Its line 490 adds
+      that the `hasCelUnsupportedFeatures()` detection algorithm is "not verified
+      against `transition.zig`'s literal ... source", and flags it explicitly
+      "for REVIEWER/RELEASE-VALIDATOR re-check if R-Co source access becomes
+      available" -- a precondition that is now met.
+      WHY THIS RISK IS SILENT, which is what makes it worth a turn: rewrite and
+      boundary rules decide how a gateway CONDITION EVALUATES. A wrong rule
+      routes a token down the wrong outgoing edge. Letflow's own test suite
+      cannot catch that class of error, because those tests assert Letflow's
+      semantics -- they would agree with a wrong rule just as readily as with a
+      right one. Absence of test signal is precisely when source verification is
+      load-bearing rather than decorative.
+      SOURCES, all located and confirmed readable this run:
+      R-Co/src/engine/transition.zig:1118 (`evaluateGatewayCondition`), :1164
+      (`translateCelToExpr`), :1210 (`hasCelUnsupportedFeatures` -- the exact
+      function req050:490 names), plus
+      R-Co/src/design/iss602_cel_expr_differential.md, a 627-line design doc
+      dedicated to the CEL/Expr differential.
+      PART 2 -- REQ-062's STANDING DISCLAIMER. lib/letflow/design/
+      req062-sub-process-runtime.md:11 states that every `instance.zig`/
+      `transition.zig` line citation in that document came verbatim from handoff
+      text rather than a direct read.
+      MEASURED FACT, VERIFY IT FIRST AND DO NOT BE SURPRISED BY IT: that document
+      contains ZERO R-Co line citations.
+      `grep -oE "(instance|transition)\.zig:[0-9]+" lib/letflow/design/req062-sub-process-runtime.md`
+      returns no matches; the two R-Co files are named in prose only (lines 3, 4
+      and 12). Line 11 is therefore a STANDING DISCLAIMER guarding citations the
+      document never made -- not a warning over real ones. Recording that,
+      with the grep output, IS the legitimate finding for this scope item.
+      Do NOT go looking for a different pattern that yields a non-zero count.
+      Reaching for a looser grep until the number stops being zero is exactly
+      the failure mode ISS-0076 exists to stop, and it would be the third
+      recursion of it in this family.
+      THE 55 OTHER CITATIONS IN THAT FILE ARE OUT OF SCOPE. Measured this run,
+      req062-sub-process-runtime.md carries 55 `file:line` citations and every
+      one points at a LETFLOW file -- sub_process.ex (16), engine.ex (11),
+      execution_error.ex (5), task_activation.ex (3), transition.ex (2),
+      token.ex (2), reconstruction.ex, service_task.ex, plugin_interface.ex and
+      several `_test.exs` files. None is an R-Co citation and none is in scope.
+      `transition.ex` and `transition.zig` differ by one character and are
+      different trees; do not audit Letflow citations against R-Co sources or
+      vice versa. Re-derive that count rather than trusting 55.
+      SCOPE -- THREE DISPOSITIONED LOCATIONS plus one measurement and one edit:
+      (a) MEASUREMENT, not a disposition: the zero-R-Co-citation finding above,
+      recorded with the command and its output.
+      (b) DISPOSITIONED -- req050-exclusive-gateway-cel.md:19's rewrite and
+      boundary rules, checked against transition.zig:1118/:1164 and the
+      iss602 differential doc. Check EACH rule individually; a single
+      block verdict over the rule set is not acceptable (same reason REQ-110
+      forbids a global verdict over its six locations -- one wrong rule inside
+      four right ones is exactly what a block verdict hides).
+      (c) DISPOSITIONED -- req050-exclusive-gateway-cel.md:490's
+      `hasCelUnsupportedFeatures()` detection, and the four unsupported
+      categories it enumerates (macros, type-conversion functions, collection
+      functions, ternary), checked against transition.zig:1210. Note what
+      req050:490 itself concedes: the exact detection ALGORITHM (regex vs.
+      scanner, string-literal span tracking) was deliberately left to
+      ELIXIR-DEV and is not pinned by that design -- so an algorithmic
+      difference from R-Co is not automatically a divergence. What must match
+      is the SET of categories detected and the boundary behaviour, not the
+      implementation strategy.
+      (d) DISPOSITIONED -- req062-sub-process-runtime.md:674, a substantive
+      assumption rather than a citation: the design ASSUMES, but explicitly
+      "does not verify against unreachable R-Co source", a
       `node.attributes["definition_name"]` string attribute resolved via
       `Letflow.Definitions.get_active_by_name/2`, chosen purely for internal
-      consistency with `Engine.create/2`. The design itself notes no such
-      attribute is validated anywhere in the shipped codebase. R-Co can now be
-      asked what its own SPC-01 actually keys a child definition on.
-      (c) req062-sub-process-runtime.md:11 itself -- the blanket claim.
-      Restate it to reflect what this audit actually established, per
-      REQ-110's precedent: replace it with the verified position, do not
-      merely delete it. REQ-112's sweep EXCLUDES this file.
-      DISPOSITIONS -- a CLOSED set of four, one per citation for (a) and one
-      for (b): `verified_exact` (the cited line holds the cited construct);
-      `corrected` (it does not; the true line is recorded and the citation
-      updated); `unresolvable` (the construct is not findable in the current
-      R-Co tree -- record the search actually performed, since R-Co may have
-      moved on since REQ-062 was designed, and that is a finding rather than a
-      failure); `divergent_behavioural` (the citation was wrong AND the claim
-      it supported is wrong in a way affecting shipped Letflow behaviour).
-      NON-NEGOTIABLE -- identical to REQ-110's and for the same reason. A
-      `divergent_behavioural` finding is filed as its own
-      `docs/issues/ISS-NNNN.yaml` plus a GitHub issue and routed through
-      WF-03, never repaired inside this audit. ZERO changes to engine
-      behaviour under lib/letflow/: moduledoc and design-doc prose only.
-      A NIL RESULT IS ALSO A FINDING -- if every citation verifies exact, say
-      so explicitly with the count, so "no corrections" is never ambiguous
-      between "checked and all correct" and "did not check."
-      NO PRIOR. Same caution as REQ-110: ISS-0075's one checked reconstruction
-      was correct; that says nothing about these. Do not write the audit
-      expecting either outcome.
-      SIZED SEPARATELY FROM REQ-110 deliberately: these sources are 8,870
-      lines against REQ-110's 1,576, and they share no locations, so bundling
-      them would produce one oversized turn rather than two clean ones.
+      consistency with `Engine.create/2`, and itself notes no such attribute is
+      validated anywhere in the shipped codebase. Ask R-Co what its own SPC-01
+      actually keys a child definition on.
+      (e) EDIT, not a disposition: req062-sub-process-runtime.md:11 is restated
+      to say what this audit established -- that the document makes no R-Co
+      line citations and the disclaimer guarded nothing -- rather than deleted.
+      DISPOSITIONS -- the SAME CLOSED FOUR-WAY SET REQ-110 uses, applied to
+      locations (b), (c) and (d) alike: `confirmed` (R-Co matches; cite the R-Co
+      file:line showing it); `divergent_doc_only` (R-Co differs, but shipped
+      Letflow behaviour is unaffected -- correct the design doc, cite the R-Co
+      file:line); `divergent_behavioural` (R-Co differs in a way that affects
+      shipped behaviour -- see NON-NEGOTIABLE); `unsettled_by_source` (the
+      source genuinely does not answer it -- cite the R-Co file:line actually
+      read and say why it does not settle the question).
+      `divergent_doc_only` is load-bearing here and its absence would break this
+      requirement. Location (d) is the likely case: R-Co may well key the child
+      definition on something other than a `definition_name` string attribute
+      while shipped Letflow behaviour remains perfectly defensible. Without
+      `divergent_doc_only` that outcome has nowhere to go -- `confirmed` is
+      false, `unsettled_by_source` is false since the answer WAS found, and
+      `divergent_behavioural` would overstate a documentation difference into a
+      filed issue and a WF-03 route. The same applies to any CEL rule that
+      differs in wording without differing in effect.
+      NON-NEGOTIABLE -- a `divergent_behavioural` finding is NOT fixed here.
+      File it as its own `docs/issues/ISS-NNNN.yaml` per
+      docs/agents/protocols/ISSUE_QUEUE.md, file the matching GitHub issue, and
+      route it through WF-03. This requirement makes ZERO changes to engine
+      behaviour: no change to any function body, guard, spec, or return value
+      anywhere under lib/letflow/. Moduledoc and design-doc prose are the only
+      permitted edits. This matters more for the CEL half than anywhere else in
+      this family -- "fixing" a translation rule in place would alter how every
+      shipped gateway condition evaluates, with no SECURITY-REVIEWER, no
+      REVIEWER, and no test that would notice.
+      A NIL RESULT IS ALSO A FINDING. If nothing diverges behaviourally, say so
+      explicitly and per-location, so "no issues filed" is never ambiguous
+      between "looked and found none" and "did not look."
     acceptance_criteria:
-      - "the total number of instance.zig/transition.zig citations in req062-sub-process-runtime.md is enumerated and stated BEFORE dispositioning, and the per-disposition counts afterwards sum to exactly that total plus one for location (b) -- so partial completion is visible as a number rather than hidden in prose"
-      - "every citation is dispositioned as exactly one of verified_exact | corrected | unresolvable | divergent_behavioural; every corrected disposition records both the cited line and the true line; every unresolvable disposition records the search actually performed against the current R-Co tree"
-      - "req062-sub-process-runtime.md:674's definition_name assumption is dispositioned against what R-Co's own SPC-01 keys a child definition on, citing a specific R-Co file:line that was read -- and if R-Co keys it differently from node.attributes[\"definition_name\"], that is assessed against shipped Letflow behaviour and routed per the NON-NEGOTIABLE clause rather than silently rewritten in the design doc"
-      - "git diff shows ZERO changes under lib/letflow/ outside @moduledoc/comment prose -- no function body, guard, @spec or return value altered -- verified by inspecting the diff"
-      - "every divergent_behavioural finding (if any) has a docs/issues/ISS-NNNN.yaml naming the R-Co file:line, the Letflow file:line and the behavioural delta, plus a filed GitHub issue or an explicit github_issue: null note; and if there are ZERO such findings the handoff states that explicitly rather than leaving it inferred"
-      - "req062-sub-process-runtime.md:11 no longer asserts the R-Co source tree is unreachable, and states instead what this audit established, with the citation-verification date -- verified by reading that line back"
-    depends_on: [REQ-062]
+      - "the zero-R-Co-citation measurement is recorded with the actual command run and its actual output, and the count of Letflow file:line citations in req062-sub-process-runtime.md is separately re-derived and stated as OUT of scope -- neither the zero nor the 55 may be reported from this requirement's text without re-running the greps, and no alternative pattern is substituted to make the zero non-zero"
+      - "all THREE dispositioned locations (req050-exclusive-gateway-cel.md:19; req050-exclusive-gateway-cel.md:490; req062-sub-process-runtime.md:674) are each dispositioned as exactly one of confirmed | divergent_doc_only | divergent_behavioural | unsettled_by_source, recorded inline at that location, with the count per disposition stated and summing to three -- a location left unaddressed is a FAIL regardless of what the others concluded"
+      - "req050:19's rewrite and boundary rules are dispositioned RULE BY RULE, and req050:490's four unsupported categories (macros, type-conversion functions, collection functions, ternary) CATEGORY BY CATEGORY, each with its own R-Co citation -- a single block verdict covering a whole rule set or category set is a FAIL even if that verdict is correct"
+      - "every confirmed, divergent_doc_only and divergent_behavioural disposition cites a specific R-Co file:line actually read this run (in src/engine/transition.zig or src/design/iss602_cel_expr_differential.md for locations (b)/(c), or the relevant SPC-01 source for (d)), and every unsettled_by_source disposition cites the R-Co file:line consulted plus why it does not settle the question -- no disposition rests on REQ-050's or REQ-062's own requirement text, which is the second-hand sourcing this audit exists to replace"
+      - "a difference between Letflow's and R-Co's hasCelUnsupportedFeatures DETECTION ALGORITHM (regex vs. scanner, string-literal span tracking) is not by itself recorded as a divergence, since req050:490 explicitly left the algorithm to ELIXIR-DEV -- the disposition turns on the SET of categories detected and the boundary behaviour, and the finding states which of the two it is assessing"
+      - "git diff shows ZERO changes under lib/letflow/ outside @moduledoc/comment prose -- no function body, guard, @spec or return value altered, and in particular no CEL translation or boundary rule changed -- verified by inspecting the diff, so that a behavioural finding cannot have been silently repaired instead of reported"
+      - "every divergent_behavioural finding (if any) has a docs/issues/ISS-NNNN.yaml naming the R-Co file:line, the Letflow file:line and the behavioural delta, plus a filed GitHub issue or an explicit github_issue: null note; and if there are ZERO such findings the handoff states that explicitly as a result rather than leaving it inferred from the absence of issue files"
+      - "req062-sub-process-runtime.md:11 no longer asserts the R-Co source tree is unreachable and instead states what this audit established -- that the document makes no R-Co line citations, so the disclaimer guarded none -- and req050-exclusive-gateway-cel.md:19 and :490 no longer assert R-Co is unreachable; all three verified by reading the lines back, and all three hold under every disposition including unsettled_by_source, because once the source has been read the unavailability claim is false regardless of what it answered"
+      - "no acceptance criterion above was satisfied by asserting a global verdict across locations: each disposition is justified at its own location with its own citation, confirmed by inspection"
+    depends_on: [REQ-050, REQ-062]
 
   - id: REQ-112
     title: Triage and sweep the remaining "R-Co source unavailable" claims across design docs and shipped moduledocs (ISS-0076 item 2)
@@ -5160,19 +5230,31 @@ requirements:
       Letflow file:line, and the R-Co source path that could settle it, and
       the caveat is LEFT IN PLACE until that issue is resolved. Known
       candidates, to be confirmed by triage rather than assumed:
-      req050-exclusive-gateway-cel.md:19 (CEL `translateCelToExpr()` rewrite/
-      boundary rules taken without R-Co verification -- behavioural, on a
-      shipped S3 gateway path), req061-execution-error-handling.md:714 with
+      req061-execution-error-handling.md:714 with
       execution_error.ex:5 (the error-code table), service_task.md:68/408/578,
       promotion_plan.md:437/664, req041-pack-update-diff-schema.md:706,
       req018-jit-provisioning.md:492, req052-instance-cancellation.md:581,
-      sub_process.ex:37.
-      EXCLUSIONS -- three files are owned elsewhere and MUST NOT be touched
+      sub_process.ex:37. (req050-exclusive-gateway-cel.md:19/:490 WOULD have
+      been the sharpest CLASS B candidate; it is excluded here only because
+      REQ-111 now audits it directly.)
+      TIEBREAKER -- WHEN IN DOUBT, CLASS B. The A/B boundary is a bounded
+      judgment call and the two errors are NOT symmetric. Misclassifying a
+      CLASS B as CLASS A does the real damage: an unanswered question about
+      shipped behaviour is rewritten into settled-looking prose, and the next
+      reader has no signal that anything was ever open. Misclassifying a
+      CLASS A as CLASS B costs one surplus issue file that a later triage
+      closes in a minute. So when the classification is genuinely unclear,
+      classify as CLASS B.
+      EXCLUSIONS -- FOUR locations are owned elsewhere and MUST NOT be touched
       here: lib/letflow/engine/variable_merge.ex (REQ-109's AC9 owns its three
       corrections and needs the stale sentences present to correct in place;
       editing it would collide with that diff and destroy REQ-049 AC4's
-      evidence artifact), and req060-pin-rebind.md:134 plus
-      req062-sub-process-runtime.md:11 (REQ-110 and REQ-111 respectively).
+      evidence artifact); req060-pin-rebind.md:134 (REQ-110);
+      req062-sub-process-runtime.md:11 (REQ-111); and
+      req050-exclusive-gateway-cel.md:19 together with its sibling at :490
+      (REQ-111 -- the CEL audit was folded into that requirement rather than
+      filed as a CLASS B issue from here, so do NOT classify, edit or file
+      against either location).
       Every OTHER occurrence in req059-pin-resolver.md, req060-pin-rebind.md
       and req062-sub-process-runtime.md that REQ-110/REQ-111 did not
       disposition IS in scope here -- check what they actually changed rather

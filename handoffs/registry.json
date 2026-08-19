@@ -1299,6 +1299,31 @@
       "queue_agent_id": "hetzner-orch",
       "worktree": "/home/tvolodi/letflow (primary checkout)",
       "note": "get_next_task (agent_id hetzner-orch) claimed queue task 99, task_type requirement, impl_order 99, matching docs/requirements.yaml REQ-054 (Periodic instance state snapshots, snapshot_writer.zig/ISS-601, extends REQ-053's reconstruct path). depends_on REQ-053, status done -- eligible. Note: an accidental immediately-following get_next_task call claimed a second task (id 100, REQ-055) which was released back to open (status left null / re-opened) within the same turn before any work started on it -- not a real duplicate-run, caught before dispatch."
+    },
+    {
+      "run_id": "WF02-REQ062-20260819",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-062"
+      ],
+      "stage": "S3",
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/engine/",
+        "lib/letflow/instance*",
+        "priv/repo/migrations/",
+        "test/letflow/",
+        "test/specs/"
+      ],
+      "lock_acquired_at": "2026-08-19T04:35:42Z",
+      "lock_released_at": "2026-08-19T08:22:56Z",
+      "released_lock": true,
+      "last_known_step": "Step 2a (ELIXIR-DEV backend implementation) escalated after hitting max_rework (3/3), still PARTIAL -- recovered via a design-amendment pass (sec 10/11/12 addenda to lib/letflow/design/req062-sub-process-runtime.md fixing the Multi-key/idempotency-key shape) rather than a blind fourth retry, then rework iteration 4 (commit d370849) and a full-suite PASS report (commit 43084c6, 1051 tests/0 failures). RELEASE-VALIDATOR independently re-verified all 8 acceptance criteria plus its own full-suite re-run. DOC-UPDATER flipped REQ-062 to done in docs/requirements.yaml and corrected the stage-3 header pending count. See handoffs/escalations.yaml's WF02-REQ062-20260819 entry for the original escalation diagnosis.",
+      "backfilled": false,
+      "queue_task_id": 106,
+      "queue_agent_id": "hetzner-wt2-orch",
+      "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
+      "note": "Recovered from the Step 2a max_rework escalation via a design-amendment pass rather than a blind retry. Final commit 43084c6 on branch feature/WF02-REQ062-20260819, merged to main during the merge of feature/WF02-REQ062-20260819 with origin/main (this run) -- composed against REQ-059's PinResolver integration in lib/letflow/engine.ex and lib/letflow/engine/reconstruction.ex, both of which REQ-059 also touched. Queue task 106 lock released."
     }
   ]
 }

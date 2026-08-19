@@ -1,0 +1,61 @@
+{
+  "handoff_id": "b1e1a1a0-0001-4a00-9000-00000000000c",
+  "run_id": "WF02-REQ062-20260819",
+  "workflow_id": "WF-02",
+  "step": "05b",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ062-20260819/step-05b-release-validator-postmerge.json",
+  "created_at": "2026-08-19T09:20:00Z",
+  "started_at": "2026-08-19T09:20:00Z",
+  "completed_at": "2026-08-19T09:35:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-062", "REQ-059"],
+    "requirement_text": {
+      "note": "Second, post-merge RELEASE-VALIDATOR pass on feature/WF02-REQ062-20260819. REQ-062 already PASSed RELEASE-VALIDATOR once pre-merge (docs/status/requirement_status.yaml REQ-062 'done' event, 2026-08-19T08:22:56Z: '8 acceptance criteria and its own full-suite re-run: 1051 tests, 0 failures'). The branch then went stale behind origin/main (which gained REQ-059/PinResolver via PR #256) and ELIXIR-DEV hand-merged origin/main into the branch (merge commit 876e0d9), resolving real conflicts in lib/letflow/engine.ex (7 regions) and lib/letflow/engine/reconstruction.ex (1 region). SECURITY-REVIEWER (step-02c2) and REVIEWER (step-02d2) both re-PASSed the merge; TEST-RUNNER (step-04b) independently reproduced 1105 tests/0 failures at commit 147a01a. This pass re-derives the verdict independently at the final commit (4fe79cb) rather than trusting any of those reports."
+    },
+    "related_handoff_ids": [
+      "step-02c2-security-reviewer-postmerge.json",
+      "step-02d2-reviewer-postmerge.json",
+      "step-04b-test-runner-postmerge.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/sub_process.ex",
+      "lib/letflow/engine/reconstruction.ex",
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/design/req062-sub-process-runtime.md",
+      "test/letflow/engine_sub_process_test.exs",
+      "test/letflow/engine/sub_process_test.exs"
+    ],
+    "owned_modules": ["lib/letflow/engine/", "lib/letflow/instance*", "priv/repo/migrations/"]
+  },
+  "task": {
+    "description": "Independently re-verify REQ-062's 8 acceptance criteria still hold at the final merged commit (4fe79cb), including that the REQ-059 merge did not silently weaken anything, particularly the parent_instance_id/pin-inheritance interaction ELIXIR-DEV introduced during conflict resolution. Re-run the full suite independently rather than trust TEST-RUNNER's report.",
+    "acceptance_criteria": [
+      "each of REQ-062's 8 acceptance criteria re-checked against the current merged code, not just re-reading test names",
+      "MIX_TEST_PARTITION=2 mix test run independently and pass count confirmed",
+      "confirm nothing about the REQ-059 merge weakened or broke a REQ-062 AC, particularly parent_instance_id handling in Engine.create/2"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Verified at HEAD (commit 4fe79cb, working tree clean, branch feature/WF02-REQ062-20260819). mix compile --warnings-as-errors: clean, exit 0. Independently ran MIX_TEST_PARTITION=2 mix test myself (not reused from any report): '5 properties, 1105 tests, 0 failures', matching TEST-RUNNER's step-04b figure exactly -- an independent reproduction, not a copy.\n\nAC-by-AC re-check against current code (lib/letflow/engine/sub_process.ex, lib/letflow/engine.ex):\nAC1/AC2 (interface-filtered vs full-copy initial variables): build_child_initial_variables/2 (sub_process.ex L107-122) -- nil interface copies parent_variables unchanged (EXT-05), a declared interface routes through filter_entries/2 which only ever Map.put/3's declared entry names into a fresh %{} accumulator, so an undeclared parent variable is structurally absent, not filtered out after the fact. Tests: engine_sub_process_test.exs describe blocks 'AC1' (L283) and 'AC2' (L310), both present and exercised in the run above.\nAC3/AC8 (four failure modes, zero orphan children / no partial merge, routed through set_instance_error): to_error_args/6 (L192-213) maps all four SUB_PROCESS_* codes plus the defensive 5th to error_type: :subprocess_interface_violation, consumed via ExecutionError.append_multi/3 (same sink REQ-061 built) -- confirmed by reading prepare_sub_process_children/5 and prepare_sub_process_children_for_completion/7's own call sites in engine.ex, both feeding SubProcess-returned error tuples into the same ExecutionError path used elsewhere. prepare_child_activation/4 (L264-315) runs entirely before append_start_multi/7 is ever called -- a failed resolve/filter never reaches a Multi.run insert, so 'zero child instances created' is structural (no rollback needed), matching the design's own claim. append_completion_multi/6 (L695-767) returns {:error, error_args} straight from build_parent_merge_variables/2's failure branch, before build_completion_multi_from_merge/12 (which contains every write step) is ever invoked -- no partial merge is structurally possible. 4 dedicated describe blocks present (engine_sub_process_test.exs L332, L384, L429, L482).\nAC4 (only declared outputs merge back): build_parent_merge_variables/2 (L131-146) is the completion-side mirror of AC1's filter, same absent-by-construction shape. Test at L529.\nAC5 (waiting_child_instance_id set/cleared, GH-428 regression): update_parent_token_waiting/5 (sub_process.ex L626-646) sets it; transition.ex L472-512 clears it only on the token's own SUB_PROCESS completion transition, and preserves it through unrelated struct-updated copies (the GH-428 bug pattern) -- confirmed the field is present in every %Token{} struct-update site I checked (transition.ex L416, L509-512) rather than being silently dropped by a literal reconstruction. Dedicated regression describe block at test/letflow/engine/sub_process_test.exs L338 ('AC5 -- GH-428 regression: an unrelated PARALLEL_GATEWAY split does not drop a sibling token's waiting_child_instance_id').\nAC6 (not reachable via create/2's public path) -- RE-CHECKED SPECIFICALLY FOR MERGE IMPACT since this is exactly where REQ-059's parent_instance_id read lives now. Read insert_child_instance_projection/8 (sub_process.ex L488-512): the ONLY place a projection's parent_instance_id/parent_token_id columns are populated, and it is called exclusively from append_start_multi/7, itself only reachable from prepare_sub_process_children/5 and its completion-time twin -- neither is reachable from Engine.create/2's own create_attrs() shape. Separately, engine.ex's new parent_pins/2 (L533, added by the REQ-059 merge) DOES read attrs[:parent_instance_id] from create/2's own caller-supplied attrs, but only to do a pin-inheritance *lookup* (PinResolver.reconstruct_effective_pins/2) -- it is never threaded into insert_instance_projection/8, which remains the pre-existing REQ-045 function untouched by this merge. Re-ran the exact AC6 test (test/letflow/engine_sub_process_test.exs L613-649, 'a caller-supplied parent_instance_id in attrs is silently ignored') and traced it by hand: it now uses a real-but-unrelated instance id as the forged parent_instance_id specifically because a nonexistent one now fails earlier at parent_pins/2's own {:error, :instance_not_found} lookup (a genuine, correctly-behaving REQ-059 path) -- the test's own comment (L620-632) documents this precisely, and the assertion that actually matters (projection.parent_instance_id == nil, projection.parent_token_id == nil, L646-647) is unchanged and still passes. This is the one place the merge could plausibly have weakened AC6, and it did not: the two concerns (pin lookup vs. projection parentage) are cleanly separated in the code, not just in the test's framing.\nAC7 (cancel does not cancel child, EE-08): describe block at engine_sub_process_test.exs L656, asserts child projection/task/token rows are completely unaffected by parent cancellation -- cancel_instance/3 (engine.ex, untouched by this merge) has no sub-process-aware cascade code at all, confirming the scope boundary by absence.\n\nNo AC regressed by the merge. The one genuinely new cross-requirement interaction (parent_pins/2 reading attrs[:parent_instance_id], a key REQ-062's own child-creation path also happens to set on the child's own INSTANCE_STARTED payload) was already the explicit subject of SECURITY-REVIEWER's step-02c2 re-gate (INV-1 cross-tenant-leak analysis, PASS) and REVIEWER's step-02d2 re-gate (control-flow/Multi-ordering analysis, PASS) -- this pass independently re-derived the same conclusion from the code rather than re-stating those reports, and additionally re-ran the specific AC6 test and full suite myself rather than trusting either prior gate or TEST-RUNNER's post-merge figure.\n\ndocs/status/requirement_status.yaml REQ-062 history (started 04:36:41Z -> blocked 05:57:02Z at max_rework/3 -> done via design-amendment recovery 08:22:56Z, noting the pre-merge RELEASE-VALIDATOR pass at 1051/0) is internally coherent and not contradicted by the merge; docs/requirements.yaml REQ-062 entry still carries status: done with its full 8-AC list, matching what was independently re-verified here. No docs/migration/decisions/ record is contradicted by anything shipped in the merge (no new framework/library choice; PinResolver and SubProcess integration is exactly what each requirement's own design doc specified). This is a WF-02 run, not a stage-gate check, so no docs/migration/stage-N-*.md REVIEWER sign-off section applies here.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ062-20260819",
+      "commit_sha_list": ["4fe79cb"],
+      "remote_branch": "origin/feature/WF02-REQ062-20260819",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Ready for ORCH's Step Final: open PR from feature/WF02-REQ062-20260819 against main, wait for CI, merge once green. No further rework needed on this branch."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

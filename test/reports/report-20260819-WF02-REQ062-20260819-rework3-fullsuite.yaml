@@ -1,0 +1,216 @@
+# Test run report — WF-02 Step 4 (test run) for REQ-062, full-suite re-run after
+# rework-3 (SECURITY-REVIEWER and REVIEWER already PASSED the rework diff;
+# TEST-DESIGN-VALIDATOR already PASSED the corrected tests and confirmed the scoped
+# subset — engine_sub_process_test.exs + engine/sub_process_test.exs, 30 tests — green).
+# This is the first FULL suite run this rework cycle has had. Superseding note: this
+# is a distinctly-named follow-up to
+# test/reports/report-20260819-WF02-REQ062-20260819.yaml, which already exists on this
+# branch as the original pre-rework run (86 failures, cause_1/cause_2/cause_3 that led
+# to the escalation -> design-amendment -> rework-3 cycle) — that file is preserved
+# as-is, not overwritten, per the project's audit-trail convention (see
+# report-20260819-WF03-ISS0064-20260819-rebase-recheck.yaml for the same
+# distinctly-named-follow-up precedent).
+
+req_id: REQ-062
+workflow: WF-02
+step: "04"
+agent: TEST-RUNNER
+run_id: WF02-REQ062-20260819
+run_variant: rework3-fullsuite
+date_utc: 2026-08-19T07:55:17Z
+
+git:
+  branch: feature/WF02-REQ062-20260819
+  branch_confirmed: true
+  head_commit: 5f267077f1105d2b8e297f74e584d765eb2728ad
+  head_commit_subject: "chore: WF02-REQ062 registry/log entries for escalation"
+  uncommitted_changes:
+    - lib/letflow/design/req062-sub-process-runtime.md
+    - lib/letflow/engine/execution_error.ex
+    - lib/letflow/engine/sub_process.ex
+    - lib/letflow/engine/task_activation.ex
+    - test/letflow/engine/sub_process_test.exs
+    - test/letflow/engine_sub_process_test.exs
+    - docs/issues/ISS-0068.yaml (untracked, filed by REVIEWER this run)
+  worktree: true (secondary checkout ~/letflow-wt2, shares Postgres container with
+    the primary ~/letflow checkout)
+  note: >
+    Not committed as of this run — the rework-3 diff (SECURITY-REVIEWER/REVIEWER-passed,
+    TEST-DESIGN-VALIDATOR-passed) is still sitting in the working tree. This report was
+    produced against that working-tree state, not HEAD alone.
+
+environment:
+  postgres_container: "letflow-postgres-1, already running (confirmed via \`docker ps\`
+    — 0.0.0.0:5462->5432/tcp). Per this worktree's standing session override,
+    \`docker compose up\` was deliberately NOT run."
+  command_run: "MIX_TEST_PARTITION=2 mix test (full suite, unpinned/default random
+    seed — the \`test\` alias runs ecto.create + ecto.migrate --quiet first
+    automatically), per this worktree's standing convention."
+
+verdict: FAIL
+
+checks:
+  test_suite_full_run:
+    result: FAIL
+    exit_code: 2
+    summary_line_verbatim: "5 properties, 1051 tests, 1 failure"
+    finished_line_verbatim: "Finished in 133.3 seconds (6.2s async, 127.1s sync)"
+    failures: 1
+    comparison_to_original_pre_rework_run: >
+      report-20260819-WF02-REQ062-20260819.yaml (the original pre-rework run, same
+      1051-test total) recorded 86 failures across 3 causes (migration-manifest
+      registration gap, missing SUB_PROCESS node-type map entry, one contradictory
+      transition_test.exs expectation). All 3 of those causes are confirmed fixed —
+      only 1 failure remains, and it is a different, previously-masked failure (see
+      below), not a residual of any of the original 3 causes.
+
+  scoped_subset_reconfirmed_in_full_suite_context:
+    result: PASS
+    note: >
+      The 30-test scoped subset TEST-DESIGN-VALIDATOR already confirmed green
+      (test/letflow/engine_sub_process_test.exs + test/letflow/engine/sub_process_test.exs)
+      contributed no failures to this full-suite run — the single failure below is in a
+      third file, test/letflow/engine/reconstruction_test.exs, outside that scoped
+      subset.
+
+  failure_1_req062_own_reconstruction_test:
+    result: FAIL
+    classification: "REQ-062's OWN test coverage failing — BLOCKING this run.
+      test/specs/REQ-062.md explicitly names this test as this requirement's owned
+      coverage (\"reconstruction_test.exs's new test is REQ-053's own replay contract
+      (EE-11) extended to a 5th persisted event type this requirement introduces...
+      explicitly named in the design doc's moduledoc-finding list as this branch's own
+      rework-1 fix\"), and lib/letflow/engine/reconstruction.ex's SUB_PROCESS_COMPLETED
+      replay clause is listed as part of REQ-062's own real executable surface."
+    test: "test req062 -- SUB_PROCESS_COMPLETED replay reconstructs the same state the
+      live completion path produced reconstructing a parent past its completed
+      SUB_PROCESS child matches the live projection (Letflow.Engine.ReconstructionTest)"
+    location: "test/letflow/engine/reconstruction_test.exs:675 (assertion at line 708)"
+    assertion_output_verbatim: |
+      match (=) failed
+      code:  assert {:ok, result} = Reconstruction.reconstruct_instance(created.instance_id, prefix: schema_name)
+      left:  {:ok, result}
+      right: {:error,
+              {:replay_failed,
+               {:ambiguous_sub_process_completion,
+                "47d853ee-966b-4db9-97cc-0bc8cfb97d38"}}}
+      stacktrace:
+        test/letflow/engine/reconstruction_test.exs:708: (test)
+    root_cause_diagnosis: >
+      lib/letflow/engine/reconstruction.ex has a pre-existing, self-documented gap
+      (its own comment at the drop_pending_events/1 clause, ~lines 619-630): "This
+      module still has no replay-time consumer for a {:sub_process_start, ...}
+      pending event (activating a *new* child during replay) -- that remains a real,
+      named gap for a future requirement". When apply_event/3 replays INSTANCE_STARTED
+      and Engine.advance_until_stable/4 drives the seed token to the SUB_PROCESS node,
+      Transition.transition/3 produces a {:sub_process_start, ...} pending_event (real
+      child activation requires a DB write, which live-path SubProcess does but replay
+      cannot/does not attempt) -- drop_pending_events/1 silently discards it instead of
+      setting the in-memory token's waiting_child_instance_id. By the time apply_event/3
+      later replays the SUB_PROCESS_COMPLETED event and calls
+      find_sub_process_completion_token/2 (matching by
+      token.waiting_child_instance_id == child_instance_id, reconstruction.ex:578), no
+      live token has that field set, so the zero-match branch fires
+      {:error, {:ambiguous_sub_process_completion, child_instance_id}}.
+
+      This gap is NOT in this rework cycle's own uncommitted diff
+      (lib/letflow/engine/task_activation.ex, lib/letflow/engine/sub_process.ex,
+      lib/letflow/engine/execution_error.ex) -- reconstruction.ex is unmodified in the
+      current working-tree diff. But it was newly EXPOSED as a hard test failure by
+      this rework cycle's task_activation.ex fix: confirmed via \`git stash\` (still on
+      feature/WF02-REQ062-20260819 throughout, stash popped immediately after) +
+      isolated rerun of test/letflow/engine/reconstruction_test.exs alone. Without the
+      rework-3 diff (i.e. on this branch's last committed state, HEAD
+      5f267077f1105d2b8e297f74e584d765eb2728ad), the SAME test fails earlier and
+      differently:
+        \`\`\` (RuntimeError) cannot merge Multi; the following operations were found
+        in both Ecto.Multi: [:task_records]
+        code: Engine.complete_task(...)
+        (ecto 3.14.1) lib/ecto/multi.ex:952: Ecto.Multi.merge_results/3
+        ...
+        (letflow 0.1.0) lib/letflow/engine.ex:1153: Letflow.Engine.run_complete_task/6
+        test/letflow/engine/reconstruction_test.exs:697: (test)
+        \`\`\`
+      That earlier crash is exactly the :task_records Multi-key collision bug this
+      rework cycle's task_activation.ex change fixes (namespacing the step key by
+      instance_id, per its own docstring addition). So the test has never actually
+      passed on this branch -- it previously died in its own DB setup (completing the
+      child task, before ever calling Reconstruction.reconstruct_instance/2) on a bug
+      this rework fixed, and now runs far enough to hit the separate, pre-existing
+      reconstruction.ex gap described above. This rework's OWN changes are confirmed
+      NOT the proximate cause of the ambiguous_sub_process_completion failure (they
+      contain no waiting_child_instance_id / SUB_PROCESS_COMPLETED replay logic at
+      all), but they are what unmasked it, and reconstruction_test.exs is squarely
+      REQ-062's own claimed test coverage per test/specs/REQ-062.md -- so this
+      blocks the requirement, it is not filed-and-forwarded as unrelated/out-of-scope.
+    routing: "ELIXIR-DEV (real application bug in lib/letflow/engine/reconstruction.ex,
+      not a test-code issue -- reconstruction_test.exs's assertion is correct per
+      REQ-062's own design doc/test spec; the gap is reconstruction.ex's
+      drop_pending_events/1 silently discarding the {:sub_process_start, ...}
+      pending_event instead of deriving/replaying the child link so
+      waiting_child_instance_id is set to match what SUB_PROCESS_COMPLETED's payload
+      will later reference). Per TEST-RUNNER's own role file, not fixed here."
+
+known_noise_not_a_failure:
+  - >
+    Verbose SQL query debug logging (`[debug] QUERY OK ...`) throughout raw mix test
+    output (config/test.exs's default test log level) -- expected, not indicative of
+    any problem.
+  - >
+    Multiple EXECUTION_ERROR/variable_schema_rejected/no_matching_gateway_edge/
+    subprocess_interface_violation DB rows appear in the log as deliberate negative-path
+    fixtures from unrelated REQ-030/REQ-053/REQ-061/REQ-062 tests exercising error
+    paths on purpose -- confirmed these are fixture data, not failures (grepped for
+    "Finished...failures: [1-9]" pattern; only the one failure above matched).
+
+pre_existing_failures_found: []
+  # The failure IS attributable to a pre-existing gap in reconstruction.ex, but it is
+  # not filed as a separate pre-existing/unrelated issue because it blocks THIS run's
+  # own acceptance criteria (reconstruction_test.exs is REQ-062's own named coverage
+  # per test/specs/REQ-062.md) -- per WF-02 Step 4's own routing rule, this is
+  # "reworked on this branch", not "filed and forwarded".
+
+issues_filed_this_run: none (this finding is routed directly back into this run's own
+  rework loop per WF-02 Step 4 -- it blocks REQ-062's own claimed test coverage, so it
+  is not an unrelated/out-of-scope discovery under the "No Issue Left Local-Only" rule).
+
+diagnosis: >
+  1 of 1051 tests failed -- a large improvement over the original pre-rework run's 86
+  failures (report-20260819-WF02-REQ062-20260819.yaml), confirming all 3 of that run's
+  root causes (migration-manifest registration, missing SUB_PROCESS node-type map
+  entry, contradictory transition_test.exs expectation) are fixed. The one remaining
+  failure -- reconstruction_test.exs's "req062 -- SUB_PROCESS_COMPLETED replay..." --
+  is REQ-062's own named test coverage (test/specs/REQ-062.md), not a pre-existing/
+  unrelated failure. Root-caused to lib/letflow/engine/reconstruction.ex's own
+  documented, unaddressed gap: no replay-time handling for a
+  {:sub_process_start, ...} pending_event, so a token reconstructed purely from
+  INSTANCE_STARTED + SUB_PROCESS_COMPLETED never gets waiting_child_instance_id set,
+  and find_sub_process_completion_token/2 finds zero matches. Confirmed via git-stash
+  comparison (branch never left feature/WF02-REQ062-20260819, stash popped
+  immediately after) that this rework cycle's own uncommitted diff
+  (task_activation.ex/sub_process.ex/execution_error.ex) is not the buggy code --
+  reconstruction.ex is unmodified by it -- but the rework's task_activation.ex
+  Multi-key fix is what allowed the test to run far enough to reach this separate,
+  pre-existing gap for the first time (previously it crashed earlier in its own setup
+  with an unrelated Ecto.Multi key-collision RuntimeError). This is a real, in-scope
+  application bug, not a bad test and not out-of-scope noise -- REQ-062 cannot be
+  marked done with this failing.
+
+regression_check: >
+  1051 tests total, 5 properties, 1 failure. No test outside
+  reconstruction_test.exs's single req062 case failed. The 30-test scoped subset
+  TEST-DESIGN-VALIDATOR already confirmed (engine_sub_process_test.exs +
+  engine/sub_process_test.exs) stayed green in the full-suite context. No other
+  regression found.
+
+handoff:
+  verdict: FAIL
+  artifacts_out:
+    - test/reports/report-20260819-WF02-REQ062-20260819-rework3-fullsuite.yaml
+  next_action: "Route to ELIXIR-DEV to fix lib/letflow/engine/reconstruction.ex's
+    replay-time gap (no consumer for a {:sub_process_start, ...} pending_event, so
+    waiting_child_instance_id is never set on a token reconstructed purely from
+    INSTANCE_STARTED before a later SUB_PROCESS_COMPLETED event needs to match it)
+    before REQ-062 can proceed to RELEASE-VALIDATOR. Once fixed, TEST-RUNNER must
+    re-run the full suite again per WF-02 Step 4 (this same report's own scope) before
+    routing forward."

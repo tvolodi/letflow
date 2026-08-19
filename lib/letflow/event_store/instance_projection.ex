@@ -118,6 +118,15 @@ defmodule Letflow.EventStore.InstanceProjection do
     field(:completed_at, :utc_datetime_usec)
     field(:cancelled_at, :utc_datetime_usec)
 
+    # REQ-062 (SPC-01 sub-process runtime half, design §6.1) -- the durable
+    # child->parent link. Both nullable: `nil` for every top-level (non-child)
+    # instance, which is every instance `Letflow.Engine.create/2` (REQ-045)
+    # produces -- that entry point never sets either field (AC6). Only
+    # `Letflow.Engine.SubProcess.append_start_multi/7` (REQ-062) ever inserts
+    # a row with these populated, for a freshly-created sub-process child.
+    field(:parent_instance_id, Ecto.UUID)
+    field(:parent_token_id, Ecto.UUID)
+
     timestamps(inserted_at: :started_at, type: :utc_datetime_usec)
   end
 
@@ -137,7 +146,9 @@ defmodule Letflow.EventStore.InstanceProjection do
       :definition_id,
       :correlation_key,
       :current_nodes,
-      :variables
+      :variables,
+      :parent_instance_id,
+      :parent_token_id
     ])
     |> validate_required([:instance_id, :status, :definition_id])
     |> unique_constraint(:correlation_key, name: :uq_instance_correlation)

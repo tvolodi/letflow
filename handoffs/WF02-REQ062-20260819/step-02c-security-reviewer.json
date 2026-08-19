@@ -1,0 +1,43 @@
+{
+  "handoff_id": "b1e1a1a0-0001-4a00-9000-000000000005",
+  "run_id": "WF02-REQ062-20260819",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ062-20260819/step-02c-security-reviewer.json",
+  "created_at": "2026-08-19T05:09:14Z",
+  "started_at": "2026-08-19T05:09:14Z",
+  "completed_at": "2026-08-19T05:11:29Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-062"],
+    "requirement_text": {
+      "REQ-062": "See handoffs/WF02-REQ062-20260819/step-01-code-designer.json context.requirement_text for the full verbatim requirement description."
+    },
+    "related_handoff_ids": ["step-02a-elixir-dev.json"],
+    "artifacts_in": ["lib/letflow/engine/sub_process.ex", "lib/letflow/engine/transition.ex", "lib/letflow/engine.ex", "lib/letflow/engine/reconstruction.ex", "lib/letflow/event_store/instance_projection.ex", "priv/repo/migrations/20260819045553_add_sub_process_parent_columns.exs"],
+    "owned_modules": ["lib/letflow/engine/", "lib/letflow/instance*", "priv/repo/migrations/"]
+  },
+  "task": {
+    "description": "Security gate (hard gate) on REQ-062's implementation. Branch feature/WF02-REQ062-20260819, already checked out. Read git diff main...HEAD (or origin/main...HEAD) and docs/agents/instructions/security-invariants.md. This diff creates child tenant instances internally, filters/merges variable maps across a parent/child instance boundary, and adds a migration touching instance_projections (a tenant-scoped table) -- run the full scope test and INV-1..INV-8 checklist per WF-02 Step 2c.",
+    "acceptance_criteria": [
+      "Scope test result stated explicitly (in scope / out of scope) with reasoning",
+      "Every applicable invariant (INV-1..INV-8) verdicted APPLIES or NOT-APPLICABLE with its How-to-verify check actually run, not assumed",
+      "New migration's tenant-scoping (prefix()-truthiness guard per decision 0006/REQ-022 §4) checked explicitly, since it touches instance_projections",
+      "The parent/child variable merge and input-filter paths checked for any cross-tenant data leak potential (a child instance created from a parent must stay within the same tenant schema)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "SCOPE: IN SCOPE. Diff adds priv/repo/migrations/20260819045553_add_sub_process_parent_columns.exs (alters instance_projections, a tenant-scoped table, adds parent_instance_id/parent_token_id FKs + 2 indexes) and lib/letflow/engine/sub_process.ex (new module, 1127 lines, internal child-tenant-instance creation + cross-instance variable merge for SPC-01 sub-process runtime), plus supporting changes to lib/letflow/engine.ex, lib/letflow/engine/transition.ex, lib/letflow/engine/reconstruction.ex, lib/letflow/event_store/instance_projection.ex. Matches 'adds/modifies a migration' and 'lookup-by-ID / tenant-scoped data path' scope triggers.\n\nINV-1 (tenant data isolation) -- APPLIES, PASS. (a) Every Repo write/read touching instance_projections, tokens, tasks, event_store in sub_process.ex, engine.ex, and reconstruction.ex passes `prefix: prefix` explicitly (verified by reading every repo.insert/repo.update/repo.get/Repo.all/Repo.get call site in the diff: insert_child_instance_projection, insert_child_token_records, insert_child_task_records, append_instance_started_event_for_child, update_parent_token_waiting, find_waiting_parent_token, load_parent_context, reconcile_parent_tokens, reconcile_parent_projection, append_sub_process_completed_event -- all thread the same single `prefix` value). `prefix` originates once at Letflow.Engine.create/2's top level (`prefix = Keyword.get(opts, :prefix)`) validated via `TenantProvisioning.tenant_id_for_schema_name(prefix)`, then threaded unchanged through prepare_child_activation/4, append_start_multi/7, append_completion_multi/5, and the grandparent-cascade recursion in maybe_cascade_to_grandparent/6 -- no second/independent prefix is introduced anywhere in the diff, and Definitions.get_active_by_name/2 (child definition resolution) is itself prefix-scoped, so a child cannot resolve a process definition belonging to a different tenant. (b) Migration wraps both the alter table and both new indexes in `if prefix() do ... end` (verified by reading the migration file in full) -- a plain `mix ecto.migrate` (no prefix bound) creates nothing, matching every other tenant-scoped migration's convention (decision 0006/REQ-022 §4, cross-checked against 20260818110002_create_tokens.exs's stated precedent in the migration's own header comment). (c) instance_projections carries no tenant_id column of its own (tenant_id lives at the schema level per 0003 Dimension B, not as an intra-row column here) -- not applicable to (c)'s literal wording for this table. Engine.create/2's public entry point rejects a caller-supplied `:tenant_id` (reject_tenant_id/1) and insert_instance_projection/8 (the public, top-level path) builds its own attrs map from scratch (instance_id/status/definition_id/correlation_key/current_nodes/variables only) -- it does NOT forward caller attrs into InstanceProjection.insert_changeset/2, so even though insert_changeset/2's cast list now includes :parent_instance_id/:parent_token_id (added by this diff), a public caller has no path to set them; only sub_process.ex's internal insert_child_instance_projection/8 populates them, from parent_instance_id/parent_token_record_id values resolved server-side from the parent's own already-in-scope token/instance, never from external caller input.\nINV-2 -- NOT-APPLICABLE (no multi-tenant API response surface touched; S4 not started).\nINV-3 -- NOT-APPLICABLE (no Lua/WASM scripting; S5 not started).\nINV-4 (secrets by reference) -- APPLIES, PASS. `grep -n \"System.get_env\"` and the hardcoded-secret heuristic grep run against all 5 changed/added lib files (sub_process.ex, engine.ex, transition.ex, reconstruction.ex, instance_projection.ex) returned zero hits in either direction -- no secret material introduced or handled in this diff.\nINV-5 -- NOT-APPLICABLE (no lookup-by-ID HTTP endpoint added; S4 not started -- SubProcess module is explicitly internal-only per its own moduledoc, not reachable from any public create_attrs() shape).\nINV-6 (new data-access paths prove scoping) -- APPLIES, PASS. This handoff itself is the proof artifact.\nINV-7 (no raw SQL string interpolation) -- APPLIES, PASS. `grep -rn \"Repo.query\" lib/ priv/repo/migrations/` returns hits only in lib/letflow/sandbox_pool.ex, lib/letflow/tenant_provisioning.ex, lib/letflow/sandbox_pool/fixture_loader.ex -- none of which are touched by this diff (confirmed against `git diff main...HEAD --stat`). Zero Repo.query calls anywhere in the diff's own files; all writes go through Ecto.Query/Ecto.Multi/changeset APIs.\nINV-8 (no unhandled crashes on realistic failure paths) -- APPLIES, PASS. `grep -n \"^\\s*{:ok, .*} = \"` against the 5 diff files returns only `case`/`with` clause patterns (`{:ok, %X{} = var} ->`), not bare destructuring assignments that could raise -- false positives from the heuristic, manually confirmed by reading each hit in context. Every fallible call (repo inserts/updates/gets, EventStore.append, Transition.transition, Letflow.Engine.advance_until_stable, VariableMerge.merge, SnapshotStore.create/get_by_instance_id, Definitions.get_active_by_name) is handled via `case`/`with` returning a typed {:error, _} on the failure branch, mapped to ExecutionError.error_args() or a typed reconstruct_error(). `mix compile --warnings-as-errors` ran clean (no output, exit clean) confirming no missing-clause/unreachable-pattern warnings.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {"branch_name": "feature/WF02-REQ062-20260819", "commit_sha_list": [], "remote_branch": "origin/feature/WF02-REQ062-20260819", "push_status": "ok", "pr_url": null, "pr_create_error": null},
+    "next_action": "Route to REVIEWER (2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

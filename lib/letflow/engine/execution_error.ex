@@ -222,7 +222,8 @@ defmodule Letflow.Engine.ExecutionError do
       "error_type" => to_string(error_args.error_type),
       "affected" => encode_affected(error_args.affected),
       "reason" => error_args.reason,
-      "occurred_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+      "occurred_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
+      "details" => Map.get(error_args, :details, %{})
     }
 
     projection

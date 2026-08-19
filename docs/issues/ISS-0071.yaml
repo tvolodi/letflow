@@ -1,62 +1,61 @@
 id: ISS-0071
 title: >
-  No production code path ever registers TASK_COMPLETED / INSTANCE_CANCELLED /
-  INSTANCE_PINS_REBOUND event types -- EventStore.append/2 for all three would
-  fail against a real, non-test-fixture tenant schema
+  Derived idempotency-key suffixes in sub_process.ex are ad hoc string
+  interpolation with no shared constant/helper -- a typo'd suffix would
+  silently produce a wrong key instead of failing to compile
 discovered_by: REVIEWER
-discovered_in_run: WF02-REQ060-20260819 (Step 2d, OQ-1 sign-off)
-discovered_at: "2026-08-19T00:00:00Z"
-severity: MAJOR
-tags:
-  - type-safety
-  - event-store
-  - operational-gap
+discovered_in_run: WF02-REQ062-20260819
+discovered_at: 2026-08-19T07:45:34Z
+severity: MINOR
+category: type-safety
 description: >
-  While resolving REQ-060's carried-forward OQ-1 (whether
-  Letflow.Engine.PinRebind.rebind_pins/3 should self-register the
-  "INSTANCE_PINS_REBOUND" event type), traced where "INSTANCE_CANCELLED" and
-  "TASK_COMPLETED" -- the two precedents pin_rebind.ex's moduledoc cites for
-  its own no-self-registration choice -- actually get registered today.
+  lib/letflow/engine/sub_process.ex now derives three distinct idempotency
+  keys, one per call site, each built by hand-interpolating a literal
+  "::<suffix>::" string between the caller's raw idempotency_key and one or
+  two instance-id values:
 
-  grep across lib/ and test/ for Registry.register_type/2 call sites found
-  exactly one production call site: TenantProvisioning.maybe_seed_platform_event_types/2
-  (tenant_provisioning.ex:539-544), and it seeds only "INSTANCE_STARTED", by its
-  own comment ("No other event type is seeded here ... no other already-designed
-  event type currently has a real writer in this codebase that would need its
-  own registry row yet -- seeding one this call has no caller for would be
-  speculative, not a fix for a demonstrated gap"). Every other
-  Registry.register_type/2 call site in the repo is a test file registering its
-  own fixture's event type (test/letflow/engine_cancel_instance_test.exs,
-  engine_complete_task_test.exs, event_store_test.exs, etc.).
+    - "#{idempotency_key}::sub_process_start::#{child_instance_id}"
+      (sub_process.ex:616-617, pre-existing)
+    - "#{idempotency_key}::sub_process_completed::#{parent_instance_id}::#{child_instance_id}"
+      (sub_process.ex:1109-1110/1124, pre-existing)
+    - "#{idempotency_key}::sub_process_completion_error::#{parent_token.instance_id}::#{child_instance_id}"
+      (sub_process.ex:715-716, new in this rework cycle -- REQ-062 design
+      addendum §10.2)
 
-  EventStore.append/2 (event_store.ex:186) calls Registry.validate_payload/3,
-  which requires Registry.get_type/2 to find a matching, already-registered
-  event_type_registry row for the tenant schema -- confirmed by reading
-  event_store.ex directly. So in any real, provisioned (non-test-fixture)
-  tenant schema today: Letflow.Engine.cancel_instance/3 appending
-  "INSTANCE_CANCELLED", Letflow.Engine.complete_task/3 appending
-  "TASK_COMPLETED", and (once merged) Letflow.Engine.PinRebind.rebind_pins/3
-  appending "INSTANCE_PINS_REBOUND" would all hit an unregistered-event-type
-  rejection from Registry.validate_payload/3 -- these write paths currently
-  only work in tests because every test fixture explicitly calls
-  Registry.register_type/2 for itself before exercising the code under test.
+  All three are required to be pairwise-distinct for correctness (each
+  guards a separate schema-wide-unique event_idempotency.idempotency_key
+  index write within the same transaction) -- this is exactly the invariant
+  §10.2's own reasoning depends on. Today that distinctness is guaranteed
+  only by each suffix literal being spelled differently by hand at three
+  separate call sites, with no shared module attribute, no enum/type, and
+  no compile-time or Dialyzer check that a fourth future call site's suffix
+  doesn't accidentally collide with (or typo into) one of the existing
+  three. A typo (e.g. "sub_process_completed" vs "sub_process_completion")
+  would not fail to compile and would not necessarily fail any existing
+  test -- it would only surface as a runtime unique-constraint violation
+  the next time two of the mistyped/colliding keys' inputs happened to
+  coincide, which could be far from where the typo was introduced.
 
-  Not a regression introduced by REQ-060/pin_rebind.ex -- it is a pre-existing
-  gap that predates cancel_instance/3 and complete_task/3 shipping, and
-  pin_rebind.ex's own no-self-registration choice is consistent with (not a
-  new instance of) that gap, per REVIEWER's WF02-REQ060-20260819 Step 2d
-  review. Filed because nothing currently tracks it, and it is squarely the
-  kind of "only a runtime error catches it" gap core-directives.md's
-  type-safety-gap filing duty exists for -- worth a real
-  provisioning-vs-registration design decision (e.g. extend
-  maybe_seed_platform_event_types/2 to seed all currently-shipped write-path
-  event types, or an explicit migration-time seed list) before this reaches
-  a real deployment, not a test suite.
+  This is not a defect in the current, already-verified-distinct three
+  suffixes (confirmed distinct by direct string comparison during this
+  review) -- it is a structural gap: nothing about the type system makes a
+  fourth call site's suffix choice safe by construction. Doesn't rise to a
+  blocking finding (REVIEWER's four questions explicitly note type-safety
+  gaps are non-blocking, filed for later claimable work instead).
+
+  Renumbered from its original ISS-0068 slot during the merge of
+  feature/WF02-REQ062-20260819 into main (2026-08-19): ISS-0068 was
+  independently reused by a concurrent host for an unrelated, already-
+  resolved mix-format-drift finding before this branch merged, an ISS-number
+  collision of the same class documented in docs/anti-patterns.md. See also
+  ISS-0070.yaml (filed by hetzner-orch while this branch was still
+  unmerged/escalated, describing GH#255/queue-task-127 as "not actionable
+  against main" for exactly that reason) -- now that REQ-062 has merged and
+  lib/letflow/engine/sub_process.ex exists on main, this finding (this file)
+  is the actionable record; ISS-0070's own "blocked" status should be
+  revisited by whichever run next touches the GH#255/queue-task-127 backlog
+  item.
 affected_files:
-  - lib/letflow/tenant_provisioning.ex
-  - lib/letflow/event_store.ex
-  - lib/letflow/event_store/registry.ex
-  - lib/letflow/engine.ex
-  - lib/letflow/engine/pin_rebind.ex
-github_issue: https://github.com/tvolodi/letflow/issues/257
+  - lib/letflow/engine/sub_process.ex
+github_issue: https://github.com/tvolodi/letflow/issues/255
 status: open

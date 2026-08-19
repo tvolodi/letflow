@@ -4997,6 +4997,55 @@ history:
       needed -- this change added no new HTTP route, no change to the
       documented gen_statem/process-model diagram, and no change to
       the "Running it" section, same reasoning as REQ-045/047/048/052/061.
+  - req: REQ-062
+    event: started
+    agent: ELIXIR-DEV
+    at: 2026-08-19T04:36:41Z
+    note: >
+      WF02-REQ062-20260819. Porting SPC-01's runtime half (child
+      instance creation via createWithParentInheritance, parent-token
+      waiting_child_instance_id wait/clear, input filtering/output
+      merge, the four SPC-01 failure modes routed through REQ-061's
+      set_instance_error) from src/engine/instance.zig +
+      transition.zig. depends_on REQ-061/REQ-049/REQ-032, all done.
+  - req: REQ-062
+    event: blocked
+    agent: ELIXIR-DEV
+    at: 2026-08-19T05:57:02Z
+    note: >
+      WF02-REQ062-20260819 Step 2a (backend implementation) hit
+      max_rework (3/3) still at PARTIAL -- scoped run
+      (engine_sub_process_test.exs + engine_test.exs) 36/42 passing,
+      engine_test.exs itself fully green (32/32, no regression to any
+      shipped requirement). Three successive rework iterations each
+      fixed their assigned bug but surfaced a new, distinct latent bug
+      in the sub-process completion/cascade path each time (Ecto.Multi
+      key collisions, idempotency-key collisions across the
+      parent/child event cascade, an input-side error-routing gap) --
+      see handoffs/escalations.yaml's WF02-REQ062-20260819 entry for
+      full detail and the recommended next step (a design-amendment
+      pass on the cascade's Multi-key/idempotency-key shape before a
+      fourth implementation attempt). Branch feature/WF02-REQ062-20260819
+      pushed to origin, not merged, not deleted. Requirement status
+      stays in_progress, not done.
+  - req: REQ-062
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-19T08:22:56Z
+    note: >
+      WF02-REQ062-20260819. Escalated at max_rework (3/3) on Step 2a
+      (see this file's own REQ-062 `blocked` entry above and
+      handoffs/escalations.yaml for full detail) -- recovered via a
+      design-amendment pass rather than a blind fourth implementation
+      retry: sec 10/11/12 addenda to
+      lib/letflow/design/req062-sub-process-runtime.md fixed the
+      Multi-key/idempotency-key shape underlying the three successive
+      latent-bug surfacings. Final commit 43084c6. RELEASE-VALIDATOR
+      independently re-verified all 8 acceptance criteria and its own
+      full-suite re-run: 1051 tests, 0 failures. status flipped
+      in_progress -> done in docs/requirements.yaml; stage-3 header
+      pending count corrected 4 -> 3 in
+      docs/migration/stage-3-instance-engine.md.
 
   - req: REQ-054
     event: started

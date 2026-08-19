@@ -1,0 +1,157 @@
+# Test run report — WF-02 Step 4 (test run) for REQ-062
+
+requirement_id: REQ-062
+workflow: WF-02
+step: "04"
+agent: TEST-RUNNER
+run_id: WF02-REQ062-20260819
+date_utc: 2026-08-19T05:33:04Z
+
+git:
+  branch: feature/WF02-REQ062-20260819
+  branch_confirmed: true
+  commit: ac6f4b4e58df6e5c8e9c8e7d6632a4169a0c1847
+  commit_subject: "test-design-validator: PASS gate for REQ-062 (WF02-REQ062-20260819)"
+  worktree: true (secondary checkout at ~/letflow-wt2, shares Postgres with primary ~/letflow)
+  postgres: already running (shared container), no docker compose up run per instructions
+
+environment:
+  command_run: "MIX_TEST_PARTITION=2 mix test"
+  test_alias_note: "mix.exs's `test` alias runs ecto.create + ecto.migrate --quiet first automatically"
+
+verdict: FAIL
+
+summary_line_verbatim: "5 properties, 1051 tests, 86 failures"
+finished_line_verbatim: "Finished in 130.0 seconds (5.6s async, 124.4s sync)"
+
+root_cause_analysis:
+  total_failures: 86
+
+  cause_1_migration_not_registered_in_manifest:
+    failure_count: 75
+    severity: blocking
+    owner_to_fix: ELIXIR-DEV
+    diagnosis: >
+      priv/repo/migrations/20260819045553_add_sub_process_parent_columns.exs adds
+      instance_projections.parent_instance_id / parent_token_id (plus 2 indexes) and
+      is a tenant-scoped migration (guarded by `if prefix() do`). Its own header
+      comment states "Registered in Letflow.TenantProvisioning.tenant_scoped_migrations/0
+      -- both halves are mandatory" but it was never actually added to
+      @tenant_scoped_migration_manifest in lib/letflow/tenant_provisioning.ex (list ends
+      at 20260820000011 / CreateLuaScriptExecutionAudit, no
+      20260819045553/AddSubProcessParentColumns entry). Every provisioned test tenant
+      schema is therefore missing both columns. Letflow.EventStore.InstanceProjection's
+      Ecto schema was updated to include parent_instance_id (per REQ-062 design §6), so
+      any query selecting the full instance_projections row -- e.g.
+      Letflow.EventStore.active_instance_guard/3, called from every Engine.create/2 /
+      complete_task/3 / cancel_instance/3 / EventStore.append/2 path -- raises
+      Postgrex.Error 42703 undefined_column "i0.parent_instance_id does not exist"
+      against the real tenant schema.
+    representative_error: |
+      ** (Postgrex.Error) ERROR 42703 (undefined_column) column i0.parent_instance_id does not exist
+          query: SELECT i0."instance_id", ..., i0."parent_instance_id", i0."parent_token_id", ...
+          FROM "tenant_350fa7d094b942da980087bb996f3933"."instance_projections" AS i0
+          WHERE (i0."instance_id" = $1)
+      stacktrace:
+        lib/letflow/event_store.ex:358: Letflow.EventStore.active_instance_guard/3
+        lib/letflow/engine.ex:871: Letflow.Engine.append_instance_started_event/6
+    affected_test_files_and_counts:
+      - "test/letflow/engine_sub_process_test.exs (3: AC3/AC8 SUB_PROCESS_MISSING_REQUIRED_INPUT, AC6, AC3/AC8 SUB_PROCESS_INPUT_SCHEMA_VIOLATION)"
+      - "test/letflow/engine_execution_error_test.exs (7, whole file)"
+      - "test/letflow/engine/migrations_test.exs (1: schema/column-list assertion, direct evidence of the missing columns)"
+      - "test/letflow/engine_test.exs (15, whole file)"
+      - "test/letflow/engine_cancel_instance_test.exs (7, whole file)"
+      - "test/letflow/event_store/migrations_test.exs (1: schema/column-list assertion, direct evidence)"
+      - "test/letflow/engine/service_task_routing_test.exs (4)"
+      - "test/letflow/engine_complete_task_test.exs (6, whole file)"
+      - "test/letflow/engine/reconstruction_test.exs (9 of its failures -- the remaining 1 of its 10 total failures is cause_2 below)"
+      - "test/letflow/event_store_test.exs (16, whole file)"
+      - "test/letflow/engine_concurrency_test.exs (3, whole file)"
+    fix_direction: >
+      Add {20_260_819_045_553, Letflow.Repo.Migrations.AddSubProcessParentColumns,
+      "20260819045553_add_sub_process_parent_columns.exs"} to
+      @tenant_scoped_migration_manifest in lib/letflow/tenant_provisioning.ex, in
+      version order (it sorts before the 20260819000001..3/20260820... entries already
+      present, i.e. immediately after the 20260818110003_create_tasks.exs entry).
+
+  cause_2_sub_process_node_type_not_registered_in_graph_parser:
+    failure_count: 8
+    severity: blocking
+    owner_to_fix: ELIXIR-DEV
+    diagnosis: >
+      lib/letflow/definitions/graph.ex's @node_type_map (the "node_type" string ->
+      atom table build_graph_node/1 uses) lists START/END/HUMAN_TASK/SERVICE_TASK/
+      EXCLUSIVE_GATEWAY/PARALLEL_GATEWAY/TIMER but has no "SUB_PROCESS" => :SUB_PROCESS
+      entry. Any graph definition containing a node with "node_type" => "SUB_PROCESS"
+      (every REQ-062 fixture) parses that node's node_type as the fallback
+      :unknown_node_type instead of :SUB_PROCESS, so Engine.create/2's activation loop
+      hits Transition's generic catch-all and returns
+      {:error, {:activation_failed, {:node_type_not_yet_implemented, :unknown_node_type, "sp"}}}
+      before any SUB_PROCESS-specific code (lib/letflow/engine/sub_process.ex,
+      transition.ex's dispatch_sub_process_entry/completion) is ever reached.
+    representative_error: |
+      match (=) failed
+      code:  assert {:ok, created} = Engine.create(start_attrs(parent_def, ...), prefix: schema_name)
+      right: {:error, {:activation_failed, {:node_type_not_yet_implemented, :unknown_node_type, "sp"}}}
+    affected_tests:
+      - "test/letflow/engine_sub_process_test.exs: AC3/AC8 SUB_PROCESS_OUTPUT_SCHEMA_VIOLATION, AC4, AC3/AC8 SUB_PROCESS_MISSING_REQUIRED_OUTPUT, AC2 (no declared interface), AC1 (declared interface filters inputs), AC5 (waiting_child_instance_id set/cleared), AC7 (cancel doesn't cancel child)"
+      - "test/letflow/engine/reconstruction_test.exs: \"req062 -- SUB_PROCESS_COMPLETED replay reconstructs the same state the live completion path produced\""
+    fix_direction: >
+      Add "SUB_PROCESS" => :SUB_PROCESS to @node_type_map in
+      lib/letflow/definitions/graph.ex.
+
+  cause_3_test_expectation_contradicts_modules_own_single_hop_contract:
+    failure_count: 1
+    severity: non_blocking_but_needs_TEST-DESIGNER_rework
+    owner_to_fix: TEST-DESIGNER
+    diagnosis: >
+      test/letflow/engine/transition_test.exs "transition/3 -- {:sub_process_completed,
+      token_id} clears the wait and advances (design doc §2.4)" / "clears
+      waiting_child_instance_id (struct-update) and moves the token off its single
+      outgoing edge" asserts that ONE Transition.transition(g, state,
+      {:sub_process_completed, "t1"}) call against a token on a :SUB_PROCESS node whose
+      single outgoing edge leads to an :END node produces new_state.tokens == [] (i.e.
+      fully completes through :END) in a single call.
+      This contradicts lib/letflow/engine/transition.ex's own documented "Single hop per
+      call" contract (module @moduledoc: "One transition/3 call processes exactly one
+      token through exactly one node-type dispatch and returns -- it never recursively
+      cascades a token through a chain of nodes within one call... requires two separate
+      transition/3 calls"), which dispatch_task_completion/4 (the exact precedent
+      dispatch_sub_process_completion/4 is deliberately written to mirror) already
+      obeys, and which lib/letflow/design/req062-sub-process-runtime.md §2.4 explicitly
+      specifies for the SUB_PROCESS case too ("dispatch_sub_process_completion/4's only
+      job is then: clear the wait, evaluate outgoing edges, advance" -- no mention of
+      cascading into :END). The implementation (transition.ex's
+      dispatch_sub_process_completion/4 -> advance_off_completed_node/4 -> advance_token/3)
+      correctly moves the token onto "after" and leaves it there for a second
+      {:advance_token, "t1"} call to process the :END entry -- this matches both the
+      module's documented contract and the design doc. The test's expectation of
+      single-call completion into an empty token list appears to be the actual defect,
+      not the implementation.
+    representative_error: |
+      Assertion with == failed
+      code:  assert new_state.tokens == []
+      left:  [%Letflow.Engine.Token{node_id: "after", token_id: "t1", branch_id: nil, waiting_child_instance_id: nil}]
+      right: []
+    fix_direction: >
+      Not fixed here per role scope (diagnosis only, no implementation-code changes
+      made this run). Needs TEST-DESIGNER rework: either the test should issue a second
+      Transition.transition(g, new_state, {:advance_token, "t1"}) call before asserting
+      tokens == [] (matching the module's single-hop contract and the HUMAN_TASK
+      precedent), or -- if single-call full completion through :END really is the
+      intended REQ-062 behavior for SUB_PROCESS completion specifically -- the design
+      doc and dispatch_sub_process_completion/4's contract need to be revisited, which
+      is a design-level decision this report does not make unilaterally.
+
+unrelated_pre_existing_failures: none found — all 86 failures trace to REQ-062's own
+  changes (a migration-manifest omission, a graph node-type-map omission, and one
+  REQ-062 test's own expectation).
+
+issues_filed: []
+
+action_taken_this_run: >
+  Diagnosis only, per TEST-RUNNER role scope ("do not attempt to fix the implementation
+  yourself, that's ELIXIR-DEV's job on rework"). No lib/letflow/**/*.ex or
+  priv/repo/migrations/*.exs files were modified. No test files were modified.
+
+next_action: "Rework ELIXIR-DEV (cause_1 migration manifest registration, cause_2 graph.ex node-type map) and TEST-DESIGNER (cause_3 transition_test.exs expectation) before re-running TEST-RUNNER."

@@ -3332,7 +3332,7 @@ requirements:
   - id: REQ-062
     title: Sub-process invocation runtime half (instance.zig SPC-01 -- child start, parent-token wait, completion propagation)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S3
     impl_order: 106  # letflow-queue task id
     description: >

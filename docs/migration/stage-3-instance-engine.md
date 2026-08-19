@@ -104,8 +104,23 @@ InstanceNotRebindable, appending one INSTANCE_PINS_REBOUND event per
 CHANGED entry, and surfacing lock contention as a distinct
 ConcurrentModification error via the same SELECT FOR UPDATE NOWAIT
 convention REQ-053 established; same header-sync gap-fix shape applied
-by this requirement's own DOC-UPDATER). REQ-062
-(`docs/requirements.yaml`, 1 total) `pending`.
+by this requirement's own DOC-UPDATER); REQ-062 `done` (Sub-process
+invocation runtime half, SPC-01 -- child instance creation via
+createWithParentInheritance, parent-token waiting_child_instance_id
+wait/clear (R-Co GH #428 field-dropping regression test included),
+input filtering and output-merge per interface, all four SPC-01 failure
+modes routed through REQ-061's set_instance_error/2 rather than a local
+ERROR transition, closing REQ-061's own AC8 obligation deferred forward
+at build time; Step 2a hit max_rework (3/3) and was escalated PARTIAL,
+recovered via a design-amendment pass (Multi-key/idempotency-key shape
+addenda, lib/letflow/design/req062-sub-process-runtime.md §10-12)
+rather than a blind fourth retry; composed against REQ-059's own
+PinResolver integration during the merge of feature/WF02-REQ062-20260819
+into main, since both requirements independently touched
+lib/letflow/engine.ex/lib/letflow/engine/reconstruction.ex; same
+header-sync gap-fix shape applied by this requirement's own
+DOC-UPDATER). All Stage 3 requirements (`docs/requirements.yaml`) are
+now `done`.
 
 ## Scope
 

@@ -1,0 +1,45 @@
+{
+  "handoff_id": "b1e1a1a0-0001-4a00-9000-000000000008",
+  "run_id": "WF02-REQ062-20260819",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ062-20260819/step-03b-test-design-validator.json",
+  "created_at": "2026-08-19T05:25:43Z",
+  "started_at": "2026-08-19T05:26:00Z",
+  "completed_at": "2026-08-19T05:27:39Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-062"],
+    "requirement_text": {
+      "REQ-062": "See handoffs/WF02-REQ062-20260819/step-01-code-designer.json context.requirement_text for the full verbatim requirement description."
+    },
+    "related_handoff_ids": ["step-03-test-designer.json"],
+    "artifacts_in": ["test/specs/REQ-062.md", "test/letflow/engine/sub_process_test.exs", "test/letflow/engine_sub_process_test.exs", "test/letflow/engine/transition_test.exs", "test/letflow/engine/reconstruction_test.exs"],
+    "owned_modules": ["lib/letflow/engine/", "lib/letflow/instance*", "priv/repo/migrations/", "test/letflow/", "test/specs/"]
+  },
+  "task": {
+    "description": "Hard gate on TEST-DESIGNER's REQ-062 test spec + test code, branch feature/WF02-REQ062-20260819 already checked out. Read the test spec and test source files independently -- do not read TEST-DESIGNER's result.summary as a substitute.",
+    "acceptance_criteria": [
+      "Every one of REQ-062's 8 acceptance criteria has at least one runnable test targeting it (not @tag :skip without a passing counterpart)",
+      "No 'TODO: implement test' left in the spec",
+      "Test fixtures use per-test unique data (not shared hardcoded IDs) -- matters given tenancy exists",
+      "Tests are self-sufficient -- don't depend on other tests running first",
+      "No hardcoded secrets/connection strings in test files",
+      "Independently verify the describe/test combined-name-length claim (max 232 chars pre-existing, new pairs <=219) rather than trusting it -- grep every describe/test string pair in the 4 touched files yourself"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-derived PASS by reading test/specs/REQ-062.md and all 4 touched test files directly (not TEST-DESIGNER's summary). All 8 REQ-062 ACs (from step-03-test-designer.json task.acceptance_criteria) have runnable test coverage: AC1/AC2 in sub_process_test.exs (pure filter branches) + engine_sub_process_test.exs (DB-persisted child variables); AC3 (4 failure modes) across sub_process_test.exs error-shape cases + 4 dedicated DB describe blocks in engine_sub_process_test.exs, each asserting zero child rows (activation failures, checked via instance_projection_count/child_projections) or unmodified parent variables (completion failures); AC4 in both files including the SUB_PROCESS_COMPLETED event payload check; AC5 via sub_process_test.exs's GH-428 pure regression test (unrelated PARALLEL_GATEWAY split leaves a sibling waiting token byte-for-byte unchanged) plus engine_sub_process_test.exs's DB set/clear test; AC6 via moduledoc-inspection test plus a functional test forging parent_instance_id into create/2 attrs and confirming it's ignored; AC7 via a real cancel_instance/3 call against a real running child, asserting the child's projection/task/token rows are untouched; AC8 via to_error_args/6's shared error_type pure test plus the same AC3 DB tests additionally asserting error_detail.error_type and exactly one EXECUTION_ERROR event. transition_test.exs's stale catch-all fix was verified directly: :SUB_PROCESS was removed from the {:SERVICE_TASK,:TIMER,:NOT_A_REAL_TYPE} catch-all test list (line 528-531) and a new describe block (line 552) asserts it now dispatches to {:sub_process_start,...} instead of node_type_not_yet_implemented -- this is a real, correct fix, not a cosmetic rename. reconstruction_test.exs's new SUB_PROCESS_COMPLETED replay test (line 674) drives a real parent+child completion through Engine, then reconstructs and asserts the replayed state matches the live projection including waiting_child_instance_id being genuinely cleared by replay. No @tag :skip and no 'TODO: implement test' anywhere in the spec or the 4 test files (grep confirmed zero hits). No hardcoded secrets/connection strings (grep for password/secret_key/api_key/postgres:// /ecto:// found zero hits). Fixtures use per-test-unique data throughout: unique_slug/unique_name/unique_idempotency_key wrap System.unique_integer, and Ecto.UUID.generate() for actor_id -- no shared hardcoded tenant/instance IDs across tests. Tests are self-sufficient: every DB test calls its own provisioned_tenant() which creates a fresh tenant+schema and registers an on_exit that drops the schema and deletes the tenant/registration rows, so no test depends on another having run first or leaves cross-test state. Independently re-verified the describe/test combined-name-length claim via my own Python script (not trusted from the handoff) scanning all describe+test/property string pairs in all 4 files: the true max is 232 chars at test/letflow/engine/transition_test.exs:294 (a pre-existing pair, unrelated to this run's changes), and the largest pair newly added by this run is 219 chars at test/letflow/engine/sub_process_test.exs:317 (AC5 GH-428 test) -- both exactly matching TEST-DESIGNER's claimed figures, well under ExUnit's 255-char ceiling. Ran `MIX_ENV=test mix compile --warnings-as-errors --force` myself: 'Compiling 81 files (.ex) / Generated letflow app', zero warnings, confirming all 4 test files are at minimum syntactically valid and load cleanly.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {"branch_name": "feature/WF02-REQ062-20260819", "commit_sha_list": [], "remote_branch": "origin/feature/WF02-REQ062-20260819", "push_status": "ok", "pr_url": null, "pr_create_error": null},
+    "next_action": "Route to TEST-RUNNER (4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -207,7 +207,8 @@ defmodule Letflow.Definitions.Graph do
     "SERVICE_TASK" => :SERVICE_TASK,
     "EXCLUSIVE_GATEWAY" => :EXCLUSIVE_GATEWAY,
     "PARALLEL_GATEWAY" => :PARALLEL_GATEWAY,
-    "TIMER" => :TIMER
+    "TIMER" => :TIMER,
+    "SUB_PROCESS" => :SUB_PROCESS
   }
 
   defp fetch_graph_list(map, key) do

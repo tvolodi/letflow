@@ -63,4 +63,26 @@ affected_files:
   - lib/letflow/engine/pin_rebind.ex
   - test/letflow/engine/pin_rebind_test.exs
 github_issue: https://github.com/tvolodi/letflow/issues/269
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0072-20260819
+resolved_at: "2026-08-19T17:10:00Z"
+resolution_note: >
+  Fixed in `lib/letflow/tenant_provisioning.ex`'s `@platform_event_type_seed_attrs`
+  entry for `"INSTANCE_PINS_REBOUND"`: `"prior_version"`/`"new_version"`'s `"type"`
+  changed from `"integer"` to `"string"`, matching `Letflow.Engine.PinRebind`'s
+  `String.t()`-typed `rebind_entry`/`changed_entry` fields -- a single, narrow
+  2-line type correction, nothing else in the schema touched. The test-only
+  workaround in `test/letflow/engine/pin_rebind_test.exs`'s `provisioned_tenant/0`
+  (delete-and-reregister of a corrected schema, added while fixing ISS-0073) was
+  removed now that the root cause is fixed; the fixture again relies on the real
+  provisioning-seeded schema. `mix test test/letflow/engine/pin_rebind_test.exs`:
+  17 passed, 0 failures, against the real (uncorrected-by-test) schema. Full
+  `mix test`: 1121/1135 passed on the first run (14 failed); a targeted `mix test
+  --failed` rerun showed 12-13 failures across repeated runs, all in the two
+  known pre-existing/flaky classes -- `Mix.Tasks.Letflow.Check.TestTest`
+  (subprocess timeout) and `Letflow.IdentityMigrationTest` (FK/guard race) --
+  none touching PinRebind, tenant_provisioning, or event-type registry
+  validation. `mix compile --warnings-as-errors` and `mix format
+  --check-formatted` both show only pre-existing issues, confirmed via
+  git-stash comparison against HEAD before this change; no new warnings or
+  formatting drift introduced.

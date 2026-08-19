@@ -9,10 +9,11 @@ defmodule Letflow.Engine.PinRebindTest do
   `provisioned_tenant/0` pattern exactly. Self-contained: does not share fixtures with
   any other test file.
 
-  Registers `"INSTANCE_PINS_REBOUND"` itself (ISS-0071/GH#257 -- no production code
-  path registers it yet, same pre-existing gap `"TASK_COMPLETED"`/`"INSTANCE_CANCELLED"`
-  already have), plus `"INSTANCE_CANCELLED"` and `"EXECUTION_ERROR"` (needed for the
-  AC3 CANCELLED/ERROR terminal-status fixtures below).
+  `"INSTANCE_PINS_REBOUND"`, `"INSTANCE_CANCELLED"`, and `"EXECUTION_ERROR"` (needed
+  for the AC3 CANCELLED/ERROR terminal-status fixtures below) are all auto-seeded by
+  `TenantProvisioning.replay_migrations/2`'s default manifest (REQ-045 §9 OQ-3a,
+  extended by ISS-0072/GH#257) -- this file relies on that seed rather than
+  registering any of them itself.
 
   Every fixture rebinds the `:variable_schema` pin (the one kind every instance
   carries unconditionally, PIN-02 AC4) rather than `:catalog_entry`/`:module`, because
@@ -31,7 +32,6 @@ defmodule Letflow.Engine.PinRebindTest do
   alias Letflow.Engine.PinResolver
   alias Letflow.Engine.Reconstruction
   alias Letflow.EventStore.InstanceProjection
-  alias Letflow.EventStore.Registry
   alias Letflow.Identity.Tenant
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
@@ -76,70 +76,12 @@ defmodule Letflow.Engine.PinRebindTest do
 
     assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
-    # INSTANCE_PINS_REBOUND, INSTANCE_CANCELLED, and EXECUTION_ERROR are all now
+    # INSTANCE_PINS_REBOUND, INSTANCE_CANCELLED, and EXECUTION_ERROR are all
     # auto-seeded by replay_migrations/2's default manifest (REQ-045 §9 OQ-3a,
-    # extended by ISS-0072/GH#257) -- this fixture used to self-register all three
-    # again against a permissive `%{"type" => "object"}` schema (ISS-0073/GH#267:
-    # that duplicate registration now collides with provisioning's own seed and
-    # hard-fails). INSTANCE_CANCELLED/EXECUTION_ERROR are simply redundant now
-    # (removed, no replacement needed -- their real writers match provisioning's
-    # stricter schemas fine). INSTANCE_PINS_REBOUND is a genuine conflict, not a
-    # mere duplicate: `Letflow.Engine.PinRebind`'s own `@type rebind_entry`/
-    # `@type changed_entry` (pin_rebind.ex) define `version`/`prior_version`/
-    # `new_version` as `String.t()` throughout (pin refs use version *strings*,
-    # e.g. "v1" or a semver-like definition version, never integers) -- but
-    # provisioning's seeded json_schema for INSTANCE_PINS_REBOUND types
-    # "prior_version"/"new_version" as `"integer"`. That mismatch means
-    # `PinRebind.rebind_pins/3`'s real, hardcoded `event_type: "INSTANCE_PINS_REBOUND"`
-    # write (pin_rebind.ex M6) would fail schema validation on every real call, in
-    # production too, not just in this test -- filed as ISS-0074 for a fix to
-    # provisioning's own schema (out of this run's scope: this run's directive is
-    # test/-only, tenant_provisioning.ex is the already-reviewed ISS-0072 fix).
-    # Worked around here, not by using a distinctly-named test-only event type
-    # (impossible -- pin_rebind.ex hardcodes the real name, so a differently-named
-    # type would test nothing real), but by deleting the auto-seeded row and
-    # re-registering the SAME name or a corrected, string-typed schema: this
-    # reconstructs the schema ISS-0074 will make provisioning itself seed, so this
-    # file keeps testing the real "INSTANCE_PINS_REBOUND" name end to end.
-    Repo.delete_all(
-      from(et in Registry.EventType, where: et.name == "INSTANCE_PINS_REBOUND"),
-      prefix: schema_name
-    )
-
-    assert {:ok, _event_type} =
-             Registry.register_type(
-               %{
-                 "name" => "INSTANCE_PINS_REBOUND",
-                 "schema_version" => 1,
-                 "json_schema" => %{
-                   "type" => "object",
-                   "properties" => %{
-                     "entries" => %{
-                       "type" => "array",
-                       "items" => %{
-                         "type" => "object",
-                         "properties" => %{
-                           "kind" => %{"type" => "string"},
-                           "ref" => %{"type" => "string"},
-                           "prior_version" => %{"type" => "string"},
-                           "new_version" => %{"type" => "string"}
-                         },
-                         "required" => ["kind", "ref", "new_version"]
-                       }
-                     },
-                     "actor" => %{"type" => "string"},
-                     "reason" => %{"type" => ["string", "null"]}
-                   },
-                   "required" => ["entries", "actor"]
-                 },
-                 "description" =>
-                   "ISS-0073 corrected schema -- prior_version/new_version are strings " <>
-                     "(see PinRebind.rebind_entry/changed_entry), not integers as " <>
-                     "provisioning's own seed currently has it (ISS-0074)."
-               },
-               tenant.id
-             )
-
+    # extended by ISS-0072/GH#257), each with a schema matching its real writer
+    # (Letflow.Engine.PinRebind.rebind_pins/3 for INSTANCE_PINS_REBOUND, whose
+    # prior_version/new_version fields provisioning now seeds as strings --
+    # ISS-0074), so this fixture just relies on the seed directly.
     %{tenant_id: tenant.id, schema_name: schema_name}
   end
 

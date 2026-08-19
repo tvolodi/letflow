@@ -616,8 +616,8 @@ defmodule Letflow.TenantProvisioning do
               "properties" => %{
                 "kind" => %{"type" => "string"},
                 "ref" => %{"type" => "string"},
-                "prior_version" => %{"type" => "integer"},
-                "new_version" => %{"type" => "integer"}
+                "prior_version" => %{"type" => "string"},
+                "new_version" => %{"type" => "string"}
               },
               "required" => ["kind", "ref", "new_version"]
             }

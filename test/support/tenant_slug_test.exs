@@ -67,7 +67,7 @@ defmodule Letflow.TenantSlugFixtureTest do
       # one.
       results =
         for _ <- 1..3 do
-          {output, 0} = System.cmd("elixir", ["-e", @old_mechanism_script])
+          {output, 0} = write_script_and_run("elixir", @old_mechanism_script)
           output
         end
 
@@ -103,12 +103,7 @@ defmodule Letflow.TenantSlugFixtureTest do
 
       results =
         for _ <- 1..3 do
-          {output, 0} =
-            System.cmd("mix", ["run", "--no-start", "-e", script],
-              env: [{"MIX_ENV", "test"}],
-              stderr_to_stdout: false
-            )
-
+          {output, 0} = write_script_and_run("mix", script)
           output
         end
 
@@ -159,6 +154,39 @@ defmodule Letflow.TenantSlugFixtureTest do
 
         assert length(Enum.uniq(slugs)) == length(slugs)
       end
+    end
+  end
+
+  # ISS-0065: writes `script_body` to a uniquely-named temp `.exs` file and
+  # invokes `cmd` with that file's path as a plain argv element instead of
+  # `-e <script>`. A bare path has none of the `(`, `)`, `"` characters that
+  # `cmd.exe` re-parses on Windows when `mix`/`elixir` resolve to
+  # `mix.bat`/`elixir.bat` -- see
+  # `lib/letflow/design/iss065-windows-cmd-script-tempfile-fix.md` for the
+  # full rationale. Behaves identically to today's `-e` invocation on Linux.
+  @spec write_script_and_run(cmd :: String.t(), script_body :: String.t()) ::
+          {output :: String.t(), exit_status :: non_neg_integer()}
+  defp write_script_and_run(cmd, script_body) do
+    filename =
+      "letflow_iss0065_#{System.unique_integer([:positive, :monotonic])}_#{:erlang.unique_integer([:positive])}.exs"
+
+    path = Path.join(System.tmp_dir!(), filename)
+
+    File.write!(path, script_body)
+
+    try do
+      case cmd do
+        "mix" ->
+          System.cmd("mix", ["run", "--no-start", path],
+            env: [{"MIX_ENV", "test"}],
+            stderr_to_stdout: false
+          )
+
+        _ ->
+          System.cmd(cmd, [path])
+      end
+    after
+      File.rm(path)
     end
   end
 end

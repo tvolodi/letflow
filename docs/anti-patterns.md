@@ -452,3 +452,52 @@ and post-rebase blobs (`git show ORIG_HEAD:<path>` vs current) as a final check 
 git reported the rebase as conflict-free for that path — a silently-applied patch that
 happened not to conflict textually can still be the wrong side's content in a genuine
 add/add scenario, and only a content diff (not the exit code) reveals it.
+
+## Two independently-merged Ecto migrations picking the same version-number prefix
+
+**Found:** 2026-08-19 (ISS-0061), discovered by `hetzner-orch` when `mix ecto.migrate` /
+`mix test` on `main` failed hard before a single test ran.
+
+`priv/repo/migrations/20260819000001_create_groups_tenant_scoped.exs` (REQ-063,
+Decision 0006 D1) and `priv/repo/migrations/20260819000001_drop_transition_events.exs`
+(REQ-046, `process_instance.ex` retirement, #199) were developed on independent hosts,
+each derived its migration's version prefix from its own host clock at commit time, and
+both merged to `main` independently (commits `5941472` and `1059093`) without either
+host observing the other's concurrent migration. `mix ecto.migrate` — and therefore
+`mix test`, which runs pending migrations against the sandbox DB before any test body
+executes — failed immediately with `Ecto.MigrationError: migration version
+20260819000001 is duplicated`, blocking every host working this backlog, not just the
+run that happened to find it first. Fixed in PR #211 (WF03-ISS0061-20260819) by
+renumbering one of the two files to a later, non-colliding version.
+
+This is the same cross-host filename/id collision class already documented above ("Two
+branches picking the same module name...", the `docs/issues/ISS-NNNN.yaml` add/add
+entry) but the first occurrence against an Ecto migration version number specifically,
+and it is worth distinguishing from those two: a colliding module name compiles cleanly
+and is only caught later by a build/test failure somewhere downstream, and a colliding
+`docs/issues/ISS-NNNN.yaml` filename can land through a rebase without git ever
+flagging it as a conflict at all. A colliding migration version is a *harder* failure —
+Ecto's own duplicate-version guard raises `Ecto.MigrationError` immediately, before any
+application code runs, so it is impossible to silently ship (unlike the other two,
+which can persist on `main` for a while before anything notices).
+
+**Why this is easy to miss:** each host generates its migration's timestamp prefix from
+its own local clock at the moment the migration is created, with no cross-host
+coordination step in between — two hosts working the backlog concurrently, each
+starting from the same base commit, have a real chance of picking timestamps that land
+in the same second-granularity bucket, especially when migrations are authored close
+together in wall-clock time. Nothing about either individual branch looks wrong in
+isolation; the collision only exists once both have merged into the same `main`.
+
+**Correct alternative:** `test/letflow/migration_filenames_test.exs` (added in the same
+ISS-0061 fix) is now a standing regression guard — it asserts no two files under
+`priv/repo/migrations/` share a leading version prefix, and that every migration
+filename's prefix is purely numeric, so a second occurrence fails `mix test` on the
+merging host's own branch (or on `main` immediately after a bad merge) rather than
+surfacing only when some other host next tries to migrate. Rely on that test rather than
+manually eyeballing timestamps before a migration PR merges. The deeper mitigation this
+incident points to — ORCH preferring a coarser/higher-entropy migration timestamp source
+(e.g. including seconds *and* a host-specific salt, or checking
+`docs/agents/protocols/GIT_SETUP.md`'s branch-push coordination signal more carefully
+when multiple hosts are adding migrations concurrently) — is out of scope for this entry;
+flag it if it recurs a second time.

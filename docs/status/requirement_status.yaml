@@ -4699,3 +4699,36 @@ history:
       pass (moved REQ-052 into the `done` clause with an EE-08 one-line
       summary, pending count corrected 11 -> 10), same header-sync gap-fix
       shape REQ-045/047/048's DOC-UPDATER passes already applied.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-19T01:39:30Z
+    note: >
+      Queue reconciliation per docs/agents/protocols/TASK_QUEUE.md's
+      recovery-path shape, after user directive that all done
+      requirements must be immediately marked done in letflow-queue.
+      Two requirements were completed in single-host fallback mode
+      (QUEUE_AUTH_TOKEN believed unavailable, per handoffs/orchestrator.log's
+      WF02-REQ048-20260818 and WF02-REQ058-20260818 entries) and left
+      their real letflow-queue tasks sitting `open`/unlocked despite
+      docs/requirements.yaml already showing them `done`: REQ-048
+      (impl_order/queue task id 93, GitHub issue #142) and REQ-058
+      (impl_order/queue task id 103, GitHub issue #152). Reconciled both
+      by claiming (set_lock) and releasing (release_lock, status: done)
+      against the real service at queue-test.ai-dala.com, confirming the
+      returned task title matched the REQ before touching it (per
+      TASK_QUEUE.md's own caution not to trust the impl_order comment
+      blindly) and re-verifying `status: done` with a follow-up lock/
+      release pair after. Both linked GitHub issues close automatically
+      via release_lock's best-effort sync. No other done requirement had
+      a stale open queue task -- handoffs/orchestrator.log confirms every
+      other completed run this project claimed/released via a real
+      get_next_task/release_lock call, not the file fallback (the
+      REQ-048 duplicate-run incident on 2026-08-19 was itself caused by
+      a session missing the .env-stored QUEUE_AUTH_TOKEN, not a genuinely
+      unreachable queue -- see docs/anti-patterns.md's "Task-selection
+      fallback duplicating a run" entry). REQ-061's queue task (id 97)
+      was deliberately left untouched: docs/requirements.yaml still shows
+      it `pending`, and it may be actively locked by a live session on a
+      sibling worktree per the same log's 2026-08-19T00:51:00Z entry.

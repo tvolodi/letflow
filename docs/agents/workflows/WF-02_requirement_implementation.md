@@ -413,6 +413,20 @@ ORCH supplies `context.branch_name` and `context.requirement_ids`. Use DOC-UPDAT
 `result.summary` as the commit/PR summary. List forwarded `ISS-NNNN` ids under a
 "Forwarded, not fixed here" note if any exist.
 
+**Immediately on PASS** (same turn, before writing the `RUN_DONE` log line or
+considering the run finished): for every requirement this run just flipped to `done` in
+Step 6 that has a real queue task (an `impl_order:` comment in its
+`docs/requirements.yaml` entry), call `release_lock` with `status: "done"` against that
+task id — see `docs/agents/protocols/TASK_QUEUE.md`. This is not deferred bookkeeping;
+a requirement that is `done` in the yaml but still `open`/locked in `letflow-queue` is a
+stale queue entry the instant Step Final returns PASS, and a stale entry is exactly what
+let two sessions both build REQ-048 on 2026-08-19 (see `docs/anti-patterns.md`'s
+"Task-selection fallback duplicating a run" entry) — do not let a new one accumulate
+between merge and some later reconciliation pass. If the queue is unreachable at this
+exact moment (already checked both `$QUEUE_AUTH_TOKEN` and `.env`, per
+`TASK_QUEUE.md`), state that explicitly in the `RUN_DONE` log line and flag the task id
+for reconciliation next session — do not silently skip it.
+
 ## Parallel execution rule
 
 Steps 2a and 2b MAY run in parallel when both are present, on the same branch from Step

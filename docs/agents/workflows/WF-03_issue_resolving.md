@@ -115,6 +115,15 @@ against already-fixed code proves nothing about whether it actually covers the b
 3. Complete the handoff: PASS, next_action: "Route to Step Final".
 ```
 
+**ORCH, immediately on this step's PASS** (same turn, before writing the `RUN_DONE` log
+line): if this issue has a real `letflow-queue` task (registered via `register_task`,
+`task_type: "issue"`), call `release_lock` with `status: "done"` against that task id —
+see `docs/agents/protocols/TASK_QUEUE.md`. Same rule as WF-02 Step Final: a resolved
+issue that stays `open`/locked in the queue is a stale entry from the moment this step
+passes, not something to clean up in a later reconciliation pass. If the queue is
+unreachable (checked both `$QUEUE_AUTH_TOKEN` and `.env`), state that explicitly in the
+`RUN_DONE` line and flag the task id for next-session reconciliation.
+
 ## Output
 
 The issue's root cause is fixed, proven by a fail-then-pass regression test, merged to

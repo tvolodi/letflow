@@ -583,7 +583,13 @@ defmodule Letflow.Engine.Reconstruction do
       Repo.transaction(fn ->
         case lock_projection_nowait(instance_id, prefix) do
           {:ok, projection} ->
-            upsert_projection(projection, instance_id, instance_state, last_sequence_number, prefix)
+            upsert_projection(
+              projection,
+              instance_id,
+              instance_state,
+              last_sequence_number,
+              prefix
+            )
 
           {:error, :lock_contention} ->
             Repo.rollback({:lock_contention, instance_id})

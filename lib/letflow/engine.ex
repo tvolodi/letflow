@@ -380,7 +380,7 @@ defmodule Letflow.Engine do
   end
 
   def advance_until_stable(_graph, _instance_state, [token_id | _rest], hops_remaining)
-       when hops_remaining <= 0 do
+      when hops_remaining <= 0 do
     {:error, {:activation_failed, {:hop_limit_exceeded, token_id}}}
   end
 

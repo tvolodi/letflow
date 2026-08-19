@@ -186,10 +186,14 @@ defmodule Letflow.Engine.ReconstructionTest do
     # Only the node the live token currently sits on has a `tasks` row -- t2/t3's rows
     # don't exist until each prior task completes and the token advances onto them.
     t1 = pending_task!(schema_name, created.instance_id, "t1")
-    assert {:ok, _} = Engine.complete_task(t1.id, complete_attrs(%{"b" => 2}), prefix: schema_name)
+
+    assert {:ok, _} =
+             Engine.complete_task(t1.id, complete_attrs(%{"b" => 2}), prefix: schema_name)
 
     t2 = pending_task!(schema_name, created.instance_id, "t2")
-    assert {:ok, _} = Engine.complete_task(t2.id, complete_attrs(%{"c" => 3}), prefix: schema_name)
+
+    assert {:ok, _} =
+             Engine.complete_task(t2.id, complete_attrs(%{"c" => 3}), prefix: schema_name)
 
     {created.instance_id, schema_name}
   end
@@ -255,7 +259,8 @@ defmodule Letflow.Engine.ReconstructionTest do
   defp backdate_events!(schema_name, instance_id, days_ago) do
     cutoff = DateTime.add(DateTime.utc_now(), -days_ago * 86_400, :second)
 
-    Repo.update_all(from(e in Event, where: e.instance_id == ^instance_id),
+    Repo.update_all(
+      from(e in Event, where: e.instance_id == ^instance_id),
       [set: [created_at: cutoff]],
       prefix: schema_name
     )
@@ -338,7 +343,9 @@ defmodule Letflow.Engine.ReconstructionTest do
       assert Enum.sort(Enum.map(after_archive_result.instance_state.tokens, & &1.node_id)) ==
                Enum.sort(Enum.map(before_result.instance_state.tokens, & &1.node_id))
 
-      assert after_archive_result.instance_state.variables == before_result.instance_state.variables
+      assert after_archive_result.instance_state.variables ==
+               before_result.instance_state.variables
+
       assert after_archive_result.instance_state.status == before_result.instance_state.status
 
       # Now a genuinely new event lands in the LIVE `events` table, while the
@@ -349,7 +356,8 @@ defmodule Letflow.Engine.ReconstructionTest do
         |> where([t], t.instance_id == ^instance_id and t.status == :pending)
         |> Repo.all(prefix: schema_name)
 
-      assert {:ok, _} = Engine.complete_task(t3.id, complete_attrs(%{"d" => 4}), prefix: schema_name)
+      assert {:ok, _} =
+               Engine.complete_task(t3.id, complete_attrs(%{"d" => 4}), prefix: schema_name)
 
       assert {:ok, final_result} =
                Reconstruction.reconstruct_instance(instance_id, prefix: schema_name)
@@ -375,7 +383,9 @@ defmodule Letflow.Engine.ReconstructionTest do
       # event (or instance_projections row) was ever appended -- Engine.create/2 is
       # deliberately NOT called here.
       instance_id = Ecto.UUID.generate()
-      assert {:ok, _snapshot} = SnapshotStore.create(instance_id, definition.id, prefix: schema_name)
+
+      assert {:ok, _snapshot} =
+               SnapshotStore.create(instance_id, definition.id, prefix: schema_name)
 
       assert {:ok, result} = Reconstruction.reconstruct_instance(instance_id, prefix: schema_name)
 
@@ -453,7 +463,10 @@ defmodule Letflow.Engine.ReconstructionTest do
       |> Repo.update!(prefix: schema_name)
 
       assert {:ok, result} =
-               Reconstruction.reconstruct_instance(instance_id, prefix: schema_name, write_back: true)
+               Reconstruction.reconstruct_instance(instance_id,
+                 prefix: schema_name,
+                 write_back: true
+               )
 
       assert result.write_back == :written
 

@@ -552,3 +552,89 @@ incident points to — ORCH preferring a coarser/higher-entropy migration timest
 `docs/agents/protocols/GIT_SETUP.md`'s branch-push coordination signal more carefully
 when multiple hosts are adding migrations concurrently) — is out of scope for this entry;
 flag it if it recurs a second time.
+
+## Inheriting a claim from a record instead of re-deriving it from the source
+
+**Occurred three times in one session (WF01-REQ109-20260819), each time compounding the
+last.** Every instance had the same shape: an agent read a *claim in a Letflow record*,
+treated it as established fact, and built work on top of it — when the underlying source
+was reachable the whole time and said something different.
+
+1. **ISS-0063's original scoping note.** ISSUE-FIXER concluded the issue was blocked on
+   an undecided product question ("where does a `:HUMAN_TASK` node's output schema come
+   from?", REQ-047 OQ-3) and wrote that conclusion into the issue file as fact. Reading
+   R-Co directly showed three different things there carry the word "schema", that the
+   investigation had conflated two of them, and that `tasks.form_schema` is a UI
+   rendering payload never used for validation. The real source (`variable_schemas`) had
+   existed in R-Co the entire time. **A wrong-but-confident record is worse than an open
+   issue**, because the next agent inherits the frame instead of re-deriving it.
+2. **ISS-0076's own file list.** Filed by ORCH to warn about exactly this class of
+   problem — and its `affected_files` was derived *from* its own recommended grep
+   pattern, so list and pattern were self-consistent and blind together. It missed four
+   files including a fourth shipped moduledoc (`lib/letflow/engine/execution_error.ex`).
+   Its "30 occurrences" counted `docs/`, i.e. the record counting itself.
+3. **REQ-111's premise.** ORCH scoped a whole requirement around auditing
+   `req062-sub-process-runtime.md`'s `instance.zig`/`transition.zig` line citations,
+   inherited from ISS-0076's framing. There are **zero** such citations — the file
+   mentions those R-Co files in prose only, and all ~55 of its `file:line` citations
+   point at *Letflow* files, two of them at `transition.ex`, one character from
+   `transition.zig`. The caveat it was built around is a standing disclaimer guarding
+   citations the document never made. Caught only by REQ-VALIDATOR running the grep.
+
+**Why this is easy to miss:** the inherited claim is usually *plausible*, written by a
+competent agent, and sitting in the exact file you were told to read. Nothing looks
+wrong. The failure is invisible precisely because the record is the normal, sanctioned
+input — and each downstream agent that trusts it adds authority to the error rather than
+catching it. Prose caveats are especially dangerous: a sentence like "no R-Co source tree
+is reachable in this environment" was true for the host that wrote it and silently false
+for every host after.
+
+**Correct alternative:** when a record makes a *checkable* claim that your work depends
+on — a file exists, a citation resolves, a count is N, a source is unreachable — spend
+the one command it takes to check it before building on it. Specifically:
+
+* **Verify the premise before scoping work around it.** If a requirement's whole point is
+  "audit the citations in X", grep for the citations first. Zero is an answer.
+* **Never derive a file list and a search pattern from each other**, then cite one as
+  evidence for the other. Measure with a deliberately broader pattern than you think you
+  need, and make counts an *output* of the run rather than a constant copied forward.
+* **Scope greps to the code being described.** ISS-0076's inflated count came from
+  including `docs/`, where the issue files themselves live.
+* **Treat "unreachable/unavailable in this environment" as expiring.** It is a statement
+  about one host at one moment, not a property of the project. R-Co is at
+  `c:\Users\tvolo\dev\ai-dala\R-Co` and is readable; check before repeating the claim.
+* **When you do correct such a record, supersede rather than overwrite** — ISS-0063
+  keeps the wrong note as `superseded_scoping_note` marked do-not-act-on, so the audit
+  trail survives without the error staying live.
+
+## Audit-shaped requirements: closed-set and outcome-independence must be checked at draft time
+
+**Twice in one session the gate had to repair the same property after the fact**
+(REQ-110/111/112). Requirements whose deliverable is *findings* rather than *code* have a
+failure mode ordinary requirements don't: an acceptance criterion that presumes a finding
+is unsatisfiable exactly when the audit succeeds at finding something unexpected. "REQ-059's
+override mechanism matches R-Co" reads as a reasonable AC and is actually a trap — an
+honest auditor who finds a mismatch fails it.
+
+The sibling defect is a **disposition set that isn't closed**. ORCH's first set was
+`confirmed / corrected / filed-as-issue`, which has no slot for a question the source
+*cannot* answer — and one target (`req060-pin-rebind.md:100`) says in its own text that
+it isn't something R-Co could settle, being a Letflow caller-responsibility choice. Under
+that set an auditor must either leave the location unaddressed (failing an AC) or force a
+false disposition. A fourth outcome, `unsettled_by_source`, fixed it. The identical gap
+then reappeared one requirement over in REQ-111, whose set was closed for *citations* but
+not for a substantive assumption that might "differ, but harmlessly".
+
+**Correct alternative:** when drafting an audit-shaped requirement, run the closure test
+as a *drafting step*, not as something the gate discovers — for each location in scope,
+enumerate the plausible outcomes and confirm every one has a slot. Then write ACs that
+quantify over **locations, never over outcomes**: every location resolves to exactly one
+disposition, each carrying concrete `file:line` evidence, with counts that must sum so
+partial completion shows up as arithmetic rather than prose. Add an explicit nil-result
+clause so "found nothing" is a *stated* result rather than an inferred absence — that
+closes the "looked and found none" vs "never looked" ambiguity. A meta-AC forbidding
+satisfaction by global verdict is worth including: it stops one block judgement standing
+in for N per-location ones, which is exactly what hides a single wrong rule among several
+right ones. Where a disposition could become a lazy catch-all, fence it by requiring the
+specific source `file:line` consulted *and* why it doesn't settle the question — a shrug
+can't produce either.

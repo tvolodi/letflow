@@ -28,4 +28,6 @@ affected_files:
   - priv/repo/migrations/20260819000001_create_groups_tenant_scoped.exs
   - priv/repo/migrations/20260819000001_drop_transition_events.exs
 github_issue: 210
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0061-20260819
+resolved_at: "2026-08-19T01:06:10Z"

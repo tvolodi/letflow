@@ -4647,3 +4647,22 @@ history:
       from the pending list into the done list. Checked README.md for
       staleness -- no update needed; this change adds no HTTP route, no
       process/supervision change, and nothing user-facing.
+  - req: REQ-052
+    event: started
+    agent: ORCH
+    at: "2026-08-19T00:00:01Z"
+    note: >
+      WF02-REQ052-20260819. Claimed via direct docs/requirements.yaml read
+      (letflow-queue unreachable, no QUEUE_AUTH_TOKEN in this environment --
+      single-host fallback per TASK_QUEUE.md, stated explicitly). REQ-045,
+      REQ-050, REQ-051 already done (completed by other concurrent hosts
+      since last session). First pending requirement in file order with all
+      depends_on satisfied: REQ-052 (depends_on REQ-048, REQ-051, both done).
+      Step 00 (git setup, worktree variant per GIT_SETUP.md -- git worktree
+      list shows 2 entries) PASS: feature/WF02-REQ052-20260819 branched from
+      freshly-fetched origin/main, pushed. Status flipped pending ->
+      in_progress. Instance cancellation (EE-08) -- caller-initiated,
+      terminal CANCELLED path, supersedes lib/letflow/parallel_approval.ex
+      per the requirement's own SUPERSESSION note. No owned_modules overlap
+      with this host's primary checkout (~/letflow, currently on
+      feature/WF02-REQ058-20260818).

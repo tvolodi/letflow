@@ -1254,6 +1254,28 @@
       "queue_agent_id": "tvolodi-orch",
       "worktree": "c:Users\tvolodevai-dalaletflow (primary worktree)",
       "note": "Single-host fallback task selection (QUEUE_AUTH_TOKEN not set). REQ-048 was next pending requirement in this session file order with depends_on satisfied at selection time, but a genuinely earlier concurrent run (WF02-REQ048-20260818, a different host/session) had already completed and merged the same requirement (PR #204) before this run pulled main in Step 00. CANCELLED, not reworked -- this is exactly the race letflow-queue exists to prevent; documented as a data point for TASK_QUEUE.md fallback-mode risk."
+    },
+    {
+      "run_id": "WF03-ISS0065-20260819",
+      "workflow_id": "WF-03",
+      "issue_ids": [
+        "ISS-0065"
+      ],
+      "stage": null,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "test/support/tenant_slug_test.exs",
+        "test/support/tenant_slug.ex"
+      ],
+      "lock_acquired_at": "2026-08-19T03:25:13Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (git setup) starting.",
+      "backfilled": false,
+      "queue_task_id": 121,
+      "queue_agent_id": "hetzner-orch",
+      "worktree": "/home/tvolodi/letflow (primary checkout)",
+      "note": "get_next_task (agent_id hetzner-orch, QUEUE_AUTH_TOKEN from .env) claimed queue task 121, task_type issue, github_issue_number 221. Task body pointed to docs/issues/ISS-0064.yaml as the local record, but that number had since been independently claimed and resolved by a different host for an unrelated defect (orphaned tenant_schemas reaper, GH#207) -- same cross-host local-ID-collision class already documented in docs/anti-patterns.md. Reconstructed the lost content from gh issue view 221 and re-filed under the next free local ID, docs/issues/ISS-0065.yaml."
     }
   ]
 }

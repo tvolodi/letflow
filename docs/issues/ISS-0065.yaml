@@ -1,0 +1,55 @@
+id: ISS-0065
+title: "tenant_slug_test.exs cross-VM test fails on Windows (System.cmd mix subprocess returns {\"\",255})"
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ056-20260819
+discovered_at: "2026-08-19T03:24:20Z"
+severity: MINOR
+tags:
+  - test-hygiene
+  - windows
+  - system-cmd
+description: >
+  During WF-02 Step 4 for REQ-056 (run WF02-REQ056-20260819), the full `mix test`
+  run surfaced one pre-existing failure that is NOT the previously-known ISS-0062
+  (test/letflow/identity_migration_test.exs:367 -- that file now passes 10/10 in
+  isolation).
+
+  Instead: test/support/tenant_slug_test.exs:101 ("post-fix unique_slug/1 avoids
+  the cross-VM collision distinct slugs across three fresh VMs") fails
+  deterministically on that Windows host:
+
+    ** (MatchError) no match of right hand side value: {"", 255}
+    code: for _ <- 1..3 do
+      {output, 0} =
+        System.cmd("mix", ["run", "--no-start", "-e", script],
+          env: [{"MIX_ENV", "test"}], stderr_to_stdout: false)
+
+  Reproduces in isolation (`mix test test/support/tenant_slug_test.exs --include
+  slow`), with an extra "...) was unexpected at this time." line -- a classic
+  Windows cmd.exe/batch parse error, suggesting System.cmd("mix", [...]) resolves
+  through mix.bat/mix.ps1 and the -e script argument (which contains quotes) isn't
+  escaped the way the test assumes.
+
+  Not caused by REQ-056 -- filed per ISSUE_QUEUE.md as an incidentally-discovered,
+  non-blocking defect (Linux hosts, including this one, are unaffected -- the
+  affected assertion only runs where `mix` resolves to a Windows batch/PowerShell
+  wrapper).
+
+  Discovered by TEST-RUNNER during WF02-REQ056-20260819. Filed under GitHub issue
+  #221 as "Local record: docs/issues/ISS-0064.yaml" -- that reference was wrong by
+  the time this session picked the queue task up: ISS-0064 had, in the interim,
+  been independently claimed and fully resolved by a different host for an
+  unrelated defect (the orphaned tenant_schemas reaper fix, GH#207), so this
+  issue's actual content was never written to docs/issues/ under any number. This
+  is the same "two hosts pick the same next-free local ID, one wins" class already
+  documented in docs/anti-patterns.md ("Two branches picking the same module
+  name..." / migration-version-collision entries) -- reconstructed here from the
+  GitHub issue body (`gh issue view 221`) and re-filed under the next genuinely
+  free local ID.
+affected_files:
+  - test/support/tenant_slug_test.exs
+status: open
+github_issue: 221
+queue_task_id: 121
+related_issues:
+  - ISS-0059

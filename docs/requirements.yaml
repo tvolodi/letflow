@@ -3002,6 +3002,7 @@ requirements:
       - "a 2xx response whose body is a JSON object merges into instance variables via REQ-049's merge; a 2xx response whose body is a JSON array or a bare string does not merge and routes to REQ-061's ERROR path -- two explicit tests"
       - "a URL template rendering to an empty string is rejected at activation and routes to the ERROR path rather than dispatching a request"
       - "the moduledoc states explicitly that the HTTP transport and the service_catalog lookup are injectable interfaces, names OBS-05's DLQ (S6) as the unbuilt destination for exhausted retries, and confirms no partial DLQ was built here"
+      - "an exhausted-retry outcome (decide_failure returning give-up) is demonstrated routing into REQ-061's set_instance_error rather than writing its own ERROR transition, confirmed by inspection and by test -- this closes REQ-061's own AC obligation, deferred forward because REQ-056 did not exist when REQ-061 was built"
     depends_on: [REQ-061]
 
   - id: REQ-057
@@ -3076,6 +3077,7 @@ requirements:
       - "a tenant-scoped registration without an owner_tenant_id and a global registration with one are both rejected with their own distinct errors, and resolution for tenant B does not return tenant A's tenant-scoped handler"
       - "a plugin registered for a node_type that also has a built-in handler shadows the built-in, demonstrated by an explicit test"
       - "the moduledoc states that the WASM plugin host is S5 scope and that S3 supports only in-process Elixir behaviour implementations, and names the registry-storage mechanism as an open question left for CODE-DESIGNER"
+      - "a handler ERROR outcome is demonstrated routing into REQ-061's set_instance_error rather than writing its own ERROR transition, confirmed by inspection and by test -- this closes REQ-061's own AC obligation, deferred forward because REQ-057 did not exist when REQ-061 was built"
     depends_on: [REQ-061]
 
   - id: REQ-058
@@ -3321,7 +3323,8 @@ requirements:
       - "an EXECUTION_ERROR event carries error type, affected node or field, a human-readable reason, and the instance variable map as it stood at the moment of the error -- all four verified by reading the event payload back"
       - "the status flip to ERROR and the EXECUTION_ERROR append commit together: forcing the append to fail leaves the instance status unchanged, verified by reading both back"
       - "an instance in ERROR rejects task completion with a distinct conflict error and remains in ERROR afterwards"
-      - "at least three of the five calling paths (REQ-049 schema violation, REQ-050 gateway no-match, REQ-056 exhausted retries, REQ-057 plugin ERROR, REQ-062 sub-process interface violation) are demonstrated routing into this one function rather than writing their own ERROR transition, confirmed by inspection and by test"
+      - "both calling paths that already exist at this requirement's own build time (REQ-049 schema violation, REQ-050 gateway no-match) are demonstrated routing into this one function rather than writing their own ERROR transition, confirmed by inspection and by test"
+      - "the moduledoc states explicitly that REQ-056 (exhausted retries), REQ-057 (plugin ERROR) and REQ-062 (sub-process interface violation) do not exist yet at this requirement's build time and so cannot be verified here, and that each of them -- all three depends_on this requirement -- MUST independently demonstrate its own routing into set_instance_error as part of its OWN acceptance criteria when it is later built; the obligation is deferred forward onto those requirements, not dropped"
       - "two concurrent operations both triggering EE-10 on the same instance result in exactly one committed EXECUTION_ERROR and one rejection, run concurrently rather than sequentially"
       - "the moduledoc names OBS-05's dead-letter retry/discard path (S6/S4) as the out-of-scope operator action, confirms no partial DLQ was built, and states that ERROR is non-terminal in a way CANCELLED and COMPLETED are not"
     depends_on: [REQ-048, REQ-050]
@@ -3402,6 +3405,7 @@ requirements:
       - "the parent token's waiting_child_instance_id is set while the child runs and cleared on completion, and it survives a transition that copies tokens for an unrelated reason -- an explicit regression test for R-Co's GH #428 field-dropping bug"
       - "child instance creation is not reachable through REQ-045's public create/1 path, matching R-Co's internal-only createWithParentInheritance shape, confirmed by inspection and stated in the moduledoc"
       - "cancelling a parent instance does not cancel its running child, matching R-Co's documented EE-08 behaviour, demonstrated by an explicit test rather than assumed"
+      - "each of the four SPC-01 failure modes is demonstrated routing into REQ-061's set_instance_error rather than writing its own ERROR transition, confirmed by inspection and by test -- this closes REQ-061's own AC obligation, deferred forward because REQ-062 did not exist when REQ-061 was built"
     depends_on: [REQ-061, REQ-049, REQ-032]
 
   - id: REQ-063

@@ -1,0 +1,70 @@
+{
+  "handoff_id": "6f3a2b1c-0059-4a03-9f01-req059step03",
+  "run_id": "WF02-REQ059-20260819",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ059-20260819/step-03-test-designer.json",
+  "created_at": "2026-08-19T08:30:09Z",
+  "started_at": "2026-08-19T08:30:09Z",
+  "completed_at": "2026-08-19T08:44:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-059"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ059-20260819/step-01-code-designer.json",
+      "handoffs/WF02-REQ059-20260819/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ059-20260819/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ059-20260819/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ059-20260819/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/pin_resolver.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/design/req059-pin-resolver.md",
+      "docs/requirements.yaml (REQ-059 entry)"
+    ],
+    "owned_modules": ["test/letflow", "test/specs"]
+  },
+  "task": {
+    "description": "Write test spec + test code for REQ-059's gate-approved PinResolver implementation (SECURITY-REVIEWER and REVIEWER both PASSed). Cover all 8 REQ-059 acceptance criteria from docs/requirements.yaml: resolve/4 deterministic ordering (byte-identical serialized output), zero-row write on failed resolution, initial variable validation reusing REQ-024's validator, INSTANCE_STARTED payload carrying pinned_versions with exactly-one-variable_schema-entry guarantee and no separate pin table, PinMissing error with no fallback code path confirmed by inspection, child inheritance with conflict recording, replay deriving effective pins from events only with zero catalog reads, and the moduledoc's SCOPE GAP/ISS-0672/GH-306 citation.",
+    "acceptance_criteria": [
+      "AC1: resolve/4 ordering by {kind, ref}, two resolutions produce byte-identical Jason-serialized output -- explicit test",
+      "AC2: a failed resolution writes zero rows (instance_projections, instance_definition_snapshots, events) -- verified by reading all three back",
+      "AC3: initial variables violating the resolved variable_schema rejected listing every failing field, reusing REQ-024's JsonSchema.validate/2",
+      "AC4: INSTANCE_STARTED payload carries pinned_versions; zero-catalog/zero-module definition still records exactly one variable_schema entry; no separate pin table in priv/repo/migrations",
+      "AC5: PinMissing error naming the reference; no fallback-to-current-version code path anywhere, confirmed by inspection (not just runtime behavior) and stated in the moduledoc",
+      "AC6: child instance inherits parent's pins with source: inherited; a conflicting child ref uses the inherited version and records the conflict in the child's INSTANCE_STARTED payload",
+      "AC7: reconstruction derives the effective pin set from INSTANCE_STARTED + INSTANCE_PINS_REBOUND only, zero catalog/module registry reads, demonstrated by an injected/call-counted lookup",
+      "AC8: moduledoc names the service_catalog(S6)/PLC-01(unscoped) gap, cites ISS-0672/GH-306, states unresolvable refs return typed errors not stubs",
+      "Test code compiles and genuinely passes (mix test run, real output quoted, not assumed)",
+      "No wall-clock/unseeded-randomness dependency"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote test/specs/REQ-059.md (31 numbered test cases mapped to all 8 ACs, plus a coverage-check table) and two test files: test/letflow/engine/pin_resolver_test.exs (31 pure-function-level tests -- resolve/4 ordering/byte-identical-output/override-precedence/halt-on-unresolved/PIN-02-AC4-zero-refs, validate_initial_variables/2 reuse of REQ-024's JsonSchema.validate/2, pin_for/3's no-fallback contract, an inspection-based AC5 test that splits the raw pin_resolver.ex source at 'def merge_effective_pins(' and asserts neither 'catalog_lookup' nor 'module_lookup' appears anywhere from that point on -- confirming by source inspection, not just runtime sampling, that no fallback path exists past resolve/4's own two legitimate call sites -- plus merge_effective_pins/2, apply_inheritance/2 including the OQ-6 override-vs-inheritance case, and the AC8 moduledoc content checks) and 42 new tests appended to test/letflow/engine_test.exs (real Postgres, Letflow.DataCase) covering AC2 (zero-row write on an unresolvable service_id, contrasted against the pre-existing resolvable-pin/later-activation-failure case to prove the reordering specifically causes the zero-snapshot result), AC3 (variable_schema_violation end to end through Engine.create/2, zero rows), AC4 (a real INSTANCE_STARTED payload read back via Reconstruction.read_full_log/3, plus a filesystem check that no priv/repo/migrations file creates a pin-shaped table), AC6 (a genuine two-instance parent/child chain using the always-present variable_schema pin as the shared {kind,ref} -- the child's real INSTANCE_STARTED payload is asserted to carry the inherited version and the conflict record, plus a second case proving pin_conflicts: [] vs. an omitted key distinguishes child-zero-conflicts from root), and AC7 (an Agent-backed call-counting pin_lookup wired into a real create/2 call, then PinResolver.reconstruct_effective_pins/2 called and the counter confirmed unchanged, since that function's own 2-arity signature has no Lookup parameter to reach it through at all).\n\nOne genuine pre-existing-code finding surfaced while writing these tests, documented inline in both files rather than worked around silently: Letflow.Definitions.Graph's own @node_type_map (graph.ex:203-211) has no 'SUB_PROCESS' entry -- a 'SUB_PROCESS' node built through the real Definitions.create/2 JSON-graph path silently becomes :unknown_node_type, not :SUB_PROCESS, so PinResolver.resolve/4's module_ref branch is structurally unreachable through the real pipeline today. Confirmed by writing the integration-level 'unresolvable module_ref' test first and watching it fail with {:activation_failed, {:node_type_not_yet_implemented, :unknown_node_type, \"sub\"}} instead of the expected unresolved_module_ref error. This is a Graph-level gap one layer beneath REQ-059's own already-documented SCOPE GAP (service_catalog/PLC-01 not existing), not something REQ-059 introduces or must fix -- module_ref halt behavior stays fully covered at the pure-function level against a hand-built %Node{node_type: :SUB_PROCESS} struct (the only way to construct one today), and the integration describe block carries a comment explaining the gap in place of a test that cannot pass through the real pipeline.\n\nVerified compilation and genuine pass, not assumed: mix test test/letflow/engine_test.exs test/letflow/engine/pin_resolver_test.exs -> 73 tests, 0 failures. Also ran the full test/letflow/engine/ directory afterward to confirm no regression from the new fixtures/aliases: 1 property, 285 tests, 0 failures. mix compile --warnings-as-errors is clean. No wall-clock or unseeded-randomness dependency anywhere (Ecto.UUID.generate()/System.unique_integer/1 for fixture uniqueness only, matching every sibling test file's convention).",
+    "artifacts_out": [
+      "test/specs/REQ-059.md",
+      "test/letflow/engine/pin_resolver_test.exs",
+      "test/letflow/engine_test.exs"
+    ],
+    "issues": [
+      "Letflow.Definitions.Graph's @node_type_map has no \"SUB_PROCESS\" node type yet -- PinResolver's module_ref path is unreachable through the real Definitions/Engine pipeline until a future requirement adds real SUB_PROCESS support to Graph.build/1. Not a REQ-059 defect; documented inline in engine_test.exs and test/specs/REQ-059.md rather than filed separately, since it blocks nothing in this requirement's own scope."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ059-20260819",
+      "commit_sha_list": ["be0b4bd"],
+      "remote_branch": "origin/feature/WF02-REQ059-20260819",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

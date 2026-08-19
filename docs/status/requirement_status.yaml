@@ -4851,7 +4851,6 @@ history:
       with an EE-11 one-line summary, pending count corrected 8 -> 7),
       same header-sync gap-fix shape REQ-045/047/048/052/061's
       DOC-UPDATER passes already applied.
-
   - req: REQ-057
     event: done
     agent: DOC-UPDATER
@@ -4998,3 +4997,8 @@ history:
       needed -- this change added no new HTTP route, no change to the
       documented gen_statem/process-model diagram, and no change to
       the "Running it" section, same reasoning as REQ-045/047/048/052/061.
+
+  - req: REQ-054
+    event: started
+    agent: ORCH
+    at: "2026-08-19T03:50:35Z"

@@ -60,3 +60,28 @@ affected_files:
   - lib/letflow/engine.ex
 status: open
 github_issue: https://github.com/tvolodi/letflow/issues/212
+scoping_note: >
+  WF03-ISS0063-20260819 (2026-08-19T18:39:29Z): ISSUE-FIXER investigated for
+  a direct fix and concluded this is NOT achievable as a MINOR issue fix, so
+  no CODE-DESIGNER/ELIXIR-DEV work was attempted this run. Root cause
+  re-confirmed (lib/letflow/engine.ex:1543 hardcodes `nil` for
+  VariableMerge.merge/3's variable_validations argument), and the validator
+  needed to populate it for real already exists and is reusable
+  (Letflow.EventStore.Registry.JsonSchema.validate/2 -- the same shape
+  lib/letflow/engine/sub_process.ex's interface validation already uses).
+  What's actually missing is a schema SOURCE for an ordinary :HUMAN_TASK
+  node's output_variables -- this is REQ-047's own unresolved OQ-3
+  (lib/letflow/design/req047-task-activation-persistence.md lines 483-487):
+  "tasks.form_schema is left nil/unset by insert_attrs/4 -- no source read
+  for this design names where a :HUMAN_TASK node's form schema would come
+  from at activation time (a node.attributes["form_schema"] key? a separate
+  definition-time artifact?) ... a future requirement may need to extend
+  insert_attrs/4's attrs map once a source is named." A real fix requires
+  first deciding that (a product/schema-design question, not a bug),
+  then wiring it into tasks.form_schema at activation, then having
+  merge_output_variables/5 build a real variable_validations map via
+  JsonSchema.validate/2 instead of nil. Recommend: settle OQ-3 first (a
+  design decision, likely belonging with whoever next touches task-output
+  schema design), then file a properly-scoped follow-up requirement
+  referencing this note -- not a direct WF-03 issue-fix pipeline run.
+  GH#212 left open, not closed, since this is genuinely unresolved.

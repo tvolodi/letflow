@@ -1,0 +1,53 @@
+{
+  "handoff_id": "3b19eac8-daac-4309-192h-req052step05",
+  "run_id": "WF02-REQ052-20260819",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ052-20260819/step-05-release-validator.json",
+  "created_at": "2026-08-19T00:34:05Z",
+  "started_at": "2026-08-19T00:34:05Z",
+  "completed_at": "2026-08-19T00:39:09Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-052"],
+    "requirement_text": {
+      "REQ-052": "See handoffs/WF02-REQ052-20260819/step-01-code-designer.json context.requirement_text for the full verbatim requirement text."
+    },
+    "related_handoff_ids": ["step-02a-elixir-dev.json", "step-03-test-designer.json", "step-04-test-runner.json"],
+    "artifacts_in": ["lib/letflow/engine.ex", "test/letflow/engine_cancel_instance_test.exs", "test/reports/report-20260819-WF02-REQ052-20260819.yaml"],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently re-verify REQ-052 is genuinely done before it is marked so. Do NOT trust TEST-RUNNER's report alone -- re-run the suite yourself. Confirm each of the 7 acceptance criteria against the actual code/tests, not against any prior step's summary. Check docs/status/requirement_status.yaml and docs/requirements.yaml for staleness relative to what actually shipped.",
+    "acceptance_criteria": [
+      "cancelling an ACTIVE instance sets every open task to CANCELLED, appends exactly one INSTANCE_CANCELLED event, and sets the instance status to CANCELLED -- all committed together, verified by reading tasks, instance_projections and events back",
+      "cancelling an already-CANCELLED or already-COMPLETED instance returns a distinct conflict error and changes nothing; cancelling an ACTIVE instance with zero open tasks still appends INSTANCE_CANCELLED",
+      "after cancellation, a further append via REQ-025's append/1 is rejected by its existing active-instance guard -- demonstrated against the real event store rather than asserted from the code",
+      "a cancellation racing a task completion on the same instance resolves with exactly one winner and a distinct conflict error for the loser, run concurrently rather than sequentially",
+      "an instance cancelled via REQ-051's all-branches-cancelled join path and one cancelled by a direct cancel_instance call reach the same persisted state (status, task statuses, appended event), compared explicitly",
+      "the moduledoc names the SCH-03 timer-cancellation hook (S6) and the in-flight SERVICE_TASK abandonment hook (REQ-056) as explicitly out of scope, rather than implying EE-08 is fully covered",
+      "the moduledoc states concretely whether lib/letflow/parallel_approval.ex and Letflow.ApprovalSupervisor are deleted or retained-with-a-stated-reason, and mix test passes with the actual output quoted after the change"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-ran MIX_TEST_PARTITION=2 mix test on feature/WF02-REQ052-20260819 (not TEST-RUNNER's report): 3 properties, 892 tests, 1 failure -- same count TEST-RUNNER reported. The failure is test/letflow/identity_migration_test.exs:367 (Letflow.IdentityMigrationTest DropLegacyPublicIdentityTables guard). Verified independently (not just accepted TEST-RUNNER's/ISS-0058's characterization): re-ran that file alone (8 tests, 1 failure) and that single test alone via :367 line filter (still fails, DB-state dependent, not order-dependent within-file) -- confirmed via `git diff main...HEAD --stat` that REQ-052's diff touches only docs/, handoffs/, lib/letflow/application.ex (1-line ApprovalSupervisor child removal), lib/letflow/approval_supervisor.ex (deleted), lib/letflow/engine.ex, lib/letflow/parallel_approval.ex (deleted), lib/letflow/sandbox_pool.ex (doc-comment only), and test/letflow/{engine_cancel_instance_test.exs,parallel_approval_test.exs} -- nothing under identity_migration.ex/identity_migration_test.exs/tenant_provisioning.ex. Confirmed genuinely unrelated; does not block PASS. All 7 acceptance criteria checked directly against lib/letflow/engine.ex (read in full, lines 80-1619) and test/letflow/engine_cancel_instance_test.exs (read in full, 514 lines), plus ran that test file in isolation (9 tests, 0 failures, all ACs 1-7 represented as named describe blocks): AC1 (lines 236-274, one Multi/Repo.transaction at run_cancel_instance/5 covering tasks+tokens+event+projection, verified by reading rows back) -- PASS. AC2 (lines 280-346: already-CANCELLED and already-COMPLETED both return {:error, {:instance_already_terminal, status}} via check_cancel_eligibility/1 reusing InstanceProjection.terminal?/1, zero-open-tasks ACTIVE still appends one event) -- PASS. AC3 (lines 352-371, real EventStore.append/2 call post-cancel returns {:error, {:instance_terminated, :cancelled}} against real event store) -- PASS. AC4 (lines 377-426, Elixir.Task.async/await_many with real separate Postgres connections under :auto sandbox mode, exactly one winner) -- PASS. AC5 (lines 433-474, explicit pure Transition.transition/3 :cancel_join outcome compared against a real cancel_instance/3 persisted status, `assert pure_status == persisted_status`) -- PASS. AC6 (moduledoc lines 102-133 names SCH-03/S6 and REQ-056/SERVICE_TASK explicitly as unimplemented hooks, states 'Neither exists in Letflow yet, and cancel_instance/3 performs neither' verbatim -- test AC6 asserts this exact string) -- PASS. AC7 (moduledoc states ParallelApproval and ApprovalSupervisor are both DELETED with the REQ-046/ProcessInstance contrast reason; verified lib/letflow/parallel_approval.ex and lib/letflow/approval_supervisor.ex do not exist on disk, application.ex no longer references ApprovalSupervisor, and Code.ensure_loaded/1 for both returns {:error, :nofile} in the test) -- PASS. Checked docs/requirements.yaml (REQ-052 entry, line 2701: status: in_progress, correctly NOT yet done) and docs/status/requirement_status.yaml (line 4591-4606: only a 'started' event for REQ-052, no 'done' event) -- neither is stale; both correctly reflect that DOC-UPDATER has not yet run. No docs/migration/decisions/ record contradicted (ApprovalSupervisor/ParallelApproval deletion is this requirement's own explicit SUPERSESSION scope, consistent with REQ-046's precedent it cites). This is a WF-02 requirement-level check, not a stage gate, so no stage-N REVIEWER sign-off section was required.",
+    "artifacts_out": ["handoffs/WF02-REQ052-20260819/step-05-release-validator.json"],
+    "issues": ["docs/issues/ISS-0058.yaml (pre-existing, unrelated, independently re-confirmed unrelated to REQ-052's diff -- does not block this PASS)"],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ052-20260819",
+      "commit_sha_list": ["f888c69", "b8115e3", "5fbede8", "a3035ce", "e54ee83", "c8d5ed8", "55b430e", "ba30623"],
+      "remote_branch": "origin/feature/WF02-REQ052-20260819",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

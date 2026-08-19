@@ -1,0 +1,63 @@
+# Test run report — WF-03 Step 4 (test run) for ISS-0060
+
+issue_id: ISS-0060
+workflow: WF-03
+step: "04"
+agent: TEST-RUNNER
+run_id: WF03-ISS0060-20260819
+date_utc: 2026-08-19T02:24:52Z
+
+git:
+  branch: feature/WF03-ISS0060-20260819
+  branch_confirmed: true
+  commit: c1f3bd1
+  commit_subject: "test(ISS-0060): shorten describe/test names flagged by TEST-DESIGN-VALIDATOR"
+  worktree: false
+  diff_stat_main_to_head: >
+    lib/letflow/design/iss060-migration-guard-test-race-fix.md (new, 217 lines),
+    test/letflow/identity_migration_test.exs (updated, +356/-17 lines),
+    test/specs/ISS-0060.md (new, 114 lines).
+    3 files changed, 687 insertions(+), 17 deletions(-) (git diff --stat main...HEAD).
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 27 [erts-15.2.7.4] [source] [64-bit] [smp:8:8] [ds:8:8:10] [async-threads:1] [jit:ns]; Elixir 1.18.3 (compiled with Erlang/OTP 27)"
+  postgres_container: >
+    letflow-postgres-1, confirmed via docker ps —
+    0.0.0.0:5462->5432/tcp, [::]:5462->5432/tcp, status Up (healthy).
+    `docker compose up -d` run first (container was already Running).
+  partition: "MIX_TEST_PARTITION=hetzner-orch (as instructed for this run)"
+  command_run: >
+    MIX_TEST_PARTITION=hetzner-orch mix test (full suite, unpinned/default
+    random seed — the `test` alias runs ecto.create + ecto.migrate --quiet
+    first automatically)
+
+verdict: PASS
+
+checks:
+  test_suite_full_run:
+    result: PASS — all green, no failures
+    exit_code: "0 (implied — no failure output; summary line reports 0 failures)"
+    summary_line_verbatim: "5 properties, 914 tests, 0 failures"
+    finished_line_verbatim: "Finished in 105.7 seconds (4.5s async, 101.2s sync)"
+    failures: 0
+
+  new_iss0060_tests_included_in_run:
+    result: PASS
+    note: >
+      test/letflow/identity_migration_test.exs (expanded coverage for the
+      migration-guard test race fix that is the subject of ISS-0060) executed
+      as part of the full-suite run above. No failures reported anywhere in
+      the run, so this file's tests are included in the "0 failures" total.
+
+  property_test_present_and_green:
+    result: PASS
+    note: >
+      The standing property test ("no sequence of actions produces an
+      invalid state") is one of the "5 properties" counted in the summary
+      line and reported no failures.
+
+  pre_existing_failures_masking_result:
+    result: N/A — none observed; full suite is green.
+
+next_action: "Route to RELEASE-VALIDATOR"

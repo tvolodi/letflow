@@ -1,0 +1,35 @@
+id: ISS-0064
+title: "Recurrence: IdentityMigrationTest DropLegacyPublicIdentityTables guard fails intermittently under full-suite mix test (same class as ISS-0048/ISS-0050)"
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ052-20260819
+discovered_at: "2026-08-19T01:28:03Z"
+severity: MAJOR
+tags:
+  - test-hygiene
+  - postgres
+  - tenant-provisioning
+  - identity-migration
+  - recurrence
+description: >
+  Observed again during WF02-REQ052-20260819 (TEST-RUNNER Step 4), full-suite
+  `MIX_TEST_PARTITION=2 mix test`: test/letflow/identity_migration_test.exs:367
+  fails with "expected public.groups to be dropped". Same test/assertion class
+  already documented under ISS-0048's recurrence_note and ISS-0050 (both
+  status: resolved) -- order/isolation-dependent, passes in isolation, not
+  caused by this run's own diff (Letflow.Engine.cancel_instance/3, REQ-052).
+
+  Per WF-03 Step 0.5's registry-lookup rule: this is a recurrence of a
+  previously "resolved" root cause, so severity is raised to MAJOR regardless
+  of the original issues' MINOR severity.
+
+  Discovered by TEST-RUNNER during WF02-REQ052-20260819.
+affected_files:
+  - test/letflow/identity_migration_test.exs
+  - lib/letflow/tenant_provisioning.ex
+  - lib/letflow/sandbox_pool.ex
+status: open
+github_issue: 207
+queue_task_id: 117
+related_issues:
+  - ISS-0048
+  - ISS-0050

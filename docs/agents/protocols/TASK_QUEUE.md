@@ -51,15 +51,30 @@ Once `letflow-queue` is live for a given run:
   `docs/agents/instructions/core-directives.md`'s updated Zero Manual Work /
   Humanless Operation sections.
 
-If `letflow-queue` is unreachable (network down, not yet deployed, single-host session
-with no multi-host risk), ORCH may fall back to the pre-queue single-host behavior
-(read `docs/requirements.yaml` directly, same as before) — but must say so explicitly
-in its report, per `core-directives.md`'s No Speculation rule, rather than silently
-switching modes.
+**As of 2026-08-19, fallback selection is forbidden.** If `letflow-queue` is
+unreachable (network down, not yet deployed, or `$QUEUE_AUTH_TOKEN` unavailable) —
+**including a session that believes itself to be single-host** — ORCH MUST NOT fall
+back to reading `docs/requirements.yaml` to pick unscoped work on its own initiative.
+A session cannot reliably know it is the only host running Letflow agents, and
+"single-host, no multi-host risk" was exactly the reasoning that failed on 2026-08-19:
+two concurrent runs both selected REQ-048 because one of them was in fallback mode and
+couldn't see the other's in-flight claim, producing a fully duplicated WF-02 run that
+had to be discovered and cancelled after the fact (see `docs/anti-patterns.md`).
 
-**A requirement completed in fallback mode still has a real, already-registered queue
-task sitting `open`/unlocked** if it was registered before the fallback session (check
-its `impl_order:` comment in `docs/requirements.yaml` — that's the queue task id). Do
+When the queue is unreachable, ORCH reports `no_eligible_task (queue unreachable)` and
+stops — it does not silently, or even explicitly, degrade to file-order selection. This
+does not block work that is *not* agent-selected: a specific `REQ-XXX` named directly by
+the user, or another human-originated instruction, is not "agent discretion over
+selection" and may still proceed without the queue — but ORCH must still attempt to
+`set_lock`/`register_task` it against the queue once reachable (see the reconciliation
+note below), and must state plainly that the queue was not consulted for selection.
+
+**Legacy note — recovering from a *pre-2026-08-19* fallback session.** Before this rule
+existed, a requirement completed in fallback mode still had a real, already-registered
+queue task sitting `open`/unlocked if it was registered before the fallback session
+(check its `impl_order:` comment in `docs/requirements.yaml` — that's the queue task
+id). This reconciliation path is retained only to clean up state from before the rule
+changed — it is not a currently sanctioned way to work around the queue. Do
 not leave the queue silently out of sync indefinitely: once `$QUEUE_AUTH_TOKEN` becomes
 available again (a later session, a different host, a human supplying it), reconcile
 by claiming and releasing each affected task —
@@ -259,10 +274,12 @@ Concretely:
   DOC-UPDATER as before (Step 6) — this reflects reality for humans reading the repo,
   but the queue's own `status` field (`open`/`done`/`blocked`) is the one that actually
   gates `get_next_task`.
-- Single-host sessions (no `letflow-queue` deployed, or deliberately working
-  disconnected) may continue reading `docs/requirements.yaml` directly exactly as
-  before — this protocol only binds once multi-host coordination is actually in play.
-  See the fallback note above.
+- **Fallback selection is forbidden as of 2026-08-19** (see the Hard Rule section
+  above) — even a single-host or deliberately-disconnected session must not read
+  `docs/requirements.yaml` to pick unscoped work; the queue's unreachability is a
+  blocked state to report, not a mode to switch into. Reading the file for *content*
+  once a task id is already known (citing a REQ's description, acceptance criteria,
+  `depends_on` for cross-linking) is unaffected — this rule is about selection only.
 
 ---
 

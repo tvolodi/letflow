@@ -121,6 +121,42 @@ that it was a reconstruction rather than a measurement (see
 timestamp is indistinguishable from one that was right all along, which
 defeats the audit trail the correction is meant to preserve.
 
+## Task-selection fallback duplicating a run (ORCH)
+
+On 2026-08-19, two separate ORCH sessions both selected REQ-048 as "the
+next eligible requirement" and independently ran full WF-02 pipelines
+for it. `docs/agents/protocols/TASK_QUEUE.md` at the time explicitly
+permitted this: if `letflow-queue` was unreachable or
+`$QUEUE_AUTH_TOKEN` wasn't set, ORCH was allowed to fall back to
+reading `docs/requirements.yaml` directly and picking the first
+`pending` requirement with satisfied `depends_on` — reasoned to be safe
+in a "single-host session with no multi-host risk." That reasoning was
+the bug: a session cannot actually verify it's the only host running
+Letflow agents, so "no multi-host risk" was an assumption, not a fact.
+One session's fallback-mode run finished and merged REQ-048
+(`WF02-REQ048-20260818`, PR #204) while a second session, also lacking
+`$QUEUE_AUTH_TOKEN`, independently fell back and dispatched a second
+full WF-02 run for the same requirement
+(`WF02-REQ048-20260819`). The duplicate was caught only because Step
+00's `git pull --ff-only` happened to surface the already-merged
+work before any real implementation started — a later-arriving
+conflict, not a structural guarantee. `letflow-queue` exists
+specifically to make this kind of claim atomic across hosts; a
+fallback path that reintroduces unarbitrated file reads defeats that
+guarantee exactly in the case it matters most (multiple hosts active
+at once, none aware of the others).
+
+**Correct alternative:** fallback selection is now forbidden outright
+(`TASK_QUEUE.md`'s Hard Rule, `ORCHESTRATOR.md` §1,
+`core-directives.md`'s "No Agent Discretion Over Task Selection"
+section). If `letflow-queue` is unreachable, ORCH reports
+`no_eligible_task (queue unreachable)` and stops rather than reading
+`docs/requirements.yaml` to pick unscoped work itself — even when the
+session appears to be the only one running. A specific `REQ-XXX` named
+directly by the user remains fine to work on without the queue (the
+human made the selection, not ORCH), but ORCH should still attempt to
+register/lock it against the queue once reachable.
+
 ## Running `docker compose up` from a secondary worktree checkout
 
 During WF02-REQ037-20260817's Step 3b (TEST-DESIGN-VALIDATOR, running from

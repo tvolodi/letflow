@@ -192,8 +192,14 @@ Only `ORCH` calls the queue's four functions (`register_task`, `get_next_task`,
 `set_lock`, `release_lock`); every other role receives its work via the handoff ORCH
 already writes — this is unchanged from how handoffs already work, it just means the
 *source* of what goes into that handoff is now the queue, not a direct file read, once
-multi-host coordination is live. See `TASK_QUEUE.md` for the full protocol and the
-single-host fallback (queue not yet deployed / unreachable).
+multi-host coordination is live. See `TASK_QUEUE.md` for the full protocol. **There is
+no fallback for task *selection*:** if the queue is unreachable (network down, not
+deployed, `$QUEUE_AUTH_TOKEN` unavailable — including a session that believes itself
+single-host), ORCH reports blocked rather than reading `docs/requirements.yaml` to pick
+work itself. This was tightened 2026-08-19 after a permitted fallback caused two
+concurrent sessions to both select and fully implement REQ-048 (see
+`docs/anti-patterns.md`); a directly human-named `REQ-XXX` is not affected, since that
+is not agent discretion over selection.
 
 ---
 

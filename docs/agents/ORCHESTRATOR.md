@@ -41,17 +41,24 @@ depends_on — unchanged schema) but is a mirror for task-selection purposes onc
 queue is live, kept in sync via `register_task` and DOC-UPDATER's normal status-flip
 step.
 
-**Single-host fallback:** if `letflow-queue` is not deployed yet or unreachable (see
-`TASK_QUEUE.md`'s "Deployment status"), fall back to the pre-queue behavior: pick the
-first `pending` requirement whose `depends_on` are all `done`, in file order — but
-state explicitly that you're in fallback mode rather than silently treating it as
-normal, per `core-directives.md`'s No Speculation rule.
+**No fallback selection.** If `letflow-queue` is not deployed, unreachable, or
+`$QUEUE_AUTH_TOKEN` is unavailable, ORCH MUST NOT pick a requirement itself by reading
+`docs/requirements.yaml` — even in a session that believes itself single-host. Report
+`no_eligible_task (queue unreachable)` and stop. See `TASK_QUEUE.md`'s Hard Rule section
+for why: on 2026-08-19, two concurrent sessions both selected REQ-048 because one was
+in (the then-permitted) fallback mode and couldn't see the other's in-flight claim,
+producing a fully duplicated WF-02 run that had to be discovered and cancelled
+afterward — see `docs/anti-patterns.md`.
 
 When given a specific `REQ-XXX` directly by the user, look it up and route by workflow
 (see §3 below), not by a single `owner` field — the fuller pipeline routes a
-requirement through multiple roles in sequence, not to one owner. (A directly-named
-REQ-XXX may still need `set_lock` called against its queue task, if one exists, before
-starting — check `TASK_QUEUE.md` for the recovery-path shape.)
+requirement through multiple roles in sequence, not to one owner. This is not
+"fallback selection" (the human already made the choice, not ORCH), so it remains
+allowed even when the queue is unreachable — but still attempt `set_lock`/
+`register_task` against the queue once reachable, and state plainly that the queue
+wasn't consulted for selection. (A directly-named REQ-XXX may still need `set_lock`
+called against its queue task, if one exists, before starting — check `TASK_QUEUE.md`
+for the recovery-path shape.)
 
 ## 2. Standard workflows
 

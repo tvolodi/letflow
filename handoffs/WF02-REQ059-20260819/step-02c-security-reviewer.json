@@ -1,0 +1,63 @@
+{
+  "handoff_id": "c2f1a1a0-0003-4a00-9000-00000002c059",
+  "run_id": "WF02-REQ059-20260819",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ059-20260819/step-02c-security-reviewer.json",
+  "created_at": "2026-08-19T08:30:00Z",
+  "started_at": "2026-08-19T08:30:00Z",
+  "completed_at": "2026-08-19T08:45:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-059"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ059-20260819/step-01-code-designer.json",
+      "handoffs/WF02-REQ059-20260819/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ059-20260819/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/pin_resolver.ex",
+      "lib/letflow/engine/reconstruction.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/pin_resolver.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/reconstruction.ex"
+    ]
+  },
+  "task": {
+    "description": "Security-review the diff on branch feature/WF02-REQ059-20260819 (git diff main...HEAD). Reorders Engine.start_instance/5 to run PinResolver.resolve/4 + validate_initial_variables/2 + apply_inheritance/2 before create_snapshot/3's first Repo write, adds pin resolution/recording into the INSTANCE_STARTED event payload, and widens Reconstruction.read_full_log/3 from private to public/@doc false. Also assess the two ELIXIR-DEV-flagged deviations (tenant_id-as-nil in pin_lookup; parent_pins/2's tagged-tuple return) for security implications, and whether the reordering or the visibility widening introduce any cross-tenant read or isolation bypass.",
+    "acceptance_criteria": [
+      "Scope test correctly determines this diff touches a tenant-data path",
+      "Every applicable invariant (INV-1..INV-8) explicitly verdicted APPLIES/NOT-APPLICABLE with reasoning",
+      "For each APPLIES invariant, the 'How to verify' check is actually run against the diff, not asserted",
+      "Both ELIXIR-DEV-flagged deviations explicitly assessed for security implications",
+      "No BLOCKER-severity finding left unaddressed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: APPLIES (tenant-data path) -- diff changes the ordering and payload shape of Engine.start_instance/5's write path (INSTANCE_STARTED event, instance_definition_snapshots) and widens Reconstruction.read_full_log/3's visibility, a tenant-scoped read helper. No migration touched (confirmed empty via `git diff main...HEAD --stat -- priv/repo/migrations/`).\n\nINV-1 APPLIES/PASS. (a) Every Repo access in the reordered path stays prefix-scoped: create_snapshot/3 -> SnapshotStore.create(.., prefix: prefix); persist/10's Repo writes (unchanged by this diff) all pass prefix: prefix; PinResolver.reconstruct_effective_pins/2's sole caller, parent_pins/2, threads the SAME `prefix` that Engine.create/2 already validated via TenantProvisioning.tenant_id_for_schema_name/1 (engine.ex:334) before start_instance/5 is ever invoked -- pin resolution/inheritance therefore runs strictly AFTER tenant scope is established, not before; no new query bypasses :prefix. (b) no new migration -- confirmed above. (c) the INSTANCE_STARTED payload's new pinned_versions/pin_conflicts fields carry no tenant_id field anywhere (pinned_version()/effective_pin()/conflict() typespecs have none); tenant attribution for the event row itself is unchanged, still derived by EventStore.append/2 from opts[:prefix] (untouched by this diff). PinResolver.resolve/4 itself is pure with respect to tenant scoping today: it performs zero Repo/DB calls -- default_lookup/0 (the only Lookup wired up anywhere in this diff or its callers, confirmed by `grep -rn ':pin_lookup' lib/` showing no other caller) is in-memory only, and overrides are caller-supplied data, not queried.\n\nReordering check: pin resolution (PinResolver.resolve/4) now runs before create_snapshot/3's first Repo write, but Engine.create/2's `with` chain validates and resolves the tenant `prefix` via TenantProvisioning.tenant_id_for_schema_name/1 BEFORE calling start_instance/5 at all (engine.ex:329-338) -- the reordering is entirely within the already-tenant-scoped portion of the call chain. No new cross-tenant read is introduced by moving pin resolution earlier, because pin resolution performs no read at all in this diff's shipped configuration.\n\nread_full_log/3 visibility widening: confirmed via `grep -rn read_full_log lib/letflow/` that Letflow.Engine.PinResolver.reconstruct_effective_pins/2 is the only caller outside Reconstruction itself. That caller requires `opts[:prefix]` as a mandatory keyword arg with no default (`Keyword.get(opts, :prefix)` yields nil only if the caller omits it entirely), and its own sole caller, Engine.parent_pins/2, always supplies the already-validated tenant prefix -- there is no code path today that invokes the newly-public function with an unscoped or attacker-controlled prefix. read_full_log/3's own body (reconstruction.ex:304-338) passes `prefix: prefix` to both Repo.all calls unconditionally -- no default-schema fallback. Precedent-consistent with Engine.advance_until_stable/4's prior identical @doc false widening. No isolation bypass.\n\nDeviation 1 (tenant_id-as-nil in pin_lookup, OQ-7): assessed for security implications specifically requested. resolve/4 passes a literal `nil` as `tenant_id` to `lookup.variable_schema_lookup/2` unconditionally (pin_resolver.ex:367). This is NOT a live cross-tenant leak in this diff: (i) the only Lookup constructed anywhere in the shipped code is default_lookup/0, whose variable_schema_lookup ignores its tenant_id argument entirely and returns a fixed unversioned/unconstrained result -- no tenant-scoped catalog or schema table is read by any code path this diff ships; (ii) pin_lookup/2 (engine.ex:448-450) is the function positioned to construct a real, tenant-scoped Lookup in a future requirement, and it already receives the validated `prefix` as its second argument (currently unused, `_prefix`) -- a future real implementation should close over that validated `prefix` when building the Lookup's functions, not rely on resolve/4's own tenant_id argument, so OQ-7's gap does not by itself force a future implementation into an unscoped catalog read. This is a genuine design gap (a future variable_schema_lookup implementation that mistakenly relies on the tenant_id argument instead of a prefix-closed-over Lookup would silently query without tenant scoping) but it is inert today -- no catalog/schema table exists to leak from, and the correct scoping mechanism (prefix, captured at Lookup-construction time) is already plumbed and validated. Flagged forward: any future requirement wiring a real variable_schema_lookup MUST scope via the `prefix` closed over at pin_lookup/2 construction time, not the always-nil tenant_id argument -- recorded here so SECURITY-REVIEWER on that future requirement checks it explicitly.\n\nDeviation 2 (parent_pins/2 tagged-tuple return): no security implication -- this is a pure error-propagation shape fix (bare list-or-nil to {:ok,_}/{:error,_}) so a parent-pin-lookup failure surfaces as a typed create/2 error instead of being uncatchable; it does not change what data is read, how it's scoped, or what's persisted. Positive: this is the correct INV-8-compatible shape (typed error over a would-be crash).\n\nINV-2 NOT-APPLICABLE (S4 not started, no API response shaping in this diff). INV-3 NOT-APPLICABLE (S5 not started). INV-4 APPLIES/PASS -- grep for System.get_env and the hardcoded-secret heuristic against all three changed files: no hits in either; no secret-resolution code touched. INV-5 NOT-APPLICABLE (S4 not started, no lookup-by-ID endpoint in this diff). INV-6 APPLIES/PASS -- this handoff is the required proof-of-scoping artifact. INV-7 APPLIES/PASS -- grep for Repo.query against all three changed files: zero hits; all access goes through Ecto.Query composition and Repo.all/prefix. INV-8 APPLIES/PASS-with-note -- grep for bare `{:ok, x} = ...` assignment pattern against the three changed files found one new hit, pin_resolver.ex:367 (`{:ok, %{version: version, json_schema: json_schema}} = lookup_fun.(nil, process_key)`), an unguarded match on an externally-injectable function's return. Manually confirmed not currently reachable-to-crash: the only Lookup ever constructed in this diff's shipped call graph is default_lookup/0, whose variable_schema_lookup is total by construction (always {:ok, ...}), and no caller anywhere supplies a real pin_lookup yet (confirmed via `grep -rn ':pin_lookup' lib/` -- zero hits outside engine.ex's own default-fallback line and pin_resolver.ex). This is intentional per the design doc's own §4.2 'variable_schema_lookup is total by design' contract, documented in the moduledoc (default_lookup/0's own doc). Flagged forward, same as Deviation 1: whichever future requirement wires a real (possibly DB-backed, hence genuinely fallible) variable_schema_lookup must either preserve totality by construction (catching its own errors and mapping to the documented {:ok, ...} contract) or this bare match must become a `case`, before that Lookup is exercised -- not a BLOCKER today since no realistic input reaches it yet, but not to be re-litigated as newly-discovered when that requirement lands.\n\nNo BLOCKER findings on any applicable invariant. Both ELIXIR-DEV-flagged deviations reviewed and found to have no live security impact, with one forward-looking scoping note each recorded for the requirement that eventually wires a real Lookup (plausibly REQ-062 or a service_catalog/S6 requirement).",
+    "artifacts_out": [],
+    "issues": [
+      "Forward note (not a BLOCKER today): a future real variable_schema_lookup implementation must scope via the `prefix` closed over at pin_lookup/2 construction time (engine.ex:448-450), not resolve/4's always-nil tenant_id argument (OQ-7) -- SECURITY-REVIEWER on that future requirement should check this explicitly.",
+      "Forward note (not a BLOCKER today): pin_resolver.ex:367's bare `{:ok, _} = lookup_fun.(...)` match relies on variable_schema_lookup's documented totality contract, satisfied only by default_lookup/0 today -- any future fallible (e.g. DB-backed) Lookup implementation must preserve totality or this match must become a `case`."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ059-20260819",
+      "commit_sha_list": ["a5deb53", "9e1bb26"],
+      "remote_branch": "origin/feature/WF02-REQ059-20260819",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (2d) for OTP idiom / the two ELIXIR-DEV-flagged deviations, before TEST-DESIGNER."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -22,7 +22,6 @@ defmodule Letflow.Application do
          }},
         {Registry, keys: :unique, name: Letflow.Registry},
         Letflow.InstanceSupervisor,
-        Letflow.ApprovalSupervisor,
         {Letflow.SandboxPool, []}
       ] ++ http_child()
 

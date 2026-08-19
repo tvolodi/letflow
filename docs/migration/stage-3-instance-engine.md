@@ -28,9 +28,16 @@ DOC-UPDATER); REQ-058 `done` (Lua script execution audit
 persistence path, LUA-07 minimal path -- Letflow.Engine.LuaScriptAudit,
 schema-per-tenant migration, injected-executor test-double pattern,
 missing/nil/empty-prefix fail-closed added during an INV-1 rework
-cycle; the real Lua execution runtime remains S5 scope); REQ-052,
-REQ-053, REQ-054, REQ-055, REQ-056, REQ-057, REQ-059, REQ-060,
-REQ-061, REQ-062 (`docs/requirements.yaml`, 10 total) `pending`.
+cycle; the real Lua execution runtime remains S5 scope); REQ-052 `done`
+(Instance cancellation, EE-08 -- Letflow.Engine.cancel_instance/3 sets
+every open task to CANCELLED, appends one INSTANCE_CANCELLED event, and
+sets instance status to CANCELLED in one transaction; supersedes and
+deletes lib/letflow/parallel_approval.ex and
+lib/letflow/approval_supervisor.ex, superseded by REQ-051's
+PARALLEL_GATEWAY split/join; same header-sync gap-fix shape applied by
+this requirement's own DOC-UPDATER); REQ-053, REQ-054, REQ-055,
+REQ-056, REQ-057, REQ-059, REQ-060, REQ-061, REQ-062
+(`docs/requirements.yaml`, 9 total) `pending`.
 
 ## Scope
 

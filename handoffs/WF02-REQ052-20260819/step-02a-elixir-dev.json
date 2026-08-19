@@ -1,0 +1,68 @@
+{
+  "handoff_id": "d5b3e4c2-74c2-4e43-be3c-req052step02a",
+  "run_id": "WF02-REQ052-20260819",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ052-20260819/step-02a-elixir-dev.json",
+  "created_at": "2026-08-19T00:13:14Z",
+  "started_at": "2026-08-19T00:13:14Z",
+  "completed_at": "2026-08-19T00:18:15Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-052"],
+    "requirement_text": {
+      "REQ-052": "See handoffs/WF02-REQ052-20260819/step-01-code-designer.json context.requirement_text for the full verbatim requirement text."
+    },
+    "related_handoff_ids": ["step-01-code-designer.json", "step-01b-code-design-validator.json"],
+    "artifacts_in": ["lib/letflow/design/req052-instance-cancellation.md"],
+    "owned_modules": ["lib/letflow/engine.ex", "lib/letflow/parallel_approval.ex", "lib/letflow/approval_supervisor.ex", "lib/letflow/application.ex"]
+  },
+  "task": {
+    "description": "Implement lib/letflow/design/req052-instance-cancellation.md exactly: add cancel_instance/3 to lib/letflow/engine.ex per the design's Multi steps (lock tasks before instance_projections, reuse InstanceProjection.terminal?/1 for the conflict check, cancel open tasks and live tokens via the already-shipped Task.complete_changeset/2 and TokenRecord.advance_changeset/2 with :cancelled, append the INSTANCE_CANCELLED event before writing instance_projections.status = :cancelled so EventStore.append/2's own active-instance guard doesn't self-reject). Delete lib/letflow/parallel_approval.ex and lib/letflow/approval_supervisor.ex per the design's SUPERSESSION decision (§2, DELETE), remove the ApprovalSupervisor child-spec entry from lib/letflow/application.ex, and delete/update test/letflow/parallel_approval_test.exs if it exists (grep for it -- if its tests are superseded by REQ-052's own coverage, note this in your handoff for TEST-DESIGNER; do not silently leave a test file referencing a deleted module, that would break compilation).",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "All migrations apply cleanly (none expected -- confirm design doc introduces no new migration)",
+      "No SQL string interpolation of tenant/user data",
+      "All callers of any changed function signature compile",
+      "cancel_instance/3 matches the design's @spec exactly (signature, error taxonomy)",
+      "parallel_approval.ex and approval_supervisor.ex are deleted, application.ex no longer references ApprovalSupervisor"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented Letflow.Engine.cancel_instance/3 in lib/letflow/engine.ex exactly per lib/letflow/design/req052-instance-cancellation.md's Multi table (M1 open_tasks lock -> M2 instance_projection lock -> M3 eligibility via InstanceProjection.terminal?/1 (reused unchanged) -> M4 task cancellations via Task.complete_changeset/2 (reused unchanged) -> M5 live-token lock+cancel via TokenRecord.advance_changeset/2 (reused unchanged) -> M6 INSTANCE_CANCELLED event append (before M7, so EventStore.append/2's own active_instance_guard/3 does not self-reject on a status this Multi already wrote) -> M7 instance_projections status write via InstanceProjection.update_changeset/2). tasks locked before instance_projections, matching complete_task/3's global lock-ordering rule. @spec/error taxonomy (cancel_attrs/cancel_opts/cancel_error/cancel_result) copied verbatim from design doc §3. Added the required moduledoc content (SUPERSESSION disposition + SCH-03/REQ-056 scope boundary) to Letflow.Engine's top moduledoc, matching the existing create/2 and complete_task/3 sections' style. Deleted lib/letflow/parallel_approval.ex and lib/letflow/approval_supervisor.ex per design doc SS2 (DELETE, no retained half), removed Letflow.ApprovalSupervisor's child-spec entry from lib/letflow/application.ex, and updated lib/letflow/sandbox_pool.ex's moduledoc to remove the now-stale ApprovalSupervisor cross-reference (design doc SS2 point 3). No migration added -- every column this design writes to (tasks.cancelled_at, tokens.cancelled_at, instance_projections.cancelled_at, all *.status:cancelled) already exists per REQ-023/043's shipped schemas, confirmed by design doc SS8. `mix compile --warnings-as-errors` output: 'Compiling 1 file (.ex)\\nGenerated letflow app' (clean, 0 warnings). `mix format --check-formatted` clean for every file this run touched (engine.ex, application.ex, sandbox_pool.ex) after one `mix format` pass on engine.ex; the three other files mix format flags (graph.ex, identity_migration.ex, event_store_test.exs, sandbox_pool_test.exs) are pre-existing unformatted files this run did not touch, left as-is. Full `mix test` run: '3 properties, 883 tests, 0 failures' (includes the 32 pre-existing test/letflow/engine_test.exs tests for create/2 and complete_task/3, still passing unchanged -- no test yet exercises cancel_instance/3 itself, that is TEST-DESIGNER's job next).",
+    "artifacts_out": [
+      "lib/letflow/engine.ex",
+      "lib/letflow/application.ex",
+      "lib/letflow/sandbox_pool.ex",
+      "lib/letflow/parallel_approval.ex (deleted)",
+      "lib/letflow/approval_supervisor.ex (deleted)",
+      "test/letflow/parallel_approval_test.exs (deleted)"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "note": "Deleted test/letflow/parallel_approval_test.exs alongside its now-deleted subject modules (lib/letflow/parallel_approval.ex, lib/letflow/approval_supervisor.ex), per design doc SS2's explicit instruction. Its coverage (two-approver gen_statem sign-off, supervisor crash isolation) is not migrated/re-created anywhere -- TEST-DESIGNER does not need to re-migrate it (the module it tested no longer exists), this is only a note that it's gone, not an open coverage gap for REQ-052's own acceptance criteria."
+      },
+      {
+        "severity": "INFO",
+        "note": "Design doc leaves six open questions (OQ-1..OQ-6, SS11) unresolved and explicitly flagged for REVIEWER/RELEASE-VALIDATOR, most notably OQ-2 (MAJOR) on whether cancel_instance/3's 'agreement by construction' answer to the join-path-vs-direct-cancel AC is the intended reading. This implementation follows the design doc's resolution as written without deviation; routing to REVIEWER surfaces these for sign-off, not silently resolved by ELIXIR-DEV."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ052-20260819",
+      "commit_sha_list": ["f888c69", "b8115e3"],
+      "remote_branch": "origin/feature/WF02-REQ052-20260819",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

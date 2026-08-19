@@ -1,0 +1,60 @@
+id: ISS-0060
+title: "Letflow.IdentityMigrationTest's DropLegacyPublicIdentityTables guard test failed again under full-suite mix test (recurrence of ISS-0048/ISS-0050 class)"
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ052-20260819 (Step 4 test run)
+discovered_at: "2026-08-19T00:32:36Z"
+severity: MINOR
+tags:
+  - test-hygiene
+  - postgres
+  - tenant-provisioning
+  - identity-migration
+description: >
+  While running the full suite (`MIX_TEST_PARTITION=2 mix test`) per this
+  host's Step 4 procedure for WF02-REQ052-20260819 (Letflow.Engine.cancel_instance/3),
+  one failure was observed:
+
+    1) test DropLegacyPublicIdentityTables migration guard (REQ-063 §5) --
+       skip-on-uncopied-row once the copy is completed for every registered
+       tenant, the guard PROCEEDS and drops all three public tables
+       (Letflow.IdentityMigrationTest)
+       test/letflow/identity_migration_test.exs:367
+       expected public.groups to be dropped
+
+  This is the same test/line/assertion-shape already documented under
+  ISS-0048's `recurrence_note` (observed during WF02-REQ048-20260818) and
+  structurally the same class as ISS-0050 (order/isolation-dependent full-suite
+  failure of this same guard test, passes in isolation) -- both already marked
+  `status: resolved`, so this is a recurrence rather than a new root cause.
+
+  Confirmed NOT caused by this run's own diff: `git diff main...HEAD --stat`
+  shows only docs/requirements.yaml, docs/status/, handoffs/, lib/letflow/
+  application.ex (removes Letflow.ApprovalSupervisor from the supervision
+  tree), lib/letflow/approval_supervisor.ex (deleted),
+  lib/letflow/design/req052-instance-cancellation.md (new),
+  lib/letflow/engine.ex (new cancel_instance/3), lib/letflow/parallel_approval.ex
+  (deleted), lib/letflow/sandbox_pool.ex (moduledoc-comment-only change, no
+  functional diff), test/letflow/engine_cancel_instance_test.exs (new),
+  test/letflow/parallel_approval_test.exs (deleted), test/specs/REQ-052.md
+  (new) -- nothing under test/letflow/identity_migration_test.exs or its
+  migration, and the one sandbox_pool.ex line touched is a doc comment only.
+
+  All 9 of REQ-052's own new cancel_instance tests
+  (test/letflow/engine_cancel_instance_test.exs) passed; this is the suite's
+  only failure (3 properties, 892 tests, 1 failure). Did not block this run's
+  own PASS verdict per Unblock-Everything's scope boundary (this failure is
+  not this run's own acceptance criteria) -- filed and forwarded per
+  docs/agents/protocols/ISSUE_QUEUE.md instead.
+
+  Not diagnosed further by this run (TEST-RUNNER scope, not WF-03 diagnosis).
+  Whoever picks this up next should first check whether ISS-0048's
+  SandboxPool owner-monitor reaper (lib/letflow/sandbox_pool.ex) is itself
+  failing to reclaim orphaned tenant schemas in some case, per ISS-0048's own
+  "if the orphaned-schema count is observed climbing again ... treat this as
+  a possible recurrence" guidance, before assuming a fresh root cause.
+affected_files:
+  - test/letflow/identity_migration_test.exs
+  - lib/letflow/tenant_provisioning.ex
+  - lib/letflow/sandbox_pool.ex
+status: open
+github_issue: https://github.com/tvolodi/letflow/issues/207

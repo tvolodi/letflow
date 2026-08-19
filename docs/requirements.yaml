@@ -2698,7 +2698,7 @@ requirements:
   - id: REQ-052
     title: Instance cancellation (instance.zig cancelInstance, EE-08) -- supersedes lib/letflow/parallel_approval.ex
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S3
     impl_order: 96  # letflow-queue task id
     description: >

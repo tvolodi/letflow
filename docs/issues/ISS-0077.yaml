@@ -1,0 +1,102 @@
+id: ISS-0077
+title: "VariableMerge.merge/3 validates ONLY overwrite candidates, but R-Co validates EVERY output key -- a brand-new variable with a registered schema bypasses validation entirely, so the first write of a variable (the one most likely wrong) escapes its own schema"
+discovered_by: CODE-DESIGNER
+discovered_in_run: WF02-REQ109-20260819 (Step 1 design)
+discovered_at: "2026-08-19T20:22:38Z"
+severity: MAJOR
+tags:
+  - behavioural-divergence
+  - req-049
+  - req-109
+  - variable-validation
+  - validation-bypass
+  - r-co-verification
+description: >
+  BEHAVIOURAL DIVERGENCE IN SHIPPED CODE, found by direct source comparison
+  during REQ-109's design step. Not a docs defect.
+
+  Letflow's `Letflow.Engine.VariableMerge.merge/3` splits incoming keys into
+  `new_keys` and `overwrite_keys`, then validates ONLY the latter --
+  `lib/letflow/engine/variable_merge.ex:160` reads
+  `find_rejection(overwrite_keys, validations)`. Keys absent from
+  `current_variables` are inserted unconditionally with no schema check. This
+  is REQ-049 design doc sec 3.1's stated rule ("new_keys are NEVER looked up
+  in variable_validations at all") and is faithfully implemented.
+
+  R-Co does NOT do this. `mergeVariables`' Phase 1
+  (R-Co/src/engine/instance.zig:2389-2430) iterates EVERY key of
+  `output_variables` via `var it = output_variables.iterator()` and checks
+  `if (schema_map.get(key))` unconditionally -- no comparison against
+  `current_vars` is involved in the validation decision at all. Collision
+  detection is a SEPARATE, later check (`if (current_vars.get(key))` at
+  :2432) whose only role is deciding whether a VARIABLE_OVERWRITTEN event is
+  recorded. In R-Co a brand-new key carrying a registered schema IS
+  validated and CAN produce a SCHEMA_VIOLATION.
+
+  CONSEQUENCE. The first write of a variable -- the write most likely to be
+  malformed, and the only one for which no prior good value exists -- is
+  precisely the write that escapes its own schema. Every subsequent write of
+  the same key is validated. This inverts the intended protection.
+
+  This becomes live rather than theoretical when REQ-109 lands. REQ-109
+  ports R-Co's `variable_schemas` table and wires per-key validation into
+  `merge_output_variables/5`, making REQ-061's rejection branch reachable
+  for the first time (ISS-0063 / GH#212). After REQ-109, an operator who
+  registers a schema for a variable will reasonably believe that variable is
+  constrained -- and it will not be, on the write that creates it. A
+  validation feature that silently does not apply on first write is worse
+  than an absent one, because it is trusted.
+
+  PROVENANCE -- this was flagged as unverified and then propagated as fact.
+  REQ-049's own design doc could not check it (no R-Co source was reachable
+  on the host that wrote it -- see ISS-0076/GH#297 for that systemic issue).
+  ORCH then asserted the overwrite-candidates-only rule as verified fact in
+  briefs to REQ-ANALYST, REQ-VALIDATOR and CODE-DESIGNER during
+  WF01-REQ109/WF02-REQ109, having inherited it from the design doc rather
+  than deriving it from R-Co. CODE-DESIGNER checked the source and caught
+  it. This is the fourth recurrence in one session of the inherited-claim
+  anti-pattern now recorded in docs/anti-patterns.md, and the first with a
+  behavioural consequence rather than a documentation one.
+affected_files:
+  - lib/letflow/engine/variable_merge.ex
+  - lib/letflow/design/req049-variable-merge.md
+status: open
+github_issue: https://github.com/tvolodi/letflow/issues/300
+related:
+  - ISS-0063
+  - ISS-0076
+scoping_note: >
+  DELIBERATELY NOT FIXED INSIDE REQ-109. REQ-109's own scope forbids
+  altering `merge/3`, and CODE-DESIGNER correctly followed AC5 as written
+  and raised this as its design OQ-1 rather than quietly widening the port.
+  That was the right call: silently changing a shipped pure function's
+  validation surface inside an unrelated requirement is exactly the class of
+  change the producer/validator pipeline exists to prevent.
+
+  ROUTING: this needs its own WF-03 run, or a requirement if the fix proves
+  larger than an issue-fix. It is NOT a blocker for REQ-109 -- REQ-109 is a
+  strict improvement even with this gap present (it validates overwrites,
+  which today are not validated at all), and holding REQ-109 for this would
+  block the fix for ISS-0063 behind a newly-discovered second defect.
+  Sequencing them the other way costs nothing.
+
+  DECISION REQUIRED BEFORE A FIX IS DESIGNED, and it is not obvious: does
+  Letflow adopt R-Co's semantic (validate all keys) or keep its own
+  (overwrite-only)? Adopting R-Co's is the migration-fidelity answer and
+  closes the bypass, but it changes a shipped pure function's contract,
+  invalidates REQ-049 design sec 3.1 and its AC, and would reject payloads
+  that are accepted today -- a behaviour change visible at the API boundary
+  for any tenant already relying on first-write leniency. Keeping Letflow's
+  requires an explicit, recorded justification for diverging from the source
+  system on a validation-bypass question, which no current record provides
+  (sec 3.1 states the rule but argues no rationale for it beyond stating it).
+  REVIEWER should decide, and given it contradicts a shipped requirement's
+  acceptance criterion it likely warrants a decision record under
+  docs/migration/decisions/.
+
+  Whoever picks this up: verify BOTH sides directly rather than trusting
+  this note. R-Co instance.zig:2389-2430 (Phase 1 iteration and the
+  unconditional schema_map.get) and :2432 (the separate collision check);
+  Letflow variable_merge.ex:153-183 (the split_with and the
+  find_rejection(overwrite_keys, ...) call). That is the specific lesson
+  this issue exists to record.

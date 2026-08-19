@@ -1,6 +1,8 @@
 # Stage 3 — Instance engine
 
-Status: in progress. Depends on: S2 (all of REQ-022..REQ-042 `done`).
+Status: done -- all Stage 3 requirements shipped, REQ-060 (last
+pending) merged 2026-08-19. Depends on: S2 (all of REQ-022..REQ-042
+`done`).
 Requirements: REQ-044 `done` (Pure transition kernel core types and
 dispatch skeleton); REQ-049 `done` (Variable scoping and merge, EE-09);
 REQ-050 `done` (Exclusive gateway evaluation and condition expressions,

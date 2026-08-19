@@ -205,6 +205,92 @@ defmodule Letflow.IdentityMigrationTest do
     id
   end
 
+  # ISS-0060: crash-durable backup table used by
+  # with_only_this_tenant_visible!/2 below to snapshot/restore OTHER tenants'
+  # public.tenant_schemas rows around the guard-PROCEEDS test's
+  # Ecto.Migrator.run/4 call, so a concurrently-provisioning tenant elsewhere
+  # in the suite can never force a false SKIP in that one test. Column set is
+  # an exact structural mirror of public.tenant_schemas (see
+  # priv/repo/migrations/20260816090045_create_tenant_schemas.exs lines
+  # 28-37) so the restore INSERT can be a bare `SELECT *` -- see
+  # lib/letflow/design/iss060-migration-guard-test-race-fix.md section 3.
+  # Never dropped by on_exit/1: it must survive a BEAM crash to do its job
+  # (section 5's crash-safety argument).
+  defp ensure_backup_table! do
+    Repo.query!("""
+    CREATE TABLE IF NOT EXISTS public.iss060_tenant_schemas_guard_backup (
+      id uuid PRIMARY KEY,
+      tenant_id uuid NOT NULL,
+      schema_name text NOT NULL,
+      migrations_applied_at timestamp,
+      provisioned_at timestamp NOT NULL
+    )
+    """)
+
+    :ok
+  end
+
+  # ISS-0060 section 5 self-heal: if the backup table is non-empty when any
+  # test in this file starts, that non-emptiness IS the signal that a prior
+  # run crashed between with_only_this_tenant_visible!/2's move-out and
+  # move-back statements -- restore those orphaned rows before the next test
+  # proceeds, mirroring ISS-0048's reaper pattern (detect-and-heal-on-next-run
+  # rather than an unbounded, growing-until-noticed orphan).
+  defp restore_orphaned_guard_backup_rows! do
+    ensure_backup_table!()
+
+    Repo.query!("""
+    WITH restored AS (
+      DELETE FROM public.iss060_tenant_schemas_guard_backup
+      RETURNING *
+    )
+    INSERT INTO public.tenant_schemas
+    SELECT * FROM restored
+    ON CONFLICT (id) DO NOTHING
+    """)
+
+    :ok
+  end
+
+  # ISS-0060: wraps `fun` (the guarded Ecto.Migrator.run/4 call plus its
+  # follow-up assertions) so that, for the duration of `fun`, public.tenant_schemas
+  # contains at most one row -- `tenant_id`'s own row. Every other tenant's row is
+  # moved out (single atomic data-modifying CTE, one round trip -- no
+  # Elixir-side window between snapshot and delete) into the crash-durable
+  # backup table for the duration of `fun`, then moved back (another single
+  # atomic CTE) in an `after` block so the restore runs whether `fun` succeeds
+  # or raises. See design section 4 for the full sequence/rationale.
+  defp with_only_this_tenant_visible!(tenant_id, fun) do
+    ensure_backup_table!()
+
+    Repo.query!(
+      """
+      WITH moved AS (
+        DELETE FROM public.tenant_schemas
+        WHERE tenant_id <> $1
+        RETURNING *
+      )
+      INSERT INTO public.iss060_tenant_schemas_guard_backup
+      SELECT * FROM moved
+      """,
+      [Ecto.UUID.dump!(tenant_id)]
+    )
+
+    try do
+      fun.()
+    after
+      Repo.query!("""
+      WITH restored AS (
+        DELETE FROM public.iss060_tenant_schemas_guard_backup
+        RETURNING *
+      )
+      INSERT INTO public.tenant_schemas
+      SELECT * FROM restored
+      ON CONFLICT (id) DO NOTHING
+      """)
+    end
+  end
+
   defp tenant_schema_has_row?(schema_name, table, id) do
     sql = "SELECT count(*) FROM \"#{schema_name}\".\"#{table}\" WHERE id = $1"
     %{rows: [[count]]} = Repo.query!(sql, [Ecto.UUID.dump!(id)])
@@ -221,6 +307,7 @@ defmodule Letflow.IdentityMigrationTest do
   setup do
     Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
     recreate_legacy_public_tables!()
+    restore_orphaned_guard_backup_rows!()
     :ok
   end
 
@@ -381,20 +468,29 @@ defmodule Letflow.IdentityMigrationTest do
         Repo.query!("DELETE FROM schema_migrations WHERE version = $1", [version])
       end)
 
-      assert [^version] =
-               Ecto.Migrator.run(
-                 Letflow.Repo,
-                 [{version, Letflow.Repo.Migrations.DropLegacyPublicIdentityTables}],
-                 :up,
-                 all: true,
-                 log: false
-               )
+      # ISS-0060: only this test's own tenant may be visible in
+      # public.tenant_schemas for the duration of the guarded migration run --
+      # otherwise a concurrently-provisioning tenant elsewhere in the suite
+      # (registered but not yet copied) can make the guard's global per-tenant
+      # scan see an uncopied row that has nothing to do with this test and
+      # flip a correct PROCEED into a false SKIP. See
+      # lib/letflow/design/iss060-migration-guard-test-race-fix.md.
+      with_only_this_tenant_visible!(tenant.id, fn ->
+        assert [^version] =
+                 Ecto.Migrator.run(
+                   Letflow.Repo,
+                   [{version, Letflow.Repo.Migrations.DropLegacyPublicIdentityTables}],
+                   :up,
+                   all: true,
+                   log: false
+                 )
 
-      # The guard proceeded: all three legacy public tables are gone.
-      for table <- ["groups", "users", "tenant_role"] do
-        %{rows: [[regclass]]} = Repo.query!("SELECT to_regclass('public.#{table}')::text")
-        assert regclass == nil, "expected public.#{table} to be dropped"
-      end
+        # The guard proceeded: all three legacy public tables are gone.
+        for table <- ["groups", "users", "tenant_role"] do
+          %{rows: [[regclass]]} = Repo.query!("SELECT to_regclass('public.#{table}')::text")
+          assert regclass == nil, "expected public.#{table} to be dropped"
+        end
+      end)
 
       # Recreate them immediately so this test's own on_exit/1 cleanup (which
       # unconditionally issues DROP TABLE IF EXISTS) and any other test in this

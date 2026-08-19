@@ -216,12 +216,16 @@ defmodule Letflow.Engine do
 
   import Ecto.Query
 
+  require Logger
+
   alias Ecto.Multi
   alias Letflow.Definitions
   alias Letflow.Definitions.Graph
   alias Letflow.Definitions.SnapshotStore
   alias Letflow.Engine.ExecutionError
   alias Letflow.Engine.InstanceState
+  alias Letflow.Engine.Reconstruction
+  alias Letflow.Engine.SnapshotWriter
   alias Letflow.Engine.Task
   alias Letflow.Engine.TaskActivation
   alias Letflow.Engine.Token
@@ -614,6 +618,7 @@ defmodule Letflow.Engine do
       )
     end)
     |> Repo.transaction()
+    |> maybe_snapshot_after_create(instance_id, new_instance_state, prefix)
     |> interpret_create_result(
       instance_id,
       definition,
@@ -621,6 +626,46 @@ defmodule Letflow.Engine do
       current_node_ids,
       initial_variables
     )
+  end
+
+  # REQ-054 (design doc §4.2) -- SnapshotWriter's first named call site:
+  # after create/2's own INSTANCE_STARTED event append. Best-effort: a
+  # SnapshotWriter failure here must never turn a successfully-committed
+  # create/2 call into an error return to the caller (the event log is
+  # already durable; the snapshot is a read-side cache over it, per
+  # SnapshotWriter's own moduledoc/INV-ISS-2), so any {:error, _} is logged
+  # and swallowed, not propagated. Runs after Repo.transaction/1 commits
+  # (not folded into the Multi itself) -- instance_state_snapshots is a
+  # separate table this Multi has no atomicity obligation toward.
+  defp maybe_snapshot_after_create(
+         {:ok, %{event: %{sequence_number: sequence_number}}} = result,
+         instance_id,
+         %InstanceState{} = new_instance_state,
+         prefix
+       ) do
+    snapshot_instance(instance_id, new_instance_state, sequence_number, prefix)
+    result
+  end
+
+  defp maybe_snapshot_after_create(result, _instance_id, _new_instance_state, _prefix), do: result
+
+  # Shared by every REQ-054 call site below: delegates to
+  # SnapshotWriter.maybe_take_snapshot/4, logs and swallows a write failure
+  # rather than raising or propagating it into the caller's own result --
+  # see maybe_snapshot_after_create/4's comment for why.
+  defp snapshot_instance(instance_id, %InstanceState{} = instance_state, sequence_number, prefix) do
+    case SnapshotWriter.maybe_take_snapshot(instance_id, instance_state, sequence_number,
+           prefix: prefix
+         ) do
+      {:ok, _outcome} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning(
+          "Letflow.Engine.SnapshotWriter.maybe_take_snapshot/4 failed for instance " <>
+            "#{instance_id} at sequence_number #{sequence_number}: #{inspect(reason)}"
+        )
+    end
   end
 
   # M1 -- insert instance_projections. A uq_instance_correlation collision
@@ -1023,8 +1068,56 @@ defmodule Letflow.Engine do
       )
     end)
     |> Repo.transaction()
+    |> maybe_snapshot_after_complete_task(prefix)
     |> interpret_complete_result()
   end
+
+  # REQ-054 (design doc §4.2) -- SnapshotWriter's second named call site,
+  # both branches: the normal-completion path (uses the already-in-hand
+  # final_instance_state -- also covers "on instance completion", §4.2's
+  # fourth bullet, since final_instance_state.status is whatever this hop
+  # chain actually landed on, :active or :completed, no separate call site
+  # needed) and the REQ-061 execution-error path (M2's execution_error_event
+  # step, reusing snapshot_and_state's seed_instance_state -- accurate here
+  # because dispatch_task_completion_hop_chain/5's error branches never
+  # mutate any already-persisted token, only the merged variables and the
+  # instance's status change). Same best-effort/log-and-swallow contract as
+  # maybe_snapshot_after_create/4.
+  defp maybe_snapshot_after_complete_task(
+         {:ok,
+          %{
+            complete_task_outcome: :completed,
+            task: %Task{instance_id: instance_id},
+            event: %{sequence_number: sequence_number},
+            transition: {:advanced, %InstanceState{} = final_instance_state}
+          }} = result,
+         prefix
+       ) do
+    snapshot_instance(instance_id, final_instance_state, sequence_number, prefix)
+    result
+  end
+
+  defp maybe_snapshot_after_complete_task(
+         {:ok,
+          %{
+            complete_task_outcome: {:execution_error, error_args},
+            task: %Task{instance_id: instance_id},
+            execution_error_event: %{sequence_number: sequence_number},
+            snapshot_and_state: %{seed_instance_state: %InstanceState{} = seed_instance_state}
+          }} = result,
+         prefix
+       ) do
+    error_state = %InstanceState{
+      seed_instance_state
+      | status: :error,
+        variables: error_args.variables
+    }
+
+    snapshot_instance(instance_id, error_state, sequence_number, prefix)
+    result
+  end
+
+  defp maybe_snapshot_after_complete_task(result, _prefix), do: result
 
   # M1 -- row-lock + fetch the tasks row (design doc §8.1, AC4). Ecto's
   # lock/2 query composition, never a hand-written SQL string (INV-7).
@@ -2028,9 +2121,53 @@ defmodule Letflow.Engine do
       Multi.new()
       |> ExecutionError.append_multi(error_args, prefix: prefix)
       |> Repo.transaction()
+      |> maybe_snapshot_after_set_instance_error(instance_id, prefix)
       |> interpret_set_instance_error_result(instance_id, error_args.error_type)
     end
   end
+
+  # REQ-054 (design doc §4.2) -- SnapshotWriter's third named call site
+  # (ExecutionError.append_multi/3, via this standalone entry point).
+  # Unlike complete_task/3's own execution-error branch, no InstanceState is
+  # already in hand here -- set_instance_error/2 opens no Multi step that
+  # reads tokens/pending tasks, by design (its whole point is a caller with
+  # no other open Multi of its own). Rather than fabricate a partial
+  # InstanceState from instance_projections.current_nodes (which has no
+  # token_id/branch_id/join_counters and would risk a snapshot that
+  # disagrees with full-log replay, violating INV-ISS-1), this reuses
+  # Letflow.Engine.Reconstruction.reconstruct_instance/2 -- already-shipped,
+  # already the correctness-verified source of truth for "current
+  # InstanceState from the durable log" -- to obtain an accurate state.
+  # Acceptable here specifically because set_instance_error/2 is a rare,
+  # already-expensive write (an execution error), not the hot path
+  # create/2 and complete_task/3 are optimizing; a full-log reconstruction
+  # on every call would defeat REQ-054's own purpose if done on those paths,
+  # but not on this one. Same best-effort/log-and-swallow contract as
+  # maybe_snapshot_after_create/4.
+  defp maybe_snapshot_after_set_instance_error(
+         {:ok, %{execution_error_projection_update: %InstanceProjection{}}} = result,
+         instance_id,
+         prefix
+       ) do
+    case Reconstruction.reconstruct_instance(instance_id, prefix: prefix) do
+      {:ok, %{instance_state: %InstanceState{} = instance_state, last_sequence_number: seq}}
+      when is_integer(seq) ->
+        snapshot_instance(instance_id, instance_state, seq, prefix)
+
+      {:ok, %{last_sequence_number: nil}} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning(
+          "Letflow.Engine.Reconstruction.reconstruct_instance/2 failed while snapshotting " <>
+            "after set_instance_error/2 for instance #{instance_id}: #{inspect(reason)}"
+        )
+    end
+
+    result
+  end
+
+  defp maybe_snapshot_after_set_instance_error(result, _instance_id, _prefix), do: result
 
   # idempotency_key is the one field this pre-transaction phase itself
   # validates non-nil/non-empty (matching EventStore.append/2's own

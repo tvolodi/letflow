@@ -58,4 +58,27 @@ description: >
 affected_files:
   - lib/letflow/engine/sub_process.ex
 github_issue: https://github.com/tvolodi/letflow/issues/255
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0071-20260819
+resolved_at: "2026-08-19T16:09:15Z"
+resolution_note: >
+  Fixed in `lib/letflow/engine/sub_process.ex` (commit de0a73f): the three
+  hand-interpolated idempotency-key suffix strings replaced with a single
+  shared `derive_idempotency_key/3` helper plus three module attributes
+  (`@sub_process_start_suffix`, `@sub_process_completed_suffix`,
+  `@sub_process_completion_error_suffix`), so a fourth future call site now
+  reuses the same helper and an existing suffix atom/attribute instead of
+  hand-typing a new literal -- a pure refactor, no behavioral change (the
+  three derived key strings are byte-for-byte identical to before). Gate
+  chain: CODE-DESIGNER (1 rework) -> CODE-DESIGN-VALIDATOR PASS ->
+  ELIXIR-DEV -> SECURITY-REVIEWER PASS -> REVIEWER PASS -> TEST-DESIGNER ->
+  TEST-DESIGN-VALIDATOR PASS -> TEST-RUNNER PASS -> RELEASE-VALIDATOR PASS.
+  RELEASE-VALIDATOR independently re-ran the full suite (1122/1135 passed,
+  remaining 13 failures the same pre-existing/flaky classes tracked
+  elsewhere -- none touching sub_process.ex) plus a targeted
+  `test/letflow/engine_sub_process_test.exs` run (30/30 passed, including
+  the 3 new pinning assertions confirming the three derived keys are
+  unchanged from their pre-refactor values). Design doc:
+  lib/letflow/design/iss071-idempotency-key-helper.md. Test additions:
+  test/letflow/engine_sub_process_test.exs (3 pinning assertions),
+  test/specs/ISS-0071.md.

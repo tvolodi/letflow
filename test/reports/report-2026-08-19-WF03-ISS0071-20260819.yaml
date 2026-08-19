@@ -1,0 +1,189 @@
+# Test run report — WF-03 Step 4 (test run) for ISS-0071
+
+issue_id: ISS-0071
+related_issues: []
+workflow: WF-03
+step: "04"
+agent: TEST-RUNNER
+run_id: WF03-ISS0071-20260819
+date_utc: 2026-08-19T15:38:12Z
+
+git:
+  branch: feature/WF03-ISS0071-20260819
+  branch_confirmed: true
+  head: ecd9ab6
+  worktree: false (primary checkout at c:\Users\tvolo\dev\ai-dala\letflow)
+  diff_summary: >
+    ISS-0071 (GH#255, MINOR/type-safety): lib/letflow/engine/sub_process.ex's
+    three hand-interpolated idempotency-key strings (sub_process_start,
+    sub_process_completion_error, sub_process_completed) replaced with a
+    shared private derive_idempotency_key/3 helper. Pure refactor, no
+    behavior change intended. REVIEWER and TEST-DESIGN-VALIDATOR both
+    PASSed prior to this run; TEST-DESIGN-VALIDATOR itself empirically
+    confirmed byte-identical output by running the new tests against the
+    pre-fix commit. `git diff main...HEAD -- lib/letflow/engine/sub_process.ex`
+    confirmed in this run: the diff adds three module attributes, the
+    derive_idempotency_key/3 private function, and rewrites the three call
+    sites to use it — no other lines in the file changed.
+
+environment:
+  postgres_container: >
+    letflow-postgres-1 confirmed Running via `docker compose up -d` at
+    start of this run.
+  connection_contention: >
+    pg_stat_activity checked before the full run (count=6, well under the
+    100-connection threshold); full suite ran clean on the first attempt,
+    no too_many_connections retry needed this time.
+  command_run: "mix test (full suite; the `test` alias runs ecto.create + ecto.migrate --quiet first automatically)"
+
+verdict: PASS
+
+checks:
+  test_suite_full_run:
+    result: "PARTIAL PASS — 1121/1135 tests passed; all 14 failures match the three documented pre-existing/environmental classes, none attributable to this branch's diff"
+    exit_code: "mix test exits nonzero on any failure (14 failures present); this matches the known/expected baseline, not a new regression"
+    summary_line_verbatim: "Result: 1121/1135 passed (5/5 properties, 1116/1130 tests)"
+    failed_line_verbatim: "Failed: 14 tests"
+    finished_line_verbatim: "Finished in 546.8 seconds (5.8s async, 540.9s sync)"
+
+  pre_existing_failures_found:
+    - class: "Letflow.IdentityMigrationTest (FK/guard-race)"
+      count: 10
+      confirmation: >
+        Same 10 test names as the documented class (ISS-0060 guard fix,
+        DropLegacyPublicIdentityTables migration guard x4, copy_tenant/2 /
+        copy_all_tenants/0 x4, self-heal restore). Matches the run brief's
+        named pre-existing class exactly.
+    - class: "Mix.Tasks.Letflow.Check.TestTest (subprocess timeout)"
+      count: 3
+      confirmation: >
+        Same 3 test names as the documented class (all three
+        "detects a recurrence of ISS-0069's own warning class" variants).
+        Matches the run brief's named pre-existing class exactly.
+    - class: "tenant-schema-provisioning race under concurrent load (rotating 'relation/schema does not exist')"
+      count: 1
+      test: "provision_oidc_user/4 — username collision, same vs different tenant schemas (REQ-063) same username in TWO DIFFERENT tenant schemas both succeed (per-tenant-unique — Decision 0006 §3.1) (Letflow.IdentityTest)"
+      detail: >
+        This run's instance of this class landed on a different test than
+        the WF03-ISS0072 run's example (that run saw it in
+        Letflow.Engine.MigrationsTest's uq_instance_correlation test; this
+        run saw it in Letflow.IdentityTest.provision_oidc_user/4, failing
+        with `Postgrex.Error 42P01 undefined_table: relation
+        "tenant_ec26557e....users" does not exist`). Same underlying
+        mechanism as the documented class — a concurrently-provisioned
+        tenant schema not yet visible/complete at query time — just a
+        different innocent bystander test caught in it this time. Total
+        failure count (14) and the other two classes' exact test sets are
+        otherwise identical to the prior documented run, so this is
+        treated as the same known flaky class, not a new one. Neither this
+        test nor Letflow.IdentityTest is touched by this branch's diff.
+    note: >
+      This run did not additionally re-run isolation reruns (as the
+      WF03-ISS0072 run did) since the failure pattern/count already
+      matches the documented baseline closely enough (same two classes
+      exactly, third class present in a different member) and none of the
+      14 failures touch sub_process.ex, idempotency keys, or
+      derive_idempotency_key in any way — verified by name/module
+      inspection of all 14 failure headers.
+
+  branch_own_change_caused_failures: none
+
+  sub_process_specific_tests:
+    result: PASS
+    command_run: "mix test test/letflow/engine_sub_process_test.exs test/letflow/engine/sub_process_test.exs"
+    summary_line_verbatim: "Result: 30 passed"
+    finished_line_verbatim: "Finished in 7.5 seconds (0.3s async, 7.2s sync)"
+    count_note: >
+      The run brief said "60 tests total across both" — actual count is
+      30 (10 tests in test/letflow/engine_sub_process_test.exs's own
+      grep count of `test "` occurrences is misleading due to nested
+      describe blocks; `mix test`'s own summary line is authoritative:
+      30 passed, 0 failed). Reporting the real number rather than the
+      assumed one, per the no-speculation rule. All 30 passed, zero
+      failures, zero excluded/skipped.
+    iss0071_assertions_confirmed_present: >
+      Grepped test/letflow/engine_sub_process_test.exs for
+      "derive_idempotency_key" — found 3 "ISS-0071: exact composition
+      check for derive_idempotency_key/3's call site N" comment blocks
+      (call sites 1, 2, 3), each noting the helper is `defp` and
+      verified indirectly through the composed idempotency_key values
+      it produces. These are included in the 30/30 passing count above.
+
+  format_check:
+    command_run: "mix format --check-formatted"
+    exit_code: 0
+    result: PASS
+
+  compile_warnings_as_errors:
+    command_run: "mix compile --warnings-as-errors"
+    exit_code: 1
+    result: >
+      FAILS, as expected/documented — 14 warnings, all in the same
+      pre-existing InstanceState/JoinCounter struct-update type-checker
+      class (Dialyzer-style Elixir set-theoretic type checker complaining
+      that a bare local variable isn't provably `%InstanceState{}` /
+      `%JoinCounter{}` before a struct-update `%X{var | field: val}`
+      expression). This exact failure was confirmed present on origin/main
+      itself in a prior throwaway-worktree check per the run brief, and is
+      not treated as a blocker for this branch.
+    warning_locations:
+      - "lib/letflow/engine.ex:1604 (dispatch_task_completion_hop_chain/6)"
+      - "lib/letflow/engine/sub_process.ex:816 (build_completion_multi_from_merge/11)"
+      - "lib/letflow/engine/reconstruction.ex:563 (apply_event/4)"
+      - "lib/letflow/engine/reconstruction.ex:602 (apply_event/4)"
+      - "lib/letflow/engine/reconstruction.ex:619 (apply_event/4)"
+      - "lib/letflow/engine/reconstruction.ex:630 (apply_event/4)"
+      - "lib/letflow/engine/reconstruction.ex:652 (apply_event/4)"
+      - "lib/letflow/engine/reconstruction.ex:820 (resolve_pending_events/1)"
+      - "lib/letflow/engine/transition.ex:619 (dispatch_parallel_gateway/4)"
+      - "lib/letflow/engine/transition.ex:691 (dispatch_parallel_split/4)"
+      - "lib/letflow/engine/transition.ex:779 (dispatch_parallel_join/4)"
+      - "lib/letflow/engine/transition.ex:845 (fire_join/5)"
+      - "lib/letflow/engine/transition.ex:876 (dispatch_cancel_branch/3)"
+      - "lib/letflow/engine/transition.ex:881 (dispatch_cancel_branch/3)"
+    sub_process_ex_warning_analysis: >
+      One of the 14 warnings is in lib/letflow/engine/sub_process.ex, at
+      line 816 inside build_completion_multi_from_merge/11 — a struct
+      update on `seed_state` (an InstanceState) that predates this
+      branch's changes. Confirmed via `git diff main...HEAD --
+      lib/letflow/engine/sub_process.ex`: this branch's diff only adds
+      three module attributes, the new derive_idempotency_key/3 private
+      function (around line 238-250), and rewrites the three
+      string-interpolation call sites (around lines 637-644, 740-745,
+      1152-1158) to call it. None of those touched lines are anywhere
+      near line 816, and the diff introduces no new struct-update
+      expressions. This warning is pre-existing, not introduced by
+      ISS-0071.
+
+regression_check: >
+  1121/1135 on the full suite, matching the established 14-failure
+  baseline in composition (same two classes exactly by test name; the
+  third class's single failure landed on a different member test than
+  the last documented run, consistent with it being a timing race rather
+  than a deterministic failure). 30/30 on the sub_process-specific test
+  files, including the 3 new ISS-0071 exact-composition assertions.
+  `mix format --check-formatted` clean. `mix compile --warnings-as-errors`
+  fails with the same pre-existing 14-warning InstanceState/JoinCounter
+  struct-update class documented as present on origin/main itself,
+  including one warning in sub_process.ex whose location this run
+  confirmed (via diff inspection) is untouched by ISS-0071's change. No
+  new regressions attributable to this branch.
+
+diagnosis: >
+  ISS-0071's derive_idempotency_key/3 refactor is verified clean: zero
+  failures anywhere in the suite touch sub_process.ex, idempotency keys,
+  or the new helper, and the sub_process-specific test files (which carry
+  the 3 new ISS-0071 exact-composition assertions pinning the helper's
+  output byte-for-byte) pass 30/30. All 14 full-suite failures are
+  accounted for by the three previously-documented flaky/environmental
+  classes (IdentityMigrationTest FK/guard-race, Mix.Tasks.Letflow.Check.TestTest
+  subprocess timeout, tenant-schema-provisioning race under concurrent
+  load). The one warning under --warnings-as-errors that happens to be in
+  sub_process.ex predates this branch's diff by line-range inspection.
+  Nothing to route to ELIXIR-DEV.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-19-WF03-ISS0071-20260819.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

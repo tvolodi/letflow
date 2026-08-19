@@ -3275,7 +3275,7 @@ requirements:
   - id: REQ-061
     title: Execution error handling (instance.zig setInstanceError, EE-10)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S3
     impl_order: 97  # letflow-queue task id
     description: >

@@ -4700,6 +4700,30 @@ history:
       summary, pending count corrected 11 -> 10), same header-sync gap-fix
       shape REQ-045/047/048's DOC-UPDATER passes already applied.
 
+  - req: REQ-061
+    event: started
+    agent: ORCH
+    at: "2026-08-19T00:48:56Z"
+    note: >
+      WF02-REQ061-20260819. Continuing single-host fallback (letflow-queue
+      unreachable, no QUEUE_AUTH_TOKEN). REQ-052 (previous run this
+      session, PR #209) merged clean. Next eligible requirement in file
+      order with all depends_on satisfied: REQ-061 (depends_on REQ-048,
+      REQ-050, both done) -- REQ-053/054/055/056/057/059/060 all blocked
+      on REQ-061 or REQ-053 not yet done, skipped over per file-order-first-
+      eligible fallback rule. Step 00 (git setup, worktree variant) PASS:
+      feature/WF02-REQ061-20260819 branched from freshly-fetched
+      origin/main, pushed. Status flipped pending -> in_progress. Execution
+      error handling (EE-10) -- the shared set_instance_error/N sink
+      REQ-052's own moduledoc named as deferred, and that REQ-049/050's
+      schema-violation and no-matching-gateway-edge cases should route
+      into once this lands. Flagging now, for CODE-DESIGNER: AC4 asks for
+      "at least three of five calling paths" (REQ-049, REQ-050, REQ-056,
+      REQ-057, REQ-062) demonstrated routing into this function, but only
+      REQ-049 and REQ-050 exist as shipped code today -- REQ-056/057/062
+      are still pending. This is a real tension CODE-DESIGNER must flag
+      explicitly, not silently resolve, per core-directives.md.
+
   - req: SCOPE-CHANGE
     event: done
     agent: ORCH

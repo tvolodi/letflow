@@ -179,25 +179,22 @@ private function is engine.ex:1618-1626).
 
 Inside the function body, build the membership set **once**, before the
 `Enum.reduce_while/3` over `sub_process_starts` (not once per iteration —
-mirrors `do_reconcile_token_records/4`'s own `MapSet.new(original_tokens,
-&to_string(&1.id))` idiom at engine.ex:1984, and avoids rebuilding the same
-set on every `sub_process_start` pending event in the same hop chain):
+avoids rebuilding the same set on every `sub_process_start` pending event in
+the same hop chain). Construct `persisted_token_ids` by mirroring
+`do_reconcile_token_records/4`'s own existing idiom at engine.ex:1984 for
+building its persisted-id set: a `MapSet` built from `original_active_tokens`
+whose members are each record's `id` field normalized through `to_string/1`
+— i.e. the same "map each `TokenRecord` to the string form of its `id`, then
+collect into a `MapSet`" shape already present in that function, applied
+here to the same `original_active_tokens` source value.
 
-```
-persisted_token_ids = MapSet.new(original_active_tokens, &to_string(&1.id))
-```
-
-The `with` clause inside the `reduce_while` callback changes from:
-
-```
-with {:ok, parent_token_record_id} <- cast_parent_token_record_id(token_id),
-```
-
-to:
-
-```
-with {:ok, parent_token_record_id} <- resolve_parent_token_record_id(token_id, persisted_token_ids),
-```
+The `with` clause inside the `reduce_while` callback changes at exactly one
+point: the call to `cast_parent_token_record_id(token_id)` is replaced by a
+call to `resolve_parent_token_record_id/2`, invoked with `token_id` and the
+newly constructed `persisted_token_ids` set as its two arguments, in that
+order. The clause's arrow (`<-`) and its bound variable
+(`parent_token_record_id`) are unchanged; only the function name and its new
+second argument differ from today's single-argument call.
 
 No other line in `prepare_sub_process_children_for_completion/7`'s body
 changes — the `Enum.find(graph.nodes, ...)`, `SubProcess.prepare_child_activation/4`
@@ -228,14 +225,15 @@ New:
         token_id :: String.t(),
         persisted_token_ids :: MapSet.t(String.t())
       ) :: {:ok, String.t()} | {:error, {:sub_process_after_split_join_not_supported, String.t()}}
-defp resolve_parent_token_record_id(token_id, persisted_token_ids) do
-  if MapSet.member?(persisted_token_ids, token_id) do
-    {:ok, token_id}
-  else
-    {:error, {:sub_process_after_split_join_not_supported, token_id}}
-  end
-end
 ```
+
+`resolve_parent_token_record_id/2` replaces `cast_parent_token_record_id/1`
+as a `defp` taking two arguments (`token_id`, `persisted_token_ids`) instead
+of one. Its body is a single membership check: it tests whether `token_id`
+is a member of the `persisted_token_ids` set and returns one of exactly two
+outcomes based on that test, described precisely in "Exact semantics" below
+— no `Ecto.UUID` call, no string-shape inspection, and no branch beyond the
+member/non-member split.
 
 **Exact semantics:**
 

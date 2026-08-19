@@ -46,7 +46,7 @@ defmodule Letflow.EngineCancelInstanceTest do
     %Tenant{}
     |> Tenant.create_changeset(
       %{
-        slug: "req052-#{System.unique_integer([:positive, :monotonic])}",
+        slug: Letflow.TenantSlugFixture.unique_slug("req052"),
         display_name: "REQ-052 Test Tenant"
       },
       :disabled

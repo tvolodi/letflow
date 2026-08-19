@@ -37,7 +37,7 @@ defmodule Letflow.Identity.GroupTest do
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
 
-  defp unique_slug, do: "req063-group-#{System.unique_integer([:positive, :monotonic])}"
+  defp unique_slug, do: Letflow.TenantSlugFixture.unique_slug("req063-group")
 
   setup do
     Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)

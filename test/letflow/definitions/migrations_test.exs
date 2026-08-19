@@ -76,7 +76,7 @@ defmodule Letflow.Definitions.MigrationsTest do
     %Tenant{}
     |> Tenant.create_changeset(
       %{
-        slug: "req027-#{System.unique_integer([:positive, :monotonic])}",
+        slug: Letflow.TenantSlugFixture.unique_slug("req027"),
         display_name: "REQ-027 Test Tenant"
       },
       :disabled

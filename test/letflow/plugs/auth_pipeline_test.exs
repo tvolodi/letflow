@@ -68,7 +68,7 @@ defmodule Letflow.Plugs.AuthPipelineTest do
   end
 
   defp unique_slug(prefix \\ "tenant") do
-    "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
+    Letflow.TenantSlugFixture.unique_slug(prefix)
   end
 
   # REQ-063: switches to Sandbox :auto mode FIRST (before inserting the tenant row

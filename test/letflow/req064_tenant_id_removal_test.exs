@@ -62,7 +62,7 @@ defmodule Letflow.REQ064TenantIdRemovalTest do
     %Tenant{}
     |> Tenant.create_changeset(
       %{
-        slug: "req064-#{System.unique_integer([:positive, :monotonic])}",
+        slug: Letflow.TenantSlugFixture.unique_slug("req064"),
         display_name: "REQ-064 Test Tenant"
       },
       :disabled

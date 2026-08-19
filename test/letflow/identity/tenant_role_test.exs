@@ -35,7 +35,7 @@ defmodule Letflow.Identity.TenantRoleTest do
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
 
-  defp unique_slug, do: "req063-trole-#{System.unique_integer([:positive, :monotonic])}"
+  defp unique_slug, do: Letflow.TenantSlugFixture.unique_slug("req063-trole")
 
   setup do
     Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)

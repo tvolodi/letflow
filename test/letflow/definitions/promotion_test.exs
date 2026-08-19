@@ -63,7 +63,7 @@ defmodule Letflow.Definitions.PromotionTest do
     %Tenant{}
     |> Tenant.create_changeset(
       %{
-        slug: "req037-promo-#{System.unique_integer([:positive, :monotonic])}",
+        slug: Letflow.TenantSlugFixture.unique_slug("req037-promo"),
         display_name: "REQ-037 Promotion Test Tenant"
       },
       :disabled

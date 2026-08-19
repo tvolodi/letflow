@@ -86,7 +86,7 @@ defmodule Letflow.IdentityTest do
   # REQ-019 fixture helpers.
 
   defp unique_slug(prefix \\ "tenant") do
-    "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
+    Letflow.TenantSlugFixture.unique_slug(prefix)
   end
 
   defp insert_tenant!(attrs, oidc_mode \\ :enabled) do

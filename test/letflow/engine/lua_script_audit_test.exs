@@ -104,7 +104,7 @@ defmodule Letflow.Engine.LuaScriptAuditTest do
     %Tenant{}
     |> Tenant.create_changeset(
       %{
-        slug: "req058-#{System.unique_integer([:positive, :monotonic])}",
+        slug: Letflow.TenantSlugFixture.unique_slug("req058"),
         display_name: "REQ-058 Test Tenant"
       },
       :disabled

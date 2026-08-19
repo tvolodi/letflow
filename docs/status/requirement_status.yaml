@@ -4666,3 +4666,36 @@ history:
       per the requirement's own SUPERSESSION note. No owned_modules overlap
       with this host's primary checkout (~/letflow, currently on
       feature/WF02-REQ058-20260818).
+  - req: REQ-052
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-19T00:40:22Z"
+    note: >
+      WF02-REQ052-20260819. Instance cancellation (EE-08) shipped as
+      Letflow.Engine.cancel_instance/3 -- caller-initiated, terminal
+      CANCELLED path: sets every open task to CANCELLED, appends exactly
+      one INSTANCE_CANCELLED event, and sets instance status to CANCELLED,
+      all in one transaction. SUPERSESSION completed: lib/letflow/
+      parallel_approval.ex and lib/letflow/approval_supervisor.ex deleted
+      (application.ex's ApprovalSupervisor child removed), superseded by
+      REQ-051's PARALLEL_GATEWAY split/join. RELEASE-VALIDATOR
+      independently re-verified all 7 acceptance criteria against the real
+      code and test/letflow/engine_cancel_instance_test.exs (not against
+      any prior step's summary) -- see
+      handoffs/WF02-REQ052-20260819/step-05-release-validator.json for the
+      per-AC detail. Full suite: 3 properties, 892 tests, 1 failure -- that
+      failure is the pre-existing, unrelated
+      test/letflow/identity_migration_test.exs:367 failure (ISS-0058),
+      independently reproduced and confirmed unrelated to REQ-052's diff.
+      docs/requirements.yaml REQ-052 flipped in_progress -> done. Checked
+      README.md: no changes needed, same reasoning REQ-045/047/048's
+      DOC-UPDATER passes applied -- cancel_instance/3 is an internal engine
+      capability with no new HTTP route (POST /api/v1/instances/:id/cancel
+      is S4 scope per the requirement's own SCOPE BOUNDARY) and no
+      gen_statem/process-model change, so neither the ASCII state diagram
+      nor "What's here today"/"Running it" sections are affected.
+      docs/migration/stage-3-instance-engine.md's header listed REQ-052 in
+      its `pending` list even though it is now `done` -- fixed in this same
+      pass (moved REQ-052 into the `done` clause with an EE-08 one-line
+      summary, pending count corrected 11 -> 10), same header-sync gap-fix
+      shape REQ-045/047/048's DOC-UPDATER passes already applied.

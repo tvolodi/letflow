@@ -54,7 +54,7 @@
       "New gap found during implementation, not in the design doc: Letflow.Engine.Reconstruction (REQ-053) has no replay clause for the new SUB_PROCESS_COMPLETED event type -- reconstructing a sub-process parent instance from its event log will surface {:unrecognized_event_type, \"SUB_PROCESS_COMPLETED\", _} rather than replaying correctly. Not fixed in this pass (REQ-062's own design doc never mentions REQ-053/reconstruction.ex at all); recommend a small follow-up requirement or REVIEWER-approved amendment.",
       "A PARALLEL_GATEWAY split/join branch landing directly on a SUB_PROCESS node within the same complete_task/3 hop chain (a token_id not yet UUID-shaped, i.e. not yet a persisted TokenRecord row) is explicitly rejected with {:sub_process_after_split_join_not_supported, token_id} rather than silently mishandled -- this mirrors the codebase's own pre-existing {:new_token_during_resume_not_supported, _} limitation in the same function, not a new restriction this requirement introduces."
     ],
-    "git_evidence": {"branch_name": "feature/WF02-REQ062-20260819", "commit_sha_list": [], "remote_branch": "origin/feature/WF02-REQ062-20260819", "push_status": "pending", "pr_url": null, "pr_create_error": null},
+    "git_evidence": {"branch_name": "feature/WF02-REQ062-20260819", "commit_sha_list": ["d437e29945d673923c01b9c0af35090b974458e8"], "remote_branch": "origin/feature/WF02-REQ062-20260819", "push_status": "ok", "pr_url": null, "pr_create_error": null},
     "next_action": "Route to SECURITY-REVIEWER (2c)"
   },
   "rework_count": 0,

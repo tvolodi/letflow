@@ -1675,11 +1675,14 @@ defmodule Letflow.Engine do
       SubProcess.find_waiting_parent_token(repo, instance_id, prefix)
     end)
     |> Multi.merge(fn changes ->
+      # Multi.run/3 stores the unwrapped ok-value in `changes`, not the
+      # {:ok, _} tuple find_waiting_parent_token/3 itself returns -- match
+      # the raw value here, not the tuple.
       case Map.fetch!(changes, lookup_key) do
-        {:ok, nil} ->
+        nil ->
           Multi.new()
 
-        {:ok, %TokenRecord{} = parent_token} ->
+        %TokenRecord{} = parent_token ->
           case SubProcess.append_completion_multi(
                  Multi.new(),
                  instance_id,

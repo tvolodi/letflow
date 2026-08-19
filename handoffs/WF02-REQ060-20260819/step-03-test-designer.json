@@ -52,9 +52,9 @@
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ060-20260819",
-      "commit_sha_list": [],
+      "commit_sha_list": ["4562f3a"],
       "remote_branch": "origin/feature/WF02-REQ060-20260819",
-      "push_status": "pending",
+      "push_status": "success",
       "pr_url": null,
       "pr_create_error": null
     },

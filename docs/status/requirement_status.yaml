@@ -4804,3 +4804,50 @@ history:
     event: started
     agent: ORCH
     at: "2026-08-19T02:35:30Z"
+
+  - req: REQ-053
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-19T03:17:27Z"
+    note: >
+      WF02-REQ053-20260819. State reconstruction by event replay (EE-11)
+      shipped as Letflow.Engine.Reconstruction.reconstruct_instance/2
+      (new module lib/letflow/engine/reconstruction.ex), replaying an
+      instance's full ordered event log -- spanning both REQ-023's
+      events table and REQ-026's events_archive table -- through the
+      existing pure kernel (Transition.transition/3) to reconstruct an
+      InstanceState independent of the instance_projections read model,
+      matching it field-for-field. Write-back to instance_projections is
+      opt-in only (never the default), guarded by SELECT ... FOR UPDATE
+      NOWAIT. Three separately pattern-matchable errors:
+      :instance_not_found, {:lock_contention, id}, {:replay_failed,
+      reason}. A real defect found by TEST-DESIGNER's regression suite
+      (test/letflow/engine/reconstruction_test.exs, AC1) --
+      pending_task_nodes accumulating across the full-log fold instead
+      of reflecting only the currently-open task set -- was fixed
+      (commit 8b1d6e0) and re-reviewed by SECURITY-REVIEWER and REVIEWER
+      before RELEASE-VALIDATOR's independent pass confirmed all 7
+      acceptance criteria PASS against the real code and test suite (not
+      against any prior step's summary), full suite re-run: 935 tests, 0
+      failures. Per req053 design doc's own §9 OQ-2 two named options
+      ("exported from Engine with @doc false, or extracted into a small
+      shared helper module"), four existing Engine functions were made
+      public with @doc false for reuse rather than duplicated --
+      advance_until_stable/4, tokens_needing_dispatch/3, build_graph/1,
+      find_start_node/1 (lib/letflow/engine.ex) -- avoiding the risk of
+      two copies silently diverging, flagged for and accepted by
+      REVIEWER. docs/requirements.yaml REQ-053 flipped in_progress ->
+      done. Checked README.md: no changes needed, same reasoning
+      REQ-045/047/048/052/061's DOC-UPDATER passes applied --
+      reconstruct_instance/2 is an internal engine capability with no
+      new HTTP route (POST /api/v1/instances/:id/reconstruct is
+      explicitly S4 scope per this requirement's own SCOPE BOUNDARY) and
+      no gen_statem/process-model change, so neither the ASCII state
+      diagram nor "What's here today"/"Running it" sections are
+      affected -- verified by grep, no existing README mentions of this
+      area either. docs/migration/stage-3-instance-engine.md's header
+      listed REQ-053 in its `pending` list even though it is now `done`
+      -- fixed in this same pass (moved REQ-053 into the `done` clause
+      with an EE-11 one-line summary, pending count corrected 8 -> 7),
+      same header-sync gap-fix shape REQ-045/047/048/052/061's
+      DOC-UPDATER passes already applied.

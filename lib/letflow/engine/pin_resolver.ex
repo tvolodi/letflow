@@ -1,12 +1,17 @@
 defmodule Letflow.Engine.PinResolver do
   @moduledoc """
   PIN-01..PIN-04 (REQ-059) — dependency pin resolution, recording, and
-  inheritance. Ports `src/engine/pin_resolver.zig` (R-Co, 967 lines) — no
-  R-Co source tree was reachable at design or implementation time; every
-  behavioural claim in this module traces to REQ-059's own requirement text
-  (verified by the requirement's author against R-Co directly) or to
-  already-shipped Letflow code, cited by file/line — never to a second,
-  unverifiable read of R-Co. See `lib/letflow/design/req059-pin-resolver.md`
+  inheritance. Ports `src/engine/pin_resolver.zig` (R-Co, 967 lines).
+
+  **Sourcing.** At design and implementation time no read of
+  `pin_resolver.zig` was made, and every behavioural claim here traced to
+  REQ-059's own requirement text or to already-shipped Letflow code, cited by
+  file/line. R-Co has since been read directly (REQ-110 audit, 2026-08-19),
+  and that reconstruction did **not** hold on the override path: see the
+  OQ-1 resolution below, `docs/issues/ISS-0079.yaml` (GH#298) and
+  `docs/issues/ISS-0078.yaml` (GH#299). Treat any claim in this moduledoc
+  that REQ-110 did not explicitly verify as still unconfirmed against R-Co.
+  See `lib/letflow/design/req059-pin-resolver.md`
   (the gate-approved design this module implements) for the full algorithm,
   error taxonomy, and open questions this moduledoc restates the load-bearing
   parts of.
@@ -103,12 +108,39 @@ defmodule Letflow.Engine.PinResolver do
   ## Open questions carried from the design doc (not silently resolved)
 
   See `lib/letflow/design/req059-pin-resolver.md` §9 for the full list
-  (OQ-1..OQ-6: no R-Co source available to verify `source: :override`'s
-  exact origin; "most recent" vs. "all" `INSTANCE_PINS_REBOUND` events;
-  `attrs` vs. `opts` placement; the `:parent_instance_id` key name guess
-  against not-yet-built REQ-062; `variable_schema_lookup` totality; override
-  vs. inheritance precedence). One further gap surfaced during
-  implementation, not covered by the design doc's own OQ list:
+  (OQ-1..OQ-6: what produces `source: :override`; "most recent" vs. "all"
+  `INSTANCE_PINS_REBOUND` events; `attrs` vs. `opts` placement; the
+  `:parent_instance_id` key name guess against not-yet-built REQ-062;
+  `variable_schema_lookup` totality; override vs. inheritance precedence).
+
+  **OQ-1 is RESOLVED as of 2026-08-19** (REQ-110 audit, run
+  `WF03-REQ110-20260819`) and no longer open. R-Co's `pin_resolver.zig` was
+  read directly and its `source: :override` mechanism **differs materially**
+  from the §4.1 design this module implements. R-Co applies overrides as an
+  overlay AFTER full resolution and verifies each one against the catalog,
+  rejecting any override whose `version` is not the currently-resolvable
+  version with `UnresolvedPinOverride` / HTTP 422
+  (`pin_resolver.zig:296-299`, `:602-691`, `:189-190`); it rejects
+  `kind: module` overrides outright (`:642`) and treats an override naming
+  an unreferenced ref as an error rather than a no-op (`:707-723`). This
+  module, by contrast, takes a caller-supplied override verbatim in
+  `resolve_one_ref/4` below — no lookup call, no verification, no
+  `unresolved_pin_override` error variant — so an override may assert a
+  version that was never confirmed to exist. R-Co additionally sets
+  `source: :override` from a SECOND producer this module's design never
+  anticipated: a PIN-05 rebind (`pin_resolver.zig:138`, `:156`, tested at
+  `:914`), where `merge_effective_pins/2` below leaves `source` untouched.
+
+  **Both deltas are recorded, not repaired**, per REQ-110's audit-only
+  scope: `docs/issues/ISS-0079.yaml` (GH#298, the override mechanism) and
+  `docs/issues/ISS-0078.yaml` (GH#299, rebind provenance). The behaviour
+  described elsewhere in this moduledoc is the behaviour this module
+  actually has today; changing it needs a fix design through WF-03, and
+  "match R-Co exactly" is explicitly not assumed to be the right answer —
+  see each issue's `scoping_note` for the decisions still open.
+
+  One further gap surfaced during implementation, not covered by the design
+  doc's own OQ list:
 
     * **OQ-7 (implementation-time finding) — `tenant_id` is not in
       `resolve/4`'s own argument list**, but §4.2 of the design doc requires

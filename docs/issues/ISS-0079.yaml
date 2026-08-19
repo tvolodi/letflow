@@ -1,0 +1,190 @@
+id: ISS-0079
+title: "PinResolver.resolve/4 trusts caller-supplied pin overrides verbatim; R-Co re-resolves every override against the catalog and rejects any that does not name the currently-resolvable version (UnresolvedPinOverride / HTTP 422), rejects module overrides outright, and rejects an override naming a ref the graph does not reference"
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-REQ110-20260819
+discovered_at: "2026-08-19T20:20:06Z"
+severity: MAJOR
+tags:
+  - r-co-verification
+  - req-059
+  - pin-resolver
+  - behavioural-divergence
+  - audit-finding
+id_note: >
+  ORIGINALLY WRITTEN AS ISS-0077 and filed on GitHub as #298 under that id.
+  A concurrent run (`WF02-REQ109-20260819`, CODE-DESIGNER) independently
+  claimed ISS-0077 for an unrelated VariableMerge finding at almost the same
+  moment and its file landed second, overwriting this one. Renumbered to
+  ISS-0079 here rather than reverting the other agent's work; GH#298's body
+  was edited to point at this file. If you followed a stale ISS-0077
+  reference from GH#298, this is the record you wanted.
+
+  Root cause is the issue-id allocation scheme itself: `ls docs/issues/ |
+  tail -1` plus one is not atomic across concurrent hosts, and nothing in
+  `docs/agents/protocols/ISSUE_QUEUE.md` serialises it. Worth raising with
+  ORCH -- the same race can silently destroy an issue record rather than
+  merely renumber one, and here it did (the original ISS-0077 content was
+  only recoverable because this run still had it in context).
+description: >
+  Found by REQ-110's audit of REQ-059's OQ-1
+  (lib/letflow/design/req059-pin-resolver.md:538), which self-described as
+  "this design's single largest unverified inference": REQ-059's requirement
+  text names `:override` as a valid `source` value but never describes what
+  PRODUCES it, and the design's §4.1 invented a mechanism, stating that if
+  R-Co's actual mechanism "differs materially from §4.1's design,
+  ELIXIR-DEV/REVIEWER must correct this design before building against it."
+  REQ-059 shipped against it. R-Co's source is now readable and the
+  mechanism DOES differ materially, on a shipped S3 instance-start path.
+
+  R-CO'S ACTUAL MECHANISM (all lines read directly this run in
+  c:\Users\tvolo\dev\ai-dala\R-Co\src\engine\pin_resolver.zig):
+
+  - Overrides arrive as raw caller-supplied JSON on `ResolutionInput`
+    (`pin_overrides: ?[]const u8`, pin_resolver.zig:206) shaped
+    `{kind, ref, version}[]` -- there is NO `resolved_id` in the wire form.
+    R-Co derives `resolved_id` itself from its own catalog lookup.
+
+  - Overrides are applied as Step 5 (pin_resolver.zig:296-299), AFTER full
+    normal resolution (Steps 2/3 at :254-290) has already run and produced
+    every pin with `.source = .resolved` (:265). An override is an OVERLAY
+    onto an already-resolved pin set, never a substitute for resolving.
+
+  - `applyPinOverrides()` (pin_resolver.zig:602-691) VERIFIES each override
+    before applying it. For `catalog_entry` it calls
+    `resolveServiceCatalogRef()` and requires the override's `version` to
+    equal the currently-resolvable version, else `UnresolvedPinOverride`
+    (:648-661). For `variable_schema` it recomputes the current hash and
+    requires an exact match, else `UnresolvedPinOverride` (:670-683).
+
+  - `kind: module` overrides are rejected UNCONDITIONALLY
+    (pin_resolver.zig:642: "a module override can never verify --
+    UnresolvedPinOverride").
+
+  - An override naming a ref that is NOT in the enumerated pin set is an
+    ERROR, not a no-op: `applyOverrideToPins()` returns false when no pin
+    matches (pin_resolver.zig:707-723, the `return false` at :723), and both
+    call sites turn that into `UnresolvedPinOverride` (:662-664, :684-686).
+
+  - `UnresolvedPinOverride` is a first-class member of `ResolutionError`
+    (pin_resolver.zig:189-190, documented "pin_overrides names a version that
+    does not exist (PIN-01 AC4). HTTP 422"), and aborts resolution ENTIRELY
+    with no partial pin set kept (:598-601).
+
+  - `.source = .override` is set by exactly one line on this path:
+    `applyOverrideToPins()` at pin_resolver.zig:719, only after verification
+    succeeded.
+
+  SHIPPED LETFLOW BEHAVIOUR (lib/letflow/engine/pin_resolver.ex, read this
+  run):
+
+  - `resolve_one_ref/4` (pin_resolver.ex:317-328) checks `find_override/3`
+    FIRST and, on a hit, emits
+    `%{kind:, ref:, resolved_id:, version:, source: :override}` taking
+    `resolved_id` and `version` verbatim from the caller, and never calls
+    `lookup_fun` for that ref at all. `resolve_variable_schema/3`
+    (:353-379) does the same for the `:variable_schema` entry.
+
+  - There is NO verification step of any kind. A caller may pin any
+    arbitrary `version` string and any arbitrary `resolved_id` -- including
+    ones naming nothing that exists -- and it is written into the
+    `INSTANCE_STARTED` payload as an authoritative pin.
+
+  - `override_entry()` (pin_resolver.ex:153-158) explicitly permits
+    `kind: :catalog_entry | :module | :variable_schema`, so a `:module`
+    override is accepted where R-Co rejects it categorically.
+
+  - An override naming a ref the graph does not reference is silently
+    ignored, because `find_override/3` is only ever consulted per already-
+    enumerated ref (`resolve_refs/4`, pin_resolver.ex:304-315).
+
+  - `resolve_error()` (pin_resolver.ex:184-187) has no
+    `unresolved_pin_override` variant at all, so there is no error this path
+    could return even if verification were added.
+
+  BEHAVIOURAL DELTA. Given identical input, a `pin_overrides` entry naming a
+  stale or nonexistent version causes R-Co to reject instance creation with
+  HTTP 422 UNRESOLVED_PIN_OVERRIDE and create nothing; Letflow accepts it and
+  persists an `INSTANCE_STARTED` event whose pin set asserts a version that
+  was never verified to exist. Because pins are immutable after
+  `INSTANCE_STARTED` except through `PinRebind` (REQ-060), and PIN-03's
+  `pin_for/3` is documented "no fallback, ever", an unverified override
+  poisons every later execution-time lookup for that instance's whole
+  lifetime. This is a trust-boundary difference on a tenant-facing input,
+  not a cosmetic one -- SECURITY-REVIEWER should be in the loop on the fix.
+
+  ADJACENT DELTAS OBSERVED IN THE SAME §4.1/§4.3 SECTIONS. Recorded here so
+  the record is not lost; these are NOT the override mechanism and each needs
+  its own assessment rather than being assumed to travel with it:
+
+  (a) DEDUPLICATION. Letflow deduplicates enumerated refs with `Enum.uniq()`
+  (pin_resolver.ex:292), so two `SERVICE_TASK` nodes sharing one `service_id`
+  yield ONE pin entry. R-Co appends one pin per node with no dedup whatsoever
+  (pin_resolver.zig:254-267), yielding TWO identical entries. This changes the
+  `INSTANCE_STARTED` payload's pin-list length and therefore its bytes.
+  Letflow's behaviour is arguably the better one; it is nonetheless a
+  divergence from the port and was never flagged as a deliberate deviation.
+
+  (b) SORT ORDER. Letflow sorts by `Atom.to_string(kind)`
+  (pin_resolver.ex:383-385), giving catalog_entry < module < variable_schema.
+  R-Co sorts by `@intFromEnum(kind)` (`pinLessThan`, pin_resolver.zig:730-735)
+  against `PinKind = enum { catalog_entry, variable_schema, module }`
+  (:25), giving catalog_entry < variable_schema < module. The two orders
+  differ whenever a `module` pin exists. NOTE THE HONEST LIMIT: R-Co can
+  never actually produce a `module` pin, because any `module_ref` returns
+  `UnresolvedModuleRef` unconditionally (pin_resolver.zig:275-284, PLC-01 not
+  built), so R-Co's own ordering for that kind is unexercised and this
+  divergence is unobservable in R-Co today. It becomes observable in Letflow
+  the moment a real `module_lookup` is supplied. PIN-01 AC5 makes ordering
+  load-bearing, so it should be settled deliberately rather than inherited.
+r_co_evidence:
+  - "src/engine/pin_resolver.zig:206 -- pin_overrides is raw {kind,ref,version}[] JSON, no resolved_id"
+  - "src/engine/pin_resolver.zig:296-299 -- Step 5 applies overrides AFTER resolution"
+  - "src/engine/pin_resolver.zig:602-691 -- applyPinOverrides() verifies every override"
+  - "src/engine/pin_resolver.zig:642 -- module overrides always UnresolvedPinOverride"
+  - "src/engine/pin_resolver.zig:659-661, 681-683 -- version must equal currently-resolvable version"
+  - "src/engine/pin_resolver.zig:662-664, 684-686, 707-723 -- override naming an unknown ref is an error"
+  - "src/engine/pin_resolver.zig:189-190 -- UnresolvedPinOverride, HTTP 422"
+  - "src/engine/pin_resolver.zig:719 -- the single line that sets .source = .override on this path"
+letflow_evidence:
+  - "lib/letflow/engine/pin_resolver.ex:317-328 -- resolve_one_ref/4 takes the override verbatim, skips lookup"
+  - "lib/letflow/engine/pin_resolver.ex:353-379 -- same for the variable_schema entry"
+  - "lib/letflow/engine/pin_resolver.ex:153-158 -- override_entry() permits kind: :module"
+  - "lib/letflow/engine/pin_resolver.ex:304-315 -- stray override refs are never consulted, so silently ignored"
+  - "lib/letflow/engine/pin_resolver.ex:184-187 -- resolve_error() has no unresolved_pin_override variant"
+  - "lib/letflow/engine/pin_resolver.ex:292 -- Enum.uniq() dedup (adjacent delta a)"
+  - "lib/letflow/engine/pin_resolver.ex:383-385 -- Atom.to_string/1 sort key (adjacent delta b)"
+affected_files:
+  - lib/letflow/engine/pin_resolver.ex
+  - lib/letflow/design/req059-pin-resolver.md
+status: open
+github_issue: https://github.com/tvolodi/letflow/issues/298
+related:
+  - ISS-0076
+  - ISS-0078
+scoping_note: >
+  Filed, NOT fixed, per REQ-110's NON-NEGOTIABLE clause. REQ-110 is an audit
+  whose deliverable is findings; it makes zero changes to engine behaviour,
+  and repairing this inside the audit would bypass CODE-DESIGNER,
+  SECURITY-REVIEWER and REVIEWER on a shipped tenant-facing engine path and
+  destroy the record of what was wrong.
+
+  ROUTE THROUGH WF-03. The fix is NOT mechanical and must not be treated as
+  one. At least four separable decisions need a design:
+    1. Should Letflow verify overrides against the injected `Lookup` (the
+       nearest analogue of R-Co's catalog re-resolution), and does that make
+       `resolve/4` non-pure in a way §4.1's "no lookup call at all" was
+       specifically written to avoid?
+    2. Does `resolve_error()` gain an `{:unresolved_pin_override, ref}`
+       variant, and what does `Engine.create/2` map it to?
+    3. Is `kind: :module` still a legal override, given R-Co rejects it only
+       because PLC-01 does not exist -- an artefact of R-Co's own scoping,
+       not a principled rule Letflow must inherit?
+    4. Is a stray override ref an error or a no-op?
+  Item 3 in particular is a case where copying R-Co would be copying a
+  stopgap. Do not assume "match R-Co exactly" is the right answer to all
+  four.
+
+  Adjacent deltas (a) and (b) in the description are recorded for the same
+  designer but should be dispositioned separately -- (a) may well be a
+  deliberate improvement worth keeping, and (b) is unobservable in R-Co and
+  needs a decision rather than a port.

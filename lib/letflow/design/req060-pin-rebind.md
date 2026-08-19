@@ -96,10 +96,28 @@ register-your-own-event-type precedent by direct example, lines 63-97).
   registers `"INSTANCE_PINS_REBOUND"` in every fixture the same way
   `engine_cancel_instance_test.exs` already does for its own two event types,
   rather than discovering `{:error, :unknown_event_type}` by surprise. Flagged
-  as **OQ-1** (§9) since this is a caller-responsibility choice, not something
-  R-Co source could settle (unreachable in this environment) — REVIEWER may
+  as **OQ-1** (§9) since this is a caller-responsibility choice — REVIEWER may
   prefer this module call `Registry.register_type/2` itself, idempotently, the
   same way `maybe_seed_platform_event_types/2` does for `INSTANCE_STARTED`.
+
+  **OQ-1 disposition, 2026-08-19 (REQ-110 audit, run `WF03-REQ110-20260819`):
+  `unsettled_by_source` — R-Co was read and genuinely does not answer this.**
+  The question is not open for want of access. R-Co's `rebindPins()` appends
+  `INSTANCE_PINS_REBOUND` with a direct `INSERT INTO events (..., event_type,
+  ...) SELECT $1::uuid, 'INSTANCE_PINS_REBOUND', ...`
+  (`R-Co/src/engine/pin_rebind.zig:187-202`) — a raw SQL insert with the event
+  type as a string literal. R-Co **does** have an event-type registry
+  (`R-Co/src/event_store/registry.zig:124`, `registerType()`), but
+  `pin_rebind.zig` never calls it, never validates against it, and contains no
+  reference to it anywhere in its 388 lines. R-Co's writer bypasses the
+  registry entirely, so the `{:error, :unknown_event_type}` failure mode this
+  OQ is about **cannot arise in R-Co**, and R-Co therefore expresses no
+  opinion — neither "the module self-registers" nor "the caller registers" —
+  on a question that only exists because Letflow's `EventStore.append/2`
+  enforces registration where R-Co's insert does not. This is a genuine
+  Letflow-only design choice and stays with REVIEWER, exactly as this OQ
+  originally stated. What has changed is only the reason: it is unanswered
+  because the source is silent, not because the source was unreachable.
 - **`cancel_instance/3`'s own locking convention is plain `lock("FOR UPDATE")`
   (blocking), not `NOWAIT`** (`engine.ex:2002`, `2015`, `2061` — confirmed by
   direct read) — REQ-060's own requirement text explicitly asks for the
@@ -131,10 +149,26 @@ placement).
 
 ### Moduledoc — required content (verbatim-in-substance, per this design)
 
-1. Ports `pin_rebind.zig` (R-Co, 388 lines, PIN-05) — no R-Co source tree was
-   reachable at design time; every behavioural claim traces to REQ-060's own
-   requirement text or to already-shipped Letflow code, cited by file/line, never
-   to a second, unverifiable read of R-Co.
+1. Ports `pin_rebind.zig` (R-Co, 388 lines, PIN-05).
+
+   **Sourcing note — this is a factual record, NOT required moduledoc
+   content.** This item previously prescribed that every implementation
+   written against this design carry a caveat stating no R-Co source tree was
+   reachable. That prescription is **removed** (REQ-110, 2026-08-19,
+   `WF03-REQ110-20260819`, ISS-0076 item 2): it was minting fresh stale claims
+   into moduledocs that did not exist yet, which is how ISS-0075's defect was
+   created. **Do not copy any environment claim into an implementation's
+   moduledoc from this document.**
+
+   For the record: this design was written without a read of `pin_rebind.zig`,
+   so its behavioural claims traced to REQ-060's requirement text and to
+   already-shipped Letflow code, cited by file/line. The R-Co tree is reachable
+   at `c:\Users\tvolo\dev\ai-dala\R-Co` and REQ-110 subsequently verified this
+   document's open questions against it directly (§9 OQ-4 `confirmed`, §1 OQ-1
+   `unsettled_by_source`, §9 OQ-5 for the scope of what was and was not
+   re-checked). Anything a future implementation needs to state about
+   verification should be derived from a read of the source at that time, not
+   inherited from this line.
 2. States plainly, in its opening paragraph: this module is **the sole write
    path to an instance's effective pin set after `INSTANCE_STARTED`**. No
    scheduled job, catalog publication, or definition promotion may change a
@@ -456,12 +490,16 @@ this unwrap is a pure pass-through, not a second translation layer.
   behind it. This is a **deliberate cross-function interaction**, not a bug:
   `complete_task/3`/`cancel_instance/3` block each other (both use plain
   `FOR UPDATE`), but `rebind_pins/3` never blocks — it either gets the lock
-  immediately or fails immediately. Flagged **OQ-4** (§9): whether
-  `rebind_pins/3` racing a concurrent `complete_task/3` should really surface
-  as `ConcurrentModification` (this design's literal reading of "surfaces
-  contention as a distinct ConcurrentModification error rather than blocking")
-  or whether R-Co's own `pin_rebind.zig` scopes this narrower (e.g. only
-  concurrent rebind-vs-rebind) is unverifiable without R-Co source access.
+  immediately or fails immediately. This was flagged **OQ-4** (§9) and is now
+  **CONFIRMED against R-Co** (REQ-110 audit, 2026-08-19): `rebindPins()`
+  acquires exactly one lock, `SELECT status FROM instance_projections ... FOR
+  UPDATE NOWAIT`, and maps any failure to `ConcurrentModification`
+  (`R-Co/src/engine/pin_rebind.zig:126-134`) — no advisory lock, no
+  rebind-specific lock target. R-Co's `completeTask()` contends for that same
+  row with the same `NOWAIT` mode (`R-Co/src/engine/instance.zig:1816-1822`),
+  so rebind racing `complete_task` surfaces as `ConcurrentModification` in
+  R-Co exactly as it does here. The broad scope is the intended one; see §9
+  OQ-4 for the full citation set.
 - **Deadlock**: since `rebind_pins/3` never blocks (only `NOWAIT`), it cannot
   participate in a lock-ordering deadlock with `complete_task/3`'s/
   `cancel_instance/3`'s own `tasks`-before-`instance_projections`(-before-`tokens`)
@@ -538,20 +576,62 @@ already fixes structurally.
   design picks "always append, possibly empty" because it is the simpler,
   more uniform contract for a caller checking "did my rebind call succeed" —
   but flags this for REVIEWER/TEST-DESIGNER rather than assuming it silently.
-- **OQ-4 — `ConcurrentModification` scope: rebind-vs-rebind only, or
-  rebind-vs-any-writer (§6)?** This design's `NOWAIT` lock on
-  `instance_projections` makes `rebind_pins/3` surface `ConcurrentModification`
-  against **any** concurrent holder of that row's lock, including
-  `complete_task/3`/`cancel_instance/3` mid-transaction — not just a second
-  concurrent `rebind_pins/3` call. No R-Co source was reachable to confirm
-  `pin_rebind.zig`'s own scope here; REVIEWER should confirm this reading is
-  the intended one before ELIXIR-DEV builds against it, since a narrower scope
-  (only guard against a second rebind) would need a different, non-`instance_projections`
-  lock target (e.g. a rebind-specific advisory lock) to achieve.
-- **OQ-5 — no R-Co source available**, same standing caveat REQ-059's design
-  doc carried (its own OQ-1): every claim in this document traces to REQ-060's
-  own requirement text or already-shipped Letflow code, never a second read of
-  `pin_rebind.zig` itself.
+- **OQ-4 — RESOLVED 2026-08-19 (REQ-110 audit, run `WF03-REQ110-20260819`):
+  disposition `confirmed`.** The question was whether `ConcurrentModification`
+  is scoped rebind-vs-rebind only or rebind-vs-any-writer (§6). This design
+  chose the broad reading — a `NOWAIT` lock on `instance_projections` makes
+  `rebind_pins/3` surface `ConcurrentModification` against **any** concurrent
+  holder of that row's lock, including `complete_task/3`/`cancel_instance/3`
+  mid-transaction — and noted a narrower scope would need a different,
+  non-`instance_projections` lock target such as a rebind-specific advisory
+  lock. **R-Co was read directly and does exactly what this design chose.**
+  `rebindPins()` locks with
+  `SELECT status FROM instance_projections WHERE instance_id = $1::uuid FOR
+  UPDATE NOWAIT`, mapping any failure of that query to
+  `RebindError.ConcurrentModification`
+  (`R-Co/src/engine/pin_rebind.zig:126-134`, its own comment at `:123-125`
+  citing the `CompleteTaskError` precedent). There is **no advisory lock and
+  no rebind-specific lock target anywhere in `pin_rebind.zig`** — the whole
+  file contains exactly one lock acquisition. R-Co's own `completeTask()`
+  contends for that same row with the same `FOR UPDATE NOWAIT`
+  (`R-Co/src/engine/instance.zig:1816-1822`), so rebind-vs-complete_task
+  contention surfaces as `ConcurrentModification` in R-Co too. The route
+  layer maps it to HTTP 409 `CONCURRENT_MODIFICATION`
+  (`R-Co/src/api/routes/pin_rebind.zig:128`), matching §6's shape.
+  §6's statement at the call site above resolves with this one, on the same
+  evidence.
+- **OQ-5 — RESOLVED 2026-08-19 (REQ-110 audit, run `WF03-REQ110-20260819`):
+  disposition `divergent_doc_only`.** This OQ formerly stood as a blanket
+  caveat that no R-Co source was available and that every claim in this
+  document traced to REQ-060's own requirement text or already-shipped
+  Letflow code, never a second read of `pin_rebind.zig`. **That caveat is
+  withdrawn: it is no longer true.** The R-Co tree is reachable at
+  `c:\Users\tvolo\dev\ai-dala\R-Co` and REQ-110 read
+  `src/engine/pin_rebind.zig` (388 lines) and `src/api/routes/pin_rebind.zig`
+  (221 lines) directly — see OQ-4 above and OQ-1 in §1 for the specific lines
+  consulted.
+
+  **Scope of what that verification does and does not cover.** REQ-110 was
+  scoped to this document's open questions, not to a line-by-line re-audit of
+  every claim in it. OQ-4 was checked and confirmed; §1's OQ-1 was checked
+  and found not settleable by R-Co (recorded there). Claims in this document
+  outside those two were **not** re-verified against R-Co by REQ-110 and
+  should not be read as having been. The honest position is therefore
+  narrower than "all verified" and quite different from the old "none
+  verifiable": the source is available to anyone who wants to check the rest,
+  and the specific questions this document flagged as blocked on it are no
+  longer blocked.
+
+  **Adjacent finding, on `PinResolver` rather than this module.** While
+  resolving OQ-4, REQ-110 found that §7's claim below — that no
+  `Letflow.Engine.PinResolver` change is needed because
+  `merge_effective_pins/2` "already folds every `INSTANCE_PINS_REBOUND` event
+  found" — is true of `version` but false of `source` and `resolved_id`: R-Co
+  stamps `source = .override` onto a rebound pin
+  (`R-Co/src/engine/pin_resolver.zig:138`, tested at `:914`) where Letflow
+  leaves it at `:resolved`. Filed as `docs/issues/ISS-0078.yaml` / GH#299 and
+  routed through WF-03; not repaired here, since REQ-110 was an audit and
+  makes no engine-behaviour change.
 
 ## 10. Acceptance-criteria → design element map (self-check)
 

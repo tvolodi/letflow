@@ -535,13 +535,50 @@ Three new private functions in `engine.ex`, called from `start_instance/5` (§3)
 
 ## 9. Open questions (explicit, not silently resolved)
 
-- **OQ-1 — no R-Co source available.** Every claim above sourced from REQ-059's own
-  requirement text or shipped Letflow code, never a second read of `pin_resolver.zig`
-  itself (unreachable in this environment). If R-Co's actual override/`source: :override`
-  mechanism differs materially from §4.1's design (this design's single largest
-  unverified inference — REQ-059's text names `:override` as a valid `source` value but
-  never describes what produces it), ELIXIR-DEV/REVIEWER must correct this design
-  before building against it.
+- **OQ-1 — RESOLVED 2026-08-19 (REQ-110 audit, run `WF03-REQ110-20260819`):
+  disposition `divergent_behavioural`.** This OQ originally recorded that every claim
+  in this document came from REQ-059's own requirement text or shipped Letflow code
+  and never from a read of `pin_resolver.zig` itself, and asked that
+  ELIXIR-DEV/REVIEWER correct §4.1 before building against it if R-Co's actual
+  `source: :override` mechanism differed materially. **R-Co was read directly during
+  REQ-110** (`c:\Users\tvolo\dev\ai-dala\R-Co\src\engine\pin_resolver.zig`, 967 lines).
+  It differs materially, and REQ-059 had already shipped against §4.1 by then.
+
+  **What R-Co actually does.** Overrides arrive as `{kind, ref, version}` JSON with
+  **no** `resolved_id` (`pin_resolver.zig:206`) and are applied as **Step 5, after**
+  full normal resolution has produced every pin with `.source = .resolved`
+  (`:296-299`, `:254-290`, `:265`) — an overlay onto an already-resolved set, never a
+  substitute for resolving. `applyPinOverrides()` (`:602-691`) **verifies** each
+  override against the catalog and requires its `version` to equal the
+  currently-resolvable version (`:659-661`, `:681-683`); `kind: module` overrides are
+  rejected unconditionally (`:642`); an override naming a ref not in the enumerated
+  pin set is an error, not a no-op (`:662-664`, `:684-686`, `:707-723`). Failure is
+  `UnresolvedPinOverride`, HTTP 422, aborting resolution entirely with no partial pin
+  set (`:189-190`, `:598-601`). `.source = .override` is set on exactly one line, only
+  after verification succeeded (`:719`).
+
+  **§4.1 above still describes the shipped Letflow behaviour** — the override taken
+  verbatim, no lookup call, no verification — and is deliberately left standing so the
+  design continues to describe the code as it actually is. It is **not** what R-Co
+  does. The delta is filed as **`docs/issues/ISS-0079.yaml` / GH#298** and routed
+  through WF-03; REQ-110 was an audit and correctly made no engine-behaviour change.
+  Do not treat "match R-Co exactly" as the answer: R-Co's blanket rejection of module
+  overrides is an artefact of PLC-01 not existing in R-Co, not a principled rule.
+
+  **A second producer of `:override` that this design never anticipated.** R-Co's
+  `mergeEffectivePins()` also stamps `.source = .override` onto a pin rebound by
+  PIN-05 (`pin_resolver.zig:138`, `:156`; asserted by R-Co's own unit test at `:914`).
+  Letflow's `merge_effective_pins/2` leaves `source` untouched on a rebind, so a
+  deliberately rebound pin still reports `source: :resolved`. Filed separately as
+  **`docs/issues/ISS-0078.yaml` / GH#299** (§6's OQ-2 neighbourhood, not §4.1's).
+
+  **Two adjacent deltas** were observed in §4.1/§4.3 while checking this OQ and are
+  recorded in ISS-0079 rather than here, since neither is the override mechanism:
+  Letflow deduplicates refs with `Enum.uniq()` where R-Co does not
+  (`pin_resolver.zig:254-267`), and the two sort pin kinds in different orders
+  (`pinLessThan`, `:730-735`, against `PinKind` at `:25`) — though R-Co can never
+  produce a `module` pin (`:275-284`), so its ordering for that kind is unexercised
+  and the difference is unobservable in R-Co today.
 - **OQ-2 — "most recent" vs. "all" `INSTANCE_PINS_REBOUND` events (§6).** Flagged
   inline above; needs REVIEWER/REQ-060-designer confirmation.
 - **OQ-3 — `attrs` vs. `opts` placement for `pin_lookup`/`pin_overrides`/

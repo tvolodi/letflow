@@ -1,0 +1,153 @@
+id: ISS-0078
+title: "PinResolver.merge_effective_pins/2 loses rebind provenance: a rebound pin keeps source: :resolved (R-Co sets .override), keeps its stale resolved_id, drops a rebind naming an unknown ref, and never sets source_event_id for un-rebound pins (R-Co sets the INSTANCE_STARTED id) despite effective_pin()'s own non-nilable @type"
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-REQ110-20260819
+discovered_at: "2026-08-19T20:20:06Z"
+severity: MAJOR
+tags:
+  - r-co-verification
+  - req-059
+  - req-060
+  - pin-resolver
+  - behavioural-divergence
+  - audit-finding
+description: >
+  Found by REQ-110's audit while resolving REQ-059's OQ-1
+  (lib/letflow/design/req059-pin-resolver.md:538), which asked what PRODUCES
+  `source: :override`. The audit found R-Co has TWO producers, not one. The
+  first (caller-supplied `pin_overrides` at instance start) is ISS-0079 (GH#298). This
+  issue is the SECOND, which REQ-059's design did not anticipate at all: in
+  R-Co, a PIN-05 rebind also stamps `source = .override` onto the rebound
+  entry. Letflow's `merge_effective_pins/2` does not, and diverges on three
+  further points in the same function.
+
+  R-CO (c:\Users\tvolo\dev\ai-dala\R-Co\src\engine\pin_resolver.zig,
+  `mergeEffectivePins()`, all lines read directly this run):
+
+  - :107-118 seeds one `EffectivePin` per `started_pins` entry, setting
+    `.source_event_id = started_event_id` -- the INSTANCE_STARTED event id,
+    which the function takes as its third parameter (:93). Every entry
+    therefore always has real provenance, rebound or not.
+  - :123-142 folds each rebind change onto the matching entry, setting
+    `.pin.resolved_id = dupe(change.new_version)` (:130, :136),
+    `.pin.version = dupe(change.new_version)` (:131, :137),
+    `.pin.source = .override` (:138), and
+    `.source_event_id = rebind.event_id` (:132, :139).
+  - :143-160 handles a rebind change naming a ref NOT in the base set by
+    APPENDING it (also `.source = .override`, :156), with the stated reason
+    "so the merged set stays a superset rather than silently dropping a
+    recorded rebind" (:147-149). Explicitly defensive, explicitly not a drop.
+  - R-Co's own unit test asserts this: after a rebind of `svc-a`,
+    `try std.testing.expectEqual(PinSource.override, merged[0].pin.source);`
+    (pin_resolver.zig:914, in the test seeded at :898 with
+    `.source = .resolved`). The provenance flip is a tested contract in R-Co,
+    not an incidental detail.
+
+  SHIPPED LETFLOW (lib/letflow/engine/pin_resolver.ex, read this run):
+
+  - `apply_rebind_event/2` (:450-466) rebuilds the matched pin as
+    `%{pin | version: new_version, source_event_id: event_id}` (:460). It
+    updates exactly two fields. Consequences:
+      (1) `source` is left as-is, so a rebound pin still reports
+          `source: :resolved` -- the exact opposite of R-Co's tested :override.
+      (2) `resolved_id` is left at the ORIGINAL resolution's value while
+          `version` moves, so the two fields describe different versions of
+          the same ref.
+  - A rebind entry naming a ref absent from the base set matches nothing in
+    the `Enum.map/2` at :458-464 and is silently DROPPED -- no append, no
+    error, no log. R-Co keeps it deliberately.
+  - `merge_effective_pins/2` takes no `started_event_id` parameter at all
+    (:429-432) and seeds `source_event_id: nil` (:443).
+    `reconstruct_effective_pins/2` (:501-524) does not supply one either --
+    it passes only the extracted `pinned_versions` list and the rebound
+    events. So EVERY never-rebound pin's `source_event_id` is permanently
+    `nil`, even though `effective_pin()`'s own `@type` (:171-178) declares
+    `source_event_id: Ecto.UUID.t()`, which is not nilable. Shipped code
+    contradicts its own typespec on this field.
+
+  BEHAVIOURAL DELTA AND WHY IT MATTERS. PIN-04 AC4 is the `GET .../pins`
+  provenance view -- the whole point of `EffectivePin` carrying
+  `source_event_id` and `source` is to let a reader answer "where did this
+  version come from?". Under Letflow's current implementation that view
+  reports `source: :resolved` for a pin that was explicitly, deliberately and
+  audibly rebound by REQ-060's `rebind_pins/3`, and reports `nil` provenance
+  for every pin that was not. The one operation the system is built to make
+  auditable is the one the provenance field fails to record. The stale
+  `resolved_id` is worse than cosmetic: any consumer that trusts
+  `resolved_id` over `version` after a rebind reads the pre-rebind target.
+
+  NOT A REBIND-WRITER BUG. `Letflow.Engine.PinRebind` writes the
+  `INSTANCE_PINS_REBOUND` payload correctly as far as this audit examined;
+  the loss is entirely on the READ side, in `merge_effective_pins/2`. Any fix
+  belongs in `pin_resolver.ex`, not `pin_rebind.ex`.
+
+  DESIGN-DOC ADJACENCY. `req060-pin-rebind.md`'s §7 asserts "No code change
+  to `Letflow.Engine.Reconstruction` or `Letflow.Engine.PinResolver` is part
+  of this requirement", on the basis that `merge_effective_pins/2` "already
+  folds every INSTANCE_PINS_REBOUND event found, applying each entry's
+  kind/ref/new_version -- exactly the shape §5 produces." That statement is
+  true about `version` and false about `source`/`resolved_id`, and it is why
+  the gap was never noticed at REQ-060's gate: REQ-059 built the reader
+  before REQ-060 defined what the writer's provenance should mean, and
+  neither requirement owned the seam. Worth naming in the fix design so the
+  same seam is not re-opened.
+r_co_evidence:
+  - "src/engine/pin_resolver.zig:90-95 -- mergeEffectivePins() signature, takes started_event_id"
+  - "src/engine/pin_resolver.zig:107-118 -- seeds source_event_id from the INSTANCE_STARTED id"
+  - "src/engine/pin_resolver.zig:130-139 -- rebind sets resolved_id, version, source = .override, source_event_id"
+  - "src/engine/pin_resolver.zig:143-160 -- unknown-ref rebind is APPENDED (source = .override at :156), never dropped"
+  - "src/engine/pin_resolver.zig:914 -- unit test asserts PinSource.override after a rebind"
+letflow_evidence:
+  - "lib/letflow/engine/pin_resolver.ex:450-466 -- apply_rebind_event/2 updates only version and source_event_id"
+  - "lib/letflow/engine/pin_resolver.ex:458-464 -- unknown-ref rebind entries silently dropped"
+  - "lib/letflow/engine/pin_resolver.ex:429-432, 443 -- no started_event_id parameter; source_event_id seeded nil"
+  - "lib/letflow/engine/pin_resolver.ex:501-524 -- reconstruct_effective_pins/2 supplies no INSTANCE_STARTED event id"
+  - "lib/letflow/engine/pin_resolver.ex:171-178 -- effective_pin() @type declares source_event_id as non-nilable Ecto.UUID.t()"
+  - "lib/letflow/design/req060-pin-rebind.md:472-478 -- §7's 'no PinResolver change needed' rationale"
+affected_files:
+  - lib/letflow/engine/pin_resolver.ex
+  - lib/letflow/design/req059-pin-resolver.md
+  - lib/letflow/design/req060-pin-rebind.md
+status: open
+github_issue: https://github.com/tvolodi/letflow/issues/299
+related:
+  - ISS-0076
+  - ISS-0079
+scoping_note: >
+  Filed, NOT fixed, per REQ-110's NON-NEGOTIABLE clause -- this audit makes
+  zero changes to engine behaviour so the finding survives as a record and
+  the fix passes through CODE-DESIGNER, SECURITY-REVIEWER and REVIEWER.
+
+  ROUTE THROUGH WF-03. Separable decisions the fix design must settle:
+    1. Does a rebound pin's `source` become `:override` (matching R-Co and
+       its test at pin_resolver.zig:914), or does Letflow introduce a
+       distinct `:rebound` value? R-Co reuses `.override` for both producers,
+       which loses the distinction between "caller overrode at start" and
+       "operator rebound mid-flight". Letflow's `source` type
+       (pin_resolver.ex:139) would need widening for the alternative, and
+       `normalize_source/1` (:473-476) with it. Matching R-Co is the
+       lower-risk option but is not obviously the better one; decide it
+       deliberately.
+    2. Should `resolved_id` follow `version` on a rebind? R-Co sets it to
+       `change.new_version` (pin_resolver.zig:130) -- note that is the
+       VERSION string stored into a RESOLVED_ID field, which looks like an
+       R-Co quirk rather than an intention worth porting. Letflow's
+       `INSTANCE_PINS_REBOUND` payload may not even carry a new
+       `resolved_id` to use; check REQ-060 §5's payload shape before
+       designing this one.
+    3. Unknown-ref rebind entries: append (R-Co), drop (today), or error?
+       R-Co's own comment calls its append "defensive only" because PIN-05's
+       UnknownPinRef gate should prevent it -- Letflow has that same gate, so
+       this is about what happens when the gate is bypassed, not normal flow.
+    4. Threading the INSTANCE_STARTED event id into `merge_effective_pins/2`
+       so `source_event_id` stops being `nil` and the shipped code stops
+       contradicting `effective_pin()`'s own @type. This one has an arity
+       change on a public function, so it needs REVIEWER on the call sites.
+
+  Item 2 is the clearest case in this issue where copying R-Co would be
+  copying a defect. Do not treat "match R-Co" as the default answer.
+
+  TEST-DESIGNER note for the eventual WF-03 Step 4: R-Co's own test at
+  pin_resolver.zig:898-914 is a directly portable fail-first regression case
+  for item 1 -- seed a pin with source :resolved, fold one rebind, assert the
+  source flipped. It fails against today's code.

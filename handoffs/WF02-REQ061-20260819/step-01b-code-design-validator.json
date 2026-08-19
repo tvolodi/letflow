@@ -1,0 +1,52 @@
+{
+  "handoff_id": "6e4c2df1-0d1f-4532-4c5k-req061step01b",
+  "run_id": "WF02-REQ061-20260819",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ061-20260819/step-01b-code-design-validator.json",
+  "created_at": "2026-08-19T00:57:40Z",
+  "started_at": "2026-08-19T00:57:40Z",
+  "completed_at": "2026-08-19T00:58:36Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-061"],
+    "requirement_text": {
+      "REQ-061": "See handoffs/WF02-REQ061-20260819/step-01-code-designer.json context.requirement_text for the full verbatim requirement text, including ORCH's flagged AC4 tension."
+    },
+    "related_handoff_ids": ["step-01-code-designer.json"],
+    "artifacts_in": ["lib/letflow/design/req061-execution-error-handling.md"],
+    "owned_modules": ["lib/letflow/engine.ex", "lib/letflow/design/req061-execution-error-handling.md"]
+  },
+  "task": {
+    "description": "Independently validate lib/letflow/design/req061-execution-error-handling.md against REQ-061's acceptance criteria. Read the design artefact directly. Pay particular attention to: (1) whether AC4's tension (only 2 of 5 named calling paths exist in shipped code) is handled by an explicit, reasoned interim proposal rather than silently assumed away, (2) whether the rewiring of REQ-049's and REQ-050's existing error paths into the new shared sink is concretely specified (not just asserted), (3) whether AC3 being already-satisfied by shipped REQ-048 code is verified against the actual code rather than taken on the design doc's word, (4) no implementation code leaked in.",
+    "acceptance_criteria": [
+      "Every REQ-061 acceptance criterion maps to a concrete design element or an explicitly-flagged, reasoned open question (not a silent assumption)",
+      "No TBD/deferral language for any in-scope acceptance criterion",
+      "Function signatures fully specified with @spec-style types and error shapes",
+      "Cross-module dependencies listed",
+      "No implementation code (no .ex/.exs code blocks with real bodies) present",
+      "Open questions listed explicitly, not silently resolved"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read lib/letflow/design/req061-execution-error-handling.md in full and independently re-verified its load-bearing claims against real shipped code rather than the doc's own assertions. (1) merge_output_variables/2 (lib/letflow/engine.ex:1043) confirmed: on VariableMerge.merge/3's {:rejected, ...} it returns {:error, {:unexpected_variable_rejection, events}} from a bare Multi.run/3 step -- an Ecto.Multi.run/3 {:error, _} return unconditionally aborts and rolls back the whole transaction, so today nothing persists and instance_projections.status stays :active; no ERROR state, no EXECUTION_ERROR event exist anywhere pre-this-design. (2) dispatch_task_completion_hop_chain/2 (engine.ex:1056) confirmed: on Transition.transition/3's {:error, reason} it returns {:error, {:transition_failed, reason}}, same abort-the-whole-Multi outcome; Transition.transition_error()'s {:no_matching_edge, node_id, evaluated_conditions} member (lib/letflow/engine/transition.ex:140, built at lines 382/441) confirmed as the exact shape the design cites for REQ-050. Both (1) and (2) confirm the design's central premise -- REQ-049/REQ-050 today have NO persisted ERROR state, only abort-and-return-tuple -- against the real code, not the doc's word. (3) AC3: fetch_and_lock_instance_projection/3 (engine.ex, complete_task/3's M2) confirmed to pattern-match nil -> :instance_not_found, %{status: :active} -> {:ok, _}, %{status: status} -> {:error, {:instance_not_active, status}} -- :error is not special-cased out, so an ERROR-status instance is already rejected today with a distinct, existing conflict tuple; complete_error()'s union already names {:error, {:instance_not_active, status :: :completed | :cancelled | :error}}, confirmed by direct read. This independently confirms the design's claim that AC3 is already satisfied by shipped REQ-048 code with no new logic needed. Also spot-checked instance_projection.ex: status enum and terminal?/1 (true only for :completed/:cancelled, false for :active and :error) confirmed as claimed, and cancel_instance/3 (engine.ex:1302) confirmed to already treat :error as cancellable via terminal?/1 reuse, matching design §7's cross-reference. Checked design against the 6 gate criteria: every REQ-061 AC maps to a concrete design element or an explicitly-flagged reasoned open question (AC4's 'at least three of five' tension is addressed head-on in §15 with a stated interim recommendation, not silently assumed or silently weakened); no TBD/deferral language found (grep clean); function signatures (append_multi/3, set_instance_error/2, merge_outcome_for/2, transition_outcome_for/2) carry full @spec-style types including error unions; cross-module dependencies enumerated in §13; the Jason.encode!/event_attrs pseudocode blocks in §9 are payload-shape illustrations matching the established req045/req049 design convention, not real function bodies -- no .ex/.exs implementation code present; open questions (OQ-1..OQ-7) are listed explicitly rather than silently resolved. No blocking gaps found.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ061-20260819",
+      "commit_sha_list": ["00b58b6"],
+      "remote_branch": "origin/feature/WF02-REQ061-20260819",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (Step 2) for OTP-idiom/decision-record sign-off, with particular attention to design §15's AC4 interim reading (2-of-2-shippable-callers-today) and §5's Multi.merge branch-point rewiring of complete_task/3, both flagged by CODE-DESIGNER as the load-bearing non-obvious parts."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

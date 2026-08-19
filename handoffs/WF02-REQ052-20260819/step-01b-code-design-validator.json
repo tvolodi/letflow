@@ -1,0 +1,52 @@
+{
+  "handoff_id": "c4a2d3b1-63b1-4f32-ad2b-req052step01b",
+  "run_id": "WF02-REQ052-20260819",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ052-20260819/step-01b-code-design-validator.json",
+  "created_at": "2026-08-19T00:11:55Z",
+  "started_at": "2026-08-19T00:11:55Z",
+  "completed_at": "2026-08-19T00:12:45Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-052"],
+    "requirement_text": {
+      "REQ-052": "See handoffs/WF02-REQ052-20260819/step-01-code-designer.json context.requirement_text for the full verbatim requirement text."
+    },
+    "related_handoff_ids": ["step-01-code-designer.json"],
+    "artifacts_in": ["lib/letflow/design/req052-instance-cancellation.md"],
+    "owned_modules": ["lib/letflow/engine.ex", "lib/letflow/parallel_approval.ex", "lib/letflow/approval_supervisor.ex", "lib/letflow/design/req052-instance-cancellation.md"]
+  },
+  "task": {
+    "description": "Independently validate lib/letflow/design/req052-instance-cancellation.md against REQ-052's acceptance criteria (see step-01-code-designer.json for the full list). Read the design artefact directly, not CODE-DESIGNER's handoff summary. Pay particular attention to: (1) whether every AC maps to a concrete design element with no TBD/deferral language, (2) whether the OPEN QUESTION on process termination is stated rather than silently resolved, (3) whether the SUPERSESSION decision on parallel_approval.ex/ApprovalSupervisor is stated concretely with reasoning, (4) whether any implementation code (.ex bodies) leaked into the doc -- FAIL immediately if so, (5) whether the design's claim that no live process exists to kill (making the OPEN QUESTION moot for this requirement) is actually consistent with REQ-045's shipped resolution -- verify against the real code, not just the design doc's own assertion.",
+    "acceptance_criteria": [
+      "Every REQ-052 acceptance criterion maps to a concrete design element (function signature, Multi step, or explicit statement)",
+      "No TBD/deferral language for any in-scope acceptance criterion",
+      "Function signatures fully specified with @spec-style types and error shapes",
+      "Cross-module dependencies listed",
+      "No implementation code (no .ex/.exs code blocks with real bodies) present",
+      "Open questions listed explicitly, not silently resolved"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently read lib/letflow/design/req052-instance-cancellation.md in full (not CODE-DESIGNER's handoff summary) and cross-checked it against shipped code and prior design docs. All 7 acceptance criteria map to concrete design elements (AC traceability table §14): AC1->Multi M4/M6/M7 + INV-EE52-1/5; AC2->M3 conflict + INV-EE52-2/3/4; AC3->M7+active_instance_guard reuse; AC4->§7.1's fully-traced two-direction race with exact resulting error tuples; AC5->§4's 'agreement by construction' reasoning; AC6->§10's required moduledoc SCOPE BOUNDARY text; AC7->§2's DELETE decision for both parallel_approval.ex and ApprovalSupervisor. No TBD/deferral language found (grepped for 'TBD'/'to be implemented'/'to be decided'/'placeholder' -- zero hits). Function signatures fully specified: @type cancel_attrs/cancel_opts/cancel_error/cancel_result and @spec cancel_instance/3 in §3, with an exhaustive tagged-tuple error taxonomy. Cross-module dependencies tabulated in §13. No implementation code present -- grepped for 'def '/'defp '/Repo./Multi.new and confirmed every hit is prose citation or a Multi-step-table cell describing shape, not an actual function body; only @type/@spec blocks appear as code. Open questions listed explicitly, not silently resolved: OQ-1..OQ-6 (§11) plus the mandated §15 process-termination question. Independently re-derived the design's central claim -- that REQ-045 resolved 'no live per-instance process,' making the OPEN QUESTION's premise moot for this requirement -- by reading lib/letflow/design/req045-instance-start-engine-shell.md §1 directly ('create/2 is a plain function on a new context module... No :gen_statem, no DynamicSupervisor, no per-instance process is introduced by this requirement') and lib/letflow/instance_supervisor.ex's shipped moduledoc ('Currently supervises no children... REQ-045 resolved the S3 running-instance shape to a plain transactional context module'); both independently confirm the design doc's §15 restatement rather than a silent sweep-aside. Also verified the SUPERSESSION disposition (§2) against the actual shipped lib/letflow/parallel_approval.ex (a real :gen_statem, confirmed) and lib/letflow/approval_supervisor.ex (a real DynamicSupervisor, confirmed), and against lib/letflow/application.ex lines 24-25, which do list both Letflow.InstanceSupervisor and Letflow.ApprovalSupervisor as current children -- matching the design's claim of what ELIXIR-DEV must edit. Verified the M1-before-M2 lock-ordering claim (tasks before instance_projections) against complete_task/3's actual shipped Multi (lib/letflow/engine.ex lines 834-885, fetch_and_lock_task before fetch_and_lock_instance_projection, both using lock(\"FOR UPDATE\")). All checks pass; no BLOCKER issues found.",
+    "artifacts_out": ["handoffs/WF02-REQ052-20260819/step-01b-code-design-validator.json"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ052-20260819",
+      "commit_sha_list": ["f888c69"],
+      "remote_branch": "origin/feature/WF02-REQ052-20260819",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (WF-02 Step 2a) to implement cancel_instance/3 in lib/letflow/engine.ex and delete lib/letflow/parallel_approval.ex, lib/letflow/approval_supervisor.ex, test/letflow/parallel_approval_test.exs, and the ApprovalSupervisor child-spec entry in lib/letflow/application.ex, per the design."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

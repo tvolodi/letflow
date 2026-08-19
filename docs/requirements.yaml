@@ -3544,3 +3544,1074 @@ requirements:
       - "every moduledoc that described tenant_id on a dropped-from table has been updated rather than left describing a nonexistent field, confirmed by grep for the phrase 'never caller-supplied' and 'intra-schema column'"
       - "mix test is green with no skipped or excluded tests, and the actual output is quoted in the completion report"
     depends_on: [REQ-063]
+
+
+  # ---------------------------------------------------------------
+  # S4 — api-surface
+  # Expanded once S3 (instance-engine) was fully done -- REQ-043..064
+  # all `done`. Ports R-Co's src/api/ (source inventory re-counted
+  # against the live R-Co tree 2026-08-19 and re-verified during this
+  # expansion: routes/ 31 modules / 15,083 lines, middleware/ 9 /
+  # 3,342, shared conventions src/api/*.zig 9 / 1,843, openapi/ 7 /
+  # 992, health/ 2 / 357). See docs/migration/stage-4-api-surface.md
+  # for the per-module table. Note two corrections this expansion
+  # found against that table: openapi/ has 7 modules totalling 992
+  # lines (builder 235, mod 6, model 59, path_registry 46,
+  # schema_registry 290, serialize 346, version_source 10), not
+  # "6 / 1,286"; and routes/sandbox_access.zig exports no handle*
+  # entry point at all (checkPrincipalBound/checkProbeRate/
+  # writeSentinelAudit are guard helpers a route calls), so it is a
+  # middleware-shaped concern, not a route. Its only consumer in the
+  # whole R-Co tree is routes/agent_sandboxes.zig, a post-S6
+  # runtime-agent route, so it is NOT ported in S4 by any requirement
+  # here and moves to the group (b) deferred table in
+  # stage-4-api-surface.md.
+  #
+  # ORDERING. The shared conventions (errors.zig RFC 9457 problem
+  # details, response.zig, pagination.zig cursor contract,
+  # validation.zig, authorization.zig role/permission matrix) are the
+  # cross-cutting contract every route consumes and land FIRST
+  # (REQ-066..069), ahead of any route requirement -- the same
+  # ordering precedent S2 used for REQ-024's event-type registry
+  # ahead of REQ-025's append. Router decomposition (REQ-070) lands
+  # immediately after, because a single flat route table cannot carry
+  # this surface and every later requirement mounts into it.
+  #
+  # THE FRAMEWORK CONTRADICTION IS REAL AND IS NOT RESOLVED HERE.
+  # docs/migration/decisions/0001-web-framework.md is `decided` and
+  # its Decision section says, in as many words, "Letflow migrates to
+  # Phoenix (router scope/pipeline DSL, controllers) ... effective at
+  # S4". Meanwhile lib/letflow/router.ex's moduledoc says
+  # "Deliberately minimal -- Plug + Bandit, no Phoenix",
+  # docs/migration/stage-4-api-surface.md's Decisions section says
+  # this stage "Executes on 0001 (Plug + Bandit, no Phoenix)", and
+  # mix.exs has no :phoenix dependency. Both readings cannot be
+  # right, and S4 is the exact stage where the difference becomes
+  # load-bearing (it changes what REQ-070's router is, what REQ-071's
+  # middleware chain is composed with, and whether OQ-2's
+  # open_api_spex is even on the table). Per CLAUDE.md's "Don't
+  # silently re-decide what a decision record already settled", this
+  # is escalated as REQ-065, a decision-record requirement gating the
+  # whole batch -- not chosen inside a route requirement. Every other
+  # S4 requirement below depends on REQ-065 transitively and is
+  # written framework-neutrally: it names the behaviour and the
+  # response contract, never `Plug.Router`-vs-`Phoenix.Router`
+  # specifics.
+  #
+  # OQ-2 (OpenAPI spec generation -- hand-build like R-Co's
+  # openapi/builder.zig + schema_registry.zig, adopt open_api_spex,
+  # or defer to S6) is the second genuine unresolved choice, and it
+  # is downstream of REQ-065 (open_api_spex is Phoenix-oriented). It
+  # gets its own decision-record requirement, REQ-084, on the
+  # REQ-010/REQ-014 precedent -- a decision record plus REVIEWER
+  # sign-off as the deliverable, with the spec-serving route left to
+  # whatever that record decides. R-Co's routes/openapi.zig (158
+  # lines) is therefore NOT ported by any requirement in this batch.
+  #
+  # SECURITY. S4 is the first stage that exposes tenant data over
+  # HTTP, which makes four of security-invariants.md's invariants go
+  # live simultaneously: INV-2 (server-side field authorisation --
+  # "no multi-tenant API surface exists (S4 not started)" stops being
+  # true here), INV-5 (not-found/forbidden indistinguishability --
+  # same), INV-1 (tenant isolation, already live but now reachable
+  # from an untrusted network peer rather than only from a test), and
+  # INV-6 (every new data-access path proves its scoping). Every
+  # tenant-scoped route requirement below carries an explicit
+  # cross-tenant acceptance criterion naming the invariant it
+  # discharges. REQ-072 exists specifically so that discharge is a
+  # shared, tested mechanism rather than 15 hand-written repetitions.
+  #
+  # ALREADY BUILT, DO NOT RE-PORT. REQ-021 ported the two hardest
+  # middleware modules -- Letflow.Plugs.AuthPipeline
+  # (src/api/middleware/auth.zig, 1,876 lines) and
+  # Letflow.Plugs.TenantStatus (tenant_status.zig, 81). Both
+  # moduledocs say they are "not mounted in front of any route today
+  # ... left available for S4". MOUNTING them is REQ-071's job;
+  # re-porting them is nobody's.
+  #
+  # SCOPE BOUNDARY FOR ROUTES WITHOUT A BACKING SUBSYSTEM. Eleven of
+  # R-Co's 31 route modules front subsystems Letflow has not built:
+  # dlq.zig (337, needs src/dlq/ -- S6), services.zig (417, needs
+  # service_catalog -- S6), platform_migrations.zig (288 -- S6),
+  # webhooks.zig (497 -- S6), simulation_test.zig (476 -- S7),
+  # process_modules.zig (363 -- S5), entities.zig (328) and
+  # entity_query.zig (559) (entity/data-model subsystem plus a query
+  # compiler -- S5/S6), and agent_task_specs.zig (311),
+  # agent_sandboxes.zig (501), agent_artifacts.zig (562)
+  # (runtime-agent orchestration, which docs/migration/README.md's
+  # "Two applications of the agent-pipeline principles" section
+  # explicitly defers -- "Only (1) is built"). NONE of these gets a
+  # requirement in this batch. Building a partial backing subsystem
+  # inside a route requirement is exactly the failure REQ-056's own
+  # SCOPE BOUNDARY paragraph exists to prevent, and a route against a
+  # subsystem that does not exist has nothing to be tenant-scoped
+  # against. They are named here so a later reader finds them
+  # accounted for; REQ-070's router requirement carries the same list
+  # in its moduledoc so the gap is visible at the code level too.
+  # Also not ported: middleware/agent_auth.zig (65 lines, same
+  # runtime-agent deferral) and middleware/outbox_cap.zig (236 -- the
+  # outbox itself is S6, so the cap has nothing to cap).
+  #
+  # SIZING. Four routes are too large for one agent turn each and are
+  # split by handler group with depends_on chaining, on REQ-052/061's
+  # precedent: identity.zig (1,868 lines / 23 handlers) splits four
+  # ways (REQ-073 users, REQ-074 groups, REQ-075 tenants, REQ-076 API
+  # tokens + roles); instances.zig (1,535 / 8) splits two ways
+  # (REQ-079 write path create/cancel/reconstruct, REQ-080 read path
+  # get/list/history/timeline/pins); definitions.zig (1,276 / 13)
+  # splits two ways (REQ-081 read/search, REQ-082 write/lifecycle);
+  # tasks.zig (1,085 / 7) splits two ways (REQ-083 read/inbox,
+  # REQ-085 complete/claim/assign/reassign). The split lines follow
+  # R-Co's own handler boundaries, not arbitrary line counts.
+  # ---------------------------------------------------------------
+
+  - id: REQ-065
+    title: Resolve the Phoenix-vs-Plug/Bandit contradiction between decision 0001 and the shipped router (gates all of S4)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Letflow currently holds two mutually exclusive positions on the S4 web
+      framework, and S4 cannot start until one of them is retired in writing.
+      THE CONTRADICTION, stated precisely so it is not re-litigated from
+      memory:
+      (a) docs/migration/decisions/0001-web-framework.md is Status: decided
+      (REQ-010, `done`). Its Decision section reads "Letflow migrates to
+      Phoenix (router scope/pipeline DSL, controllers) rather than continuing
+      to hand-rolling on plain Plug/Bandit, effective at S4", and its Summary
+      repeats "Dimensions A and B justify migrating to Phoenix at S4; the
+      migration itself (adding {:phoenix, \"~>...\"} to mix.exs, rewriting
+      lib/letflow/router.ex) is out of scope for this decision record and is
+      S4 execution work".
+      (b) lib/letflow/router.ex's moduledoc, shipped and `done` as of REQ-046,
+      opens "Deliberately minimal -- Plug + Bandit, no Phoenix", and
+      docs/migration/stage-4-api-surface.md's Decisions section states this
+      stage "Executes on docs/migration/decisions/0001-web-framework.md (Plug
+      + Bandit, no Phoenix) from S0" -- an inversion of what 0001 actually
+      decided. mix.exs's deps list ([:ecto_sql, :postgrex, :plug, :bandit,
+      :jason, :stream_data, :ueberauth_oidcc]) has no :phoenix entry, so the
+      shipped code matches (b) and the decision record says (a).
+      DELIVERABLE: an updated docs/migration/decisions/0001-web-framework.md
+      (amended in place with a dated addendum, in the same style as decision
+      0003's 2026-08-17 addendum and decision 0006's section 6 supersession
+      notes -- do NOT delete the original reasoning, which is what makes the
+      drift auditable) that states which of (a) or (b) now stands, why, and
+      what concretely changes. If Phoenix stands, the addendum must name the
+      mix.exs dependency additions and say that lib/letflow/router.ex's
+      moduledoc sentence and stage-4-api-surface.md's Decisions section are
+      both wrong and are corrected by this requirement. If Plug/Bandit stands,
+      the addendum must answer 0001's own Dimension B argument on its merits
+      -- that argument was the stated tie-breaker (a named, router-level
+      pipeline declared once and reused via pipe_through, versus hand-building
+      the same grouping from Plug.Builder primitives) and cannot be dismissed
+      by silence; note that Plug.Builder plus Plug.Router.forward/2 is a real
+      answer to it, but it must be written down as one.
+      Also correct 0001's stale route/middleware counts while amending: it
+      reasons against "24 route modules" and "7 middleware", both re-counted
+      2026-08-19 as 31 and 9 (agent_auth.zig and outbox_cap.zig are the two
+      middleware modules the 7 omits). The recount does not obviously flip the
+      decision in either direction -- more routes strengthens Dimension A --
+      but the record must not keep citing a number that is measurably wrong.
+      SCOPE BOUNDARY: this requirement writes the decision record and gets
+      REVIEWER sign-off on it. It does NOT add a dependency to mix.exs, does
+      NOT rewrite lib/letflow/router.ex, and does NOT port any route -- that
+      is REQ-070's and the route requirements' work, executing whatever this
+      record settles. Same producer/deliverable shape as REQ-010 and REQ-014.
+    acceptance_criteria:
+      - "docs/migration/decisions/0001-web-framework.md contains a dated addendum naming exactly one surviving position (Phoenix or Plug/Bandit) in a single unambiguous sentence, with the pre-existing Decision and Reasoning sections left intact rather than deleted"
+      - "the addendum explicitly addresses 0001's Dimension B tie-breaker argument on its merits -- either affirming it or naming the concrete Plug-side mechanism (Plug.Builder shared pipeline module plus Plug.Router.forward/2) that answers it -- rather than reversing the decision without engaging the reasoning"
+      - "the addendum states the corrected counts (31 route modules, 9 middleware modules) and says whether the recount changes the conclusion, so the record no longer reasons against 24/7"
+      - "lib/letflow/router.ex's moduledoc and docs/migration/stage-4-api-surface.md's Decisions section both agree with the surviving position after this requirement -- verified by grep for the string 'no Phoenix' in both files, which must either be gone or be consistent with the addendum"
+      - "a REVIEWER sign-off exists recording that the surviving position was reviewed against 0001's original reasoning, appended to docs/migration/stage-4-api-surface.md's 'REVIEWER sign-off' section"
+      - "no mix.exs dependency change and no lib/letflow/router.ex behavioural change is made by this requirement -- confirmed by git diff showing only docs/ files (plus, if Phoenix stands, the single corrected moduledoc sentence) touched"
+    depends_on: [REQ-010, REQ-064]
+
+  - id: REQ-066
+    title: RFC 9457 problem-details error contract and response builder (errors.zig + response.zig)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Port src/api/errors.zig (272 lines) and src/api/response.zig (69) as
+      Letflow.Api.Error and Letflow.Api.Response -- the single response/error
+      contract every S4 route emits. Nothing in this batch renders a response
+      body by hand once these exist.
+      errors.zig is an RFC 9457 Problem Details builder. Port: the
+      ProblemDetails shape (type as an absolute URI under a configured base,
+      title, status, detail, plus the trace id field errors.zig carries with a
+      "" default), the per-status constructors (problemNotFound and its
+      siblings for 400/401/403/404/409/422/429/500 -- enumerate them from the
+      Zig source rather than guessing which exist), and serialisation to a
+      JSON body. Emit Content-Type: application/problem+json on error
+      responses, per RFC 9457, and state in the moduledoc whether R-Co does
+      the same or emits application/json (check response.zig's
+      CONTENT_TYPE_JSON usage) -- if Letflow diverges, that divergence is
+      deliberate and documented, not accidental.
+      response.zig defines the canonical HandlerResult (status_code, body,
+      content_type defaulting to JSON) and the typed success constructors that
+      keep positive responses on correct status codes (200 vs 201 vs 202 vs
+      204). In Elixir the conn IS the result carrier, so port these as
+      functions that take and return a conn (send_json/3, created/2,
+      no_content/1, and the error counterparts) rather than transliterating a
+      HandlerResult struct -- Zig returns a value because it has no conn.
+      State that translation in the moduledoc.
+      SECURITY (INV-4, INV-5): an error body must never carry secret material,
+      a raw Ecto/Postgrex error, or a stack trace -- detail is a
+      caller-safe string chosen by the handler, and an unexpected internal
+      error maps to a generic 500 problem document whose detail does not vary
+      with the underlying exception. Separately, the not-found problem
+      document is the exact response a cross-tenant probe receives (REQ-072
+      enforces the routing; this requirement guarantees the two bodies are
+      byte-identical by construction, because both go through one constructor).
+    acceptance_criteria:
+      - "Letflow.Api.Error produces a JSON body containing type, title, status and detail for every status constructor ported, with type an absolute URI, verified by a test per constructor"
+      - "an error response carries Content-Type: application/problem+json and a success response carries application/json, each verified by asserting the response header rather than by inspection"
+      - "a 500 produced from an unexpected exception has a detail string that is identical across two different underlying exception types, demonstrated by a test -- no exception message, module name, SQL fragment, or stack trace reaches the body (INV-4)"
+      - "the 404 problem document produced for a resource that never existed and the one produced for a resource belonging to another tenant are byte-identical, demonstrated by a test comparing the two serialised bodies (INV-5)"
+      - "Letflow.Api.Response's success helpers set 201 for creation and 204 with an empty body for deletion, each verified by a test asserting the status and (for 204) that the body is empty"
+      - "the moduledoc states the Zig-to-Elixir translation explicitly: that response.zig's HandlerResult struct is replaced by conn-threading functions, and whether Letflow's problem+json content type diverges from R-Co's"
+    depends_on: [REQ-065]
+
+  - id: REQ-067
+    title: Cursor pagination contract for every list endpoint (pagination.zig, API-06)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Port src/api/pagination.zig (406 lines, R-Co's API-06) as
+      Letflow.Api.Pagination -- the shared cursor encode/decode, prefix
+      validation, expiry checking, page-size validation, and standardised page
+      response that every S4 list endpoint delegates to. pagination.zig's own
+      header states the rule this requirement inherits: "All list endpoints
+      SHALL delegate pagination concerns to this module, eliminating
+      duplicated encode/decode/expiry code."
+      Port the constants exactly as R-Co declares them rather than rounding:
+      MAX_PAGE_SIZE 200, DEFAULT_PAGE_SIZE 50, MIN_PAGE_SIZE 1,
+      CURSOR_EXPIRY_US 86_400_000_000 (24 hours). A requested page size above
+      MAX_PAGE_SIZE, below MIN_PAGE_SIZE, or non-numeric is a 400 via
+      REQ-066's problem document, not a silent clamp -- confirm against
+      pagination.zig's own error set which of clamp-vs-reject R-Co does, and
+      port R-Co's behaviour, stating it in the moduledoc either way.
+      A cursor carries a type prefix so a cursor minted by one endpoint cannot
+      be replayed against another; port that prefix validation. An expired
+      cursor (older than CURSOR_EXPIRY_US) is rejected rather than honoured.
+      SECURITY (INV-1, INV-5): a cursor is caller-supplied, tamperable input
+      that decodes into query parameters. It must NOT be able to carry a
+      tenant identity, schema prefix, or any value that widens the query's
+      scope -- tenant scoping comes exclusively from REQ-072's resolved
+      request context, never from the cursor. State this as an explicit
+      invariant in the moduledoc, and make it structurally true (the decoded
+      cursor struct has no tenant field to set). A cursor minted in tenant A
+      and replayed against tenant B must return tenant B's page or an error,
+      never tenant A's rows.
+      The page response shape (items plus next-cursor, per pagination.zig's
+      PageResponse(T)) is the shape every list route in this batch returns.
+    acceptance_criteria:
+      - "MAX_PAGE_SIZE is 200, DEFAULT_PAGE_SIZE is 50, MIN_PAGE_SIZE is 1 and the cursor expiry window is 86_400_000_000 microseconds, each asserted against a named module attribute rather than a literal buried in a function"
+      - "a page-size request of 201, of 0, and of a non-numeric string each produce the behaviour R-Co's pagination.zig produces (reject-with-400 or clamp, whichever the port confirms), with all three cases covered by explicit tests and the chosen behaviour named in the moduledoc"
+      - "a cursor minted by one endpoint and submitted to a different endpoint is rejected on prefix mismatch, demonstrated by a test"
+      - "a cursor whose timestamp is older than the 24-hour expiry window is rejected, demonstrated by a test that constructs an old cursor rather than by waiting"
+      - "the decoded cursor struct has no tenant_id, schema, or prefix field -- confirmed by inspection and stated in the moduledoc -- and a test replays a cursor minted while scoped to tenant A against a request scoped to tenant B and asserts that no tenant A row appears in the response (INV-1)"
+      - "paging through more rows than one page holds returns every row exactly once with no duplicate and no gap across at least three successive pages, demonstrated by a test"
+    depends_on: [REQ-066]
+
+  - id: REQ-068
+    title: Request-body validation and typed rejection contract (validation.zig + middleware/validate.zig + middleware/content_type.zig)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Port src/api/validation.zig (592 lines) plus the two thin middleware
+      modules that front it -- src/api/middleware/content_type.zig (119) and
+      src/api/middleware/validate.zig (86) -- as Letflow.Api.Validation and
+      the plugs that run it. This is the layer that turns malformed
+      caller input into a REQ-066 problem document before any handler or Repo
+      call runs.
+      content_type.zig: a request carrying a body (POST/PUT/PATCH) without
+      Content-Type: application/json is rejected with 415 before parsing;
+      GET/HEAD/DELETE pass through untouched. Confirm R-Co's exact status code
+      and its treatment of a charset parameter (application/json;
+      charset=utf-8) against the Zig source rather than assuming.
+      validation.zig: port the per-field validators and their typed error set
+      -- required-field presence, type checks, string length bounds, UUID
+      shape, enum membership -- returning a structured list of field errors
+      that REQ-066 renders into one 400/422 problem document with per-field
+      detail, rather than aborting on the first bad field.
+      SECURITY (INV-8, INV-7): validation runs on untrusted network input and
+      must never raise on any byte sequence. A body that is not valid JSON, a
+      body that is valid JSON but not an object, a deeply nested body, a
+      body far larger than any endpoint expects, and a body containing SQL
+      metacharacters or a NUL byte in a string field all produce a typed
+      rejection, never a 500 and never an unhandled crash. Enforce a maximum
+      request body size (Plug.Parsers' :length option or equivalent) and state
+      the chosen limit as a named constant with its justification -- an
+      unbounded body is a memory-exhaustion vector against a shared node.
+      SCOPE BOUNDARY: this requirement does NOT port
+      src/api/middleware/rate_limit.zig (236) or quota_enforcement.zig (412).
+      Both are real S4 middleware and both are named in decision 0001's
+      Dimension B, but they need per-tenant counter storage that no Letflow
+      requirement has built, and bolting a counter store onto a validation
+      requirement is the partial-subsystem failure REQ-056's boundary
+      paragraph exists to prevent. They belong to their own later requirement
+      or to S6 alongside the rest of the operational cross-cutting work; say
+      so in the moduledoc rather than leaving the omission unremarked.
+    acceptance_criteria:
+      - "a POST with a body and no Content-Type header, and a POST with Content-Type: text/plain, are both rejected with the status R-Co's content_type.zig uses, before Plug.Parsers attempts to decode -- two explicit tests; a GET with no Content-Type is unaffected"
+      - "a request body containing invalid JSON, a JSON array where an object is required, a 10-level-nested object, and a string field containing a NUL byte each return a typed 400/422 problem document, with each of the four cases covered by its own test and none producing a 500 or an unhandled exception (INV-8)"
+      - "a request body exceeding the configured maximum size is rejected with 413 rather than being buffered, and the maximum is a named module attribute with a comment justifying the value"
+      - "a body with three simultaneously invalid fields produces one problem document naming all three fields, not a document naming only the first -- demonstrated by a test asserting all three field names appear"
+      - "the moduledoc states explicitly that rate_limit.zig and quota_enforcement.zig are NOT ported here, names the per-tenant counter storage they need as the reason, and names where they belong instead"
+    depends_on: [REQ-066]
+
+  - id: REQ-069
+    title: Role/permission authorization matrix and 403 decision contract (authorization.zig)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Port src/api/authorization.zig (280 lines) as Letflow.Api.Authorization
+      -- the role-to-permission matrix every route consults before doing work.
+      Port R-Co's enums exactly, not a renamed approximation: Role is
+      PLATFORM_ADMIN | PROCESS_DESIGNER | PROCESS_OPERATOR | TASK_WORKER |
+      AGENT_RUNNER, and Permission is DefinitionsWrite | DefinitionsRead |
+      InstancesStart | InstancesCancel | InstancesRead | TasksRead |
+      TasksComplete | TasksAssign | UsersGroupsRolesManage | TokensManage |
+      AuditRead | DlqOperate | MetricsRead | WebhooksManage. AGENT_RUNNER,
+      DlqOperate and WebhooksManage have no S4 route that consumes them
+      (runtime-agent orchestration, the DLQ and webhook dispatch are all
+      deferred subsystems) -- port them anyway so the matrix matches R-Co's,
+      and note in the moduledoc which entries are currently unreachable rather
+      than dropping them and leaving a later reader to rediscover the gap.
+      Port the AccessDecisionKind outcome exactly as authorization.zig L28-32
+      defines it -- three variants, Allow | Deny403 | AllowWithRowFilter -- and
+      the decision function that maps (roles, permission) to an outcome.
+      AllowWithRowFilter is not a stylistic third case: it is a tenant-data
+      row-visibility mechanism and must be ported as one. evaluateAccess
+      (L114-139) returns it in exactly one situation -- endpoint TasksList when
+      isTaskWorkerOnly(roles) is true, i.e. the caller holds TASK_WORKER and
+      holds none of PLATFORM_ADMIN, PROCESS_DESIGNER or PROCESS_OPERATOR
+      (L124-130, L139-143) -- and pairs it with task_scope
+      OwnUserAndGroups(ctx.user_id) rather than the All scope every other
+      allow carries. routes/tasks.zig L148-152 is the only consumer: on
+      AllowWithRowFilter it overrides the caller-supplied assignee filter with
+      the caller's own user_id and sets include_group_membership_for_user, so
+      a TASK_WORKER-only caller sees only tasks assigned to them or to a group
+      they belong to, and cannot widen that by passing assignee_id. Port that
+      override as a decision the authorization layer hands the task-list query,
+      not as an optional hint a handler may ignore. REQ-083 consumes this
+      when it ports tasks.zig's read path. The roles come from
+      conn.assigns[:auth_context][:roles], which Letflow.Plugs.AuthPipeline
+      (REQ-021, built) already populates -- read that module's actual assign
+      shape rather than inventing one.
+      SECURITY (INV-2, INV-5): authorization is a server-side gate that runs
+      BEFORE the handler queries anything, and a Deny403 must not itself leak
+      existence. Where R-Co returns 403 for an unauthorised action on a
+      resource the caller can legitimately know exists (wrong role, right
+      tenant) that is correct; where the resource belongs to another tenant
+      the answer is REQ-072's 404, never a 403 -- a 403 there would tell the
+      prober the id is real. State that distinction explicitly in the
+      moduledoc, because getting it backwards is the single easiest way to
+      violate INV-5.
+    acceptance_criteria:
+      - "all five Role values and all fourteen Permission values from authorization.zig exist with R-Co's exact names, verified by a test enumerating each list against the expected set"
+      - "the role-to-permission decision function has a test per role covering at least one permission it grants and one it denies, so no role's row is untested"
+      - "all three AccessDecisionKind variants exist with R-Co's exact names (Allow, Deny403, AllowWithRowFilter), and each is returned by at least one decision-function test"
+      - "the decision for the task-list endpoint returns AllowWithRowFilter carrying a row scope of the caller's own user id when the caller holds TASK_WORKER and none of PLATFORM_ADMIN, PROCESS_DESIGNER or PROCESS_OPERATOR, and returns a plain Allow with the unrestricted scope when the caller additionally holds any one of those three -- four tests, one per widening role plus the TASK_WORKER-only case"
+      - "the row scope AllowWithRowFilter carries is a value the caller cannot influence: a task-list decision for a TASK_WORKER-only caller who supplied an assignee filter naming a different user still yields the caller's own user id as the scope, proving the filter is authorization-derived and not request-derived (INV-2)"
+      - "a request whose auth_context carries no role at all is denied, not defaulted to any role -- an explicit test, since a missing-roles default-allow is the classic form of this bug"
+      - "the moduledoc names AGENT_RUNNER, DlqOperate and WebhooksManage as ported-but-currently-unreachable, with the deferred subsystem that would consume each"
+      - "the moduledoc states the 403-vs-404 rule explicitly: wrong role within the caller's own tenant is 403, any resource outside the caller's tenant is 404 via REQ-072, never 403 (INV-5)"
+      - "the module reads roles from the assign key Letflow.Plugs.AuthPipeline actually sets, confirmed by a test that runs the real plug and then the authorization check rather than by hand-constructing an assigns map"
+    depends_on: [REQ-066]
+
+  - id: REQ-070
+    title: Router decomposition into per-subsystem sub-routers (OQ-1), replacing the single flat route table
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Replace lib/letflow/router.ex's single flat route table -- today GET
+      /health plus a 404 catch-all, per its own moduledoc -- with the
+      decomposed structure the rest of S4 mounts into. This resolves
+      stage-4-api-surface.md's OQ-1.
+      The shape is per-subsystem sub-routers under an /api/v1 prefix, one
+      module per R-Co route file group, delegated to from a top-level router:
+      identity, instances, definitions, tasks, promotion, onboarding, audit,
+      tenant_config, validation, health, metrics. Under Plug that is
+      Plug.Router.forward/2 to a sub-router module per subsystem; under
+      Phoenix it is scope plus a controller per subsystem. REQ-065 settles
+      which -- this requirement executes whichever survives and MUST NOT
+      re-open it. What is framework-independent, and is what this requirement
+      is actually accountable for, is: one module per subsystem, no subsystem
+      declaring another's paths, a single place where the shared middleware
+      chain is declared (not repeated per sub-router), and the existing GET
+      /health preserved byte-compatibly.
+      GET /health MUST keep its current contract exactly -- 200 with
+      {"status":"ok"}, no auth, no DB dependency -- because
+      deploy/redeploy-test.sh's post-deploy check consumes it and a change
+      breaks deployment, not just a test. R-Co's routes/health.zig (221 lines,
+      handleLive/handleReady) adds a readiness endpoint backed by
+      src/api/health/readiness.zig (245) and subsystems.zig (112); porting
+      readiness is NOT this requirement (it needs subsystem health probes that
+      pair with S6 observability) -- keep liveness, name readiness as deferred.
+      The unmatched-route response becomes REQ-066's 404 problem document
+      rather than today's ad-hoc {"error":"not_found"} map, so a caller sees
+      one error shape across the whole surface.
+      The moduledoc MUST carry the deferred-route list so the gap is visible
+      in code and not only in docs: dlq, services, platform_migrations,
+      webhooks (S6), simulation_test (S7), process_modules (S5), entities and
+      entity_query (S5/S6), and the three agent_* routes (runtime-agent
+      orchestration, deferred per docs/migration/README.md), each with its
+      owning stage.
+    acceptance_criteria:
+      - "GET /health still returns 200 with a body equal to {\"status\":\"ok\"} and still requires no auth and no database connection, demonstrated by a test that runs with the Repo unavailable"
+      - "the router is decomposed into at least one module per subsystem with no subsystem's paths declared inside another's, confirmed by inspection and by a test that mounts a sub-router in isolation and exercises one of its paths without the top-level router"
+      - "a request to an unrouted path returns REQ-066's RFC 9457 404 problem document with Content-Type: application/problem+json, not the previous {\"error\":\"not_found\"} body -- an explicit test asserting both body shape and header"
+      - "the shared middleware chain is declared in exactly one place and applied to every tenant-scoped sub-router, verified by grep showing a single declaration site rather than a repetition per sub-router"
+      - "the moduledoc lists all eleven deferred route modules with their owning stage, and states that readiness (routes/health.zig handleReady, api/health/readiness.zig) is deliberately not ported here"
+      - "the router change introduces no framework choice of its own -- it implements whichever position REQ-065's addendum settled, cited by name in the moduledoc"
+    depends_on: [REQ-065, REQ-066]
+
+  - id: REQ-071
+    title: Mount the built auth and tenant-status plugs in front of the tenant-scoped pipeline
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Mount Letflow.Plugs.AuthPipeline and Letflow.Plugs.TenantStatus (both
+      built, compiled and tested by REQ-021, both explicitly "not mounted in
+      front of any route today ... left available for S4" per their own
+      moduledocs) in front of REQ-070's tenant-scoped sub-routers, and update
+      both moduledocs so they no longer say they are unmounted.
+      DO NOT RE-PORT EITHER PLUG. src/api/middleware/auth.zig (1,876 lines)
+      and tenant_status.zig (81) are already ported; this requirement is
+      wiring plus the ordering guarantees, nothing else. If a behavioural gap
+      is found in either plug while wiring, record it as an issue rather than
+      widening this requirement.
+      ORDERING is the substance here, and it is the same order decision 0001's
+      Dimension B lists and R-Co's auth.zig enforces: AuthPipeline first
+      (nothing downstream has a tenant or principal until it runs), then
+      TenantStatus (needs auth's resolved tenant_id), then REQ-069's
+      authorization check, then the handler. GET /health and any other
+      non-tenant-scoped path must stay OUTSIDE this chain -- health must
+      answer while auth's OIDC provider is unreachable.
+      TenantStatus's documented fail-closed divergence (REQ-021 chose to let a
+      tenant-status lookup failure crash the request process rather than
+      fail open like tenant_status.zig does, per
+      lib/letflow/design/req021-auth-plug-pipeline.md section 6.4 OQ-14, and
+      that moduledoc says "REVIEWER should confirm") becomes reachable from
+      the network for the first time here. Confirm the divergence explicitly
+      with REVIEWER as part of this requirement rather than inheriting it
+      silently, and verify the crash is contained to the one request (INV-8):
+      a lookup failure on tenant A's request must not affect a concurrent
+      tenant B request.
+      SECURITY (INV-6): this is the requirement that makes every downstream
+      route's tenant scoping possible, so it must demonstrate the chain cannot
+      be bypassed -- a tenant-scoped path reached without a valid bearer token
+      returns 401 before any Repo call, and no tenant-scoped path exists that
+      the chain does not front.
+    acceptance_criteria:
+      - "a request to a tenant-scoped path with no Authorization header returns 401 and executes zero Repo queries, demonstrated by a test that asserts on query telemetry or a Repo sandbox with no checkout rather than by inspection"
+      - "a request to a tenant-scoped path with a valid token reaches the handler with conn.assigns[:auth_context] populated with user_id, tenant_id and roles, demonstrated end-to-end through the real router rather than by unit-testing the plug alone"
+      - "GET /health returns 200 while the OIDC provider configuration worker is unavailable, demonstrated by a test -- proving health sits outside the auth chain"
+      - "a POST against a tenant whose status is :migrating returns 503 with a Retry-After header, and the equivalent GET returns 200, through the mounted chain -- two explicit tests"
+      - "a tenant-status lookup failure on one request does not affect a concurrent request for a different tenant, demonstrated by a test running both concurrently (INV-8)"
+      - "both plugs' moduledocs no longer contain the phrase 'Not mounted in front of any route today', confirmed by grep, and instead name the pipeline they are mounted in"
+      - "the REQ-021 OQ-14 fail-closed divergence is explicitly confirmed by REVIEWER in this requirement's review, recorded in docs/migration/stage-4-api-surface.md's REVIEWER sign-off section"
+    depends_on: [REQ-069, REQ-070]
+
+  - id: REQ-072
+    title: Tenant-scoped request context and the cross-tenant 404 mechanism (tenant_context.zig + trace_context.zig)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Port src/api/tenant_context.zig (104 lines) and src/api/trace_context.zig
+      (55) as the per-request context every tenant-scoped handler reads, and
+      build the single shared mechanism that turns a cross-tenant access into
+      an indistinguishable 404. This requirement exists so INV-5 is discharged
+      once, structurally, instead of being re-implemented and re-tested in
+      each of the fifteen route requirements that follow.
+      IDIOM TRANSLATION, mandatory: trace_context.zig and pipeline_context.zig
+      (45) use Zig `threadlocal` storage for the per-request correlation id.
+      That is not the Elixir/OTP shape. Carry the trace id explicitly on
+      conn.assigns (and mirror it into Logger.metadata/1 for log correlation
+      only) -- do NOT port a process-dictionary or ETS global standing in for
+      a thread-local. stage-4-api-surface.md names this as an idiom
+      translation REVIEWER confirms, not a behaviour change. pipeline_context.zig
+      itself has no separate Letflow module: its content folds into this one,
+      stated in the moduledoc rather than silently dropped.
+      THE SCOPING MECHANISM (this is the load-bearing half). Provide one
+      function -- call it whatever the design settles on, e.g.
+      Letflow.Api.Context.scoped_repo_opts/1 or fetch_scoped/3 -- that derives
+      the Ecto :prefix from conn.assigns[:auth_context][:tenant_id] via
+      Letflow.TenantProvisioning.schema_name_for_tenant/1 (REQ-022's existing
+      mechanism, per decision 0003 Dimension B and decision 0006, which
+      removed tenant_id from the schema-isolated tables entirely -- so the
+      Postgres schema IS the only scoping these rows have, and a query issued
+      without the prefix is not merely unfiltered, it hits the wrong schema).
+      Handlers obtain their prefix ONLY from this function; no handler
+      constructs a schema name itself and no handler accepts a tenant
+      identifier from the request path, query string, body, or a header.
+      Because the prefix comes from the authenticated token rather than the
+      request, a lookup for a resource belonging to another tenant simply
+      finds nothing in the caller's schema -- which is what makes the 404
+      identical to a never-existed 404 by construction, with no separate
+      existence check to leak timing. State that reasoning in the moduledoc:
+      it is the INV-5 argument, and it is why no handler may add a
+      cross-tenant existence check "for a better error message".
+      SECURITY (INV-1, INV-5, INV-6): this module is where all three are
+      discharged for the whole stage.
+    acceptance_criteria:
+      - "the trace id is carried on conn.assigns and no module in lib/letflow/api/ uses Process.put/Process.get or an ETS table for per-request context, confirmed by grep and stated in the moduledoc as the deliberate translation of Zig's threadlocal"
+      - "the same trace id appears on the response header and in a log line emitted during the request, demonstrated by a test capturing both"
+      - "the scoping function derives its Ecto :prefix solely from conn.assigns[:auth_context][:tenant_id]; a test supplying a conflicting tenant id in the request path, in a query parameter, and in an X-Tenant-Id header confirms all three are ignored and the token's tenant is used (INV-1)"
+      - "a GET for a resource id that exists in tenant B, issued by a caller authenticated for tenant A, returns a response byte-identical to a GET for a randomly generated id that exists nowhere -- same status, same body, demonstrated by a test comparing the two responses directly (INV-5)"
+      - "the cross-tenant path and the never-existed path execute the same number of database queries, demonstrated by counting queries via telemetry in both cases, so no early-exit timing signal distinguishes them (INV-5)"
+      - "no function in this module accepts a tenant id, schema name, or prefix as a caller-supplied argument -- confirmed by inspection of every public function's signature and stated in the moduledoc"
+      - "the moduledoc explains why a cross-tenant existence check is prohibited even to improve an error message, citing INV-5"
+    depends_on: [REQ-071]
+
+  - id: REQ-073
+    title: Identity routes 1/4 -- user CRUD and status (identity.zig handleCreateUser/List/Get/Patch/UpdateUserStatus)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Port the user-management handler group of src/api/routes/identity.zig
+      (1,868 lines / 23 handlers total -- too large for one agent turn, split
+      four ways across REQ-073..076 along R-Co's own handler boundaries).
+      This requirement takes five handlers: handleCreateUser (L21),
+      handleListUsers (L101), handleGetUser (L130), handlePatchUser (L149),
+      handleUpdateUserStatus (L303).
+      Backing domain logic already exists and is NOT rebuilt here: REQ-015..021
+      built Letflow.Identity, and REQ-063 made users a per-schema table.
+      Read lib/letflow/identity.ex's actual public functions and route to
+      them; if a handler needs a domain function that does not exist, add the
+      thin function there rather than inlining a Repo query in the handler,
+      and say so in the completion report.
+      Every response goes through REQ-066's builders, every list through
+      REQ-067's cursor pagination, every body through REQ-068's validation,
+      every action through REQ-069's UsersGroupsRolesManage permission check,
+      and every query through REQ-072's scoped prefix.
+      SECURITY (INV-2): a user representation must never serialise password
+      material, a token secret, or an OIDC refresh token, and field selection
+      happens server-side before serialisation -- not by the client omitting
+      fields. Build the response map explicitly (or derive Jason.Encoder with
+      an explicit :only list); do not encode the Ecto struct wholesale, which
+      is how an added column silently becomes an exposed field later.
+    acceptance_criteria:
+      - "each of the five handlers has an end-to-end test through the real router: create returns 201 with the created user, list returns a cursor page, get returns 200, patch returns the updated user, and status update changes the persisted status"
+      - "a caller authenticated for tenant A requesting a user id that exists only in tenant B receives the same status and body as for an id that exists nowhere, via REQ-072's mechanism -- an explicit test (INV-5)"
+      - "listing users as a tenant A caller returns only tenant A users when tenant B has users with similar names, demonstrated by a test that seeds both tenants (INV-1)"
+      - "a caller lacking the UsersGroupsRolesManage permission receives 403 on create, patch and status-update, and the write does not occur -- verified by asserting the database is unchanged, not only by the status code"
+      - "the serialised user response contains exactly an explicit allowlist of fields, demonstrated by a test asserting the full key set of the response body; adding a field to the Ecto schema without updating the allowlist does not change the response (INV-2)"
+      - "the moduledoc names which lib/letflow/identity.ex functions each handler calls, so the route layer is demonstrably thin rather than carrying domain logic"
+    depends_on: [REQ-072]
+
+  - id: REQ-074
+    title: Identity routes 2/4 -- groups and group membership (identity.zig 7 group handlers)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Port the group-management handler group of src/api/routes/identity.zig:
+      handleCreateGroup (L343), handleAddGroupMember (L399), handleListGroups
+      (L447), handleDeleteGroup (L478), handleListGroupMembersArray (L495),
+      handleListGroupMembers (L526), handleRemoveGroupMember (L551).
+      Note that R-Co has BOTH handleListGroupMembers and
+      handleListGroupMembersArray -- read both and determine whether they are
+      two endpoints (paginated object response vs. bare array) or one with a
+      legacy shape. Port whichever R-Co actually serves and state the finding
+      in the moduledoc; do not silently collapse them, and do not port a
+      duplicate endpoint that R-Co no longer routes.
+      Backing domain logic is REQ-015..021's Letflow.Identity and REQ-063's
+      per-schema groups table -- not rebuilt here. Same shared-contract
+      obligations as REQ-073 (REQ-066 responses, REQ-067 pagination, REQ-068
+      validation, REQ-069's UsersGroupsRolesManage, REQ-072 scoping).
+      SECURITY (INV-1): group membership is a cross-entity relation and is the
+      classic place a join silently escapes tenant scoping -- adding a user
+      from another tenant to a group must fail, not succeed with a
+      cross-tenant member row.
+    acceptance_criteria:
+      - "each ported handler has an end-to-end test through the real router asserting its status code and response shape"
+      - "adding a user id that exists only in tenant B to a group in tenant A fails with the same not-found response as a nonexistent user id, and creates no membership row -- verified by querying the membership table after the attempt (INV-1, INV-5)"
+      - "listing groups and listing group members as a tenant A caller return only tenant A rows when tenant B is seeded with equivalent data, demonstrated by a test seeding both"
+      - "listing group members is cursor-paginated via REQ-067 for the paginated variant, demonstrated across at least two pages"
+      - "deleting a group that has members behaves as R-Co's handleDeleteGroup does (cascade, refuse, or orphan), with the observed R-Co behaviour named in the moduledoc and covered by a test"
+      - "the moduledoc records the finding on handleListGroupMembers vs handleListGroupMembersArray -- two endpoints or one -- rather than leaving the duplication unexplained"
+    depends_on: [REQ-073]
+
+  - id: REQ-075
+    title: Identity routes 3/4 -- tenant administration (identity.zig 6 tenant handlers)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Port the tenant-administration handler group of
+      src/api/routes/identity.zig: handleCreateTenant (L222), handleListTenants
+      (L674), handleGetTenant (L695), handlePatchTenant (L713),
+      handleDeactivateTenant (L822), handleReactivateTenant (L851).
+      THIS GROUP IS DIFFERENT FROM EVERY OTHER ROUTE REQUIREMENT IN THIS BATCH
+      AND MUST NOT BE TREATED AS ROUTINE. Tenants are the isolation boundary
+      itself, so these handlers operate on the public/global schema
+      (tenant_schemas per REQ-022, and decision 0006 D3's list of tables that
+      legitimately keep a tenant_id foreign key) rather than inside a single
+      tenant's schema. REQ-072's prefix-scoping therefore does NOT protect
+      them -- a bug here is a platform-wide cross-tenant leak, not a
+      single-tenant one.
+      The gate is REQ-069's PLATFORM_ADMIN role: listing, reading, patching,
+      deactivating or reactivating any tenant requires it. A caller with any
+      other role -- including a tenant's own administrator -- must not be able
+      to enumerate tenants or read another tenant's record. Whether a tenant
+      admin may read or patch their OWN tenant record is a real question R-Co's
+      handlers answer; read handleGetTenant and handlePatchTenant and port
+      R-Co's actual rule, stating it explicitly in the moduledoc.
+      Tenant creation overlaps REQ-022's Letflow.TenantProvisioning (schema
+      creation plus migration replay) and REQ-076's onboarding flow. This
+      requirement routes to TenantProvisioning; it does NOT reimplement
+      provisioning, and it must state in the moduledoc how handleCreateTenant
+      relates to the onboarding endpoint so the two are not two divergent
+      creation paths.
+      Deactivation interacts with Letflow.Plugs.TenantStatus (REQ-021,
+      mounted by REQ-071): confirm what a deactivated tenant's subsequent
+      requests receive and that the answer is consistent with that plug's
+      :migrating handling rather than a second, conflicting status rule.
+      SECURITY (INV-1, INV-2, INV-6): this is the highest-risk requirement in
+      the batch.
+    acceptance_criteria:
+      - "listing tenants as a non-PLATFORM_ADMIN caller returns 403 and no tenant data whatsoever, including no count and no total, demonstrated by asserting the full response body"
+      - "reading, patching, deactivating and reactivating another tenant's record as a caller authenticated for a different tenant is rejected, with each of the four verbs covered by its own test and each verified to leave the target tenant's row unchanged (INV-1)"
+      - "the moduledoc states R-Co's actual rule on whether a tenant admin may read or patch their own tenant record, and a test covers that rule in both the allowed and denied direction"
+      - "tenant creation routes to Letflow.TenantProvisioning and results in a provisioned schema with REQ-022's migrations replayed, demonstrated by querying information_schema for a table in the new schema -- not by trusting the 201"
+      - "a deactivated tenant's subsequent authenticated request receives a response consistent with Letflow.Plugs.TenantStatus's behaviour, with the expected status named in the moduledoc and asserted by a test"
+      - "the moduledoc states explicitly that these handlers operate outside REQ-072's per-tenant prefix scoping, names PLATFORM_ADMIN as the only protection, and explains why that makes this group higher-risk than the rest of S4"
+      - "the moduledoc states how handleCreateTenant relates to REQ-076's onboarding endpoint, so the platform has one provisioning path rather than two"
+    depends_on: [REQ-073]
+
+  - id: REQ-076
+    title: Identity routes 4/4 -- API tokens, role registry, and tenant onboarding (identity.zig tokens/roles + onboarding.zig)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Port the final identity handler group plus the onboarding route:
+      identity.zig's handleCreateToken (L570), handleListTokens (L634),
+      handleRevokeToken (L651), handleListRoles (L1169), handleUpsertRole
+      (L1203); and src/api/routes/onboarding.zig (920 lines / 3 handlers:
+      handleOnboarding L47, handleGetOnboarding L283,
+      handleGetOnboardingByHostname L379), whose backing subsystem is REQ-022's
+      Letflow.TenantProvisioning.
+      SECURITY -- API TOKENS ARE SECRET MATERIAL (INV-4), and this is the one
+      route group in S4 where a response legitimately contains a secret. The
+      rules, all mandatory: the token plaintext is returned exactly once, in
+      the 201 response to creation, and is never retrievable afterwards;
+      storage is a hash, never the plaintext; handleListTokens returns
+      metadata only (id, name, created_at, last_used_at, revoked_at) and never
+      the token or its hash; the plaintext is never logged, never included in
+      an error detail, and never written into a trace. Confirm each of these
+      against R-Co's handleCreateToken rather than assuming, and if R-Co
+      diverges from any of them, that divergence is NOT ported -- record it as
+      a deliberate hardening in the moduledoc, since INV-4 sits above a port's
+      fidelity to source.
+      Token revocation must take effect on the next request, not on a cache
+      expiry -- state and test the propagation guarantee, since a revoked
+      credential that keeps working is the failure mode that matters.
+      The role registry (handleListRoles/handleUpsertRole) writes the
+      role-to-permission data REQ-069's matrix reads; confirm whether R-Co's
+      upsert can define a role outside authorization.zig's five-value Role
+      enum and port the actual constraint.
+      Onboarding: handleGetOnboardingByHostname is reachable by hostname
+      rather than by an authenticated tenant, so it is a pre-authentication
+      lookup -- establish exactly what it may disclose about a tenant that
+      does or does not exist, and hold it to INV-5's indistinguishability
+      standard for an unknown hostname.
+      SCOPE BOUNDARY: does not build a new tenant-provisioning mechanism;
+      routes to REQ-022's Letflow.TenantProvisioning, the same one REQ-075's
+      handleCreateTenant uses.
+    acceptance_criteria:
+      - "creating an API token returns the plaintext exactly once in the 201 body, and a subsequent GET of that token returns metadata with no token field, demonstrated by two tests (INV-4)"
+      - "the persisted token record does not contain the plaintext in any column, verified by querying the row and asserting no column equals the returned plaintext (INV-4)"
+      - "the token plaintext appears in no log line and no error body, verified by capturing logs across a successful creation and a deliberately failed one (INV-4)"
+      - "a revoked token is rejected with 401 on the very next request, demonstrated by a test that revokes and immediately retries with no sleep or cache flush"
+      - "a token created in tenant A cannot authenticate a request for tenant B's resources, demonstrated by a test (INV-1)"
+      - "handleUpsertRole's constraint on role names matches R-Co's actual behaviour, with the observed constraint named in the moduledoc and a test covering both an accepted and a rejected role name"
+      - "GET onboarding by an unknown hostname returns a response indistinguishable from one for a hostname whose tenant exists but is not the caller's, demonstrated by comparing the two responses (INV-5)"
+      - "onboarding creates a tenant via Letflow.TenantProvisioning rather than a second provisioning path, confirmed by inspection and stated in the moduledoc"
+    depends_on: [REQ-075]
+
+  - id: REQ-077
+    title: Promotion pipeline routes (promotion_review.zig, promotions.zig, promotion_read.zig, promotion_assertion.zig, promotion.zig, definition_rollback.zig)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Port the six promotion-pipeline route modules as one requirement --
+      they total 1,844 lines but 1,140 of that is promotion_review.zig's five
+      handlers, and the other five modules are thin single-purpose routes over
+      domain logic S2/S3 already built:
+      - promotion_review.zig (940 / 5 handlers: handleSubmitPromotion L72,
+      handleGetPromotionContext L264, handleApproveReview L371,
+      handleRejectReview L482, handleApplyReview L580) over REQ-035/037's
+      PromotionReview store.
+      - promotions.zig (288) and promotion.zig (111) over REQ-036/037's
+      promotion plan and ENV-03 base promote.
+      - promotion_read.zig (169) over REQ-036's plan/conflict/digest reads.
+      - promotion_assertion.zig (203) over REQ-040's assertion re-run.
+      - definition_rollback.zig (133) over REQ-038's PRM-08 rollback.
+      All six are thin HTTP surfaces over `done` context modules. Read those
+      modules' actual public functions before writing a handler; if a handler
+      needs logic that does not exist, add it to the context module, never
+      inline in the route.
+      Two contracts already established in S2/S3 must be preserved through the
+      HTTP layer rather than re-derived: REQ-040's assertion-run idempotency
+      (backed by the unique index on idempotency_key that REQ-064 simplified,
+      consumed via on_conflict: :nothing) means a repeated POST with the same
+      idempotency key must not produce a second run; and REQ-064 confirmed
+      promotion_reviews' plan_digest uniqueness is per-tenant, so two tenants
+      submitting the same digest are two independent reviews.
+      Approve/reject/apply are state transitions on a review, so a stale or
+      out-of-order transition (approving an already-applied review) must be
+      rejected with a 409-class problem document rather than silently
+      re-applying.
+      SECURITY (INV-1, INV-5): every handler scopes through REQ-072; a review
+      or plan id from another tenant is a 404.
+    acceptance_criteria:
+      - "each of the six route modules has at least one end-to-end test through the real router asserting status and response shape, with promotion_review.zig's five handlers each covered individually"
+      - "POSTing the same assertion-run idempotency key twice produces one run and two identical successful responses, demonstrated by a test asserting the row count is 1 (REQ-040's contract)"
+      - "two different tenants submitting a promotion with the same plan_digest each get their own review, demonstrated by a test seeding both tenants (REQ-064's per-tenant uniqueness)"
+      - "approving a review that has already been applied returns a 409-class problem document and does not re-apply, verified by asserting the review's state and the target definition are unchanged"
+      - "a review id belonging to another tenant returns the same response as a nonexistent review id on every one of get, approve, reject and apply -- four explicit tests (INV-5)"
+      - "no route module contains an Ecto query or Repo call -- every handler delegates to a promotion context module, confirmed by grep for Repo. in lib/letflow/api/ returning no hit in these modules"
+    depends_on: [REQ-072]
+
+  - id: REQ-078
+    title: Supporting routes -- audit, definition validation, tenant config, solution packs, pin rebind, metrics
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Port the six small route modules whose backing subsystems are all
+      `done`, as one requirement (1,356 lines total, but every module is a
+      one-to-three-handler surface over existing context functions):
+      - audit.zig (146, handleList) over REQ-026's event read paths.
+      - validation.zig (173, handleValidate) over REQ-028/029's graph
+      validators -- note this is routes/validation.zig, the definition-graph
+      validation ENDPOINT, and is distinct from src/api/validation.zig, the
+      request-body validator REQ-068 ports; name the distinction in the
+      moduledoc so a later reader does not conflate them.
+      - tenant_config.zig (207, handleTenantConfig) over REQ-015/019's tenant
+      and realm binding.
+      - solution_packs.zig (550, handleExport L29 / handleInstall L110) over
+      REQ-041's pack-update three-way diff.
+      - pin_rebind.zig (221) over REQ-060's PIN-05 explicit rebind.
+      - metrics.zig (59, thin) -- port the endpoint shape only. It pairs with
+      S6 observability, so it exposes whatever counters exist today rather
+      than building a metrics subsystem; say so in the moduledoc.
+      NOT IN THIS REQUIREMENT: sandbox_access.zig (181). It exports no handle*
+      entry point -- its three public functions are checkPrincipalBound (L41),
+      checkProbeRate (L82) and writeSentinelAudit (L152), i.e. guards a route
+      calls rather than a route -- and `grep -rln sandbox_access src/` returns
+      exactly one consumer, routes/agent_sandboxes.zig, which its own header
+      names as the module it was extracted from. agent_sandboxes.zig is the
+      runtime-agent subsystem, owning stage post-S6, so porting these guards in
+      S4 would ship a guard with no S4 caller to guard -- a partial backing
+      subsystem, the REQ-056 failure mode. checkProbeRate is additionally rate
+      limiting (probe_threshold 20 per probe_window_secs 60), which needs the
+      per-tenant counter storage REQ-068's SCOPE BOUNDARY paragraph explicitly
+      defers; porting it here would smuggle in the mechanism this batch defers
+      elsewhere. It moves with agent_sandboxes.zig to post-S6 -- see the group
+      (b) table in docs/migration/stage-4-api-surface.md.
+      SECURITY: audit.zig is the sharpest INV-1 case in this group -- an audit
+      list that escapes tenant scoping discloses another tenant's entire
+      activity history in one response, and audit reads additionally require
+      REQ-069's AuditRead permission. solution_packs.zig's export produces a
+      document derived from tenant data and its install writes tenant data, so
+      both directions need scoping. metrics.zig must not expose per-tenant
+      counters to a caller of another tenant, or must expose only aggregate
+      platform counters to MetricsRead holders -- state which and enforce it.
+    acceptance_criteria:
+      - "each of the six modules has at least one end-to-end test through the real router asserting status and response shape"
+      - "an audit list request returns only the calling tenant's events when both tenants are seeded with events in the same time window, demonstrated by a test, and a caller without AuditRead receives 403 (INV-1)"
+      - "a solution-pack export as a tenant A caller contains no tenant B artefact, and an install as tenant A writes only into tenant A's schema, verified by querying both schemas after the operation (INV-1)"
+      - "the definition-validation endpoint returns the same validation outcome as calling REQ-028/029's validator directly for the same graph, demonstrated by a test comparing both paths -- proving the route adds no second validation rule"
+      - "the metrics endpoint's tenant-exposure rule is stated in the moduledoc (aggregate-only or per-tenant-scoped) and enforced by a test that a tenant A caller sees no tenant B figure"
+      - "the moduledoc distinguishes routes/validation.zig (definition-graph validation endpoint, ported here) from src/api/validation.zig (request-body validator, ported by REQ-068), so the two are not conflated"
+      - "metrics.zig's moduledoc states that no metrics subsystem is built here and names S6 observability as its owner"
+    depends_on: [REQ-072]
+
+  - id: REQ-079
+    title: Instance routes 1/2 -- write path (instances.zig handleCreate/handleCancel/handleReconstruct)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Port the write half of src/api/routes/instances.zig (1,535 lines / 8
+      handlers -- split two ways with REQ-080 along R-Co's own read/write
+      seam): handleCreate (L55, EE-01, POST /api/v1/instances), handleCancel
+      (L233, EE-08, POST /api/v1/instances/:id/cancel) and handleReconstruct
+      (L309, EE-11, POST /api/v1/instances/:id/reconstruct).
+      These are the routes S3 deliberately deferred: REQ-045's, REQ-052's and
+      REQ-059's descriptions each state their HTTP endpoint is S4 scope. The
+      backing domain functions are `done` -- read Letflow.Engine's actual
+      public API and route to it. This requirement adds no engine behaviour.
+      lib/letflow/router.ex's own moduledoc names this requirement's job: the
+      pilot-slice POST /instances routes were removed with REQ-046 and "S4
+      (api-surface) is expected to add the real /api/v1/instances routes
+      against Letflow.Engine.create/2, not a revival of this pilot contract."
+      Do not resurrect the pilot route shapes; port R-Co's.
+      REQ-045's EE-01 correlation-key uniqueness is enforced structurally by
+      the uq_instance_correlation partial unique index (REQ-043). A create
+      that violates it must surface as a 409-class problem document, not a
+      500 from a raw constraint error (INV-8) -- and because the index is
+      inside the tenant schema, the same correlation key in two tenants is two
+      valid instances, which must be tested rather than assumed.
+      Cancel and reconstruct act on an existing instance, so both need the
+      cross-tenant 404 via REQ-072, and both need REQ-069's InstancesCancel /
+      InstancesStart permission checks.
+      SECURITY (INV-1, INV-5, INV-8).
+    acceptance_criteria:
+      - "POST /api/v1/instances creates an instance via Letflow.Engine and returns 201 with the instance id, demonstrated end-to-end through the real router"
+      - "a create whose correlation key duplicates an existing active instance in the same tenant returns a 409-class problem document, not a 500 and not an unhandled constraint error (INV-8); the same correlation key used in a different tenant succeeds -- two explicit tests"
+      - "cancel and reconstruct against an instance id belonging to another tenant each return the same response as a nonexistent id, and leave the target instance's state unchanged, verified by reading the row afterwards (INV-5)"
+      - "a caller without InstancesStart cannot create and a caller without InstancesCancel cannot cancel, with the absence of any state change verified in both cases rather than only the 403"
+      - "no route module in this requirement contains a Repo call or transition logic -- every handler delegates to Letflow.Engine, confirmed by grep"
+      - "cancelling an already-cancelled or already-completed instance returns a deterministic non-500 response whose status is named in the moduledoc, covered by a test for each terminal state"
+    depends_on: [REQ-072]
+
+  - id: REQ-080
+    title: Instance routes 2/2 -- read path (instances.zig handleGetById/List/History/Timeline/GetPins)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Port the read half of src/api/routes/instances.zig: handleGetById
+      (L422), handleList (L586), handleHistory (L839), handleTimeline (L1067)
+      and handleGetPins (L1265). Five handlers over 1,113 of the file's 1,535
+      lines -- the read path carries the query/filter/projection weight, which
+      is why the split falls here.
+      handleList, handleHistory and handleTimeline are all list-shaped and MUST
+      go through REQ-067's cursor pagination rather than each inventing an
+      offset scheme; history and timeline read REQ-026's event paths, which are
+      append-only and can be large, so an unpaginated response is a real
+      memory and latency hazard, not a style preference.
+      handleGetPins reads REQ-060's PIN state. Route to the existing pin
+      resolver context; add no pin logic here.
+      Filtering is where a tenant-scoped list leaks: any filter parameter
+      (status, definition id, correlation key, date range) composes onto a
+      query whose prefix comes from REQ-072, and no filter parameter may be
+      able to change the schema, the prefix, or add a raw SQL fragment
+      (INV-7) -- filters build through Ecto.Query composition with bound
+      parameters, never string interpolation.
+      SECURITY (INV-1, INV-5, INV-7).
+    acceptance_criteria:
+      - "each of the five handlers has an end-to-end test through the real router asserting status and response shape"
+      - "list, history and timeline are each cursor-paginated via REQ-067 and each is demonstrated returning every row exactly once across at least three pages with no duplicate and no gap"
+      - "an instance id belonging to another tenant returns the same response as a nonexistent id on get, history, timeline and pins -- four explicit tests (INV-5)"
+      - "listing instances with every supported filter applied returns only the calling tenant's rows when both tenants are seeded with rows matching the same filter values, demonstrated by a test (INV-1)"
+      - "a filter parameter containing a SQL metacharacter sequence is treated as a literal value and produces an empty or unfiltered-by-that-value result rather than altering the query, demonstrated by a test, and no handler builds SQL by interpolation -- confirmed by grep (INV-7)"
+      - "a caller without InstancesRead receives 403 on every one of the five endpoints"
+    depends_on: [REQ-079]
+
+  - id: REQ-081
+    title: Definition routes 1/2 -- read path (definitions.zig handleGetById/List/GetActiveByName/Search/Export)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Port the read half of src/api/routes/definitions.zig (1,276 lines / 13
+      handlers -- split two ways with REQ-082): handleGetById (L71), handleList
+      (L98), handleGetActiveByName (L182), handleSearch (L210) and handleExport
+      (L1090).
+      handleSearch is the endpoint REQ-042 explicitly deferred here: REQ-042's
+      description states "the HTTP endpoint (GET /api/v1/definitions/search) is
+      S4 (api-surface) scope, not built here", and it establishes the contract
+      this route must preserve -- exact name match ranks above partial name
+      match above description-only match, ordered by rank DESC then created_at
+      DESC; an empty query is an error, not an empty page; a query over 512
+      characters is an error; no match is HTTP 200 with an empty array, NOT a
+      404. That last mapping is explicitly REQ-042's stated boundary ("this
+      function returns the empty list, the S4 HTTP layer owns the 200
+      mapping") and is this requirement's to implement.
+      definitions.zig's own header states all handlers "require a valid
+      authenticated session (API-08). Auth is enforced by upstream middleware
+      -- handlers may assume the caller has already validated the session."
+      That assumption is only safe because REQ-071 mounts the chain; a handler
+      must never re-derive the tenant itself.
+      handleExport produces a document derived from tenant data -- it is a
+      read, but a bulk one, so its scoping is as load-bearing as list's.
+      SECURITY (INV-1, INV-5).
+    acceptance_criteria:
+      - "each of the five handlers has an end-to-end test through the real router asserting status and response shape"
+      - "a search with no match returns 200 with an empty array (not 404), an empty query returns a 400-class problem document, and a query over 512 characters returns a 400-class problem document -- three explicit tests preserving REQ-042's contract"
+      - "search ranking through the HTTP layer preserves REQ-042's order: exact name match above partial name match above description-only match, demonstrated by a test asserting the returned order"
+      - "list and search are cursor-paginated via REQ-067, demonstrated across at least two pages"
+      - "a definition id belonging to another tenant returns the same response as a nonexistent id on get and export, and a search for a term matching only tenant B definitions returns an empty page to a tenant A caller -- three explicit tests (INV-1, INV-5)"
+      - "a caller without DefinitionsRead receives 403 on all five endpoints"
+    depends_on: [REQ-072]
+
+  - id: REQ-082
+    title: Definition routes 2/2 -- write and lifecycle path (definitions.zig Create/Put/Patch/Delete/Activate/Deprecate/Archive/Import)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Port the write half of src/api/routes/definitions.zig: handleCreate
+      (L309), handlePut (L362), handlePatch (L458), handleDelete (L546),
+      handleActivate (L633), handleDeprecate (L721), handleArchive (L759) and
+      handleImport (L1126). Eight handlers, all state-changing, over REQ-030's
+      Letflow.Definitions and REQ-028/029's graph validators.
+      The lifecycle transitions (activate, deprecate, archive) are ordered
+      state changes, not idempotent writes: activating an archived definition,
+      deprecating an already-archived one, or archiving an already-archived one
+      must each return a deterministic 409-class problem document rather than
+      silently succeeding or raising. Read REQ-030's context module for the
+      actual permitted transitions and enforce exactly those -- do not invent a
+      second state machine in the route layer.
+      A create/put/import carries a definition graph, so REQ-028/029's
+      validators run before persistence and their structured errors render as
+      REQ-066 field-level problem details rather than a bare 500. handleImport
+      accepts a whole document from an untrusted caller -- it is the largest
+      untrusted-input surface in S4 and must hold to REQ-068's body limit and
+      typed-rejection rules (INV-8).
+      REQ-030's process_definitions is per-tenant (decision 0006), so activate
+      and archive act only within the caller's schema -- an activate that
+      touched another tenant's active definition would be a cross-tenant write,
+      the most severe failure mode in this batch.
+      SECURITY (INV-1, INV-5, INV-8).
+    acceptance_criteria:
+      - "each of the eight handlers has an end-to-end test through the real router asserting status and, for writes, the resulting persisted state rather than only the status code"
+      - "activating an archived definition, deprecating an archived one, and archiving an archived one each return a 409-class problem document and leave the row unchanged -- three explicit tests"
+      - "a create with a structurally invalid graph returns a problem document carrying the per-field validation errors from REQ-028/029's validator, not a 500 and not a generic message (INV-8)"
+      - "handleImport with a malformed document, an oversized document, and a document whose JSON is valid but whose graph is invalid each return a typed rejection with no unhandled exception -- three explicit tests"
+      - "activating a definition in tenant A leaves tenant B's same-named active definition untouched, verified by reading both tenants' rows after the operation (INV-1)"
+      - "a definition id belonging to another tenant returns the same response as a nonexistent id on every write verb, and no write occurs -- verified by reading the target row (INV-5)"
+      - "a caller without DefinitionsWrite receives 403 on all eight endpoints with no state change in any case"
+    depends_on: [REQ-081]
+
+  - id: REQ-083
+    title: Task routes 1/2 -- read path (tasks.zig handleList/handleGetById/handleInbox)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Port the read half of src/api/routes/tasks.zig (1,085 lines / 7 handlers
+      -- split two ways with REQ-085): handleList (L89, EE-03/API-04, cursor
+      paginated), handleGetById (L290) and handleInbox (L960).
+      REQ-043's description named this surface as deferred: its tasks-table
+      boundary note states "the standalone task query/list surface
+      (src/tasks/store.zig's own list/filter operations) is NOT ported here
+      and belongs with S4's tasks routes or its own later requirement." This
+      is that requirement. R-Co's task query logic lives in
+      src/tasks/store.zig (1,202 lines) outside src/api/ -- port only the
+      query/filter operations these three handlers actually invoke, and state
+      in the moduledoc which parts of store.zig were and were not ported, so
+      the boundary is explicit rather than approximate.
+      handleInbox is per-principal, not merely per-tenant: it returns the tasks
+      assigned to the calling user (directly, or via a group or role they
+      hold). That is a second scoping dimension on top of REQ-072's tenant
+      prefix, and both must hold -- an inbox that returns another user's tasks
+      within the same tenant is a real authorisation defect even though it is
+      not a cross-tenant leak. Read REQ-047's assignee_type/assignee_ref model
+      (USER|GROUP|ROLE) and resolve group and role membership through
+      Letflow.Identity rather than reimplementing the resolution.
+      SECURITY (INV-1, INV-2, INV-5).
+    acceptance_criteria:
+      - "each of the three handlers has an end-to-end test through the real router asserting status and response shape, with list and inbox cursor-paginated via REQ-067 across at least two pages"
+      - "the inbox for user X returns tasks assigned directly to X, tasks assigned to a group X belongs to, and tasks assigned to a role X holds, and returns no task assigned only to a different user Y in the same tenant -- four assertions in explicit tests"
+      - "a task id belonging to another tenant returns the same response as a nonexistent id, demonstrated by a test (INV-5)"
+      - "listing tasks as a tenant A caller returns no tenant B task when both tenants have tasks on identically-named nodes, demonstrated by a test seeding both (INV-1)"
+      - "the serialised task response contains an explicit field allowlist and does not encode the Ecto struct wholesale, demonstrated by a test asserting the full key set (INV-2)"
+      - "the moduledoc states which src/tasks/store.zig query operations were ported and which were not, rather than describing the boundary approximately"
+      - "a caller without TasksRead receives 403 on all three endpoints"
+    depends_on: [REQ-072]
+
+  - id: REQ-084
+    title: OpenAPI spec strategy decision record (OQ-2) -- hand-build vs. open_api_spex vs. defer to S6
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Write a decision record settling stage-4-api-surface.md's OQ-2, which
+      that document explicitly flags as "Flag to REVIEWER before building; do
+      not decide it inside a route requirement." Deliverable shape follows
+      REQ-010 and REQ-014: a docs/migration/decisions/000N-*.md record plus
+      REVIEWER sign-off, not an implementation.
+      THE QUESTION. R-Co hand-builds its OpenAPI spec across src/api/openapi/
+      -- 7 modules, 992 lines re-counted during this expansion (builder.zig
+      235, mod.zig 6, model.zig 59, path_registry.zig 46, schema_registry.zig
+      290, serialize.zig 346, version_source.zig 10; note
+      stage-4-api-surface.md's table says 6 modules / 1,286 lines, which this
+      record should correct) -- and serves it from routes/openapi.zig (158).
+      Letflow's three candidates are: hand-build the equivalent; adopt
+      open_api_spex; or defer spec generation to S6 and serve no spec in S4.
+      WHY THIS IS NOT A FREE CHOICE. open_api_spex is Phoenix-oriented, so
+      this decision is downstream of REQ-065's resolution of the
+      Phoenix-vs-Plug/Bandit contradiction -- adopting it under a Plug/Bandit
+      outcome would mean either fighting the library or reversing REQ-065.
+      The record must state that dependency explicitly rather than evaluating
+      the three options as if the framework question were settled
+      independently.
+      WHAT THE RECORD MUST WEIGH, concretely: (a) whether any consumer needs
+      the spec today -- web/ is the only client and S8 owns its integration,
+      so a spec no one reads is 992 lines of ported cost with no reader; (b)
+      drift risk, since a hand-built spec that is not generated from the
+      routes goes stale silently, which is the failure mode R-Co's
+      path_registry.zig exists to mitigate; (c) whether R-Co's schema_registry
+      shape has any Elixir equivalent worth adopting.
+      SCOPE BOUNDARY: this requirement writes a decision record. It does NOT
+      port src/api/openapi/, does NOT port routes/openapi.zig, and does NOT
+      add a dependency to mix.exs. No other requirement in this S4 batch ports
+      the OpenAPI surface -- whichever option this record selects, the
+      execution work is a later requirement written against the record, in the
+      stage the record names.
+    acceptance_criteria:
+      - "a numbered record exists under docs/migration/decisions/ selecting exactly one of hand-build, open_api_spex, or defer-to-S6, stated as an explicit decision sentence rather than a pros-and-cons list"
+      - "the record states how the choice depends on REQ-065's framework resolution, and if open_api_spex is selected it explicitly reconciles that with whichever position REQ-065's addendum left standing"
+      - "the record names the actual R-Co source it reasons against with correct counts (7 modules, 992 lines under src/api/openapi/, plus routes/openapi.zig at 158) and notes the correction to stage-4-api-surface.md's table"
+      - "the record addresses spec-drift risk explicitly, naming what keeps the spec in sync with the routes under the selected option"
+      - "the record names which stage and which future requirement owns the execution, so the selected option has an owner rather than being decided and dropped"
+      - "REVIEWER sign-off is recorded in docs/migration/stage-4-api-surface.md's REVIEWER sign-off section, and no mix.exs change and no lib/ code change is made by this requirement -- confirmed by git diff showing only docs/ files touched"
+    depends_on: [REQ-065]
+
+  - id: REQ-085
+    title: Task routes 2/2 -- write path (tasks.zig handleComplete/handleClaim/handleAssign/handleReassign)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    description: >
+      Port the write half of src/api/routes/tasks.zig: handleComplete (L341,
+      EE-04), handleClaim (L551), handleAssign (L628) and handleReassign
+      (L736). Four state-changing handlers over REQ-047/048's task domain
+      logic.
+      COMPLETION IS THE ENGINE ENTRY POINT, not a status update. REQ-048's
+      EE-04 completion advances the instance -- output variables merge into
+      instance variables and the token moves on -- so handleComplete routes to
+      the engine's completion function and must not write the tasks row
+      directly. A handler that flips status to COMPLETED without driving the
+      transition would leave the instance permanently stalled, which is the
+      most damaging way to get this route wrong; state that explicitly in the
+      moduledoc.
+      Completing an already-completed or already-cancelled task must return a
+      deterministic 409-class problem document, not a second transition.
+      Claim/assign/reassign are authorisation-sensitive beyond REQ-069's
+      TasksAssign permission: claiming a task assigned to a different user or
+      to a group the caller does not belong to must fail even within the same
+      tenant. Resolve group and role membership through Letflow.Identity
+      (REQ-015..021), the same resolution REQ-083's inbox uses -- one
+      resolution path, not two that can disagree.
+      Concurrency matters here in a way it does not elsewhere in S4: two
+      simultaneous claims of the same task must result in exactly one winner,
+      and two simultaneous completions in exactly one transition. Read
+      REQ-047/048's row-locking approach and route through it rather than
+      adding a second locking scheme in the route layer.
+      SECURITY (INV-1, INV-5, INV-8).
+    acceptance_criteria:
+      - "completing a task advances the owning instance -- the output variables appear in the instance's variables and the token has moved -- demonstrated end-to-end through the real router by asserting instance state, not only the 200"
+      - "handleComplete contains no direct write to the tasks table; it routes to REQ-048's engine completion function, confirmed by grep for Repo. in the module returning no hit and stated in the moduledoc"
+      - "completing an already-completed task and completing an already-cancelled task each return a 409-class problem document and produce no second transition, verified by asserting the instance state is unchanged -- two explicit tests"
+      - "two concurrent claims of the same task produce exactly one success and one deterministic non-500 rejection, demonstrated by a test running both concurrently"
+      - "claiming a task assigned to a different user in the same tenant, and claiming one assigned to a group the caller does not belong to, are both rejected with no state change -- two explicit tests"
+      - "a task id belonging to another tenant returns the same response as a nonexistent id on all four verbs, with no state change in any case -- verified by reading the target row (INV-1, INV-5)"
+      - "a caller without TasksComplete cannot complete and a caller without TasksAssign cannot assign or reassign, with the absence of state change verified in each case"
+    depends_on: [REQ-083]

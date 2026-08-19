@@ -2776,7 +2776,7 @@ requirements:
   - id: REQ-053
     title: State reconstruction by event replay (reconstruction.zig, EE-11)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S3
     impl_order: 98  # letflow-queue task id
     description: >

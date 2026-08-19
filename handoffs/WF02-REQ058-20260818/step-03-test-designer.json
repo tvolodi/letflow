@@ -1,0 +1,60 @@
+{
+  "handoff_id": "8f1e6b1a-1a2d-4a3e-9b0a-000000000008",
+  "run_id": "WF02-REQ058-20260818",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ058-20260818/step-03-test-designer.json",
+  "created_at": "2026-08-19T00:11:49Z",
+  "started_at": "2026-08-19T00:15:12Z",
+  "completed_at": "2026-08-19T00:15:17Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-058"],
+    "requirement_text": {
+      "REQ-058": "See handoffs/WF02-REQ058-20260818/step-01-code-designer.json context.requirement_text for full text -- Lua script execution audit persistence path, MINIMAL narrow injectable-executor audit path, S3/S5 scope boundary, manifest-hash-mismatch as distinct error, instance_id validated before executor invocation."
+    },
+    "related_handoff_ids": ["step-01-code-designer.json", "step-02a-elixir-dev-rework1.json"],
+    "artifacts_in": [
+      "lib/letflow/design/req058-lua-script-audit.md",
+      "lib/letflow/engine/lua_script_audit.ex",
+      "priv/repo/migrations/20260820000011_create_lua_script_execution_audit.exs"
+    ],
+    "owned_modules": ["lib/letflow/engine/lua_script_audit.ex", "priv/repo/migrations/*lua_script_execution_audit*", "test/letflow/engine/lua_script_audit_test.exs", "test/specs/REQ-058.md"]
+  },
+  "task": {
+    "description": "Application-executable surface is clearly present (lib/letflow/engine/lua_script_audit.ex is real Elixir business logic) -- proceed with the full TEST-DESIGNER procedure, no scope-test skip. Write test/specs/REQ-058.md and test/letflow/engine/lua_script_audit_test.exs against Letflow.Engine.LuaScriptAudit.execute_script_for_audit/6, using a test-double Executor module (or an inline module implementing the @behaviour) for every case -- do not attempt to invoke a real Lua runtime, none exists. Follow docs/anti-patterns.md's ExUnit 255-char describe+test combined-name limit: keep describe/test names short labels, put spec citations in a # comment above the test, not in the name string. Cover the empirical cases ELIXIR-DEV already ran manually (AC2/AC3/AC4/prefix-fail-closed) as real, permanent ExUnit tests -- those were throwaway mix run -e verification, not committed test code.",
+    "acceptance_criteria": [
+      "priv/repo/migrations gains a lua_script_execution_audit migration, schema-per-tenant per REQ-022, applying cleanly against a provisioned tenant schema",
+      "execute_script_for_audit with a test-double executor writes exactly one audit row carrying instance_id, manifest_hash, actor_id and a timestamp, verified by reading the row back",
+      "an unparseable or absent instance_id is rejected BEFORE the injected executor is invoked, demonstrated by a test-double that records whether it was called at all",
+      "a manifest hash differing from the supplied registered_hash returns a distinct, pattern-matchable mismatch error and writes no audit row",
+      "mix.exs gains no Lua/NIF dependency, and the moduledoc states that the Lua execution runtime is S5 scope pending stage-5-scripting-plugins.md's build-vs-bind decision record",
+      "the moduledoc carries R-Co's own narrowness statement in substance: this is not the SERVICE_TASK script-execution handler, must not be called from normal process-execution flow, and will be superseded (not extended) by the real scripting integration when it lands",
+      "a missing/nil/empty prefix fails closed with a distinct error and zero writes (added during INV-1 rework, must have its own test)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote test/specs/REQ-058.md and test/letflow/engine/lua_script_audit_test.exs against Letflow.Engine.LuaScriptAudit.execute_script_for_audit/6, using inline test-double Executor modules (EchoExecutor, MismatchExecutor, RaiseIfCalledExecutor, RecordingExecutor). AC-to-test mapping: AC1 (migration applies cleanly, schema-per-tenant) -> describe 'migration applies to a provisioned tenant schema' (table exists in tenant schema not public, column set matches AuditRecord.__schema__(:fields), idx_lua_script_execution_audit_instance exists, module registered in tenant_scoped_migrations/0). AC2 (successful write + read-back) -> describe 'execute_script_for_audit/6 success path' (EchoExecutor, asserts return tuple then independently Repo.get/Repo.all read-back). AC3 (instance_id rejected before executor invoked) -> describe 'instance_id validated before executor invocation' (nil and malformed-string cases against RaiseIfCalledExecutor, plus a RecordingExecutor case asserting refute_received). AC4 (manifest-hash mismatch distinct error, zero rows) -> describe 'manifest hash mismatch' (MismatchExecutor, asserts {:manifest_hash_mismatch, registered, actual} 3-tuple and zero rows). AC5 (mix.exs no Lua/NIF dep, moduledoc states S5 scope) + AC6 (moduledoc narrowness statement) -> describe 'mix.exs and moduledoc guardrails' (Mix.Project.config()[:deps] grep, Code.fetch_docs/1 substring assertions). AC7/INV-LSA-6 (missing/nil/empty prefix fails closed, zero writes, zero executor calls) -> describe 'missing or blank :prefix fails closed' (no-key, nil, and empty-string cases against RaiseIfCalledExecutor, plus a RecordingExecutor refute_received case). Every describe+test combined name verified programmatically under 200 chars (max 134) per docs/anti-patterns.md's ExUnit 255-char compile-time-failure entry. Not run (TEST-RUNNER's job, Step 4) -- syntax verified via Code.string_to_quoted/1 only (no local mix/DB toolchain exercised here).",
+    "artifacts_out": [
+      "test/specs/REQ-058.md",
+      "test/letflow/engine/lua_script_audit_test.exs"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ058-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ058-20260818",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

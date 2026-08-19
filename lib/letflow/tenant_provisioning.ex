@@ -316,6 +316,8 @@ defmodule Letflow.TenantProvisioning do
      "20260819000002_create_tenant_role_tenant_scoped.exs"},
     {20_260_819_000_003, Letflow.Repo.Migrations.CreateUsersTenantScoped,
      "20260819000003_create_users_tenant_scoped.exs"},
+    {20_260_819_045_553, Letflow.Repo.Migrations.AddSubProcessParentColumns,
+     "20260819045553_add_sub_process_parent_columns.exs"},
     {20_260_820_000_001, Letflow.Repo.Migrations.DropTenantIdEvents,
      "20260820000001_drop_tenant_id_events.exs"},
     {20_260_820_000_002, Letflow.Repo.Migrations.DropTenantIdEventsArchive,

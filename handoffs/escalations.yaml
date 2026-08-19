@@ -1,4 +1,4 @@
-# Letflow — Escalation record
+# Letflow — Escalation records
 #
 # Written when a handoff hits rework_count >= max_rework (see
 # docs/agents/ORCHESTRATOR.md §5). ESCALATED does not mean "wait for a
@@ -26,6 +26,88 @@
 #       concrete recommendation for the resuming session
 
 escalations:
+  - run_id: WF02-REQ062-20260819
+    requirement_ids: [REQ-062]
+    handoff_file: handoffs/WF02-REQ062-20260819/step-02a-elixir-dev.json
+    step: "02a (ELIXIR-DEV backend implementation)"
+    escalated_at: 2026-08-19T05:56:29Z
+    rework_count: 3
+    max_rework: 3
+    branch: feature/WF02-REQ062-20260819
+    summary: >
+      REQ-062 (SPC-01 sub-process invocation runtime half) implementation
+      reached max_rework at Step 2a without a fully green scoped test run.
+      Three successive rework iterations each fixed the specific bug(s)
+      assigned to them (iteration 1: REQ-053/reconstruction.ex replay
+      regression for the new SUB_PROCESS_COMPLETED event type; iteration 2:
+      tenant_scoped_migration_manifest registration + graph.ex node_type_map
+      entry, plus a self-discovered idempotency_key collision; iteration 3:
+      an Ecto.Multi {:ok, _} double-unwrap CaseClauseError + a missing
+      Jason.Encoder derive) -- but each iteration's fix surfaced a new,
+      previously-latent bug in the same sub-process completion/cascade
+      path, rather than converging to green. This is not the
+      same-failure-recurring pattern ORCHESTRATOR.md §5's "change
+      approach on the third attempt" rule targets (each iteration's bug was
+      genuinely distinct), so no single rework iteration was mishandled --
+      the underlying implementation has more latent depth (multi-instance
+      Ecto.Multi composition, idempotency-key uniqueness across a
+      parent/child event cascade) than the original design fully specified.
+    current_state: >
+      Scoped run (test/letflow/engine_sub_process_test.exs +
+      test/letflow/engine_test.exs) is 36/42 passing.
+      test/letflow/engine_test.exs itself is fully green (32/32) -- no
+      regression to any already-shipped requirement. All 6 remaining
+      failures are within EngineSubProcessTest (REQ-062's own new test
+      file). Three distinct, unfixed problems remain, none introduced by
+      the final rework pass and none part of that pass's assigned scope:
+      (i) an Ecto.Multi :task_records key collision --
+      TaskActivation.append_multi_from_existing_records/6
+      (lib/letflow/engine/task_activation.ex:246) always appends under the
+      fixed atom key :task_records regardless of which instance's Multi is
+      being built; when the sub-process completion cascade merges the
+      parent's Multi into the child's own (which already used that key),
+      Ecto raises on the duplicate key. Needs a real signature change
+      (namespace the key by instance_id or token_id across both
+      task_activation.ex and sub_process.ex), not a local fix -- affects
+      AC4/AC5 (2 tests). (ii) a suspected idempotency_key collision on the
+      ExecutionError event path (DBConnection.ConnectionError /
+      "transaction rolling back") -- the same class of bug iteration 2
+      fixed for the INSTANCE_STARTED/SUB_PROCESS_COMPLETED event paths
+      apparently was not (or could not be, without further diagnosis)
+      applied to the ExecutionError event path -- affects the two
+      output-side interface-violation tests (AC3/AC8, 2 tests).
+      (iii) a pre-existing-within-this-branch bug (present since before
+      iteration 3's two fixes, confirmed by iteration 3's own first scoped
+      run) where input-side interface violations (SUB_PROCESS_MISSING_REQUIRED_INPUT,
+      SUB_PROCESS_INPUT_SCHEMA_VIOLATION) return {:error, ...} directly from
+      complete_task/3 instead of {:ok, ...} with the error routed internally
+      via ExecutionError.append_multi/3, contradicting AC8's own routing
+      requirement -- affects 2 tests.
+    recommended_next_step: >
+      A fresh CODE-DESIGNER pass scoped explicitly to these three items
+      (particularly (i), which needs a real design decision on how
+      Ecto.Multi step-keys should be namespaced across a
+      parent-instance/child-instance cascade, not just a local rename) is
+      recommended over a direct ELIXIR-DEV retry -- the repeated
+      "fix reveals next latent bug in the same area" pattern across three
+      iterations suggests the original design (lib/letflow/design/req062-sub-process-runtime.md)
+      under-specified the Multi-composition and idempotency-key shape for
+      the cascade path, not that ELIXIR-DEV mis-implemented a
+      fully-specified design. Do not simply re-run ELIXIR-DEV against the
+      same handoff -- max_rework is already exhausted on step-02a; a fresh
+      Step 1/1b design-amendment cycle (or a REVIEWER-approved targeted
+      design addendum covering just the cascade's Multi-key and
+      idempotency-key shape) should precede the next implementation attempt.
+    branch_state: >
+      feature/WF02-REQ062-20260819 is pushed to origin with all work through
+      this escalation (commits through d370849/7239c6f). Left as-is,
+      not merged, not deleted -- the next session resumes from this branch
+      rather than starting over. docs/requirements.yaml REQ-062 remains
+      status: in_progress (not done). letflow-queue task id 106 remains
+      locked to hetzner-wt2-orch -- the next session picking this up should
+      either resume as the same agent_id or have ORCH release/re-lock it
+      explicitly, not silently abandon the lock.
+
   - run_id: WF02-REQ062-20260819
     requirement_ids: [REQ-062]
     escalated_at: "2026-08-19T05:58:07Z"
@@ -67,3 +149,14 @@ escalations:
       "patch one failure, re-run full suite" strategy that produced three
       consecutive rework cycles; diagnose all remaining failures before
       making a fourth code change.
+
+    # NOTE (merge of feature/WF02-REQ062-20260819 into main, 2026-08-19,
+    # ELIXIR-DEV): both entries above describe the same underlying
+    # escalation event (~2 minutes apart, logged under two different
+    # schema conventions by two concurrent agents/hosts) -- kept as two
+    # separate list entries per this file's own "append-only, never
+    # rewrite past entries" rule rather than merging/discarding either.
+    # REQ-062 itself has since been fixed (issues (i)/(ii) code-level, and
+    # (iii) recognised as a test-expectation error, not an implementation
+    # bug -- see lib/letflow/design/req062-sub-process-runtime.md §10) and
+    # is being merged to main in this same run.

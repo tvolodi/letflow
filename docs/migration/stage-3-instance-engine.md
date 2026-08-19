@@ -94,8 +94,22 @@ forward R-Co's own PIN-01 AC1/AC2 and PIN-03 AC3 scope gap
 "Scope boundaries with S4 and S5") and reserves PIN_RETRY_EXHAUSTED as a
 named, not-yet-emitted hook for PIN-03 AC4's exhausted-retry-budget DLQ
 routing rather than a partial implementation; same header-sync gap-fix
-shape applied by this requirement's own DOC-UPDATER); REQ-060, REQ-062
-(`docs/requirements.yaml`, 2 total) `pending`.
+shape applied by this requirement's own DOC-UPDATER); REQ-062 `done`
+(Sub-process invocation runtime half, SPC-01 -- child instance creation
+via createWithParentInheritance, parent-token waiting_child_instance_id
+wait/clear (R-Co GH #428 field-dropping regression test included),
+input filtering and output-merge per interface, all four SPC-01 failure
+modes routed through REQ-061's set_instance_error/2 rather than a local
+ERROR transition, closing REQ-061's own AC8 obligation deferred forward
+at build time; Step 2a hit max_rework (3/3) and was escalated PARTIAL,
+recovered via a design-amendment pass (Multi-key/idempotency-key shape
+addenda, lib/letflow/design/req062-sub-process-runtime.md §10-12)
+rather than a blind fourth retry; composed against REQ-059's own
+PinResolver integration during the merge of feature/WF02-REQ062-20260819
+into main, since both requirements independently touched
+lib/letflow/engine.ex/lib/letflow/engine/reconstruction.ex; same
+header-sync gap-fix shape applied by this requirement's own
+DOC-UPDATER); REQ-060 (`docs/requirements.yaml`, 1 total) `pending`.
 
 ## Scope
 

@@ -34,8 +34,9 @@ defmodule Letflow.Engine.PinResolverTest do
     %Node{
       id: id,
       node_type: :SERVICE_TASK,
-      attributes: %{"endpoint" => "https://example.test/#{id}", "timeout_ms" => 1000}
-      |> maybe_put("service_id", service_id)
+      attributes:
+        %{"endpoint" => "https://example.test/#{id}", "timeout_ms" => 1000}
+        |> maybe_put("service_id", service_id)
     }
   end
 
@@ -98,12 +99,28 @@ defmodule Letflow.Engine.PinResolverTest do
         ])
 
       def_ = definition("my-process")
-      lookup = const_lookup({:ok, %{resolved_id: "svc-id", version: "1.0.0"}}, {:ok, %{resolved_id: "mod-id", version: "2.0.0"}})
+
+      lookup =
+        const_lookup(
+          {:ok, %{resolved_id: "svc-id", version: "1.0.0"}},
+          {:ok, %{resolved_id: "mod-id", version: "2.0.0"}}
+        )
 
       assert {:ok, pins, _schema} = PinResolver.resolve(g, def_, lookup, [])
 
-      assert Enum.map(pins, & &1.ref) == ["aaa-service", "zzz-service", "mmm-module", "my-process"]
-      assert Enum.map(pins, & &1.kind) == [:catalog_entry, :catalog_entry, :module, :variable_schema]
+      assert Enum.map(pins, & &1.ref) == [
+               "aaa-service",
+               "zzz-service",
+               "mmm-module",
+               "my-process"
+             ]
+
+      assert Enum.map(pins, & &1.kind) == [
+               :catalog_entry,
+               :catalog_entry,
+               :module,
+               :variable_schema
+             ]
     end
 
     test "two resolutions of the same graph/definition/lookup produce byte-identical Jason-serialized output" do
@@ -115,7 +132,12 @@ defmodule Letflow.Engine.PinResolverTest do
         ])
 
       def_ = definition("byte-identical-process")
-      lookup = const_lookup({:ok, %{resolved_id: "sid", version: "1.0.0"}}, {:ok, %{resolved_id: "mid", version: "1.0.0"}})
+
+      lookup =
+        const_lookup(
+          {:ok, %{resolved_id: "sid", version: "1.0.0"}},
+          {:ok, %{resolved_id: "mid", version: "1.0.0"}}
+        )
 
       assert {:ok, pins_1, _} = PinResolver.resolve(g, def_, lookup, [])
       assert {:ok, pins_2, _} = PinResolver.resolve(g, def_, lookup, [])
@@ -149,12 +171,25 @@ defmodule Letflow.Engine.PinResolverTest do
         %{kind: :module, ref: "mod-a", resolved_id: "override-mid", version: "8.8.8"}
       ]
 
-      assert {:ok, pins, _schema} = PinResolver.resolve(g, def_, raise_if_called_lookup(), overrides)
+      assert {:ok, pins, _schema} =
+               PinResolver.resolve(g, def_, raise_if_called_lookup(), overrides)
 
-      assert %{kind: :catalog_entry, ref: "svc-a", resolved_id: "override-sid", version: "9.9.9", source: :override} =
+      assert %{
+               kind: :catalog_entry,
+               ref: "svc-a",
+               resolved_id: "override-sid",
+               version: "9.9.9",
+               source: :override
+             } =
                Enum.find(pins, &(&1.kind == :catalog_entry))
 
-      assert %{kind: :module, ref: "mod-a", resolved_id: "override-mid", version: "8.8.8", source: :override} =
+      assert %{
+               kind: :module,
+               ref: "mod-a",
+               resolved_id: "override-mid",
+               version: "8.8.8",
+               source: :override
+             } =
                Enum.find(pins, &(&1.kind == :module))
     end
   end
@@ -182,7 +217,9 @@ defmodule Letflow.Engine.PinResolverTest do
 
           {:error, :not_found}
         end,
-        module_lookup: fn ref -> raise "module_lookup must not be called, got: #{inspect(ref)}" end,
+        module_lookup: fn ref ->
+          raise "module_lookup must not be called, got: #{inspect(ref)}"
+        end,
         variable_schema_lookup: &default_variable_schema_lookup/2
       }
 
@@ -198,7 +235,8 @@ defmodule Letflow.Engine.PinResolverTest do
 
       lookup = const_lookup({:error, :not_found}, {:error, :not_found})
 
-      assert {:error, {:unresolved_module_ref, "ghost-module"}} = PinResolver.resolve(g, def_, lookup, [])
+      assert {:error, {:unresolved_module_ref, "ghost-module"}} =
+               PinResolver.resolve(g, def_, lookup, [])
     end
 
     test "an unresolved module ref never runs after a resolved catalog ref -- the variable_schema lookup is also never reached" do
@@ -213,7 +251,8 @@ defmodule Letflow.Engine.PinResolverTest do
         end
       }
 
-      assert {:error, {:unresolved_module_ref, "ghost-module"}} = PinResolver.resolve(g, def_, lookup, [])
+      assert {:error, {:unresolved_module_ref, "ghost-module"}} =
+               PinResolver.resolve(g, def_, lookup, [])
     end
   end
 
@@ -302,14 +341,30 @@ defmodule Letflow.Engine.PinResolverTest do
 
   describe "pin_for/3 -- AC5: PinMissing error naming the reference, never a fallback value" do
     test "a present {kind, ref} entry is found" do
-      pins = [%{kind: :catalog_entry, ref: "svc-a", resolved_id: "sid", version: "1.0.0", source: :resolved}]
+      pins = [
+        %{
+          kind: :catalog_entry,
+          ref: "svc-a",
+          resolved_id: "sid",
+          version: "1.0.0",
+          source: :resolved
+        }
+      ]
 
       assert {:ok, %{ref: "svc-a", version: "1.0.0"}} =
                PinResolver.pin_for(pins, :catalog_entry, "svc-a")
     end
 
     test "an absent {kind, ref} entry returns {:error, {:pin_missing, kind, ref}}, naming the exact kind/ref, never a substitute" do
-      pins = [%{kind: :catalog_entry, ref: "svc-a", resolved_id: "sid", version: "1.0.0", source: :resolved}]
+      pins = [
+        %{
+          kind: :catalog_entry,
+          ref: "svc-a",
+          resolved_id: "sid",
+          version: "1.0.0",
+          source: :resolved
+        }
+      ]
 
       assert {:error, {:pin_missing, :catalog_entry, "svc-b"}} =
                PinResolver.pin_for(pins, :catalog_entry, "svc-b")
@@ -374,7 +429,13 @@ defmodule Letflow.Engine.PinResolverTest do
   describe "merge_effective_pins/2 -- PIN-04: replay-time effective set, pure, folds all rebind events in order" do
     test "with zero rebind events, the effective set mirrors instance_started_pinned_versions exactly (kind/ref/resolved_id/version/source normalized)" do
       base = [
-        %{kind: :catalog_entry, ref: "svc-a", resolved_id: "sid", version: "1.0.0", source: :resolved}
+        %{
+          kind: :catalog_entry,
+          ref: "svc-a",
+          resolved_id: "sid",
+          version: "1.0.0",
+          source: :resolved
+        }
       ]
 
       assert [%{kind: :catalog_entry, ref: "svc-a", version: "1.0.0", source: :resolved}] =
@@ -383,7 +444,13 @@ defmodule Letflow.Engine.PinResolverTest do
 
     test "a single rebind event updates only the matching {kind, ref} entry's version, leaves kind/resolved_id/source untouched" do
       base = [
-        %{kind: :catalog_entry, ref: "svc-a", resolved_id: "sid", version: "1.0.0", source: :resolved},
+        %{
+          kind: :catalog_entry,
+          ref: "svc-a",
+          resolved_id: "sid",
+          version: "1.0.0",
+          source: :resolved
+        },
         %{kind: :module, ref: "mod-a", resolved_id: "mid", version: "1.0.0", source: :resolved}
       ]
 
@@ -392,13 +459,22 @@ defmodule Letflow.Engine.PinResolverTest do
       rebind_events = [
         %{
           event_id: rebind_event_id,
-          payload: %{"entries" => [%{"kind" => "catalog_entry", "ref" => "svc-a", "new_version" => "2.0.0"}]}
+          payload: %{
+            "entries" => [
+              %{"kind" => "catalog_entry", "ref" => "svc-a", "new_version" => "2.0.0"}
+            ]
+          }
         }
       ]
 
       effective = PinResolver.merge_effective_pins(base, rebind_events)
 
-      assert %{version: "2.0.0", source_event_id: ^rebind_event_id, kind: :catalog_entry, resolved_id: "sid"} =
+      assert %{
+               version: "2.0.0",
+               source_event_id: ^rebind_event_id,
+               kind: :catalog_entry,
+               resolved_id: "sid"
+             } =
                Enum.find(effective, &(&1.ref == "svc-a"))
 
       assert %{version: "1.0.0", kind: :module} = Enum.find(effective, &(&1.ref == "mod-a"))
@@ -406,8 +482,20 @@ defmodule Letflow.Engine.PinResolverTest do
 
     test "ALL rebind events are folded, in the given order, not just the most recent -- REQ-060's delta-only payload shape (design doc §6 OQ-2)" do
       base = [
-        %{kind: :catalog_entry, ref: "svc-a", resolved_id: "sid", version: "1.0.0", source: :resolved},
-        %{kind: :catalog_entry, ref: "svc-b", resolved_id: "sid2", version: "1.0.0", source: :resolved}
+        %{
+          kind: :catalog_entry,
+          ref: "svc-a",
+          resolved_id: "sid",
+          version: "1.0.0",
+          source: :resolved
+        },
+        %{
+          kind: :catalog_entry,
+          ref: "svc-b",
+          resolved_id: "sid2",
+          version: "1.0.0",
+          source: :resolved
+        }
       ]
 
       event_1 = Ecto.UUID.generate()
@@ -416,11 +504,19 @@ defmodule Letflow.Engine.PinResolverTest do
       rebind_events = [
         %{
           event_id: event_1,
-          payload: %{"entries" => [%{"kind" => "catalog_entry", "ref" => "svc-a", "new_version" => "2.0.0"}]}
+          payload: %{
+            "entries" => [
+              %{"kind" => "catalog_entry", "ref" => "svc-a", "new_version" => "2.0.0"}
+            ]
+          }
         },
         %{
           event_id: event_2,
-          payload: %{"entries" => [%{"kind" => "catalog_entry", "ref" => "svc-b", "new_version" => "3.0.0"}]}
+          payload: %{
+            "entries" => [
+              %{"kind" => "catalog_entry", "ref" => "svc-b", "new_version" => "3.0.0"}
+            ]
+          }
         }
       ]
 
@@ -440,31 +536,75 @@ defmodule Letflow.Engine.PinResolverTest do
 
   describe "apply_inheritance/2 -- PIN-04 AC2/AC3: child inheritance, source: inherited, conflict recording" do
     test "a nil parent (root instance) returns own_pins unchanged and zero conflicts" do
-      own_pins = [%{kind: :variable_schema, ref: "p", resolved_id: nil, version: "unversioned", source: :resolved}]
+      own_pins = [
+        %{
+          kind: :variable_schema,
+          ref: "p",
+          resolved_id: nil,
+          version: "unversioned",
+          source: :resolved
+        }
+      ]
 
       assert {:ok, ^own_pins, []} = PinResolver.apply_inheritance(own_pins, nil)
     end
 
     test "a parent pin absent from own_pins is ADDED with source: :inherited, no conflict recorded" do
-      own_pins = [%{kind: :variable_schema, ref: "proc", resolved_id: nil, version: "unversioned", source: :resolved}]
+      own_pins = [
+        %{
+          kind: :variable_schema,
+          ref: "proc",
+          resolved_id: nil,
+          version: "unversioned",
+          source: :resolved
+        }
+      ]
 
       parent_pins = [
-        %{kind: :catalog_entry, ref: "svc-a", resolved_id: "sid", version: "1.0.0", source: :resolved, source_event_id: Ecto.UUID.generate()}
+        %{
+          kind: :catalog_entry,
+          ref: "svc-a",
+          resolved_id: "sid",
+          version: "1.0.0",
+          source: :resolved,
+          source_event_id: Ecto.UUID.generate()
+        }
       ]
 
       assert {:ok, merged, []} = PinResolver.apply_inheritance(own_pins, parent_pins)
 
-      assert %{kind: :catalog_entry, ref: "svc-a", resolved_id: "sid", version: "1.0.0", source: :inherited} =
+      assert %{
+               kind: :catalog_entry,
+               ref: "svc-a",
+               resolved_id: "sid",
+               version: "1.0.0",
+               source: :inherited
+             } =
                Enum.find(merged, &(&1.ref == "svc-a"))
 
       refute Map.has_key?(Enum.find(merged, &(&1.ref == "svc-a")), :source_event_id)
     end
 
     test "a {kind, ref} present in both with matching versions is kept as-is -- agreement is not inheritance" do
-      own_pins = [%{kind: :catalog_entry, ref: "svc-a", resolved_id: "sid", version: "1.0.0", source: :resolved}]
+      own_pins = [
+        %{
+          kind: :catalog_entry,
+          ref: "svc-a",
+          resolved_id: "sid",
+          version: "1.0.0",
+          source: :resolved
+        }
+      ]
 
       parent_pins = [
-        %{kind: :catalog_entry, ref: "svc-a", resolved_id: "sid", version: "1.0.0", source: :resolved, source_event_id: Ecto.UUID.generate()}
+        %{
+          kind: :catalog_entry,
+          ref: "svc-a",
+          resolved_id: "sid",
+          version: "1.0.0",
+          source: :resolved,
+          source_event_id: Ecto.UUID.generate()
+        }
       ]
 
       assert {:ok, merged, []} = PinResolver.apply_inheritance(own_pins, parent_pins)
@@ -472,15 +612,38 @@ defmodule Letflow.Engine.PinResolverTest do
     end
 
     test "a {kind, ref} present in both with DIFFERING versions: the INHERITED version wins, and a conflict is recorded (PIN-04 AC3)" do
-      own_pins = [%{kind: :catalog_entry, ref: "svc-a", resolved_id: "sid-child", version: "1.0.0", source: :resolved}]
+      own_pins = [
+        %{
+          kind: :catalog_entry,
+          ref: "svc-a",
+          resolved_id: "sid-child",
+          version: "1.0.0",
+          source: :resolved
+        }
+      ]
 
       parent_pins = [
-        %{kind: :catalog_entry, ref: "svc-a", resolved_id: "sid-parent", version: "2.0.0", source: :resolved, source_event_id: Ecto.UUID.generate()}
+        %{
+          kind: :catalog_entry,
+          ref: "svc-a",
+          resolved_id: "sid-parent",
+          version: "2.0.0",
+          source: :resolved,
+          source_event_id: Ecto.UUID.generate()
+        }
       ]
 
       assert {:ok, merged, conflicts} = PinResolver.apply_inheritance(own_pins, parent_pins)
 
-      assert [%{kind: :catalog_entry, ref: "svc-a", resolved_id: "sid-parent", version: "2.0.0", source: :inherited}] =
+      assert [
+               %{
+                 kind: :catalog_entry,
+                 ref: "svc-a",
+                 resolved_id: "sid-parent",
+                 version: "2.0.0",
+                 source: :inherited
+               }
+             ] =
                merged
 
       assert [
@@ -494,10 +657,25 @@ defmodule Letflow.Engine.PinResolverTest do
     end
 
     test "inheritance wins even over a child's own :override source (design doc §7/OQ-6 -- no override exception)" do
-      own_pins = [%{kind: :catalog_entry, ref: "svc-a", resolved_id: "override-sid", version: "9.9.9", source: :override}]
+      own_pins = [
+        %{
+          kind: :catalog_entry,
+          ref: "svc-a",
+          resolved_id: "override-sid",
+          version: "9.9.9",
+          source: :override
+        }
+      ]
 
       parent_pins = [
-        %{kind: :catalog_entry, ref: "svc-a", resolved_id: "parent-sid", version: "1.0.0", source: :resolved, source_event_id: Ecto.UUID.generate()}
+        %{
+          kind: :catalog_entry,
+          ref: "svc-a",
+          resolved_id: "parent-sid",
+          version: "1.0.0",
+          source: :resolved,
+          source_event_id: Ecto.UUID.generate()
+        }
       ]
 
       assert {:ok, [%{source: :inherited, version: "1.0.0"}], [_conflict]} =
@@ -505,11 +683,33 @@ defmodule Letflow.Engine.PinResolverTest do
     end
 
     test "the merged result is re-sorted per resolve/4's own {kind, ref} ordering after inherited additions" do
-      own_pins = [%{kind: :variable_schema, ref: "proc", resolved_id: nil, version: "unversioned", source: :resolved}]
+      own_pins = [
+        %{
+          kind: :variable_schema,
+          ref: "proc",
+          resolved_id: nil,
+          version: "unversioned",
+          source: :resolved
+        }
+      ]
 
       parent_pins = [
-        %{kind: :module, ref: "zzz-mod", resolved_id: "mid", version: "1.0.0", source: :resolved, source_event_id: Ecto.UUID.generate()},
-        %{kind: :catalog_entry, ref: "aaa-svc", resolved_id: "sid", version: "1.0.0", source: :resolved, source_event_id: Ecto.UUID.generate()}
+        %{
+          kind: :module,
+          ref: "zzz-mod",
+          resolved_id: "mid",
+          version: "1.0.0",
+          source: :resolved,
+          source_event_id: Ecto.UUID.generate()
+        },
+        %{
+          kind: :catalog_entry,
+          ref: "aaa-svc",
+          resolved_id: "sid",
+          version: "1.0.0",
+          source: :resolved,
+          source_event_id: Ecto.UUID.generate()
+        }
       ]
 
       assert {:ok, merged, []} = PinResolver.apply_inheritance(own_pins, parent_pins)
@@ -523,7 +723,9 @@ defmodule Letflow.Engine.PinResolverTest do
   # ---------------------------------------------------------------------------------
 
   defp normalized_moduledoc(module) do
-    {:docs_v1, _anno, _lang, _format, %{"en" => moduledoc}, _meta, _docs} = Code.fetch_docs(module)
+    {:docs_v1, _anno, _lang, _format, %{"en" => moduledoc}, _meta, _docs} =
+      Code.fetch_docs(module)
+
     String.replace(moduledoc, ~r/\s+/, " ")
   end
 

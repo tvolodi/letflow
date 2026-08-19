@@ -28,5 +28,14 @@ defmodule Letflow.EventStore.Registry.ValidationFailure do
           actual: term()
         }
 
+  # Encoded verbatim into EXECUTION_ERROR event payloads (via
+  # Letflow.Engine.ExecutionError.append_execution_error_event/2, which
+  # Jason.encode!/1's error_args.reason -- a list of these structs for a
+  # schema-violation failure) -- all three fields are already
+  # non-sensitive, already-decoded terms (see moduledoc), so deriving the
+  # full struct is safe, matching this codebase's convention of encoding
+  # plain data structs directly rather than hand-building an intermediate
+  # map.
+  @derive Jason.Encoder
   defstruct [:field_path, :constraint, :actual]
 end

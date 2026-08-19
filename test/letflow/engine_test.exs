@@ -992,7 +992,9 @@ defmodule Letflow.EngineTest do
   describe "create/2 (REQ-059 AC2) -- failed pin resolution writes zero rows" do
     test "an unresolvable service_id (default lookup) returns {:error, {:unresolved_catalog_ref, ref}} and writes zero projection/snapshot/token/event rows" do
       %{schema_name: schema_name} = provisioned_tenant()
-      definition = active_definition!(schema_name, graph_start_service_task_end("unregistered-svc"))
+
+      definition =
+        active_definition!(schema_name, graph_start_service_task_end("unregistered-svc"))
 
       assert {:error, {:unresolved_catalog_ref, "unregistered-svc"}} =
                Engine.create(base_attrs(definition), prefix: schema_name)
@@ -1024,10 +1026,12 @@ defmodule Letflow.EngineTest do
 
       attrs =
         base_attrs(definition, %{
-          pin_lookup: const_pin_lookup({:ok, %{resolved_id: "sid", version: "1.0.0"}}, {:error, :not_found})
+          pin_lookup:
+            const_pin_lookup({:ok, %{resolved_id: "sid", version: "1.0.0"}}, {:error, :not_found})
         })
 
-      assert {:error, {:activation_failed, {:node_type_not_yet_implemented, :SERVICE_TASK, "svc"}}} =
+      assert {:error,
+              {:activation_failed, {:node_type_not_yet_implemented, :SERVICE_TASK, "svc"}}} =
                Engine.create(attrs, prefix: schema_name)
 
       assert projection_count(schema_name) == 0
@@ -1057,7 +1061,8 @@ defmodule Letflow.EngineTest do
           pin_lookup: variable_schema_pin_lookup(schema)
         })
 
-      assert {:error, {:variable_schema_violation, failures}} = Engine.create(attrs, prefix: schema_name)
+      assert {:error, {:variable_schema_violation, failures}} =
+               Engine.create(attrs, prefix: schema_name)
 
       assert length(failures) == 2
       assert Enum.any?(failures, &(&1.field_path == "/approver" and &1.constraint == "required"))
@@ -1126,15 +1131,25 @@ defmodule Letflow.EngineTest do
         base_attrs(definition, %{
           pin_lookup: variable_schema_pin_lookup(nil),
           pin_overrides: [
-            %{kind: :variable_schema, ref: definition.name, resolved_id: nil, version: "parent-v1"}
+            %{
+              kind: :variable_schema,
+              ref: definition.name,
+              resolved_id: nil,
+              version: "parent-v1"
+            }
           ]
         })
 
       assert {:ok, parent} = Engine.create(parent_attrs, prefix: schema_name)
 
-      assert {:ok, parent_events} = Reconstruction.read_full_log(parent.instance_id, schema_name, 1)
+      assert {:ok, parent_events} =
+               Reconstruction.read_full_log(parent.instance_id, schema_name, 1)
+
       parent_started = Enum.find(parent_events, &(&1.event_type == "INSTANCE_STARTED"))
-      assert [%{"version" => "parent-v1", "source" => "override"}] = parent_started.payload["pinned_versions"]
+
+      assert [%{"version" => "parent-v1", "source" => "override"}] =
+               parent_started.payload["pinned_versions"]
+
       refute Map.has_key?(parent_started.payload, "pin_conflicts")
 
       child_attrs =
@@ -1145,7 +1160,8 @@ defmodule Letflow.EngineTest do
       assert {:ok, child_events} = Reconstruction.read_full_log(child.instance_id, schema_name, 1)
       child_started = Enum.find(child_events, &(&1.event_type == "INSTANCE_STARTED"))
 
-      assert [%{"version" => "parent-v1", "source" => "inherited"}] = child_started.payload["pinned_versions"]
+      assert [%{"version" => "parent-v1", "source" => "inherited"}] =
+               child_started.payload["pinned_versions"]
 
       expected_ref = definition.name
 
@@ -1166,7 +1182,12 @@ defmodule Letflow.EngineTest do
       parent_attrs =
         base_attrs(definition, %{
           pin_overrides: [
-            %{kind: :variable_schema, ref: definition.name, resolved_id: nil, version: "unversioned"}
+            %{
+              kind: :variable_schema,
+              ref: definition.name,
+              resolved_id: nil,
+              version: "unversioned"
+            }
           ]
         })
 
@@ -1208,12 +1229,15 @@ defmodule Letflow.EngineTest do
       assert {:ok, result} = Engine.create(attrs, prefix: schema_name)
 
       count_after_create = Agent.get(counter, & &1)
-      assert count_after_create == 1, "expected exactly the one variable_schema lookup call create/2 itself makes"
+
+      assert count_after_create == 1,
+             "expected exactly the one variable_schema lookup call create/2 itself makes"
 
       assert {:ok, effective_pins} =
                PinResolver.reconstruct_effective_pins(result.instance_id, prefix: schema_name)
 
       assert [%{kind: :variable_schema, version: "unversioned"}] = effective_pins
+
       assert Agent.get(counter, & &1) == count_after_create,
              "reconstruct_effective_pins/2 must issue zero catalog/module/variable_schema lookup calls -- " <>
                "the counter changed after replay"

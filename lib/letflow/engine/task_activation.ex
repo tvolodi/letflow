@@ -212,9 +212,9 @@ defmodule Letflow.Engine.TaskActivation do
   end
 
   @doc """
-  Appends one `Multi.run(:task_records, ...)` step to `multi`, inserting one
-  `Letflow.Engine.Task` row per newly-pending `Token.t()` — REQ-048's own
-  variant of `append_multi/6` (EE-04,
+  Appends one `Multi.run({:task_records, instance_id}, ...)` step to `multi`,
+  inserting one `Letflow.Engine.Task` row per newly-pending `Token.t()` —
+  REQ-048's own variant of `append_multi/6` (EE-04,
   `lib/letflow/design/req048-task-completion.md` §9), for a caller whose
   tokens are **pre-existing** `tokens` rows being advanced/reconciled rather
   than freshly inserted the way `Letflow.Engine.persist/8`'s own
@@ -226,6 +226,15 @@ defmodule Letflow.Engine.TaskActivation do
   unlike `append_multi/6`. `append_multi/6` itself is left completely
   unmodified by this addition — `Letflow.Engine.create/2`'s own call site is
   unaffected.
+
+  The step key is namespaced by `instance_id` (design doc §10.1) — this
+  function can be called more than once on the *same* outer `Multi` within
+  one transaction (once for the completing task's own instance, once per
+  sub-process completion-cascade level for that level's ancestor instance),
+  and a fixed `:task_records` atom key would collide across those calls via
+  `Ecto.Multi.merge/2`'s own static duplicate-key check. `append_multi/6` is
+  deliberately left on the fixed atom key: it has exactly one call site per
+  `Multi`, so no collision is possible there.
   """
   @spec append_multi_from_existing_records(
           multi :: Ecto.Multi.t(),
@@ -243,7 +252,7 @@ defmodule Letflow.Engine.TaskActivation do
         %InstanceState{} = new_instance_state,
         prefix
       ) do
-    Multi.run(multi, :task_records, fn repo, _changes ->
+    Multi.run(multi, {:task_records, instance_id}, fn repo, _changes ->
       newly_pending =
         newly_pending_tokens(previous_pending_task_nodes, new_instance_state.pending_task_nodes)
 

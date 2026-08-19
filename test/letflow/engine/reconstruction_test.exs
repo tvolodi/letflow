@@ -90,6 +90,9 @@ defmodule Letflow.Engine.ReconstructionTest do
     :ok = register_event_type!("INSTANCE_CANCELLED", tenant.id)
     :ok = register_event_type!("EXECUTION_ERROR", tenant.id)
     :ok = register_event_type!("BOGUS_EVENT_TYPE", tenant.id)
+    # req062 (SPC-01) -- the 5th persisted event type this module's own rework now
+    # replays (moduledoc finding list above); not auto-seeded, same as the 3 above it.
+    :ok = register_event_type!("SUB_PROCESS_COMPLETED", tenant.id)
 
     %{tenant_id: tenant.id, schema_name: schema_name}
   end
@@ -133,6 +136,48 @@ defmodule Letflow.Engine.ReconstructionTest do
       "edges" => [
         %{"id" => "e1", "source" => "start", "target" => "task"},
         %{"id" => "e2", "source" => "task", "target" => "end"}
+      ]
+    }
+  end
+
+  # req062 (SPC-01) fixtures -- START -> SUB_PROCESS("sp") -> after(HUMAN_TASK) -> END,
+  # for a parent whose SUB_PROCESS child completion is the event this file's own new
+  # replay clause must reconstruct. A trailing HUMAN_TASK (rather than a direct ->END)
+  # is deliberate: it leaves a live token at a known, inspectable node_id
+  # post-replay, the same reason engine_sub_process_test.exs's own AC5 fixture does.
+  defp graph_parent_subprocess_then_task(child_definition_name) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "sp",
+          "node_type" => "SUB_PROCESS",
+          "attributes" => %{"definition_name" => child_definition_name}
+        },
+        %{"id" => "after", "node_type" => "HUMAN_TASK", "attributes" => %{"role" => "closer"}},
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "sp"},
+        %{"id" => "e2", "source" => "sp", "target" => "after"},
+        %{"id" => "e3", "source" => "after", "target" => "end"}
+      ]
+    }
+  end
+
+  # START -> work(HUMAN_TASK) -> END -- deliberately does not complete synchronously at
+  # creation time, so the child's own completion is a separate, later, real
+  # Engine.complete_task/3 call this test drives explicitly.
+  defp graph_child_two_step do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{"id" => "work", "node_type" => "HUMAN_TASK", "attributes" => %{"role" => "worker"}},
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "work"},
+        %{"id" => "e2", "source" => "work", "target" => "end"}
       ]
     }
   end
@@ -612,6 +657,71 @@ defmodule Letflow.Engine.ReconstructionTest do
 
       assert {:error, {:replay_failed, {:unrecognized_event_type, "BOGUS_EVENT_TYPE", ^event_id}}} =
                Reconstruction.reconstruct_instance(created.instance_id, prefix: schema_name)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # req062 (SPC-01) -- SUB_PROCESS_COMPLETED replay clause (apply_event/3's newest
+  # clause, added this same branch as a rework-1 fix -- see this module's own
+  # moduledoc "findings confirmed against shipped code" list). Not one of REQ-053's
+  # own bare ACs (SUB_PROCESS_COMPLETED did not exist when REQ-053 was built) but
+  # necessary regression coverage: reconstruct_instance/2 must replay a real, live
+  # parent+child sub-process completion to the SAME state Letflow.Engine's own live
+  # completion path produced, matching how EXECUTION_ERROR/TASK_COMPLETED are each
+  # already covered above.
+  # ---------------------------------------------------------------------------------
+
+  describe "req062 -- SUB_PROCESS_COMPLETED replay reconstructs the same state the live completion path produced" do
+    test "reconstructing a parent past its completed SUB_PROCESS child matches the live projection" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      child_definition = active_definition!(schema_name, graph_child_two_step())
+
+      parent_definition =
+        active_definition!(schema_name, graph_parent_subprocess_then_task(child_definition.name))
+
+      assert {:ok, created} =
+               Engine.create(start_attrs(parent_definition), prefix: schema_name)
+
+      [child_projection] =
+        InstanceProjection
+        |> where([p], p.parent_instance_id == ^created.instance_id)
+        |> Repo.all(prefix: schema_name)
+
+      child_task =
+        EngineTask
+        |> where([t], t.instance_id == ^child_projection.instance_id and t.status == :pending)
+        |> Repo.one!(prefix: schema_name)
+
+      assert {:ok, _child_result} =
+               Engine.complete_task(
+                 child_task.id,
+                 complete_attrs(%{"result" => true}),
+                 prefix: schema_name
+               )
+
+      live_projection = Repo.get!(InstanceProjection, created.instance_id, prefix: schema_name)
+      assert live_projection.status == :active
+      assert live_projection.current_nodes == ["after"]
+      assert live_projection.variables == %{"a" => 1, "result" => true}
+
+      assert {:ok, result} =
+               Reconstruction.reconstruct_instance(created.instance_id, prefix: schema_name)
+
+      # 2 durable events on the parent's own stream: INSTANCE_STARTED, then
+      # SUB_PROCESS_COMPLETED (the child's own completion never appends anything to
+      # the PARENT's stream except this one event -- design doc §3.4 point 4).
+      assert result.event_count == 2
+      assert_state_matches_projection(result.instance_state, live_projection)
+      assert result.instance_state.variables == %{"a" => 1, "result" => true}
+      assert Enum.map(result.instance_state.tokens, & &1.node_id) == ["after"]
+
+      # The reconstructed token's own wait was genuinely cleared by replay (not just
+      # coincidentally absent) -- confirms apply_event/3's SUB_PROCESS_COMPLETED
+      # clause actually clears waiting_child_instance_id via
+      # dispatch_sub_process_completion/3, not merely advances a token that never
+      # carried the flag to begin with.
+      assert Enum.all?(result.instance_state.tokens, &(&1.waiting_child_instance_id == nil))
     end
   end
 

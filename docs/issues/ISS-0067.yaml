@@ -1,0 +1,49 @@
+id: ISS-0067
+title: >
+  token_id "real persisted token vs. derived split/join branch id" distinction is a
+  runtime UUID-castability heuristic, not a type -- two call sites now rely on it
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ062-20260819
+discovered_at: 2026-08-19T05:13:36Z
+severity: MINOR
+category: type-safety
+description: >
+  Letflow.Engine.Token.token_id is typed String.t() everywhere, but two different
+  code paths need to distinguish, at runtime, whether a given token_id string is a
+  genuine persisted TokenRecord id versus a token_id minted in-memory during a
+  PARALLEL_GATEWAY split/join that never got its own tokens row within the current
+  hop chain. Neither case is represented in the type: both are just String.t().
+
+  Pre-existing site (before REQ-062): Letflow.Engine's do_reconcile_token_records/4
+  detects this by checking whether a token_id present in final_instance_state.tokens
+  is absent from the original persisted token set, and rejects with
+  {:new_token_during_resume_not_supported, token_id} if so -- a runtime set-membership
+  check, not a type distinction.
+
+  New site (REQ-062, lib/letflow/engine.ex's cast_parent_token_record_id/1, added by
+  this run for the SUB_PROCESS-after-split/join rejection path named in this run's own
+  REVIEWER handoff task description): detects the same class of "not a real persisted
+  token" case by calling Ecto.UUID.cast/1 on the token_id string and treating a cast
+  failure as proof the id is a derived branch id rather than a persisted TokenRecord
+  id, rejecting with {:sub_process_after_split_join_not_supported, token_id}. This
+  works today only because persisted TokenRecord ids happen to be UUIDs and derived
+  split/join branch ids (per Letflow.Engine.Transition's own token-minting code)
+  happen not to be UUID-shaped strings -- an incidental string-shape coincidence, not
+  an enforced invariant. A future change to how split/join branch token_ids are
+  minted (e.g. switching them to UUIDs for some unrelated reason) would silently make
+  this heuristic wrong in the direction that could route a legitimate SUB_PROCESS
+  activation into a spurious "not supported" rejection, invisible until a specific
+  test or production trace hit it.
+
+  A @type distinction (e.g. an explicit `{:persisted, TokenRecord.id()} |
+  {:derived, String.t()}` tag threaded alongside token_id from the point a
+  split/join mints a branch token, rather than reconstructed later by shape-sniffing
+  the string) would make the "not yet persisted" state unrepresentable as a bare
+  token_id and remove the need for either heuristic. Not blocking REQ-062's own 8
+  ACs -- none of them exercise this path -- filed as adjacent, incidentally-discovered
+  work per ISSUE_QUEUE.md, not as a REQ-062 rework item.
+affected_files:
+  - lib/letflow/engine.ex
+  - lib/letflow/engine/transition.ex
+github_issue: https://github.com/tvolodi/letflow/issues/228
+status: open

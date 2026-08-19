@@ -1,0 +1,50 @@
+{
+  "handoff_id": "b1e1a1a0-0001-4a00-9000-000000000007",
+  "run_id": "WF02-REQ062-20260819",
+  "workflow_id": "WF-02",
+  "step": "02d2",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ062-20260819/step-02d2-reviewer-postmerge.json",
+  "created_at": "2026-08-19T09:00:00Z",
+  "started_at": "2026-08-19T09:15:00Z",
+  "completed_at": "2026-08-19T09:25:50Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-062", "REQ-059"],
+    "requirement_text": {
+      "note": "Re-gate of a real merge (hand-resolved conflicts, not a rebase) of feature/WF02-REQ062-20260819 (previously PASSed alone in step-02d-reviewer.json) with origin/main (REQ-059 PinResolver, merged via PR #256). Merge commit 876e0d9, done by ELIXIR-DEV. Conflicts: lib/letflow/engine.ex (7 regions), lib/letflow/engine/reconstruction.ex (1 region). SECURITY-REVIEWER already re-PASSed this merge (step-02c2-security-reviewer-postmerge.json)."
+    },
+    "related_handoff_ids": ["step-02d-reviewer.json", "step-02c2-security-reviewer-postmerge.json"],
+    "artifacts_in": ["lib/letflow/engine.ex", "lib/letflow/engine/reconstruction.ex", "lib/letflow/design/req059-pin-resolver.md", "lib/letflow/design/req062-sub-process-runtime.md", "test/letflow/engine_sub_process_test.exs"],
+    "owned_modules": ["lib/letflow/engine/", "lib/letflow/instance*", "priv/repo/migrations/"]
+  },
+  "task": {
+    "description": "Idiom/OTP/scope-creep re-check (hard gate) on the merge conflict resolution between REQ-062 and REQ-059 in lib/letflow/engine.ex and lib/letflow/engine/reconstruction.ex.",
+    "acceptance_criteria": [
+      "Composed start_instance/5 -> persist/11 control flow reviewed for coherence and correct Ecto.Multi error handling/rollback across both requirements' steps",
+      "Design docs (req059-pin-resolver.md, req062-sub-process-runtime.md incl. addenda) checked for drift from what actually shipped after the merge",
+      "The one cross-requirement fix (engine_sub_process_test.exs fixture change) sanity-checked as a legitimate test-fixture fix, not a disguised behavior change",
+      "Scope creep check -- merge should be pure integration of two already-approved requirements"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "AC1 (composed control flow / Multi correctness): PASS. Read the full merge diff (git diff origin/main...HEAD -- lib/letflow/engine.ex lib/letflow/engine/reconstruction.ex) and the merge commit's own diff (git show 876e0d9) side by side -- the merge commit's diff is line-for-line identical to the final branch-vs-origin/main diff for these two files, confirming the merge introduced no additional edits beyond composing the two already-reviewed feature diffs (no drive-by changes snuck in under cover of conflict resolution). start_instance/5 reads as one coherent pipeline, not two stapled features: build_graph (shared, built once) -> PinResolver.resolve/validate_initial_variables -> parent_pins/apply_inheritance -> create_snapshot (first Repo write) -> activate (3-tuple, REQ-062's widened advance_until_stable/4) -> prepare_sub_process_children, all still composed via a single `with` chain that fails closed before create_snapshot/3's first write for every REQ-059 step, and fails closed before persist/11 opens its Multi for prepare_sub_process_children's own failure -- the ordering constraint each design doc separately demanded (REQ-059 zero-writes-on-resolution-failure; REQ-062 zero-writes-on-child-preparation-failure) is jointly satisfied, not just individually. persist/11's Multi composition is correct: build_sub_process_children_multi/6 is appended via Multi.merge/2 immediately after :token_record (correctly ordered -- each child's parent_token_record_id FK requires the parent's own token rows to already exist in this same transaction, verified by reading build_sub_process_children_multi/6's own id_map lookup against changes.token_record), pins/conflicts are threaded as new persist/11 arguments straight into append_instance_started_event/8 without disturbing any REQ-062 step's own argument order, and the whole Multi.transaction/1 result still flows through the pre-existing interpret_create_result/5 unchanged. The complete_task/3 side (prepare_sub_process_children_for_completion/7, append_sub_process_children_creation_multi/6, append_sub_process_completion_cascade_multi/6) is untouched by REQ-059 (PinResolver only concerns creation-time resolution) and reviewed once already at step-02d -- re-confirmed here that the merge did not touch it beyond mechanical id widening (3-tuple `transition` key). maybe_snapshot_after_create/4 (REQ-054, already-shipped) sits after Repo.transaction/1 and before interpret_create_result/5 exactly as before the merge -- log-and-swallow best-effort contract intact, does not interact with either REQ-059 or REQ-062's error paths. reconstruction.ex's replay/4 composes REQ-054's snapshot-aware seed_state_for_replay/3 with REQ-062's prefix-threaded fold_events/4 additively: the merge's only structural change here is fold_events/3 -> fold_events/4 gaining the `prefix` parameter every apply_event/4 clause now needs for the new SUB_PROCESS_COMPLETED clause's fetch_child_parent_node_id/2 read -- REQ-054's own seed-selection logic (select_replay_source/2, seed_state_for_replay/3) is untouched by that widening. No new error class introduced by the merge itself (both {:parent_pin_lookup_failed, _} and the SUB_PROCESS-related errors were already in each side's own type union before the merge).\n\nAC2 (design doc consistency): PASS, no drift beyond expected conflict-resolution composition. req059-pin-resolver.md §8/§9 OQ-4 already explicitly flags attrs[:parent_instance_id] as 'a forward guess against not-yet-built REQ-062, unconfirmed against that requirement's own eventual code' -- the merge is exactly the event that resolves this OQ (REQ-062's actual attrs[:parent_instance_id] usage in SubProcess/engine.ex's own sub-process creation path now exists to compare against), and the key name matches with no changes needed on either side; the OQ remains correctly un-deleted (still an accurate historical note, not stale) since the design doc predates the merge and was not required to be updated by it. req062-sub-process-runtime.md §6 (pin inheritance seam, 'stated, not implemented') and its §12 addenda (reconstruction.ex replay handling) were both already written and committed before this merge (git log shows 5a233bc and c8ee735 predate 876e0d9) -- the merge does not change SubProcess.ex, transition.ex, or any §10/§11/§12-addressed code path at all (confirmed: git diff origin/main...HEAD --stat shows only engine.ex and reconstruction.ex touched among design-relevant files, both already accounted for above). No design doc claim was falsified by the merge's actual composition.\n\nAC3 (test fixture fix): PASS, legitimate fixture fix, not a disguised behavior change. Read the diff in test/letflow/engine_sub_process_test.exs's AC6 test ('a caller-supplied parent_instance_id in attrs is silently ignored'): the test's actual invariant under test is that create/2's insert_instance_projection/8 never populates parent_instance_id/parent_token_id from attrs -- that assertion (`projection.parent_instance_id == nil`) is unchanged. What changed is only the value used to reach that assertion: a forged/nonexistent parent_instance_id now fails earlier, in parent_pins/2's new PinResolver.reconstruct_effective_pins/2 lookup (a real REQ-059 behavior this test predates), before ever reaching insert_instance_projection/8 -- an artifact of test ordering, not of what's being tested. Pointing the fixture at a real (but unrelated) instance id sidesteps that earlier, correctly-behaving failure path without weakening the assertion the test exists to make. Confirmed no shipped behavior changed on either requirement's side: parent_pins/2's actual logic (reject-if-unresolvable) is exactly what REQ-059's own design doc §3 specifies, and insert_instance_projection/8's own parent_instance_id-blindness (REQ-062's own AC6 invariant) is untouched code, not relaxed to make the test pass.\n\nAC4 (scope creep): PASS. Every line in the merge diff traces to either REQ-059's already-approved design (§3, §8) or REQ-062's already-approved design (§3.3, §3.4, §12) plus the minimum mechanical glue needed to compose two independently-developed call chains sharing the same two files (argument-list widening, Multi.merge ordering, arity bumps) -- no new abstraction, behaviour, or generic plumbing appears that either design doc's already-reviewed content doesn't already call for. The merge commit's own diff matching the final diff line-for-line (AC1) is itself evidence no extra work was smuggled in.\n\nNo idiom/supervision concerns beyond what step-02d already covered: this merge touches zero process_instance.ex/instance_supervisor.ex code, and both compose Ecto.Multi-based pure functions in the same shape reviewed and passed at step-02d.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ062-20260819",
+      "commit_sha_list": ["876e0d942d309d60ba5a24bc711f9e57118fa2b1"],
+      "remote_branch": "origin/feature/WF02-REQ062-20260819",
+      "push_status": "not_pushed_by_this_gate",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -83,8 +83,19 @@ path to replay from the latest snapshot forward instead of from
 sequence 1 when one exists; a rework cycle wired the writer's four
 call sites into lib/letflow/engine.ex after REVIEWER's first pass
 caught them as dead code; same header-sync gap-fix shape applied by
-this requirement's own DOC-UPDATER); REQ-059, REQ-060, REQ-062
-(`docs/requirements.yaml`, 3 total) `pending`.
+this requirement's own DOC-UPDATER); REQ-059 `done` (Dependency pin
+resolution, recording and inheritance, PIN-01..04 --
+Letflow.Engine.PinResolver, resolving every versioned reference before
+the instance row is written, recording the pin set in INSTANCE_STARTED's
+payload with no side table, PinMissing with no fallback, and
+inherited-wins pin inheritance for REQ-062 sub-process children; carries
+forward R-Co's own PIN-01 AC1/AC2 and PIN-03 AC3 scope gap
+(service_catalog/PLC-01, ISS-0672/GH-306, already noted above under
+"Scope boundaries with S4 and S5") and reserves PIN_RETRY_EXHAUSTED as a
+named, not-yet-emitted hook for PIN-03 AC4's exhausted-retry-budget DLQ
+routing rather than a partial implementation; same header-sync gap-fix
+shape applied by this requirement's own DOC-UPDATER); REQ-060, REQ-062
+(`docs/requirements.yaml`, 2 total) `pending`.
 
 ## Scope
 

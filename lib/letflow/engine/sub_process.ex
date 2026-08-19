@@ -598,7 +598,23 @@ defmodule Letflow.Engine.SubProcess do
       event_type: "INSTANCE_STARTED",
       payload: payload,
       actor_id: Map.get(attrs, :actor_id),
-      idempotency_key: Map.get(attrs, :idempotency_key)
+      # Derived, not the caller's own `idempotency_key` verbatim -- the
+      # `event_idempotency` unique index (20260816120006_create_event_idempotency.exs)
+      # is keyed on `idempotency_key` alone, schema-wide, not per-instance. Reusing
+      # the parent create/2 (or complete_task/3) call's own idempotency_key unchanged
+      # for the child's own INSTANCE_STARTED event collides with that SAME key's use
+      # for the parent-stream event appended later in the same transaction, which
+      # EventStore.append/2 (itself opening its own nested Repo.transaction/1) then
+      # surfaces as a claim_idempotency :error step -- fatal here because Ecto.Multi's
+      # own internal rollback for that nested transaction is not bubbled cleanly
+      # through the outer Multi (Ecto raises "operation :rollback is rolling back
+      # unexpectedly" instead of a typed error tuple). `child_instance_id` is a
+      # freshly minted UUID (prepare_child_activation/4), so suffixing it here is
+      # sufficient on its own to guarantee no collision with any other event this
+      # same request appends, while keeping the value traceable back to the
+      # originating request's own idempotency_key.
+      idempotency_key:
+        "#{Map.get(attrs, :idempotency_key)}::sub_process_start::#{child_instance_id}"
     }
 
     case EventStore.append(event_attrs, prefix: prefix) do
@@ -1079,7 +1095,16 @@ defmodule Letflow.Engine.SubProcess do
       event_type: "SUB_PROCESS_COMPLETED",
       payload: payload,
       actor_id: actor_id,
-      idempotency_key: idempotency_key
+      # Derived, not the caller's own `idempotency_key` verbatim -- same
+      # collision reason as append_instance_started_event_for_child/8's own
+      # comment above: the caller's `idempotency_key` (create/2's or
+      # complete_task/3's own) is also used, in the same transaction, for
+      # that call's own primary event on a DIFFERENT stream (the parent's
+      # INSTANCE_STARTED, or the completing task's own TASK_COMPLETED).
+      # Reusing it unchanged here would collide against the
+      # schema-wide-unique `event_idempotency.idempotency_key` index.
+      idempotency_key:
+        "#{idempotency_key}::sub_process_completed::#{parent_instance_id}::#{child_instance_id}"
     }
 
     case EventStore.append(event_attrs, prefix: prefix) do

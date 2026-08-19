@@ -2896,7 +2896,7 @@ requirements:
   - id: REQ-055
     title: Concurrent instance isolation guarantees (instance.zig locking, EE-12)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S3
     impl_order: 100  # letflow-queue task id
     description: >

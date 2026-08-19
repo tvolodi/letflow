@@ -116,54 +116,43 @@ Enum.join([base, suffix | ids], "::")
 
 ### Exact call-site arguments (must reproduce today's output byte-for-byte)
 
-1. **`append_instance_started_event_for_child/8`**, replacing line 616-617:
-   ```
-   idempotency_key:
-     derive_idempotency_key(
-       Map.get(attrs, :idempotency_key),
-       @sub_process_start_suffix,
-       [child_instance_id]
-     )
-   ```
-   Reproduces `"#{Map.get(attrs, :idempotency_key)}::sub_process_start::#{child_instance_id}"`.
+Each row below specifies, for the one expression at that call site that
+currently produces the derived key by inline string interpolation, the exact
+`derive_idempotency_key/3` arguments it must be replaced with (`base`,
+`suffix`, `ids` in order). Verified against the current file: all three line
+numbers and enclosing function names are confirmed accurate as of this
+rework.
 
-2. **`append_completion_multi/4`**, replacing line 715-716:
-   ```
-   error_idempotency_key =
-     derive_idempotency_key(
-       idempotency_key,
-       @sub_process_completion_error_suffix,
-       [parent_token.instance_id, child_instance_id]
-     )
-   ```
-   Reproduces
-   `"#{idempotency_key}::sub_process_completion_error::#{parent_token.instance_id}::#{child_instance_id}"`.
-   Note `parent_token.instance_id` before `child_instance_id`, in that order —
-   matching today's literal exactly.
+| # | Call site (enclosing function, current line) | `base` expression | `suffix` attribute | `ids` (in order) |
+|---|---|---|---|---|
+| 1 | `append_instance_started_event_for_child/8` (line ~617) | `Map.get(attrs, :idempotency_key)` | `@sub_process_start_suffix` | `[child_instance_id]` |
+| 2 | `append_completion_multi/4` (line ~716) | `idempotency_key` | `@sub_process_completion_error_suffix` | `[parent_token.instance_id, child_instance_id]` |
+| 3 | `append_sub_process_completed_event/8` (line ~1124) | `idempotency_key` | `@sub_process_completed_suffix` | `[parent_instance_id, child_instance_id]` |
 
-3. **`append_sub_process_completed_event/8`**, replacing line 1123-1124:
-   ```
-   idempotency_key:
-     derive_idempotency_key(
-       idempotency_key,
-       @sub_process_completed_suffix,
-       [parent_instance_id, child_instance_id]
-     )
-   ```
-   Reproduces
-   `"#{idempotency_key}::sub_process_completed::#{parent_instance_id}::#{child_instance_id}"`.
-   Note `parent_instance_id` before `child_instance_id`, in that order —
-   matching today's literal exactly. (Site 3's local variable is also named
-   `idempotency_key`, same as site 2's — both are the caller-supplied base
-   value threaded in from that function's own parameter/arg list, not the
-   derived value; this is pre-existing naming in the current code and this
-   design does not rename either.)
+Notes:
 
-All three sites' existing surrounding code (the rest of `event_attrs`, the
-doc comments explaining *why* a derived key is needed, the `case
-EventStore.append(...)` handling, etc.) is unchanged — only the expression
-that computes the derived key value is replaced by the `derive_idempotency_key/3`
-call shown above.
+- Row 1's replaced expression today reads
+  `"#{Map.get(attrs, :idempotency_key)}::sub_process_start::#{child_instance_id}"`.
+- Row 2's replaced expression today reads
+  `"#{idempotency_key}::sub_process_completion_error::#{parent_token.instance_id}::#{child_instance_id}"`
+  — note `parent_token.instance_id` precedes `child_instance_id`; the `ids`
+  list must preserve that order.
+- Row 3's replaced expression today reads
+  `"#{idempotency_key}::sub_process_completed::#{parent_instance_id}::#{child_instance_id}"`
+  — note `parent_instance_id` precedes `child_instance_id`; the `ids` list
+  must preserve that order. (Row 3's local variable is also named
+  `idempotency_key`, same as row 2's — both are the caller-supplied base
+  value threaded in from that function's own parameter/arg list, not the
+  derived value; this is pre-existing naming in the current code and this
+  design does not rename either.)
+- At each site, only the single expression that computes the derived key
+  value is replaced by a call to `derive_idempotency_key/3` with the
+  arguments in that row; everywhere that expression's result is currently
+  used (e.g. as an `idempotency_key:`/`error_idempotency_key` value inside
+  the surrounding `event_attrs`/assignment) keeps using it the same way. All
+  other surrounding code at each site (doc comments explaining *why* a
+  derived key is needed, the rest of `event_attrs`, the
+  `case EventStore.append(...)` handling, etc.) is unchanged.
 
 ## Placement
 

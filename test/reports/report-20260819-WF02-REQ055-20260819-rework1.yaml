@@ -1,0 +1,85 @@
+# Test run report — WF-02 Step 4 (test run, rework verification) for REQ-055
+
+requirement_id: REQ-055
+workflow: WF-02
+step: "04"
+agent: TEST-RUNNER
+run_id: WF02-REQ055-20260819
+rework_of: report-20260819-WF02-REQ055-20260819.yaml
+date_utc: 2026-08-19T04:21:01Z
+
+git:
+  branch: feature/WF02-REQ055-20260819
+  branch_confirmed: true
+  commit: 3c701754a2594c524cd19e040d72158cbb2939ee
+  commit_subject: "fix(WF02-REQ055): time only the concurrent-completion span in AC1 proxy assertion"
+  worktree: true (secondary checkout at ~/letflow-wt2)
+  diff_summary: >
+    TEST-DESIGNER's fix for the prior FAIL: test/letflow/engine_concurrency_test.exs
+    now splits provisioning and concurrent completion into two helpers
+    (start_n_instances!/3, complete_all_concurrently!/2). AC1's :timer.tc block
+    wraps only complete_all_concurrently! (the Task.async/Task.await_many
+    concurrent-completion phase), with start_n_instances! called beforehand,
+    outside the timed span. baseline_micros (a single bare complete_task/3 call)
+    is unchanged, so the 30x threshold now compares like-for-like (concurrent
+    completion cost vs. single completion cost), no longer inflated by ~100
+    sequential Engine.create calls.
+
+environment:
+  postgres: >
+    Did NOT run `docker compose up`/`up -d` per run instructions -- Postgres
+    already running, shared with the primary checkout (letflow-postgres-1,
+    0.0.0.0:5462->5432/tcp).
+  command_run: "MIX_TEST_PARTITION=2 mix test (full suite), then
+    MIX_TEST_PARTITION=2 mix test test/letflow/engine_concurrency_test.exs
+    --seed 0 run 3x in isolation to check the timing-fix isn't itself flaky."
+
+verdict: PASS
+
+checks:
+  test_suite_full_run:
+    result: "PASS -- 0 failures, full suite"
+    summary_line_verbatim: "5 properties, 975 tests, 0 failures"
+    finished_line_verbatim: "Finished in 120.3 seconds (4.9s async, 115.4s sync)"
+    other_failures: "None."
+
+  engine_concurrency_test_isolated_reruns:
+    result: "PASS across all 3 isolated runs, 3/3 tests passing each time (AC1,
+      AC2, AC4) -- 9/9 total assertions of the file across the 3 runs, 0
+      failures"
+    command: "MIX_TEST_PARTITION=2 mix test test/letflow/engine_concurrency_test.exs --seed 0"
+    runs:
+      - run: 1
+        summary_line_verbatim: "3 tests, 0 failures"
+        finished_line_verbatim: "Finished in 3.5 seconds (0.00s async, 3.5s sync)"
+      - run: 2
+        summary_line_verbatim: "3 tests, 0 failures"
+        finished_line_verbatim: "Finished in 3.7 seconds (0.00s async, 3.7s sync)"
+      - run: 3
+        summary_line_verbatim: "3 tests, 0 failures"
+        finished_line_verbatim: "Finished in 3.7 seconds (0.00s async, 3.7s sync)"
+    tests:
+      - name: "AC1 -- 100 concurrent task completions across 100 distinct
+          instances / every completion succeeds, no cross-instance
+          corruption, no global serialization"
+        result: PASS (all 3 runs)
+        note: >
+          The wall-clock proxy assertion (concurrent_micros < baseline_micros *
+          30, now timing only complete_all_concurrently!) passed comfortably on
+          every run -- no flakiness observed. This confirms the diagnosis from
+          the prior FAIL report: the measurement window (including ~100
+          sequential Engine.create calls) was the bug, not the underlying
+          30x-threshold property, which is stable once correctly scoped.
+      - name: "AC2 -- two concurrent task completions on the SAME instance /
+          exactly one commits :completed, the other observes
+          {:task_not_pending, :completed}"
+        result: PASS (all 3 runs)
+      - name: "AC4 -- reconstruction matches projection for all instances
+          after the concurrent run / each instance's reconstructed
+          status/variables/token positions match its own projection"
+        result: PASS (all 3 runs)
+
+next_steps:
+  - "None. All acceptance criteria pass, full suite green, timing fix confirmed
+    stable across 3 isolated re-runs. Ready for RELEASE-VALIDATOR's independent
+    re-verification."

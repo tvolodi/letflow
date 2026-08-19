@@ -68,8 +68,15 @@ HTTP transport and service_catalog left injectable per this stage's
 own scope boundary; an exhausted-retry outcome routes into REQ-061's
 set_instance_error/2, closing REQ-061's own deferred AC8 obligation;
 same header-sync gap-fix shape applied by this requirement's own
-DOC-UPDATER); REQ-054, REQ-055, REQ-059, REQ-060, REQ-062
-(`docs/requirements.yaml`, 5 total) `pending`.
+DOC-UPDATER); REQ-055 `done` (Concurrent instance isolation
+guarantees, EE-12 -- a moduledoc-only lock-inventory section added to
+lib/letflow/engine.ex plus three new concurrency tests in
+test/letflow/engine_concurrency_test.exs verifying 100-concurrent-
+instance completion, same-instance conflict resolution, and post-
+concurrency reconstruction match; REQ-045's row-based state resolution
+made AC5's process-kill scenario N/A; same header-sync gap-fix shape
+applied by this requirement's own DOC-UPDATER); REQ-054, REQ-059,
+REQ-060, REQ-062 (`docs/requirements.yaml`, 4 total) `pending`.
 
 ## Scope
 

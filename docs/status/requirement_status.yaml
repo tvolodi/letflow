@@ -4894,7 +4894,6 @@ history:
       corrected 8 -> 7, same header-sync shape REQ-061's DOC-UPDATER
       pass already applied for REQ-061 itself. Left for a follow-up
       pass.
-
   - req: REQ-056
     event: started
     agent: ORCH
@@ -4952,3 +4951,50 @@ history:
       DOC-UPDATER" and carries no lingering "deferred to REQ-056"
       language needing a fix -- confirmed by direct read, no change
       required there.
+
+  - req: REQ-055
+    event: started
+    agent: ELIXIR-DEV
+    at: 2026-08-19T03:55:15Z
+    note: >
+      WF02-REQ055-20260819, run by hetzner-wt2-orch (queue task id 100,
+      depends_on REQ-053 satisfied). Step 00 git setup PASS on
+      feature/WF02-REQ055-20260819 (worktree variant, branched from
+      freshly-fetched origin/main). Establishing/verifying EE-12
+      concurrent instance isolation guarantees across
+      REQ-045/047/048/052's engine paths.
+  - req: REQ-055
+    event: done
+    agent: ELIXIR-DEV
+    at: 2026-08-19T04:25:59Z
+    note: >
+      WF02-REQ055-20260819 complete, RELEASE-VALIDATOR independently
+      re-verified all 5 acceptance criteria against actual code/tests
+      (not just the report) and re-ran mix test itself: 975 tests, 0
+      failures. EE-12 concurrent instance isolation guarantees shipped
+      as a moduledoc-only `## EE-12 (REQ-055)` lock-inventory section
+      added to lib/letflow/engine.ex -- no new production code, since
+      REQ-045 resolved to row-based state (confirmed), leaving AC5's
+      process-kill scenario N/A -- plus three new tests in
+      test/letflow/engine_concurrency_test.exs: AC1 (100 concurrent
+      instances all completing without deadlock/corruption), AC2 (two
+      concurrent task completions on the same instance producing
+      exactly one success and one conflict), and AC4 (post-concurrency
+      reconstruction via REQ-053 matching each instance's own
+      projection). All gates PASSed: CODE-DESIGN-VALIDATOR (1 rework,
+      GenServer-scoping fix), SECURITY-REVIEWER (out of scope, PASS),
+      REVIEWER (PASS, with explicit sign-off on the stage-3-doc tension
+      question), TEST-DESIGN-VALIDATOR (2 reworks, spec-code
+      mismatches), TEST-RUNNER (1 rework, AC1 timing-window bug fixed),
+      RELEASE-VALIDATOR (independent re-verification of all 5 ACs
+      against real mix test output). docs/requirements.yaml REQ-055
+      flipped in_progress -> done.
+      docs/migration/stage-3-instance-engine.md's header listed
+      REQ-055 in its `pending` list even though it is now `done` --
+      fixed in this same pass (moved REQ-055 into the `done` clause
+      with an EE-12 one-line summary, pending count corrected 6 -> 5),
+      same header-sync gap-fix shape REQ-045/047/048/052/053/057/061's
+      DOC-UPDATER passes already applied. README.md: no changes
+      needed -- this change added no new HTTP route, no change to the
+      documented gen_statem/process-model diagram, and no change to
+      the "Running it" section, same reasoning as REQ-045/047/048/052/061.

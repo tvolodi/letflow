@@ -1,0 +1,85 @@
+# Test run report — WF-03 Step 4 (test run) for ISS-0070
+
+issue_id: ISS-0070
+workflow: WF-03
+step: "04"
+agent: TEST-RUNNER
+run_id: WF03-ISS0070-20260819
+date_utc: 2026-08-19T05:53:30Z
+
+git:
+  branch: feature/WF03-ISS0070-20260819
+  branch_confirmed: true
+  commit: 8fee737
+  commit_subject: "Apply Decision 0005: pin Elixir/OTP toolchain"
+  worktree: false (primary checkout at ~/letflow)
+  diff_summary: >
+    Decision 0005 toolchain-pin application, already REVIEWER-PASSed and
+    TEST-DESIGN-VALIDATOR-PASSed. Final gate before merge.
+
+environment:
+  postgres_container: >
+    letflow-postgres-1 confirmed Running via `docker compose up -d` at start
+    of this run.
+  command_run: >
+    mix format --check-formatted; mix compile --warnings-as-errors;
+    LETFLOW_DEV_DB_CONFIRMED=1 mix test (full suite, seed 59086 — the
+    `test` alias runs ecto.create + ecto.migrate --quiet first
+    automatically)
+
+verdict: PASS
+
+checks:
+  format_check:
+    result: PASS — no unformatted files reported
+    exit_code: 0
+
+  compile_warnings_as_errors:
+    result: PASS — clean compile, no output, no errors
+    exit_code: 0
+
+  test_suite_full_run:
+    result: PASS — all green, no failures
+    exit_code: 0
+    summary_line_verbatim: "5 properties, 1029 tests, 0 failures"
+    finished_line_verbatim: "Finished in 129.7 seconds (5.4s async, 124.3s sync)"
+    failures: 0
+
+  branch_own_change_caused_failures: none
+
+  pre_existing_failures_found: []
+
+  known_noise_not_a_failure:
+    - >
+      Verbose SQL [debug] QUERY OK logging and one expected Keycloak
+      metadata-load connection error (placeholder OIDC issuer:
+      "Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/...") appear in raw mix test
+      output — expected, not a failure.
+    - >
+      One "default values for the optional arguments in
+      unique_idempotency_key/1 are never used" compiler warning surfaced
+      during the mix test run's own compilation pass
+      (test/letflow/engine_cancel_instance_test.exs:106), a test-file-only
+      warning not gated by the separate `mix compile --warnings-as-errors`
+      invocation (which only compiles lib/ and returned clean, exit 0).
+      Unrelated to this branch's diff.
+
+  regression_check: >
+    1029 tests, 0 failures, single run. No regressions attributable to
+    this branch's diff (toolchain pin only, no application logic changes).
+    No new issue needs filing to the queue.
+
+diagnosis: >
+  All three required gates passed cleanly: `mix format --check-formatted`
+  (exit 0, no drift), `mix compile --warnings-as-errors` (exit 0, clean),
+  and `LETFLOW_DEV_DB_CONFIRMED=1 mix test` (exit 0, 1029 tests / 5
+  properties, 0 failures). Consistent with this being a toolchain-pin-only
+  change already passed by REVIEWER and TEST-DESIGN-VALIDATOR. Nothing to
+  route to ELIXIR-DEV.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-20260819-WF03-ISS0070-20260819.yaml
+  next_action: "Proceed to Step Final merge (final gate before merge)"

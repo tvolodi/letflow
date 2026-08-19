@@ -28,5 +28,13 @@ description: >
 affected_files:
   - test/letflow/engine/service_task_routing_test.exs
   - test/letflow/engine_plugin_error_routing_test.exs
+  - test/letflow/engine_cancel_instance_test.exs
 github_issue: null # to be filed via register_task's best-effort GH mirror
 status: open
+update_20260819T054500Z: >
+  TEST-RUNNER (WF03-ISS0070-20260819, applying Decision 0005) observed a
+  third instance of the same warning class: an unused default-arg warning
+  at test/letflow/engine_cancel_instance_test.exs:106, again test-file-only
+  (does not fail mix compile --warnings-as-errors, unrelated to that run's
+  toolchain-pin diff). Added to affected_files above rather than filed as
+  a separate issue -- same symptom class, same non-blocking severity.

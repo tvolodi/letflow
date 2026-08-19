@@ -1,0 +1,52 @@
+{
+  "handoff_id": "6o4m2n81-0n19-653c-4m5u-req061step05",
+  "run_id": "WF02-REQ061-20260819",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ061-20260819/step-05-release-validator.json",
+  "created_at": "2026-08-19T02:00:40Z",
+  "started_at": "2026-08-19T02:00:40Z",
+  "completed_at": "2026-08-19T02:05:48Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-061"],
+    "requirement_text": {
+      "REQ-061": "See handoffs/WF02-REQ061-20260819/step-01-code-designer.json context.requirement_text for the full verbatim requirement text."
+    },
+    "related_handoff_ids": ["step-02a-elixir-dev.json", "step-03-test-designer.json", "step-04-test-runner.json", "step-02d-reviewer-rework1.json"],
+    "artifacts_in": ["lib/letflow/engine.ex", "lib/letflow/engine/execution_error.ex", "test/letflow/engine_execution_error_test.exs", "test/reports/report-20260819-WF02-REQ061-20260819.yaml"],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently re-verify REQ-061 is genuinely done before it is marked so. Do NOT trust TEST-RUNNER's report alone -- re-run the suite yourself. Confirm each of the 6 acceptance criteria against the actual code/tests. This run went through a rework iteration (fixed a real AC4 gap, filed docs/issues/ISS-0061.yaml for a separate pre-existing REQ-049 gap) -- confirm the final shipped state, not any intermediate one. Check docs/status/requirement_status.yaml and docs/requirements.yaml for staleness.",
+    "acceptance_criteria": [
+      "an EXECUTION_ERROR event carries error type, affected node or field, a human-readable reason, and the instance variable map as it stood at the moment of the error -- all four verified by reading the event payload back",
+      "the status flip to ERROR and the EXECUTION_ERROR append commit together: forcing the append to fail leaves the instance status unchanged, verified by reading both back",
+      "an instance in ERROR rejects task completion with a distinct conflict error and remains in ERROR afterwards",
+      "at least the two currently-shipped calling paths are demonstrated routing into the shared sink where reachable -- REQ-050 for real (fixed this run), REQ-049 honestly documented as blocked by a separately-filed pre-existing issue (ISS-0061), per REVIEWER's explicit sign-off on this interim reading",
+      "two concurrent operations both triggering EE-10 on the same instance result in exactly one committed EXECUTION_ERROR and one rejection, run concurrently rather than sequentially",
+      "the moduledoc names OBS-05's dead-letter retry/discard path (S6/S4) as the out-of-scope operator action, confirms no partial DLQ was built, and states that ERROR is non-terminal in a way CANCELLED and COMPLETED are not"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified, not report-copied. (1) mix compile --warnings-as-errors: clean. (2) Re-ran MIX_TEST_PARTITION=2 mix test myself (full suite): 3 properties, 916 tests, 1 failure -- the failure is test/letflow/identity_migration_test.exs:367 (DropLegacyPublicIdentityTables guard), matching ISS-0062's exact test/line/assertion characterization (recurrence of ISS-0048/0050/0058/0060 class), confirmed by direct diff inspection (git diff main...HEAD --stat) that this run's diff touches none of identity_migration_test.exs or its migration/provisioning code -- genuinely unrelated, does not block PASS. (3) Ran test/letflow/engine_execution_error_test.exs alone: 8 tests, 0 failures. (4) Read every AC's test body directly (lines 299-572): AC1 reads event.payload back for error_type/affected/reason/variables all four, verbatim. AC2 forces a real failure (unregistered EXECUTION_ERROR event type via provisioned_tenant_without_execution_error_type()) and independently re-reads both instance status (:active, unchanged) and event_count (unchanged) rather than trusting the return tuple alone. AC3 drives an instance to :error via set_instance_error/2 then calls complete_task/3 for real, asserts the distinct {:error, {:instance_not_active, :error}} tuple, re-reads projection status and task status afterward. AC4a calls Engine.complete_task/3 for real against graph_task_then_gateway_no_match() (REQ-050's actual downstream-gateway scenario) and asserts the fixed behavior end to end: {:error, {:instance_execution_error, :no_matching_gateway_edge, {:node, \"gw\"}}}, +1 EXECUTION_ERROR event, status :error, task stays :pending -- read lib/letflow/engine.ex's dispatch_task_completion_hop_chain/5 (lines 1129-1200) directly and confirmed the {:error, {:activation_failed, {:no_matching_edge, ...}}} clause (the rework-1 fix, commit d91e97d) is present and correctly rewired into {:ok, {:execution_error, error_args}}. AC4b honestly exercises REQ-049's error_args() shape only via set_instance_error/2 (not complete_task/3), consistent with ISS-0061's filed, well-scoped gap (merge_output_variables/5 always passes nil for variable_validations -- confirmed by reading lib/letflow/engine.ex directly, not just the issue text) and with REVIEWER's explicit sign-off (step-02d-reviewer-rework1.json) accepting '1 of 2 currently-reachable callers demonstrated for real, 1 blocked by a separately-filed pre-existing issue' as this requirement's interim AC4 satisfaction -- REQ-061's own depends_on is [REQ-048, REQ-050], not REQ-049, so this is a legitimate scope boundary, not a quietly dropped AC. AC5 uses real Elixir.Task.async/await_many (not sequential calls) racing two set_instance_error/2 calls for the same instance_projections row lock, asserts exactly one winner/one {:instance_already_error, _} loser and exactly one EXECUTION_ERROR event ever appended. AC6's two tests read Code.fetch_docs(ExecutionError) directly and assert the exact OBS-05/S6/S4/no-partial-DLQ and ERROR-non-terminal sentences are present -- cross-checked against the actual moduledoc text in lib/letflow/engine/execution_error.ex, verbatim match. (5) Cross-checked test/specs/REQ-061.md against the shipped code and test file: the spec's rework-1 'STATUS' section accurately narrates the same d91e97d fix and the same ISS-0061 boundary I verified independently -- spec, code, and tests all agree, no stale claims. (6) git diff main...HEAD --stat matches exactly the files ELIXIR-DEV/TEST-DESIGNER/TEST-RUNNER claimed touching (engine.ex, execution_error.ex, engine_execution_error_test.exs, REQ-061 design/spec docs, ISS-0061/0062, requirements.yaml, requirement_status.yaml, handoffs) -- no undisclosed scope. (7) Staleness check: docs/requirements.yaml REQ-061 still status: in_progress (line 3276); docs/status/requirement_status.yaml's last REQ-061 event is 'started' (2026-08-19T00:48:56Z), no premature 'done' event -- DOC-UPDATER has not yet run, as expected at this step. No docs/migration/decisions/ record contradicted (no framework/library choice made by this requirement). This is a WF-02 run, not a stage-gate, so no stage-N doc REVIEWER sign-off section applies.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ061-20260819",
+      "commit_sha_list": ["ab5af10", "c7f8e77", "82f5501"],
+      "remote_branch": "origin/feature/WF02-REQ061-20260819",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

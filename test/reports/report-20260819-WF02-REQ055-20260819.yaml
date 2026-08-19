@@ -1,0 +1,116 @@
+# Test run report — WF-02 Step 4 (test run) for REQ-055
+
+requirement_id: REQ-055
+workflow: WF-02
+step: "04"
+agent: TEST-RUNNER
+run_id: WF02-REQ055-20260819
+date_utc: 2026-08-19T04:16:38Z
+
+git:
+  branch: feature/WF02-REQ055-20260819
+  branch_confirmed: true
+  commit: 61d046dc85f4dd56607f9c092fefef44b81663a4
+  commit_subject: "test(WF02-REQ055): EE-12 concurrency test suite"
+  worktree: true (secondary checkout at ~/letflow-wt2)
+  diff_summary: >
+    Adds lib/letflow/design/req-055-concurrent-instance-isolation.md (design),
+    lib/letflow/engine.ex changes (81 lines, EE-12 concurrency-safety work),
+    test/letflow/engine_concurrency_test.exs (new, 382 lines, 3 tests — AC1/
+    AC2/AC4), test/specs/REQ-055.md, plus requirements.yaml/status bookkeeping.
+
+environment:
+  postgres_container: >
+    This worktree's own docker-compose-managed container
+    (letflow-wt2-postgres-1) is up but has no published host port (a second
+    `docker compose up` from this secondary worktree lost the port-5462 bind
+    to the primary checkout's container — expected, see docs/anti-patterns.md's
+    "Running docker compose up from a secondary worktree checkout" entry). Per
+    the run instructions, did NOT run `docker compose up`/`up -d` here. Verified
+    the actually-used shared Postgres (letflow-postgres-1, primary checkout's
+    container, 0.0.0.0:5462->5432/tcp, healthy, 44+ hours uptime) is reachable
+    on localhost:5462 via a raw /dev/tcp connect check before running tests.
+  command_run: "MIX_TEST_PARTITION=2 mix test (full suite; the `test` alias
+    runs ecto.create + ecto.migrate --quiet against letflow_test2 first
+    automatically, isolating this worktree's test database from other
+    concurrent hosts/worktrees per standing instruction for this checkout)."
+
+verdict: PARTIAL
+
+checks:
+  test_suite_full_run:
+    result: "PARTIAL — 1 failure out of 975 tests, isolated to the new REQ-055 file"
+    summary_line_verbatim: "5 properties, 975 tests, 1 failure"
+    finished_line_verbatim: "Finished in 119.1 seconds (5.0s async, 114.0s sync)"
+    other_failures: >
+      None. The single failure is in test/letflow/engine_concurrency_test.exs
+      (new file for this REQ, commit 61d046d). No pre-existing/unrelated
+      failures were found elsewhere in the suite, so nothing was filed under
+      docs/issues/ for this run.
+
+  engine_concurrency_test_new_file:
+    result: "2/3 PASS, 1/3 FAIL — reproduced consistently across 3 separate runs
+      (once inside the full suite, twice in isolated re-runs of just this file)"
+    tests:
+      - name: "AC1 -- 100 concurrent task completions across 100 distinct
+          instances / every completion succeeds, no cross-instance
+          corruption, no global serialization"
+        result: FAIL
+        location: "test/letflow/engine_concurrency_test.exs:265 (assertion at
+          line 299)"
+        assertion_verbatim: "assert concurrent_micros < baseline_micros * 30"
+        observed_values:
+          run_1_full_suite: "left (concurrent_micros): 971275, right (baseline_micros * 30): 264150"
+          run_2_isolated: "left: 1142294, right: 288570"
+        functional_assertions_in_same_test: >
+          All PASS every run — every one of the 100 Task.async completions
+          returns {:ok, %{instance_status: :completed}}, and every instance's
+          reconstructed InstanceProjection has status :completed and the
+          correct per-instance variables["instance_seed"]. Only the trailing
+          wall-clock proxy assertion fails. No cross-instance corruption or
+          deadlock was observed in any run.
+        diagnosis: >
+          Test-code fragility, not an application bug in lib/letflow/engine.ex.
+          The comment at engine_concurrency_test.exs:271-280 documents this as
+          a "loose wall-clock proxy... deliberately loose, catches only gross
+          regressions like an accidentally-reintroduced global mutex/singleton
+          serializer" — but the :timer.tc block being measured
+          (provision_and_complete_all!, line 283) wraps BOTH the sequential
+          creation of all 100 instances (start_n_instances!, line 220-230,
+          explicitly sequential per its own comment: "starts `n` instances...
+          sequentially — the concurrency under test is the subsequent
+          task-completion step, not this setup") AND the concurrent
+          completions, while baseline_micros times only a single
+          Engine.complete_task call with no instance-creation cost at all. So
+          concurrent_micros is inflated by ~100x a single Engine.create call's
+          cost (unrelated to the lock-contention property under test) before
+          it's ever compared against baseline_micros. In this environment a
+          single Engine.create appears to cost several ms, so 100 sequential
+          creates alone can exceed the 30x-single-completion threshold
+          regardless of how well engine.ex's per-row locking scales — the
+          measurement window is the bug, not the app.
+        routing: >
+          Routed back to TEST-DESIGNER: the timed block in
+          provision_and_complete_all! (or the AC1 test itself) needs to time
+          only the concurrent completion phase (the Task.async/await_many
+          span), not the sequential provisioning phase, so the proxy assertion
+          measures what its own comment says it's measuring. Not loosened or
+          skipped here per the "no speculation" / "never edit a test purely to
+          make a red suite go green" rules — left as a genuine FAIL.
+      - name: "AC2 -- two concurrent task completions on the SAME instance /
+          exactly one commits :completed, the other observes
+          {:task_not_pending, :completed}"
+        result: PASS
+      - name: "AC4 -- reconstruction matches projection for all instances
+          after the concurrent run / each instance's reconstructed
+          status/variables/token positions match its own projection"
+        result: PASS
+
+next_steps:
+  - "TEST-DESIGNER: fix the AC1 timing measurement in
+    test/letflow/engine_concurrency_test.exs so :timer.tc wraps only the
+    concurrent-completion phase, not the sequential instance-provisioning
+    phase, then TEST-RUNNER re-verifies."
+  - "No ELIXIR-DEV action indicated by this run — all functional/correctness
+    assertions (no cross-instance corruption, exactly-one-wins on same-instance
+    races, correct reconstruction) passed on every run."

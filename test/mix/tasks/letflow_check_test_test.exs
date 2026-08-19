@@ -80,7 +80,10 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
   # calls internally -- resolves to this fake instead of the real `mix`.
   defp install_fake_mix(output, exit_code) do
     dir =
-      Path.join(System.tmp_dir!(), "letflow_check_test_fake_mix_#{System.unique_integer([:positive])}")
+      Path.join(
+        System.tmp_dir!(),
+        "letflow_check_test_fake_mix_#{System.unique_integer([:positive])}"
+      )
 
     File.mkdir_p!(dir)
     fake_mix_path = Path.join(dir, "mix")

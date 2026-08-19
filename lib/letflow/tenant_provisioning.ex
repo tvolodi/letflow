@@ -38,22 +38,32 @@ defmodule Letflow.TenantProvisioning do
   schema-per-tenant post-migration-060) is left open for a future requirement
   to decide explicitly — not assumed either way by this module.
 
-  ## `replay_migrations/2` also seeds platform event types (REQ-045 §9 OQ-3a)
+  ## `replay_migrations/2` also seeds platform event types (REQ-045 §9 OQ-3a,
+  ## extended by ISS-0072/GH#257)
 
   When `replay_migrations/2` is called with its default `migration_source`
   (i.e. the real `tenant_scoped_migrations/0` manifest, not a caller-supplied
-  one), it seeds the `"INSTANCE_STARTED"` `event_type_registry` row
-  immediately after migrations apply successfully —
-  `Letflow.EventStore.Registry.validate_payload/3` otherwise fails closed
-  with `{:error, :unknown_event_type}` for every tenant, since no shipped
-  migration seeds this row and R-Co's own 20-built-in-type seed was
-  deliberately left out of `20260816163103_create_event_type_registry.exs`
-  (that migration's own header comment: "nothing yet exists that emits
-  them"). `Letflow.Engine.create/2` (REQ-045) is the first thing that does.
-  Idempotent, and skipped entirely when a caller passes an explicit
-  `migration_source` (so `test/support/req022_migration_fixture.ex`'s
-  fixture-only replay is unaffected). See `replay_migrations/2`'s own
-  private `maybe_seed_platform_event_types/2` for the full reasoning.
+  one), it seeds 6 `event_type_registry` rows — `"INSTANCE_STARTED"`,
+  `"TASK_COMPLETED"`, `"INSTANCE_CANCELLED"`, `"INSTANCE_PINS_REBOUND"`,
+  `"SUB_PROCESS_COMPLETED"`, and `"EXECUTION_ERROR"` — immediately after
+  migrations apply successfully. `Letflow.EventStore.Registry.validate_payload/3`
+  otherwise fails closed with `{:error, :unknown_event_type}` for every
+  tenant, since no shipped migration seeds these rows and R-Co's own
+  20-built-in-type seed was deliberately left out of
+  `20260816163103_create_event_type_registry.exs` (that migration's own
+  header comment: "nothing yet exists that emits them"). `INSTANCE_STARTED`
+  was seeded first, for `Letflow.Engine.create/2` (REQ-045). The other 5 were
+  added by ISS-0072/GH#257, which found each already had a real production
+  writer (`Letflow.Engine.complete_task/3`, `Letflow.Engine.cancel_instance/3`,
+  `Letflow.Engine.PinRebind.rebind_pins/3`, `Letflow.Engine.SubProcess`'s
+  sub-process completion path, and
+  `Letflow.Engine.ExecutionError.append_execution_error_event/2`
+  respectively) with no corresponding registry row — a pre-existing
+  operational gap, closed here. Idempotent, and skipped entirely when a
+  caller passes an explicit `migration_source` (so
+  `test/support/req022_migration_fixture.ex`'s fixture-only replay is
+  unaffected). See `replay_migrations/2`'s own private
+  `maybe_seed_platform_event_types/2` for the full reasoning.
 
   ## Secondary open question (surfaced during design, not in REQ-022's
   original list)
@@ -483,12 +493,12 @@ defmodule Letflow.TenantProvisioning do
     |> Repo.update_all(set: [migrations_applied_at: now])
   end
 
-  # Seeds the "INSTANCE_STARTED" event_type_registry row (REQ-045 §9 OQ-3a) --
-  # only when replay_migrations/2 ran the real, default production manifest
-  # (tenant_scoped_migrations/0), never when a caller passed an explicit
-  # migration_source. This distinction matters: a caller-supplied
-  # migration_source (test/support/req022_migration_fixture.ex's own
-  # {1, MigrationFixture} case, exercised by
+  # Seeds 6 event_type_registry rows (REQ-045 §9 OQ-3a, extended by
+  # ISS-0072/GH#257) -- only when replay_migrations/2 ran the real, default
+  # production manifest (tenant_scoped_migrations/0), never when a caller
+  # passed an explicit migration_source. This distinction matters: a
+  # caller-supplied migration_source (test/support/req022_migration_fixture.ex's
+  # own {1, MigrationFixture} case, exercised by
   # test/letflow/tenant_provisioning_test.exs) may not include
   # event_type_registry's own migration at all, so unconditionally seeding
   # here would attempt an insert against a table that doesn't exist in that
@@ -509,40 +519,179 @@ defmodule Letflow.TenantProvisioning do
   #
   # Idempotent by construction: Letflow.EventStore.Registry.register_type/2's
   # own (name, schema_version) collision -- {:error, :duplicate_event_type_version}
-  # -- is treated as success here, so a second replay_migrations/2 call
-  # against an already-seeded tenant schema (Ecto.Migrator.run/4 itself is
-  # already idempotent on re-applying migrations) is also a no-op on this
-  # step, not a hard failure.
+  # -- is treated as success here, for every entry in the list below, so a
+  # second replay_migrations/2 call against an already-seeded tenant schema
+  # (Ecto.Migrator.run/4 itself is already idempotent on re-applying
+  # migrations) is also a no-op on this step for all 6 types, not a hard
+  # failure.
   #
-  # No other event type is seeded here. REQ-045's own OQ-3a is narrowly
-  # scoped to "INSTANCE_STARTED" (the one event type EE-01's Letflow.Engine.create/2
-  # actually appends) -- no other already-designed event type currently has a
-  # real writer in this codebase that would need its own registry row yet;
-  # seeding one this call has no caller for would be speculative, not a fix
-  # for a demonstrated gap.
-  @instance_started_event_type_attrs %{
-    name: "INSTANCE_STARTED",
-    schema_version: 1,
-    description:
-      "Emitted once by Letflow.Engine.create/2 (EE-01) when a new process instance starts.",
-    json_schema: %{
-      "type" => "object",
-      "properties" => %{
-        "definition_id" => %{"type" => "string"},
-        "correlation_key" => %{"type" => ["string", "null"]},
-        "initial_variables" => %{"type" => "object"}
-      },
-      "required" => ["definition_id", "initial_variables"]
+  # REQ-045's own OQ-3a was narrowly scoped to "INSTANCE_STARTED" (the one
+  # event type EE-01's Letflow.Engine.create/2 actually appends). ISS-0072
+  # (GH#257) found 5 additional event types with real production writers and
+  # no registry row -- each was silently failing EventStore.append/2 with
+  # {:error, :unknown_event_type} -- and they are seeded here too:
+  # "TASK_COMPLETED" (Letflow.Engine.complete_task/3), "INSTANCE_CANCELLED"
+  # (Letflow.Engine.cancel_instance/3), "INSTANCE_PINS_REBOUND"
+  # (Letflow.Engine.PinRebind.rebind_pins/3), "SUB_PROCESS_COMPLETED"
+  # (Letflow.Engine.SubProcess's sub-process completion path), and
+  # "EXECUTION_ERROR" (Letflow.Engine.ExecutionError.append_execution_error_event/2).
+  #
+  # No other event type is seeded here. "DEFINITION_PROMOTED",
+  # "DEFINITION_VERSION_ROLLED_BACK", and
+  # "PROMOTION_ASSERTION_TEARDOWN_FAILED" remain deliberately unseeded: no
+  # production writer exists for any of them yet (each event_appender is
+  # caller-injected with no default, deliberately unwired) -- seeding one
+  # this call has no caller for would be speculative, not a fix for a
+  # demonstrated gap.
+  @platform_event_type_seed_attrs [
+    %{
+      name: "INSTANCE_STARTED",
+      schema_version: 1,
+      description:
+        "Emitted once by Letflow.Engine.create/2 (EE-01) when a new process instance starts.",
+      json_schema: %{
+        "type" => "object",
+        "properties" => %{
+          "definition_id" => %{"type" => "string"},
+          "correlation_key" => %{"type" => ["string", "null"]},
+          "initial_variables" => %{"type" => "object"}
+        },
+        "required" => ["definition_id", "initial_variables"]
+      }
+    },
+    %{
+      name: "TASK_COMPLETED",
+      schema_version: 1,
+      description:
+        "Emitted by Letflow.Engine.complete_task/3 (M9, EE-04) when a user task is completed.",
+      json_schema: %{
+        "type" => "object",
+        "properties" => %{
+          "task_id" => %{"type" => "string"},
+          "node_id" => %{"type" => "string"},
+          "output_variables" => %{"type" => "object"},
+          "merged_variable_events" => %{
+            "type" => "array",
+            "items" => %{
+              "type" => "object",
+              "properties" => %{
+                "event" => %{"type" => "string", "enum" => ["variable_overwritten"]},
+                "key" => %{"type" => "string"}
+              },
+              "required" => ["event", "key"]
+            }
+          },
+          "activated_nodes" => %{"type" => "array", "items" => %{"type" => "string"}}
+        },
+        "required" => ["task_id", "node_id", "output_variables", "activated_nodes"]
+      }
+    },
+    %{
+      name: "INSTANCE_CANCELLED",
+      schema_version: 1,
+      description:
+        "Emitted by Letflow.Engine.cancel_instance/3 (M6) when a running instance is cancelled.",
+      json_schema: %{
+        "type" => "object",
+        "properties" => %{
+          "cancelled_task_ids" => %{"type" => "array", "items" => %{"type" => "string"}},
+          "cancelled_token_ids" => %{"type" => "array", "items" => %{"type" => "string"}}
+        },
+        "required" => ["cancelled_task_ids", "cancelled_token_ids"]
+      }
+    },
+    %{
+      name: "INSTANCE_PINS_REBOUND",
+      schema_version: 1,
+      description:
+        "Emitted by Letflow.Engine.PinRebind.rebind_pins/3 (M6) when a definition/sub-process " <>
+          "version pin is rebound.",
+      json_schema: %{
+        "type" => "object",
+        "properties" => %{
+          "entries" => %{
+            "type" => "array",
+            "items" => %{
+              "type" => "object",
+              "properties" => %{
+                "kind" => %{"type" => "string"},
+                "ref" => %{"type" => "string"},
+                "prior_version" => %{"type" => "integer"},
+                "new_version" => %{"type" => "integer"}
+              },
+              "required" => ["kind", "ref", "new_version"]
+            }
+          },
+          "actor" => %{"type" => "string"},
+          "reason" => %{"type" => ["string", "null"]}
+        },
+        "required" => ["entries", "actor"]
+      }
+    },
+    %{
+      name: "SUB_PROCESS_COMPLETED",
+      schema_version: 1,
+      description:
+        "Emitted by Letflow.Engine.SubProcess (M-series) on the parent instance's stream when " <>
+          "a called sub-process instance completes and its output is merged back.",
+      json_schema: %{
+        "type" => "object",
+        "properties" => %{
+          "child_instance_id" => %{"type" => "string"},
+          "output_variables" => %{"type" => "object"},
+          "merged_variable_events" => %{
+            "type" => "array",
+            "items" => %{
+              "type" => "object",
+              "properties" => %{
+                "event" => %{"type" => "string", "enum" => ["variable_overwritten"]},
+                "key" => %{"type" => "string"}
+              },
+              "required" => ["event", "key"]
+            }
+          },
+          "activated_nodes" => %{"type" => "array", "items" => %{"type" => "string"}}
+        },
+        "required" => ["child_instance_id", "output_variables", "activated_nodes"]
+      }
+    },
+    %{
+      name: "EXECUTION_ERROR",
+      schema_version: 1,
+      description:
+        "Emitted by Letflow.Engine.ExecutionError.append_execution_error_event/2 (EE-10 AC1) " <>
+          "when an instance transitions to the :error status.",
+      json_schema: %{
+        "type" => "object",
+        "properties" => %{
+          "error_type" => %{"type" => "string"},
+          "affected" => %{
+            "type" => "object",
+            "properties" => %{
+              "kind" => %{"type" => "string", "enum" => ["node", "field"]},
+              "node_id" => %{"type" => "string"},
+              "key" => %{"type" => "string"}
+            },
+            "required" => ["kind"]
+          },
+          "reason" => %{"type" => "string"},
+          "variables" => %{"type" => "object"},
+          "details" => %{"type" => "object"}
+        },
+        "required" => ["error_type", "affected", "reason", "variables"]
+      }
     }
-  }
+  ]
 
   defp maybe_seed_platform_event_types(false, _tenant_id), do: :ok
 
   defp maybe_seed_platform_event_types(true, tenant_id) do
-    case Registry.register_type(@instance_started_event_type_attrs, tenant_id) do
-      {:ok, _event_type} -> :ok
-      {:error, :duplicate_event_type_version} -> :ok
-      {:error, reason} -> {:error, {:event_type_seed_failed, reason}}
-    end
+    Enum.reduce_while(@platform_event_type_seed_attrs, :ok, fn attrs, :ok ->
+      case Registry.register_type(attrs, tenant_id) do
+        {:ok, _event_type} -> {:cont, :ok}
+        {:error, :duplicate_event_type_version} -> {:cont, :ok}
+        {:error, reason} -> {:halt, {:error, {:event_type_seed_failed, reason}}}
+      end
+    end)
   end
 end

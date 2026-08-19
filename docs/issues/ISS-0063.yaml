@@ -60,7 +60,12 @@ affected_files:
   - lib/letflow/engine.ex
 status: open
 github_issue: https://github.com/tvolodi/letflow/issues/212
-scoping_note: >
+superseded_scoping_note: >
+  SUPERSEDED 2026-08-19T19:10:03Z by `scoping_note` below -- its central claim
+  (that this is blocked on an unanswered product decision about a :HUMAN_TASK
+  node's form schema, REQ-047 OQ-3) is WRONG. Retained verbatim for audit
+  trail only. Do NOT act on it.
+
   WF03-ISS0063-20260819 (2026-08-19T18:39:29Z): ISSUE-FIXER investigated for
   a direct fix and concluded this is NOT achievable as a MINOR issue fix, so
   no CODE-DESIGNER/ELIXIR-DEV work was attempted this run. Root cause
@@ -85,3 +90,58 @@ scoping_note: >
   schema design), then file a properly-scoped follow-up requirement
   referencing this note -- not a direct WF-03 issue-fix pipeline run.
   GH#212 left open, not closed, since this is genuinely unresolved.
+scoping_note: >
+  ORCH re-analysis 2026-08-19T19:10:03Z (supersedes the note above). The
+  earlier scoping is wrong on its central point: this is NOT blocked on a
+  product/schema-design decision, and REQ-047's OQ-3 is NOT the blocker. The
+  earlier investigation conflated three distinct things that all carry the
+  word "schema" in R-Co. Verified by direct source read of
+  c:\Users\tvolo\dev\ai-dala\R-Co:
+
+  (1) `tasks.form_schema` -- R-Co populates this from
+  `node.attributes["form_schema"]` at activation
+  (src/engine/instance.zig:5488 `extractFormSchemaJson`) and serves it in the
+  task-detail API response (src/api/routes/tasks.zig:894) as a UI
+  form-RENDERING payload. R-Co NEVER validates submitted output variables
+  against it. REQ-047's OQ-3 is therefore answerable (the source is the node
+  attributes key -- option A of the two it listed), but answering it would NOT
+  fix this issue, because form_schema is not the validation source in the
+  source system either.
+
+  (2) `variable_schemas` -- `(definition_id, variable_key) -> json_schema`,
+  R-Co migrations/012_event_retention.sql:32. THIS is the real validation
+  source: R-Co's `mergeVariables` (src/engine/instance.zig:2318) SELECTs
+  `variable_key, json_schema FROM variable_schemas` for the definition and
+  validates each overwrite candidate per-key in its two-phase (validate-all,
+  then apply) merge. Its shape is exactly VariableMerge.merge/3's
+  `variable_validations` map, which is why REQ-049 typed that argument as a
+  per-key map.
+
+  (3) `form_schema_registry` -- R-Co migrations/047, REPO-05. A field-level
+  SEARCH/DISCOVERY index over form artifacts keyed to `artifact_versions`.
+  Unrelated to both of the above. Named here because a designer grepping
+  "form schema" lands on it first and would build the wrong mechanism.
+
+  CONSEQUENCE: lib/letflow/engine.ex:1543's hardcoded `nil` is NOT a defect --
+  it conforms to its own design contract. REQ-049's design doc
+  (lib/letflow/design/req049-variable-merge.md sec 7.3) states it outright:
+  "Letflow has no `variable_schemas` storage of any kind today ... until that
+  requirement exists, every real caller of `merge/3` legitimately passes
+  `variable_validations: nil`." Independently confirmed: `variable_schemas`
+  appears in Letflow only in design prose -- zero migrations -- and
+  lib/letflow/definitions/promotion_plan.ex:191 states "there is no
+  `variable_schemas` table or `process_definitions` column in Letflow today".
+
+  TRUE STATUS: a known, documented, deliberate MIGRATION GAP -- not a bug, and
+  not blocked on any decision. The unreachable rejection branch is
+  design-sanctioned build-ahead. What is missing is a PORT, not an invention:
+  the source DDL exists (R-Co migrations/012:32), the source algorithm exists
+  (instance.zig:2318), the consumer call sequence is already specified
+  (req049-variable-merge.md sec 8, 4 steps), and the validator is already
+  shipped in Letflow (Letflow.EventStore.Registry.JsonSchema.validate/2).
+  Schema registration is definition-scoped, per R-Co's `definition_id` FK.
+
+  ACTION: superseded by REQ-109 (port `variable_schemas` + wire per-key
+  validation into merge_output_variables/5's call site). This issue closes
+  when REQ-109 lands. GH#212 remains open until then, but is now correctly
+  scoped as a tracked migration gap rather than an undiagnosable blocker.

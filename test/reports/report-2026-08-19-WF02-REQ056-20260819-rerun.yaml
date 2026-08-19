@@ -1,0 +1,72 @@
+run_id: WF02-REQ056-20260819-rerun
+agent: TEST-RUNNER
+step: WF-02 Step 4 (re-run after rework attempt 1/3)
+branch: feature/WF02-REQ056-20260819
+head_commit: ef163c4
+timestamp: 2026-08-19T08:39:34Z
+
+command: mix test
+environment: local Elixir toolchain (mix/elixir on PATH), Postgres via docker compose
+             (letflow-postgres-1, port 5462), Windows 11 host
+
+context: >
+  Re-run of Step 4 after TEST-DESIGNER's rework attempt 1: the prior run's blocker
+  (test/letflow/engine/service_task_routing_test.exs's graph_service_task_end/0 fixture
+  could not activate -- lib/letflow/engine/transition.ex's dispatch_node/4 has no
+  dispatch clause for :SERVICE_TASK) was resolved by swapping to a HUMAN_TASK-end graph
+  fixture, matching test/letflow/engine_execution_error_test.exs's established pattern.
+  The prior rework's node/1 -> svc_node/1 Kernel-shadow fix (in service_task_test.exs)
+  was carried forward unchanged.
+
+verdict: PASS
+verdict_reason: >
+  Full suite result: 970/971 passed (5/5 properties, 965/966 example tests). The single
+  failure is test/support/tenant_slug_test.exs:101, the same pre-existing,
+  Windows-only, already-filed issue (ISS-0064 / GH#221) confirmed in the prior run --
+  the failing-test set is otherwise unchanged (still exactly this one) and none of it is
+  this run's responsibility. All 4 previously-failing
+  service_task_routing_test.exs tests (AC5(b) x2, AC6, AC8) now pass.
+
+final_result_line: "Result: 970/971 passed (5/5 properties, 965/966 tests) -- Failed: 1 test"
+finished_in: "235.8 seconds (3.3s async, 232.5s sync)"
+
+previously_failing_tests_now_passing:
+  - "AC5(b) -- a JSON array body -> :invalid_2xx_body -> give_up -> instance lands in :error"
+  - "AC5(b) -- a bare JSON string body -> :invalid_2xx_body -> give_up -> instance lands in :error"
+  - "AC6 -- validate_rendered_url rejects the empty render, and the build attrs land the instance in :error"
+  - "AC8 -- a retriable kind at attempt_index == retry_limit gives up and lands the instance in :error"
+  confirmation_method: >
+    Full-suite output captured to a log file (not truncated via `tail`, unlike the
+    first attempt at running this in the background which cut the failure-trace
+    section out and had to be re-run to get a clean capture). Grepped the complete log
+    for `^\s*\d+\) ` (ExUnit's per-failure header format) and found exactly one match
+    (tenant_slug_test.exs). The two service_task_routing_test.exs line references that
+    do appear in the log (lines 100 and 175 of that file) are both compiler warnings
+    about unused default-argument values on private helpers, not test failures --
+    confirmed by reading the surrounding log context directly.
+
+pre_existing_failures:
+  - test: "Letflow.TenantSlugFixtureTest post-fix unique_slug/1 avoids the cross-VM collision distinct slugs across three fresh VMs"
+    location: test/support/tenant_slug_test.exs:101
+    error: "** (MatchError) no match of right hand side value: {\"\", 255}"
+    note: >
+      Same failure, same signature, as the prior WF-02 Step 4 run for this REQ
+      (report-2026-08-19-WF02-REQ056-20260819.yaml) -- confirmed still the ONLY
+      pre-existing failure; the failing-test set has not changed since the last run.
+    filed_as: docs/issues/ISS-0064.yaml
+    github_issue: https://github.com/tvolodi/letflow/issues/221
+    forwarded: true
+    blocks_this_runs_pass_verdict: false
+
+pass_fail_summary:
+  total_tests: 971
+  total_properties: 5
+  properties_passed: 5
+  example_tests: 966
+  example_tests_passed: 965
+  example_tests_failed: 1
+  failed_breakdown:
+    this_runs_own_responsibility: 0
+    pre_existing_unrelated: 1   # tenant_slug_test.exs, ISS-0064 / GH#221
+
+next_action: Route to RELEASE-VALIDATOR

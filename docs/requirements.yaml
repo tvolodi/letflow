@@ -2943,7 +2943,7 @@ requirements:
   - id: REQ-056
     title: Service task configuration, retry classification and dispatch contract (service_task.zig, EXT-01)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S3
     impl_order: 101  # letflow-queue task id
     description: >

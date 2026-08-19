@@ -4894,3 +4894,61 @@ history:
       corrected 8 -> 7, same header-sync shape REQ-061's DOC-UPDATER
       pass already applied for REQ-061 itself. Left for a follow-up
       pass.
+
+  - req: REQ-056
+    event: started
+    agent: ORCH
+    timestamp: "2026-08-19T02:40:35Z"
+    note: >
+      WF-02 run WF02-REQ056-20260819. Queue task 101 confirmed locked to
+      tvolodi-orch, depends_on [97] (REQ-061) satisfied (merged). Branch
+      feature/WF02-REQ056-20260819 created and pushed. status pending ->
+      in_progress.
+
+  - req: REQ-056
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-19T03:53:01Z"
+    note: >
+      WF02-REQ056-20260819. Service task configuration, retry
+      classification and dispatch contract (service_task.zig, EXT-01)
+      shipped as lib/letflow/engine/service_task.ex, the pure
+      Letflow.Engine.ServiceTask module -- parse_config_from_node_attributes/1,
+      validate_rendered_url/1, classify_failure_kind/1,
+      is_retriable_failure/1, compute_service_task_backoff_ms/3,
+      decide_failure/3 and build_idempotency_key/N, with the outbound
+      HTTP transport and service_catalog lookup left injectable per this
+      stage's own scope boundary (OBS-05's DLQ and the service_catalog
+      remain unbuilt S6 dependencies, no partial DLQ built here). An
+      exhausted-retry outcome (decide_failure returning give-up) routes
+      into Letflow.Engine.set_instance_error/2 rather than writing its
+      own ERROR transition -- this closes REQ-061's own AC8 obligation,
+      deferred forward because REQ-056 did not exist when REQ-061 was
+      built. RELEASE-VALIDATOR independently re-ran the full suite and
+      re-verified all 8 acceptance criteria against the real code and
+      tests (not against any prior step's summary): 970/971, the single
+      failure being the pre-existing, unrelated Windows-only failure
+      tracked as ISS-0066/GH#221 (renumbered from this run's original
+      ISS-0064 filing during Step Final's rebase, which surfaced an
+      add/add id collision with two unrelated issues main had already
+      assigned ISS-0064/ISS-0065 to) -- forwarded, not fixed in this
+      run.
+      docs/requirements.yaml REQ-056 flipped in_progress -> done
+      (impl_order/queue task id 101 left as-is). Checked README.md's
+      "What's here today"/"Running it"/state-diagram sections: no
+      changes needed -- this run added one new pure-function module with
+      no new process, no new HTTP route, and no
+      InstanceSupervisor/supervision-tree change, so README's existing
+      "InstanceSupervisor ... reserved for REQ-056/057" line stays
+      accurate as-is (REQ-056 doesn't wire anything into
+      InstanceSupervisor itself). docs/migration/stage-3-instance-engine.md's
+      header listed REQ-056 in its `pending` list even though it is now
+      `done` -- fixed in this same pass (moved REQ-056 into the `done`
+      clause with an EXT-01 one-line summary noting the AC8 closure,
+      pending count corrected 8 -> 7), same header-sync gap-fix shape
+      REQ-045/047/048/052/061's DOC-UPDATER passes already applied.
+      REQ-061's own header-clause text already only says "same
+      header-sync gap-fix shape applied by this requirement's own
+      DOC-UPDATER" and carries no lingering "deferred to REQ-056"
+      language needing a fix -- confirmed by direct read, no change
+      required there.

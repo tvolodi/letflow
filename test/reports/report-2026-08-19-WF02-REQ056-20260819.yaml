@@ -1,0 +1,131 @@
+run_id: WF02-REQ056-20260819
+agent: TEST-RUNNER
+step: WF-02 Step 4
+branch: feature/WF02-REQ056-20260819
+timestamp: 2026-08-19T08:25:00Z
+
+command: mix test
+environment: local Elixir toolchain (mix/elixir on PATH), Postgres via docker compose
+             (letflow-postgres-1, port 5462), Windows 11 host
+
+verdict: FAIL
+verdict_reason: >
+  This run's own DB-backed integration tests
+  (test/letflow/engine/service_task_routing_test.exs) fail -- 4 of them, all with the
+  same root cause. Not a pre-existing/forwardable issue; this run's own responsibility
+  per the task's instructions.
+
+final_result_line: "Result: 966/971 passed (5/5 properties, 961/966 tests) -- Failed: 5 tests"
+finished_in: "249.7 seconds (3.2s async, 246.4s sync)"
+
+fixes_applied_in_this_run:
+  - file: test/letflow/engine/service_task_test.exs
+    problem: >
+      `defp node(attrs)` shadowed `Kernel.node/1`, which Elixir 1.20.3 treats as a
+      hard compile ERROR (not a warning) for this arity/usage -- blocked compilation
+      of the ENTIRE suite (`** (CompileError) ... cannot compile module
+      Letflow.Engine.ServiceTaskTest`), so no test in the whole repo could run at all
+      until fixed.
+    fix: Renamed the private helper `node/1` -> `svc_node/1` (6 call sites). Purely a
+      naming fix; no assertion logic touched.
+    result: test/letflow/engine/service_task_test.exs (the pure-function AC1-AC4,
+      AC5(a), AC7 unit tests) now compiles and all pass -- confirmed 0 failures
+      attributed to this file in the full run.
+
+  - file: test/letflow/engine/service_task_routing_test.exs
+    problem: >
+      The shared fixture `graph_service_task_end/0` built a SERVICE_TASK node with only
+      an "endpoint" attribute, omitting "timeout_ms". `lib/letflow/definitions/graph.ex`
+      CHK-11 (pre-existing, unrelated to REQ-056) requires SERVICE_TASK nodes to carry
+      an explicit integer "timeout_ms" in 1..300000 at graph-validation time, so
+      Definitions.create/2 rejected every fixture with
+      {:graph_validation_failed, [%Violation{code: :invalid_timeout, ...}]} --
+      3 of the 5 originally-observed failures were this, before the deeper issue below
+      was even reachable.
+    fix: Added "timeout_ms" => 30_000 to the fixture's SERVICE_TASK node attributes.
+      Setup-data fix only; no assertion touched.
+    result: Fixture now builds a valid definition. Uncovered the real, still-open
+      failure below.
+
+unresolved_failure_this_run_must_own:
+  description: >
+    All 4 tests in test/letflow/engine/service_task_routing_test.exs now fail
+    identically: Engine.create/2 (called via the test's own start_instance!/2 helper)
+    returns {:error, {:activation_failed, {:node_type_not_yet_implemented, :SERVICE_TASK,
+    "svc"}}} instead of {:ok, result}.
+  root_cause: >
+    lib/letflow/engine/transition.ex's dispatch_node/4 has a documented, deliberate
+    catch-all (lines 256-268) for :SERVICE_TASK, :TIMER, :SUB_PROCESS and any unknown
+    node_type -- "the 3 remaining variants ... not part of this requirement's 5-way
+    dispatch". No dispatch clause exists for :SERVICE_TASK (unlike :START, :END,
+    :HUMAN_TASK, :EXCLUSIVE_GATEWAY, :PARALLEL_GATEWAY, which all park/advance
+    correctly). Because Engine.create/2 auto-advances a fresh token along the hop
+    chain from START, any graph containing a SERVICE_TASK node fails immediately at
+    instance-creation time -- there is no way to reach "a real, running instance"
+    whose token sits at a SERVICE_TASK node under the engine's current dispatch table.
+  spec_vs_reality_gap: >
+    test/specs/REQ-056.md itself states "no dispatch-orchestration loop exists yet"
+    and that Letflow.Engine.ServiceTask is "deliberately caller-less" -- consistent
+    with lib/letflow/engine/service_task.ex being pure helpers only. But the routing
+    test's own fixture comment (service_task_routing_test.exs lines 130-133) assumes
+    the graph "just needs to be a structurally valid, activatable definition to reach
+    a real instance" -- i.e. it assumed SERVICE_TASK could sit parked like HUMAN_TASK
+    once reached. That assumption does not hold against the current transition.ex
+    dispatch table, and this mismatch was not caught before this test-runner turn
+    (the routing tests were apparently never actually executed against a real engine
+    before being handed off here).
+  affected_tests:
+    - "AC5(b) -- a JSON array body -> :invalid_2xx_body -> give_up -> instance lands in :error"
+    - "AC5(b) -- a bare JSON string body -> :invalid_2xx_body -> give_up -> instance lands in :error"
+    - "AC6 -- validate_rendered_url rejects the empty render, and the build attrs land the instance in :error"
+    - "AC8 -- a retriable kind at attempt_index == retry_limit gives up and lands the instance in :error"
+  not_fixed_by_test_runner_because: >
+    Closing this gap means either (a) ELIXIR-DEV adding a minimal SERVICE_TASK
+    dispatch_node/4 clause to transition.ex that parks the token (mirroring
+    dispatch_human_task) so an instance can legitimately sit at a SERVICE_TASK node
+    pending external completion/error, or (b) TEST-DESIGNER redesigning these 4
+    fixtures to construct/seed instance state directly (bypassing Engine.create's
+    auto-hop through the unimplemented node type), matching how other suites test
+    node-level behavior without full engine dispatch. Both are scope/design decisions
+    outside TEST-RUNNER's remit -- risk of silently expanding this run or picking the
+    wrong fix shape is too high to decide unilaterally.
+  next_action: Route back to ELIXIR-DEV (most likely fix: add SERVICE_TASK park
+    dispatch to transition.ex) with TEST-DESIGNER looped in to confirm/adjust the
+    4 fixtures once the dispatch behavior lands; re-run WF-02 Step 4 after.
+
+pre_existing_failures:
+  - test: "Letflow.TenantSlugFixtureTest post-fix unique_slug/1 avoids the cross-VM collision distinct slugs across three fresh VMs"
+    location: test/support/tenant_slug_test.exs:101
+    error: "** (MatchError) no match of right hand side value: {\"\", 255}"
+    note: >
+      NOT the previously-expected pre-existing failure. Per the task brief, REQ-061's
+      2026-08-19 run saw exactly 1 pre-existing failure, in
+      test/letflow/identity_migration_test.exs:367 (ISS-0062). This run instead sees
+      identity_migration_test.exs pass cleanly (confirmed via isolated run: "Finished
+      in 6.5 seconds ... Result: 10 passed"), and a DIFFERENT pre-existing failure in
+      tenant_slug_test.exs instead. Reproduces in isolation
+      (`mix test test/support/tenant_slug_test.exs --include slow`), deterministic on
+      this Windows host -- System.cmd("mix", ["run", "--no-start", "-e", script], ...)
+      returns {"", 255} with an accompanying "...) was unexpected at this time." line
+      (a Windows cmd.exe/batch parse-error signature), consistent with mix.bat/mix.ps1
+      argument escaping breaking on the quoted `-e` script string. Windows-only
+      environment gap in the test itself, unrelated to REQ-056.
+    filed_as: docs/issues/ISS-0064.yaml
+    github_issue: https://github.com/tvolodi/letflow/issues/221
+    forwarded: true
+    blocks_this_runs_pass_verdict: false
+    caveat: >
+      This run's own PASS/FAIL verdict is not affected by this pre-existing failure
+      per se -- but this run's overall verdict is FAIL anyway, driven entirely by the
+      4 ServiceTaskRoutingTest failures above, which ARE this run's own responsibility.
+
+pass_fail_summary:
+  total_tests: 971
+  total_properties: 5
+  properties_passed: 5
+  example_tests: 966
+  example_tests_passed: 961
+  example_tests_failed: 5
+  failed_breakdown:
+    this_runs_own_responsibility: 4   # ServiceTaskRoutingTest, SERVICE_TASK dispatch gap
+    pre_existing_unrelated: 1          # tenant_slug_test.exs, filed as ISS-0064

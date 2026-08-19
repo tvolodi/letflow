@@ -4638,3 +4638,176 @@ requirements:
       - "a task id belonging to another tenant returns the same response as a nonexistent id on all four verbs, with no state change in any case -- verified by reading the target row (INV-1, INV-5)"
       - "a caller without TasksComplete cannot complete and a caller without TasksAssign cannot assign or reassign, with the absence of state change verified in each case"
     depends_on: [REQ-083]
+
+  - id: REQ-109
+    title: Port R-Co variable_schemas storage and wire per-key output-variable validation into merge_output_variables/5 (closes ISS-0063 / GH#212)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    impl_order: 153  # letflow-queue task id
+    description: >
+      Port R-Co's `variable_schemas` table and the per-key lookup that feeds
+      it into REQ-049's merge, so that REQ-049's schema-rejection branch --
+      built, tested in isolation, and currently UNREACHABLE through the real
+      completion path -- actually fires. Closes ISS-0063 / GH#212.
+      THIS IS A PORT, NOT AN INVENTION. The source DDL exists
+      (R-Co migrations/012_event_retention.sql:32), the source algorithm
+      exists (R-Co src/engine/instance.zig:2318, `mergeVariables`), the
+      consumer call sequence is already specified
+      (lib/letflow/design/req049-variable-merge.md section 8, four numbered
+      steps, plus sections 7.2/7.3), and the JSON Schema validator is already
+      shipped in Letflow. Read section 8 and follow it rather than
+      re-specifying the sequence.
+      NOT A BUG FIX. lib/letflow/engine.ex:1543 hardcoding `nil` for
+      `VariableMerge.merge/3`'s `variable_validations` argument conforms to
+      its own design contract -- req049-variable-merge.md section 7.3 states
+      outright that "until that requirement exists, every real caller of
+      `merge/3` legitimately passes `variable_validations: nil`." REQ-109 IS
+      that requirement. State this in the moduledoc so the hardcoded `nil` is
+      not re-filed as a regression a third time.
+      THREE THINGS IN R-Co CARRY THE WORD "SCHEMA" AND A PRIOR INVESTIGATION
+      CONFLATED THEM (ISS-0063's superseded_scoping_note is the record of
+      that mistake). Name all three in the moduledoc with which is in scope:
+      (1) `tasks.form_schema` -- populated at activation from
+      `node.attributes["form_schema"]` (R-Co src/engine/instance.zig:5490,
+      `extractFormSchemaJson`) and served in the task-detail response
+      (R-Co src/api/routes/tasks.zig:896). A UI form-RENDERING payload;
+      R-Co NEVER validates submitted output against it. OUT OF SCOPE, and
+      REQ-047's OQ-3 stays open -- answering it would not close ISS-0063.
+      (2) `variable_schemas` -- `(definition_id, variable_key) -> json_schema`.
+      IN SCOPE; this requirement is about this table and nothing else.
+      (3) `form_schema_registry` -- R-Co migrations/047_repository_form_schemas.sql,
+      REPO-05, a field-level search/discovery index over form artifacts keyed
+      to `artifact_versions`. OUT OF SCOPE; named explicitly because grepping
+      "form schema" lands here first and would build the wrong mechanism.
+      DELIVERABLE 1 -- the migration. A new tenant-scoped migration creating
+      `variable_schemas`, porting R-Co migrations/012_event_retention.sql:32
+      column for column: `id` (binary_id PK), `definition_id` (NOT NULL, FK to
+      `process_definitions(id)`), `variable_key` (text, NOT NULL),
+      `json_schema` (jsonb, NOT NULL), `description` (text, nullable),
+      `created_at`; UNIQUE (definition_id, variable_key); index on
+      `definition_id` (Postgres does not index the referencing side of an FK).
+      SCHEMA-PER-TENANT, like every other Letflow engine table: the
+      `if prefix() do` guard is MANDATORY and the migration MUST also be
+      registered in `@tenant_scoped_migration_manifest`
+      (lib/letflow/tenant_provisioning.ex:295) -- both halves, per
+      20260818110003_create_tasks.exs's header. R-Co's own DDL comment agrees
+      ("ISS-0641 / GH-637: PER_TENANT ... FKs to tenant-schema
+      process_definitions(id)"), as does R-Co src/definition/sandbox_pool.zig:126,
+      which clones `variable_schemas` per tenant schema. Follow
+      20260818110003_create_tasks.exs's `on_delete:` reasoning explicitly:
+      R-Co uses ON DELETE CASCADE, but every Letflow FK onto an engine table so
+      far chose `:restrict` because no delete path exists; pick one, and state
+      the reason in the migration header rather than copying either silently.
+      DELIVERABLE 2 -- decision: a DEDICATED TABLE, not `event_type_registry`.
+      req049-variable-merge.md section 7.3 left this open ("whether a variable
+      schema is registered in the existing `event_type_registry` table under a
+      name derived from the variable key, or in a new dedicated table"). This
+      requirement SETTLES it as the dedicated table, on R-Co precedent: R-Co
+      has a distinct `variable_schemas` table keyed by
+      `(definition_id, variable_key)`, and reusing `event_type_registry` would
+      mean inventing a variable-key-to-event-type name mangling with no source
+      counterpart and would pollute the event-type namespace with
+      non-event-type rows. Record this resolution in the moduledoc citing
+      section 7.3 as the question it closes. Do NOT re-open it.
+      DELIVERABLE 3 -- the per-key lookup and the wiring. Replace the
+      hardcoded `nil` at lib/letflow/engine.ex:1543 with a real
+      `variable_validations` map, built inside the same already-open
+      transaction and already-locked projection that
+      `merge_output_variables/5` runs in. The lookup key is
+      `projection.definition_id`
+      (lib/letflow/event_store/instance_projection.ex:113) -- already carried
+      on the locked projection, so no new plumbing is needed to obtain it.
+      One SELECT of `variable_key, json_schema` for that `definition_id`, per
+      R-Co's own "Issues one SELECT on `variable_schemas`; no writes"
+      (src/engine/instance.zig:2318 doc comment) -- not one query per key.
+      ONLY OVERWRITE CANDIDATES ARE VALIDATED -- keys present in BOTH the
+      current variable map and the incoming output map. Brand-new keys are
+      NEVER validated (req049-variable-merge.md section 3.1 step 3, section 8
+      step 2). Keys with no `variable_schemas` row are simply OMITTED from
+      `variable_validations`; `merge/3`'s existing `Map.get(..., K, :ok)`
+      default already handles the omission. The validate-all-then-apply
+      two-phase property (R-Co's ISS-202 two-phase merge) is ALREADY
+      `merge/3`'s behaviour -- do not re-implement it in the caller.
+      VALIDATOR -- `Letflow.EventStore.Registry.JsonSchema.validate/2`, called
+      directly. Do NOT add a JSON Schema dependency to mix.exs and do NOT
+      write a second validator. This is a deliberate, stated deviation from
+      REQ-049's AC4 wording ("goes through REQ-024's `validate_payload/3`")
+      and req049-variable-merge.md sections 7.1/7.2, whose substance it still
+      satisfies: `JsonSchema.validate/2` IS `validate_payload/3`'s own
+      internal pure delegate (req049-variable-merge.md section 0 confirms
+      this), so no second JSON Schema implementation is introduced, while
+      `validate_payload/3` itself is bound to `event_type_registry` lookups
+      that Deliverable 2 has just decided against. Consequences to state
+      explicitly in the moduledoc so the divergence is visible rather than
+      accidental: section 7.1's `{"value": <raw>}` wrapper convention is
+      SUPERSEDED -- use the `%{key => value}` / `%{"type" => "object",
+      "properties" => %{key => json_schema}, "required" => [key]}` wrapping
+      already proven at lib/letflow/engine/sub_process.ex:180-185, which
+      exists because `JsonSchema.validate/2` requires both arguments to be
+      maps; and section 7.2's mapping row `{:error, :unknown_event_type} ->
+      :ok` no longer applies, since "not registered" is now "no row for that
+      variable_key" rather than an event-type miss. A non-empty
+      `[ValidationFailure.t()]` return becomes `{:rejected, failures}`, which
+      is what `merge/3` already consumes.
+      REGISTRATION (the INSERT path) IS OUT OF SCOPE, DEFERRED. This
+      requirement builds the table, the Ecto schema, the lookup, and the
+      wiring. It does NOT build a path that WRITES `variable_schemas` rows.
+      R-Co scoped it the same way -- its own merge design says variable
+      schemas are "created during process definition loading (existing
+      mechanism, not part of ISS-202)" (R-Co src/design/engine-merge.md:173),
+      with the actual write path living in
+      R-Co src/api/routes/solution_packs.zig:299 (solution-pack import) and
+      R-Co src/definition/fixture_loader.zig:32. Because an unpopulated table
+      would leave the rejection branch exactly as unreachable as it is today,
+      this requirement's acceptance criteria prove the path end-to-end with
+      rows seeded directly via `Repo.insert` against a provisioned tenant
+      schema, and the moduledoc must name the deferred follow-up (a
+      definition-upload / solution-pack-import registration path, S4 route
+      layer plus its own requirement) rather than leaving it unstated.
+      DO NOT WIRE THE OTHER TWO WAITING CONSUMERS. Two further Letflow call
+      sites carry null-returning `variable_schemas` placeholders and are
+      explicitly OUT OF SCOPE here -- touching them turns this into three
+      requirements: `default_variable_schema_fetcher/2`
+      (lib/letflow/definitions/promotion_plan.ex:196, whose comment "there is
+      no `variable_schemas` table or `process_definitions` column in Letflow
+      today" becomes stale and should be corrected to point at this
+      requirement WITHOUT changing the function's behaviour) and
+      `default_lookup/0`'s `variable_schema_lookup`
+      (lib/letflow/engine/pin_resolver.ex, REQ-059). Name both in the
+      moduledoc as known remaining consumers.
+      OPEN QUESTION -- FLAGGED, NOT RESOLVED HERE (do not settle it in code).
+      REQ-059 (PIN-01/PIN-03, `done`) freezes exactly one `:variable_schema`
+      pin per instance at start time and forbids any code path from
+      substituting a current version for a pinned one, so that "a newer
+      catalog version published mid-flight does not affect an in-flight
+      instance." A merge-time LIVE read of `variable_schemas` can therefore
+      expose an in-flight instance to a schema edited after it started. R-Co
+      itself does the live read at merge time (src/engine/instance.zig:2318)
+      while pinning a digest over the same rows at start
+      (R-Co src/engine/pin_resolver.zig:428/490), so PORT THE LIVE READ --
+      but record the tension in the moduledoc as an open question for
+      REVIEWER, and, if REVIEWER judges it a real conflict with REQ-059,
+      route it to a `docs/migration/decisions/` record rather than deciding
+      it inside this requirement.
+      STAGE NOTE: this is S3 (`src/engine/instance.zig`, EE-09 -- the same
+      source function REQ-049 ported), but
+      docs/migration/stage-3-instance-engine.md currently reads "Status: done
+      -- all Stage 3 requirements shipped." DOC-UPDATER must amend that line
+      and the stage's requirement list when this lands, so the stage file does
+      not silently contradict docs/requirements.yaml.
+      SECURITY (INV-1): `variable_schemas` is a tenant-data path -- the table
+      is tenant-schema-scoped and every read MUST carry an explicit `prefix:`.
+      A missing, nil or empty prefix must fail closed, matching the
+      fail-closed treatment already established elsewhere in the engine.
+    acceptance_criteria:
+      - "priv/repo/migrations gains a variable_schemas migration guarded by `if prefix() do` AND registered in lib/letflow/tenant_provisioning.ex's @tenant_scoped_migration_manifest, applying cleanly against a freshly provisioned tenant schema -- both halves verified, the manifest entry by inspection and the apply by provisioning a tenant and reading the table back"
+      - "the created table carries definition_id (FK to process_definitions(id)), variable_key, json_schema, description and created_at, and inserting a second row with the same (definition_id, variable_key) pair is rejected by the UNIQUE constraint -- demonstrated by an actual failing insert, not by reading the migration source"
+      - "with a variable_schemas row seeded for an overwrite candidate key, completing a task through the real Letflow.Engine.complete_task/3 with a value that violates that schema leaves the instance variable map WITHOUT the rejected value, sets the instance status to ERROR, and appends exactly one EXECUTION_ERROR event whose payload names the offending variable_key -- driven through complete_task/3, NOT through Engine.set_instance_error/2, which is the shortcut test/letflow/engine_execution_error_test.exs's AC4b had to take precisely because this path was unreachable"
+      - "with the same seeded schema, completing a task with a value that CONFORMS overwrites the key, leaves the instance status unchanged, appends a VARIABLE_OVERWRITTEN event, and advances the token -- verified by reading instance_projections and events back"
+      - "an overwrite candidate key with NO variable_schemas row merges untouched with no EXECUTION_ERROR, and a brand-new key (absent from the instance's current variables) whose value would violate a seeded schema for that same key is still inserted unvalidated -- two explicit tests, the second pinning req049-variable-merge.md section 3.1's overwrite-candidates-only rule"
+      - "a variable_schemas row belonging to tenant A has zero effect on a completion running in tenant B: the identical (definition_id, variable_key, violating value) completion that is REJECTED in tenant A SUCCEEDS in tenant B, demonstrated with two provisioned tenant schemas (INV-1)"
+      - "a lookup invoked with a missing, nil or empty prefix fails closed with a distinct, pattern-matchable error and issues no query, demonstrated by a test rather than argued"
+      - "mix.exs gains no new JSON Schema dependency and grep shows the validation calls Letflow.EventStore.Registry.JsonSchema.validate/2, with the moduledoc stating why this rather than REQ-024's validate_payload/3 and that req049-variable-merge.md sections 7.1 and 7.2 are superseded on the wrapper shape and the :unknown_event_type row"
+      - "the moduledoc names all three R-Co 'schema' concepts (tasks.form_schema, variable_schemas, form_schema_registry) with which is in scope, states that engine.ex's former hardcoded nil was design-sanctioned rather than a defect, names the deferred registration/INSERT path as a follow-up, names promotion_plan.ex and pin_resolver.ex as the two remaining unwired consumers, and records the REQ-059 pinning-vs-live-read tension as an open question for REVIEWER"
+    depends_on: [REQ-027, REQ-048, REQ-049, REQ-061]

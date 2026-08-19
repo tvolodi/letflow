@@ -100,8 +100,9 @@ scoping_note: >
 
   (1) `tasks.form_schema` -- R-Co populates this from
   `node.attributes["form_schema"]` at activation
-  (src/engine/instance.zig:5488 `extractFormSchemaJson`) and serves it in the
-  task-detail API response (src/api/routes/tasks.zig:894) as a UI
+  (src/engine/instance.zig:5490 `extractFormSchemaJson`; :5488 is its doc
+  comment) and serves it in the task-detail API response
+  (src/api/routes/tasks.zig:896, emitted at :922/:934) as a UI
   form-RENDERING payload. R-Co NEVER validates submitted output variables
   against it. REQ-047's OQ-3 is therefore answerable (the source is the node
   attributes key -- option A of the two it listed), but answering it would NOT

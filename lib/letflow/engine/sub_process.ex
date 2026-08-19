@@ -94,6 +94,17 @@ defmodule Letflow.Engine.SubProcess do
              failures :: [ValidationFailure.t()]}
 
   # ---------------------------------------------------------------------
+  # ISS-0071 -- derived idempotency-key suffixes (see
+  # lib/letflow/design/iss071-idempotency-key-helper.md). Must stay
+  # pairwise-distinct from each other and from any caller-supplied base
+  # idempotency_key, since event_idempotency.idempotency_key is a
+  # schema-wide-unique index, not per-instance.
+  # ---------------------------------------------------------------------
+  @sub_process_start_suffix "sub_process_start"
+  @sub_process_completion_error_suffix "sub_process_completion_error"
+  @sub_process_completed_suffix "sub_process_completed"
+
+  # ---------------------------------------------------------------------
   # §3.2.1 / §3.2.2 -- pure input/output filtering.
   # ---------------------------------------------------------------------
 
@@ -226,6 +237,18 @@ defmodule Letflow.Engine.SubProcess do
 
   defp failure_detail({:definition_not_found, _reason}),
     do: {"SUB_PROCESS_DEFINITION_NOT_FOUND", "definition_name", []}
+
+  # ISS-0071: shared derivation for the three sub_process idempotency-key
+  # suffixes above, so the three call sites can't drift out of sync with
+  # each other. See lib/letflow/design/iss071-idempotency-key-helper.md.
+  @spec derive_idempotency_key(
+          base :: String.t() | nil,
+          suffix :: String.t(),
+          ids :: [String.t()]
+        ) :: String.t()
+  defp derive_idempotency_key(base, suffix, ids) do
+    Enum.join([base, suffix | ids], "::")
+  end
 
   # ---------------------------------------------------------------------
   # §3.3 -- prepare_child_activation/4 (activation-time, pre-Multi).
@@ -614,7 +637,11 @@ defmodule Letflow.Engine.SubProcess do
       # same request appends, while keeping the value traceable back to the
       # originating request's own idempotency_key.
       idempotency_key:
-        "#{Map.get(attrs, :idempotency_key)}::sub_process_start::#{child_instance_id}"
+        derive_idempotency_key(
+          Map.get(attrs, :idempotency_key),
+          @sub_process_start_suffix,
+          [child_instance_id]
+        )
     }
 
     case EventStore.append(event_attrs, prefix: prefix) do
@@ -713,7 +740,11 @@ defmodule Letflow.Engine.SubProcess do
     # from both ::sub_process_start:: and ::sub_process_completed:: so it
     # can never collide with either.
     error_idempotency_key =
-      "#{idempotency_key}::sub_process_completion_error::#{parent_token.instance_id}::#{child_instance_id}"
+      derive_idempotency_key(
+        idempotency_key,
+        @sub_process_completion_error_suffix,
+        [parent_token.instance_id, child_instance_id]
+      )
 
     case load_parent_context(parent_token, prefix) do
       {:error, reason} ->
@@ -1121,7 +1152,11 @@ defmodule Letflow.Engine.SubProcess do
       # Reusing it unchanged here would collide against the
       # schema-wide-unique `event_idempotency.idempotency_key` index.
       idempotency_key:
-        "#{idempotency_key}::sub_process_completed::#{parent_instance_id}::#{child_instance_id}"
+        derive_idempotency_key(
+          idempotency_key,
+          @sub_process_completed_suffix,
+          [parent_instance_id, child_instance_id]
+        )
     }
 
     case EventStore.append(event_attrs, prefix: prefix) do

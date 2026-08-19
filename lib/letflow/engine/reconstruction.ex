@@ -288,12 +288,20 @@ defmodule Letflow.Engine.Reconstruction do
   # snapshot-aware replay-source selection". Both Event and ArchivedEvent
   # queries gain a `sequence_number > min_sequence_number - 1` clause
   # (design doc §5.1), i.e. `>= min_sequence_number`.
+  #
+  # Public/`@doc false` (REQ-059 widening) for the same precedent
+  # `Letflow.Engine.advance_until_stable/4` etc. already set (see that
+  # module's own comment) -- `Letflow.Engine.PinResolver.reconstruct_effective_pins/2`
+  # (req059-pin-resolver.md §6) reuses this exact merged, archive-aware read
+  # rather than writing a second, independently-drifting copy of the same
+  # events/events_archive merge logic.
+  @doc false
   @spec read_full_log(
           instance_id :: Ecto.UUID.t(),
           prefix :: String.t(),
           min_sequence_number :: pos_integer()
         ) :: {:ok, [merged_event()]} | {:error, term()}
-  defp read_full_log(instance_id, prefix, min_sequence_number) do
+  def read_full_log(instance_id, prefix, min_sequence_number) do
     Repo.transaction(fn ->
       # events_archive queried first -- the design doc §9 OQ-1's own
       # argued-safe ordering under READ COMMITTED (archive/1 only ever moves

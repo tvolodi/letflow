@@ -84,6 +84,33 @@ defmodule Letflow.Engine do
   `instance_projections`/`tokens`/`tasks` carries a `tenant_id` column
   (Decision 0006 D2).
 
+  ## REQ-059 (PIN-01..PIN-04) — pin resolution runs before any write
+
+  `start_instance/5`'s call order is, in this exact sequence: build the
+  graph once (`build_graph/1`, reused by both this step and `activate/3`
+  below rather than built twice); `Letflow.Engine.PinResolver.resolve/4`
+  (enumerates and resolves every `SERVICE_TASK`/`SUB_PROCESS` catalog/module
+  reference plus exactly one `variable_schema` entry, against an injectable
+  `PinResolver.Lookup.t()` — see `pin_lookup/2`/`pin_overrides/1` below);
+  `PinResolver.validate_initial_variables/2` (rejects initial variables
+  violating the resolved `variable_schema`, reusing REQ-024's
+  `Letflow.EventStore.Registry.JsonSchema.validate/2`); `parent_pins/2` +
+  `PinResolver.apply_inheritance/2` (child pin inheritance when
+  `attrs[:parent_instance_id]` is given, `{:ok, own_pins, []}` unchanged
+  otherwise); **only then** `create_snapshot/3` — the first step in the
+  whole sequence that performs any `Repo` write. A failed resolution,
+  validation, or parent-pin lookup therefore writes zero rows anywhere
+  (`instance_definition_snapshots` included) by construction, never by a
+  rollback — see `lib/letflow/design/req059-pin-resolver.md` §3 for the full
+  call-order specification this implements verbatim. The resolved
+  `pins`/`conflicts` are threaded through `activate/3` (its own signature
+  changed to `activate(instance_id, graph, initial_variables)`, taking the
+  already-built graph instead of rebuilding it) into `persist/10`, which
+  embeds them into the `INSTANCE_STARTED` event payload
+  (`append_instance_started_event/8`) — see
+  `Letflow.Engine.PinResolver`'s own moduledoc for the full PIN-01..PIN-04
+  algorithm and its named SCOPE GAPs.
+
   ## `complete_task/3` (EE-04, REQ-048) — HTTP and assignee authorization are
   ## out of scope
 
@@ -224,6 +251,7 @@ defmodule Letflow.Engine do
   alias Letflow.Definitions.SnapshotStore
   alias Letflow.Engine.ExecutionError
   alias Letflow.Engine.InstanceState
+  alias Letflow.Engine.PinResolver
   alias Letflow.Engine.Reconstruction
   alias Letflow.Engine.SnapshotWriter
   alias Letflow.Engine.Task
@@ -261,6 +289,11 @@ defmodule Letflow.Engine do
           | {:error, {:graph_structure_invalid, term()}}
           | {:error, {:activation_failed, term()}}
           | {:error, {:event_append_failed, term()}}
+          | {:error, {:unresolved_catalog_ref, ref :: String.t()}}
+          | {:error, {:unresolved_module_ref, ref :: String.t()}}
+          | {:error,
+             {:variable_schema_violation, [Letflow.EventStore.Registry.ValidationFailure.t()]}}
+          | {:error, {:parent_pin_lookup_failed, reason :: term()}}
           | {:error, Ecto.Changeset.t()}
           | {:error, term()}
 
@@ -364,12 +397,33 @@ defmodule Letflow.Engine do
   # Ecto.Multi below (design doc §9 OQ-4).
   # ---------------------------------------------------------------------
 
+  # REQ-059 (design doc §3) -- pin resolution (PinResolver.resolve/4),
+  # initial-variable validation against the resolved variable_schema, and
+  # child-instance pin inheritance all run BEFORE create_snapshot/3's first
+  # Repo write, so a failed resolution/validation/parent-pin-lookup writes
+  # zero rows anywhere (PIN-01 AC1/AC4, PIN-02 AC2) -- satisfied by
+  # construction (a failure returns before create_snapshot/3 ever runs), not
+  # by a rollback. The graph is built once, up front, and threaded into both
+  # PinResolver.resolve/4 and activate/3 (its own signature changed from
+  # activate(instance_id, definition, initial_variables) to
+  # activate(instance_id, graph, initial_variables) -- mechanical, avoids
+  # building the same graph twice).
   defp start_instance(definition, initial_variables, correlation_key, attrs, prefix) do
     instance_id = Ecto.UUID.generate()
 
-    with {:ok, _snapshot} <- create_snapshot(instance_id, definition, prefix),
-         {:ok, graph, new_instance_state} <-
-           activate(instance_id, definition, initial_variables) do
+    with {:ok, graph} <- build_graph(definition.graph),
+         {:ok, own_pins, variable_json_schema} <-
+           PinResolver.resolve(
+             graph,
+             definition,
+             pin_lookup(attrs, prefix),
+             pin_overrides(attrs)
+           ),
+         :ok <- PinResolver.validate_initial_variables(initial_variables, variable_json_schema),
+         {:ok, parent_pins} <- parent_pins(attrs, prefix),
+         {:ok, pins, conflicts} <- PinResolver.apply_inheritance(own_pins, parent_pins),
+         {:ok, _snapshot} <- create_snapshot(instance_id, definition, prefix),
+         {:ok, new_instance_state} <- activate(instance_id, graph, initial_variables) do
       persist(
         instance_id,
         definition,
@@ -377,9 +431,57 @@ defmodule Letflow.Engine do
         correlation_key,
         graph,
         new_instance_state,
+        pins,
+        conflicts,
         attrs,
         prefix
       )
+    end
+  end
+
+  # design doc §8 -- attrs[:pin_lookup] surface: a caller-supplied
+  # PinResolver.Lookup.t(), or PinResolver.default_lookup/0 (the always-fails
+  # -for-catalog/module lookup) when none is given. prefix is unused today
+  # (mirrors the design's own 2-arity spec) -- kept as a named parameter
+  # rather than dropped, since a real future Lookup builder plausibly needs
+  # the tenant schema to construct itself.
+  @spec pin_lookup(attrs :: map(), prefix :: String.t() | nil) :: PinResolver.Lookup.t()
+  defp pin_lookup(attrs, _prefix) do
+    Map.get(attrs, :pin_lookup, PinResolver.default_lookup())
+  end
+
+  # design doc §8 -- attrs[:pin_overrides] surface, [] when absent.
+  @spec pin_overrides(attrs :: map()) :: [PinResolver.override_entry()]
+  defp pin_overrides(attrs) do
+    Map.get(attrs, :pin_overrides, [])
+  end
+
+  # design doc §8 -- attrs[:parent_instance_id] surface: nil (root instance,
+  # no parent) when absent; otherwise reconstructs the parent's effective pin
+  # set via PinResolver.reconstruct_effective_pins/2. The design's own §8
+  # spec shows a bare `[PinResolver.effective_pin()] | nil` return type, but
+  # its own prose requires a reconstruct_effective_pins/2 failure to
+  # propagate as create/2's own {:error, {:parent_pin_lookup_failed, reason}}
+  # -- a bare, untagged return cannot carry that error, so this
+  # implementation returns {:ok, pins_or_nil} | {:error, _} to fit the
+  # `with` chain above, the smallest change consistent with the design's own
+  # stated error-propagation requirement. Flagged for REVIEWER (also design
+  # doc §9 OQ-4: the :parent_instance_id key name itself is a forward guess
+  # against not-yet-built REQ-062, unconfirmed against that requirement's
+  # own eventual code).
+  @spec parent_pins(attrs :: map(), prefix :: String.t() | nil) ::
+          {:ok, [PinResolver.effective_pin()] | nil}
+          | {:error, {:parent_pin_lookup_failed, reason :: term()}}
+  defp parent_pins(attrs, prefix) do
+    case Map.get(attrs, :parent_instance_id) do
+      nil ->
+        {:ok, nil}
+
+      parent_instance_id ->
+        case PinResolver.reconstruct_effective_pins(parent_instance_id, prefix: prefix) do
+          {:ok, pins} -> {:ok, pins}
+          {:error, reason} -> {:error, {:parent_pin_lookup_failed, reason}}
+        end
     end
   end
 
@@ -396,9 +498,8 @@ defmodule Letflow.Engine do
   # before the Multi opens, so a dispatch failure never needs a rollback.
   # ---------------------------------------------------------------------
 
-  defp activate(instance_id, definition, initial_variables) do
-    with {:ok, graph} <- build_graph(definition.graph),
-         {:ok, start_node} <- find_start_node(graph) do
+  defp activate(instance_id, graph, initial_variables) do
+    with {:ok, start_node} <- find_start_node(graph) do
       token_id = Ecto.UUID.generate()
       root_token = %Token{token_id: token_id, node_id: start_node.id, branch_id: instance_id}
 
@@ -425,7 +526,7 @@ defmodule Letflow.Engine do
       hop_limit = length(graph.nodes) * 4 + 10
 
       case advance_until_stable(graph, instance_state, [token_id], hop_limit) do
-        {:ok, new_instance_state} -> {:ok, graph, new_instance_state}
+        {:ok, new_instance_state} -> {:ok, new_instance_state}
         {:error, reason} -> {:error, reason}
       end
     end
@@ -556,6 +657,8 @@ defmodule Letflow.Engine do
          correlation_key,
          graph,
          new_instance_state,
+         pins,
+         conflicts,
          attrs,
          prefix
        ) do
@@ -604,6 +707,8 @@ defmodule Letflow.Engine do
         definition,
         correlation_key,
         initial_variables,
+        pins,
+        conflicts,
         attrs,
         prefix
       )
@@ -763,20 +868,37 @@ defmodule Letflow.Engine do
   # this module must not raise on (INV-8) -- a missing value is passed
   # through unchanged to EventStore.append/2, which already returns the
   # typed :missing_actor_id / :missing_idempotency_key errors for it.
+  # REQ-059 (design doc §3) -- pins is embedded as pinned_versions (PIN-02
+  # AC3/AC4). pin_conflicts (design doc §7) is embedded, even when [],
+  # whenever this instance has a parent (attrs[:parent_instance_id] present)
+  # -- omitted entirely, not even as an empty list, when it has none, so a
+  # reader can distinguish "root instance" from "child instance with zero
+  # conflicts" from the payload shape alone.
   defp append_instance_started_event(
          instance_id,
          definition,
          correlation_key,
          initial_variables,
+         pins,
+         conflicts,
          attrs,
          prefix
        ) do
-    payload =
-      Jason.encode!(%{
-        definition_id: definition.id,
-        correlation_key: correlation_key,
-        initial_variables: initial_variables
-      })
+    base_payload = %{
+      definition_id: definition.id,
+      correlation_key: correlation_key,
+      initial_variables: initial_variables,
+      pinned_versions: pins
+    }
+
+    payload_map =
+      if Map.has_key?(attrs, :parent_instance_id) do
+        Map.put(base_payload, :pin_conflicts, conflicts)
+      else
+        base_payload
+      end
+
+    payload = Jason.encode!(payload_map)
 
     event_attrs = %{
       instance_id: instance_id,

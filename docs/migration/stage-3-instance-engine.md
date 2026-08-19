@@ -1,8 +1,10 @@
 # Stage 3 — Instance engine
 
-Status: done -- all Stage 3 requirements shipped, REQ-060 (last
-pending) merged 2026-08-19. Depends on: S2 (all of REQ-022..REQ-042
-`done`).
+Status: in progress -- every Stage 3 requirement through REQ-062 has
+shipped (REQ-060 merged 2026-08-19), but two later-added S3
+requirements are still open: REQ-109 (variable_schemas storage and
+per-key output-variable validation, closing ISS-0063 / GH#212) and
+REQ-110. Depends on: S2 (all of REQ-022..REQ-042 `done`).
 Requirements: REQ-044 `done` (Pure transition kernel core types and
 dispatch skeleton); REQ-049 `done` (Variable scoping and merge, EE-09);
 REQ-050 `done` (Exclusive gateway evaluation and condition expressions,
@@ -121,8 +123,22 @@ PinResolver integration during the merge of feature/WF02-REQ062-20260819
 into main, since both requirements independently touched
 lib/letflow/engine.ex/lib/letflow/engine/reconstruction.ex; same
 header-sync gap-fix shape applied by this requirement's own
-DOC-UPDATER). All Stage 3 requirements (`docs/requirements.yaml`) are
-now `done`.
+DOC-UPDATER); REQ-109 `pending` (variable_schemas storage and per-key
+output-variable validation at the merge call site, closing ISS-0063 /
+GH#212 -- ports R-Co migrations/012_event_retention.sql:32's
+variable_schemas table as a tenant-scoped migration plus
+Letflow.Engine.VariableSchema (Ecto schema, the single per-definition
+SELECT, and the pure validations builder), and replaces the hardcoded
+`nil` variable_validations argument at
+Letflow.Engine.merge_output_variables's VariableMerge.merge/3 call with
+a real map, making REQ-061's `{:rejected, ...}` ->
+ExecutionError.append_multi/3 branch reachable through
+complete_task/3 for the first time; validation goes through REQ-024's
+pure JsonSchema.validate/2 delegate with no new mix.exs dependency, and
+the registration/INSERT path is deferred to REQ-078/REQ-082);
+REQ-110 `pending`. Every Stage 3 requirement listed above through
+REQ-062 is `done` in `docs/requirements.yaml`; REQ-109 and REQ-110 were
+added to this stage afterwards and are still open.
 
 ## Scope
 

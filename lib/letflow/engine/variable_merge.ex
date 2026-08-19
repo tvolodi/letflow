@@ -15,26 +15,49 @@ defmodule Letflow.Engine.VariableMerge do
       `{:rejected, failures}` aborts the **entire** batch: nothing from this
       call is merged (not even otherwise-unproblematic `new_keys` inserts),
       and `merge/3` returns `{:rejected, current_variables,
-      [execution_error_event]}` instead (design doc §3.2 — a reasoned
-      reconstruction, not verified against `instance.zig`'s literal source,
-      since no R-Co source tree is reachable in this environment).
+      [execution_error_event]}` instead (design doc §3.2 — **verified against
+      `instance.zig`'s literal source** by REQ-109, which read the R-Co tree
+      directly: `mergeVariables`'s own doc comment at
+      `src/engine/instance.zig:2300-2304` documents the ISS-202 two-phase
+      merge — "Phase 1: Validate ALL output variables … with NO state change.
+      On any failure, return early with violation. Phase 2: Apply all
+      validated keys … only if Phase 1 succeeds. On failure, leave variables
+      untouched." — confirmed by the code beneath it (`:2395` "Phase 1
+      succeeded", `:2470` `PHASE 2: APPLICATION`). This was previously
+      qualified as an unverified reconstruction on the grounds that no R-Co
+      source tree was reachable; the tree **is** reachable and the
+      reconstruction was correct. Closes ISS-0075 / GH#296 claim 2).
     * An empty `incoming_variables` map is a no-op: zero events, the same
       `current_variables` value returned unchanged (design doc §9).
 
   `merge/3` never runs schema validation itself — `variable_validations` is
   a map of **already-computed** per-key outcomes the caller resolves (design
-  doc §2, §7) by calling `Letflow.EventStore.Registry.validate_payload/3`
-  (REQ-024) before invoking `merge/3`, not a second JSON Schema
-  implementation. This is what keeps `merge/3` itself pure and testable
-  without a database.
+  doc §2, §7) before invoking `merge/3`, **not a second JSON Schema
+  implementation.** That substance is unchanged; what resolves the outcomes
+  changed with REQ-109. The caller is now
+  `Letflow.Engine.VariableSchema.variable_validations/5`
+  (`lib/letflow/design/req109-variable-schemas.md` §4.3), which looks the
+  per-key schema up in the tenant-scoped `variable_schemas` table and calls
+  `Letflow.EventStore.Registry.JsonSchema.validate/2` **directly** rather than
+  going through REQ-024's `Letflow.EventStore.Registry.validate_payload/3`.
+  Still no second implementation: `JsonSchema.validate/2` **is**
+  `validate_payload/3`'s own internal pure delegate
+  (`lib/letflow/event_store/registry.ex:147`). `validate_payload/3` itself is
+  bypassed because it is bound to `get_type/2` → `event_type_registry`, and
+  REQ-109 resolved variable-schema storage as a dedicated table instead. This
+  is what keeps `merge/3` itself pure and testable without a database.
 
   ## Dependency ordering: this module does not depend on REQ-061
 
   AC3 describes a rejected variable value as transitioning the instance to
-  ERROR "via REQ-061's EE-10 path." REQ-061 (EE-10, execution error handling)
-  is `status: pending` and unimplemented as of this module's own
-  implementation — this module's own `depends_on` is [REQ-044, REQ-024], not
-  REQ-061. `merge/3` is pure (see the purity section below): it never calls,
+  ERROR "via REQ-061's EE-10 path." **At the time this module was
+  implemented,** REQ-061 (EE-10, execution error handling) was `status:
+  pending` and unimplemented — this module's own `depends_on` is
+  [REQ-044, REQ-024], not REQ-061. REQ-061 has since shipped (`done`), and
+  REQ-109 wired the caller so that its ERROR path is reachable through
+  `Letflow.Engine.complete_task/3`; **none of that changes this module, and
+  the reasoning below is exactly why** (ISS-0075 / GH#296 claim 1).
+  `merge/3` is pure (see the purity section below): it never calls,
   aliases, or references any REQ-061 module. A rejected batch is signalled
   purely through `merge/3`'s own return value -- the `{:rejected,
   unchanged_variables, [execution_error_event]}` tuple -- which the caller
@@ -64,6 +87,21 @@ defmodule Letflow.Engine.VariableMerge do
   ```
 
   must return zero matches.
+
+  **That "zero matches" claim is factually wrong about shipped code and has
+  been since this module shipped — independent of REQ-109.** The grep returns
+  four matches, every one of them documentation prose (or the pattern string
+  matching itself), none an executable call site: this moduledoc necessarily
+  *names* the functions it promises never to *call*, and a textual grep cannot
+  tell a mention from a call. Tracked as **ISS-0080 / GH#301**; REQ-109
+  deliberately did not repair the recipe, and deliberately did not delete or
+  reword any of the matching lines to make it pass — doing so would satisfy a
+  gate by editing what it measures, and would destroy REQ-049 AC4's own
+  evidence artifact. The real invariant is the prose above it: no `Repo` I/O,
+  no `alias Letflow.Repo`, no `import Ecto.Query`, no `Ecto.Changeset`, no
+  invocation of `validate_payload/3`/`get_type/2`/`register_type/2`, no clock,
+  no `:rand`/`:crypto` — verified by reading this module's `alias`/`import`
+  list and its function bodies, which REQ-109 left untouched.
 
   ## Determinism
 
@@ -102,8 +140,11 @@ defmodule Letflow.Engine.VariableMerge do
   incoming value. `:ok` covers both "an explicit `:ok` outcome" and "no
   schema registered for this key" (an absent entry defaults to `:ok`, §3.1
   step 3). `merge/3` never runs a validator itself — this outcome is
-  resolved by the caller, typically by wrapping a call to
-  `Letflow.EventStore.Registry.validate_payload/3` (REQ-024).
+  resolved by the caller, which since REQ-109 is
+  `Letflow.Engine.VariableSchema.variable_validations/5`, wrapping a call to
+  `Letflow.EventStore.Registry.JsonSchema.validate/2` (REQ-024's own pure
+  delegate) rather than to `Letflow.EventStore.Registry.validate_payload/3`.
+  See the moduledoc's caller paragraph for why.
   """
   @type validation_outcome :: :ok | {:rejected, failures :: [ValidationFailure.t()]}
 

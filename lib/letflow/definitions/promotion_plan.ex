@@ -188,10 +188,14 @@ defmodule Letflow.Definitions.PromotionPlan do
   @spec default_tenant_classifier(Ecto.UUID.t()) :: :production | :test
   def default_tenant_classifier(_tenant_id), do: :test
 
-  # Default `variable_schema_fetcher` — there is no `variable_schemas` table
-  # or `process_definitions` column in Letflow today (design §9.3); always
-  # returns nil, so the :variable_schema dimension contributes zero entries
-  # under the default.
+  # Default `variable_schema_fetcher` — REQ-109 added a tenant-scoped
+  # `variable_schemas` table (`Letflow.Engine.VariableSchema`), but this
+  # fetcher is deliberately NOT wired to it: REQ-109's scope is the table, the
+  # lookup, and the `merge_output_variables` call site only, and wiring this
+  # consumer is a later requirement's job (req109-variable-schemas.md §9.2,
+  # §9.3). There is still no `variable_schemas` `process_definitions` column
+  # (design §9.3). Always returns nil, so the :variable_schema dimension
+  # contributes zero entries under the default.
   @spec default_variable_schema_fetcher(Ecto.UUID.t(), String.t()) :: nil
   defp default_variable_schema_fetcher(_tenant_id, _process_key), do: nil
 

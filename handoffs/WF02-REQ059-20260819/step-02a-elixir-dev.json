@@ -1,0 +1,69 @@
+{
+  "handoff_id": "c2f1a1a0-0003-4a00-9000-000000000059",
+  "run_id": "WF02-REQ059-20260819",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ059-20260819/step-02a-elixir-dev.json",
+  "created_at": "2026-08-19T08:13:39Z",
+  "started_at": "2026-08-19T08:13:39Z",
+  "completed_at": "2026-08-19T08:25:50Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-059"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ059-20260819/step-01-code-designer.json",
+      "handoffs/WF02-REQ059-20260819/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req059-pin-resolver.md",
+      "handoffs/WF02-REQ059-20260819/step-01b-code-design-validator.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/pin_resolver.ex",
+      "lib/letflow/engine.ex (call sites only)",
+      "lib/letflow/engine/reconstruction.ex (visibility widening only)"
+    ]
+  },
+  "task": {
+    "description": "Implement lib/letflow/design/req059-pin-resolver.md (gate-approved commit 3af91bd) exactly: new Letflow.Engine.PinResolver (lib/letflow/engine/pin_resolver.ex) with resolve/4, validate_initial_variables/2, merge_effective_pins/2, reconstruct_effective_pins/2, apply_inheritance/2, pin_for/3, the Lookup struct, default_lookup/0, and the PIN_RETRY_EXHAUSTED reserved-hook moduledoc content (design doc SS4-SS12); the SS3 7-step Engine.start_instance/5 reordering (pin resolution + variable validation + inheritance before create_snapshot/3's first Repo write, so a failed resolution writes zero rows -- PIN-01 AC1/AC4, PIN-02 AC2); widen Reconstruction.read_full_log/3 from private to public/@doc false per the REQ-053 precedent so merge_effective_pins/2 can wire into it. No migration -- pins live only in the INSTANCE_STARTED event payload. Do not write tests (TEST-DESIGNER's job); do run mix compile --warnings-as-errors and fix anything that doesn't compile clean.",
+    "acceptance_criteria": [
+      "resolve returns pinned_versions ordered by kind then ref, and two resolutions of the same definition against the same injected lookups produce byte-identical output, demonstrated by an explicit test comparing serialised payloads",
+      "a failed resolution writes zero rows -- no instance_projections row, no instance_definition_snapshots row, no events row -- verified by reading all three back after a deliberately unresolvable reference",
+      "initial variables violating the resolved variable_schema are rejected with an error listing each failing field, using REQ-024's validator rather than a second implementation",
+      "the INSTANCE_STARTED event payload carries the pinned_versions entries, and a definition with zero catalog and zero module references still records exactly one variable_schema entry; no separate pin table exists anywhere in priv/repo/migrations",
+      "a reference with no pin entry returns a distinct PinMissing error naming the reference, and no code path anywhere in the module queries a catalog for a current/latest version as a fallback -- confirmed by inspection and stated in the moduledoc",
+      "a child instance started from a parent inherits the parent's pins with source: inherited, and a child reference resolving to a different version than an inherited pin uses the INHERITED version while recording the conflict in the child's INSTANCE_STARTED payload",
+      "reconstruction via REQ-053 derives the effective pin set from INSTANCE_STARTED (plus INSTANCE_PINS_REBOUND when present) and issues zero reads against any catalog or module registry, demonstrated by an injected lookup that records whether it was called",
+      "the moduledoc names the service_catalog (S6) and PLC-01 (unscoped) dependency gap explicitly, cites R-Co's own ISS-0672/GH-306 precedent for holding PIN-01/PIN-03 partially unmet, and states that unresolvable references return typed errors rather than stubs"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented lib/letflow/engine/pin_resolver.ex exactly per the gate-approved design's SS2-SS12: resolve/4 (walks (\"SERVICE_TASK\",\"service_id\")->:catalog_entry and (\"SUB_PROCESS\",\"module_ref\")->:module node references via the PromotionPlan-cited convention, dedupes by ref, resolves against overrides first then the injected Lookup, halts on the first {:unresolved_catalog_ref,_}/{:unresolved_module_ref,_}, always appends exactly one :variable_schema entry, sorts by {Atom.to_string(kind), ref} for byte-identical serialised output -- PIN-01 AC5), validate_initial_variables/2 (reuses Letflow.EventStore.Registry.JsonSchema.validate/2 verbatim, REQ-024), merge_effective_pins/2 + reconstruct_effective_pins/2 (pure replay-time fold seeded from INSTANCE_STARTED's pinned_versions, folding ALL INSTANCE_PINS_REBOUND events per the design's OQ-2 reading, zero catalog/module capability in the call path at all -- AC7 satisfied by construction), apply_inheritance/2 (parent_pins==nil passes own_pins through; matching versions kept as-is; differing versions replaced by the inherited one with a conflict() recorded, re-sorted -- PIN-04 AC2/AC3), pin_for/3 (no-fallback accessor, PIN-03 AC1/AC5), default_lookup/0 (variable_schema_lookup total, catalog/module always {:error,:not_found}), and the Lookup struct (3 fields, mirrors ServiceScopeValidator.Lookup). Moduledoc states the SCOPE GAP (ISS-0672/GH-306), the (node_type,attribute_key) reuse citation, the persistence story (no migration anywhere), the two-distinct-'effective pin set'-functions naming note, the PIN-03 AC4 PIN_RETRY_EXHAUSTED reserved-hook (matches REQ-056's identical S6 DLQ gap, named but not wired), and every design-doc OQ (OQ-1..OQ-6) plus one implementation-time finding (OQ-7, below).\n\nReordered Letflow.Engine.start_instance/5 (lib/letflow/engine.ex) to the design's SS3 7-step sequence: build_graph/1 once (reused by both PinResolver.resolve/4 and activate/3, which no longer rebuilds it -- activate/3's signature changed to activate(instance_id, graph, initial_variables)) -> PinResolver.resolve/4 -> PinResolver.validate_initial_variables/2 -> parent_pins/2 (new private helper) -> PinResolver.apply_inheritance/2 -> create_snapshot/3 (first Repo write in the whole sequence) -> activate/3 -> persist/10 (was persist/8, gained pins/conflicts positional args before attrs/prefix). append_instance_started_event/6 -> /8 embeds pins as pinned_versions unconditionally and conflicts as pin_conflicts only when attrs[:parent_instance_id] is present (even when conflicts == [], per SS7's root-vs-child-with-zero-conflicts distinction) -- checked via Map.has_key?(attrs, :parent_instance_id) since attrs is already threaded through. New private helpers pin_lookup/2, pin_overrides/1, parent_pins/2 (design doc SS8) surface attrs[:pin_lookup]/[:pin_overrides]/[:parent_instance_id] for REQ-062's future child-creation call site. create_error() gained {:unresolved_catalog_ref,_}/{:unresolved_module_ref,_}/{:variable_schema_violation,_}/{:parent_pin_lookup_failed,_} variants. Added a new moduledoc section to Letflow.Engine stating the reordering by function name, per design item 5.\n\nWidened Reconstruction.read_full_log/3 (lib/letflow/engine/reconstruction.ex) from private to public/@doc false, following the exact advance_until_stable/4 precedent already documented in that module's own moduledoc -- PinResolver.reconstruct_effective_pins/2 calls it directly rather than duplicating the events/events_archive merge query.\n\nNo migration added anywhere -- confirmed priv/repo/migrations is untouched by this diff (git diff --stat shows only the three lib/letflow/engine* files).\n\nmix compile --force --warnings-as-errors: clean, 'Generated letflow app', zero warnings (both incremental and full 78-file recompile). mix format --check-formatted (after running mix format once to fix 3 pipe/multi-clause-map formatting mismatches mix format itself flagged): clean on all three changed files. mix test test/letflow/engine_test.exs test/letflow/engine/reconstruction_test.exs: 45 tests, 0 failures -- confirms the reordering and new INSTANCE_STARTED payload shape (pinned_versions with the default lookup's single unversioned variable_schema entry, visible in the query log) did not regress either module. Full mix test: '5 properties, 1032 tests, 0 failures'.\n\nDEVIATION 1 (OQ-7, implementation-time finding, flagged in both the PinResolver moduledoc and an engine.ex comment): the design's own resolve/4 spec (SS4, 4 args: graph, definition, lookup, overrides) has no tenant_id parameter, but SS4.2 requires calling lookup.variable_schema_lookup.(tenant_id, definition.name). ProcessDefinition carries no tenant_id field (schema-per-tenant, Engine's own moduledoc: 'tenant_id is validated, never persisted'), and resolve/4's specified arity has no other source for it. Implemented as nil passed to variable_schema_lookup -- consistent with default_lookup/0's own variable_schema_lookup ignoring its tenant_id argument entirely, and does not affect any AC (variable_schema resolution still always produces exactly one entry, PIN-02 AC4). Not silently resolved -- named for REVIEWER.\n\nDEVIATION 2 (mechanical, engine.ex comment at parent_pins/2): the design's SS8 spec shows parent_pins/2 with a bare '[PinResolver.effective_pin()] | nil' return type, but its own prose requires a reconstruct_effective_pins/2 failure to propagate as create/2's own {:error, {:parent_pin_lookup_failed, reason}} -- a bare, untagged return cannot carry that error through the with-chain. Implemented as {:ok, pins_or_nil} | {:error, {:parent_pin_lookup_failed, reason}} instead, the smallest change consistent with the design's own stated error-propagation requirement (this codebase's INV-8 no-raise discipline rules out solving it by raising instead). Flagged for REVIEWER.\n\nNo other deviations -- every other function signature, the sort order, the override/inheritance precedence (including OQ-6's literal 'inheritance wins even over :override' reading), and the PIN_RETRY_EXHAUSTED naming were implemented exactly as specified.",
+    "artifacts_out": [
+      "lib/letflow/engine/pin_resolver.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/reconstruction.ex"
+    ],
+    "issues": [
+      "OQ-7 (new, implementation-time): resolve/4's 4-arg design spec has no tenant_id parameter despite SS4.2 requiring one for variable_schema_lookup -- implemented as nil, flagged in the PinResolver moduledoc and an engine.ex comment for REVIEWER.",
+      "parent_pins/2's design-doc spec shows a bare list-or-nil return type that cannot carry SS8's own required error-propagation behavior -- implemented as a tagged {:ok, _}/{:error, _} tuple instead, flagged for REVIEWER as the minimal fix.",
+      "Every OQ-1..OQ-6 already named in the gate-approved design (override mechanism unverified against R-Co; 'most recent' vs 'all' INSTANCE_PINS_REBOUND folding; attrs vs opts placement; :parent_instance_id key name is a forward guess against not-yet-built REQ-062; variable_schema_lookup totality; override-vs-inheritance precedence) are carried forward unresolved in the moduledoc, per the design's own instruction not to silently resolve them."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ059-20260819",
+      "commit_sha_list": ["a5deb53"],
+      "remote_branch": "origin/feature/WF02-REQ059-20260819",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (2c) -- touches the event-append path of a tenant-data write (INSTANCE_STARTED payload shape change) -- then REVIEWER (2d) for OTP idiom / the two flagged deviations, before TEST-DESIGNER."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

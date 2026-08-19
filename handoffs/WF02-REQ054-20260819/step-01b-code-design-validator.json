@@ -1,0 +1,62 @@
+{
+  "handoff_id": "b3e2f1a0-0001-4a00-9c00-000000000002",
+  "run_id": "WF02-REQ054-20260819",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ054-20260819/step-01b-code-design-validator.json",
+  "created_at": "2026-08-19T03:55:00Z",
+  "started_at": "2026-08-19T03:56:08Z",
+  "completed_at": "2026-08-19T03:58:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [
+      "REQ-054"
+    ],
+    "requirement_text": {
+      "REQ-054": "Port src/engine/snapshot_writer.zig (348 lines -- R-Co's ISS-601, design artefact src/design/iss601_state_snapshots.md) as Letflow.Engine.SnapshotWriter, plus its instance_state_snapshots migration and Ecto.Schema module (schema-per-tenant per REQ-022, same as every other table this stage adds). THIS REQUIREMENT EXTENDS REQ-053's already-shipped reconstruct path -- it is not a standalone module. REQ-053 builds full-log replay from sequence 1; this requirement adds the snapshot table, the writer, and the replay-source selection that lets that same reconstruct function start from the latest snapshot instead. The deliverable is therefore a modification of REQ-053's function plus new supporting code, and the correctness bar below is that both paths agree. Purpose: reconstruction (REQ-053) replaying the FULL event log from sequence 1 is O(events) and gets slower forever. A periodic snapshot of the InstanceState as a jsonb blob lets reconstruction replay only the events SINCE the latest snapshot. - take_snapshot/N: serialises REQ-044's InstanceState (status, tokens, variables, pending task nodes, error_detail) plus the sequence_number it is current as of, into an instance_state_snapshots row. - maybe_take_snapshot/N: the cadence check -- snapshot every N events, default 1000 per snapshot_writer.zig's DEFAULT_SNAPSHOT_INTERVAL. Called after event appends and on instance completion. - REQ-053's replay-source selection: given a latest snapshot at sequence S, replay only events with sequence_number > S on top of the deserialised snapshot state, versus replaying from 1 when no snapshot exists (reconstruction.zig's determineReplaySourceForSnapshot()). This requirement extends REQ-053's reconstruct path to use snapshots when present -- and the correctness bar is that BOTH paths produce the identical state, since a snapshot that diverges from full replay is worse than no snapshot at all. - This table is NOT the same thing as REQ-027/REQ-033's instance_definition_snapshots (the immutable PD-08 DEFINITION graph bound to an instance at start). These are periodic EXECUTION STATE snapshots, mutable in the sense that new rows accumulate over an instance's life. Say so explicitly in the moduledoc -- the two names are one word apart and confusing them would be a silent data-model error. OPEN QUESTION (flag, do not silently resolve): where the events-since-last-snapshot counter lives. instance_projections.last_event_seq (REQ-023) already tracks the latest sequence per instance, which makes a pure row-based cadence check possible with no in-memory counter at all; R-Co's own SnapshotWriter is a struct holding a pool handle. If REQ-045 resolved to supervised processes, an in-process counter is available but is exactly the kind of state stage-3-instance-engine.md's second Early finding warns is NOT automatically worth a process. Leave the choice to CODE-DESIGNER, citing that finding and REQ-045's resolution."
+    },
+    "related_handoff_ids": [
+      "b3e2f1a0-0001-4a00-9c00-000000000000"
+    ],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/engine/",
+      "priv/repo/migrations/",
+      "lib/letflow/design/"
+    ]
+  },
+  "task": {
+    "description": "Independently validate lib/letflow/design/req054-instance-state-snapshots.md against REQ-054's acceptance criteria. Do not read CODE-DESIGNER's result.summary as a substitute for reading the actual file.",
+    "acceptance_criteria": [
+      "priv/repo/migrations gains an instance_state_snapshots migration, schema-per-tenant per REQ-022, applying cleanly against a provisioned tenant schema",
+      "take_snapshot writes a row whose deserialised state equals the InstanceState passed in, round-tripped field-for-field including tokens and variables",
+      "maybe_take_snapshot writes no row before the interval is reached and exactly one row when it is, with the interval configurable and defaulting to 1000",
+      "reconstructing an instance that has a snapshot at sequence S replays only events with sequence_number greater than S, and produces a state identical to the same instance reconstructed with snapshots ignored entirely -- an explicit both-paths-agree test, not just a faster-path test",
+      "the moduledoc explicitly distinguishes instance_state_snapshots (periodic execution state, this requirement) from instance_definition_snapshots (immutable PD-08 definition graph, REQ-027/REQ-033)",
+      "the moduledoc names the snapshot-cadence-counter placement as an open question left for CODE-DESIGNER, citing stage-3-instance-engine.md's second Early finding and REQ-045's process-vs-row resolution"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-derived all 9 checks against lib/letflow/design/req054-instance-state-snapshots.md, read directly (not CODE-DESIGNER's summary). (1) AC coverage map in §9 maps every AC to a concrete design section; §6's open question is an intentional, requirement-mandated non-resolution, not a TBD/deferral. (2) take_snapshot/4 (§4.1), maybe_take_snapshot/4 (§4.2), latest_snapshot/2 (§4.3) all carry full @spec with named args, types, and success/error outcomes. (3) Errors are tagged tuples throughout: {:ok, snapshot_id}|{:error, term()}; {:ok, :snapshotted|:skipped}|{:error, term()}; {:ok, {state, seq}}|{:error, :snapshot_not_found}. (4) §8 lists cross-module deps (InstanceState, Token, JoinCounter, Repo, Reconstruction, Engine context module) with direction of each edge. (5) Confirmed no .ex code with function bodies anywhere in the doc -- only @spec/@type blocks and prose query descriptions (grepped for 'def ... do', none found). (6) Verified against docs/migration/decisions/0006-identity-tables-schema-per-tenant.md D2 directly: §3's table has no tenant_id column, INV-ISS-4 restates it, matches D2's no-tenant_id-on-schema-isolated-tables rule. (7) §1 gives an explicit side-by-side table distinguishing instance_state_snapshots from instance_definition_snapshots (content/cardinality/mutability/read-path/owning-module), satisfying AC5's moduledoc requirement. (8) §6 states the cadence-counter placement as genuinely open ('This design does not pick between them'), citing stage-3-instance-engine.md's second Early finding (verified at lines ~173-184: 'Don't assume process-per-instance is automatically the right call for every piece of engine state') and req045's design doc resolution (verified: 'plain transactional context module, no process' at req045 §1) -- satisfies AC6. (9) Verified directly against lib/letflow/engine/instance_state.ex that InstanceState.t() has no error_detail field (fields are instance_id, status, tokens, variables, pending_task_nodes, join_counters only); §2.1 documents this mismatch explicitly, explains the consequence (snapshot of an :error-status instance won't carry structured error_detail), and neither silently drops the field from the requirement's intent nor fabricates a field InstanceState.t() doesn't have -- flags it for REVIEWER instead. No check failed.",
+    "artifacts_out": [
+      "lib/letflow/design/req054-instance-state-snapshots.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ054-20260819",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ054-20260819",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (2a)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -19,7 +19,7 @@ working tree / R-Co tree; nothing here is carried from memory.
 | R-Co `src/engine/instance.zig` | 4060–4070 (`error_type_str` 10-variant switch, `SCHEMA_VIOLATION` at 4062) | §11's OQ-4 naming divergence |
 | `lib/letflow/design/req049-variable-merge.md` | §3.1, §3.2, §7.1, §7.2, §7.3, §8 (five steps), §13.1, §13.2 | The consumer contract this requirement produces the input for |
 | `lib/letflow/engine.ex` | 1276–1290 (the `:merge` `Multi.run/3` step), 1526–1560 (`merge_output_variables/5`), **1543** (`VariableMerge.merge(current_variables, output_variables, nil)` — confirmed verbatim), 1150–1170 (`complete_error()`), 1216–1234 (`complete_task/3`) | §5's call-site change |
-| `lib/letflow/engine/variable_merge.ex` | 12–13, 18–20, 24–29, 31–46, 100–117 (`validation_outcome()`, `variable_validations()`) | §8's three in-place moduledoc corrections; the exact map shape produced |
+| `lib/letflow/engine/variable_merge.ex` | 12–13, 18–20, 24–29, 31–46, 100–117 (`validation_outcome()`, `variable_validations()`), 186 (`find_rejection/2`'s `Map.get(validations, key, :ok)`). **Purity self-check grep at 59–66 executed this session: it returns FOUR matches, not the zero it claims** (26, 56, 63, 106) — see §13.1 | §8's four in-place moduledoc corrections; the exact map shape produced; §13's corrected purity baseline |
 | `lib/letflow/event_store/registry.ex` | **147** (`case JsonSchema.validate(decoded, schema) do` — confirmed verbatim), 129–156 (`validate_payload/3` @spec + body), 165–175 (`get_type/2`) | §4.3's validator choice and why `validate_payload/3` is bypassed |
 | `lib/letflow/event_store/registry/json_schema.ex` | 31–32 (`@spec validate(payload :: map(), schema :: map()) :: [ValidationFailure.t()]`, guarded `when is_map(payload) and is_map(schema)`) | §4.3's wrapping requirement |
 | `lib/letflow/engine/sub_process.ex` | **179–185** (the `%{key => value}` / `%{"type" => "object", "properties" => %{key => schema}, "required" => [key]}` pair, confirmed verbatim) | §4.3's wrapping convention — proven precedent, not invented here |
@@ -30,7 +30,7 @@ working tree / R-Co tree; nothing here is carried from memory.
 | `lib/letflow/engine/lua_script_audit.ex` | 113–120 (`error_reason()` incl. `:missing_prefix`), 152–158 (`validate_prefix/1` fail-closed, no `public` fallback) | §6.1's fail-closed precedent |
 | `lib/letflow/definitions/snapshot_store.ex` | 50, 95, 137, 157 (same `:missing_prefix` precedent) | §6.1, corroborating |
 | `lib/letflow/definitions/promotion_plan.ex` | **191** (`# Default variable_schema_fetcher — there is no variable_schemas table`), 195–196 (`default_variable_schema_fetcher/2` returns `nil`) | §9's comment-only edit |
-| `lib/letflow/engine/pin_resolver.ex` | **235–237** (`variable_schema_lookup: fn _tenant_id, _process_key -> {:ok, %{version: "unversioned", json_schema: nil}} end`) | §11's OQ-2 latency argument |
+| `lib/letflow/engine/pin_resolver.ex` | **262–263** (`variable_schema_lookup: fn _tenant_id, _process_key -> {:ok, %{version: "unversioned", json_schema: nil}} end`, inside `default_lookup/0` at 262). **Corrected in rework:** an earlier draft of this design said 235–237, inheriting that number from REQ-109's own description; 230–240 is the `Lookup` `@type` block, not the value. The substance was always right, only the citation was wrong — and AC10 item 4 has ELIXIR-DEV copy this location into a moduledoc, so the wrong number would have been baked in | §11's OQ-2 latency argument; §9.2 |
 | `docs/issues/ISS-0063.yaml` | `scoping_note` (lines 93–140), NOT `superseded_scoping_note` (64–92, marked do-not-act-on) | §1's three-schemas disambiguation |
 | `docs/agents/instructions/security-invariants.md` | INV-1 (lines 46–58) | §6's fail-closed and §7's tenant-isolation obligations |
 | `docs/migration/stage-3-instance-engine.md` | 3–5 (`Status: done -- all Stage 3 requirements shipped…`) | §10's AC12 edit |
@@ -218,7 +218,7 @@ fail-closed for infrastructure faults inside an open `Ecto.Multi`.
    note that neither description mentioned it before REQ-109 added the obligation — §9.1.
 4. **`promotion_plan.ex` and `pin_resolver.ex` named as the two remaining unwired consumers**, with
    their *actual* current return values stated correctly — §9.2. In particular
-   `pin_resolver.ex:235-237` returns `{:ok, %{version: "unversioned", json_schema: nil}}`, a **populated
+   `pin_resolver.ex:262-263` returns `{:ok, %{version: "unversioned", json_schema: nil}}`, a **populated
    tuple whose `json_schema` is nil — not a nil return**; describing it as null-returning is wrong and
    AC10 is verified by reading this file.
 
@@ -270,8 +270,9 @@ database — the same pure/orchestration split `req049-variable-merge.md` §7 es
 Pure: no `Repo`, no clock, no randomness. For each key `K` in `overwrite_candidate_keys`:
 
 1. If `schemas` has no entry for `K` → **omit `K` from the result entirely.** Not `:ok` — omitted.
-   `merge/3`'s existing `Map.get(variable_validations, K, :ok)` default (`variable_merge.ex:112-117`,
-   `req049` §3.1 step 3) already treats an absent entry as `:ok`. Omission is the contract; adding an
+   `merge/3`'s existing `Map.get(variable_validations, K, :ok)` default (documented at the
+   `variable_validations` typedoc, `variable_merge.ex:110-117`; implemented at `find_rejection/2`,
+   `variable_merge.ex:186`; `req049` §3.1 step 3) already treats an absent entry as `:ok`. Omission is the contract; adding an
    explicit `:ok` would work identically but obscures which keys had a schema at all.
 2. If `schemas[K]` is present but is **not a map** (§6.3) → omit `K`, same as (1).
 3. Otherwise call the validator per §4.3 and map its result per §4.4 into `%{K => outcome}`.
@@ -319,7 +320,7 @@ This is the REQ-109 replacement for `req049-variable-merge.md` §7.2's table.
 | `[]` | `:ok` | Schema-compatible (REQ-049 AC2) |
 | `[_ \| _] = failures` | `{:rejected, failures}` | REQ-049 AC3's rejection; `failures` reused **verbatim**, no re-wrapping — it is already `[ValidationFailure.t()]`, exactly what `variable_merge.ex:96-98`'s `execution_error_event()` and `ExecutionError` consume |
 | *no row for `K`* | key **omitted** from the map | §4.2 step 1. This replaces §7.2's `{:error, :unknown_event_type} -> :ok` row, which no longer applies: "not registered" is now "no row for that `variable_key`", not an event-type miss |
-| *stored schema not a map* | key **omitted** from the map | §6.3, porting `instance.zig:2426-2428`'s "Unparseable schema string → treat as no constraint" |
+| *stored schema not a map* | key **omitted** from the map | §6.3 — a Letflow-specific defensive rule, with a related (narrower) R-Co precedent at `instance.zig:2426-2428` |
 
 **The table has exactly four rows, and none of them is unresolved.** `req049` §7.2's two unresolved rows
 (`{:error, :tenant_not_provisioned}` and `{:error, term()}`) **dissolve** rather than merely re-mapping:
@@ -386,6 +387,14 @@ widens correspondingly. Its existing two return branches — `{:ok, {:merged, �
 **`definition_id` needs no new plumbing**: it is `projection.definition_id`, and `projection` is already
 this function's first argument and the already-locked row from the `:instance_projection` step
 (`instance_projection.ex:113`).
+
+**Stale `/5` references the arity change leaves behind — owner named so this does not fall through.**
+Three artefacts refer to the function as `merge_output_variables/5` and become imprecise once it is `/7`:
+REQ-109's own description and AC-adjacent text in `docs/requirements.yaml`; `docs/issues/ISS-0063.yaml`;
+and GH#212. **No acceptance criterion requires fixing any of them, and ELIXIR-DEV must not widen scope to
+do it.** They are assigned to **DOC-UPDATER**, in the same pass that flips REQ-109's status and closes
+ISS-0063/GH#212 — that pass already edits all three files, so the correction costs one word each. The
+substance (which call site, which argument) is unambiguous either way; this is precision, not a defect.
 
 ### 5.2 The resulting sequence — `req049` §8's five steps, now all reachable
 
@@ -455,7 +464,8 @@ fail-closed.
 ### 6.2 No rows for the definition (AC5, first half)
 
 `fetch_schemas/3` returns `{:ok, %{}}`. `validations_for/3` returns `%{}`. `merge/3` receives `%{}`,
-whose every key defaults to `:ok` (`variable_merge.ex:112-117`). Every overwrite candidate merges
+whose every key defaults to `:ok` (`find_rejection/2`'s `Map.get(validations, key, :ok)`,
+`variable_merge.ex:186`; documented at the `variable_validations` typedoc, `variable_merge.ex:110-117`). Every overwrite candidate merges
 untouched, `VARIABLE_OVERWRITTEN` events are appended as usual, no `EXECUTION_ERROR`. **This is the
 behaviour that holds today with `nil`** — REQ-109 must not regress it, which is why AC5 tests it
 explicitly. `nil` and `%{}` are equivalent inputs to `merge/3` by that module's own contract.
@@ -473,9 +483,17 @@ an open transaction on the task-completion hot path**, turning one bad registrat
 failure of every completion for that definition.
 
 **Rule: a stored `json_schema` that is not a map is treated as no constraint — the key is omitted from
-`variable_validations` (§4.2 step 2), exactly as if no row existed.** This is a literal port of R-Co's
-own behaviour: `instance.zig:2426-2428` catches the schema-parse failure and comments "Unparseable
-schema string → treat as no constraint."
+`variable_validations` (§4.2 step 2), exactly as if no row existed.**
+
+**This is a Letflow-specific defensive rule with a related — but strictly narrower — R-Co precedent, not
+a literal port. Stated precisely so nobody over-claims the citation:** `instance.zig:2426-2428`'s
+"Unparseable schema string → treat as no constraint" is the `else` arm of `std.json.parseFromSlice`, so
+it fires **only when the stored text fails to parse as JSON at all**. A jsonb array, string or number
+parses fine in R-Co and is handed to `json_schema.validate` as-is; R-Co's fallback never sees it. Letflow's
+rule covers a wider class ("parsed, but not an object") because Letflow's constraint is different:
+`JsonSchema.validate/2`'s `when is_map(schema)` guard turns that wider class into a raise, which R-Co's
+untyped path does not have. The R-Co line is cited as the source system's *disposition* for an unusable
+stored schema — tolerate and skip, do not fail the merge — which is the part being ported.
 
 This is permissive by design and the permissiveness belongs at the *registration* end, not here — which
 is why §3.2's changeset gap is flagged as OQ-3. It is not silent: ELIXIR-DEV should emit a `Logger.warning`
@@ -522,9 +540,14 @@ nothing in tenant B's schema.
 
 ## 8. In-place moduledoc corrections in `lib/letflow/engine/variable_merge.ex` (AC9, closes ISS-0075 / GH#296)
 
-Three corrections, **all in `variable_merge.ex` itself** — AC9 requires each to be verified by reading
-*that* file directly, not inferred from `engine.ex`. **All three are corrections in place. Nothing is
-deleted.**
+**Four** corrections, all in `variable_merge.ex` itself — AC9's three (§8.1, §8.2, §8.3) plus one this
+design adds beyond AC9's literal enumeration (§8.4, line 106) because REQ-109 forbids leaving such text
+stale and no other requirement owns it. AC9 requires each of its three to be verified by reading *that*
+file directly, not inferred from `engine.ex`.
+
+**All four are corrections IN PLACE. Nothing is deleted.** §13.1–13.3 state why the module's own purity
+grep must not be used as the check on this section, and forbid deleting any of these lines to make that
+grep pass.
 
 ### 8.1 Lines 24–29 — REQ-109's own supersession (AC9a)
 
@@ -569,7 +592,32 @@ Replacing rather than deleting is what upgrades a documented guess into a verifi
 what makes that semantic observable in production for the first time. Landing 8.2 and 8.3 closes
 ISS-0075 / GH#296.
 
-### 8.4 `lib/letflow/engine.ex`'s moduledoc (AC8, AC11)
+### 8.4 Line 106, the `validation_outcome()` typedoc — a FOURTH in-place correction
+
+**Beyond AC9's literal three counts, and required anyway.**
+
+`variable_merge.ex:100-107`'s `@typedoc` for `validation_outcome()` ends: "this outcome is resolved by
+the caller, **typically by wrapping a call to `Letflow.EventStore.Registry.validate_payload/3`
+(REQ-024)**." That is stale about shipped code in exactly the way lines 24–29 are: after REQ-109 the
+one real caller is `Letflow.Engine.VariableSchema`, which calls `JsonSchema.validate/2` directly and
+never touches `validate_payload/3`.
+
+It is softer than lines 24–29 ("typically", not an assertion about the caller's obligation), which is
+presumably why neither AC9 nor ISS-0075 enumerates it — but it still names the wrong mechanism, and
+REQ-109's description is explicit that such text must not be left "stale for REVIEWER's
+decision-record-consistency check to catch." **Assigning it to nobody is not an option, so this design
+assigns it here.**
+
+**Correct in place, same rule as §8.1: not deleted.** Replace the `validate_payload/3` clause with the
+real mechanism (`Letflow.Engine.VariableSchema`, REQ-109, via `JsonSchema.validate/2`). The rest of the
+typedoc — that `:ok` covers both an explicit `:ok` and "no schema registered for this key," and that an
+absent entry defaults to `:ok` — is **correct and must be preserved**; §4.2's omission rule depends on
+it.
+
+Landing this leaves `variable_merge.ex` with zero remaining statements that misdescribe the caller's
+mechanism.
+
+### 8.5 `lib/letflow/engine.ex`'s moduledoc (AC8, AC11)
 
 Separate file, separate obligations. Three statements, all in `engine.ex`:
 
@@ -625,7 +673,7 @@ descriptions:
 
 - `lib/letflow/definitions/promotion_plan.ex:195-196` — `default_variable_schema_fetcher/2`, returns
   `nil`.
-- `lib/letflow/engine/pin_resolver.ex:235-237` (REQ-059) — `default_lookup/0`'s
+- `lib/letflow/engine/pin_resolver.ex:262-263` (REQ-059) — `default_lookup/0`'s
   `variable_schema_lookup`, returns `{:ok, %{version: "unversioned", json_schema: nil}}` — **a populated
   tuple whose `json_schema` is nil, not a nil return.**
 
@@ -701,7 +749,7 @@ mid-flight does not affect an in-flight instance." A merge-time **live** read of
 `lib/letflow/engine.ex`'s moduledoc (AC11) so REVIEWER disposes of it in one pass instead of
 re-deriving it:
 
-1. `default_lookup/0` returns `json_schema: nil` (`pin_resolver.ex:235-237`), so the one
+1. `default_lookup/0` returns `json_schema: nil` (`pin_resolver.ex:262-263`), so the one
    `:variable_schema` pin every instance records today carries **no schema content** — nothing
    meaningful is pinned, so nothing can be contradicted.
 2. REQ-059 AC5's no-fallback guarantee is scoped to `PinResolver`, which this requirement does not touch.
@@ -716,7 +764,7 @@ requirement's code.**
 
 §3.2's changeset requires `json_schema` to be present but does not check that it is a usable schema
 document, and the column is jsonb, which accepts arrays, strings, numbers and booleans. §6.3 handles the
-read side defensively (treat as no constraint, port of `instance.zig:2426-2428`), which is correct for
+read side defensively (treat as no constraint, §6.3), which is correct for
 the hot path but means a bad registration **silently validates nothing**.
 
 **Unresolved: where the well-formedness check belongs.** Candidates: the shared `Letflow.Definitions`
@@ -778,7 +826,7 @@ moduledocs, which is what AC8 and AC9 verify.
 | §7.2 row `{:error, :unknown_event_type} -> :ok` | **Superseded** — "not registered" is now "no row for that `variable_key`", and the key is omitted rather than mapped (§4.4) | `engine.ex` moduledoc (AC8) |
 | §7.2's two unresolved rows (`:tenant_not_provisioned`, `{:error, term()}`) | **Dissolved** — `JsonSchema.validate/2` is pure, does no `get_type/2` and no tenant resolution, so neither error surface exists (§4.4) | `engine.ex` moduledoc (AC8) |
 | §7.3 "dedicated table or `event_type_registry`?" | **CLOSED** — dedicated table (§1.1) | `VariableSchema` moduledoc (AC10) |
-| §7.3 "every real caller legitimately passes `nil`" | **No longer applies** — REQ-109 is the requirement it was waiting for. The historical `nil` was design-sanctioned, not a defect (§8.4 item 1) | `engine.ex` moduledoc (AC11) |
+| §7.3 "every real caller legitimately passes `nil`" | **No longer applies** — REQ-109 is the requirement it was waiting for. The historical `nil` was design-sanctioned, not a defect (§8.5 item 1) | `engine.ex` moduledoc (AC11) |
 | §13.1 "where a registered variable schema is stored and looked up" | **CLOSED** by §2 + §4 | `VariableSchema` moduledoc (AC10) |
 | §13.2 `validate_payload/3`'s `:tenant_not_provisioned` / unexpected-error cases | **CLOSED**, not merely re-mapped — the pure delegate has no such error surface (§4.4) | `engine.ex` moduledoc (AC8) |
 | §13.3 whole-batch atomicity, "reconstructed, not verified" | **VERIFIED CORRECT** against `instance.zig:2300-2304` (§8.3) | `variable_merge.ex` moduledoc, AC9c |
@@ -804,14 +852,57 @@ moduledocs, which is what AC8 and AC9 verify.
 
 **`Letflow.Engine` gains** a dependency on `Letflow.Engine.VariableSchema`. Nothing else changes.
 
-**`Letflow.Engine.VariableMerge` gains no dependency** — its purity contract
-(`variable_merge.ex:48-66`, grep-checkable, zero `Repo.`/`Registry.validate_payload`/`Registry.get_type`
-matches) must still hold after the §8 moduledoc edits. Those edits are prose only; the grep must still
-return zero. **Note for ELIXIR-DEV: `variable_merge.ex:63`'s own verification grep string is inside a
-fenced block in the moduledoc, and the corrected §8.1 text must not introduce a literal
-`Registry.validate_payload` mention outside that block that would make the module's own self-check
-grep return a match.** Phrase the correction to name the function without the `Registry.` prefix, or
-verify the grep after editing.
+**`Letflow.Engine.VariableMerge` gains no dependency.** Its purity contract
+(`variable_merge.ex:48-66`) must still hold after the §8 moduledoc edits. That contract is stated
+correctly at line 56 — no `Repo` I/O, no `alias Letflow.Repo`, no `import Ecto.Query`, no
+`Ecto.Changeset`, no call to `Registry.validate_payload/3` or `.get_type/2` — and it remains true
+after REQ-109, because REQ-109 adds no call site to `variable_merge.ex` at all.
+
+### 13.1 The module's own self-check grep does NOT return zero today — corrected baseline
+
+The moduledoc at `variable_merge.ex:59-66` claims its grep "must return zero matches." **It does not,
+and has not since the module shipped — independent of REQ-109.** Run this session against the current
+working tree, the grep at line 63 returns **four** matches:
+
+| Line | Match | Disposition |
+|---|---|---|
+| 26 | `Letflow.EventStore.Registry.validate_payload/3` in the lines 24–29 caller-mechanism paragraph | **Prose. Stays** — corrected in place per §8.1, never deleted. This is REQ-049 AC4's own evidence artifact |
+| 56 | `Letflow.EventStore.Registry.validate_payload/3 or .get_type/2` in the Purity section | **Prose. Stays unchanged.** It is the purity *statement itself* — legitimate documentation that necessarily names the functions it promises are absent |
+| 63 | the grep pattern string in the fenced block, matching itself | **Stays.** A self-matching pattern; nothing to fix here |
+| 106 | `Letflow.EventStore.Registry.validate_payload/3` in the `validation_outcome()` typedoc | **Prose. Stays, corrected in place** per §8.4 |
+
+**Every one of the four is documentation prose or the pattern itself. None is an executable call site.**
+The grep is a blunt textual instrument that cannot distinguish a call from a mention of a call, which is
+why its "zero matches" claim was never achievable for a module whose moduledoc discusses the very
+functions it abstains from calling.
+
+### 13.2 The actual obligation on ELIXIR-DEV — stated correctly
+
+**The obligation is NOT "make the grep return zero."**
+
+> **After §8's edits, `Letflow.Engine.VariableMerge` must introduce no new `Repo.` or `Registry.*` call
+> site, and must remain free of executable I/O — no `alias Letflow.Repo`, no `import Ecto.Query`, no
+> `Ecto.Changeset`, no invocation of `Registry.validate_payload/3`, `Registry.get_type/2` or
+> `Registry.register_type/2`, no clock read, no `:rand`/`:crypto`. §8's edits are prose-only; `merge/3`'s
+> body and every private function beneath it are untouched.**
+
+Verify that by reading the module's `alias`/`import` list and its function bodies, not by counting grep
+hits in the moduledoc.
+
+**Do not delete or reword lines 26, 56 or 106 in order to make a grep pass.** Line 26 sits inside the
+24–29 block AC9a requires **corrected in place, not deleted**; line 56 is the purity documentation
+itself; line 106 is corrected in place by §8.4. Editing any of them to satisfy the measurement would be
+`core-directives.md`'s "Never Satisfy a Gate by Editing What It Measures," and for line 26 it would
+destroy REQ-049 AC4's evidence artifact — precisely what REQ-109 forbids.
+
+### 13.3 The false self-check claim itself is out of scope here
+
+`variable_merge.ex:59-66`'s "must return zero matches" assertion is factually wrong about shipped code
+and predates REQ-109. It is **not** REQ-109's to fix — it is neither an acceptance criterion nor part of
+ISS-0075's two claims, and repairing it would mean rewriting a verification recipe that REQ-049's gate
+approved. It is being filed as its own issue by ORCH; reference that issue id from §8's edit pass if
+one is available at implementation time, but **do not take on fixing it in this run.** §13.1's table
+exists so that whoever does fix it finds the true baseline already recorded.
 
 **Table-level FK dependency:** `process_definitions` (REQ-027, `done`), in the same tenant schema.
 
@@ -833,10 +924,10 @@ Every one of REQ-109's 13 acceptance criteria maps to a concrete design element.
 | AC5 | Overwrite candidate with **no** row merges untouched, no `EXECUTION_ERROR`; **brand-new** key with a seeded schema still inserted unvalidated | **§6.2** (first half), **§4.5 step 2 + §4.2** (second half — overwrite-candidates-only), OQ-1 §11.1 (divergence flagged, not silently resolved) |
 | AC6 | Tenant A's row has zero effect in tenant B: identical completion rejected in A, succeeds in B | **§7** (five obligations), §4.1 (`prefix:` on the query), §2.3 (per-tenant table) |
 | AC7 | Lookup with missing/nil/empty prefix fails closed, distinct pattern-matchable error, **issues no query** | **§6.1**, §4.5 step 1 (ordering: prefix check precedes the empty-candidate fast path), §3.3 (`:missing_prefix` in the closed `error_reason()` union) |
-| AC8 | No new JSON Schema dep; grep shows `JsonSchema.validate/2`; `engine.ex` moduledoc states why not `validate_payload/3`, that §7.1/§7.2 are superseded, and that §13.2 is CLOSED | **§4.3** (validator choice + wrapping), **§4.4** (mapping table), **§8.4 item 2** (what goes in `engine.ex`), **§12** (the supersession list) |
-| AC9 | `variable_merge.ex` moduledoc corrected **in place** on three counts (a) lines 24-29, (b) ISS-0075 claim 1, (c) ISS-0075 claim 2 | **§8.1**, **§8.2**, **§8.3** — each states corrected-in-place, what substance is preserved, and what replaces the stale text; plus §13's grep-self-check warning |
+| AC8 | No new JSON Schema dep; grep shows `JsonSchema.validate/2`; `engine.ex` moduledoc states why not `validate_payload/3`, that §7.1/§7.2 are superseded, and that `req049-variable-merge.md` §13.2 is CLOSED | **§4.3** (validator choice + wrapping), **§4.4** (mapping table), **§8.5 item 2** (what goes in `engine.ex`), **§12** (the supersession list) |
+| AC9 | `variable_merge.ex` moduledoc corrected **in place** on three counts (a) lines 24-29, (b) ISS-0075 claim 1, (c) ISS-0075 claim 2 | **§8.1**, **§8.2**, **§8.3** — each states corrected-in-place, what substance is preserved, and what replaces the stale text. **§8.4** adds a fourth in-place correction (line 106) beyond AC9's literal three, with its reason. **§13.1-13.3** record the true purity-grep baseline and forbid deleting any of the four matching lines to satisfy it |
 | AC10 | `VariableSchema` moduledoc carries four things: three "schema" concepts; §7.3's dedicated-table resolution; REQ-078/REQ-082 as registration carriers; `promotion_plan.ex` + `pin_resolver.ex` as remaining consumers | **§3.4** (the four-item list, in this file), sourced from **§1**, **§1.1**, **§9.1**, **§9.2** |
-| AC11 | `engine.ex` moduledoc states the former `nil` was design-sanctioned by §7.3, and records the REQ-059 tension as an open question with the latency reason | **§8.4 items 1 and 3**, **OQ-2 §11.2** (all three latency reasons) |
+| AC11 | `engine.ex` moduledoc states the former `nil` was design-sanctioned by §7.3, and records the REQ-059 tension as an open question with the latency reason | **§8.5 items 1 and 3**, **OQ-2 §11.2** (all three latency reasons) |
 | AC12 | `stage-3-instance-engine.md`'s `Status:` no longer claims all S3 shipped; list includes REQ-109 | **§10** (both edits named) |
 | AC13 | `promotion_plan.ex:191`'s comment cites REQ-109; `default_variable_schema_fetcher/2` still returns `nil` | **§9.3** (comment-only edit, return value and `@spec` explicitly unchanged) |
 
@@ -851,8 +942,8 @@ Every one of REQ-109's 13 acceptance criteria maps to a concrete design element.
 | "exactly how `merge_output_variables/5`'s call site changes" | §5.1, §5.2, §5.3, §5.4 |
 | "failure modes — no rows, nil/empty prefix, malformed stored schema" | §6.2, §6.1, §6.3 (plus §6.4, `definition_id`) |
 | "`req049` §8 has FIVE steps — do not stop at step 4" | §5.2's table, step 5 |
-| "say what documentation goes where" | §3.4 (`VariableSchema`), §8.1-8.3 (`variable_merge.ex`), §8.4 (`engine.ex`), §10 (stage doc), §9.3 (`promotion_plan.ex`) |
-| "corrections in place, not deleted" | §8's preamble and each of §8.1/§8.2/§8.3 |
+| "say what documentation goes where" | §3.4 (`VariableSchema`), §8.1-8.4 (`variable_merge.ex`), §8.5 (`engine.ex`), §10 (stage doc), §9.3 (`promotion_plan.ex`) |
+| "corrections in place, not deleted" | §8's preamble and each of §8.1/§8.2/§8.3/§8.4, reinforced by §13.2's explicit prohibition on deleting any of them to satisfy a grep |
 | "carry the REQ-059 open question, do not re-decide it" | OQ-2 §11.2 |
 | "note the `SCHEMA_VIOLATION` naming divergence for REVIEWER" | OQ-4 §11.4 |
 

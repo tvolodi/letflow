@@ -4,60 +4,60 @@ defmodule Letflow.EngineExecutionErrorTest do
   append_multi/3` (the shared sink), `Letflow.Engine.set_instance_error/2` (its
   standalone entry point), and the rewired REQ-049/REQ-050 call sites inside
   `Letflow.Engine.complete_task/3`. See `test/specs/REQ-061.md` for the full
-  rationale and the CONFIRMED GAP this file documents rather than papers over.
+  rationale.
 
   Uses `Letflow.DataCase` (real Postgres), Sandbox `:auto`, `async: false` --
   mirrors `engine_cancel_instance_test.exs`'s and `engine_complete_task_test.exs`'s
   own `provisioned_tenant/0` pattern exactly. Self-contained.
 
-  ## CONFIRMED GAP -- read before trusting any "REQ-050 via complete_task/3" claim
+  ## REQ-050 downstream-gateway coverage (fixed in rework iteration 1)
 
-  Verified by direct code read AND by actually running the scenario against real
-  Postgres (not asserted from the design doc's own text):
+  `Letflow.Engine.dispatch_task_completion_hop_chain/5` routes a
+  `{:no_matching_edge, node_id, evaluated_conditions}` no-match into
+  `ExecutionError.append_multi/3` whether it's discovered on the *completing
+  task's own* outgoing edges (`Letflow.Engine.Transition`'s
+  `dispatch_task_completion/4`, for the literal `{:complete_task, token_id}`
+  event) or on a *later* hop -- e.g. an `:EXCLUSIVE_GATEWAY` reached one hop
+  downstream of the completing task, dispatched via `advance_until_stable/4`'s
+  own internal worklist loop (`{:advance_token, token_id}` events), whose
+  `{:error, reason}` is wrapped as `{:error, {:activation_failed, reason}}`
+  (engine.ex line 383) and unwrapped/rewired by the `case advance_until_stable(
+  ...)` clause in `dispatch_task_completion_hop_chain/5`. `AC4a` below exercises
+  the realistic downstream-gateway trigger (a gateway reached one hop after the
+  completing task, `graph_task_then_gateway_no_match/0`) end to end against real
+  Postgres and confirms it now lands in `ExecutionError.append_multi/3`: one
+  `EXECUTION_ERROR` event appended, instance status `:error`.
 
-  1. `Letflow.Engine.dispatch_task_completion_hop_chain/5`'s own rewired
-     `{:error, {:no_matching_edge, node_id, evaluated_conditions}}` clause
-     (`lib/letflow/engine.ex` line ~1157) only intercepts a no-match on the
-     *completing task's own* outgoing edges (`Letflow.Engine.Transition`'s
-     `dispatch_task_completion/4`, called for the literal `{:complete_task,
-     token_id}` event). It does **not** intercept a no-match discovered on a
-     *later* hop -- e.g. an `:EXCLUSIVE_GATEWAY` reached one hop downstream of
-     the completing task, which is dispatched via `advance_until_stable/4`'s own
-     internal worklist loop (`{:advance_token, token_id}` events), a completely
-     separate code path whose `{:error, reason}` is wrapped as `{:error,
-     {:activation_failed, reason}}` (line 383) and returned **unrewired** --
-     the whole transaction still aborts, exactly the pre-REQ-061 bug.
-  2. The one scenario where the rewired clause fires directly (a `:HUMAN_TASK`
-     whose own outgoing edges fail to resolve) is **structurally unreachable**
-     via the public API: `Letflow.Definitions.create/2` runs `Graph.
-     validate_edge_conditions/1` (CHK-19, `check_human_task_fallback_edge/1`)
-     before any row is written, which rejects a `:HUMAN_TASK` with a
-     really-conditioned outgoing edge and no fallback -- confirmed directly:
-     `Letflow.Definitions.Graph.validate_edge_conditions(g)` on such a graph
-     returns `%{valid: false, violations: [%{code: :human_task_no_fallback_edge,
-     ...}]}`. A zero-outgoing-edges `:HUMAN_TASK` is independently rejected by
-     `Graph.validate_graph/1`'s `check_isolated_nodes/1` (`:isolated_node`).
+  Note: the one scenario where a no-match is discovered on the completing
+  task's *own* outgoing edges directly (a `:HUMAN_TASK` whose own edges fail to
+  resolve) is structurally unreachable via the public API --
+  `Letflow.Definitions.create/2` runs `Graph.validate_edge_conditions/1`
+  (CHK-19, `check_human_task_fallback_edge/1`) before any row is written,
+  rejecting a `:HUMAN_TASK` with a really-conditioned outgoing edge and no
+  fallback; a zero-outgoing-edges `:HUMAN_TASK` is independently rejected by
+  `Graph.validate_graph/1`'s `check_isolated_nodes/1` (`:isolated_node`). That
+  does not matter for REQ-050's own acceptance criteria, whose realistic
+  trigger is always a *downstream* gateway (AC4a covers this) -- it only means
+  the same-hop clause itself is exercised indirectly (via `AC4b`'s direct
+  `set_instance_error/2` call using the identical `error_args()` shape) rather
+  than via its own dedicated `complete_task/3` scenario.
 
-  **Net effect: REQ-050's no-matching-gateway-edge case, reached the way any
-  real process definition would reach it (the gateway one or more hops after
-  the completing task), is NOT actually routed into `ExecutionError.
-  append_multi/3` by the shipped code -- `AC4a` below demonstrates this
-  precisely, with the transaction still aborting and zero `ERROR` state
-  persisted.** This is a confirmed defect in the shipped `complete_task/3`
-  rewiring, not something this test file works around by picking an
-  artificial trigger -- flagged in this run's handoff `issues` for
-  ORCH/ISSUE-FIXER, since REVIEWER's AC4 sign-off ("2 of 2 currently-shippable
-  callers wired") assumed both REQ-049's and REQ-050's call sites were
-  reachable through `complete_task/3`, and REQ-049's is independently
-  unreachable too (see `AC4b`'s test below).
+  REQ-049's own schema-violation call site (`merge_output_variables/5`) remains
+  unreachable via `complete_task/3` today -- it always passes `nil` for
+  `VariableMerge.merge/3`'s `variable_validations` argument, so its own
+  `{:rejected, ...}` branch can never fire. This is a pre-existing gap
+  inherited from REQ-049's own shipped code, not something REQ-061 introduced
+  or is in scope to fix -- filed separately, see `docs/issues/` for the
+  tracking issue. `AC4b` below still verifies REQ-049's `error_args()` shape
+  commits correctly through `set_instance_error/2` directly.
 
-  What DOES work, and is tested here with real coverage: `Letflow.Engine.
-  ExecutionError.append_multi/3` and `Letflow.Engine.set_instance_error/2`
-  themselves -- the shared sink's own mechanics (event payload shape,
-  atomicity, eligibility/concurrency, and `complete_task/3`'s own
-  already-shipped-pre-REQ-061 M2 rejection of a further call against an
-  `:error` instance) are all genuinely reachable via the public API and
-  verified below against real Postgres.
+  What is tested here with real coverage against real Postgres: `Letflow.
+  Engine.ExecutionError.append_multi/3` and `Letflow.Engine.set_instance_error/2`
+  themselves (event payload shape, atomicity, eligibility/concurrency,
+  `complete_task/3`'s own already-shipped-pre-REQ-061 M2 rejection of a further
+  call against an `:error` instance), AND, as of this rework, REQ-050's
+  realistic downstream-gateway trigger reached genuinely through
+  `complete_task/3` (`AC4a`).
   """
 
   use Letflow.DataCase, async: false
@@ -257,9 +257,9 @@ defmodule Letflow.EngineExecutionErrorTest do
   # treated as false per REQ-050 AC4), no default edge -- the REALISTIC shape
   # REQ-050's own requirement text describes (a gateway a completing task feeds
   # into). This graph IS valid/activatable (CHK-19 only constrains a HUMAN_TASK's
-  # OWN edges, not a downstream EXCLUSIVE_GATEWAY's) -- see this file's moduledoc
-  # for why the resulting no-match is nonetheless NOT routed into ExecutionError
-  # today (AC4a, the confirmed gap).
+  # OWN edges, not a downstream EXCLUSIVE_GATEWAY's) -- the resulting no-match is
+  # routed into ExecutionError.append_multi/3 via dispatch_task_completion_hop_chain/5's
+  # advance_until_stable/4 clause (see AC4a below).
   defp graph_task_then_gateway_no_match do
     %{
       "nodes" => [
@@ -305,7 +305,8 @@ defmodule Letflow.EngineExecutionErrorTest do
         error_attrs(instance_id, %{
           error_type: :no_matching_gateway_edge,
           affected: {:node, "gw"},
-          reason: "no outgoing edge matched conditions and no default edge configured for gateway node 'gw'",
+          reason:
+            "no outgoing edge matched conditions and no default edge configured for gateway node 'gw'",
           variables: %{"seed" => 1}
         })
 
@@ -356,8 +357,9 @@ defmodule Letflow.EngineExecutionErrorTest do
   # ---------------------------------------------------------------------------------
   # AC3 -- an instance in ERROR rejects task completion with a distinct conflict.
   # Already-shipped REQ-048 M2 behavior (design doc §6) -- exercised here via
-  # set_instance_error/2 to reach :error (independent of the broken complete_task/3
-  # rewiring, AC4a), then a real complete_task/3 call against the still-PENDING task.
+  # set_instance_error/2 to reach :error directly (independent of AC4a's
+  # complete_task/3 route), then a real complete_task/3 call against the
+  # still-PENDING task.
   # ---------------------------------------------------------------------------------
 
   describe "AC3 -- complete_task/3 against an ERROR instance" do
@@ -385,31 +387,41 @@ defmodule Letflow.EngineExecutionErrorTest do
   end
 
   # ---------------------------------------------------------------------------------
-  # AC4 -- see this file's moduledoc for the confirmed gap in full. AC4a documents
-  # the actual (broken) shipped behavior for REQ-050's realistic trigger; AC4b
-  # proves the one part of AC4 that does hold: REQ-049's and REQ-050's own
-  # error_args() shapes both commit through the identical, single append_multi/3.
+  # AC4 -- see this file's moduledoc for full rationale. AC4a exercises REQ-050's
+  # realistic downstream-gateway trigger end to end through complete_task/3 (fixed
+  # in rework iteration 1); AC4b proves REQ-049's and REQ-050's own error_args()
+  # shapes both commit through the identical, single append_multi/3.
   # ---------------------------------------------------------------------------------
 
-  describe "AC4a -- CONFIRMED GAP: REQ-050's realistic downstream-gateway no-match" do
-    test "complete_task/3 still aborts unrewired, zero ERROR state persisted" do
+  describe "AC4a -- REQ-050's realistic downstream-gateway no-match" do
+    test "complete_task/3 routes it into ExecutionError.append_multi/3: EXECUTION_ERROR appended, status :error" do
       %{schema_name: schema_name} = provisioned_tenant()
       instance_id = start_instance!(schema_name, graph_task_then_gateway_no_match())
       task = find_task(schema_name, "task")
 
       events_before = event_count(schema_name)
 
-      # NOT {:error, {:instance_execution_error, :no_matching_gateway_edge, _}} --
-      # the pre-REQ-061 shape, confirming the rewiring did not intercept this call.
-      assert {:error, {:activation_failed, {:no_matching_edge, "gw", _evaluated_conditions}}} =
+      # The Ecto.Multi as a whole still commits (ERROR state must durably
+      # persist, not roll back) -- interpret_complete_result/1's leading
+      # clause (engine.ex line 1488) maps that committed {:execution_error, _}
+      # outcome to this {:error, {:instance_execution_error, ...}} shape for
+      # the caller, distinct from the pre-fix raw {:error, {:activation_failed,
+      # ...}} abort.
+      assert {:error, {:instance_execution_error, :no_matching_gateway_edge, {:node, "gw"}}} =
                Engine.complete_task(task.id, complete_attrs(), prefix: schema_name)
 
       projection = Repo.get!(InstanceProjection, instance_id, prefix: schema_name)
-      assert projection.status == :active
-      assert projection.error_detail == nil
+      assert projection.status == :error
+      assert projection.error_detail != nil
 
-      assert event_count(schema_name) == events_before
+      assert event_count(schema_name) == events_before + 1
 
+      assert [event] = execution_error_events(schema_name, instance_id)
+      assert event.payload["error_type"] == "no_matching_gateway_edge"
+
+      # The task stays :pending -- REQ-061's design (ERROR is a non-terminal
+      # instance state; TASK_COMPLETED never fires when the tail routes into
+      # ExecutionError.append_multi/3 instead of the normal-path tail).
       untouched = Repo.get!(EngineTask, task.id, prefix: schema_name)
       assert untouched.status == :pending
     end
@@ -422,9 +434,10 @@ defmodule Letflow.EngineExecutionErrorTest do
       req050_instance_id = start_instance!(schema_name, graph_human_task_end())
 
       # Mirrors lib/letflow/engine.ex lines 1093-1106 verbatim -- the exact
-      # error_args() shape merge_output_variables/5's own (currently unreachable
-      # via complete_task/3, see AC4a and this file's moduledoc) rejection clause
-      # builds.
+      # error_args() shape merge_output_variables/5's own rejection clause
+      # builds. Currently unreachable via complete_task/3 (a pre-existing,
+      # separately-filed REQ-049 gap -- see this file's moduledoc), so exercised
+      # here directly through set_instance_error/2 instead.
       req049_attrs =
         error_attrs(req049_instance_id, %{
           error_type: :variable_schema_rejected,
@@ -434,13 +447,16 @@ defmodule Letflow.EngineExecutionErrorTest do
 
       # Mirrors lib/letflow/engine.ex lines 1157-1170 verbatim -- the exact
       # error_args() shape dispatch_task_completion_hop_chain/5's own rewired
-      # clause builds (reachable only via the direct same-hop trigger, itself
-      # structurally unreachable -- see this file's moduledoc point 2).
+      # same-hop clause builds (as opposed to the downstream-hop clause AC4a
+      # exercises through complete_task/3 directly). The same-hop trigger
+      # itself is structurally unreachable via the public API (see this file's
+      # moduledoc), so exercised here directly through set_instance_error/2.
       req050_attrs =
         error_attrs(req050_instance_id, %{
           error_type: :no_matching_gateway_edge,
           affected: {:node, "gw"},
-          reason: "no outgoing edge matched conditions and no default edge configured for gateway node 'gw'"
+          reason:
+            "no outgoing edge matched conditions and no default edge configured for gateway node 'gw'"
         })
 
       assert {:ok, req049_result} = Engine.set_instance_error(req049_attrs, prefix: schema_name)
@@ -473,9 +489,7 @@ defmodule Letflow.EngineExecutionErrorTest do
   # ---------------------------------------------------------------------------------
   # AC5 -- two concurrent EE-10 triggers on one instance, run truly concurrently.
   # The general row-lock-queueing mechanism (design doc §3), exercised via two
-  # concurrent set_instance_error/2 calls -- genuinely reachable (unlike the
-  # complete_task/3-specific race the design doc §5.5 also describes, which
-  # inherits AC4a's gap and cannot itself be exercised end to end today).
+  # concurrent set_instance_error/2 calls.
   # ---------------------------------------------------------------------------------
 
   describe "AC5 -- two concurrent set_instance_error/2 calls target the same instance" do

@@ -1113,11 +1113,19 @@ defmodule Letflow.Engine do
   # Never returns a bare {:error, _} for REQ-050's own no-matching-edge case
   # (req061 §5.2) -- routed into an ExecutionError.error_args() tagged
   # {:execution_error, _} instead, same reasoning as merge_output_variables/2
-  # above. Any *other* Transition.transition/3 error (hop-limit,
-  # unimplemented node type, etc.) is intentionally left unrewired (req061
-  # §5.2/§12 OQ-4 -- only {:no_matching_edge, ...} is in this requirement's
-  # named scope) and still aborts the transaction via
-  # {:error, {:transition_failed, reason}} exactly as before.
+  # above. This applies whether the no-matching-edge is discovered on the
+  # completing task's own first Transition.transition/3 call (below) OR one
+  # or more hops later inside advance_until_stable/4's internal worklist loop
+  # (wrapped there as {:error, {:activation_failed, {:no_matching_edge, ...}}},
+  # unwrapped and rewired in the `case advance_until_stable(...)` below) --
+  # REQ-050's realistic trigger is a downstream gateway, so both call sites
+  # must be covered, not just the same-hop case (rework iteration 1, was
+  # previously only rewired for the same-hop case). Any *other*
+  # Transition.transition/3 error (hop-limit, unimplemented node type, etc.)
+  # is intentionally left unrewired (req061 §5.2/§12 OQ-4 -- only
+  # {:no_matching_edge, ...} is in this requirement's named scope) and still
+  # aborts the transaction via {:error, {:transition_failed, reason}} or
+  # {:error, {:activation_failed, reason}} exactly as before.
   defp dispatch_task_completion_hop_chain(
          _snapshot_and_state,
          _projection,
@@ -1150,8 +1158,26 @@ defmodule Letflow.Engine do
           )
 
         case advance_until_stable(graph, new_instance_state, newly_pending, hop_limit - 1) do
-          {:ok, advanced_state} -> {:ok, {:advanced, advanced_state}}
-          {:error, reason} -> {:error, reason}
+          {:ok, advanced_state} ->
+            {:ok, {:advanced, advanced_state}}
+
+          {:error, {:activation_failed, {:no_matching_edge, node_id, evaluated_conditions}}} ->
+            error_args = %{
+              instance_id: projection.instance_id,
+              error_type: :no_matching_gateway_edge,
+              affected: {:node, node_id},
+              reason:
+                "no outgoing edge matched conditions and no default edge configured for gateway node '#{node_id}'",
+              variables: state_with_merged_variables.variables,
+              details: %{evaluated_conditions: evaluated_conditions},
+              actor_id: actor_id,
+              idempotency_key: idempotency_key
+            }
+
+            {:ok, {:execution_error, error_args}}
+
+          {:error, reason} ->
+            {:error, reason}
         end
 
       {:error, {:no_matching_edge, node_id, evaluated_conditions}} ->

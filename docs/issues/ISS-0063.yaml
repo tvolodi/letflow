@@ -1,0 +1,62 @@
+id: ISS-0063
+title: "merge_output_variables/5 always passes nil for VariableMerge.merge/3's variable_validations argument, so REQ-049's own schema-rejection ExecutionError branch can never fire via complete_task/3"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ061-20260819 (Step 2a rework iteration 1)
+discovered_at: "2026-08-19T01:42:25Z"
+severity: MINOR
+tags:
+  - execution-error
+  - req-049
+  - req-061
+  - variable-validation
+description: >
+  Renumbered from ISS-0061 to ISS-0063 during REQ-061's Step Final rebase
+  onto main: main independently gained an unrelated ISS-0061 (duplicate
+  migration version 20260819000001, filed by hetzner-orch, already
+  resolved) via a concurrent branch, an add/add collision on the same
+  docs/issues/ISS-0061.yaml filename per the collision class documented
+  in docs/anti-patterns.md. Content below is unchanged from the original
+  filing; only the id and this note were added.
+
+  While reworking REQ-061's dispatch_task_completion_hop_chain/5 rewiring
+  (lib/letflow/engine.ex) to also intercept a no-matching-edge discovered on a
+  hop downstream of the completing task (REQ-050's realistic trigger, fixed
+  this run -- see test/letflow/engine_execution_error_test.exs's AC4a), the
+  same investigation surfaced a separate, pre-existing gap in REQ-049's own
+  call site: merge_output_variables/5 (lib/letflow/engine.ex, ~line 1089,
+  M4 in complete_task/3's Multi chain) always calls VariableMerge.merge/3
+  with `nil` for the variable_validations argument. VariableMerge.merge/3's
+  own {:rejected, unchanged_variables, [{:execution_error, key, ...,
+  :variable_schema_rejected, failures}]} branch -- the exact branch
+  merge_output_variables/5 was rewired (by REQ-061) to route into
+  ExecutionError.append_multi/3 -- can therefore never actually fire through
+  complete_task/3 today, because no validation-outcome producer was ever
+  wired into that call site to populate variable_validations with anything
+  other than nil.
+
+  This is inherited from REQ-049's own shipped code (REQ-049 never wired a
+  validation-outcome producer into merge_output_variables's call site) --
+  REQ-061 only rewired what happens *after* a rejection is produced, it did
+  not (and per its own design doc's scope was not asked to) make the
+  rejection itself reachable. Confirmed by direct code read of
+  lib/letflow/engine.ex's merge_output_variables/5 body and its call to
+  VariableMerge.merge/3, and by test/letflow/engine_execution_error_test.exs's
+  own AC4b test, which exercises the identical error_args() shape directly
+  through Engine.set_instance_error/2 rather than through complete_task/3,
+  precisely because the complete_task/3 path is unreachable for this case.
+
+  Out of scope for REQ-061's rework (Unblock-Everything's scope boundary --
+  this is not a REQ-061 or REQ-050 acceptance criterion, and fixing it would
+  require wiring a real validation-outcome producer into REQ-049's own
+  merge_output_variables call site, a REQ-049-shaped change). Filed rather
+  than fixed, per docs/agents/protocols/ISSUE_QUEUE.md.
+
+  Whoever picks this up next should look at how/where task output_variables
+  get schema-validated before merge_output_variables/5 is called (or whether
+  that validation needs to happen inside merge_output_variables/5 itself,
+  passing its own outcome into VariableMerge.merge/3's variable_validations
+  argument instead of a hardcoded nil).
+affected_files:
+  - lib/letflow/engine.ex
+status: open
+github_issue: https://github.com/tvolodi/letflow/issues/212

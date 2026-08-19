@@ -5009,3 +5009,23 @@ history:
       merge, the four SPC-01 failure modes routed through REQ-061's
       set_instance_error) from src/engine/instance.zig +
       transition.zig. depends_on REQ-061/REQ-049/REQ-032, all done.
+  - req: REQ-062
+    event: blocked
+    agent: ELIXIR-DEV
+    at: 2026-08-19T05:57:02Z
+    note: >
+      WF02-REQ062-20260819 Step 2a (backend implementation) hit
+      max_rework (3/3) still at PARTIAL -- scoped run
+      (engine_sub_process_test.exs + engine_test.exs) 36/42 passing,
+      engine_test.exs itself fully green (32/32, no regression to any
+      shipped requirement). Three successive rework iterations each
+      fixed their assigned bug but surfaced a new, distinct latent bug
+      in the sub-process completion/cascade path each time (Ecto.Multi
+      key collisions, idempotency-key collisions across the
+      parent/child event cascade, an input-side error-routing gap) --
+      see handoffs/escalations.yaml's WF02-REQ062-20260819 entry for
+      full detail and the recommended next step (a design-amendment
+      pass on the cascade's Multi-key/idempotency-key shape before a
+      fourth implementation attempt). Branch feature/WF02-REQ062-20260819
+      pushed to origin, not merged, not deleted. Requirement status
+      stays in_progress, not done.

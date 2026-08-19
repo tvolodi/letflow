@@ -112,7 +112,8 @@ defmodule Letflow.Engine.LuaScriptAudit do
 
   @typedoc "Every distinct, pattern-matchable failure `execute_script_for_audit/6` returns."
   @type error_reason ::
-          :invalid_instance_id
+          :missing_prefix
+          | :invalid_instance_id
           | {:manifest_hash_mismatch, registered_hash :: String.t(), actual_hash :: String.t()}
           | {:executor_failed, term()}
           | {:insert_failed, Ecto.Changeset.t()}
@@ -134,11 +135,25 @@ defmodule Letflow.Engine.LuaScriptAudit do
         ) :: {:ok, AuditRecord.t()} | {:error, error_reason()}
   def execute_script_for_audit(executor, instance_id, script_ref, registered_hash, actor_id, opts)
       when is_atom(executor) do
-    with {:ok, validated_instance_id} <- validate_instance_id(instance_id),
+    with {:ok, prefix} <- validate_prefix(opts),
+         {:ok, validated_instance_id} <- validate_instance_id(instance_id),
          {:ok, %{manifest_hash: actual_hash}} <-
            executor_result(executor, script_ref, registered_hash),
          :ok <- verify_manifest_hash(registered_hash, actual_hash) do
-      insert_audit_record(validated_instance_id, actual_hash, actor_id, opts)
+      insert_audit_record(validated_instance_id, actual_hash, actor_id, prefix)
+    end
+  end
+
+  # Step 0 (INV-LSA-6) -- opts[:prefix] must be present and non-nil BEFORE the executor
+  # is ever invoked or any insert happens. There is no public-schema fallback: unlike
+  # `Repo.insert(prefix: opts[:prefix])`, which silently resolves a missing/nil
+  # `:prefix` to Ecto's default schema (see lib/letflow/event_store.ex:176's identical
+  # fail-closed precedent), this fails closed with a distinct typed error and performs
+  # zero writes.
+  defp validate_prefix(opts) do
+    case Keyword.fetch(opts, :prefix) do
+      {:ok, prefix} when is_binary(prefix) and prefix != "" -> {:ok, prefix}
+      _ -> {:error, :missing_prefix}
     end
   end
 
@@ -171,13 +186,14 @@ defmodule Letflow.Engine.LuaScriptAudit do
   defp verify_manifest_hash(registered_hash, actual_hash),
     do: {:error, {:manifest_hash_mismatch, registered_hash, actual_hash}}
 
-  # Step 3 continued -- exactly one insert path (INV-LSA-3).
-  defp insert_audit_record(instance_id, manifest_hash, actor_id, opts) do
+  # Step 3 continued -- exactly one insert path (INV-LSA-3). `prefix` was already
+  # validated present/non-nil by `validate_prefix/1` above.
+  defp insert_audit_record(instance_id, manifest_hash, actor_id, prefix) do
     attrs = %{instance_id: instance_id, manifest_hash: manifest_hash, actor_id: actor_id}
 
     %AuditRecord{}
     |> AuditRecord.insert_changeset(attrs)
-    |> Repo.insert(prefix: opts[:prefix])
+    |> Repo.insert(prefix: prefix)
     |> case do
       {:ok, record} -> {:ok, record}
       {:error, changeset} -> {:error, {:insert_failed, changeset}}

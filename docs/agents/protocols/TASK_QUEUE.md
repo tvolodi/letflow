@@ -111,14 +111,31 @@ env var name must match `letflow-queue`'s own `QUEUE_AUTH_TOKEN` exactly (see it
 `README.md`'s "Auth" section and `deploy/.env.example`) — an earlier draft of this doc
 called it `LETFLOW_QUEUE_TOKEN`, which doesn't match anything the service reads.
 
-If `$QUEUE_AUTH_TOKEN` isn't set in the current environment, that's the fallback
-trigger below, not something to guess or invent a substitute value for. The real value
-is deliberately not stored on any developer workstation, per `ai-dala-infra`'s
-secrets-inventory policy — it lives only in `/opt/apps/letflow-queue-test/.env` on the
-host running the service (`landscape/secrets-inventory.md` in `ai-dala-infra`, entry
-`letflow-queue-test:QUEUE_AUTH_TOKEN`). Retrieving it requires host access ORCH does
-not have by default in a normal Letflow session — do not attempt to derive, guess, or
-hardcode a token; fall back exactly as documented below instead.
+**Before concluding the token is unavailable, check both places it may live:**
+1. `$QUEUE_AUTH_TOKEN` in the current shell environment.
+2. A `QUEUE_AUTH_TOKEN=` line in a `.env` file at the repo root (`./.env`, gitignored,
+   not tracked — `grep QUEUE_AUTH_TOKEN .env` if present). **This file does exist on at
+   least this workstation's checkout and does carry a working token** (confirmed
+   2026-08-19 by a live `get_next_task` call succeeding with it) — a fact that
+   contradicts the secrets-inventory claim below, which this doc has not yet reconciled.
+   Do not skip this check and assume unavailability from the shell var alone; doing
+   exactly that on 2026-08-19 caused an unnecessary trip into (the now-forbidden)
+   fallback mode when the queue was in fact reachable the whole time.
+
+Only if **neither** source yields a token is this the genuine unreachable case covered
+by the Hard Rule above (report blocked, do not select). Never guess or invent a
+substitute value, and never hand-edit `.env` to add a token you don't already have from
+one of these two sources.
+
+The secrets-inventory policy this doc previously stated at face value — that the real
+value is "deliberately not stored on any developer workstation" per `ai-dala-infra`'s
+`landscape/secrets-inventory.md` (entry `letflow-queue-test:QUEUE_AUTH_TOKEN`), living
+only in `/opt/apps/letflow-queue-test/.env` on the service host — does not match the
+observed state of this repo's checkout. Treat that policy line as unverified/stale
+rather than authoritative until reconciled; it is flagged here, not silently corrected,
+since resolving the discrepancy (is the workstation `.env` sanctioned, or is it a leak
+that should be rotated/removed?) is an infra/secrets-policy decision, not one ORCH makes
+unilaterally.
 
 ### 1. `register_task` — create a new claimable work item
 

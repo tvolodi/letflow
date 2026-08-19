@@ -1,0 +1,85 @@
+# Test run report — WF-02 Step 4 (test run) for REQ-060
+
+req_id: REQ-060
+workflow: WF-02
+step: "04"
+agent: TEST-RUNNER
+run_id: WF02-REQ060-20260819
+date_utc: 2026-08-19T09:29:44Z
+
+git:
+  branch: feature/WF02-REQ060-20260819
+  branch_confirmed: true
+  worktree: false
+  commit_at_run_start: 278c5add2007f5ddaea9e7c026b139e2473d31a3
+
+environment:
+  postgres: "docker compose up -d -- letflow-postgres-1 already Running, port 5462"
+  db_confirmed_env: "LETFLOW_DEV_DB_CONFIRMED=1"
+  command_run_compile: "LETFLOW_DEV_DB_CONFIRMED=1 mix compile --warnings-as-errors"
+  command_run_full_suite: "LETFLOW_DEV_DB_CONFIRMED=1 mix test (full suite, unpinned/default
+    random seed -- the `test` alias runs ecto.create + ecto.migrate --quiet first
+    automatically)"
+
+verdict: PASS
+
+checks:
+  compile_warnings_as_errors:
+    result: PASS
+    summary: "No output (clean) -- mix compile --warnings-as-errors succeeded with zero
+      warnings."
+
+  test_suite_full_run:
+    result: PASS
+    exit_code: 0
+    summary_line_verbatim: "5 properties, 1090 tests, 0 failures"
+    finished_line_verbatim: "Finished in 153.3 seconds (5.4s async, 147.8s sync)"
+    failures: 0
+    note: >
+      Full suite is fully green. Test count is 17 higher than the last
+      recorded full-suite run (REQ-059: 1073 tests), consistent with the
+      17 new pin-rebind tests added in
+      test/letflow/engine/pin_rebind_test.exs for REQ-060. No pre-existing
+      or unrelated failures observed (no recurrence of the
+      identity_migration_test.exs order-dependent flake seen in prior runs
+      -- ISS-0048/ISS-0050/ISS-0060/ISS-0062 class).
+
+  req060_scoped_isolated_run:
+    result: PASS
+    command: "LETFLOW_DEV_DB_CONFIRMED=1 mix test test/letflow/engine/pin_rebind_test.exs"
+    summary_line_verbatim: "17 tests, 0 failures"
+    note: >
+      All REQ-060 PinRebind.rebind_pins/3 tests pass in isolation.
+
+  known_noise_not_a_failure:
+    - >
+      Verbose SQL query debug logging (`[debug] QUERY OK ...` / `[debug]
+      QUERY ERROR ...` lines, including tenant-schema DDL/DML and expected
+      constraint-violation probes from multi-tenant test fixtures) appears
+      in raw mix test output (config/test.exs's default test log level)
+      -- expected, not indicative of any problem.
+
+pre_existing_failures_found: []
+
+issues_filed: []
+
+diagnosis: >
+  Full suite (1090 tests, 5 properties) passes with zero failures, and
+  mix compile --warnings-as-errors is clean. The scoped REQ-060 isolated
+  run (17 tests in test/letflow/engine/pin_rebind_test.exs) also passes
+  with zero failures, confirming REQ-060's acceptance criteria (already
+  independently verified by TEST-DESIGN-VALIDATOR) have real, passing
+  test coverage. No rework needed; no root-causing required since nothing
+  failed.
+
+regression_check: >
+  1090 tests, 5 properties, 0 failures across the full suite -- no
+  regression anywhere relative to the last recorded full-suite baseline
+  (REQ-059: 1073 tests, 0 failures); the +17 test delta matches exactly
+  the new pin-rebind test file added for REQ-060.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-20260819-WF02-REQ060-20260819.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

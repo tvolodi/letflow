@@ -86,4 +86,6 @@ affected_files:
   - test/letflow/sandbox_pool_test.exs
   - test/support/tenant_schema_reaper_test.exs
 github_issue: https://github.com/tvolodi/letflow/issues/229
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0068-20260819
+resolved_at: 2026-08-19T05:31:28Z

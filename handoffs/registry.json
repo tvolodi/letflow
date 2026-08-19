@@ -836,10 +836,15 @@
     {
       "run_id": "WF02-REQ043-20260818",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-043"],
+      "requirement_ids": [
+        "REQ-043"
+      ],
       "stage": "S3",
       "status": "COMPLETED",
-      "owned_modules": ["priv/repo/migrations", "lib/letflow/schemas"],
+      "owned_modules": [
+        "priv/repo/migrations",
+        "lib/letflow/schemas"
+      ],
       "lock_acquired_at": "2026-08-18T05:53:09Z",
       "lock_released_at": "2026-08-18T08:20:51Z",
       "released_lock": true,
@@ -978,7 +983,9 @@
       "requirement_ids": [],
       "stage": null,
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/engine/transition.ex"],
+      "owned_modules": [
+        "lib/letflow/engine/transition.ex"
+      ],
       "lock_acquired_at": "2026-08-18T08:24:44Z",
       "lock_released_at": "2026-08-18T08:47:14Z",
       "released_lock": true,
@@ -992,10 +999,20 @@
     {
       "run_id": "WF02-REQ063-20260818",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-063"],
+      "requirement_ids": [
+        "REQ-063"
+      ],
       "stage": "S3",
       "status": "COMPLETED",
-      "owned_modules": ["priv/repo/migrations", "lib/letflow/identity", "lib/letflow/tenant_provisioning.ex", "lib/letflow/plugs/auth_pipeline.ex", "lib/mix/tasks", "test/letflow", "test/specs"],
+      "owned_modules": [
+        "priv/repo/migrations",
+        "lib/letflow/identity",
+        "lib/letflow/tenant_provisioning.ex",
+        "lib/letflow/plugs/auth_pipeline.ex",
+        "lib/mix/tasks",
+        "test/letflow",
+        "test/specs"
+      ],
       "lock_acquired_at": "2026-08-18T08:48:48Z",
       "lock_released_at": "2026-08-18T12:41:33Z",
       "released_lock": true,
@@ -1009,10 +1026,21 @@
     {
       "run_id": "WF02-REQ064-20260818",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-064"],
+      "requirement_ids": [
+        "REQ-064"
+      ],
       "stage": "S3",
       "status": "COMPLETED",
-      "owned_modules": ["priv/repo/migrations", "lib/letflow/engine", "lib/letflow/event_store", "lib/letflow/definitions", "lib/letflow/identity", "lib/letflow/definitions.ex", "lib/letflow/event_store.ex", "lib/letflow/tenant_provisioning.ex"],
+      "owned_modules": [
+        "priv/repo/migrations",
+        "lib/letflow/engine",
+        "lib/letflow/event_store",
+        "lib/letflow/definitions",
+        "lib/letflow/identity",
+        "lib/letflow/definitions.ex",
+        "lib/letflow/event_store.ex",
+        "lib/letflow/tenant_provisioning.ex"
+      ],
       "lock_acquired_at": "2026-08-18T12:43:35Z",
       "lock_released_at": "2026-08-18T15:35:05Z",
       "released_lock": true,
@@ -1029,7 +1057,10 @@
       "requirement_ids": [],
       "stage": null,
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/identity.ex", "test/letflow/identity_test.exs"],
+      "owned_modules": [
+        "lib/letflow/identity.ex",
+        "test/letflow/identity_test.exs"
+      ],
       "lock_acquired_at": "2026-08-18T18:25:44Z",
       "lock_released_at": "2026-08-18T18:54:54Z",
       "released_lock": true,
@@ -1043,10 +1074,17 @@
     {
       "run_id": "WF02-REQ050-20260818",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-050"],
+      "requirement_ids": [
+        "REQ-050"
+      ],
       "stage": "S3",
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/engine/transition.ex", "lib/letflow/engine/expr.ex", "test/letflow/engine", "test/specs"],
+      "owned_modules": [
+        "lib/letflow/engine/transition.ex",
+        "lib/letflow/engine/expr.ex",
+        "test/letflow/engine",
+        "test/specs"
+      ],
       "lock_acquired_at": "2026-08-18T18:29:11Z",
       "lock_released_at": "2026-08-18T19:11:42Z",
       "released_lock": true,
@@ -1060,10 +1098,15 @@
     {
       "run_id": "WF02-REQ051-20260818",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-051"],
+      "requirement_ids": [
+        "REQ-051"
+      ],
       "stage": "S3",
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/engine", "test/letflow/engine"],
+      "owned_modules": [
+        "lib/letflow/engine",
+        "test/letflow/engine"
+      ],
       "lock_acquired_at": "2026-08-18T18:57:37Z",
       "lock_released_at": "2026-08-18T19:35:23Z",
       "released_lock": true,
@@ -1077,10 +1120,17 @@
     {
       "run_id": "WF02-REQ045-20260818",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-045"],
+      "requirement_ids": [
+        "REQ-045"
+      ],
       "stage": "S3",
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/engine.ex", "lib/letflow/definitions/graph.ex", "lib/letflow/tenant_provisioning.ex", "test/letflow/engine_test.exs"],
+      "owned_modules": [
+        "lib/letflow/engine.ex",
+        "lib/letflow/definitions/graph.ex",
+        "lib/letflow/tenant_provisioning.ex",
+        "test/letflow/engine_test.exs"
+      ],
       "lock_acquired_at": "2026-08-18T18:23:12Z",
       "lock_released_at": "2026-08-18T21:16:37Z",
       "released_lock": true,
@@ -1097,7 +1147,10 @@
       "requirement_ids": [],
       "stage": "S3",
       "status": "COMPLETED",
-      "owned_modules": ["priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs", "test/letflow/identity_migration_test.exs"],
+      "owned_modules": [
+        "priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs",
+        "test/letflow/identity_migration_test.exs"
+      ],
       "lock_acquired_at": "2026-08-18T21:19:14Z",
       "lock_released_at": "2026-08-18T22:02:25Z",
       "released_lock": true,
@@ -1111,10 +1164,19 @@
     {
       "run_id": "WF02-REQ046-20260818",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-046"],
+      "requirement_ids": [
+        "REQ-046"
+      ],
       "stage": "S3",
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/process_instance.ex", "lib/letflow/events/transition_event.ex", "lib/letflow/instance_supervisor.ex", "lib/letflow/router.ex", "test/letflow/process_instance_test.exs", "test/letflow/router_test.exs"],
+      "owned_modules": [
+        "lib/letflow/process_instance.ex",
+        "lib/letflow/events/transition_event.ex",
+        "lib/letflow/instance_supervisor.ex",
+        "lib/letflow/router.ex",
+        "test/letflow/process_instance_test.exs",
+        "test/letflow/router_test.exs"
+      ],
       "lock_acquired_at": "2026-08-18T21:39:02Z",
       "lock_released_at": "2026-08-18T22:41:42Z",
       "released_lock": true,
@@ -1128,10 +1190,16 @@
     {
       "run_id": "WF02-REQ048-20260818",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-048"],
+      "requirement_ids": [
+        "REQ-048"
+      ],
       "stage": "S3",
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/engine/", "lib/letflow/instance*", "priv/repo/migrations/"],
+      "owned_modules": [
+        "lib/letflow/engine/",
+        "lib/letflow/instance*",
+        "priv/repo/migrations/"
+      ],
       "lock_acquired_at": "2026-08-18T22:28:30Z",
       "lock_released_at": "2026-08-18T23:50:57Z",
       "released_lock": true,
@@ -1145,10 +1213,15 @@
     {
       "run_id": "WF02-REQ058-20260818",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-058"],
+      "requirement_ids": [
+        "REQ-058"
+      ],
       "stage": "S3",
       "status": "COMPLETED",
-      "owned_modules": ["lib/letflow/engine/lua_script_audit.ex", "priv/repo/migrations/*lua_script_execution_audit*"],
+      "owned_modules": [
+        "lib/letflow/engine/lua_script_audit.ex",
+        "priv/repo/migrations/*lua_script_execution_audit*"
+      ],
       "lock_acquired_at": "2026-08-18T23:50:05Z",
       "lock_released_at": "2026-08-19T00:37:38Z",
       "released_lock": true,
@@ -1158,6 +1231,29 @@
       "queue_agent_id": "hetzner-orch",
       "worktree": "/home/tvolodi/letflow (primary checkout)",
       "note": "Single-host fallback mode entire run: QUEUE_AUTH_TOKEN unset (get_next_task 401 unauthorized). Claimed via direct docs/requirements.yaml read -- first pending Stage-3 requirement in file order with depends_on satisfied (REQ-045) not already claimed elsewhere (REQ-048, also eligible, was confirmed live on sibling worktree hetzner-wt2-orch, PR #204 open at claim time). Ported src/engine/lua_script_audit.zig (LUA-07's second AC) as Letflow.Engine.LuaScriptAudit -- a deliberately minimal, injected-Executor audit-persistence path, explicitly NOT the SERVICE_TASK script handler, with the real Lua runtime left to S5 per stage-5-scripting-plugins.md's unmade build-vs-bind decision. Design gate PASSed clean (0 rework). SECURITY-REVIEWER FAILed once (rework 1 of 3): INV-1 BLOCKER -- opts[:prefix] was never validated non-nil before Repo.insert, so a caller omitting :prefix would silently write into the default/public schema instead of failing closed, contradicting the module's own moduledoc claim. Fixed with validate_prefix/1 as Step 0 of the with-chain (mirroring lib/letflow/event_store.ex's established fail-closed pattern); re-check PASS. REVIEWER PASS (S3/S5 scope boundary genuinely honored -- zero mix.exs/mix.lock diff, Executor stays an uninstantiated @behaviour, no overclaiming in the moduledoc). 16 new tests (test/letflow/engine/lua_script_audit_test.exs), TEST-DESIGN-VALIDATOR independently recomputed every describe+test combined name length itself (max 134 chars, well under the 255-char ExUnit limit this project has hit 4 times before). TEST-RUNNER: 898/898 (16 new + 882 baseline), one already-filed unrelated flaky failure (migrations_test.exs slug collision) forwarded not fixed. RELEASE-VALIDATOR independently re-ran mix test and re-verified all 7 ACs (including the rework-added prefix-fail-closed one) against actual code, PASS, plus one non-blocking note that requirements.yaml's AC list hadn't itemized the 7th criterion -- DOC-UPDATER added it. Step Final's rebase hit 3 conflict-marker files (orchestrator.log, requirement_status.yaml -- both simple concurrent-append composes; stage-3-instance-engine.md -- genuine semantic conflict, this branch's done-list was composed against a stale premise that REQ-048 was still pending when main had meanwhile flipped it to done, resolved by composing both facts) plus a 4th non-marker add/add collision on docs/issues/ISS-0057.yaml (this run's own two forwarded issues had provisionally claimed ISS-0057/ISS-0058, both already taken on main by a different, already-resolved REQ-048 bug -- renumbered to ISS-0058/ISS-0059, GitHub issue numbers 205/206 preserved and cross-references verified consistent post-merge by ORCH). Post-merge: mix compile clean, full suite 906/906 (independently re-run by ORCH, not just trusted from the merge agent's report)."
+    },
+    {
+      "run_id": "WF02-REQ048-20260819",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-048"
+      ],
+      "stage": "S3",
+      "status": "CANCELLED",
+      "owned_modules": [
+        "lib/letflow/engine/",
+        "lib/letflow/engine.ex",
+        "priv/repo/migrations/"
+      ],
+      "lock_acquired_at": "2026-08-19T01:17:31Z",
+      "lock_released_at": "2026-08-19T01:24:00Z",
+      "released_lock": true,
+      "last_known_step": "Step 00 (git setup) COMPLETED PASS -- but its own git pull revealed origin/main (ee8fc38) already contains REQ-048 status done, full design/impl/tests, and a completed WF02-REQ048-20260818 run (PR #204, merged). Cancelled as a stale duplicate dispatch before reaching Step 1; feature/WF02-REQ048-20260819 deleted (local + remote), no code changes made on it.",
+      "backfilled": false,
+      "queue_task_id": null,
+      "queue_agent_id": "tvolodi-orch",
+      "worktree": "c:Users\tvolodevai-dalaletflow (primary worktree)",
+      "note": "Single-host fallback task selection (QUEUE_AUTH_TOKEN not set). REQ-048 was next pending requirement in this session file order with depends_on satisfied at selection time, but a genuinely earlier concurrent run (WF02-REQ048-20260818, a different host/session) had already completed and merged the same requirement (PR #204) before this run pulled main in Step 00. CANCELLED, not reworked -- this is exactly the race letflow-queue exists to prevent; documented as a data point for TASK_QUEUE.md fallback-mode risk."
     }
   ]
 }

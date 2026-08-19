@@ -5002,3 +5002,42 @@ history:
     event: started
     agent: ORCH
     at: "2026-08-19T03:50:35Z"
+
+  - req: REQ-054
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-19T04:41:48Z"
+    note: >
+      WF02-REQ054-20260819. Periodic instance state snapshots (ISS-601)
+      shipped as Letflow.Engine.SnapshotWriter, plus its schema-per-tenant
+      instance_state_snapshots migration and Ecto.Schema module (no
+      tenant_id column per Decision 0006 D2, same as every other
+      schema-per-tenant table this stage adds) and a modification to
+      REQ-053's Reconstruction.reconstruct_instance/2 so it replays from
+      the latest snapshot's sequence_number forward instead of always
+      from sequence 1 when one exists, with both replay paths verified
+      to agree. First pass through the gate cycle FAILed at REVIEWER's
+      step-02d: SnapshotWriter and the snapshot-aware replay selection
+      existed as code but were never actually called from
+      lib/letflow/engine.ex, so maybe_take_snapshot/N would never fire
+      in real instance execution. ELIXIR-DEV wired the four call sites
+      -- create/2, complete_task/3, set_instance_error/2, and the
+      instance-completion path -- into engine.ex (commit 3207741), and
+      SECURITY-REVIEWER and REVIEWER both re-ran and passed the second
+      time. RELEASE-VALIDATOR then independently re-verified every
+      acceptance criterion against the live code (not against any prior
+      step's report) and re-ran the full suite itself: 952/952 tests,
+      0 failures. docs/requirements.yaml REQ-054 flipped in_progress ->
+      done. Checked README.md: no changes needed, same reasoning
+      REQ-045/047/048/052/053/061's DOC-UPDATER passes applied --
+      SnapshotWriter and the replay-source selection are internal engine
+      capabilities with no new HTTP route and no process-model change,
+      so neither the ASCII state diagram nor "Running it" section is
+      affected -- verified by grep, only an unrelated pre-existing
+      "snapshot count" mention in README.md exists and does not concern
+      this table. docs/migration/stage-3-instance-engine.md's header
+      listed REQ-054 in its `pending` list -- fixed in this same pass
+      (moved REQ-054 into the `done` clause with an ISS-601 one-line
+      summary, pending count corrected 7 -> 6), same header-sync gap-fix
+      shape REQ-045/047/048/052/053/061's DOC-UPDATER passes already
+      applied.

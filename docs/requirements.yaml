@@ -3413,6 +3413,7 @@ requirements:
     owner: ELIXIR-DEV
     status: done
     stage: S3
+    impl_order: 130  # letflow-queue task id
     description: >
       Execute Decision 0006's D1
       (docs/migration/decisions/0006-identity-tables-schema-per-tenant.md):
@@ -3475,6 +3476,7 @@ requirements:
     owner: ELIXIR-DEV
     status: done
     stage: S3
+    impl_order: 131  # letflow-queue task id
     description: >
       Execute Decision 0006's D2
       (docs/migration/decisions/0006-identity-tables-schema-per-tenant.md):
@@ -3670,6 +3672,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 132  # letflow-queue task id
     description: >
       Letflow currently holds two mutually exclusive positions on the S4 web
       framework, and S4 cannot start until one of them is retired in writing.
@@ -3731,6 +3734,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 133  # letflow-queue task id
     description: >
       Port src/api/errors.zig (272 lines) and src/api/response.zig (69) as
       Letflow.Api.Error and Letflow.Api.Response -- the single response/error
@@ -3777,6 +3781,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 134  # letflow-queue task id
     description: >
       Port src/api/pagination.zig (406 lines, R-Co's API-06) as
       Letflow.Api.Pagination -- the shared cursor encode/decode, prefix
@@ -3820,6 +3825,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 135  # letflow-queue task id
     description: >
       Port src/api/validation.zig (592 lines) plus the two thin middleware
       modules that front it -- src/api/middleware/content_type.zig (119) and
@@ -3868,6 +3874,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 136  # letflow-queue task id
     description: >
       Port src/api/authorization.zig (280 lines) as Letflow.Api.Authorization
       -- the role-to-permission matrix every route consults before doing work.
@@ -3929,6 +3936,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 137  # letflow-queue task id
     description: >
       Replace lib/letflow/router.ex's single flat route table -- today GET
       /health plus a 404 catch-all, per its own moduledoc -- with the
@@ -3977,6 +3985,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 138  # letflow-queue task id
     description: >
       Mount Letflow.Plugs.AuthPipeline and Letflow.Plugs.TenantStatus (both
       built, compiled and tested by REQ-021, both explicitly "not mounted in
@@ -4025,6 +4034,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 139  # letflow-queue task id
     description: >
       Port src/api/tenant_context.zig (104 lines) and src/api/trace_context.zig
       (55) as the per-request context every tenant-scoped handler reads, and
@@ -4077,6 +4087,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 140  # letflow-queue task id
     description: >
       Port the user-management handler group of src/api/routes/identity.zig
       (1,868 lines / 23 handlers total -- too large for one agent turn, split
@@ -4114,6 +4125,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 141  # letflow-queue task id
     description: >
       Port the group-management handler group of src/api/routes/identity.zig:
       handleCreateGroup (L343), handleAddGroupMember (L399), handleListGroups
@@ -4147,6 +4159,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 142  # letflow-queue task id
     description: >
       Port the tenant-administration handler group of
       src/api/routes/identity.zig: handleCreateTenant (L222), handleListTenants
@@ -4194,6 +4207,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 143  # letflow-queue task id
     description: >
       Port the final identity handler group plus the onboarding route:
       identity.zig's handleCreateToken (L570), handleListTokens (L634),
@@ -4245,6 +4259,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 144  # letflow-queue task id
     description: >
       Port the six promotion-pipeline route modules as one requirement --
       they total 1,844 lines but 1,140 of that is promotion_review.zig's five
@@ -4290,6 +4305,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 145  # letflow-queue task id
     description: >
       Port the six small route modules whose backing subsystems are all
       `done`, as one requirement (1,356 lines total, but every module is a
@@ -4345,6 +4361,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 146  # letflow-queue task id
     description: >
       Port the write half of src/api/routes/instances.zig (1,535 lines / 8
       handlers -- split two ways with REQ-080 along R-Co's own read/write
@@ -4384,6 +4401,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 147  # letflow-queue task id
     description: >
       Port the read half of src/api/routes/instances.zig: handleGetById
       (L422), handleList (L586), handleHistory (L839), handleTimeline (L1067)
@@ -4418,6 +4436,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 148  # letflow-queue task id
     description: >
       Port the read half of src/api/routes/definitions.zig (1,276 lines / 13
       handlers -- split two ways with REQ-082): handleGetById (L71), handleList
@@ -4455,6 +4474,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 149  # letflow-queue task id
     description: >
       Port the write half of src/api/routes/definitions.zig: handleCreate
       (L309), handlePut (L362), handlePatch (L458), handleDelete (L546),
@@ -4494,6 +4514,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 150  # letflow-queue task id
     description: >
       Port the read half of src/api/routes/tasks.zig (1,085 lines / 7 handlers
       -- split two ways with REQ-085): handleList (L89, EE-03/API-04, cursor
@@ -4531,6 +4552,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 151  # letflow-queue task id
     description: >
       Write a decision record settling stage-4-api-surface.md's OQ-2, which
       that document explicitly flags as "Flag to REVIEWER before building; do
@@ -4579,6 +4601,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
+    impl_order: 152  # letflow-queue task id
     description: >
       Port the write half of src/api/routes/tasks.zig: handleComplete (L341,
       EE-04), handleClaim (L551), handleAssign (L628) and handleReassign

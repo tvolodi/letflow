@@ -456,7 +456,36 @@ defmodule Letflow.Engine.Reconstruction do
          {:ok, token} <- find_task_completion_token(state.tokens, node_id) do
       case VariableMerge.merge(state.variables, output_variables, nil) do
         {:ok, new_variables, _merge_events} ->
-          state_with_merged_variables = %InstanceState{state | variables: new_variables}
+          # Drop this token's now-completed (token_id, node_id) entry from
+          # pending_task_nodes before dispatching the completion hop. The
+          # live single-hop Engine.complete_task/3 path never carries this
+          # forward because it re-derives pending_task_nodes fresh from the
+          # `tasks` table (status == :pending) on every call
+          # (Engine.load_pending_task_tokens/3) -- an already-completed
+          # entry simply never reappears in the next call's seed state.
+          # This fold has no such per-call reseed: it threads one
+          # InstanceState through the whole event log, and
+          # dispatch_human_task/3 (transition.ex) only ever appends to
+          # pending_task_nodes, never removes. Without this explicit
+          # removal, pending_task_nodes would accumulate every HUMAN_TASK
+          # node a token has EVER visited across the whole replay instead
+          # of reflecting only the currently-open set (test/specs/REQ-053.md
+          # AC1 known open finding). Matched on {token_id, node_id}, not
+          # node_id alone, mirroring ISS-0057's fix (a token can revisit the
+          # same node_id under a different token_id is not possible here,
+          # but keeping both keys matches TaskActivation's own diff key).
+          pending_after_completion =
+            Enum.reject(
+              state.pending_task_nodes,
+              &(&1.token_id == token.token_id and &1.node_id == node_id)
+            )
+
+          state_with_merged_variables = %InstanceState{
+            state
+            | variables: new_variables,
+              pending_task_nodes: pending_after_completion
+          }
+
           dispatch_task_completion(graph, state_with_merged_variables, token.token_id)
 
         {:rejected, _unchanged_variables,

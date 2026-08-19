@@ -1,0 +1,109 @@
+# Test run report — WF-03 Step 4 (test run) for ISS-0065
+
+issue_id: ISS-0065
+workflow: WF-03
+step: "04"
+agent: TEST-RUNNER
+run_id: WF03-ISS0065-20260819
+date_utc: 2026-08-19T03:41:53Z
+
+git:
+  branch: feature/WF03-ISS0065-20260819
+  branch_confirmed: true
+  commit: 7bc0269f68dd4f3761ec93a1d41234ad4eea2b7f
+  commit_subject: "test(WF03-ISS0065): add fail-then-pass regression tests for the -e/tempfile fix"
+  worktree: false (primary checkout at ~/letflow)
+  diff_summary: >
+    Pure test-infrastructure change: test/support/tenant_slug_test.exs fixes a
+    Windows-only System.cmd argv-mangling bug in write_script_and_run/2 (writes
+    the spawned script to a temp file and passes a bare path instead of an
+    inline "-e <script>" argv element) and adds 2 new fail-then-pass regression
+    tests. No application code under lib/letflow/ touched.
+
+environment:
+  postgres_container: >
+    letflow-postgres-1, already running and healthy (43+ hours uptime) before
+    this run started, confirmed via `docker ps` —
+    0.0.0.0:5462->5432/tcp, status Up (healthy). No `docker compose up -d`
+    needed; per role instructions this is the primary checkout so starting it
+    here would have been permitted, but it was already up.
+  command_run: "mix test (full suite, unpinned/default random seed — the
+    `test` alias runs ecto.create + ecto.migrate --quiet first automatically)"
+
+verdict: PASS
+
+checks:
+  test_suite_full_run:
+    result: PASS — all green, no failures
+    exit_code: "0 (implied — no failure output, summary line reports 0 failures)"
+    summary_line_verbatim: "5 properties, 942 tests, 0 failures"
+    finished_line_verbatim: "Finished in 125.3 seconds (6.1s async, 119.2s sync)"
+    failures: 0
+
+  iss0065_target_tests_in_full_suite_context:
+    result: PASS
+    note: >
+      test/support/tenant_slug_test.exs's full describe-block set (6 tests: 2
+      pre-existing property tests "no duplicates across thousands of calls"
+      and "stable <prefix>-<uuid> format regardless of call order/count", the
+      pre-fix/post-fix VM-collision demonstration tests from ISS-0059, and the
+      2 new ISS-0065 regression tests — "no System.cmd/2,3 call node in this
+      file's AST has a literal -e argv element" and "write_script_and_run/2
+      cleans up its temp file even when the subprocess fails") ran as part of
+      the full-suite invocation above (module confirmed present via
+      deprecation-warning references to test/support/tenant_slug_test.exs:124
+      and :141 in the full-suite log), and contributed to the overall 0
+      failures. Also independently re-ran in isolation with --trace for
+      explicit per-test confirmation:
+        "Letflow.TenantSlugFixtureTest [test/support/tenant_slug_test.exs]"
+        property "...stable format..." [L#141] — PASS (11.1ms)
+        test "pre-fix mechanism collides across VM runs..." [L#64] — PASS (1253.5ms)
+        property "no duplicates across thousands of calls" [L#124] — PASS (13.5ms)
+        test "ISS-0065 regression: no literal \"-e\" argv element..." [L#188] — PASS (1.2ms)
+        test "post-fix unique_slug/1 avoids the cross-VM collision..." [L#101] — PASS (2188.7ms)
+        test "ISS-0065 regression: write_script_and_run/2 cleans up its temp
+          file..." [L#220] — PASS (443.0ms); this test's own deliberate
+          `raise` fires as designed (its negative-path fixture) and is printed
+          as a RuntimeError in trace output, but the test itself asserts on
+          the cleanup postcondition and passed — not a real failure.
+        Isolated summary line: "2 properties, 4 tests, 0 failures"
+      Both the full-suite context and the isolated re-run agree: all 6 tests
+      in this file (including both new ISS-0065 regression tests) pass.
+
+  branch_own_change_caused_failures: none
+
+  pre_existing_failures_found: []
+
+  known_noise_not_a_failure:
+    - >
+      Verbose SQL query debug logging (`[debug] QUERY OK ...`) and one
+      expected Keycloak metadata-load connection error (placeholder OIDC
+      issuer, unrelated fixture) appear in raw mix test output — expected,
+      not indicative of any problem. Confirmed via grep that no
+      "Finished...failures: [1-9]" pattern appears anywhere in the run's
+      output.
+    - >
+      No known-flaky backlog items (ISS-0060/ISS-0062/ISS-0064-class,
+      identity_migration_test.exs guard test) surfaced this run — the suite
+      was fully green in one pass, so there was nothing to distinguish as
+      pre-existing vs. new.
+
+  regression_check: >
+    942 tests, 0 failures, single run. No regressions attributable to this
+    branch's diff (test-infrastructure-only change, no lib/letflow/ code
+    touched). No new issue needs filing to the queue — the suite was fully
+    green.
+
+diagnosis: >
+  Full suite passed cleanly (942 tests, 0 failures) on the first run. The
+  ISS-0065 fix and its 2 new regression tests in
+  test/support/tenant_slug_test.exs pass both within the full-suite context
+  and in an isolated --trace re-run. No rework needed; nothing to route to
+  ELIXIR-DEV — this run's own acceptance criteria (full suite green, ISS-0065
+  tests specifically confirmed passing in full-suite context) are met.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-20260819-WF03-ISS0065-20260819.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

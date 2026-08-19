@@ -1,0 +1,123 @@
+# Test run report — WF-02 Step 4 (test run) for REQ-057
+
+req_id: REQ-057
+workflow: WF-02
+step: "04"
+agent: TEST-RUNNER
+run_id: WF02-REQ057-20260819
+date_utc: 2026-08-19T03:41:30Z
+
+git:
+  branch: feature/WF02-REQ057-20260819
+  branch_confirmed: true
+  worktree: true
+  note: >
+    ~/letflow-wt2 secondary worktree. `docker compose up -d` attempted;
+    port 5462 already bound by an already-running `letflow-postgres-1`
+    container from another worktree sharing the same Postgres instance —
+    reused it rather than starting a second one (same DB the `test` mix
+    alias targets). Tests invoked with MIX_TEST_PARTITION=2, this host's
+    mandatory convention.
+
+environment:
+  command_run: "MIX_TEST_PARTITION=2 mix test (full suite, unpinned/default
+    random seed -- the `test` alias runs ecto.create + ecto.migrate --quiet
+    first automatically)"
+
+diff_scope:
+  git_diff_main_HEAD_stat: >
+    lib/letflow/application.ex (+13/-1, new supervised plugin_registry
+    child pair added to the supervision tree),
+    lib/letflow/design/req057-plugin-interface-registry.md (new, design doc),
+    lib/letflow/engine/plugin_interface.ex (new),
+    lib/letflow/engine/plugin_registry.ex (new),
+    test/letflow/engine/plugin_interface_test.exs (new),
+    test/letflow/engine/plugin_registry_test.exs (new),
+    test/letflow/engine_plugin_error_routing_test.exs (new),
+    test/specs/REQ-057.md (new).
+    8 files changed, 2714 insertions(+), 1 deletion(-).
+
+verdict: PASS
+
+checks:
+  run_1_full_suite:
+    result: PASS
+    command: "MIX_TEST_PARTITION=2 mix test"
+    summary_line_verbatim: "5 properties, 957 tests, 0 failures"
+    finished_line_verbatim: "Finished in 110.0 seconds (4.7s async, 105.2s sync)"
+    failures: 0
+
+  run_1_new_req057_modules_confirmed_in_full_suite_trace:
+    result: PASS
+    command: "MIX_TEST_PARTITION=2 mix test --trace"
+    note: >
+      Grepped the --trace output for the three new test modules and
+      confirmed all three are collected and exercised as part of the
+      full-suite run (not standalone-only):
+      Letflow.Engine.PluginInterfaceTest [test/letflow/engine/plugin_interface_test.exs],
+      Letflow.Engine.PluginRegistryTest [test/letflow/engine/plugin_registry_test.exs],
+      Letflow.EnginePluginErrorRoutingTest [test/letflow/engine_plugin_error_routing_test.exs].
+      All assertions from these modules passed (no per-test FAIL lines;
+      overall suite failure count is 0). Expected raised/crash-log noise
+      from the plugin error-routing tests' deliberately-crashing test
+      handlers (ExitingHandler, RaisingHandler) appears in the trace
+      output but is asserted-on behavior, not a test failure.
+
+  run_2_full_suite_stability_recheck:
+    result: PASS
+    command: "MIX_TEST_PARTITION=2 mix test"
+    summary_line_verbatim: "5 properties, 957 tests, 0 failures"
+    finished_line_verbatim: "Finished in 115.1 seconds (4.4s async, 110.6s sync)"
+    failures: 0
+    note: >
+      Re-ran the full suite a second time specifically to check that this
+      branch's new supervised child pair in lib/letflow/application.ex
+      (PluginRegistry + its supervisor) doesn't destabilize startup order
+      or leak state across independent test runs. Identical pass count
+      and 0 failures on both runs; only variance was total wall-clock time
+      (110.0s vs 115.1s), consistent with shared-host load, not flakiness.
+
+known_noise_not_a_failure:
+  - >
+    Verbose SQL query debug logging (`[debug] QUERY OK ...` lines,
+    including tenant-schema DDL/DML from multi-tenant test fixtures)
+    appears in raw mix test output (config/test.exs's default test log
+    level) -- expected, not indicative of any problem.
+  - >
+    `[error] Metadata load failed for issuer
+    https://placeholder-keycloak.invalid/...` retry-loop log lines appear
+    in both runs -- pre-existing placeholder-OIDC-config background noise
+    unrelated to this diff, not a test failure (no test asserts on this
+    path failing differently).
+  - >
+    Expected crash/error output from engine_plugin_error_routing_test.exs's
+    deliberately-crashing RaisingHandler/ExitingHandler test fixtures
+    (RuntimeError stack traces, EXECUTION_ERROR event rows, instance
+    status transitions to :error) -- this is the behavior under test
+    (plugin-error routing), not a failure.
+
+pre_existing_failures_found: []
+
+issues_filed: []
+
+diagnosis: >
+  Zero failures in either full-suite run. All three new REQ-057 test files
+  (plugin_interface_test.exs, plugin_registry_test.exs,
+  engine_plugin_error_routing_test.exs) execute and pass within the
+  full-suite run, not just standalone. The application.ex change (new
+  PluginRegistry supervised child pair) shows no startup-order or
+  stability issue across two consecutive full runs -- identical 957
+  tests / 5 properties / 0 failures both times. No pre-existing failures
+  were encountered this run (contrast with the prior REQ-061 run's
+  ISS-0062 identity_migration_test.exs recurrence -- not observed here;
+  full suite is fully green).
+
+regression_check: >
+  957 tests, 5 properties, 0 failures on both runs. No regression
+  anywhere in the suite attributable to this branch's diff.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-20260819-WF02-REQ057-20260819.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

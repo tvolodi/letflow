@@ -4756,3 +4756,47 @@ history:
       was deliberately left untouched: docs/requirements.yaml still shows
       it `pending`, and it may be actively locked by a live session on a
       sibling worktree per the same log's 2026-08-19T00:51:00Z entry.
+
+  - req: REQ-061
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-19T02:07:17Z"
+    note: >
+      WF02-REQ061-20260819. Execution error handling (EE-10) shipped as
+      Letflow.Engine.set_instance_error/2 and
+      Letflow.Engine.ExecutionError.append_multi/3 -- the single, shared
+      sink every engine-internal failure funnels into: flips instance
+      status to ERROR and appends one EXECUTION_ERROR event (error type,
+      affected node/field, human-readable reason, and the instance
+      variable snapshot) atomically. During a rework iteration,
+      REQ-050's downstream-gateway-no-match calling path was fixed to
+      realistically route into this shared sink (a real AC4 gap caught
+      before merge, not a pre-existing one). REQ-049's own separate,
+      pre-existing gap in routing into this sink was NOT fixed here --
+      filed as docs/issues/ISS-0063.yaml (renumbered from ISS-0061 during
+      Step Final's rebase -- main independently gained an unrelated
+      ISS-0061 via a concurrent branch), explicitly out of scope for
+      this requirement, per REVIEWER's sign-off in
+      handoffs/WF02-REQ061-20260819/step-02d-reviewer-rework1.json.
+      RELEASE-VALIDATOR independently re-verified all 6 acceptance
+      criteria against the real code and
+      test/letflow/engine_execution_error_test.exs (not against any
+      prior step's summary) -- see
+      handoffs/WF02-REQ061-20260819/step-05-release-validator.json for
+      the per-AC detail. Full suite re-run independently by
+      RELEASE-VALIDATOR: 3 properties, 916 tests, 1 failure -- that
+      failure is the pre-existing, unrelated
+      test/letflow/identity_migration_test.exs:367 failure (ISS-0062),
+      confirmed unrelated to REQ-061's diff by direct diff inspection.
+      docs/requirements.yaml REQ-061 flipped in_progress -> done. Checked
+      README.md: no changes needed, same reasoning REQ-045/047/048/052's
+      DOC-UPDATER passes applied -- set_instance_error/2 is an internal
+      engine capability with no new HTTP route and no
+      gen_statem/process-model change, so neither the ASCII state
+      diagram nor "What's here today"/"Running it" sections are
+      affected. docs/migration/stage-3-instance-engine.md's header
+      listed REQ-061 in its `pending` list even though it is now `done`
+      -- fixed in this same pass (moved REQ-061 into the `done` clause
+      with an EE-10 one-line summary, pending count corrected 9 -> 8),
+      same header-sync gap-fix shape REQ-045/047/048/052's DOC-UPDATER
+      passes already applied.

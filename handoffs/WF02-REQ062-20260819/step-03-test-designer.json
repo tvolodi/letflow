@@ -9,7 +9,7 @@
   "created_at": "2026-08-19T05:14:34Z",
   "started_at": "2026-08-19T05:14:34Z",
   "completed_at": "2026-08-19T05:25:43Z",
-  "status": "COMPLETED",
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -22,7 +22,7 @@
     "owned_modules": ["lib/letflow/engine/", "lib/letflow/instance*", "priv/repo/migrations/", "test/letflow/", "test/specs/"]
   },
   "task": {
-    "description": "Write test spec + test code for REQ-062 (branch feature/WF02-REQ062-20260819, already checked out -- security and idiom gates already PASSED, steps 02c/02d). Scope test per WF-02 Step 3: this requirement has real executable surface (lib/letflow/engine/sub_process.ex, transition.ex, engine.ex, reconstruction.ex all changed) so the full test-design procedure applies, not the docs-only skip path. Write test/specs/REQ-062.md and test code under test/letflow/ (e.g. test/letflow/engine/sub_process_test.exs plus any needed additions to test/letflow/engine_test.exs / test/letflow/engine/reconstruction_test.exs / test/letflow/engine/transition_test.exs for the pure-transition-kernel dispatch clauses). Read lib/letflow/design/req062-sub-process-runtime.md for the exact function signatures to test against. Keep describe/test name pairs comfortably under 200 combined characters (docs/anti-patterns.md documents 4 prior ExUnit 255-char compile failures from this exact mistake) -- put spec-citation detail in a comment above the test, not in the name string.",
+    "description": "Write test spec + test code for REQ-062 (branch feature/WF02-REQ062-20260819, already checked out -- security and idiom gates already PASSED, steps 02c/02d). Scope test per WF-02 Step 3: this requirement has real executable surface (lib/letflow/engine/sub_process.ex, transition.ex, engine.ex, reconstruction.ex all changed) so the full test-design procedure applies, not the docs-only skip path. Write test/specs/REQ-062.md and test code under test/letflow/ (e.g. test/letflow/engine/sub_process_test.exs plus any needed additions to test/letflow/engine_test.exs / test/letflow/engine/reconstruction_test.exs / test/letflow/engine/transition_test.exs for the pure-transition-kernel dispatch clauses). Read lib/letflow/design/req062-sub-process-runtime.md for the exact function signatures to test against. Keep describe/test name pairs comfortably under 200 combined characters (docs/anti-patterns.md documents 4 prior ExUnit 255-char compile failures from this exact mistake) -- put spec-citation detail in a comment above the test, not in the name string.\n\nREWORK ITERATION 1: TEST-RUNNER (Step 4) found that test/letflow/engine/transition_test.exs's {:sub_process_completed, token_id} test asserts a SINGLE Transition.transition/3 call fully completes a token through an :END node (new_state.tokens == []) -- but transition.ex documents (and req062-sub-process-runtime.md design doc \\u00a72.4 specifies) a 'single hop per call' contract, the same contract dispatch_task_completion/4's HUMAN_TASK precedent already follows. ELIXIR-DEV's implementation (dispatch_sub_process_completion/4) correctly follows that single-hop contract; the test's own expectation is the defect, not the code. Fix the test to assert correctly against the single-hop contract (e.g. assert the token advances one hop per call, matching how the existing HUMAN_TASK completion test in the same file asserts it -- read that test's shape and mirror it) rather than expecting full completion to :END in one call. Do not touch anything else in this step -- ELIXIR-DEV is separately fixing two unrelated implementation gaps (tenant_provisioning.ex migration manifest registration, graph.ex node_type_map entry) in parallel; leave lib/ files alone.",
     "acceptance_criteria": [
       "a token entering a SUB_PROCESS node with a declared interface creates exactly one child instance whose initial variable map contains ONLY the declared inputs -- a parent variable not named in inputs is demonstrably absent from the child",
       "a SUB_PROCESS node with no declared interface copies the full parent variable map to the child (EXT-05 behaviour preserved), demonstrated by an explicit test alongside the filtered case",
@@ -48,6 +48,6 @@
     "git_evidence": {"branch_name": "feature/WF02-REQ062-20260819", "commit_sha_list": ["84903e3"], "remote_branch": "origin/feature/WF02-REQ062-20260819", "push_status": "ok", "pr_url": null, "pr_create_error": null},
     "next_action": "Route to TEST-DESIGN-VALIDATOR"
   },
-  "rework_count": 0,
+  "rework_count": 1,
   "max_rework": 3
 }

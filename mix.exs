@@ -53,7 +53,11 @@ defmodule Letflow.MixProject do
       # measure — this alias needs neither (it wants `mix compile` to run as one of its
       # own steps regardless, and reads from `mix.exs` data, never from a compiled
       # `lib/` module), so the concern doesn't apply.
-      "letflow.check": ["format --check-formatted", "compile --warnings-as-errors", "test"]
+      "letflow.check": [
+        "format --check-formatted",
+        "compile --warnings-as-errors",
+        "test --warnings-as-errors"
+      ]
     ]
   end
 end

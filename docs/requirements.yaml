@@ -4338,6 +4338,26 @@ requirements:
       defers; porting it here would smuggle in the mechanism this batch defers
       elsewhere. It moves with agent_sandboxes.zig to post-S6 -- see the group
       (b) table in docs/migration/stage-4-api-surface.md.
+      VARIABLE_SCHEMAS REGISTRATION (obligation added by REQ-109 -- do not drop
+      it). solution_packs.zig's handleInstall (L110) is ONE OF THE TWO WRITE
+      PATHS that must POPULATE the `variable_schemas` table REQ-109 ports:
+      R-Co's own pack document carries a `variable_schemas` array
+      (R-Co src/api/routes/solution_packs.zig:299) and its install is what
+      writes those rows. REQ-109 deliberately ports the table, the Ecto schema
+      and the merge-time lookup ONLY, and defers every INSERT path to this
+      requirement and REQ-082. If this obligation is dropped, the table ships
+      EMPTY and REQ-061's variable-schema rejection branch stays exactly as
+      unreachable as it is today -- which is the entire failure mode REQ-109
+      exists to fix (ISS-0063 / GH#212).
+      ONE SHARED PATH, NOT TWO: the registration logic lives in a SINGLE
+      function on REQ-030's Letflow.Definitions, called by both this
+      requirement's install and REQ-082's import. Whichever of the two lands
+      FIRST builds that function; the second CALLS it and adds no second
+      implementation -- the same "one resolution path, not two that can
+      disagree" rule REQ-085 applies to membership resolution. Rows are scoped
+      to the `definition_id` being written, so a pack carrying N definitions
+      writes N disjoint row sets and cannot collide with REQ-082 importing a
+      different definition.
       SECURITY: audit.zig is the sharpest INV-1 case in this group -- an audit
       list that escapes tenant scoping discloses another tenant's entire
       activity history in one response, and audit reads additionally require
@@ -4354,6 +4374,7 @@ requirements:
       - "the metrics endpoint's tenant-exposure rule is stated in the moduledoc (aggregate-only or per-tenant-scoped) and enforced by a test that a tenant A caller sees no tenant B figure"
       - "the moduledoc distinguishes routes/validation.zig (definition-graph validation endpoint, ported here) from src/api/validation.zig (request-body validator, ported by REQ-068), so the two are not conflated"
       - "metrics.zig's moduledoc states that no metrics subsystem is built here and names S6 observability as its owner"
+      - "installing a solution pack whose document carries variable_schemas entries writes the corresponding rows into the CALLING tenant's variable_schemas table (REQ-109's table) and none into any other tenant's schema, verified by reading both schemas back; and that write goes through the single shared Letflow.Definitions registration function REQ-082's import also calls, with grep confirming no second insert path into variable_schemas anywhere in the route layer"
     depends_on: [REQ-072]
 
   - id: REQ-079
@@ -4498,6 +4519,25 @@ requirements:
       and archive act only within the caller's schema -- an activate that
       touched another tenant's active definition would be a cross-tenant write,
       the most severe failure mode in this batch.
+      VARIABLE_SCHEMAS REGISTRATION (obligation added by REQ-109 -- do not drop
+      it). handleImport (L1126), and handleCreate/handlePut where the submitted
+      document carries them, is ONE OF THE TWO WRITE PATHS that must POPULATE
+      the `variable_schemas` table REQ-109 ports. REQ-109 deliberately ports the
+      table, the Ecto schema and the merge-time lookup ONLY, deferring every
+      INSERT path to this requirement and REQ-078. If this obligation is
+      dropped, the table ships EMPTY and REQ-061's variable-schema rejection
+      branch stays exactly as unreachable as it is today -- the entire failure
+      mode REQ-109 exists to fix (ISS-0063 / GH#212).
+      ONE SHARED PATH, NOT TWO: the registration logic lives in a SINGLE
+      function on REQ-030's Letflow.Definitions, called by both this
+      requirement's import and REQ-078's solution-pack install. Whichever of the
+      two lands FIRST builds that function; the second CALLS it and adds no
+      second implementation. Rows are scoped to the `definition_id` being
+      written, so re-importing under a NEW version produces a new definition_id
+      and a disjoint row set rather than mutating an existing one; a re-import
+      onto the SAME definition_id must REPLACE that definition's rows inside the
+      same transaction rather than accumulating duplicates against
+      UNIQUE (definition_id, variable_key).
       SECURITY (INV-1, INV-5, INV-8).
     acceptance_criteria:
       - "each of the eight handlers has an end-to-end test through the real router asserting status and, for writes, the resulting persisted state rather than only the status code"
@@ -4507,6 +4547,7 @@ requirements:
       - "activating a definition in tenant A leaves tenant B's same-named active definition untouched, verified by reading both tenants' rows after the operation (INV-1)"
       - "a definition id belonging to another tenant returns the same response as a nonexistent id on every write verb, and no write occurs -- verified by reading the target row (INV-5)"
       - "a caller without DefinitionsWrite receives 403 on all eight endpoints with no state change in any case"
+      - "importing a definition document carrying variable_schemas entries writes the corresponding rows into the calling tenant's variable_schemas table (REQ-109's table), and re-importing onto the SAME definition_id replaces those rows inside one transaction rather than failing on UNIQUE (definition_id, variable_key) or accumulating duplicates -- both verified by reading the rows back; and that write goes through the single shared Letflow.Definitions registration function REQ-078's install also calls, with grep confirming no second insert path into variable_schemas anywhere in the route layer"
     depends_on: [REQ-081]
 
   - id: REQ-083
@@ -4776,6 +4817,30 @@ requirements:
       decision-record-consistency check to catch.
       A non-empty `[ValidationFailure.t()]` return becomes
       `{:rejected, failures}`, which is what `merge/3` already consumes.
+      WHILE IN THAT MODULEDOC, ALSO CLOSE ISS-0075 / GH#296, which records two
+      further stale claims in the SAME docstring. Repairing them here costs two
+      sentences and avoids a second agent editing the same file. (i) The
+      "Dependency ordering" section (lines 31-46) asserts REQ-061 "is `status:
+      pending` and unimplemented"; REQ-061 is `done`. Restate that in the PAST
+      tense as the condition that held at this module's implementation time --
+      the surrounding rationale (that VariableMerge does not and should not
+      depend on REQ-061, signalling rejection purely through its own return
+      value) is CORRECT and must be preserved, not deleted. (ii) Lines 18-20
+      qualify design section 3.2's abort-the-entire-batch semantic as "a
+      reasoned reconstruction, not verified against `instance.zig`'s literal
+      source, since no R-Co source tree is reachable in this environment." The
+      tree IS reachable and the reconstruction is CORRECT: R-Co's own
+      `mergeVariables` doc comment at src/engine/instance.zig:2300-2304
+      documents the ISS-202 two-phase merge -- "Phase 1: Validate ALL output
+      variables ... with NO state change. On any failure, return early with
+      violation. Phase 2: Apply all validated keys ... only if Phase 1
+      succeeds. On failure, leave variables untouched." REPLACE the caveat with
+      a positive citation of those lines rather than merely deleting it: that
+      upgrades a documented guess into a verified port, and REQ-109 is exactly
+      what makes the semantic observable in production for the first time.
+      ISS-0075 explicitly EXCLUDES the lines 24-29 sentence -- that one stays
+      under this requirement's own supersession item (c) above, corrected in
+      place because it is REQ-049 AC4's evidence artifact.
       REGISTRATION (the INSERT path) IS OUT OF SCOPE, DEFERRED -- BUT NAMED.
       This requirement builds the table, the Ecto schema, the lookup, and the
       wiring. It does NOT build a path that WRITES `variable_schemas` rows.
@@ -4862,7 +4927,7 @@ requirements:
       - "a variable_schemas row belonging to tenant A has zero effect on a completion running in tenant B: the identical (definition_id, variable_key, violating value) completion that is REJECTED in tenant A SUCCEEDS in tenant B, demonstrated with two provisioned tenant schemas (INV-1)"
       - "a lookup invoked with a missing, nil or empty prefix fails closed with a distinct, pattern-matchable error and issues no query, demonstrated by a test rather than argued"
       - "mix.exs gains no new JSON Schema dependency and grep shows the validation calling Letflow.EventStore.Registry.JsonSchema.validate/2, with lib/letflow/engine.ex's moduledoc stating why that rather than REQ-024's validate_payload/3, and stating that req049-variable-merge.md sections 7.1 and 7.2 are superseded (wrapper shape; :unknown_event_type row) and that section 13.2's open question is CLOSED because the pure delegate has no tenant-resolution error surface"
-      - "lib/letflow/engine/variable_merge.ex's moduledoc paragraph at lines 24-29 -- which today asserts the caller resolves outcomes by calling Letflow.EventStore.Registry.validate_payload/3 -- is corrected IN PLACE to cite REQ-109's rationale and no longer names validate_payload/3 as the caller's mechanism, verified by reading that file directly rather than inferring it from lib/letflow/engine.ex"
+      - "lib/letflow/engine/variable_merge.ex's moduledoc is corrected IN PLACE on three counts, each verified by reading THAT file directly rather than inferring it from lib/letflow/engine.ex: (a) the paragraph at lines 24-29, which today asserts the caller resolves outcomes by calling Letflow.EventStore.Registry.validate_payload/3, cites REQ-109's rationale instead and no longer names validate_payload/3 as the caller's mechanism; (b) ISS-0075 claim 1 -- the Dependency ordering section (lines 31-46) no longer asserts REQ-061 is status pending and unimplemented, restating it in the past tense as the condition that held at implementation time, with the surrounding does-not-depend-on-REQ-061 rationale preserved rather than deleted; (c) ISS-0075 claim 2 -- the lines 18-20 caveat calling design section 3.2 an unverified reconstruction because no R-Co source tree is reachable is REPLACED, not merely deleted, by a positive citation of R-Co src/engine/instance.zig:2300-2304's ISS-202 two-phase merge doc comment confirming the reconstruction was correct. Landing (b) and (c) closes ISS-0075 / GH#296"
       - "the new lib/letflow/engine/variable_schema.ex's Letflow.Engine.VariableSchema moduledoc carries four things, each verified by reading that file: all three R-Co 'schema' concepts (tasks.form_schema, variable_schemas, form_schema_registry) with which is in scope; the dedicated-table resolution of req049-variable-merge.md section 7.3; REQ-078 and REQ-082 named as the carriers of the deferred registration path, with the note that neither currently mentions it; and promotion_plan.ex plus pin_resolver.ex named as the two remaining unwired consumers"
       - "lib/letflow/engine.ex's moduledoc states that the former hardcoded nil at the merge call site was design-sanctioned by req049-variable-merge.md section 7.3 rather than a defect, and records the REQ-059 pinning-vs-live-read tension as an open question for REVIEWER together with the reason it is latent (pin_resolver.ex's default lookup carries json_schema: nil) -- both verified by reading that file"
       - "docs/migration/stage-3-instance-engine.md's Status: line no longer claims all Stage 3 requirements shipped, and the stage's requirement list includes REQ-109 -- verified by reading the file"

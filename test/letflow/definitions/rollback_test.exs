@@ -85,7 +85,7 @@ defmodule Letflow.Definitions.RollbackTest do
     %Tenant{}
     |> Tenant.create_changeset(
       %{
-        slug: "req038-rollback-#{System.unique_integer([:positive, :monotonic])}",
+        slug: Letflow.TenantSlugFixture.unique_slug("req038-rollback"),
         display_name: "REQ-038 Rollback Test Tenant"
       },
       :disabled

@@ -96,7 +96,7 @@ defmodule Letflow.Definitions.PromotionAssertionRerunTest do
     %Tenant{}
     |> Tenant.create_changeset(
       %{
-        slug: "req040-assertion-rerun-#{System.unique_integer([:positive, :monotonic])}",
+        slug: Letflow.TenantSlugFixture.unique_slug("req040-assertion-rerun"),
         display_name: "REQ-040 Assertion Rerun Test Tenant"
       },
       :disabled

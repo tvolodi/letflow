@@ -92,7 +92,7 @@ defmodule Letflow.EventStoreTest do
     %Tenant{}
     |> Tenant.create_changeset(
       %{
-        slug: "req025-#{System.unique_integer([:positive, :monotonic])}",
+        slug: Letflow.TenantSlugFixture.unique_slug("req025"),
         display_name: "REQ-025 Test Tenant"
       },
       :disabled

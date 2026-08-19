@@ -1,0 +1,92 @@
+# Test run report — WF-03 Step 4 (test run) for ISS-0059
+
+issue_id: ISS-0059
+workflow: WF-03
+step: "04"
+agent: TEST-RUNNER
+run_id: WF03-ISS0059-20260819
+date_utc: 2026-08-19T01:41:00Z
+
+git:
+  branch: feature/WF03-ISS0059-20260819
+  branch_confirmed: true
+  commit: 74e6eb8
+  commit_subject: "test(ISS-0059): shorten describe/test names below 200-char ceiling"
+  worktree: false
+  diff_stat_main_to_head: >
+    lib/letflow/design/iss059-flaky-slug-collision-fix.md (new, 211 lines),
+    test/support/tenant_slug.ex (new, 24 lines — collision-proof slug helper),
+    test/support/tenant_slug_test.exs (new, 158 lines),
+    test/specs/ISS-0059.md (new, 120 lines),
+    30 existing test files under test/letflow/** updated (2 lines each) to use
+    the new collision-proof slug suffix instead of
+    System.unique_integer([:positive, :monotonic]) in insert_tenant!/0-style
+    helpers. 34 files changed, 543 insertions(+), 30 deletions(-) (git diff
+    --stat main...HEAD).
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 27 [erts-15.2.7.4] ... Elixir 1.18.3 (compiled with Erlang/OTP 27)"
+  postgres_container: "letflow-postgres-1, confirmed via docker ps —
+    0.0.0.0:5462->5432/tcp, [::]:5462->5432/tcp, status Up (healthy).
+    docker compose up -d run first (reported container already Running)."
+  partition: "MIX_TEST_PARTITION=hetzner-orch (as instructed for this run)"
+  command_run: "MIX_TEST_PARTITION=hetzner-orch mix test (full suite, unpinned/
+    default random seed — the `test` alias runs ecto.create + ecto.migrate
+    --quiet first automatically)"
+
+verdict: PASS
+
+checks:
+  test_suite_full_run:
+    result: PASS — all green, no failures
+    exit_code: "0 (implied — no failure output, summary line reports 0 failures)"
+    summary_line_verbatim: "5 properties, 912 tests, 0 failures"
+    finished_line_verbatim: "Finished in 102.0 seconds (3.9s async, 98.0s sync)"
+    failures: 0
+
+  new_iss0059_tests_included_in_run:
+    result: PASS
+    note: >
+      test/support/tenant_slug_test.exs (new regression coverage for the
+      collision-proof slug helper introduced to fix ISS-0059) executed as part
+      of the full-suite run above, along with all 30 updated call sites under
+      test/letflow/**. No failures reported anywhere in the run, so this
+      file's tests are included in the "0 failures" total.
+
+  original_flaky_test_present_and_green:
+    result: PASS
+    note: >
+      test/letflow/definitions/migrations_test.exs (the module ISS-0059
+      originally flagged as intermittently failing on tenant slug collision)
+      ran clean in this invocation — no
+      Ecto.InvalidChangesetError/tenants_slug_index failures.
+
+  known_noise_not_a_failure:
+    - >
+      Verbose SQL query debug logging (`[debug] QUERY OK ...` lines, including
+      tenant-schema DDL/DML from multi-tenant test fixtures) appears in raw
+      mix test output (config/test.exs's default test log level) — expected,
+      not indicative of any problem.
+
+  pre_existing_failures_found: []
+
+  regression_check: >
+    5 properties, 912 tests, 0 failures — full green run, no regressions. Test
+    count is up from the prior WF-03/ISS-0061 baseline (3 properties, 910
+    tests) by 2 new tests and 2 new properties, consistent with the new
+    test/support/tenant_slug_test.exs file added by this branch.
+
+diagnosis: >
+  Full suite passed cleanly with no failures on a single run (flakes by
+  definition are not conclusively ruled out by one green run, but no
+  collision — the originally reported failure mode — occurred here, and the
+  fix replaces the non-VM-durable System.unique_integer/1 counter with a
+  collision-proof slug source per lib/letflow/design/iss059-flaky-slug-collision-fix.md).
+  No rework needed from this run's evidence.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-20260819-WF03-ISS0059-20260819.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

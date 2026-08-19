@@ -76,7 +76,7 @@ defmodule Letflow.IdentityMigrationTest do
     Code.require_file(@drop_migration_file)
   end
 
-  defp unique_slug, do: "req063-idmig-#{System.unique_integer([:positive, :monotonic])}"
+  defp unique_slug, do: Letflow.TenantSlugFixture.unique_slug("req063-idmig")
 
   # Provisions a real tenant (row + schema + full migration replay, including the
   # three per-tenant identity tables) -- the copy/guard target every test in this

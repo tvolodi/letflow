@@ -67,7 +67,7 @@ defmodule Letflow.Plugs.AuthPipelineConfigurableVerifierTest do
   end
 
   defp unique_slug(prefix \\ "tenant") do
-    "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
+    Letflow.TenantSlugFixture.unique_slug(prefix)
   end
 
   # REQ-063: this file was already `async: false` (needed for the global

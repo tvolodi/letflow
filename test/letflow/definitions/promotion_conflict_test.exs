@@ -55,7 +55,7 @@ defmodule Letflow.Definitions.PromotionConflictTest do
     %Tenant{}
     |> Tenant.create_changeset(
       %{
-        slug: "req036-conflict-#{System.unique_integer([:positive, :monotonic])}",
+        slug: Letflow.TenantSlugFixture.unique_slug("req036-conflict"),
         display_name: "REQ-036 PromotionConflict Test Tenant"
       },
       :disabled

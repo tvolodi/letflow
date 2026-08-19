@@ -51,7 +51,7 @@ defmodule Letflow.Definitions.SnapshotStoreTest do
     %Tenant{}
     |> Tenant.create_changeset(
       %{
-        slug: "req033-#{System.unique_integer([:positive, :monotonic])}",
+        slug: Letflow.TenantSlugFixture.unique_slug("req033"),
         display_name: "REQ-033 Test Tenant"
       },
       :disabled

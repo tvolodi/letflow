@@ -46,7 +46,7 @@ defmodule Letflow.EngineCompleteTaskTest do
     %Tenant{}
     |> Tenant.create_changeset(
       %{
-        slug: "req048-#{System.unique_integer([:positive, :monotonic])}",
+        slug: Letflow.TenantSlugFixture.unique_slug("req048"),
         display_name: "REQ-048 Test Tenant"
       },
       :disabled

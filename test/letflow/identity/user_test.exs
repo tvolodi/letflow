@@ -103,7 +103,7 @@ defmodule Letflow.Identity.UserTest do
   # tenant_test.exs.
   defp unique_username, do: "user-#{Ecto.UUID.generate()}"
 
-  defp unique_slug, do: "req063-user-#{System.unique_integer([:positive, :monotonic])}"
+  defp unique_slug, do: Letflow.TenantSlugFixture.unique_slug("req063-user")
 
   # REQ-063: provisions a real tenant schema (still needs Sandbox :auto mode for
   # Ecto.Migrator's migration replay -- see moduledoc), WITHOUT touching

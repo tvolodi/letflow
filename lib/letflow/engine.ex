@@ -131,6 +131,87 @@ defmodule Letflow.Engine do
 
   See `lib/letflow/design/req052-instance-cancellation.md` for the full
   design this section implements.
+
+  ## EE-12 (REQ-055) — lock inventory and cross-instance isolation
+
+  Every `lock("FOR UPDATE")` acquired anywhere in `create/2`, `complete_task/3`,
+  and `cancel_instance/3` (this module) plus `Letflow.EventStore.append/2`'s own
+  transitive lock is scoped to a single `instance_id`, never wider:
+
+    * `fetch_and_lock_task/3` (`complete_task/3`) — locks `tasks`, filtered
+      `where t.id == ^task_id`. **Single-row**: exactly the one `tasks` row
+      named by `task_id`, which FK-scopes to exactly one `instance_id`.
+    * `fetch_and_lock_instance_projection/3` (`complete_task/3`) — locks
+      `instance_projections`, filtered `where p.instance_id == ^instance_id`.
+      **Single-row**: exactly this instance's own projection row.
+    * `fetch_and_lock_open_tasks/3` (`cancel_instance/3`) — locks `tasks`,
+      filtered `where t.instance_id == ^instance_id and t.status == :pending`,
+      `order_by asc: t.id`. **Row-set, single-instance**: every row locked
+      carries this same `instance_id`; the deterministic `order_by` avoids a
+      lock-ordering deadlock against a concurrent multi-row locker on the same
+      instance, and never touches another instance's rows.
+    * `fetch_and_lock_instance_projection_for_cancel/3` (`cancel_instance/3`) —
+      locks `instance_projections`, filtered `where p.instance_id ==
+      ^instance_id`. **Single-row**, same shape as the `complete_task/3`
+      projection lock above, scoped to this instance only.
+    * `fetch_and_lock_live_tokens/3` (`cancel_instance/3`) — locks `tokens`
+      (`TokenRecord`), filtered `where t.instance_id == ^instance_id and
+      t.status in [:active, :waiting]`, `order_by asc: t.id`. **Row-set,
+      single-instance**, same shape as the open-tasks lock above, scoped to
+      this instance's own tokens only.
+    * `lock_and_increment_sequence/3` (`Letflow.EventStore`, reached from
+      every `create/2`/`complete_task/3`/`cancel_instance/3` event append via
+      `EventStore.append/2`) — locks `instance_sequences`
+      (`InstanceSequence`), filtered `where s.instance_id == ^instance_id`.
+      **Single-row, single-instance**: the row is keyed 1:1 by `instance_id`
+      (`on_conflict: :nothing, conflict_target: :instance_id` on the
+      preceding insert-if-absent step); a concurrent `EventStore.append/2`
+      call for a *different* `instance_id` locks a disjoint row and is never
+      blocked by this one. `create/2` itself acquires no `lock("FOR UPDATE")`
+      of its own — its `Multi.run(:instance_projection, ...)` step only
+      inserts fresh rows, so L6 above is its only shared contention point.
+
+  **No global or table-level lock is held anywhere in these write paths.**
+  Every lock above is acquired via a `where` clause keyed on `instance_id`
+  (directly, or transitively via `task_id`/`token_id` FK-scoped to one
+  `instance_id`) — Postgres's `SELECT ... FOR UPDATE` locks exactly the
+  row(s) the query's `WHERE` clause matches, never the table. No
+  `Repo.transaction/1` call in `lib/letflow/engine.ex`,
+  `lib/letflow/engine/task_activation.ex`, or `lib/letflow/event_store.ex`
+  locks any row outside the `instance_id` it was given, and none of those
+  three modules holds a `:global`/`Registry`-backed singleton, a
+  `Mutex`/`:mutex` dependency, a `LOCK TABLE`, or any
+  `GenServer`/`:gen_statem`/`DynamicSupervisor.start_child` call.
+  **This finding does not extend to every file under `lib/letflow/engine/*.ex`
+  as a blanket claim**: `lib/letflow/engine/plugin_registry.ex`
+  (`Letflow.Engine.PluginRegistry`, REQ-057) is `use GenServer` — a real
+  singleton process — but it is out of scope here on purpose, not by
+  oversight: it holds no `instance_id`-scoped row lock at all (it is a
+  registry lookup process, not a `Repo.transaction/1` participant), and it is
+  not one of REQ-045/047/048/052's per-instance write paths, which is
+  REQ-055's own named scope. `lib/letflow/engine/task_activation.ex` acquires
+  no lock of its own anywhere — every step it contributes runs as an
+  `Ecto.Multi.run/3` step inside the caller's already-open transaction,
+  operating only on rows the caller already locks or fresh rows it is itself
+  inserting.
+
+  Lock ordering: `complete_task/3` always locks `tasks` before
+  `instance_projections`. `cancel_instance/3` always locks `tasks` before
+  `instance_projections` before `tokens`. Both orderings are
+  same-instance-scoped (every lock in a given call carries the same
+  `instance_id`), so this is a same-instance deadlock-avoidance discipline,
+  not a cross-instance one.
+
+  REQ-045 resolved this engine to row-based state (`create/2` is a plain
+  function under `Ecto.Multi`, not a supervised `:gen_statem`/
+  `DynamicSupervisor`-per-instance process — see this moduledoc's own
+  "Process-vs-row decision" section above), so there is no per-instance
+  process for a supervised-isolation/process-kill scenario to apply to.
+  Isolation instead rests entirely on the row-locking discipline documented
+  above, verified under real concurrency by
+  `test/letflow/engine_concurrency_test.exs` (REQ-055). See
+  `lib/letflow/design/req-055-concurrent-instance-isolation.md` for the full
+  design this section implements.
   """
 
   import Ecto.Query

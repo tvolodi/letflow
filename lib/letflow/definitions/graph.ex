@@ -928,10 +928,8 @@ defmodule Letflow.Definitions.Graph do
 
     edges
     |> Enum.filter(fn edge ->
-      not (
-        (exclusive_gateway_source?(nodes, node_index, edge) and edge.is_default != true) or
-          human_task_source?(nodes, node_index, edge)
-      ) and edge.condition != nil
+      not ((exclusive_gateway_source?(nodes, node_index, edge) and edge.is_default != true) or
+             human_task_source?(nodes, node_index, edge)) and edge.condition != nil
     end)
     |> Enum.map(fn edge ->
       %Violation{

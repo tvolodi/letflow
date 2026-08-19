@@ -67,6 +67,7 @@ defmodule Letflow.Engine.ParallelGatewayTest do
   # branch_ids is in edges_out declaration order (b0, b1, b2).
   defp do_split(g, initial_token_id \\ "t1") do
     state = instance_state([token("split", initial_token_id)])
+
     assert {:ok, new_state, [{:parallel_split, ^initial_token_id, "split", branch_ids}]} =
              Transition.transition(g, state, {:advance_token, initial_token_id})
 
@@ -132,12 +133,15 @@ defmodule Letflow.Engine.ParallelGatewayTest do
       assert Enum.all?(state_after_2.tokens, &(&1.node_id != "e"))
 
       # Third arrival (b2): 0 outstanding -- fires.
-      assert {:ok, state_after_3, [{:parallel_join_fired, "join", origin_token_id, new_token_id, _merge_events}]} =
+      assert {:ok, state_after_3,
+              [{:parallel_join_fired, "join", origin_token_id, new_token_id, _merge_events}]} =
                Transition.transition(g, state_after_2, {:advance_token, b2})
 
       refute Map.has_key?(state_after_3.join_counters, "join")
       assert origin_token_id == "t1"
-      assert [%Token{token_id: ^new_token_id, node_id: "e", branch_id: nil}] = state_after_3.tokens
+
+      assert [%Token{token_id: ^new_token_id, node_id: "e", branch_id: nil}] =
+               state_after_3.tokens
     end
   end
 
@@ -222,7 +226,10 @@ defmodule Letflow.Engine.ParallelGatewayTest do
         {final_state, pending_events_per_call} =
           Enum.reduce(order_indexes, {split_state, []}, fn idx, {state, acc} ->
             branch_id = branch_ids_by_index[idx]
-            assert {:ok, new_state, pending} = Transition.transition(g, state, {:advance_token, branch_id})
+
+            assert {:ok, new_state, pending} =
+                     Transition.transition(g, state, {:advance_token, branch_id})
+
             {new_state, acc ++ [pending]}
           end)
 
@@ -298,7 +305,8 @@ defmodule Letflow.Engine.ParallelGatewayTest do
       # Branch A's own task completion (simulating REQ-047's future
       # orchestration calling REQ-049 at an ordinary task completion, design
       # doc §12.5) writes a brand-new key -- no collision yet.
-      assert {:ok, vars_after_a, []} = VariableMerge.merge(split_state.variables, %{"x" => "a"}, nil)
+      assert {:ok, vars_after_a, []} =
+               VariableMerge.merge(split_state.variables, %{"x" => "a"}, nil)
 
       # Branch B's own task completion overwrites the same key with a
       # different value -- REQ-049's merge/3 itself is the one and only
@@ -324,7 +332,8 @@ defmodule Letflow.Engine.ParallelGatewayTest do
       # cancellation path (AC3's mechanism), then inspect the fired event.
       assert pending == []
 
-      assert {:ok, final_state, [{:parallel_join_fired, "join", "t1", _new_token_id, merge_events}]} =
+      assert {:ok, final_state,
+              [{:parallel_join_fired, "join", "t1", _new_token_id, merge_events}]} =
                Transition.transition(g, state_after_b1, {:cancel_branch, b2})
 
       # §4.3 step 1's join-fire call is always a no-op given the current

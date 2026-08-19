@@ -143,7 +143,9 @@ defmodule Letflow.Engine.ExprTest do
 
     test "an ordering comparison between a string and a number is a :type_mismatch eval error" do
       ast = {:cmp, :gt, {:var, ["name"]}, {:lit, 5}}
-      assert {:error, {:eval_error, {:type_mismatch, :gt, "bob", 5}}} = Expr.eval(ast, %{"name" => "bob"})
+
+      assert {:error, {:eval_error, {:type_mismatch, :gt, "bob", 5}}} =
+               Expr.eval(ast, %{"name" => "bob"})
     end
 
     test "eq/neq never error across differently-typed operands (design doc §9.4)" do
@@ -217,7 +219,8 @@ defmodule Letflow.Engine.ExprTest do
         |> Enum.reject(&(String.trim(&1) |> String.starts_with?("#")))
         |> Enum.join("\n")
 
-      refute code_only =~ ~r/Repo\.|Logger\.|DateTime\.|System\.os_time|System\.system_time|HTTPoison|Req\.|File\.|:rand\.|:crypto\./
+      refute code_only =~
+               ~r/Repo\.|Logger\.|DateTime\.|System\.os_time|System\.system_time|HTTPoison|Req\.|File\.|:rand\.|:crypto\./
     end
 
     test "translate_cel_to_expr/1 is deterministic -- == -equal input, == -equal output, twice" do

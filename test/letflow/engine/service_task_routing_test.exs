@@ -127,24 +127,35 @@ defmodule Letflow.Engine.ServiceTaskRoutingTest do
     )
   end
 
-  # START -> svc(SERVICE_TASK) -> END -- svc's own endpoint attribute is
-  # irrelevant here (this suite never dispatches through it, per this
-  # module's own scope boundary, design doc §1); just needs to be a
-  # structurally valid, activatable definition to reach a real instance.
-  defp graph_service_task_end do
+  # START -> task(HUMAN_TASK) -> END -- identical to
+  # engine_execution_error_test.exs's own graph_human_task_end/0. A real
+  # SERVICE_TASK node cannot be used here: transition.ex's dispatch_node/4
+  # has no dispatch clause for :SERVICE_TASK yet (a documented, deliberate
+  # gap alongside :TIMER/:SUB_PROCESS -- building a dispatch/park path for it
+  # is exactly the dispatch-orchestration loop REQ-056's own design doc §1
+  # defers to a future/S4 requirement, not something this test suite's
+  # fixtures should route around). What AC5(b)/AC6/AC8 actually need to
+  # demonstrate is narrower than "a SERVICE_TASK node can be activated and
+  # parked by the engine": they need to demonstrate that
+  # build_empty_url_error_attrs/1 and build_service_task_give_up_error_attrs/1
+  # produce output set_instance_error/2 correctly accepts and processes into
+  # a real instance's :error state. set_instance_error/2 never validates
+  # `affected`'s node_id against the graph (lib/letflow/engine.ex's own body,
+  # read directly -- it only reads attrs[:instance_id]/[:error_type]/
+  # [:affected]/[:reason]/[:variables]/[:details]/[:actor_id]/
+  # [:idempotency_key], no graph/node lookup at all), so a HUMAN_TASK-parked
+  # instance plus a hypothetical "svc" node_id in the error attrs exercises
+  # the identical code path a real SERVICE_TASK-parked instance would.
+  defp graph_human_task_end do
     %{
       "nodes" => [
         %{"id" => "start", "node_type" => "START"},
-        %{
-          "id" => "svc",
-          "node_type" => "SERVICE_TASK",
-          "attributes" => %{"endpoint" => "http://example.invalid/hook"}
-        },
+        %{"id" => "task", "node_type" => "HUMAN_TASK", "attributes" => %{"role" => "approver"}},
         %{"id" => "end", "node_type" => "END"}
       ],
       "edges" => [
-        %{"id" => "e1", "source" => "start", "target" => "svc"},
-        %{"id" => "e2", "source" => "svc", "target" => "end"}
+        %{"id" => "e1", "source" => "start", "target" => "task"},
+        %{"id" => "e2", "source" => "task", "target" => "end"}
       ]
     }
   end
@@ -197,7 +208,7 @@ defmodule Letflow.Engine.ServiceTaskRoutingTest do
   describe "AC5(b) -- an invalid 2xx body's give-up verdict routes to set_instance_error/2" do
     test "a JSON array body -> :invalid_2xx_body -> give_up -> instance lands in :error" do
       %{schema_name: schema_name} = provisioned_tenant()
-      instance_id = start_instance!(schema_name, graph_service_task_end())
+      instance_id = start_instance!(schema_name, graph_human_task_end())
 
       # The classification/decision chain AC5(b) requires, exercised for real.
       assert :invalid_2xx_body = ServiceTask.classify_failure_kind({:http, 200, "[1,2,3]"})
@@ -225,7 +236,7 @@ defmodule Letflow.Engine.ServiceTaskRoutingTest do
 
     test "a bare JSON string body -> :invalid_2xx_body -> give_up -> instance lands in :error" do
       %{schema_name: schema_name} = provisioned_tenant()
-      instance_id = start_instance!(schema_name, graph_service_task_end())
+      instance_id = start_instance!(schema_name, graph_human_task_end())
 
       assert :invalid_2xx_body =
                ServiceTask.classify_failure_kind({:http, 200, ~s("just a string")})
@@ -249,7 +260,7 @@ defmodule Letflow.Engine.ServiceTaskRoutingTest do
   describe "AC6 -- an empty rendered URL routes to set_instance_error/2 rather than dispatching" do
     test "validate_rendered_url rejects the empty render, and the build attrs land the instance in :error" do
       %{schema_name: schema_name} = provisioned_tenant()
-      instance_id = start_instance!(schema_name, graph_service_task_end())
+      instance_id = start_instance!(schema_name, graph_human_task_end())
 
       assert {:error, :empty_rendered_url} = ServiceTask.validate_rendered_url("")
 
@@ -280,7 +291,7 @@ defmodule Letflow.Engine.ServiceTaskRoutingTest do
   describe "AC8 -- exhausted retries (retriable kind at retry_limit) routes to set_instance_error/2" do
     test "a retriable kind at attempt_index == retry_limit gives up and lands the instance in :error" do
       %{schema_name: schema_name} = provisioned_tenant()
-      instance_id = start_instance!(schema_name, graph_service_task_end())
+      instance_id = start_instance!(schema_name, graph_human_task_end())
 
       # Distinct cause from AC5(b): :timeout IS retriable, but attempt_index has
       # reached retry_limit -- the "exhausted retries" case AC8 names verbatim,

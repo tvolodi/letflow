@@ -21,7 +21,7 @@ defmodule Letflow.Engine.ServiceTaskTest do
   alias Letflow.Engine.ServiceTask.Config
   alias Letflow.Engine.VariableMerge
 
-  defp node(attrs) do
+  defp svc_node(attrs) do
     %Graph.Node{id: "svc1", node_type: :SERVICE_TASK, attributes: attrs}
   end
 
@@ -32,7 +32,7 @@ defmodule Letflow.Engine.ServiceTaskTest do
   describe "AC1 -- parse_config_from_node_attributes/1 defaults and warning" do
     test "defaults timeout_ms to 30000 and retry_limit to 3 when omitted" do
       assert {:ok, %Config{} = config} =
-               ServiceTask.parse_config_from_node_attributes(node(%{"endpoint" => "http://x"}))
+               ServiceTask.parse_config_from_node_attributes(svc_node(%{"endpoint" => "http://x"}))
 
       assert config.timeout_ms == 30_000
       assert config.retry_limit == 3
@@ -42,7 +42,7 @@ defmodule Letflow.Engine.ServiceTaskTest do
     test "explicit timeout_ms/retry_limit are read through, not overridden by the defaults" do
       assert {:ok, %Config{} = config} =
                ServiceTask.parse_config_from_node_attributes(
-                 node(%{"endpoint" => "http://x", "timeout_ms" => 5_000, "retry_limit" => 7})
+                 svc_node(%{"endpoint" => "http://x", "timeout_ms" => 5_000, "retry_limit" => 7})
                )
 
       assert config.timeout_ms == 5_000
@@ -52,7 +52,7 @@ defmodule Letflow.Engine.ServiceTaskTest do
     test "both url and service_id present records the BothUrlAndServiceIdProvidedUrlIgnored warning, not an error" do
       assert {:ok, %Config{} = config} =
                ServiceTask.parse_config_from_node_attributes(
-                 node(%{"endpoint" => "http://x", "service_id" => "svc-42"})
+                 svc_node(%{"endpoint" => "http://x", "service_id" => "svc-42"})
                )
 
       assert config.warnings == [:both_url_and_service_id_provided_url_ignored]
@@ -64,7 +64,7 @@ defmodule Letflow.Engine.ServiceTaskTest do
 
     test "url only (no service_id) never records the warning" do
       assert {:ok, %Config{} = config} =
-               ServiceTask.parse_config_from_node_attributes(node(%{"endpoint" => "http://x"}))
+               ServiceTask.parse_config_from_node_attributes(svc_node(%{"endpoint" => "http://x"}))
 
       assert config.warnings == []
       assert config.route_kind == :inline_url
@@ -72,7 +72,7 @@ defmodule Letflow.Engine.ServiceTaskTest do
 
     test "neither url nor service_id present is a hard parse error, not silently defaulted" do
       assert {:error, :missing_url_and_service_id} =
-               ServiceTask.parse_config_from_node_attributes(node(%{}))
+               ServiceTask.parse_config_from_node_attributes(svc_node(%{}))
     end
   end
 

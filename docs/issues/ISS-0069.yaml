@@ -1,0 +1,32 @@
+id: ISS-0069
+title: >
+  Unused default-value warnings in service_task_routing_test.exs and
+  engine_plugin_error_routing_test.exs surfaced during ISS-0068's post-fix
+  mix test run
+discovered_by: TEST-RUNNER
+discovered_in_run: WF03-ISS0068-20260819
+discovered_at: 2026-08-19T05:31:00Z
+severity: MINOR
+description: >
+  While re-running the full suite to verify ISS-0068's format-only fix,
+  TEST-RUNNER observed two pre-existing compiler warnings of the form
+  "default values ... never used" surfacing during the test-file compile
+  pass (not the app-code `mix compile --warnings-as-errors` pass, so they
+  don't fail that gate):
+
+    test/letflow/engine/service_task_routing_test.exs
+    test/letflow/engine_plugin_error_routing_test.exs
+
+  Not introduced by ISS-0068 (that run only reformatted whitespace in 14
+  unrelated files). Filed per ISSUE_QUEUE.md as an incidental,
+  not-blocking finding rather than expanding ISS-0068's own scope. Needs
+  a real diagnosis run (re-run `mix test test/letflow/engine/service_task_routing_test.exs
+  test/letflow/engine_plugin_error_routing_test.exs --warnings-as-errors`
+  or similar to capture the exact function/line each warning points at)
+  before a fix can be designed -- this record only captures that the
+  warnings exist and where TEST-RUNNER saw them, not their root cause.
+affected_files:
+  - test/letflow/engine/service_task_routing_test.exs
+  - test/letflow/engine_plugin_error_routing_test.exs
+github_issue: null # to be filed via register_task's best-effort GH mirror
+status: open

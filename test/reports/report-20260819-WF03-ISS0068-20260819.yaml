@@ -1,0 +1,87 @@
+# Test run report — WF-03 Step 4 (test run) for ISS-0068
+
+issue_id: ISS-0068
+workflow: WF-03
+step: "04"
+agent: TEST-RUNNER
+run_id: WF03-ISS0068-20260819
+date_utc: 2026-08-19T05:31:00Z
+
+git:
+  branch: feature/WF03-ISS0068-20260819
+  branch_confirmed: true
+  commit: e1c7753
+  commit_subject: "fix: reformat 14 files to close ISS-0068 mix format drift"
+  worktree: false (primary checkout at ~/letflow)
+  diff_summary: >
+    Whitespace-only mix format drift fix across 14 files, already
+    REVIEWER-PASSed and TEST-DESIGN-VALIDATOR-PASSed. No behavioral/logic
+    changes expected.
+
+environment:
+  postgres_container: >
+    letflow-postgres-1 confirmed Running via `docker compose up -d` at start
+    of this run (already up, no-op).
+  command_run: >
+    mix format --check-formatted; mix compile --warnings-as-errors;
+    LETFLOW_DEV_DB_CONFIRMED=1 mix test (full suite, default random seed —
+    the `test` alias runs ecto.create + ecto.migrate --quiet first
+    automatically)
+
+verdict: PASS
+
+checks:
+  format_check:
+    result: PASS — no unformatted files reported
+    exit_code: 0
+
+  compile_warnings_as_errors:
+    result: PASS — clean compile, no warnings surfaced, no errors
+    exit_code: 0
+
+  test_suite_full_run:
+    result: PASS — all green, no failures
+    exit_code: 0
+    summary_line_verbatim: "5 properties, 1029 tests, 0 failures"
+    finished_line_verbatim: "Finished in 140.7 seconds (5.3s async, 135.4s sync)"
+    failures: 0
+
+  branch_own_change_caused_failures: none
+
+  pre_existing_failures_found: []
+
+  known_noise_not_a_failure:
+    - >
+      Verbose SQL [debug] QUERY OK logging and one expected Keycloak
+      metadata-load connection error (placeholder OIDC issuer, unrelated
+      fixture: "Metadata load failed for issuer
+      https://placeholder-keycloak.invalid/...") appear in raw mix test
+      output — expected, not a failure.
+    - >
+      Two pre-existing "default values ... never used" compiler warnings
+      appeared in the mix test run's own compilation pass (test files
+      service_task_routing_test.exs and
+      engine_plugin_error_routing_test.exs, unrelated to this branch's
+      diff) — these did not appear during the separate
+      `mix compile --warnings-as-errors` invocation of application code,
+      confirming they are test-file-only warnings not gated by that
+      command, and are not attributable to the ISS-0068 formatting change.
+
+  regression_check: >
+    1029 tests, 0 failures, single run. No regressions attributable to this
+    branch's diff (whitespace-only reformat, no logic changes). No new
+    issue needs filing to the queue.
+
+diagnosis: >
+  All three required gates passed cleanly: `mix format --check-formatted`
+  (exit 0, no drift), `mix compile --warnings-as-errors` (exit 0, clean),
+  and `LETFLOW_DEV_DB_CONFIRMED=1 mix test` (exit 0, 1029 tests / 5
+  properties, 0 failures). Consistent with this being a whitespace-only
+  formatting fix already passed by REVIEWER and TEST-DESIGN-VALIDATOR.
+  Nothing to route to ELIXIR-DEV.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-20260819-WF03-ISS0068-20260819.yaml
+  next_action: "ISSUE-FIXER may close ISS-0068; proceed to Step Final merge"

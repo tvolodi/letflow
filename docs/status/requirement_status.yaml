@@ -5094,3 +5094,48 @@ history:
       "Running it" section; verified by grep, only an unrelated
       pre-existing "snapshot count" mention in README.md exists and does
       not concern this table.
+
+  - req: REQ-060
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-19T09:35:27Z"
+    note: >
+      WF02-REQ060-20260819. Explicit instance pin rebind (pin_rebind.zig,
+      PIN-05) shipped as Letflow.Engine.PinRebind.rebind_pins/N: the sole
+      write path to a running instance's effective pin set after
+      INSTANCE_STARTED, requiring a mandatory reason and rejecting an
+      empty/malformed request with a distinct invalid-input error
+      (PIN-05 AC4); validates every named ref against REQ-059's
+      merge_effective_pins, returning a distinct UnknownPinRef and
+      applying none of the entries on any miss (PIN-05 AC2, all-or-
+      nothing via a single Ecto.Multi/transaction); rejects COMPLETED,
+      CANCELLED and ERROR instances with a distinct InstanceNotRebindable
+      error, treating ERROR as the terminal status PIN-05's own text
+      calls "FAILED" (a status that does not exist in Letflow's or
+      R-Co's own InstanceStatus enum) and saying so explicitly in the
+      moduledoc (PIN-05 AC3); appends exactly one INSTANCE_PINS_REBOUND
+      event per CHANGED entry with {ref, prior_version, new_version,
+      actor, reason}, omitting no-op entries whose requested version
+      already matches (PIN-05 AC1); surfaces lock contention as a
+      distinct ConcurrentModification error via SELECT FOR UPDATE NOWAIT
+      rather than blocking, the same convention REQ-053's
+      Reconstruction.write_back/3 already established, not REQ-052's
+      blocking cancel_instance/3 convention. Gate chain: REVIEWER (PASS),
+      TEST-DESIGN-VALIDATOR (PASS), TEST-RUNNER (PASS, full suite: 5
+      properties, 1090 tests, 0 failures), RELEASE-VALIDATOR (independent
+      re-verification of all 6 acceptance criteria against real mix test
+      output plus a 3-claim design-doc-vs-shipped-code spot check, all
+      matching). docs/requirements.yaml REQ-060 flipped pending -> done.
+      docs/migration/stage-3-instance-engine.md's header still listed
+      REQ-060 in its `pending` clause alongside REQ-062 -- fixed in this
+      same pass (moved REQ-060 into the `done` clause with a PIN-05
+      summary, and updated the trailing pending clause to name REQ-062
+      alone since it is the sole remaining Stage 3 pending requirement,
+      separately in-flight on another host), same header-sync gap-fix
+      shape REQ-045/047/048/052/053/054/055/056/057/059/061's
+      DOC-UPDATER passes already applied. README.md: no changes needed
+      -- this change adds no new HTTP route (POST
+      /api/v1/instances/{id}/rebind-pins is REQ-060's own documented S4
+      scope boundary, not shipped here), no change to the documented
+      gen_statem/process-model diagram, and no change to the "Running
+      it" section; verified by grep.

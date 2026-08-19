@@ -94,8 +94,18 @@ forward R-Co's own PIN-01 AC1/AC2 and PIN-03 AC3 scope gap
 "Scope boundaries with S4 and S5") and reserves PIN_RETRY_EXHAUSTED as a
 named, not-yet-emitted hook for PIN-03 AC4's exhausted-retry-budget DLQ
 routing rather than a partial implementation; same header-sync gap-fix
-shape applied by this requirement's own DOC-UPDATER); REQ-060, REQ-062
-(`docs/requirements.yaml`, 2 total) `pending`.
+shape applied by this requirement's own DOC-UPDATER); REQ-060 `done`
+(Explicit instance pin rebind, PIN-05 -- Letflow.Engine.PinRebind, the
+sole write path to a running instance's effective pin set after
+INSTANCE_STARTED, requiring a mandatory reason, validating every ref
+against REQ-059's merge_effective_pins with all-or-nothing application
+on an UnknownPinRef, rejecting COMPLETED/CANCELLED/ERROR instances as
+InstanceNotRebindable, appending one INSTANCE_PINS_REBOUND event per
+CHANGED entry, and surfacing lock contention as a distinct
+ConcurrentModification error via the same SELECT FOR UPDATE NOWAIT
+convention REQ-053 established; same header-sync gap-fix shape applied
+by this requirement's own DOC-UPDATER). REQ-062
+(`docs/requirements.yaml`, 1 total) `pending`.
 
 ## Scope
 

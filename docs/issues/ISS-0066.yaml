@@ -1,0 +1,54 @@
+id: ISS-0066
+title: >
+  test/support/tenant_slug_test.exs "distinct slugs across three fresh VMs" fails on
+  Windows -- System.cmd("mix", ["run", "--no-start", "-e", script], ...) returns
+  {"", 255} instead of running the subprocess
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ056-20260819
+discovered_at: 2026-08-19T08:22:00Z
+severity: MINOR
+description: >
+  During WF-02 Step 4 for REQ-056, the full `mix test` run surfaced exactly one
+  pre-existing failure -- but it was NOT the expected ISS-0062 failure in
+  test/letflow/identity_migration_test.exs:367 (that file passed cleanly, 10/10,
+  when run in isolation this run). Instead, test/support/tenant_slug_test.exs:101
+  ("post-fix unique_slug/1 avoids the cross-VM collision distinct slugs across three
+  fresh VMs") fails deterministically on this Windows host:
+
+    ** (MatchError) no match of right hand side value: {"", 255}
+    code: for _ <- 1..3 do
+      {output, 0} =
+        System.cmd("mix", ["run", "--no-start", "-e", script],
+          env: [{"MIX_ENV", "test"}], stderr_to_stdout: false)
+
+  Reproduces in isolation (not a concurrency/parallel-suite artifact): running
+  `mix test test/support/tenant_slug_test.exs --include slow` alone still fails the
+  same way, with an extra "...) was unexpected at this time." line in the output --
+  that phrasing is a classic Windows cmd.exe/batch parse error, strongly suggesting
+  `System.cmd("mix", [...])` on Windows resolves through mix.bat/mix.ps1 and the
+  argument list (particularly the `-e` script string, which contains quotes) is not
+  being escaped/passed the way the test assumes. Exit code 255 with empty stdout is
+  consistent with the subprocess never actually running Elixir code at all.
+
+  This looks like a Windows-only environment gap in the test itself (spawns real `mix`
+  subprocesses via System.cmd, which is inherently more shell-fragile than a plain
+  `elixir -e` invocation), not something introduced by REQ-056. Filed rather than fixed
+  in-run per Unblock-Everything / ISSUE_QUEUE.md: it is adjacent to, not blocking,
+  REQ-056's own acceptance criteria, and REQ-056's own new tests do not touch this file.
+
+  Net effect for this run: the *set* of pre-existing failures has changed since
+  REQ-061's 2026-08-19 run (which saw exactly 1 pre-existing failure, in
+  identity_migration_test.exs). This run sees a different single pre-existing failure
+  (this one) instead, with identity_migration_test.exs now clean. Worth checking
+  whether ISS-0062 was already fixed by intervening work, or is itself an intermittent
+  flake that simply didn't trigger this run.
+
+  Filed as ISS-0066 (not ISS-0064) because a rebase onto origin/main during this run's
+  Step Final surfaced an add/add id collision: main had already assigned ISS-0064 (and
+  ISS-0065) to unrelated issues merged after this run's own TEST-RUNNER filed its
+  report under the same next-available number it saw at the time. Renumbered by ORCH
+  during conflict resolution rather than by TEST-RUNNER itself.
+affected_files:
+  - test/support/tenant_slug_test.exs
+github_issue: https://github.com/tvolodi/letflow/issues/221
+status: open

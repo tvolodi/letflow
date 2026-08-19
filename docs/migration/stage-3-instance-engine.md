@@ -60,8 +60,16 @@ set_instance_error/2, closing that requirement's own AC8 obligation
 deferred forward at the time; wires REQ-031's plugin_lookup_fun and
 REQ-049's variable merge; registry contract only, WASM plugin host is
 S5 scope; same header-sync gap-fix shape applied by this requirement's
-own DOC-UPDATER); REQ-054, REQ-055, REQ-056, REQ-059, REQ-060, REQ-062
-(`docs/requirements.yaml`, 6 total) `pending`.
+own DOC-UPDATER); REQ-056 `done` (Service task configuration, retry
+classification and dispatch contract, EXT-01 --
+Letflow.Engine.ServiceTask, pure config-parsing,
+failure-classification, backoff and retry-decision functions with the
+HTTP transport and service_catalog left injectable per this stage's
+own scope boundary; an exhausted-retry outcome routes into REQ-061's
+set_instance_error/2, closing REQ-061's own deferred AC8 obligation;
+same header-sync gap-fix shape applied by this requirement's own
+DOC-UPDATER); REQ-054, REQ-055, REQ-059, REQ-060, REQ-062
+(`docs/requirements.yaml`, 5 total) `pending`.
 
 ## Scope
 

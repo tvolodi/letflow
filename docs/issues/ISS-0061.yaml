@@ -1,0 +1,33 @@
+id: ISS-0061
+title: "Duplicate migration version 20260819000001 blocks mix ecto.migrate / mix test on main"
+discovered_by: hetzner-orch
+discovered_in_run: hetzner-orch-session-20260819
+discovered_at: "2026-08-19T00:53:56Z"
+severity: BLOCKER
+description: >
+  Two independent migration files on main share the same version number
+  20260819000001: priv/repo/migrations/20260819000001_create_groups_tenant_scoped.exs
+  (from REQ-063, Decision 0006 D1) and
+  priv/repo/migrations/20260819000001_drop_transition_events.exs (from REQ-046,
+  process_instance.ex retirement, #199). Both merged to main independently
+  (commits 5941472 and 1059093) without either host noticing the other's
+  concurrent migration timestamp. `mix ecto.migrate` (and therefore `mix test`,
+  which runs migrations against the sandbox DB) now fails immediately with
+  Ecto.MigrationError: "migration version 20260819000001 is duplicated" before
+  any test runs at all -- this blocks every host working this backlog, not just
+  the run that finds it first. Root cause is the same cross-host filename/id
+  collision class already documented in docs/anti-patterns.md ("Two branches
+  picking the same module name...", "A rebase add/add conflict on
+  docs/issues/ISS-NNNN.yaml can land without git ever flagging it as CONFLICT")
+  but this is the first occurrence against a migration version number rather
+  than a module name or docs/issues/ entry -- worth its own anti-patterns entry
+  once fixed, since Ecto's own duplicate-version guard is what caught it here
+  (unlike the module-name collision class, which compiles cleanly and is only
+  caught by test/build failure).
+affected_files:
+  - priv/repo/migrations/20260819000001_create_groups_tenant_scoped.exs
+  - priv/repo/migrations/20260819000001_drop_transition_events.exs
+github_issue: 210
+status: resolved
+resolved_in_run: WF03-ISS0061-20260819
+resolved_at: "2026-08-19T01:06:10Z"

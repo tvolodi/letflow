@@ -1,0 +1,84 @@
+# Test run report — WF-03 Step 4 (test run) for ISS-0061
+
+issue_id: ISS-0061
+workflow: WF-03
+step: "04"
+agent: TEST-RUNNER
+run_id: WF03-ISS0061-20260819
+date_utc: 2026-08-19T01:07:00Z
+
+git:
+  branch: feature/WF03-ISS0061-20260819
+  branch_confirmed: true
+  commit: 8b57b6b
+  commit_subject: "test(ISS-0061): regression test for duplicate migration version numbers"
+  worktree: false
+  diff_stat_main_to_head: >
+    docs/issues/ISS-0061.yaml (new, 31 lines),
+    docs/issues/iss061-migration-version-collision-fix.md (new, 98 lines),
+    priv/repo/migrations/20260819000001_drop_transition_events.exs renamed to
+    20260819000005_drop_transition_events.exs (0 content changes — rename only,
+    resolves the duplicate version-number collision with another
+    20260819000001_*.exs migration),
+    test/letflow/migration_filenames_test.exs (new, 79 lines),
+    test/specs/ISS-0061.md (new, 109 lines).
+    5 files changed, 317 insertions(+).
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 27 [erts-15.2.7.4] ... Elixir 1.18.3 (compiled with Erlang/OTP 27)"
+  postgres_container: "letflow-postgres-1, confirmed via docker ps —
+    0.0.0.0:5462->5432/tcp, [::]:5462->5432/tcp, status Up (healthy).
+    docker compose up -d run first (reported container already Running)."
+  partition: "MIX_TEST_PARTITION=hetzner-orch (as instructed for this run)"
+  command_run: "MIX_TEST_PARTITION=hetzner-orch mix test (full suite, unpinned/
+    default random seed — the `test` alias runs ecto.create + ecto.migrate
+    --quiet first automatically)"
+
+verdict: PASS
+
+checks:
+  test_suite_full_run:
+    result: PASS — all green, no failures
+    exit_code: "0 (implied — no failure output, summary line reports 0 failures)"
+    summary_line_verbatim: "3 properties, 910 tests, 0 failures"
+    finished_line_verbatim: "Finished in 101.7 seconds (2.3s async, 99.4s sync)"
+    failures: 0
+
+  new_iss0061_tests_included_in_run:
+    result: PASS
+    note: >
+      test/letflow/migration_filenames_test.exs (new regression test guarding
+      against duplicate migration version numbers, per ISS-0061's fix in
+      docs/issues/iss061-migration-version-collision-fix.md) executed as part
+      of the full-suite run above. No failures reported anywhere in the run,
+      so this file's tests are included in the "0 failures" total.
+
+  known_noise_not_a_failure:
+    - >
+      Verbose SQL query debug logging (`[debug] QUERY OK ...` lines, including
+      tenant-schema DDL/DML from multi-tenant test fixtures) appears in raw
+      mix test output (config/test.exs's default test log level) — expected,
+      not indicative of any problem.
+
+  pre_existing_failures_found: []
+
+  regression_check: >
+    3 properties, 910 tests, 0 failures — full green run, no regressions, no
+    pre-existing failures observed this time (contrast with prior runs, e.g.
+    report-20260819-WF02-REQ052-20260819.yaml, which hit a since-addressed
+    order/isolation-dependent identity_migration_test.exs failure; that class
+    of issue did not reproduce in this run).
+
+diagnosis: >
+  Full suite passed cleanly with no failures. ISS-0061's fix (renaming the
+  colliding migration file's version prefix from 20260819000001 to
+  20260819000005) resolved the duplicate-version-number defect, and the new
+  regression test (migration_filenames_test.exs) guarding against future
+  collisions passed along with the rest of the suite. No rework needed.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-20260819-WF03-ISS0061-20260819.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

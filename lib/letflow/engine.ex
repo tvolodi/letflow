@@ -360,16 +360,31 @@ defmodule Letflow.Engine do
   # it stayed put (:HUMAN_TASK's "no automatic outgoing traversal" contract,
   # or a join's :wait outcome consuming the arriving branch token without
   # producing a new one).
-  defp advance_until_stable(_graph, instance_state, [], _hops_remaining) do
+  # Made public (still `@doc false`, not part of this module's documented API)
+  # rather than duplicated, per req053 design doc §9 OQ-2's own two named
+  # options ("exported from Engine with @doc false, or extracted into a
+  # small shared helper module") — Letflow.Engine.Reconstruction
+  # (REQ-053, EE-11) drives this exact worklist loop over a replayed
+  # InstanceState the same way create/2's own activate/2 and complete_task/3's
+  # own dispatch_task_completion_hop_chain/5 already do. Duplicating this
+  # function's body risked the two copies silently diverging over time
+  # (design doc §9 OQ-2's own stated risk for that alternative) — exporting
+  # the existing, already-tested implementation unchanged avoids that at the
+  # cost of a slightly wider module surface, which @doc false keeps out of
+  # generated docs. Flagged for REVIEWER per the design doc's own request.
+  @doc false
+  @spec advance_until_stable(Graph.t(), InstanceState.t(), [String.t()], integer()) ::
+          {:ok, InstanceState.t()} | {:error, {:activation_failed, term()}}
+  def advance_until_stable(_graph, instance_state, [], _hops_remaining) do
     {:ok, instance_state}
   end
 
-  defp advance_until_stable(_graph, _instance_state, [token_id | _rest], hops_remaining)
+  def advance_until_stable(_graph, _instance_state, [token_id | _rest], hops_remaining)
        when hops_remaining <= 0 do
     {:error, {:activation_failed, {:hop_limit_exceeded, token_id}}}
   end
 
-  defp advance_until_stable(graph, instance_state, [token_id | rest], hops_remaining) do
+  def advance_until_stable(graph, instance_state, [token_id | rest], hops_remaining) do
     previous_tokens = instance_state.tokens
 
     case Transition.transition(graph, instance_state, {:advance_token, token_id}) do
@@ -395,8 +410,11 @@ defmodule Letflow.Engine do
   # existing token is untouched by this hop and was already resolved (either
   # still correctly queued from an earlier hop, or already stable) -- this
   # function never re-adds it.
+  # Public/`@doc false` for the same req053 design doc §9 OQ-2 reason as
+  # advance_until_stable/4 above.
+  @doc false
   @spec tokens_needing_dispatch([Token.t()], [Token.t()], String.t()) :: [String.t()]
-  defp tokens_needing_dispatch(previous_tokens, new_tokens, dispatched_token_id) do
+  def tokens_needing_dispatch(previous_tokens, new_tokens, dispatched_token_id) do
     previous_by_id = Map.new(previous_tokens, &{&1.token_id, &1})
 
     new_tokens
@@ -412,7 +430,14 @@ defmodule Letflow.Engine do
     |> Enum.map(& &1.token_id)
   end
 
-  defp build_graph(graph_map) do
+  # Public/`@doc false` for the same req053 design doc §9 OQ-2 reason as
+  # advance_until_stable/4 above -- Letflow.Engine.Reconstruction (REQ-053)
+  # resolves an event log's snapshot graph through this exact function
+  # rather than re-deriving graph-load error mapping independently.
+  @doc false
+  @spec build_graph(map()) ::
+          {:ok, Graph.t()} | {:error, {:graph_structure_invalid, term()}}
+  def build_graph(graph_map) do
     case Graph.from_map(graph_map) do
       {:ok, graph} -> {:ok, graph}
       :error -> {:error, {:graph_structure_invalid, :invalid_graph_map}}
@@ -421,8 +446,12 @@ defmodule Letflow.Engine do
 
   # A structurally-valid graph (CHK-01, REQ-028) guarantees exactly one
   # START node -- defensive, never-raising fallback only, not a literal AC
-  # case (design doc §6 step 8).
-  defp find_start_node(%Graph{nodes: nodes}) do
+  # case (design doc §6 step 8). Public/`@doc false` for the same req053
+  # design doc §9 OQ-2 reason as advance_until_stable/4 above.
+  @doc false
+  @spec find_start_node(Graph.t()) ::
+          {:ok, Node.t()} | {:error, {:graph_structure_invalid, :no_start_node}}
+  def find_start_node(%Graph{nodes: nodes}) do
     case Enum.find(nodes, &(&1.node_type == :START)) do
       nil -> {:error, {:graph_structure_invalid, :no_start_node}}
       start_node -> {:ok, start_node}

@@ -1,0 +1,47 @@
+{
+  "handoff_id": "b1e1a1a0-0001-4a00-9000-000000000003",
+  "run_id": "WF02-REQ062-20260819",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ062-20260819/step-01b-code-design-validator.json",
+  "created_at": "2026-08-19T04:46:19Z",
+  "started_at": "2026-08-19T04:46:19Z",
+  "completed_at": "2026-08-19T04:48:04Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-062"],
+    "requirement_text": {
+      "REQ-062": "See handoffs/WF02-REQ062-20260819/step-01-code-designer.json context.requirement_text for the full verbatim requirement description."
+    },
+    "related_handoff_ids": ["step-01-code-designer.json"],
+    "artifacts_in": ["lib/letflow/design/req062-sub-process-runtime.md"],
+    "owned_modules": ["lib/letflow/engine/", "lib/letflow/instance*", "priv/repo/migrations/"]
+  },
+  "task": {
+    "description": "Independently validate lib/letflow/design/req062-sub-process-runtime.md (branch feature/WF02-REQ062-20260819, already checked out) against REQ-062's 8 acceptance criteria (copy them from step-01-code-designer.json's task.acceptance_criteria). Read the design file directly -- do not read step-01-code-designer.json's result.summary as a substitute. Per WF-02 Step 1b: for each AC, confirm a concrete design element exists (no TBD/deferral language), function signatures are fully specified with error cases, error handling shape is stated as tagged tuples not left implicit, cross-module dependencies are listed, and no .ex implementation code bodies are present (signatures/type shapes only). Note: the design's own summary flagged an open question (OQ-1, how a SUB_PROCESS node names which definition to run) as unverified against R-Co source since R-Co is unreachable in this sandbox -- an explicitly-flagged open question is acceptable per WF-02 Step 1's own procedure (\"Open questions listed explicitly, not silently resolved\"), so do not FAIL solely for that being open; but do check whether the open question actually blocks any of the 8 ACs from having a concrete design element (if it does, that IS a FAIL-worthy gap, not just an open question).",
+    "acceptance_criteria": [
+      "a token entering a SUB_PROCESS node with a declared interface creates exactly one child instance whose initial variable map contains ONLY the declared inputs -- a parent variable not named in inputs is demonstrably absent from the child",
+      "a SUB_PROCESS node with no declared interface copies the full parent variable map to the child (EXT-05 behaviour preserved), demonstrated by an explicit test alongside the filtered case",
+      "each of the four SPC-01 failure modes has its own test and its own distinct error: the two activation failures leave ZERO child instances created (verified by counting instance rows), and the two completion failures leave the parent's variable map unmodified (no partial merge)",
+      "on child completion with a declared interface.outputs, only the named outputs merge into the parent via REQ-049's merge, and a child variable not named in outputs is demonstrably absent from the parent afterwards",
+      "the parent token's waiting_child_instance_id is set while the child runs and cleared on completion, and it survives a transition that copies tokens for an unrelated reason -- an explicit regression test for R-Co's GH #428 field-dropping bug",
+      "child instance creation is not reachable through REQ-045's public create/1 path, matching R-Co's internal-only createWithParentInheritance shape, confirmed by inspection and stated in the moduledoc",
+      "cancelling a parent instance does not cancel its running child, matching R-Co's documented EE-08 behaviour, demonstrated by an explicit test rather than assumed",
+      "each of the four SPC-01 failure modes is demonstrated routing into REQ-061's set_instance_error rather than writing its own ERROR transition, confirmed by inspection and by test -- this closes REQ-061's own AC obligation, deferred forward because REQ-062 did not exist when REQ-061 was built"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read lib/letflow/design/req062-sub-process-runtime.md directly (not CODE-DESIGNER's summary) and checked all 8 ACs against it, then cross-checked the design's foundational claims about existing code against lib/letflow/engine.ex, lib/letflow/engine/transition.ex, lib/letflow/engine/token.ex, lib/letflow/engine/token_record.ex, lib/letflow/engine/execution_error.ex, lib/letflow/definitions/sub_process_interface.ex, lib/letflow/engine/variable_merge.ex. AC1 (filtered inputs) and AC2 (EXT-05 full-copy fallback) -> §3.2.1 build_child_initial_variables/2 with full @spec, error tuples, and explicit interface==nil vs. interface!=nil branches. AC3 (4 failure modes, zero-child / no-partial-merge) -> §4 summary table + §3.3 (structural 'append_start_multi/6 never called' guarantee) + §3.4 step 2 (merge computed before any Multi step appended). AC4 (output filtering) -> §3.2.2 build_parent_merge_variables/2, same shape as §3.2.1. AC5 (waiting_child_instance_id set/clear/preserve, GH-428 regression) -> §5 + §1.1's struct-update discipline, verified against the real lib/letflow/engine/token.ex (field already exists, confirmed) and lib/letflow/engine/transition.ex's existing struct-update pattern in advance_token/3 etc. AC6 (create/2 has no second entry point) -> §0 + §3.3, verified against the real Letflow.Engine.create/2 (lib/letflow/engine.ex lines 290-303): create_attrs has no parent_instance_id field, matching the design's claim that child creation stays a separate, non-public code path. AC7 (EE-08 no cascade) -> §7, verified word-for-word against the real fetch_and_lock_open_tasks/3 and fetch_and_lock_live_tokens/3 (lib/letflow/engine.ex lines 1782-1850): both filtered strictly on `where t.instance_id == ^instance_id`, confirming the design's 'structurally unreachable' claim is true of the actual code, not just asserted. AC8 (routes through ExecutionError, not a new ERROR transition) -> §4 table + §3.2.3, verified against the real lib/letflow/engine/execution_error.ex: error_type() already reserves :subprocess_interface_violation (line 67) and append_multi/3's real @spec matches the design's usage; also confirmed Letflow.Engine.set_instance_error/2 (engine.ex line 2007) is a real function, matching AC8's own wording. Also verified: Letflow.Engine.Transition's real transition_event()/pending_event() unions (3 and 3 variants respectively, transition.ex lines 96-116) match the design's 'one new variant' framing exactly, and Letflow.Definitions.SubProcessInterface's real parse_interface/2 and validate_schema_shape/2 (sub_process_interface.ex) match the design's 'reused unchanged' claim in shape and arity. No TBD/deferral language found on any of the 8 ACs -- 4 open questions (OQ-1..OQ-4) exist but were checked individually: OQ-1 (SUB_PROCESS definition-reference attribute name) does not leave any of the 8 ACs without a concrete design element -- §3.3's prepare_child_activation/4 states a concrete assumed attribute name/resolution path (node.attributes['definition_name'] via Definitions.get_active_by_name/2) plus a named defensive error code (SUB_PROCESS_DEFINITION_NOT_FOUND) for the case it's wrong, so implementation is not blocked, only flagged for correction if wrong. OQ-2/OQ-3/OQ-4 are genuinely out of this requirement's 8 ACs' scope (registry-schema double-validation, cross-definition recursion depth, cancel-cascade-to-parent) and are correctly left open rather than blocking any AC. Every function signature reviewed carries full @spec-style types with explicit tagged-tuple error shapes ({:ok, _} | {:error, _} throughout); no .ex implementation code bodies present anywhere in the document -- every code-shaped block is a @spec/@type declaration or a table, never a real defp/def body.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {"branch_name": "feature/WF02-REQ062-20260819", "commit_sha_list": [], "remote_branch": "origin/feature/WF02-REQ062-20260819", "push_status": "ok", "pr_url": null, "pr_create_error": null},
+    "next_action": "Route to ELIXIR-DEV (2a)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

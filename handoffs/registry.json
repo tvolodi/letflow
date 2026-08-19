@@ -1262,20 +1262,20 @@
         "ISS-0065"
       ],
       "stage": null,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "test/support/tenant_slug_test.exs",
         "test/support/tenant_slug.ex"
       ],
       "lock_acquired_at": "2026-08-19T03:25:13Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 (git setup) starting.",
+      "lock_released_at": "2026-08-19T03:44:06Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (git merge) COMPLETED -- PR #222 squash-merged into main as d9bd370. Independently re-verified by ORCH: gh pr view confirms MERGED; git status clean on main; mix compile --warnings-as-errors clean pre-merge; full mix test run by TEST-RUNNER pre-merge -- 942/942, 5 properties, 0 failures. Queue task 121 released status: done.",
       "backfilled": false,
       "queue_task_id": 121,
       "queue_agent_id": "hetzner-orch",
       "worktree": "/home/tvolodi/letflow (primary checkout)",
-      "note": "get_next_task (agent_id hetzner-orch, QUEUE_AUTH_TOKEN from .env) claimed queue task 121, task_type issue, github_issue_number 221. Task body pointed to docs/issues/ISS-0064.yaml as the local record, but that number had since been independently claimed and resolved by a different host for an unrelated defect (orphaned tenant_schemas reaper, GH#207) -- same cross-host local-ID-collision class already documented in docs/anti-patterns.md. Reconstructed the lost content from gh issue view 221 and re-filed under the next free local ID, docs/issues/ISS-0065.yaml."
+      "note": "get_next_task (agent_id hetzner-orch, QUEUE_AUTH_TOKEN from .env) claimed queue task 121, task_type issue, github_issue_number 221. Task body pointed to docs/issues/ISS-0064.yaml as the local record, but that number had since been independently claimed and resolved by a different host for an unrelated defect (orphaned tenant_schemas reaper, GH#207) -- same cross-host local-ID-collision class already documented in docs/anti-patterns.md. Reconstructed the lost content from gh issue view 221 and re-filed under the next free local ID, docs/issues/ISS-0065.yaml. Root cause: System.cmd/3's documented Windows argv-reparsing caveat for .bat-invoked subprocesses (mix.bat/elixir.bat), triggered by a `-e <script>` argv element containing parens/quotes. Fix: private write_script_and_run/2 helper writing scripts to temp files, invoked via a plain file-path argv element instead of -e, guaranteed try/after cleanup. CODE-DESIGN-VALIDATOR FAILed once (rework 1 of 3): a /2 vs /3 signature contradiction in the design doc (an unresolved 'open question' paragraph contradicted the printed @spec) -- CODE-DESIGNER resolved by committing to /2 with a stated YAGNI rationale; re-check PASS. REVIEWER PASS (scope limited to the one test file, idiomatic try/after + File.rm/1, no lib/letflow/ touched, SECURITY-REVIEWER correctly out of scope -- no tenant-data path). TEST-DESIGNER added 2 fail-then-pass regression tests (AST-based check for no literal \"-e\" argv element; negative-path cleanup-on-failure test) -- TEST-DESIGN-VALIDATOR independently re-verified the fail-then-pass boundary against pre-fix commit ef888b5 itself (git show), re-ran the tests, re-computed describe+test name lengths (149/189 chars, well under the 255-char ExUnit limit this project has hit 4 times before). TEST-RUNNER: full suite 942 tests/5 properties/0 failures, no pre-existing flaky failures observed this run. ISSUE-FIXER closed ISS-0065 and GitHub issue #221. Step Final: no rebase conflicts (origin/main hadn't moved since branch creation), PR #222 opened and squash-merged clean."
     }
   ]
 }

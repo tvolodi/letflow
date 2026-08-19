@@ -31,4 +31,6 @@ description: >
 affected_files:
   - test/letflow/definitions/migrations_test.exs
 github_issue: "https://github.com/tvolodi/letflow/issues/206"
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0059-20260819
+resolved_at: 2026-08-19T01:39:49Z

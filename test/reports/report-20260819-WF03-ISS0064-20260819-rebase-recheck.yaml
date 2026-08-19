@@ -1,0 +1,122 @@
+# Test run report — WF-03 Step 4 (test run) for ISS-0064
+# Re-verification after rebase onto current origin/main, which now also
+# includes ISS-0060's concurrently-merged fix for a different failure mode
+# of the same identity_migration_test.exs guard test.
+
+issue_id: ISS-0064
+workflow: WF-03
+step: "04"
+agent: TEST-RUNNER
+run_id: WF03-ISS0064-20260819-rebase-recheck
+date_utc: 2026-08-19T03:02:00Z
+
+git:
+  branch: fix/WF03-ISS0064-20260819
+  branch_confirmed: true
+  commit: d5d7b3474ec5295e2ea9431cdb3d5c4cfa9057b4
+  commit_subject: "chore(WF03-ISS0064): close issue -- ISS-0064 resolved, distinct from ISS-0060"
+  worktree: true
+  note: >
+    Branch has been rebased onto current origin/main since the prior
+    report (report-20260819-WF03-ISS0064-20260819.yaml), which was taken
+    at commit 1851e0bc7031504a8ac908b522ae3b101f244a6e. main now includes
+    ISS-0060's fix (a `with_only_this_tenant_visible!/2` scoping helper)
+    for a different failure mode of the same
+    test/letflow/identity_migration_test.exs guard test that this branch's
+    Letflow.TenantSchemaReaper also touches indirectly (both address
+    orphaned/cross-tenant public.tenant_schemas rows breaking that guard,
+    via independent mechanisms). Re-running the full suite to confirm no
+    interaction/regression between the two fixes now that they coexist.
+  diff_stat_main_to_head_this_branch_only: >
+    docs/issues/ISS-0064.yaml (new), lib/letflow/design/iss064-orphaned-
+    tenant-schemas-fix.md (new), test/specs/ISS-0064.md (new),
+    test/support/tenant_schema_reaper.ex (new),
+    test/support/tenant_schema_reaper_test.exs (new),
+    test/test_helper.exs (+4 lines, wires sweep_orphans/2 before
+    ExUnit.start() and via ExUnit.after_suite/1).
+
+environment:
+  postgres_container: >
+    letflow-postgres-1 (shared, pre-existing container from another
+    worktree on this host), confirmed via docker ps — 0.0.0.0:5462->5432/tcp,
+    status Up (healthy). `docker compose up -d` in this worktree attempted
+    to recreate letflow-wt2-postgres-1 but failed with "port is already
+    allocated" (5462 already bound by the running letflow-postgres-1
+    container); the stray "Created" (never started) container was removed
+    with `docker rm` and the already-healthy shared container was used
+    directly — same port/service, no functional impact.
+  partition: "MIX_TEST_PARTITION=2 (as instructed for this run)"
+  command_run: "MIX_TEST_PARTITION=2 mix test (full suite; the `test`
+    alias runs ecto.create + ecto.migrate --quiet first automatically)"
+
+verdict: PASS
+
+checks:
+  test_suite_full_run:
+    result: PASS — all green, no failures
+    summary_line_verbatim: "5 properties, 927 tests, 0 failures"
+    finished_line_verbatim: "Finished in 108.2 seconds (4.2s async, 104.0s sync)"
+    failures: 0
+    note: >
+      927 tests vs. the prior pre-rebase report's 925 — consistent with
+      ISS-0060 having added its own test coverage on main in the interim;
+      no test count regression.
+    post_suite_sweep_confirmed: >
+      A `SELECT id, tenant_id, schema_name FROM tenant_schemas WHERE
+      provisioned_at < $1` query ran immediately after the "Finished" line,
+      confirming ExUnit.after_suite/1's orphan sweep (this branch's fix)
+      still executes as wired in test/test_helper.exs post-rebase.
+
+  identity_migration_test_isolated_run:
+    result: PASS
+    command: "MIX_TEST_PARTITION=2 mix test test/letflow/identity_migration_test.exs --seed 0"
+    summary_line_verbatim: "10 tests, 0 failures"
+    finished_line_verbatim: "Finished in 3.5 seconds (0.00s async, 3.5s sync)"
+    note: >
+      Ran this file in isolation (in addition to it being part of the full
+      927-test run above) specifically because it is now affected by two
+      independent, concurrently-merged fixes: ISS-0060's
+      with_only_this_tenant_visible!/2 scoping helper and this branch's
+      Letflow.TenantSchemaReaper orphan sweep. All 10 tests in this file,
+      including the DropLegacyPublicIdentityTables migration guard tests
+      (the ISS-0050/ISS-0064 regression coverage at lines ~318-471) and
+      whatever ISS-0060 added, pass cleanly together — no interaction
+      failure between the two fixes observed.
+
+  new_iss0064_tests_included_in_run:
+    result: PASS
+    note: >
+      test/support/tenant_schema_reaper_test.exs (regression coverage for
+      Letflow.TenantSchemaReaper.sweep_orphans/2) executed as part of the
+      full-suite run above with 0 failures.
+
+  known_noise_not_a_failure:
+    - >
+      Verbose SQL query debug logging ([debug] QUERY OK ...) appears in raw
+      mix test output per config/test.exs's default test log level —
+      expected, not indicative of any problem. No "[failure]" or
+      "0 failures" contradicting pattern appears anywhere in the output.
+
+  pre_existing_failures_found: []
+
+  regression_check: >
+    Full suite: 5 properties, 927 tests, 0 failures. Isolated
+    identity_migration_test.exs re-run: 10 tests, 0 failures. No
+    regressions attributable to this branch's changes, and no
+    interaction/conflict with ISS-0060's independently-merged fix for the
+    same test file. Nothing to route to ELIXIR-DEV.
+
+diagnosis: >
+  Post-rebase re-verification confirms the suite is fully green
+  (927 tests, 0 failures) with this branch's TenantSchemaReaper fix now
+  coexisting with ISS-0060's with_only_this_tenant_visible!/2 scoping fix,
+  both of which independently address orphaned/cross-tenant
+  public.tenant_schemas rows affecting the same identity_migration_test.exs
+  guard test. identity_migration_test.exs passes in full (10/10) both as
+  part of the full suite and in isolation. No rework needed.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-20260819-WF03-ISS0064-20260819-rebase-recheck.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

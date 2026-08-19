@@ -4998,3 +4998,14 @@ history:
       needed -- this change added no new HTTP route, no change to the
       documented gen_statem/process-model diagram, and no change to
       the "Running it" section, same reasoning as REQ-045/047/048/052/061.
+  - req: REQ-062
+    event: started
+    agent: ELIXIR-DEV
+    at: 2026-08-19T04:36:41Z
+    note: >
+      WF02-REQ062-20260819. Porting SPC-01's runtime half (child
+      instance creation via createWithParentInheritance, parent-token
+      waiting_child_instance_id wait/clear, input filtering/output
+      merge, the four SPC-01 failure modes routed through REQ-061's
+      set_instance_error) from src/engine/instance.zig +
+      transition.zig. depends_on REQ-061/REQ-049/REQ-032, all done.

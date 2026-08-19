@@ -27,9 +27,63 @@ affected_files:
   - test/letflow/identity_migration_test.exs
   - lib/letflow/tenant_provisioning.ex
   - lib/letflow/sandbox_pool.ex
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0064-20260819
+resolved_at: "2026-08-19T02:56:56Z"
 github_issue: 207
 queue_task_id: 117
 related_issues:
   - ISS-0048
   - ISS-0050
+  - ISS-0060
+resolution_note: >
+  Root cause (confirmed by direct reproduction, not inferred from prior reports):
+  the DropLegacyPublicIdentityTables guard migration
+  (priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs)
+  intentionally scans ALL rows of public.tenant_schemas, globally and unscoped --
+  correct for production (one tenant registry), but in the shared test database
+  that table accumulates permanently orphaned rows left behind by the ~30+ test
+  files that provision a real (non-sandboxed) tenant schema directly via
+  Letflow.TenantProvisioning.provision_tenant_schema/1 and rely solely on a
+  manually-registered on_exit/1 for cleanup. Unlike Letflow.SandboxPool's
+  `sandbox_*`-prefixed pooled schemas (which ISS-0048 gave an owner-crash
+  reaper), these direct-provisioning `tenant_*` schemas have no reaper at all --
+  a killed/timed-out test process, or a partially-failing on_exit, permanently
+  orphans the tenant_schemas row and its real Postgres schema. Reproduced
+  directly: `MIX_TEST_PARTITION=2 mix test test/letflow/identity_migration_test.exs`
+  failed deterministically (8 tests, 1 failure, the exact "expected public.groups
+  to be dropped" assertion at line 367) against letflow_test2, which had 2
+  pre-existing orphaned tenant_schemas rows at rest (confirmed via
+  `docker exec letflow-postgres-1 psql -d letflow_test2` -- both real Postgres
+  schemas, both missing their .groups table); the identical test run against the
+  clean letflow_test database (0 orphaned rows) passed 8/8. This explains the
+  "intermittent"/"passes in isolation" framing in ISS-0048/ISS-0050: the failure
+  is deterministic per shared-DB state, not a true race within a single run.
+
+  Fix: Letflow.TenantSchemaReaper.sweep_orphans/2 (test/support/tenant_schema_reaper.ex,
+  design at lib/letflow/design/iss064-orphaned-tenant-schemas-fix.md) -- a
+  test-only, suite-boundary sweep (called once before ExUnit.start() and once via
+  ExUnit.after_suite/1 in test/test_helper.exs) that reclaims tenant_schemas rows
+  older than a min-age threshold (default 300s), safely distinguishing genuinely
+  orphaned rows from ones still in active use by validating schema_name format and
+  age rather than relying on any in-memory liveness tracking (the two suite
+  boundaries are the only points "currently active" is guaranteed to be empty, so
+  no owner-monitor equivalent to SandboxPool's is needed). Regression coverage at
+  test/support/tenant_schema_reaper_test.exs. Full suite (MIX_TEST_PARTITION=2 mix
+  test) run twice post-fix: 925 tests, 5 properties, 0 failures both times,
+  including all DropLegacyPublicIdentityTables guard tests.
+
+  Relationship to ISS-0060 (also closing GH#207): distinct, complementary root
+  cause, not a duplicate. ISS-0060 (PR #217, merged to main before this branch's
+  Step 5) fixed a different failure mode of the same guard test -- races against
+  OTHER tenants *concurrently provisioning/deprovisioning* during a single test
+  run -- via a test-side snapshot/restore scoping helper
+  (with_only_this_tenant_visible!/2). This issue (ISS-0064) fixes *persistent*
+  orphaned rows that survive across separate mix test invocations entirely, a
+  different failure mode with no overlap in the code changed. Both fixes are
+  needed; neither supersedes the other.
+
+  GitHub issue #207 was already closed (2026-08-19T02:25:44Z) by ISS-0060's PR
+  #217 before this run reached Step 5 -- `gh issue close 207` was attempted per
+  WF-03 Step 5 and correctly no-op'd (gh reported "already closed"). A traceability
+  comment was posted instead: https://github.com/tvolodi/letflow/issues/207#issuecomment-5336952971

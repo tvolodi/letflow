@@ -1,0 +1,84 @@
+id: ISS-0075
+title: "Letflow.Engine.VariableMerge moduledoc carries two stale claims: REQ-061 described as pending/unimplemented (it is done), and design §3.2's abort-entire-batch semantic described as unverified because 'no R-Co source tree is reachable' (it is reachable, and the reconstruction is CORRECT)"
+discovered_by: ORCH
+discovered_in_run: WF01-REQ109-20260819 (REQ-VALIDATOR re-gate prep)
+discovered_at: "2026-08-19T19:37:45Z"
+severity: MINOR
+tags:
+  - stale-doc
+  - req-049
+  - req-061
+  - variable-merge
+  - r-co-verification
+description: >
+  `lib/letflow/engine/variable_merge.ex`'s moduledoc carries two factually
+  stale claims. Neither affects runtime behaviour -- the module is pure and
+  its code is correct -- but both mislead a reader, and one of them
+  understates the confidence of a semantic REQ-109 is about to depend on.
+
+  STALE CLAIM 1 (lines 31-46, the "Dependency ordering" section). The
+  moduledoc states: "REQ-061 (EE-10, execution error handling) is `status:
+  pending` and unimplemented as of this module's own implementation."
+  REQ-061 is now `status: done` in docs/requirements.yaml. The surrounding
+  reasoning (that VariableMerge does not and should not depend on REQ-061,
+  and signals rejection purely through its own return value) remains
+  correct and should be PRESERVED -- only the status assertion is stale.
+  Suggested repair: keep the section, restate the claim in the past tense
+  as the condition that held at implementation time, so the
+  dependency-ordering rationale survives without asserting a false current
+  status.
+
+  STALE CLAIM 2 (lines 18-20) -- the more consequential one. The moduledoc
+  qualifies design §3.2's abort-the-entire-batch semantic as "a reasoned
+  reconstruction, not verified against `instance.zig`'s literal source,
+  since no R-Co source tree is reachable in this environment."
+
+  The R-Co source tree IS reachable at c:\Users\tvolo\dev\ai-dala\R-Co, and
+  this run verified the reconstruction directly. R-Co's own `mergeVariables`
+  doc comment (src/engine/instance.zig:2300-2304) reads: "Merge
+  `output_variables` into `current_vars` using ISS-202 two-phase merge:
+  Phase 1: Validate ALL output variables (schema checks, collision
+  detection) with NO state change. On any failure, return early with
+  violation. Phase 2: Apply all validated keys and emit VARIABLE_OVERWRITTEN
+  events only if Phase 1 succeeds. On failure, leave variables untouched."
+
+  That is precisely the abort-entire-batch semantic REQ-049 reconstructed.
+  The reconstruction was RIGHT. The caveat should therefore be replaced with
+  a positive citation of R-Co's two-phase merge rather than merely deleted --
+  this upgrades a documented guess into a verified port, which matters
+  because REQ-109 wires the rejection path that makes this exact semantic
+  observable in production for the first time (the branch is unreachable
+  today; see ISS-0063).
+
+  The environment claim itself ("no R-Co source tree is reachable in this
+  environment") is worth auditing separately: it may have been true for the
+  host that implemented REQ-049, but if the same sentence was copied into
+  other design docs or moduledocs, other "reasoned reconstructions" may also
+  be verifiable now and may not all turn out correct. Only this one has been
+  checked.
+
+  NOT INCLUDED HERE: a third stale sentence in the same moduledoc (lines
+  24-29, asserting the caller resolves outcomes via
+  `Letflow.EventStore.Registry.validate_payload/3`) is already owned by
+  REQ-109's AC9 and must NOT be fixed by this issue -- REQ-109 needs that
+  sentence present to correct in place, since it is REQ-049 AC4's own
+  evidence artifact. Fixing it here would destroy that evidence and collide
+  with REQ-109's own diff.
+affected_files:
+  - lib/letflow/engine/variable_merge.ex
+status: open
+github_issue: https://github.com/tvolodi/letflow/issues/296
+scoping_note: >
+  Filed by ORCH during REQ-109's re-gate rather than fixed inline, for two
+  reasons. (a) REQ-109 already edits this exact moduledoc under its AC9;
+  a concurrent ORCH edit to the same docstring would collide. (b) Per
+  core-directives' Unblock-Everything scope boundary this is a noticed
+  pre-existing defect, not a REQ-109 blocker, and per "No Issue Left
+  Local-Only" it must not evaporate into a conversation.
+
+  RECOMMENDED DISPOSITION: fold both repairs into REQ-109's AC9, since that
+  AC already requires opening and editing this file and the marginal cost is
+  two sentences. If REQ-109's scope is judged already full, this stands
+  alone as a docs-only fix owned by DOC-UPDATER. Either way it should not be
+  scheduled as an independent WF-03 run -- the edit is smaller than the
+  pipeline overhead of routing it.

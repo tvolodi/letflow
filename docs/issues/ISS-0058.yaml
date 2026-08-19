@@ -24,4 +24,15 @@ affected_files:
   - priv/repo/migrations/20260819000001_create_groups_tenant_scoped.exs
   - priv/repo/migrations/20260819000001_drop_transition_events.exs
 github_issue: 205
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0061-20260819
+resolved_at: "2026-08-19T01:11:06Z"
+note: >
+  Duplicate of ISS-0061, discovered independently by a different host shortly
+  after this issue was filed. ISS-0061 fixed the root cause (renamed
+  priv/repo/migrations/20260819000001_drop_transition_events.exs to
+  20260819000005_drop_transition_events.exs, PR #211, merged) and added a
+  regression guard (test/letflow/migration_filenames_test.exs). Closed here as
+  a duplicate rather than re-doing the fix, per docs/anti-patterns.md's
+  documented cross-host duplicate-discovery precedent (check whether main
+  already carries an equivalent record before re-filing/re-fixing one).

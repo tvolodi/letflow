@@ -222,6 +222,7 @@ defmodule Letflow.Engine do
   alias Letflow.Definitions.SnapshotStore
   alias Letflow.Engine.ExecutionError
   alias Letflow.Engine.InstanceState
+  alias Letflow.Engine.SubProcess
   alias Letflow.Engine.Task
   alias Letflow.Engine.TaskActivation
   alias Letflow.Engine.Token
@@ -364,8 +365,16 @@ defmodule Letflow.Engine do
     instance_id = Ecto.UUID.generate()
 
     with {:ok, _snapshot} <- create_snapshot(instance_id, definition, prefix),
-         {:ok, graph, new_instance_state} <-
-           activate(instance_id, definition, initial_variables) do
+         {:ok, graph, new_instance_state, pending_events} <-
+           activate(instance_id, definition, initial_variables),
+         {:ok, prepared_children} <-
+           prepare_sub_process_children(
+             instance_id,
+             new_instance_state,
+             graph,
+             pending_events,
+             prefix
+           ) do
       persist(
         instance_id,
         definition,
@@ -373,9 +382,57 @@ defmodule Letflow.Engine do
         correlation_key,
         graph,
         new_instance_state,
+        prepared_children,
         attrs,
         prefix
       )
+    end
+  end
+
+  # req062 design doc §3.3 -- resolves every {:sub_process_start, token_id,
+  # node_id} pending_event() surfaced by this instance's own root activation
+  # (before any Multi step for create/2 itself has been appended, matching
+  # SubProcess.prepare_child_activation/4's own "must write nothing on
+  # failure" contract). A failure here aborts create/2 entirely, exactly
+  # like every other activation failure this function already surfaces
+  # (hop-limit, unimplemented node type) -- there is no already-persisted
+  # parent instance for a failure at this specific call site to route into
+  # Letflow.Engine.ExecutionError against (the parent itself does not exist
+  # in the DB yet), unlike the dispatch_task_completion_hop_chain/5 call
+  # site (§3.3), where the parent instance already exists and is already
+  # locked.
+  defp prepare_sub_process_children(
+         instance_id,
+         new_instance_state,
+         graph,
+         pending_events,
+         prefix
+       ) do
+    pending_events
+    |> Enum.filter(&match?({:sub_process_start, _token_id, _node_id}, &1))
+    |> Enum.reduce_while({:ok, []}, fn {:sub_process_start, token_id, node_id}, {:ok, acc} ->
+      case Enum.find(graph.nodes, &(&1.id == node_id)) do
+        nil ->
+          {:halt, {:error, {:graph_structure_invalid, {:unknown_node_id, node_id}}}}
+
+        node ->
+          case SubProcess.prepare_child_activation(
+                 instance_id,
+                 new_instance_state.variables,
+                 node,
+                 prefix: prefix
+               ) do
+            {:ok, prepared} ->
+              {:cont, {:ok, [{token_id, prepared} | acc]}}
+
+            {:error, reason} ->
+              {:halt, {:error, {:activation_failed, {:subprocess_interface_violation, reason}}}}
+          end
+      end
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -421,8 +478,11 @@ defmodule Letflow.Engine do
       hop_limit = length(graph.nodes) * 4 + 10
 
       case advance_until_stable(graph, instance_state, [token_id], hop_limit) do
-        {:ok, new_instance_state} -> {:ok, graph, new_instance_state}
-        {:error, reason} -> {:error, reason}
+        {:ok, new_instance_state, pending_events} ->
+          {:ok, graph, new_instance_state, pending_events}
+
+        {:error, reason} ->
+          {:error, reason}
       end
     end
   end
@@ -453,11 +513,20 @@ defmodule Letflow.Engine do
   # the existing, already-tested implementation unchanged avoids that at the
   # cost of a slightly wider module surface, which @doc false keeps out of
   # generated docs. Flagged for REVIEWER per the design doc's own request.
+  # req062 design doc §3.1 -- widened to accumulate every hop's own
+  # pending_event() list (order preserved, hop order) and return it as a
+  # third tuple element, rather than silently dropping it one hop at a time.
+  # Every caller now binds and uses this third element; for now only
+  # {:sub_process_start, ...} entries are actually consumed by this
+  # requirement's own new code (Letflow.Engine.SubProcess) -- every other
+  # variant continues to be structurally received but not acted on,
+  # identical to today's behavior.
   @doc false
   @spec advance_until_stable(Graph.t(), InstanceState.t(), [String.t()], integer()) ::
-          {:ok, InstanceState.t()} | {:error, {:activation_failed, term()}}
+          {:ok, InstanceState.t(), [Transition.pending_event()]}
+          | {:error, {:activation_failed, term()}}
   def advance_until_stable(_graph, instance_state, [], _hops_remaining) do
-    {:ok, instance_state}
+    {:ok, instance_state, []}
   end
 
   def advance_until_stable(_graph, _instance_state, [token_id | _rest], hops_remaining)
@@ -469,11 +538,22 @@ defmodule Letflow.Engine do
     previous_tokens = instance_state.tokens
 
     case Transition.transition(graph, instance_state, {:advance_token, token_id}) do
-      {:ok, new_instance_state, _pending_events} ->
+      {:ok, new_instance_state, pending_events} ->
         newly_pending =
           tokens_needing_dispatch(previous_tokens, new_instance_state.tokens, token_id)
 
-        advance_until_stable(graph, new_instance_state, rest ++ newly_pending, hops_remaining - 1)
+        case advance_until_stable(
+               graph,
+               new_instance_state,
+               rest ++ newly_pending,
+               hops_remaining - 1
+             ) do
+          {:ok, final_state, more_pending_events} ->
+            {:ok, final_state, pending_events ++ more_pending_events}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
 
       {:error, reason} ->
         {:error, {:activation_failed, reason}}
@@ -552,6 +632,7 @@ defmodule Letflow.Engine do
          correlation_key,
          graph,
          new_instance_state,
+         prepared_children,
          attrs,
          prefix
        ) do
@@ -580,6 +661,21 @@ defmodule Letflow.Engine do
     end)
     |> Multi.run(:token_record, fn repo, _changes ->
       insert_token_records(repo, instance_id, new_instance_state.tokens, prefix)
+    end)
+    |> Multi.merge(fn changes ->
+      # req062 design doc §3.3 -- appends each prepared sub-process child's
+      # own creation steps, keyed off the just-inserted parent :token_record
+      # rows (must run after M2 above -- the parent token row referenced by
+      # each child's own parent_token_id FK must already exist in this same
+      # transaction).
+      build_sub_process_children_multi(
+        changes,
+        instance_id,
+        new_instance_state,
+        prepared_children,
+        attrs,
+        prefix
+      )
     end)
     |> TaskActivation.append_multi(
       instance_id,
@@ -621,6 +717,37 @@ defmodule Letflow.Engine do
       current_node_ids,
       initial_variables
     )
+  end
+
+  # req062 design doc §3.3 -- resolves each prepared child's own parent
+  # TokenRecord.id (from M2's own just-inserted list, positionally zipped
+  # against new_instance_state.tokens the same way
+  # TaskActivation.token_id_to_record_id/2 already does) and appends
+  # SubProcess.append_start_multi/7 for it, one child at a time.
+  defp build_sub_process_children_multi(
+         changes,
+         instance_id,
+         new_instance_state,
+         prepared_children,
+         attrs,
+         prefix
+       ) do
+    token_records = Map.fetch!(changes, :token_record)
+    id_map = TaskActivation.token_id_to_record_id(new_instance_state.tokens, token_records)
+
+    Enum.reduce(prepared_children, Multi.new(), fn {token_id, prepared}, acc_multi ->
+      parent_token_record_id = Map.fetch!(id_map, token_id)
+
+      SubProcess.append_start_multi(
+        acc_multi,
+        instance_id,
+        parent_token_record_id,
+        prepared.node_id,
+        prepared,
+        %{actor_id: Map.get(attrs, :actor_id), idempotency_key: Map.get(attrs, :idempotency_key)},
+        prefix: prefix
+      )
+    end)
   end
 
   # M1 -- insert instance_projections. A uq_instance_correlation collision
@@ -1009,7 +1136,8 @@ defmodule Letflow.Engine do
         projection,
         actor_id,
         idempotency_key,
-        merge_outcome
+        merge_outcome,
+        prefix
       )
     end)
     |> Multi.merge(fn changes ->
@@ -1241,7 +1369,8 @@ defmodule Letflow.Engine do
          _projection,
          _actor_id,
          _idempotency_key,
-         {:execution_error, error_args}
+         {:execution_error, error_args},
+         _prefix
        ) do
     # M4 already fired (REQ-049's own rejection) -- pass-through, no
     # transition dispatched on top of a rejected merge (req061 §5.2).
@@ -1253,7 +1382,8 @@ defmodule Letflow.Engine do
          projection,
          actor_id,
          idempotency_key,
-         {:merged, %{new_variables: merged_variables}}
+         {:merged, %{new_variables: merged_variables}},
+         prefix
        ) do
     state_with_merged_variables = %InstanceState{seed_state | variables: merged_variables}
     hop_limit = length(graph.nodes) * 4 + 10
@@ -1268,8 +1398,16 @@ defmodule Letflow.Engine do
           )
 
         case advance_until_stable(graph, new_instance_state, newly_pending, hop_limit - 1) do
-          {:ok, advanced_state} ->
-            {:ok, {:advanced, advanced_state}}
+          {:ok, advanced_state, pending_events} ->
+            prepare_sub_process_children_for_completion(
+              advanced_state,
+              graph,
+              pending_events,
+              projection,
+              actor_id,
+              idempotency_key,
+              prefix
+            )
 
           {:error, {:activation_failed, {:no_matching_edge, node_id, evaluated_conditions}}} ->
             error_args = %{
@@ -1307,6 +1445,82 @@ defmodule Letflow.Engine do
 
       {:error, reason} ->
         {:error, {:transition_failed, reason}}
+    end
+  end
+
+  # req062 design doc §3.3 -- the dispatch_task_completion_hop_chain/6 call
+  # site's own {:sub_process_start, ...} pending_event() consumer. Unlike
+  # prepare_sub_process_children/5 (create/2's own call site), the parent
+  # instance already exists here and is already locked (M2,
+  # fetch_and_lock_instance_projection/3) -- an activation failure routes
+  # into an {:execution_error, error_args} tagged tuple (req061 §5.2/§5.3's
+  # own established channel) instead of aborting the whole transaction, so
+  # ExecutionError.append_multi/3 still commits an ERROR-transition tail
+  # against this already-locked projection.
+  #
+  # A derived (non-UUID-shaped) token_id reaching a SUB_PROCESS node within
+  # this same hop chain (a PARALLEL_GATEWAY split/join branch landing there
+  # before ever being persisted as its own tokens row) is not supported --
+  # do_reconcile_token_records/4 already rejects any brand-new token_id
+  # appearing during a complete_task/3 hop chain
+  # ({:new_token_during_resume_not_supported, token_id}); this is the same,
+  # pre-existing limitation surfaced earlier and with its own name, not a
+  # new gap this requirement introduces.
+  defp prepare_sub_process_children_for_completion(
+         advanced_state,
+         graph,
+         pending_events,
+         projection,
+         actor_id,
+         idempotency_key,
+         prefix
+       ) do
+    sub_process_starts = Enum.filter(pending_events, &match?({:sub_process_start, _, _}, &1))
+
+    sub_process_starts
+    |> Enum.reduce_while({:ok, []}, fn {:sub_process_start, token_id, node_id}, {:ok, acc} ->
+      with {:ok, parent_token_record_id} <- cast_parent_token_record_id(token_id),
+           %Graph.Node{} = node <- Enum.find(graph.nodes, &(&1.id == node_id)) || :unknown_node,
+           {:ok, prepared} <-
+             SubProcess.prepare_child_activation(
+               projection.instance_id,
+               advanced_state.variables,
+               node,
+               prefix: prefix
+             ) do
+        {:cont, {:ok, [{parent_token_record_id, prepared} | acc]}}
+      else
+        :unknown_node ->
+          {:halt, {:error, {:unknown_node_id, node_id}}}
+
+        {:error, {:sub_process_after_split_join_not_supported, _token_id} = reason} ->
+          {:halt, {:error, reason}}
+
+        {:error, failure} ->
+          error_args =
+            SubProcess.to_error_args(
+              failure,
+              projection.instance_id,
+              node_id,
+              advanced_state.variables,
+              actor_id,
+              idempotency_key
+            )
+
+          {:halt, {:execution_error, error_args}}
+      end
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, {:advanced, advanced_state, Enum.reverse(acc)}}
+      {:execution_error, error_args} -> {:ok, {:execution_error, error_args}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp cast_parent_token_record_id(token_id) do
+    case Ecto.UUID.cast(token_id) do
+      {:ok, uuid} -> {:ok, uuid}
+      :error -> {:error, {:sub_process_after_split_join_not_supported, token_id}}
     end
   end
 
@@ -1348,8 +1562,10 @@ defmodule Letflow.Engine do
   end
 
   defp build_complete_task_tail_multi(
-         %{merge: {:merged, merge_outcome}, transition: {:advanced, final_instance_state}} =
-           changes,
+         %{
+           merge: {:merged, merge_outcome},
+           transition: {:advanced, final_instance_state, prepared_children}
+         } = changes,
          actor_id,
          output_variables,
          completed_at,
@@ -1360,6 +1576,8 @@ defmodule Letflow.Engine do
       changes
       |> Map.put(:merge, merge_outcome)
       |> Map.put(:transition, final_instance_state)
+
+    parent_instance_id = normalized_changes.task.instance_id
 
     normalized_changes
     |> build_task_activation_and_reconciliation_multi(completed_at, prefix)
@@ -1391,8 +1609,105 @@ defmodule Letflow.Engine do
         prefix
       )
     end)
+    |> append_sub_process_children_creation_multi(
+      prepared_children,
+      parent_instance_id,
+      actor_id,
+      idempotency_key,
+      prefix
+    )
+    |> append_sub_process_completion_cascade_multi(
+      parent_instance_id,
+      final_instance_state,
+      actor_id,
+      idempotency_key,
+      prefix
+    )
     |> Multi.run(:complete_task_outcome, fn _repo, _changes -> {:ok, :completed} end)
   end
+
+  # req062 design doc §3.3 -- appends each child spawned by this hop chain's
+  # own newly-entered SUB_PROCESS node(s) (already prepared/pre-validated by
+  # prepare_sub_process_children_for_completion/7, above -- a failure there
+  # already short-circuited into the execution_error clause instead of
+  # reaching this function at all).
+  defp append_sub_process_children_creation_multi(
+         multi,
+         prepared_children,
+         parent_instance_id,
+         actor_id,
+         idempotency_key,
+         prefix
+       ) do
+    Enum.reduce(prepared_children, multi, fn {parent_token_record_id, prepared}, acc_multi ->
+      SubProcess.append_start_multi(
+        acc_multi,
+        parent_instance_id,
+        parent_token_record_id,
+        prepared.node_id,
+        prepared,
+        %{actor_id: actor_id, idempotency_key: idempotency_key},
+        prefix: prefix
+      )
+    end)
+  end
+
+  # req062 design doc §3.4 -- the OTHER direction: this instance (the one
+  # whose task just completed) may itself be a sub-process child. If it just
+  # reached :completed as a result, look up its own waiting parent token
+  # (Letflow.Engine.SubProcess.find_waiting_parent_token/3) and, if one
+  # exists, cascade the parent's own completion steps into this same
+  # transaction (Letflow.Engine.SubProcess.append_completion_multi/6) --
+  # recursing grandparent-ward internally when the cascade itself completes
+  # a further ancestor.
+  defp append_sub_process_completion_cascade_multi(
+         multi,
+         instance_id,
+         %InstanceState{status: :completed} = final_instance_state,
+         actor_id,
+         idempotency_key,
+         prefix
+       ) do
+    lookup_key = {:sub_process_parent_lookup, instance_id}
+
+    multi
+    |> Multi.run(lookup_key, fn repo, _changes ->
+      SubProcess.find_waiting_parent_token(repo, instance_id, prefix)
+    end)
+    |> Multi.merge(fn changes ->
+      case Map.fetch!(changes, lookup_key) do
+        {:ok, nil} ->
+          Multi.new()
+
+        {:ok, %TokenRecord{} = parent_token} ->
+          case SubProcess.append_completion_multi(
+                 Multi.new(),
+                 instance_id,
+                 final_instance_state.variables,
+                 parent_token,
+                 prefix: prefix,
+                 actor_id: actor_id,
+                 idempotency_key: idempotency_key
+               ) do
+            {:ok, cascade_multi} ->
+              cascade_multi
+
+            {:error, error_args} ->
+              Multi.new() |> ExecutionError.append_multi(error_args, prefix: prefix)
+          end
+      end
+    end)
+  end
+
+  defp append_sub_process_completion_cascade_multi(
+         multi,
+         _instance_id,
+         _final_instance_state,
+         _actor_id,
+         _idempotency_key,
+         _prefix
+       ),
+       do: multi
 
   # M6/M7 -- built together via Multi.merge/2 (the idiomatic Ecto mechanism
   # for appending Multi steps whose concrete arguments are only known once
@@ -1604,7 +1919,7 @@ defmodule Letflow.Engine do
           %{
             complete_task_outcome: :completed,
             task: %Task{} = task,
-            transition: {:advanced, %InstanceState{} = final_instance_state},
+            transition: {:advanced, %InstanceState{} = final_instance_state, _prepared_children},
             task_complete: %Task{} = completed_task
           }}
        ) do

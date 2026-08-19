@@ -97,6 +97,7 @@ defmodule Letflow.Engine.Transition do
           {:advance_token, token_id :: String.t()}
           | {:cancel_branch, branch_id :: String.t()}
           | {:complete_task, token_id :: String.t()}
+          | {:sub_process_completed, token_id :: String.t()}
 
   @typedoc """
   The tagged union `transition.zig` declares for EE-06/EE-07 split/join
@@ -114,6 +115,7 @@ defmodule Letflow.Engine.Transition do
           | {:parallel_join_fired, join_node_id :: String.t(), origin_token_id :: String.t(),
              new_token_id :: String.t(), merge_events :: [VariableMerge.merge_event()]}
           | {:parallel_join_cancelled, join_node_id :: String.t(), origin_token_id :: String.t()}
+          | {:sub_process_start, token_id :: String.t(), node_id :: String.t()}
 
   @typedoc """
   Every failure `transition/3` can return. `:unknown_event_type` and
@@ -143,6 +145,7 @@ defmodule Letflow.Engine.Transition do
           | {:no_matching_join_found, split_node_id :: String.t()}
           | {:combined_split_join_not_supported, node_id :: String.t()}
           | {:token_not_at_human_task, node_type :: atom(), node_id :: String.t()}
+          | {:token_not_waiting_on_child, node_type :: atom(), node_id :: String.t()}
 
   @typedoc """
   One entry per non-default outgoing edge of an `:EXCLUSIVE_GATEWAY` whose
@@ -204,6 +207,21 @@ defmodule Letflow.Engine.Transition do
             end
         end
 
+      {:sub_process_completed, token_id} ->
+        case find_token(instance_state.tokens, token_id) do
+          nil ->
+            {:error, {:unknown_token_id, token_id}}
+
+          token ->
+            case find_node(definition_snapshot.nodes, token.node_id) do
+              nil ->
+                {:error, {:unknown_node_id, token.node_id}}
+
+              node ->
+                dispatch_sub_process_completion(definition_snapshot, instance_state, token, node)
+            end
+        end
+
       other ->
         {:error, {:unknown_event_type, other}}
     end
@@ -253,13 +271,22 @@ defmodule Letflow.Engine.Transition do
     dispatch_parallel_gateway(definition_snapshot, instance_state, token, node)
   end
 
-  # Catch-all: :SERVICE_TASK, :TIMER, :SUB_PROCESS (the 3 remaining variants
-  # of Letflow.Definitions.Graph.node_type()'s 8-variant union not part of
-  # this requirement's 5-way dispatch), and any node whose node_type is not
-  # one of the 8 known atoms at all. Necessary for transition/3 to be total
-  # over every value Node.t().node_type can actually hold -- a partial
-  # match with no catch-all clause would raise on any of these, violating
-  # the purity contract's "never raise" bar (design doc §6.6).
+  defp dispatch_node(
+         definition_snapshot,
+         instance_state,
+         token,
+         %Node{node_type: :SUB_PROCESS} = node
+       ) do
+    dispatch_sub_process_entry(definition_snapshot, instance_state, token, node)
+  end
+
+  # Catch-all: :SERVICE_TASK, :TIMER (the 2 remaining variants of
+  # Letflow.Definitions.Graph.node_type()'s 8-variant union not part of this
+  # module's own dispatch), and any node whose node_type is not one of the 8
+  # known atoms at all. Necessary for transition/3 to be total over every
+  # value Node.t().node_type can actually hold -- a partial match with no
+  # catch-all clause would raise on any of these, violating the purity
+  # contract's "never raise" bar (design doc §6.6).
   defp dispatch_node(_definition_snapshot, _instance_state, _token, %Node{
          node_type: node_type,
          id: node_id
@@ -366,25 +393,7 @@ defmodule Letflow.Engine.Transition do
          %Node{node_type: :HUMAN_TASK} = node
        ) do
     outgoing_edges = Enum.filter(definition_snapshot.edges, &(&1.source == node.id))
-
-    {conditioned_edges, default_candidates} =
-      Enum.split_with(outgoing_edges, &really_conditioned?/1)
-
-    default_edge = List.first(default_candidates)
-
-    case evaluate_conditioned_edges(conditioned_edges, instance_state.variables) do
-      {:match, edge} ->
-        advance_token(instance_state, token, edge.target)
-
-      {:no_match, evaluated_conditions} ->
-        case default_edge do
-          nil ->
-            {:error, {:no_matching_edge, node.id, evaluated_conditions}}
-
-          edge ->
-            advance_token(instance_state, token, edge.target)
-        end
-    end
+    advance_off_completed_node(definition_snapshot, instance_state, token, outgoing_edges)
   end
 
   # Defensive guard against a stale/mismatched task.token_id <-> token_record
@@ -398,6 +407,41 @@ defmodule Letflow.Engine.Transition do
     {:error, {:token_not_at_human_task, node_type, node_id}}
   end
 
+  # Shared edge-partition/advance step (req062 design doc §2.4) -- extracted
+  # from dispatch_task_completion/4's own body so dispatch_sub_process_completion/4
+  # (below) reuses the exact same "declared-order, default-last" completion
+  # algorithm instead of a second copy of the partition rule. `token` is
+  # already the caller's own post-clear/pre-advance value (dispatch_task_completion/4
+  # passes the token unchanged; dispatch_sub_process_completion/4 passes a
+  # struct-updated copy with waiting_child_instance_id already cleared) --
+  # this function itself performs no clearing, only edge evaluation +
+  # advance_token/3.
+  @spec advance_off_completed_node(Graph.t(), InstanceState.t(), Token.t(), [Graph.Edge.t()]) ::
+          {:ok, InstanceState.t(), [pending_event()]}
+          | {:error,
+             {:no_matching_edge, node_id :: String.t(),
+              evaluated_conditions :: [evaluated_condition()]}}
+  defp advance_off_completed_node(_definition_snapshot, instance_state, token, outgoing_edges) do
+    {conditioned_edges, default_candidates} =
+      Enum.split_with(outgoing_edges, &really_conditioned?/1)
+
+    default_edge = List.first(default_candidates)
+
+    case evaluate_conditioned_edges(conditioned_edges, instance_state.variables) do
+      {:match, edge} ->
+        advance_token(instance_state, token, edge.target)
+
+      {:no_match, evaluated_conditions} ->
+        case default_edge do
+          nil ->
+            {:error, {:no_matching_edge, token.node_id, evaluated_conditions}}
+
+          edge ->
+            advance_token(instance_state, token, edge.target)
+        end
+    end
+  end
+
   # An edge is "really conditioned" only if it isn't explicitly is_default
   # AND it carries a real, non-empty CEL condition string -- everything else
   # (is_default: true, or condition nil/"") is a default/fallback candidate.
@@ -407,6 +451,74 @@ defmodule Letflow.Engine.Transition do
   @spec really_conditioned?(Graph.Edge.t()) :: boolean()
   defp really_conditioned?(%Graph.Edge{is_default: is_default, condition: condition}) do
     is_default != true and is_binary(condition) and condition != ""
+  end
+
+  # --- :SUB_PROCESS (req062 design doc §2.3, §2.4, SPC-01) -------------------
+
+  # Entry: a token landing on (or already re-dispatched against) a
+  # :SUB_PROCESS node. Zero I/O, zero child creation here -- Letflow.Engine.Transition
+  # may never perform a DB write (this module's own "Purity" moduledoc
+  # section); all actual child-instance work happens at the Letflow.Engine
+  # layer, triggered by the {:sub_process_start, ...} pending_event() this
+  # clause emits. Guards a caller re-dispatching a token that already has a
+  # child running (defensive -- tokens_needing_dispatch/3 should never
+  # re-select this token_id anyway since its node_id never changes once
+  # parked here, but this clause does not rely on that caller discipline).
+  @spec dispatch_sub_process_entry(Graph.t(), InstanceState.t(), Token.t(), Node.t()) ::
+          {:ok, InstanceState.t(), [pending_event()]}
+  defp dispatch_sub_process_entry(
+         _definition_snapshot,
+         %InstanceState{} = instance_state,
+         %Token{waiting_child_instance_id: waiting_child_instance_id},
+         _node
+       )
+       when not is_nil(waiting_child_instance_id) do
+    {:ok, instance_state, []}
+  end
+
+  defp dispatch_sub_process_entry(
+         _definition_snapshot,
+         %InstanceState{} = instance_state,
+         %Token{} = token,
+         %Node{} = node
+       ) do
+    {:ok, instance_state, [{:sub_process_start, token.token_id, node.id}]}
+  end
+
+  # Completion: the caller's explicit "this token's child instance finished,
+  # and instance_state.variables already reflects the already-filtered
+  # (interface.outputs-only, or full-map under EXT-05) merged output" signal
+  # -- parallel to dispatch_task_completion/4's own contract. Defensive guard
+  # mirrors dispatch_task_completion/4's own defensive clause: a token not
+  # currently waiting on a child, or a node that isn't :SUB_PROCESS, is a
+  # typed error rather than a raise (should be unreachable given
+  # Letflow.Engine's own lookup invariant, kept for this codebase's "never
+  # raise" totality discipline).
+  @spec dispatch_sub_process_completion(Graph.t(), InstanceState.t(), Token.t(), Node.t()) ::
+          {:ok, InstanceState.t(), [pending_event()]}
+          | {:error, {:token_not_waiting_on_child, node_type :: atom(), node_id :: String.t()}}
+          | {:error,
+             {:no_matching_edge, node_id :: String.t(),
+              evaluated_conditions :: [evaluated_condition()]}}
+  defp dispatch_sub_process_completion(
+         definition_snapshot,
+         %InstanceState{} = instance_state,
+         %Token{} = token,
+         %Node{} = node
+       ) do
+    if is_nil(token.waiting_child_instance_id) or node.node_type != :SUB_PROCESS do
+      {:error, {:token_not_waiting_on_child, node.node_type, node.id}}
+    else
+      cleared_token = %Token{token | waiting_child_instance_id: nil}
+      outgoing_edges = Enum.filter(definition_snapshot.edges, &(&1.source == node.id))
+
+      advance_off_completed_node(
+        definition_snapshot,
+        instance_state,
+        cleared_token,
+        outgoing_edges
+      )
+    end
   end
 
   # --- :EXCLUSIVE_GATEWAY (REQ-050 design doc §5, EE-05) ----------------------

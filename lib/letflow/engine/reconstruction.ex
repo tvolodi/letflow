@@ -446,7 +446,9 @@ defmodule Letflow.Engine.Reconstruction do
       reseeded_state = %InstanceState{state | variables: initial_variables}
       worklist = Enum.map(reseeded_state.tokens, & &1.token_id)
 
-      Engine.advance_until_stable(graph, reseeded_state, worklist, hop_limit(graph))
+      drop_pending_events(
+        Engine.advance_until_stable(graph, reseeded_state, worklist, hop_limit(graph))
+      )
     end
   end
 
@@ -536,12 +538,31 @@ defmodule Letflow.Engine.Reconstruction do
     case Transition.transition(graph, state, {:complete_task, token_id}) do
       {:ok, new_state, _pending_events} ->
         newly_pending = Engine.tokens_needing_dispatch(state.tokens, new_state.tokens, token_id)
-        Engine.advance_until_stable(graph, new_state, newly_pending, hop_limit(graph))
+
+        drop_pending_events(
+          Engine.advance_until_stable(graph, new_state, newly_pending, hop_limit(graph))
+        )
 
       {:error, reason} ->
         {:error, {:transition_error, reason}}
     end
   end
+
+  # req062 (SPC-01 sub-process runtime half) widened Engine.advance_until_stable/4's
+  # own return shape to a 3-tuple that also surfaces each hop's accumulated
+  # pending_event() list (previously silently dropped) -- this module has no
+  # replay-time consumer for a {:sub_process_start, ...} pending event yet
+  # (REQ-053 predates REQ-062; reconstructing a sub-process parent/child pair
+  # from its event log, including the still-unhandled SUB_PROCESS_COMPLETED
+  # event type, is not implemented here and is a real, named gap for a
+  # future requirement -- apply_event/3's own catch-all clause already
+  # surfaces any unrecognized event_type as a typed
+  # {:unrecognized_event_type, ...} error rather than silently mis-replaying
+  # it). This adapter only restores this module's own pre-existing 2-tuple
+  # contract with fold_events/3 so REQ-053's already-shipped behavior for
+  # every non-SUB_PROCESS instance is unaffected by that widening.
+  defp drop_pending_events({:ok, state, _pending_events}), do: {:ok, state}
+  defp drop_pending_events({:error, _reason} = error), do: error
 
   # Same defensive hop-count formula Engine.create/2's own activate/2 and
   # complete_task/3's own dispatch_task_completion_hop_chain/5 already use

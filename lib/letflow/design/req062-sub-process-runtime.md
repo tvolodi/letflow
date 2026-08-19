@@ -1131,3 +1131,351 @@ place the copy was missing.
 None — §11.2's grep is exhaustive over `test/` and finds no exact-match
 assertion that would be broken; this fix is unconditional and has no
 remaining ambiguity for ELIXIR-DEV to resolve.
+
+## 12. Design amendment — `reconstruction.ex` `{:sub_process_start, ...}` replay gap (post rework-3 full-suite run)
+
+Written after TEST-RUNNER's full-suite rework-3 run
+(`test/reports/report-20260819-WF02-REQ062-20260819-rework3-fullsuite.yaml`,
+5 properties / 1051 tests / 1 failure) found `lib/letflow/engine/reconstruction.ex`
+still failing its own already-shipped test —
+`test/letflow/engine/reconstruction_test.exs:675` ("req062 — SUB_PROCESS_COMPLETED
+replay reconstructs the same state the live completion path produced"), which
+this design doc's §1–§9 already named as this requirement's own reconstruction
+coverage (§ "Files touched" list, `test/specs/REQ-062.md`'s "`reconstruction_test.exs`'s
+new test is REQ-053's own replay contract (EE-11) extended..." line). Not new
+scope — `reconstruction.ex` was never actually green on this branch until now
+(confirmed by the report's own `git stash` comparison: pre-rework-3 it crashed
+earlier, inside its own DB setup, on the unrelated `:task_records` Multi
+collision §10.1 already fixes; rework-3's fix let the test run far enough to
+reach this separate, pre-existing gap for the first time).
+
+### 12.1 Root cause, confirmed against the real code
+
+`reconstruction.ex`'s `apply_event/3` clause for `"INSTANCE_STARTED"`
+(line 457) calls `Engine.advance_until_stable/4` and pipes the result through
+`drop_pending_events/1` (line 634), which discards every `pending_event()`
+in the returned list unconditionally. When the seeded token's forward drive
+reaches a `:SUB_PROCESS` node, `Transition.transition/3`'s
+`dispatch_sub_process_entry/4` clause (`transition.ex:479-486`) leaves the
+token sitting on that node (`waiting_child_instance_id` still `nil`) and
+emits `{:sub_process_start, token_id, node_id}` as a `pending_event()` —
+real child-instance creation is a DB write (`Letflow.Engine.SubProcess`'s
+own live-path Multi), which `Transition` itself never performs (its own
+"Purity" moduledoc section) and which `reconstruction.ex` must never perform
+either (INV-RC-1, read-only by default). `drop_pending_events/1` throws this
+signal away, so the in-memory token is left looking exactly like an
+ordinary, non-waiting token parked on a `:SUB_PROCESS` node.
+
+Later, when replay reaches the parent's own persisted `SUB_PROCESS_COMPLETED`
+event, `find_sub_process_completion_token/2` (line 577) filters
+`state.tokens` for `waiting_child_instance_id == child_instance_id` (the
+payload's own field — no `node_id` is persisted on this event type, per the
+moduledoc finding at line 27). Zero tokens carry any `waiting_child_instance_id`
+at all (the marking step above never ran), so the filter always returns `[]`,
+producing `{:error, {:ambiguous_sub_process_completion, child_instance_id}}`
+— exactly the failure the report reproduces.
+
+Two more call sites pipe `Engine.advance_until_stable/4`'s result through the
+same `drop_pending_events/1` — `dispatch_task_completion/3` (line 594) and
+`dispatch_sub_process_completion/3` (line 614). Both are reachable after a
+prior `TASK_COMPLETED`/`SUB_PROCESS_COMPLETED` event has already advanced a
+different token to a `:SUB_PROCESS` node later in the same replay (e.g. an
+instance with two independent branches, one already past its own child
+completion, the other only now reaching its `:SUB_PROCESS` node) — the fix
+below applies at all three call sites uniformly, not only the
+`"INSTANCE_STARTED"` one the report's stack trace happens to exercise.
+
+### 12.2 Fix — consume `{:sub_process_start, ...}` during replay by parking the token, never by creating a child
+
+Replace `drop_pending_events/1` (line 634) with a new private function,
+`resolve_pending_events/1`, at all three of its current call sites
+(`apply_event/3`'s `"INSTANCE_STARTED"` clause, `dispatch_task_completion/3`,
+`dispatch_sub_process_completion/3`). Same 3-tuple-in/2-tuple-out adapter
+shape `drop_pending_events/1` already has (`{:ok, state, pending_events} ->
+{:ok, new_state}` / `{:error, _} = error -> error`), except instead of
+discarding `pending_events` it folds over the list and, for every
+`{:sub_process_start, token_id, _node_id}` entry (ignoring `:parallel_split`
+/`:parallel_join_fired`/`:parallel_join_cancelled` entries exactly as
+`drop_pending_events/1` already does today — those three stay in-memory-only
+per this module's own moduledoc finding and never need replay-time
+resolution, since `Transition.transition/3` already fully applies their
+token-set change to the returned `InstanceState` before emitting them; only
+`:sub_process_start` leaves the graph "unfinished" from replay's point of
+view), replaces that `token_id`'s entry in `state.tokens` with a
+struct-updated copy: `%Token{token | waiting_child_instance_id:
+@replay_pending_child_marker}`.
+
+`@replay_pending_child_marker` is a new private module attribute in
+`reconstruction.ex`:
+
+```
+@replay_pending_child_marker "reconstruction:pending_child"
+```
+
+A short, human-readable, structurally-non-UUID string (contains `:`, which
+`Ecto.UUID.generate/0` output never does) — chosen so it can never collide
+with a real `child_instance_id` even in principle, not merely in practice.
+It is a private implementation detail of this module only: no other module
+reads or pattern-matches on it, `Transition`'s own
+`dispatch_sub_process_entry/4` guard (`transition.ex:472-477`) only checks
+`not is_nil(waiting_child_instance_id)` — never equality against any
+specific value — so this marker satisfies that guard exactly the same way a
+real live-path `child_instance_id` would, with no `Transition`/`Engine`
+change needed anywhere.
+
+**Why parking (setting the field to a marker), not creating a real child:**
+`reconstruct_instance/2` must stay read-only by default (INV-RC-1) — it has
+no code path that could perform `Letflow.Engine.SubProcess`'s child-creation
+Multi even if it wanted to, and doing so would also violate the
+already-established finding that replay cannot recover the *original*
+`token_id`/`branch_id` bit-for-bit (moduledoc, line 38-45) — inventing a
+*new* live child instance during a replay would fabricate a
+`child_instance_id` that never existed on the original run, silently
+diverging from ground truth instead of surfacing the gap. Parking with a
+non-claiming marker is the only option consistent with both invariants: it
+records "this token is known to be waiting on some child, identity unknown
+until a later event says so" without asserting a specific, possibly-wrong
+identity.
+
+### 12.3 Fix — matching a later `SUB_PROCESS_COMPLETED` event against the *correct* parked token (rework — see 12.3.0)
+
+#### 12.3.0 Why the first version of this section was wrong (CODE-DESIGN-VALIDATOR rework 1/3)
+
+The original draft of this section matched purely on `waiting_child_instance_id
+== @replay_pending_child_marker` — one **fixed, shared** constant. That
+breaks the moment two sibling `:SUB_PROCESS` branches are parked at once
+(a real, in-scope shape: §5/AC5's own GH-428 regression test already
+exercises a parallel-gateway split with an independent waiting-on-child
+token on another branch — a graph with two `:SUB_PROCESS` nodes fed by a
+`:PARALLEL_GATEWAY` split is the same shape, just both branches unresolved
+simultaneously instead of one). Both parked tokens would carry the
+*identical* marker string, so replaying **either** child's
+`SUB_PROCESS_COMPLETED` event would filter to two matches and incorrectly
+return `{:error, {:ambiguous_sub_process_completion, ...}}`, even though the
+event payload's own `child_instance_id` does unambiguously identify one
+specific child — the previous draft's `:zero_or_many`-only framing is
+correct machinery, but it fires spuriously here because the *matching key*
+carries no per-child information at all. The former §12.6 OQ-1 tried to wave
+this off ("still exactly one match" / "cannot happen") — both claims were
+wrong and mutually contradictory; there is no reachability argument that
+rules this case out, so it needed an actual fix, not a deferral.
+
+**The missing piece:** a marker keyed only by "is parked" can never
+disambiguate between two parked tokens using information available *on the
+parent's own event stream* — the `SUB_PROCESS_COMPLETED` payload carries no
+`node_id` (moduledoc finding, line 27) and never will (that payload shape is
+already durably persisted by shipped code; this fix cannot retroactively add
+a field to it). Disambiguation therefore needs one more, real fact this
+module does not currently look at: **which node the child was actually
+started from** — durably recorded, once, on the **child's own** stream, not
+the parent's.
+
+#### 12.3.1 The correlating fact already exists, durably, one hop away
+
+`Letflow.Engine.SubProcess.append_instance_started_event_for_child/8`
+(`sub_process.ex:576-624`) is the code that persists a child's very first
+event — its own `"INSTANCE_STARTED"`, on the **child's** `instance_id`
+stream — and its payload already includes `parent_node_id` (line 593:
+`payload = Jason.encode!(%{..., parent_instance_id: parent_instance_id,
+parent_token_id: parent_token_record_id, parent_node_id: parent_node_id})`).
+This is the exact node the parent's token was sitting on when it spawned
+this specific child — written once, transactionally, at child-creation time,
+on the live path only (this fix never writes it; it only reads what the
+live path already wrote). Reading it is still reading **the event log**
+(one instance's own `INSTANCE_STARTED` event, `events`/`events_archive`,
+merged by `sequence_number` exactly like `read_full_log/2` already does) —
+it does not touch `instance_projections`, so it does not conflict with
+INV-RC-2's literal text ("no function on the replay path ever reads
+`instance_projections`"). It *is* however a genuinely new capability this
+module has never had before — reading a **different** instance's own event
+log during one instance's reconstruction — flagged explicitly as divergence
+5 below, for REVIEWER, following this module's own established "deliberate
+divergence" cataloguing precedent (moduledoc, divergences 1-4).
+
+#### 12.3.2 New helper: `fetch_child_parent_node_id/2`
+
+```
+@spec fetch_child_parent_node_id(child_instance_id :: String.t(), prefix :: String.t()) ::
+        {:ok, node_id :: String.t()}
+        | {:error, {:child_start_event_missing, child_instance_id :: String.t()}}
+        | {:error, {:malformed_payload, event_id :: Ecto.UUID.t(), reason :: term()}}
+```
+
+Queries `Event`/`ArchivedEvent` for `instance_id == child_instance_id and
+event_type == "INSTANCE_STARTED"` (both tables, same merge-by-sequence
+pattern `read_full_log/2` already uses, same `$ref` payload resolution via
+the existing `resolve_live_payloads/2`) and expects **exactly one** row —
+every instance has exactly one `INSTANCE_STARTED` event by construction,
+never zero (once the child exists at all) and never more than one (no code
+path appends a second). Zero or more-than-one rows is
+`{:error, {:child_start_event_missing, child_instance_id}}` — a new
+`replay_failure_reason()` variant, added to the `@type` union
+(`reconstruction.ex:194-204`) alongside the existing 9. On exactly one row,
+extracts `payload["parent_node_id"]` via the same `fetch_string_field/2`
+helper already used elsewhere in this module (malformed/missing field ->
+the existing `{:malformed_payload, event_id, reason}` variant, no new type
+needed for that case).
+
+#### 12.3.3 `apply_event/3`'s `"SUB_PROCESS_COMPLETED"` clause and `find_sub_process_completion_token/2` — updated shape
+
+`apply_event/3` (and every private helper it calls transitively for this
+event type — `find_sub_process_completion_token/2`,
+`dispatch_sub_process_completion/3`) gains a `prefix` argument, threaded
+from `replay/3` (which already has it in scope) through `fold_events/3`.
+This is the one signature change every `apply_event/3` clause picks up
+(most clauses ignore the new argument; only `"SUB_PROCESS_COMPLETED"` uses
+it) — necessary because `fetch_child_parent_node_id/2` is a `Repo` read and
+every `Repo` call in this module is `prefix:`-scoped (tenant isolation,
+same discipline as `read_full_log/2`/`write_back/3`).
+
+```
+defp apply_event(graph, state, %{event_type: "SUB_PROCESS_COMPLETED"} = event, prefix) do
+  with {:ok, child_instance_id} <- fetch_string_field(event, "child_instance_id"),
+       {:ok, output_variables} <- fetch_map_field(event, "output_variables"),
+       {:ok, parent_node_id} <- fetch_child_parent_node_id(child_instance_id, prefix),
+       {:ok, parked_token} <-
+         find_sub_process_completion_token(state.tokens, parent_node_id, child_instance_id) do
+    ...
+```
+
+`find_sub_process_completion_token/3` (arity grows from 2 to 3 — same name,
+new disambiguating parameter) now filters on **two** conditions together,
+not one shared constant:
+
+```
+defp find_sub_process_completion_token(tokens, parent_node_id, child_instance_id) do
+  case Enum.filter(tokens, fn token ->
+         token.node_id == parent_node_id and
+           token.waiting_child_instance_id == @replay_pending_child_marker
+       end) do
+    [token] -> {:ok, token}
+    _zero_or_many -> {:error, {:ambiguous_sub_process_completion, child_instance_id}}
+  end
+end
+```
+
+`token.node_id` is **not** new information this fix invents — every `Token`
+already carries its own current `node_id` (`token.ex:11,17`, it is the
+field `dispatch_sub_process_entry/4` never changes while a token is parked,
+since a parked token's whole point is that it stays put). Combining
+"sitting at the specific node the child says it was spawned from" (real,
+per-child-unique information, now sourced from the child's own event) with
+"still carries the generic parked marker" (rules out an already-resolved or
+never-parked token) is what makes this match sound even with N concurrently
+parked siblings, each pinned to a distinct `node_id` by construction (two
+tokens simultaneously parked at the *same* `node_id` would itself be a
+structural anomaly this module has no way to disambiguate — same
+irreducible limit `find_task_completion_token/2` already accepts for
+`:HUMAN_TASK` position-matching, not new to this fix).
+
+The generic `@replay_pending_child_marker` from §12.2 is therefore **kept,
+unchanged** — it still answers "is this token parked at all", which
+`node_id` alone cannot (a token could legitimately be sitting at a
+`:SUB_PROCESS` node's `node_id` string for reasons unrelated to parking,
+e.g. before `resolve_pending_events/1` runs — the two-condition filter is
+deliberately conjunctive, not `node_id` alone).
+
+On `{:ok, parked_token}`, exactly as the previous draft: replace that token
+in `state.tokens` with `%Token{parked_token | waiting_child_instance_id:
+child_instance_id}` (the marker -> real id, both invariants from §12.2's
+"why parking" reasoning still hold — this never fabricates a child, it only
+records the id the payload already gave us) via the same `replace_token/2`
+helper, then continue into `VariableMerge.merge/3` and
+`dispatch_sub_process_completion/3` unchanged.
+
+### 12.4 `Letflow.Engine.Token` struct — no shape change
+
+`Token`'s existing `waiting_child_instance_id: String.t() | nil` field
+(`token.ex:11,17`) is reused as-is, holding either `nil` (not waiting),
+`@replay_pending_child_marker` (replay-only, transiently, between the
+`{:sub_process_start, ...}` pending event and the matching
+`SUB_PROCESS_COMPLETED` event), or a real `child_instance_id` (both on the
+live path, and briefly during replay per §12.3.3). `Token`'s existing
+`node_id` field is likewise reused, not added — it is what
+`find_sub_process_completion_token/3` now also filters on (§12.3.3), doing
+double duty exactly the way it already does for `find_task_completion_token/2`.
+No new field, no `@type` widening. Two rejected alternatives:
+
+1. **A second boolean field** (e.g. `replay_parked?: boolean()`) — rejected
+   for the same reason the original draft gave: both shared guards
+   (`Transition.dispatch_sub_process_entry/4`,
+   `dispatch_sub_process_completion/4`) key off
+   `not is_nil(waiting_child_instance_id)` alone, so `waiting_child_instance_id`
+   must be non-nil regardless; a boolean would be pure duplication.
+2. **A node-id-encoded marker string** (e.g. `waiting_child_instance_id =
+   "reconstruction:pending_child:" <> node_id`, CODE-DESIGN-VALIDATOR's own
+   suggested direction for fixing 12.3's original gap) — considered, and
+   rejected in favor of §12.3.3's two-condition filter, because `Token`
+   already has a dedicated `node_id` field carrying exactly that
+   information natively and type-checked (`String.t()`, no parsing) —
+   encoding it into a second string field as a suffix would (a) require a
+   parse/strip step everywhere the marker is read back apart from its
+   "is-parked" role, (b) still need the *same* cross-instance read
+   (§12.3.1/12.3.2) to learn the completing child's own `parent_node_id`
+   to compare against, since the `SUB_PROCESS_COMPLETED` payload has no
+   `node_id` either way — so it buys no reduction in the read this fix
+   already needs, only adds string-encoding risk for no benefit.
+
+### 12.5 Acceptance-criteria mapping — no new scope; one flagged divergence
+
+This section fixes `reconstruction.ex` against `reconstruction_test.exs`'s
+own already-existing test (line 674-726), already named in this design
+doc's own "files touched" list and in `test/specs/REQ-062.md` as this
+requirement's reconstruction coverage — no acceptance criterion is added,
+widened, or reinterpreted. TEST-RUNNER's rework-3 report already confirms no
+other test (1050 of 1051) regresses; this fix only needs to turn that one
+remaining failure green, plus correctly handle the concurrent-siblings case
+CODE-DESIGN-VALIDATOR's rework-1 finding surfaced (not itself exercised by
+the current test — see §12.6 OQ-1). No migration, no
+`Transition`/`Engine`/`SubProcess` change, no API-surface change (§ "Scope
+boundary (AC7)" — reconstruction's S4 HTTP wrapper remains out of scope,
+unaffected).
+
+**Divergence 5 (moduledoc's own "deliberate divergences" catalogue,
+extended by this addendum):** `reconstruct_instance/2`'s replay path reads
+a second instance's own event log (the completing child's single
+`INSTANCE_STARTED` event, §12.3.1/12.3.2) — previously this module only
+ever read the *target* instance's own `events`/`events_archive` rows. Still
+compliant with INV-RC-1 (read-only — this is a `Repo.all`, no write) and
+with INV-RC-2's literal text (still never reads `instance_projections`),
+but it is a genuinely new shape of read this module has not needed before,
+so it is called out explicitly here — matching this module's own
+established practice (moduledoc divergences 1-4) — rather than left for
+REVIEWER to notice unaided in the diff.
+
+### 12.6 Open questions
+
+* **OQ-1 (resolved by this rework, kept as a record of the correction).**
+  The previous draft of this section left an open question claiming the
+  `:zero_or_many` "many" branch was unreachable ("cannot happen"), while
+  simultaneously describing the exact scenario (two sibling `:SUB_PROCESS`
+  branches parked at once) that reaches it — a direct contradiction,
+  correctly caught by CODE-DESIGN-VALIDATOR (rework 1/3). That scenario
+  **is** reachable (§5/AC5's own GH-428 test already proves concurrent
+  independent waiting-on-child tokens are a real, in-scope shape) and,
+  under the original shared-constant marker, **did** produce a spurious
+  `:zero_or_many` on every completion replay once two siblings were parked
+  simultaneously, not just on a genuine data anomaly. §12.3's rework fixes
+  this structurally (disambiguating by `node_id`, sourced from the
+  completing child's own `parent_node_id`), so the two-sibling case now
+  resolves to exactly one match, correctly, without hitting `:zero_or_many`
+  at all. The `_zero_or_many` branch inside `find_sub_process_completion_token/3`
+  is now reachable only by a genuine structural anomaly (two tokens
+  simultaneously parked at the *identical* `node_id`, or the marker
+  surviving on a token whose child was never actually the one that
+  completed) — the same class of "should be unreachable, kept as a typed
+  totality guard rather than a `raise`" branch `find_task_completion_token/2`
+  already has for its own `node_id`-position match, not a gap specific to
+  this fix.
+* **OQ-2 (non-blocking, new).** The existing test at
+  `reconstruction_test.exs:674-726` exercises exactly one parked child per
+  replay. It does not yet exercise the concurrent-siblings case §12.3
+  specifically fixes (two `:SUB_PROCESS` branches parked at once via a
+  `:PARALLEL_GATEWAY` split, then both `SUB_PROCESS_COMPLETED` events
+  replayed in either order) — the scenario CODE-DESIGN-VALIDATOR's finding
+  was about. Flagged for TEST-DESIGNER to add as regression coverage on the
+  next cycle that touches this test file (mirrors the already-existing
+  GH-428 live-path regression test's own graph shape, replayed instead of
+  asserted live) — not required to land in the same rework as the
+  `reconstruction.ex` fix itself, but strongly recommended given this is
+  precisely the case that was silently wrong before this rework.

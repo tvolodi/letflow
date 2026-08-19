@@ -170,6 +170,16 @@ defmodule Letflow.Engine.Reconstruction do
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
 
+  # design doc §12.2 -- a short, human-readable, structurally-non-UUID string
+  # (contains `:`, which Ecto.UUID.generate/0 output never does) used to park
+  # a token's waiting_child_instance_id during replay when its
+  # {:sub_process_start, ...} pending event has been seen but the matching
+  # SUB_PROCESS_COMPLETED event has not yet replayed. Private to this module
+  # only -- Transition's own dispatch_sub_process_entry/4 guard only checks
+  # not is_nil(waiting_child_instance_id), never equality against a specific
+  # value.
+  @replay_pending_child_marker "reconstruction:pending_child"
+
   @type reconstruct_opts :: [
           prefix: String.t(),
           write_back: boolean()
@@ -202,6 +212,7 @@ defmodule Letflow.Engine.Reconstruction do
           | {:ambiguous_task_node, node_id :: String.t()}
           | {:variable_merge_rejected, event_id :: Ecto.UUID.t(), key :: term()}
           | {:ambiguous_sub_process_completion, child_instance_id :: String.t()}
+          | {:child_start_event_missing, child_instance_id :: String.t()}
 
   @type reconstruct_error ::
           {:error, :instance_not_found}
@@ -387,7 +398,7 @@ defmodule Letflow.Engine.Reconstruction do
       {:ok, snapshot} ->
         with {:ok, graph} <- build_graph_for_replay(snapshot.graph),
              {:ok, seed_state} <- seed_instance_state(instance_id, graph) do
-          case fold_events(graph, seed_state, events) do
+          case fold_events(graph, seed_state, events, prefix) do
             {:ok, final_state} -> {:ok, final_state}
             {:error, reason} -> {:error, {:replay_failed, reason}}
           end
@@ -441,11 +452,11 @@ defmodule Letflow.Engine.Reconstruction do
     end
   end
 
-  defp fold_events(_graph, state, []), do: {:ok, state}
+  defp fold_events(_graph, state, [], _prefix), do: {:ok, state}
 
-  defp fold_events(graph, state, [event | rest]) do
-    case apply_event(graph, state, event) do
-      {:ok, new_state} -> fold_events(graph, new_state, rest)
+  defp fold_events(graph, state, [event | rest], prefix) do
+    case apply_event(graph, state, event, prefix) do
+      {:ok, new_state} -> fold_events(graph, new_state, rest, prefix)
       {:error, _reason} = error -> error
     end
   end
@@ -454,18 +465,18 @@ defmodule Letflow.Engine.Reconstruction do
   # Design doc §5.3 -- per-event-type replay clauses.
   # ---------------------------------------------------------------------
 
-  defp apply_event(graph, state, %{event_type: "INSTANCE_STARTED"} = event) do
+  defp apply_event(graph, state, %{event_type: "INSTANCE_STARTED"} = event, _prefix) do
     with {:ok, initial_variables} <- fetch_map_field(event, "initial_variables") do
       reseeded_state = %InstanceState{state | variables: initial_variables}
       worklist = Enum.map(reseeded_state.tokens, & &1.token_id)
 
-      drop_pending_events(
+      resolve_pending_events(
         Engine.advance_until_stable(graph, reseeded_state, worklist, hop_limit(graph))
       )
     end
   end
 
-  defp apply_event(graph, state, %{event_type: "TASK_COMPLETED"} = event) do
+  defp apply_event(graph, state, %{event_type: "TASK_COMPLETED"} = event, _prefix) do
     with {:ok, node_id} <- fetch_string_field(event, "node_id"),
          {:ok, output_variables} <- fetch_map_field(event, "output_variables"),
          {:ok, token} <- find_task_completion_token(state.tokens, node_id) do
@@ -510,7 +521,7 @@ defmodule Letflow.Engine.Reconstruction do
     end
   end
 
-  defp apply_event(_graph, state, %{event_type: "INSTANCE_CANCELLED"}) do
+  defp apply_event(_graph, state, %{event_type: "INSTANCE_CANCELLED"}, _prefix) do
     {:ok,
      %InstanceState{
        state
@@ -521,7 +532,7 @@ defmodule Letflow.Engine.Reconstruction do
      }}
   end
 
-  defp apply_event(_graph, state, %{event_type: "EXECUTION_ERROR"} = event) do
+  defp apply_event(_graph, state, %{event_type: "EXECUTION_ERROR"} = event, _prefix) do
     with {:ok, variables} <- fetch_map_field(event, "variables") do
       {:ok, %InstanceState{state | status: :error, variables: variables}}
     end
@@ -537,14 +548,23 @@ defmodule Letflow.Engine.Reconstruction do
   # event type, so the completing token is found by matching the payload's
   # child_instance_id against each in-memory token's own
   # waiting_child_instance_id instead (find_sub_process_completion_token/2).
-  defp apply_event(graph, state, %{event_type: "SUB_PROCESS_COMPLETED"} = event) do
+  defp apply_event(graph, state, %{event_type: "SUB_PROCESS_COMPLETED"} = event, prefix) do
     with {:ok, child_instance_id} <- fetch_string_field(event, "child_instance_id"),
          {:ok, output_variables} <- fetch_map_field(event, "output_variables"),
-         {:ok, token} <- find_sub_process_completion_token(state.tokens, child_instance_id) do
+         {:ok, parent_node_id} <- fetch_child_parent_node_id(child_instance_id, prefix),
+         {:ok, parked_token} <-
+           find_sub_process_completion_token(state.tokens, parent_node_id, child_instance_id) do
       case VariableMerge.merge(state.variables, output_variables, nil) do
         {:ok, new_variables, _merge_events} ->
-          state_with_merged_variables = %InstanceState{state | variables: new_variables}
-          dispatch_sub_process_completion(graph, state_with_merged_variables, token.token_id)
+          resolved_token = %Token{parked_token | waiting_child_instance_id: child_instance_id}
+
+          state_with_merged_variables = %InstanceState{
+            state
+            | variables: new_variables,
+              tokens: replace_token(state.tokens, resolved_token)
+          }
+
+          dispatch_sub_process_completion(graph, state_with_merged_variables, resolved_token.token_id)
 
         {:rejected, _unchanged_variables,
          [{:execution_error, key, _rejected_value, :variable_schema_rejected, _failures}]} ->
@@ -553,7 +573,7 @@ defmodule Letflow.Engine.Reconstruction do
     end
   end
 
-  defp apply_event(_graph, _state, %{event_type: event_type, event_id: event_id}) do
+  defp apply_event(_graph, _state, %{event_type: event_type, event_id: event_id}, _prefix) do
     {:error, {:unrecognized_event_type, event_type, event_id}}
   end
 
@@ -568,17 +588,68 @@ defmodule Letflow.Engine.Reconstruction do
     end
   end
 
-  # req062 (SPC-01) SUB_PROCESS_COMPLETED row -- matched by the payload's own
-  # child_instance_id against each live token's in-memory
-  # waiting_child_instance_id (moduledoc finding above; this event type
-  # persists no node_id). Zero or >=2 matches is a named, surfaced
-  # replay-fidelity gap, never a silent guess -- mirrors
-  # find_task_completion_token/2's own zero-or-many handling.
-  defp find_sub_process_completion_token(tokens, child_instance_id) do
-    case Enum.filter(tokens, &(&1.waiting_child_instance_id == child_instance_id)) do
+  # req062 (SPC-01, design doc §12.3.3) SUB_PROCESS_COMPLETED row -- matched by
+  # BOTH the parked token's own node_id (sourced from the completing child's
+  # own INSTANCE_STARTED payload, fetch_child_parent_node_id/2 below) AND the
+  # generic replay-parked marker (@replay_pending_child_marker). node_id alone
+  # disambiguates between concurrently-parked siblings (design doc §12.3.0's
+  # rework); the marker alone rules out a token sitting at that node_id for an
+  # unrelated reason. Zero or >=2 matches is a named, surfaced replay-fidelity
+  # gap, never a silent guess -- mirrors find_task_completion_token/2's own
+  # zero-or-many handling.
+  defp find_sub_process_completion_token(tokens, parent_node_id, child_instance_id) do
+    case Enum.filter(tokens, fn token ->
+           token.node_id == parent_node_id and
+             token.waiting_child_instance_id == @replay_pending_child_marker
+         end) do
       [token] -> {:ok, token}
       _zero_or_many -> {:error, {:ambiguous_sub_process_completion, child_instance_id}}
     end
+  end
+
+  # design doc §12.3.1/12.3.2 -- reads the completing child's own single
+  # INSTANCE_STARTED event (its own instance_id stream, not the parent's) to
+  # recover parent_node_id, the node the parent's token was sitting on when it
+  # spawned this specific child (SubProcess.append_instance_started_event_for_child/8's
+  # own persisted payload field). Still a read-only Repo.all -- INV-RC-1 -- and
+  # still never reads instance_projections -- INV-RC-2 -- but is a genuinely
+  # new shape of read for this module: a different instance's own event log
+  # (moduledoc divergence 5).
+  @spec fetch_child_parent_node_id(child_instance_id :: String.t(), prefix :: String.t()) ::
+          {:ok, node_id :: String.t()}
+          | {:error, {:child_start_event_missing, child_instance_id :: String.t()}}
+          | {:error, {:malformed_payload, event_id :: Ecto.UUID.t(), reason :: term()}}
+  defp fetch_child_parent_node_id(child_instance_id, prefix) do
+    archived_events =
+      ArchivedEvent
+      |> where([e], e.instance_id == ^child_instance_id and e.event_type == "INSTANCE_STARTED")
+      |> Repo.all(prefix: prefix)
+      |> Enum.map(&normalize_merged_event/1)
+
+    live_events_result =
+      Event
+      |> where([e], e.instance_id == ^child_instance_id and e.event_type == "INSTANCE_STARTED")
+      |> Repo.all(prefix: prefix)
+      |> resolve_live_payloads(prefix)
+
+    with {:ok, live_events} <- live_events_result do
+      case archived_events ++ live_events do
+        [event] -> fetch_string_field(event, "parent_node_id")
+        _zero_or_many -> {:error, {:child_start_event_missing, child_instance_id}}
+      end
+    end
+  end
+
+  # Same shape as Transition's own private replace_token/2 (transition.ex) --
+  # replaces the token whose token_id matches new_token's, preserving list
+  # order otherwise. Not reused directly (Transition's is private to that
+  # module).
+  @spec replace_token([Token.t()], Token.t()) :: [Token.t()]
+  defp replace_token(tokens, %Token{token_id: token_id} = new_token) do
+    Enum.map(tokens, fn
+      %Token{token_id: ^token_id} -> new_token
+      other -> other
+    end)
   end
 
   # Mirrors Engine.complete_task/3's own dispatch_task_completion_hop_chain/5
@@ -591,7 +662,7 @@ defmodule Letflow.Engine.Reconstruction do
       {:ok, new_state, _pending_events} ->
         newly_pending = Engine.tokens_needing_dispatch(state.tokens, new_state.tokens, token_id)
 
-        drop_pending_events(
+        resolve_pending_events(
           Engine.advance_until_stable(graph, new_state, newly_pending, hop_limit(graph))
         )
 
@@ -611,7 +682,7 @@ defmodule Letflow.Engine.Reconstruction do
       {:ok, new_state, _pending_events} ->
         newly_pending = Engine.tokens_needing_dispatch(state.tokens, new_state.tokens, token_id)
 
-        drop_pending_events(
+        resolve_pending_events(
           Engine.advance_until_stable(graph, new_state, newly_pending, hop_limit(graph))
         )
 
@@ -620,19 +691,39 @@ defmodule Letflow.Engine.Reconstruction do
     end
   end
 
-  # req062 (SPC-01 sub-process runtime half) widened Engine.advance_until_stable/4's
-  # own return shape to a 3-tuple that also surfaces each hop's accumulated
-  # pending_event() list (previously silently dropped). This module still has
-  # no replay-time consumer for a {:sub_process_start, ...} pending event
-  # (activating a *new* child during replay) -- that remains a real, named
-  # gap for a future requirement (REQ-062's own moduledoc/handoff issue list),
-  # distinct from replaying an already-recorded SUB_PROCESS_COMPLETED event,
-  # which this module now does handle (apply_event/3 above). This adapter
-  # only restores this module's own pre-existing 2-tuple contract with
-  # fold_events/3 so callers here never need to thread pending_event() lists
-  # through the fold.
-  defp drop_pending_events({:ok, state, _pending_events}), do: {:ok, state}
-  defp drop_pending_events({:error, _reason} = error), do: error
+  # design doc §12.2 -- replaces the former drop_pending_events/1. Same
+  # 3-tuple-in/2-tuple-out adapter shape ({:ok, state, pending_events} ->
+  # {:ok, new_state} / {:error, _} = error -> error), except instead of
+  # unconditionally discarding pending_events, folds over the list and, for
+  # every {:sub_process_start, token_id, _node_id} entry, parks that token by
+  # setting its waiting_child_instance_id to @replay_pending_child_marker --
+  # real child-instance creation is a live-path-only DB write
+  # (Letflow.Engine.SubProcess's own Multi) this module must never perform
+  # (INV-RC-1). :parallel_split/:parallel_join_fired/:parallel_join_cancelled
+  # entries are still dropped exactly as before -- Transition.transition/3
+  # already fully applies their token-set change to the returned
+  # InstanceState before emitting them; only :sub_process_start leaves the
+  # graph "unfinished" from replay's point of view.
+  defp resolve_pending_events({:ok, state, pending_events}) do
+    new_tokens =
+      Enum.reduce(pending_events, state.tokens, fn
+        {:sub_process_start, token_id, _node_id}, tokens ->
+          Enum.map(tokens, fn
+            %Token{token_id: ^token_id} = token ->
+              %Token{token | waiting_child_instance_id: @replay_pending_child_marker}
+
+            other ->
+              other
+          end)
+
+        _other_pending_event, tokens ->
+          tokens
+      end)
+
+    {:ok, %InstanceState{state | tokens: new_tokens}}
+  end
+
+  defp resolve_pending_events({:error, _reason} = error), do: error
 
   # Same defensive hop-count formula Engine.create/2's own activate/2 and
   # complete_task/3's own dispatch_task_completion_hop_chain/5 already use

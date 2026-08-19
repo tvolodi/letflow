@@ -814,9 +814,12 @@ defmodule Letflow.IdentityMigrationTest do
       assert post_heal_visible_count == 1
 
       %{rows: [[backup_count]]} =
-        Repo.query!("SELECT count(*) FROM public.iss060_tenant_schemas_guard_backup WHERE id = $1", [
-          Ecto.UUID.dump!(stale_id)
-        ])
+        Repo.query!(
+          "SELECT count(*) FROM public.iss060_tenant_schemas_guard_backup WHERE id = $1",
+          [
+            Ecto.UUID.dump!(stale_id)
+          ]
+        )
 
       assert backup_count == 0
     end

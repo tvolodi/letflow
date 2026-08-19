@@ -1,0 +1,64 @@
+{
+    "handoff_id": "b77d6479-dee1-41a8-ac70-d9e983ee68f9",
+    "run_id": "WF02-REQ060-20260819",
+    "workflow_id": "WF-02",
+    "step": "02d",
+    "from_agent": "ORCH",
+    "to_agent": "REVIEWER",
+    "file": "handoffs/WF02-REQ060-20260819/step-02d-reviewer.json",
+    "created_at": "2026-08-19T09:15:36Z",
+    "started_at": "2026-08-19T09:15:36Z",
+    "completed_at": "2026-08-19T09:15:36Z",
+    "status": "COMPLETED",
+    "priority": "NORMAL",
+    "context": {
+        "stage": "S3",
+        "requirement_ids": [
+            "REQ-060"
+        ],
+        "related_handoff_ids": [
+            "handoffs/WF02-REQ060-20260819/step-01-code-designer.json",
+            "handoffs/WF02-REQ060-20260819/step-01b-code-design-validator.json",
+            "handoffs/WF02-REQ060-20260819/step-02a-elixir-dev.json",
+            "handoffs/WF02-REQ060-20260819/step-02c-security-reviewer.json"
+        ],
+        "artifacts_in": [
+            "lib/letflow/engine/pin_rebind.ex",
+            "lib/letflow/design/req060-pin-rebind.md",
+            "lib/letflow/engine.ex",
+            "lib/letflow/event_store.ex",
+            "lib/letflow/event_store/registry.ex",
+            "lib/letflow/tenant_provisioning.ex",
+            "lib/letflow/event_store/instance_projection.ex"
+        ],
+        "owned_modules": [
+            "lib/letflow/engine/",
+            "lib/letflow/design/"
+        ]
+    },
+    "task": {
+        "description": "Idiom/scope-creep/decision-consistency review gate on REQ-060's PinRebind implementation (lib/letflow/engine/pin_rebind.ex, new module). Resolve OQ-1 (event-type self-registration) and OQ-4 (ConcurrentModification scope) as explicit REVIEWER sign-off items -- not just their security implications (SECURITY-REVIEWER already cleared those) but whether they are the right engineering call. Verify rebind_pins/3 genuinely matches cancel_instance/3's established Multi/error/actor_id patterns rather than inventing new conventions, and confirm check_rebind_eligibility/1 correctly does not reuse InstanceProjection.terminal?/1.",
+        "acceptance_criteria": []
+    },
+    "result": {
+        "status": "PASS",
+        "summary": "lib/letflow/engine/pin_rebind.ex is idiomatic and matches the gate-approved design (req060-pin-rebind.md) and cancel_instance/3's established conventions. No process/supervision question in play -- PinRebind is a stateless module of pure validation functions plus one Ecto.Multi/Repo.transaction call, same shape as PinResolver/Reconstruction; N/A on the supervision check, no isolation collapsed.\n\nPattern match against cancel_instance/3 confirmed by direct read of both: cast_instance_id/1 and fetch_actor_and_idempotency_key/1 are verbatim mirrors of cancel_instance/3's own same-named helpers (pin_rebind.ex's own comments say so and the logic matches). Multi step naming (:instance_projection, then domain-specific steps) follows cancel_instance/3's :instance_projection/:tasks/:tokens/:event convention. Error-tuple shapes ({:error, {:tag, detail}}) match cancel_instance/3's own taxonomy style. actor_id flows through identically -- required, propagated into the event's actor_id field, never defaulted. No invented convention.\n\ncheck_rebind_eligibility/1 (pin_rebind.ex ~M2) does NOT call InstanceProjection.terminal?/1 -- confirmed by reading instance_projection.ex:178-179 directly: terminal?/1 is `status in [:completed, :cancelled]` only, explicitly excluding :error. PinRebind's own three-way predicate (`status in [:completed, :cancelled, :error]` rejected, `:active` proceeds) is a deliberate, correctly-scoped departure, not an oversight -- the moduledoc's 'Terminal-status naming note' states this explicitly and it is accurate.\n\nOQ-1 sign-off (no self-registration of INSTANCE_PINS_REBOUND): traced where TASK_COMPLETED/INSTANCE_CANCELLED actually get registered today by grepping every Registry.register_type/2 call site in lib/ and test/. Finding: the ONLY production call site is TenantProvisioning.maybe_seed_platform_event_types/2 (tenant_provisioning.ex:539-544), and by its own comment it seeds ONLY INSTANCE_STARTED -- 'no other already-designed event type currently has a real writer in this codebase that would need its own registry row yet.' Every other register_type/2 call is a test fixture (engine_cancel_instance_test.exs:63, engine_complete_task_test.exs:63, etc.) registering its own event type. EventStore.append/2 (event_store.ex:186) requires Registry.validate_payload/3 -> Registry.get_type/2 to find an already-registered row, confirmed by direct read. Conclusion: PinRebind's no-self-registration choice is CONSISTENT with the TASK_COMPLETED/INSTANCE_CANCELLED precedent as claimed -- it is not inventing a new gap. But that precedent itself is a real, pre-existing platform gap: in any real, non-test-fixture-registered tenant schema, cancel_instance/3, complete_task/3, and (once merged) rebind_pins/3 would ALL be rejected by Registry.validate_payload/3 as unregistered event types -- these write paths only function today because tests explicitly self-register. This is exactly the kind of gap that undermines the moduledoc's 'sole write path'/'one deliberate, audited, explicit way' framing if left unaddressed before real deployment. Filed as docs/issues/ISS-0071.yaml (GH#257, severity MAJOR, tagged type-safety/event-store/operational-gap) rather than blocking this PR on it, since (a) it is not a regression introduced by this module, (b) fixing it here alone -- e.g. having PinRebind self-register idempotently while its two precedents still don't -- would be an inconsistent, scope-widening fix for a systemic issue, and (c) the right fix (extend maybe_seed_platform_event_types/2 or add an explicit seed list) is a provisioning-layer design decision outside REQ-060's scope. Design doc's own OQ-1 reading (matching precedent over inventing per-module self-registration) is the right call given the alternative would make PinRebind inconsistent with its own siblings.\n\nOQ-4 sign-off (ConcurrentModification scope: rebind-vs-rebind only, or rebind-vs-any-writer): confirmed cancel_instance/3 and complete_task/3 both lock the same instance_projections row via plain lock(\"FOR UPDATE\") (engine.ex:1264, 2015) -- blocking, not NOWAIT. PinRebind's NOWAIT lock on that same row necessarily surfaces ConcurrentModification against ANY concurrent holder (a second rebind_pins/3, or a mid-transaction complete_task/3/cancel_instance/3), not just a second rebind. This is the RIGHT engineering call, not just an accepted ambiguity: REQ-060's own requirement text asks for immediate, distinct contention surfacing rather than blocking, and the alternative (a narrower rebind-only scope) would require a separate advisory lock disjoint from the row cancel_instance/3 and complete_task/3 actually mutate -- which would let rebind_pins/3 race a genuine concurrent status/pin-affecting write undetected, a correctness regression, not an improvement. Locking the same contended row NOWAIT is the conservative, safe choice consistent with REQ-055's zero-cross-instance-contention rule (this is intra-instance, not cross-instance) and with Reconstruction.lock_projection_nowait/2's own precedent. Sign off: rebind-vs-any-writer is correct and should be documented as settled (not merely 'this design's reading') in the design doc's own OQ-4 entry going forward.\n\nNo scope creep: no new behaviour/abstraction beyond PIN-05's own ACs; no new Letflow.Engine.rebind_* wrapper was added, matching the design's own placement-choice note (a future HTTP route calls rebind_pins/3 directly, same as S4's read route calls Reconstruction.reconstruct_instance/2 directly) -- appropriately deferred, not premature plumbing. No decision-record conflict: NOWAIT locking, all-or-nothing validation-before-transaction, and PinResolver/Reconstruction zero-code-change reuse are all cited, verified reuses of already-shipped precedent, not new conventions. docs/anti-patterns.md has no entries this diff repeats.\n\nType-safety note (non-blocking): rebind_error()'s catch-all {:error, term()} clause is intentionally loose per the design; no invalid-state class here is representable-but-unchecked beyond what ISS-0071 already covers, so no additional type-safety issue filed.",
+        "artifacts_out": [
+            "docs/issues/ISS-0071.yaml"
+        ],
+        "issues": [
+            "ISS-0071 (GH#257, MAJOR, not blocking this PASS): no production code path registers TASK_COMPLETED/INSTANCE_CANCELLED/INSTANCE_PINS_REBOUND event types -- EventStore.append/2 would reject all three in a real, non-test-fixture tenant schema. Pre-existing gap, not introduced by REQ-060; needs a provisioning-layer design decision before real deployment."
+        ],
+        "git_evidence": {
+            "branch_name": "feature/WF02-REQ060-20260819",
+            "commit_sha_list": [],
+            "remote_branch": "origin/feature/WF02-REQ060-20260819",
+            "push_status": "pending",
+            "pr_url": null,
+            "pr_create_error": null
+        },
+        "next_action": "Route to TEST-DESIGNER"
+    },
+    "rework_count": 0,
+    "max_rework": 3
+}

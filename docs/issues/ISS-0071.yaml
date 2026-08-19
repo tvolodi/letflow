@@ -1,0 +1,62 @@
+id: ISS-0071
+title: >
+  No production code path ever registers TASK_COMPLETED / INSTANCE_CANCELLED /
+  INSTANCE_PINS_REBOUND event types -- EventStore.append/2 for all three would
+  fail against a real, non-test-fixture tenant schema
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ060-20260819 (Step 2d, OQ-1 sign-off)
+discovered_at: "2026-08-19T00:00:00Z"
+severity: MAJOR
+tags:
+  - type-safety
+  - event-store
+  - operational-gap
+description: >
+  While resolving REQ-060's carried-forward OQ-1 (whether
+  Letflow.Engine.PinRebind.rebind_pins/3 should self-register the
+  "INSTANCE_PINS_REBOUND" event type), traced where "INSTANCE_CANCELLED" and
+  "TASK_COMPLETED" -- the two precedents pin_rebind.ex's moduledoc cites for
+  its own no-self-registration choice -- actually get registered today.
+
+  grep across lib/ and test/ for Registry.register_type/2 call sites found
+  exactly one production call site: TenantProvisioning.maybe_seed_platform_event_types/2
+  (tenant_provisioning.ex:539-544), and it seeds only "INSTANCE_STARTED", by its
+  own comment ("No other event type is seeded here ... no other already-designed
+  event type currently has a real writer in this codebase that would need its
+  own registry row yet -- seeding one this call has no caller for would be
+  speculative, not a fix for a demonstrated gap"). Every other
+  Registry.register_type/2 call site in the repo is a test file registering its
+  own fixture's event type (test/letflow/engine_cancel_instance_test.exs,
+  engine_complete_task_test.exs, event_store_test.exs, etc.).
+
+  EventStore.append/2 (event_store.ex:186) calls Registry.validate_payload/3,
+  which requires Registry.get_type/2 to find a matching, already-registered
+  event_type_registry row for the tenant schema -- confirmed by reading
+  event_store.ex directly. So in any real, provisioned (non-test-fixture)
+  tenant schema today: Letflow.Engine.cancel_instance/3 appending
+  "INSTANCE_CANCELLED", Letflow.Engine.complete_task/3 appending
+  "TASK_COMPLETED", and (once merged) Letflow.Engine.PinRebind.rebind_pins/3
+  appending "INSTANCE_PINS_REBOUND" would all hit an unregistered-event-type
+  rejection from Registry.validate_payload/3 -- these write paths currently
+  only work in tests because every test fixture explicitly calls
+  Registry.register_type/2 for itself before exercising the code under test.
+
+  Not a regression introduced by REQ-060/pin_rebind.ex -- it is a pre-existing
+  gap that predates cancel_instance/3 and complete_task/3 shipping, and
+  pin_rebind.ex's own no-self-registration choice is consistent with (not a
+  new instance of) that gap, per REVIEWER's WF02-REQ060-20260819 Step 2d
+  review. Filed because nothing currently tracks it, and it is squarely the
+  kind of "only a runtime error catches it" gap core-directives.md's
+  type-safety-gap filing duty exists for -- worth a real
+  provisioning-vs-registration design decision (e.g. extend
+  maybe_seed_platform_event_types/2 to seed all currently-shipped write-path
+  event types, or an explicit migration-time seed list) before this reaches
+  a real deployment, not a test suite.
+affected_files:
+  - lib/letflow/tenant_provisioning.ex
+  - lib/letflow/event_store.ex
+  - lib/letflow/event_store/registry.ex
+  - lib/letflow/engine.ex
+  - lib/letflow/engine/pin_rebind.ex
+github_issue: https://github.com/tvolodi/letflow/issues/257
+status: open

@@ -67,7 +67,7 @@ defmodule Letflow.TenantSlugFixtureTest do
       # one.
       results =
         for _ <- 1..3 do
-          {output, 0} = System.cmd("elixir", ["-e", @old_mechanism_script])
+          {output, 0} = write_script_and_run("elixir", @old_mechanism_script)
           output
         end
 
@@ -103,12 +103,7 @@ defmodule Letflow.TenantSlugFixtureTest do
 
       results =
         for _ <- 1..3 do
-          {output, 0} =
-            System.cmd("mix", ["run", "--no-start", "-e", script],
-              env: [{"MIX_ENV", "test"}],
-              stderr_to_stdout: false
-            )
-
+          {output, 0} = write_script_and_run("mix", script)
           output
         end
 
@@ -159,6 +154,123 @@ defmodule Letflow.TenantSlugFixtureTest do
 
         assert length(Enum.uniq(slugs)) == length(slugs)
       end
+    end
+  end
+
+  # ISS-0065 WF-03 regression tests.
+  #
+  # Fail-then-pass boundary for BOTH tests below: `write_script_and_run/2` did not
+  # exist before commit f90919f (design: ef888b5). Before that commit both
+  # VM-spawning call sites passed the script inline as a `-e <script>` argv element
+  # directly to `System.cmd/3` (confirmed: `git show ef888b5:test/support/tenant_slug_test.exs
+  # | grep -c '"-e"'` returns 2, at the exact two call sites this fix touched). Neither
+  # test below could even compile against that pre-fix source (test (a) would find
+  # the literal `"-e"` and fail its assertion; test (b) calls a private function that
+  # did not exist, a compile error) -- so both give a real fail-then-pass boundary
+  # against the actual pre-fix commit, not an assumption.
+  describe "ISS-0065 regression: no literal \"-e\" argv element passed to System.cmd" do
+    # Structural/mechanism-level check: the Windows-unsafe pattern ISS-0065 fixed is
+    # a literal "-e" element inside a System.cmd/2,3 call's argv list, at either
+    # VM-spawning call site above. This parses this file's own source into an AST
+    # and inspects only the argument lists of actual System.cmd/2,3 call nodes --
+    # deliberately NOT a raw substring/regex scan of the file text, because this
+    # test file's own comments and assertion messages legitimately discuss `"-e"`
+    # in prose (see above) and would make a text-level scan self-defeating (a raw
+    # `File.read!(__ENV__.file) =~ "-e"` scan was tried first and failed against
+    # its own describe/test names and comments -- not a hypothetical concern, an
+    # earlier draft of this test hit it). Verified against real commits: `git show
+    # ef888b5:test/support/tenant_slug_test.exs` (pre-fix) parsed through this same
+    # AST walk yields 2 offending call nodes (the exact two call sites the fix
+    # touched); this file (post-fix, current HEAD) yields 0. This complements
+    # (does not replace) the empirical cleanup test below: this test proves the
+    # unsafe *pattern* is gone from the source; the test below proves the
+    # *replacement* mechanism's cleanup guarantee actually holds at runtime.
+    test "no System.cmd/2,3 call node in this file's AST has a literal \"-e\" argv element" do
+      {:ok, ast} = Code.string_to_quoted(File.read!(__ENV__.file))
+
+      {_ast, offending_calls} =
+        Macro.prewalk(ast, [], fn
+          {{:., _, [{:__aliases__, _, [:System]}, :cmd]}, _, args} = node, acc ->
+            if Enum.any?(args, &(is_list(&1) and "-e" in &1)) do
+              {node, [node | acc]}
+            else
+              {node, acc}
+            end
+
+          node, acc ->
+            {node, acc}
+        end)
+
+      assert offending_calls == [],
+             "found a System.cmd/2,3 call passing a literal \"-e\" argv element -- ISS-0065 " <>
+               "replaced both VM-spawning call sites with write_script_and_run/2, which passes " <>
+               "a bare temp-file path instead; a \"-e\" argv element here would reintroduce the " <>
+               "Windows cmd.exe argv-mangling bug (mix.bat/elixir.bat re-parse `(`, `)`, `\"` " <>
+               "inside an inline -e script -- see " <>
+               "lib/letflow/design/iss065-windows-cmd-script-tempfile-fix.md)"
+    end
+  end
+
+  describe "ISS-0065 regression: write_script_and_run/2 cleans up its temp file even when the subprocess fails" do
+    # Negative-path/empirical check on write_script_and_run/2 itself (per the design
+    # doc's acceptance criterion 5): forces a subprocess that exits nonzero (a
+    # deliberate `raise` in the spawned script) and asserts no `letflow_iss0065_*`
+    # temp file is left behind in System.tmp_dir!/0 afterward -- proving the
+    # try/after cleanup guarantee empirically, not just by reading the code.
+    test "temp file removed after a nonzero-exit subprocess (try/after runs on the failure path too)" do
+      tmp_dir = System.tmp_dir!()
+      before_files = Path.wildcard(Path.join(tmp_dir, "letflow_iss0065_*"))
+
+      {_output, exit_status} =
+        write_script_and_run(
+          "elixir",
+          ~s|raise "ISS-0065 negative-path cleanup test: forced failure"|
+        )
+
+      assert exit_status != 0,
+             "expected the deliberate `raise` in the spawned script to produce a nonzero exit " <>
+               "status; got 0 -- the negative path this test relies on didn't actually trigger"
+
+      after_files = Path.wildcard(Path.join(tmp_dir, "letflow_iss0065_*"))
+
+      assert after_files == before_files,
+             "write_script_and_run/2 left a temp file behind after a failing subprocess -- the " <>
+               "try/after cleanup (File.rm/1) must run unconditionally on both the success and " <>
+               "failure paths, per iss065-windows-cmd-script-tempfile-fix.md's \"Cleanup " <>
+               "semantics\" section"
+    end
+  end
+
+  # ISS-0065: writes `script_body` to a uniquely-named temp `.exs` file and
+  # invokes `cmd` with that file's path as a plain argv element instead of
+  # `-e <script>`. A bare path has none of the `(`, `)`, `"` characters that
+  # `cmd.exe` re-parses on Windows when `mix`/`elixir` resolve to
+  # `mix.bat`/`elixir.bat` -- see
+  # `lib/letflow/design/iss065-windows-cmd-script-tempfile-fix.md` for the
+  # full rationale. Behaves identically to today's `-e` invocation on Linux.
+  @spec write_script_and_run(cmd :: String.t(), script_body :: String.t()) ::
+          {output :: String.t(), exit_status :: non_neg_integer()}
+  defp write_script_and_run(cmd, script_body) do
+    filename =
+      "letflow_iss0065_#{System.unique_integer([:positive, :monotonic])}_#{:erlang.unique_integer([:positive])}.exs"
+
+    path = Path.join(System.tmp_dir!(), filename)
+
+    File.write!(path, script_body)
+
+    try do
+      case cmd do
+        "mix" ->
+          System.cmd("mix", ["run", "--no-start", path],
+            env: [{"MIX_ENV", "test"}],
+            stderr_to_stdout: false
+          )
+
+        _ ->
+          System.cmd(cmd, [path])
+      end
+    after
+      File.rm(path)
     end
   end
 end

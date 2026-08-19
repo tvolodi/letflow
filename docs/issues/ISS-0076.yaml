@@ -1,0 +1,144 @@
+id: ISS-0076
+title: "\"No R-Co source available\" appears 30 times across 11 files with INCONSISTENT wording (an exact-phrase grep finds zero), and it deferred open questions in shipped designs (REQ-059 OQ-1, REQ-060 OQ-5) that the now-reachable R-Co tree can answer"
+discovered_by: ORCH
+discovered_in_run: WF01-REQ109-20260819
+discovered_at: "2026-08-19T19:37:45Z"
+severity: MINOR
+tags:
+  - stale-doc
+  - r-co-verification
+  - citation-drift
+  - open-questions
+  - audit
+description: >
+  ISS-0075 fixed ONE instance of this claim in
+  lib/letflow/engine/variable_merge.ex, where it had caused a CORRECT
+  reconstruction of R-Co's merge semantic to be documented as an unverified
+  guess. Auditing for siblings found the pattern is systemic: 30 occurrences
+  across 11 files, several of which DEFERRED DESIGN QUESTIONS IN SHIPPED
+  REQUIREMENTS on the grounds that R-Co could not be consulted.
+
+  The R-Co source tree IS reachable at c:\Users\tvolo\dev\ai-dala\R-Co and
+  was read directly throughout WF01-REQ109-20260819.
+
+  READ THIS BEFORE GREPPING -- THE WORDING IS INCONSISTENT. ORCH's first
+  grep for the literal string "no R-Co source tree is reachable in this
+  environment" returned ZERO matches across all five files that demonstrably
+  contain the claim. Observed variants include: "No R-Co source tree is
+  reachable in this environment", "no R-Co source tree was reachable",
+  "no R-Co source available", "unreachable R-Co source", "without R-Co
+  source access", "no R-Co source was reachable to confirm", and
+  "(unreachable in this environment)". A sweep that greps one phrasing will
+  silently conclude the work is done. Use a loose pattern such as
+  `-i "no R-Co source|R-Co source tree|unreachable R-Co|without R-Co source"`
+  and re-verify the count.
+
+  AFFECTED FILES (30 hits total; counts exclude this issue file and
+  ISS-0075):
+    - lib/letflow/design/req059-pin-resolver.md      (incl. OQ-1)
+    - lib/letflow/design/req060-pin-rebind.md        (incl. OQ-5)
+    - lib/letflow/design/req062-sub-process-runtime.md
+    - lib/letflow/design/promotion_plan.md
+    - lib/letflow/design/req018-jit-provisioning.md
+    - lib/letflow/design/req041-pack-update-diff-schema.md
+    - lib/letflow/design/service_task.md
+    - lib/letflow/engine/pin_resolver.ex   (SHIPPED moduledoc)
+    - lib/letflow/engine/pin_rebind.ex     (SHIPPED moduledoc)
+    - lib/letflow/engine/sub_process.ex    (SHIPPED moduledoc)
+    - lib/letflow/engine/variable_merge.ex (owned by REQ-109 AC9; see below)
+
+  MITIGATION -- these are NOT uniformly as bad as ISS-0075's. Most add that
+  the requirement author verified against R-Co directly, and scope the claim
+  to "never a second, unverifiable read." variable_merge.ex's was the only
+  one that FLATLY declared its own reconstruction unverified, which is why
+  it was the one that understated a guess that turned out correct. Do not
+  bulk-rewrite on the assumption they all carry the same defect; assess each.
+
+  THREE ITEMS DESERVE ACTION BEYOND A DOCS SWEEP:
+
+  (1) SHIPPED OPEN QUESTIONS THAT ARE NOW ANSWERABLE -- the highest-value
+  item. These were deferred specifically because R-Co could not be read, and
+  their source files exist and are readable today
+  (R-Co/src/engine/pin_resolver.zig, R-Co/src/engine/pin_rebind.zig,
+  R-Co/src/api/routes/pin_rebind.zig):
+    - req059-pin-resolver.md:538 -- "OQ-1: no R-Co source available. Every
+      claim above sourced from REQ-059's own requirement text..."
+    - req060-pin-rebind.md:551 -- "OQ-5: no R-Co source available, same
+      standing caveat REQ-059's design..."
+    - req060-pin-rebind.md:464 -- concurrent rebind-vs-rebind behaviour
+      "unverifiable without R-Co source access"
+    - req060-pin-rebind.md:100 -- a question "R-Co source could settle
+      (unreachable in this environment)", explicitly left to REVIEWER
+    - req062-sub-process-runtime.md:674 -- verifies a claim but explicitly
+      "does not verify against unreachable R-Co source"
+  REQ-059, REQ-060 and REQ-062 are all `done` and shipped. These are open
+  questions standing in shipped design rationale that are answerable now.
+
+  (2) req060-pin-rebind.md:134 IS SECOND-ORDER -- it does not merely carry
+  the caveat, it PRESCRIBES it as required moduledoc content for
+  implementations written against it. Left in place it keeps minting new
+  stale claims in files that do not exist yet, which is how ISS-0075's
+  defect was created. Fix this even if every other occurrence is judged
+  acceptable: it is the only one that reproduces itself.
+
+  (3) req062-sub-process-runtime.md:11 IS UNVERIFIED BY CONSTRUCTION -- it
+  states that ALL of its instance.zig/transition.zig line citations came
+  verbatim from handoff text rather than a direct read. REQ-062 is shipped,
+  so those citations are load-bearing for future readers. Line citations
+  demonstrably drift: in this run two ORCH citations were off by two lines
+  (extractFormSchemaJson at instance.zig:5490 not :5488; the tasks.zig field
+  read at :896 not :894). Neither mattered, but that was luck rather than
+  method, and both were caught only because someone re-read the source. A
+  WRONG citation in shipped design rationale is worse than an absent one,
+  because it reads as verified.
+
+  SCOPE NOTE -- THE REAL RISK. Verifying any of these may reveal that a
+  "reasoned reconstruction" was WRONG, not merely under-attributed as
+  ISS-0075's turned out to be. ISS-0075's guess was correct; that is
+  evidence about one guess, not about the method. A wrong reconstruction in
+  shipped code is a behavioural finding and MUST be filed as its own issue
+  and routed through WF-03, never quietly corrected inside a documentation
+  sweep.
+affected_files:
+  - lib/letflow/design/req059-pin-resolver.md
+  - lib/letflow/design/req060-pin-rebind.md
+  - lib/letflow/design/req062-sub-process-runtime.md
+  - lib/letflow/design/promotion_plan.md
+  - lib/letflow/design/req018-jit-provisioning.md
+  - lib/letflow/design/req041-pack-update-diff-schema.md
+  - lib/letflow/design/service_task.md
+  - lib/letflow/engine/pin_resolver.ex
+  - lib/letflow/engine/pin_rebind.ex
+  - lib/letflow/engine/sub_process.ex
+status: open
+github_issue: https://github.com/tvolodi/letflow/issues/297
+related:
+  - ISS-0075
+scoping_note: >
+  Filed by ORCH rather than folded into REQ-109. ISS-0075's two repairs went
+  into REQ-109's AC9 because REQ-109 already opens and edits that exact
+  file; none of the files here is touched by REQ-109, so folding them in
+  would be scope creep on a requirement that has already passed its gate
+  (REQ-VALIDATOR PASS, WF01-REQ109-20260819).
+
+  lib/letflow/engine/variable_merge.ex is deliberately EXCLUDED from
+  affected_files -- REQ-109's AC9 owns that file's three corrections and
+  needs the stale sentences present to correct in place. Editing it here
+  would collide with REQ-109's diff and destroy REQ-049 AC4's evidence
+  artifact.
+
+  RECOMMENDED SEQUENCING, cheapest-first:
+    1. req060-pin-rebind.md:134 -- stop the caveat being prescribed to
+       future moduledocs. Docs-only, DOC-UPDATER, independent of the rest.
+       Do this first regardless of what else is decided.
+    2. The remaining flat occurrences -- restate or drop the environment
+       claim. Docs-only. Use the loose grep pattern above, not a literal
+       phrase.
+    3. Item (1)'s shipped open questions (REQ-059 OQ-1, REQ-060 OQ-5 and
+       siblings) -- genuine investigation against now-readable R-Co
+       sources, with a real chance of surfacing a behavioural finding.
+       Should be its own requirement, NOT bundled into a docs sweep.
+    4. req062's citation audit -- same character as 3, separately scoped.
+  Do not schedule 1 and 2 as independent WF-03 runs; those edits are smaller
+  than the pipeline overhead of routing them. Items 3 and 4 are real work
+  and should be sized as requirements by REQ-ANALYST.

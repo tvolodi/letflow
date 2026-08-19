@@ -1,0 +1,211 @@
+id: ISS-0073
+title: >
+  ISS-0072's TenantProvisioning event-type seed (6 types) collides with
+  ~13 pre-existing test files' own Registry.register_type/2 fixture calls
+  for the same (name, schema_version) pairs -- 80 tests now fail on
+  feature/WF03-ISS0072-20260819
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF03-ISS0072-20260819
+discovered_at: "2026-08-19T10:46:14Z"
+severity: BLOCKER
+tags:
+  - test-fixture-collision
+  - event-store
+  - regression
+description: >
+  While writing the WF-03 regression test for ISS-0072 (GH#257,
+  test/letflow/tenant_provisioning_event_seed_test.exs), investigated the
+  design doc's (lib/letflow/design/iss072-event-type-registration.md §9 OQ-1)
+  flagged-but-unresolved risk: that pre-existing test files calling
+  `Letflow.EventStore.Registry.register_type/2` directly for their own
+  fixture, for the same event-type names ISS-0072's fix now seeds
+  automatically via `TenantProvisioning.replay_migrations/2`'s default
+  manifest, might collide.
+
+  Confirmed this is a real, currently-active collision, not merely a
+  theoretical risk. Ran `mix test` on `feature/WF03-ISS0072-20260819`
+  (commit a147d0f, post-ISS-0072-fix, pre-existing-tests unmodified):
+
+    Result: 1047/1127 passed (5/5 properties, 1042/1122 tests)
+    Failed: 80 tests
+
+  Failure breakdown by module (from a `mix test` re-run against the same
+  commit):
+    16 Letflow.Engine.PinRebindTest
+    13 Letflow.Engine.ReconstructionTest
+    10 Letflow.EngineSubProcessTest
+     8 Letflow.Engine.SnapshotWriterTest
+     7 Letflow.EngineCompleteTaskTest
+     7 Letflow.EngineCancelInstanceTest
+     6 Letflow.EngineExecutionErrorTest
+     4 Letflow.Engine.ServiceTaskRoutingTest
+     3 Letflow.EnginePluginErrorRoutingTest
+     3 Letflow.EngineConcurrencyTest
+     1 Letflow.Engine.MigrationsTest
+    (Letflow.IdentityMigrationTest and Mix.Tasks.Letflow.Check.TestTest also
+    showed failures in the same run, but those are a separate, unrelated
+    foreign_key_violation/test-pollution issue on tenant_schemas -- NOT
+    caused by ISS-0072's fix; not counted above, not covered by this issue.)
+
+  Root cause, directly confirmed for two files
+  (test/letflow/engine_complete_task_test.exs,
+  test/letflow/engine_cancel_instance_test.exs): each calls
+  `TenantProvisioning.replay_migrations(tenant.id)` (default manifest, so
+  ISS-0072's `maybe_seed_platform_event_types/2` now auto-seeds all 6 types,
+  including "TASK_COMPLETED"/"INSTANCE_CANCELLED" at schema_version 1), then
+  immediately calls its own local `register_event_type!/2` helper, which
+  hard-asserts `{:ok, _event_type} = Registry.register_type(%{"name" =>
+  "TASK_COMPLETED", "schema_version" => 1, ...}, tenant_id)`. Since
+  `Letflow.EventStore.Registry.register_type/2`'s own monotonicity check
+  (registry.ex:225-259, `version == current_max -> {:error,
+  :duplicate_event_type_version}`) now finds ISS-0072's seed already at
+  version 1, the fixture's second registration for the exact same (name,
+  version) pair returns `{:error, :duplicate_event_type_version}` instead of
+  `{:ok, _}`, and the hard `assert {:ok, _event_type} = ...` match fails --
+  every test using that fixture then fails at setup, before its own body
+  runs. Reproduced directly: `mix test
+  test/letflow/engine_complete_task_test.exs
+  test/letflow/engine_cancel_instance_test.exs` -> 14 failures, all with
+  `left: {:ok, _event_type}` / `right: {:error, :duplicate_event_type_version}`
+  at each file's own `register_event_type!/2` (or equivalently-named)
+  helper. The other ~11 affected files likely share the same mechanism
+  (each pre-existing test file's own permissive-schema
+  `Registry.register_type/2` fixture call, for one of ISS-0072's 6 now-seeded
+  names, at schema_version 1) -- not individually re-confirmed one by one in
+  this issue (that determination is this issue's own future resolving run's
+  job, per `docs/agents/protocols/ISSUE_QUEUE.md` -- filing, not fixing,
+  here), but the `mix test` failure counts above are the actual, current,
+  reproducible evidence that the collision is real and BLOCKER-severity: it
+  would break CI/`mix test` for anyone merging ISS-0072's fix as-is.
+
+  This was exactly what
+  `lib/letflow/design/iss072-event-type-registration.md` §9 OQ-1 flagged as
+  a risk needing TEST-DESIGNER/TEST-DESIGN-VALIDATOR investigation rather
+  than assumption -- this issue is that investigation's result.
+
+  Not fixed here (see `test/letflow/tenant_provisioning_event_seed_test.exs`'s
+  own moduledoc, and `test/specs/ISS-0072.md`'s "OQ-1 finding" section, for
+  the regression-test-writing task this was discovered during) -- filed per
+  core-directives.md's "No Issue Left Local-Only" / ISSUE_QUEUE.md
+  procedure, since fixing ~13 pre-existing test fixture files is a
+  substantially different, larger scope than ISS-0072's own WF-03 run
+  (writing one new regression test file for the production fix).
+
+  Two plausible fix directions for a future resolving run to choose between
+  (not decided here): (a) update each affected fixture's local
+  `register_event_type!/2`-equivalent helper to treat
+  `{:error, :duplicate_event_type_version}` as success, same as
+  `maybe_seed_platform_event_types/2` itself already does; or (b) have those
+  fixtures skip self-registering a name ISS-0072's seed already covers
+  (register only under a uniquely-generated name, matching
+  `event_store_test.exs`'s own `unique_type_name()` idiom, which does NOT
+  collide). Direction (b) more closely matches this project's "why did this
+  file need its own registration at all" intent for files whose actual
+  test subject isn't the registry itself; direction (a) is the smaller
+  diff. Left to REVIEWER/ELIXIR-DEV on the resolving run.
+affected_files:
+  - test/letflow/engine_complete_task_test.exs
+  - test/letflow/engine_cancel_instance_test.exs
+  - test/letflow/engine_concurrency_test.exs
+  - test/letflow/engine_sub_process_test.exs
+  - test/letflow/engine_execution_error_test.exs
+  - test/letflow/engine_plugin_error_routing_test.exs
+  - test/letflow/engine/pin_rebind_test.exs
+  - test/letflow/engine/reconstruction_test.exs
+  - test/letflow/engine/snapshot_writer_test.exs
+  - test/letflow/engine/service_task_routing_test.exs
+  - test/letflow/engine/migrations_test.exs
+  - lib/letflow/tenant_provisioning.ex
+github_issue: https://github.com/tvolodi/letflow/issues/267
+status: resolved
+resolved_in_run: WF03-ISS0072-20260819
+resolved_at: "2026-08-19T11:39:26Z"
+resolution_note: >
+  Fixed by editing only test/ fixtures (lib/letflow/tenant_provisioning.ex left
+  untouched, per this run's own directive). `mix test` before: 90 failures (the
+  80 originally reported here plus 10 more of the same class this issue's own
+  filing didn't individually re-confirm file-by-file). `mix test` after: 0
+  failures attributable to `duplicate_event_type_version` or any related
+  schema-validation regression (`grep -c duplicate_event_type_version` on the
+  post-fix full-suite log returns 0). Remaining ~13 failures on a full run are
+  a confirmed-unrelated, pre-existing flaky/test-pollution class (this issue's
+  own text already named 10 of them -- Letflow.IdentityMigrationTest's
+  foreign_key_violation on tenant_schemas; this run additionally saw
+  Mix.Tasks.Letflow.Check.TestTest's 60s subprocess timeouts, and, on
+  different runs, one-off "schema does not exist"/FK failures in
+  Letflow.Definitions.PromotionConflictTest, PromotionAssertionRerunTest, and
+  Letflow.Definitions.StoreTest -- each independently confirmed to pass when
+  its own file is run in isolation, and none reference
+  duplicate_event_type_version or any file this run touched).
+
+  Two categories of fix, by file:
+
+  (a) Simply redundant -- self-registered json_schema was structurally
+  equivalent in intent to what tenant_provisioning.ex now seeds (both
+  permissive `%{"type" => "object"}` test fixtures standing in for the same
+  named type, no real content conflict once compared against what the real
+  production writer actually emits). The fixture's own `register_type/2` call
+  (and, where now-unused, its `register_event_type!/2` helper and `Registry`
+  alias) was deleted outright, relying on provisioning's own seed instead:
+    - test/letflow/engine_complete_task_test.exs (TASK_COMPLETED)
+    - test/letflow/engine_cancel_instance_test.exs (TASK_COMPLETED,
+      INSTANCE_CANCELLED)
+    - test/letflow/engine_concurrency_test.exs (TASK_COMPLETED)
+    - test/letflow/engine_sub_process_test.exs (TASK_COMPLETED,
+      EXECUTION_ERROR, SUB_PROCESS_COMPLETED, INSTANCE_CANCELLED)
+    - test/letflow/engine_execution_error_test.exs (EXECUTION_ERROR, in its
+      `provisioned_tenant/0`)
+    - test/letflow/engine_plugin_error_routing_test.exs (EXECUTION_ERROR)
+    - test/letflow/engine/snapshot_writer_test.exs (TASK_COMPLETED,
+      EXECUTION_ERROR)
+    - test/letflow/engine/reconstruction_test.exs (TASK_COMPLETED,
+      INSTANCE_CANCELLED, EXECUTION_ERROR, SUB_PROCESS_COMPLETED --
+      BOGUS_EVENT_TYPE, which has no production writer and isn't auto-seeded,
+      kept registered as before, no collision)
+    - test/letflow/engine/service_task_routing_test.exs (EXECUTION_ERROR)
+
+  (b) Genuine conflicts, not mere duplicates -- required a real, deliberate
+  fix rather than deletion:
+    - test/letflow/engine_execution_error_test.exs's
+      `provisioned_tenant_without_execution_error_type/0`: this fixture's
+      whole premise ("EXECUTION_ERROR is unregistered") became unreachable via
+      the default manifest once provisioning started auto-seeding it. Fixed by
+      deleting the auto-seeded row (via the real
+      `Letflow.EventStore.Registry.EventType` schema) immediately after
+      provisioning, reconstructing the exact state AC2's atomicity test needs.
+    - test/letflow/engine/pin_rebind_test.exs: provisioning's own seeded
+      json_schema for INSTANCE_PINS_REBOUND types `prior_version`/
+      `new_version` as `"integer"`, but `Letflow.Engine.PinRebind`'s real
+      `String.t()`-typed fields mean every real `rebind_pins/3` write is
+      schema-invalid against that seed -- a genuine production bug in
+      ISS-0072's fix, not just a test-fixture duplicate (filed separately as
+      ISS-0074/GH#269, out of this run's test/-only scope to fix at the
+      source). Worked around by deleting the wrongly-typed auto-seeded row and
+      re-registering the same name/version with a corrected string-typed
+      schema, so this file keeps testing the real "INSTANCE_PINS_REBOUND" name
+      end to end (PinRebind hardcodes that name, so a distinctly-named
+      test-only type was not a viable option here).
+    - test/letflow/engine_cancel_instance_test.exs's AC3 "further append after
+      cancellation" test sent a bare `%{probe: true}` payload, relying on the
+      old permissive fixture schema to reach `EventStore.append/2`'s
+      `:instance_terminated` check. Against the real stricter schema that
+      payload now fails `Registry.validate_payload/3` (which runs *before*
+      the `:instance_terminated` check, per event_store.ex's own P4 ordering)
+      before reaching the check the test actually means to exercise. Fixed by
+      sending a schema-valid `%{cancelled_task_ids: [], cancelled_token_ids:
+      []}` payload instead, so the test reaches and proves the intended
+      check.
+    - test/letflow/engine/reconstruction_test.exs's AC4 "EXECUTION_ERROR
+      reconstructs to status ERROR" test hand-built an
+      `EventStore.append/2` payload with only a `variables` key. Fixed by
+      adding the schema's other required fields (`error_type`, `affected`,
+      `reason`) with minimal placeholder values, preserving the `variables`
+      assertion the test actually cares about.
+
+  Verified via real `mix test` runs (not self-report): pre-fix 90 failures
+  (`/tmp/pretest.log`), post-fix 0 `duplicate_event_type_version`-class
+  failures across three separate full-suite runs, plus a dedicated
+  re-run of every file this issue's own affected_files list named together
+  (pin_rebind_test.exs + engine_cancel_instance_test.exs +
+  reconstruction_test.exs: 40/40 passed) to rule out flakiness on the specific
+  fixes above.

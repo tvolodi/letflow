@@ -59,4 +59,21 @@ affected_files:
   - lib/letflow/engine.ex
   - lib/letflow/engine/pin_rebind.ex
 github_issue: https://github.com/tvolodi/letflow/issues/257
-status: open
+status: resolved
+resolved_at: "2026-08-19T13:19:25Z"
+fix_landed_on_branch: feature/WF03-ISS0072-20260819
+fix_commit: eb69dd7
+fix_note: >
+  Fix implemented by commit eb69dd7 (fix(WF03-ISS0072): seed 5 more
+  production-written event types at provisioning) --
+  lib/letflow/tenant_provisioning.ex's maybe_seed_platform_event_types/2
+  now seeds TASK_COMPLETED, INSTANCE_CANCELLED, INSTANCE_PINS_REBOUND,
+  SUB_PROCESS_COMPLETED, and EXECUTION_ERROR alongside the pre-existing
+  INSTANCE_STARTED seed. Verified by TEST-RUNNER in the
+  WF03-ISS0072-20260819 run (1121/1135 passed; zero failures in
+  event-type-registry/tenant_provisioning/PinRebind paths -- see
+  test/reports/report-2026-08-19-WF03-ISS0072-20260819.yaml). Flipped
+  to `resolved` and GitHub issue #257 closed as part of this run's own
+  Step Final merge to main (not before) -- fix_commit eb69dd7 plus the
+  ISS-0073/ISS-0074 follow-on fixes (0880532, 26ad3fb) all merge in the
+  same Step Final.

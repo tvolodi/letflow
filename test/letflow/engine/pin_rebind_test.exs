@@ -9,10 +9,11 @@ defmodule Letflow.Engine.PinRebindTest do
   `provisioned_tenant/0` pattern exactly. Self-contained: does not share fixtures with
   any other test file.
 
-  Registers `"INSTANCE_PINS_REBOUND"` itself (ISS-0071/GH#257 -- no production code
-  path registers it yet, same pre-existing gap `"TASK_COMPLETED"`/`"INSTANCE_CANCELLED"`
-  already have), plus `"INSTANCE_CANCELLED"` and `"EXECUTION_ERROR"` (needed for the
-  AC3 CANCELLED/ERROR terminal-status fixtures below).
+  `"INSTANCE_PINS_REBOUND"`, `"INSTANCE_CANCELLED"`, and `"EXECUTION_ERROR"` (needed
+  for the AC3 CANCELLED/ERROR terminal-status fixtures below) are all auto-seeded by
+  `TenantProvisioning.replay_migrations/2`'s default manifest (REQ-045 §9 OQ-3a,
+  extended by ISS-0072/GH#257) -- this file relies on that seed rather than
+  registering any of them itself.
 
   Every fixture rebinds the `:variable_schema` pin (the one kind every instance
   carries unconditionally, PIN-02 AC4) rather than `:catalog_entry`/`:module`, because
@@ -31,7 +32,6 @@ defmodule Letflow.Engine.PinRebindTest do
   alias Letflow.Engine.PinResolver
   alias Letflow.Engine.Reconstruction
   alias Letflow.EventStore.InstanceProjection
-  alias Letflow.EventStore.Registry
   alias Letflow.Identity.Tenant
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
@@ -56,21 +56,6 @@ defmodule Letflow.Engine.PinRebindTest do
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
   end
 
-  defp register_event_type!(name, tenant_id) do
-    assert {:ok, _event_type} =
-             Registry.register_type(
-               %{
-                 "name" => name,
-                 "schema_version" => 1,
-                 "json_schema" => %{"type" => "object"},
-                 "description" => "REQ-060 test fixture -- permissive schema"
-               },
-               tenant_id
-             )
-
-    :ok
-  end
-
   defp provisioned_tenant do
     Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
 
@@ -91,10 +76,12 @@ defmodule Letflow.Engine.PinRebindTest do
 
     assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
-    :ok = register_event_type!("INSTANCE_PINS_REBOUND", tenant.id)
-    :ok = register_event_type!("INSTANCE_CANCELLED", tenant.id)
-    :ok = register_event_type!("EXECUTION_ERROR", tenant.id)
-
+    # INSTANCE_PINS_REBOUND, INSTANCE_CANCELLED, and EXECUTION_ERROR are all
+    # auto-seeded by replay_migrations/2's default manifest (REQ-045 §9 OQ-3a,
+    # extended by ISS-0072/GH#257), each with a schema matching its real writer
+    # (Letflow.Engine.PinRebind.rebind_pins/3 for INSTANCE_PINS_REBOUND, whose
+    # prior_version/new_version fields provisioning now seeds as strings --
+    # ISS-0074), so this fixture just relies on the seed directly.
     %{tenant_id: tenant.id, schema_name: schema_name}
   end
 
@@ -217,7 +204,8 @@ defmodule Letflow.Engine.PinRebindTest do
           actor_id: actor_id
         })
 
-      assert {:ok, result} = PinRebind.rebind_pins(instance.instance_id, attrs, prefix: schema_name)
+      assert {:ok, result} =
+               PinRebind.rebind_pins(instance.instance_id, attrs, prefix: schema_name)
 
       assert result.changed == [
                %{
@@ -327,7 +315,10 @@ defmodule Letflow.Engine.PinRebindTest do
       assert {:ok, _cancel_result} =
                Engine.cancel_instance(
                  instance.instance_id,
-                 %{actor_id: Ecto.UUID.generate(), idempotency_key: unique_idempotency_key("req060-cancel")},
+                 %{
+                   actor_id: Ecto.UUID.generate(),
+                   idempotency_key: unique_idempotency_key("req060-cancel")
+                 },
                  prefix: schema_name
                )
 
@@ -415,7 +406,10 @@ defmodule Letflow.Engine.PinRebindTest do
                PinRebind.rebind_pins(instance.instance_id, attrs, prefix: schema_name)
     end
 
-    test "malformed entry -- missing :version key", %{schema_name: schema_name, instance: instance} do
+    test "malformed entry -- missing :version key", %{
+      schema_name: schema_name,
+      instance: instance
+    } do
       attrs = rebind_attrs(%{entries: [%{kind: :variable_schema, ref: "x"}]})
 
       assert {:error, {:malformed_entry, 0, :missing_or_unexpected_keys}} =

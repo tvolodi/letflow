@@ -56,7 +56,6 @@ defmodule Letflow.EngineConcurrencyTest do
   alias Letflow.Engine.Reconstruction
   alias Letflow.Engine.Task, as: EngineTask
   alias Letflow.EventStore.InstanceProjection
-  alias Letflow.EventStore.Registry
   alias Letflow.Identity.Tenant
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
@@ -85,21 +84,6 @@ defmodule Letflow.EngineConcurrencyTest do
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
   end
 
-  defp register_task_completed_event_type!(tenant_id) do
-    assert {:ok, _event_type} =
-             Registry.register_type(
-               %{
-                 "name" => "TASK_COMPLETED",
-                 "schema_version" => 1,
-                 "json_schema" => %{"type" => "object"},
-                 "description" => "REQ-055 test fixture -- permissive schema"
-               },
-               tenant_id
-             )
-
-    :ok
-  end
-
   defp provisioned_tenant do
     Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
 
@@ -120,8 +104,13 @@ defmodule Letflow.EngineConcurrencyTest do
 
     assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
-    :ok = register_task_completed_event_type!(tenant.id)
-
+    # TASK_COMPLETED is now auto-seeded by replay_migrations/2's default manifest
+    # (REQ-045 §9 OQ-3a, extended by ISS-0072/GH#257) -- this fixture used to
+    # self-register it again against a permissive `%{"type" => "object"}` schema
+    # (ISS-0073/GH#267: that duplicate registration now collides with provisioning's
+    # own seed and hard-fails). Removed rather than reconciled: every payload this
+    # file writes goes through the real Engine.complete_task/3 writer provisioning's
+    # stricter schema was written to validate.
     %{tenant_id: tenant.id, schema_name: schema_name}
   end
 

@@ -1,0 +1,127 @@
+id: ISS-0087
+title: "Ternary detection disagrees with R-Co on the exact boundary REQ-111 AC5 names: for a CEL string literal containing an escaped quote AND a `?` (`variables.q == \"a\\\"?b\"`), R-Co's quote-toggle scan sees the `?` as OUTSIDE the literal and rejects the condition as ternary (false), while Letflow's escape-aware regex sees it as INSIDE and evaluates the comparison normally -- an outcome difference, not an algorithm difference"
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-REQ111-20260819
+discovered_at: "2026-08-19T20:33:14Z"
+severity: MINOR
+tags:
+  - behavioural-divergence
+  - req-050
+  - req-111
+  - cel
+  - exclusive-gateway
+  - gateway-routing
+  - string-literal-boundary
+  - r-co-verification
+description: >
+  BEHAVIOURAL DIVERGENCE IN SHIPPED CODE, narrow but real, found during
+  REQ-111's audit of req050-exclusive-gateway-cel.md:490 against
+  `R-Co/src/engine/transition.zig:1210-1234`.
+
+  WHY THIS IS FILED RATHER THAN DISMISSED. req050:490 explicitly left the
+  DETECTION ALGORITHM (regex vs. hand-written scanner, and the mechanism by
+  which string-literal spans are tracked) to ELIXIR-DEV, and REQ-111's AC5
+  says an algorithm difference is not by itself a divergence. But AC5 draws
+  the line precisely here: the OUTCOME the mechanism produces -- whether a
+  literal `?` inside a quoted CEL string is detected as the ternary
+  operator -- IS boundary behaviour and IS in scope, and dismissing an
+  outcome difference as an algorithm difference would be a false negative
+  on gateway routing. This entry records an OUTCOME difference. The
+  mechanisms differ too, but that is not what is being reported.
+
+  THE COMMON CASE AGREES -- stated so this is not read as broader than it
+  is. For an ordinary literal question mark both engines classify the
+  condition as SUPPORTED and evaluate it:
+    variables.q == "what?"   -> Letflow supported, eval true (verified)
+    variables.q == 'what?'   -> Letflow supported, eval true (verified)
+    R-Co: `"` toggles in_double, the `?` is seen while in_double is true,
+    so the `?` branch at transition.zig:1230 does not fire.
+  And a genuine ternary is rejected by both:
+    variables.a ? 1 : 2      -> Letflow {:error, :unsupported_cel_feature}
+                                (verified); R-Co returns true from
+                                hasCelUnsupportedFeatures at :1230.
+  That is the main AC5 boundary and it MATCHES.
+
+  WHERE THEY DIVERGE. A string literal containing a BACKSLASH-ESCAPED
+  QUOTE followed by a `?`.
+
+  R-Co, `transition.zig:1224-1232`, tracks quote spans by simple toggling
+  with NO escape handling:
+      var in_double = false; var in_single = false;
+      for (expression) |c| {
+          if (c == '"' and !in_single) in_double = !in_double;
+          if (c == '\'' and !in_double) in_single = !in_single;
+          if (!in_double and !in_single and c == '?') return true;
+      }
+  For `variables.q == "a\"?b"` the opening `"` sets in_double true, then
+  the ESCAPED `\"`'s quote character toggles it back to false (the
+  preceding backslash is not consulted), so the following `?` is judged to
+  be outside any literal and the function returns true -- UNSUPPORTED.
+  `translateCelToExpr` returns null (:1165) and `evaluateGatewayCondition`
+  returns false (:1124).
+
+  Letflow, `lib/letflow/engine/expr.ex:163-171`, strips literal spans with
+  an escape-aware regex before looking for `?`:
+      Regex.replace(~r/"([^"\\]|\\.)*"/, cel, "\"\"")
+      Regex.replace(~r/'([^'\\]|\\.)*'/, cel, "''")
+  The `\\.` alternative consumes `\"` as one unit, so the whole literal
+  `"a\"?b"` is stripped, no `?` remains, and the condition is judged
+  SUPPORTED. Verified this run:
+    Expr.translate_cel_to_expr(~S|variables.q == "a\"?b"|)
+      => {:ok, "q == \"a\\\"?b\""}      # supported; R-Co: unsupported
+  With a matching value for `q` the comparison can therefore evaluate TRUE
+  in Letflow where R-Co would have short-circuited to FALSE -- a different
+  outgoing edge.
+
+  REACHABILITY CONFIRMED, not assumed.
+  `Letflow.Definitions.Graph.valid_cel_syntax?/1` admits it:
+    Graph.valid_cel_syntax?(~S|variables.q == "a\"?b"|)   => true
+    Graph.valid_cel_syntax?(~S|variables.q == 'it\'s?'|)  => true
+  The related UNTERMINATED-literal case (`variables.q == "x?`), where the
+  two engines also disagree (R-Co: in_double stays true, `?` treated as
+  inside, supported; Letflow: regex finds no complete literal, `?` remains,
+  unsupported), is NOT reachable -- `valid_cel_syntax?/1` returns false for
+  it (verified) because its balanced-string check rejects the definition
+  before it can reach the gateway. Recorded here for completeness so a
+  later fix does not treat it as live.
+
+  ASSESSMENT, stated plainly rather than hidden in a severity number.
+  Letflow's escape-aware handling is arguably the MORE correct of the two:
+  R-Co's toggle mis-parses any escaped quote, and a CEL author writing
+  `"a\"?b"` means a literal question mark, not a ternary. This issue is
+  filed because REQ-111's AC5 requires an outcome difference on this exact
+  boundary to be recorded as a divergence regardless of which side looks
+  better -- not because Letflow is presumed wrong. The fix decision is
+  therefore genuinely open, and is a decision, not a repair:
+    - ADOPT R-Co's semantics (drop escape awareness) for strict parity; or
+    - KEEP Letflow's semantics and record the deliberate divergence in
+      `req050-exclusive-gateway-cel.md` §4.4 plus a decision note, so a
+      future differential run does not re-flag it.
+  CODE-DESIGNER should choose explicitly. Do NOT let this be resolved by
+  silently changing `expr.ex` in either direction without recording which
+  semantic was chosen and why.
+
+  RELATIONSHIP TO THE OTHER TWO CEL FINDINGS. Independent root causes.
+  ISS-0085 is the `&&`/`||` spacing loss; ISS-0086 is the missing
+  `matches(` marker plus a non-total tokenizer. This one is the
+  string-literal span boundary. All three were found in the same audit of
+  the same two functions and should probably be fixed in one WF-03 pass,
+  but each needs its own fail-first regression test.
+
+  NOT FIXED HERE. REQ-111 is an audit and forbids any change to engine
+  behaviour; it routes behavioural findings through WF-03 instead. No
+  function body, guard, @spec or return value was altered by REQ-111's run.
+affected_files:
+  - lib/letflow/engine/expr.ex
+  - lib/letflow/design/req050-exclusive-gateway-cel.md
+r_co_sources:
+  - "R-Co/src/engine/transition.zig:1224-1232 (quote-toggle span scan, no escape handling)"
+  - "R-Co/src/engine/transition.zig:1230 (`?` outside any span => unsupported)"
+  - "R-Co/src/engine/transition.zig:1165 (translateCelToExpr returns null when unsupported)"
+  - "R-Co/src/engine/transition.zig:1124 (evaluateGatewayCondition `orelse return false`)"
+related:
+  - ISS-0085
+  - ISS-0086
+  - ISS-0076
+github_issue: https://github.com/tvolodi/letflow/issues/304
+status: open

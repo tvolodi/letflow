@@ -12,13 +12,18 @@ re-validates. Signatures and type shapes only — no implementation code, no fun
 `.ex`/`.exs` code block contains real logic (any fenced block below is a `@type`/`@spec` signature
 or a plain-English/pseudocode algorithm description, never a working function body).
 
-## 0. Sources read for this design, and the R-Co access gap
+## 0. Sources read for this design, and the R-Co access gap (CLOSED — see §0.1)
+
+> **⚠️ AUDITED BY REQ-111 — three behavioural divergences found. Read §0.1 before
+> trusting §4.3 or §4.4.** The R-Co source tree IS reachable and has now been read
+> directly. The rules below were originally taken second-hand from REQ-050's
+> requirement text; two of them are wrong in ways that change gateway routing.
 
 - This handoff's `context.requirement_text.REQ-050` (quoted in full where load-bearing — the
   requirement text itself already restates `evaluateGatewayCondition()`'s and
-  `translateCelToExpr()`'s literal rewrite/boundary rules verbatim, since R-Co source is not
-  reachable on this host per ORCH's explicit note below) and `task.acceptance_criteria` (8 items,
-  traced in §10).
+  `translateCelToExpr()`'s literal rewrite/boundary rules verbatim, which this design took as
+  its source of record for those rules rather than reading `transition.zig` itself) and
+  `task.acceptance_criteria` (8 items, traced in §10).
 - `docs/guides/backend_developer_guide.md` (full) — §3.5's `{:ok, _} | {:error, _}` convention,
   already followed by `transition/3`; this design does not diverge from it.
 - `docs/migration/stage-3-instance-engine.md` (full) — confirms "Gateway condition evaluation is
@@ -47,12 +52,44 @@ or a plain-English/pseudocode algorithm description, never a working function bo
   build-vs-adopt decision record is needed here (R-Co has a real reference implementation, not a
   stub, to port); confirmed by inspection — no decision file added by this design.
 
-**Access gap, stated explicitly per this handoff's own instruction, not silently worked around:**
-the R-Co checkout (`transition.zig`, `src/expr/`) is not present on this host. This design is
-built entirely from `context.requirement_text.REQ-050`'s own inline specification, which the
-handoff states already restates every rule needed (the four `translateCelToExpr` rewrites, the
-catch-false semantics, the unsupported-feature boundary) verbatim from the Zig source — the same
-class of gap REQ-044's design §0 flagged, resolved the same way REQ-044/063/064 were.
+**Access gap — CLOSED, and it was not harmless.** This section previously stated that the R-Co
+checkout (`transition.zig`, `src/expr/`) was not present on this host, and that the design was
+built entirely from `context.requirement_text.REQ-050`'s own inline restatement of the Zig
+rules. The checkout **is** present (`c:\Users\tvolo\dev\ai-dala\R-Co`), and REQ-111 has now
+read `src/engine/transition.zig` and `src/design/iss602_cel_expr_differential.md` directly.
+
+### 0.1 REQ-111 audit result — what the second-hand sourcing got wrong
+
+Sources actually read: `R-Co/src/engine/transition.zig:1118-1157`
+(`evaluateGatewayCondition`), `:1164-1205` (`translateCelToExpr`), `:1210-1241`
+(`hasCelUnsupportedFeatures` + `isCelIdentChar`), `R-Co/src/expr/lexer.zig:46-48`, and
+`R-Co/src/design/iss602_cel_expr_differential.md:236-278`.
+
+| Location | Disposition | Detail |
+|---|---|---|
+| §4.3 rule 1 — strip `variables.` | `confirmed` | `transition.zig:1171-1174` |
+| §4.3 rule 2 — `&&` → `and` | **`divergent_behavioural`** | R-Co emits **`" and "`** with spaces (`transition.zig:1177`); this design's table shows `and` and only spaced examples. See **ISS-0085** / GH#302. |
+| §4.3 rule 3 — `\|\|` → `or` | **`divergent_behavioural`** | R-Co emits **`" or "`** with spaces (`transition.zig:1183`). Same issue, **ISS-0085**. |
+| §4.3 rule 4 — `!` → `not `, `!=` intact | `confirmed` | `transition.zig:1188-1197` — R-Co's `"not "` trailing space is reproduced correctly here |
+| §4.2 step 1 — detect on the untranslated string, before any rewrite | `confirmed` | `transition.zig:1165` (`if (hasCelUnsupportedFeatures(...)) return null;`, first statement) |
+| §5.2 — uniform catch-false over translate/parse/eval | `confirmed` | `transition.zig:1124`, `:1128`, `:1150-1156` (non-bool result → `false`) |
+| §4.4 — macros | `divergent_doc_only` | Marker sets differ both ways (`transition.zig:1211`, `:1215`); all differences funnel to `false` via catch-false — **except `matches(`**, see §9.1 |
+| §4.4 — type-conversion functions | `divergent_doc_only` | R-Co lists only `int(`/`string(`/`double(` (`transition.zig:1215`) |
+| §4.4 — collection functions | `divergent_doc_only` | R-Co uses method-form `.size(`/`.map(` and adds `map{` literals (`transition.zig:1211`, `:1223`); it has **no `in` check** — but `in` is not an expr keyword (`R-Co/src/expr/lexer.zig:46-48` defines only `and`/`or`/`not`), so it fails to parse and still yields `false` |
+| §4.4 — ternary | **`divergent_behavioural`** | The main case agrees (a literal `?` inside a quoted string is NOT treated as ternary, both sides). The escaped-quote case does not — see §9.1 and **ISS-0087** / GH#304. |
+
+**Rolled-up disposition for §4.3's rules and §4.2/§5.2's boundary rules:
+`divergent_behavioural`** (most severe of the per-rule dispositions).
+
+Note this design's §4.3 already reasons that "rule ordering within the 4 does not observably
+matter" because the rules touch disjoint token shapes. That reasoning is sound and survives the
+audit — it is simply orthogonal to the spacing question, which the design never raised. R-Co
+applies all four in a **single left-to-right pass** (`transition.zig:1168-1200`) rather than as
+four sequential whole-string replacements, which is an implementation difference with no
+observable effect once the spacing is corrected.
+
+Per REQ-111 this audit records findings and changes **no** engine behaviour; the divergences are
+routed through WF-03 via the issues cited above, not repaired here.
 
 ## 1. What is being replaced
 
@@ -478,17 +515,61 @@ guarantee, per this handoff's instruction to match REQ-044's own moduledoc patte
 
 ## 9. Open questions — not resolved here
 
-### 9.1 Unsupported-feature detection mechanism — reasoned default, not verified against source
+### 9.1 Unsupported-feature detection — VERIFIED against source by REQ-111
 
-§4.4's "fixed marker list + string-literal-aware `?` scan" is this design's own reasonable
+§4.4's "fixed marker list + string-literal-aware `?` scan" was this design's own reasonable
 implementation strategy for `hasCelUnsupportedFeatures()`'s boundary, reconstructed from the
 requirement text's enumeration of the 4 unsupported categories (macros, type-conversion functions,
 collection functions, ternary). The exact detection algorithm (regex vs. hand-written scanner, and
 precisely how string-literal spans are tracked so a literal `?` inside a quoted CEL string value is
-never mistaken for the ternary operator) is left to ELIXIR-DEV, not pinned by this design — not
-verified against `transition.zig`'s literal `hasCelUnsupportedFeatures()` source (§0's access gap).
-Flagged for REVIEWER/RELEASE-VALIDATOR re-check if R-Co source access becomes available, matching
-REQ-044/029's own precedent for similarly-reconstructed algorithms.
+never mistaken for the ternary operator) was left to ELIXIR-DEV, not pinned by this design.
+
+**This section asked to be re-checked once R-Co source access became available. REQ-111 has now
+done so, reading `R-Co/src/engine/transition.zig:1210-1241` directly.** Rolled-up disposition:
+**`divergent_behavioural`**. Per-category dispositions are tabulated in §0.1; what follows is
+what the source actually says and which parts matter.
+
+**R-Co's actual detection**, `transition.zig:1210-1234`, in four steps:
+
+1. `:1211` — method-form markers, plain substring, no boundary guard:
+   `{ ".all(", ".exists(", ".size(", ".map(" }`.
+2. `:1215-1222` — standalone markers `{ "has(", "matches(", "int(", "string(", "double(" }`,
+   each scanned with an **identifier-boundary guard**: `if (idx == 0 or
+   !isCelIdentChar(expression[idx - 1])) return true` (`isCelIdentChar` at `:1236-1241`), so
+   `recall(` does not trip an `all(`-shaped marker.
+3. `:1223` — map literals, `map{`.
+4. `:1224-1232` — ternary: a `?` seen while outside every quoted span, where spans are tracked
+   by a simple `in_double`/`in_single` toggle **with no backslash-escape handling**.
+
+**The algorithm difference is NOT the finding.** §4.4's marker-list-plus-regex strategy and
+R-Co's hand-written scan are different mechanisms, and this design deliberately left the
+mechanism open — that difference is out of scope and is not recorded as a divergence. Two
+*outcome* differences are in scope:
+
+**(a) `matches(` is absent from Letflow's marker list, and it does not fail safe.** Most
+marker-set differences are harmless: an unlisted construct survives translation, then fails to
+parse, and §5.2's catch-false folds it to `false` — the same answer R-Co reaches by rejecting it
+earlier. That holds for every difference in both directions **except** `matches(`, whose
+`ident.ident(` shape reaches an unhandled clause in the shipped tokenizer and **raises
+`CaseClauseError`** instead of returning `false`. That breaks §4.7's own "always-boolean,
+never-`{:error, _}`" contract and propagates out of `Transition.transition/3`, which calls
+`evaluate_condition/2` unguarded. R-Co returns `false` here (`transition.zig:1215` → `:1165` →
+`:1124`). See **ISS-0086** / GH#303 — which also covers making the tokenizer total, the more
+important half of the fix.
+
+**(b) The string-literal span boundary differs in outcome on escaped quotes.** The case this
+section names explicitly — a literal `?` inside a quoted CEL string must not be mistaken for the
+ternary operator — **is handled correctly and agrees with R-Co** for ordinary literals
+(`variables.q == "what?"` is supported by both), and a genuine ternary is rejected by both. But
+for a literal containing a backslash-escaped quote followed by `?` (`variables.q == "a\"?b"`),
+R-Co's toggle has no escape handling, sees the `?` as outside the literal, and rejects the
+condition as ternary; Letflow's escape-aware regex sees it as inside and evaluates the
+comparison. This is an outcome difference on exactly the boundary this section flags, so it is
+recorded as a divergence rather than dismissed as a mechanism difference — even though
+Letflow's behaviour is arguably the more correct of the two. See **ISS-0087** / GH#304, which
+leaves the parity-vs-correctness choice explicitly open for the fix design.
+
+Per REQ-111 this audit changes no engine behaviour; both findings are routed through WF-03.
 
 ### 9.2 `{:error, :translate_error}` — this design's own defensive addition, not a literal AC
 

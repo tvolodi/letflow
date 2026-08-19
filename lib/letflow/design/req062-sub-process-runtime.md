@@ -8,11 +8,28 @@ creation), the `sub_process_start` pending event, the parent-token wait
 completion, and the four SPC-01 failure modes routed through REQ-061's
 `Letflow.Engine.ExecutionError` path.
 
-**No R-Co source tree is reachable in this environment.** Every citation to
-`instance.zig`/`transition.zig` line numbers below is taken verbatim from
-this run's own handoff text (which the requirement author verified directly
-against those files); this design reasons from that text plus the already-
-shipped Letflow code, not from a second independent read of R-Co.
+**The R-Co source tree IS reachable** (`c:\Users\tvolo\dev\ai-dala\R-Co`),
+and this disclaimer previously said it was not. REQ-111 audited that claim
+and established that **this document makes no R-Co line citations at all**,
+so the disclaimer guarded nothing. Measured by REQ-111:
+
+```bash
+grep -oE "(instance|transition)\.zig:[0-9]+" lib/letflow/design/req062-sub-process-runtime.md
+# no matches; likewise for any `*.zig:N` pattern
+```
+
+`instance.zig` and `transition.zig` are named in prose only (lines 3, 4 and
+12 above). The 55 `file:line` citations this document does carry all point
+at **Letflow** files (`sub_process.ex`, `engine.ex`, `execution_error.ex`,
+`task_activation.ex`, `transition.ex`, `token.ex`, `reconstruction.ex`,
+`service_task.ex`, `plugin_interface.ex` and several `_test.exs`) — note
+that `transition.ex` and `transition.zig` differ by one character and are
+different trees. Those citations are Letflow-internal and were never in
+this disclaimer's scope.
+
+What the disclaimer *did* correctly flag is §9's OQ-1, a substantive
+assumption rather than a citation. REQ-111 resolved it against the real
+source — see OQ-1 for the finding.
 
 ## 0. Scope boundary (stated up front, restated in the eventual moduledoc)
 
@@ -670,20 +687,56 @@ resolve fresh," which is REQ-059's own concern to state, not this one's.
   anywhere in the shipped codebase.** Neither `Letflow.Definitions.Graph`'s
   node-attribute validators (CHK-09..19) nor `SubProcessInterface` name or
   validate any "which definition does this child run" attribute — only the
-  optional `interface` attribute is validated today. This design assumes
-  (but does **not** verify against unreachable R-Co source) a
+  optional `interface` attribute is validated today. This design assumed a
   `node.attributes["definition_name"]` string attribute, resolved via
   `Letflow.Definitions.get_active_by_name/2` — the one definition-resolution
   convention already established (`Engine.create/2`'s own
-  `attrs[:definition_name]` path), chosen purely for internal consistency.
-  **This is a guess, flagged as such, not a verified port.** If the real
-  R-Co attribute name/shape differs (e.g. a `definition_id` reference, or a
-  nested object), ELIXIR-DEV/REVIEWER must correct this design's §3.3 before
-  implementing against it — do not silently build against this assumption
-  without re-confirming. No structural graph validator (CHK-09..19) checks
-  this attribute's presence/shape at definition time either — §3.2.3's
-  defensive `SUB_PROCESS_DEFINITION_NOT_FOUND` code exists because of this
-  gap, not despite it.
+  `attrs[:definition_name]` path), chosen purely for internal consistency,
+  and flagged at the time as a guess rather than a verified port.
+
+  **RESOLVED BY REQ-111 against the real R-Co source — disposition:
+  `divergent_doc_only`.** R-Co keys a child definition on a different
+  attribute, with a different resolution mechanism:
+
+  * `R-Co/src/engine/transition.zig:1903` — the SUB_PROCESS node's
+    `attributes` JSON is parsed for the key **`child_definition_id`**:
+    `parsed.value.object.get("child_definition_id") orelse return
+    error.InvalidSubProcessConfig`. `:1904` requires it to be a non-empty
+    string. The attribute is therefore **mandatory** in R-Co, not optional.
+  * `R-Co/src/engine/transition.zig:1448` — that value is carried onto the
+    `sub_process_start` event as `.child_definition_id`.
+  * `R-Co/src/engine/instance.zig:4681` — the consumer parses it as a
+    **UUID** (`parseUuid(sp.child_definition_id)`), and `:4707-4712` passes
+    it straight to `createWithParentInheritance(... child_definition_id
+    ...)`. It is a definition **id**, never a name.
+
+  So the guess was wrong on the attribute name (`definition_name` vs.
+  `child_definition_id`), on its type (name string vs. UUID), and on its
+  optionality (unvalidated vs. mandatory).
+
+  **Why this is documentation-only and NOT a behavioural issue.** Shipped
+  Letflow behaviour is internally consistent and defensible: the graph
+  schema here is Letflow's own, no validator or requirement mandates either
+  attribute, and reusing `Engine.create/2`'s established
+  `definition_name` + `get_active_by_name/2` path is a coherent choice.
+  Nothing in Letflow is *incorrect* relative to a Letflow specification, so
+  REQ-111 recorded the difference here rather than filing an issue.
+
+  **One semantic consequence worth stating explicitly**, since it is a real
+  design difference and not merely a naming one: R-Co pins the exact child
+  definition version at design time (an immutable UUID — early binding),
+  whereas Letflow resolves *whichever version is currently active* at
+  activation time (`get_active_by_name/2` — late binding). Publishing a new
+  version of a child definition therefore changes what already-deployed
+  parent definitions launch, in Letflow but not in R-Co. That is a
+  legitimate product decision either way; it is flagged here so a later
+  stage chooses it deliberately rather than inheriting it by accident.
+
+  No structural graph validator (CHK-09..19) checks this attribute's
+  presence/shape at definition time — §3.2.3's defensive
+  `SUB_PROCESS_DEFINITION_NOT_FOUND` code exists because of that gap, not
+  despite it. R-Co closes the equivalent gap at `transition.zig:1903-1904`
+  by rejecting the config outright.
 * **OQ-2 — Should the parent's own registered variable-type schemas
   (`Letflow.EventStore.Registry`, the schemas `complete_task/3`'s
   `variable_validations` argument checks) also apply to a sub-process

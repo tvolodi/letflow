@@ -1,0 +1,141 @@
+id: ISS-0086
+title: "Expr.evaluate_condition/2 RAISES CaseClauseError on a CEL method-call condition (`variables.s.matches(\"a\")`) instead of returning false: R-Co's hasCelUnsupportedFeatures detects `matches(` and short-circuits to false, but Letflow's marker list omits it, so the string reaches the tokenizer and crashes gateway dispatch -- violating the function's own `:: boolean()` totality contract"
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-REQ111-20260819
+discovered_at: "2026-08-19T20:33:14Z"
+severity: MAJOR
+tags:
+  - behavioural-divergence
+  - crash
+  - totality-violation
+  - req-050
+  - req-111
+  - cel
+  - exclusive-gateway
+  - gateway-routing
+  - r-co-verification
+description: >
+  BEHAVIOURAL DIVERGENCE IN SHIPPED CODE plus a totality violation, found
+  by direct source comparison during REQ-111's audit of
+  req050-exclusive-gateway-cel.md:490's `hasCelUnsupportedFeatures()`
+  reconstruction against the real R-Co source. Not a docs defect.
+
+  WHAT R-Co DOES. `R-Co/src/engine/transition.zig:1215` declares
+  `const standalone_features = [_][]const u8{ "has(", "matches(", "int(",
+  "string(", "double(" };` and `:1216-1222` scans for each with an
+  identifier-boundary guard: `if (idx == 0 or
+  !isCelIdentChar(expression[idx - 1])) return true`. For the condition
+  `variables.s.matches("a")` the character preceding `matches(` is `.`,
+  which `isCelIdentChar` (`:1236-1241`) reports false for, so the guard
+  passes and the function returns true. `translateCelToExpr` then returns
+  null at `:1165`, and `evaluateGatewayCondition` returns false at `:1124`
+  (`orelse return false`). R-Co routes the gateway on a false condition and
+  the instance continues.
+
+  WHAT LETFLOW DOES. `lib/letflow/engine/expr.ex:59-75`'s
+  `@unsupported_call_markers` list contains `has(`, `all(`, `exists_one(`,
+  `exists(`, `int(`, `uint(`, `double(`, `string(`, `bool(`, `bytes(`,
+  `duration(`, `timestamp(`, `size(`, `map(`, `filter(` -- and NOT
+  `matches(`. The condition is therefore classified supported, the rewrite
+  rules run, and the resulting expr source `s.matches("a")` is handed to
+  `parse/1`, whose tokenizer has no case for a method-call shape and
+  raises.
+
+  REPRODUCED THIS RUN against shipped code:
+
+    Expr.translate_cel_to_expr(~S|variables.s.matches("a")|)
+      => {:ok, "s.matches(\"a\")"}
+    Expr.evaluate_condition(~S|variables.s.matches("a")|, %{"s" => "y"})
+      => ** (CaseClauseError) no case clause matching: ["s.matches", ".matches"]
+           (letflow) lib/letflow/engine/expr.ex:237: Expr.do_tokenize/2
+           (letflow) lib/letflow/engine/expr.ex:183: Expr.parse/1
+           (letflow) lib/letflow/engine/expr.ex:435: Expr.evaluate_condition/2
+
+  TWO DEFECTS, ONE ROOT CAUSE.
+
+  (1) The marker-set gap itself: R-Co treats `matches(` as unsupported,
+  Letflow does not. On its own this would be harmless -- REQ-111's audit
+  found several marker-set differences in both directions (R-Co lacks
+  `uint(`/`bool(`/`bytes(`/`duration(`/`timestamp(`/`filter(`/`exists_one(`;
+  Letflow lacks `matches(`/`map{`) and every other one funnels to the same
+  `false` through design doc §5.2's catch-false composition, because an
+  unrecognised construct that survives translation then fails to parse.
+  Those are documentation-level differences only.
+
+  (2) `matches(` is the one that does NOT funnel, because the specific
+  shape it produces (`ident.ident(`) hits an unhandled clause in
+  `do_tokenize/2` rather than a parse error. `evaluate_condition/2` is
+  specified as total: its `@spec` is `:: boolean()` and
+  req050-exclusive-gateway-cel.md §4.7 calls it "the composed,
+  always-boolean, never-`{:error, _}` entry point", with §5.2 stating one
+  uniform catch-false rule for every stage's failure. A raise breaks that
+  contract.
+
+  BLAST RADIUS. `lib/letflow/engine/transition.ex:579` calls
+  `Expr.evaluate_condition(edge.condition, variables)` inside
+  `evaluate_conditioned_edges/3` with no rescue, so the CaseClauseError
+  propagates out of `Letflow.Engine.Transition.transition/3` into the
+  engine. This is not a wrong-edge routing bug like ISS-0085; it is an
+  unhandled exception on a structurally valid definition.
+
+  REACHABILITY CONFIRMED, not assumed.
+  `Letflow.Definitions.Graph.valid_cel_syntax?/1`
+  (`lib/letflow/definitions/graph.ex:365-375`) is purely structural
+  (balanced brackets, balanced strings, no bare leading/trailing operator).
+  Run this run:
+    Graph.valid_cel_syntax?(~S|variables.s.matches("a")|) => true
+  So such an edge condition is accepted at definition time and reaches the
+  gateway.
+
+  WHY NO TEST CAUGHT IT. The existing suite exercises the marker list's own
+  members and well-formed supported expressions; no test supplies a CEL
+  method-call whose function name is absent from the marker list. More
+  generally, `parse/1`'s tokenizer is not total over arbitrary strings, and
+  nothing tests `evaluate_condition/2` against input that survives
+  translation but is not in the expr grammar.
+
+  WHAT A FIX NEEDS TO CHANGE (for CODE-DESIGNER, not applied here). Two
+  independent changes, and the second matters more than the first:
+    (a) Add `matches(` to `@unsupported_call_markers` (`expr.ex:59-75`) so
+        the category set matches `transition.zig:1215`. Consider `map{`
+        (`transition.zig:1223`, map literals) at the same time.
+    (b) Make `evaluate_condition/2` genuinely total, so ANY input that
+        survives translation but is outside the expr grammar yields `false`
+        rather than raising. Adding a marker fixes one string; making the
+        tokenizer total fixes the class. `do_tokenize/2`'s unmatched shapes
+        should return `{:error, reason}` rather than falling off a `case`.
+        Note that (b) alone resolves the crash even without (a), and (a)
+        alone leaves the tokenizer non-total for the next unlisted
+        construct.
+  Whether to adopt R-Co's identifier-boundary guard
+  (`isCelIdentChar`, `transition.zig:1219`, which prevents `recall(` from
+  matching an `all(` marker) is a fix-design question, not a defect --
+  REQ-111 dispositioned that difference as documentation-only because both
+  engines reach `false` for such input.
+
+  REGRESSION TEST (for TEST-DESIGNER). Fail-first:
+  `Expr.evaluate_condition(~S|variables.s.matches("a")|, %{"s" => "y"})`
+  must return `false`; against pre-fix code it raises CaseClauseError.
+  Add a property or table test asserting `evaluate_condition/2` returns a
+  boolean and never raises across a corpus of malformed/out-of-grammar
+  conditions, which is what actually enforces the `:: boolean()` contract.
+
+  NOT FIXED HERE. REQ-111 is an audit and forbids any change to engine
+  behaviour; it routes behavioural findings through WF-03 instead. No
+  function body, guard, @spec or return value was altered by REQ-111's run.
+affected_files:
+  - lib/letflow/engine/expr.ex
+  - lib/letflow/engine/transition.ex
+  - lib/letflow/design/req050-exclusive-gateway-cel.md
+r_co_sources:
+  - "R-Co/src/engine/transition.zig:1215 (standalone_features includes `matches(`)"
+  - "R-Co/src/engine/transition.zig:1216-1222 (ident-boundary-guarded scan)"
+  - "R-Co/src/engine/transition.zig:1236-1241 (isCelIdentChar)"
+  - "R-Co/src/engine/transition.zig:1165 (translateCelToExpr returns null when unsupported)"
+  - "R-Co/src/engine/transition.zig:1124 (evaluateGatewayCondition `orelse return false`)"
+related:
+  - ISS-0085
+  - ISS-0087
+  - ISS-0076
+github_issue: https://github.com/tvolodi/letflow/issues/303
+status: open

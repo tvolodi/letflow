@@ -1,0 +1,118 @@
+id: ISS-0085
+title: "Expr.translate_cel_to_expr/1 rewrites `&&`/`||` to `and`/`or` WITHOUT the surrounding spaces R-Co emits, so whitespace-free CEL (`variables.a&&variables.b`) fuses into a single identifier `aandb` and the gateway condition silently evaluates false -- routing the token down the wrong outgoing edge"
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-REQ111-20260819
+discovered_at: "2026-08-19T20:33:14Z"
+severity: MAJOR
+tags:
+  - behavioural-divergence
+  - req-050
+  - req-111
+  - cel
+  - exclusive-gateway
+  - gateway-routing
+  - r-co-verification
+description: >
+  BEHAVIOURAL DIVERGENCE IN SHIPPED CODE, found by direct source comparison
+  during REQ-111's audit of req050-exclusive-gateway-cel.md:19's rewrite
+  rules against the real R-Co source. Not a docs defect.
+
+  R-Co's `translateCelToExpr()` emits the word operators WITH SURROUNDING
+  SPACES. `R-Co/src/engine/transition.zig:1177` reads
+  `result.appendSlice(allocator, " and ")` and `:1183` reads
+  `result.appendSlice(allocator, " or ")` -- note the leading and trailing
+  space inside each string literal. This is load-bearing, not cosmetic: CEL
+  does not require whitespace around `&&`/`||`, so the spaces are what
+  guarantee the resulting expr source still has token boundaries where the
+  C-style operator supplied them.
+
+  Letflow drops both spaces. `lib/letflow/engine/expr.ex:106` reads
+  `|> String.replace("&&", "and")` and `:107` reads
+  `|> String.replace("||", "or")`.
+
+  CONSEQUENCE, reproduced this run against shipped code:
+
+    Expr.translate_cel_to_expr("variables.a&&variables.b")
+      => {:ok, "aandb"}                      # one identifier, not `a and b`
+    Expr.evaluate_condition("variables.a&&variables.b", %{"a" => true, "b" => true})
+      => false
+
+    R-Co, same input, transition.zig:1164-1205 traced by hand:
+      "variables." stripped (i += 10) -> 'a' -> " and " -> "variables."
+      stripped -> 'b'  ==>  "a and b"  ==> parses, evaluates TRUE.
+
+  Spaced input is unaffected (`variables.a && variables.b` ->
+  `{:ok, "a and b"}` -> true), which is why every existing test passes: the
+  suite only ever exercises spaced CEL. The unspaced form produces a
+  well-formed expr string that parses successfully as a bare variable
+  reference `aandb`, so there is no parse error and no crash -- it resolves
+  to an undefined variable, becomes an eval error, and is folded into
+  design doc §5.2's catch-false composition as a plain `false`. The failure
+  is therefore completely silent.
+
+  A `false` on an exclusive gateway edge does not stop the instance; it
+  moves the token to the NEXT edge in declared order, or to the default
+  edge. So the observable effect is a token routed down the wrong branch,
+  which is precisely the class of error REQ-111 states Letflow's own test
+  suite cannot catch (the tests assert Letflow's semantics and would agree
+  with the wrong rule as readily as the right one).
+
+  REACHABILITY CONFIRMED, not assumed. Definition-time validation admits
+  the unspaced form: `Letflow.Definitions.Graph.valid_cel_syntax?/1`
+  (`lib/letflow/definitions/graph.ex:365-375`) is a purely STRUCTURAL check
+  -- balanced brackets, balanced string literals, no bare leading/trailing
+  operator. Run this run:
+    Graph.valid_cel_syntax?("variables.a&&variables.b") => true
+    Graph.valid_cel_syntax?("variables.a||variables.b") => true
+  So a definition carrying such an edge condition is accepted and reaches
+  `Expr.evaluate_condition/2` via `lib/letflow/engine/transition.ex:579`.
+
+  ROOT CAUSE. `req050-exclusive-gateway-cel.md` §4.3's rule table (rows 2
+  and 3) renders the rewrites as "`&&` -> `and`" and "`||` -> `or`" and
+  illustrates each only with an already-spaced example
+  (`variables.a && variables.b` -> `a and b`), from which the space
+  requirement is invisible. §4.3 also asserts the 4 rules "touch disjoint
+  token shapes ... so this design does not mandate one fixed application
+  order" -- true, but orthogonal to the spacing question, which the design
+  never raises. The design derived these rules from REQ-050's requirement
+  text rather than from `transition.zig`, per its own §0 access-gap note
+  (line 19) -- exactly the second-hand sourcing REQ-111 exists to replace.
+
+  Contrast rule 4, which R-Co writes as `"not "` with a trailing space
+  (`transition.zig:1194`) and which Letflow DOES reproduce faithfully
+  (`expr.ex:134`, `Regex.replace(~r/!(?!=)/, expr_source, "not ")`) --
+  the trailing space is present there. Only rules 2 and 3 lost it.
+
+  WHAT A FIX NEEDS TO CHANGE (for CODE-DESIGNER, not applied here).
+  `expr.ex:106-107` must emit `" and "` / `" or "` rather than `"and"` /
+  `"or"`, matching `transition.zig:1177`/`:1183`. Note the resulting expr
+  source may then contain doubled spaces for already-spaced input
+  (`a  and  b`); R-Co has the same property and its lexer skips whitespace,
+  as does Letflow's `do_tokenize/2` (`expr.ex:202-204`), so this is
+  harmless -- but it should be stated explicitly in the fix design rather
+  than discovered later. `req050-exclusive-gateway-cel.md` §4.3's rule
+  table also needs rows 2 and 3 restated with the spaces and an unspaced
+  example, so the next reader cannot re-derive the same gap.
+
+  REGRESSION TEST (for TEST-DESIGNER). The fail-first test is
+  `evaluate_condition("variables.a&&variables.b", %{"a" => true, "b" => true})`
+  asserting `true`; it returns `false` against pre-fix code. Same shape for
+  `||`. Cover the mixed case `variables.a&&variables.b || variables.c` too.
+
+  NOT FIXED HERE. REQ-111 is an audit and forbids any change to engine
+  behaviour; it routes behavioural findings through WF-03 instead. No
+  function body, guard, @spec or return value was altered by REQ-111's run.
+affected_files:
+  - lib/letflow/engine/expr.ex
+  - lib/letflow/design/req050-exclusive-gateway-cel.md
+r_co_sources:
+  - "R-Co/src/engine/transition.zig:1177 (` and ` -- spaces included)"
+  - "R-Co/src/engine/transition.zig:1183 (` or ` -- spaces included)"
+  - "R-Co/src/engine/transition.zig:1164-1205 (translateCelToExpr, full single-pass loop)"
+  - "R-Co/src/engine/transition.zig:1194 (`not ` -- the rule Letflow DID reproduce correctly)"
+related:
+  - ISS-0086
+  - ISS-0087
+  - ISS-0076
+github_issue: https://github.com/tvolodi/letflow/issues/302
+status: open

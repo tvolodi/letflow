@@ -1,0 +1,63 @@
+{
+  "handoff_id": "8f1e6b1a-1a2d-4a3e-9b0a-000000000003",
+  "run_id": "WF02-REQ058-20260818",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ058-20260818/step-02a-elixir-dev.json",
+  "created_at": "2026-08-18T23:57:57Z",
+  "started_at": "2026-08-19T00:00:51Z",
+  "completed_at": "2026-08-19T00:02:19Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-058"],
+    "requirement_text": {
+      "REQ-058": "See handoffs/WF02-REQ058-20260818/step-01-code-designer.json context.requirement_text for full text -- Lua script execution audit persistence path, MINIMAL narrow injectable-executor audit path, S3/S5 scope boundary, manifest-hash-mismatch as distinct error, instance_id validated before executor invocation."
+    },
+    "related_handoff_ids": ["step-01-code-designer.json", "step-01b-code-design-validator.json"],
+    "artifacts_in": ["lib/letflow/design/req058-lua-script-audit.md"],
+    "owned_modules": ["lib/letflow/engine/lua_script_audit.ex", "priv/repo/migrations/*lua_script_execution_audit*"]
+  },
+  "task": {
+    "description": "On branch feature/WF02-REQ058-20260818 (already checked out -- verify with git branch --show-current, STOP if not on it). Implement lib/letflow/design/req058-lua-script-audit.md exactly: the LuaScriptAudit Ecto schema, the migration (schema-per-tenant per REQ-022's :prefix convention -- follow the existing precedent migration the design cites), the Executor @behaviour, and Letflow.Engine.LuaScriptAudit.execute_script_for_audit/6 with the validated-before-invoke ordering, the manifest-hash-mismatch tagged error, and the moduledoc's verbatim-in-substance narrowness statement plus S5-deferred scope note. Do NOT add any Lua/NIF dependency to mix.exs. Run: mix compile --warnings-as-errors, mix ecto.migrate against the test DB (or Docker fallback per docs/anti-patterns.md if no local toolchain), mix format --check-formatted. Run the Step 2a self-review checklist from WF-02 (no string interpolation of tenant/user input into raw SQL, no unresolved {:ok,_}= on external-I/O path, new public functions have @doc, all call sites still compile).",
+    "acceptance_criteria": [
+      "priv/repo/migrations gains a lua_script_execution_audit migration, schema-per-tenant per REQ-022, applying cleanly against a provisioned tenant schema",
+      "execute_script_for_audit with a test-double executor writes exactly one audit row carrying instance_id, manifest_hash, actor_id and a timestamp, verified by reading the row back",
+      "an unparseable or absent instance_id is rejected BEFORE the injected executor is invoked, demonstrated by a test-double that records whether it was called at all",
+      "a manifest hash differing from the supplied registered_hash returns a distinct, pattern-matchable mismatch error and writes no audit row",
+      "mix.exs gains no Lua/NIF dependency, and the moduledoc states that the Lua execution runtime is S5 scope pending stage-5-scripting-plugins.md's build-vs-bind decision record",
+      "the moduledoc carries R-Co's own narrowness statement in substance: this is not the SERVICE_TASK script-execution handler, must not be called from normal process-execution flow, and will be superseded (not extended) by the real scripting integration when it lands",
+      "mix compile --warnings-as-errors exits 0",
+      "all migrations apply cleanly against a fresh DB",
+      "no SQL string interpolation of tenant/user data",
+      "all callers of any changed function signature compile"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented per lib/letflow/design/req058-lua-script-audit.md exactly: Letflow.Engine.LuaScriptAudit (lib/letflow/engine/lua_script_audit.ex) with nested AuditRecord Ecto.Schema (id/instance_id/manifest_hash/actor_id/executed_at + timestamps, no tenant_id per Decision 0006 D2) and Executor @behaviour (one @callback execute_with_manifest/2, opaque script_ref type), plus execute_script_for_audit/6 with strict validate-instance_id-before-executor-invocation ordering and a distinct {:manifest_hash_mismatch, registered_hash, actual_hash} error. Migration priv/repo/migrations/20260820000011_create_lua_script_execution_audit.exs (schema-per-tenant `if prefix() do` guard, matching 20260818090001_create_promotion_assertion_runs.exs precedent) plus required lib/letflow/tenant_provisioning.ex @tenant_scoped_migration_manifest registration (not in owned_modules but a hard AC1 prerequisite per design §0/§6.3). Moduledoc carries both required blocks verbatim-in-substance (narrowness statement: not the SERVICE_TASK handler, must not be called from normal process-execution flow, superseded not extended; S5-deferred scope note naming stage-5-scripting-plugins.md's build-vs-bind decision). mix.exs untouched -- no Lua/NIF dependency added (grep for lua/Lua/NIF/rustler/luerl in mix.exs returned no matches).\n\nVerification commands and real output:\n1. `mix compile --warnings-as-errors` -> 'Compiling 2 files (.ex)' / 'Generated letflow app', exit 0, zero warnings.\n2. `mix format --check-formatted lib/letflow/engine/lua_script_audit.ex lib/letflow/tenant_provisioning.ex priv/repo/migrations/20260820000011_create_lua_script_execution_audit.exs` -> no output (all three formatted; the repo-wide `mix format --check-formatted` shows unrelated pre-existing diffs in transition.ex/graph_test.exs/sandbox_pool_test.exs not touched by this change).\n3. `MIX_ENV=test MIX_TEST_PARTITION=req058audit mix ecto.migrate` initially failed with `** (Ecto.MigrationError) migrations can't be executed, migration version 20260819000001 is duplicated` -- confirmed via `git stash` that this is a PRE-EXISTING bug on main (both priv/repo/migrations/20260819000001_create_groups_tenant_scoped.exs (PR #177) and priv/repo/migrations/20260819000001_drop_transition_events.exs (PR #199) already share this timestamp on main, unrelated to REQ-058, not in owned_modules -- flagged below rather than silently fixed). Worked around it for verification ONLY by temporarily moving 20260819000001_drop_transition_events.exs out of priv/repo/migrations/ (never committed, restored immediately after): `mix ecto.migrate` then ran clean through '== Migrated 20260820000011 in 0.0s', confirming this migration itself applies cleanly. File was moved back before continuing; `git status --short priv/repo/migrations/` after restore shows only the new migration as untracked, no residual diff.\n4. End-to-end empirical verification via `mix run -e` against real Postgres (test DB, partition req058audit): inserted a real Tenant, called `TenantProvisioning.provision_tenant_schema/1` + `replay_migrations/1` (28 versions applied including 20260820000011), then exercised all three ACs with test-double Executor modules: AC2 -- `execute_script_for_audit/6` with a matching-hash double returned `{:ok, %AuditRecord{instance_id: ..., manifest_hash: \"hash-abc\", actor_id: ...}}`, independently read back via `Repo.get/3` with identical field values, `Repo.aggregate(:count)` == 1. AC3 -- called with `instance_id: nil` and `instance_id: \"not-a-uuid\"` against a call-recording double (`send(self(), :executor_called)`); both returned `{:error, :invalid_instance_id}` and `receive after 0` confirmed zero `:executor_called` messages (executor never invoked). AC4 -- a double returning `manifest_hash: \"actual-hash\"` against `registered_hash: \"different-hash\"` returned exactly `{:error, {:manifest_hash_mismatch, \"different-hash\", \"actual-hash\"}}` and row count stayed unchanged (no audit row written). Scratch DB dropped afterward (`mix ecto.drop`), `git status --short` clean of scratch artifacts.\n\nSelf-review checklist: no string interpolation of tenant/user input into raw SQL anywhere in the new files (migration uses only `prefix()`, no `#{}` inside SQL text; the one raw-SQL identifier interpolation project-wide, in tenant_provisioning.ex's CREATE SCHEMA, predates this change and is unmodified). No unresolved `{:ok, _} =` on an externally-reachable I/O path -- `executor.execute_with_manifest/2`'s and `Repo.insert/2`'s results are both fully `case`-matched with explicit error branches. Every new public function (`execute_script_for_audit/6`, `AuditRecord.insert_changeset/2`) carries a one-line-plus @doc. No existing function signature changed -- the only edit to an unowned file was a pure data-list append (tenant_provisioning.ex's @tenant_scoped_migration_manifest), not a signature change; `mix compile --warnings-as-errors` confirms every caller still compiles.\n\nISSUE FLAGGED, not fixed here (out of owned_modules, pre-existing on main before this branch): priv/repo/migrations/20260819000001_create_groups_tenant_scoped.exs and priv/repo/migrations/20260819000001_drop_transition_events.exs share the same version number 20260819000001, which makes any `mix ecto.migrate` against a fresh/from-scratch DB fail with Ecto.MigrationError regardless of this REQ-058 change. Reproduced identically with this branch's own changes stashed. Needs its own fix (renumbering one of the two, matching the migration-numbering-collision class docs/anti-patterns.md already documents) by whichever agent owns that -- routing this to ORCH/REVIEWER alongside this handoff rather than silently renumbering an unowned, already-merged pair of migrations myself.",
+    "artifacts_out": [
+      "lib/letflow/engine/lua_script_audit.ex",
+      "priv/repo/migrations/20260820000011_create_lua_script_execution_audit.exs",
+      "lib/letflow/tenant_provisioning.ex",
+      "handoffs/WF02-REQ058-20260818/step-02a-elixir-dev.json"
+    ],
+    "issues": [
+      "Pre-existing, unrelated migration-version collision on main: priv/repo/migrations/20260819000001_create_groups_tenant_scoped.exs and priv/repo/migrations/20260819000001_drop_transition_events.exs both use version 20260819000001, breaking any from-scratch `mix ecto.migrate`. Confirmed pre-dates this branch (reproduces with this branch's changes stashed). Not in this requirement's owned_modules -- flagged for ORCH/REVIEWER, not fixed here."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ058-20260818",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ058-20260818",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -58,6 +58,7 @@ defmodule Letflow.Engine.Expr do
   # since it is a bare keyword, not a `name(` call.
   @unsupported_call_markers [
     "has(",
+    "matches(",
     "all(",
     "exists_one(",
     "exists(",
@@ -71,6 +72,7 @@ defmodule Letflow.Engine.Expr do
     "timestamp(",
     "size(",
     "map(",
+    "map{",
     "filter("
   ]
 
@@ -217,8 +219,12 @@ defmodule Letflow.Engine.Expr do
   defp do_tokenize(<<"'", _::binary>> = input, acc), do: tokenize_string(input, ?', acc)
 
   defp do_tokenize(<<c, _::binary>> = input, acc) when c in ?0..?9 do
+    # Same capture-group shape as the identifier clause above: `(\.\d+)?`
+    # makes any decimal literal (e.g. "3.14") return a 2-element
+    # `[match, decimal_part]` list, not `[match]` -- matching on `[match | _]`
+    # handles both integer and decimal literals uniformly.
     case Regex.run(~r/\A-?\d+(\.\d+)?/, input) do
-      [match] ->
+      [match | _] ->
         rest = binary_part(input, byte_size(match), byte_size(input) - byte_size(match))
 
         number =
@@ -234,8 +240,15 @@ defmodule Letflow.Engine.Expr do
   end
 
   defp do_tokenize(<<c, _::binary>> = input, acc) when c in ?a..?z or c in ?A..?Z or c == ?_ do
+    # `Regex.run/2` returns the full match plus one entry per capture group --
+    # the trailing `(\.[A-Za-z_][A-Za-z0-9_]*)*` group means any dotted,
+    # multi-segment identifier (e.g. "order.status") yields a 2-element list
+    # (`[match, last_dot_segment]`), not the 1-element `[match]` a bare
+    # identifier produces. Matching on `[match | _]` (full match only, capture
+    # groups discarded) handles both shapes uniformly instead of raising on
+    # every multi-segment path -- see ISS-0086/GH#303.
     case Regex.run(~r/\A[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*/, input) do
-      [match] ->
+      [match | _] ->
         rest = binary_part(input, byte_size(match), byte_size(input) - byte_size(match))
         do_tokenize(rest, [identifier_token(match) | acc])
 

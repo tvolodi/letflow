@@ -138,4 +138,60 @@ related:
   - ISS-0087
   - ISS-0076
 github_issue: https://github.com/tvolodi/letflow/issues/303
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0086-20260820
+resolved_at: "2026-08-19T23:34:42Z"
+resolution: >
+  Fixed both halves per the diagnosis: `matches(` added to
+  `@unsupported_call_markers` (`expr.ex` §`@unsupported_call_markers`), and
+  `do_tokenize/2`'s identifier clause fixed to make the tokenizer genuinely
+  total.
+
+  ROOT CAUSE WAS BROADER THAN DIAGNOSED. `do_tokenize/2`'s identifier and
+  number clauses each matched `Regex.run/2`'s result against a 1-element
+  `[match]` pattern, but the underlying regexes
+  (`(\.[A-Za-z_][A-Za-z0-9_]*)*` for identifiers, `(\.\d+)?` for numbers)
+  each contain a capture group, so `Regex.run/2` returns a 2-element list
+  (`[full_match, last_capture]`) whenever that group participates at all --
+  i.e. for ANY multi-segment dotted variable path (`order.status`, not just
+  method-call shapes like `s.matches(`) and ANY decimal number literal
+  (`3.14`). Both raised the identical `CaseClauseError` reported here.
+  Confirmed empirically (not assumed): `mix test` on unmodified
+  `origin/main` had zero test coverage of multi-segment variable paths or
+  decimal literals anywhere in `expr_test.exs`, so this was live and
+  unguarded in shipped code, not merely a `matches(`-shaped edge case.
+
+  FIX. Both `case` clauses in `do_tokenize/2` changed from `[match] ->` to
+  `[match | _] ->`, which uses only the full match (discarding capture
+  groups) and handles both 1- and 2-element results uniformly -- this alone
+  makes the tokenizer total for every input shape, matching item (b) of the
+  diagnosis. Item (a) (`matches(` marker) was also applied for R-Co parity,
+  per the diagnosis's own recommendation; `map{` was added alongside it for
+  the same parity reason (design doc §9.1/§0.1 already flags it as a
+  documented marker-set difference).
+
+  REGRESSION TESTS (`test/letflow/engine/expr_test.exs`, fail-first
+  confirmed against pre-fix code, all pass post-fix):
+    - `parse/1` on a multi-segment dotted path (`order.status == 1`)
+    - `parse/1` on a decimal literal (`amount > 3.14`)
+    - `evaluate_condition/2` on the exact `matches()` repro from this issue
+    - `evaluate_condition/2` on a nested variable path end-to-end
+    - `evaluate_condition/2` totality corpus (asserts `is_boolean/1` across
+      6 out-of-grammar/malformed conditions, never raises)
+
+  VALIDATION. `mix format --check-formatted`: clean. `mix test
+  test/letflow/engine/expr_test.exs`: 39/39 (34 pre-existing + 5 new).
+  `mix test` (full suite): no regression -- 13 unrelated pre-existing
+  failures confirmed present identically on unmodified `origin/main`
+  (`Letflow.IdentityMigrationTest`, `Mix.Tasks.Letflow.Check.TestTest`; see
+  this run's incidental-finding note, forwarded separately per
+  `docs/agents/ORCHESTRATOR.md` §2's incidental-finding rule -- not fixed
+  here, out of scope for ISS-0086). `mix compile --warnings-as-errors`:
+  pre-existing unrelated failures in `reconstruction.ex`/`transition.ex`
+  (REQ-013's CI gate not yet landed, per `GIT_MERGE.md`'s own precondition
+  note) confirmed identical on unmodified `origin/main`; zero warnings from
+  either file this run touched.
+
+  NOT ADOPTED: R-Co's `isCelIdentChar` identifier-boundary guard --
+  correctly dispositioned by REQ-111 as a documentation-only difference,
+  out of scope for this fix.

@@ -127,6 +127,16 @@ defmodule Letflow.Engine.ExprTest do
     test "an unparseable string returns a tagged :parse_error, never raises" do
       assert {:error, {:parse_error, _reason}} = Expr.parse("and and and")
     end
+
+    test "a multi-segment dotted variable path parses instead of raising (ISS-0086 root cause)" do
+      assert Expr.parse("order.status == 1") ==
+               {:ok, {:cmp, :eq, {:var, ["order", "status"]}, {:lit, 1}}}
+    end
+
+    test "a decimal number literal parses instead of raising (ISS-0086, same tokenizer root cause)" do
+      assert Expr.parse("amount > 3.14") ==
+               {:ok, {:cmp, :gt, {:var, ["amount"]}, {:lit, 3.14}}}
+    end
   end
 
   # ---------------------------------------------------------------------
@@ -190,6 +200,32 @@ defmodule Letflow.Engine.ExprTest do
 
     test "a malformed/unparseable condition returns false, not a raised error" do
       assert Expr.evaluate_condition("", %{}) == false
+    end
+
+    test "a CEL method-call condition (matches()) returns false, not a raised CaseClauseError (ISS-0086/GH#303)" do
+      assert Expr.evaluate_condition(~S|variables.s.matches("a")|, %{"s" => "y"}) == false
+    end
+
+    test "a nested/dotted variable path condition evaluates correctly instead of raising (ISS-0086 root cause)" do
+      assert Expr.evaluate_condition(~S|variables.order.status == "approved"|, %{
+               "order" => %{"status" => "approved"}
+             }) == true
+    end
+
+    test "evaluate_condition/2 never raises across a corpus of out-of-grammar conditions (ISS-0086 totality)" do
+      corpus = [
+        {~S|variables.s.matches("a")|, %{"s" => "y"}},
+        {~S|variables.a.b.c.d == 1|, %{}},
+        {"variables.a..b == 1", %{}},
+        {"variables. == 1", %{}},
+        {"$$$", %{}},
+        {"variables.x(y)", %{}}
+      ]
+
+      for {condition, variables} <- corpus do
+        assert is_boolean(Expr.evaluate_condition(condition, variables)),
+               "expected a boolean for #{inspect(condition)}, got a raise or non-boolean"
+      end
     end
   end
 

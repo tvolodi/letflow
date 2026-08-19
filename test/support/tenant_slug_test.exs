@@ -144,13 +144,19 @@ defmodule Letflow.TenantSlugFixtureTest do
     # unique_slug/1 always returns "<prefix>-<36-char UUID>", regardless of
     # call order or repetition count.
     property "stable \"<prefix>-<uuid>\" format regardless of call order/count" do
-      check all(prefix <- StreamData.string(:alphanumeric, min_length: 1, max_length: 20),
-                repeat_count <- StreamData.integer(1..25),
-                max_runs: 30) do
+      check all(
+              prefix <- StreamData.string(:alphanumeric, min_length: 1, max_length: 20),
+              repeat_count <- StreamData.integer(1..25),
+              max_runs: 30
+            ) do
         slugs = for _ <- 1..repeat_count, do: TenantSlugFixture.unique_slug(prefix)
 
         assert Enum.all?(slugs, &String.starts_with?(&1, prefix <> "-"))
-        assert Enum.all?(slugs, fn slug -> String.length(slug) == String.length(prefix) + 1 + 36 end)
+
+        assert Enum.all?(slugs, fn slug ->
+                 String.length(slug) == String.length(prefix) + 1 + 36
+               end)
+
         assert length(Enum.uniq(slugs)) == length(slugs)
       end
     end

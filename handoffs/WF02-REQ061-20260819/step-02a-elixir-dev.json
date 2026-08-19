@@ -1,0 +1,60 @@
+{
+  "handoff_id": "7f5d3ef2-1e20-4643-5d6l-req061step02a",
+  "run_id": "WF02-REQ061-20260819",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ061-20260819/step-02a-elixir-dev.json",
+  "created_at": "2026-08-19T00:59:12Z",
+  "started_at": "2026-08-19T00:59:12Z",
+  "completed_at": "2026-08-19T01:17:08Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-061"],
+    "requirement_text": {
+      "REQ-061": "See handoffs/WF02-REQ061-20260819/step-01-code-designer.json context.requirement_text for the full verbatim requirement text."
+    },
+    "related_handoff_ids": ["step-01-code-designer.json", "step-01b-code-design-validator.json"],
+    "artifacts_in": ["lib/letflow/design/req061-execution-error-handling.md"],
+    "owned_modules": ["lib/letflow/engine.ex"]
+  },
+  "task": {
+    "description": "Implement lib/letflow/design/req061-execution-error-handling.md exactly: add Letflow.Engine.ExecutionError.append_multi/3 (the Multi-composable shared sink) and Letflow.Engine.set_instance_error/2 (standalone wrapper) to lib/letflow/engine.ex per the design's Multi step table -- reusing the already-existing instance_projections.error_detail column (no migration needed, confirm this). Rewire merge_output_variables/2 and dispatch_task_completion_hop_chain/2 (both in complete_task/3's Multi chain) per the design's §5 Multi.merge/2 branch-point specification: they must stop aborting the whole Multi on schema-violation/no-matching-edge and instead route into ExecutionError.append_multi/3, reusing complete_task/3's already-locked instance_projection (no second lock). complete_error()'s type gains the {:error, {:instance_execution_error, error_type, affected}} member per the design.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "No new migration needed (design confirms instance_projections.error_detail already exists -- verify this claim against the actual schema before proceeding)",
+      "No SQL string interpolation of tenant/user data",
+      "All callers of merge_output_variables/2 and dispatch_task_completion_hop_chain/2 (i.e. complete_task/3) still compile and their existing tests still pass",
+      "set_instance_error/2 and ExecutionError.append_multi/3 match the design's @spec exactly",
+      "REQ-049's schema-violation path and REQ-050's no-matching-edge path both now route through ExecutionError.append_multi/3 instead of aborting the Multi with a bare error tuple"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented Letflow.Engine.ExecutionError (new lib/letflow/engine/execution_error.ex: append_multi/3, the shared Multi-composable sink) and Letflow.Engine.set_instance_error/2 (standalone entry point in engine.ex) per the design's Multi step table. Confirmed instance_projections.error_detail already exists (schema module lib/letflow/event_store/instance_projection.ex line 117, already in update_changeset/2's cast list) -- no migration added. Rewired merge_output_variables/2 (M4) and dispatch_task_completion_hop_chain/2 (M5) so REQ-049's schema-violation and REQ-050's no-matching-edge cases return {:ok, {:execution_error, error_args}} instead of aborting the Multi; added a new Multi.merge/2 branch point (build_complete_task_tail_multi/6, replacing the former unconditional build_task_activation_and_reconciliation_multi/3 call site) that routes {:execution_error, _} into ExecutionError.append_multi/3 (reusing M2's already-locked instance_projection, no second lock) or, on {:advanced, _}, runs the existing task-activation/token-reconciliation/task_complete/event/projection tail unchanged. interpret_complete_result/1 gained a leading clause for the new complete_error() member {:error, {:instance_execution_error, error_type, affected}}. DEVIATION flagged for REVIEWER: the design doc's own @spec text for merge_output_variables/2's replacement (§5.1, shown as `merge_outcome_for/2`) and dispatch_task_completion_hop_chain/2's replacement (§5.2) are both 2-arg, but error_args() needs instance_id/actor_id/idempotency_key those 2-arg signatures have no access to -- widened both functions' arity (merge_output_variables/5, dispatch_task_completion_hop_chain/5) to thread projection/actor_id/idempotency_key through instead, keeping the original function names since the handoff task text names them explicitly. `mix compile --warnings-as-errors` exits 0 (clean, no warnings). `mix format --check-formatted` clean on both changed files (lib/letflow/engine.ex, lib/letflow/engine/execution_error.ex; pre-existing unrelated formatting drift in other repo files left untouched). `mix test test/letflow/engine_complete_task_test.exs`: 8 tests, 0 failures. `mix test test/letflow/engine_cancel_instance_test.exs test/letflow/engine_test.exs test/letflow/engine/`: 1 property, 201 tests, 0 failures. Full `mix test` run twice: first run showed 1 failure in test/letflow/definitions/migrations_test.exs (tenants.slug uniqueness collision, REQ-027 test, unrelated file/path), confirmed pre-existing/flaky by (a) passing standalone (`mix test test/letflow/definitions/migrations_test.exs`: 14 tests, 0 failures) and (b) a second full run passing clean (3 properties, 908 tests, 0 failures) -- not caused by this change.",
+    "artifacts_out": [
+      "lib/letflow/engine/execution_error.ex",
+      "lib/letflow/engine.ex"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Design doc req061-execution-error-handling.md §5.1/§5.2 show merge_outcome_for/2 and dispatch_task_completion_hop_chain/2's replacement as 2-arg pure functions, but error_args() construction needs instance_id (from the locked instance_projection)/actor_id/idempotency_key that a 2-arg signature has no access to. Resolved by widening merge_output_variables/2 to arity 5 and dispatch_task_completion_hop_chain/2 to arity 5 (kept original function names per the handoff task text, which names them explicitly), threading projection/actor_id/idempotency_key through as extra parameters instead of inventing closures. Flagged for REVIEWER to confirm this is an acceptable, safe deviation from the design doc's literal @spec text."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ061-20260819",
+      "commit_sha_list": ["00b58b6", "5d238e1"],
+      "remote_branch": "origin/feature/WF02-REQ061-20260819",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

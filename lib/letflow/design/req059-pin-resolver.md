@@ -144,29 +144,47 @@ matters.
    computation (§7's `apply_inheritance/2`), which is a different function with a
    different job, despite REQ-059's own prose using "effective pin set" in both
    contexts. Two different functions, stated as such.
+7. States §12's PIN-03 AC4 SCOPE GAP: no retry loop/budget/DLQ exists in this module;
+   `PIN_RETRY_EXHAUSTED` is the reserved (not-yet-emitted, not-yet-registered) event-type
+   name a future stage-S6 DLQ integration attaches to, and REQ-056 flagged this identical
+   gap for its own dispatch retries.
 
 ## 3. `Engine.create/2` integration — the exact reordering (PIN-01 AC1/AC4, PIN-02 AC2)
 
 `start_instance/5`'s new sequence (replacing `engine.ex:367-384`), every step before
-`create_snapshot/3` performing **zero** `Repo` calls of any kind:
+`create_snapshot/3` performing **zero** `Repo` calls of any kind. This is a **call-order
+specification**, not code — each numbered step names the function called, its inputs
+(all already in scope by that point), and its success/failure contract. `start_instance/5`
+runs these steps **in this exact order**, and — matching the short-circuit discipline
+`with` already gives every other multi-step function in `engine.ex` today — the first
+step to return anything other than its stated success shape becomes `start_instance/5`'s
+own return value immediately, with no later step ever running:
 
-```
-defp start_instance(definition, initial_variables, correlation_key, attrs, prefix) do
-  instance_id = Ecto.UUID.generate()
+1. `build_graph(definition.graph)` → `{:ok, graph}` on success (existing function,
+   unchanged); its existing error shape on failure.
+2. `PinResolver.resolve(graph, definition, pin_lookup(attrs, prefix), pin_overrides(attrs))`
+   → `{:ok, own_pins, variable_json_schema}` (the 3-tuple form — see §5's INV-PIN-5) on
+   success; a `resolve_error()` (§4) on failure.
+3. `PinResolver.validate_initial_variables(initial_variables, variable_json_schema)` →
+   `:ok` on success; `{:error, {:variable_schema_violation, failures}}` (§5) on failure.
+4. `PinResolver.apply_inheritance(own_pins, parent_pins(attrs, prefix))` →
+   `{:ok, pins, conflicts}` (§7) — this step has no failure branch of its own (see §7).
+5. `create_snapshot(instance_id, definition, prefix)` → `{:ok, snapshot}` on success
+   (existing function, unchanged); its existing error shape on failure. **This is the
+   first step in the sequence that performs any `Repo` write** — steps 1-4 are pure or
+   read-only against the event log only (step 2's `pin_lookup`/`pin_overrides` and step
+   4's `parent_pins` read `attrs`; step 4's `parent_pins/2` helper, §8, reads the
+   parent's event stream via `PinResolver.reconstruct_effective_pins/2`, §6 — never a
+   catalog/module read, never a write).
+6. `activate(instance_id, graph, initial_variables)` → `{:ok, new_instance_state}` on
+   success (existing function, signature changed per §1: takes the already-built
+   `graph` instead of building it again); its existing error shape on failure.
+7. `persist(instance_id, definition, initial_variables, correlation_key, graph,
+   new_instance_state, pins, conflicts, attrs, prefix)` — the existing `Ecto.Multi`
+   (renamed `/10`, two new positional arguments `pins`/`conflicts` inserted before
+   `attrs`/`prefix`) — its existing return shape, unchanged.
 
-  with {:ok, graph}            <- build_graph(definition.graph),
-       {:ok, own_pins}         <- PinResolver.resolve(graph, definition, pin_lookup(attrs, prefix), pin_overrides(attrs)),
-       :ok                     <- PinResolver.validate_initial_variables(initial_variables, own_pins),
-       {:ok, pins, conflicts}  <- PinResolver.apply_inheritance(own_pins, parent_pins(attrs, prefix)),
-       {:ok, _snapshot}        <- create_snapshot(instance_id, definition, prefix),
-       {:ok, new_instance_state} <- activate(instance_id, graph, initial_variables) do
-    persist(instance_id, definition, initial_variables, correlation_key, graph,
-            new_instance_state, pins, conflicts, attrs, prefix)
-  end
-end
-```
-
-- **Every step up to and including `apply_inheritance/2` is pure or read-only against
+- **Every step up to and including step 4 is pure or read-only against
   the event log only** (§7's `parent_pins/2` reads the parent's own event stream via
   `merge_effective_pins/2`, §6 — no catalog/module read, no write of any kind). A
   failure at any of these steps returns before `create_snapshot/3` ever runs — AC2's
@@ -208,8 +226,11 @@ end
         definition :: Letflow.Definitions.ProcessDefinition.t(),
         lookup :: Lookup.t(),
         overrides :: [override_entry()]
-      ) :: {:ok, [pinned_version()]} | resolve_error()
+      ) :: {:ok, [pinned_version()], variable_json_schema :: map() | nil} | resolve_error()
 ```
+
+(the 3-tuple form — see §5's INV-PIN-5 for why `variable_json_schema` is returned
+alongside `pins` rather than embedded inside a `pinned_version()` entry)
 
 `Lookup` (plain struct, mirrors `ServiceScopeValidator.Lookup` exactly, three fields
 instead of two):
@@ -355,7 +376,7 @@ entries also carry no schema/config payload, only `resolved_id`/`version`). `res
 therefore returns the `json_schema` **separately**, alongside `pins`, as its own value
 this design's §3 sequence must thread through unchanged from `resolve/4`'s call site to
 `validate_initial_variables/2`'s call site (both occur back-to-back in `start_instance/5`,
-so no extra storage is needed) — **§3's pseudocode above is corrected accordingly**:
+so no extra storage is needed) — **§3's step 2/3 sequence above already reflects this**:
 `resolve/4` returns `{:ok, own_pins, variable_json_schema}` (3-tuple), and
 `validate_initial_variables/2` takes `variable_json_schema` as its second argument
 directly rather than re-deriving it from `pins`. ELIXIR-DEV: implement the 3-tuple
@@ -560,6 +581,7 @@ Three new private functions in `engine.ex`, called from `start_instance/5` (§3)
 | AC6 (child inheritance + conflict recording) | §7 |
 | AC7 (replay derives from events only, zero catalog reads) | §6 |
 | AC8 (moduledoc SCOPE GAP citing ISS-0672/GH-306) | §2 point 2 |
+| PIN-03 AC4 (exhausted retry budget → named hook, no partial DLQ) | §12, §2 point 7 |
 
 ## 11. `pin_for/3` — the no-fallback runtime accessor (PIN-03 AC1/AC5)
 
@@ -581,3 +603,35 @@ module — not `resolve/4`, not `merge_effective_pins/2`, not `apply_inheritance
 this function — ever queries a catalog/module/variable-schema lookup for a "current" or
 "latest" value as a substitute when a pin is absent; `{:error, {:pin_missing, _, _}}` is
 the only outcome for "no pin entry," always.
+
+## 12. PIN-03 AC4 — exhausted retry budget, named hook (no DLQ in this stage)
+
+R-Co's PIN-03 AC4 routes an exhausted `PinMissing` retry budget to the dead-letter
+queue. **This is a SCOPE GAP, same shape and same underlying absence as the SCOPE GAP
+statements already in §2 point 2 and §9 OQ-2's sibling gaps**: `OBS-05`'s DLQ is stage
+S6 (operational cross-cutting), not yet ported — REQ-056 flagged this identical gap for
+its own service-task dispatch retries (`docs/requirements.yaml` REQ-056 entry), and this
+module inherits the same absence rather than re-deciding it independently. Per §1's
+`ServiceScopeValidator`/`PromotionPlan` precedent of naming an explicit extension point
+rather than building a partial substitute, this design specifies:
+
+- **No retry loop, no retry budget, and no DLQ write of any kind exists in this module.**
+  `pin_for/3` (§11) is a single, synchronous lookup — it has no notion of "retry" at all;
+  a caller that wants retry-with-backoff semantics builds that entirely on its own side,
+  calling `pin_for/3` again each attempt.
+- **The named hook**: a caller implementing its own retry loop around `pin_for/3` (e.g.
+  a future REQ-056 dispatch retry) is the one place a `PinMissing`-exhausted-retries
+  event would be produced, and this design reserves the **event type name**
+  `PIN_RETRY_EXHAUSTED` (not yet emitted by any code in this requirement's own scope,
+  and not registered in `Letflow.EventStore.Registry` by this requirement) as the
+  documented attachment point a stage-S6 DLQ integration hooks onto once `OBS-05` lands
+  — matching the same "name the seam, don't half-build the destination" pattern
+  `dispatch_exclusive_gateway/4`'s own stub uses elsewhere in this codebase (cited §1's
+  peer precedent).
+- **Moduledoc requirement (added to §2's numbered list, item 7):** the moduledoc must
+  state this reserved event-type name and cite REQ-056's identical gap, so a future S6
+  DLQ implementer finds the attachment point named here rather than re-discovering the
+  gap independently.
+- This is a documentation-only hook — **no code, migration, or `Registry` entry is
+  created by this requirement**; PIN-03 AC4 is satisfied by naming the seam, consistent
+  with how PIN-01 AC1/AC2 and PIN-03 AC3's SCOPE GAPs are already handled (§2 point 2).

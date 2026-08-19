@@ -811,7 +811,8 @@ defmodule Letflow.Definitions.GraphTest do
     test "single HUMAN_TASK edge, blank condition -> no CHK-19 violation (the common case)" do
       # Design doc §6 row 2 -- not really-conditioned, so CHK-19 never
       # fires; this is the everyday single-unconditioned-edge shape.
-      g = graph([node("h", :HUMAN_TASK), node("t", :END)], [cond_edge("e1", "h", "t", nil, false)])
+      g =
+        graph([node("h", :HUMAN_TASK), node("t", :END)], [cond_edge("e1", "h", "t", nil, false)])
 
       assert Graph.validate_edge_conditions(g) == %{valid: true, violations: []}
     end
@@ -821,7 +822,10 @@ defmodule Letflow.Definitions.GraphTest do
       # category with no equivalent in CHK-13/16 (neither requires a
       # gateway to have a default/fallback edge to exist at all); worth
       # its own test given how easy this boundary is to get backwards.
-      g = graph([node("h", :HUMAN_TASK), node("t", :END)], [cond_edge("e1", "h", "t", "status == \"approved\"", false)])
+      g =
+        graph([node("h", :HUMAN_TASK), node("t", :END)], [
+          cond_edge("e1", "h", "t", "status == \"approved\"", false)
+        ])
 
       result = Graph.validate_edge_conditions(g)
       assert result.valid == false

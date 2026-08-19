@@ -97,7 +97,8 @@ defmodule Letflow.Engine.TaskActivationTest do
 
   describe "resolve_assignee/1" do
     test "reads assignee_ref from attributes[\"role\"] and assignee_type from attributes[\"assignee_type\"]" do
-      n = node("task", :HUMAN_TASK, attributes: %{"role" => "approver", "assignee_type" => "GROUP"})
+      n =
+        node("task", :HUMAN_TASK, attributes: %{"role" => "approver", "assignee_type" => "GROUP"})
 
       assert TaskActivation.resolve_assignee(n) == {"GROUP", "approver"}
     end
@@ -279,7 +280,10 @@ defmodule Letflow.Engine.TaskActivationTest do
       assert {:ok, new_state, _pending_events} =
                Transition.transition(g, state, {:advance_token, "t1"})
 
-      assert TaskActivation.newly_pending_tokens(state.pending_task_nodes, new_state.pending_task_nodes) ==
+      assert TaskActivation.newly_pending_tokens(
+               state.pending_task_nodes,
+               new_state.pending_task_nodes
+             ) ==
                [token("task", "t1")]
     end
   end

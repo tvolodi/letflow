@@ -247,7 +247,8 @@ defmodule Letflow.EngineCancelInstanceTest do
       assert length(tokens_before) == 2
       token_ids_before = Enum.map(tokens_before, & &1.id) |> Enum.sort()
 
-      assert {:ok, result} = Engine.cancel_instance(instance_id, cancel_attrs(), prefix: schema_name)
+      assert {:ok, result} =
+               Engine.cancel_instance(instance_id, cancel_attrs(), prefix: schema_name)
 
       assert result.instance_id == instance_id
       assert result.status == :cancelled
@@ -282,7 +283,8 @@ defmodule Letflow.EngineCancelInstanceTest do
       %{schema_name: schema_name} = provisioned_tenant()
       instance_id = start_instance!(schema_name, graph_human_task_end())
 
-      assert {:ok, _first} = Engine.cancel_instance(instance_id, cancel_attrs(), prefix: schema_name)
+      assert {:ok, _first} =
+               Engine.cancel_instance(instance_id, cancel_attrs(), prefix: schema_name)
 
       tasks_after_first = task_count(schema_name)
       events_after_first = event_count(schema_name)
@@ -388,7 +390,8 @@ defmodule Letflow.EngineCancelInstanceTest do
       # the test's own sandbox ownership (mirrors engine_complete_task_test.exs's own AC4).
       cancel_task =
         Elixir.Task.async(fn ->
-          {:cancel, Engine.cancel_instance(created.instance_id, cancel_attrs(), prefix: schema_name)}
+          {:cancel,
+           Engine.cancel_instance(created.instance_id, cancel_attrs(), prefix: schema_name)}
         end)
 
       complete_task =
@@ -407,7 +410,9 @@ defmodule Letflow.EngineCancelInstanceTest do
           assert {:complete, {:error, {:task_not_pending, :cancelled}}} =
                    Enum.find(results, &match?({:complete, _}, &1))
 
-          final_projection = Repo.get!(InstanceProjection, created.instance_id, prefix: schema_name)
+          final_projection =
+            Repo.get!(InstanceProjection, created.instance_id, prefix: schema_name)
+
           assert final_projection.status == :cancelled
 
           final_task = Repo.get!(EngineTask, task.id, prefix: schema_name)
@@ -417,7 +422,9 @@ defmodule Letflow.EngineCancelInstanceTest do
           assert {:cancel, {:error, {:instance_already_terminal, :completed}}} =
                    Enum.find(results, &match?({:cancel, _}, &1))
 
-          final_projection = Repo.get!(InstanceProjection, created.instance_id, prefix: schema_name)
+          final_projection =
+            Repo.get!(InstanceProjection, created.instance_id, prefix: schema_name)
+
           assert final_projection.status == :completed
 
           final_task = Repo.get!(EngineTask, task.id, prefix: schema_name)

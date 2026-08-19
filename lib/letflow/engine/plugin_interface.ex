@@ -193,7 +193,12 @@ defmodule Letflow.Engine.PluginInterface do
     |> handle_yield_result(task, handler, timeout_ms)
   end
 
-  defp handle_yield_result({:ok, {:complete, output_variables} = outcome}, _task, _handler, _timeout_ms)
+  defp handle_yield_result(
+         {:ok, {:complete, output_variables} = outcome},
+         _task,
+         _handler,
+         _timeout_ms
+       )
        when is_map(output_variables) do
     outcome
   end
@@ -242,7 +247,8 @@ defmodule Letflow.Engine.PluginInterface do
           reason :: String.t(),
           meta :: error_meta()
         ) :: ExecutionError.error_args()
-  def build_error_args(%ExecutionContext{} = context, reason, %{} = meta) when is_binary(reason) do
+  def build_error_args(%ExecutionContext{} = context, reason, %{} = meta)
+      when is_binary(reason) do
     %{
       instance_id: context.instance_id,
       error_type: :plugin_error_outcome,

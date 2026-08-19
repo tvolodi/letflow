@@ -124,12 +124,20 @@ defmodule Letflow.IdentityMigration do
   # column post-D2: it targets the about-to-be-dropped legacy public tables,
   # not any of the ten D2 tables.
   defp copy_groups(tenant_id, schema_name) do
-    rows = Repo.all(from(g in Group, where: fragment("? = ?", g.tenant_id, type(^tenant_id, Ecto.UUID))))
+    rows =
+      Repo.all(
+        from(g in Group, where: fragment("? = ?", g.tenant_id, type(^tenant_id, Ecto.UUID)))
+      )
+
     insert_all_preserving_id(rows, schema_name)
   end
 
   defp copy_users(tenant_id, schema_name) do
-    rows = Repo.all(from(u in User, where: fragment("? = ?", u.tenant_id, type(^tenant_id, Ecto.UUID))))
+    rows =
+      Repo.all(
+        from(u in User, where: fragment("? = ?", u.tenant_id, type(^tenant_id, Ecto.UUID)))
+      )
+
     insert_all_preserving_id(rows, schema_name)
   end
 

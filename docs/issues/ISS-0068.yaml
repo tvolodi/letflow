@@ -1,0 +1,89 @@
+id: ISS-0068
+title: >
+  mix format --check-formatted fails on 14 pre-existing committed files under
+  Elixir 1.18.3/Mix 1.18.3 (OTP 27) -- formatter paren/line-break drift, same
+  class as ISS-0008
+discovered_by: ORCH
+discovered_in_run: hetzner-orch session-start verification, 2026-08-19
+discovered_at: 2026-08-19T05:15:33Z
+severity: BLOCKER
+description: >
+  Session-start verification on a clean `main` checkout (commit 7dbf3a8,
+  `git status` clean) ran `mix letflow.check`. It failed at step 1
+  (`mix format --check-formatted`) before compile or test ever ran, on 14
+  files none of which this session touched:
+
+    lib/letflow/definitions/graph.ex
+    lib/letflow/engine/plugin_interface.ex
+    lib/letflow/identity_migration.ex
+    test/letflow/definitions/graph_test.exs
+    test/letflow/engine_cancel_instance_test.exs
+    test/letflow/engine/expr_test.exs
+    test/letflow/engine/parallel_gateway_test.exs
+    test/letflow/engine/service_task_test.exs
+    test/letflow/engine/snapshot_writer_test.exs
+    test/letflow/engine/task_activation_test.exs
+    test/letflow/engine/variable_merge_test.exs
+    test/letflow/event_store_test.exs
+    test/letflow/sandbox_pool_test.exs
+    test/support/tenant_schema_reaper_test.exs
+
+  All diffs are pure line-break/paren-placement reflow (e.g. wrapping a long
+  `assert ... =` onto multiple lines) -- no token-level content change. This
+  host's toolchain is Elixir 1.18.3 / Mix 1.18.3 (OTP 27); the files were
+  evidently committed as formatted-clean under a different concurrent host's
+  Elixir/Mix version (this project runs 4 concurrent hosts per
+  CLAUDE.md/hetzner-orch's session brief, each free to run whatever local
+  toolchain it has -- README only recommends "1.17+", it does not pin one).
+
+  This is the same root-cause class as ISS-0008/GH#12 (closed 2026-08-15):
+  formatter paren-insertion rules differ across Elixir versions, and nothing
+  in this repo pins a single canonical formatting toolchain version. ISS-0008
+  recommended two options at the time -- (a) reformat the flagged files under
+  the actual target toolchain, or (b) pin CI/dev toolchain to one Elixir
+  version. Only (a) was ever executed (per-incident), which is inherently
+  unstable across N concurrently-active hosts each running its own Elixir
+  version: whichever host commits last "wins" formatting-wise and silently
+  un-formats every other host's next `mix format --check-formatted` run.
+  This is the second occurrence of the class (see docs/anti-patterns.md's
+  cross-host collision entries for the general shape: independent hosts
+  producing content that only conflicts once merged to a shared `main`).
+
+  Verified not a real regression: `mix compile --warnings-as-errors` and a
+  full `mix test` run (LETFLOW_DEV_DB_CONFIRMED=1, no toolchain override) both
+  pass clean -- 5 properties, 1029 tests, 0 failures. Only the format-check
+  gate itself fails.
+
+  Impact: `mix letflow.check` (docs/agents/protocols/GIT_MERGE.md's Step
+  Final gate, `mix format --check-formatted && mix compile
+  --warnings-as-errors && mix test`) checks the *whole* file tree, not a
+  diff -- so this blocks Step Final for every WF-02/WF-03 run dispatched from
+  this host until fixed, regardless of what that run's own change touches.
+
+  Recommended action taken this run: reformat the 14 files under this host's
+  toolchain (mix format, no other changes) so this host's gate is unblocked
+  now, per Unblock-Everything. The deeper fix -- pinning one canonical
+  Elixir/Mix version for formatting across all 4 hosts (e.g. an `.tool-versions`
+  file plus a documented convention) so this doesn't recur a third time -- is
+  a cross-cutting decision affecting every host's dev environment, not a
+  single-file mechanical fix; flagging it for a
+  `docs/migration/decisions/000x-*.md` draft rather than deciding it
+  unilaterally here, per core-directives.md's "two or more genuinely
+  equivalent options" clause.
+affected_files:
+  - lib/letflow/definitions/graph.ex
+  - lib/letflow/engine/plugin_interface.ex
+  - lib/letflow/identity_migration.ex
+  - test/letflow/definitions/graph_test.exs
+  - test/letflow/engine_cancel_instance_test.exs
+  - test/letflow/engine/expr_test.exs
+  - test/letflow/engine/parallel_gateway_test.exs
+  - test/letflow/engine/service_task_test.exs
+  - test/letflow/engine/snapshot_writer_test.exs
+  - test/letflow/engine/task_activation_test.exs
+  - test/letflow/engine/variable_merge_test.exs
+  - test/letflow/event_store_test.exs
+  - test/letflow/sandbox_pool_test.exs
+  - test/support/tenant_schema_reaper_test.exs
+github_issue: https://github.com/tvolodi/letflow/issues/229
+status: open

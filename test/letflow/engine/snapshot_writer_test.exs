@@ -396,10 +396,14 @@ defmodule Letflow.Engine.SnapshotWriterTest do
       assert {:ok, created_a} = Engine.create(start_attrs(definition), prefix: schema_name)
 
       t1_a = pending_task!(schema_name, created_a.instance_id, "t1")
-      assert {:ok, _} = Engine.complete_task(t1_a.id, complete_attrs(%{"b" => 2}), prefix: schema_name)
+
+      assert {:ok, _} =
+               Engine.complete_task(t1_a.id, complete_attrs(%{"b" => 2}), prefix: schema_name)
 
       t2_a = pending_task!(schema_name, created_a.instance_id, "t2")
-      assert {:ok, _} = Engine.complete_task(t2_a.id, complete_attrs(%{"c" => 3}), prefix: schema_name)
+
+      assert {:ok, _} =
+               Engine.complete_task(t2_a.id, complete_attrs(%{"c" => 3}), prefix: schema_name)
 
       assert {:ok, mid_result} =
                Reconstruction.reconstruct_instance(created_a.instance_id, prefix: schema_name)
@@ -413,20 +417,28 @@ defmodule Letflow.Engine.SnapshotWriterTest do
                )
 
       t3_a = pending_task!(schema_name, created_a.instance_id, "t3")
-      assert {:ok, _} = Engine.complete_task(t3_a.id, complete_attrs(%{"d" => 4}), prefix: schema_name)
+
+      assert {:ok, _} =
+               Engine.complete_task(t3_a.id, complete_attrs(%{"d" => 4}), prefix: schema_name)
 
       # Instance B: identical graph, identical sequence of completions, NEVER snapshotted
       # -- select_replay_source/2 genuinely returns {:full_replay, 1} for this instance.
       assert {:ok, created_b} = Engine.create(start_attrs(definition), prefix: schema_name)
 
       t1_b = pending_task!(schema_name, created_b.instance_id, "t1")
-      assert {:ok, _} = Engine.complete_task(t1_b.id, complete_attrs(%{"b" => 2}), prefix: schema_name)
+
+      assert {:ok, _} =
+               Engine.complete_task(t1_b.id, complete_attrs(%{"b" => 2}), prefix: schema_name)
 
       t2_b = pending_task!(schema_name, created_b.instance_id, "t2")
-      assert {:ok, _} = Engine.complete_task(t2_b.id, complete_attrs(%{"c" => 3}), prefix: schema_name)
+
+      assert {:ok, _} =
+               Engine.complete_task(t2_b.id, complete_attrs(%{"c" => 3}), prefix: schema_name)
 
       t3_b = pending_task!(schema_name, created_b.instance_id, "t3")
-      assert {:ok, _} = Engine.complete_task(t3_b.id, complete_attrs(%{"d" => 4}), prefix: schema_name)
+
+      assert {:ok, _} =
+               Engine.complete_task(t3_b.id, complete_attrs(%{"d" => 4}), prefix: schema_name)
 
       assert {:ok, snapshot_sourced_result} =
                Reconstruction.reconstruct_instance(created_a.instance_id, prefix: schema_name)
@@ -446,6 +458,7 @@ defmodule Letflow.Engine.SnapshotWriterTest do
       )
 
       assert snapshot_sourced_result.instance_state.status == :completed
+
       assert snapshot_sourced_result.instance_state.variables ==
                %{"a" => 1, "b" => 2, "c" => 3, "d" => 4}
     end
@@ -500,7 +513,9 @@ defmodule Letflow.Engine.SnapshotWriterTest do
                SnapshotWriter.latest_snapshot(created.instance_id, prefix: schema_name)
 
       t1 = pending_task!(schema_name, created.instance_id, "t1")
-      assert {:ok, _} = Engine.complete_task(t1.id, complete_attrs(%{"b" => 2}), prefix: schema_name)
+
+      assert {:ok, _} =
+               Engine.complete_task(t1.id, complete_attrs(%{"b" => 2}), prefix: schema_name)
 
       assert {:error, :snapshot_not_found} =
                SnapshotWriter.latest_snapshot(created.instance_id, prefix: schema_name)

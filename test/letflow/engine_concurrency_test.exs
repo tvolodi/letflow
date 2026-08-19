@@ -231,14 +231,15 @@ defmodule Letflow.EngineConcurrencyTest do
     end
   end
 
-  # Shared by Case AC1 and Case AC4 -- provisions a tenant, starts @instance_count
-  # instances, and completes all of their pending tasks via genuinely concurrent
-  # Task.async calls launched before any is awaited. Returns the schema_name and
-  # the list of {instance_id, task_id} maps so AC4 can reconstruct each instance
-  # afterward.
-  defp provision_and_complete_all!(schema_name, definition) do
-    instances = start_n_instances!(schema_name, definition, @instance_count)
-
+  # Completes every {instance_id, task_id} pair in `instances` via genuinely
+  # concurrent Task.async calls, all launched before any is awaited. Split out
+  # from `provision_and_complete_all!/2` (below) specifically so AC1's timing
+  # measurement can wrap ONLY this concurrent span -- not the sequential
+  # `start_n_instances!/3` setup that precedes it -- keeping the "no global lock"
+  # wall-clock proxy an apples-to-apples comparison against `baseline_micros`
+  # (which also times a single bare `complete_task/3` call with zero
+  # instance-creation cost).
+  defp complete_all_concurrently!(schema_name, instances) do
     tasks =
       Enum.map(instances, fn %{instance_id: instance_id, task_id: task_id} ->
         Task.async(fn ->
@@ -251,7 +252,18 @@ defmodule Letflow.EngineConcurrencyTest do
         end)
       end)
 
-    results = Task.await_many(tasks, 30_000)
+    Task.await_many(tasks, 30_000)
+  end
+
+  # Shared by Case AC1 and Case AC4 -- provisions a tenant, starts @instance_count
+  # instances, and completes all of their pending tasks concurrently. Returns the
+  # instance list and results so AC4 can reconstruct each instance afterward. AC1
+  # does not call this directly (it needs to time only the completion phase); it
+  # calls `start_n_instances!/3` and `complete_all_concurrently!/2` separately
+  # instead, see below.
+  defp provision_and_complete_all!(schema_name, definition) do
+    instances = start_n_instances!(schema_name, definition, @instance_count)
+    results = complete_all_concurrently!(schema_name, instances)
 
     {instances, results}
   end
@@ -279,8 +291,14 @@ defmodule Letflow.EngineConcurrencyTest do
 
       assert {:ok, %{instance_status: :completed}} = baseline_result
 
-      {concurrent_micros, {instances, results}} =
-        :timer.tc(fn -> provision_and_complete_all!(schema_name, definition) end)
+      # Setup (sequential -- start_n_instances!/3's own docstring) happens OUTSIDE
+      # the timed span: only the concurrent Task.async/Task.await_many completion
+      # phase is measured, so concurrent_micros stays comparable to baseline_micros
+      # (which also excludes any instance-creation cost).
+      instances = start_n_instances!(schema_name, definition, @instance_count)
+
+      {concurrent_micros, results} =
+        :timer.tc(fn -> complete_all_concurrently!(schema_name, instances) end)
 
       for {_instance_id, result} <- results do
         assert {:ok, %{instance_status: :completed}} = result

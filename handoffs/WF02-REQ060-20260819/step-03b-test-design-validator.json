@@ -1,0 +1,64 @@
+{
+  "handoff_id": "e1a4f8b3-2c67-4d10-9e5a-req060step03b",
+  "run_id": "WF02-REQ060-20260819",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ060-20260819/step-03b-test-design-validator.json",
+  "created_at": "2026-08-19T09:21:15Z",
+  "started_at": "2026-08-19T09:22:00Z",
+  "completed_at": "2026-08-19T09:25:48Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-060"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ060-20260819/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "test/specs/REQ-060.md",
+      "test/letflow/engine/pin_rebind_test.exs",
+      "lib/letflow/engine/pin_rebind.ex",
+      "docs/issues/ISS-0071.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently validate TEST-DESIGNER's coverage of REQ-060's 6 acceptance criteria against docs/requirements.yaml's REQ-060 entry: runnable non-trivial test per AC, isolated/self-sufficient fixtures, no ordering dependency between tests. Specific focus: (1) run the AC6 lock-contention test repeatedly across seeds/isolated runs to check for flakiness; (2) confirm the provisioned_tenant/0 event-type self-registration workaround (ISS-0071/GH#257) does not mask real production failure and the tests still exercise the module's real logic; (3) confirm AC2's test places the valid entry BEFORE the unknown-ref entry, not after.",
+    "acceptance_criteria": [
+      "AC1-AC6 each have >=1 runnable, non-trivial test, mapped in test/specs/REQ-060.md's coverage table",
+      "No @tag :skip / TODO: implement test anywhere",
+      "Fixtures use per-test unique data, no shared hardcoded IDs, no cross-test ordering dependency",
+      "No hardcoded secrets/connection strings",
+      "AC6 concurrency test is not flaky across repeated runs",
+      "ISS-0071 event-type registration workaround does not mask real module logic",
+      "AC2 test genuinely proves a full pre-pass (valid entry ordered before invalid one)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-ran the suite against real Postgres (did not trust TEST-DESIGNER's report): `LETFLOW_DEV_DB_CONFIRMED=1 mix test test/letflow/engine/pin_rebind_test.exs` -> 17 tests, 0 failures. `mix compile --force` clean (79 files, no warnings). Re-ran the full file 5 more times across `--seed 1..5` (17 tests, 0 failures every time) and ran the AC6 concurrency test in isolation (`pin_rebind_test.exs:579`) 10 more consecutive times -- 0 failures, no flakiness observed.\n\nAll 6 REQ-060 ACs traced against docs/requirements.yaml's REQ-060 entry: each has >=1 non-trivial test. AC1: reads the raw INSTANCE_PINS_REBOUND payload back via Reconstruction.read_full_log/3 (not just the return value) plus a dedicated no-op-entry case asserting the event still commits with an empty entries list. AC2: verified in source that the request orders the genuinely-valid entry (kind: :variable_schema, version: v2) BEFORE the unknown-ref entry (kind: :catalog_entry, ref: 'does-not-exist') -- lines 280-284 of the test file -- so the test actually exercises resolve_entries_against_effective_pins/2's full pre-pass rather than trivially passing under a buggy short-circuit-only-on-first-entry implementation; also confirms the effective pin set is read back unchanged (original v1) and zero events were appended. AC3: three independent tests, one per terminal status (COMPLETED via in-create completion, CANCELLED via real Engine.cancel_instance/3, ERROR via real Engine.set_instance_error/2), matching REVIEWER's own note that check_rebind_eligibility/1 is a hand-written three-way case rather than a reuse of terminal?/1. AC4: six tests distinguishing :invalid_reason vs :empty_entries vs two distinctly-shaped :malformed_entry reasons. AC5: reconstruct_effective_pins/2 post-rebind check, an independent hand-fold over the raw event log via PinResolver.merge_effective_pins/2 asserted equal to reconstruct_effective_pins/2's own result, and a structural check that a caller-supplied :pin_lookup key is never invoked (0 calls via an Agent counter). AC6: genuine two-Task.async real-connection FOR UPDATE / FOR UPDATE NOWAIT race (Sandbox :auto), asserting {:error, {:concurrent_modification, id}} returned in <2s against a 5s lock-hold budget, row unchanged, zero events written; plus a whitespace-normalized moduledoc substring check for the FAILED/ERROR naming note. No @tag :skip, no 'TODO: implement test' (grepped spec and test file). No hardcoded secrets/connection strings (grepped). Fixtures are per-test unique (Ecto.UUID.generate/System.unique_integer) with each test provisioning and tearing down its own tenant schema via provisioned_tenant/0 -- no shared state, no cross-test ordering dependency (confirmed further by the repeated full-file reruns above producing identical pass counts regardless of seed/order).\n\nFocus 1 (AC6 flakiness): not flaky. 5 full-file reruns across different --seed values plus 10 additional isolated reruns of the single concurrency test, all real Postgres, all 0 failures. The lock-holder task synchronizes via a blocking `receive :locked` handshake before the racing call starts (not a sleep), and the elapsed-time assertion (<2s against a 5s hold budget) has ample margin, so there is no observed timing sensitivity.\n\nFocus 2 (ISS-0071 registration workaround): does not mask real module logic. Confirmed lib/letflow/engine/pin_rebind.ex's own moduledoc states it deliberately does NOT self-register INSTANCE_PINS_REBOUND, matching the pre-existing, already-shipped precedent for INSTANCE_CANCELLED/TASK_COMPLETED (neither of those production paths self-registers either). ISS-0071 is filed, open, and mirrored as GH#257 (confirmed via `gh issue view 257` -- OPEN). provisioned_tenant/0's register_event_type! calls are a test-fixture precondition only (mirrors engine_cancel_instance_test.exs:63-97's identical established pattern line-for-line) -- they satisfy EventStore.append/2's registry precondition so the actual rebind_pins/3 code path (validation, all-or-nothing resolution, Ecto.Multi transaction, event payload construction, lock handling) runs for real and is what every assertion in this file checks. This is not a new dodge invented for this run; it's the same convention already used by every sibling event-appending test in the codebase, and the underlying production gap is tracked, not hidden.\n\nFocus 3 (AC2 ordering): confirmed directly in test/letflow/engine/pin_rebind_test.exs lines 278-287 -- entries list is [valid v2 entry, then does-not-exist entry], and lib/letflow/engine/pin_rebind.ex's resolve_entries_against_effective_pins/2 (line 407) processes entries via Enum.reduce_while/3 in list order, so this ordering is the one that actually exercises the full-pre-pass claim rather than trivially passing.\n\nMinor issue noted, not gate-failing: TEST-DESIGNER's own handoff (step-03-test-designer.json) result.summary claims '27 tests across 6 describe blocks' -- the actual file has 17 tests (`grep -c '^\\s*test \"'` = 17), matching the spec's own 17 numbered test cases. Coverage itself is correct and complete; the self-reported test count is simply wrong. Filed as result.issues below rather than treated as a coverage gap, since every AC is independently confirmed covered by the actual 17 tests that were run.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ060-20260819/step-03b-test-design-validator.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "TEST-DESIGNER's step-03 handoff result.summary claims '27 tests across 6 describe blocks'; the actual test file has 17 tests, matching test/specs/REQ-060.md's 17 numbered cases. Not a coverage defect (all 6 ACs are genuinely covered by the real 17 tests, independently re-run here), but a self-report accuracy issue worth naming so it doesn't recur."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ060-20260819",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ060-20260819",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

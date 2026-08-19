@@ -3222,7 +3222,7 @@ requirements:
   - id: REQ-060
     title: Explicit instance pin rebind (pin_rebind.zig, PIN-05)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S3
     impl_order: 105  # letflow-queue task id
     description: >

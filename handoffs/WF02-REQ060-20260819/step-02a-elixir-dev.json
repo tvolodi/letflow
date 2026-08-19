@@ -1,0 +1,61 @@
+{
+  "handoff_id": "c2f1a1a0-0003-4a00-9000-000000000060",
+  "run_id": "WF02-REQ060-20260819",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ060-20260819/step-02a-elixir-dev.json",
+  "created_at": "2026-08-19T09:11:15Z",
+  "started_at": "2026-08-19T09:11:15Z",
+  "completed_at": "2026-08-19T09:11:15Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-060"],
+    "related_handoff_ids": [
+      "lib/letflow/design/req060-pin-rebind.md"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req060-pin-rebind.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/pin_rebind.ex"
+    ]
+  },
+  "task": {
+    "description": "Implement lib/letflow/design/req060-pin-rebind.md (gate-approved commit d102cfd) exactly: new Letflow.Engine.PinRebind (lib/letflow/engine/pin_rebind.ex) with rebind_pins/3, the pre-transaction validation phase (M0.1-M0.6), and the Ecto.Multi with M1 (lock_projection_nowait/3, SELECT FOR UPDATE NOWAIT ported from Reconstruction.lock_projection_nowait/2), M2 (module-local three-way eligibility check, NOT InstanceProjection.terminal?/1), M3 (PinResolver.reconstruct_effective_pins/2 inside the lock), M4 (all-or-nothing per-entry PinResolver.pin_for/3 lookup), M5/M6 (changed-entries computation + EventStore.append/2 with the INSTANCE_PINS_REBOUND payload). No self-registration of the INSTANCE_PINS_REBOUND event type (matches the TASK_COMPLETED/INSTANCE_CANCELLED precedent). No migration -- PIN-05 writes exactly one new event type into the existing events table. Do not write tests (TEST-DESIGNER's job); do run mix compile --warnings-as-errors and fix anything that doesn't compile clean.",
+    "acceptance_criteria": [
+      "a valid rebind on a running instance appends exactly one INSTANCE_PINS_REBOUND event carrying ref, prior_version, new_version, actor and reason for each CHANGED entry, and an entry whose requested version already matches contributes no payload entry",
+      "a rebind naming a ref absent from the current effective pin set returns a distinct UnknownPinRef error and applies NONE of the entries -- verified by reading the effective pin set back and confirming it is unchanged, including for the entries that were individually valid",
+      "a rebind against a COMPLETED, CANCELLED or ERROR instance returns a distinct InstanceNotRebindable error, with each of the three statuses tested",
+      "a rebind with a missing or empty reason, an empty entries list, and a malformed entry each return a distinct invalid-input error",
+      "after a rebind, REQ-059's effective pin set reflects the new versions and REQ-053's reconstruction derives the same set from INSTANCE_STARTED plus INSTANCE_PINS_REBOUND, with no catalog read",
+      "lock contention surfaces as a distinct ConcurrentModification error rather than blocking, and the moduledoc states that ERROR (not a non-existent FAILED status) is the terminal status PIN-05's text refers to"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented lib/letflow/engine/pin_rebind.ex exactly per the gate-approved design's SS2-SS9: rebind_pins/3 is the module's sole public entry point (no new Letflow.Engine.rebind_* wrapper, per the design's own placement-choice note). Pre-transaction phase (zero Repo calls): cast_instance_id/1 (Ecto.UUID.cast/1, mirrors cancel_instance/3's own helper verbatim), fetch_actor_and_idempotency_key/1 (mirrors cancel_instance/3's own helper verbatim), fetch_reason/1 (nil/non-binary/blank-after-trim all collapse to :invalid_reason per design's OQ-2 reading), fetch_entries/1 (missing key and [] both collapse to :empty_entries), normalize_and_validate_entries/1 (per-entry, index-tagged, ordered checks: exactly the 3 required keys non-nil -> :missing_or_unexpected_keys, kind in the 3-atom/3-string set -> :invalid_kind, ref/version non-empty-after-trim binaries -> :invalid_ref/:invalid_version; halts the whole list on the first failure), and TenantProvisioning.tenant_id_for_schema_name/1 (-> :invalid_schema_name) last, matching cancel_instance/3's own reuse. Atomic phase, one Ecto.Multi: M1 lock_projection_nowait/3 (repo.one/2 on InstanceProjection with lock(\"FOR UPDATE NOWAIT\"), rescuing only %Postgrex.Error{postgres: %{code: :lock_not_available}} into {:error, {:concurrent_modification, instance_id}}, re-raising any other Postgrex.Error unrescued, row-absent -> {:error, :instance_not_found}); M2 check_rebind_eligibility/1 (pure, module-local three-way predicate -- :completed/:cancelled/:error all -> {:error, {:instance_not_rebindable, status}}, :active -> proceeds -- deliberately NOT InstanceProjection.terminal?/1, which excludes :error); M3 PinResolver.reconstruct_effective_pins/2 called inside the same Multi/transaction, after the lock; M4 resolve_entries_against_effective_pins/2 (PinResolver.pin_for/3 per entry, all-or-nothing -- first {:pin_missing, kind, ref} halts the whole pass with {:error, {:unknown_pin_ref, kind, ref}}, no entries applied); M5 compute_changed_entries/1 (pure -- entries whose requested version equals the current pinned version contribute nothing); M6 append_pins_rebound_event/6 (EventStore.append/2 with event_type \"INSTANCE_PINS_REBOUND\", payload Jason.encode!(%{entries: ..., actor: actor_id, reason: reason}), each entry carrying kind/ref/prior_version/new_version -- exactly the shape PinResolver.apply_rebind_event/2 already reads plus the audit-only prior_version). No separate instance_projections write after M6 (EventStore.append/2 already advances last_event_seq, matching cancel_instance/3's own M7-equivalent precedent). interpret_rebind_result/3 unwraps Ecto.Multi's {:error, failed_step, reason, changes} envelope as a pure pass-through, and builds rebind_result() from instance_id/changed_entries/a rebound_at timestamp computed once before the transaction opens. The moduledoc states the sole-write-path invariant, the FAILED-vs-ERROR naming note (with the module's own three-way eligibility check named explicitly), the PinResolver/Reconstruction zero-code-change reuse, the NOWAIT locking provenance, the caller-owns-event-type-registration responsibility, and the all-or-nothing invariant -- matching every one of the design doc's SS2 moduledoc-content requirements verbatim in substance. INSTANCE_PINS_REBOUND is not self-registered anywhere in this module (OQ-1's chosen reading), matching the TASK_COMPLETED/INSTANCE_CANCELLED precedent -- TEST-DESIGNER must register it in every fixture exercising rebind_pins/3, the same way test/letflow/engine_cancel_instance_test.exs already does for its own two event types.\n\nmix compile --warnings-as-errors: clean, 'Generated letflow app', zero warnings (both incremental single-file and full project compile). mix format --check-formatted: clean after one mix format pass fixed 4 line-length wrapping mismatches (long function heads/pipe chains) -- no semantic change, confirmed by re-running --warnings-as-errors after formatting.\n\nNo deviations from the design doc -- every function name, Multi step key, error atom/tuple shape, and the payload shape in SS5 were implemented exactly as specified. The design's own five open questions (OQ-1..OQ-5) are all still open and are restated in the moduledoc/carried forward for REVIEWER, not silently resolved by this implementation.",
+    "artifacts_out": [
+      "lib/letflow/engine/pin_rebind.ex"
+    ],
+    "issues": [
+      "OQ-1 (design doc SS9, restated in this module's moduledoc): rebind_pins/3 does not self-register the INSTANCE_PINS_REBOUND event type -- REVIEWER should confirm this reading (vs. an idempotent self-registration alternative) before TEST-DESIGNER writes fixtures against it.",
+      "OQ-4 (design doc SS6, not resolved by this implementation): the NOWAIT lock on instance_projections makes rebind_pins/3 surface ConcurrentModification against ANY concurrent holder of that row's lock (including complete_task/3/cancel_instance/3 mid-transaction), not just a second concurrent rebind_pins/3 call -- unverifiable against R-Co without source access, flagged for REVIEWER per the design doc's own note.",
+      "OQ-2/OQ-3/OQ-5 (design doc SS9) carried forward unresolved in the moduledoc/design doc, per the design's own instruction not to silently resolve them."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ060-20260819",
+      "commit_sha_list": ["a00c840"],
+      "remote_branch": "origin/feature/WF02-REQ060-20260819",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (2c) -- touches the event-append path of a tenant-data write (new INSTANCE_PINS_REBOUND event type, new NOWAIT lock on instance_projections) -- then REVIEWER (2d) for OTP idiom / OQ-1/OQ-4 sign-off, before TEST-DESIGNER."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

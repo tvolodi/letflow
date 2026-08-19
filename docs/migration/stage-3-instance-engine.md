@@ -94,9 +94,19 @@ forward R-Co's own PIN-01 AC1/AC2 and PIN-03 AC3 scope gap
 "Scope boundaries with S4 and S5") and reserves PIN_RETRY_EXHAUSTED as a
 named, not-yet-emitted hook for PIN-03 AC4's exhausted-retry-budget DLQ
 routing rather than a partial implementation; same header-sync gap-fix
-shape applied by this requirement's own DOC-UPDATER); REQ-062 `done`
-(Sub-process invocation runtime half, SPC-01 -- child instance creation
-via createWithParentInheritance, parent-token waiting_child_instance_id
+shape applied by this requirement's own DOC-UPDATER); REQ-060 `done`
+(Explicit instance pin rebind, PIN-05 -- Letflow.Engine.PinRebind, the
+sole write path to a running instance's effective pin set after
+INSTANCE_STARTED, requiring a mandatory reason, validating every ref
+against REQ-059's merge_effective_pins with all-or-nothing application
+on an UnknownPinRef, rejecting COMPLETED/CANCELLED/ERROR instances as
+InstanceNotRebindable, appending one INSTANCE_PINS_REBOUND event per
+CHANGED entry, and surfacing lock contention as a distinct
+ConcurrentModification error via the same SELECT FOR UPDATE NOWAIT
+convention REQ-053 established; same header-sync gap-fix shape applied
+by this requirement's own DOC-UPDATER); REQ-062 `done` (Sub-process
+invocation runtime half, SPC-01 -- child instance creation via
+createWithParentInheritance, parent-token waiting_child_instance_id
 wait/clear (R-Co GH #428 field-dropping regression test included),
 input filtering and output-merge per interface, all four SPC-01 failure
 modes routed through REQ-061's set_instance_error/2 rather than a local
@@ -109,7 +119,8 @@ PinResolver integration during the merge of feature/WF02-REQ062-20260819
 into main, since both requirements independently touched
 lib/letflow/engine.ex/lib/letflow/engine/reconstruction.ex; same
 header-sync gap-fix shape applied by this requirement's own
-DOC-UPDATER); REQ-060 (`docs/requirements.yaml`, 1 total) `pending`.
+DOC-UPDATER). All Stage 3 requirements (`docs/requirements.yaml`) are
+now `done`.
 
 ## Scope
 

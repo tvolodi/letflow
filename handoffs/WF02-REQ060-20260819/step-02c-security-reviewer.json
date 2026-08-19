@@ -1,0 +1,61 @@
+{
+  "handoff_id": "c2f1a1a0-0003-4a00-9000-00000002c060",
+  "run_id": "WF02-REQ060-20260819",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ060-20260819/step-02c-security-reviewer.json",
+  "created_at": "2026-08-19T09:12:58Z",
+  "started_at": "2026-08-19T09:12:58Z",
+  "completed_at": "2026-08-19T09:12:58Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-060"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ060-20260819/step-01-code-designer.json",
+      "handoffs/WF02-REQ060-20260819/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ060-20260819/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/pin_rebind.ex",
+      "lib/letflow/design/req060-pin-rebind.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/pin_rebind.ex"
+    ]
+  },
+  "task": {
+    "description": "Security-review lib/letflow/engine/pin_rebind.ex (new module, git diff main...HEAD) which adds rebind_pins/3, a write path locking instance_projections FOR UPDATE NOWAIT, mutating a running instance's effective pin set, and appending an INSTANCE_PINS_REBOUND event. Assess tenant isolation of every DB op, the two ELIXIR-DEV-flagged open questions (OQ-1 no self-registration of the event type, OQ-4 ConcurrentModification scope), the all-or-nothing invariant (PIN-05 AC2), and actor_id handling vs. cancel_instance/3 precedent.",
+    "acceptance_criteria": [
+      "Scope test correctly determines this diff touches a tenant-data path",
+      "Every applicable invariant (INV-1..INV-8) explicitly verdicted APPLIES/NOT-APPLICABLE with reasoning",
+      "For each APPLIES invariant, the 'How to verify' check is actually run against the diff, not asserted",
+      "OQ-1 and OQ-4 explicitly assessed for security implications",
+      "All-or-nothing write invariant traced directly in the Ecto.Multi code, not assumed from the moduledoc",
+      "actor_id spoofability assessed against the cancel_instance/3 precedent",
+      "No BLOCKER-severity finding left unaddressed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: APPLIES (tenant-data path) -- new module adds a write path against instance_projections (lock) and appends a new event type (INSTANCE_PINS_REBOUND) into the tenant-scoped events table. No migration in this diff (`git diff main...HEAD --stat -- priv/repo/migrations/` empty).\n\nINV-1 APPLIES/PASS. (a) Every Repo access is prefix-scoped: lock_projection_nowait/3 -> repo.one(query, prefix: prefix) on InstanceProjection (pin_rebind.ex:~lock_projection_nowait); PinResolver.reconstruct_effective_pins/2 called with prefix: prefix (M3); EventStore.append/2 called with prefix: prefix (M6). No query anywhere in the module omits :prefix or falls back to a default/public schema. (b) no migration -- confirmed empty diff on priv/repo/migrations/. (c) tenant_id is never accepted from rebind_attrs() (the type has no tenant_id field) -- rebind_pins/3's pre-transaction phase calls TenantProvisioning.tenant_id_for_schema_name(prefix) purely to validate the prefix resolves to a real tenant before opening the transaction (result is discarded, `{:ok, _tenant_id} <-`); actual tenant_id attribution on the appended event is derived by EventStore.append/2 itself from opts[:prefix] (event_store.ex:179, unchanged by this diff), never from caller-supplied data -- satisfies 0003's addendum.\n\nCross-tenant leak check specifically requested (focus area 1): the lock query `where([p], p.instance_id == ^instance_id) |> lock(\"FOR UPDATE NOWAIT\")` is scoped entirely by the `prefix:` option passed to repo.one/2, i.e. by which tenant's physical schema Postgres resolves the query against -- there is no code path where a caller can lock, read, or write another tenant's instance_projections row by supplying a different instance_id while prefix stays fixed to the caller's own schema (schema-per-tenant means the row simply does not exist in the wrong schema). The reconstruction read (M3) and the event append (M6) both reuse the same `prefix` variable threaded from rebind_pins/3's own opts, never re-derived or caller-overridable mid-flow.\n\nOQ-1 (focus area 2, event-type self-registration): assessed for the specific concern raised -- could missing registration silently swallow or misroute the audit trail. Traced EventStore.append/2 (event_store.ex:175-208): it calls `Registry.validate_payload(event_type, payload, tenant_id)` inside its own `with` chain before any write; Registry.get_type/2 (registry.ex:169-178) returns `{:error, :unknown_event_type}` -- never nil, never a raised exception -- when no row exists for that event_type in that tenant's schema. An unregistered INSTANCE_PINS_REBOUND therefore makes the whole `with` chain fail closed, surfacing as `{:error, {:event_append_failed, {:error, :unknown_event_type}}}` from pin_rebind.ex's own append_pins_rebound_event/6, which aborts the Ecto.Multi and rolls back the lock/read with it. This is an explicit, typed failure, not a silent swallow or misroute -- no event is written and no partial state persists. OQ-1 has no security implication; it is purely an operational/test-fixture-setup concern (which SECURITY-REVIEWER-01c leaves to REVIEWER per the design's own routing), consistent with the established TASK_COMPLETED/INSTANCE_CANCELLED precedent already in test/letflow/engine_cancel_instance_test.exs.\n\nOQ-4 (focus area 2, ConcurrentModification scope): the NOWAIT lock is instance_id-scoped only (same discipline as every other Engine lock, per EE-12), and surfacing contention against ANY concurrent holder of that row (not just another rebind_pins/3 call) is strictly more conservative from a security standpoint than the alternative -- it cannot cause a cross-tenant effect (the lock is already prefix-scoped per INV-1 above) and it cannot cause a stale-read/lost-update within a tenant, since NOWAIT+abort is the safe failure mode when contended. No security implication; this is a liveness/UX precision question (does REQ-060's text want a distinct error atom to distinguish 'another rebind is racing' from 'complete_task/cancel_instance holds the row'), correctly left to REVIEWER/design, not SECURITY-REVIEWER.\n\nAll-or-nothing invariant (focus area 3, PIN-05 AC2) -- traced directly in the Ecto.Multi (run_rebind_pins/7): resolve_entries_against_effective_pins/2 (M4) is a pure, no-I/O Enum.reduce_while over normalized_entries; the FIRST entry whose PinResolver.pin_for/3 lookup returns {:error, {:pin_missing, kind, ref}} halts the whole pass immediately with {:halt, {:error, {:unknown_pin_ref, kind, ref}}} -- no partial accumulator is ever exposed. This {:error, ...} return from the Multi.run(:resolved_entries, ...) step causes Ecto.Multi to abort the entire transaction before Multi.run(:changed_entries, ...) or Multi.run(:event, ...) (M5/M6, the only steps that produce a Repo write via EventStore.append/2) ever execute -- confirmed by Multi step ordering in run_rebind_pins/7 (:instance_projection -> :eligibility -> :effective_pins -> :resolved_entries -> :changed_entries -> :event) and Ecto.Multi's own abort-on-first-error semantics. A request naming one valid + one UnknownPinRef entry therefore applies zero writes: the lock (M1) is taken and released on rollback, but no event is appended and instance_projections itself is never mutated by this module (mutation happens exclusively via EventStore.append/2's own effects). This matches AC2 exactly.\n\nactor_id handling (focus area 4): rebind_pins/3's fetch_actor_and_idempotency_key/1 mirrors cancel_instance/3's own helper verbatim (Map.get(attrs, :actor_id), {:error, :missing_actor_id} if nil) -- confirmed by direct comparison with lib/letflow/engine.ex:907/1094. actor_id is caller-supplied and NOT independently authorized by this module, but this is the established, documented precedent across the entire Engine surface (engine.ex:114-127's own moduledoc note: complete_task/3 'performs no assignee comparison and accepts attrs.actor_id as already-authorized by the caller' -- the S4 HTTP auth plug's job per REQ-021). pin_rebind.ex does not deviate from or weaken this precedent. actor_id is format-validated downstream by EventStore.append/2's fetch_uuid/3 (event_store.ex:223-234, Ecto.UUID.cast) before being written into the event row or the JSON payload -- a malformed actor_id fails closed as {:error, :missing_actor_id}-shaped, never reaches the payload unvalidated. No spoofing path beyond the already-accepted, already-reviewed caller-authority model; no new gap introduced.\n\nINV-2 NOT-APPLICABLE (S4 not started, no API response shaping in this diff -- rebind_pins/3 is a direct library call, no HTTP route yet). INV-3 NOT-APPLICABLE (S5 not started). INV-4 APPLIES/PASS -- grep for System.get_env/password/secret/token against pin_rebind.ex: zero hits; no secret-resolution code touched. INV-5 NOT-APPLICABLE (S4 not started, no lookup-by-ID endpoint in this diff). INV-6 APPLIES/PASS -- this handoff is the required proof-of-scoping artifact. INV-7 APPLIES/PASS -- grep for Repo.query against pin_rebind.ex: zero hits; all access via Ecto.Query composition (where/lock) and Repo.transaction/1 through Ecto.Multi. INV-8 APPLIES/PASS -- grep for bare `{:ok, x} = ...`/`{:error, x} = ...` assignment: the three hits found (lines in normalize_and_validate_entries/1 and resolve_entries_against_effective_pins/2's case fallthroughs) are all `{:error, _reason} = error -> error`, i.e. re-binding an already-tagged tuple inside a `case` branch, not a blind destructuring match on a fallible external call -- no realistic input reaches an unhandled raise. lock_projection_nowait/3's Postgrex.Error rescue is deliberately scoped to `%Postgrex.Error{postgres: %{code: :lock_not_available}}` only, re-raising any other Postgrex.Error unrescued -- consistent with Reconstruction's own ported precedent and this codebase's stated let-it-crash-on-genuinely-unexpected-state discipline (INV-8's own carve-out).\n\nNo BLOCKER findings on any applicable invariant. Both ELIXIR-DEV-flagged open questions (OQ-1, OQ-4) reviewed and found to have no live security implication -- both fail closed / abort safely rather than silently corrupting or misrouting tenant data or the audit trail.",
+    "artifacts_out": [],
+    "issues": [
+      "Non-blocking, forward to REVIEWER: OQ-1 (event-type self-registration responsibility) and OQ-4 (ConcurrentModification scope precision) are both operational/idiom questions with no security implication -- REVIEWER should still sign off on the design intent per the design doc's own routing, since this handoff only confirms neither introduces a tenant-isolation, secret-leak, injection, or crash-on-tenant-input defect."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ060-20260819",
+      "commit_sha_list": ["a00c840", "8bae0cc"],
+      "remote_branch": "origin/feature/WF02-REQ060-20260819",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (2d) for OTP idiom / OQ-1/OQ-4 sign-off, before TEST-DESIGNER."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

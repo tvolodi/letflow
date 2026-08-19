@@ -1,0 +1,12 @@
+{
+  "run_id": "WF02-REQ060-20260819",
+  "workflow_id": "WF-02",
+  "requirement_ids": ["REQ-060"],
+  "stage": "S3",
+  "branch": "feature/WF02-REQ060-20260819",
+  "owned_modules": ["lib/letflow/engine/pin_rebind.ex"],
+  "step": "00-git-setup",
+  "agent_id": "hetzner-orch",
+  "queue_task_id": 105,
+  "timestamp": "2026-08-19T09:00:00Z"
+}

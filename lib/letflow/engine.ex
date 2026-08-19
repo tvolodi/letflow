@@ -98,6 +98,39 @@ defmodule Letflow.Engine do
   no assignee comparison and accepts `attrs.actor_id` as already-authorized
   by the caller. See `lib/letflow/design/req048-task-completion.md` for the
   full design.
+
+  ## `cancel_instance/3` (EE-08, REQ-052) — SUPERSESSION and scope boundary
+
+  `lib/letflow/parallel_approval.ex` (`Letflow.ParallelApproval`) and
+  `lib/letflow/approval_supervisor.ex` (`Letflow.ApprovalSupervisor`) are
+  **deleted** by this requirement, together with REQ-051's `PARALLEL_GATEWAY`
+  split/join — the hand-written two-approver `:gen_statem` and its dedicated
+  `DynamicSupervisor` are both fully superseded, with no retained/generalized
+  half (unlike `Letflow.ProcessInstance`'s own retirement, REQ-046, which kept
+  `Letflow.InstanceSupervisor` for a distinct, still-open future need —
+  REQ-052 introduces no new process and therefore has no equivalent
+  supervisor to keep).
+
+  R-Co's own EE-08 additionally (a) cancels pending timers atomically via
+  SCH-03 (`src/scheduler/`, S6 — not yet built in Letflow) and (b) abandons
+  any in-flight `SERVICE_TASK` HTTP call best-effort (REQ-056's own future
+  transport, out of S3 scope). **Neither exists in Letflow yet, and
+  `cancel_instance/3` performs neither.** This function cancels what already
+  exists today — `tasks`, `tokens`, and `instance_projections` rows, plus the
+  one `INSTANCE_CANCELLED` event — and leaves both as named, documented gaps:
+  a future S6 timer-scheduling requirement is expected to add its own
+  timer-cancellation call alongside this function's own transaction (or a
+  follow-up hook this function exposes for it to call), and REQ-056 is
+  expected to add its own best-effort HTTP-abort call the same way. Neither
+  is a silent omission — `cancel_instance/3` does not claim to fully
+  implement EE-08's R-Co scope, only its S3-buildable subset.
+
+  `POST /api/v1/instances/:id/cancel` is S4 (api-surface) scope — this
+  function returns tagged tuples only, matching the boundary `create/2`/
+  `complete_task/3` already established.
+
+  See `lib/letflow/design/req052-instance-cancellation.md` for the full
+  design this section implements.
   """
 
   import Ecto.Query
@@ -1263,6 +1296,324 @@ defmodule Letflow.Engine do
   # just unwraps Ecto.Multi's {:error, failed_step, reason, changes_so_far}
   # envelope around whatever reason each step already produced.
   defp interpret_complete_result({:error, _failed_step, reason, _changes}) do
+    {:error, reason}
+  end
+
+  # =========================================================================
+  # cancel_instance/3 (EE-08, REQ-052) -- see
+  # lib/letflow/design/req052-instance-cancellation.md for the full design
+  # this section implements.
+  # =========================================================================
+
+  @type cancel_attrs :: %{
+          required(:actor_id) => Ecto.UUID.t(),
+          required(:idempotency_key) => String.t()
+        }
+
+  @type cancel_opts :: [prefix: String.t()]
+
+  @type cancel_error ::
+          {:error, :invalid_instance_id}
+          | {:error, :invalid_schema_name}
+          | {:error, :missing_actor_id}
+          | {:error, :missing_idempotency_key}
+          | {:error, :instance_not_found}
+          | {:error, {:instance_already_terminal, status :: :completed | :cancelled}}
+          | {:error, {:event_append_failed, term()}}
+          | {:error, Ecto.Changeset.t()}
+          | {:error, term()}
+
+  @type cancel_result :: %{
+          instance_id: Ecto.UUID.t(),
+          status: :cancelled,
+          cancelled_task_ids: [Ecto.UUID.t()],
+          cancelled_at: DateTime.t()
+        }
+
+  @doc """
+  Cancels an instance (EE-08): sets every currently `PENDING` `tasks` row and
+  every currently `ACTIVE`/`WAITING` `tokens` row of the instance to
+  `CANCELLED`, appends exactly one `INSTANCE_CANCELLED` event (REQ-025), and
+  sets the `instance_projections` row to `CANCELLED` -- all inside one
+  `Ecto.Multi`/`Repo.transaction/1`. Row-level `SELECT ... FOR UPDATE`
+  locking on the `tasks` row set (locked before `instance_projections`,
+  matching `complete_task/3`'s own global lock-ordering rule) serializes a
+  `cancel_instance/3` call against a concurrent `complete_task/3` call on the
+  same instance: exactly one of the two commits, the other observes a
+  distinct, typed conflict error.
+
+  Cancelling an instance whose `instance_projections.status` is already
+  `:completed`/`:cancelled` (`Letflow.EventStore.InstanceProjection.terminal?/1`,
+  reused unchanged -- the same predicate `Letflow.EventStore.append/2`'s own
+  `active_instance_guard/3` already applies) returns
+  `{:error, {:instance_already_terminal, status}}` and writes nothing. An
+  `:error`-status instance is treated the same as an `:active` one --
+  cancellable -- since `terminal?/1` only returns `true` for
+  `:completed`/`:cancelled` (design doc §6).
+
+  `attrs[:actor_id]`/`attrs[:idempotency_key]` are pre-validated here, before
+  the transaction opens, since this function has no other caller-supplied
+  payload to validate (design doc §5, diverging from `complete_task/3`'s own
+  "no pre-check, let `append/2` validate" convention).
+
+  See this module's moduledoc for the `Letflow.ParallelApproval`/
+  `Letflow.ApprovalSupervisor` SUPERSESSION and the SCH-03/REQ-056 scope
+  boundary this function does not implement.
+  """
+  @spec cancel_instance(
+          instance_id :: Ecto.UUID.t(),
+          attrs :: cancel_attrs(),
+          opts :: cancel_opts()
+        ) :: {:ok, cancel_result()} | cancel_error()
+  def cancel_instance(instance_id, attrs, opts) when is_map(attrs) and is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+
+    with {:ok, instance_id} <- cast_instance_id(instance_id),
+         {:ok, actor_id, idempotency_key} <- fetch_actor_and_idempotency_key(attrs),
+         {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      cancelled_at = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+      run_cancel_instance(
+        instance_id,
+        actor_id,
+        idempotency_key,
+        cancelled_at,
+        prefix
+      )
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # Pre-transaction phase (design doc §5) -- zero DB writes attempted.
+  # ---------------------------------------------------------------------
+
+  # Defensive INV-8 guard, matching cast_task_id/1's own precedent above:
+  # instance_id flows into a `where i.instance_id == ^instance_id` query
+  # (M2, below) -- a malformed, non-UUID-shaped value there raises
+  # Ecto.Query.CastError rather than returning a typed error.
+  defp cast_instance_id(instance_id) do
+    case Ecto.UUID.cast(instance_id) do
+      {:ok, uuid} -> {:ok, uuid}
+      :error -> {:error, :invalid_instance_id}
+    end
+  end
+
+  defp fetch_actor_and_idempotency_key(attrs) do
+    case {Map.get(attrs, :actor_id), Map.get(attrs, :idempotency_key)} do
+      {nil, _idempotency_key} -> {:error, :missing_actor_id}
+      {_actor_id, nil} -> {:error, :missing_idempotency_key}
+      {actor_id, idempotency_key} -> {:ok, actor_id, idempotency_key}
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # Atomic phase (design doc §7) -- one Ecto.Multi.
+  # ---------------------------------------------------------------------
+
+  defp run_cancel_instance(instance_id, actor_id, idempotency_key, cancelled_at, prefix) do
+    Multi.new()
+    |> Multi.run(:open_tasks, fn repo, _changes ->
+      fetch_and_lock_open_tasks(repo, instance_id, prefix)
+    end)
+    |> Multi.run(:instance_projection, fn repo, _changes ->
+      fetch_and_lock_instance_projection_for_cancel(repo, instance_id, prefix)
+    end)
+    |> Multi.run(:eligibility, fn _repo, %{instance_projection: projection} ->
+      check_cancel_eligibility(projection)
+    end)
+    |> Multi.run(:task_cancellations, fn repo, %{open_tasks: open_tasks} ->
+      cancel_task_rows(repo, open_tasks, cancelled_at, prefix)
+    end)
+    |> Multi.run(:live_tokens, fn repo, _changes ->
+      fetch_and_lock_live_tokens(repo, instance_id, prefix)
+    end)
+    |> Multi.run(:token_cancellations, fn repo, %{live_tokens: live_tokens} ->
+      cancel_token_rows(repo, live_tokens, cancelled_at, prefix)
+    end)
+    |> Multi.run(:event, fn _repo, changes ->
+      append_instance_cancelled_event(
+        instance_id,
+        changes,
+        actor_id,
+        idempotency_key,
+        prefix
+      )
+    end)
+    |> Multi.run(:projection, fn repo, %{instance_projection: projection} ->
+      cancel_instance_projection(repo, projection, cancelled_at, prefix)
+    end)
+    |> Repo.transaction()
+    |> interpret_cancel_result(instance_id, cancelled_at)
+  end
+
+  # M1 -- row-lock + fetch every open (:pending) tasks row for this instance,
+  # deterministically ordered (design doc §7, §7.1) -- must run, and lock,
+  # before M2 (instance_projections), matching complete_task/3's own global
+  # lock-ordering rule verbatim.
+  defp fetch_and_lock_open_tasks(repo, instance_id, prefix) do
+    tasks =
+      Task
+      |> where([t], t.instance_id == ^instance_id and t.status == :pending)
+      |> order_by([t], asc: t.id)
+      |> lock("FOR UPDATE")
+      |> repo.all(prefix: prefix)
+
+    {:ok, tasks}
+  end
+
+  # M2 -- row-lock + fetch the instance_projections row. Unlike
+  # fetch_and_lock_instance_projection/3 (complete_task/3's own M2), this does
+  # NOT reject a non-:active status itself -- eligibility (M3, terminal?/1) is
+  # the shared, reused predicate for that (design doc §6).
+  defp fetch_and_lock_instance_projection_for_cancel(repo, instance_id, prefix) do
+    InstanceProjection
+    |> where([p], p.instance_id == ^instance_id)
+    |> lock("FOR UPDATE")
+    |> repo.one(prefix: prefix)
+    |> case do
+      nil -> {:error, :instance_not_found}
+      %InstanceProjection{} = projection -> {:ok, projection}
+    end
+  end
+
+  # M3 -- pure check, no I/O: reuses InstanceProjection.terminal?/1 unchanged
+  # (design doc §6) rather than a second, independently-maintained predicate.
+  # Nothing has been written yet when this runs -- M1/M2 only locked/read.
+  defp check_cancel_eligibility(%InstanceProjection{status: status} = projection) do
+    if InstanceProjection.terminal?(status) do
+      {:error, {:instance_already_terminal, status}}
+    else
+      {:ok, projection}
+    end
+  end
+
+  # M4 -- Task.complete_changeset/2, already shipped, reused unchanged.
+  defp cancel_task_rows(repo, open_tasks, cancelled_at, prefix) do
+    attrs = %{status: :cancelled, cancelled_at: cancelled_at}
+
+    open_tasks
+    |> Enum.reduce_while({:ok, []}, fn %Task{} = task, {:ok, acc} ->
+      task
+      |> Task.complete_changeset(attrs)
+      |> repo.update(prefix: prefix)
+      |> case do
+        {:ok, updated} -> {:cont, {:ok, [updated | acc]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, updated} -> {:ok, Enum.reverse(updated)}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # M5 -- row-lock + fetch every live (:active/:waiting) tokens row for this
+  # instance, deterministically ordered (design doc §7).
+  defp fetch_and_lock_live_tokens(repo, instance_id, prefix) do
+    tokens =
+      TokenRecord
+      |> where([t], t.instance_id == ^instance_id and t.status in [:active, :waiting])
+      |> order_by([t], asc: t.id)
+      |> lock("FOR UPDATE")
+      |> repo.all(prefix: prefix)
+
+    {:ok, tokens}
+  end
+
+  # M5 (cont.) -- TokenRecord.advance_changeset/2, already shipped, reused
+  # unchanged.
+  defp cancel_token_rows(repo, live_tokens, cancelled_at, prefix) do
+    attrs = %{status: :cancelled, cancelled_at: cancelled_at}
+
+    live_tokens
+    |> Enum.reduce_while({:ok, []}, fn %TokenRecord{} = token, {:ok, acc} ->
+      token
+      |> TokenRecord.advance_changeset(attrs)
+      |> repo.update(prefix: prefix)
+      |> case do
+        {:ok, updated} -> {:cont, {:ok, [updated | acc]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, updated} -> {:ok, Enum.reverse(updated)}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # M6 -- appends the INSTANCE_CANCELLED event (design doc §9, REQ-025).
+  # Runs BEFORE M7 (the instance_projections status write) -- load-bearing:
+  # EventStore.append/2's own active_instance_guard/3 reads
+  # instance_projections.status itself, inside this same outer transaction.
+  # If M7 ran first, that guard would read the just-written :cancelled status
+  # and reject its own call.
+  defp append_instance_cancelled_event(
+         instance_id,
+         %{open_tasks: open_tasks, live_tokens: live_tokens},
+         actor_id,
+         idempotency_key,
+         prefix
+       ) do
+    payload =
+      Jason.encode!(%{
+        cancelled_task_ids: Enum.map(open_tasks, & &1.id),
+        cancelled_token_ids: Enum.map(live_tokens, & &1.id)
+      })
+
+    event_attrs = %{
+      instance_id: instance_id,
+      event_type: "INSTANCE_CANCELLED",
+      payload: payload,
+      actor_id: actor_id,
+      idempotency_key: idempotency_key
+    }
+
+    case EventStore.append(event_attrs, prefix: prefix) do
+      {:ok, result} -> {:ok, result}
+      {:error, reason} -> {:error, {:event_append_failed, reason}}
+    end
+  end
+
+  # M7 -- InstanceProjection.update_changeset/2, already shipped, reused
+  # unchanged. last_event_seq intentionally omitted from attrs -- M6's own
+  # EventStore.append/2 call already advanced it, matching
+  # reconcile_projection/5's own precedent above.
+  defp cancel_instance_projection(repo, %InstanceProjection{} = projection, cancelled_at, prefix) do
+    attrs = %{status: :cancelled, cancelled_at: cancelled_at}
+
+    projection
+    |> InstanceProjection.update_changeset(attrs)
+    |> repo.update(prefix: prefix)
+  end
+
+  # ---------------------------------------------------------------------
+  # Result assembly (design doc §3's cancel_result()).
+  # ---------------------------------------------------------------------
+
+  defp interpret_cancel_result(
+         {:ok, %{instance_projection: %InstanceProjection{}, open_tasks: open_tasks}},
+         instance_id,
+         cancelled_at
+       ) do
+    {:ok,
+     %{
+       instance_id: instance_id,
+       status: :cancelled,
+       cancelled_task_ids: Enum.map(open_tasks, & &1.id),
+       cancelled_at: cancelled_at
+     }}
+  end
+
+  # Catch-all -- every Multi step's own callback above already maps its
+  # failure to the exact error shape cancel_error() promises (or passes a
+  # raw changeset/term() through, matching those catch-all clauses); this
+  # just unwraps Ecto.Multi's {:error, failed_step, reason, changes_so_far}
+  # envelope around whatever reason each step already produced.
+  defp interpret_cancel_result(
+         {:error, _failed_step, reason, _changes},
+         _instance_id,
+         _cancelled_at
+       ) do
     {:error, reason}
   end
 end

@@ -23,9 +23,10 @@ defmodule Letflow.SandboxPool do
   or its own wait window elapses) needs one serialization point to arbitrate correctly —
   a property a single process's mailbox provides natively and a row-based design would
   need to re-derive via an additional DB-level lock. This is distinct from why
-  `Letflow.InstanceSupervisor`/`Letflow.ApprovalSupervisor` use one process *per*
-  instance: those exist for crash isolation between autonomous, long-lived actors, which
-  a claimed sandbox (inert data between `claim` and `release`) is not. See the design
+  `Letflow.InstanceSupervisor` uses one process *per* instance: that exists for crash
+  isolation between autonomous, long-lived actors, which a claimed sandbox (inert data
+  between `claim` and `release`) is not (REQ-052 deleted the once-analogous
+  `Letflow.ApprovalSupervisor`, per its own design doc §2). See the design
   doc §2 for the full reasoning, including the accepted trade-off that pool state does
   not survive a `SandboxPool` process restart (design doc §11 OQ-3).
 

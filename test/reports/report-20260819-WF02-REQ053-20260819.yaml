@@ -1,0 +1,90 @@
+# Test run report — WF-02 Step 4 (test run) for REQ-053
+
+requirement_id: REQ-053
+workflow: WF-02
+step: "04"
+agent: TEST-RUNNER
+run_id: WF02-REQ053-20260819
+date_utc: 2026-08-19T03:15:00Z
+
+git:
+  branch: feature/WF02-REQ053-20260819
+  branch_confirmed: true
+  commit: 1f12e4a
+  commit_subject: "docs(REQ-053): update spec to reflect AC1 fix in 8b1d6e0"
+  worktree: false
+  diff_stat_main_to_head: >
+    docs/issues/ISS-0062.yaml, docs/requirements.yaml,
+    docs/status/requirement_status.yaml,
+    lib/letflow/design/req053-state-reconstruction.md (new, 365 lines),
+    lib/letflow/engine.ex (+43/-),
+    lib/letflow/engine/reconstruction.ex (new, 662 lines),
+    test/letflow/engine/reconstruction_test.exs (new, 627 lines),
+    test/specs/REQ-053.md (new, 264 lines).
+    8 files changed, 1974 insertions(+), 9 deletions(-).
+
+environment:
+  toolchain: local (not Docker fallback) — mix/elixir reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 27 [erts-15.2.7.4] ... Elixir 1.18.3 (compiled with Erlang/OTP 27)"
+  postgres_container: "letflow-postgres-1, confirmed via docker compose up -d
+    (reported container already Running) — Postgres on host port 5462."
+  partition: "MIX_TEST_PARTITION=hetzner-orch (as instructed for this run)"
+  command_run: "MIX_TEST_PARTITION=hetzner-orch mix test (full suite, unpinned/
+    default random seed — the `test` alias runs ecto.create + ecto.migrate
+    --quiet first automatically)"
+
+verdict: PASS
+
+checks:
+  test_suite_full_run:
+    result: PASS — all green, no failures
+    exit_code: "0 (implied — no failure output, summary line reports 0 failures)"
+    summary_line_verbatim: "5 properties, 935 tests, 0 failures"
+    finished_line_verbatim: "Finished in 124.2 seconds (4.7s async, 119.5s sync)"
+    failures: 0
+
+  new_req053_tests_included_in_run:
+    result: PASS
+    note: >
+      test/letflow/engine/reconstruction_test.exs (new, 627 lines — covers
+      Letflow.Engine.Reconstruction.reconstruct_instance/2, including the
+      previously-identified AC1 defect around pending_task_nodes accumulating
+      across the replay fold, fixed in commit 8b1d6e0) executed as part of
+      the full-suite run above. No failures anywhere in the run, so this
+      file's tests are included in the "0 failures" total. The commit history
+      on this branch shows the file was originally reported "12/13 pass, AC1
+      finds a real defect" (commit dc5ec2a) before the fix landed (8b1d6e0)
+      and the spec doc was updated to match (1f12e4a, HEAD) — this run
+      confirms all 13 (now folded into the 935 total) pass post-fix.
+
+  known_noise_not_a_failure:
+    - >
+      Verbose SQL query debug logging (`[debug] QUERY OK ...` lines, including
+      multi-tenant schema DDL/DML from test fixtures) appears in raw mix test
+      output (config/test.exs's default test log level) — expected, not
+      indicative of any problem.
+    - >
+      "Metadata load failed for issuer https://placeholder-keycloak.invalid/..."
+      recurring error/retry log line — expected: a placeholder OIDC issuer
+      used in test config that intentionally has no real network target; does
+      not affect any test outcome.
+
+  pre_existing_failures_found: []
+
+  regression_check: >
+    5 properties, 935 tests, 0 failures — full green run, no regressions
+    observed against the rest of the suite (process_instance_test.exs's
+    property test and all other existing suites included).
+
+diagnosis: >
+  Full suite passed cleanly with no failures. REQ-053's reconstruction module
+  and its test suite (previously blocked by a real AC1 defect — state
+  accumulating pending_task_nodes incorrectly across the replay fold, fixed
+  in lib/letflow/engine/reconstruction.ex per commit 8b1d6e0) now pass in
+  full. No rework needed at this step.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-20260819-WF02-REQ053-20260819.yaml
+  next_action: "Route to RELEASE-VALIDATOR"

@@ -64,5 +64,19 @@ affected_files:
   - test/letflow/identity_migration_test.exs
   - lib/letflow/tenant_provisioning.ex
   - lib/letflow/sandbox_pool.ex
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0060-20260819
+resolved_at: "2026-08-19T02:35:00Z"
 github_issue: null
+note: >
+  Duplicate of ISS-0060, discovered independently by a different host shortly
+  after ISS-0060 was filed (same underlying race). ISS-0060 fixed the actual
+  root cause -- the DropLegacyPublicIdentityTables guard test's assertion
+  racing against other concurrently-provisioning tenants in the shared,
+  non-sandboxed test DB -- via a snapshot/restore helper
+  (with_only_this_tenant_visible!/2) plus a crash-safe self-heal check,
+  merged in PR #217. This was the fourth filing of the same class
+  (ISS-0048, ISS-0050, ISS-0060, ISS-0062); ISS-0060's fix targets the race
+  window itself rather than another downstream symptom. Closed here as a
+  duplicate rather than re-doing the fix, per docs/anti-patterns.md's
+  documented cross-host duplicate-discovery precedent.

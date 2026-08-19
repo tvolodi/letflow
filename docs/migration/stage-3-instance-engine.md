@@ -44,9 +44,16 @@ pre-existing gap filed separately as docs/issues/ISS-0063.yaml
 (renumbered from ISS-0061 during Step Final's rebase; main
 independently gained an unrelated ISS-0061 via a concurrent branch),
 out of scope per REVIEWER sign-off; same header-sync gap-fix shape
-applied by this requirement's own DOC-UPDATER); REQ-053, REQ-054,
-REQ-055, REQ-056, REQ-057, REQ-059, REQ-060, REQ-062
-(`docs/requirements.yaml`, 8 total) `pending`.
+applied by this requirement's own DOC-UPDATER); REQ-053 `done` (State
+reconstruction by event replay, EE-11 --
+Letflow.Engine.Reconstruction.reconstruct_instance/2, replays an
+instance's full event log across events and events_archive through the
+existing pure kernel to reconstruct state independent of the
+projection, with opt-in write-back under SELECT ... FOR UPDATE NOWAIT
+and a three-way instance-not-found/lock-contention/replay-failed error
+taxonomy; same header-sync gap-fix shape applied by this requirement's
+own DOC-UPDATER); REQ-054, REQ-055, REQ-056, REQ-057, REQ-059, REQ-060,
+REQ-062 (`docs/requirements.yaml`, 7 total) `pending`.
 
 ## Scope
 

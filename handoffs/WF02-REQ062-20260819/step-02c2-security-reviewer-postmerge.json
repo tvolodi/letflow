@@ -1,0 +1,50 @@
+{
+  "handoff_id": "b1e1a1a0-0001-4a00-9000-000000000006",
+  "run_id": "WF02-REQ062-20260819",
+  "workflow_id": "WF-02",
+  "step": "02c2",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ062-20260819/step-02c2-security-reviewer-postmerge.json",
+  "created_at": "2026-08-19T00:00:00Z",
+  "started_at": "2026-08-19T00:00:00Z",
+  "completed_at": "2026-08-19T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-062", "REQ-059"],
+    "requirement_text": {
+      "note": "Re-gate of a real merge (hand-resolved conflicts, not a rebase) of feature/WF02-REQ062-20260819 (previously PASSed alone in step-02c-security-reviewer.json) with origin/main (REQ-059 PinResolver, merged separately via PR #256). Merge commit 876e0d9, done by ELIXIR-DEV. Conflicts: lib/letflow/engine.ex (7 regions), lib/letflow/engine/reconstruction.ex (1 region)."
+    },
+    "related_handoff_ids": ["step-02c-security-reviewer.json", "step-02a-elixir-dev.json"],
+    "artifacts_in": ["lib/letflow/engine.ex", "lib/letflow/engine/reconstruction.ex"],
+    "owned_modules": ["lib/letflow/engine/", "lib/letflow/instance*", "priv/repo/migrations/"]
+  },
+  "task": {
+    "description": "Re-run the INV-1..INV-8 gate specifically against the merge diff (git diff origin/main...HEAD -- lib/letflow/engine.ex lib/letflow/engine/reconstruction.ex), not against REQ-062 or REQ-059 in isolation (each already gated separately). Focus on the new interaction ELIXIR-DEV found and fixed at the merge: REQ-059's parent_pins/2 reads attrs[:parent_instance_id] (a key REQ-062's sub-process creation path sets) for pin-inheritance lookup -- does that lookup verify/enforce tenant scoping before using a caller/cross-requirement-supplied parent_instance_id?",
+    "acceptance_criteria": [
+      "Scope test result stated explicitly with reasoning",
+      "Every applicable invariant (INV-1..INV-8) verdicted APPLIES or NOT-APPLICABLE with its How-to-verify check actually run against the merge diff, not assumed from the prior single-branch passes",
+      "parent_pins/2's cross-tenant leak potential explicitly assessed: does a forged/cross-tenant parent_instance_id let the caller read another tenant's pin data?",
+      "Confirm no tenant-scoping guard present in either pre-merge branch was silently dropped by the conflict resolution"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "SCOPE: IN SCOPE. Diff touches lib/letflow/engine.ex (start_instance/5 composition, persist/10, complete-task hop chain, snapshot call sites) and lib/letflow/engine/reconstruction.ex (replay widened for SUB_PROCESS_COMPLETED + snapshot-aware replay source) -- both read/write tenant-scoped tables (instance_projections, tokens, tasks, events/events_archive, instance_state_snapshots) and the new parent_pins/2 is a lookup-by-(caller-supplied)-ID path. No migrations are new to this merge diff itself (priv/repo/migrations/20260819045553_add_sub_process_parent_columns.exs and .../20260821000001_create_instance_state_snapshots.exs both predate the merge and were each already gated on their own branch/PR -- confirmed via `git diff origin/main...HEAD --stat -- priv/repo/migrations/` showing these as the only 2 migration files in the branch delta, both authored before commit 876e0d9).\n\nINV-1 (tenant data isolation) -- APPLIES, PASS. This is the central question of the re-gate: parent_pins/2 (engine.ex, new in this merge, ~line 209) does `case Map.get(attrs, :parent_instance_id) do nil -> {:ok, nil}; parent_instance_id -> PinResolver.reconstruct_effective_pins(parent_instance_id, prefix: prefix) end` -- prefix is create/2's own top-level, already-validated tenant schema (Keyword.get(opts, :prefix), validated earlier via TenantProvisioning.tenant_id_for_schema_name/1 in the call chain the same way it always has been; unchanged by this merge), NOT a value derived from or paired with the caller-supplied parent_instance_id. Traced PinResolver.reconstruct_effective_pins/2 (lib/letflow/engine/pin_resolver.ex:499-514): its only I/O is `Reconstruction.read_full_log(instance_id, prefix, 1)`, and read_full_log (reconstruction.ex, widened to arity-3 by this same merge) queries both Event and ArchivedEvent with `where([e], e.instance_id == ^instance_id) |> Repo.all(prefix: prefix)` -- i.e. every query is scoped through Ecto's `:prefix` (schema-per-tenant, decision 0003 Dimension B) using the CALLER's resolved tenant schema, never a schema derived from the supplied instance_id. Consequence: a forged or genuinely cross-tenant parent_instance_id cannot leak another tenant's pin/event data -- querying it against the wrong tenant's Postgres schema returns zero rows (that tenant's events/events_archive tables, in that tenant's own schema, are structurally unreachable from this prefix), so reconstruct_effective_pins/2 hits its own `{:ok, []} -> {:error, :instance_not_found}` clause, which parent_pins/2 maps to `{:error, {:parent_pin_lookup_failed, :instance_not_found}}`, and create/2's `with` chain aborts before create_snapshot/3's first write -- confirmed by reading the full `with` chain in start_instance/5 (engine.ex ~line 91-112): parent_pins/2 runs strictly before create_snapshot/3. This satisfies (a) prefix-scoped query and, by construction, closes the cross-tenant-leak question the task specifically raised: the new interaction is a clean same-tenant-only failure path, not a leak. Also checked fetch_child_parent_node_id/2 (reconstruction.ex, new SUB_PROCESS_COMPLETED replay clause) -- queries the completing child's own INSTANCE_STARTED event via the same `Repo.all(prefix: prefix)` pattern using the PARENT's resolved prefix; since a child instance is always created inside its parent's own tenant schema (SubProcess.append_start_multi/7, unchanged by this merge, already gated in step-02c), this is same-tenant by construction, not a new leak surface. (b)/(c): no migration is new to this diff, so not re-derived here (see scope note above) -- both were already confirmed prefix()-guarded in their own prior gates.\nINV-2 -- NOT-APPLICABLE (no multi-tenant HTTP API response surface touched; S4 not started).\nINV-3 -- NOT-APPLICABLE (no Lua/WASM scripting; S5 not started).\nINV-4 (secrets by reference) -- APPLIES, PASS. `grep -n \"System.get_env\"` and the hardcoded-secret heuristic grep run against the merge diff's two files (engine.ex, reconstruction.ex) returned zero hits either direction -- no secret material introduced, logged, or serialised by the merge (the new Logger.warning/Logger.warning calls in maybe_snapshot_after_create/4, maybe_snapshot_after_complete_task/2, maybe_snapshot_after_set_instance_error/3 log only `instance_id`, `sequence_number`, and `inspect(reason)` of a typed error tuple -- no secret-shaped field reachable).\nINV-5 -- NOT-APPLICABLE (parent_pins/2 and the SubProcess paths are internal engine functions, not an HTTP lookup-by-ID endpoint; S4 not started). Noted for the record: the observable behavior (clean {:error, :instance_not_found} for both 'never existed' and 'exists, other tenant' cases, verified above under INV-1) already happens to be indistinguishable, which is the right shape for when S4 does add an HTTP surface over this, but this is not itself an INV-5 finding today.\nINV-6 (new data-access paths prove scoping) -- APPLIES, PASS. This handoff is the proof artifact for the merge's one genuinely new data-access path (parent_pins/2's cross-branch interaction).\nINV-7 (no raw SQL) -- APPLIES, PASS. `grep -rn \"Repo.query\" lib/letflow/engine.ex lib/letflow/engine/reconstruction.ex lib/letflow/engine/sub_process.ex lib/letflow/engine/pin_resolver.ex` returns zero hits. Every query in the merge diff goes through Ecto.Query/Repo.all/Repo.transaction/Ecto.Multi.\nINV-8 (no unhandled crashes) -- APPLIES, PASS. `grep -n \"^\\s*{:ok, .*} = \"` against the two diff files returns only function-head/case-clause patterns (`{:ok, %{...}} = result,` as a function parameter pattern with a fallback clause immediately below it, e.g. maybe_snapshot_after_create/4, maybe_snapshot_after_set_instance_error/3 -- each has a matching catch-all clause `defp maybe_snapshot_after_create(result, ...), do: result` immediately after), not bare destructuring assignments that raise on mismatch -- manually confirmed by reading each hit in context. parent_pins/2 itself returns a typed {:ok, _} | {:error, {:parent_pin_lookup_failed, reason}} tuple consumed by the `with` chain, no raise path. `mix compile --warnings-as-errors` ran clean (no warnings) against commit 876e0d9. Test evidence (ELIXIR-DEV-reported, not independently re-run by this gate): MIX_TEST_PARTITION=2 mix test, 1105 tests, 0 failures.\n\nNo tenant-scoping guard present in either pre-merge branch was dropped: prefix is threaded unchanged through every new/changed function signature in both diffs (pin_lookup/2, parent_pins/2, prepare_sub_process_children/5, build_sub_process_children_multi/6, snapshot_instance/4, select_replay_source/2, read_full_log/3, fetch_child_parent_node_id/2) -- confirmed by reading every call site in the two diffs; none introduces a second, independently-derived prefix or drops the parameter.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ062-20260819",
+      "commit_sha_list": ["876e0d942d309d60ba5a24bc711f9e57118fa2b1"],
+      "remote_branch": "origin/feature/WF02-REQ062-20260819",
+      "push_status": "not_pushed_by_this_gate",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (2d) for idiom/supervision/scope-creep re-check of the merge conflict resolution"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

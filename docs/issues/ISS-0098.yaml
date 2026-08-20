@@ -23,4 +23,39 @@ affected_files:
   - lib/letflow/design/req052-instance-cancellation.md
 queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
 github_issue: https://github.com/tvolodi/letflow/issues/326
-status: open
+status: resolved
+resolution:
+  resolved_at: "2026-08-20T00:00:00Z"
+  summary: >
+    R-Co/src/engine/instance.zig read directly. cancelInstance() confirmed at
+    L2513-2739 (signature: pub fn cancelInstance(self: *InstanceStore,
+    allocator: std.mem.Allocator, task_store: *const task_mod.TaskStore,
+    instance_id: Uuid, actor_id: []const u8) CancelInstanceError!void).
+    OQ-1: the literal signature carries no reason/note parameter, confirming
+    cancel_attrs() needs none either. Bonus finding: it also carries no
+    caller-supplied idempotency_key -- R-Co generates one internally
+    (fillRandom into a fresh UUIDv4, L2659-2663) rather than accepting it
+    from the caller, a genuine but benign shape divergence (Letflow's
+    EventStore.append/2 already requires a caller-supplied idempotency_key
+    for every event type, so cancel_instance/3 matches its own codebase's
+    convention instead).
+    OQ-2 (verification part): R-Co's own teardown (L2573-2643) cancels tasks
+    and timers via direct, imperative SQL (task_store.cancelInTx and an
+    equivalent direct UPDATE timers) -- no per-branch event is dispatched
+    through any transition/reducer function. This confirms design §4's
+    independently-reasoned "direct, coarser-grained persistence-layer
+    operation" mechanism already matches R-Co's own shape, and more
+    strongly than §4 anticipated: R-Co turns out to persist join_counters
+    (instance_projections.join_counters jsonb, e.g. L1109/L1391/L2164) and
+    so has no reconstruction gap forcing that choice the way Letflow's own
+    req048 OQ-3 gap does -- R-Co could drive fully join-aware per-branch
+    cancellation and simply doesn't. The broader AC-interpretation question
+    §4/OQ-2 raises (whether "agreement by construction" satisfies the AC,
+    versus requiring a literal per-branch Transition.transition call) is
+    not answerable from R-Co's source and remains REVIEWER's judgment call
+    -- flagged as still open in the design doc, not closed by this read.
+    Follow-up-worthy gap surfaced but out of REQ-052's own scope: Letflow's
+    instance_projections has no join_counters column today, where R-Co's
+    equivalent table does.
+  files_updated:
+    - lib/letflow/design/req052-instance-cancellation.md

@@ -1,0 +1,27 @@
+id: ISS-0099
+title: "plugin_interface_registry handler_key reconciliation (open String.t() vs Graph.node_type() enum) not verified against R-Co (req057-plugin-interface-registry.md:935, OQ-2)"
+discovered_by: DOC-UPDATER
+discovered_in_run: WF02-REQ112-20260820
+discovered_at: "2026-08-20T03:08:10Z"
+severity: MAJOR
+description: >
+  Triaged as CLASS B during REQ-112's sweep of ISS-0076 item 2's remaining
+  "R-Co source unavailable" claims. OQ-2 (MAJOR): treating this registry's
+  handler_key as an open String.t() (not Graph.node_type()'s 8-atom enum),
+  specifically so the same namespace serves both this requirement's own
+  "node_type" vocabulary and REQ-031's plugin_handler identifier string, is
+  this design's own judgment call -- not verified against R-Co source. An
+  alternative reading (two separate registries) was considered and rejected,
+  but flagged for REVIEWER to confirm rather than accepted silently. Left as
+  an open question, not swept.
+  Letflow file:line: lib/letflow/design/req057-plugin-interface-registry.md:935
+  R-Co source that could settle it: R-Co/src/engine/plugin_registry.zig,
+  R-Co/src/engine/plugin_interface.zig,
+  R-Co/src/design/ext-03-plugin-interface.md (R-Co tree reachable at
+  c:\Users\tvolo\dev\ai-dala\R-Co; REQ-112 is docs-only and does not itself
+  read R-Co to answer this).
+affected_files:
+  - lib/letflow/design/req057-plugin-interface-registry.md
+queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
+github_issue: https://github.com/tvolodi/letflow/issues/327
+status: open

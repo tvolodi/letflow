@@ -33,11 +33,12 @@ reference vs. a "module" reference), `lib/letflow/engine/reconstruction.ex` (REQ
 table), `lib/letflow/definitions/process_definition.ex`, `lib/letflow/definitions/graph.ex`.
 `lib/letflow/design/req053-state-reconstruction.md` (gate-approved, format this
 document follows) and `lib/letflow/design/req031-service-scope-validator.md`'s sibling
-`.ex` module for the injectable-lookup shape precedent. **No R-Co source tree
-(`pin_resolver.zig`) is reachable in this environment** — every behavioural claim below
-is sourced from REQ-059's own requirement text (which the requirement author verified
-against R-Co directly) plus already-shipped Letflow code; §9 flags every place this
-matters.
+`.ex` module for the injectable-lookup shape precedent. **This design itself did not
+read `pin_resolver.zig` directly** — the R-Co tree at `c:\Users\tvolo\dev\ai-dala\R-Co`
+is reachable and was read directly for REQ-110's later audit (§9 OQ-1), but at the time
+this design was written every behavioural claim below was sourced from REQ-059's own
+requirement text (which the requirement author verified against R-Co directly) plus
+already-shipped Letflow code; §9 flags every place this matters.
 
 ## 1. Confirmed against shipped code, not assumed
 
@@ -98,10 +99,18 @@ matters.
 
 ### Moduledoc — required content (verbatim-in-substance, per this design)
 
-1. Ports `pin_resolver.zig` (R-Co, PIN-01..PIN-04) — no R-Co source tree was reachable
-   at design time; every behavioural claim traces to REQ-059's own requirement text
-   (verified by the requirement's author against R-Co directly) or to already-shipped
-   Letflow code, cited by file/line, never to a second, unverifiable read of R-Co.
+1. Ports `pin_resolver.zig` (R-Co, PIN-01..PIN-04).
+
+   **Sourcing note — this is a factual record, not required moduledoc content.**
+   This item previously prescribed that the moduledoc state R-Co's source tree could
+   not be reached at design time. That prescription is removed (REQ-112, ISS-0076 item 2
+   sweep): the R-Co tree at `c:\Users\tvolo\dev\ai-dala\R-Co` is reachable, and
+   `pin_resolver.ex`'s own moduledoc already carries REQ-110's later, source-verified
+   findings (§9 OQ-1). Do not copy an "unreachable" environment claim into any future
+   moduledoc from this document. At design time, every behavioural claim below traced
+   to REQ-059's own requirement text (verified by the requirement's author against
+   R-Co directly) or to already-shipped Letflow code, cited by file/line — not to a
+   second, independent read of R-Co by this design itself.
 2. **SCOPE GAP statement (AC8, verbatim structure required)** — must state, explicitly,
    with the future stage each belongs to:
    - PIN-01 AC1 (`service_catalog` version resolution) and PIN-01 AC2 (`module_ref`

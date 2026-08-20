@@ -1,11 +1,15 @@
 defmodule Letflow.Engine.PinRebind do
   @moduledoc """
   PIN-05 (REQ-060) — explicit instance pin rebind. Ports `src/engine/pin_rebind.zig`
-  (R-Co, 388 lines) — no R-Co source tree was reachable at design or implementation
-  time; every behavioural claim in this module traces to REQ-060's own requirement
-  text or to already-shipped Letflow code, cited by file/line, never to a second,
-  unverifiable read of R-Co. See `lib/letflow/design/req060-pin-rebind.md` (the
-  gate-approved design this module implements) for the full call-order
+  (R-Co, 388 lines). At design/implementation time R-Co's source tree was believed
+  unreachable, so every behavioural claim in this module traced to REQ-060's own requirement text
+  or to already-shipped Letflow code, cited by file/line, never to a second,
+  independent read of R-Co. That gap is closed: the R-Co tree at
+  `c:\Users\tvolo\dev\ai-dala\R-Co` is reachable, and REQ-110 read
+  `src/engine/pin_rebind.zig` and `src/api/routes/pin_rebind.zig` directly, confirming
+  this module's behaviour is `divergent_doc_only` against R-Co (no engine-behaviour
+  change needed). See `lib/letflow/design/req060-pin-rebind.md` (the gate-approved
+  design this module implements, its OQ-4/OQ-5) for the full call-order
   specification, error taxonomy, and open questions this moduledoc restates the
   load-bearing parts of.
 

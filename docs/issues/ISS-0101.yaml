@@ -1,0 +1,31 @@
+id: ISS-0101
+title: "whether registry variable-type schemas should also apply to a sub-process output merge not verified against R-Co (req062-sub-process-runtime.md:748, OQ-2)"
+discovered_by: DOC-UPDATER
+discovered_in_run: WF02-REQ112-20260820
+discovered_at: "2026-08-20T03:08:10Z"
+severity: MINOR
+description: >
+  Triaged as CLASS B during REQ-112's sweep of ISS-0076 item 2's remaining
+  "R-Co source unavailable" claims. OQ-2: should the parent's own registered
+  variable-type schemas (Letflow.EventStore.Registry, the schemas
+  complete_task/3's variable_validations argument checks) also apply to a
+  sub-process output merge, the way they already apply to a completed
+  task's output merge? This design passes variable_validations: nil to
+  VariableMerge.merge/3 (skip), reasoning the requirement text's "output
+  schema violation" names only the interface's own declared json_schema,
+  not the registry's separate per-variable-name schemas -- not verified
+  against R-Co. Left as an open question, not swept.
+  Note: REQ-111 already audited this same file's §0 disclaimer (excluded
+  location, req062-sub-process-runtime.md:11) and §3.3's definition-
+  reference question (OQ-1) -- OQ-2 is a separate, still-open question that
+  REQ-111 did not disposition.
+  Letflow file:line: lib/letflow/design/req062-sub-process-runtime.md:748
+  R-Co source that could settle it: R-Co/src/engine/instance.zig
+  (sub-process output-merge path) (R-Co tree reachable at
+  c:\Users\tvolo\dev\ai-dala\R-Co; REQ-112 is docs-only and does not itself
+  read R-Co to answer this).
+affected_files:
+  - lib/letflow/design/req062-sub-process-runtime.md
+queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
+github_issue: https://github.com/tvolodi/letflow/issues/329
+status: open

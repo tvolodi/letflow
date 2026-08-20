@@ -489,11 +489,12 @@ consequence:
   plus REVIEWER sign-off on revisiting a `done` requirement's schema.
 - (c) Mangle the stored `username` to guarantee uniqueness (e.g.
   `"#{realm}:#{preferred_username}"` or append a short tenant/external-id suffix) —
-  not chosen here because REQ-018's description doesn't ask for it, no R-Co source cited
-  in this design's research does this either (registry.zig's `input.username` is passed
-  through verbatim, not mangled — R-Co apparently has the identical latent
-  global-uniqueness exposure, unremarked in the source read for this design), and
-  inventing a mangling scheme unilaterally in this design would be exactly the kind of
+  not chosen here because REQ-018's description doesn't ask for it, and R-Co's
+  `registry.zig` (read directly — the R-Co tree at `c:\Users\tvolo\dev\ai-dala\R-Co`
+  is reachable) does not do this either: `input.username` is passed through verbatim,
+  not mangled — R-Co apparently has the identical latent global-uniqueness exposure,
+  unremarked in the source. Inventing a mangling scheme unilaterally in this design
+  would be exactly the kind of
   silent guess REQ-018's own instructions forbid.
 
 **This design picks option (a)** (verbatim `preferred_username`, accept the collision

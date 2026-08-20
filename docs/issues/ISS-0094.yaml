@@ -1,0 +1,27 @@
+id: ISS-0094
+title: "process_definitions.version comparison semantics (numeric vs lexicographic) not confirmed against R-Co (promotion_plan.md:664)"
+discovered_by: DOC-UPDATER
+discovered_in_run: WF02-REQ112-20260820
+discovered_at: "2026-08-20T03:08:10Z"
+severity: MINOR
+description: >
+  Triaged as CLASS B during REQ-112's sweep of ISS-0076 item 2's remaining
+  "R-Co source unavailable" claims. PRM-02 defines a promotion conflict as
+  target_active_version > base_version, an ordinal comparison.
+  process_definitions.version is :string/varchar(255) with no numeric/semver
+  constraint. The design cannot confirm against R-Co's source whether
+  version follows a monotonic-integer-as-string convention (numeric
+  comparison correct) or is genuinely free text (only lexicographic > is
+  well-defined). An explicit default (version_greater?/2) is chosen and
+  flagged, not silently guessed -- left as an open question, not swept.
+  Letflow file:line: lib/letflow/design/promotion_plan.md:664
+  R-Co source that could settle it: R-Co/src/definition/promotion.zig,
+  R-Co/src/definition/promotion_conflict.zig,
+  R-Co/src/design/prm-01-promotion-plan-and-diff-report.md (R-Co tree
+  reachable at c:\Users\tvolo\dev\ai-dala\R-Co; REQ-112 is docs-only and does
+  not itself read R-Co to answer this).
+affected_files:
+  - lib/letflow/design/promotion_plan.md
+queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
+github_issue: https://github.com/tvolodi/letflow/issues/322
+status: open

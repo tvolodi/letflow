@@ -33,8 +33,8 @@ defmodule Letflow.Engine.SubProcess do
   `Letflow.Repo` read here is a reentrant query against the same connection,
   not a second, independent transaction.
 
-  ## OQ-1 — SUB_PROCESS node definition reference (resolved against this
-  ## codebase's own conventions, not verified against unreachable R-Co source)
+  ## OQ-1 — SUB_PROCESS node definition reference — RESOLVED against R-Co by
+  ## REQ-111 (divergent_doc_only, doc-only, no engine-behaviour change)
 
   `resolve_child_definition/2` reads `node.attributes["definition_name"]` and
   resolves it via `Letflow.Definitions.get_active_by_name/2` — confirmed
@@ -44,8 +44,16 @@ defmodule Letflow.Engine.SubProcess do
   contradict. `Letflow.Engine.create/2`'s own `attrs[:definition_name]` /
   `Definitions.get_active_by_name/2` path is the one definition-resolution
   convention already established anywhere in this codebase, so it is reused
-  here for internal consistency, per the design's own framing of this as a
-  flagged assumption rather than a verified port.
+  here for internal consistency. This was originally flagged as an unverified
+  guess; REQ-111 has since read `R-Co/src/engine/transition.zig:1903-1904` and
+  `instance.zig:4681,4707-4712` directly and found R-Co keys the child on a
+  different, mandatory attribute instead: `child_definition_id` (a UUID,
+  early-bound at design time), not a name (late-bound here via
+  `get_active_by_name/2`). Shipped Letflow behaviour is internally consistent
+  and not incorrect against any Letflow spec, so this is recorded as a design
+  difference (`lib/letflow/design/req062-sub-process-runtime.md` §3.3) rather
+  than a bug — see that design doc for the full disposition and the semantic
+  consequence (early- vs. late-binding of the child definition version).
 
   ## OQ-3 — nested (child-of-child) SUB_PROCESS activation not wired here
 

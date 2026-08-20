@@ -1,0 +1,28 @@
+id: ISS-0103
+title: "\"endpoint\" attribute naming/placeholder requirement (CHK-10 vs route_kind: :catalog_service) not verified against R-Co (service_task.md:578, OQ-1)"
+discovered_by: DOC-UPDATER
+discovered_in_run: WF02-REQ112-20260820
+discovered_at: "2026-08-20T03:08:10Z"
+severity: MINOR
+description: >
+  Triaged as CLASS B during REQ-112's sweep of ISS-0076 item 2's remaining
+  "R-Co source unavailable" claims. OQ-1: REQ-029's CHK-10 requires the
+  "endpoint" attribute to be present and non-blank unconditionally at
+  graph-validation time, before REQ-056's route_kind: :catalog_service
+  (service-id-only, no URL) config could ever activate. This design reads
+  "endpoint" as the source of url_template, assuming CHK-10 and the
+  route_kind derivation are meant to coexist -- but whether a definition
+  author is expected to also supply a (now-ignored) placeholder "endpoint"
+  value when using service_id-only dispatch is not stated by either
+  requirement, and R-Co's real service_task.zig attribute names were not
+  read to settle it. Left as an open question, not swept.
+  Letflow file:line: lib/letflow/design/service_task.md:580 (shifted from 578
+  by REQ-112's own §0 edit earlier in the same file)
+  R-Co source that could settle it: R-Co/src/engine/service_task.zig (R-Co
+  tree reachable at c:\Users\tvolo\dev\ai-dala\R-Co; REQ-112 is docs-only and
+  does not itself read R-Co to answer this).
+affected_files:
+  - lib/letflow/design/service_task.md
+queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
+github_issue: https://github.com/tvolodi/letflow/issues/331
+status: open

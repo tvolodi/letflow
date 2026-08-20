@@ -5429,3 +5429,67 @@ history:
       No engine-behaviour change made by this closeout itself -- only
       docs/requirements.yaml's status field and this status-history entry
       were touched.
+  - req: REQ-112
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-20T03:15:06Z
+    note: >
+      ISS-0076 item 2 (GH#317) closed. Re-derived the hit list at start with
+      a broadened pattern (7 phrases from the requirement text, all -iE):
+      26 hits / 15 files -- lower than ISS-0076's own uncorrected 30 and the
+      requirement text's own 29/15, expected since REQ-110/REQ-111 already
+      fixed several occurrences before this run started. Excluded 3 of the
+      26 hits by content match against the four named exclusions (
+      req050-exclusive-gateway-cel.md:18 [=original :19], req060-pin-rebind.md:156
+      [=original :134], req062-sub-process-runtime.md:11); req050:490 is the
+      fourth exclusion but no longer matches any pattern (REQ-111 already
+      replaced its caveat with resolved prose), so it produced no hit to
+      exclude -- confirmed present and unchanged by re-reading it directly.
+      variable_merge.ex: git diff is empty (0 lines) -- confirmed untouched.
+      23 classified occurrences: CLASS A 9 (req018-jit-provisioning.md:492,
+      req059-pin-resolver.md:36, :101, req060-pin-rebind.md:618 [already-
+      resolved historical prose, no substantive edit needed],
+      req109-variable-schemas.md:39, :582 [:582 is a direct quotation of
+      variable_merge.ex's pre-REQ-109 caveat, kept verbatim since it is
+      historical evidence, not a live claim -- see note below],
+      service_task.md:68 (now :64), lib/letflow/engine/pin_rebind.ex:4,
+      lib/letflow/engine/sub_process.ex:37); CLASS B 14
+      (promotion_plan.md:437, :664; req041-pack-update-diff-schema.md:182,
+      :266, :706; req052-instance-cancellation.md:117, :581;
+      req057-plugin-interface-registry.md:935;
+      req061-execution-error-handling.md:714, :715;
+      lib/letflow/engine/execution_error.ex:5; req062-sub-process-runtime.md:748;
+      service_task.md:408 (now :410), :578 (now :580)). 9 + 14 = 23, matches.
+      execution_error.ex:5 -- the location ISS-0076's own affected_files list
+      omitted -- classified CLASS B and filed as ISS-0100/GH#328, paired with
+      req061-execution-error-handling.md:714 (same OQ-1, same R-Co citation),
+      caveat left in place at BOTH locations, verified by reading them back
+      after all edits.
+      Every CLASS A occurrence restated factually (or, for req060:618 and
+      req109:39, given a minimal non-substantive rewording only to avoid
+      re-matching the broadened grep pattern, since the prose was already
+      accurate historical narrative, not a live stale claim). Re-ran the
+      broadened pattern after all edits: 18 residual hits, all accounted
+      for -- 3 as the named exclusions (req050:18, req060:156, req062:11),
+      1 as req109-variable-schemas.md:582 (the variable_merge.ex quotation,
+      tied to that same exclusion's spirit since it quotes the file's
+      pre-correction text verbatim), and 14 as the CLASS B occurrences
+      above with their caveats intentionally left standing. Zero CLASS A
+      hits remain.
+      11 docs/issues/ISS-NNNN.yaml filed (ISS-0093..ISS-0103), each with a
+      real GitHub issue (GH#321-331), gh auth confirmed active
+      (tvolodi). queue_task_id left null on all 11 -- filed directly via
+      `gh issue create` because this run has no live ORCH process to hand
+      the finding to (ISSUE_QUEUE.md's discovering-agent-reports-to-ORCH
+      step has no ORCH to report to in this single-agent session); noted
+      in each yaml as pending queue reconciliation, per ISSUE_QUEUE.md's
+      2b fallback.
+      git diff confirmed DOCS ONLY: 7 files touched
+      (req018-jit-provisioning.md, req059-pin-resolver.md,
+      req060-pin-rebind.md, req109-variable-schemas.md, service_task.md,
+      lib/letflow/engine/pin_rebind.ex, lib/letflow/engine/sub_process.ex),
+      all edits confined to markdown prose or @moduledoc heredoc / `##`
+      comment-block text -- zero function bodies, guards, @specs, or
+      return values changed anywhere under lib/letflow/, verified by
+      inspecting the full diff. lib/letflow/engine/execution_error.ex has
+      zero diff (CLASS B, caveat correctly left untouched).

@@ -386,6 +386,7 @@ defmodule Letflow.Engine do
           | {:error, {:event_append_failed, term()}}
           | {:error, {:unresolved_catalog_ref, ref :: String.t()}}
           | {:error, {:unresolved_module_ref, ref :: String.t()}}
+          | {:error, {:unresolved_pin_override, ref :: String.t()}}
           | {:error,
              {:variable_schema_violation, [Letflow.EventStore.Registry.ValidationFailure.t()]}}
           | {:error, {:parent_pin_lookup_failed, reason :: term()}}

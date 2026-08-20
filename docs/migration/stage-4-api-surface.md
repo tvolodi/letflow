@@ -1,6 +1,6 @@
 # Stage 4 — API surface
 
-Status: expanded into requirements (2026-08-19), none started. Depends
+Status: expanded into requirements (2026-08-19), in progress. Depends
 on: S3 (all of REQ-043..REQ-064 `done`; Stage 3's header flipped to
 `done`, PR #265).
 Requirements: REQ-065 (Resolve the Phoenix-vs-Plug/Bandit contradiction
@@ -23,9 +23,9 @@ REQ-079 (Instance routes 1/2 — write path); REQ-080 (Instance routes
 2/2 — read path); REQ-081 (Definition routes 1/2 — read path);
 REQ-082 (Definition routes 2/2 — write and lifecycle path); REQ-083
 (Task routes 1/2 — read path); REQ-084 (OpenAPI spec strategy decision
-record, OQ-2); REQ-085 (Task routes 2/2 — write path). All 21 are
-`pending`; see `docs/requirements.yaml` for the authoritative
-per-requirement status, not a snapshot here (`ISS-0022`).
+record, OQ-2); REQ-085 (Task routes 2/2 — write path). See `docs/requirements.yaml` for the
+authoritative per-requirement status — this file deliberately keeps no
+status snapshot, which is exactly what goes stale (`ISS-0022`).
 
 ## Scope
 
@@ -152,6 +152,19 @@ These are the cross-cutting response/error/pagination contract every
 route depends on. They must land **before** the route requirements that
 consume them — the same ordering S2 used for REQ-024's event-type
 registry ahead of REQ-025's append.
+
+The first two landed under REQ-066 as `Letflow.Api.Error`
+(`lib/letflow/api/error.ex`) and `Letflow.Api.Response`
+(`lib/letflow/api/response.ex`). Two translation notes for the
+requirements that build on them: Letflow emits
+`application/problem+json` on errors where `response.zig`'s
+`CONTENT_TYPE_JSON` emits `application/json` (a deliberate RFC 9457
+divergence, not drift), and `response.zig`'s `HandlerResult` struct is
+replaced by conn-threading functions rather than transliterated, since
+in Elixir the conn is the result carrier. Only the 10 generic
+HTTP-status constructors were ported; the 9 domain-specific ones in
+`errors.zig` are deferred to their owning PIN-01/PIN-05/PRM-01/PAR-01
+requirements rather than guessed at in advance.
 
 Note `pipeline_context.zig` and `trace_context.zig` use Zig
 `threadlocal` storage for per-request correlation IDs. That is not the

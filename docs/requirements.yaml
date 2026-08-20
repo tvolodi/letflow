@@ -3732,7 +3732,7 @@ requirements:
   - id: REQ-066
     title: RFC 9457 problem-details error contract and response builder (errors.zig + response.zig)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 133  # letflow-queue task id
     description: >

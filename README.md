@@ -73,8 +73,21 @@ curl -s localhost:4000/health
 ```
 
 This is the only working HTTP endpoint today — see "What's here today"
-above. Any other path currently 404s; the real instance-management API
-lands in S4.
+above. Any other path currently 404s, as an RFC 9457 problem document
+(`Content-Type: application/problem+json`) rather than an ad-hoc error
+body; the real instance-management API lands in S4.
+
+```
+curl -s -i localhost:4000/nope
+# HTTP/1.1 404 Not Found
+# content-type: application/problem+json
+# {"type":"https://bpm.example.com/problems/not-found","title":"Not Found",
+#  "status":404,"detail":"the requested resource was not found","trace_id":""}
+```
+
+Every error body in the application goes through the one
+`Letflow.Api.Error`/`Letflow.Api.Response` contract (REQ-066); the
+`type` base URI is configurable via `config :letflow, :problems_base_uri`.
 
 ```
 mix test

@@ -1,0 +1,66 @@
+{
+  "handoff_id": "ee1de850-ab90-4cb2-88ea-2088ff1b19ee",
+  "run_id": "WF02-REQ066-20260820",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ066-20260820/step-06-doc-updater.json",
+  "created_at": "2026-08-20T21:12:59Z",
+  "started_at": "2026-08-20T21:12:59Z",
+  "completed_at": "2026-08-20T21:16:53Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-066"],
+    "requirement_text": {
+      "REQ-066": "Port src/api/errors.zig (272 lines) and src/api/response.zig (69) as Letflow.Api.Error and Letflow.Api.Response -- the single response/error contract every S4 route emits. Nothing in this batch renders a response body by hand once these exist. errors.zig is an RFC 9457 Problem Details builder. Port: the ProblemDetails shape (type as an absolute URI under a configured base, title, status, detail, plus the trace id field errors.zig carries with a \"\" default), the per-status constructors (problemNotFound and its siblings for 400/401/403/404/409/422/429/500 -- enumerate them from the Zig source rather than guessing which exist), and serialisation to a JSON body. Emit Content-Type: application/problem+json on error responses, per RFC 9457, and state in the moduledoc whether R-Co does the same or emits application/json (check response.zig's CONTENT_TYPE_JSON usage) -- if Letflow diverges, that divergence is deliberate and documented, not accidental. response.zig defines the canonical HandlerResult (status_code, body, content_type defaulting to JSON) and the typed success constructors that keep positive responses on correct status codes (200 vs 201 vs 202 vs 204). In Elixir the conn IS the result carrier, so port these as functions that take and return a conn (send_json/3, created/2, no_content/1, and the error counterparts) rather than transliterating a HandlerResult struct -- Zig returns a value because it has no conn. State that translation in the moduledoc. SECURITY (INV-4, INV-5): an error body must never carry secret material, a raw Ecto/Postgrex error, or a stack trace -- detail is a caller-safe string chosen by the handler, and an unexpected internal error maps to a generic 500 problem document whose detail does not vary with the underlying exception. Separately, the not-found problem document is the exact response a cross-tenant probe receives (REQ-072 enforces the routing; this requirement guarantees the two bodies are byte-identical by construction, because both go through one constructor)."
+    },
+    "related_handoff_ids": ["8bc1da8f-6b25-4e9c-b52f-bf4841b23477"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "README.md",
+      "lib/letflow/api/error.ex",
+      "lib/letflow/api/response.ex",
+      "lib/letflow/router.ex",
+      "docs/migration/stage-4-api-surface.md",
+      "handoffs/WF02-REQ066-20260820/step-05-release-validator.json"
+    ],
+    "owned_modules": ["lib/letflow/api/", "test/letflow/api/", "lib/letflow/design/req066-api-error-response.md"]
+  },
+  "task": {
+    "description": "WF-02 Step 6 (documentation update) for REQ-066 on branch feature/WF02-REQ066-20260820. RELEASE-VALIDATOR returned PASS (commit cf82968) with all six acceptance criteria verified, two of them by mutation testing.\n\n1. Flip REQ-066's status from in_progress to done in docs/requirements.yaml. ORCH already flipped it pending -> in_progress at Step 00, so this is the second half of that transition, not a fresh edit.\n\n2. Append a 'done' event to docs/status/requirement_status.yaml. That file is APPEND-ONLY -- read it in full first, preserve its established schema exactly (req/event/agent/at/note field names), and append. Do NOT rewrite or reformat prior entries: docs/anti-patterns.md records an agent doing exactly that on this file and silently discarding earlier history. ORCH already appended a 'started' event for REQ-066 at 2026-08-20T19:31:22Z -- leave it untouched. Take the timestamp from the clock, never from memory or by extrapolating from another entry (this is its own anti-patterns entry too).\n\n3. Update README.md if this change altered documented current behavior. It likely did: README's 'What's here today' section currently says Letflow.Router 'now serves only GET /health' and describes the real API as deferred to S4. REQ-066 does not add a route, but it does change what the router emits for an unmatched path -- the catch-all now returns an RFC 9457 problem document (application/problem+json) instead of the old hand-built {\"error\":\"not_found\"} JSON. README's 'Running it' section states 'Any other path currently 404s' -- consider whether the body shape is now worth stating, since the whole point of REQ-066 is that the response contract is uniform. Use judgement; do not pad the README with detail that belongs in a moduledoc.\n\n4. REQ-066's acceptance criteria name no stage or decision file, so there is no such file to confirm. However, check whether docs/migration/stage-4-api-surface.md exists and whether it carries a scope or progress section that is now stale given S4's first implementation requirement has landed. If it has a REVIEWER sign-off section, do NOT write into it -- that is REVIEWER's alone.\n\nContext you may need for an accurate note, all independently verified this run: 40 new/updated tests all green (14 error_test, 21 response_test, 5 router_test); full suite 1215-1216/1230 with 14-15 pre-existing environmental failures, none attributable to this branch; 10 generic HTTP-status constructors ported, 9 domain-specific ones deliberately deferred to their owning PIN-01/PIN-05/PRM-01/PAR-01 requirements; Letflow emits application/problem+json on errors where R-Co emits application/json, a deliberate and documented RFC 9457 divergence; three issues were filed by this run rather than fixed -- ISS-0106/GH#354 (toolchain drift), ISS-0107/GH#358 and ISS-0108/GH#360 (test-isolation flakes).\n\nName every file you actually touch explicitly in artifacts_out -- 'docs updated' is not acceptable, because ORCH independently verifies each named file actually contains the claimed change before writing the DONE log line.",
+    "acceptance_criteria": [
+      "REQ-066's status is done in docs/requirements.yaml",
+      "a done event for REQ-066 is appended to docs/status/requirement_status.yaml with a real clock-read UTC timestamp, with no prior entry rewritten, reformatted or lost",
+      "README.md updated if and only if this change altered documented current behavior, with a stated judgement either way",
+      "docs/migration/stage-4-api-surface.md checked for staleness; any REVIEWER sign-off section left untouched",
+      "artifacts_out names every file actually touched, explicitly"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "WF-02 Step 6 documentation update for REQ-066 complete. (1) docs/requirements.yaml: REQ-066's status flipped in_progress -> done (line 3735) -- one field changed, no other entry touched. (2) docs/status/requirement_status.yaml: one 'done' event appended for REQ-066 (agent DOC-UPDATER, at 2026-08-20T21:15:15Z read from the clock immediately before writing), using the file's established req/event/agent/at/note schema. Appended via shell append redirection, never a rewrite; git diff --numstat confirms 46 insertions / 0 deletions, so no prior entry was rewritten, reformatted, or lost. ORCH's 'started' event at 2026-08-20T19:31:22Z is intact and precedes it (it appears in the same diff only because it was still uncommitted in the working tree at Step 6 start). (3) README.md: updated -- judgement is that this DID alter documented current behavior. The 'Running it' section said 'Any other path currently 404s' without a body shape; REQ-066's whole point is that the 404 body is now a uniform RFC 9457 problem document on application/problem+json instead of the old hand-built {\"error\":\"not_found\"}, so the section now states the content type and shows a concrete curl example. Field names, order, the not-found detail string, the default type base URI, and the config key in that example were each read out of lib/letflow/api/error.ex rather than assumed. The 'What's here today' section was deliberately NOT changed: REQ-066 adds no route, so 'Letflow.Router now serves only GET /health' remains accurate, and the constructor inventory belongs in the moduledoc, not the README. (4) docs/migration/stage-4-api-surface.md: existed and was stale in two literal ways -- the header read 'none started' and 'All 21 are pending' while REQ-065 was already done and REQ-066 now is. Fixed 'none started' -> 'in progress' and replaced the 'All 21 are pending' snapshot with a pointer to docs/requirements.yaml as the authority, consistent with the sentence already there citing ISS-0022 against keeping snapshots in this file. Also added a short note under 'Shared conventions (src/api/*.zig)' recording that errors.zig/response.zig have landed as Letflow.Api.Error / Letflow.Api.Response, plus the two translation facts downstream S4 requirements need (problem+json divergence from R-Co's CONTENT_TYPE_JSON; HandlerResult replaced by conn-threading rather than transliterated) and that only the 10 generic constructors were ported with 9 domain-specific ones deferred to PIN-01/PIN-05/PRM-01/PAR-01. The 'REVIEWER sign-off' section was read but NOT written to -- that section is REVIEWER's alone. No gap to flag: REQ-066's acceptance criteria name no stage or decision file as a deliverable, so there was no implementing-agent doc obligation to verify.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml",
+      "README.md",
+      "docs/migration/stage-4-api-surface.md",
+      "handoffs/WF02-REQ066-20260820/step-06-doc-updater.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ066-20260820",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH: verify each file named in artifacts_out contains the claimed change, then write the DONE log line and proceed to the push/PR/merge step for WF02-REQ066-20260820."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

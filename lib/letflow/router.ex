@@ -21,8 +21,11 @@ defmodule Letflow.Router do
     send_json(conn, 200, %{status: "ok"})
   end
 
+  # Every 404 this application emits — catch-all included — goes through the one
+  # `Letflow.Api.Error.not_found/0` constructor (REQ-066), so no route renders an
+  # error body by hand and all 404 bodies are byte-identical by construction.
   match _ do
-    send_json(conn, 404, %{error: "not_found"})
+    Letflow.Api.Response.not_found(conn)
   end
 
   # Delegates to the shared response contract (REQ-066) rather than keeping a

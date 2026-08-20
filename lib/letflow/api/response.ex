@@ -95,14 +95,21 @@ defmodule Letflow.Api.Response do
   @doc """
   Send an already-built `Letflow.Api.Error` problem document.
 
-  The one primitive every per-status error helper funnels through. Splices
-  `conn.assigns[:trace_id]` (or `""` when unset) into the document's
-  `trace_id`, then sends it at the document's own status with
+  The one primitive every per-status error helper funnels through. Resolves the
+  document's `trace_id`, then sends it at the document's own status with
   `Content-Type: application/problem+json`.
+
+  `trace_id` resolution matches `errors.zig`'s `serialise/2` precedence exactly:
+
+    1. a non-empty `trace_id` already on the problem document wins (the
+       supported explicit-override mechanism R-Co documents for tests);
+    2. otherwise `conn.assigns[:trace_id]` — Letflow's conn-scoped stand-in for
+       R-Co's `trace_context` thread-local;
+    3. otherwise `""`.
   """
   @spec send_problem(Plug.Conn.t(), Error.t()) :: Plug.Conn.t()
   def send_problem(conn, %Error{} = problem) do
-    problem = %{problem | trace_id: conn.assigns[:trace_id] || ""}
+    problem = %{problem | trace_id: effective_trace_id(problem.trace_id, conn)}
 
     conn
     |> put_resp_content_type(@problem_content_type)
@@ -166,4 +173,9 @@ defmodule Letflow.Api.Response do
   @doc "HTTP 503 — Service Unavailable."
   @spec service_unavailable(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
   def service_unavailable(conn, detail), do: send_problem(conn, Error.service_unavailable(detail))
+
+  # See send_problem/2's doc for the precedence this implements.
+  @spec effective_trace_id(String.t(), Plug.Conn.t()) :: String.t()
+  defp effective_trace_id("", conn), do: conn.assigns[:trace_id] || ""
+  defp effective_trace_id(trace_id, _conn) when is_binary(trace_id), do: trace_id
 end

@@ -452,6 +452,63 @@ defmodule Letflow.Engine.PinRebindTest do
       assert pin.kind == :variable_schema
       assert pin.ref == definition.name
       assert pin.version == "v2"
+      # ISS-0078 (GH#299): a rebound pin's provenance must reflect the rebind,
+      # not the pre-rebind resolution.
+      assert pin.source == :rebound
+      assert pin.resolved_id == nil
+    end
+
+    test "an un-rebound instance's effective pins carry a non-nil source_event_id (ISS-0078, GH#299)" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_human_task_end())
+      instance = start_instance!(schema_name, definition)
+
+      assert {:ok, [pin]} =
+               PinResolver.reconstruct_effective_pins(instance.instance_id, prefix: schema_name)
+
+      refute is_nil(pin.source_event_id)
+
+      started_event_id =
+        schema_name
+        |> read_events(instance.instance_id)
+        |> Enum.find(&(&1.event_type == "INSTANCE_STARTED"))
+        |> Map.fetch!(:event_id)
+
+      assert pin.source_event_id == started_event_id
+    end
+
+    test "reconstruct_effective_pins/2 returns {:error, :instance_not_found} for a non-empty event stream with no INSTANCE_STARTED (SECURITY-REVIEWER finding, ISS-0078)" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      # Deliberately fabricate an event stream missing its INSTANCE_STARTED
+      # row, by inserting straight through Event.insert_changeset/2 --
+      # EventStore.append/2 itself already refuses this via its own
+      # :instance_not_started guard, so this scenario is unreachable through
+      # any real writer. reconstruct_effective_pins/2 must still not crash if
+      # Reconstruction.read_full_log/3 ever hands it a stream shaped this way
+      # (INV-8: no unhandled crash on a non-empty-but-malformed stream).
+      orphan_instance_id = Ecto.UUID.generate()
+
+      changeset =
+        Letflow.EventStore.Event.insert_changeset(%Letflow.EventStore.Event{}, %{
+          event_id: Ecto.UUID.generate(),
+          created_at: DateTime.utc_now() |> DateTime.truncate(:microsecond),
+          instance_id: orphan_instance_id,
+          event_type: "INSTANCE_PINS_REBOUND",
+          payload: %{
+            "entries" => [%{"kind" => "variable_schema", "ref" => "orphan", "new_version" => "v2"}],
+            "actor" => "tester",
+            "reason" => nil
+          },
+          actor_id: Ecto.UUID.generate(),
+          sequence_number: 1,
+          idempotency_key: "iss0078-orphan-rebind-#{orphan_instance_id}"
+        })
+
+      assert {:ok, _event} = Repo.insert(changeset, prefix: schema_name)
+
+      assert {:error, :instance_not_found} =
+               PinResolver.reconstruct_effective_pins(orphan_instance_id, prefix: schema_name)
     end
 
     test "the same effective set is independently reproducible from INSTANCE_STARTED + INSTANCE_PINS_REBOUND alone" do
@@ -469,10 +526,7 @@ defmodule Letflow.Engine.PinRebindTest do
 
       events = read_events(schema_name, instance.instance_id)
 
-      started_payload =
-        events
-        |> Enum.find(&(&1.event_type == "INSTANCE_STARTED"))
-        |> Map.fetch!(:payload)
+      started_event = Enum.find(events, &(&1.event_type == "INSTANCE_STARTED"))
 
       pins_rebound =
         events
@@ -480,7 +534,11 @@ defmodule Letflow.Engine.PinRebindTest do
         |> Enum.map(&%{event_id: &1.event_id, payload: &1.payload})
 
       hand_merged =
-        PinResolver.merge_effective_pins(started_payload["pinned_versions"], pins_rebound)
+        PinResolver.merge_effective_pins(
+          started_event.payload["pinned_versions"],
+          pins_rebound,
+          started_event.event_id
+        )
 
       assert {:ok, via_reconstruct} =
                PinResolver.reconstruct_effective_pins(instance.instance_id, prefix: schema_name)

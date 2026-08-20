@@ -426,8 +426,8 @@ defmodule Letflow.Engine.PinResolverTest do
   # PIN-04 AC1/AC5/AC7 -- merge_effective_pins/2, the pure replay-time fold.
   # ---------------------------------------------------------------------------------
 
-  describe "merge_effective_pins/2 -- PIN-04: replay-time effective set, pure, folds all rebind events in order" do
-    test "with zero rebind events, the effective set mirrors instance_started_pinned_versions exactly (kind/ref/resolved_id/version/source normalized)" do
+  describe "merge_effective_pins/3 -- PIN-04: replay-time effective set, pure, folds all rebind events in order" do
+    test "with zero rebind events, the effective set mirrors instance_started_pinned_versions exactly (kind/ref/resolved_id/version/source normalized), source_event_id seeded from started_event_id" do
       base = [
         %{
           kind: :catalog_entry,
@@ -438,11 +438,21 @@ defmodule Letflow.Engine.PinResolverTest do
         }
       ]
 
-      assert [%{kind: :catalog_entry, ref: "svc-a", version: "1.0.0", source: :resolved}] =
-               PinResolver.merge_effective_pins(base, [])
+      started_event_id = Ecto.UUID.generate()
+
+      assert [
+               %{
+                 kind: :catalog_entry,
+                 ref: "svc-a",
+                 version: "1.0.0",
+                 source: :resolved,
+                 source_event_id: ^started_event_id
+               }
+             ] =
+               PinResolver.merge_effective_pins(base, [], started_event_id)
     end
 
-    test "a single rebind event updates only the matching {kind, ref} entry's version, leaves kind/resolved_id/source untouched" do
+    test "a single rebind event updates the matching {kind, ref} entry's version/resolved_id/source/source_event_id, leaves kind untouched" do
       base = [
         %{
           kind: :catalog_entry,
@@ -455,6 +465,7 @@ defmodule Letflow.Engine.PinResolverTest do
       ]
 
       rebind_event_id = Ecto.UUID.generate()
+      started_event_id = Ecto.UUID.generate()
 
       rebind_events = [
         %{
@@ -467,17 +478,19 @@ defmodule Letflow.Engine.PinResolverTest do
         }
       ]
 
-      effective = PinResolver.merge_effective_pins(base, rebind_events)
+      effective = PinResolver.merge_effective_pins(base, rebind_events, started_event_id)
 
       assert %{
                version: "2.0.0",
                source_event_id: ^rebind_event_id,
                kind: :catalog_entry,
-               resolved_id: "sid"
+               resolved_id: nil,
+               source: :rebound
              } =
                Enum.find(effective, &(&1.ref == "svc-a"))
 
-      assert %{version: "1.0.0", kind: :module} = Enum.find(effective, &(&1.ref == "mod-a"))
+      assert %{version: "1.0.0", kind: :module, source_event_id: ^started_event_id} =
+               Enum.find(effective, &(&1.ref == "mod-a"))
     end
 
     test "ALL rebind events are folded, in the given order, not just the most recent -- REQ-060's delta-only payload shape (design doc §6 OQ-2)" do
@@ -500,6 +513,7 @@ defmodule Letflow.Engine.PinResolverTest do
 
       event_1 = Ecto.UUID.generate()
       event_2 = Ecto.UUID.generate()
+      started_event_id = Ecto.UUID.generate()
 
       rebind_events = [
         %{
@@ -520,13 +534,135 @@ defmodule Letflow.Engine.PinResolverTest do
         }
       ]
 
-      effective = PinResolver.merge_effective_pins(base, rebind_events)
+      effective = PinResolver.merge_effective_pins(base, rebind_events, started_event_id)
 
       # earlier rebind of svc-a is NOT lost even though a later, unrelated
       # rebind event (svc-b) came after it -- folding only the "most recent"
       # event would have silently dropped this.
       assert %{version: "2.0.0"} = Enum.find(effective, &(&1.ref == "svc-a"))
       assert %{version: "3.0.0"} = Enum.find(effective, &(&1.ref == "svc-b"))
+    end
+
+    test "a rebind entry naming a {kind, ref} absent from the base set is appended, not dropped (Decision 3, defensive-only path)" do
+      base = [
+        %{
+          kind: :catalog_entry,
+          ref: "svc-a",
+          resolved_id: "sid",
+          version: "1.0.0",
+          source: :resolved
+        }
+      ]
+
+      rebind_event_id = Ecto.UUID.generate()
+      started_event_id = Ecto.UUID.generate()
+
+      rebind_events = [
+        %{
+          event_id: rebind_event_id,
+          payload: %{
+            "entries" => [
+              %{"kind" => "module", "ref" => "mod-unknown", "new_version" => "9.0.0"}
+            ]
+          }
+        }
+      ]
+
+      effective = PinResolver.merge_effective_pins(base, rebind_events, started_event_id)
+
+      assert %{
+               kind: :module,
+               ref: "mod-unknown",
+               resolved_id: nil,
+               version: "9.0.0",
+               source: :rebound,
+               source_event_id: ^rebind_event_id
+             } = Enum.find(effective, &(&1.ref == "mod-unknown"))
+
+      # original base entry is untouched
+      assert %{
+               kind: :catalog_entry,
+               ref: "svc-a",
+               resolved_id: "sid",
+               version: "1.0.0",
+               source: :resolved,
+               source_event_id: ^started_event_id
+             } = Enum.find(effective, &(&1.ref == "svc-a"))
+    end
+
+    test "the same ref rebound twice reflects the LAST rebind on every provenance field, not just version" do
+      base = [
+        %{
+          kind: :catalog_entry,
+          ref: "svc-a",
+          resolved_id: "sid",
+          version: "1.0.0",
+          source: :resolved
+        }
+      ]
+
+      event_1 = Ecto.UUID.generate()
+      event_2 = Ecto.UUID.generate()
+      started_event_id = Ecto.UUID.generate()
+
+      rebind_events = [
+        %{
+          event_id: event_1,
+          payload: %{
+            "entries" => [
+              %{"kind" => "catalog_entry", "ref" => "svc-a", "new_version" => "2.0.0"}
+            ]
+          }
+        },
+        %{
+          event_id: event_2,
+          payload: %{
+            "entries" => [
+              %{"kind" => "catalog_entry", "ref" => "svc-a", "new_version" => "3.0.0"}
+            ]
+          }
+        }
+      ]
+
+      effective = PinResolver.merge_effective_pins(base, rebind_events, started_event_id)
+
+      assert [
+               %{
+                 version: "3.0.0",
+                 resolved_id: nil,
+                 source: :rebound,
+                 source_event_id: ^event_2
+               }
+             ] = effective
+    end
+
+    test "a rebind event with an empty entries payload is a byte-for-byte no-op" do
+      base = [
+        %{
+          kind: :catalog_entry,
+          ref: "svc-a",
+          resolved_id: "sid",
+          version: "1.0.0",
+          source: :resolved
+        }
+      ]
+
+      started_event_id = Ecto.UUID.generate()
+
+      rebind_events = [
+        %{event_id: Ecto.UUID.generate(), payload: %{"entries" => []}}
+      ]
+
+      assert [
+               %{
+                 kind: :catalog_entry,
+                 ref: "svc-a",
+                 resolved_id: "sid",
+                 version: "1.0.0",
+                 source: :resolved,
+                 source_event_id: ^started_event_id
+               }
+             ] = PinResolver.merge_effective_pins(base, rebind_events, started_event_id)
     end
   end
 

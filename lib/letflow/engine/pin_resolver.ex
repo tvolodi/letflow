@@ -75,7 +75,7 @@ defmodule Letflow.Engine.PinResolver do
   REQ-059's own prose uses "effective pin set" for two distinct
   computations, and this module keeps them as two distinct functions:
 
-    * `merge_effective_pins/2` (plus its caller `reconstruct_effective_pins/2`)
+    * `merge_effective_pins/3` (plus its caller `reconstruct_effective_pins/2`)
       is the **replay-time** computation — `INSTANCE_STARTED`'s base pin set
       folded with zero or more `INSTANCE_PINS_REBOUND` deltas, pure, no I/O.
     * `apply_inheritance/2` is the **instance-start-time child-inheritance**
@@ -85,7 +85,7 @@ defmodule Letflow.Engine.PinResolver do
   ## No fallback, ever (PIN-03 AC1/AC5)
 
   No function anywhere in this module — not `resolve/4`, not
-  `merge_effective_pins/2`, not `apply_inheritance/2`, not `pin_for/3` —
+  `merge_effective_pins/3`, not `apply_inheritance/2`, not `pin_for/3` —
   ever queries a catalog/module/variable-schema lookup for a "current" or
   "latest" value as a substitute when a pin is absent. `{:error,
   {:pin_missing, kind, ref}}` (`pin_for/3`) is the only outcome for "no pin
@@ -129,15 +129,19 @@ defmodule Letflow.Engine.PinResolver do
   version that was never confirmed to exist. R-Co additionally sets
   `source: :override` from a SECOND producer this module's design never
   anticipated: a PIN-05 rebind (`pin_resolver.zig:138`, `:156`, tested at
-  `:914`), where `merge_effective_pins/2` below leaves `source` untouched.
+  `:914`).
 
-  **Both deltas are recorded, not repaired**, per REQ-110's audit-only
-  scope: `docs/issues/ISS-0079.yaml` (GH#298, the override mechanism) and
-  `docs/issues/ISS-0078.yaml` (GH#299, rebind provenance). The behaviour
-  described elsewhere in this moduledoc is the behaviour this module
-  actually has today; changing it needs a fix design through WF-03, and
-  "match R-Co exactly" is explicitly not assumed to be the right answer —
-  see each issue's `scoping_note` for the decisions still open.
+  The override-mechanism delta is recorded, not repaired, per REQ-110's
+  audit-only scope: `docs/issues/ISS-0079.yaml` (GH#298). The rebind-
+  provenance delta was fixed under `docs/issues/ISS-0078.yaml` (GH#299,
+  `lib/letflow/design/iss-0078-pin-rebind-provenance.md`) — `source: :rebound`
+  (a distinct value from R-Co's `:override`, not a copy of it), a rebound
+  entry's `resolved_id` becomes `nil` (never R-Co's `change.new_version`
+  quirk), an unknown-ref rebind entry is appended rather than dropped, and
+  `merge_effective_pins/3` (arity 2 → 3) now threads `started_event_id` so
+  `source_event_id` is never `nil` for an un-rebound pin — see that design
+  doc for the full reasoning "match R-Co exactly" was deliberately not
+  assumed to be right for `resolved_id`.
 
   One further gap surfaced during implementation, not covered by the design
   doc's own OQ list:
@@ -168,7 +172,7 @@ defmodule Letflow.Engine.PinResolver do
   @type kind :: :catalog_entry | :variable_schema | :module
 
   @typedoc "How a `pinned_version()`/`effective_pin()` entry's version was obtained."
-  @type source :: :resolved | :override | :inherited
+  @type source :: :resolved | :override | :inherited | :rebound
 
   @typedoc """
   One resolved (or override-substituted, or inherited) dependency pin,
@@ -191,7 +195,7 @@ defmodule Letflow.Engine.PinResolver do
         }
 
   @typedoc """
-  One effective pin as derived at replay time (`merge_effective_pins/2`) or
+  One effective pin as derived at replay time (`merge_effective_pins/3`) or
   carried by a parent instance for inheritance purposes
   (`apply_inheritance/2`'s second argument). Distinct from `pinned_version()`
   by the addition of `source_event_id` — a read-side-only field, never
@@ -457,12 +461,22 @@ defmodule Letflow.Engine.PinResolver do
   recent one (design doc §6, flagged OQ-2: REQ-060's own delta-only payload
   shape means folding only the single most-recent event would silently lose
   earlier rebinds of other refs).
+
+  A rebound entry's `resolved_id` becomes `nil` (never `change.new_version`,
+  never left at its pre-rebind value) and its `source` becomes `:rebound` —
+  `PinRebind`'s payload never re-verifies a rebind against a catalog, so
+  `nil` is the only `resolved_id` that doesn't assert a false identity; see
+  `lib/letflow/design/iss-0078-pin-rebind-provenance.md` Decisions 1-2. An
+  entry naming a `{kind, ref}` absent from the base set is **appended**, not
+  dropped (Decision 3) — defensive-only, since PIN-05's own `UnknownPinRef`
+  gate prevents this in normal operation.
   """
   @spec merge_effective_pins(
           instance_started_pinned_versions :: [pinned_version()],
-          pins_rebound_events :: [%{event_id: Ecto.UUID.t(), payload: map()}]
+          pins_rebound_events :: [%{event_id: Ecto.UUID.t(), payload: map()}],
+          started_event_id :: Ecto.UUID.t()
         ) :: [effective_pin()]
-  def merge_effective_pins(instance_started_pinned_versions, pins_rebound_events)
+  def merge_effective_pins(instance_started_pinned_versions, pins_rebound_events, started_event_id)
       when is_list(instance_started_pinned_versions) and is_list(pins_rebound_events) do
     base =
       Enum.map(instance_started_pinned_versions, fn pin ->
@@ -472,7 +486,7 @@ defmodule Letflow.Engine.PinResolver do
           resolved_id: pin[:resolved_id] || pin["resolved_id"],
           version: pin[:version] || pin["version"],
           source: normalize_source(pin[:source] || pin["source"]),
-          source_event_id: nil
+          source_event_id: started_event_id
         }
       end)
 
@@ -487,13 +501,33 @@ defmodule Letflow.Engine.PinResolver do
       ref = entry["ref"] || entry[:ref]
       new_version = entry["new_version"] || entry[:new_version]
 
-      Enum.map(acc, fn pin ->
-        if pin.kind == kind and pin.ref == ref do
-          %{pin | version: new_version, source_event_id: event_id}
-        else
-          pin
-        end
-      end)
+      if Enum.any?(acc, &(&1.kind == kind and &1.ref == ref)) do
+        Enum.map(acc, fn pin ->
+          if pin.kind == kind and pin.ref == ref do
+            %{
+              pin
+              | version: new_version,
+                resolved_id: nil,
+                source: :rebound,
+                source_event_id: event_id
+            }
+          else
+            pin
+          end
+        end)
+      else
+        acc ++
+          [
+            %{
+              kind: kind,
+              ref: ref,
+              resolved_id: nil,
+              version: new_version,
+              source: :rebound,
+              source_event_id: event_id
+            }
+          ]
+      end
     end)
   end
 
@@ -506,6 +540,7 @@ defmodule Letflow.Engine.PinResolver do
   defp normalize_source("resolved"), do: :resolved
   defp normalize_source("override"), do: :override
   defp normalize_source("inherited"), do: :inherited
+  defp normalize_source("rebound"), do: :rebound
 
   @doc """
   PIN-04 AC1/AC7 — obtains an instance's effective pin set purely from its
@@ -517,7 +552,7 @@ defmodule Letflow.Engine.PinResolver do
   row, so a pin read must always walk the full log, regardless of what
   REQ-054's snapshot-aware replay would use for *state* replay), filters for
   `INSTANCE_STARTED`/`INSTANCE_PINS_REBOUND`, and folds via
-  `merge_effective_pins/2`.
+  `merge_effective_pins/3`.
 
   AC7 ("issues zero reads against any catalog or module registry") is
   satisfied by construction: this function accepts no `Lookup.t()` parameter
@@ -538,24 +573,30 @@ defmodule Letflow.Engine.PinResolver do
         {:error, :instance_not_found}
 
       {:ok, events} ->
-        instance_started_pinned_versions =
-          events
-          |> Enum.find(&(&1.event_type == "INSTANCE_STARTED"))
-          |> extract_pinned_versions()
+        case Enum.find(events, &(&1.event_type == "INSTANCE_STARTED")) do
+          nil ->
+            {:error, :instance_not_found}
 
-        pins_rebound_events =
-          events
-          |> Enum.filter(&(&1.event_type == "INSTANCE_PINS_REBOUND"))
-          |> Enum.map(&%{event_id: &1.event_id, payload: &1.payload})
+          started_event ->
+            instance_started_pinned_versions = extract_pinned_versions(started_event)
 
-        {:ok, merge_effective_pins(instance_started_pinned_versions, pins_rebound_events)}
+            pins_rebound_events =
+              events
+              |> Enum.filter(&(&1.event_type == "INSTANCE_PINS_REBOUND"))
+              |> Enum.map(&%{event_id: &1.event_id, payload: &1.payload})
+
+            {:ok,
+             merge_effective_pins(
+               instance_started_pinned_versions,
+               pins_rebound_events,
+               started_event.event_id
+             )}
+        end
 
       {:error, _reason} = error ->
         error
     end
   end
-
-  defp extract_pinned_versions(nil), do: []
 
   defp extract_pinned_versions(%{payload: payload}) do
     payload["pinned_versions"] || payload[:pinned_versions] || []
@@ -563,7 +604,7 @@ defmodule Letflow.Engine.PinResolver do
 
   @doc """
   PIN-04 AC2/AC3 — child instance pin inheritance, run once at instance
-  start (distinct from `merge_effective_pins/2` — see moduledoc).
+  start (distinct from `merge_effective_pins/3` — see moduledoc).
 
   `parent_pins == nil` (root instance, no parent): `own_pins` returned
   unchanged, `{:ok, own_pins, []}`.

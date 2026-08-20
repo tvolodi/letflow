@@ -216,6 +216,68 @@ defmodule Letflow.Api.ResponseTest do
     _e -> Response.internal_error(req()).resp_body
   end
 
+  # The leak half needs the seeded values to actually REACH an input the function
+  # under test observes. `internal_error/1` is arity-1 and conn-only, so the conn is
+  # that input and every field a leaking implementation could plausibly reach for
+  # gets loaded here: assigns (the exception struct itself, its message, its module
+  # name, the formatted stacktrace), a request header, and the request path/query.
+  # `:trace_id` is deliberately NOT assigned — that assign is legitimately reflected
+  # into the body by send_problem/2, so seeding it would prove nothing.
+  defp leaky_conn(e, stacktrace) do
+    conn(:get, "/api/v1/tenants/acme/instances?debug=hunter2&sql=SELECT+tenant_id")
+    |> put_req_header("x-db-dsn", "postgres://app:hunter2@db.internal:5432/letflow")
+    |> put_req_header("x-debug-flags", "stacktrace,verbose")
+    |> assign(:error, e)
+    |> assign(:exception_message, Exception.message(e))
+    |> assign(:error_type, to_string(e.__struct__))
+    |> assign(:stacktrace, Exception.format_stacktrace(stacktrace))
+  end
+
+  defp leaky_body_after_runtime_error do
+    raise RuntimeError, @runtime_message
+  rescue
+    e -> Response.internal_error(leaky_conn(e, __STACKTRACE__)).resp_body
+  end
+
+  defp leaky_body_after_argument_error do
+    raise ArgumentError, @argument_message
+  rescue
+    e -> Response.internal_error(leaky_conn(e, __STACKTRACE__)).resp_body
+  end
+
+  # A `refute String.contains?/2` on the raw JSON body alone would miss a leak whose
+  # text contains a quote or a backslash, since Jason escapes those on the way out
+  # (@argument_message contains `"tenant_id"`). The searched surface is therefore the
+  # raw body PLUS every decoded string value, which undoes that escaping.
+  defp leak_surface(body) do
+    values =
+      body
+      |> Jason.decode!()
+      |> Map.values()
+      |> Enum.map_join("\n", &to_string/1)
+
+    body <> "\n" <> values
+  end
+
+  # Seeded into BOTH conns by leaky_conn/2, so reachable in either case: the DSN
+  # header supplies "hunter2"/"db.internal", the query string supplies
+  # "SELECT"/"tenant_id", the :error_type assign supplies "Elixir.", and the
+  # :stacktrace assign supplies both its formatted frames and (to an implementation
+  # that dumped conn.assigns) the word "stacktrace" itself.
+  @shared_forbidden ["hunter2", "db.internal", "SELECT", "tenant_id", "Elixir.", "stacktrace"]
+
+  # Each case additionally forbids only what ITS OWN exception contributed. Listing
+  # the ArgumentError's message against the RuntimeError body would be a decorative
+  # refute — nothing in that call could have produced it.
+  defp leak_cases do
+    [
+      {leak_surface(leaky_body_after_runtime_error()),
+       [@runtime_message, "RuntimeError" | @shared_forbidden]},
+      {leak_surface(leaky_body_after_argument_error()),
+       [@argument_message, "ArgumentError" | @shared_forbidden]}
+    ]
+  end
+
   describe "internal_error and INV-4" do
     # REQ-066 AC3 — spec §2 case 17.
     test "a rescued RuntimeError yields the fixed body" do
@@ -239,25 +301,22 @@ defmodule Letflow.Api.ResponseTest do
     # REQ-066 AC3 — spec §2 case 20. The leak-detection half of INV-4, distinct from
     # the identical-across-types half: two bodies can be identical to each other and
     # both still leak the same shared secret.
-    test "no exception detail leaks into the body" do
-      body = internal_error_body_after_runtime_error()
-      other = internal_error_body_after_argument_error()
-
-      for forbidden <- [
-            @runtime_message,
-            @argument_message,
-            "hunter2",
-            "db.internal",
-            "SELECT",
-            "tenant_id",
-            "RuntimeError",
-            "ArgumentError",
-            "Elixir.",
-            "stacktrace"
-          ] do
-        refute String.contains?(body, forbidden), "500 body leaked #{inspect(forbidden)}"
-        refute String.contains?(other, forbidden), "500 body leaked #{inspect(forbidden)}"
+    test "no seeded exception material leaks into the body" do
+      for {surface, forbidden} <- leak_cases() do
+        for value <- forbidden do
+          refute String.contains?(surface, value), "500 body leaked #{inspect(value)}"
+        end
       end
+    end
+
+    # REQ-066 AC3 — spec §2 case 20b. The same claim stated positively and at maximum
+    # strength: a conn loaded with the exception, its message, its module name, the
+    # stacktrace, a fake DSN header and a secret-bearing query string still yields the
+    # byte-identical fixed document a bare conn yields. Any reflection of ANY conn
+    # field into the detail — not only the substrings enumerated above — breaks this.
+    test "a fully seeded conn yields the same bytes as a bare conn" do
+      assert leaky_body_after_runtime_error() == internal_error_body_after_runtime_error()
+      assert leaky_body_after_argument_error() == internal_error_body_after_argument_error()
     end
   end
 

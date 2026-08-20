@@ -91,3 +91,22 @@ scoping_note: >
   `variable_schemas` row -- the same activation event as ISS-0088. Consider
   resolving both together, since they are the same class of question about
   where schema well-formedness is enforced.
+
+triage_20260820: >
+  Re-derived independently in response to GH#306 (this issue's mirror) before
+  acting: REQ-078 and REQ-082 are both still `status: pending` in
+  docs/requirements.yaml, and nothing in lib/ writes a `variable_schemas` row
+  yet -- the defect is exactly as latent as when filed, so there is no code
+  to fix today (fixing variable_schema.ex now, ahead of the registration
+  path, would be scope creep past REQ-109's own turn and would preempt the
+  (a)-vs-(b) choice this issue deliberately leaves to whoever builds
+  registration). What WAS missing: neither REQ-078's nor REQ-082's own
+  "VARIABLE_SCHEMAS REGISTRATION" paragraph mentioned this issue or ISS-0088
+  at all, so the obligation to answer OQ-3 could have been silently dropped
+  the same way ISS-0075's staleness was created. Added a "WELL-FORMEDNESS,
+  NOT JUST PRESENCE" paragraph to BOTH REQ-078 and REQ-082 (mirrored, since
+  either may land first) naming GH#306/ISS-0089 and GH#305/ISS-0088
+  explicitly, restating both candidate resolutions, and requiring whichever
+  lands first to record the choice in VariableSchema's moduledoc and close
+  both GitHub issues. Status stays `open` -- this triage makes the fix
+  unlosable, it does not perform it.

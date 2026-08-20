@@ -4358,6 +4358,38 @@ requirements:
       to the `definition_id` being written, so a pack carrying N definitions
       writes N disjoint row sets and cannot collide with REQ-082 importing a
       different definition.
+      WELL-FORMEDNESS, NOT JUST PRESENCE (obligation added by ISS-0089/GH#306
+      and ISS-0088/GH#305 -- do not drop it either). Whichever of this
+      requirement or REQ-082 builds the shared registration function is also
+      the FIRST requirement that can write a `variable_schemas` row, which is
+      the precondition both issues are latent behind. REQ-109's read side
+      carries two now-reachable-for-the-first-time defects once a row exists:
+      (i) ISS-0089 -- `variable_schema.ex`'s `fetch_schemas/3` selects
+      `json_schema` as a typed `:map` field, so a top-level non-object jsonb
+      value (array/string/number/boolean -- the column is NOT NULL jsonb, not
+      NOT NULL json-OBJECT) raises `ArgumentError` at Ecto's load time, inside
+      the open completion transaction, before `validations_for/3`'s own
+      `{:ok, _not_a_map}` guard ever runs; (ii) ISS-0088 -- a well-formed
+      top-level object whose value at some property is itself a non-map
+      subschema passes that same loader and then raises
+      `FunctionClauseError` deeper in
+      `Letflow.EventStore.Registry.JsonSchema.properties_violations/3`. THE
+      SHARED REGISTRATION FUNCTION MUST CHOOSE ONE OF: (a) validate the
+      submitted `json_schema` document is well-formed (every level, not just
+      top level) BEFORE insert and reject a malformed one with a typed error
+      at import/install time -- the two read-side defects then become
+      genuinely unreachable and their defensive branches may be deleted as
+      dead code; or (b) accept that a malformed row can still be written and
+      instead fix the two read-side defects directly (ISS-0089's own
+      candidate fix: select `json_schema` untyped/raw so
+      `validations_for/3`'s existing guard is what actually sees it first,
+      widening `error_reason()` accordingly; ISS-0088 needs the equivalent
+      guard added inside `properties_violations/3`'s recursion). Do NOT do
+      neither -- landing registration with no well-formedness answer ships
+      the exact failure mode both issues describe, now reachable in
+      production for the first time. Whichever requirement lands first
+      records the choice in `Letflow.Engine.VariableSchema`'s moduledoc
+      (closing design sec 11.3 OQ-3) and closes GH#306/GH#305 accordingly.
       SECURITY: audit.zig is the sharpest INV-1 case in this group -- an audit
       list that escapes tenant scoping discloses another tenant's entire
       activity history in one response, and audit reads additionally require
@@ -4538,6 +4570,22 @@ requirements:
       onto the SAME definition_id must REPLACE that definition's rows inside the
       same transaction rather than accumulating duplicates against
       UNIQUE (definition_id, variable_key).
+      WELL-FORMEDNESS, NOT JUST PRESENCE (obligation added by ISS-0089/GH#306
+      and ISS-0088/GH#305 -- do not drop it either; mirrored verbatim in
+      REQ-078 since either requirement may land first and build the shared
+      registration function). Whichever of this requirement or REQ-078 builds
+      that function is the FIRST requirement that can write a
+      `variable_schemas` row -- the precondition both issues are latent
+      behind. See REQ-078's own "WELL-FORMEDNESS, NOT JUST PRESENCE" paragraph
+      for the full defect description; in short, the shared registration
+      function must choose (a) validate `json_schema` well-formed at every
+      level before insert, making the two read-side defensive branches
+      genuinely dead code to delete, or (b) accept a malformed row can still
+      land and instead fix `variable_schema.ex`'s `fetch_schemas/3` (ISS-0089)
+      and `JsonSchema.properties_violations/3`'s recursion (ISS-0088)
+      directly. Do NOT do neither. Whichever requirement lands first records
+      the choice in `Letflow.Engine.VariableSchema`'s moduledoc (closing
+      design sec 11.3 OQ-3) and closes GH#306/GH#305 accordingly.
       SECURITY (INV-1, INV-5, INV-8).
     acceptance_criteria:
       - "each of the eight handlers has an end-to-end test through the real router asserting status and, for writes, the resulting persisted state rather than only the status code"

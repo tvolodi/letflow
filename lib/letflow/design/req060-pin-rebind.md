@@ -160,6 +160,19 @@ placement).
    created. **Do not copy any environment claim into an implementation's
    moduledoc from this document.**
 
+   **Location disposition (REQ-110 item 6), re-confirmed 2026-08-20
+   (`WF03-REQ110-20260820`): `divergent_doc_only`.** The removed prescription
+   asserted R-Co was categorically unreachable; that assertion is false and
+   was false the whole time this file prescribed it — `R-Co/src/engine/pin_rebind.zig`
+   exists, is 388 lines, and was read directly both by the 2026-08-19 audit
+   and again this run (its header comment, `pin_rebind.zig:1-18`, states the
+   module's own purpose and confirms the file is a real, readable, in-tree
+   source, not an unreachable one). Nothing about shipped Letflow behaviour
+   is affected by this location on its own — the divergence is confined to
+   what this design document told future implementers to claim in their own
+   moduledocs, hence `divergent_doc_only` rather than `divergent_behavioural`.
+   The correction is the prescription's removal above.
+
    For the record: this design was written without a read of `pin_rebind.zig`,
    so its behavioural claims traced to REQ-060's requirement text and to
    already-shipped Letflow code, cited by file/line. The R-Co tree is reachable

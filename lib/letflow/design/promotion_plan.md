@@ -420,8 +420,8 @@ A caller checking a single `process_key` passes 1-element lists.
    `Repo.get_by/3` call, no `lock/2`, no `FOR UPDATE`, no `Repo.transaction/1`**,
    satisfying PRM-02's explicit "plain read" requirement. `nil` (target has zero rows
    for this `process_key`) → no conflict for this pair. A row exists → compare its
-   `version` against `base` via `version_greater?/2` (§9.4 — the numeric-vs-lexicographic
-   open question). `true` → append a `conflict_detail()` for this pair; `false`/`==` →
+   `version` against `base` via `version_greater?/2` (§9.4 — numeric comparison,
+   confirmed against R-Co source). `true` → append a `conflict_detail()` for this pair; `false`/`==` →
    no conflict for this pair.
 4. Collected conflict list `== []` → `:ok`. Non-empty → `{:error, {:conflicts, list}}`
    (AC4: naming each conflicting definition, as a list, satisfies "with
@@ -655,24 +655,52 @@ rule — "no data source exists" is an objectively true current fact, not a deci
 security or correctness consequences, so giving a concrete default here (rather than
 only flagging) is appropriate.
 
-### 9.4 `version` is free-form text; `>` comparison semantics are unconfirmed
+### 9.4 `version` comparison semantics — RESOLVED (GH#322, ISS-0094, 2026-08-20)
 
 `process_definitions.version` is `:string`/`varchar(255)` with **no numeric or semver
 constraint anywhere** in REQ-027's design or migration (confirmed §0) — R-Co's own
 `definition.md` names only a non-empty (`VersionEmpty`) constraint. PRM-02 defines
-conflict as `target_active_version > base_version`, an ordinal comparison, without this
-design being able to confirm against unreachable R-Co source whether `version` follows
-a monotonic-integer-as-string convention (in which case numeric comparison is correct
-and `"10" > "9"`) or is genuinely free text (in which case only lexicographic `>` is
-well-defined, and `"10" > "9"` would be **false**).
+conflict as `target_active_version > base_version`, an ordinal comparison; at the time
+this design was written, R-Co's source was unreachable to confirm whether `version`
+follows a monotonic-integer-as-string convention (in which case numeric comparison is
+correct and `"10" > "9"`) or is genuinely free text (in which case only lexicographic
+`>` is well-defined, and `"10" > "9"` would be **false**).
 
-**Explicit resolution, stated as a flagged default, not hidden:** `version_greater?/2`
-(private helper in `PromotionConflict`) attempts `Integer.parse/1` on both strings; if
-both parse with no remainder, compares numerically; otherwise falls back to Elixir's
-default (byte-wise lexicographic) `>` on the raw strings. REVIEWER should re-confirm
-this against PRM-02's own doc once reachable, and TEST-DESIGNER should cover both the
-all-numeric-version case and at least one non-numeric-version case explicitly so this
-fallback's behavior is pinned by a test rather than left implicit.
+**Confirmed against R-Co source (GH#322, ISS-0094, resolves the open question):** the
+R-Co tree is reachable at `c:\Users\tvolo\dev\ai-dala\R-Co`. Both ends of R-Co's own
+`version` handling were read directly:
+
+- **Write path** — `R-Co/src/definition/promotion.zig` L286-318 (`computePromotionPlan`'s
+  next-version step): the next version is computed as `SELECT COALESCE(MAX(version::int),
+  0)::text AS max_ver` (L295) — a Postgres integer cast/aggregate — then formatted back
+  with `std.fmt.allocPrint(allocator, "{d}", .{next_version})` (L313). R-Co is the sole
+  writer of `version`, and it **always** assigns the next sequential integer as decimal
+  text (`"1"`, `"2"`, `"3"`, …) — never free text, never semver.
+- **Read/compare path** — `R-Co/src/definition/promotion_conflict.zig` L50/74-99
+  (`rejectIfConflicts`): the query itself casts `(version::int)::text` (L74-76) — a
+  non-numeric `version` would make this SQL cast raise, not fall back to a string
+  comparison — and both `base_version` and the parsed `target_version` are typed `u32`
+  (L22/50), compared with a plain numeric `<=` (L99, `if (target_version <= base_version)
+  return null`). R-Co has **no lexicographic fallback anywhere** in this file; a
+  non-numeric value is a hard error condition on read, not a second comparison mode.
+
+This settles the open question: `process_definitions.version` follows a
+monotonic-integer-as-string convention by construction (R-Co's own write path
+guarantees it), and R-Co's own conflict check is a pure numeric comparison, never a
+lexicographic one. PRM-02's `target_active_version > base_version` means ordinal-as-integer,
+confirmed, not ordinal-as-string.
+
+**Effect on this design's `version_greater?/2`, stated precisely:** no change to the
+algorithm was needed. The existing design — `Integer.parse/1` on both strings, numeric
+`>` when both parse cleanly — already matches R-Co's confirmed semantics exactly and
+remains correct. The lexicographic fallback branch (used when either string fails to
+parse as an integer) is **not** matching an R-Co free-text convention — no such
+convention exists — it is pure defensive slack for Letflow's own schema, which (unlike
+R-Co's read path) has no `varchar(255)`-level numeric constraint or cast-time
+enforcement. That branch should not be expected to ever trigger against
+R-Co-conformant data; TEST-DESIGNER should still pin its behavior with an explicit
+non-numeric-version test, but as a defensive/schema-slack case, not as a modeled R-Co
+scenario.
 
 ### 9.5 `module_ref` raw-string treatment (inherited from the requirement text's own flag)
 
@@ -713,13 +741,14 @@ as a considered default, not a hard invariant.
 | 1 | `compute_promotion_plan/5` against a target with no existing version of `process_key` marks every entry `change_kind: :added` | §3.3 — empty-target fallout is a mechanical consequence of §3.4's generic before/after rule with `before = nil` for every dimension, not a special-cased branch. |
 | 2 | Byte-identical source/target → empty-plan error, not an empty-entries plan | §3.2 step 9 — `entries == []` (after §3.4's before==after filtering) returns `{:error, :empty_plan}` explicitly, never `{:ok, %{entries: []}}`. |
 | 3 | `source_tenant_id` that is a production tenant → invalid-promotion-source error, before any `process_definitions` read | §3.2 steps 1–2 order (`tenant_classifier` check runs before step 4/5's `Repo.get_by` calls); §9.2 states the classifier's injection point and flagged default. |
-| 4 | `reject_if_conflicts/4`: `target_active_version > base_version` → rejection detail naming the conflict; `<=` (incl. zero rows) → no conflict | §4.2 algorithm steps 3–4; `conflict_detail()` (§4.1) names `process_key`/`target_definition_id`/`target_active_version`/`base_version` per conflicting pair; §9.4 states the `>` comparison's exact (flagged) semantics. |
+| 4 | `reject_if_conflicts/4`: `target_active_version > base_version` → rejection detail naming the conflict; `<=` (incl. zero rows) → no conflict | §4.2 algorithm steps 3–4; `conflict_detail()` (§4.1) names `process_key`/`target_definition_id`/`target_active_version`/`base_version` per conflicting pair; §9.4 states the `>` comparison's exact semantics, confirmed numeric against R-Co source (GH#322). |
 | 5 | `compute_plan_digest/1` on identical-content, differently-key-ordered plans → identical digest | §5.1 — `canonicalize/1`'s explicit recursive sort-then-`Jason.OrderedObject`-encode step, named precisely, independent of Erlang's incidental small-map ordering (§5.1's closing note). |
 | 6 | `verify_digest/2` uses a constant-time comparison, not `==`/`=:=`, stated in the moduledoc | §5.2 — `:crypto.hash_equals/2` named explicitly as the only comparator; INV-PRM-5 (§8) restates it as a grep-checkable invariant; ELIXIR-DEV's moduledoc must restate this per the AC's own wording. |
 
 Every one of REQ-036's 6 acceptance criteria maps to a concrete, named design element
 above — no "TBD" placeholders. Where this design could not resolve an underlying data-
-model gap (permission mapping, tenant classification, `variable_schema` storage,
-`version` comparison semantics), it says so explicitly in §9 with a stated default (or
-the deliberate absence of one) and the reasoning behind that choice, rather than
-silently picking one and hiding the assumption.
+model gap (permission mapping, tenant classification, `variable_schema` storage), it
+says so explicitly in §9 with a stated default (or the deliberate absence of one) and
+the reasoning behind that choice, rather than silently picking one and hiding the
+assumption. (`version` comparison semantics, §9.4, was one such gap at authoring time;
+it is now resolved against R-Co source — GH#322, ISS-0094.)

@@ -24,4 +24,28 @@ affected_files:
   - lib/letflow/design/promotion_plan.md
 queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
 github_issue: https://github.com/tvolodi/letflow/issues/322
-status: open
+status: resolved
+resolution:
+  resolved_at: "2026-08-20T00:00:00Z"
+  summary: >
+    R-Co tree read directly at c:\Users\tvolo\dev\ai-dala\R-Co.
+    R-Co/src/definition/promotion.zig L286-318 (the sole writer of
+    process_definitions.version) computes the next version via
+    SELECT COALESCE(MAX(version::int), 0)::text AS max_ver (L295) and writes it
+    back as decimal text via std.fmt.allocPrint("{d}", .{next_version}) (L313) --
+    always a sequential integer-as-string, never free text or semver.
+    R-Co/src/definition/promotion_conflict.zig L50/74-99 (rejectIfConflicts) reads
+    version via a Postgres (version::int)::text cast (L74-76, which would raise on
+    non-numeric input rather than degrade gracefully) and compares base_version/
+    target_version as plain u32 values (L22/50/99) -- a pure numeric comparison,
+    with no lexicographic fallback anywhere in R-Co. This settles the open
+    question: process_definitions.version follows a monotonic-integer-as-string
+    convention by construction, and PRM-02's target_active_version > base_version
+    means ordinal-as-integer. Letflow's version_greater?/2 (Integer.parse first,
+    numeric compare when both parse) already matches this exactly -- no algorithm
+    change needed. Its lexicographic fallback branch is confirmed to be pure
+    defensive slack for Letflow's own looser schema (varchar(255), no numeric
+    constraint), not a modeled R-Co scenario, since R-Co's own schema/cast
+    enforces numeric-only implicitly and never falls back to string comparison.
+  files_updated:
+    - lib/letflow/design/promotion_plan.md

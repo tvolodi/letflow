@@ -166,7 +166,43 @@ affected_files:
   - lib/letflow/engine/pin_rebind.ex
   - lib/letflow/engine/sub_process.ex
   - lib/letflow/engine/execution_error.ex
-status: open
+status: resolved
+resolved_in_run: bookkeeping-20260820
+resolved_at: "2026-08-20T08:10:00Z"
+resolution: >
+  All four items of the recommended_sequencing below are complete, each via
+  its own requirement rather than a single docs sweep, per this issue's own
+  guidance not to bundle items 3/4 into item 1/2's docs-only edits:
+    1. req060-pin-rebind.md:134 (no longer prescribing the caveat) --
+       resolved by REQ-110 (done).
+    2. Remaining flat/CLASS-A occurrences restated, CLASS-B occurrences
+       (deferred substantive questions) left in place and each filed as its
+       own docs/issues/ISS-NNNN.yaml -- resolved by REQ-112 (done, GH#317),
+       which also caught execution_error.ex:5 (the location this issue's own
+       original affected_files list omitted) and filed it as ISS-0100/GH#328.
+    3. REQ-059/REQ-060's shipped open questions (OQ-1, OQ-4, OQ-5 and
+       siblings) verified against the now-readable pin_resolver.zig/
+       pin_rebind.zig/routes/pin_rebind.zig -- resolved by REQ-110 (done),
+       which found 2 divergent_behavioural findings and filed them as their
+       own issues per NON-NEGOTIABLE: ISS-0078/GH#299 (rebind provenance,
+       fixed and closed) and ISS-0079/GH#298 (override verification bypass,
+       still open -- correctly not fixed by this closeout, since ISS-0076's
+       own scope was the audit/sequencing, not every downstream finding).
+    4. req062-sub-process-runtime.md's citation audit -- resolved by REQ-111
+       (done, GH#316), which found the document's standing disclaimer
+       guarded zero actual R-Co citations (measured, not assumed) and found
+       2 further divergent_behavioural CEL findings in the same pass
+       (req050-exclusive-gateway-cel.md), filed as ISS-0085/GH#302 (still
+       open, &&/|| spacing) and ISS-0086/ISS-0087 (both resolved).
+  This issue's own file list and hit count were separately corrected in the
+  thread above (see `correction:` field) before REQ-110/111/112 were sized
+  against the corrected 15-file/29-hit measurement -- that correction is
+  not re-litigated here.
+  Downstream issues still open (ISS-0079/GH#298, ISS-0085/GH#302, and
+  others REQ-112 filed as CLASS B) are deliberately NOT closed by this
+  record -- they are separate WF-03-routed findings this audit surfaced,
+  not part of what ISS-0076 itself was scoped to fix. ISS-0076's own scope
+  (identify the systemic pattern, sequence the follow-on work) is complete.
 github_issue: https://github.com/tvolodi/letflow/issues/297
 related:
   - ISS-0075

@@ -404,7 +404,7 @@ at all) — treated identically to an empty map.
 |---|---|---|---|
 | `node_id` | `node.id` | — (required) | `{:error, :missing_node_id}` if `node.id` is `nil`/blank (defensive; `Graph.Node.t()`'s own `@enforce_keys` already makes this unreachable in practice — kept as a total-function guard, §9 OQ-2 style reasoning). |
 | `service_id` | `"service_id"` | `nil` | Non-empty-string gate (mirrors `ServiceScopeValidator.ref_id/2`, §0) — a missing key, `nil`, non-string, or `""` value is treated as "not provided." |
-| `url_template` | `"endpoint"` (see §9 OQ-1 — REQ-029's CHK-10 already validates this exact key) | `nil` | Same non-empty-string gate. |
+| `url_template` | `"endpoint"` (see §9 OQ-1, verified 2026-08-20, GH#331 — optional when `service_id` is provided) | `nil` | Same non-empty-string gate. |
 | `route_kind` | *derived*, not read directly | — | `:catalog_service` if `service_id` provided (§ above); else `:inline_url` if `url_template` provided; else `{:error, :missing_url_and_service_id}` — neither present is a hard parse failure, not a defaulted/silent case. |
 | `warnings` | *derived* | `[]` | `[:both_url_and_service_id_provided_url_ignored]` iff both `service_id` and `url_template` are non-blank (AC1) — `route_kind` still resolves to `:catalog_service` in this case (service_id wins, URL ignored per the requirement text's own wording). |
 | `method` | `"method"` | `:POST` (matches R-Co `service_task.zig`'s own unconditional `.POST` default when `"method"` is absent — §9 OQ-5, verified 2026-08-20, GH#330) | Must parse (case-insensitively) to one of `GET/POST/PUT/PATCH/DELETE`; anything else -> `{:error, {:invalid_method, value}}`. |
@@ -568,18 +568,26 @@ dead-letter listing will query -- no additional table is needed for S6 to find e
 
 ## 9. Open questions — not silently resolved
 
-**OQ-1 (MINOR):** REQ-029's already-shipped CHK-10 (`graph.ex`) requires a SERVICE_TASK node's
-`"endpoint"` attribute to be present and non-blank **unconditionally**, at graph-validation
-time — before this requirement's own `route_kind: :catalog_service` (service-id-only, no URL)
-configuration could ever reach `parse_config_from_node_attributes/1` via a definition that
-actually activated. This design reads `"endpoint"` as the source of `url_template` (§5.1) on
-the assumption that CHK-10's existing rule and REQ-056's `route_kind` derivation are meant to
-coexist — but whether a definition author is expected to also supply a (now-ignored, per AC1)
-placeholder `"endpoint"` value even when using `service_id`-only dispatch is not stated by
-either requirement. Not resolved here (R-Co's real `service_task.zig` attribute names are
-unreachable in this environment, §0) — flagged for REVIEWER: either REQ-029's CHK-10 needs a
-follow-up loosening (endpoint optional when `service_id` is present) or this module's own
-tests/docs need to state the placeholder-value expectation explicitly.
+**OQ-1 (MINOR, RESOLVED 2026-08-20, GH#331):** Verified against R-Co source
+(`R-Co/src/engine/service_task.zig`, `parseConfigFromNodeAttributes`, lines 84-100): R-Co
+treats `"url"`/`"endpoint"` as fully **optional** whenever `"service_id"` is present —
+`resolveCatalogEndpoint/3` derives the real URL from the service catalog entry, and
+`InvalidConfig` is returned only when **neither** `service_id` **nor** `url`/`endpoint` is
+supplied (line ~102). No placeholder `"endpoint"` value is expected or required from a
+definition author using `service_id`-only dispatch. This module's own already-shipped
+`parse_config_from_node_attributes/1` (`lib/letflow/engine/service_task.ex:191-199`) already
+matches R-Co exactly here (`{nil, nil} -> {:error, :missing_url_and_service_id}`, any other
+combination succeeds) — so no change was needed in this module.
+
+The still-open problem this verification surfaced is upstream of this module: REQ-029's
+already-shipped CHK-10 (`graph.ex`) requires `"endpoint"` unconditionally at graph-validation
+time, regardless of `service_id`, contradicting both R-Co and this module's own parse function
+— a definition using `route_kind: :catalog_service` (service-id-only, no URL) can never pass
+graph validation today and so can never reach `parse_config_from_node_attributes/1` in
+production. That is a defect in CHK-10 itself, outside this design's own file scope — filed
+separately as ISS-0104/GH#334 rather than fixed here (see `ISSUE_QUEUE.md`'s
+incidentally-discovered-defect protocol) so it gets its own reviewed change to `graph.ex` and
+its test suite.
 
 **OQ-2 (MINOR):** `parse_config_from_node_attributes/1` does not re-validate `timeout_ms`
 against REQ-029's `[1, 300_000]` range (§5.1) — it trusts CHK-11 already ran at graph-validation

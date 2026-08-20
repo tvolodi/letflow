@@ -1,0 +1,48 @@
+id: ISS-0104
+title: "REQ-029 CHK-10 requires SERVICE_TASK \"endpoint\" unconditionally, blocking route_kind: :catalog_service (service_id-only) definitions at graph-validation time"
+discovered_by: DOC-UPDATER
+discovered_in_run: GH331-resolution-20260820
+discovered_at: "2026-08-20T00:00:00Z"
+severity: MAJOR
+description: >
+  Discovered incidentally while resolving GH#331 (OQ-1 in
+  lib/letflow/design/service_task.md). R-Co's real source
+  (R-Co/src/engine/service_task.zig, parseConfigFromNodeAttributes, lines
+  84-100) treats "endpoint"/"url" as fully optional whenever "service_id"
+  is present -- it only rejects a config when neither service_id nor
+  url/endpoint is supplied. Letflow's own already-shipped
+  Letflow.Engine.ServiceTask.parse_config_from_node_attributes/1
+  (lib/letflow/engine/service_task.ex:191-199) matches this exactly.
+
+  The bug: REQ-029's already-shipped CHK-10
+  (check_service_task_endpoint/1, lib/letflow/definitions/graph.ex:692-704)
+  requires a SERVICE_TASK node's "endpoint" attribute to be present and
+  non-blank unconditionally, regardless of whether "service_id" is present
+  -- at graph-validation time, which runs before
+  parse_config_from_node_attributes/1 is ever reached. Practical effect: a
+  definition using route_kind: :catalog_service (service-id-only, no URL)
+  -- REQ-056's own AC1 case -- can never pass graph validation, because
+  CHK-10 fires :missing_endpoint first. route_kind: :catalog_service is
+  currently unreachable via any graph that validates successfully.
+
+  Recommended fix: loosen CHK-10 to require "endpoint" OR non-blank
+  "service_id" (mirroring parse_config_from_node_attributes/1's own
+  {nil, nil} -> :missing_url_and_service_id condition) -- a violation only
+  when both are blank/missing. Touches
+  lib/letflow/definitions/graph.ex's check_service_task_endpoint/1,
+  lib/letflow/design/req029-node-attribute-edge-condition-validators.md's
+  CHK-10 row/§4.1, test/letflow/definitions/graph_test.exs's CHK-10
+  describe block (new case: service_id present, endpoint absent -> valid),
+  and test/specs/REQ-029.md's CHK-10 test table. Also note:
+  lib/letflow/design/req031-service-scope-validator.md line 62-64's
+  confirmed claim that no other check reads "service_id" will go stale
+  once this is fixed -- update that cross-reference in the same change.
+affected_files:
+  - lib/letflow/definitions/graph.ex
+  - lib/letflow/design/req029-node-attribute-edge-condition-validators.md
+  - test/letflow/definitions/graph_test.exs
+  - test/specs/REQ-029.md
+  - lib/letflow/design/req031-service-scope-validator.md
+queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
+github_issue: https://github.com/tvolodi/letflow/issues/334
+status: open

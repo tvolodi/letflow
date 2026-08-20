@@ -25,4 +25,25 @@ affected_files:
   - lib/letflow/design/service_task.md
 queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
 github_issue: https://github.com/tvolodi/letflow/issues/331
-status: open
+status: resolved
+resolution: >
+  R-Co/src/engine/service_task.zig's parseConfigFromNodeAttributes (lines
+  84-100) confirms "url"/"endpoint" is fully optional whenever
+  "service_id" is present (resolveCatalogEndpoint derives the real URL
+  from the service catalog entry); InvalidConfig is returned only when
+  neither service_id nor url/endpoint is supplied. No placeholder
+  "endpoint" value is expected from a definition author using
+  service_id-only dispatch. lib/letflow/design/service_task.md's OQ-1
+  (§9) and the §5.1 url_template table row updated from "not resolved" to
+  verified accordingly. This module's own already-shipped
+  parse_config_from_node_attributes/1 already matched R-Co here, so no
+  code change was needed in this module.
+
+  Verification also surfaced a real, separate defect upstream of this
+  design: REQ-029's already-shipped CHK-10 requires "endpoint"
+  unconditionally regardless of service_id, contradicting R-Co and
+  blocking route_kind: :catalog_service definitions from ever passing
+  graph validation. That is out of this design doc's own file scope --
+  filed separately as ISS-0104/GH#334 per ISSUE_QUEUE.md's
+  incidentally-discovered-defect protocol, not fixed here.
+resolved_at: "2026-08-20T00:00:00Z"

@@ -5642,3 +5642,36 @@ history:
       3's docs-only scope test exists ("added after REQ-010's WF02 run surfaced the
       gap"). Branch feature/WF02-REQ065-20260820 created off origin/main and pushed
       (Step 00). Status flipped pending -> in_progress here.
+  - req: REQ-065
+    event: done
+    agent: ORCH
+    at: 2026-08-20T19:07:05Z
+    note: >
+      All six acceptance criteria verified directly against the branch's actual content
+      (not against any prior agent's summary): the 0001-web-framework.md addendum names
+      Plug/Bandit as the surviving position in one unambiguous sentence with the original
+      Decision/Reasoning sections left intact; Dimension B's tie-breaker is engaged on
+      its merits (Plug.Builder + forward/2 counter-argument); corrected counts (31
+      routes/9 middleware) are stated with reasoning that the recount doesn't flip the
+      conclusion; router.ex's moduledoc and stage-4-api-surface.md's OQ-0 both agree with
+      the surviving position; REVIEWER sign-off is present and dated 2026-08-20; git diff
+      main --stat confirms only docs/ and lib/letflow/design/ files touched (no mix.exs,
+      no router.ex). Step 4 (TEST-RUNNER)/Step 3a-3b were correctly skipped per WF-02's
+      own docs-only scope test -- REQ-065 has no application-executable surface. Step 5's
+      independent mix test re-run was killed by explicit project-owner instruction after
+      running ~30+ minutes without completing (well past the ~9 minute baseline observed
+      on other runs this session) on this workstation's local Docker environment;
+      RELEASE-VALIDATOR's acceptance-criteria verification was completed by reading the
+      artefacts directly instead, per the docs-only path WF-02 Step 3a already specifies
+      for this exact case ("RELEASE-VALIDATOR verifies acceptance criteria by reading the
+      artefacts directly ... rather than by test result") -- explicitly authorized as a
+      one-off exception to Step 5's own generic "re-run mix test" instruction, not a
+      process change. No code path was exercised by this run for the full suite to have
+      meaningfully covered; git diff confirms zero application code changed.
+
+      Adjacent finding (not blocking, reported by REVIEWER): two other files still assert
+      the now-reversed "Phoenix" position -- docs/migration/decisions/0002-oidc-
+      integration.md:127-128 and docs/migration/stage-0-foundation.md:64 -- both predate
+      REQ-065 and are stale in the same way router.ex/mix.exs were before this run. Worth
+      a small follow-up doc fix; not filed as a separate issue by this run (out of
+      REQ-065's scope boundary), flagging here for a future session.

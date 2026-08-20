@@ -24,4 +24,22 @@ affected_files:
   - lib/letflow/design/req057-plugin-interface-registry.md
 queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
 github_issue: https://github.com/tvolodi/letflow/issues/327
-status: open
+status: resolved
+resolution:
+  resolved_at: "2026-08-20T00:00:00Z"
+  summary: >
+    R-Co/src/engine/plugin_registry.zig read directly. RegisterPluginHandlerInput.node_type
+    and PluginRegistration.node_type (L23-41) are both []const u8 (Zig's open string-slice
+    type), and PluginRegistry.entries is std.StringHashMap(PluginRegistration) (L51), keyed
+    by that same raw string -- not a closed enum. registerPluginHandler/3 (L88-131) validates
+    only that the string is non-empty (L94, error.InvalidNodeType); no membership check
+    against a fixed node-type set exists anywhere in the file. R-Co/src/design/ext-03-plugin-
+    interface.md confirms the identical node_type: []const u8 shape at L31/L63/L129/L213.
+    This settles OQ-2 in favor of the design's existing choice: handler_key :: String.t()
+    (open, not Graph.node_type()'s 8-atom union) matches R-Co's own shape exactly -- it is
+    not a departure invented to reconcile two vocabularies, it is what R-Co already does.
+    R-Co also has exactly one plugin registry (not two), confirming the two-separate-
+    registries alternative this design considered and rejected was the correct rejection.
+    No change to req057's types, algorithm, or shipped plugin_registry.ex was needed.
+  files_updated:
+    - lib/letflow/design/req057-plugin-interface-registry.md

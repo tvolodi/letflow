@@ -124,16 +124,18 @@ unchanged from the version CODE-DESIGN-VALIDATOR reviewed.
 - `docs/anti-patterns.md` (current entries) — no entry bears directly on this module's own
   construction.
 
-**Access gap, stated explicitly, matching every other S3 design's own precedent:** this
-environment has no `R-Co/src/engine/plugin_interface.zig`, `R-Co/src/engine/plugin_registry.zig`,
-or `R-Co/src/design/engine.md` reachable — confirmed via `find / -iname "plugin_*.zig"` and
+**Access gap at time of writing — since resolved for OQ-2 (GH#327, ISS-0099):** this environment
+had no `R-Co/src/engine/plugin_interface.zig`, `R-Co/src/engine/plugin_registry.zig`, or
+`R-Co/src/design/engine.md` reachable — confirmed via `find / -iname "plugin_*.zig"` and
 `find / -maxdepth 4 -iname "R-Co*"`, both returning no match, the same negative result every
 other S3 design in this repository (`req049`, `req052`, `req061`) already recorded. This design
-is therefore built from this run's own `context.requirement_text` (which already summarizes
+was therefore built from this run's own `context.requirement_text` (which already summarizes
 `plugin_interface.zig`'s 79-line handler contract and `plugin_registry.zig`'s 232-line
-registration/resolution table) plus the shipped-code precedent above — **not** verified against
-either `.zig` file's literal source. Every place this matters is flagged inline as its own open
-question (§10), not silently assumed.
+registration/resolution table) plus the shipped-code precedent above — not verified at the time
+against either `.zig` file's literal source. The tree is reachable in the current environment
+(`c:\Users\tvolo\dev\ai-dala\R-Co`); §3.2's `handler_key` reconciliation (OQ-2) has since been
+read directly against it and confirmed — see §3.2 and §10 OQ-2. §10's remaining open questions
+(OQ-1, OQ-4, OQ-6) are unaffected and still flagged.
 
 ---
 
@@ -404,8 +406,23 @@ requirement's own vocabulary and `plugin_registry.zig`'s own field name) **and**
 the string a `SERVICE_TASK` node's `attributes["plugin_handler"]` value would hold and REQ-031's
 `Lookup.plugin_lookup` would be called with — one namespace, two names for the same thing
 depending on which requirement's vocabulary is talking about it. §5.3 states the adapter that
-makes this literal, not merely analogous. Flagged for REVIEWER at §10 OQ-2 as this design's own
-judgment call, since it cannot be checked against `plugin_registry.zig`'s unreachable source.
+makes this literal, not merely analogous.
+
+**Confirmed against R-Co source (GH#327, ISS-0099, resolves OQ-2):**
+`R-Co/src/engine/plugin_registry.zig` was read directly. `RegisterPluginHandlerInput.node_type`
+and `PluginRegistration.node_type` (L23–41) are both typed `[]const u8` — Zig's string-slice
+type, i.e. an **open string**, not a fixed enum of node kinds; `PluginRegistry.entries` is
+`std.StringHashMap(PluginRegistration)` (L51), keyed by that same raw string. R-Co's own
+`registerPluginHandler/3` (L88–131) validates only that the string is non-empty
+(`input.node_type.len == 0` → `error.InvalidNodeType`, L94) — no membership check against any
+closed set of node-type values exists in R-Co. `R-Co/src/design/ext-03-plugin-interface.md`
+(L31, L63, L129, L213) uses the identical `node_type: []const u8` shape throughout. This
+settles the reconciliation this design made without being able to check it: `handler_key ::
+String.t()` (open, not `Graph.node_type()`'s 8-atom union) is exactly R-Co's own shape, not a
+departure from it. The two-separate-registries alternative this design considered and rejected
+(§10 OQ-2) is confirmed wrong — R-Co has exactly one registry, one open-string key namespace,
+matching this design's choice. No change to this design's types or algorithm was needed; §10
+OQ-2 is now closed.
 
 ```
 @type scope :: :global | :tenant
@@ -929,15 +946,17 @@ per the stage doc's own escalation framing, since a plugin-registry storage choi
 the kind of "introduces a new dependency or a platform-wide rule" decision that doc anticipates
 might need one.
 
-**OQ-2 (MAJOR).** §3.2's reconciliation — treating this registry's `handler_key` as an open
-`String.t()` (not `Graph.node_type()`'s 8-atom enum) specifically so the same namespace serves
-both this requirement's own "node_type" vocabulary and REQ-031's `plugin_handler` identifier
-string — is this design's own judgment call, not verified against R-Co source. An alternative
-reading (two genuinely separate registries — one keyed by `Graph.node_type()` atoms for
-dispatch-kind precedence, one keyed by arbitrary plugin-identifier strings for REQ-031's SVC-03
-check) was considered and rejected here because this run's own text asks for exactly one
-registry wired to both concerns, but is flagged for REVIEWER to confirm that reading is right
-rather than accepted silently.
+**OQ-2 — RESOLVED (GH#327, ISS-0099, 2026-08-20).** §3.2's reconciliation — treating this
+registry's `handler_key` as an open `String.t()` (not `Graph.node_type()`'s 8-atom enum)
+specifically so the same namespace serves both this requirement's own "node_type" vocabulary
+and REQ-031's `plugin_handler` identifier string — was this design's own judgment call, not
+verified against R-Co source at the time. `R-Co/src/engine/plugin_registry.zig` (L23–41, L51,
+L88–131) and `R-Co/src/design/ext-03-plugin-interface.md` (L31, L63, L129, L213) have since been
+read directly (see §3.2): R-Co itself keys its one plugin registry by `node_type: []const u8`,
+an open string with only a non-empty-string validity check, not a closed enum — confirming this
+design's `handler_key :: String.t()` choice matches R-Co's own shape exactly, and that the
+two-separate-registries alternative considered and rejected here was the correct rejection. No
+further action for REVIEWER on this item.
 
 **OQ-3 (MINOR).** §2.4.1's `{:ok, other}` defensive branch (a handler returning a value outside
 its own `@callback` contract) is a design addition beyond this run's own five/seven named ACs —

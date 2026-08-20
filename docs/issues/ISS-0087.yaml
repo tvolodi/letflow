@@ -124,4 +124,78 @@ related:
   - ISS-0086
   - ISS-0076
 github_issue: https://github.com/tvolodi/letflow/issues/304
-status: open
+queue_task_id: null   # never registered (filed under pre-2026-08-20 ISSUE_QUEUE.md, same
+  # gap as ISS-0086). One real get_next_task reconciliation attempt during the resolving
+  # run returned a different, newer task (#165/ISS-0090) -- not this one -- released back
+  # to open untouched. Residual gap, bounded: GH#304 is now closed and will not be
+  # re-imported.
+status: resolved
+resolved_in_run: WF03-ISS0087-20260820
+resolved_at: "2026-08-20T00:27:13Z"
+resolution: >
+  DECISION MADE, as the issue itself required: KEEP Letflow's escape-aware string-literal
+  semantics (deliberate divergence from R-Co), recorded in
+  lib/letflow/design/req050-exclusive-gateway-cel.md §9.1(b) and its §0.1 table row.
+
+  THE ISSUE'S OWN CENTRAL CLAIM WAS UNVERIFIED, AND WRONG AS STATED. Its description
+  said "with a matching value for q the comparison can therefore evaluate TRUE in Letflow
+  where R-Co would have short-circuited to FALSE" -- but this was inferred from
+  `translate_cel_to_expr/1`'s output alone, never checked end-to-end. Reproduced directly
+  this run, per WF-03 Step 1's "reproduce directly, don't diagnose from prose" rule:
+
+    Expr.evaluate_condition(~S|variables.q == "a\"?b"|, %{"q" => ~S|a"?b|})
+      => false   # NOT true as the issue assumed -- confirmed against pre-fix code
+
+  ROOT CAUSE OF THE DISCREPANCY: a second, more severe, previously-undiscovered bug.
+  `parse/1`'s own string-literal tokenizer (`tokenize_string/3`) -- upstream of and
+  independent from the CEL-detection stage (`strip_string_literals/1`) this issue was
+  about -- had NO escape handling of its own. It terminated on the first raw quote byte
+  regardless of a preceding backslash, so `variables.q == "a\"?b"` was correctly
+  classified `supported` at the CEL stage, then failed to *parse* at the expr-syntax
+  stage, catch-falsing to `false` -- coincidentally agreeing with R-Co's `false`, but for
+  an entirely unrelated reason. This is materially worse than the ternary-boundary
+  question this issue was filed about: ANY expr-syntax string literal containing an
+  escaped quote of its own delimiter failed to parse, with no relationship to `?` or
+  ternary detection at all -- e.g. `variables.name == "O\"Brien"` silently always
+  evaluated `false` regardless of `name`'s actual value, for any tenant business process
+  comparing against such a string.
+
+  FIX. `tokenize_string/3` rewritten (via a new `scan_string_literal/3`) to treat a
+  backslash immediately followed by the delimiter quote as one escaped-quote unit,
+  unescaped into the literal's value rather than treated as the terminator -- mirrors
+  `strip_string_literals/1`'s existing `\\.` regex alternative, which the CEL-detection
+  stage already assumed but the expr-syntax tokenizer had never been brought in line
+  with. No broader escape-sequence grammar (e.g. `\n`) implied or added -- out of scope,
+  not asked for by this issue or the design doc.
+
+  POST-FIX, THE ISSUE'S ORIGINAL PREDICTION IS NOW REAL. Confirmed:
+
+    Expr.evaluate_condition(~S|variables.q == "a\"?b"|, %{"q" => ~S|a"?b|})
+      => true   # matches the issue's original (previously unverified) claim
+
+  R-Co still returns `false` (ternary misdetection via its non-escape-aware toggle,
+  uncorrected -- out of scope, R-Co is not this project's code). This is now a genuine,
+  intentional outcome divergence, decided and recorded rather than left as an
+  open question.
+
+  DECISION RATIONALE. Reverting to R-Co's non-escape-aware parity would mean
+  deliberately reintroducing a basic string-literal correctness bug (breaking ANY
+  escaped-quote literal, not just the ternary-adjacent case) just to match a known-wrong
+  R-Co behavior. Keeping Letflow's semantics is the only choice that doesn't trade away
+  basic correctness for parity with a bug.
+
+  REGRESSION TESTS (test/letflow/engine/expr_test.exs):
+    - translate_cel_to_expr/1 on the escaped-quote-then-? literal (characterizes the
+      CEL-detection stage alone, unaffected by this fix)
+    - evaluate_condition/2 end-to-end on the same condition with a matching value --
+      this is the test that actually caught the discrepancy between the issue's claim
+      and pre-fix shipped behavior, and now locks in the corrected, decided outcome
+
+  VALIDATION. mix format --check-formatted: clean. mix test
+  test/letflow/engine/expr_test.exs: 41/41 (39 pre-existing + 2 new). Full mix test
+  suite run for regressions -- see this run's own output for the current unrelated
+  pre-existing-failure baseline (IdentityMigrationTest, Mix.Tasks.Letflow.Check.TestTest,
+  tracked separately, not introduced by this change).
+
+  RELATED, NOT FIXED HERE: ISS-0085 (`&&`/`||` spacing) is a separate, independent root
+  cause per the original issue's own note -- out of scope for this run.

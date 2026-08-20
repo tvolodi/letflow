@@ -270,11 +270,36 @@ defmodule Letflow.Engine.Expr do
 
   @spec tokenize_string(String.t(), byte(), [term()]) :: {:ok, [term()]} | {:error, term()}
   defp tokenize_string(<<quote, rest::binary>>, quote, acc) do
-    case String.split(rest, <<quote>>, parts: 2) do
-      [content, remainder] -> do_tokenize(remainder, [{:lit, content} | acc])
-      _ -> {:error, {:unterminated_string, rest}}
+    case scan_string_literal(rest, quote, <<>>) do
+      {:ok, content, remainder} -> do_tokenize(remainder, [{:lit, content} | acc])
+      :error -> {:error, {:unterminated_string, rest}}
     end
   end
+
+  # Scans a string literal body up to its closing, un-escaped `quote` byte. A
+  # backslash immediately followed by `quote` is consumed as one escaped-quote
+  # unit -- unescaped into the literal's value rather than treated as the
+  # terminator -- mirroring `strip_string_literals/1`'s `\\.` regex
+  # alternative, which the CEL-detection stage already assumed. Any other
+  # backslash sequence passes through unchanged (no broader escape-sequence
+  # grammar, e.g. `\n`, is implied or needed here). Before this, the
+  # tokenizer had no escape handling at all and terminated on the first raw
+  # quote byte regardless of a preceding backslash, so ANY string literal
+  # containing an escaped quote of its own delimiter failed to parse
+  # (ISS-0087/GH#304 -- discovered while investigating a narrower ternary-
+  # detection question; this is the actual, broader bug behind it).
+  @spec scan_string_literal(String.t(), byte(), binary()) ::
+          {:ok, String.t(), String.t()} | :error
+  defp scan_string_literal(<<quote, remainder::binary>>, quote, content),
+    do: {:ok, content, remainder}
+
+  defp scan_string_literal(<<?\\, quote, rest::binary>>, quote, content),
+    do: scan_string_literal(rest, quote, <<content::binary, quote>>)
+
+  defp scan_string_literal(<<c, rest::binary>>, quote, content),
+    do: scan_string_literal(rest, quote, <<content::binary, c>>)
+
+  defp scan_string_literal(<<>>, _quote, _content), do: :error
 
   # --- recursive-descent parser -------------------------------------------
 

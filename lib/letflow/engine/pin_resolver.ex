@@ -8,7 +8,8 @@ defmodule Letflow.Engine.PinResolver do
   REQ-059's own requirement text or to already-shipped Letflow code, cited by
   file/line. R-Co has since been read directly (REQ-110 audit, 2026-08-19),
   and that reconstruction did **not** hold on the override path: see the
-  OQ-1 resolution below, `docs/issues/ISS-0079.yaml` (GH#298) and
+  OQ-1 resolution below, `docs/issues/ISS-0079.yaml` (GH#298,
+  `lib/letflow/design/iss-0079-pin-override-verification.md`) and
   `docs/issues/ISS-0078.yaml` (GH#299). Treat any claim in this moduledoc
   that REQ-110 did not explicitly verify as still unconfirmed against R-Co.
   See `lib/letflow/design/req059-pin-resolver.md`
@@ -123,16 +124,28 @@ defmodule Letflow.Engine.PinResolver do
   (`pin_resolver.zig:296-299`, `:602-691`, `:189-190`); it rejects
   `kind: module` overrides outright (`:642`) and treats an override naming
   an unreferenced ref as an error rather than a no-op (`:707-723`). This
-  module, by contrast, takes a caller-supplied override verbatim in
-  `resolve_one_ref/4` below — no lookup call, no verification, no
-  `unresolved_pin_override` error variant — so an override may assert a
-  version that was never confirmed to exist. R-Co additionally sets
-  `source: :override` from a SECOND producer this module's design never
-  anticipated: a PIN-05 rebind (`pin_resolver.zig:138`, `:156`, tested at
-  `:914`).
+  module's override mechanism now matches that verify-then-accept shape:
+  `resolve_one_ref/4` and `resolve_variable_schema/3` call `lookup` for
+  every override before accepting it, and an unverifiable or stray override
+  halts resolution with `{:error, {:unresolved_pin_override, ref}}` — see
+  `docs/issues/ISS-0079.yaml` (GH#298,
+  `lib/letflow/design/iss-0079-pin-override-verification.md`) for the design
+  that closed this gap. R-Co additionally sets `source: :override` from a
+  SECOND producer this module's design never anticipated: a PIN-05 rebind
+  (`pin_resolver.zig:138`, `:156`, tested at `:914`).
 
-  The override-mechanism delta is recorded, not repaired, per REQ-110's
-  audit-only scope: `docs/issues/ISS-0079.yaml` (GH#298). The rebind-
+  The override-mechanism delta **was repaired** under
+  `docs/issues/ISS-0079.yaml` (GH#298,
+  `lib/letflow/design/iss-0079-pin-override-verification.md`): every
+  override is now verified against `lookup` before acceptance; `kind:
+  :module` remains a legal override, verified the same way as
+  `catalog_entry` (Letflow's own decision — R-Co's unconditional module
+  rejection was a consequence of R-Co having no module catalog at all, not
+  a principled rule ported here); a stray override naming a ref outside the
+  enumerated pin set is an error, `{:unresolved_pin_override, ref}`; and an
+  accepted `variable_schema` override's `resolved_id` is forced to `nil`
+  regardless of what the caller supplied, since `variable_schema_lookup`
+  has no `resolved_id` of its own to confirm one against. The rebind-
   provenance delta was fixed under `docs/issues/ISS-0078.yaml` (GH#299,
   `lib/letflow/design/iss-0078-pin-rebind-provenance.md`) — `source: :rebound`
   (a distinct value from R-Co's `:override`, not a copy of it), a rebound
@@ -218,9 +231,22 @@ defmodule Letflow.Engine.PinResolver do
           inherited_version: String.t()
         }
 
+  @typedoc """
+  `{:unresolved_catalog_ref, ref}` and `{:unresolved_module_ref, ref}` are
+  the HTTP 422 analogue once an S4 route exists (matching R-Co's own
+  `UnresolvedCatalogRef`/`UnresolvedModuleRef`). `{:unresolved_pin_override,
+  ref}` (added for GH#298,
+  `lib/letflow/design/iss-0079-pin-override-verification.md`) is the same
+  HTTP 422 analogue for an override entry that failed verification against
+  `lookup`, or that named a `{kind, ref}` outside the enumerated pin set —
+  `ref` is always the override's own `ref` field (the value the caller
+  supplied), not a pin-set index, so a future 422 response body can echo
+  back exactly what the caller named.
+  """
   @type resolve_error ::
           {:error, {:unresolved_catalog_ref, ref :: String.t()}}
           | {:error, {:unresolved_module_ref, ref :: String.t()}}
+          | {:error, {:unresolved_pin_override, ref :: String.t()}}
           | {:error, {:graph_structure_invalid, term()}}
 
   defmodule Lookup do
@@ -278,16 +304,26 @@ defmodule Letflow.Engine.PinResolver do
   PIN-01 — enumerates every versioned reference in `graph`/`definition`
   (`("SERVICE_TASK", "service_id")` → `:catalog_entry`, `("SUB_PROCESS",
   "module_ref")` → `:module`, plus exactly one `:variable_schema` entry,
-  unconditionally) and resolves each to a `pinned_version()`, in `overrides`
-  first, `lookup` otherwise. Returns the deterministically-sorted (PIN-01
-  AC5, `{kind, ref}` ascending) list alongside the resolved variable JSON
-  Schema (kept separate from `pinned_version()` itself — see the design
-  doc's INV-PIN-5 — so `validate_initial_variables/2` can use it without
-  re-deriving it from `pins`).
+  unconditionally) and resolves each to a `pinned_version()`. An `overrides`
+  entry matching an enumerated `{kind, ref}` is **verified against `lookup`
+  before being accepted** (GH#298,
+  `lib/letflow/design/iss-0079-pin-override-verification.md`, superseding
+  this module's earlier verbatim-acceptance behaviour) — an enumerated pin
+  with no matching override resolves via `lookup` as before. Returns the
+  deterministically-sorted (PIN-01 AC5, `{kind, ref}` ascending — Letflow's
+  own deliberately-chosen canonical order, `catalog_entry < module <
+  variable_schema`, diverging from R-Co's `PinKind` ordinal order by
+  design) list alongside the resolved variable JSON Schema (kept separate
+  from `pinned_version()` itself — see the design doc's INV-PIN-5 — so
+  `validate_initial_variables/2` can use it without re-deriving it from
+  `pins`).
 
   Halts and returns the first `{:unresolved_catalog_ref, ref}` /
-  `{:unresolved_module_ref, ref}` encountered — never a partial list (design
-  doc §4.1).
+  `{:unresolved_module_ref, ref}` encountered while resolving a
+  no-override pin — never a partial list (design doc §4.1). Also halts with
+  `{:error, {:unresolved_pin_override, ref}}` for the first `overrides`
+  entry that either fails verification against `lookup` or names a `{kind,
+  ref}` outside the enumerated pin set entirely.
   """
   @spec resolve(
           graph :: Graph.t(),
@@ -303,10 +339,10 @@ defmodule Letflow.Engine.PinResolver do
     with {:ok, catalog_pins} <-
            resolve_refs(catalog_refs, :catalog_entry, lookup.catalog_lookup, overrides),
          {:ok, module_pins} <-
-           resolve_refs(module_refs, :module, lookup.module_lookup, overrides) do
-      {variable_schema_pin, json_schema} =
-        resolve_variable_schema(definition, lookup.variable_schema_lookup, overrides)
-
+           resolve_refs(module_refs, :module, lookup.module_lookup, overrides),
+         {:ok, {variable_schema_pin, json_schema}} <-
+           resolve_variable_schema(definition, lookup.variable_schema_lookup, overrides),
+         :ok <- check_stray_overrides(overrides, catalog_refs, module_refs, definition.name) do
       pins =
         (catalog_pins ++ module_pins ++ [variable_schema_pin])
         |> sort_pins()
@@ -315,9 +351,34 @@ defmodule Letflow.Engine.PinResolver do
     end
   end
 
+  # Decision 4 -- after every enumerated pin has been processed (steps 1-2
+  # of the design's combined control-flow spec), reject the first overrides
+  # entry (in `overrides`' own list order) whose {kind, ref} matched no
+  # enumerated pin at all. Only reached if resolve_refs/4 and
+  # resolve_variable_schema/3 above did not already halt.
+  defp check_stray_overrides(overrides, catalog_refs, module_refs, variable_schema_ref) do
+    enumerated =
+      MapSet.new(
+        Enum.map(catalog_refs, &{:catalog_entry, &1}) ++
+          Enum.map(module_refs, &{:module, &1}) ++
+          [{:variable_schema, variable_schema_ref}]
+      )
+
+    overrides
+    |> Enum.find(fn override -> not MapSet.member?(enumerated, {override.kind, override.ref}) end)
+    |> case do
+      nil -> :ok
+      %{ref: ref} -> {:error, {:unresolved_pin_override, ref}}
+    end
+  end
+
   # §4.1 -- walk nodes in original list order, keep only non-empty string
   # attribute values, dedupe by ref (first occurrence kept for lookup-order
-  # purposes only; final order is sort_pins/1's job).
+  # purposes only; final order is sort_pins/1's job). The Enum.uniq() here
+  # is a deliberate deviation from R-Co (which emits one pin entry per graph
+  # node, byte-identical duplicates included) -- GH#298's design doc,
+  # disposition (a), confirms this is a strict improvement with no
+  # acceptance criterion depending on R-Co's entry count.
   defp collect_refs(%Graph{nodes: nodes}, node_type_string, attribute_key) do
     node_type = String.to_existing_atom(node_type_string)
 
@@ -350,11 +411,31 @@ defmodule Letflow.Engine.PinResolver do
     end
   end
 
+  # Decision 1/3 -- an override is an overlay applied only after a fresh
+  # lookup.(ref) confirms it: accepted only if the lookup succeeds and its
+  # `version` matches the override's own `version`. On accept, resolved_id
+  # comes from the *lookup result*, never the caller-supplied value
+  # (Decision 1's "resolved_id/version come from the fresh lookup" bullet).
+  # Any other outcome (not found, or a version mismatch) is
+  # {:unresolved_pin_override, ref} -- uniform across :catalog_entry and
+  # :module (Decision 3: no categorical kind: :module ban).
   defp resolve_one_ref(ref, kind, lookup_fun, overrides) do
     case find_override(overrides, kind, ref) do
-      %{resolved_id: resolved_id, version: version} ->
-        {:ok,
-         %{kind: kind, ref: ref, resolved_id: resolved_id, version: version, source: :override}}
+      %{version: version} ->
+        case lookup_fun.(ref) do
+          {:ok, %{resolved_id: resolved_id, version: ^version}} ->
+            {:ok,
+             %{
+               kind: kind,
+               ref: ref,
+               resolved_id: resolved_id,
+               version: version,
+               source: :override
+             }}
+
+          _other ->
+            {:error, {:unresolved_pin_override, ref}}
+        end
 
       nil ->
         ref
@@ -386,18 +467,32 @@ defmodule Letflow.Engine.PinResolver do
   # OQ-7 (moduledoc): resolve/4 has no tenant_id in scope, so nil is passed
   # here -- default_lookup/0's own variable_schema_lookup ignores its
   # tenant_id argument entirely, consistent with this. Flagged for REVIEWER.
+  #
+  # Decision 1/4 (sub-decision) -- an override is verified against a fresh
+  # lookup.(nil, process_key) call before being accepted: only `version` is
+  # checked (variable_schema_lookup_result carries no resolved_id at all),
+  # and the accepted pin's resolved_id is forced to nil unconditionally --
+  # never the caller-supplied value -- since there is no lookup-confirmed
+  # value to substitute it with. A version mismatch or lookup failure is
+  # {:unresolved_pin_override, ref}.
   defp resolve_variable_schema(%ProcessDefinition{name: process_key}, lookup_fun, overrides) do
     case find_override(overrides, :variable_schema, process_key) do
-      %{resolved_id: resolved_id, version: version} ->
-        pin = %{
-          kind: :variable_schema,
-          ref: process_key,
-          resolved_id: resolved_id,
-          version: version,
-          source: :override
-        }
+      %{version: version} ->
+        case lookup_fun.(nil, process_key) do
+          {:ok, %{version: ^version}} ->
+            pin = %{
+              kind: :variable_schema,
+              ref: process_key,
+              resolved_id: nil,
+              version: version,
+              source: :override
+            }
 
-        {pin, nil}
+            {:ok, {pin, nil}}
+
+          _other ->
+            {:error, {:unresolved_pin_override, process_key}}
+        end
 
       nil ->
         {:ok, %{version: version, json_schema: json_schema}} = lookup_fun.(nil, process_key)
@@ -410,12 +505,16 @@ defmodule Letflow.Engine.PinResolver do
           source: :resolved
         }
 
-        {pin, json_schema}
+        {:ok, {pin, json_schema}}
     end
   end
 
   # §4.3 -- deterministic, load-bearing ordering: {Atom.to_string(kind), ref}
-  # ascending ("catalog_entry" < "module" < "variable_schema").
+  # ascending ("catalog_entry" < "module" < "variable_schema"). This is
+  # Letflow's own deliberately-chosen canonical order (GH#298,
+  # `lib/letflow/design/iss-0079-pin-override-verification.md`, disposition
+  # b) -- it diverges from R-Co's PinKind enum ordinal order by design, not
+  # by accident, and must not be "corrected" toward R-Co's order later.
   defp sort_pins(pins) do
     Enum.sort_by(pins, fn %{kind: kind, ref: ref} -> {Atom.to_string(kind), ref} end)
   end
@@ -476,7 +575,11 @@ defmodule Letflow.Engine.PinResolver do
           pins_rebound_events :: [%{event_id: Ecto.UUID.t(), payload: map()}],
           started_event_id :: Ecto.UUID.t()
         ) :: [effective_pin()]
-  def merge_effective_pins(instance_started_pinned_versions, pins_rebound_events, started_event_id)
+  def merge_effective_pins(
+        instance_started_pinned_versions,
+        pins_rebound_events,
+        started_event_id
+      )
       when is_list(instance_started_pinned_versions) and is_list(pins_rebound_events) do
     base =
       Enum.map(instance_started_pinned_versions, fn pin ->

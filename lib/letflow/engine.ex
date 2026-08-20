@@ -111,6 +111,17 @@ defmodule Letflow.Engine do
   `Letflow.Engine.PinResolver`'s own moduledoc for the full PIN-01..PIN-04
   algorithm and its named SCOPE GAPs.
 
+  `create_error()`'s `{:unresolved_catalog_ref, ref}`, `{:unresolved_module_ref,
+  ref}`, and `{:unresolved_pin_override, ref}` (the last added for GH#298,
+  `lib/letflow/design/iss-0079-pin-override-verification.md`) are documented
+  here as the HTTP 422 analogue a future S4 route should map each of them
+  to, matching R-Co's own `UnresolvedCatalogRef`/`UnresolvedModuleRef`/
+  `UnresolvedPinOverride` — no controller or route in this codebase performs
+  that mapping today (S3 is pre-API-route scope for `create/2`); `ref` in
+  every case is the caller-supplied value (a `service_id`/`module_ref`, or
+  an override's own `ref`), never a pin-set index, so a 422 body can echo
+  back exactly what the caller named.
+
   ## `complete_task/3` (EE-04, REQ-048) — HTTP and assignee authorization are
   ## out of scope
 
@@ -386,6 +397,7 @@ defmodule Letflow.Engine do
           | {:error, {:event_append_failed, term()}}
           | {:error, {:unresolved_catalog_ref, ref :: String.t()}}
           | {:error, {:unresolved_module_ref, ref :: String.t()}}
+          | {:error, {:unresolved_pin_override, ref :: String.t()}}
           | {:error,
              {:variable_schema_violation, [Letflow.EventStore.Registry.ValidationFailure.t()]}}
           | {:error, {:parent_pin_lookup_failed, reason :: term()}}

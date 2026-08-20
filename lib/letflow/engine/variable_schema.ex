@@ -180,24 +180,29 @@ defmodule Letflow.Engine.VariableSchema do
     1. Validate `opts[:prefix]` — `{:error, :missing_prefix}` on a nil,
        non-binary or empty value, **before any other work and before any query
        is constructed**.
-    2. Compute the overwrite candidates: keys present in **both**
-       `current_variables` and `incoming_variables`.
-    3. If that set is empty, return `{:ok, %{}}` without issuing a query
-       (R-Co's own `if (output_variables.count() == 0)` fast path,
-       `instance.zig:2331`, generalised to "nothing to validate"). This runs
-       *after* step 1, so a missing prefix still fails closed even when there
-       is nothing to look up.
+    2. Compute the validation candidates: every key in `incoming_variables`,
+       new or overwrite alike.
+    3. If that set is empty (i.e. `incoming_variables` is empty), return
+       `{:ok, %{}}` without issuing a query (R-Co's own
+       `if (output_variables.count() == 0)` fast path, `instance.zig:2331`,
+       generalised to "nothing to validate"). This runs *after* step 1, so a
+       missing prefix still fails closed even when there is nothing to look
+       up.
     4. `fetch_schemas/3`. Any `{:error, reason}` propagates unchanged.
     5. `validations_for/3` over the candidate list.
 
-  **Only overwrite candidates are validated.** A brand-new key — one absent
-  from `current_variables` — is never validated, even when a
-  `variable_schemas` row exists for that exact key. That is
-  `req049-variable-merge.md` §3.1 step 3's rule and REQ-109's AC5. It
-  **diverges from R-Co**, whose Phase 1 (`instance.zig:2390-2430`) validates
-  every key with a schema and only afterwards checks collision; the divergence
-  is flagged for REVIEWER as design §11.1 (OQ-1) rather than silently
-  re-decided here.
+  **Every incoming key is validated, new or overwrite alike**
+  (`docs/migration/decisions/0007-variable-merge-validates-new-keys.md`,
+  GH#300/ISS-0077). Before that fix, only overwrite candidates — keys present
+  in both `current_variables` and `incoming_variables` — were validated, and a
+  brand-new key with a registered schema was inserted unconditionally; that
+  was `req049-variable-merge.md` §3.1 step 3's rule and REQ-109's AC5, and it
+  diverged from R-Co, whose Phase 1 (`instance.zig:2390-2430`) validates every
+  key with a schema and only afterwards checks collision. The divergence was
+  flagged for REVIEWER as design §11.1 (OQ-1); this fix is that decision,
+  adopting R-Co's semantic. `current_variables` is kept as a parameter — both
+  call sites already have it in scope, and it still serves as an input-shape
+  guard below — but no longer filters which keys get validated.
   """
   @spec variable_validations(
           repo :: module(),
@@ -211,7 +216,7 @@ defmodule Letflow.Engine.VariableSchema do
       when is_atom(repo) and is_map(current_variables) and is_map(incoming_variables) and
              is_list(opts) do
     with {:ok, prefix} <- validate_prefix(opts) do
-      candidate_keys = overwrite_candidate_keys(current_variables, incoming_variables)
+      candidate_keys = validation_keys(incoming_variables)
 
       if candidate_keys == [] do
         {:ok, %{}}
@@ -269,7 +274,7 @@ defmodule Letflow.Engine.VariableSchema do
   end
 
   @doc """
-  Pure: maps `overwrite_candidate_keys` onto per-key
+  Pure: maps `keys_to_validate` onto per-key
   `Letflow.Engine.VariableMerge.validation_outcome()` values. No `Repo`, no
   clock, no randomness — so the mapping can be exercised without a database.
 
@@ -317,16 +322,16 @@ defmodule Letflow.Engine.VariableSchema do
   failure list that reaches the `EXECUTION_ERROR` payload names the real
   variable.
 
-  The returned map's keys are always a subset of `overwrite_candidate_keys`.
+  The returned map's keys are always a subset of `keys_to_validate`.
   """
   @spec validations_for(
           schemas :: schema_map(),
-          overwrite_candidate_keys :: [String.t()],
+          keys_to_validate :: [String.t()],
           incoming_variables :: map()
         ) :: Letflow.Engine.VariableMerge.variable_validations()
-  def validations_for(schemas, overwrite_candidate_keys, incoming_variables)
-      when is_map(schemas) and is_list(overwrite_candidate_keys) and is_map(incoming_variables) do
-    Enum.reduce(overwrite_candidate_keys, %{}, fn key, acc ->
+  def validations_for(schemas, keys_to_validate, incoming_variables)
+      when is_map(schemas) and is_list(keys_to_validate) and is_map(incoming_variables) do
+    Enum.reduce(keys_to_validate, %{}, fn key, acc ->
       case Map.fetch(schemas, key) do
         :error ->
           acc
@@ -360,11 +365,14 @@ defmodule Letflow.Engine.VariableSchema do
     end
   end
 
-  @spec overwrite_candidate_keys(map(), map()) :: [String.t()]
-  defp overwrite_candidate_keys(current_variables, incoming_variables) do
-    incoming_variables
-    |> Map.keys()
-    |> Enum.filter(&Map.has_key?(current_variables, &1))
+  # Every incoming key is a validation candidate, new or overwrite alike
+  # (docs/migration/decisions/0007-variable-merge-validates-new-keys.md,
+  # GH#300/ISS-0077). Before that fix this filtered to keys already present in
+  # current_variables (the "overwrite candidates"); a brand-new key with a
+  # registered schema bypassed validation entirely.
+  @spec validation_keys(map()) :: [String.t()]
+  defp validation_keys(incoming_variables) do
+    Map.keys(incoming_variables)
   end
 
   # Fail closed (INV-1, design §6.1), matching lua_script_audit.ex:152-158's

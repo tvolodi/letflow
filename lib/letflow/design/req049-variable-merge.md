@@ -178,25 +178,43 @@ inside `{:error, _}`.
 
 ### 3.1 Algorithm, described (not implemented)
 
+**Step 3 corrected 2026-08-20, `docs/migration/decisions/0007-variable-merge-validates-new-keys.md`
+(GH#300/ISS-0077).** The original text below validated `overwrite_keys` only, exempting a
+brand-new key from its own registered schema on the one write most likely to be malformed.
+That was never a considered divergence from R-Co — it was an unverified claim (no R-Co source
+was reachable when this design was written) that got implemented and shipped before anyone
+checked it against `instance.zig`. Decision 0007 adopts R-Co's actual semantic. The superseded
+original text is kept below, struck through in spirit but not in fact (see decision 0007 for
+why: this codebase's convention is to correct a design doc in place while keeping the
+superseded rationale legible, not to delete it), so a reader can see exactly what changed and
+why.
+
 1. Let `all_keys` = `Map.keys(incoming_variables)`, sorted ascending (`Enum.sort/1`, ordinary
    Erlang term order on binaries — lexicographic). Sorting exists purely for **determinism**
    (REQ-044 §8's bar: identical inputs → identical outputs, including event list order) — it is
    not semantically meaningful, matching REQ-044 §2's note on `InstanceState.tokens` order.
 2. Partition `all_keys` into:
    - `new_keys` — keys **not** present in `current_variables` (`Map.has_key?/2` false).
-   - `overwrite_keys` — keys already present in `current_variables`.
-3. **Validation pass, over `overwrite_keys` only, in sorted order.** For each key `K`:
+   - `overwrite_keys` — keys already present in `current_variables`. This partition is used only
+     in step 4, to decide which keys' application emits a `VARIABLE_OVERWRITTEN` event — **not**
+     to decide which keys get validated in step 3.
+3. **Validation pass, over `all_keys` — new and overwrite alike — in sorted order**
+   (`instance.zig:2389-2430`'s Phase 1: iterates every key of `output_variables`, checking
+   `schema_map.get(key)` unconditionally, with no comparison against `current_vars` at all).
+   For each key `K`:
    - Look up `outcome = Map.get(variable_validations || %{}, K, :ok)`.
    - `:ok` → `K` passes (covers both AC2 branches: an explicit `:ok` outcome, and an absent
      entry meaning "no schema registered for K").
    - `{:rejected, failures}` → **stop the validation pass immediately** (do not evaluate any
-     further key in `overwrite_keys`) and proceed to §3.3 (the rejected branch) for this `K`.
-   - `new_keys` are **never** looked up in `variable_validations` at all, regardless of whether an
-     entry happens to exist for one of those keys — AC1's "A key K absent from the instance
-     variable map is inserted" is unconditional, no schema exception carved out. An entry present
-     in `variable_validations` for a key that turns out to be a `new_keys` member is silently
-     ignored — stated explicitly as a design decision (§12.1 flags it as unverified against
-     `instance.zig`'s literal source).
+     further key in `all_keys`) and proceed to §3.3 (the rejected branch) for this `K`.
+
+   *(Superseded original text: "Validation pass, over `overwrite_keys` only, in sorted order... 
+   `new_keys` are **never** looked up in `variable_validations` at all, regardless of whether an
+   entry happens to exist for one of those keys — AC1's 'A key K absent from the instance
+   variable map is inserted' is unconditional, no schema exception carved out." That reading of
+   AC1 was wrong: AC1 says an absent key is inserted, not that it is inserted *unvalidated* — the
+   design conflated "no collision-detection exception" with "no validation exception," and only
+   the former is actually in R-Co.)*
 4. **If the validation pass completes with no rejection (§3.2, the `:ok` branch):** apply the
    merge — for each `K` in `new_keys`: insert `K => incoming_variables[K]` into a working copy of
    `current_variables`, no event. For each `K` in `overwrite_keys` (sorted order): record
@@ -231,7 +249,7 @@ source ever becomes reachable.
 
 ### 3.3 First-failure-wins ordering — a design decision, stated explicitly
 
-When more than one key in `overwrite_keys` would be rejected, §3.1 step 3's sorted-order scan
+When more than one key in `all_keys` would be rejected, §3.1 step 3's sorted-order scan
 reports the **first** such key (lexicographically smallest key name) and its own `failures` list
 only — the others are never evaluated (step 3's "stop immediately"). This is this design's own
 tie-break, chosen for determinism (REQ-044 §8's bar — the same `incoming_variables`/

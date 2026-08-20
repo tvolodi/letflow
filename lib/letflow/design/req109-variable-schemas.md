@@ -708,7 +708,19 @@ the `Status:` line and the second should find it already correct.
 
 ### 11.1 OQ-1 — Overwrite-candidates-only diverges from R-Co, which validates every key
 
-**Status: this design follows the acceptance criterion; the divergence is flagged for REVIEWER.**
+**RESOLVED 2026-08-20 — `docs/migration/decisions/0007-variable-merge-validates-new-keys.md`
+(GH#300/ISS-0077). Answer: port-fidelity defect, not an intentional simplification — adopted
+R-Co's semantic (validate every key).** No recorded rationale ever justified the divergence
+(the paragraph below states the rule but argues no reason for it beyond "AC5 says so"), no
+production traffic existed to protect (pre-S8, `docs/migration/decisions/0004-humanless-pipeline.md`),
+and the divergence is a real validation bypass on exactly the write most likely to be wrong. See
+the decision record for the full reasoning. `req049-variable-merge.md` §3.1,
+`docs/requirements.yaml` REQ-109's AC5, and this document's own AC5/INV-VS-3 rows below are
+corrected accordingly; the paragraph immediately following is preserved as the record of what
+was originally decided and why it was reopened.
+
+**Status (as originally written, preserved for history): this design follows the acceptance
+criterion; the divergence is flagged for REVIEWER.**
 
 `req049-variable-merge.md` §3.1 step 3 and §8 step 2 restrict validation to **overwrite candidates**, and
 REQ-109's AC5 pins that with an explicit test ("a brand-new key … whose value would violate a seeded
@@ -830,7 +842,7 @@ moduledocs, which is what AC8 and AC9 verify.
 | §13.1 "where a registered variable schema is stored and looked up" | **CLOSED** by §2 + §4 | `VariableSchema` moduledoc (AC10) |
 | §13.2 `validate_payload/3`'s `:tenant_not_provisioned` / unexpected-error cases | **CLOSED**, not merely re-mapped — the pure delegate has no such error surface (§4.4) | `engine.ex` moduledoc (AC8) |
 | §13.3 whole-batch atomicity, "reconstructed, not verified" | **VERIFIED CORRECT** against `instance.zig:2300-2304` (§8.3) | `variable_merge.ex` moduledoc, AC9c |
-| §3.1 step 3's overwrite-candidates-only rule (§12.1 flagged it unverified) | **VERIFIED — and it DIFFERS from R-Co.** Preserved per AC5; divergence flagged | OQ-1 (§11.1) |
+| §3.1 step 3's overwrite-candidates-only rule (§12.1 flagged it unverified) | **VERIFIED, differed from R-Co, and RESOLVED 2026-08-20** — adopted R-Co's semantic (validate every key), decision 0007 | OQ-1 (§11.1) |
 | §13.4 first-failure-wins ordering | **Untouched.** A `merge/3` property; REQ-109 does not exercise multi-key rejection ordering | — |
 | §13.5 `VARIABLE_OVERWRITTEN`/`EXECUTION_ERROR` event-type registration prerequisite | **Untouched, and now load-bearing.** Both event types must be registered for AC3/AC4's appends to succeed. Already satisfied on the shipped path (REQ-047/REQ-061 exercise it today); named so TEST-DESIGNER's fixtures do not assume it silently | — |
 
@@ -921,7 +933,7 @@ Every one of REQ-109's 13 acceptance criteria maps to a concrete design element.
 | AC2 | Table carries `definition_id` (FK), `variable_key`, `json_schema`, `description`, `created_at`; duplicate `(definition_id, variable_key)` rejected by an actual failing insert | **§2.1** (column table), **§2.4** (`uq_variable_schema_definition_key`), §3.1 (matching schema fields) |
 | AC3 | Seeded schema + violating value on an overwrite candidate through real `complete_task/3` → value not merged, status ERROR, exactly one `EXECUTION_ERROR` naming the key | **§5.2 step 5** (the newly reachable branch), §4.5 (the map that makes it fire), §4.4 (`{:rejected, failures}` mapping), §5.4 (the existing `ExecutionError.append_multi/3` path is untouched) |
 | AC4 | Conforming value → key overwritten, status unchanged, `VARIABLE_OVERWRITTEN` appended, token advances | **§5.2 step 4**, §4.4 row 1 (`[] -> :ok`), §5.4 (transition path untouched) |
-| AC5 | Overwrite candidate with **no** row merges untouched, no `EXECUTION_ERROR`; **brand-new** key with a seeded schema still inserted unvalidated | **§6.2** (first half), **§4.5 step 2 + §4.2** (second half — overwrite-candidates-only), OQ-1 §11.1 (divergence flagged, not silently resolved) |
+| AC5 | Overwrite candidate with **no** row merges untouched, no `EXECUTION_ERROR`. Second clause **superseded 2026-08-20** (OQ-1 §11.1 resolved, decision 0007): a brand-new key with a seeded schema is now validated and rejected on violation, matching R-Co, not "still inserted unvalidated" | **§6.2** (first half), **§4.5 step 2 + §4.2** (second half — now validates every key), OQ-1 §11.1 (resolved) |
 | AC6 | Tenant A's row has zero effect in tenant B: identical completion rejected in A, succeeds in B | **§7** (five obligations), §4.1 (`prefix:` on the query), §2.3 (per-tenant table) |
 | AC7 | Lookup with missing/nil/empty prefix fails closed, distinct pattern-matchable error, **issues no query** | **§6.1**, §4.5 step 1 (ordering: prefix check precedes the empty-candidate fast path), §3.3 (`:missing_prefix` in the closed `error_reason()` union) |
 | AC8 | No new JSON Schema dep; grep shows `JsonSchema.validate/2`; `engine.ex` moduledoc states why not `validate_payload/3`, that §7.1/§7.2 are superseded, and that `req049-variable-merge.md` §13.2 is CLOSED | **§4.3** (validator choice + wrapping), **§4.4** (mapping table), **§8.5 item 2** (what goes in `engine.ex`), **§12** (the supersession list) |
@@ -955,7 +967,7 @@ Every one of REQ-109's 13 acceptance criteria maps to a concrete design element.
 |---|---|
 | INV-VS-1 | Every `variable_schemas` read carries an explicit non-empty binary `prefix:`. A missing, nil or empty prefix returns `{:error, :missing_prefix}` and issues **zero** queries. No `public` fallback. (INV-1, AC7) |
 | INV-VS-2 | Exactly **one** SELECT on `variable_schemas` per `complete_task/3` call — never one per key. Zero when the overwrite-candidate set is empty. Never a write. |
-| INV-VS-3 | Only **overwrite candidates** (keys in both `current_variables` and `incoming_variables`) appear in the produced `variable_validations` map. A brand-new key never appears, whatever rows exist. (AC5; diverges from R-Co — OQ-1) |
+| INV-VS-3 | **Superseded 2026-08-20** (OQ-1 §11.1 resolved, decision 0007). Every key of `incoming_variables` — new or overwrite alike — appears in the produced `variable_validations` map when a `variable_schemas` row exists for it; only a key with no registered schema is omitted. (Was: only overwrite candidates appeared; a brand-new key never appeared, whatever rows existed.) |
 | INV-VS-4 | A key with no row, or with a non-map stored `json_schema`, is **omitted** from the map — never mapped to an explicit outcome, never an error. (§4.2, §6.3) |
 | INV-VS-5 | `VariableMerge.merge/3` is not modified, and its validate-all-then-apply two-phase semantic is not re-implemented in the caller. REQ-109 supplies input only. |
 | INV-VS-6 | No JSON Schema implementation is added. The only validator invoked is `Letflow.EventStore.Registry.JsonSchema.validate/2`. `mix.exs` gains no dependency. (AC8) |

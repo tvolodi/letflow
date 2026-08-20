@@ -6,16 +6,22 @@ defmodule Letflow.Engine.VariableMerge do
   map produced by a completed task/service task into `current_variables`
   (the live `Letflow.Engine.InstanceState.variables`, REQ-044), per key:
 
-    * A key absent from `current_variables` is inserted, no event.
+    * A key absent from `current_variables` is inserted, no event, provided
+      `variable_validations` has no `{:rejected, _}` outcome recorded for it.
     * A key already present is overwritten and produces one
       `{:variable_overwritten, key, old_value, new_value}` event, provided
       `variable_validations` has no `{:rejected, _}` outcome recorded for it
       (an absent entry, or an explicit `:ok`, both mean "no rejection").
-    * The first key (in sorted order) whose `variable_validations` entry is
-      `{:rejected, failures}` aborts the **entire** batch: nothing from this
-      call is merged (not even otherwise-unproblematic `new_keys` inserts),
-      and `merge/3` returns `{:rejected, current_variables,
-      [execution_error_event]}` instead (design doc §3.2 — **verified against
+    * **Every** incoming key is checked against `variable_validations`, new or
+      overwrite alike (`docs/migration/decisions/0007-variable-merge-validates-new-keys.md`,
+      GH#300/ISS-0077) — collision (new vs. overwrite) only decides whether a
+      passing key's application emits a `VARIABLE_OVERWRITTEN` event, never
+      whether it is validated. The first key (in sorted order) whose
+      `variable_validations` entry is `{:rejected, failures}` aborts the
+      **entire** batch: nothing from this call is merged (not even
+      otherwise-unproblematic inserts of other keys), and `merge/3` returns
+      `{:rejected, current_variables, [execution_error_event]}` instead
+      (design doc §3.2 — **verified against
       `instance.zig`'s literal source** by REQ-109, which read the R-Co tree
       directly: `mergeVariables`'s own doc comment at
       `src/engine/instance.zig:2300-2304` documents the ISS-202 two-phase
@@ -126,9 +132,10 @@ defmodule Letflow.Engine.VariableMerge do
           {:variable_overwritten, key :: String.t(), old_value :: term(), new_value :: term()}
 
   @typedoc """
-  One `EXECUTION_ERROR` outcome — emitted for the first (sorted-order)
-  overwrite key whose `variable_validations` entry is `{:rejected,
-  failures}`. `reason` is a fixed atom identifying this as EE-09's own
+  One `EXECUTION_ERROR` outcome — emitted for the first (sorted-order) key,
+  new or overwrite, whose `variable_validations` entry is `{:rejected,
+  failures}` (`docs/migration/decisions/0007-variable-merge-validates-new-keys.md`,
+  GH#300/ISS-0077). `reason` is a fixed atom identifying this as EE-09's own
   contribution to what will become EE-10's (REQ-061) full `EXECUTION_ERROR`
   reason taxonomy — deliberately not a closed enumeration declared by this
   module.
@@ -138,8 +145,8 @@ defmodule Letflow.Engine.VariableMerge do
            reason :: :variable_schema_rejected, failures :: [ValidationFailure.t()]}
 
   @typedoc """
-  The already-computed validation outcome for one overwrite candidate's
-  incoming value. `:ok` covers both "an explicit `:ok` outcome" and "no
+  The already-computed validation outcome for one incoming key's value,
+  new or overwrite alike. `:ok` covers both "an explicit `:ok` outcome" and "no
   schema registered for this key" (an absent entry defaults to `:ok`, §3.1
   step 3). `merge/3` never runs a validator itself — this outcome is
   resolved by the caller, which since REQ-109 is
@@ -151,11 +158,12 @@ defmodule Letflow.Engine.VariableMerge do
   @type validation_outcome :: :ok | {:rejected, failures :: [ValidationFailure.t()]}
 
   @typedoc """
-  Per-key precomputed validation outcomes for this call's overwrite
-  candidates. `new_keys` (keys absent from `current_variables`) are never
-  looked up here, even if an entry happens to exist for one — AC1's insert
-  path is unconditional. `nil` and `%{}` are equivalent: every key defaults
-  to `:ok`.
+  Per-key precomputed validation outcomes for **every** key in this call's
+  `incoming_variables` — new keys and overwrite keys alike
+  (`docs/migration/decisions/0007-variable-merge-validates-new-keys.md`,
+  GH#300/ISS-0077; before that fix, only overwrite candidates were looked up
+  here). `nil` and `%{}` are equivalent: every key defaults to `:ok`, so a key
+  with no registered schema is unaffected either way.
   """
   @type variable_validations :: %{optional(String.t()) => validation_outcome()}
 
@@ -177,14 +185,18 @@ defmodule Letflow.Engine.VariableMerge do
 
     1. `all_keys` = `Map.keys(incoming_variables)`, sorted (determinism only).
     2. Partition into `new_keys` (absent from `current_variables`) and
-       `overwrite_keys` (present).
-    3. Scan `overwrite_keys` in sorted order for the first key whose
-       `variable_validations` entry is `{:rejected, failures}`.
-    4. No rejection found -> apply every insert and overwrite, return
-       `{:ok, new_variables, overwritten_events}`.
+       `overwrite_keys` (present) — used only to decide event emission in
+       step 4, not which keys get validated in step 3.
+    3. Scan **`all_keys`** in sorted order for the first key whose
+       `variable_validations` entry is `{:rejected, failures}` — new and
+       overwrite keys alike (`docs/migration/decisions/0007-variable-merge-validates-new-keys.md`,
+       GH#300/ISS-0077).
+    4. No rejection found -> apply every insert and overwrite (inserts produce
+       no event, overwrites produce a `VARIABLE_OVERWRITTEN` event each),
+       return `{:ok, new_variables, overwritten_events}`.
     5. Rejection found on key `K` -> return `{:rejected, current_variables,
        [execution_error_event]}`, `current_variables` returned unchanged
-       (not even the `new_keys` inserts are applied).
+       (not even otherwise-unproblematic `new_keys` inserts are applied).
 
   Never raises. `variable_validations` may be `nil` (equivalent to `%{}`).
   """
@@ -200,7 +212,7 @@ defmodule Letflow.Engine.VariableMerge do
     {new_keys, overwrite_keys} =
       Enum.split_with(all_keys, fn key -> not Map.has_key?(current_variables, key) end)
 
-    case find_rejection(overwrite_keys, validations) do
+    case find_rejection(all_keys, validations) do
       {key, failures} ->
         rejected_value = Map.fetch!(incoming_variables, key)
         event = {:execution_error, key, rejected_value, :variable_schema_rejected, failures}
@@ -226,8 +238,8 @@ defmodule Letflow.Engine.VariableMerge do
 
   @spec find_rejection([String.t()], variable_validations()) ::
           {String.t(), [ValidationFailure.t()]} | nil
-  defp find_rejection(overwrite_keys, validations) do
-    Enum.find_value(overwrite_keys, fn key ->
+  defp find_rejection(keys, validations) do
+    Enum.find_value(keys, fn key ->
       case Map.get(validations, key, :ok) do
         :ok -> nil
         {:rejected, failures} -> {key, failures}

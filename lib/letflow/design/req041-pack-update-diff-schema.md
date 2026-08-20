@@ -48,6 +48,16 @@ schema-per-tenant mechanism. `lib/letflow/design/identity-schema.md` §2 and the
   `req035-promotion-reviews-schema.md` §0 documents for `prm-04`. **Flagged explicitly,
   not silently worked around** — CODE-DESIGN-VALIDATOR and REVIEWER should know this
   design is one level removed from the R-Co source doc, same caveat as req035.
+  **Access gap — partially resolved (GH#324, ISS-0096):** `R-Co/src/definition/
+  pack_update.zig` is in fact reachable in this environment (the `find` result above
+  was scoped to this repo, `~/letflow`, not the separate R-Co tree at
+  `c:\Users\tvolo\dev\ai-dala\R-Co` — the two were conflated at the time this design was
+  written). Read directly: `ResolutionKind` (`pack_update.zig:25-29` — `keep_local`,
+  `take_incoming`, `merged`) and `ConflictResolution` (`:31-41` — `resolution_kind`,
+  `merged_content: ?[]const u8`, `resolved_by`, `resolved_at`). This settles §9 OQ-6 —
+  see there for the finding. The broader `pack_update.zig`/`prm-batch1` design-doc gap
+  this paragraph originally described (classification algorithm, table shapes generally)
+  is otherwise unaffected — only the resolution-enum question is closed by this read.
 - **REQ-036 (`compute_promotion_plan/5` + `compute_plan_digest/1`, PRM-01/02/03)
   checked — status `pending`, not yet implemented** (`docs/requirements.yaml:1639`,
   `status: pending`). REQ-041's description says its classification algorithm uses
@@ -263,8 +273,8 @@ inventing a persistence/reuse policy REQ-041 never asked for (§9 OQ-5).
 | `target_version` | `:string` | `varchar(255)` | `NOT NULL` | "Vn" — the incoming version this resolution applies to (matches `compute_pack_update_plan/5`'s `incoming_version` argument, §5.3). |
 | `artefact_type` | `:string` | `varchar(255)` | `NOT NULL` | Same shape as §3.2's `artefact_type`. |
 | `artefact_id` | `:string` | `varchar(255)` | `NOT NULL` | Same shape as §3.2's `artefact_id`. |
-| `resolution` | `Ecto.Enum` | `varchar(255)` | `NOT NULL` | Bare atom-list `Ecto.Enum` over `[:keep_theirs, :take_incoming, :custom]` — the three ways a human/system can resolve a conflicting artefact. No R-Co source names this set (§0); this is this design's own reasonable enumeration of "keep the tenant's local change," "accept the pack's offered change," or "neither, here is a merged value" — flagged as a design choice, not a cited fact (§9 OQ-6). |
-| `resolved_content` | `:text` | `text` | **nullable** | Only meaningful when `resolution == :custom` (the merged/overridden content, same canonical-JSON-text contract as `base_content`, §3.2). `NULL` for `:keep_theirs`/`:take_incoming`, where the resolved content is unambiguously `theirs`/`incoming` respectively and does not need to be duplicated into this table. Not CHECK-constrained to enforce that nullability-vs-`resolution` correlation — same "structural checks are an application/changeset concern" precedent `req027`/`req035` already establish (§3 there). |
+| `resolution` | `Ecto.Enum` | `varchar(255)` | `NOT NULL` | Bare atom-list `Ecto.Enum` over `[:keep_local, :take_incoming, :merged]` — the three ways a human/system can resolve a conflicting artefact. **Renamed from this design's original `[:keep_theirs, :take_incoming, :custom]` guess (GH#324, ISS-0096, §9 OQ-6, resolved)** to match R-Co's own literal `ResolutionKind` enum (`pack_update.zig:25-29`) exactly — `take_incoming` already matched; `:keep_theirs` is now `:keep_local` and `:custom` is now `:merged`. |
+| `resolved_content` | `:text` | `text` | **nullable** | Only meaningful when `resolution == :merged` (the merged/overridden content, same canonical-JSON-text contract as `base_content`, §3.2 — matches R-Co's own `ConflictResolution.merged_content: ?[]const u8`, `pack_update.zig:33`). `NULL` for `:keep_local`/`:take_incoming`, where the resolved content is unambiguously the tenant's current local content or the pack's incoming content respectively and does not need to be duplicated into this table. Not CHECK-constrained to enforce that nullability-vs-`resolution` correlation — same "structural checks are an application/changeset concern" precedent `req027`/`req035` already establish (§3 there). |
 | `resolved_by` | `:binary_id` | `uuid` | `NOT NULL` | Actor who made the resolution decision. No FK — same cross-schema-adjacent reasoning `req035` gives `requested_by`/`approved_by` (§3.1 there): `users` and this table are technically both GLOBAL here (unlike `req035`'s case), but this design still omits the FK, deliberately, because REQ-041 names no requirement that this column be validated against a real `users.id` and inventing one is unasserted scope — flagged as a design choice in §9 OQ-7, not silently matched to `req035`'s different-reasoned precedent. |
 | `resolved_at` | `:utc_datetime_usec` | `timestamp` (precision 6) | `NOT NULL` | When the resolution was recorded. |
 | `inserted_at` / `updated_at` | via `timestamps/1` | `timestamp` (precision 6) | `NOT NULL` | Same convention as §3.1/§3.2. |
@@ -725,12 +735,26 @@ forward to a later, different incoming version's preflight. Flagged as a design
 decision a future requirement could revisit if it turns out resolutions should persist
 across update attempts.
 
-**OQ-6 (MINOR): `resolution`'s three-value enum (`:keep_theirs`/`:take_incoming`/
-`:custom`) is this design's own enumeration**, not sourced from R-Co (§0 — no access to
-prm-batch1's actual schema). A future requirement building the real
-resolution-recording write path should confirm this enum matches whatever UI/API
-REQ-041's downstream consumer actually needs, and extend it (a 4th migration, per this
-project's additive-migration convention) if not.
+**OQ-6 — RESOLVED (GH#324, ISS-0096, 2026-08-20).** `R-Co/src/definition/pack_update.zig`
+was read directly (§0). Verdict: R-Co's own `ResolutionKind` enum (`:25-29`) is
+`keep_local | take_incoming | merged` — a real, citable three-value set, not a guess.
+This design's original `[:keep_theirs, :take_incoming, :custom]` matched R-Co in count and
+in meaning for all three values, but matched R-Co's literal spelling for only one
+(`take_incoming`). The other two are now renamed to match exactly (§3, `resolved_content`
+row): `:keep_theirs` → `:keep_local`, `:custom` → `:merged` — also propagated to the
+shipped `Letflow.Definitions.PackUpdateResolution` schema (`lib/letflow/definitions/
+pack_update_resolution.ex`). No *application* caller depends on the old spellings
+(REQ-041's own scope never calls `insert_changeset/2`, per its moduledoc); one test
+fixture did (`test/letflow/definitions/pack_update_migration_test.exs`,
+`insert_resolution/5`/`insert_resolution!/5`) and is updated in the same change. Worth noting for whoever
+builds the future resolution-recording write path this OQ originally deferred to: R-Co's
+`theirs` field (on `PackUpdateArtefactEntry`, `pack_update.zig:54`) holds the tenant's
+*current local* content, not an "other party's" content — R-Co's own `ResolutionKind`
+avoids that ambiguity by naming the keep-local case `keep_local` rather than
+`keep_theirs`, which is exactly the confusion this rename fixes. A future write path
+should still confirm this matches whatever UI/API REQ-041's downstream consumer actually
+needs (unchanged from the original flag) — R-Co's naming is now the cited baseline for
+that comparison, not this design's own guess.
 
 **OQ-7 (MINOR): `pack_update_resolutions.resolved_by` has no FK to `users.id`**, even
 though both tables are GLOBAL here (unlike `req035`'s cross-schema reason for omitting

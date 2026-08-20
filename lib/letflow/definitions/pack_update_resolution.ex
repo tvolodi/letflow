@@ -47,6 +47,16 @@ defmodule Letflow.Definitions.PackUpdateResolution do
   A deliberate design choice (§3.3, §9 OQ-7), not forced by any cross-schema
   constraint — REQ-041 names no requirement that this column be validated
   referentially. Flagged for REVIEWER to override if a real FK is preferred.
+
+  ## `resolution` atom names match R-Co's `ResolutionKind` exactly
+
+  Verified directly against `R-Co/src/definition/pack_update.zig:25-29` (GH#324,
+  ISS-0096, 2026-08-20) — `keep_local`/`take_incoming`/`merged`. This design
+  originally guessed `keep_theirs`/`take_incoming`/`custom` (§9 OQ-6); the two
+  divergent names are renamed here to match R-Co's literal source. No
+  *application* caller depends on the old spellings (see "Scope" above); the
+  one test fixture that did (`test/letflow/definitions/pack_update_migration_test.exs`,
+  `insert_resolution/5`/`insert_resolution!/5`) is updated in the same change.
   """
 
   use Ecto.Schema
@@ -59,7 +69,7 @@ defmodule Letflow.Definitions.PackUpdateResolution do
     field(:target_version, :string)
     field(:artefact_type, :string)
     field(:artefact_id, :string)
-    field(:resolution, Ecto.Enum, values: [:keep_theirs, :take_incoming, :custom])
+    field(:resolution, Ecto.Enum, values: [:keep_local, :take_incoming, :merged])
     field(:resolved_content, :string)
     field(:resolved_by, Ecto.UUID)
     field(:resolved_at, :utc_datetime_usec)
@@ -68,14 +78,14 @@ defmodule Letflow.Definitions.PackUpdateResolution do
   end
 
   @type t :: %__MODULE__{}
-  @type resolution :: :keep_theirs | :take_incoming | :custom
+  @type resolution :: :keep_local | :take_incoming | :merged
 
   @doc """
   Structural changeset for inserting a new pack-update conflict resolution.
   Does no I/O. Not called anywhere within REQ-041's own scope — see moduledoc.
 
-  `resolved_content` is only meaningful when `resolution == :custom` (nullable
-  for `:keep_theirs`/`:take_incoming`, design §3.3) — this changeset does not
+  `resolved_content` is only meaningful when `resolution == :merged` (nullable
+  for `:keep_local`/`:take_incoming`, design §3.3) — this changeset does not
   add a conditional-required check for that correlation, matching
   `req027`/`req035`'s "structural checks are an application/changeset concern,
   not asserted here without a stated requirement" precedent.

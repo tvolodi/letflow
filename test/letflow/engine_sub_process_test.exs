@@ -888,7 +888,7 @@ defmodule Letflow.EngineSubProcessTest do
   # ---------------------------------------------------------------------------------
 
   describe "ISS-0067 -- resolve_parent_token_record_id/2 rejects a derived split/join branch token_id" do
-    test "a SUB_PROCESS node reached directly off a PARALLEL_GATEWAY split, within the completing task's own hop chain, is rejected -- zero children created, transaction rolled back" do
+    test "a SUB_PROCESS node off a PARALLEL_GATEWAY split, within the completing hop chain, is rejected -- zero children created, transaction rolled back" do
       %{schema_name: schema_name} = provisioned_tenant()
 
       child_def = active_definition!(schema_name, graph_child_two_step())

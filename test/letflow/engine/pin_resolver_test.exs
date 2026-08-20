@@ -577,7 +577,7 @@ defmodule Letflow.Engine.PinResolverTest do
   # ---------------------------------------------------------------------------------
 
   describe "merge_effective_pins/3 -- PIN-04: replay-time effective set, pure, folds all rebind events in order" do
-    test "with zero rebind events, the effective set mirrors instance_started_pinned_versions exactly (kind/ref/resolved_id/version/source normalized), source_event_id seeded from started_event_id" do
+    test "with zero rebind events, the effective set mirrors instance_started_pinned_versions exactly, source_event_id seeded from started_event_id" do
       base = [
         %{
           kind: :catalog_entry,

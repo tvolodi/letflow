@@ -60,7 +60,43 @@ description: >
 affected_files:
   - lib/letflow/engine/variable_merge.ex
   - lib/letflow/design/req049-variable-merge.md
-status: open
+status: resolved
+resolved_at: "2026-08-20T12:30:00Z"
+resolution: >
+  Decision made and both findings fixed in
+  docs/migration/decisions/0007-variable-merge-validates-new-keys.md:
+  adopted R-Co's semantic (validate every incoming key, new or overwrite
+  alike), not Letflow's prior overwrite-candidates-only rule. Verified both
+  sides directly per this issue's own instruction: R-Co
+  instance.zig:2389-2430 (Phase 1, unconditional per-key validation) and
+  :2432 (the separate, later collision check); Letflow
+  variable_merge.ex:196-207 (the split_with and the
+  find_rejection(overwrite_keys, ...) call) as they stood before this fix.
+
+  Reasoning for the decision (full version in the decision record): the
+  divergence traced to an unverified claim in REQ-049's design doc
+  (no R-Co source was reachable when written), propagated as fact through
+  three later briefings, never independently justified once implemented and
+  shipped; no production traffic exists yet to protect (pre-S8); and the gap
+  is a real validation bypass on exactly the write most likely to be wrong.
+
+  Fixed: lib/letflow/engine/variable_merge.ex (merge/3 scans all_keys, not
+  overwrite_keys, for a rejection; collision detection unchanged, still
+  governs only VARIABLE_OVERWRITTEN event emission), lib/letflow/engine/variable_schema.ex
+  (variable_validations/5's candidate set is now every incoming key; private
+  helper renamed overwrite_candidate_keys/2 -> validation_keys/1),
+  req049-variable-merge.md §3.1 (corrected in place, superseded text kept
+  for history), req109-variable-schemas.md §11.1/OQ-1 (marked resolved),
+  docs/requirements.yaml REQ-109's AC5 (second clause corrected),
+  docs/status/requirement_status.yaml (revised events for REQ-049 and
+  REQ-109). Tests updated: variable_merge_test.exs, variable_schema_test.exs,
+  engine_variable_schema_merge_test.exs, test/specs/REQ-109.md -- each had
+  one test/section explicitly pinning the old behaviour pending this
+  decision; all inverted, old text preserved for history where the file's
+  own convention calls for it.
+
+  Full test suite green after the fix (variable-merge/variable-schema files:
+  42/42; see PR for the full run). Closing GH#300.
 github_issue: https://github.com/tvolodi/letflow/issues/300
 related:
   - ISS-0063

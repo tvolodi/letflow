@@ -5538,3 +5538,47 @@ history:
       was wrong. Replaced the "appends a VARIABLE_OVERWRITTEN event" clause
       with wording matching INV-EE48-5, per the issue's own recommended
       fix. No code or test changes -- requirement text only. Closing GH#308.
+  - req: REQ-049
+    event: revised
+    agent: ORCH
+    at: "2026-08-20T12:30:00Z"
+    note: >
+      GH#300 (ISS-0077): design doc section 3.1 step 3 restricted schema
+      validation to overwrite candidates (keys already present in
+      current_variables); a brand-new key with a registered schema was
+      inserted unconditionally, unvalidated. Verified directly against R-Co
+      this run (instance.zig:2389-2430, :2432): mergeVariables Phase 1
+      validates every output key unconditionally and only afterwards, in a
+      separate check, decides collision (VARIABLE_OVERWRITTEN eligibility).
+      The overwrite-only rule was never a considered divergence -- REQ-049's
+      own design doc could not check R-Co when written, and the claim was
+      propagated as fact through three later briefings before CODE-DESIGNER
+      caught it while building REQ-109. No production traffic exists to
+      protect (pre-S8) and no rationale for the divergence was ever
+      recorded. Decision: docs/migration/decisions/0007-variable-merge-validates-new-keys.md
+      adopts R-Co's semantic. Fixed: lib/letflow/engine/variable_merge.ex
+      (merge/3 now scans every incoming key, not just overwrite_keys, for a
+      rejection; collision detection unchanged, still governs only
+      VARIABLE_OVERWRITTEN event emission), lib/letflow/engine/variable_schema.ex
+      (variable_validations/5 builds its candidate set from every incoming
+      key), req049-variable-merge.md section 3.1 (corrected in place,
+      superseded text kept for history), req109-variable-schemas.md OQ-1
+      (section 11.1, marked resolved). Tests updated:
+      variable_merge_test.exs, variable_schema_test.exs,
+      engine_variable_schema_merge_test.exs each had one test pinning the
+      old behaviour specifically pending this decision; all three inverted.
+      Closing GH#300.
+  - req: REQ-109
+    event: revised
+    agent: ORCH
+    at: "2026-08-20T12:30:00Z"
+    note: >
+      GH#300 (ISS-0077), companion to the REQ-049 revision immediately
+      above: AC5's second clause required a brand-new key with a seeded
+      schema be "still inserted unvalidated," pinning the overwrite-only
+      divergence design doc section 11.1/OQ-1 explicitly flagged for
+      REVIEWER to decide. Decided: adopt R-Co's semantic (decision 0007).
+      AC5 text corrected in docs/requirements.yaml; the second
+      end-to-end test in engine_variable_schema_merge_test.exs's AC5
+      describe blocks now asserts rejection (unmerged, instance ERROR, one
+      EXECUTION_ERROR) instead of unvalidated insertion. Closing GH#300.

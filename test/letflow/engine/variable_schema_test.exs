@@ -25,8 +25,9 @@ defmodule Letflow.Engine.VariableSchemaTest do
   @moduledoc """
   Storage-side and lookup-side tests for REQ-109's `Letflow.Engine.VariableSchema`:
   the migration (AC1), the table's columns and its `UNIQUE (definition_id,
-  variable_key)` constraint (AC2), the overwrite-candidates-only rule at the lookup
-  level (AC5, unit half), and the fail-closed prefix/`definition_id` guards (AC7).
+  variable_key)` constraint (AC2), the every-incoming-key lookup rule (AC5, unit half —
+  revised 2026-08-20, GH#300/ISS-0077, decision 0007), and the fail-closed
+  prefix/`definition_id` guards (AC7).
 
   The end-to-end criteria — AC3's rejection driven through the real
   `Letflow.Engine.complete_task/3`, AC4's conforming overwrite, AC5's two
@@ -419,23 +420,49 @@ defmodule Letflow.Engine.VariableSchemaTest do
   end
 
   # ---------------------------------------------------------------------------------
-  # AC5 (unit half) -- only overwrite candidates reach the lookup at all, and an
-  # empty candidate set issues zero queries (INV-VS-2, INV-VS-3).
+  # AC5 (unit half) -- every incoming key reaches the lookup, new or overwrite alike
+  # (revised 2026-08-20, GH#300/ISS-0077, decision 0007 -- previously only overwrite
+  # candidates reached the lookup; a brand-new key short-circuited before any query),
+  # and only a truly empty incoming_variables map issues zero queries (INV-VS-2,
+  # INV-VS-3).
   # ---------------------------------------------------------------------------------
 
-  describe "AC5 -- overwrite candidates only, at the lookup level" do
-    test "a brand-new key yields no validations and issues no query" do
-      # "b" is present in incoming but absent from current, so it is NOT an overwrite
-      # candidate -- the candidate set is empty and the fast path returns without
-      # touching the repo, which NeverQueriedRepo proves.
+  describe "AC5 -- every incoming key, new or overwrite, at the lookup level" do
+    test "an empty incoming_variables map yields no validations and issues no query" do
+      # Nothing to validate -- the candidate set is empty regardless of what
+      # current_variables holds, and the fast path returns without touching
+      # the repo, which NeverQueriedRepo proves.
       assert {:ok, %{}} ==
                VariableSchema.variable_validations(
                  NeverQueriedRepo,
                  Ecto.UUID.generate(),
                  %{"a" => 1},
-                 %{"b" => 2},
+                 %{},
                  prefix: "some_tenant_schema"
                )
+    end
+
+    test "a brand-new key with a seeded row yields a {:rejected, _} outcome, same as an overwrite candidate would" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = definition!(schema_name)
+      seed_schema_row!(schema_name, definition.id, "amount", %{"type" => "number"})
+
+      # "amount" is absent from current_variables -- a brand-new key, not an
+      # overwrite candidate -- but it still reaches the lookup and is still
+      # validated against its seeded schema (decision 0007 adopts R-Co's
+      # instance.zig:2389-2430 Phase 1: every output key is checked
+      # unconditionally, collision detection is separate).
+      assert {:ok, validations} =
+               VariableSchema.variable_validations(
+                 Repo,
+                 definition.id,
+                 %{},
+                 %{"amount" => "not-a-number"},
+                 prefix: schema_name
+               )
+
+      assert %{"amount" => {:rejected, [failure]}} = validations
+      assert failure.field_path == "/amount"
     end
 
     test "an overwrite candidate with a seeded row yields a {:rejected, _} outcome" do

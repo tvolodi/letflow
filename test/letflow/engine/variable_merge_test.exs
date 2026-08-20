@@ -142,7 +142,7 @@ defmodule Letflow.Engine.VariableMergeTest do
              ]
     end
 
-    test "a variable_validations entry for a new (non-overwrite) key is silently ignored -- new_keys are never looked up" do
+    test "a variable_validations entry for a new (non-overwrite) key is honored -- new keys are validated exactly like overwrite keys (GH#300/ISS-0077, decision 0007)" do
       current = %{}
       incoming = %{"new_and_rejected" => "bad_value"}
 
@@ -150,17 +150,39 @@ defmodule Letflow.Engine.VariableMergeTest do
         %ValidationFailure{field_path: "/value", constraint: "type", actual: "bad_value"}
       ]
 
-      # "new_and_rejected" is absent from current_variables, so it is a
-      # new_keys member -- design doc §3.1 step 3 says new_keys are NEVER
-      # looked up in variable_validations, even if an entry happens to exist.
-      # A {:rejected, _} entry for this key must therefore have no effect.
+      # "new_and_rejected" is absent from current_variables (a new_keys member),
+      # but design doc §3.1 step 3 (as of decision 0007) scans ALL incoming
+      # keys for a rejection, matching R-Co's instance.zig:2389-2430 Phase 1 --
+      # collision (new vs. overwrite) governs only VARIABLE_OVERWRITTEN event
+      # emission, never whether a key is validated. A {:rejected, _} entry for
+      # a brand-new key must therefore abort the batch exactly as it would for
+      # an overwrite key.
       validations = %{"new_and_rejected" => {:rejected, failures}}
 
-      assert {:ok, new_variables, []} = VariableMerge.merge(current, incoming, validations)
+      assert {:rejected, unchanged_variables, events} =
+               VariableMerge.merge(current, incoming, validations)
 
-      # AC1's insert path is unconditional -- a variable_validations entry for
-      # a new_keys member is silently ignored (design doc §3.1 step 3).
-      assert new_variables == %{"new_and_rejected" => "bad_value"}
+      # current_variables returned unchanged -- the rejected insert never landed.
+      assert unchanged_variables == current
+      refute Map.has_key?(unchanged_variables, "new_and_rejected")
+
+      assert events == [
+               {:execution_error, "new_and_rejected", "bad_value", :variable_schema_rejected,
+                failures}
+             ]
+    end
+
+    test "a variable_validations entry for a new key that PASSES validation is inserted normally, no event" do
+      current = %{}
+      incoming = %{"new_and_ok" => "fine"}
+
+      # An explicit :ok outcome for a new key behaves identically to an absent
+      # entry -- validated, not exempted, and still produces no
+      # VARIABLE_OVERWRITTEN event because it is an insert, not an overwrite.
+      validations = %{"new_and_ok" => :ok}
+
+      assert {:ok, new_variables, []} = VariableMerge.merge(current, incoming, validations)
+      assert new_variables == %{"new_and_ok" => "fine"}
     end
   end
 

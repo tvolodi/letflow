@@ -8,7 +8,9 @@ defmodule Letflow.EngineVariableSchemaMergeTest do
       the offending `variable_key`.
     * **AC4** — a conforming overwrite still merges, status unchanged, token advanced.
     * **AC5** — an overwrite candidate with no row merges untouched; a brand-new key
-      is inserted unvalidated even when a row exists for that exact key.
+      is rejected exactly like an overwrite key when a row exists for that exact key
+      and the value violates it (revised 2026-08-20, GH#300/ISS-0077, decision 0007 —
+      previously a brand-new key was inserted unvalidated).
     * **AC6** — a tenant-A row has zero effect on the identical completion in tenant B.
 
   ## Why AC3 is the file's centre of gravity
@@ -352,37 +354,47 @@ defmodule Letflow.EngineVariableSchemaMergeTest do
     end
   end
 
-  describe "AC5 -- a brand-new key is never validated" do
-    test "a violating value for a seeded key is still inserted when the key is new" do
+  describe "AC5 -- a brand-new key is validated exactly like an overwrite key" do
+    test "a violating value for a seeded key is rejected even when the key is new (GH#300/ISS-0077, decision 0007)" do
       %{schema_name: schema_name} = provisioned_tenant()
       definition = active_definition!(schema_name, graph_two_human_tasks())
 
       # A row for exactly the key the completion writes.
       seed_schema_row!(schema_name, definition.id, "amount", %{"type" => "number"})
 
-      # ...but the instance does not carry "amount", so it is a brand-new key, not an
-      # overwrite candidate.
+      # ...and the instance does not carry "amount" yet, so it is a brand-new key, not
+      # an overwrite candidate -- previously that meant unvalidated; not any more.
       instance_id = start_instance!(schema_name, definition, %{"seed" => 1})
       task_a = find_task(schema_name, instance_id, "task_a")
 
-      assert {:ok, _result} =
+      assert {:error, {:instance_execution_error, :variable_schema_rejected, {:field, "amount"}}} =
                Engine.complete_task(
                  task_a.id,
                  complete_attrs(%{"amount" => "not-a-number"}),
                  prefix: schema_name
                )
 
-      # THIS ASSERTS THE IMPLEMENTED BEHAVIOUR, NOT R-Co's. R-Co's Phase 1
-      # (instance.zig:2390-2430) validates every key that has a schema and only then
-      # checks collision; Letflow validates overwrite candidates only
-      # (req049-variable-merge.md section 3.1 step 3, design section 11.1 OQ-1).
-      # That divergence is tracked as ISS-0077 / GH#300 with a decision pending.
-      # REQ-109 is built to AC5 as written, so this test pins AC5's semantics -- if
-      # ISS-0077 is decided the other way, this is the test that must change.
+      # THIS NOW MATCHES R-Co's OWN BEHAVIOUR. R-Co's Phase 1 (instance.zig:2390-2430)
+      # validates every key that has a schema and only afterwards checks collision;
+      # Letflow used to validate overwrite candidates only
+      # (req049-variable-merge.md section 3.1 step 3, design section 11.1 OQ-1) --
+      # tracked as ISS-0077 / GH#300, resolved by
+      # docs/migration/decisions/0007-variable-merge-validates-new-keys.md, which
+      # adopts R-Co's semantic. This is the test the decision record's own note said
+      # would have to change; assertions below mirror AC3's overwrite-rejection test
+      # above, the only difference being the key was brand-new, not an overwrite.
       projection = Repo.get!(InstanceProjection, instance_id, prefix: schema_name)
-      assert projection.variables == %{"seed" => 1, "amount" => "not-a-number"}
-      assert projection.status == :active
-      assert events_of_type(schema_name, instance_id, "EXECUTION_ERROR") == []
+      assert projection.variables == %{"seed" => 1}
+      assert projection.status == :error
+
+      assert [event] = events_of_type(schema_name, instance_id, "EXECUTION_ERROR")
+      assert event.payload["error_type"] == "variable_schema_rejected"
+      assert event.payload["affected"] == %{"kind" => "field", "key" => "amount"}
+      assert event.payload["reason"] =~ "amount"
+      assert event.payload["variables"] == %{"seed" => 1}
+
+      assert events_of_type(schema_name, instance_id, "TASK_COMPLETED") == []
+      assert Repo.get!(EngineTask, task_a.id, prefix: schema_name).status == :pending
     end
   end
 

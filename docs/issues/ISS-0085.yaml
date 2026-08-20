@@ -115,4 +115,11 @@ related:
   - ISS-0087
   - ISS-0076
 github_issue: https://github.com/tvolodi/letflow/issues/302
-status: open
+status: resolved
+resolution: >
+  Fixed 2026-08-20, commit 27c586a (WF03-ISS0085-20260820). expr.ex:106-107
+  now emit " and "/" or " with surrounding spaces, matching
+  transition.zig:1177/:1183. req050-exclusive-gateway-cel.md's §4.3 rule
+  table and §0.1 disposition rows updated to match. Regression tests added
+  in test/letflow/engine/expr_test.exs (unspaced &&, unspaced ||, mixed
+  &&/|| case, evaluate_condition/2-level coverage). GH#302 closed.

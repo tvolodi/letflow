@@ -105,6 +105,42 @@ defmodule Letflow.Engine.VariableSchemaTest do
     "req109-vs-def-" <> to_string(System.unique_integer([:positive, :monotonic]))
   end
 
+  # Copied from test/letflow/definitions/migrations_test.exs:160-186 (the established
+  # helper for this assertion class). `confdeltype` is pg_constraint's referential
+  # action as a single byte -- 'a' NO ACTION, 'r' RESTRICT, 'c' CASCADE, 'n' SET NULL,
+  # 'd' SET DEFAULT -- cast to text so Postgrex hands back a plain binary. This is the
+  # ONLY place the referential action is observable: no DDL text distinguishes
+  # `on_delete: :restrict` from a cascade.
+  defp foreign_keys_on(schema_name, table_name) do
+    %{rows: rows} =
+      Repo.query!(
+        """
+        SELECT c.conname,
+               c.confdeltype::text,
+               c.confrelid::regclass::text,
+               (SELECT a.attname FROM pg_attribute a
+                 WHERE a.attrelid = c.conrelid AND a.attnum = c.conkey[1]),
+               (SELECT a.attname FROM pg_attribute a
+                 WHERE a.attrelid = c.confrelid AND a.attnum = c.confkey[1])
+        FROM pg_constraint c
+        JOIN pg_class t ON t.oid = c.conrelid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        WHERE n.nspname = $1 AND t.relname = $2 AND c.contype = 'f'
+        """,
+        [schema_name, table_name]
+      )
+
+    Enum.map(rows, fn [name, on_delete, referenced_table, column, referenced_column] ->
+      %{
+        name: name,
+        on_delete: on_delete,
+        referenced_table: referenced_table,
+        column: column,
+        referenced_column: referenced_column
+      }
+    end)
+  end
+
   # START -> task(HUMAN_TASK) -> END. The plainest activatable graph; this file never
   # starts an instance, it only needs a real process_definitions row for the FK.
   defp graph_human_task_end do
@@ -256,6 +292,50 @@ defmodule Letflow.Engine.VariableSchemaTest do
 
       assert error.constraint == "uq_variable_schema_definition_key"
       assert error.type == :unique
+    end
+
+    test "definition_id's FK resolves to the tenant's own process_definitions, ON DELETE RESTRICT" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      foreign_keys = foreign_keys_on(schema_name, "variable_schemas")
+
+      assert [foreign_key] = foreign_keys,
+             "expected exactly one foreign key on variable_schemas, got #{inspect(foreign_keys)}"
+
+      assert foreign_key.column == "definition_id"
+      assert foreign_key.referenced_column == "id"
+
+      # The property is not "an FK exists" but WHICH process_definitions it resolves
+      # to. A tenant-scoped migration whose FK bound to public.process_definitions
+      # would be a cross-schema reference (INV-1) -- and would still satisfy every
+      # other assertion in this test.
+      assert foreign_key.referenced_table == "#{schema_name}.process_definitions",
+             "the variable_schemas FK references #{foreign_key.referenced_table}, not the tenant's own process_definitions"
+
+      # `on_delete: :restrict` is a stated, reasoned divergence from R-Co's ON DELETE
+      # CASCADE, committed to in the migration header (design section 2.2). confdeltype
+      # is the only place that choice is observable at all.
+      assert foreign_key.on_delete == "r",
+             "the variable_schemas FK's ON DELETE action is #{inspect(foreign_key.on_delete)}, expected \"r\" (RESTRICT) per the migration header"
+
+      refute foreign_key.on_delete == "c",
+             "the variable_schemas FK carries R-Co's ON DELETE CASCADE, which the migration header explicitly diverges from"
+    end
+
+    test "a definition_id matching no process_definitions row is rejected by the FK" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      # AC2's preferred "actual failing insert" form, for the FK clause rather than the
+      # UNIQUE clause: a well-formed UUID that simply has no referent.
+      error =
+        assert_raise Ecto.ConstraintError, fn ->
+          seed_schema_row!(schema_name, Ecto.UUID.generate(), "amount", %{"type" => "number"})
+        end
+
+      assert error.type == :foreign_key
+      assert error.constraint == "variable_schemas_definition_id_fkey"
+
+      assert Repo.all(VariableSchema, prefix: schema_name) == []
     end
 
     test "a different variable_key for the same definition_id inserts fine" do

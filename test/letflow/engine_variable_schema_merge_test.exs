@@ -387,6 +387,31 @@ defmodule Letflow.EngineVariableSchemaMergeTest do
   end
 
   # ---------------------------------------------------------------------------------
+  # NOT TESTED HERE, AND WHY -- {:variable_schema_lookup_failed, reason}
+  # (engine.ex:1671, and a clause of complete_task/3's own @spec at :1263) has NO
+  # reachable end-to-end trigger, so no test for it is written. Both members of
+  # VariableSchema.error_reason() are structurally unreachable from complete_task/3:
+  #
+  #   * :missing_prefix -- complete_task/3 resolves the tenant from `prefix` via
+  #     TenantProvisioning.tenant_id_for_schema_name/1 (engine.ex:1315) BEFORE
+  #     run_complete_task/6 is entered, so a nil/empty prefix is rejected several
+  #     steps earlier and never reaches the merge step.
+  #   * :invalid_definition_id -- instance_projection.ex:113 types definition_id as a
+  #     nullable Ecto.UUID, but the COLUMN is `null: false` and typed `uuid`
+  #     (20260818110001_alter_instance_projections_add_engine_columns.exs:71).
+  #     Verified by execution: forcing it via Repo.update_all raises
+  #     Postgrex.Error 23502 (not_null_violation) rather than producing the state.
+  #     A malformed non-UUID value is likewise rejected by the column type.
+  #
+  # The guard is therefore correct defence-in-depth against a state the schema
+  # forbids, of the same class as ISS-0089/GH#306's non-map json_schema branch -- and
+  # like that one, it is covered as a UNIT test (variable_schema_test.exs's AC7
+  # block asserts {:error, :invalid_definition_id} from fetch_schemas/3 directly)
+  # rather than by a DB-seeded test that would certify a path production cannot take.
+  # Reported to ORCH for forward filing rather than faked here.
+  # ---------------------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------------------
   # AC6 -- cross-tenant isolation (INV-1). The two completions differ in nothing but
   # which tenant schema holds the variable_schemas row: same definition_id, same
   # variable_key, same violating value, same graph.

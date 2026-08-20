@@ -155,3 +155,108 @@ move the decision in either direction. Combined, Dimensions A and B justify migr
 Phoenix at S4; the migration itself (adding `{:phoenix, "~>..."}` to `mix.exs`, rewriting
 `lib/letflow/router.ex`) is out of scope for this decision record and is S4 execution
 work, not S0 decision-recording.
+
+## Addendum (2026-08-20) — Plug/Bandit stands; the Decision above is reversed
+
+**Trigger — REQ-065.** `lib/letflow/router.ex`'s shipped moduledoc ("Deliberately
+minimal — Plug + Bandit, no Phoenix", present since before REQ-046 and unchanged by it)
+and `mix.exs` (no `:phoenix` dependency, confirmed by direct read) have directly
+contradicted this record's Decision section above since S1. `docs/migration/
+stage-4-api-surface.md`'s Decisions section flagged the contradiction during the
+2026-08-19 requirement expansion and escalated it as REQ-065, whose sole deliverable is
+this addendum: name the surviving position, engage Dimension B's tie-breaker on its
+merits either way, and state whether the corrected route/middleware counts change the
+conclusion. This addendum does that; the Decision and Reasoning sections above are left
+as originally written, per this repo's own precedent for correcting a decision record in
+place (`0003-ecto-schema-strategy.md`'s 2026-08-17 addendum, `0006-identity-tables-
+schema-per-tenant.md`'s "exactly what this supersedes" section) rather than deleting or
+rewriting them.
+
+**Corrected counts.** R-Co's `src/api/routes/` now holds **31** route modules (up from
+the 24 this file's Decision section already corrected once, via `ISS-0001`), and
+`src/api/middleware/` holds **9** (up from 7) — reverified directly against R-Co's live
+tree during REQ-065's design step, independently of the prior 24/7 figures
+(`lib/letflow/design/0001-web-framework-addendum-req065.md` §2). Of the two middleware
+modules added since this file's Reasoning was written, `outbox_cap.zig` is not
+mountable until S6's outbox subsystem exists regardless of framework choice, and
+`agent_auth.zig` is out of scope entirely — deferred runtime-agent subsystem work, per
+`docs/migration/README.md`'s "Two applications of the agent-pipeline principles"
+section. **The middleware set actually within S4's practical mounting scope today is
+still the same 7 modules Dimension B's Reasoning already named individually** (`trace`,
+`auth`, `content_type`, `validate`, `tenant_status`, `quota_enforcement`, `rate_limit`);
+only the routes count materially grew (24 → 31, +29%). **The recount does not change the
+conclusion below** — if anything it strengthens the premise that S4's router carries
+real structural weight, which is exactly why Dimension A's `forward/2` decomposition
+answer (not a new framework) is the one this addendum adopts.
+
+**Decision: Plug/Bandit stands as Letflow's S4 web framework — Phoenix is not
+adopted, reversing this file's original Decision above.**
+
+**Reasoning.**
+
+*Dimension B's tie-breaker, engaged on its merits, not sidestepped.* The Reasoning
+section above already names the Plug-side answer and rules it out: "(b) building a
+bespoke shared `Plug.Builder` module to hold the sequence and delegating to it — which
+is Letflow re-implementing, by hand, the exact mechanism `pipeline`/`pipe_through`
+already gives Phoenix for free," then calls that "duplicated effort with no
+corresponding benefit." That framing overstates the actual cost. A shared
+`Plug.Builder` module holding the 7 in-scope-today plugs in order (e.g.
+`Letflow.Plugs.ApiPipeline`, using `Plug.Builder`'s own `plug`-composition macros) is a
+**one-time, ~20-30 line module**, not effort duplicated per route or per sub-router: it
+is written once, and every sub-router mounted via `Plug.Router.forward/2` delegates to
+it with a single `plug Letflow.Plugs.ApiPipeline` line — structurally the same
+reuse shape `pipe_through :api` gives Phoenix, just spelled with `Plug.Builder`'s
+primitives instead of `Phoenix.Router`'s DSL sugar around those same primitives (0001's
+own Dimension B text already concedes "Both mechanisms are Plug-based under the hood").
+The two already-shipped, already-framework-neutral plugs this composition would carry
+(`Letflow.Plugs.AuthPipeline`, `Letflow.Plugs.TenantStatus`, REQ-021) mount into a
+`Plug.Builder` chain identically to how they would mount into a Phoenix `pipeline`
+block — no rework either way. What Phoenix buys over this is the DSL syntax for
+declaring the grouping, not the capability to group; that syntactic convenience does not
+justify importing and maintaining an entire additional framework dependency (Phoenix,
+Phoenix.PubSub, and their own transitive tree) on top of a BPM engine core (`gen_statem`
+process-per-instance, `DynamicSupervisor`) that has no other Phoenix-shaped need, when a
+~20-30 line module inside `lib/letflow/plugs/` already closes the gap.
+
+*Dimension A revisited — the `forward/2` decomposition already named for OQ-1 answers
+the accumulation concern directly.* Dimension A's own text says route-count growth "is
+real signal but is not, by itself, decisive... a disciplined team could keep a
+24-route `Plug.Router` legible via consistent use of `forward/2`." `stage-4-api-surface
+.md`'s OQ-1 independently reaches the same place from the routing side: "`Plug.Router`'s
+`forward/2` to per-subsystem sub-routers is the idiomatic answer and needs no new
+dependency... It becomes [a decision record] if the resolution pulls in a routing
+library." At 31 routes, the discipline Dimension A worried would be "self-imposed" is
+exactly what OQ-1 already plans to impose structurally via per-subsystem sub-routers,
+matching Dimension A's own accepted fallback rather than requiring Phoenix's `scope`
+DSL to force it.
+
+*Switching cost is low either way, and that cuts toward not switching, not toward
+switching.* REQ-065's design step confirms the sunk cost in the current Plug/Bandit
+router is minimal — `router.ex` is ~30 lines with two routes, and both already-built S4
+plugs are framework-neutral by construction
+(`lib/letflow/design/0001-web-framework-addendum-req065.md` §3). That fact means neither
+position wins by inertia. It is weighed here on the merits above: minimal added
+dependency surface for a project whose own governing rule (`CLAUDE.md`'s "Keep it
+light, but match effort to the active stage"; `.claude/agents/elixir-dev.md`'s
+"Forbidden" section, "Don't add abstractions... the current requirement doesn't need
+yet") already disfavors introducing a framework-scale abstraction to solve a
+plug-composition problem a ~20-30 line module solves directly.
+
+*Dimension C — unaffected.* Still orthogonal, as originally reasoned: `ueberauth`/OIDC
+integration attaches as a plug under either framework, and nothing about this addendum
+changes that.
+
+**What this supersedes.** The Decision section's naming of Phoenix, and the Summary's
+"Combined, Dimensions A and B justify migrating to Phoenix at S4" sentence, are
+superseded by this addendum's Plug/Bandit conclusion. Dimension B's per-module mapping
+(all 7 plugs, their ordering constraints) is **not** superseded — it remains the
+accurate list of what must be mounted and in what order; this addendum revises only the
+*tie-breaker conclusion* (which composition mechanism assembles them), not the
+per-module analysis itself. Dimension C is untouched, as always.
+
+**Scope.** This addendum does not add a `mix.exs` dependency, does not change
+`lib/letflow/router.ex`'s behavior (its "no Phoenix" moduledoc line was already
+consistent with the position named here and needed no correction), and does not resolve
+OQ-1 (router decomposition, owned by REQ-070) or OQ-2 (OpenAPI spec strategy, owned by
+REQ-084) — both proceed against this addendum's Plug/Bandit conclusion as their now-
+settled premise rather than an open question.

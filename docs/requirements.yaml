@@ -4945,7 +4945,7 @@ requirements:
   - id: REQ-110
     title: Verify REQ-059/REQ-060's R-Co-deferred open questions against the now-readable pin sources (ISS-0076 item 1)
     owner: ISSUE-FIXER
-    status: pending
+    status: done
     stage: S3
     impl_order: 167  # letflow-queue task id -- registered 2026-08-20 per ISS-0092/GH#314
     # (superseding the invented 154, which addressed an unrelated live task

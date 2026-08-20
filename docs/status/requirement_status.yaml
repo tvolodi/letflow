@@ -5292,3 +5292,58 @@ history:
       Filed tvolodi/letflow-queue#3 requesting a non-destructive
       GET /tasks/:id, per ISS-0092's third suggested action -- out of this
       repo's scope to build (separate service).
+  - req: REQ-110
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-08-20T02:49:21Z"
+    note: >
+      WF03-REQ110-20260820. Verified this run: the substantive audit
+      (commit d483d98, "audit(REQ-110): pin OQs verified against R-Co -- 2
+      behavioural divergences", run WF03-REQ110-20260819) had already
+      landed on main before this session started, but docs/requirements.yaml
+      still read REQ-110 status: pending -- a bookkeeping gap, not missing
+      work. Re-derived all six ACs independently rather than trusting that
+      commit's own message:
+      (1) all six locations dispositioned inline, confirmed by reading each
+      file directly -- req059-pin-resolver.md:538 OQ-1 divergent_behavioural;
+      pin_resolver.ex:106 moduledoc divergent_behavioural (agrees with #1);
+      req060-pin-rebind.md:592 OQ-4 (+:464-ish call site, shifted by prior
+      edits) confirmed; req060-pin-rebind.md:616 OQ-5 divergent_doc_only;
+      req060-pin-rebind.md:103 OQ-1 (event-type self-registration)
+      unsettled_by_source; req060-pin-rebind.md:134 (now :163 after this
+      session's insert) -- FOUND UNDONE, no
+      explicit disposition label existed at this location despite the
+      commit message's count table claiming divergent_doc_only x2. Added
+      one this run (divergent_doc_only, citing R-Co pin_rebind.zig:1-18,
+      re-read directly this session, plus its confirmed 388-line count) so
+      AC1/AC7's "recorded inline at that location, no global verdict" is
+      actually true rather than asserted. Counts now genuinely sum to six:
+      confirmed 1, divergent_doc_only 2, divergent_behavioural 2,
+      unsettled_by_source 1.
+      (2) every disposition's R-Co citation checked against the source
+      files directly this run (R-Co/src/engine/pin_resolver.zig 967 lines,
+      R-Co/src/engine/pin_rebind.zig 388 lines, R-Co/src/api/routes/pin_rebind.zig
+      221 lines -- all three line counts re-confirmed with `wc -l`).
+      (3) git diff for this session's own edit touches only
+      lib/letflow/design/req060-pin-rebind.md (design-doc prose, the
+      missing location-6 disposition paragraph) -- zero lib/letflow/ code
+      changes. The prior merged commit's own diff (d483d98) was also
+      re-checked: its only lib/ file touched is pin_resolver.ex, and both
+      hunks fall inside the @moduledoc heredoc (lines 2-159) -- no function
+      body, guard, @spec, lock mode or return value altered.
+      (4) two divergent_behavioural findings, both filed and unfixed, per
+      NON-NEGOTIABLE: docs/issues/ISS-0079.yaml (GH#298, override
+      verification bypass) and docs/issues/ISS-0078.yaml (GH#299, rebind
+      provenance loss) -- both still status: open, correctly not resolved
+      by this audit.
+      (5) req060-pin-rebind.md:134 no longer prescribes the caveat as
+      required moduledoc content -- re-read, confirmed.
+      (6) pin_resolver.ex:106's shipped moduledoc and req059-pin-resolver.md:538's
+      OQ-1 no longer assert R-Co is unavailable, and agree with each other
+      (both state divergent_behavioural, same evidence) -- re-read both,
+      confirmed.
+      (7) no AC satisfied by a global verdict -- each of the six locations
+      carries its own citation, verified individually.
+      No ISS-0076-registry match beyond ISS-0078/ISS-0079/ISS-0076 itself
+      (Step 0.5 lookup); this is not a recurrence, it is the same audit's
+      bookkeeping being completed a session later.

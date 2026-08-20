@@ -138,6 +138,13 @@ related:
   - ISS-0087
   - ISS-0076
 github_issue: https://github.com/tvolodi/letflow/issues/303
+queue_task_id: null   # never registered via register_task -- filed under the pre-2026-08-20
+  # ISSUE_QUEUE.md, which didn't call letflow-queue at all (see docs/anti-patterns.md's
+  # matching entry). One real get_next_task reconciliation attempt during the resolving
+  # run returned a different, newer task (#163/ISS-0088) -- not this one -- and was
+  # released back to open untouched rather than chased further down the stack. Residual
+  # gap, bounded: GH#303 is now closed, and get_next_task's GitHub-import only pulls
+  # OPEN issues, so this item will never be re-imported/re-claimed from here.
 status: resolved
 resolved_in_run: WF03-ISS0086-20260820
 resolved_at: "2026-08-19T23:34:42Z"

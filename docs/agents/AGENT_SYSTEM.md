@@ -134,7 +134,7 @@ requirement's file-level status stays exactly as terse as it's always been.
 | Handoff files | `handoffs/` | all (via ORCH) | `.json` (exception) |
 | Requirement queue | `docs/requirements.yaml` | `ORCH`/`DOC-UPDATER` (status field) | `.yaml` (pre-existing schema, unchanged) |
 | Requirement event history | `docs/status/requirement_status.yaml` | `DOC-UPDATER` | `.yaml` |
-| Issue registry | `docs/issues/` | any agent (via ISSUE_QUEUE protocol) | `.yaml` |
+| Issue registry | `docs/issues/` | `ORCH` (queue calls) / any agent (finding content), via ISSUE_QUEUE protocol | `.yaml` (`queue_task_id` cross-refs `letflow-queue`, added 2026-08-20) |
 | Release decisions | `docs/status/` | `RELEASE-VALIDATOR` | `.yaml` |
 | Migration decision records | `docs/migration/decisions/` | any agent, REVIEWER sign-off | `.md` |
 | Stage detail + REVIEWER sign-off | `docs/migration/stage-N-*.md` | `REVIEWER` | `.md` |

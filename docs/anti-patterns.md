@@ -689,3 +689,45 @@ encourages — running producing agents in parallel.
 * **When you do hit a collision, renumber your own and leave the other intact** — that is
   what happened here and it was the right call. Then fix the GH body, and say so in the
   handoff so the coordinator knows the numbering is no longer dense.
+
+## Working a user-named GitHub issue without ever locking it in letflow-queue
+
+An ORCH session resolving ISS-0086/GH#303 (a user-named, directly-selected issue —
+exempt from the queue's Hard Rule *selection* requirement) treated that exemption as
+covering the queue entirely: it branched, fixed, tested, and merged the whole run
+without ever calling `set_lock`/`get_next_task` to actually claim the task, and without
+`release_lock` at the end. Two separate mistakes compounded:
+
+1. **Reachability was tested with `get_next_task` used as a probe.** A throwaway
+   `agent_id: "probe"` call meant only to check the service was up actually claimed and
+   locked a real, unrelated task (#161, ISS-0075) — `get_next_task` is not read-only, it
+   atomically claims whatever it returns. Caught and released immediately, but it should
+   never have happened: `GET /health` is the reachability check with no side effects.
+2. **The exemption from *selection* was read as an exemption from *locking*.** Nothing
+   in the queue's state reflected that ISS-0086 was being worked on. For the entire
+   duration of the fix, a second host's own `get_next_task` call could have independently
+   claimed the same still-open GitHub issue (if/once it entered the queue's GitHub-import
+   side effect) and duplicated the work — the exact failure mode `TASK_QUEUE.md` was
+   written to prevent, just via a different door than the one its Hard Rule closes.
+
+**Root cause traced further back, not just this run's own shortcut:** `ISSUE_QUEUE.md`
+(the protocol that filed ISS-0086 in the first place) never called `register_task` at
+all — it predates `letflow-queue` and was never reconciled with it, so issues filed that
+way only enter the queue *opportunistically*, as a side effect of some later
+`get_next_task` call's GitHub-import step, if at all. There was no `queue_task_id`
+recorded anywhere for ISS-0086, so even a well-intentioned attempt to lock it correctly
+had no known id to target — confirmed empirically: one real `get_next_task` claim
+attempt this run returned a completely different, newer issue (#163/ISS-0088), not the
+one being worked, and had to be released back untouched.
+
+**Correct alternative:** `ISSUE_QUEUE.md` now routes every newly-filed issue through
+`register_task` (task_type: "issue") at filing time, recording the returned id as
+`queue_task_id` in the issue's yaml — see that file's 2026-08-20 update. For a
+user-named task with a `queue_task_id` already on record, `set_lock` it directly before
+starting work (it locks any unlocked known-id task, not only a task the same agent held
+before — see `TASK_QUEUE.md`'s `set_lock` section). For a legacy issue with no recorded
+id, make exactly one real `get_next_task` call to check/claim, release-and-report on a
+mismatch rather than chasing further down the stack, and `release_lock(status: "done")`
+whatever was actually locked once the fix is merged — full bounded procedure in
+`TASK_QUEUE.md`'s "A human names a specific issue" section. Test queue reachability with
+`GET /health`, never with a disposable `get_next_task` probe.

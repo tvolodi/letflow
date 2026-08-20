@@ -24,4 +24,23 @@ affected_files:
   - lib/letflow/design/promotion_plan.md
 queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
 github_issue: https://github.com/tvolodi/letflow/issues/321
-status: open
+status: resolved
+resolution:
+  resolved_at: "2026-08-20T00:00:00Z"
+  summary: >
+    R-Co/src/definition/promotion_plan.zig:99-102 read directly: computePromotionPlan()
+    (PRM-01, the compute_promotion_plan/5 counterpart) runs "Step 1: permission check --
+    caller holds promotion.submit?" via checkPermission(allocator, pool, actor_id,
+    "promotion", "submit"). R-Co/src/design/prm-02-conflict-preflight-rejection.md's
+    rejectIfConflicts (PRM-02, this function's R-Co counterpart) has signature
+    (allocator, pool, target_tenant_id, process_key, base_version) -- no actor_id
+    parameter at all -- and its module purpose/dependencies sections describe no
+    permission check of its own: a plain read plus a conditional single-event append,
+    called after computePromotionPlan() and before the promotion_reviews insert (PRM-04).
+    Disposition confirmed: R-Co gates actor_id once, at plan-computation time, not again
+    in the conflict-preflight step, exactly matching this design's existing inference.
+    Letflow's reject_if_conflicts/4 keeps actor_id in its own signature only because the
+    task briefing mandated the literal 4-arity/4-name signature; it remains an
+    accepted-but-unused parameter, not a gating divergence. No code change needed.
+  files_updated:
+    - lib/letflow/design/promotion_plan.md

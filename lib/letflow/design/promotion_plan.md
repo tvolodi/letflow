@@ -434,8 +434,21 @@ on a permission check — the requirement text names a permission gate for
 `compute_promotion_plan/5` (§3.2 step 1) and for REQ-038's rollback, but not for this
 function. Read as deliberate: `reject_if_conflicts/4` is a preflight re-check REQ-037's
 already-permission-gated approve/apply flow calls internally, not a fresh entry point.
-Flagged here as an inference, not confirmed against unreachable R-Co source — REVIEWER
-should re-check this reading once PRM-02's own doc is available.
+
+**Confirmed against R-Co source (GH#321, ISS-0093):** `R-Co/src/definition/promotion_plan.zig:99-102`
+runs the permission check — `checkPermission(allocator, pool, actor_id, "promotion", "submit")`
+— as "Step 1" of `computePromotionPlan()` (PRM-01, the `compute_promotion_plan/5` counterpart),
+not inside the conflict check. `R-Co/src/design/prm-02-conflict-preflight-rejection.md`'s
+`rejectIfConflicts` (PRM-02, this function's R-Co counterpart) has signature
+`(allocator, pool, target_tenant_id, process_key, base_version)` — **no `actor_id` parameter
+at all** — and its module purpose/data-flow/dependencies sections describe no permission check
+of its own; it is a plain read (`SELECT MAX(version::int) ...`) plus a conditional single-event
+append, called *after* `computePromotionPlan()` and *before* the `promotion_reviews` insert
+(PRM-04). This settles the inference exactly as this design already read it: R-Co gates
+`actor_id` once, at plan-computation time, not again in the conflict-preflight step. Letflow's
+choice to keep `actor_id` in this function's own signature (unlike R-Co, which omits it
+entirely) is solely to satisfy the task briefing's literal 4-arity/4-name signature (§4.2 above)
+— it remains an accepted-but-unused parameter, not a divergence in gating behaviour.
 
 This function does **not** call `Letflow.EventStore.append/N` on conflict — no
 `DEFINITION_PROMOTION_REJECTED` event is appended here, matching the requirement

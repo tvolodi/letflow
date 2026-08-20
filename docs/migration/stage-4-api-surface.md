@@ -163,22 +163,21 @@ confirm, not a behavior change.
 
 ## Decisions
 
-**OQ-0 — the framework question is NOT settled, contrary to what this
-section used to say.** This paragraph previously read "Executes on
-`docs/migration/decisions/0001-web-framework.md` (Plug + Bandit, no
-Phoenix) from S0." That is an inversion of what 0001 actually decided.
-0001 is `Status: decided` and its Decision section says "Letflow
-migrates to **Phoenix** (router `scope`/pipeline DSL, controllers)
-rather than continuing to hand-roll on plain Plug/Bandit, effective at
-S4." Meanwhile `lib/letflow/router.ex`'s shipped moduledoc says
-"Deliberately minimal — Plug + Bandit, no Phoenix", and `mix.exs` has
-no `:phoenix` dependency. The shipped code and this file said one
-thing; the decision record said the opposite. Found during the
-2026-08-19 requirement expansion and escalated as **REQ-065**, whose
-sole deliverable is a dated addendum to 0001 naming the surviving
-position plus REVIEWER sign-off. Every other S4 requirement depends on
-REQ-065 transitively and is written framework-neutrally. Do not resolve
-this inside a route requirement.
+**OQ-0 — RESOLVED (2026-08-20) by REQ-065's addendum to 0001: Plug/Bandit stands.**
+This paragraph previously read "Executes on `docs/migration/decisions/
+0001-web-framework.md` (Plug + Bandit, no Phoenix) from S0" — an inversion of what
+0001 actually decided at the time (0001's original Decision section named Phoenix),
+which is why this section was rewritten to flag the contradiction rather than silently
+keep asserting a position. The contradiction is now resolved the other direction: 0001
+carries a dated 2026-08-20 addendum reversing its own original Decision, naming
+Plug/Bandit as the surviving position after engaging its Dimension B tie-breaker on the
+merits and reasoning against the corrected 31-route/9-middleware counts
+(`docs/migration/decisions/0001-web-framework.md`, "Addendum (2026-08-20)").
+`lib/letflow/router.ex`'s shipped moduledoc ("Deliberately minimal — Plug + Bandit, no
+Phoenix") and `mix.exs` (no `:phoenix` dependency) were already consistent with this
+outcome and needed no change. Every other S4 requirement was already written
+framework-neutrally and remains unaffected by which way this resolved. REQ-065's
+remaining deliverable is REVIEWER sign-off, recorded below once complete.
 
 The existing `lib/letflow/router.ex` is still the precedent to
 generalize from — the same relationship S3 had to

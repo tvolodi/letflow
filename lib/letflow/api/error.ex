@@ -1,0 +1,222 @@
+defmodule Letflow.Api.Error do
+  @moduledoc """
+  RFC 9457 Problem Details builder — ports `src/api/errors.zig` (272 lines).
+
+  Pure: no `Plug.Conn` dependency and no I/O. Build a `t()` with one of the
+  per-status constructors below, then either serialise it yourself with
+  `serialise/1` or hand it to `Letflow.Api.Response.send_problem/2`, which
+  resolves `trace_id` from the conn and sends it.
+
+  ## Zig-to-Elixir translation notes
+
+  * **`HandlerResult` struct → conn-threading functions.** `errors.zig`'s
+    companion `response.zig` returns a `HandlerResult` value
+    (`status_code`/`body`/`content_type`) because Zig has no request object to
+    thread through. In Elixir the conn *is* the result carrier, so that struct
+    is not ported at all: `Letflow.Api.Response` exposes functions that take
+    and return a `Plug.Conn.t()` instead. See `Letflow.Api.Response`'s
+    moduledoc.
+  * **Content-Type is a deliberate divergence from R-Co.** `response.zig`'s
+    `problemResponse/2` does not set `content_type` on the `HandlerResult` it
+    returns, so it falls through to the struct default
+    `CONTENT_TYPE_JSON = "application/json"` — R-Co serves RFC 9457-shaped
+    error bodies as `application/json`. Letflow intentionally does **not**
+    replicate that: error responses are sent as `application/problem+json`,
+    the media type RFC 9457 §3 defines for exactly this document shape.
+    Success responses stay on `application/json`, matching R-Co.
+  * **No allocator-failure fallback.** `errors.zig`'s `serialise/2` can fail
+    with `error{OutOfMemory}`, and `response.zig`'s `problemResponse/2` has a
+    hand-written literal 500 JSON string for that case. Elixir has no
+    caller-managed allocator, so neither the error union nor the fallback body
+    has an analogue; both are deliberately dropped rather than transliterated.
+  * **Strings are properly escaped.** `errors.zig`'s `serialise/2` builds its
+    JSON with `std.fmt.allocPrint` and literal `"{s}"` interpolation, which
+    does **not** escape quotes, backslashes, or control characters inside
+    `detail`. `serialise/1` here uses `Jason`, which does full RFC 8259 string
+    escaping — this fixes an unescaped-string bug present in the Zig source and
+    must not be "fixed" back to raw interpolation.
+
+  ## Security invariants
+
+  * **INV-4** — `internal/0` takes no `detail` argument. Its detail string is a
+    module attribute baked into the function body, so no exception message,
+    struct, or stacktrace can reach a 500 body through any parameter: the
+    signature has no slot for one.
+  * **INV-5** — `not_found/0` likewise takes no argument. Every 404 in the
+    system, whether a genuine missing resource or a cross-tenant probe
+    (REQ-072), goes through this one constructor with no varying input, so the
+    two bodies are byte-identical by construction.
+
+  Every other constructor keeps a `detail` parameter; the caller is
+  responsible for passing a caller-safe string (never a raw Ecto/Postgrex
+  error, secret material, or a stack trace).
+  """
+
+  @problems_base Application.compile_env(
+                   :letflow,
+                   :problems_base_uri,
+                   "https://bpm.example.com/problems/"
+                 )
+
+  @internal_error_detail "an unexpected error occurred"
+  @not_found_detail "the requested resource was not found"
+
+  @derive {Jason.Encoder, only: [:type, :title, :status, :detail, :trace_id]}
+  defstruct [:type, :title, :status, :detail, trace_id: ""]
+
+  @typedoc """
+  An RFC 9457 Problem Details object. Mirrors `errors.zig`'s `ProblemDetails`
+  field set 1:1, including `trace_id`'s `""` default.
+  """
+  @type t :: %__MODULE__{
+          type: String.t(),
+          title: String.t(),
+          status: 400..599,
+          detail: String.t(),
+          trace_id: String.t()
+        }
+
+  @doc """
+  Serialise a problem document to a JSON body.
+
+  Unlike `errors.zig`'s `serialise/2`, this does **not** resolve `trace_id`
+  from a thread-local — `Letflow.Api.Error` is conn-agnostic by design (see
+  `docs/migration/stage-4-api-surface.md`: prefer `conn.assigns`, do not port a
+  thread-local global). `Letflow.Api.Response.send_problem/2` splices
+  `conn.assigns[:trace_id]` in before calling this.
+  """
+  @spec serialise(t()) :: String.t()
+  def serialise(%__MODULE__{} = problem), do: Jason.encode!(problem)
+
+  @doc "HTTP 400 — Bad Request."
+  @spec bad_request(String.t()) :: t()
+  def bad_request(detail) do
+    %__MODULE__{
+      type: @problems_base <> "bad-request",
+      title: "Bad Request",
+      status: 400,
+      detail: detail
+    }
+  end
+
+  @doc """
+  HTTP 401 — Unauthorized.
+
+  The caller MUST set the `WWW-Authenticate: Bearer` header separately; this
+  constructor only produces the Problem Details body.
+  """
+  @spec unauthorized(String.t()) :: t()
+  def unauthorized(detail) do
+    %__MODULE__{
+      type: @problems_base <> "unauthorized",
+      title: "Unauthorized",
+      status: 401,
+      detail: detail
+    }
+  end
+
+  @doc "HTTP 403 — Forbidden."
+  @spec forbidden(String.t()) :: t()
+  def forbidden(detail) do
+    %__MODULE__{
+      type: @problems_base <> "forbidden",
+      title: "Forbidden",
+      status: 403,
+      detail: detail
+    }
+  end
+
+  @doc """
+  HTTP 404 — Not Found.
+
+  Takes no `detail` argument, per INV-5: the true-not-found body and the
+  cross-tenant-probe body must be byte-identical, which is guaranteed here by
+  there being exactly one code path and no varying input.
+  """
+  @spec not_found() :: t()
+  def not_found do
+    %__MODULE__{
+      type: @problems_base <> "not-found",
+      title: "Not Found",
+      status: 404,
+      detail: @not_found_detail
+    }
+  end
+
+  @doc "HTTP 409 — Conflict."
+  @spec conflict(String.t()) :: t()
+  def conflict(detail) do
+    %__MODULE__{
+      type: @problems_base <> "conflict",
+      title: "Conflict",
+      status: 409,
+      detail: detail
+    }
+  end
+
+  @doc "HTTP 415 — Unsupported Media Type."
+  @spec unsupported_media_type(String.t()) :: t()
+  def unsupported_media_type(detail) do
+    %__MODULE__{
+      type: @problems_base <> "unsupported-media-type",
+      title: "Unsupported Media Type",
+      status: 415,
+      detail: detail
+    }
+  end
+
+  @doc "HTTP 422 — Unprocessable Entity."
+  @spec unprocessable(String.t()) :: t()
+  def unprocessable(detail) do
+    %__MODULE__{
+      type: @problems_base <> "unprocessable-entity",
+      title: "Unprocessable Entity",
+      status: 422,
+      detail: detail
+    }
+  end
+
+  @doc """
+  HTTP 429 — Too Many Requests.
+
+  The caller MUST set the `Retry-After` header separately; this constructor
+  only produces the Problem Details body.
+  """
+  @spec rate_limited(String.t()) :: t()
+  def rate_limited(detail) do
+    %__MODULE__{
+      type: @problems_base <> "rate-limited",
+      title: "Too Many Requests",
+      status: 429,
+      detail: detail
+    }
+  end
+
+  @doc """
+  HTTP 500 — Internal Server Error.
+
+  Takes no `detail` argument, per INV-4: the detail string must not vary with
+  the underlying exception, so there is no parameter through which
+  exception-derived text could be threaded.
+  """
+  @spec internal() :: t()
+  def internal do
+    %__MODULE__{
+      type: @problems_base <> "internal-error",
+      title: "Internal Server Error",
+      status: 500,
+      detail: @internal_error_detail
+    }
+  end
+
+  @doc "HTTP 503 — Service Unavailable."
+  @spec service_unavailable(String.t()) :: t()
+  def service_unavailable(detail) do
+    %__MODULE__{
+      type: @problems_base <> "service-unavailable",
+      title: "Service Unavailable",
+      status: 503,
+      detail: detail
+    }
+  end
+end

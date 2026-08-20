@@ -1,0 +1,72 @@
+{
+  "handoff_id": "0d57dedd-4791-427d-89ca-f53203a98985",
+  "run_id": "WF02-REQ066-20260820",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ066-20260820/step-02a-elixir-dev.json",
+  "created_at": "2026-08-20T19:41:36Z",
+  "started_at": "2026-08-20T19:41:36Z",
+  "completed_at": "2026-08-20T19:46:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-066"],
+    "requirement_text": {
+      "REQ-066": "Port src/api/errors.zig (272 lines) and src/api/response.zig (69) as Letflow.Api.Error and Letflow.Api.Response -- the single response/error contract every S4 route emits. Nothing in this batch renders a response body by hand once these exist. errors.zig is an RFC 9457 Problem Details builder. Port: the ProblemDetails shape (type as an absolute URI under a configured base, title, status, detail, plus the trace id field errors.zig carries with a \"\" default), the per-status constructors (problemNotFound and its siblings for 400/401/403/404/409/422/429/500 -- enumerate them from the Zig source rather than guessing which exist), and serialisation to a JSON body. Emit Content-Type: application/problem+json on error responses, per RFC 9457, and state in the moduledoc whether R-Co does the same or emits application/json (check response.zig's CONTENT_TYPE_JSON usage) -- if Letflow diverges, that divergence is deliberate and documented, not accidental. response.zig defines the canonical HandlerResult (status_code, body, content_type defaulting to JSON) and the typed success constructors that keep positive responses on correct status codes (200 vs 201 vs 202 vs 204). In Elixir the conn IS the result carrier, so port these as functions that take and return a conn (send_json/3, created/2, no_content/1, and the error counterparts) rather than transliterating a HandlerResult struct -- Zig returns a value because it has no conn. State that translation in the moduledoc. SECURITY (INV-4, INV-5): an error body must never carry secret material, a raw Ecto/Postgrex error, or a stack trace -- detail is a caller-safe string chosen by the handler, and an unexpected internal error maps to a generic 500 problem document whose detail does not vary with the underlying exception. Separately, the not-found problem document is the exact response a cross-tenant probe receives (REQ-072 enforces the routing; this requirement guarantees the two bodies are byte-identical by construction, because both go through one constructor)."
+    },
+    "related_handoff_ids": [
+      "02c7d749-fc6f-420b-bbda-a59dfd6c9131",
+      "d84fed46-76be-4ba8-b3e7-5b3023b4351c"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req066-api-error-response.md",
+      "handoffs/WF02-REQ066-20260820/step-01-code-designer.json",
+      "handoffs/WF02-REQ066-20260820/step-01b-code-design-validator.json"
+    ],
+    "owned_modules": ["lib/letflow/api/", "test/letflow/api/", "lib/letflow/design/req066-api-error-response.md"]
+  },
+  "task": {
+    "description": "WF-02 Step 2a (backend implementation) on branch feature/WF02-REQ066-20260820. Implement Letflow.Api.Error and Letflow.Api.Response exactly per the design artefact lib/letflow/design/req066-api-error-response.md, which passed the Step 1b hard gate. Follow WF-02 Step 2a's procedure in docs/agents/workflows/WF-02_requirement_implementation.md, including its self-review checklist. No migration is involved in this requirement, so step 6 (mix ecto.migrate) is not applicable -- state that rather than skipping silently. CODE-DESIGN-VALIDATOR forwarded two non-blocking implementation notes you MUST honour: (1) take each constructor's title string verbatim from R-Co's c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\api\\errors.zig lines 66-168, NOT by Title-Casing the slug -- 'rate-limited' maps to 'Too Many Requests' and 'internal-error' maps to 'Internal Server Error', which slug-casing would get wrong; (2) Plug.Conn.put_resp_content_type/3 appends '; charset=utf-8' to the header value, so be aware the emitted Content-Type will not be a bare 'application/problem+json' -- implement whichever way the design specifies and note the actual emitted value in your result.summary so TEST-DESIGNER asserts the real value. The design's INV-4/INV-5 enforcement is structural and must not be weakened: Error.internal/0, Error.not_found/0, Response.internal_error/1 and Response.not_found/1 take no detail-bearing argument, so there is no slot through which an exception message could reach the body -- if implementing reveals a reason to add such a parameter, STOP and report it as a BLOCKER rather than adding it. Also per the design: lib/letflow/router.ex's duplicated send_json/3 should delegate to Letflow.Api.Response.send_json/3 -- do that, and verify GET /health still returns the same body/status/content-type as before (router.ex is currently Plug/Bandit, not Phoenix, per docs/migration/decisions/0001-web-framework.md and REQ-065). Do NOT write tests -- TEST-DESIGNER owns test/ in Step 3. Do not touch docs/requirements.yaml.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "mix format --check-formatted exits 0",
+      "Letflow.Api.Error implements every constructor the design specifies, each producing type/title/status/detail with type an absolute URI, titles taken verbatim from errors.zig",
+      "Letflow.Api.Response implements the conn-threading success and error helpers the design specifies, with 201 for creation and 204 with an empty body for deletion",
+      "error responses set Content-Type application/problem+json and success responses application/json, per the design",
+      "Error.internal and Error.not_found (and their Response counterparts) accept no detail-bearing argument -- INV-4/INV-5 enforced structurally, not by convention",
+      "both moduledocs state the Zig-to-Elixir translation explicitly (HandlerResult struct replaced by conn-threading functions) and that Letflow's problem+json content type is a deliberate divergence from R-Co's application/json",
+      "lib/letflow/router.ex's send_json/3 delegates to Letflow.Api.Response.send_json/3 and GET /health is unchanged in body, status and content-type",
+      "all call sites of any changed function signature still compile"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented Letflow.Api.Error and Letflow.Api.Response exactly per lib/letflow/design/req066-api-error-response.md, and replaced lib/letflow/router.ex's private send_json/3 body with a delegation to Letflow.Api.Response.send_json/3. NO BLOCKER encountered: Error.internal/0, Error.not_found/0, Response.internal_error/1 and Response.not_found/1 are implemented with zero detail-bearing arguments exactly as designed; nothing in implementation gave a reason to add such a parameter, so INV-4/INV-5 remain structurally enforced. CONSTRUCTORS (10, generic HTTP-status family per design section 0.2; the nine domain-specific problem* constructors are deliberately deferred): bad_request/1 400 'Bad Request', unauthorized/1 401 'Unauthorized', forbidden/1 403 'Forbidden', not_found/0 404 'Not Found', conflict/1 409 'Conflict', unsupported_media_type/1 415 'Unsupported Media Type', unprocessable/1 422 'Unprocessable Entity', rate_limited/1 429 'Too Many Requests', internal/0 500 'Internal Server Error', service_unavailable/1 503 'Service Unavailable'. Every title string was copied verbatim from c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\api\\errors.zig lines 66-168 (implementation note 1 honoured): 'rate-limited' -> 'Too Many Requests' and 'internal-error' -> 'Internal Server Error', neither of which is the Title-Cased slug. ACTUAL EMITTED CONTENT-TYPE HEADER VALUES (implementation note 2 -- measured at runtime via Plug.Test, not assumed): success responses (send_json/3, ok/2, created/2) emit exactly 'application/json; charset=utf-8'; error responses (send_problem/2 and all ten per-status wrappers) emit exactly 'application/problem+json; charset=utf-8'. Both carry the '; charset=utf-8' suffix because the design specifies Plug.Conn.put_resp_content_type/2, which appends it. TEST-DESIGNER must assert these exact strings, not the bare media types. no_content/1 emits status 204, body \"\", and NO content-type header at all (no put_resp_content_type call -- a 204 carries no representation). MEASURED BODIES: not_found -> {\"type\":\"https://bpm.example.com/problems/not-found\",\"title\":\"Not Found\",\"status\":404,\"detail\":\"the requested resource was not found\",\"trace_id\":\"\"}; internal_error -> {\"type\":\"https://bpm.example.com/problems/internal-error\",\"title\":\"Internal Server Error\",\"status\":500,\"detail\":\"an unexpected error occurred\",\"trace_id\":\"\"}. Two not_found/1 calls on different conns with different assigns were verified byte-identical at runtime (true). ROUTER: GET /health verified unchanged after the delegation -- status 200, body {\"status\":\"ok\"}, content-type 'application/json; charset=utf-8'; the catch-all `match _` 404 ({\"error\":\"not_found\"}, application/json) was deliberately left as-is rather than converted to a problem document, since converting it is not in this requirement's scope. TOOLCHAIN (real output, local toolchain at /c/Program Files/Elixir/bin/mix, Mix 1.20.3 / OTP 29): `mix compile` exits 0 and prints 'Generated letflow app'. `mix compile --warnings-as-errors` FAILS -- but it fails identically on a stashed clean tree (14 'a struct for ... is expected on struct update' Elixir 1.20 type warnings in lib/letflow/engine/{transition,engine,sub_process,reconstruction}.ex), so this is pre-existing and NOT introduced by this change; zero warnings reference lib/letflow/api/ or lib/letflow/router.ex. `mix format --check-formatted` FAILS repo-wide for the same pre-existing reason (lib/letflow/engine/variable_merge.ex, lib/letflow/engine/pin_resolver.ex, test/letflow/engine/pin_resolver_test.exs, test/letflow/engine/pin_rebind_test.exs); scoped to this change's files it exits 0: `mix format --check-formatted lib/letflow/api/error.ex lib/letflow/api/response.ex lib/letflow/router.ex` -> exit 0. See issues[] -- REVIEWER should decide whether the pre-existing repo-wide failures get their own cleanup requirement. MIGRATION STEP: WF-02 Step 2a step 6 (mix ecto.migrate) is NOT APPLICABLE to REQ-066 -- both modules are pure/conn-threading libraries with no Ecto schema and no migration; priv/repo/migrations/ is untouched. DESIGN OPEN QUESTIONS RESOLVED BY ELIXIR-DEV: (OQ1) pattern-copy chosen over a shared private builder, as the design's own body text specifies -- each of the ten constructors writes its own struct literal. (OQ2) `@derive {Jason.Encoder, only: [:type, :title, :status, :detail, :trace_id]}` chosen over Map.from_struct/1, because the explicit `only:` list also pins JSON field order to match errors.zig's serialise/2 output order exactly. (OQ3) no config/config.exs key added; @problems_base uses Application.compile_env(:letflow, :problems_base_uri, \"https://bpm.example.com/problems/\") as designed. NO tests were written -- test/ is untouched, TEST-DESIGNER owns Step 3. docs/requirements.yaml was not touched by this step.",
+    "artifacts_out": [
+      "lib/letflow/api/error.ex",
+      "lib/letflow/api/response.ex",
+      "lib/letflow/router.ex",
+      "handoffs/WF02-REQ066-20260820/step-02a-elixir-dev.json"
+    ],
+    "issues": [
+      "PRE-EXISTING, NOT INTRODUCED BY THIS CHANGE: `mix compile --warnings-as-errors` does not exit 0 on this repo. 14 Elixir 1.20 'a struct for X is expected on struct update' type warnings in lib/letflow/engine/transition.ex, lib/letflow/engine.ex, lib/letflow/engine/sub_process.ex and lib/letflow/engine/reconstruction.ex. Verified by stashing this change (git stash push -u) and recompiling clean: the same 14 warnings and the same failure. AC1 is therefore unmet repo-wide but met for the files this step owns.",
+      "PRE-EXISTING, NOT INTRODUCED BY THIS CHANGE: `mix format --check-formatted` does not exit 0 repo-wide -- lib/letflow/engine/variable_merge.ex, lib/letflow/engine/pin_resolver.ex, test/letflow/engine/pin_resolver_test.exs, test/letflow/engine/pin_rebind_test.exs are unformatted under Elixir 1.20's formatter. Scoped to this step's three files the check exits 0. Not fixed here because reformatting four unrelated engine/test files is outside REQ-066's scope and would collide with other in-flight work; recommend a separate toolchain-upgrade cleanup requirement.",
+      "FOR TEST-DESIGNER: assert the content-type strings WITH the charset suffix -- 'application/json; charset=utf-8' and 'application/problem+json; charset=utf-8'. A test asserting a bare 'application/problem+json' will fail against the real implementation.",
+      "FOR TEST-DESIGNER: no_content/1 sets no content-type header at all (get_resp_header/2 returns []), which is intentional for a 204."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ066-20260820",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (WF-02 Step 2b) -- this change shapes every S4 error response body and is INV-4/INV-5 load-bearing -- then to REVIEWER (Step 2c). Do not advance to TEST-DESIGNER (Step 3) until both hard gates pass."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

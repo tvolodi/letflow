@@ -25,9 +25,9 @@ defmodule Letflow.Router do
     send_json(conn, 404, %{error: "not_found"})
   end
 
-  defp send_json(conn, status, body) do
-    conn
-    |> put_resp_content_type("application/json")
-    |> send_resp(status, Jason.encode!(body))
-  end
+  # Delegates to the shared response contract (REQ-066) rather than keeping a
+  # second copy of the same encode-and-send logic. Behaviour is identical:
+  # `Letflow.Api.Response.send_json/3` is the same
+  # put_resp_content_type("application/json") + Jason.encode! + send_resp.
+  defp send_json(conn, status, body), do: Letflow.Api.Response.send_json(conn, status, body)
 end

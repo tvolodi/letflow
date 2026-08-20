@@ -5510,3 +5510,15 @@ history:
       directly (confirmed via `gh issue view 316`, closedAt matching the
       release timestamp 2026-08-20T03:15:38Z). No AC re-verification
       redone here beyond what the entry above already recorded in detail.
+  - req: REQ-112
+    event: verified
+    agent: ORCH
+    at: 2026-08-20T05:00:26Z
+    note: >
+      GH#325 (ISS-0097, OQ-3 from req041-pack-update-diff-schema.md sweep) resolved by
+      reading R-Co source directly: migrations/1157_prm09_solution_pack_update.sql
+      declares installed_version as TEXT NOT NULL; src/definition/pack_update.zig
+      carries base_pack_version/incoming_pack_version as []const u8 with no integer
+      parsing anywhere in the diff pipeline. :string confirmed correct. Updated
+      req041-pack-update-diff-schema.md OQ-3 to RESOLVED and ISS-0097.yaml to
+      status: resolved. Closing GH#325.

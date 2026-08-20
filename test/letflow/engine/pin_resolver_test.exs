@@ -158,39 +158,208 @@ defmodule Letflow.Engine.PinResolverTest do
   end
 
   # ---------------------------------------------------------------------------------
-  # Overrides bypass the lookup entirely (design doc §4.1)
+  # ISS-0079 (GH#298) -- overrides are VERIFIED against `lookup` before being
+  # accepted, not taken verbatim. See
+  # lib/letflow/design/iss-0079-pin-override-verification.md Decisions 1/3/4 and
+  # test/specs/ISS-0079.md for the full rationale. The pre-fix module took an
+  # override verbatim and never called `lookup` for an overridden ref at all --
+  # that is precisely the vulnerability this describe block now guards against.
   # ---------------------------------------------------------------------------------
 
-  describe "resolve/4 -- overrides substitute for the lookup, no lookup call at all for an overridden ref" do
-    test "a matching override entry is used verbatim, source: :override, and the corresponding lookup function is never called" do
-      g = graph([service_task("n1", "svc-a"), sub_process("n2", "mod-a")])
-      def_ = definition("override-process")
+  describe "resolve/4 -- ISS-0079: a matching override is VERIFIED against lookup, never taken verbatim" do
+    test "an override whose asserted version does NOT match what lookup confirms is rejected with {:unresolved_pin_override, ref}, not silently accepted" do
+      g = graph([service_task("n1", "svc-a")])
+      def_ = definition("mismatch-process")
 
       overrides = [
-        %{kind: :catalog_entry, ref: "svc-a", resolved_id: "override-sid", version: "9.9.9"},
-        %{kind: :module, ref: "mod-a", resolved_id: "override-mid", version: "8.8.8"}
+        %{kind: :catalog_entry, ref: "svc-a", resolved_id: "override-sid", version: "9.9.9"}
       ]
 
-      assert {:ok, pins, _schema} =
-               PinResolver.resolve(g, def_, raise_if_called_lookup(), overrides)
+      # lookup confirms svc-a exists, but at a DIFFERENT version than the
+      # override asserts -- this is the exact shape of the vulnerability:
+      # pre-fix, resolve_one_ref/4 never called lookup_fun for an overridden
+      # ref at all, so this mismatch was never detected and "9.9.9" would have
+      # been written into pins verbatim.
+      lookup =
+        const_lookup({:ok, %{resolved_id: "real-sid", version: "1.0.0"}}, {:error, :not_found})
+
+      assert {:error, {:unresolved_pin_override, "svc-a"}} =
+               PinResolver.resolve(g, def_, lookup, overrides)
+    end
+
+    test "an override naming a ref the lookup reports :not_found is rejected with {:unresolved_pin_override, ref}, not silently accepted" do
+      g = graph([service_task("n1", "svc-a")])
+      def_ = definition("not-found-process")
+
+      overrides = [
+        %{kind: :catalog_entry, ref: "svc-a", resolved_id: "override-sid", version: "1.0.0"}
+      ]
+
+      lookup = const_lookup({:error, :not_found}, {:error, :not_found})
+
+      assert {:error, {:unresolved_pin_override, "svc-a"}} =
+               PinResolver.resolve(g, def_, lookup, overrides)
+    end
+
+    test "an override whose version DOES match the lookup is accepted with resolved_id/version taken from the LOOKUP result, not the caller-supplied override" do
+      g = graph([service_task("n1", "svc-a")])
+      def_ = definition("verified-process")
+
+      overrides = [
+        %{
+          kind: :catalog_entry,
+          ref: "svc-a",
+          resolved_id: "caller-asserted-sid",
+          version: "1.0.0"
+        }
+      ]
+
+      # lookup confirms the SAME version the override names, but under a
+      # DIFFERENT resolved_id than the caller supplied -- proving resolved_id
+      # is sourced from the lookup, never taken verbatim from the caller
+      # (design doc's "resolved_id/version come from the fresh lookup result"
+      # bullet, Decision 1).
+      lookup =
+        const_lookup(
+          {:ok, %{resolved_id: "lookup-confirmed-sid", version: "1.0.0"}},
+          {:error, :not_found}
+        )
+
+      assert {:ok, pins, _schema} = PinResolver.resolve(g, def_, lookup, overrides)
 
       assert %{
                kind: :catalog_entry,
                ref: "svc-a",
-               resolved_id: "override-sid",
-               version: "9.9.9",
+               resolved_id: "lookup-confirmed-sid",
+               version: "1.0.0",
                source: :override
-             } =
-               Enum.find(pins, &(&1.kind == :catalog_entry))
+             } = Enum.find(pins, &(&1.kind == :catalog_entry))
+    end
+
+    test "a verified variable_schema override is accepted with resolved_id forced to nil, never the caller-supplied value" do
+      g = graph([])
+      def_ = definition("vs-override-process")
+
+      overrides = [
+        %{
+          kind: :variable_schema,
+          ref: "vs-override-process",
+          resolved_id: "caller-asserted-vs-id",
+          version: "3.0.0"
+        }
+      ]
+
+      lookup =
+        const_lookup(
+          {:error, :not_found},
+          {:error, :not_found},
+          {:ok, %{version: "3.0.0", json_schema: nil}}
+        )
+
+      assert {:ok, [pin], _schema} = PinResolver.resolve(g, def_, lookup, overrides)
+
+      assert %{
+               kind: :variable_schema,
+               ref: "vs-override-process",
+               resolved_id: nil,
+               version: "3.0.0",
+               source: :override
+             } = pin
+    end
+
+    test "a variable_schema override whose version does not match the lookup is rejected with {:unresolved_pin_override, ref}" do
+      g = graph([])
+      def_ = definition("vs-mismatch-process")
+
+      overrides = [
+        %{kind: :variable_schema, ref: "vs-mismatch-process", resolved_id: nil, version: "3.0.0"}
+      ]
+
+      lookup =
+        const_lookup(
+          {:error, :not_found},
+          {:error, :not_found},
+          {:ok, %{version: "2.0.0", json_schema: nil}}
+        )
+
+      assert {:error, {:unresolved_pin_override, "vs-mismatch-process"}} =
+               PinResolver.resolve(g, def_, lookup, overrides)
+    end
+
+    test "a verified kind: :module override is still accepted (Decision 3 -- no categorical ban on module overrides, unlike R-Co)" do
+      g = graph([sub_process("n1", "mod-a")])
+      def_ = definition("module-override-process")
+
+      overrides = [
+        %{kind: :module, ref: "mod-a", resolved_id: "caller-asserted-mid", version: "5.0.0"}
+      ]
+
+      lookup =
+        const_lookup(
+          {:error, :not_found},
+          {:ok, %{resolved_id: "lookup-confirmed-mid", version: "5.0.0"}}
+        )
+
+      assert {:ok, pins, _schema} = PinResolver.resolve(g, def_, lookup, overrides)
 
       assert %{
                kind: :module,
                ref: "mod-a",
-               resolved_id: "override-mid",
-               version: "8.8.8",
+               resolved_id: "lookup-confirmed-mid",
+               version: "5.0.0",
                source: :override
-             } =
-               Enum.find(pins, &(&1.kind == :module))
+             } = Enum.find(pins, &(&1.kind == :module))
+    end
+
+    test "an unverifiable kind: :module override is rejected the same way an unverifiable catalog_entry override is -- verification alone suffices, no categorical ban needed" do
+      g = graph([sub_process("n1", "mod-a")])
+      def_ = definition("module-unverifiable-process")
+
+      overrides = [
+        %{kind: :module, ref: "mod-a", resolved_id: "caller-asserted-mid", version: "5.0.0"}
+      ]
+
+      lookup = const_lookup({:error, :not_found}, {:error, :not_found})
+
+      assert {:error, {:unresolved_pin_override, "mod-a"}} =
+               PinResolver.resolve(g, def_, lookup, overrides)
+    end
+
+    test "an override naming a ref NOT in the enumerated pin set (Decision 4) is an error, not a silently-ignored no-op" do
+      g = graph([service_task("n1", "svc-a")])
+      def_ = definition("stray-override-process")
+
+      overrides = [
+        %{kind: :catalog_entry, ref: "svc-never-referenced", resolved_id: "sid", version: "1.0.0"}
+      ]
+
+      lookup =
+        const_lookup({:ok, %{resolved_id: "real-sid", version: "1.0.0"}}, {:error, :not_found})
+
+      assert {:error, {:unresolved_pin_override, "svc-never-referenced"}} =
+               PinResolver.resolve(g, def_, lookup, overrides)
+
+      # the enumerated ref itself (svc-a) resolved fine -- proving the stray
+      # check runs only AFTER normal resolution succeeds, matching the design
+      # doc's "only needs to run if steps 1-2 completed without halting" note,
+      # and confirming the error is specifically about the stray ref, not a
+      # coincidental failure of svc-a's own resolution.
+    end
+
+    test "an override naming a kind/ref pair that mismatches an enumerated pin's kind is treated as stray (Decision 4), not matched loosely" do
+      g = graph([service_task("n1", "shared-name")])
+      def_ = definition("kind-mismatch-process")
+
+      # "shared-name" IS enumerated, but as :catalog_entry -- an override
+      # claiming kind: :module for the same ref string does not match it.
+      overrides = [
+        %{kind: :module, ref: "shared-name", resolved_id: "mid", version: "1.0.0"}
+      ]
+
+      lookup = const_lookup({:ok, %{resolved_id: "sid", version: "1.0.0"}}, {:error, :not_found})
+
+      assert {:error, {:unresolved_pin_override, "shared-name"}} =
+               PinResolver.resolve(g, def_, lookup, overrides)
     end
   end
 

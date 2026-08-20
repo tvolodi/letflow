@@ -1,12 +1,18 @@
 defmodule Letflow.Engine.ExecutionError do
   @moduledoc """
   EE-10 (REQ-061) — execution error handling. Ports `instance.zig`'s
-  `setInstanceError()` (R-Co `~L3078`, its error-code table `~L4067`
-  unreachable in this environment — see
-  `lib/letflow/design/req061-execution-error-handling.md` §0/§12 OQ-1). This
-  module is **the single, shared path every engine-internal failure funnels
-  into** — the one place the `instance_projections.status: :error` write, the
-  `EXECUTION_ERROR` event append, and the eligibility check are implemented.
+  `setInstanceError()` (R-Co `instance.zig:3078`, `SetInstanceErrorArgs`
+  `instance.zig:289`). Verified directly against R-Co's source (GH#328,
+  ISS-0100, 2026-08-20) — field shape matches (§0 of the design doc); the
+  `error_type()` union here is deliberately **open**, unlike R-Co's own
+  closed 10-variant `ErrorType` enum, because this port collapses R-Co's
+  `SUB_PROCESS_*` four variants into one `:subprocess_interface_violation`
+  atom pending REQ-062 (design doc §2, §12 OQ-2) — see
+  `lib/letflow/design/req061-execution-error-handling.md` §0/§2/§12 OQ-1 for
+  the full comparison. This module is **the single, shared path every
+  engine-internal failure funnels into** — the one place the
+  `instance_projections.status: :error` write, the `EXECUTION_ERROR` event
+  append, and the eligibility check are implemented.
 
   `append_multi/3` matches `Letflow.Engine.TaskActivation`'s own
   `append_multi_from_existing_records/6` composable shape exactly (its own

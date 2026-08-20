@@ -28,4 +28,27 @@ affected_files:
   - lib/letflow/engine/execution_error.ex
 queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
 github_issue: https://github.com/tvolodi/letflow/issues/328
-status: open
+status: resolved
+resolution:
+  resolved_at: "2026-08-20T00:00:00Z"
+  summary: >
+    R-Co/src/engine/instance.zig read directly. setInstanceError() confirmed
+    at L3078-3182 (signature: pub fn setInstanceError(self: *InstanceStore,
+    allocator: std.mem.Allocator, args: SetInstanceErrorArgs)
+    SetInstanceErrorError!void). SetInstanceErrorArgs confirmed at L289-306.
+    The "error-code table" is a hardcoded switch (~L4060-4071, inside
+    buildExecutionErrorPayload/3) over R-Co's own closed 10-variant
+    ErrorType enum (L244-273) -- NOT a mapping data structure, which
+    corrects an inaccurate claim both flagged locations made about R-Co's
+    own shape. Letflow's field-for-field shape (error_args()) matches
+    SetInstanceErrorArgs exactly; Letflow's error_type() union is
+    deliberately open (unlike R-Co's closed enum) and deliberately coarser
+    (5 atoms vs R-Co's 10 variants, folding R-Co's 4 SUB_PROCESS_* variants
+    into one :subprocess_interface_violation pending REQ-062) -- both are
+    documented departures, not omissions. OQ-4 (req061 design doc) is also
+    now settled by the same read: R-Co's own ErrorType enum has no
+    hop-limit/unimplemented-node-type variant, confirming this design's
+    narrow Transition-error scoping already matched R-Co.
+  files_updated:
+    - lib/letflow/design/req061-execution-error-handling.md
+    - lib/letflow/engine/execution_error.ex

@@ -33,15 +33,18 @@ defmodule Letflow.Engine.PinRebind do
   it defines its own three-way eligibility check (`check_rebind_eligibility/1`,
   below).
 
-  ## `Reconstruction`/`PinResolver` reuse — no code change needed there
+  ## `Reconstruction`/`PinResolver` reuse
 
   This module calls `Letflow.Engine.PinResolver.reconstruct_effective_pins/2`
-  (REQ-059, unchanged) to obtain the instance's current effective pin set, and
-  appends its own `INSTANCE_PINS_REBOUND` event in a payload shape
-  `Letflow.Engine.PinResolver.merge_effective_pins/2` **already** folds correctly
-  (folds *every* `INSTANCE_PINS_REBOUND` event found, not just the most recent —
-  `pin_resolver.ex:424-427`) — no `Letflow.Engine.Reconstruction`/
-  `Letflow.Engine.PinResolver` code changes are part of this requirement.
+  (REQ-059, arity unchanged) to obtain the instance's current effective pin
+  set, and appends its own `INSTANCE_PINS_REBOUND` event in a payload shape
+  `Letflow.Engine.PinResolver.merge_effective_pins/3` folds — every
+  `INSTANCE_PINS_REBOUND` event found, not just the most recent. That fold's
+  provenance handling (rebound `source`/`resolved_id`/`source_event_id`) was
+  fixed under ISS-0078 (GH#299) after this requirement shipped; see
+  `pin_resolver.ex`'s own moduledoc and
+  `lib/letflow/design/iss-0078-pin-rebind-provenance.md` — no change to this
+  module was needed for that fix, the loss was entirely on the read side.
 
   ## `NOWAIT` locking convention
 

@@ -108,7 +108,31 @@ affected_files:
   - lib/letflow/engine/pin_resolver.ex
   - lib/letflow/design/req059-pin-resolver.md
   - lib/letflow/design/req060-pin-rebind.md
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0078-20260820
+resolved_at: "2026-08-20T07:56:09Z"
+resolution: >
+  Fixed 2026-08-20 (WF03-ISS0078-20260820), lib/letflow/design/iss-0078-pin-rebind-provenance.md
+  is the gate-approved fix design. lib/letflow/engine/pin_resolver.ex:
+  merge_effective_pins/2 -> /3, adding started_event_id as a third
+  parameter so source_event_id is never nil for an un-rebound pin;
+  apply_rebind_event/2 now sets a rebound entry's source to a new,
+  distinct :rebound value (not R-Co's :override) and resolved_id to nil
+  (never R-Co's change.new_version quirk, never left stale); an unknown-ref
+  rebind entry is appended rather than dropped. reconstruct_effective_pins/2
+  updated to thread the INSTANCE_STARTED event's own id through, with an
+  explicit nil-guard (SECURITY-REVIEWER finding, INV-8) so a malformed
+  event stream returns {:error, :instance_not_found} instead of crashing.
+  Zero functional change to lib/letflow/engine/pin_rebind.ex (moduledoc
+  prose only). Regression tests added/updated in
+  test/letflow/engine/pin_resolver_test.exs and
+  test/letflow/engine/pin_rebind_test.exs, shown to fail against pre-fix
+  code (git stash of the two implementation files) and pass post-fix.
+  mix test test/letflow/engine/{pin_resolver,pin_rebind}_test.exs:
+  53/53 passed. Full mix test: 1168/1182, all 14 failures pre-existing
+  and unrelated (plugin_interface_test.exs, engine_concurrency_test.exs,
+  engine_plugin_error_routing_test.exs, event_store/migrations_test.exs,
+  identity_migration_test.exs). GH#299 closed.
 github_issue: https://github.com/tvolodi/letflow/issues/299
 related:
   - ISS-0076

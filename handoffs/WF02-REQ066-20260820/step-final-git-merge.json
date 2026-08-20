@@ -1,0 +1,79 @@
+{
+  "handoff_id": "136d47ef-7941-458f-8f5c-90d829de67e1",
+  "run_id": "WF02-REQ066-20260820",
+  "workflow_id": "WF-02",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ066-20260820/step-final-git-merge.json",
+  "created_at": "2026-08-20T21:18:57Z",
+  "started_at": "2026-08-20T21:18:57Z",
+  "completed_at": "2026-08-20T21:27:41Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-066"],
+    "requirement_text": {
+      "REQ-066": "Port src/api/errors.zig (272 lines) and src/api/response.zig (69) as Letflow.Api.Error and Letflow.Api.Response -- the single response/error contract every S4 route emits. Nothing in this batch renders a response body by hand once these exist. errors.zig is an RFC 9457 Problem Details builder. Port: the ProblemDetails shape (type as an absolute URI under a configured base, title, status, detail, plus the trace id field errors.zig carries with a \"\" default), the per-status constructors (problemNotFound and its siblings for 400/401/403/404/409/422/429/500 -- enumerate them from the Zig source rather than guessing which exist), and serialisation to a JSON body. Emit Content-Type: application/problem+json on error responses, per RFC 9457, and state in the moduledoc whether R-Co does the same or emits application/json (check response.zig's CONTENT_TYPE_JSON usage) -- if Letflow diverges, that divergence is deliberate and documented, not accidental. response.zig defines the canonical HandlerResult (status_code, body, content_type defaulting to JSON) and the typed success constructors that keep positive responses on correct status codes (200 vs 201 vs 202 vs 204). In Elixir the conn IS the result carrier, so port these as functions that take and return a conn (send_json/3, created/2, no_content/1, and the error counterparts) rather than transliterating a HandlerResult struct -- Zig returns a value because it has no conn. State that translation in the moduledoc. SECURITY (INV-4, INV-5): an error body must never carry secret material, a raw Ecto/Postgrex error, or a stack trace -- detail is a caller-safe string chosen by the handler, and an unexpected internal error maps to a generic 500 problem document whose detail does not vary with the underlying exception. Separately, the not-found problem document is the exact response a cross-tenant probe receives (REQ-072 enforces the routing; this requirement guarantees the two bodies are byte-identical by construction, because both go through one constructor)."
+    },
+    "related_handoff_ids": ["ee1de850-ab90-4cb2-88ea-2088ff1b19ee"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ066-20260820/step-06-doc-updater.json"
+    ],
+    "owned_modules": ["lib/letflow/api/", "test/letflow/api/", "lib/letflow/design/req066-api-error-response.md"],
+    "branch_name": "feature/WF02-REQ066-20260820"
+  },
+  "task": {
+    "description": "WF-02 Step Final (git merge) per docs/agents/protocols/GIT_MERGE.md, branch feature/WF02-REQ066-20260820. All gates are green: CODE-DESIGN-VALIDATOR PASS, SECURITY-REVIEWER PASS (INV-1..INV-8 all recorded), REVIEWER PASS after one rework, TEST-DESIGN-VALIDATOR PASS after one rework, TEST-RUNNER PASS, RELEASE-VALIDATOR PASS, DOC-UPDATER PASS and independently verified by ORCH. The merge is pre-authorized -- do not pause to ask.\n\nSTEP 2 STAGING: several files are ORCH's and are still uncommitted in the working tree. Stage them BY EXPLICIT FILENAME (never `git add -A`, per GIT_MERGE.md step 2 and ISS-0023):\n  docs/issues/ISS-0106.yaml (new)\n  docs/issues/ISS-0107.yaml (modified -- ORCH backfilled queue_task_id/github_issue)\n  docs/issues/ISS-0108.yaml (new)\n  handoffs/orchestrator.log (modified -- APPEND-ONLY, must never shrink)\n  handoffs/registry.json (modified)\n  handoffs/WF02-REQ066-20260820/step-00-git-setup.json (new)\n  handoffs/WF02-REQ066-20260820/step-final-git-merge.json (this file, once you complete it)\nCheck `git status` for anything else that appeared since; stage only files belonging to this run.\n\nCONFLICT HANDLING -- read GIT_MERGE.md's block in full before resolving anything. Two hazards this project has actually been bitten by and that apply directly to this run:\n  1. `git checkout --ours`/`--theirs` is INVERTED during a rebase versus a merge. Do not use either flag from merge-trained habit; read the conflict markers or `git show :2:<path>` / `git show :3:<path>` and hand-resolve. This caused a real silent overwrite of a resolved issue record on main (ISS-0039).\n  2. This run adds THREE new docs/issues/ISS-NNNN.yaml files (0106, 0107, 0108). That directory is this project's most collision-prone path -- concurrent hosts independently picking the same next-free number is a documented, repeated occurrence. If a rebase produces an add/add on any of them, do NOT overwrite the other side: renumber THIS run's file to the next genuinely free id, update the ISS id inside the file, and repoint the GitHub issue body (GH#354 for 0106, GH#358 for 0107, GH#360 for 0108). Note also that an add/add on this path has previously landed WITHOUT git flagging it as a conflict at all -- so after `git rebase --continue` reports success, re-run `git diff --name-only --diff-filter=U | wc -l` as a hard check (must be 0), and diff each new issue file's pre- and post-rebase content rather than trusting the exit code.\n\nSTEP 7-8 PR: no CI is configured on this repo, so `gh pr merge` has no check to wait on -- per GIT_MERGE.md's Precondition, proceed on the strength of this run's own recorded gates. Use --squash.\n\nKNOWN, do not treat as a merge blocker: `mix compile --warnings-as-errors` and `mix format --check-formatted` both fail repo-wide on main itself (toolchain drift, filed ISS-0106/GH#354), and the full suite has 14-15 pre-existing environmental failures (ISS-0107/GH#358, ISS-0108/GH#360, and the ISS-0048/0050/0060/0062/0064 class). Scoped to this run's own files, format exits 0 and no new warning is introduced. If you run mix test after a rebase per GIT_MERGE.md step 5d, judge it against that known set -- a REQ-066 test failing is a real blocker, a recurrence of the known environmental set is not.\n\nPR body: use DOC-UPDATER's summary. Under a 'Forwarded, not fixed here' note list ISS-0106/GH#354, ISS-0107/GH#358, ISS-0108/GH#360.\n\nDo NOT call letflow-queue's release_lock yourself -- ORCH owns that and will do it immediately on your PASS.",
+    "acceptance_criteria": [
+      "all of this run's uncommitted artifacts staged by explicit filename and committed -- no git add -A",
+      "handoffs/orchestrator.log did not shrink",
+      "rebase onto origin/main completed with git diff --name-only --diff-filter=U returning 0 after --continue",
+      "each of the three new docs/issues/ISS-NNNN.yaml files verified post-rebase to still contain this run's own content, by content diff rather than by exit code",
+      "branch pushed, PR created with --squash merge completed",
+      "git log --oneline -1 shows the squash-merge commit and git status is clean",
+      "any merge-blocking failure distinguished from the known pre-existing environmental set, with evidence"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "WF-02 Step Final complete for REQ-066: branch rebased onto origin/main, one add/add conflict hand-resolved without overwriting the other side, PR #362 squash-merged into main. (1) STAGING: staged by explicit filename only, never `git add -A` -- docs/issues/ISS-0106.yaml, ISS-0107.yaml, ISS-0108.yaml, handoffs/orchestrator.log, handoffs/registry.json, handoffs/WF02-REQ066-20260820/step-00-git-setup.json, committed as c5e3012 (265 insertions, 0 deletions across 6 files). handoffs/orchestrator.log did NOT shrink: 932 lines at HEAD and 932 on origin/main, 943 after this run's append; `git diff --cached --numstat` showed 11 insertions / 0 deletions on that file. (2) CONFLICT -- the exact hazard the handoff warned about materialised. origin/main had advanced by one commit (21621e6, PR #356, the per-workspace LETFLOW_DB_PORT change from the letflow-2 workspace), and that commit added its OWN docs/issues/ISS-0107.yaml for an unrelated issue (\"letflow_check_test_test.exs's fake-mix fixture is POSIX-only\", discovered_by ORCH, GH issue unrelated to ours). This run had independently filed docs/issues/ISS-0107.yaml for TEST-RUNNER's promotion-test teardown race (GH#358). The rebase raised CONFLICT (add/add) on that path at commit 911adf1, then a second CONTENT conflict on the same path at c5e3012 (ORCH's queue_task_id/github_issue backfill hunk, which after the first resolution was pointing at main's file rather than ours). Neither `--ours` nor `--theirs` was used at any point, per the ISS-0039/GH#121 inversion warning; both stages were read explicitly via `git show :2:` / `git show :3:` and identified BY CONTENT (stage 2 = main's ORCH-filed Windows issue, stage 3 = this run's TEST-RUNNER-filed race). RESOLUTION: main's record was preserved untouched at ISS-0107, and THIS run's record was renumbered to ISS-0109 -- the next genuinely free id, established by scanning docs/issues/ across every remote branch (highest anywhere was 0107; 0106 and 0108 are this run's own). The 10-line backfill hunk from the second conflict was redirected onto ISS-0109 where it belonged. ISS-0109 carries a `renumbered_from: ISS-0107` field and a `renumber_note` explaining the collision and listing the pre-rebase artefacts that still say \"ISS-0107\". ISS-0108's three cross-references were repointed to ISS-0109. GH#358's body was repointed to docs/issues/ISS-0109.yaml with a renumber banner; the issue number itself is unchanged. Historical handoffs (step-04/05/06) and test/reports/report-20260820-WF02-REQ066-20260820.yaml were deliberately NOT rewritten -- they are immutable records of what was true when written, and the renumber_note makes them resolvable. (3) POST-REBASE HARD CHECKS, by content and not by exit code, as required: `git diff --name-only --diff-filter=U | wc -l` returned 0 after the final --continue; ISS-0106 pre- vs post-rebase content is IDENTICAL (the raw diff showed every line differing purely from LF->CRLF checkout conversion, confirmed with `diff --strip-trailing-cr`); ISS-0108 differs in exactly the 3 intended cross-reference lines and nothing else; ISS-0109 differs from the pre-rebase ISS-0107 in exactly 1 removed + 17 added lines (the id line plus the renumber block) with the body otherwise untouched; and docs/issues/ISS-0107.yaml on the rebased branch is byte-identical to `git show origin/main:docs/issues/ISS-0107.yaml`, proving the other side was not silently overwritten. README.md auto-merged cleanly and carries BOTH sides (main's LETFLOW_DB_PORT text and this run's problem+json text). (4) BUILD after rebase: `mix compile` exit 0; `mix format --check-formatted` scoped to this run's six files exit 0; `mix test` on the three REQ-066 files => \"Result: 40 passed\", exit 0, unchanged from pre-rebase. The remaining compile warnings are the known ISS-0106/GH#354 struct-update set in lib/letflow/engine/*, none in REQ-066's files. The full suite was deliberately NOT re-run at this step: the only conflicted path was a docs/issues YAML with zero code impact, the code-bearing half of the rebase is main's own already-merged PR #356, RELEASE-VALIDATOR had already run the full suite green-against-known this run, and main's newly-merged ISS-0107 documents that on this Windows host a full suite recurses into a real nested `mix test` and orphans a BEAM holding DB connections. No merge blocker: nothing in the known environmental set (ISS-0106/0107/0108/0109 and the ISS-0048/0050/0060/0062/0064 class) was mistaken for one, and no REQ-066 test failed. (5) MERGE: pushed with --force-with-lease (the remote branch was stale at the pre-rebase base aafcbc8 and carried no one else's commits), PR #362 created with DOC-UPDATER's summary plus a 'Forwarded, not fixed here' section naming ISS-0106/GH#354, ISS-0109(filed as 0107)/GH#358 and ISS-0108/GH#360, then squash-merged with --delete-branch. Local main fast-forwarded and the feature branch deleted locally and remotely.",
+    "artifacts_out": [
+      "branch: feature/WF02-REQ066-20260820 (squash-merged into main via PR #362, branch deleted)",
+      "docs/issues/ISS-0106.yaml",
+      "docs/issues/ISS-0108.yaml",
+      "docs/issues/ISS-0109.yaml (renumbered from ISS-0107 during rebase conflict resolution)",
+      "handoffs/orchestrator.log",
+      "handoffs/registry.json",
+      "handoffs/WF02-REQ066-20260820/step-00-git-setup.json",
+      "handoffs/WF02-REQ066-20260820/step-final-git-merge.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "ISS-NNNN id collision recurred, as the handoff predicted: this run's ISS-0107 and the letflow-2 workspace's ISS-0107 (PR #356) were allocated concurrently for unrelated issues. Resolved by renumbering this run's record to ISS-0109 without touching main's. The underlying cause -- concurrent hosts independently picking the next free number with no reservation mechanism -- is unfixed and will recur. Worth ORCH's attention as a candidate for a queue-allocated id."
+      },
+      {
+        "severity": "MINOR",
+        "description": "Pre-rebase artefacts of this run (handoffs step-04/05/06, test/reports/report-20260820-WF02-REQ066-20260820.yaml, and this run's docs/status/requirement_status.yaml entry) refer to ISS-0109 by its original number ISS-0107, which on main now names a different issue. Left as written on purpose -- rewriting immutable records is an anti-pattern this project has already been bitten by. ISS-0109's renumber_note makes them resolvable."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ066-20260820",
+      "commit_sha_list": [
+        "c5e3012 (pre-rebase: finalize artifacts commit)",
+        "e63c4fd (post-rebase branch tip, pushed)",
+        "b7bd508 (post-rebase: TEST-RUNNER Step 4 commit, carrying the ISS-0107->ISS-0109 add/add resolution)",
+        "full post-rebase range origin/main..HEAD: e63c4fd c877d8b a6356a7 a5a5d0c c5d3d24 b7bd508 61abea0 5e4ca38 3da62e7 d356f7f 56dcb70 55807d4 9538d07 9bc9ac3 5aa9806 351da7c f89afd4 daae3ef 351e066 a01c04a a07ec86 dfafefd"
+      ],
+      "remote_branch": "origin/feature/WF02-REQ066-20260820 (deleted after squash merge)",
+      "push_status": "pushed",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/362",
+      "pr_create_error": null
+    },
+    "next_action": "ORCH marks run WF02-REQ066-20260820 COMPLETED and releases the owned_modules lock (release_lock was deliberately NOT called by ELIXIR-DEV). Two follow-ups for ORCH's queue, neither blocking: (a) the ISS-NNNN concurrent-allocation collision recurred and has no reservation mechanism; (b) GH#358 now points at docs/issues/ISS-0109.yaml."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

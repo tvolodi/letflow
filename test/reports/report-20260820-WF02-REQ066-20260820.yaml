@@ -1,0 +1,266 @@
+report_id: report-20260820-WF02-REQ066-20260820
+agent: TEST-RUNNER
+requirement: REQ-066
+workflow_step: WF-02 Step 4
+handoff: handoffs/WF02-REQ066-20260820/step-04-test-runner.json
+branch: feature/WF02-REQ066-20260820
+commit: 2201ac8
+date: 2026-08-20
+command: "mix test"
+seed: 948844
+max_cases: 32
+
+toolchain:
+  mix: "Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  erlang: "Erlang/OTP 29 [erts-17.0.5] [64-bit] [smp:16:16] [jit:ns]"
+  mix_path: "/c/Program Files/Elixir/bin/mix (local toolchain; Docker NOT required for mix test)"
+
+environment:
+  postgres: >
+    letflow-postgres-1 (0.0.0.0:5462->5432), reported "Up 20 hours (healthy)" by
+    docker ps at the start of this run. Matches config/test.exs's port: 5462.
+    `docker compose up -d` was NOT run -- per docs/anti-patterns.md the shared
+    container is never started from a secondary checkout, and it was already healthy.
+    A second container letflow-2-postgres-1 exists on port 5472 for the other
+    worktree and was not used by this run.
+  contention: >
+    `grep -c too_many_connections` over the full run log = 0. No Postgrex saturation
+    during this run. A post-run `select count(*) from pg_stat_activity` returned 6,
+    i.e. no other mix test invocation was connected at that moment. Whether a
+    concurrent run overlapped the middle of this 608s suite could not be established
+    retroactively -- see ISS-0107.
+
+verdict: PASS
+
+summary_line: "Result: 1216/1230 passed (5/5 properties, 1211/1225 tests)"
+duration: "Finished in 608.7 seconds (5.3s async, 603.3s sync)"
+
+raw_output_tail: |
+  Finished in 608.7 seconds (5.3s async, 603.3s sync)
+
+  Result: 1216/1230 passed (5/5 properties, 1211/1225 tests)
+  Failed: 14 tests
+
+exit_code: 2
+
+failure_count: 14
+failures_caused_by_req_066: 0
+failures_pre_existing_already_filed: 12
+failures_pre_existing_newly_filed: 2
+
+req_066_own_tests:
+  files:
+    - test/letflow/api/error_test.exs
+    - test/letflow/api/response_test.exs
+    - test/letflow/router_test.exs
+  expected_by_handoff: 40   # 14 + 21 new, plus 5 in the updated router_test
+  result: PASS
+  evidence:
+    - method: "absent from the full-suite failure list"
+      detail: >
+        All 14 numbered failure blocks in the full run were extracted; none names
+        Letflow.Api.ErrorTest, Letflow.Api.ResponseTest, or Letflow.RouterTest, and
+        none names a file under test/letflow/api/ or test/letflow/router_test.exs.
+    - method: "isolation run of exactly the three files"
+      detail: |
+        mix test test/letflow/api/error_test.exs test/letflow/api/response_test.exs \
+                 test/letflow/router_test.exs
+        Running ExUnit with seed: 164636, max_cases: 32
+        ........................................
+        Finished in 0.1 seconds (0.1s async, 0.00s sync)
+        Result: 40 passed
+        => 40 passed, exactly the 40 the handoff predicted (14 + 21 + 5), 0 failed,
+           0 skipped, 0 excluded.
+  compile_of_new_leak_helpers:
+    note: >
+      The handoff flagged that TEST-DESIGN-VALIDATOR never compiled
+      test/letflow/api/response_test.exs (compiling it means running it), so this run
+      was its first real compile. It compiled cleanly: `grep -c '^warning:'` over the
+      full run log = 0, and the file's 21 tests all pass. No finding here.
+
+failures:
+  - group: Letflow.IdentityMigrationTest
+    count: 10
+    file: test/letflow/identity_migration_test.exs
+    numbered_in_run: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+    root_error: |
+      ** (Postgrex.Error) ERROR 23503 (foreign_key_violation) insert or update on table
+      "tenant_schemas" violates foreign key constraint "tenant_schemas_tenant_id_fkey"
+
+          table: tenant_schemas
+          constraint: tenant_schemas_tenant_id_fkey
+
+      Key (tenant_id)=(c3a201b9-04da-4b0d-bfb6-bba6a18800ea) is not present in table "tenants".
+      stacktrace:
+        (ecto_sql 3.14.0) lib/ecto/adapters/sql.ex:1121: Ecto.Adapters.SQL.raise_sql_call_error/1
+        test/letflow/identity_migration_test.exs:242: Letflow.IdentityMigrationTest.restore_orphaned_guard_backup_rows!/0
+        test/letflow/identity_migration_test.exs:1: Letflow.IdentityMigrationTest.__ex_unit__/2
+    uniformity: >
+      All 10 share the byte-identical root error and stacktrace through
+      restore_orphaned_guard_backup_rows!/0 at line 242 -- one root cause failing the
+      module's shared setup, not 10 independent defects.
+    determination: "PRE-EXISTING -- already filed (ISS-0048 / ISS-0050 / ISS-0060 / ISS-0062 / ISS-0064 class). NOT caused by REQ-066."
+    evidence:
+      - method: "identical reproduction of a previously recorded run"
+        detail: >
+          test/reports/report-20260819-WF02-REQ109-20260819.yaml records this exact
+          10-failure group on a DIFFERENT branch (feature/WF02-REQ109-20260819,
+          commit 2916ddc), with the same stacktrace AND the same literal orphaned
+          tenant_id c3a201b9-04da-4b0d-bfb6-bba6a18800ea. A stale row in
+          public.iss060_tenant_schemas_guard_backup, left by an interrupted earlier
+          run in this shared database, persists across branches. Same UUID on two
+          unrelated branches is direct evidence the cause predates this branch.
+      - method: "structural -- branch diff"
+        detail: >
+          `git diff --stat main...HEAD` lists 19 files (11 handoff JSONs,
+          lib/letflow/api/error.ex, lib/letflow/api/response.ex,
+          lib/letflow/design/req066-api-error-response.md, lib/letflow/router.ex,
+          test/letflow/api/error_test.exs, test/letflow/api/response_test.exs,
+          test/letflow/router_test.exs, test/specs/REQ-066.md). Neither
+          test/letflow/identity_migration_test.exs nor lib/letflow/identity_migration.ex
+          appears.
+      - method: "root-cause analysis"
+        detail: >
+          An FK violation restoring a row into public.tenant_schemas whose parent
+          tenants row was deleted by another run's teardown. Letflow.Api.Error and
+          Letflow.Api.Response issue no database queries at all. No causal path exists.
+    action: "FORWARDED -- already covered by the ISS-0048/0050/0060/0062/0064 class. No new issue filed; no test loosened, no fix attempted (out of this run's scope per the handoff)."
+
+  - group: Mix.Tasks.Letflow.Check.TestTest
+    count: 2
+    file: test/mix/tasks/letflow_check_test_test.exs
+    numbered_in_run: [1, 2]
+    failing_tests:
+      - "raises and reports the offending line when the target substring is present, even though the underlying subprocess exited 0 (line 105)"
+      - "passes (no raise) when the subprocess exits 0 and the target substring is absent, even with unrelated warnings present (line 126)"
+    root_error: |
+      ** (ExUnit.TimeoutError) test timed out after 60000ms.
+      stacktrace:
+        (letflow 0.1.0) lib/mix/tasks/letflow.check.test.ex:110: Mix.Tasks.Letflow.Check.Test.collect/2
+        (letflow 0.1.0) lib/mix/tasks/letflow.check.test.ex:63: Mix.Tasks.Letflow.Check.Test.run/1
+        (ex_unit 1.20.3) lib/ex_unit/capture_io.ex:325: ExUnit.CaptureIO.do_capture_gl/2
+        test/mix/tasks/letflow_check_test_test.exs:119: (test)
+    mechanism: >
+      Both tests spawn a real external subprocess and block in collect/2 until
+      {:exit_status, _}. Both hit the default 60s ExUnit timeout inside collect/2. The
+      run log shows the spawned subprocess retrying Keycloak metadata loads against the
+      intentionally-unreachable placeholder issuer (placeholder-keycloak.invalid,
+      :nxdomain) with backoffs of 19614ms, 12671ms and 11768ms logged in the same
+      window -- that alone approaches the 60s budget before any real work.
+    determination: "PRE-EXISTING -- reproduces the previously recorded run exactly. NOT caused by REQ-066."
+    evidence:
+      - method: "identical reproduction of a previously recorded run"
+        detail: >
+          report-20260819-WF02-REQ109-20260819.yaml records the same two tests, at the
+          same line numbers (105 and 126), with the same TimeoutError through
+          collect/2, on an unrelated branch.
+      - method: "structural -- branch diff"
+        detail: >
+          Neither test/mix/tasks/letflow_check_test_test.exs nor
+          lib/mix/tasks/letflow.check.test.ex is in this branch's 19-file diff.
+      - method: "root-cause analysis"
+        detail: >
+          A wall-clock timeout waiting on an external subprocess, aggravated by DNS
+          backoff against a deliberately unreachable placeholder issuer. Load-dependent,
+          not behavioural, and touching no REQ-066 code path.
+    action: "FORWARDED -- pre-existing environmental/load failure, same set already recorded in the REQ-109 report. No new issue filed for it here beyond the cross-reference; no fix attempted."
+
+  - group: Letflow.Definitions.PromotionTest + Letflow.Definitions.PromotionAssertionRerunTest
+    count: 2
+    numbered_in_run: [3, 14]
+    files:
+      - test/letflow/definitions/promotion_test.exs
+      - test/letflow/definitions/promotion_assertion_rerun_test.exs
+    failing_tests:
+      - "promote_definition/3 -- opts[:event_appender] an event_appender returning {:error, _} propagates unchanged, after the version-pointer move has already committed (promotion_test.exs:378)"
+      - "INV-AR-6 -- failed replay stays :failed after teardown failure: release failure after a failing replay stays :failed, event still appended (promotion_assertion_rerun_test.exs:639)"
+    root_error_3: |
+      match (=) failed
+      code:  assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+      right: {:error, {:migration_failed, %MatchError{term: {:error, %Postgrex.Error{
+               postgres: %{code: :invalid_schema_name, pg_code: "3F000",
+                 message: "schema \"tenant_8111baf7cec4418592f94a3a68a71722\" does not exist"}}}}}}
+      stacktrace:
+        test/letflow/definitions/promotion_test.exs:96: Letflow.Definitions.PromotionTest.provisioned_tenant/0
+        test/letflow/definitions/promotion_test.exs:380: (test)
+    root_error_14: |
+      match (=) failed on Definitions.apply_promotion_assertion_rerun/6
+      right: {:error, {:transaction_failed, %Postgrex.Error{postgres: %{
+               code: :undefined_table, pg_code: "42P01",
+               message: "relation \"tenant_cb34d76b2b9c498a8b38f065c7682989.promotion_assertion_runs\" does not exist"}}}}
+      stacktrace:
+        test/letflow/definitions/promotion_assertion_rerun_test.exs:647: (test)
+    mechanism: >
+      Direct log evidence for failure 3 -- the schema was created and committed, then
+      dropped 750ms later by a teardown path, then the test's own replay_migrations/1
+      reached it:
+        01:43:45.746  CREATE SCHEMA IF NOT EXISTS "tenant_8111baf7cec4418592f94a3a68a71722"
+        01:43:45.755  commit
+        01:43:46.501  DROP SCHEMA IF EXISTS "tenant_8111baf7cec4418592f94a3a68a71722" CASCADE
+        01:43:46.504  DELETE FROM "tenant_schemas" WHERE tenant_id = 8111baf7-...
+        01:43:46.507  DELETE FROM "tenants"        WHERE id = 8111baf7-...
+      Letflow.TenantSchemaReaper is EXCLUDED as the dropper: it only reclaims rows whose
+      provisioned_at is older than its 300s min_age (test/support/tenant_schema_reaper.ex
+      lines 43 and 66), and this row's provisioned_at was ~N[2026-08-20 20:43:45] -- one
+      second old. Failure 14 is the same shape one level deeper (schema present, the
+      promotion_assertion_runs table inside it gone). Full candidate analysis is in the
+      issue; not root-caused here, and deliberately not guessed at.
+    determination: "PRE-EXISTING CLASS, NOT caused by REQ-066 -- newly filed as ISS-0107."
+    evidence:
+      - method: "structural -- branch diff"
+        detail: >
+          Neither failing test file, nor lib/letflow/definitions/, nor
+          lib/letflow/tenant_provisioning.ex, nor test/support/tenant_schema_reaper.ex
+          appears in this branch's 19-file `git diff --stat main...HEAD`.
+      - method: "root-cause analysis"
+        detail: >
+          Both failures are DDL-level absence of a Postgres schema/table during tenant
+          provisioning and migration replay, with the drop observed in the log as an
+          independent teardown 750ms after creation. REQ-066 adds two pure conn-shaping
+          modules (Letflow.Api.Error, Letflow.Api.Response) that issue no queries, plus
+          a router change; neither failing module references the router.
+      - method: "isolation run"
+        detail: >
+          The three REQ-066 files pass 40/40 in 0.1s with no tenant schema involved.
+      - method: "honest limitation"
+        detail: >
+          Unlike the other 12, these 2 are NOT present in the previous recorded run
+          (report-20260819-WF02-REQ109-20260819.yaml). They are therefore new relative
+          to that baseline and could not be attributed by identical reproduction. The
+          attribution above rests on the structural diff and the logged drop sequence,
+          not on precedent. They were NOT silently ignored -- ISS-0107 was filed.
+    action: "FILED as docs/issues/ISS-0107.yaml (next free number; no existing ISS file overwritten). Not covered by ISS-0106 (that is the format/warnings toolchain-drift issue) and not by ISS-0050 (scoped to IdentityMigrationTest)."
+
+pre_existing_gates_not_re_run:
+  note: >
+    Per the handoff, `mix compile --warnings-as-errors` (14 struct-update warnings under
+    Elixir 1.20/OTP 29) and `mix format --check-formatted` (4 files) fail on main itself
+    and are already filed as ISS-0106 / GH#354 / queue task 170. Neither blocks mix test.
+    They were not re-diagnosed and not fixed here. Plain `mix compile` succeeded as part
+    of this run (0 warnings printed with `^warning:` at the start of a line in the test
+    compile pass).
+
+acceptance_criteria_check:
+  - criterion: "mix test was actually run against the full suite, with the real output quoted"
+    met: true
+    detail: "Full `mix test` (no file arguments), 608.7s, exit code 2. Summary and every failure block quoted verbatim above from the captured 9.4MB run log."
+  - criterion: "test/reports/report-20260820-WF02-REQ066-20260820.yaml written with the actual results"
+    met: true
+    detail: "This file."
+  - criterion: "the 35 new REQ-066 tests and the 5 router tests are accounted for in the totals"
+    met: true
+    detail: "All 40 present and passing; isolation run returned exactly 'Result: 40 passed'. None appears in the full-suite failure list."
+  - criterion: "every failure is attributed either to this run's own change or to a pre-existing condition, with evidence"
+    met: true
+    detail: "14/14 attributed. 12 by identical reproduction on an unrelated branch plus structural diff; 2 by structural diff plus the logged drop sequence, with the limitation stated explicitly."
+  - criterion: "no pre-existing failure was silently fixed or silently ignored"
+    met: true
+    detail: "No test file was edited and no application code was touched by this step. 12 forwarded against the existing ISS class, 2 newly filed as ISS-0107."
+
+artifacts_out:
+  - test/reports/report-20260820-WF02-REQ066-20260820.yaml
+  - docs/issues/ISS-0107.yaml
+
+next_action: >
+  Proceed to WF-04 Step 1 (RELEASE-VALIDATOR), which re-runs the suite independently.
+  ISS-0107 needs an ISSUE-FIXER diagnosis run; it does not block REQ-066.

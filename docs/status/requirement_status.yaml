@@ -5522,3 +5522,19 @@ history:
       parsing anywhere in the diff pipeline. :string confirmed correct. Updated
       req041-pack-update-diff-schema.md OQ-3 to RESOLVED and ISS-0097.yaml to
       status: resolved. Closing GH#325.
+  - req: REQ-109
+    event: revised
+    agent: REQ-ANALYST
+    at: 2026-08-20T06:30:15Z
+    note: >
+      GH#308 (ISS-0090): AC4's literal text required an appended
+      VARIABLE_OVERWRITTEN event, which REQ-048's INV-EE48-5 forbids --
+      merge outcomes are embedded as payload.merged_variable_events inside
+      the single TASK_COMPLETED event (lib/letflow/engine.ex:2245,
+      append_task_completed_event/5's own comment). The shipped code and
+      test/letflow/engine_variable_schema_merge_test.exs:302-319 were
+      already correct (asserting merged_variable_events populated AND
+      events_of_type(..., "VARIABLE_OVERWRITTEN") == []); only the AC text
+      was wrong. Replaced the "appends a VARIABLE_OVERWRITTEN event" clause
+      with wording matching INV-EE48-5, per the issue's own recommended
+      fix. No code or test changes -- requirement text only. Closing GH#308.

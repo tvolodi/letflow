@@ -65,9 +65,42 @@ When the queue is unreachable, ORCH reports `no_eligible_task (queue unreachable
 stops — it does not silently, or even explicitly, degrade to file-order selection. This
 does not block work that is *not* agent-selected: a specific `REQ-XXX` named directly by
 the user, or another human-originated instruction, is not "agent discretion over
-selection" and may still proceed without the queue — but ORCH must still attempt to
-`set_lock`/`register_task` it against the queue once reachable (see the reconciliation
-note below), and must state plainly that the queue was not consulted for selection.
+selection" and may still proceed without the queue for *selection* purposes — but see
+"A human names a specific issue" below: skipping selection is not the same as skipping
+the queue's claim/release entirely, and doing so leaves a real duplicate-work window
+open to any other host running `get_next_task` against the same still-open item.
+
+### Reachability checks must not have side effects
+
+**Test reachability with `GET /health`** (no auth required, touches nothing) —
+**never** with `get_next_task` used as a probe. `get_next_task` is not read-only: it
+atomically claims and locks whatever it returns, and its GitHub-import step can also
+mutate queue state (importing not-yet-tracked open issues as new tasks) even when the
+claim itself is later released. A `get_next_task` call made "just to check the service
+is up" with a disposable `agent_id` (e.g. `"probe"`) still produces a real lock on a
+real task that a concurrent host could have been about to claim — release it
+immediately if this happens by mistake, the same as any other hand-back (2026-08-20,
+ISS-0086/GH#303's own resolution run — this happened for real, see
+`docs/anti-patterns.md`).
+
+### A human names a specific issue/GH-issue-number directly
+
+Selection is exempt from the Hard Rule (above), but **locking is not** — the task still
+needs to be claimed before work starts and released when done, or nothing stops a second
+host's own `get_next_task` from independently claiming the same still-open item mid-run.
+Bounded procedure (full detail and rationale in `ISSUE_QUEUE.md`'s "Picking up a queued
+issue later" section — this is the summary):
+
+1. Known `queue_task_id` (recorded in the issue's yaml)? → `set_lock` it directly.
+2. Not known? → exactly **one** real `get_next_task` call, real `agent_id`. Matches by
+   `github_issue_number` → proceed locked, backfill `queue_task_id`. Doesn't match →
+   `release_lock` it back to `open` (no `status`) immediately, report the mismatch, do
+   not chase further down the stack.
+3. On completion: `release_lock(status: "done")` whatever was actually locked in 1/2. If
+   2 never found a match, state that plainly — the queue's mirror stays out of sync for
+   that item, bounded risk once its GitHub issue is closed (closed issues are never
+   re-imported, see the "GitHub Issues visibility" section's `get_next_task` bullet
+   below), but still a real gap worth noting.
 
 **Legacy note — recovering from a *pre-2026-08-19* fallback session.** Before this rule
 existed, a requirement completed in fallback mode still had a real, already-registered
@@ -171,10 +204,16 @@ priority (below); there is no reliable way for the service to infer it after the
 so ORCH must state it explicitly on every `register_task` call.
 
 Returns the created task including its `impl_order` (the implementation sequence
-number — this is what get_next_task sorts by within a `task_type`). Record the returned
-`impl_order` back into the requirement's entry in `docs/requirements.yaml` (a new
-`impl_order:` field, or a comment — see the migration note below) so a human/agent
-reading the file can cross-reference which queue task a REQ-ID maps to.
+number — this is what get_next_task sorts by within a `task_type`, and doubles as the
+task `id` used by `set_lock`/`release_lock`). Record it back into the source record so a
+human/agent reading the file can cross-reference which queue task it maps to:
+- `task_type: "requirement"` → the requirement's entry in `docs/requirements.yaml` (a
+  new `impl_order:` field, or a comment — see the migration note below).
+- `task_type: "issue"` → the issue's entry in `docs/issues/ISS-NNNN.yaml`, a
+  `queue_task_id:` field (added 2026-08-20, `ISSUE_QUEUE.md`'s matching update) — this
+  is what makes a later WF-03 run able to `set_lock` the exact task directly instead of
+  gambling on `get_next_task`'s claim order (see "A human names a specific issue"
+  below).
 
 **A new issue discovered mid-run still gets a number** — this is the literal
 requirement from the design brief. `register_task` is the only source of `impl_order`
@@ -215,10 +254,20 @@ the requirement backlog FIFO exactly as before this priority split existed.
   every open task's dependencies aren't done yet, or everything open is already
   locked). Report this plainly — it is not an error to work around.
 
-### 3. `set_lock` — re-acquire a lock (recovery path)
+### 3. `set_lock` — lock a task you already know the id of
 
-**Who calls this:** `ORCH` only, and only for recovery — re-claiming a task this same
-host already held before a crash/restart, using the same `agent_id`.
+**Who calls this:** `ORCH` only. Two legitimate uses:
+- **Recovery** — re-claiming a task this same host already held before a crash/restart,
+  using the same `agent_id`.
+- **Targeted claim of a known-id task named directly by a human** — see "A human names a
+  specific issue" below. **This is not merely a recovery mechanism at the API level**:
+  per `letflow-queue`'s own `README.md`, the service accepts any `agent_id` on an
+  unlocked task, not only one that previously held it — "Unlocked, or already locked by
+  the same `agent_id` → `200`... Locked by a *different* `agent_id` → `409 Conflict`."
+  This corrects an earlier draft of this doc, which undersold `set_lock` as
+  recovery-only and left no documented way to target-claim a specific already-known task
+  id outside the `get_next_task` priority order (2026-08-20, ISS-0086/GH#303's own
+  resolution run).
 
 ```bash
 curl -X POST https://queue-test.ai-dala.com/tasks/42/lock \
@@ -230,6 +279,15 @@ curl -X POST https://queue-test.ai-dala.com/tasks/42/lock \
 409 Conflict means another host currently holds it — do not force past this without
 using `release_lock`'s `force` override deliberately and with a stated reason (see
 below).
+
+**This only works if the id is already known.** There is no lookup-by-`github_issue_number`
+or lookup-by-title endpoint (the service is deliberately four operations, per its own
+README's "Design" section) — the id has to come from a prior `register_task` response
+(now recorded as `queue_task_id` in `docs/issues/ISS-NNNN.yaml` or as `impl_order` in
+`docs/requirements.yaml`, per `ISSUE_QUEUE.md`'s 2026-08-20 update) or from having seen
+it in a prior `get_next_task`/`set_lock` response. An issue with no recorded id and no
+prior sighting cannot be target-claimed at all — see "A human names a specific issue"
+below for the bounded fallback.
 
 ### 4. `release_lock` — release a claim, optionally transitioning status
 

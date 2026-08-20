@@ -1241,6 +1241,19 @@ defmodule Letflow.Engine do
 
   @type complete_opts :: [prefix: String.t()]
 
+  # `{:error, {:variable_schema_lookup_failed, VariableSchema.error_reason()}}` was
+  # removed from this union (GH#310 / ISS-0091): neither member of
+  # `VariableSchema.error_reason/0` is reachable on this call path --
+  # `:missing_prefix` is foreclosed by the tenant resolution above (before
+  # `run_complete_task/6` is even entered), and `:invalid_definition_id` by
+  # `InstanceProjection.definition_id`'s column being `NOT NULL` (now reflected in
+  # that struct's own `@type t`, see its moduledoc). `merge_output_variables/7`
+  # still maps that lookup failure into the same tuple internally -- deliberately
+  # not removed, see its own comment -- but a value no caller of this function can
+  # ever observe has no business in this *public* @spec, where it would only
+  # obligate every exhaustive `case` to handle a clause that can't match. The
+  # trailing `{:error, term()}` member already covers it structurally, so nothing
+  # about the runtime contract narrows.
   @type complete_error ::
           {:error, :invalid_output_variables}
           | {:error, :invalid_task_id}
@@ -1261,7 +1274,6 @@ defmodule Letflow.Engine do
           | {:error,
              {:instance_execution_error, error_type :: ExecutionError.error_type(),
               affected :: ExecutionError.affected()}}
-          | {:error, {:variable_schema_lookup_failed, VariableSchema.error_reason()}}
           | {:error, Ecto.Changeset.t()}
           | {:error, term()}
 
@@ -1631,6 +1643,16 @@ defmodule Letflow.Engine do
   # Unlike the two {:execution_error, _} routings, a lookup failure is NOT a
   # business outcome: it returns {:error, _} and aborts the Multi (req109
   # §5.3).
+  #
+  # GH#310 / ISS-0091: this @spec's {:variable_schema_lookup_failed, _} member is
+  # accurate to this function's own body (the `else` clause below still produces
+  # it) but is, as of that issue, unreachable in practice -- both
+  # VariableSchema.error_reason() members are foreclosed before this function is
+  # ever called from complete_task/3 (see that function's own complete_error()
+  # comment). Kept here deliberately: this is a private step function whose @spec
+  # should describe what it can locally return, not what its one caller happens to
+  # guarantee upstream. Do not read its presence here as contradicting
+  # complete_error()'s narrower, public-facing union above.
   @spec merge_output_variables(
           InstanceProjection.t(),
           Ecto.UUID.t() | nil,

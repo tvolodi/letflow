@@ -86,6 +86,25 @@ defmodule Letflow.EventStore.InstanceProjection do
   `prefix: schema_name` explicitly at call time rather than relying on a
   compile-time prefix.
 
+  ## `definition_id` is non-nullable at the Elixir level (GH#310 / ISS-0091)
+
+  The column is `NOT NULL` (confirmed above) and `insert_changeset/2` requires
+  the field, so no row this schema represents can have a nil `definition_id`
+  after insert -- `update_changeset/2` doesn't even cast it (immutable, per
+  that function's own doc). `@type t`, below, previously left every field
+  implicitly `term()` (`@type t :: %__MODULE__{}`), which is what let
+  `Letflow.Engine.VariableSchema.validate_definition_id/1`'s nil guard read as
+  a real defence: a reader relying on the struct's type alone would see
+  `Ecto.UUID.t() | nil` and reasonably write exactly that guard. It defends a
+  state the schema forbids, not one that occurs -- fixed here by typing
+  `definition_id` explicitly. The guard itself is deliberately left in place:
+  `VariableSchema.fetch_schemas/3` and `variable_validations/5` are that
+  module's public entry points, not sealed to this struct as their only
+  possible caller. What changed downstream is that `Letflow.Engine.complete_task/3`'s
+  own public `@spec` no longer advertises the resulting
+  `{:variable_schema_lookup_failed, _}` tuple as one of its returns, since
+  nothing on that call path can produce it.
+
   ## No `tenant_id` column (Decision 0006 D2)
 
   This table carried `tenant_id` until Decision 0006 D2
@@ -130,7 +149,7 @@ defmodule Letflow.EventStore.InstanceProjection do
     timestamps(inserted_at: :started_at, type: :utc_datetime_usec)
   end
 
-  @type t :: %__MODULE__{}
+  @type t :: %__MODULE__{definition_id: Ecto.UUID.t()}
   @type status :: :active | :completed | :cancelled | :error
 
   @doc """

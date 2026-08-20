@@ -93,7 +93,42 @@ description: >
 affected_files:
   - lib/letflow/engine.ex
   - lib/letflow/event_store/instance_projection.ex
-status: open
+status: resolved
+resolved_at: 2026-08-20T00:00:00Z
+resolution: >
+  Fixed in dependency order, per the scoping note and the follow-up comment on
+  GH#310.
+
+  FINDING 2 (root cause): lib/letflow/event_store/instance_projection.ex's
+  `@type t` now types `definition_id` explicitly as `Ecto.UUID.t()` (was
+  implicitly `term()` via the bare `@type t :: %__MODULE__{}`), matching the
+  column's `NOT NULL` constraint. A moduledoc section explains why and cross-
+  references this issue.
+
+  FINDING 1 (downstream consequence): lib/letflow/engine.ex's `complete_error()`
+  type no longer lists `{:error, {:variable_schema_lookup_failed,
+  VariableSchema.error_reason()}}` -- per the follow-up comment's sharper
+  framing, this guard is not genuine defence-in-depth (the state is forbidden by
+  the DDL, not merely unreached), so its downstream @spec member is dropped
+  rather than documented-and-kept. The trailing `{:error, term()}` member
+  already covers it structurally, so no caller-visible contract narrows.
+  `merge_output_variables/7`'s own (private) @spec is deliberately left
+  unchanged -- it still describes what that function's body can locally
+  produce -- with a comment explaining the asymmetry.
+
+  `VariableSchema.validate_definition_id/1` itself (lib/letflow/engine/variable_schema.ex)
+  is intentionally NOT removed: `fetch_schemas/3`/`variable_validations/5` are
+  that module's public entry points, not sealed to InstanceProjection as their
+  only possible caller, so the guard remains a legitimate boundary defence
+  there. Its comment is updated to stop citing the now-fixed nullable typing as
+  the reason it exists.
+
+  test/letflow/engine_variable_schema_merge_test.exs's "NOT TESTED HERE" block
+  updated to record the resolution rather than describe it as still-open.
+
+  The suggested cheap follow-up (a sweep for other Ecto fields typed nullable
+  over NOT NULL columns) was deliberately not run -- the yaml's own scoping_note
+  says not to schedule it on the evidence of one instance.
 github_issue: https://github.com/tvolodi/letflow/issues/310
 related:
   - ISS-0088

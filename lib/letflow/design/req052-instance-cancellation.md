@@ -576,23 +576,40 @@ Also states, per §2's own required content: the `Letflow.ParallelApproval`/
 
 ## 11. Open questions — explicitly listed, not silently resolved
 
-**OQ-1 (MINOR).** `cancel_attrs()` (§3) carries no cancellation-reason/note field. No
-acceptance criterion names one, and R-Co's own literal `cancelInstance` signature is
-unreachable in this environment (§0's access gap). Flagged for REVIEWER to confirm no
-`reason`/`note` field is expected, or to add one as a small follow-up if S4's future
-`POST /instances/:id/cancel` body needs to carry one through.
+**OQ-1 — RESOLVED (GH#326, ISS-0098, 2026-08-20).** R-Co's own `cancelInstance()`
+(`instance.zig:2513–2739`) was read directly. Verdict: its literal signature —
+`(self, allocator, task_store, instance_id, actor_id)` — carries no `reason`/`note`
+parameter, confirming `cancel_attrs()` (§3) needs none either. Bonus finding, not itself
+part of this OQ but adjacent: R-Co's signature also carries no caller-supplied
+`idempotency_key` — R-Co generates one internally (fresh random UUIDv4,
+`instance.zig:2659–2663`) rather than accepting it from the caller, which this design's own
+`cancel_attrs()` does (§3, `required(:idempotency_key)`). This is a genuine shape divergence
+from R-Co, but not a defect in this design: Letflow's `EventStore.append/2` already requires
+a caller-supplied `idempotency_key` for every event type (§0), so `cancel_instance/3`
+matches its own codebase's established convention rather than R-Co's. No further action for
+REVIEWER on this item.
 
-**OQ-2 (MAJOR).** §4's decision **not** to drive `{:cancel_branch, branch_id}` through
-`Transition` for `cancel_instance/3`'s own whole-instance cancellation, and the
-"agreement by construction" argument offered in its place, is this design's own resolution
-of a genuinely ambiguous AC ("an instance CANCELLED by the all-branches-cancelled path and
-one CANCELLED by a direct caller request must reach the same persisted state… compared
-explicitly"). Flagged for REVIEWER/RELEASE-VALIDATOR to confirm this reading — verifying
-that "the same status atom, and no second exercised persistence path exists to diverge from
-it" satisfies the AC — is the intended one, versus requiring `cancel_instance/3` to
-literally call `Transition.transition(graph, state, {:cancel_branch, branch_id})` per branch
-(which §4 explains would today always hit the "no cohort tracked" no-op given the
-join-counters persistence gap `req048`'s own OQ-3 already discloses).
+**OQ-2 (MAJOR) — verification part RESOLVED, interpretation judgment call still open
+(GH#326, ISS-0098, 2026-08-20).** R-Co's own `cancelInstance()` teardown
+(`instance.zig:2573–2643`) was read directly and confirmed to cancel tasks and timers via
+direct, imperative SQL (`task_store.cancelInTx` and an equivalent direct `UPDATE timers`) —
+no per-branch event is dispatched through any transition/reducer function anywhere in it.
+This empirically confirms §4's independently-reasoned "direct, coarser-grained
+persistence-layer operation" mechanism already matches R-Co's own shape — and more strongly
+than §4's own reasoning anticipated, since R-Co turns out to *persist* `join_counters`
+(`instance_projections.join_counters jsonb`, e.g. `instance.zig:1109`/`:1391`/`:2164`) and
+so has no reconstruction gap forcing that choice the way Letflow's own `req048` OQ-3 gap
+does — R-Co could drive fully join-aware per-branch cancellation and simply doesn't. What
+remains **not** settled by this read, because R-Co's own architecture cannot answer it: §4's
+own AC-interpretation question — whether "agreement by construction, no second exercised
+persistence path" satisfies this run's AC, versus requiring a literal
+`Transition.transition(graph, state, {:cancel_branch, branch_id})` call per branch — is still
+REVIEWER/RELEASE-VALIDATOR's judgment call to make, unchanged by this verification. Separately
+flagged as a follow-up-worthy gap, outside REQ-052's own scope: Letflow's `instance_projections`
+has no `join_counters` column at all today (`req048` OQ-3), where R-Co's equivalent table
+does — closing that gap (likely REQ-053/054's `instance_state_snapshots` work) is what would
+let a future requirement revisit driving `{:cancel_branch, _}` here for real, not just as a
+degenerate no-op.
 
 **OQ-3 (MINOR).** §5 step 2 pre-validates `actor_id`/`idempotency_key` before the
 transaction opens, diverging from `complete_task/3`'s own "no pre-check, let `append/2`

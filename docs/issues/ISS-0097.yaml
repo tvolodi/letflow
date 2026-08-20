@@ -20,4 +20,12 @@ affected_files:
   - lib/letflow/design/req041-pack-update-diff-schema.md
 queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
 github_issue: https://github.com/tvolodi/letflow/issues/325
-status: open
+status: resolved
+resolution: >
+  Verified against R-Co source. migrations/1157_prm09_solution_pack_update.sql
+  declares solution_pack_installs.installed_version as TEXT NOT NULL;
+  src/definition/pack_update.zig carries base_pack_version/incoming_pack_version
+  as []const u8 (byte-string slices) with no integer parsing anywhere in the
+  diff pipeline. :string is confirmed correct, not merely least-assuming.
+  req041-pack-update-diff-schema.md:705 OQ-3 updated to RESOLVED.
+resolved_at: "2026-08-20T05:00:26Z"

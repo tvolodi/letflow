@@ -702,11 +702,15 @@ general rule should be — that is explicitly REQ-041's own instruction to leave
 not this design's judgment call to make. See §2's cross-reference to `req035` §9 OQ-2
 for the sibling data point on the same still-open question.
 
-**OQ-3 (MINOR): `installed_version`/`base_version`/`target_version` are `:string`, not
-`:integer`.** No R-Co source available to this design confirms whether solution-pack
-versions are numeric, semver-shaped, or an opaque string. `:string` was chosen as the
-least-assuming shape (an integer column would reject a semver-style value outright);
-flagged rather than asserted as confirmed.
+**OQ-3 (RESOLVED, verified against R-Co GH#325): `installed_version`/`base_version`/
+`target_version` are `:string`, not `:integer` — confirmed.** R-Co's
+`migrations/1157_prm09_solution_pack_update.sql` declares
+`solution_pack_installs.installed_version` as `TEXT NOT NULL`, and
+`src/definition/pack_update.zig` carries `base_pack_version`/`incoming_pack_version`
+as `[]const u8` (a byte-string slice, not a numeric type) throughout the diff
+pipeline. No integer parsing or numeric comparison of version values occurs anywhere
+in `pack_update.zig`. `:string` is confirmed as the correct shape, not merely the
+least-assuming one.
 
 **OQ-4 (MINOR): `artefact_type` carries no enum, no CHECK constraint** — same
 open-ended-text treatment `req035` §9 OQ-1 gives `def_type`, for the same reason (no

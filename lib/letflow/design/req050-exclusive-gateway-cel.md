@@ -68,8 +68,8 @@ Sources actually read: `R-Co/src/engine/transition.zig:1118-1157`
 | Location | Disposition | Detail |
 |---|---|---|
 | §4.3 rule 1 — strip `variables.` | `confirmed` | `transition.zig:1171-1174` |
-| §4.3 rule 2 — `&&` → `and` | **`divergent_behavioural`** | R-Co emits **`" and "`** with spaces (`transition.zig:1177`); this design's table shows `and` and only spaced examples. See **ISS-0085** / GH#302. |
-| §4.3 rule 3 — `\|\|` → `or` | **`divergent_behavioural`** | R-Co emits **`" or "`** with spaces (`transition.zig:1183`). Same issue, **ISS-0085**. |
+| §4.3 rule 2 — `&&` → `and` | **`divergent_behavioural`** | R-Co emits **`" and "`** with spaces (`transition.zig:1177`); this design's table shows `and` and only spaced examples. See **ISS-0085** / GH#302. **RESOLVED** 2026-08-20 — `expr.ex:106` now emits `" and "` with spaces, matching `transition.zig:1177`; table above restated with an unspaced example. |
+| §4.3 rule 3 — `\|\|` → `or` | **`divergent_behavioural`** | R-Co emits **`" or "`** with spaces (`transition.zig:1183`). Same issue, **ISS-0085**. **RESOLVED** 2026-08-20 — `expr.ex:107` now emits `" or "` with spaces, matching `transition.zig:1183`. |
 | §4.3 rule 4 — `!` → `not `, `!=` intact | `confirmed` | `transition.zig:1188-1197` — R-Co's `"not "` trailing space is reproduced correctly here |
 | §4.2 step 1 — detect on the untranslated string, before any rewrite | `confirmed` | `transition.zig:1165` (`if (hasCelUnsupportedFeatures(...)) return null;`, first statement) |
 | §5.2 — uniform catch-false over translate/parse/eval | `confirmed` | `transition.zig:1124`, `:1128`, `:1150-1156` (non-bool result → `false`) |
@@ -250,9 +250,23 @@ string transformation, matching the Zig original being "small and fully specifie
 | # | Rule | CEL input | expr-syntax output |
 |---|---|---|---|
 | 1 | Strip the `variables.` prefix | `variables.amount` | `amount` |
-| 2 | `&&` → `and` | `variables.a && variables.b` | `a and b` |
-| 3 | `\|\|` → `or` | `variables.a \|\| variables.b` | `a or b` |
+| 2 | `&&` → `" and "` (with surrounding spaces) | `variables.a&&variables.b` | `a and b` |
+| 3 | `\|\|` → `" or "` (with surrounding spaces) | `variables.a\|\|variables.b` | `a or b` |
 | 4 | `!` → `not ` (`!=` passes through unchanged) | `!variables.approved`, `variables.status != "x"` | `not approved`, `status != "x"` |
+
+**Rules 2/3's spaces are load-bearing, not cosmetic (ISS-0085 / GH#302):** `transition.zig:1177`/
+`:1183` emit `" and "`/`" or "` with surrounding spaces, matching rule 4's own `"not "` (which
+already carried its trailing space, `transition.zig:1194`, and was already ported correctly at
+`expr.ex:134`). CEL does not require whitespace around `&&`/`||`, so unpadded CEL like
+`variables.a&&variables.b` is valid input. An unpadded rewrite fuses the adjacent tokens into one
+identifier (`aandb`) instead of `a and b`; that parses as a bare variable reference rather than
+raising, resolves to an undefined-variable eval error, and folds into §5.2's catch-false
+composition as a silent `false` — routing the token down the wrong outgoing edge with no crash and
+no test signal (the existing suite only ever exercised spaced CEL). Already-spaced input can
+produce a doubled space (`a  and  b`) after the fix; harmless, since `do_tokenize/2`
+(`expr.ex:202-204`) skips whitespace exactly as R-Co's own lexer does. The prior table version
+showed spaced-only examples for rows 2/3, which is what made the space requirement invisible;
+the examples above are deliberately unspaced.
 
 **Rule 4's carve-out is load-bearing, stated explicitly:** the rewrite must recognize `!=` as a
 single token and leave it untouched — a naive `!` → `not ` substitution applied byte-for-byte would

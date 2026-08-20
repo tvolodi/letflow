@@ -27,15 +27,29 @@ defmodule Letflow.Engine.ExprTest do
     end
   end
 
-  describe "translate_cel_to_expr/1 -- rule 2, && becomes and (AC7)" do
-    test "rewrites && to and" do
-      assert Expr.translate_cel_to_expr("variables.a && variables.b") == {:ok, "a and b"}
+  # Rules 2/3 emit " and "/" or " WITH surrounding spaces (ISS-0085/GH#302),
+  # matching transition.zig:1177/:1183. Spaced CEL input therefore ends up
+  # with a doubled space around the keyword ("a  and  b") -- harmless, since
+  # do_tokenize/2 skips whitespace -- while the load-bearing case is
+  # unspaced CEL input, which is valid CEL and previously fused into one
+  # identifier instead of two tokens joined by "and"/"or".
+  describe "translate_cel_to_expr/1 -- rule 2, && becomes ' and ' (AC7)" do
+    test "rewrites && to ' and ', doubling the space around already-spaced input" do
+      assert Expr.translate_cel_to_expr("variables.a && variables.b") == {:ok, "a  and  b"}
+    end
+
+    test "rewrites unspaced && without fusing the adjacent identifiers (ISS-0085/GH#302)" do
+      assert Expr.translate_cel_to_expr("variables.a&&variables.b") == {:ok, "a and b"}
     end
   end
 
-  describe "translate_cel_to_expr/1 -- rule 3, || becomes or (AC7)" do
-    test "rewrites || to or" do
-      assert Expr.translate_cel_to_expr("variables.a || variables.b") == {:ok, "a or b"}
+  describe "translate_cel_to_expr/1 -- rule 3, || becomes ' or ' (AC7)" do
+    test "rewrites || to ' or ', doubling the space around already-spaced input" do
+      assert Expr.translate_cel_to_expr("variables.a || variables.b") == {:ok, "a  or  b"}
+    end
+
+    test "rewrites unspaced || without fusing the adjacent identifiers (ISS-0085/GH#302)" do
+      assert Expr.translate_cel_to_expr("variables.a||variables.b") == {:ok, "a or b"}
     end
   end
 
@@ -53,7 +67,7 @@ defmodule Letflow.Engine.ExprTest do
 
     test "a condition mixing both ! and != rewrites only the bare !" do
       assert Expr.translate_cel_to_expr("!variables.a && variables.b != 1") ==
-               {:ok, "not a and b != 1"}
+               {:ok, "not a  and  b != 1"}
     end
   end
 
@@ -195,6 +209,27 @@ defmodule Letflow.Engine.ExprTest do
 
     test "a well-formed, false-evaluating condition returns false" do
       assert Expr.evaluate_condition("variables.amount > 100", %{"amount" => 50}) == false
+    end
+
+    # ISS-0085/GH#302 fail-first regression: pre-fix, unspaced && fused into
+    # one identifier ("aandb"), which resolved as :undefined_variable and
+    # was caught-false into `false` -- silently routing the gateway token
+    # down the wrong outgoing edge with no crash and no prior test signal.
+    test "unspaced && evaluates true instead of silently false (ISS-0085/GH#302)" do
+      assert Expr.evaluate_condition("variables.a&&variables.b", %{"a" => true, "b" => true}) ==
+               true
+    end
+
+    test "unspaced || evaluates true instead of silently false (ISS-0085/GH#302)" do
+      assert Expr.evaluate_condition("variables.a||variables.b", %{"a" => false, "b" => true}) ==
+               true
+    end
+
+    test "a mixed unspaced &&/|| condition evaluates correctly (ISS-0085/GH#302)" do
+      assert Expr.evaluate_condition(
+               "variables.a&&variables.b || variables.c",
+               %{"a" => true, "b" => false, "c" => true}
+             ) == true
     end
 
     test "an undefined-variable condition returns false, not a raised error" do

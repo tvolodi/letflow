@@ -102,11 +102,19 @@ defmodule Letflow.Engine.Expr do
         {:error, :unsupported_cel_feature}
 
       true ->
+        # Rules 2/3: `&&`/`||` -> `" and "`/`" or "`, WITH surrounding spaces
+        # (ISS-0085/GH#302 fix; transition.zig:1177/:1183 emit the same
+        # padded literals). CEL itself doesn't require whitespace around
+        # `&&`/`||`, so an unpadded rewrite fuses adjacent tokens into one
+        # identifier (`a&&b` -> `aandb`) instead of `a and b` -- a silent
+        # wrong-edge routing bug, not a parse error. Already-spaced input can
+        # end up with doubled spaces (`a  and  b`); harmless, since
+        # `do_tokenize/2` below skips whitespace like R-Co's own lexer does.
         expr_source =
           cel_condition
           |> strip_variables_prefix()
-          |> String.replace("&&", "and")
-          |> String.replace("||", "or")
+          |> String.replace("&&", " and ")
+          |> String.replace("||", " or ")
           |> rewrite_not()
 
         if String.trim(expr_source) == "" do

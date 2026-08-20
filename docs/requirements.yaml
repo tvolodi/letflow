@@ -5051,7 +5051,7 @@ requirements:
   - id: REQ-111
     title: Verify REQ-050's CEL translation rules against transition.zig, and close out REQ-062's standing R-Co disclaimer (ISS-0076 item 3)
     owner: ISSUE-FIXER
-    status: pending
+    status: done
     stage: S3
     impl_order: 168  # letflow-queue task id -- registered 2026-08-20 per ISS-0092/GH#314
     # (superseding the invented 155, which addressed an unrelated live task

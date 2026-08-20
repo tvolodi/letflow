@@ -27,6 +27,7 @@ defmodule Letflow.EngineSubProcessTest do
   alias Letflow.Engine
   alias Letflow.Engine.Task, as: EngineTask
   alias Letflow.Engine.TokenRecord
+  alias Letflow.Engine.VariableSchema
   alias Letflow.EventStore.Event
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Identity.Tenant
@@ -335,6 +336,20 @@ defmodule Letflow.EngineSubProcessTest do
     Event
     |> where([e], e.instance_id == ^instance_id and e.event_type == "EXECUTION_ERROR")
     |> Repo.all(prefix: schema_name)
+  end
+
+  # OQ-2 (req062-sub-process-runtime.md §9, GH#329)/REQ-109 precedent
+  # (test/letflow/engine_variable_schema_merge_test.exs's own seed_schema_row!/4):
+  # REQ-109 builds no registration/INSERT path (REQ-078/REQ-082 own it), so rows are
+  # seeded directly against the provisioned tenant schema.
+  defp seed_schema_row!(schema_name, definition_id, variable_key, json_schema) do
+    %VariableSchema{}
+    |> VariableSchema.changeset(%{
+      definition_id: definition_id,
+      variable_key: variable_key,
+      json_schema: json_schema
+    })
+    |> Repo.insert!(prefix: schema_name)
   end
 
   # ---------------------------------------------------------------------------------
@@ -662,6 +677,69 @@ defmodule Letflow.EngineSubProcessTest do
       # assertion on its exact join format.
       assert event.idempotency_key ==
                "#{output_attrs.idempotency_key}::sub_process_completed::#{created.instance_id}::#{child.instance_id}"
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # OQ-2 (req062-sub-process-runtime.md §9, GH#329) -- verified against R-Co
+  # (instance.zig's mergeVariables call at the sub-process completion site uses the
+  # exact same variable_schemas lookup, keyed only on definition_id, as every other
+  # merge call site): the parent's own registered variable-type schemas DO apply to a
+  # sub-process output merge, on top of (not instead of) the interface's own
+  # per-output json_schema (SPC-01). "result" below passes the interface's own
+  # {"type" => "boolean"} output check but still gets rejected by a stricter registry
+  # schema for the same key -- proving the registry lookup actually ran, not just that
+  # the interface's own check did.
+  # ---------------------------------------------------------------------------------
+
+  describe "OQ-2/GH#329 -- a registered variable_schemas row also applies to a sub-process output merge" do
+    test "an output that passes the interface's own schema but violates the registry's is rejected, parent lands in ERROR" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      child_def = active_definition!(schema_name, graph_child_two_step())
+
+      interface = %{
+        "outputs" => [%{"name" => "result", "json_schema" => %{"type" => "boolean"}}]
+      }
+
+      parent_def =
+        active_definition!(schema_name, graph_parent_subprocess_root(child_def.name, interface))
+
+      # Stricter than the interface's own output schema -- "result" must be an
+      # OVERWRITE candidate (REQ-109 AC5) for this row to be consulted at all, so
+      # the parent's own initial_variables seeds a placeholder value for it.
+      seed_schema_row!(schema_name, parent_def.id, "result", %{"type" => "string"})
+
+      parent_initial_variables = %{"seed" => 1, "result" => "placeholder"}
+
+      assert {:ok, created} =
+               Engine.create(
+                 start_attrs(parent_def, %{initial_variables: parent_initial_variables}),
+                 prefix: schema_name
+               )
+
+      child = child_projection!(schema_name, created.instance_id)
+      child_task = pending_task_for_instance!(schema_name, child.instance_id)
+
+      # true is a valid boolean per the interface's own output json_schema (SPC-01
+      # accepts it, so no SUB_PROCESS_OUTPUT_SCHEMA_VIOLATION fires) but is not a
+      # string, so the registry's own row must be what rejects it.
+      output_attrs = complete_attrs(%{output_variables: %{"result" => true}})
+
+      assert {:ok, child_result} =
+               Engine.complete_task(child_task.id, output_attrs, prefix: schema_name)
+
+      assert child_result.instance_status == :completed
+
+      parent_projection = Repo.get!(InstanceProjection, created.instance_id, prefix: schema_name)
+      assert parent_projection.status == :error
+      # Unmerged -- the placeholder value survives untouched (REQ-109 AC3 precedent).
+      assert parent_projection.variables == parent_initial_variables
+
+      assert [event] = execution_error_events(schema_name, created.instance_id)
+      assert event.payload["error_type"] == "variable_schema_rejected"
+      assert event.payload["affected"] == %{"kind" => "field", "key" => "result"}
+      assert event.payload["reason"] =~ "result"
     end
   end
 

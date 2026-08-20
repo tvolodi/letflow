@@ -206,5 +206,37 @@ Two open questions this stage may need to escalate into a
 
 ## REVIEWER sign-off
 
-(None yet — requirements being expanded 2026-08-19; no implementation
-work has started.)
+**2026-08-20 (REQ-065) — PASS.** Reviewed `decisions/0001-web-framework.md`'s
+2026-08-20 addendum (Plug/Bandit stands, reversing the file's original Phoenix
+Decision) against the original Decision/Reasoning sections it reverses. Findings:
+
+- The addendum leaves the original Decision/Reasoning/Summary sections intact and
+  appends rather than rewrites, consistent with this repo's precedent
+  (`0003-ecto-schema-strategy.md`'s 2026-08-17 addendum).
+- Dimension B's tie-breaker is engaged on its merits, not sidestepped: it quotes the
+  original "duplicated effort with no corresponding benefit" framing and rebuts it
+  concretely — a one-time ~20-30 line `Plug.Builder` module reused via `forward/2`,
+  not per-route duplication — a checkable, substantive counter-argument rather than a
+  hand-wave.
+- Corrected counts (31 routes, 9 middleware, 7 in S4's practical mounting scope) are
+  stated, sourced to the design doc's live-tree reverification, and the addendum
+  explicitly reasons about whether the recount changes the conclusion (it doesn't,
+  and says why) rather than silently asserting no change.
+- Scope: verified via `git diff main...HEAD --stat` — only `docs/` and
+  `lib/letflow/design/` files changed; no `mix.exs` or `router.ex` diff. `router.ex`'s
+  "no Phoenix" moduledoc line and this file's OQ-0 paragraph both agree with the
+  surviving Plug/Bandit position (`grep -n "no Phoenix" lib/letflow/router.ex
+  docs/migration/stage-4-api-surface.md`).
+- Not a contradiction with `docs/migration/decisions/0002-oidc-integration.md`'s
+  Dimension C (OIDC attaches as a plug under either framework) — that reasoning is
+  framework-choice-independent and stands regardless of which way 0001 resolved.
+
+**Adjacent finding, reported to ORCH per `ISSUE_QUEUE.md` (not blocking this PASS,
+outside REQ-065's scope boundary):** two other files still assert the now-reversed
+"Phoenix" position as current fact and were not updated by this addendum —
+`docs/migration/decisions/0002-oidc-integration.md`:127-128 ("that decision (Phoenix
+at S4) already found...") and `docs/migration/stage-0-foundation.md`:64 ("No
+contradiction found among decisions/0001-web-framework.md (Phoenix, REQ-010)..."). Both
+predate REQ-065 and are stale in the same way router.ex/mix.exs were before this run —
+worth a small follow-up doc fix so a future reader doesn't hit the same
+contradiction-of-record class that produced REQ-065 in the first place.

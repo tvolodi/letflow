@@ -22,4 +22,34 @@ affected_files:
   - lib/letflow/design/req041-pack-update-diff-schema.md
 queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
 github_issue: https://github.com/tvolodi/letflow/issues/324
-status: open
+status: resolved
+resolution:
+  resolved_at: "2026-08-20T00:00:00Z"
+  summary: >
+    R-Co/src/definition/pack_update.zig read directly. ResolutionKind enum
+    confirmed at L25-29: keep_local, take_incoming, merged. ConflictResolution
+    struct confirmed at L31-41 (resolution_kind, merged_content: ?[]const u8,
+    resolved_by, resolved_at). This design's original enumeration
+    ([:keep_theirs, :take_incoming, :custom]) matched R-Co in count and
+    meaning for all three values but matched R-Co's literal spelling for only
+    one (take_incoming). Renamed to match exactly: :keep_theirs -> :keep_local,
+    :custom -> :merged. Propagated to the shipped
+    Letflow.Definitions.PackUpdateResolution Ecto schema (values list,
+    @type resolution, moduledoc), the create_pack_update_resolutions.exs
+    migration's comment block (no schema/column change needed -- resolution
+    is a plain :string column, atom validation is Ecto.Enum/application-layer
+    only), and one test fixture in
+    test/letflow/definitions/pack_update_migration_test.exs that used the old
+    "keep_theirs" string literal. mix compile and
+    mix test test/letflow/definitions/pack_update_migration_test.exs both
+    pass (20 tests) after the rename.
+    Also surfaced: R-Co's own PackUpdateArtefactEntry.theirs field
+    (pack_update.zig:54) holds the tenant's *current local* content, not an
+    "other party's" -- R-Co's own ResolutionKind avoids that naming ambiguity
+    by calling the keep-local case keep_local rather than keep_theirs, which
+    is exactly the confusion this rename fixes going forward.
+  files_updated:
+    - lib/letflow/design/req041-pack-update-diff-schema.md
+    - lib/letflow/definitions/pack_update_resolution.ex
+    - priv/repo/migrations/20260817083803_create_pack_update_resolutions.exs
+    - test/letflow/definitions/pack_update_migration_test.exs

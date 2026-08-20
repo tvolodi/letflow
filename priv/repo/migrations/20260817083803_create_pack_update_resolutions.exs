@@ -32,10 +32,17 @@
 # judgment call, flagged for REVIEWER to override if a real FK is preferred.
 #
 # resolved_content is nullable :text, only meaningful when
-# resolution == :custom (the merged/overridden content, same canonical-JSON
+# resolution == :merged (the merged/overridden content, same canonical-JSON
 # -text contract as solution_pack_artefact_bases.base_content). Not
 # CHECK-constrained to enforce the nullability-vs-resolution correlation --
 # same "structural checks are an application/changeset concern" precedent
+#
+# resolution's Ecto.Enum atom names (:keep_local/:take_incoming/:merged, app
+# layer only -- this column is a plain :string, no DB-level enum/CHECK) match
+# R-Co's own ResolutionKind exactly (pack_update.zig:25-29), verified GH#324
+# / ISS-0096, 2026-08-20. Originally :keep_theirs/:take_incoming/:custom
+# (design section 9 OQ-6); renamed in the Ecto schema only, no schema-level
+# change needed here since the column was always a plain string.
 # req027/req035 already establish.
 defmodule Letflow.Repo.Migrations.CreatePackUpdateResolutions do
   use Ecto.Migration

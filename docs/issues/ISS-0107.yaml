@@ -1,0 +1,66 @@
+id: ISS-0107
+title: "letflow_check_test_test.exs's fake-mix fixture is POSIX-only: on Windows it runs the REAL mix test, times out, and orphans a BEAM holding DB connections"
+discovered_by: ORCH
+discovered_in_run: chore/per-workspace-db-port (letflow-2 workspace setup, 2026-08-21)
+discovered_at: "2026-08-20T20:08:01Z"
+severity: MAJOR
+tags:
+  - test-hygiene
+  - windows
+  - subprocess
+description: >
+  Mix.Tasks.Letflow.Check.TestTest (test/mix/tasks/letflow_check_test_test.exs)
+  fakes the `mix test` subprocess that Mix.Tasks.Letflow.Check.Test.run/1 shells
+  out to: install_fake_mix/2 writes an extensionless `#!/bin/sh` file named `mix`
+  into a temp dir and prepends that dir onto PATH with a ":" separator, so that
+  System.find_executable("mix") resolves to the fake.
+
+  Both halves of that mechanism are POSIX-only. On Windows the PATH separator is
+  ";", so the prepend produces one malformed entry rather than a new first entry;
+  and System.find_executable/1 will not resolve an extensionless file at all
+  (PATHEXT requires .bat/.cmd/.exe). install_fake_mix/2 therefore has no effect
+  there, and run/1 shells out to the REAL mix -- recursing the suite into a full
+  nested `mix test`.
+
+  Observed on a Windows 11 host (letflow-2 checkout, 2026-08-21, Elixir 1.20.3):
+  three tests in this module fail -- two by ExUnit timeout at 60000ms inside
+  Mix.Tasks.Letflow.Check.Test.collect/2, one with "(Mix.Error) mix
+  letflow.check.test: FAILED -- underlying `mix test` run exited 1".
+
+  The failures are not the worst of it. Each timed-out test leaves its nested
+  `mix test` alive after the ExUnit timeout: three orphaned erl.exe processes
+  were found holding 96 open connections to letflow_test, which then blocked
+  `mix ecto.drop` ("database is being accessed by other users") and cascaded into
+  Letflow.IdentityMigrationTest, whose setup helper
+  restore_orphaned_guard_backup_rows!/0 hit a foreign_key_violation on stale
+  public.iss060_tenant_schemas_guard_backup rows left behind by the interrupted
+  nested run. The failure count grew run over run (4 -> 11 -> 13) purely from
+  this accumulating state. Killing the three orphans and recreating the test
+  database restored identity_migration_test.exs to 10/10 passing, confirming the
+  cascade is a consequence, not an independent defect.
+
+  Same class as ISS-0065 (a `mix` subprocess behaving differently once a Windows
+  wrapper is in the exec path). Likely fix: write the fake as `mix.bat` on
+  Windows (or both names), join PATH with the platform separator, and/or tag the
+  module to skip where the fixture provably cannot work -- plus a guard so a
+  timeout cannot leave the nested subprocess running (the orphan is what makes
+  this MAJOR rather than MINOR: it corrupts shared test-database state for every
+  later run on the same host, not just the failing module).
+
+  Filed per docs/agents/protocols/ISSUE_QUEUE.md as incidentally discovered --
+  not caused by, and not blocking, the change it was found during (PR #356, which
+  moves the dev/test Postgres host port to a per-workspace LETFLOW_DB_PORT).
+
+  Note on the local ID: ISS-0106 was already claimed concurrently by another host
+  (GH#354, "main fails mix format --check-formatted ... under Elixir 1.20/OTP 29")
+  with no file committed under docs/issues/ yet, so this took the next free ID --
+  the same collision class docs/anti-patterns.md already records.
+affected_files:
+  - test/mix/tasks/letflow_check_test_test.exs
+  - lib/mix/tasks/letflow.check.test.ex
+status: open
+github_issue: 357
+queue_task_id: 171
+related_issues:
+  - ISS-0065
+  - ISS-0069

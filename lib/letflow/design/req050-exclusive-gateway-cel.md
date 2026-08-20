@@ -73,10 +73,10 @@ Sources actually read: `R-Co/src/engine/transition.zig:1118-1157`
 | §4.3 rule 4 — `!` → `not `, `!=` intact | `confirmed` | `transition.zig:1188-1197` — R-Co's `"not "` trailing space is reproduced correctly here |
 | §4.2 step 1 — detect on the untranslated string, before any rewrite | `confirmed` | `transition.zig:1165` (`if (hasCelUnsupportedFeatures(...)) return null;`, first statement) |
 | §5.2 — uniform catch-false over translate/parse/eval | `confirmed` | `transition.zig:1124`, `:1128`, `:1150-1156` (non-bool result → `false`) |
-| §4.4 — macros | `divergent_doc_only` | Marker sets differ both ways (`transition.zig:1211`, `:1215`); all differences funnel to `false` via catch-false — **except `matches(`**, see §9.1 |
+| §4.4 — macros | `divergent_doc_only` | Marker sets differ both ways (`transition.zig:1211`, `:1215`); all differences funnel to `false` via catch-false — **except `matches(`**, see §9.1. **RESOLVED** 2026-08-20, `matches(`/`map{` added to the marker list, tokenizer made total — WF03-ISS0086-20260820, PR #307. |
 | §4.4 — type-conversion functions | `divergent_doc_only` | R-Co lists only `int(`/`string(`/`double(` (`transition.zig:1215`) |
 | §4.4 — collection functions | `divergent_doc_only` | R-Co uses method-form `.size(`/`.map(` and adds `map{` literals (`transition.zig:1211`, `:1223`); it has **no `in` check** — but `in` is not an expr keyword (`R-Co/src/expr/lexer.zig:46-48` defines only `and`/`or`/`not`), so it fails to parse and still yields `false` |
-| §4.4 — ternary | **`divergent_behavioural`** | The main case agrees (a literal `?` inside a quoted string is NOT treated as ternary, both sides). The escaped-quote case does not — see §9.1 and **ISS-0087** / GH#304. |
+| §4.4 — ternary | **`divergent_behavioural`** | The main case agrees (a literal `?` inside a quoted string is NOT treated as ternary, both sides). The escaped-quote case does not — see §9.1 and **ISS-0087** / GH#304. **RESOLVED** 2026-08-20 — decision: KEEP Letflow's escape-aware semantics (deliberate divergence, recorded in §9.1(b)) — WF03-ISS0087-20260820. |
 
 **Rolled-up disposition for §4.3's rules and §4.2/§5.2's boundary rules:
 `divergent_behavioural`** (most severe of the per-rule dispositions).
@@ -557,6 +557,11 @@ never-`{:error, _}`" contract and propagates out of `Transition.transition/3`, w
 `:1124`). See **ISS-0086** / GH#303 — which also covers making the tokenizer total, the more
 important half of the fix.
 
+**RESOLVED 2026-08-20 (WF03-ISS0086-20260820, PR #307).** `matches(`/`map{` added to
+`@unsupported_call_markers`; `do_tokenize/2`'s identifier and number clauses fixed to be total
+over every input shape (the actual bug was broader than this repro — see the issue's own
+resolution notes in `docs/issues/ISS-0086.yaml`).
+
 **(b) The string-literal span boundary differs in outcome on escaped quotes.** The case this
 section names explicitly — a literal `?` inside a quoted CEL string must not be mistaken for the
 ternary operator — **is handled correctly and agrees with R-Co** for ordinary literals
@@ -568,6 +573,29 @@ comparison. This is an outcome difference on exactly the boundary this section f
 recorded as a divergence rather than dismissed as a mechanism difference — even though
 Letflow's behaviour is arguably the more correct of the two. See **ISS-0087** / GH#304, which
 leaves the parity-vs-correctness choice explicitly open for the fix design.
+
+**RESOLVED 2026-08-20 (WF03-ISS0087-20260820) — decision: KEEP Letflow's escape-aware
+semantics.** Verifying this end-to-end (not just at the `translate_cel_to_expr/1` stage this
+paragraph describes) surfaced that the outcome this section predicted did not actually occur in
+shipped code, for a reason this audit missed: `parse/1`'s own string-literal tokenizer
+(`tokenize_string/3`, upstream of and independent from the CEL-detection stage discussed above)
+had **no escape handling of its own** — it terminated on the first raw quote byte regardless of
+a preceding backslash. So `variables.q == "a\"?b"` was classified `supported` at the CEL stage
+(as described above) but then failed to *parse* at the expr-syntax stage, catch-falsing to
+`false` — coincidentally agreeing with R-Co's `false`, but for an unrelated reason, and as a
+symptom of a materially worse bug: **any** expr-syntax string literal containing an escaped
+quote of its own delimiter failed to parse at all, with no relationship to ternary detection —
+e.g. `variables.name == "O'Brien"`-shaped comparisons using the *other* quote style were fine,
+but `variables.name == "O\"Brien"` silently always evaluated `false` regardless of `name`'s
+actual value. Fixed by making `tokenize_string/3` escape-aware (mirrors
+`strip_string_literals/1`'s existing `\\.` handling, which this stage had never been brought in
+line with). Post-fix, the outcome this section originally predicted is now real: Letflow
+evaluates the escaped-quote-then-`?` comparison correctly (`true` for a matching value); R-Co
+still returns `false` (ternary misdetection, uncorrected on that side). Decision: **keep**
+Letflow's semantics — reverting to R-Co's non-escape-aware parity would mean deliberately
+reintroducing a basic string-literal correctness bug just to match a known-wrong R-Co behavior,
+which is a worse trade than the recorded divergence. See ISS-0087's resolution notes for the
+regression tests locking this in.
 
 Per REQ-111 this audit changes no engine behaviour; both findings are routed through WF-03.
 

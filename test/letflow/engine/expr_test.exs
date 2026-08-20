@@ -93,6 +93,21 @@ defmodule Letflow.Engine.ExprTest do
       assert Expr.translate_cel_to_expr("variables.status == \"ready?\"") ==
                {:ok, "status == \"ready?\""}
     end
+
+    # ISS-0087/GH#304 -- deliberate divergence from R-Co, decided and recorded in
+    # design doc §4.4/§9.1(b): R-Co's naive quote-toggle scan (no escape handling)
+    # mis-parses a backslash-escaped quote and treats the `?` that follows it as
+    # OUTSIDE the literal, rejecting the condition as ternary. Letflow's
+    # escape-aware regex correctly treats the whole escaped literal as one span,
+    # so the `?` inside it is never seen as ternary. This test locks in the
+    # CHOSEN (escape-aware, arguably more correct) semantic -- if it ever fails,
+    # that's a signal the tokenizer's escape handling changed, which must go
+    # through the same explicit design-decision process as this issue, not a
+    # silent regression.
+    test "a ? immediately after a backslash-escaped quote inside a string literal is not ternary (ISS-0087)" do
+      assert Expr.translate_cel_to_expr(~S|variables.q == "a\"?b"|) ==
+               {:ok, ~S|q == "a\"?b"|}
+    end
   end
 
   describe "translate_cel_to_expr/1 -- malformed input (design doc §4.2 step 3, own defensive addition)" do
@@ -226,6 +241,13 @@ defmodule Letflow.Engine.ExprTest do
         assert is_boolean(Expr.evaluate_condition(condition, variables)),
                "expected a boolean for #{inspect(condition)}, got a raise or non-boolean"
       end
+    end
+
+    # ISS-0087/GH#304 -- end-to-end lock-in of the chosen semantic (see the
+    # translate_cel_to_expr/1 test above for the design-decision rationale). R-Co
+    # would short-circuit this exact condition to false; Letflow evaluates it.
+    test "a matching value against an escaped-quote-then-? literal evaluates true, not R-Co's false (ISS-0087)" do
+      assert Expr.evaluate_condition(~S|variables.q == "a\"?b"|, %{"q" => ~S|a"?b|}) == true
     end
   end
 

@@ -52,14 +52,44 @@ description: >
   THIS IS THE THIRD UNREACHABLE-DEFENSIVE-BRANCH FINDING ON REQ-109, after
   ISS-0088 (properties_violations/3's unguarded recursion) and ISS-0089
   (validations_for/3's non-map branch, unreachable because Ecto's :map loader
-  raises first). Each was individually reasonable when written. In aggregate
-  they say something worth noticing: REQ-109's design specified defences
-  against states that the schema, the loader, or an upstream caller already
-  makes impossible -- and none of it was caught until someone tried to
-  write a test that exercised the branch. The general lesson, for whoever
-  picks this up: a defensive branch nobody can reach is not free. It reads
+  raises first). A defensive branch nobody can reach is not free: it reads
   as a live defence, so it stops the next person looking for the real one,
   and it costs a test-writer a cycle to discover it cannot be driven.
+
+  BUT THE THREE DO NOT SHARE ONE CAUSE -- they split 1/2, and conflating
+  them would produce the wrong fix. TEST-DESIGN-VALIDATOR's Step 3b re-gate
+  analysis, recorded here because it is the useful part:
+
+    ISS-0089 STANDS ON ITS OWN AND ITS GUARD SHOULD STAY. The jsonb COLUMN
+    genuinely permits scalars -- arrays, strings, numbers, booleans -- and
+    only Ecto's :map loader filters them first. The moment REQ-078/REQ-082
+    build the registration path, or anyone reads that column as raw or as
+    :string, the branch becomes live. That is real defence-in-depth against
+    a state the database actually allows.
+
+    THIS ISSUE'S :invalid_definition_id IS A DIFFERENT ANIMAL, and calling
+    it defence-in-depth flatters it. The column is `null: false`. The state
+    is not merely unreached -- it is FORBIDDEN BY THE DDL. The guard exists
+    only because instance_projection.ex:113 types the field as a NULLABLE
+    Ecto.UUID over a NOT NULL column. It is a symptom of the Elixir-side
+    type being wrong, not a considered defence.
+
+    AND THE @SPEC FINDING IS NOT A THIRD DATA POINT -- it is the downstream
+    consequence of the second. Because the guard exists, error_reason()
+    carries a member no execution produces; because that member exists,
+    complete_task/3's PUBLIC @spec advertises it as a returnable value. So
+    every caller writing an exhaustive `case` must handle a clause that can
+    never match, and Dialyzer is told something untrue.
+
+  THE GENERALISABLE RULE, which is the reason this issue is worth reading
+  at all:
+
+    (1) When a guard's unreachability traces to an Ecto field typed MORE
+        PERMISSIVELY than its column, the fix is to tighten the field to
+        match the DDL -- not to keep the guard.
+    (2) A guard retained for genuine defence-in-depth MUST NOT surface in a
+        public @spec as a returnable value. Doing so converts an internal
+        precaution into a CONTRACT OBLIGATION for every caller.
 affected_files:
   - lib/letflow/engine.ex
   - lib/letflow/event_store/instance_projection.ex
@@ -96,3 +126,18 @@ scoping_note: >
   complete_task/3's contract. Both are small enough to fold into an
   unrelated run that already opens those files rather than scheduling their
   own -- the pipeline overhead exceeds the edit.
+
+  RECOMMENDED CHEAP FOLLOW-UP, from the same Step 3b analysis: a standalone
+  sweep asking "which OTHER Ecto schema fields are typed nullable over NOT
+  NULL columns?" This instance was found only by accident, because a
+  test-writer happened to try driving the branch. The sweep is mechanical
+  (compare each schema's field declarations against its migration's
+  null: false constraints) and would find the rest deterministically.
+
+  DELIBERATELY NOT SCHEDULED AS A REQUIREMENT YET. On the evidence of ONE
+  instance it does not justify one -- fold it into whichever run fixes
+  finding 2, since that run already opens the schema files. If the sweep
+  comes back with more than a couple, it graduates: at that point it is a
+  systemic schema-vs-DDL fidelity question and warrants a record under
+  docs/migration/decisions/ rather than a pile of individual fixes. Do not
+  pre-judge which of those it is; measure first.

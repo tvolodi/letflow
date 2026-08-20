@@ -1,0 +1,26 @@
+id: ISS-0098
+title: "cancel_instance/3 reason/note field + branch-event teardown mechanism not verified against R-Co (req052-instance-cancellation.md:117,581)"
+discovered_by: DOC-UPDATER
+discovered_in_run: WF02-REQ112-20260820
+discovered_at: "2026-08-20T03:08:10Z"
+severity: MINOR
+description: >
+  Triaged as CLASS B during REQ-112's sweep of ISS-0076 item 2's remaining
+  "R-Co source unavailable" claims. Two related, still-open questions: (a)
+  OQ-1 -- cancel_attrs() carries no cancellation-reason/note field, and
+  R-Co's own literal cancelInstance signature was not read to confirm no
+  reason/note field is expected; (b) whether R-Co's own teardown drives
+  per-branch {:cancel_branch, _}-equivalent events through its transition
+  function, or cancels tasks directly -- this design's §4 reasoning is an
+  independent resolution, flagged as such, not verified against R-Co's
+  literal source. Left as open questions, not swept.
+  Letflow file:line: lib/letflow/design/req052-instance-cancellation.md:117
+  (both questions stated together) and :581 (OQ-1 restated in §11).
+  R-Co source that could settle it: R-Co/src/engine/instance.zig
+  (cancelInstance) (R-Co tree reachable at c:\Users\tvolo\dev\ai-dala\R-Co;
+  REQ-112 is docs-only and does not itself read R-Co to answer this).
+affected_files:
+  - lib/letflow/design/req052-instance-cancellation.md
+queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
+github_issue: https://github.com/tvolodi/letflow/issues/326
+status: open

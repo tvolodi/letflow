@@ -1,0 +1,25 @@
+id: ISS-0096
+title: "pack_conflict_resolutions.resolution enum values not sourced from R-Co (req041-pack-update-diff-schema.md:266, OQ-6)"
+discovered_by: DOC-UPDATER
+discovered_in_run: WF02-REQ112-20260820
+discovered_at: "2026-08-20T03:08:10Z"
+severity: MINOR
+description: >
+  Triaged as CLASS B during REQ-112's sweep of ISS-0076 item 2's remaining
+  "R-Co source unavailable" claims. resolution is a bare atom-list
+  Ecto.Enum over [:keep_theirs, :take_incoming, :custom] -- this design's
+  own reasonable enumeration of how a human/system resolves a conflicting
+  artefact, flagged as a design choice (§9 OQ-6) rather than a cited fact,
+  since no R-Co source names this set -- left as an open question, not
+  swept.
+  Letflow file:line: lib/letflow/design/req041-pack-update-diff-schema.md:266
+  R-Co source that could settle it: R-Co/src/definition/pack_update.zig
+  (its conflict-resolution enum/union),
+  R-Co/tests/integration/prm-09-pack-update.test.zig (R-Co tree reachable at
+  c:\Users\tvolo\dev\ai-dala\R-Co; REQ-112 is docs-only and does not itself
+  read R-Co to answer this).
+affected_files:
+  - lib/letflow/design/req041-pack-update-diff-schema.md
+queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
+github_issue: https://github.com/tvolodi/letflow/issues/324
+status: open

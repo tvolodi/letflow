@@ -1,0 +1,27 @@
+id: ISS-0093
+title: "reject_if_conflicts/4 permission-gate inference not confirmed against R-Co (promotion_plan.md:437)"
+discovered_by: DOC-UPDATER
+discovered_in_run: WF02-REQ112-20260820
+discovered_at: "2026-08-20T03:08:10Z"
+severity: MINOR
+description: >
+  Triaged as CLASS B during REQ-112's sweep of ISS-0076 item 2's remaining
+  "R-Co source unavailable" claims. lib/letflow/design/promotion_plan.md:437
+  reads reject_if_conflicts/4 as a preflight re-check of REQ-037's already
+  permission-gated approve/apply flow, and therefore does not itself gate
+  actor_id on a permission check. The design flags this explicitly as "an
+  inference, not confirmed against unreachable R-Co source" and asks
+  REVIEWER to re-check once PRM-02's own doc is available. Per REQ-112's
+  instructions this is a deferred substantive question about shipped
+  behaviour, not a pure environment claim -- the caveat is left in place,
+  not swept.
+  Letflow file:line: lib/letflow/design/promotion_plan.md:437
+  R-Co source that could settle it: R-Co/src/definition/promotion_plan.zig,
+  R-Co/src/design/prm02-05-promotion-approval-pipeline.md (R-Co tree
+  reachable at c:\Users\tvolo\dev\ai-dala\R-Co; REQ-112 is docs-only and does
+  not itself read R-Co to answer this).
+affected_files:
+  - lib/letflow/design/promotion_plan.md
+queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
+github_issue: https://github.com/tvolodi/letflow/issues/321
+status: open

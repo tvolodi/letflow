@@ -615,8 +615,8 @@ already fixes structurally.
   evidence.
 - **OQ-5 — RESOLVED 2026-08-19 (REQ-110 audit, run `WF03-REQ110-20260819`):
   disposition `divergent_doc_only`.** This OQ formerly stood as a blanket
-  caveat that no R-Co source was available and that every claim in this
-  document traced to REQ-060's own requirement text or already-shipped
+  caveat that R-Co's source was believed unreachable, and that every claim
+  in this document traced to REQ-060's own requirement text or already-shipped
   Letflow code, never a second read of `pin_rebind.zig`. **That caveat is
   withdrawn: it is no longer true.** The R-Co tree is reachable at
   `c:\Users\tvolo\dev\ai-dala\R-Co` and REQ-110 read

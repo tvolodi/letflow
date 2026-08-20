@@ -1,0 +1,31 @@
+id: ISS-0100
+title: "setInstanceError()/error-code table not verified against R-Co's literal source (req061-execution-error-handling.md:714 + lib/letflow/engine/execution_error.ex:5)"
+discovered_by: DOC-UPDATER
+discovered_in_run: WF02-REQ112-20260820
+discovered_at: "2026-08-20T03:08:10Z"
+severity: MINOR
+description: >
+  Triaged as CLASS B during REQ-112's sweep of ISS-0076 item 2's remaining
+  "R-Co source unavailable" claims. This is the location ISS-0076's own
+  affected_files list omitted -- a SHIPPED moduledoc, not just a design doc.
+  OQ-1 (MINOR, inherited): R-Co's own setInstanceError() /
+  SetInstanceErrorArgs / error-code table (~L3078 / ~L4067 of instance.zig
+  per this design's own citation) were not read directly when this design
+  and the shipped module were written; both are built from the requirement
+  text plus shipped-code precedent, not verified against R-Co's literal
+  source/signature. Left as an open question at BOTH locations, not swept --
+  neither the design doc's caveat nor the shipped moduledoc's caveat was
+  rewritten into settled-looking prose without an answer.
+  Letflow file:line: lib/letflow/design/req061-execution-error-handling.md:714
+  (§12 OQ-1) and lib/letflow/engine/execution_error.ex:5 (shipped moduledoc,
+  same claim).
+  R-Co source that could settle it: R-Co/src/engine/instance.zig
+  (setInstanceError() around line 3078, its error-code table around line
+  4067) (R-Co tree reachable at c:\Users\tvolo\dev\ai-dala\R-Co; REQ-112 is
+  docs-only and does not itself read R-Co to answer this).
+affected_files:
+  - lib/letflow/design/req061-execution-error-handling.md
+  - lib/letflow/engine/execution_error.ex
+queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
+github_issue: https://github.com/tvolodi/letflow/issues/328
+status: open

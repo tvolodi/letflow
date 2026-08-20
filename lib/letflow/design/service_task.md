@@ -61,12 +61,14 @@ code**. No function bodies, no `.ex` files.
   — confirms `build_idempotency_key/N`'s job is to produce a value stable across redeliveries
   of the *same* attempt and distinct across *different* attempts (§3.6).
 
-**R-Co source of truth:** NOT reachable in this environment (no `R-Co` checkout mounted for
-this session) — this design is a reasoned reconstruction from the requirement text's own
-description/acceptance criteria and the shipped-Letflow precedents above, same disclosed
-limitation `Letflow.Engine.ExecutionError`'s own moduledoc already states for its EE-10 port
-(§0, "its error-code table unreachable in this environment"). Every place this matters for a
-concrete design choice is flagged as an explicit open question in §9, not silently guessed.
+**R-Co source of truth:** the R-Co tree at `c:\Users\tvolo\dev\ai-dala\R-Co` is reachable, but
+this design was not built by reading `service_task.zig` directly — it is a reasoned
+reconstruction from the requirement text's own description/acceptance criteria and the
+shipped-Letflow precedents above (the same "not verified against a second, independent read
+of R-Co" posture `Letflow.Engine.ExecutionError`'s own moduledoc states for its EE-10 port,
+§12 OQ-1 of its design doc). Every place this matters for a concrete design choice is flagged
+as an explicit open question in §9, not silently guessed; two of those (OQ-1, OQ-5) are filed
+as their own tracked issues rather than left as a bare caveat (see §9).
 
 ---
 

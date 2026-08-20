@@ -5193,7 +5193,7 @@ requirements:
   - id: REQ-112
     title: Triage and sweep the remaining "R-Co source unavailable" claims across design docs and shipped moduledocs (ISS-0076 item 2)
     owner: DOC-UPDATER
-    status: pending
+    status: done
     stage: S3
     impl_order: 169  # letflow-queue task id -- registered 2026-08-20 per ISS-0092/GH#314
     # (superseding the invented 156, which was never returned by

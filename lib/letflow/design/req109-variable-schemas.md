@@ -35,8 +35,8 @@ working tree / R-Co tree; nothing here is carried from memory.
 | `docs/agents/instructions/security-invariants.md` | INV-1 (lines 46–58) | §6's fail-closed and §7's tenant-isolation obligations |
 | `docs/migration/stage-3-instance-engine.md` | 3–5 (`Status: done -- all Stage 3 requirements shipped…`) | §10's AC12 edit |
 
-**No access gap this session.** Unlike REQ-049's design (its §0 recorded an unreadable R-Co tree), the
-R-Co source tree at `c:\Users\tvolo\dev\ai-dala\R-Co` is fully readable and was read directly. Every
+**No access gap this session.** Unlike REQ-049's design (its §0 recorded R-Co as unreadable at the
+time), the R-Co tree at `c:\Users\tvolo\dev\ai-dala\R-Co` is fully readable and was read directly. Every
 "reasoned reconstruction" caveat REQ-049 was forced into is, for this design, replaced by a literal
 source citation.
 

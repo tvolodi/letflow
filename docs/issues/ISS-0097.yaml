@@ -1,0 +1,23 @@
+id: ISS-0097
+title: "pack version columns (:string vs :integer) not confirmed against R-Co (req041-pack-update-diff-schema.md:706, OQ-3)"
+discovered_by: DOC-UPDATER
+discovered_in_run: WF02-REQ112-20260820
+discovered_at: "2026-08-20T03:08:10Z"
+severity: MINOR
+description: >
+  Triaged as CLASS B during REQ-112's sweep of ISS-0076 item 2's remaining
+  "R-Co source unavailable" claims. installed_version/base_version/
+  target_version are :string, not :integer. No R-Co source confirms
+  whether solution-pack versions are numeric, semver-shaped, or an opaque
+  string. :string was chosen as the least-assuming shape; flagged (§9 OQ-3)
+  rather than asserted as confirmed -- left as an open question, not swept.
+  Letflow file:line: lib/letflow/design/req041-pack-update-diff-schema.md:706
+  R-Co source that could settle it: R-Co/src/definition/pack_update.zig,
+  R-Co/migrations/1157_prm09_solution_pack_update.sql (R-Co tree reachable
+  at c:\Users\tvolo\dev\ai-dala\R-Co; REQ-112 is docs-only and does not
+  itself read R-Co to answer this).
+affected_files:
+  - lib/letflow/design/req041-pack-update-diff-schema.md
+queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
+github_issue: https://github.com/tvolodi/letflow/issues/325
+status: open

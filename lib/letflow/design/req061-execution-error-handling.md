@@ -109,13 +109,26 @@ silently resolved. No implementation code — signatures/shapes only, matching
 - `docs/anti-patterns.md` (current entries) — no entry bears directly on this module's own
   logic.
 
-**Access gap, stated explicitly, matching `req051`/`req052`'s own precedent:** this
-environment has no `R-Co/src/engine/instance.zig` or `R-Co/src/design/engine.md` reachable
-(confirmed via the same `find` checks `req052` §0 already ran, same negative result). R-Co's
-own `setInstanceError()` (~L3078) and its error-code table (~L4067) are cited by this run's
-own text but not independently readable here — this design is built from this run's own
-`context.requirement_text.REQ-061` (ORCH's own EE-10 summary) plus the shipped precedent
-above. Flagged as OQ-1 (§12).
+**Access gap — resolved (GH#328, ISS-0100):** `R-Co/src/engine/instance.zig` is reachable in
+this environment; the earlier "unreachable" framing below (and OQ-1, §12) no longer holds and
+is kept only as a record of what this design was built without at the time. Read directly:
+`setInstanceError()` (L3078–3182, signature `pub fn setInstanceError(self: *InstanceStore,
+allocator: std.mem.Allocator, args: SetInstanceErrorArgs) SetInstanceErrorError!void`) and
+`SetInstanceErrorArgs` (L289–306: `instance_id`, `error_type: ErrorType`, `affected_node:
+?[]const u8`, `affected_field: ?[]const u8`, `reason: []const u8`, `variable_state: []const
+u8`, `evaluated_conditions: ?[]const EvaluatedCondition`, `actor_id: []const u8`). This
+design's own shape (§2 `error_args()`) matches it field-for-field: `affected_node`/
+`affected_field` collapse into this design's `affected()` tagged union, `variable_state` maps
+to `variables`, `reason`/`actor_id` map 1:1.
+
+What "the error-code table" actually is at ~L4060–4071 (inside `buildExecutionErrorPayload/3`,
+not a separate table): a `switch` over R-Co's own closed `ErrorType` enum (L244–273, 10
+variants — `NO_MATCHING_EDGE`, `SCHEMA_VIOLATION`, `SERVICE_TASK_FAILURE`,
+`TRANSFORM_EVALUATION_ERROR`, `TRANSFORM_RESULT_NON_OBJECT`, `PIN_MISSING`,
+`SUB_PROCESS_MISSING_REQUIRED_INPUT`, `SUB_PROCESS_INPUT_SCHEMA_VIOLATION`,
+`SUB_PROCESS_MISSING_REQUIRED_OUTPUT`, `SUB_PROCESS_OUTPUT_SCHEMA_VIOLATION`) that stringifies
+each variant to its JSON `error_type` value. This corrects §2's own characterization below —
+see the note there.
 
 ---
 
@@ -154,13 +167,23 @@ exists (§8).
 ```
 
 A closed-looking but explicitly **open** union (the trailing `atom()` is deliberate, not a
-typo) — mirrors R-Co's own error-code table (~L4067) being a mapping, not a hardcoded case
-statement, per this run's own text ("port that shape rather than scattering ad-hoc error
-writes"). The five named atoms map 1:1 onto this run's own five calling paths (REQ-049,
-REQ-050, REQ-056, REQ-057, REQ-062); REQ-062's four SPC-01 sub-process interface-violation
-sub-cases are not four separate atoms here — they are expected to share
-`:subprocess_interface_violation` and distinguish themselves via `error_args.details` (below),
-left to REQ-062's own CODE-DESIGNER to shape precisely (§12 OQ-2).
+typo). **Correction (GH#328, ISS-0100, resolves OQ-1):** R-Co's own error-code table
+(~L4060–4071, read directly — see §0) is *not* a mapping — it is a hardcoded `switch` over a
+*closed* 10-variant `ErrorType` enum (L244–273). This design's open union is therefore a
+deliberate departure from R-Co's shape, not a port of it: R-Co has no extensibility point here
+at all, while this design adds one via the trailing `atom()` specifically because REQ-062's
+own error shapes were still unresolved when this was written (OQ-2). The five named atoms map
+1:1 onto this run's own five calling paths (REQ-049, REQ-050, REQ-056, REQ-057, REQ-062), and
+those five are a *coarser* grouping than R-Co's 10 `ErrorType` variants by design — e.g. this
+design's single `:variable_schema_rejected` corresponds to R-Co's `SCHEMA_VIOLATION`, and this
+design's `:subprocess_interface_violation` corresponds to four separate R-Co variants
+(`SUB_PROCESS_MISSING_REQUIRED_INPUT`, `SUB_PROCESS_INPUT_SCHEMA_VIOLATION`,
+`SUB_PROCESS_MISSING_REQUIRED_OUTPUT`, `SUB_PROCESS_OUTPUT_SCHEMA_VIOLATION`) — confirming
+OQ-2's own premise that R-Co treats these as four distinct causes, not one. REQ-062's four
+SPC-01 sub-process interface-violation sub-cases are not four separate atoms here — they are
+expected to share `:subprocess_interface_violation` and distinguish themselves via
+`error_args.details` (below), left to REQ-062's own CODE-DESIGNER to shape precisely (§12
+OQ-2, now with R-Co's exact four variant names above to work from).
 
 ```
 @type affected ::
@@ -710,11 +733,14 @@ moduledoc — reading ERROR as terminal is the easy mistake"):
 
 ## 12. Open questions — explicitly listed, not silently resolved
 
-**OQ-1 (MINOR, inherited).** R-Co's own `setInstanceError()`/`SetInstanceErrorArgs`/error-code
-table (~L3078/~L4067) are unreachable in this environment (§0's access gap) — this design is
-built from this run's own text plus shipped-code precedent, not verified against R-Co's
-literal source. Flagged for REVIEWER, same shape as `req051`/`req052`'s own OQ-1-equivalent
-entries.
+**OQ-1 — RESOLVED (GH#328, ISS-0100, 2026-08-20).** R-Co's own `setInstanceError()`
+(L3078–3182), `SetInstanceErrorArgs` (L289–306), and error-code switch (~L4060–4071 inside
+`buildExecutionErrorPayload/3`) were read directly against `R-Co/src/engine/instance.zig`.
+Verdict: this design's shape matches field-for-field (§0) and no correction to this design's
+own behavior was needed — the one inaccuracy found was this design's *description* of R-Co
+(§2's "mirrors R-Co's own error-code table being a mapping, not a hardcoded case statement" —
+backwards; R-Co's table *is* a hardcoded `switch`), now corrected in §2 and §0. No further
+action for REVIEWER on this item.
 
 **OQ-2 (MAJOR).** REQ-062's "four SPC-01 sub-process interface violations" are modeled here as
 sharing one `:subprocess_interface_violation` `error_type()` atom, distinguished only via
@@ -745,8 +771,11 @@ which names REQ-050's case specifically) is correct, versus a broader reading wh
 reading — the requirement text names five *specific* calling paths, not "every possible
 engine failure," and a hop-limit-exceeded or unimplemented-node-type failure is arguably a
 programming/definition-authoring bug rather than a runtime data condition an operator can
-meaningfully retry/discard via OBS-05 — but this is this design's own interpretation, not
-verified against R-Co's literal error-code table (§0's access gap, OQ-1).
+meaningfully retry/discard via OBS-05 — and this narrow reading is now confirmed against
+R-Co's literal error-code table (OQ-1, resolved above): R-Co's own closed `ErrorType` enum
+(L244–273) has no hop-limit-exceeded or unimplemented-node-type variant either — only
+`NO_MATCHING_EDGE` from `Transition`'s failure space is wired into `setInstanceError()` on
+R-Co's own side, matching this design's scoping exactly.
 
 **OQ-5 (MINOR).** `error_detail`'s shape (§8) deliberately excludes the variable-map snapshot,
 keeping it in the `EXECUTION_ERROR` event payload only. Flagged for REVIEWER/S4's own future

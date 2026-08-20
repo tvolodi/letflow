@@ -55,13 +55,13 @@
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ066-20260820",
-      "commit_sha_list": [],
+      "commit_sha_list": ["9b7ec7b"],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route back to REVIEWER for the narrow Step 2d re-review (items REVIEWER-02d-1, -1b, -2 only). SECURITY-REVIEWER re-review is at ORCH's discretion: the 404 body change is on a tenant-data path in the INV-5 sense, but it moves the catch-all onto the already-approved constructor rather than introducing new detail-bearing output."
   },
   "rework_count": 1,
   "max_rework": 3

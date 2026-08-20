@@ -64,7 +64,7 @@ description: >
 affected_files:
   - docs/requirements.yaml
   - docs/agents/protocols/TASK_QUEUE.md
-status: open
+status: resolved
 github_issue: https://github.com/tvolodi/letflow/issues/314
 related:
   - ISS-0087
@@ -101,3 +101,34 @@ scoping_note: >
   destructive write at the end of it instead of a wasted cycle. Before an
   id-addressed mutation against an external system, confirm the id maps to
   what you think it does, or use an endpoint that fails safe.
+
+resolution: >
+  RESOLVED 2026-08-20, from GH#314. All three items from the "actual fix"
+  list above are done:
+
+  1. REGISTERED. REQ-110 -> queue task 167 (GH#315), REQ-111 -> queue task
+     168 (GH#316), REQ-112 -> queue task 169 (GH#317), all via a real
+     register_task call whose RETURNED id was written back into
+     docs/requirements.yaml's impl_order field (superseding the invented
+     154/155/156). REQ-109 is `done` and merged -- deliberately left
+     unregistered rather than backfilled: a completed requirement has no
+     remaining claim for get_next_task to hand out, so registering it would
+     create a queue task with nothing to do. Its impl_order:153 comment is
+     corrected to state plainly it is not a queue id and why.
+
+  2. DOCUMENTED. docs/agents/protocols/TASK_QUEUE.md's register_task
+     section now states explicitly, with this incident cited: an
+     unregistered requirement carries NO impl_order, never a guessed one,
+     because impl_order and the deployed service's task id are the same
+     integer and a placeholder silently doubles as a working /tasks/<id>
+     URL against an unrelated task.
+
+  3. FILED, not built (out of this repo's scope -- letflow-queue is a
+     separate service/repo). tvolodi/letflow-queue#3 requests a genuinely
+     non-destructive GET /tasks/:id, citing this incident as the concrete
+     motivating case.
+
+  Queue task 153 (ISS-0087's true task) remains stranded `done` from the
+  original incident and is not reversible via the API -- this was already
+  repaired at the time by re-registering ISS-0087 as task 166, recorded in
+  the description above. Nothing further to do there.

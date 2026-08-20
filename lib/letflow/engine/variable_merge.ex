@@ -79,29 +79,31 @@ defmodule Letflow.Engine.VariableMerge do
   `Letflow.EventStore.Registry.validate_payload/3` or `.get_type/2` (both
   perform `Repo` I/O) anywhere in this module.
 
-  Verification (grep-checkable, matching `Letflow.Engine.Transition`'s own
-  precedent):
+  Verification (grep-checkable; **ISS-0080 / GH#301 fix, 2026-08-20** — the
+  prior recipe here grepped the whole file including this moduledoc's own
+  prose, which necessarily *names* the functions it promises never to
+  *call* and so registered false positives against itself, including its
+  own recipe line. This recipe strips every `"""`-delimited doc block (the
+  `@moduledoc` and every `@typedoc` in this file) before grepping, so it
+  checks call sites in the actual code, not mentions in documentation of
+  what the caller does):
 
   ```bash
-  grep -n "Repo\\.\\|Logger\\.\\|DateTime\\.\\|System\\.os_time\\|System\\.system_time\\|HTTPoison\\|Req\\.\\|File\\.\\|:rand\\.\\|:crypto\\.\\|Registry\\.validate_payload\\|Registry\\.get_type\\|Registry\\.register_type" lib/letflow/engine/variable_merge.ex
+  awk '/"""/{f=!f; next} !f' lib/letflow/engine/variable_merge.ex \
+    | grep -n "Repo\\.\\|Logger\\.\\|DateTime\\.\\|System\\.os_time\\|System\\.system_time\\|HTTPoison\\|Req\\.\\|File\\.\\|:rand\\.\\|:crypto\\.\\|Registry\\.validate_payload\\|Registry\\.get_type\\|Registry\\.register_type"
   ```
 
-  must return zero matches.
-
-  **That "zero matches" claim is factually wrong about shipped code and has
-  been since this module shipped — independent of REQ-109.** The grep returns
-  four matches, every one of them documentation prose (or the pattern string
-  matching itself), none an executable call site: this moduledoc necessarily
-  *names* the functions it promises never to *call*, and a textual grep cannot
-  tell a mention from a call. Tracked as **ISS-0080 / GH#301**; REQ-109
-  deliberately did not repair the recipe, and deliberately did not delete or
-  reword any of the matching lines to make it pass — doing so would satisfy a
-  gate by editing what it measures, and would destroy REQ-049 AC4's own
-  evidence artifact. The real invariant is the prose above it: no `Repo` I/O,
-  no `alias Letflow.Repo`, no `import Ecto.Query`, no `Ecto.Changeset`, no
-  invocation of `validate_payload/3`/`get_type/2`/`register_type/2`, no clock,
-  no `:rand`/`:crypto` — verified by reading this module's `alias`/`import`
-  list and its function bodies, which REQ-109 left untouched.
+  must return zero matches — and does, verified this run. The real invariant
+  is the prose above it: no `Repo` I/O, no `alias Letflow.Repo`, no `import
+  Ecto.Query`, no `Ecto.Changeset`, no invocation of
+  `validate_payload/3`/`get_type/2`/`register_type/2`, no clock, no
+  `:rand`/`:crypto` — verified by reading this module's `alias`/`import`
+  list and its function bodies. Deliberately NOT fixed by deleting or
+  rewording the prose that mentions those names (REQ-049 AC4's evidence
+  artifact and REQ-109's caller-paragraph both live in that prose) — doing
+  that would satisfy a gate by editing what it measures instead of fixing
+  the recipe, exactly what ISS-0080 flagged as the risk of touching this
+  moduledoc carelessly.
 
   ## Determinism
 

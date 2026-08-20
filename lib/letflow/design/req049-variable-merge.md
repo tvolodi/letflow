@@ -469,6 +469,13 @@ must return zero matches. `mix xref graph Letflow.Engine.VariableMerge` should c
 `Letflow.Repo` nor `Letflow.EventStore.Registry` (the DB-backed functions specifically) appears as
 a callee, direct or transitive.
 
+**ISS-0080 / GH#301 note (added 2026-08-20, not re-opening this shipped design):** this recipe
+grepped the whole file, including the moduledoc's own prose describing what `merge/3` does *not*
+call — a bare-symbol grep cannot distinguish a mention from a call site, so it returned false
+positives against its own documentation. The shipped module's moduledoc now carries the corrected
+recipe (strip `"""`-delimited doc blocks before grepping); this record is left as originally
+written and is not itself re-verified against it.
+
 ## 11. Immediate visibility to subsequent CEL evaluation (AC4/EE-09 AC4, this task's AC5)
 
 **Design element, not an argued claim:** `merge/3` is synchronous and pure (§10) — it returns

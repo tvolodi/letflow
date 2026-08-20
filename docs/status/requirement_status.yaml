@@ -5493,3 +5493,20 @@ history:
       return values changed anywhere under lib/letflow/, verified by
       inspecting the full diff. lib/letflow/engine/execution_error.ex has
       zero diff (CLASS B, caveat correctly left untouched).
+  - req: REQ-111
+    event: done
+    agent: ORCH
+    at: 2026-08-20T03:15:38Z
+    note: >
+      Supplementary to the WF03-REQ111-20260820 entry above: that session's
+      own closeout note states plainly it touched only
+      docs/requirements.yaml's status field and its own status-history
+      entry -- it did not reach the letflow-queue service. Queue task 168
+      was therefore still `open`/unlocked and GH#316 still OPEN after that
+      commit landed (confirmed via `gh issue view 316` before acting here).
+      Closed the remaining gap: set_lock(168, agent_id:
+      tvolo-workstation-manual-close), then release_lock(168, status:
+      "done"); release_lock's best-effort GitHub sync closed GH#316
+      directly (confirmed via `gh issue view 316`, closedAt matching the
+      release timestamp 2026-08-20T03:15:38Z). No AC re-verification
+      redone here beyond what the entry above already recorded in detail.

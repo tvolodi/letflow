@@ -5055,7 +5055,8 @@ requirements:
     stage: S3
     impl_order: 168  # letflow-queue task id -- registered 2026-08-20 per ISS-0092/GH#314
     # (superseding the invented 155, which addressed an unrelated live task
-    # and was never returned by register_task). Mirrored to GH#316.
+    # and was never returned by register_task). Mirrored to GH#316, closed
+    # 2026-08-20 -- audit landed in 29676de, queue task released status:done.
     description: >
       Two shipped S3 designs carry deferrals that exist only because the R-Co
       source tree could not be read at design time. It can be read now. This

@@ -47,7 +47,20 @@ description: >
   FAILed it for.
 affected_files:
   - lib/letflow/engine/variable_merge.ex
-status: open
+status: resolved
+resolution: >
+  Fixed 2026-08-20, commit 91d7e25 (WF03-ISS0080-20260820), sequenced after
+  REQ-109 as recommended. Did not touch the prose that trips the false
+  positive (REQ-049 AC4's evidence artifact, REQ-109's caller-composition
+  paragraph) -- per this issue's own "do not simply delete the self-check"
+  guidance, that would satisfy a gate by editing what it measures. Instead
+  fixed the recipe itself: strip every """-delimited doc block
+  (`awk '/"""/{f=!f;next} !f'`) before grepping, so it checks call sites in
+  actual code rather than mentions in documentation. Verified this run: the
+  corrected recipe returns zero matches, genuinely, for the first time.
+  Added a pointer note to req049-variable-merge.md's original §10 recipe
+  (the source this moduledoc's recipe was copied from) so a future reader
+  doesn't reintroduce the same false positive by copying it. GH#301 closed.
 github_issue: https://github.com/tvolodi/letflow/issues/301
 related:
   - ISS-0075

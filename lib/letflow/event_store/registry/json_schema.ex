@@ -143,11 +143,26 @@ defmodule Letflow.EventStore.Registry.JsonSchema do
     end
   end
 
+  # ISS-0088 / GH#305 fix: a subschema must itself be a map before recursing
+  # into it -- mirrors array_violations/3's own `items_schema when is_map(...)`
+  # guard below. `json_schema` is a jsonb column, which permits a non-map
+  # value (array/string/number/boolean) nested at any depth, including inside
+  # an otherwise well-formed `properties` object; recursing into one
+  # unguarded reaches collect/3's clauses, all of which require a map, and
+  # raises FunctionClauseError. A non-map subschema is treated as "no
+  # constraint" for that key -- silently permissive, exactly like a non-map
+  # `items` already is -- not a validation failure in its own right, since
+  # this validator's job is reporting violations of well-formed schemas, not
+  # policing the schema document itself (that is req109-variable-schemas.md
+  # section 11.3 OQ-3's registration-time job, REQ-078/REQ-082, not this
+  # function's).
   defp properties_violations(pointer, value, schema) do
     case schema["properties"] do
       properties when is_map(properties) ->
         properties
-        |> Enum.filter(fn {name, _subschema} -> Map.has_key?(value, name) end)
+        |> Enum.filter(fn {name, subschema} ->
+          Map.has_key?(value, name) and is_map(subschema)
+        end)
         |> Enum.flat_map(fn {name, subschema} ->
           collect(join_pointer(pointer, name), value[name], subschema)
         end)

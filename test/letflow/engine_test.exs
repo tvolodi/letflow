@@ -1134,8 +1134,7 @@ defmodule Letflow.EngineTest do
             %{
               kind: :variable_schema,
               ref: definition.name,
-              resolved_id: nil,
-              version: "parent-v1"
+              version: "1.0.0"
             }
           ]
         })
@@ -1147,7 +1146,7 @@ defmodule Letflow.EngineTest do
 
       parent_started = Enum.find(parent_events, &(&1.event_type == "INSTANCE_STARTED"))
 
-      assert [%{"version" => "parent-v1", "source" => "override"}] =
+      assert [%{"version" => "1.0.0", "source" => "override"}] =
                parent_started.payload["pinned_versions"]
 
       refute Map.has_key?(parent_started.payload, "pin_conflicts")
@@ -1160,7 +1159,7 @@ defmodule Letflow.EngineTest do
       assert {:ok, child_events} = Reconstruction.read_full_log(child.instance_id, schema_name, 1)
       child_started = Enum.find(child_events, &(&1.event_type == "INSTANCE_STARTED"))
 
-      assert [%{"version" => "parent-v1", "source" => "inherited"}] =
+      assert [%{"version" => "1.0.0", "source" => "inherited"}] =
                child_started.payload["pinned_versions"]
 
       expected_ref = definition.name
@@ -1170,7 +1169,7 @@ defmodule Letflow.EngineTest do
                  "kind" => "variable_schema",
                  "ref" => ^expected_ref,
                  "child_resolved_version" => "unversioned",
-                 "inherited_version" => "parent-v1"
+                 "inherited_version" => "1.0.0"
                }
              ] = child_started.payload["pin_conflicts"]
     end
@@ -1185,7 +1184,6 @@ defmodule Letflow.EngineTest do
             %{
               kind: :variable_schema,
               ref: definition.name,
-              resolved_id: nil,
               version: "unversioned"
             }
           ]

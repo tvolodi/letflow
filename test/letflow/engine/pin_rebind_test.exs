@@ -30,6 +30,7 @@ defmodule Letflow.Engine.PinRebindTest do
   alias Letflow.Engine
   alias Letflow.Engine.PinRebind
   alias Letflow.Engine.PinResolver
+  alias Letflow.Engine.PinResolver.Lookup
   alias Letflow.Engine.Reconstruction
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Identity.Tenant
@@ -142,7 +143,22 @@ defmodule Letflow.Engine.PinRebindTest do
 
   # Pins the instance's variable_schema entry to a known, deterministic starting
   # version ("v1") via pin_overrides -- mirrors engine_test.exs's own REQ-059 AC6
-  # fixture shape (parent_attrs's pin_overrides).
+  # fixture shape (parent_attrs's pin_overrides). GH#298/ISS-0079: an override is
+  # now VERIFIED against pin_lookup rather than trusted verbatim, so this fixture
+  # supplies its own variable_schema_lookup reporting "v1" as the current version
+  # -- the override then legitimately confirms it, exactly the "I expect v1 to be
+  # current" assertion pin_overrides now means, rather than asserting a version no
+  # lookup ever backed.
+  defp v1_pin_lookup do
+    %Lookup{
+      catalog_lookup: fn _ref -> {:error, :not_found} end,
+      module_lookup: fn _ref -> {:error, :not_found} end,
+      variable_schema_lookup: fn _tenant_id, _process_key ->
+        {:ok, %{version: "v1", json_schema: nil}}
+      end
+    }
+  end
+
   defp start_instance!(schema_name, definition, overrides \\ %{}) do
     attrs =
       Map.merge(
@@ -151,8 +167,9 @@ defmodule Letflow.Engine.PinRebindTest do
           initial_variables: %{},
           actor_id: Ecto.UUID.generate(),
           idempotency_key: unique_idempotency_key("req060-start"),
+          pin_lookup: v1_pin_lookup(),
           pin_overrides: [
-            %{kind: :variable_schema, ref: definition.name, resolved_id: nil, version: "v1"}
+            %{kind: :variable_schema, ref: definition.name, version: "v1"}
           ]
         },
         overrides

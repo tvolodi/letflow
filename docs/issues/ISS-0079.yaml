@@ -156,7 +156,72 @@ letflow_evidence:
 affected_files:
   - lib/letflow/engine/pin_resolver.ex
   - lib/letflow/design/req059-pin-resolver.md
-status: open
+status: resolved
+resolved_at: "2026-08-20T14:05:00Z"
+resolution: >
+  Decided and fixed per lib/letflow/design/iss-0079-pin-override-verification.md,
+  verified against R-Co directly (pin_resolver.zig:206, :254-299, :602-735) rather
+  than trusting this record. R-Co's real semantic is narrower than "override" implies:
+  it does not force an arbitrary alternate version, it VERIFIES that a caller's
+  claimed current version matches what the injected lookup actually reports, failing
+  loudly (UnresolvedPinOverride, HTTP 422) if not -- an optimistic-concurrency
+  assertion, not a substitution mechanism.
+
+  Decision 1 -- YES, verify every override against the injected Lookup. resolve/4
+  was never "no I/O" in the first place; it already calls Lookup for every
+  non-overridden ref. Collapsed R-Co's own redundant two-phase double-lookup (base
+  resolve, then separately re-verify) into one lookup call per ref, preserving every
+  observable outcome including the edge case where an unresolvable ref reports its
+  own unresolved_catalog_ref/unresolved_module_ref rather than
+  unresolved_pin_override, even when an override was supplied for it.
+
+  Decision 2 -- resolve_error()/create_error() gain {:unresolved_pin_override, ref},
+  following this module's own ref-carrying convention over R-Co's bare error code.
+
+  Decision 3 -- kind: :module remains a legal override, verified against
+  lookup.module_lookup exactly like catalog_entry, NOT special-cased to always fail.
+  R-Co's blanket rejection is an artefact of PLC-01 not existing in R-Co at all;
+  Letflow's Lookup.module_lookup is a real injectable field that can succeed once a
+  real implementation exists. No special case needed: default_lookup/0's
+  module_lookup already fails closed the same way R-Co's special case would, arrived
+  at by the general mechanism rather than a copied stopgap.
+
+  Decision 4 -- a stray override (naming a {kind, ref} the graph doesn't reference)
+  is an error, not a no-op, checked once every real ref has resolved successfully --
+  independently justified (masks a caller's own mistake), not merely inherited.
+
+  Consequence of Decision 1: override_entry() drops resolved_id (R-Co's wire format
+  never had one; a caller-supplied value is never read once overrides are verified
+  rather than trusted).
+
+  Fixed: lib/letflow/engine/pin_resolver.ex (resolve/4, resolve_one_ref/4 ->
+  interpret_lookup/4, resolve_variable_schema/3, new check_no_stray_overrides/2),
+  lib/letflow/engine.ex (create_error() mirror, no logic change -- the with chain
+  already propagates PinResolver errors through). Two real regressions found and
+  fixed in existing test fixtures that relied on the old unverified-override
+  behaviour (arbitrary version strings not backed by any matching lookup):
+  engine_test.exs's REQ-059 AC6 child-inheritance test and
+  pin_rebind_test.exs's shared start_instance!/3 helper, both given a pin_lookup
+  whose variable_schema_lookup returns the exact version their override claims.
+  test/specs/REQ-059.md's override section and its sequential case numbering
+  corrected throughout (verified no other cross-references to the shifted numbers
+  were missed).
+
+  Verified: 104/104 across pin_resolver_test.exs, engine_test.exs, pin_rebind_test.exs
+  (every test file exercising resolve/4 or its callers); mix compile: 14 pre-existing
+  baseline warnings, none new. A full-suite run was interrupted mid-run by this
+  environment's background-task duration limit (unrelated to this fix) but reached
+  10 failures before being cut off, all Letflow.IdentityMigrationTest -- the same
+  cross-session global-table-contention pattern already diagnosed and closed out
+  during GH#300/ISS-0077's fix earlier this session; none touch pin_resolver.ex or
+  engine.ex.
+
+  Adjacent deltas (a) dedup via Enum.uniq() and (b) sort-key Atom.to_string/1 vs.
+  R-Co's @intFromEnum are DELIBERATELY NOT ADDRESSED here, per this issue's own
+  scoping note that they need separate dispositioning -- not filed as their own GH
+  issues by this fix, a judgment call beyond what resolving #298 itself calls for.
+
+  Closing GH#298.
 github_issue: https://github.com/tvolodi/letflow/issues/298
 related:
   - ISS-0076

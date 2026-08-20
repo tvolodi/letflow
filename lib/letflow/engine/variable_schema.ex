@@ -381,11 +381,16 @@ defmodule Letflow.Engine.VariableSchema do
     end
   end
 
-  # Defensive (design §6.4): instance_projection.ex:113 types `definition_id`
-  # as a plain nullable Ecto.UUID field, so a nil is representable, and a
-  # malformed value in a `where` raises Ecto.Query.CastError rather than
-  # returning a typed error -- the same class engine.ex's own cast_task_id/1
-  # guards against.
+  # Defensive (design §6.4): this function's own `definition_id` parameter stays
+  # `Ecto.UUID.t() | nil`, and this guard stays, even though
+  # `InstanceProjection.definition_id` is now typed non-nullable (GH#310 / ISS-0091)
+  # -- `fetch_schemas/3`/`variable_validations/5` are this module's public entry
+  # points, not sealed to `InstanceProjection` as their only possible caller. A
+  # malformed or nil value reaching a `where` here would raise
+  # Ecto.Query.CastError rather than returning a typed error -- the same class
+  # engine.ex's own cast_task_id/1 guards against. What's unreachable today is
+  # only the specific path from `Letflow.Engine.complete_task/3`, which now says
+  # so in its own @spec rather than in this module.
   @spec validate_definition_id(Ecto.UUID.t() | nil) ::
           {:ok, Ecto.UUID.t()} | {:error, :invalid_definition_id}
   defp validate_definition_id(definition_id) do

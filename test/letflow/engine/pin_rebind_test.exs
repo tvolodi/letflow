@@ -494,7 +494,7 @@ defmodule Letflow.Engine.PinRebindTest do
       assert pin.source_event_id == started_event_id
     end
 
-    test "reconstruct_effective_pins/2 returns {:error, :instance_not_found} for a non-empty event stream with no INSTANCE_STARTED (SECURITY-REVIEWER finding, ISS-0078)" do
+    test "returns {:error, :instance_not_found} for a non-empty event stream with no INSTANCE_STARTED (SECURITY-REVIEWER finding, ISS-0078)" do
       %{schema_name: schema_name} = provisioned_tenant()
 
       # Deliberately fabricate an event stream missing its INSTANCE_STARTED

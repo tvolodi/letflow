@@ -124,11 +124,14 @@ related:
   - ISS-0086
   - ISS-0076
 github_issue: https://github.com/tvolodi/letflow/issues/304
-queue_task_id: null   # never registered (filed under pre-2026-08-20 ISSUE_QUEUE.md, same
-  # gap as ISS-0086). One real get_next_task reconciliation attempt during the resolving
-  # run returned a different, newer task (#165/ISS-0090) -- not this one -- released back
-  # to open untouched. Residual gap, bounded: GH#304 is now closed and will not be
-  # re-imported.
+queue_task_id: 166   # backfilled 2026-08-20 per GH#313 (see closeout note below).
+  # Originally null here (filed under pre-2026-08-20 ISSUE_QUEUE.md, same gap as
+  # ISS-0086); the resolution section below's "GH#304 is now closed" claim predates
+  # ISS-0092's incident (ORCH's release_lock mistakenly transitioned unrelated queue
+  # task 153 to done off a requirements.yaml impl_order comment, closing GH#304 as a
+  # side effect) and GH#304's subsequent reopening -- see ISS-0092/GH#314 for the
+  # full incident. GH#313 (queue task 166) was filed to re-register this issue and
+  # restore claimability after that incident; it is now closed below.
 status: resolved
 resolved_in_run: WF03-ISS0087-20260820
 resolved_at: "2026-08-20T00:27:13Z"
@@ -199,3 +202,14 @@ resolution: >
 
   RELATED, NOT FIXED HERE: ISS-0085 (`&&`/`||` spacing) is a separate, independent root
   cause per the original issue's own note -- out of scope for this run.
+closeout_2026_08_20: >
+  GH#313 (queue task 166, the re-registration filed after ISS-0092's incident struck
+  GH#304 closed while genuinely unfixed) is now resolved. Re-verified this run,
+  independent of the resolution section above: `mix test test/letflow/engine/expr_test.exs`
+  -- 41/41 passing on current `main` (commit b43a274 is an ancestor of origin/main),
+  including both regression tests added by the fix. GH#304 closed with a comment citing
+  this verification, per GH#313's AC2 ("closed only when the underlying divergence is
+  actually resolved, not administratively"). Queue task 166 released with
+  `status: "done"`, which best-effort closed GH#313 itself via the queue's GitHub sync
+  (confirmed: `gh issue view 313` now reads CLOSED). Queue task 153 remains stranded at
+  `done` per ISS-0092 and is not touched by this closeout.

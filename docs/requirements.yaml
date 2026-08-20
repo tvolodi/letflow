@@ -3670,7 +3670,7 @@ requirements:
   - id: REQ-065
     title: Resolve the Phoenix-vs-Plug/Bandit contradiction between decision 0001 and the shipped router (gates all of S4)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S4
     impl_order: 132  # letflow-queue task id
     description: >

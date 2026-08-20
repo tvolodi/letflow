@@ -5624,3 +5624,21 @@ history:
       implementation," not yet started; REQ-065 gates the whole stage and
       hasn't landed), so no code changed. docs/issues/ISS-0037.yaml marked
       resolved, recording REQ-082 as the owning requirement. Closing GH#112.
+  - req: REQ-065
+    event: started
+    agent: ORCH
+    at: 2026-08-20T17:57:13Z
+    note: >
+      Picking up queue task 132 (GH#272), named directly by the project owner after
+      force-releasing it from a confirmed-dead prior session's lock. set_lock re-claimed
+      it under agent_id tvolodi-orch (200, re-locked). Routing through WF-02 (Requirement
+      Implementation), not WF-01: REQ-065 already exists as a validated pending
+      requirement in docs/requirements.yaml (drafted and REQ-VALIDATOR-passed during the
+      2026-08-19 S4 batch expansion, per stage-4-api-surface.md's "Status: expanded into
+      requirements" header) -- WF-01 is for drafting new requirements, not implementing
+      an already-well-formed one. This also matches the documented precedent WF-02 Step
+      3's own text cites by name: REQ-010 (the decision-record requirement this one is
+      explicitly modeled on) went through WF-02, and its run is literally why WF-02 Step
+      3's docs-only scope test exists ("added after REQ-010's WF02 run surfaced the
+      gap"). Branch feature/WF02-REQ065-20260820 created off origin/main and pushed
+      (Step 00). Status flipped pending -> in_progress here.

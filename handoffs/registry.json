@@ -1324,6 +1324,28 @@
       "queue_agent_id": "hetzner-wt2-orch",
       "worktree": "/home/tvolodi/letflow-wt2 (secondary worktree)",
       "note": "Recovered from the Step 2a max_rework escalation via a design-amendment pass rather than a blind retry. Final commit 43084c6 on branch feature/WF02-REQ062-20260819, merged to main during the merge of feature/WF02-REQ062-20260819 with origin/main (this run) -- composed against REQ-059's PinResolver integration in lib/letflow/engine.ex and lib/letflow/engine/reconstruction.ex, both of which REQ-059 also touched. Queue task 106 lock released."
+    },
+    {
+      "run_id": "WF02-REQ066-20260820",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-066"
+      ],
+      "stage": "S4",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/api/",
+        "test/letflow/api/",
+        "lib/letflow/design/req066-api-error-response.md"
+      ],
+      "lock_acquired_at": "2026-08-20T19:28:59Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 6 (DOC-UPDATER) COMPLETED and independently verified by ORCH; dispatching Step Final (git merge)",
+      "backfilled": false,
+      "queue_task_id": 133,
+      "queue_agent_id": "tvolodi-orch",
+      "note": "Ports src/api/errors.zig + src/api/response.zig (R-Co) as Letflow.Api.Error/Letflow.Api.Response, RFC 9457 problem-details contract for S4. depends_on REQ-065 (done). Two rework iterations, both from validator FAILs that caught real defects rather than style: REVIEWER FAILed Step 2d because router.ex's catch-all still hand-built a 404 body (which would have shipped two structurally different 404 documents and left INV-5's guarantee conventional rather than structural), and TEST-DESIGN-VALIDATOR FAILed Step 3b because AC3's leak half was vacuous -- the seeded values never reached any input the arity-1 conn-only function observed, so every refute was trivially true against every possible implementation. RELEASE-VALIDATOR then mutation-tested both security criteria (patching internal_error/1 to reflect an assign, and not_found/1 to vary on one) and confirmed each mutation failed exactly the intended test, proving the coverage is genuinely falsifiable. Three issues filed rather than fixed: ISS-0106/GH#354 (toolchain drift -- .tool-versions pins 1.18.3-otp-27, host runs 1.20.3/OTP 29), ISS-0107/GH#358 and ISS-0108/GH#360 (test-isolation flakes; the notable finding is that the suite's environmental failure set is load-dependent rather than a fixed list)."
     }
   ]
 }

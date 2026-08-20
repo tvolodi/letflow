@@ -132,6 +132,16 @@ reproducibility: >
 suggested_owner: ISSUE-FIXER
 blocks: []
 status: open
+queue_task_id: 172
+github_issue: https://github.com/tvolodi/letflow/issues/358
+github_issue_note: >
+  Filed by ORCH on TEST-RUNNER's behalf (TEST-RUNNER wrote the local record but
+  had no gh step). letflow-queue's register_task auto-created its own mirror,
+  https://github.com/tvolodi/letflow/issues/359, on registration of task 172;
+  #359 was closed as a duplicate of #358, which carries the full diagnosis.
+  #358 is the canonical record. Note that a future release_lock(status: "done")
+  on task 172 will attempt to close #359, not #358 -- a harmless no-op since
+  #359 is already closed, but whoever resolves this must close #358 by hand.
 related:
   - ISS-0048
   - ISS-0050

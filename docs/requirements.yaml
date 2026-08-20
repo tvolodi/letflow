@@ -4587,6 +4587,37 @@ requirements:
       the choice in `Letflow.Engine.VariableSchema`'s moduledoc (closing
       design sec 11.3 OQ-3) and closes GH#306/GH#305 accordingly.
       SECURITY (INV-1, INV-5, INV-8).
+      HANDLEACTIVATE AND THE SERVICE-EXISTENCE ORACLE (obligation added by
+      ISS-0037/GH#112 -- read that file before designing this handler's 422
+      body). `Letflow.Definitions.activate/2` (REQ-030, `definitions.ex:1085`)
+      returns `{:error, {:service_scope_violation, %ServiceScopeValidator.Violation{}}}`
+      when a `:SERVICE_TASK` node references a `service_id` the validator
+      rejects. `Violation.reason` is, by REQ-031's own AC3, one of two
+      distinct closed-set atoms: `:service_not_registered` (the service_id
+      exists nowhere) vs. `:service_not_available_to_tenant` (it exists,
+      scoped to a different tenant) -- and `Violation.message` independently
+      encodes the same distinction in prose ("is not registered" vs. "is not
+      available to this tenant" / "scope data is inconsistent"). That
+      distinction is REQUIRED at the `validate/3` API level (REQ-031 AC3) and
+      must stay exactly as it is in `service_scope_validator.ex` -- it is the
+      handler rendering the 422 body that must NOT expose it. If handleActivate
+      naively serializes `reason` or `message` into the response, an external
+      caller can use process-definition activation as an oracle to learn
+      whether an arbitrary `service_id` string is registered ANYWHERE in the
+      system, independent of which tenant owns it or whether the caller's own
+      tenant can use it -- the same class of leak REQ-066/REQ-072's byte-
+      identical-404 guarantee exists to close for resource ids, applied here to
+      a referenced service_id instead of a resource id. Resolution: collapse
+      both `Violation.reason` values into ONE generic external-facing 422
+      `detail` string via `Letflow.Api.Error` (REQ-066) -- e.g. "a referenced
+      service is not usable by this tenant" -- for every `service_scope_violation`
+      regardless of which internal reason produced it; the distinct internal
+      `reason`/`message` remain available for server-side logging/telemetry
+      only, never in the response body. This is option (a) from ISS-0037's own
+      two named options, chosen because it is the only one consistent with
+      every other INV-5 obligation already written into this and every other
+      S4 requirement in this file -- do not re-litigate it as if it were still
+      open. Close GH#112 / mark ISS-0037.yaml resolved when this lands.
     acceptance_criteria:
       - "each of the eight handlers has an end-to-end test through the real router asserting status and, for writes, the resulting persisted state rather than only the status code"
       - "activating an archived definition, deprecating an archived one, and archiving an archived one each return a 409-class problem document and leave the row unchanged -- three explicit tests"
@@ -4597,6 +4628,9 @@ requirements:
       - "a caller without DefinitionsWrite receives 403 on all eight endpoints with no state change in any case"
       - "importing a definition document carrying variable_schemas entries writes the corresponding rows into the calling tenant's variable_schemas table (REQ-109's table), and re-importing onto the SAME definition_id replaces those rows inside one transaction rather than failing on UNIQUE (definition_id, variable_key) or accumulating duplicates -- both verified by reading the rows back; and that write goes through the single shared Letflow.Definitions registration function REQ-078's install also calls, with grep confirming no second insert path into variable_schemas anywhere in the route layer"
       - "a re-import onto the SAME definition_id whose document OMITS a previously-registered variable_key leaves no row for that key -- verified by reading the rows back and asserting the omitted key is absent, not merely that the remaining keys are correct. A key removed from the document must stop being validated against; an upsert that leaves the stale row behind would keep REQ-109's merge rejecting values the definition no longer constrains"
+      - "activating a definition referencing an unregistered service_id and activating one referencing a service_id registered to a different tenant each return byte-identical 422 problem-detail bodies -- same status, same detail string -- demonstrated by a test comparing the two serialised responses directly, not merely asserting both are 422 (ISS-0037/GH#112, INV-5)"
+      - "the two 422 bodies from the criterion above do not contain the literal words \"registered\" or \"available to this tenant\", and do not echo the raw service_id substring distinguishably between the two cases, verified by asserting on the actual response body rather than by inspecting the handler source"
+      - "the handler's own logs or telemetry for each of the two cases above still record the distinct internal Violation.reason atom, verified by capturing the log/telemetry output in the test -- the collapse is external-response-only, not a loss of internal diagnosability"
     depends_on: [REQ-081, REQ-109]
 
   - id: REQ-083

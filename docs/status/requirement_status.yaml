@@ -5582,3 +5582,45 @@ history:
       end-to-end test in engine_variable_schema_merge_test.exs's AC5
       describe blocks now asserts rejection (unmerged, instance ERROR, one
       EXECUTION_ERROR) instead of unvalidated insertion. Closing GH#300.
+  - req: REQ-082
+    event: revised
+    agent: ORCH
+    at: "2026-08-20T15:00:00Z"
+    note: >
+      GH#112 (ISS-0037): a deferred design note filed during REQ-031's
+      SECURITY-REVIEWER gate (2026-08-17), before S4 had any requirements
+      at all. It warned that once S4 built handleActivate's HTTP renderer,
+      naively serializing service_scope_validator.ex's
+      Violation.reason/message would let an external caller use process-
+      definition activation as an oracle for whether an arbitrary
+      service_id is registered anywhere in the system -- INV-5's
+      not-found/forbidden indistinguishability principle, applied to a
+      referenced service_id rather than a resource id. S4 was expanded into
+      21 requirements on 2026-08-19 (REQ-065..REQ-085); REQ-082 is the one
+      that owns handleActivate, but its drafted text did not reference
+      ISS-0037/GH#112 at all -- confirmed by grep, despite the identical
+      INV-5 discipline being applied explicitly throughout REQ-066 and
+      every other S4 requirement touching cross-tenant responses. Filed as
+      a real gap, not assumed innocuous: no other S4 requirement's text
+      would have caught it before implementation (REQ-066 owns the generic
+      problem-details builder/constructors, not this specific business-
+      logic-to-HTTP-status decision).
+
+      Resolution: REQ-082's description gained a new paragraph
+      ("HANDLEACTIVATE AND THE SERVICE-EXISTENCE ORACLE") stating the
+      obligation explicitly and choosing option (a) from ISS-0037's own two
+      named options -- collapse both Violation.reason values into one
+      generic external 422 detail via REQ-066's Letflow.Api.Error, keeping
+      the distinct internal reason for logging only -- as the only choice
+      consistent with every other INV-5 obligation already written into
+      this and every other S4 requirement, not left open for
+      re-litigation. Three new acceptance criteria added: byte-identical
+      422 bodies across both violation reasons, the response body must not
+      leak the distinguishing words/service_id substring, and internal
+      logging must still retain the distinct reason.
+
+      REQ-082 itself remains status: pending -- this is a requirements-
+      level fix (S4 is "detailed to requirements level and waiting for
+      implementation," not yet started; REQ-065 gates the whole stage and
+      hasn't landed), so no code changed. docs/issues/ISS-0037.yaml marked
+      resolved, recording REQ-082 as the owning requirement. Closing GH#112.

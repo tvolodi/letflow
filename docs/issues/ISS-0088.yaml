@@ -54,7 +54,37 @@ description: >
   equally latent on the event-registry path today.
 affected_files:
   - lib/letflow/event_store/registry/json_schema.ex
-status: open
+status: resolved
+resolved_at: "2026-08-20T11:10:00Z"
+resolution: >
+  Fix (a) from the scoping note's two candidate fixes: added `and is_map(subschema)`
+  to properties_violations/3's Enum.filter/2 predicate, mirroring
+  array_violations/3's own `items_schema when is_map(items_schema)` guard. A
+  non-map subschema nested inside an otherwise well-formed `properties` object
+  is now treated as "no constraint" for that key, matching how a non-map
+  `items` value already behaved -- not a raise.
+
+  Fix (b) (registration-time well-formedness validation) is NOT part of this
+  resolution -- deliberately, per the scoping note's own framing that the two
+  are complementary, not alternatives, and per REQ-082's existing
+  "WELL-FORMEDNESS, NOT JUST PRESENCE" obligation paragraph (confirmed already
+  present in docs/requirements.yaml, citing this issue by name), which already
+  carries that obligation for whichever of REQ-078/REQ-082 lands first. No
+  registration INSERT path exists yet to validate against -- fix (b) has
+  nothing to attach to until one of those requirements is implemented.
+
+  Verified by execution, reproducing the issue's own confirmed cases exactly:
+  `JsonSchema.validate(%{"x" => 1}, %{"properties" => %{"x" => "junk"}})` now
+  returns `[]` (was: raised FunctionClauseError); the sibling
+  array_violations/3 case and a genuine violation both continue to behave
+  identically to before the fix. Two new tests added to
+  json_schema_test.exs's existing "properties" describe block, alongside the
+  pre-existing "malformed properties value" test this mirrors: one pinning
+  the exact fixed scenario, one confirming a malformed subschema for one key
+  does not suppress a real violation reported for a sibling key. Full suite:
+  5 properties, 1190 tests, 0 failures (was 1188 before the two new tests).
+
+  Closing GH#305.
 github_issue: https://github.com/tvolodi/letflow/issues/305
 related:
   - ISS-0077

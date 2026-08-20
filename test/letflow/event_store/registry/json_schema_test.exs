@@ -362,6 +362,26 @@ defmodule Letflow.EventStore.Registry.JsonSchemaTest do
 
       assert JsonSchema.validate(%{"anything" => 1}, schema) == []
     end
+
+    test "a subschema that is itself not a map is treated as inert, not raised, even though \"properties\" itself is well-formed (ISS-0088/GH#305)" do
+      # Confirmed by execution before the fix: this exact shape raised
+      # FunctionClauseError -- properties_violations/3 checked that
+      # schema["properties"] is a map but recursed into each subschema
+      # unchecked, unlike array_violations/3's own items_schema guard.
+      schema = %{"type" => "object", "properties" => %{"x" => "junk"}}
+
+      assert JsonSchema.validate(%{"x" => 1}, schema) == []
+    end
+
+    test "a malformed subschema for one key does not suppress a real violation reported for a sibling key" do
+      schema = %{
+        "type" => "object",
+        "properties" => %{"bad_schema" => "junk", "good" => %{"type" => "string"}}
+      }
+
+      result = JsonSchema.validate(%{"bad_schema" => 1, "good" => 42}, schema)
+      assert failures(result) == [{"/good", "type"}]
+    end
   end
 
   # ---------------------------------------------------------------------

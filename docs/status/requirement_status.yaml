@@ -5188,3 +5188,82 @@ history:
       scope boundary, not shipped here), no change to the documented
       gen_statem/process-model diagram, and no change to the "Running
       it" section; verified by grep.
+
+  - req: REQ-109
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-20T01:04:36Z"
+    note: >
+      WF02-REQ109-20260819. R-Co's variable_schemas storage ported and
+      per-key output-variable validation wired into the merge call site,
+      closing ISS-0063 / GH#212 -- the migration gap that left REQ-049's
+      own schema-rejection branch unreachable through complete_task/3.
+      Shipped: a tenant-scoped variable_schemas migration guarded by
+      `if prefix() do` AND registered in lib/letflow/tenant_provisioning.ex's
+      @tenant_scoped_migration_manifest (both halves), carrying
+      definition_id (FK to process_definitions(id)), variable_key,
+      json_schema, description, created_at and UNIQUE (definition_id,
+      variable_key); Letflow.Engine.VariableSchema
+      (lib/letflow/engine/variable_schema.ex) as the Ecto schema, the
+      single per-definition SELECT of variable_key/json_schema, and the
+      pure per-key validations builder; and the replacement of
+      lib/letflow/engine.ex's hardcoded `nil` variable_validations
+      argument to VariableMerge.merge/3 with a real map built inside the
+      same already-open transaction and already-locked projection
+      (merge_output_variables/7 -- the function REQ-109's own earlier text
+      and ISS-0063 both called /5, corrected in this pass per
+      CODE-DESIGN-VALIDATOR N4). Only overwrite candidates are validated;
+      brand-new keys are never validated and keys with no variable_schemas
+      row are simply omitted, per req049-variable-merge.md section 3.1.
+      Validation calls Letflow.EventStore.Registry.JsonSchema.validate/2
+      directly -- REQ-024's own pure internal delegate, so no second JSON
+      Schema implementation and no new mix.exs dependency -- rather than
+      validate_payload/3, which is bound to the event_type_registry
+      lookups this requirement decided against. Storage was SETTLED as a
+      dedicated table (closing req049-variable-merge.md section 7.3 on
+      R-Co precedent), and that design's sections 7.1 and 7.2 are
+      superseded while section 13.2's open question is CLOSED outright,
+      the pure delegate having no tenant-resolution error surface to map.
+      INV-1 held: every read carries an explicit prefix and a missing/nil/
+      empty prefix fails closed with a pattern-matchable error issuing no
+      query, proven by test rather than argued, and a tenant-A row was
+      shown to have zero effect on an identical completion in tenant B.
+      The registration/INSERT path stays deliberately OUT OF SCOPE,
+      deferred to REQ-078/REQ-082 and named as such in the
+      VariableSchema moduledoc; the two other waiting consumers
+      (promotion_plan.ex's default_variable_schema_fetcher/2,
+      pin_resolver.ex's default_lookup/0 variable_schema_lookup) were
+      deliberately left unwired, only promotion_plan.ex:191's now-false
+      comment corrected. The REQ-059 pinning-vs-live-read tension is
+      recorded in engine.ex's moduledoc as an open question for REVIEWER
+      with its latency reasoning, not settled in code. Gate chain: all
+      PASS; RELEASE-VALIDATOR independently re-verified 13/13 acceptance
+      criteria.
+
+      DOC-UPDATER pass also carried four doc corrections deferred to it by
+      earlier gates. (1) engine.ex's moduledoc bare "§13.2" disambiguated
+      to `req049-variable-merge.md` §13.2 (REVIEWER) -- this requirement's
+      own design has a different §13.2. (2) Stale merge_output_variables/5
+      references updated to /7 in REQ-109's docs/requirements.yaml entry
+      (title and description); ISS-0063's historical text was left verbatim
+      with the correction recorded in its fix_note instead, since those
+      references record the arity as it actually was at discovery time.
+      (3) variable_schema.ex's pin_resolver.ex citation corrected 262-263 ->
+      267-268 (RELEASE-VALIDATOR), line verified directly rather than
+      inherited. (4) stage-3-instance-engine.md's REVIEWER sign-off section,
+      which still read "(None yet -- this stage hasn't started.)" while the
+      same file cites sign-offs at lines 51 and 89 -- pre-existing, outside
+      AC12, replaced with the same populated-at-the-WF-04-stage-gate
+      convention stage-2-event-store-definitions.md already states.
+      ISS-0075 / GH#296 resolved: AC9 (b) and (c) landed, verified by
+      reading variable_merge.ex directly. That file was otherwise NOT
+      touched this pass -- its moduledoc stands exactly as four gates
+      verified it, including the deliberate ISS-0080/GH#301
+      purity-grep self-disclosure. stage-3-instance-engine.md's header
+      moved REQ-109 pending -> done (same header-sync gap-fix shape
+      REQ-045/047/048/052/053/054/055/056/057/059/060/061's DOC-UPDATER
+      passes applied), leaving REQ-110 as the sole open S3 requirement.
+      README.md: no changes needed -- no new HTTP route (S4 scope), no
+      change to the documented gen_statem/process-model text or the
+      "Running it" section, and it defers per-requirement status to
+      docs/requirements.yaml; verified by grep.

@@ -66,7 +66,51 @@ description: >
   with REQ-109's own diff.
 affected_files:
   - lib/letflow/engine/variable_merge.ex
-status: open
+status: resolved
+resolved_in_run: WF02-REQ109-20260819
+resolved_at: "2026-08-20T01:03:09Z"
+fix_note: >
+  Closed by REQ-109's AC9 parts (b) and (c), exactly the disposition this
+  issue's `scoping_note` recommended (folded into REQ-109 rather than
+  scheduled as an independent WF-03 run). Both repairs verified by reading
+  lib/letflow/engine/variable_merge.ex directly rather than inferring them
+  from REQ-109's own summary:
+
+  CLAIM 1 REPAIRED (the "Dependency ordering" section). The moduledoc now
+  reads "**At the time this module was implemented,** REQ-061 (EE-10,
+  execution error handling) was `status: pending` and unimplemented" and
+  adds "REQ-061 has since shipped (`done`), and REQ-109 wired the caller so
+  that its ERROR path is reachable through `Letflow.Engine.complete_task/3`;
+  **none of that changes this module, and the reasoning below is exactly
+  why**". The past-tense restatement is in place and the surrounding
+  does-not-depend-on-REQ-061 rationale is preserved, not deleted, as this
+  issue required.
+
+  CLAIM 2 REPAIRED. The lines 18-20 "reasoned reconstruction ... no R-Co
+  source tree is reachable" caveat is REPLACED, not merely deleted, by a
+  positive citation: design section 3.2's abort-entire-batch semantic is now
+  documented as "**verified against `instance.zig`'s literal source** by
+  REQ-109, which read the R-Co tree directly", quoting `mergeVariables`'s
+  own doc comment at src/engine/instance.zig:2300-2304 (the ISS-202
+  two-phase merge) and citing the confirming code beneath it (`:2395`
+  "Phase 1 succeeded", `:2470` `PHASE 2: APPLICATION`), followed by an
+  explicit statement that the tree **is** reachable and the reconstruction
+  was correct. A documented guess is now a verified port.
+
+  The third stale sentence this issue deliberately EXCLUDED (lines 24-29,
+  `validate_payload/3` as the caller's mechanism) was corrected separately
+  under REQ-109's own AC9 part (a), as intended -- it was not touched by
+  this issue's scope and its status as REQ-049 AC4's evidence artifact is
+  intact.
+
+  NOT CLOSED BY THIS: the broader audit this issue suggested in passing --
+  whether the same "no R-Co source tree is reachable in this environment"
+  sentence was copied into other design docs or moduledocs, and whether
+  those other "reasoned reconstructions" also hold up. Only
+  variable_merge.ex was checked. That audit is carried by REQ-110/REQ-111
+  and docs/anti-patterns.md's "Inheriting a claim from a record instead of
+  re-deriving it from the source" entry, which treats
+  "unreachable/unavailable in this environment" as an expiring claim.
 github_issue: https://github.com/tvolodi/letflow/issues/296
 scoping_note: >
   Filed by ORCH during REQ-109's re-gate rather than fixed inline, for two

@@ -177,7 +177,8 @@ defmodule Letflow.Engine do
       registered" is now "no row for that `variable_key`", and such a key is
       **omitted** from the map rather than mapped to an outcome; `merge/3`'s
       own `Map.get(validations, key, :ok)` default already covers it.
-    * **§13.2's open question is CLOSED, not merely re-mapped.** It asked how
+    * **`req049-variable-merge.md` §13.2's open question is CLOSED, not merely
+      re-mapped.** It asked how
       `validate_payload/3`'s `{:error, :tenant_not_provisioned}` and
       `{:error, term()}` cases should map into a `validation_outcome()`.
       `JsonSchema.validate/2` is pure — it performs no `get_type/2` lookup and

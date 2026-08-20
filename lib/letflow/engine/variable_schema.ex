@@ -87,7 +87,7 @@ defmodule Letflow.Engine.VariableSchema do
       `default_variable_schema_fetcher/2` returns `nil`. REQ-109 corrects only
       the stale comment above it (which asserted no `variable_schemas` table
       exists); the function's return value and `@spec` are unchanged.
-    * `lib/letflow/engine/pin_resolver.ex:262-263` (REQ-059) —
+    * `lib/letflow/engine/pin_resolver.ex:267-268` (REQ-059) —
       `default_lookup/0`'s `variable_schema_lookup` returns
       `{:ok, %{version: "unversioned", json_schema: nil}}`. That is **a
       populated tuple whose `json_schema` is nil, not a nil return**;

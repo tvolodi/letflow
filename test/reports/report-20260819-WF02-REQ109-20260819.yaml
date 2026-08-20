@@ -1,0 +1,251 @@
+report_id: report-20260819-WF02-REQ109-20260819
+agent: TEST-RUNNER
+requirement: REQ-109
+workflow_step: WF-02 Step 4
+branch: feature/WF02-REQ109-20260819
+commit: 2916ddc
+date: 2026-08-19
+command: "mix test --seed 4242"
+toolchain:
+  mix: "Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  erlang: "Erlang/OTP 29 [erts-17.0.5] [64-bit] [smp:16:16] [jit:ns]"
+  mix_path: "/c/Program Files/Elixir/bin/mix (local toolchain; Docker NOT required for mix test)"
+  note: >
+    docs/anti-patterns.md's toolchain entry previously claimed no local toolchain and
+    routed agents through Docker. That entry has been corrected. This run used the
+    local toolchain directly.
+
+environment:
+  postgres: >
+    letflow-postgres-1 (postgres:16), already Up 40 hours (healthy), 0.0.0.0:5462->5432.
+    docker compose up -d was NOT needed -- the container was already running.
+  contention: >
+    This Postgres instance is SHARED with concurrent agent sessions in this environment.
+    Connection saturation (Postgrex FATAL 53300 too_many_connections) was observed
+    repeatedly during this session -- see contention_incidents below. The authoritative
+    full-suite run completed BEFORE saturation set in and contains zero
+    too_many_connections occurrences (verified: `grep -c too_many_connections` = 0).
+
+verdict: PASS
+
+summary_line: "Result: 1149/1161 passed (5/5 properties, 1144/1156 tests)"
+duration: "Finished in 461.5 seconds (6.6s async, 454.8s sync)"
+raw_output_tail: |
+  Finished in 461.5 seconds (6.6s async, 454.8s sync)
+
+  Result: 1149/1161 passed (5/5 properties, 1144/1156 tests)
+  Failed: 12 tests
+
+failure_count: 12
+failures_caused_by_req_109: 0
+failures_pre_existing: 12
+
+baseline_checks:
+  compile_force:
+    command: "mix compile --force"
+    result: "14 warnings, 0 errors"
+    matches_stated_baseline: true
+    determination: >
+      Exactly matches the pre-existing baseline of 14 warnings / 0 errors stated in the
+      task brief and previously confirmed there by stash-and-recompile. REQ-109 added
+      no new compiler warnings.
+  format:
+    command: "mix format --check-formatted"
+    result: "exit 0"
+
+req_109_own_tests:
+  files:
+    - test/letflow/engine/variable_schema_test.exs
+    - test/letflow/engine_variable_schema_merge_test.exs
+  expected: 24
+  result: >
+    Both files passed in full. Neither appears anywhere in the 12-entry failure list.
+    Independently consistent with TEST-DESIGNER's and TEST-DESIGN-VALIDATOR's
+    24-passed figure at --seed 4242.
+
+highest_risk_item_cleared:
+  item: >
+    priv/repo/migrations/20260821000002_create_variable_schemas.exs adds a
+    tenant-scoped table to the provisioning manifest in lib/letflow/tenant_provisioning.ex,
+    so every tenant-provisioning test now applies one additional migration. The task
+    brief flagged this as the highest risk for suite-wide breakage.
+  finding: >
+    CLEARED. test/letflow/tenant_provisioning_test.exs,
+    test/letflow/tenant_provisioning_event_seed_test.exs and
+    test/letflow/req064_tenant_id_removal_test.exs all passed -- none appears in the
+    failure list. Tenant provisioning absorbed the additional migration without
+    incident across the whole suite (every tenant-provisioning test in the run
+    provisions and tears down a real schema; the logs show variable_schemas being
+    created and DROP SCHEMA ... CASCADE cleaning it up normally).
+
+failures:
+  - group: Letflow.IdentityMigrationTest
+    count: 10
+    file: test/letflow/identity_migration_test.exs
+    root_error: |
+      ** (Postgrex.Error) ERROR 23503 (foreign_key_violation) insert or update on table
+      "tenant_schemas" violates foreign key constraint "tenant_schemas_tenant_id_fkey"
+
+          table: tenant_schemas
+          constraint: tenant_schemas_tenant_id_fkey
+
+      Key (tenant_id)=(c3a201b9-04da-4b0d-bfb6-bba6a18800ea) is not present in table "tenants".
+      stacktrace:
+        (ecto_sql 3.14.0) lib/ecto/adapters/sql.ex:1121: Ecto.Adapters.SQL.raise_sql_call_error/1
+        test/letflow/identity_migration_test.exs:242: Letflow.IdentityMigrationTest.restore_orphaned_guard_backup_rows!/0
+        test/letflow/identity_migration_test.exs:1: Letflow.IdentityMigrationTest.__ex_unit__/2
+    uniformity: >
+      All 10 failures share the byte-identical root error above and the identical
+      stacktrace through restore_orphaned_guard_backup_rows!/0 at line 242 -- verified
+      by extracting the error line from each of the 10 numbered failure blocks. This is
+      one root cause failing the module's shared setup, not 10 independent defects.
+    failing_tests:
+      - "copies groups/users/tenant_role from public into the tenant's own schema, preserving id, ordering tenant_role after groups (FK dependency)"
+      - "DropLegacyPublicIdentityTables guard -- skip-on-uncopied-row: a tenant schema missing one identity table makes the guard SKIP the drop, not raise 42P01"
+      - "DropLegacyPublicIdentityTables guard -- once the copy is completed for every registered tenant, the guard PROCEEDS and drops all three public tables"
+      - "DropLegacyPublicIdentityTables guard -- idempotency: re-running after it already succeeded is a no-op"
+      - "copy_tenant/2 is idempotent: re-running after a successful copy re-copies nothing (on_conflict: :nothing)"
+      - "an uncopied row makes the guard SKIP the drop entirely -- all three public tables survive"
+      - "ISS-0060: restore_orphaned_guard_backup_rows!/0 restores the stale row"
+      - "ISS-0060: with_only_this_tenant_visible!/2 hides the racer tenant, flips guard SKIP into PROCEED"
+      - "an orphaned tenant_role aborts that tenant's copy with {:error, {:orphaned_tenant_role, id}}"
+      - "copy_all_tenants/0 processes every registered tenant and aggregates counts"
+    mechanism: >
+      restore_orphaned_guard_backup_rows!/0 is ISS-0060's self-heal hook. It moves every
+      row out of the crash-durable table public.iss060_tenant_schemas_guard_backup back
+      into public.tenant_schemas via a data-modifying CTE. That backup table persisted
+      rows from an earlier interrupted run in this SHARED database, but the matching
+      parent rows in public.tenants had since been deleted by another run's teardown
+      (teardown does DELETE FROM tenant_schemas then DELETE FROM tenants -- visible in the
+      run log). Restoring the orphaned child row therefore violates
+      tenant_schemas_tenant_id_fkey. This is cross-run / cross-agent shared-database
+      contamination in a leftover backup table.
+    determination: PRE-EXISTING -- not caused by REQ-109
+    evidence:
+      - method: "git diff against merge-base (structural)"
+        detail: >
+          merge-base of HEAD and origin/main is 29676de4e0d214dd6189f87adfa8f18aa38e2e95.
+          `git diff --stat <merge-base> HEAD -- test/letflow/identity_migration_test.exs
+          lib/letflow/identity_migration.ex` returns EMPTY. Neither the failing test file
+          nor the module under test is touched by this branch at all. The full branch diff
+          is 14 files (docs/issues/ISS-0088..0091, stage-3 doc, promotion_plan.ex,
+          engine.ex, variable_merge.ex, variable_schema.ex, tenant_provisioning.ex, the new
+          migration, the two REQ-109 test files, test/specs/REQ-109.md) -- identity
+          migration is not among them.
+      - method: "root-cause analysis"
+        detail: >
+          The failure is an FK violation on public.tenant_schemas caused by a stale row in
+          the ISS-0060 guard backup table. It involves neither the variable_schemas table,
+          nor the provisioning manifest ordering, nor merge_output_variables/7. There is no
+          causal path from REQ-109's change to this error.
+      - method: "matches documented historical baseline"
+        detail: >
+          The task brief records a historical baseline of ~12 pre-existing environmental
+          failures in exactly IdentityMigrationTest and Check.TestTest. This run reproduces
+          precisely that partition: 10 + 2 = 12, with no additional failing file.
+
+  - group: Mix.Tasks.Letflow.Check.TestTest
+    count: 2
+    file: test/mix/tasks/letflow_check_test_test.exs
+    root_error: |
+      ** (ExUnit.TimeoutError) test timed out after 60000ms.
+      stacktrace:
+        (letflow 0.1.0) lib/mix/tasks/letflow.check.test.ex:110: Mix.Tasks.Letflow.Check.Test.collect/2
+        (letflow 0.1.0) lib/mix/tasks/letflow.check.test.ex:63: Mix.Tasks.Letflow.Check.Test.run/1
+        (ex_unit 1.20.3) lib/ex_unit/capture_io.ex:325: ExUnit.CaptureIO.do_capture_gl/2
+        test/mix/tasks/letflow_check_test_test.exs:119: (test)
+    failing_tests:
+      - "raises and reports the offending line when the target substring is present, even though the underlying subprocess exited 0 (line 105)"
+      - "passes (no raise) when the subprocess exits 0 and the target substring is absent, even with unrelated warnings present (line 126)"
+    mechanism: >
+      Both tests exercise `mix letflow.check.test`, which spawns a real external
+      subprocess via Port.open({:spawn_executable, ...}) and blocks in collect/2 until
+      that subprocess emits {:exit_status, _}. Both timed out inside collect/2 at the
+      default 60s ExUnit timeout. Under this session's load -- a saturated shared
+      Postgres and concurrent agent `mix test` runs competing for CPU and connections --
+      the spawned subprocess cannot finish inside 60s. The run log also shows the
+      subprocess retrying Keycloak metadata loads against the unreachable placeholder
+      issuer (placeholder-keycloak.invalid, :nxdomain) with backoffs of 21266ms, 7983ms,
+      19992ms and 6298ms, which alone approaches the 60s budget.
+    determination: PRE-EXISTING -- not caused by REQ-109
+    evidence:
+      - method: "git diff against merge-base (structural)"
+        detail: >
+          `git diff --stat <merge-base> HEAD -- test/mix/tasks/letflow_check_test_test.exs
+          lib/mix/tasks/letflow.check.test.ex` returns EMPTY. Neither the failing test file
+          nor the task under test is touched by this branch.
+      - method: "root-cause analysis"
+        detail: >
+          A wall-clock timeout in an external subprocess wait, aggravated by host load and
+          by DNS backoff against an intentionally-unreachable placeholder Keycloak issuer.
+          Load-dependent, not behavioural. No involvement of any REQ-109 code path.
+
+contention_incidents:
+  - description: >
+      After the authoritative full-suite run completed, attempts to re-run
+      test/letflow/identity_migration_test.exs IN ISOLATION (as additional corroboration
+      of the pre-existing determination) failed twice before the suite could even start:
+    error: |
+      [error] Postgrex.Protocol (#PID<0.226.0> ("db_conn_1")) failed to connect:
+      ** (Postgrex.Error) FATAL 53300 (too_many_connections) sorry, too many clients already
+      ** (Mix) The database for Letflow.Repo couldn't be created: killed
+    corroboration: >
+      Saturation was confirmed to be environment-wide and not specific to the Elixir
+      client: a bare `docker exec letflow-postgres-1 psql -U postgres -tc "select 1"`
+      was refused with the same FATAL 53300. Postgres remained saturated by concurrent
+      agent sessions for over 10 minutes of polling.
+    impact_on_verdict: >
+      NONE. The authoritative full-suite run predates the saturation and is free of
+      too_many_connections (grep count = 0). The isolated re-run was corroboration for an
+      already-multiply-established determination, not the basis for it -- the
+      pre-existing determination rests on the merge-base diff being empty for both
+      failing files plus root-cause analysis, neither of which depends on the isolated
+      run. Reported here explicitly per the no-speculation rule rather than being
+      omitted or asserted as a result.
+
+pre_existing_failures_this_run_caused: none
+unrelated_pre_existing_failures_filed_as_issues: >
+  none -- both pre-existing failure groups are environmental/shared-database artefacts
+  of this session, not product defects, and neither is newly discovered.
+
+known_issues_not_refiled:
+  note: >
+    Per the task brief, five open issues touch this area and are deliberately out of
+    scope for REQ-109. None were re-filed.
+  issues:
+    - ISS-0077/GH#300
+    - ISS-0088/GH#305
+    - ISS-0089/GH#306
+    - ISS-0090/GH#308
+    - ISS-0091/GH#310
+  iss_0090_specifically: >
+    REQ-109's AC4 requires a VARIABLE_OVERWRITTEN event to be appended, which REQ-048's
+    INV-EE48-5 explicitly forbids. The AC is wrong; the code and the test are right.
+    Deliberately NOT reported as a test defect, per the brief.
+
+observations:
+  - >
+    The run log contains lines reading `QUERY ERROR source="variable_schemas"` (an
+    INSERT rejected at the DB level). These were checked and are NOT failures: they are
+    the intentional negative assertions of REQ-109's AC2 FK-gap test, each immediately
+    followed by a successful SELECT and a normal schema teardown. The owning tests
+    passed.
+  - >
+    REQ-061's {:rejected, ...} -> ExecutionError.append_multi/3 branch is now reachable
+    and is exercised in the run: EXECUTION_ERROR events with
+    error_type "variable_schema_rejected" are appended and projected to :error status
+    with populated error_detail.failures (Letflow.EventStore.Registry.ValidationFailure
+    structs), across multiple tenant schemas.
+  - >
+    5/5 properties passed, including the standing property test
+    "no sequence of actions produces an invalid state". No new example-based test was
+    added by this run; test authoring was TEST-DESIGNER's step and is already validated.
+
+conclusion: >
+  PASS. The full suite is at 1149/1161 with 12 failures, all 12 confined to two files
+  that this branch does not modify (empty merge-base diff), each with a root cause
+  traced to shared-database contamination or host-load timeout rather than to any
+  REQ-109 code path. REQ-109 introduces zero new failures, zero new compiler warnings
+  (14/0 matching baseline), and a clean format check. The flagged highest-risk item --
+  the new tenant-scoped migration entering the provisioning manifest -- is cleared:
+  every tenant-provisioning test passed.

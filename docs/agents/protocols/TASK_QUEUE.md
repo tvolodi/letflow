@@ -222,6 +222,17 @@ from WF-01 (a planned requirement, `task_type: "requirement"`) or `ISSUE_QUEUE.m
 incidental discovery, `task_type: "issue"`) — both funnel through the same
 `register_task` call, tagged accordingly.
 
+**An unregistered requirement carries no `impl_order` at all — never a guessed one.**
+`impl_order`/`id` on the deployed service are the same integer, so a locally-derived
+placeholder (file-max+1, or any other invented number) doubles as a working
+`/tasks/<id>/...` URL that addresses whatever unrelated task actually holds that id on
+the shared queue. This is not a hypothetical: REQ-109/110/111/112 shipped with
+file-max+1 values commented `# letflow-queue task id`, and acting on one of them
+(believing it was REQ-109's task) transitioned an unrelated open task to `done` and
+closed the wrong GitHub issue (ISS-0092/GH#314). If a requirement has not yet been
+through `register_task`, leave `impl_order` absent (or note `# UNREGISTERED`) rather
+than filling it with a placeholder that reads as a real id.
+
 ### 2. `get_next_task` — claim the next eligible task
 
 **Who calls this:** `ORCH` only, when asked for unscoped work ("what's next," "keep

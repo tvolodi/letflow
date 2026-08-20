@@ -4686,11 +4686,14 @@ requirements:
     owner: ELIXIR-DEV
     status: done
     stage: S3
-    impl_order: 153  # UNREGISTERED -- see ISS-0092
-    # NOT a letflow-queue task id -- see ISS-0092/GH#314. This value was
-    # derived as file-max+1 and was never returned by register_task; using it
-    # in a /tasks/<id>/ URL addresses an UNRELATED live task. Acting on 153
-    # wrongly closed GH#304. Do not lock/release against it.
+    impl_order: 153  # NOT a letflow-queue task id -- see ISS-0092/GH#314
+    # This value was derived as file-max+1 and was never returned by
+    # register_task; using it in a /tasks/<id>/ URL addresses an UNRELATED
+    # live task -- acting on it (as queue task 153) wrongly closed GH#304,
+    # which actually belonged to ISS-0087. Do not lock/release against it.
+    # REQ-109 is `done` and merged -- deliberately left unregistered rather
+    # than backfilled, since a completed requirement has no remaining claim
+    # to make; there is nothing for get_next_task to hand out.
     description: >
       Port R-Co's `variable_schemas` table and the per-key lookup that feeds
       it into REQ-049's merge, so that REQ-049's schema-rejection branch --
@@ -4944,11 +4947,9 @@ requirements:
     owner: ISSUE-FIXER
     status: pending
     stage: S3
-    impl_order: 154  # UNREGISTERED -- see ISS-0092
-    # NOT a letflow-queue task id -- see ISS-0092/GH#314. This value was
-    # derived as file-max+1 and was never returned by register_task; using it
-    # in a /tasks/<id>/ URL addresses an UNRELATED live task. Acting on 153
-    # wrongly closed GH#304. Do not lock/release against it.
+    impl_order: 167  # letflow-queue task id -- registered 2026-08-20 per ISS-0092/GH#314
+    # (superseding the invented 154, which addressed an unrelated live task
+    # and was never returned by register_task). Mirrored to GH#315.
     description: >
       REQ-059 (PIN-01..04) and REQ-060 (PIN-05) are both `done` and SHIPPED.
       Their gate-approved design docs deferred several questions specifically
@@ -5052,11 +5053,9 @@ requirements:
     owner: ISSUE-FIXER
     status: pending
     stage: S3
-    impl_order: 155  # UNREGISTERED -- see ISS-0092
-    # NOT a letflow-queue task id -- see ISS-0092/GH#314. This value was
-    # derived as file-max+1 and was never returned by register_task; using it
-    # in a /tasks/<id>/ URL addresses an UNRELATED live task. Acting on 153
-    # wrongly closed GH#304. Do not lock/release against it.
+    impl_order: 168  # letflow-queue task id -- registered 2026-08-20 per ISS-0092/GH#314
+    # (superseding the invented 155, which addressed an unrelated live task
+    # and was never returned by register_task). Mirrored to GH#316.
     description: >
       Two shipped S3 designs carry deferrals that exist only because the R-Co
       source tree could not be read at design time. It can be read now. This
@@ -5196,11 +5195,9 @@ requirements:
     owner: DOC-UPDATER
     status: pending
     stage: S3
-    impl_order: 156  # UNREGISTERED -- see ISS-0092
-    # NOT a letflow-queue task id -- see ISS-0092/GH#314. This value was
-    # derived as file-max+1 and was never returned by register_task; using it
-    # in a /tasks/<id>/ URL addresses an UNRELATED live task. Acting on 153
-    # wrongly closed GH#304. Do not lock/release against it.
+    impl_order: 169  # letflow-queue task id -- registered 2026-08-20 per ISS-0092/GH#314
+    # (superseding the invented 156, which was never returned by
+    # register_task and addressed an unrelated live task). Mirrored to GH#317.
     description: >
       Close out ISS-0076 / GH#297's remaining occurrences: stale claims that
       the R-Co source tree is unreachable, scattered across design docs and

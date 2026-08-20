@@ -5267,3 +5267,28 @@ history:
       change to the documented gen_statem/process-model text or the
       "Running it" section, and it defers per-requirement status to
       docs/requirements.yaml; verified by grep.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-08-20T02:35:00Z
+    note: >
+      ISS-0092 / GH#314 resolved. Registered REQ-110/111/112 with
+      letflow-queue via real register_task calls, recording the RETURNED
+      impl_order back into docs/requirements.yaml (REQ-110 -> queue task
+      167 / GH#315, REQ-111 -> queue task 168 / GH#316, REQ-112 -> queue
+      task 169 / GH#317), superseding the invented file-max+1 values
+      154/155/156 that carried no real backing and collided with unrelated
+      live tasks (154 was confirmed to belong to ISS-0087 / GH#304 in the
+      original incident). REQ-109 (done, merged) deliberately left
+      unregistered -- a completed requirement has no remaining claim for
+      get_next_task to hand out -- with its impl_order:153 comment
+      corrected to state plainly it is not a queue id.
+      docs/agents/protocols/TASK_QUEUE.md's register_task section updated
+      to state explicitly, citing this incident: an unregistered
+      requirement carries no impl_order at all, never a guessed one, since
+      impl_order and the service's task id are the same integer and a
+      placeholder silently doubles as a working /tasks/<id> URL against an
+      unrelated task.
+      Filed tvolodi/letflow-queue#3 requesting a non-destructive
+      GET /tasks/:id, per ISS-0092's third suggested action -- out of this
+      repo's scope to build (separate service).

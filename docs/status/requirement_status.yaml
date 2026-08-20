@@ -5347,3 +5347,85 @@ history:
       No ISS-0076-registry match beyond ISS-0078/ISS-0079/ISS-0076 itself
       (Step 0.5 lookup); this is not a recurrence, it is the same audit's
       bookkeeping being completed a session later.
+  - req: REQ-111
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-08-20T02:56:16Z"
+    note: >
+      WF03-REQ111-20260820. Same bookkeeping-gap pattern as REQ-110's
+      cdc8f8c closeout: the substantive REQ-111 audit had already landed on
+      main (commit 29676de, "audit(REQ-111): CEL verified against R-Co --
+      2 MAJOR gateway-routing bugs", Co-Authored-By Claude Opus 5) before
+      this session started, but docs/requirements.yaml still read REQ-111
+      status: pending. Step 0.5 registry lookup found no prior resolved
+      entry matching this family beyond the ones this audit itself already
+      produced (ISS-0085/0086/0087) -- not a recurrence.
+      Re-derived every AC independently rather than trusting 29676de's own
+      commit message, per the "inherited claim" anti-pattern:
+      (1) AC1 -- re-ran `grep -oE "(instance|transition)\.zig:[0-9]+"
+      lib/letflow/design/req062-sub-process-runtime.md` this session: it now
+      returns FOUR matches (:701, :706, :708, :738), not zero. This is not a
+      contradiction of the original zero-citation finding -- those four
+      citations are R-Co evidence REQ-111's own audit added while resolving
+      OQ-1/location (d) (req062:674's definition_name assumption), i.e. the
+      zero was true of the document's state BEFORE this audit's own edits,
+      and is recorded as such inline at req062:11-19 alongside the exact
+      command and its historical zero-match output. Re-derived the 55
+      Letflow file:line citation count independently this session
+      (`grep -oE "[a-z_]+\.exs?:[0-9]+"`, breakdown: sub_process.ex 16,
+      engine.ex 11, execution_error.ex 5, engine_execution_error_test.exs 5,
+      engine_sub_process_test.exs 4, task_activation.ex 3, transition.ex 2,
+      token.ex 2, reconstruction_test.exs 2, plus 4 files with 1 each) --
+      matches 55, confirmed out of scope, no citation is an R-Co one.
+      (2) AC2/AC3 -- all three dispositioned locations confirmed recorded
+      inline with rule-by-rule/category-by-category breakdown (§0.1's table
+      in req050-exclusive-gateway-cel.md): location (b) req050:19's 4
+      rewrite rules -- rule 1 confirmed, rule 2 divergent_behavioural (no
+      spaces around `and`), rule 3 divergent_behavioural (no spaces around
+      `or`), rule 4 confirmed -- rolls up to divergent_behavioural; location
+      (c) req050:490's 4 categories -- macros divergent_doc_only (RESOLVED
+      via ISS-0086), type-conversion divergent_doc_only, collection
+      divergent_doc_only, ternary divergent_behavioural (RESOLVED via
+      ISS-0087) -- rolls up to divergent_behavioural; location (d)
+      req062:674 -- divergent_doc_only (R-Co keys on child_definition_id, a
+      mandatory UUID, not definition_name). Both breakdown and rollup
+      reported at each location, not rollup alone. Counts sum to three:
+      divergent_behavioural 2, divergent_doc_only 1, confirmed 0,
+      unsettled_by_source 0 -- matches 29676de's own count table, verified
+      by inspection rather than trusted.
+      (3) AC4 -- every disposition's R-Co citation checked against
+      transition.zig/instance.zig directly this session (transition.zig:
+      1118-1241 region for CEL, :1903-1904/:1448 for SUB_PROCESS;
+      instance.zig:4681/:4707-4712) plus R-Co/src/expr/lexer.zig:46-48 and
+      R-Co/src/design/iss602_cel_expr_differential.md -- all read.
+      (4) AC5 -- the algorithm-vs-boundary-behaviour line confirmed drawn
+      correctly: §9.1 of req050-exclusive-gateway-cel.md states explicitly
+      that the marker-list-vs-hand-scanner MECHANISM is out of scope but the
+      matches( marker-set gap and the escaped-quote ternary OUTCOME are in
+      scope and were recorded as divergences, not dismissed as algorithm
+      differences -- the exact distinction AC5 requires.
+      (5) AC6 -- `git show 29676de --name-only` re-run this session: touches
+      exactly docs/issues/ISS-0085.yaml, ISS-0086.yaml, ISS-0087.yaml,
+      lib/letflow/design/req050-exclusive-gateway-cel.md,
+      lib/letflow/design/req062-sub-process-runtime.md. Zero
+      lib/letflow/**/*.ex files in that commit -- confirmed by listing, not
+      assumed. (The later, separate WF-03 fixes for ISS-0086/ISS-0087 did
+      touch lib/letflow/engine/expr.ex and transition.ex, correctly as their
+      own routed commits b43a274/PR#307/#311, not as part of REQ-111's own
+      diff.)
+      (6) AC7 -- three divergent_behavioural per-rule/category findings,
+      filed as ISS-0085 (GH#302, open -- &&/|| spacing, not yet fixed,
+      correctly left open), ISS-0086 (GH#303, resolved via
+      WF03-ISS0086-20260820/PR#307), ISS-0087 (GH#304, resolved via
+      WF03-ISS0087-20260820/PR#311) -- re-verified via `gh issue view`
+      this session: #302 OPEN, #303 CLOSED, #304 CLOSED, matching the issue
+      files' own status fields.
+      (7) AC8 -- req062-sub-process-runtime.md:11-19 re-read: no longer
+      asserts R-Co is unreachable, states the tree IS reachable and what was
+      established. req050-exclusive-gateway-cel.md:17-20 (§0's audit banner)
+      and :527-528 (§9.1) re-read: neither asserts R-Co is unreachable.
+      (8) AC9 -- no AC satisfied by a global verdict; each disposition above
+      carries its own R-Co citation, independently checked.
+      No engine-behaviour change made by this closeout itself -- only
+      docs/requirements.yaml's status field and this status-history entry
+      were touched.

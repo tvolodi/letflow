@@ -692,16 +692,23 @@ defmodule Letflow.Definitions.Graph do
   end
 
   # CHK-10: a SERVICE_TASK node must carry a non-empty (after trim)
-  # "endpoint" string attribute (design doc §4, §4.1).
+  # "endpoint" string attribute, UNLESS a non-empty (after trim) "service_id"
+  # attribute is present instead -- mirrors
+  # Letflow.Engine.ServiceTask.parse_config_from_node_attributes/1's own
+  # {nil, nil} -> :missing_url_and_service_id condition (design doc §4, §4.1;
+  # ISS-0104/GH#334).
   @spec check_service_task_endpoint(t()) :: [Violation.t()]
   defp check_service_task_endpoint(%__MODULE__{nodes: nodes}) do
     nodes
     |> Enum.filter(&(&1.node_type == :SERVICE_TASK))
     |> Enum.filter(&blank_or_missing_string?(&1.attributes, "endpoint"))
+    |> Enum.filter(&blank_or_missing_string?(&1.attributes, "service_id"))
     |> Enum.map(fn node ->
       %Violation{
         code: :missing_endpoint,
-        message: "Node '#{node.id}' (SERVICE_TASK) is missing a non-empty 'endpoint' attribute"
+        message:
+          "Node '#{node.id}' (SERVICE_TASK) is missing a non-empty 'endpoint' attribute " <>
+            "(and no non-empty 'service_id' attribute is present as an alternative)"
       }
     end)
   end

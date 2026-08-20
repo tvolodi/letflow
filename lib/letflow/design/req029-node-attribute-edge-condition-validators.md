@@ -194,7 +194,7 @@ unconditional-concatenation construction (REQ-028 design doc §7.1).
 | # | Check (private fn) | Applies to `node_type` | Trigger | Violation code | Message names |
 |---|---|---|---|---|---|
 | CHK-09 | `check_human_task_role/1` | `:HUMAN_TASK` | `attributes` is `nil`, or has no `"role"` key, or `attributes["role"]` is not a `String.t()`, or is a `String.t()` that is empty/whitespace-only after `String.trim/1` | `:missing_role` | the node id |
-| CHK-10 | `check_service_task_endpoint/1` | `:SERVICE_TASK` | same absent/wrong-type/blank test as CHK-09, against `"endpoint"` | `:missing_endpoint` | the node id |
+| CHK-10 | `check_service_task_endpoint/1` | `:SERVICE_TASK` | same absent/wrong-type/blank test as CHK-09, against `"endpoint"` — **unless `"service_id"` passes the same non-blank test instead** (§4.1a; fixed 2026-08-20, ISS-0104/GH#334) | `:missing_endpoint` | the node id |
 | CHK-11 | `check_service_task_timeout/1` | `:SERVICE_TASK` | `attributes` is `nil`, or has no `"timeout_ms"` key, or `attributes["timeout_ms"]` is not `is_integer/1`, or is an integer outside `1..300_000` (i.e. `< 1` or `> 300_000`) | `:invalid_timeout` | the node id, and the offending value if present |
 | CHK-12 | `check_timer_duration/1` | `:TIMER` | `attributes` is `nil`, or has no `"duration_iso8601"` key, or `attributes["duration_iso8601"]` is not a `String.t()`, or is a `String.t()` that fails §4.3's parser | `:invalid_duration` | the node id, and the offending value if present |
 
@@ -232,6 +232,25 @@ all trigger the violation — there is exactly one trigger condition, not a sepa
 sub-case, matching CHK-01..08's precedent of one code covering every way a check's single named
 rule can fail (e.g. CHK-02's "missing END node" has one code regardless of *why* no END node
 exists).
+
+### 4.1a CHK-10's `"service_id"` alternative (fixed 2026-08-20, ISS-0104/GH#334)
+
+**A SERVICE_TASK node passes CHK-10 if *either* `"endpoint"` or `"service_id"` passes the §4.1
+non-blank test — the violation fires only when *both* are blank/missing.** This mirrors
+`Letflow.Engine.ServiceTask.parse_config_from_node_attributes/1`'s own routing (REQ-056 design
+doc §5.1): `route_kind: :catalog_service` when `service_id` is non-blank, else
+`route_kind: :inline_url` when `url_template`/`endpoint` is non-blank, else
+`{:error, :missing_url_and_service_id}` only when neither is present — and R-Co's own
+`parseConfigFromNodeAttributes` (`service_task.zig` lines 84-100), which treats `endpoint`/`url`
+as fully optional whenever `service_id` is supplied.
+
+Before this fix, CHK-10 required `"endpoint"` unconditionally regardless of `"service_id"`,
+which made `route_kind: :catalog_service` (service-id-only) dispatch — REQ-056's own AC1 case —
+unreachable via any graph that could pass validation: CHK-10 rejected it at graph-validation
+time, before `parse_config_from_node_attributes/1` was ever reached. `check_service_task_endpoint/1`
+now filters out nodes with a non-blank `"service_id"` before flagging a missing `"endpoint"`, so
+only a node with *both* blank/missing is a violation — the same `{nil, nil}` condition
+`parse_config_from_node_attributes/1` itself treats as the sole failure case.
 
 ### 4.2 CHK-11 detail — `timeout_ms` range, precisely
 

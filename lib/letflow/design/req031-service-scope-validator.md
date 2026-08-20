@@ -61,10 +61,15 @@ moduledoc text — **no implementation code**. No function bodies, no `.ex` file
   - `Node.attributes :: map() | nil` (line 86), `@enforce_keys [:id, :node_type]` (line 79).
   - CHK-10 (`check_service_task_endpoint/1`, line 579-592) already validates a SERVICE_TASK
     node's `"endpoint"` attribute is a non-blank string; CHK-11 (line 594+) validates
-    `"timeout_ms"`. **Neither `"service_id"` nor `"plugin_handler"` is read or validated
-    anywhere in this file** — confirmed by grep across the whole module (no match for either
-    string) — so this design's validator is the **only** place in Letflow that currently
-    interprets those two attribute keys; no other check overlaps or conflicts with it.
+    `"timeout_ms"`. **`"plugin_handler"` is not read or validated anywhere in this file**
+    (confirmed by grep — no match), so this design's validator remains the only place in
+    Letflow that interprets that attribute key. **`"service_id"` is no longer exclusive to
+    this validator as of 2026-08-20 (ISS-0104/GH#334):** CHK-10 now also reads `"service_id"`
+    as an alternative to `"endpoint"` (a node with a non-blank `"service_id"` passes CHK-10
+    even without an `"endpoint"`) — this validator and CHK-10 both read the same key for
+    different purposes (this validator resolves it to a scope check; CHK-10 only tests
+    non-blankness) and do not conflict, but the "only place" claim above is stale and is
+    corrected here rather than left silently wrong.
   - `Violation`'s `code`/`message` field pair (line 118-119, `@enforce_keys [:code,
     :message]`) — the direct precedent this design's own `Violation` struct follows for
     splitting a machine-matchable atom from a human-readable string (§3.2 below), rather than

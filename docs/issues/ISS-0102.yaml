@@ -19,4 +19,11 @@ affected_files:
   - lib/letflow/design/service_task.md
 queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
 github_issue: https://github.com/tvolodi/letflow/issues/330
-status: open
+status: resolved
+resolution: >
+  R-Co/src/engine/service_task.zig confirms the `method` field's parse block
+  defaults unconditionally to `.POST` when `"method"` is absent from the
+  node's JSON config (`break :blk .POST;`), matching Letflow's design
+  choice exactly. lib/letflow/design/service_task.md updated (§5.1 table
+  row and §9 OQ-5) to record this as verified rather than an open question.
+resolved_at: "2026-08-20T00:00:00Z"

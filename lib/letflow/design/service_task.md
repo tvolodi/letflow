@@ -407,7 +407,7 @@ at all) — treated identically to an empty map.
 | `url_template` | `"endpoint"` (see §9 OQ-1 — REQ-029's CHK-10 already validates this exact key) | `nil` | Same non-empty-string gate. |
 | `route_kind` | *derived*, not read directly | — | `:catalog_service` if `service_id` provided (§ above); else `:inline_url` if `url_template` provided; else `{:error, :missing_url_and_service_id}` — neither present is a hard parse failure, not a defaulted/silent case. |
 | `warnings` | *derived* | `[]` | `[:both_url_and_service_id_provided_url_ignored]` iff both `service_id` and `url_template` are non-blank (AC1) — `route_kind` still resolves to `:catalog_service` in this case (service_id wins, URL ignored per the requirement text's own wording). |
-| `method` | `"method"` | `:POST` (EXT-01's typical default for a body-carrying dispatch — §9 OQ-5, not verified against unreachable R-Co source) | Must parse (case-insensitively) to one of `GET/POST/PUT/PATCH/DELETE`; anything else -> `{:error, {:invalid_method, value}}`. |
+| `method` | `"method"` | `:POST` (matches R-Co `service_task.zig`'s own unconditional `.POST` default when `"method"` is absent — §9 OQ-5, verified 2026-08-20, GH#330) | Must parse (case-insensitively) to one of `GET/POST/PUT/PATCH/DELETE`; anything else -> `{:error, {:invalid_method, value}}`. |
 | `headers` | `"headers"` | `%{}` | Must be a string-keyed map if present; anything else -> treated as `%{}` (defensive, non-fatal — headers are not validated further, no requirement names a header-shape error case). |
 | `timeout_ms` | `"timeout_ms"` | `30_000` (AC1) | Read as-is if an integer; non-integer present value -> `{:error, {:invalid_timeout_ms, value}}`. Not re-checked against `[1, 300_000]` (§9 OQ-2). |
 | `retry_limit` | `"retry_limit"` | `3` (AC1) | Must be a non-negative integer if present; else `{:error, {:invalid_retry_limit, value}}`. No requirement states an upper bound — none enforced here. |
@@ -603,10 +603,11 @@ flagged for a future requirement/rework if this proves to matter operationally (
 requirement's own AC4 only asks for deterministic, no-sleep exponential growth with a cap,
 which this design satisfies without jitter).
 
-**OQ-5 (MINOR):** `method`'s default (`:POST`, §5.1) when a SERVICE_TASK node's `"method"`
-attribute is absent is this design's own choice, not confirmed against R-Co source. `POST` was
-picked as the more common default for a request carrying `body_template`. Flagged for
-REVIEWER — a `GET` default is an equally defensible alternative if R-Co's real default differs.
+**OQ-5 (MINOR, RESOLVED 2026-08-20, GH#330):** `method`'s default (`:POST`, §5.1) when a
+SERVICE_TASK node's `"method"` attribute is absent has been confirmed against R-Co source
+(`R-Co/src/engine/service_task.zig`, the `method` parse block: `break :blk .POST;` when
+`obj.get("method")` is absent) — R-Co defaults to `.POST` unconditionally, matching this
+design's own choice. No change needed.
 
 **OQ-6 (MINOR):** `:http_non_2xx`'s retriability (§5.3, defaulted to `false`) covers every
 status outside `2xx/3xx/429` — including generic `5xx` server errors, which some retry

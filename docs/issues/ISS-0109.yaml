@@ -1,0 +1,151 @@
+id: ISS-0109
+renumbered_from: ISS-0107
+renumber_note: >
+  Filed during run WF02-REQ066-20260820 as ISS-0107. While that branch was in flight,
+  a concurrent session (the letflow-2 workspace, PR #356) independently allocated the
+  same number for an unrelated issue and merged it to main first. Rebasing this branch
+  produced an add/add conflict on docs/issues/ISS-0107.yaml; per
+  docs/agents/protocols/GIT_MERGE.md the other side was NOT overwritten -- main's
+  ISS-0107 stands, and THIS record was renumbered to the next genuinely free id
+  (0109; 0106 and 0108 are this same run's own new records). The GitHub issue is
+  unchanged: https://github.com/tvolodi/letflow/issues/358.
+  Historical artefacts of run WF02-REQ066-20260820 that predate the rebase --
+  handoffs/WF02-REQ066-20260820/step-04-test-runner.json, step-05, step-06,
+  test/reports/report-20260820-WF02-REQ066-20260820.yaml, and this run's
+  docs/status/requirement_status.yaml entry -- refer to this record as "ISS-0107".
+  Those are immutable records of what was true when written and were deliberately
+  NOT rewritten; read any "ISS-0107" in a WF02-REQ066-20260820 artefact as this file.
+title: >
+  Full-suite-only tenant-schema teardown race now also hits
+  Letflow.Definitions.PromotionTest and Letflow.Definitions.PromotionAssertionRerunTest
+  (invalid_schema_name / undefined_table on a schema the test itself just provisioned) --
+  same class as ISS-0048/0050/0060/0062/0064 but in modules those issues do not name
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ066-20260820
+discovered_at: "2026-08-20T20:55:00Z"
+severity: MINOR
+tags:
+  - flaky
+  - test-isolation
+  - tenant-provisioning
+  - full-suite-only
+
+description: >
+  During WF-02 Step 4's full-suite `mix test` run on branch
+  feature/WF02-REQ066-20260820 (commit 2201ac8), 14 tests failed. Twelve of them are
+  the byte-identical, already-documented environmental set (10 in
+  Letflow.IdentityMigrationTest via restore_orphaned_guard_backup_rows!/0, 2
+  ExUnit.TimeoutError in Mix.Tasks.Letflow.Check.TestTest) reproduced exactly as
+  recorded in test/reports/report-20260819-WF02-REQ109-20260819.yaml -- including the
+  same literal orphaned tenant_id c3a201b9-04da-4b0d-bfb6-bba6a18800ea.
+
+  The remaining TWO are the subject of this issue. They are in modules no existing
+  ISS entry names, so they are filed here rather than folded into ISS-0050's
+  IdentityMigrationTest-scoped entry:
+
+    3) Letflow.Definitions.PromotionTest
+       "promote_definition/3 -- opts[:event_appender] an event_appender returning
+        {:error, _} propagates unchanged, after the version-pointer move has already
+        committed" (test/letflow/definitions/promotion_test.exs:378)
+
+       assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+       right: {:error, {:migration_failed, %MatchError{term: {:error, %Postgrex.Error{
+                postgres: %{code: :invalid_schema_name, pg_code: "3F000",
+                  message: "schema \"tenant_8111baf7cec4418592f94a3a68a71722\" does not exist"}}}}}}
+       raised from test/letflow/definitions/promotion_test.exs:96 (provisioned_tenant/0)
+
+   14) Letflow.Definitions.PromotionAssertionRerunTest
+       "INV-AR-6 -- failed replay stays :failed after teardown failure: release failure
+        after a failing replay stays :failed, event still appended"
+       (test/letflow/definitions/promotion_assertion_rerun_test.exs:639)
+
+       right: {:error, {:transaction_failed, %Postgrex.Error{postgres: %{
+                code: :undefined_table, pg_code: "42P01",
+                message: "relation \"tenant_cb34d76b2b9c498a8b38f065c7682989.promotion_assertion_runs\" does not exist"}}}}
+
+mechanism: >
+  Direct evidence from the run log for failure 3 (timestamps are local, the log is
+  the authoritative artefact quoted in
+  test/reports/report-20260820-WF02-REQ066-20260820.yaml):
+
+    01:43:45.746  CREATE SCHEMA IF NOT EXISTS "tenant_8111baf7cec4418592f94a3a68a71722"
+    01:43:45.755  commit                       (provisioning transaction commits)
+    01:43:46.501  DROP SCHEMA IF EXISTS "tenant_8111baf7cec4418592f94a3a68a71722" CASCADE
+    01:43:46.504  DELETE FROM "tenant_schemas" WHERE tenant_id = 8111baf7-...
+    01:43:46.507  DELETE FROM "tenants"        WHERE id = 8111baf7-...
+    (then)        replay_migrations/1 fails with invalid_schema_name on that schema
+
+  i.e. the schema was dropped by a teardown path roughly 750ms AFTER the test helper
+  provisioned it and BEFORE the helper's own replay_migrations/1 call reached it. The
+  drop/delete triple is the shape of an on_exit/1 teardown, not of
+  Letflow.TenantSchemaReaper: the reaper only reclaims rows whose provisioned_at is
+  older than its 300s min_age (test/support/tenant_schema_reaper.ex:43,66), and this
+  row's provisioned_at was ~N[2026-08-20 20:43:45], one second old. Failure 14 is the
+  same shape one level deeper -- the tenant schema survives but a table inside it
+  (promotion_assertion_runs) is gone by the time the UPDATE runs.
+
+  NOT yet root-caused to a specific owner. Two candidate mechanisms, both consistent
+  with the evidence and neither yet excluded:
+    (a) an on_exit/1 teardown from an earlier test in the same module running
+        concurrently with (rather than strictly before) the next test's setup, so a
+        reused/colliding tenant id is torn down under a live test; and
+    (b) a second, concurrently-running `mix test` invocation against the same shared
+        Postgres (letflow-postgres-1, port 5462), whose own pre-suite reaper sweep or
+        teardown reclaims this run's live schemas. The environment is known to host
+        concurrent agent sessions (report-20260819-WF02-REQ109-20260819.yaml records
+        FATAL 53300 too_many_connections from exactly that), and
+        tenant_schema_reaper.ex's own moduledoc §"Why this exists" explicitly reasons
+        about "any concurrently-running mix test invocation" -- but its 300s min_age
+        was chosen when the suite was shorter than that; this run took 608.7s, so a
+        concurrent run's sweep can now reach schemas belonging to still-running tests.
+        (Note this candidate does NOT explain failure 3's 1-second-old row on its own.)
+
+  A real ISSUE-FIXER diagnosis run is needed to pick between these -- do not guess.
+
+not_caused_by_req_066:
+  - method: "structural -- branch diff"
+    detail: >
+      `git diff --stat main...HEAD` on feature/WF02-REQ066-20260820 lists 19 files:
+      11 handoff JSONs, lib/letflow/api/error.ex, lib/letflow/api/response.ex,
+      lib/letflow/design/req066-api-error-response.md, lib/letflow/router.ex,
+      test/letflow/api/error_test.exs, test/letflow/api/response_test.exs,
+      test/letflow/router_test.exs, test/specs/REQ-066.md. Neither failing test file,
+      nor lib/letflow/definitions/, nor lib/letflow/tenant_provisioning.ex, nor
+      test/support/tenant_schema_reaper.ex is touched.
+  - method: "root-cause analysis"
+    detail: >
+      Both failures are DDL-level absence of a Postgres schema/table during tenant
+      provisioning and migration replay. Letflow.Api.Error and Letflow.Api.Response are
+      pure conn-shaping functions with no database access whatsoever, and neither
+      failing module references the router. There is no causal path.
+  - method: "isolation run"
+    detail: >
+      `mix test test/letflow/api/error_test.exs test/letflow/api/response_test.exs
+      test/letflow/router_test.exs` => "Result: 40 passed" in 0.1s. REQ-066's own
+      coverage is green and does not touch a tenant schema.
+
+reproducibility: >
+  Full-suite only. Not reproduced in the previous recorded full-suite run
+  (report-20260819-WF02-REQ109-20260819.yaml, 12 failures, neither promotion module
+  among them), so this is intermittent rather than a standing failure.
+
+suggested_owner: ISSUE-FIXER
+blocks: []
+status: open
+queue_task_id: 172
+github_issue: https://github.com/tvolodi/letflow/issues/358
+github_issue_note: >
+  Filed by ORCH on TEST-RUNNER's behalf (TEST-RUNNER wrote the local record but
+  had no gh step). letflow-queue's register_task auto-created its own mirror,
+  https://github.com/tvolodi/letflow/issues/359, on registration of task 172;
+  #359 was closed as a duplicate of #358, which carries the full diagnosis.
+  #358 is the canonical record. Note that a future release_lock(status: "done")
+  on task 172 will attempt to close #359, not #358 -- a harmless no-op since
+  #359 is already closed, but whoever resolves this must close #358 by hand.
+related:
+  - ISS-0048
+  - ISS-0050
+  - ISS-0060
+  - ISS-0062
+  - ISS-0064
+  - ISS-0106

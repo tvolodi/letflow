@@ -28,6 +28,19 @@ defmodule Letflow.RouterTest do
 
   @opts Letflow.Router.init([])
 
+  # The exact RFC 9457 Problem Details body `Letflow.Api.Error.not_found/0`
+  # produces (REQ-066). Spelled out literally rather than derived from the
+  # constructor, so a change to the wire contract has to be made deliberately
+  # here too. `type` uses the compile-time default for
+  # `config :letflow, :problems_base_uri`, which nothing currently overrides.
+  @not_found_body %{
+    "type" => "https://bpm.example.com/problems/not-found",
+    "title" => "Not Found",
+    "status" => 404,
+    "detail" => "the requested resource was not found",
+    "trace_id" => ""
+  }
+
   defp call(conn), do: Letflow.Router.call(conn, @opts)
 
   test "GET /health returns 200 and status ok" do
@@ -44,7 +57,7 @@ defmodule Letflow.RouterTest do
       |> call()
 
     assert conn.status == 404
-    assert Jason.decode!(conn.resp_body) == %{"error" => "not_found"}
+    assert Jason.decode!(conn.resp_body) == @not_found_body
   end
 
   test "POST /instances/:id/actions now falls through to 404" do
@@ -56,7 +69,7 @@ defmodule Letflow.RouterTest do
       |> call()
 
     assert conn.status == 404
-    assert Jason.decode!(conn.resp_body) == %{"error" => "not_found"}
+    assert Jason.decode!(conn.resp_body) == @not_found_body
   end
 
   test "GET /instances/:id now falls through to 404" do
@@ -65,13 +78,13 @@ defmodule Letflow.RouterTest do
     conn = conn(:get, "/instances/#{id}") |> call()
 
     assert conn.status == 404
-    assert Jason.decode!(conn.resp_body) == %{"error" => "not_found"}
+    assert Jason.decode!(conn.resp_body) == @not_found_body
   end
 
   test "an arbitrary unknown route still 404s" do
     conn = conn(:get, "/definitely/not/a/route") |> call()
 
     assert conn.status == 404
-    assert Jason.decode!(conn.resp_body) == %{"error" => "not_found"}
+    assert Jason.decode!(conn.resp_body) == @not_found_body
   end
 end

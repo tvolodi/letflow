@@ -1,0 +1,91 @@
+id: ISS-0108
+title: >
+  Letflow.IdentityTest intermittently fails with Ecto.InvalidChangesetError on
+  tenants_idp_realm_id_partial_index while inserting the bpm-default seed tenant
+  (shared-DB seed contention, full-suite only)
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ066-20260820
+discovered_at: "2026-08-20T21:09:38Z"
+severity: MINOR
+tags:
+  - flaky
+  - test-isolation
+  - shared-db-seed
+  - full-suite-only
+
+description: >
+  Found during REQ-066's WF-02 Step 5 independent full-suite re-run on branch
+  feature/WF02-REQ066-20260820. That run produced 15 failures where Step 4's
+  TEST-RUNNER run 12 minutes earlier produced 14; the two runs' failure sets
+  differ in three places, and this issue covers the pair that no existing ISS
+  entry names.
+
+  Two Letflow.IdentityTest failures raised Ecto.InvalidChangesetError against
+  the `tenants_idp_realm_id_partial_index` constraint while inserting the
+  `bpm-default` seed tenant. RELEASE-VALIDATOR attributed these to leftover or
+  contended shared-DB seed state rather than to REQ-066, on the grounds that
+  they share no code path with lib/letflow/api/ or lib/letflow/router.ex --
+  and independently confirmed REQ-066's own 40 tests pass in isolation
+  (`Result: 40 passed`).
+
+  Filed separately from ISS-0109 because the mechanism is different: ISS-0109
+  is a tenant SCHEMA being dropped out from under a live test, whereas this is
+  a partial-unique-index collision on a seed row in the shared tenants table.
+  Both are members of the same broad environmental/test-isolation family
+  (ISS-0048/0050/0060/0062/0064), but folding them together would blur two
+  distinct root causes -- and this project's own history (see
+  docs/anti-patterns.md's "Inheriting a claim from a record instead of
+  re-deriving it from the source") shows how costly a wrong-but-confident
+  record is to the next agent.
+
+cross_run_variance: >
+  Worth recording, because it is the useful signal here. Three modules moved
+  between the two full-suite runs of the same commit range on the same host:
+
+    module                             Step 4 (TEST-RUNNER)   Step 5 (RELEASE-VALIDATOR)
+    Letflow.IdentityMigrationTest      10                     10   (stable)
+    Mix.Tasks.Letflow.Check.TestTest    2                      3   (one more tipped over)
+    Letflow.Definitions.Promotion*      2                      0   (did not recur -- ISS-0109)
+    Letflow.IdentityTest                0                      2   (this issue)
+
+  The Check.TestTest delta is the same ExUnit.TimeoutError at the same frame
+  (Mix.Tasks.Letflow.Check.Test.collect/2, 60s subprocess timeout) -- one
+  further test of that module crossing the threshold under load, not a new
+  defect. The overall picture is a suite whose environmental failure set is
+  load-dependent rather than deterministic, on a host where the full suite now
+  runs 564-609 seconds.
+
+why_this_matters: >
+  Not because two more tests are red -- they are already understood as
+  environmental. The concern is that the environmental failure set is no longer
+  a fixed list an agent can check against. Every WF-02 run currently asks its
+  TEST-RUNNER and RELEASE-VALIDATOR to attribute each failure to a known
+  pre-existing set, and that check silently weakens each time the set turns out
+  to be load-dependent. The value of pinning these down is that a genuine
+  regression stays visible against a stable background.
+
+affected_files:
+  - test/letflow/identity_test.exs
+  - test/support/
+  - priv/repo/migrations/ (whichever creates tenants_idp_realm_id_partial_index)
+
+suggested_owner: ISSUE-FIXER
+blocks: []
+status: open
+related:
+  - ISS-0048
+  - ISS-0050
+  - ISS-0060
+  - ISS-0062
+  - ISS-0064
+  - ISS-0109
+queue_task_id: 173
+github_issue: https://github.com/tvolodi/letflow/issues/360
+github_issue_note: >
+  Filed by ORCH on RELEASE-VALIDATOR's behalf. letflow-queue's register_task
+  auto-created its own mirror, https://github.com/tvolodi/letflow/issues/361,
+  on registration of task 173; #361 was closed as a duplicate of #360, which
+  carries the full diagnosis and is canonical. A future
+  release_lock(status: "done") on task 173 will attempt to close #361, not
+  #360 -- a harmless no-op since #361 is already closed, but whoever resolves
+  this must close #360 by hand.

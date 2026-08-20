@@ -1,0 +1,82 @@
+id: ISS-0106
+title: "main fails `mix format --check-formatted` (4 files) and `mix compile --warnings-as-errors` (14 warnings) under Elixir 1.20/OTP 29 — toolchain drift from the .tool-versions pin"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ066-20260820
+discovered_at: "2026-08-20T19:49:30Z"
+severity: MAJOR
+description: >
+  Found during REQ-066's Step 2a, confirmed independently by ORCH: `main`
+  itself (not this run's branch) currently fails both halves of the
+  `mix letflow.check` gate on this workstation. `git diff --name-only
+  origin/main...HEAD` confirms none of the affected files are touched by
+  WF02-REQ066-20260820, and `mix format --check-formatted` scoped to this
+  run's own three files exits 0.
+
+  Symptom 1 — `mix format --check-formatted` fails on four pre-existing files:
+    lib/letflow/engine/variable_merge.ex
+    lib/letflow/engine/pin_resolver.ex
+    test/letflow/engine/pin_resolver_test.exs
+    test/letflow/engine/pin_rebind_test.exs
+  The variable_merge.ex diff shows the formatter now wants `\"""` escaped
+  inside a heredoc where the committed text has a bare `"""` — a formatter
+  behaviour change between Elixir versions, not a human formatting mistake.
+
+  Symptom 2 — `mix compile --warnings-as-errors` fails on 14 pre-existing
+  "a struct for X is expected on struct update" warnings in
+  lib/letflow/engine/transition.ex, sub_process.ex, reconstruction.ex and
+  lib/letflow/engine.ex. This is Elixir 1.20's new struct-update warning.
+  Zero warnings reference REQ-066's files. Plain `mix compile` exits 0.
+
+  ROOT CAUSE (confirmed, not inferred): `.tool-versions` pins
+  `elixir 1.18.3-otp-27` / `erlang 27.2`, but the toolchain actually on
+  this host's PATH is Elixir 1.20.3 compiled with Erlang/OTP 29
+  (`/c/Program Files/Elixir/bin/elixir --version`). This is precisely the
+  formatter-drift-across-hosts failure mode that
+  docs/migration/decisions/0005-pin-formatting-toolchain.md exists to
+  prevent — and README.md's own Notes section already warns that
+  mix.exs's `elixir: "~> 1.18"` requirement accepts any 1.18.x and so
+  cannot itself catch this. The pin is documented but evidently not
+  enforced at execution time on this workstation.
+
+  Consequence: every agent running a full `mix letflow.check` on this host
+  sees a red gate it did not cause, which invites exactly the wrong
+  responses — either reformatting unrelated in-flight files (collision
+  risk with concurrent work) or learning to treat a red gate as normal.
+
+  NOT fixed by REQ-066's run, deliberately: reformatting four unrelated
+  files under a *different* formatter version than the repo pins would
+  bake the drift into the tree rather than resolve it, and two of the four
+  files are in areas with recent concurrent work (pin_resolver/pin_rebind).
+
+  Proposed resolution (for whoever picks this up — decide, don't assume):
+  either (a) install and actually use the pinned 1.18.3-otp-27 toolchain on
+  this host (asdf per README Notes) and confirm both checks go green with
+  no file changes at all, which would prove the files are correct and only
+  the host was wrong; or (b) if the project instead wants to move the pin
+  forward to 1.20/OTP 29, that is a decision-record change
+  (0005-pin-formatting-toolchain.md) plus a one-shot repo-wide reformat and
+  a fix for the 14 struct-update warnings — not something to do silently as
+  a side effect of an unrelated requirement. Check (a) first: it is
+  non-destructive and settles which of the two is even needed.
+affected_files:
+  - .tool-versions
+  - lib/letflow/engine/variable_merge.ex
+  - lib/letflow/engine/pin_resolver.ex
+  - test/letflow/engine/pin_resolver_test.exs
+  - test/letflow/engine/pin_rebind_test.exs
+  - lib/letflow/engine/transition.ex
+  - lib/letflow/engine/sub_process.ex
+  - lib/letflow/engine/reconstruction.ex
+  - lib/letflow/engine.ex
+  - docs/migration/decisions/0005-pin-formatting-toolchain.md
+queue_task_id: 170
+github_issue: https://github.com/tvolodi/letflow/issues/354
+github_issue_note: >
+  letflow-queue's register_task auto-created its own mirror issue,
+  https://github.com/tvolodi/letflow/issues/355, on registration of task
+  170. #355 was closed as a duplicate of #354, which was filed first and
+  carries the full diagnosis. #354 is the canonical record. Note that a
+  future release_lock(status: "done") on task 170 will attempt to close
+  #355, not #354 — that will be a harmless no-op since #355 is already
+  closed, but whoever resolves this must close #354 by hand.
+status: open

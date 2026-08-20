@@ -1,0 +1,70 @@
+{
+  "handoff_id": "868409d1-c890-4d5e-b3c7-1268db06f22e",
+  "run_id": "WF02-REQ066-20260820",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ066-20260820/step-03-test-designer.json",
+  "created_at": "2026-08-20T20:11:45Z",
+  "started_at": "2026-08-20T20:11:45Z",
+  "completed_at": "2026-08-20T20:17:55Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-066"],
+    "requirement_text": {
+      "REQ-066": "Port src/api/errors.zig (272 lines) and src/api/response.zig (69) as Letflow.Api.Error and Letflow.Api.Response -- the single response/error contract every S4 route emits. Nothing in this batch renders a response body by hand once these exist. errors.zig is an RFC 9457 Problem Details builder. Port: the ProblemDetails shape (type as an absolute URI under a configured base, title, status, detail, plus the trace id field errors.zig carries with a \"\" default), the per-status constructors (problemNotFound and its siblings for 400/401/403/404/409/422/429/500 -- enumerate them from the Zig source rather than guessing which exist), and serialisation to a JSON body. Emit Content-Type: application/problem+json on error responses, per RFC 9457, and state in the moduledoc whether R-Co does the same or emits application/json (check response.zig's CONTENT_TYPE_JSON usage) -- if Letflow diverges, that divergence is deliberate and documented, not accidental. response.zig defines the canonical HandlerResult (status_code, body, content_type defaulting to JSON) and the typed success constructors that keep positive responses on correct status codes (200 vs 201 vs 202 vs 204). In Elixir the conn IS the result carrier, so port these as functions that take and return a conn (send_json/3, created/2, no_content/1, and the error counterparts) rather than transliterating a HandlerResult struct -- Zig returns a value because it has no conn. State that translation in the moduledoc. SECURITY (INV-4, INV-5): an error body must never carry secret material, a raw Ecto/Postgrex error, or a stack trace -- detail is a caller-safe string chosen by the handler, and an unexpected internal error maps to a generic 500 problem document whose detail does not vary with the underlying exception. Separately, the not-found problem document is the exact response a cross-tenant probe receives (REQ-072 enforces the routing; this requirement guarantees the two bodies are byte-identical by construction, because both go through one constructor)."
+    },
+    "related_handoff_ids": [
+      "0d57dedd-4791-427d-89ca-f53203a98985",
+      "feb7acaa-cb54-4a69-aa54-f286eed000c9",
+      "76641a79-092f-4682-8ae3-e2b4a9880540"
+    ],
+    "artifacts_in": [
+      "lib/letflow/api/error.ex",
+      "lib/letflow/api/response.ex",
+      "lib/letflow/router.ex",
+      "test/letflow/router_test.exs",
+      "lib/letflow/design/req066-api-error-response.md",
+      "handoffs/WF02-REQ066-20260820/step-02d-reviewer-regate.json"
+    ],
+    "owned_modules": ["lib/letflow/api/", "test/letflow/api/", "lib/letflow/design/req066-api-error-response.md"]
+  },
+  "task": {
+    "description": "WF-02 Step 3 (test design) on branch feature/WF02-REQ066-20260820. Implementation is complete and has cleared both hard gates (SECURITY-REVIEWER PASS at 82e2e55; REVIEWER PASS at 4748778 after one rework iteration). Run Step 3's scope test first and record its answer: this requirement produced real application-executable surface (lib/letflow/api/error.ex, lib/letflow/api/response.ex), so the answer is YES and the full procedure applies -- state that explicitly rather than skipping the gate silently. Write test/specs/REQ-066.md and test code under test/letflow/api/.\n\nMEASURED FACTS you must build assertions against, verified at runtime by ELIXIR-DEV and independently re-confirmed by REVIEWER -- do not assume the idealised values instead:\n  - success responses (send_json/3, ok/2, created/2) emit Content-Type 'application/json; charset=utf-8' -- Plug.Conn.put_resp_content_type/2 appends the charset suffix, so an assertion against a bare 'application/json' will fail\n  - error responses (send_problem/2 and all ten wrappers) emit 'application/problem+json; charset=utf-8'\n  - no_content/1 emits 204 with an empty body and NO content-type header at all\n  - constructor title strings come verbatim from R-Co's src/api/errors.zig, NOT from Title-Casing the slug: 'rate-limited' -> 'Too Many Requests', 'internal-error' -> 'Internal Server Error'. Read c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\api\\errors.zig lines 66-168 for the authoritative title of each constructor rather than deriving them.\n  - trace_id precedence is three-step, matching errors.zig:54: a non-empty problem.trace_id wins, else conn.assigns[:trace_id], else \"\". Cover all three branches.\n  - nothing in config/*.exs sets :problems_base_uri, so the type URI resolves to the compile_env default -- REVIEWER confirmed this by grepping all five config files.\n\nAC3 (INV-4) NOTE: the design deliberately specifies AC3 is tested by calling internal_error/1 directly with two different underlying exception types in the caller's context, NOT by triggering a live crash through a Plug.ErrorHandler -- no catch-all error handler is wired in this requirement (that is a later router-pipeline requirement). Follow the design; do not invent a crash path.\n\nAC4 (INV-5) NOTE: the byte-identical guarantee is now structural because router.ex's catch-all also routes through Response.not_found/1. Your test must compare the two SERIALISED bodies for byte equality, not merely assert both are 404.\n\nDo NOT re-litigate or attempt to fix main's pre-existing repo-wide mix format / --warnings-as-errors failures -- already filed as docs/issues/ISS-0106.yaml / GH#354 / queue task 170.\n\nMANDATORY per docs/anti-patterns.md (this exact failure class has recurred four times in this project): keep each combined `describe` + `test` name comfortably under 200 characters. ExUnit hard-caps the concatenation at 255 and exceeding it is a compile-time SystemLimitError that fails the WHOLE suite, not one test. Put requirement/spec citations in a `#` comment above the test, never in the name string.\n\nDo not run the tests -- TEST-RUNNER owns Step 4. Do not modify lib/.",
+    "acceptance_criteria": [
+      "Letflow.Api.Error produces a JSON body containing type, title, status and detail for every status constructor ported, with type an absolute URI, verified by a test per constructor",
+      "an error response carries Content-Type: application/problem+json and a success response carries application/json, each verified by asserting the response header rather than by inspection",
+      "a 500 produced from an unexpected exception has a detail string that is identical across two different underlying exception types, demonstrated by a test -- no exception message, module name, SQL fragment, or stack trace reaches the body (INV-4)",
+      "the 404 problem document produced for a resource that never existed and the one produced for a resource belonging to another tenant are byte-identical, demonstrated by a test comparing the two serialised bodies (INV-5)",
+      "Letflow.Api.Response's success helpers set 201 for creation and 204 with an empty body for deletion, each verified by a test asserting the status and (for 204) that the body is empty",
+      "the moduledoc states the Zig-to-Elixir translation explicitly: that response.zig's HandlerResult struct is replaced by conn-threading functions, and whether Letflow's problem+json content type diverges from R-Co's",
+      "every combined describe+test name is under 200 characters",
+      "no test depends on wall-clock time or unseeded randomness"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Step 3 scope test answered explicitly: IN SCOPE (YES) -- REQ-066 produced real application-executable Elixir surface (lib/letflow/api/error.ex, lib/letflow/api/response.ex), not docs-only and not build-config, so the full Step 3 procedure applies and TEST-DESIGN-VALIDATOR (3a) / TEST-RUNNER (4) are not skipped. Wrote test/specs/REQ-066.md plus 34 tests across test/letflow/api/error_test.exs (14) and test/letflow/api/response_test.exs (20). Assertions are built against the MEASURED runtime facts carried in this handoff, not idealised values: both content types assert the '; charset=utf-8' suffix put_resp_content_type/2 appends; no_content/1 asserts 204 + literal empty body + an EMPTY content-type header list; the rate_limited title asserts 'Too Many Requests' and internal 'Internal Server Error' verbatim from R-Co src/api/errors.zig (re-read at lines 66-168 rather than derived from the slug); the type base asserts the compile_env default https://bpm.example.com/problems/ since no config file sets :problems_base_uri. AC1: one test per ported constructor (10), each asserting type/title/status/detail on the SERIALISED body plus a separate absolute-URI check (URI.parse scheme + non-empty host), so a relative base would fail even though string equality still held. AC2: header-asserted via get_resp_header/2 in both directions, including one case walking all ten error wrappers so a wrapper bypassing send_problem/2 cannot hide behind a single representative. AC3 (INV-4): follows the design's note exactly -- internal_error/1 is called directly from two rescue clauses (RuntimeError vs ArgumentError, carrying a fake secret and a fake SQL fragment), NOT via a live crash through a Plug.ErrorHandler, since none is wired in this requirement; three tests cover the fixed body per exception type, byte-equality of the two real bodies against each other, and a leak check refuting ten forbidden substrings. AC4 (INV-5): compares the two SERIALISED bodies for byte equality (never-existed path vs a cross-tenant conn carrying different tenant assigns and a different request path), plus a second case driving two unmatched routes through the real Letflow.Router catch-all and asserting byte-identity with the direct call -- the structural half of the guarantee. AC5: 201 asserts the body survives as well as the status, 204 asserts resp_body == \"\" and a header-less response, and send_json/3 is exercised at 202 to prove it is genuinely status-parameterised. AC6: asserted against Code.fetch_docs/1 (the compiled doc chunk, not source text) for HandlerResult, 'not ported as a struct', Plug.Conn.t() threading, application/problem+json and 'diverges from R-Co'. Trace-id precedence covered on all three errors.zig:54 branches, with branch 1 set up so both sources differ. AC7 name-length check performed by script over every describe/test pair: 34 names, longest combined 75 chars ('serialisation contract serialise/1 escapes quotes and backslashes in detail'), next 71 -- far under the 200-char ceiling and under a third of ExUnit's 255 hard limit; all spec/requirement citations are # comments above the tests, never in name strings. AC8: no wall-clock and no unseeded randomness -- Ecto.UUID.generate/0 is deliberately avoided in favour of two fixed literal UUIDs. Both files are async: true, no DB (neither module has an Ecto dependency), matching test/letflow/router_test.exs's precedent. Tests were NOT run (TEST-RUNNER owns Step 4) and nothing under lib/ was modified. main's pre-existing repo-wide mix format / --warnings-as-errors failures (ISS-0106 / GH#354 / queue task 170) were left alone.",
+    "artifacts_out": [
+      "test/specs/REQ-066.md",
+      "test/letflow/api/error_test.exs",
+      "test/letflow/api/response_test.exs",
+      "handoffs/WF02-REQ066-20260820/step-03-test-designer.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ066-20260820",
+      "commit_sha_list": ["96e089d552bb6bbeaab4235a99224c95c922bc5f"],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3a) for the hard gate on coverage, then TEST-RUNNER (Step 4) to actually execute mix test against these 34 tests."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,112 @@
+{
+  "handoff_id": "1f7d2bff-4f35-40b9-b8cc-ea6ecb04180e",
+  "run_id": "WF02-REQ066-20260820",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ066-20260820/step-02c-security-reviewer.json",
+  "created_at": "2026-08-20T19:51:16Z",
+  "started_at": "2026-08-20T19:51:16Z",
+  "completed_at": "2026-08-20T19:54:23Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-066"],
+    "requirement_text": {
+      "REQ-066": "Port src/api/errors.zig (272 lines) and src/api/response.zig (69) as Letflow.Api.Error and Letflow.Api.Response -- the single response/error contract every S4 route emits. Nothing in this batch renders a response body by hand once these exist. errors.zig is an RFC 9457 Problem Details builder. Port: the ProblemDetails shape (type as an absolute URI under a configured base, title, status, detail, plus the trace id field errors.zig carries with a \"\" default), the per-status constructors (problemNotFound and its siblings for 400/401/403/404/409/422/429/500 -- enumerate them from the Zig source rather than guessing which exist), and serialisation to a JSON body. Emit Content-Type: application/problem+json on error responses, per RFC 9457, and state in the moduledoc whether R-Co does the same or emits application/json (check response.zig's CONTENT_TYPE_JSON usage) -- if Letflow diverges, that divergence is deliberate and documented, not accidental. response.zig defines the canonical HandlerResult (status_code, body, content_type defaulting to JSON) and the typed success constructors that keep positive responses on correct status codes (200 vs 201 vs 202 vs 204). In Elixir the conn IS the result carrier, so port these as functions that take and return a conn (send_json/3, created/2, no_content/1, and the error counterparts) rather than transliterating a HandlerResult struct -- Zig returns a value because it has no conn. State that translation in the moduledoc. SECURITY (INV-4, INV-5): an error body must never carry secret material, a raw Ecto/Postgrex error, or a stack trace -- detail is a caller-safe string chosen by the handler, and an unexpected internal error maps to a generic 500 problem document whose detail does not vary with the underlying exception. Separately, the not-found problem document is the exact response a cross-tenant probe receives (REQ-072 enforces the routing; this requirement guarantees the two bodies are byte-identical by construction, because both go through one constructor)."
+    },
+    "related_handoff_ids": [
+      "d84fed46-76be-4ba8-b3e7-5b3023b4351c",
+      "0d57dedd-4791-427d-89ca-f53203a98985"
+    ],
+    "artifacts_in": [
+      "lib/letflow/api/error.ex",
+      "lib/letflow/api/response.ex",
+      "lib/letflow/router.ex",
+      "lib/letflow/design/req066-api-error-response.md",
+      "handoffs/WF02-REQ066-20260820/step-02a-elixir-dev.json"
+    ],
+    "owned_modules": ["lib/letflow/api/", "test/letflow/api/", "lib/letflow/design/req066-api-error-response.md"]
+  },
+  "task": {
+    "description": "WF-02 Step 2c hard security gate on branch feature/WF02-REQ066-20260820 (implementation commits 4df266f, f913bd2). This requirement's own text names INV-4 and INV-5 explicitly, so treat the scope test as already answered YES -- this is response-shaping code on the S4 API surface and is in scope. Run the full Step 2c procedure in docs/agents/workflows/WF-02_requirement_implementation.md: read `git diff origin/main...HEAD`, then state APPLIES or NOT-APPLICABLE for each of INV-1..INV-8 against this diff (an unlisted invariant reads as an unrun check -- see HANDOFF_PROTOCOL.md's security-reviewer-scoped worked example), and run the 'How to verify' check for each APPLIES. FAIL immediately on any applicable invariant failing -- all BLOCKER, no partial credit. Two claims from Step 2a you must independently re-derive rather than accept: (1) that Error.internal/0, Error.not_found/0, Response.internal_error/1 and Response.not_found/1 genuinely accept no detail-bearing argument, so no exception message, module name, SQL fragment or stack trace has any slot through which to reach a response body (INV-4) -- read the actual function heads and @specs in lib/letflow/api/error.ex and lib/letflow/api/response.ex, and additionally check that no other constructor or private helper offers a back door (e.g. an inspect/1, Exception.message/1, or interpolation of an arbitrary term anywhere in these two modules); (2) that two not_found responses are byte-identical by construction because both go through one constructor with no varying input (INV-5) -- confirm from the code, not from the developer's runtime spot-check. Also check that the new modules introduce no logging of a response body or detail string that could leak into logs, and that router.ex's send_json/3 delegation did not change what GET /health emits.",
+    "acceptance_criteria": [
+      "a verdict of APPLIES or NOT-APPLICABLE is recorded for every one of INV-1 through INV-8, with the reason",
+      "every APPLIES invariant has its 'How to verify' check actually run, with the evidence quoted",
+      "INV-4 independently confirmed structural: no detail-bearing parameter and no back-door interpolation/inspect/Exception.message path exists in lib/letflow/api/error.ex or lib/letflow/api/response.ex",
+      "INV-5 independently confirmed from the code: the 404 body cannot vary between a never-existed resource and a cross-tenant resource",
+      "any failure is reported as BLOCKER with the specific invariant number and the code location"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "WF-02 Step 2c hard security gate: PASS. Scope test answered YES (response-shaping code on the S4 API surface; requirement text names INV-4/INV-5). Diff reviewed: git diff origin/main...HEAD = lib/letflow/api/error.ex (new, 222), lib/letflow/api/response.ex (new, 169), lib/letflow/router.ex (send_json delegation, +5/-5), plus a design doc and handoff files. All eight invariants have a recorded verdict; every APPLIES invariant had its 'How to verify' procedure actually run. No BLOCKER found.",
+    "invariant_verdicts": {
+      "INV-1": {
+        "verdict": "NOT-APPLICABLE",
+        "reason": "No Ecto schema module, no migration, and no data-access path in the diff. lib/letflow/api/error.ex is pure (no Plug.Conn, no Repo); lib/letflow/api/response.ex touches only Plug.Conn. Verified by inspection of both files in full and by the absence of any Repo/Ecto reference in either. (a)/(b)/(c) of INV-1's procedure therefore all have no subject in this diff. priv/repo/migrations/ is untouched (confirmed via git diff --stat)."
+      },
+      "INV-2": {
+        "verdict": "APPLIES",
+        "result": "PASS",
+        "reason": "The diff introduces a new API response type (Letflow.Api.Error, serialised to a client-visible body), so the field-selection check has a subject even though the type carries no tenant-scoped data.",
+        "evidence": "lib/letflow/api/error.ex:64-65 uses `@derive {Jason.Encoder, only: [:type, :title, :status, :detail, :trace_id]}` over `defstruct [:type, :title, :status, :detail, trace_id: \"\"]` — an explicit allowlist applied at compile time, i.e. field selection happens before serialisation, not as post-hoc redaction on a client-visible struct. The allowlist equals the full field set, all five fields being non-sensitive RFC 9457 members. No tenant-scoped entity is serialised anywhere in this diff. NOTE (not a finding against this diff): Response.send_json/3 (response.ex:69) encodes a caller-supplied `map()` verbatim; INV-2's field-selection obligation for tenant entities falls on the requirements that introduce those entities' response shapes, not on this generic primitive."
+      },
+      "INV-3": {
+        "verdict": "NOT-APPLICABLE",
+        "reason": "No tenant-authored script execution, sandbox, host-capability allowlist, NIF, Port, Lua or WASM surface appears in the diff. S5 has not started and its build-vs-bind decision record does not exist, so INV-3 remains deferred per security-invariants.md's own 'How to verify'."
+      },
+      "INV-4": {
+        "verdict": "APPLIES",
+        "result": "PASS",
+        "reason": "Named by the requirement; the diff adds the module that builds every error body in the system.",
+        "evidence": "Structurally re-derived from the code, not from the Step 2a report. (1) Exported-arity proof by compiled module reflection (`MIX_ENV=test mix run -e 'Letflow.Api.Error.__info__(:functions)'`): Error exports `internal: 0` and `not_found: 0` and NO arity-1 overload of either; Response exports `internal_error: 1` and `not_found: 1` whose sole parameter is the conn (`__info__(:functions)` output recorded in the review). There is therefore no parameter slot through which an exception message, module name, SQL fragment, Ecto/Postgrex error or stacktrace could reach a 500 or 404 body. (2) Detail strings are compile-time module attributes: error.ex:61 `@internal_error_detail \"an unexpected error occurred\"` and error.ex:62 `@not_found_detail \"the requested resource was not found\"`, spliced at error.ex:208 and error.ex:142 respectively. (3) Back-door check: `grep -nE 'inspect|Exception|Logger|__STACKTRACE__|rescue|catch|#\\{' lib/letflow/api/error.ex lib/letflow/api/response.ex` returns ZERO hits (exit 1) — no inspect/1, no Exception.message/1, no interpolation of an arbitrary term, no rescue/catch that could capture and re-emit an exception, and no logging of a response body or detail string anywhere in either module. (4) No private helpers exist that could offer an indirect path: a full `def|defp` inventory of both modules shows 13 public functions in Error and 15 in Response and NO `defp` at all. (5) Rendered bodies confirmed constant at runtime: Error.serialise(Error.internal()) == {\"type\":\"https://bpm.example.com/problems/internal-error\",\"title\":\"Internal Server Error\",\"status\":500,\"detail\":\"an unexpected error occurred\",\"trace_id\":\"\"}. (6) The only non-constant field in a problem document is `trace_id`, spliced from `conn.assigns[:trace_id] || \"\"` at response.ex:105 — a correlation identifier, not secret material. (7) Repo-wide greps from INV-4's 'How to verify' run clean: `grep -rn \"System.get_env\" config/ lib/ --include=*.ex --include=*.exs` shows 9 hits, all env-sourced config (config/runtime.exs DATABASE_URL/POOL_SIZE/PORT, MIX_TEST_PARTITION, RELEASE_NAME, LETFLOW_DEV_DB_CONFIRMED) with no hardcoded literal; the hardcoded-secret heuristic `grep -rniE \"(password|secret|client_secret|token)\\s*(=|:)\\s*\\\"[^\\\"]{8,}\" lib/ config/ --include=*.ex --include=*.exs` returns ZERO hits. (8) The one configured value the new code reads, `Application.compile_env(:letflow, :problems_base_uri, \"https://bpm.example.com/problems/\")` at error.ex:55-59, is a public URI base and is not secret material."
+      },
+      "INV-5": {
+        "verdict": "APPLIES",
+        "result": "PASS",
+        "reason": "Named by the requirement. S4 has started and this diff defines the exact 404 body a cross-tenant probe will receive; the body-identity half of INV-5 is checkable here even though no lookup-by-ID handler exists yet.",
+        "evidence": "Re-derived from the code, not from the developer's runtime spot-check. Error.not_found/0 (error.ex:137-144) takes no argument — confirmed by compiled reflection showing `not_found: 0` with no arity-1 sibling — and returns a struct whose four content fields are compile-time constants (`@problems_base <> \"not-found\"`, \"Not Found\", 404, `@not_found_detail`). Response.not_found/1 (response.ex:135) is `send_problem(conn, Error.not_found())`: the conn is the only parameter and is not used to shape any body field. There is exactly ONE code path and NO varying input, so a never-existed 404 and a cross-tenant 404 are byte-identical by construction rather than by convention. Runtime confirmation of the constant document: {\"type\":\"https://bpm.example.com/problems/not-found\",\"title\":\"Not Found\",\"status\":404,\"detail\":\"the requested resource was not found\",\"trace_id\":\"\"}. The single per-request-varying field, `trace_id` (response.ex:105), is drawn from `conn.assigns` and is request-scoped, not resource-scoped — it varies identically in both cases and so carries no existence signal. Content-Type is identically `application/problem+json; charset=utf-8` on both (response.ex:108). INV-5's timing clause (comparable DB round-trips) is NOT EXERCISED by this diff — these modules perform no DB access at all; enforcing that the cross-tenant path does not short-circuit earlier than the not-found path belongs to REQ-072, which owns the routing, and must be checked there."
+      },
+      "INV-6": {
+        "verdict": "APPLIES",
+        "result": "PASS",
+        "reason": "Meta-invariant: this diff adds the response/error surface for new S4 data-access paths, so a SECURITY-REVIEWER gate with an explicit per-invariant assessment is required before merge.",
+        "evidence": "This handoff exists at handoffs/WF02-REQ066-20260820/step-02c-security-reviewer.json with result.status PASS and an explicit APPLIES/NOT-APPLICABLE verdict plus reason recorded for every one of INV-1 through INV-8 in this block. No invariant is left unlisted."
+      },
+      "INV-7": {
+        "verdict": "APPLIES",
+        "result": "PASS",
+        "reason": "Ecto is already in use repo-wide, so the check is live; run against the diff.",
+        "evidence": "`grep -rn \"Repo.query\" lib/ priv/repo/migrations/ --include=*.ex --include=*.exs` returns 7 hits, ALL in files untouched by this diff (lib/letflow/sandbox_pool/fixture_loader.ex:111,118,150; lib/letflow/sandbox_pool.ex:298,321; lib/letflow/tenant_provisioning.ex:174,188) — git diff --stat confirms the only lib/ files changed are api/error.ex, api/response.ex and router.ex. The diff introduces ZERO SQL of any kind: neither new module references Repo, Ecto, or a query, and no migration is added. No new interpolation surface."
+      },
+      "INV-8": {
+        "verdict": "APPLIES",
+        "result": "PASS",
+        "reason": "The new code sits on the HTTP request path, which is network input, so the typed-result/no-unhandled-crash rule applies.",
+        "evidence": "`grep -rn \"^\\s*{:ok, .*} = \" lib/letflow/ --include=*.ex` returns 23 hits, none of them in lib/letflow/api/ — the new modules contain no bare tagged-tuple pattern match at all. The two modules' only raise-capable calls are `Jason.encode!/1` (response.ex:72) and `Error.serialise/1` (error.ex:89, itself `Jason.encode!/1`). For every problem document the encoded term is a struct of strings and an integer and cannot raise. For `send_json/3` the encoded term is a caller-supplied map, so a handler passing a non-encodable term would raise Jason.EncodeError — but this is byte-for-byte the same construct the router already used before this diff (the removed private send_json/3 was the identical put_resp_content_type + Jason.encode! + send_resp), so the diff introduces no new crash surface; and under Plug/Bandit each request runs in its own process, so such a raise is confined to the one connection and cannot degrade another tenant's in-flight work — the deliberate-isolation carve-out INV-8 names explicitly. NOTE for a later requirement (not a finding here): the S4 top-level error-handling plug that maps an unexpected raise to a generic 500 should route through Response.internal_error/1, which by INV-4's structure cannot leak the exception."
+      }
+    },
+    "additional_checks": [
+      "No logging of a response body or detail string: `grep -nE 'Logger' lib/letflow/api/error.ex lib/letflow/api/response.ex` returns zero hits. Neither module calls Logger, :logger, IO.puts or IO.inspect.",
+      "router.ex's send_json/3 delegation did not change what GET /health emits: executed Letflow.Router.call/2 against Plug.Test.conn(:get, \"/health\") post-change, giving {200, \"{\\\"status\\\":\\\"ok\\\"}\", [\"application/json; charset=utf-8\"]} — identical status, body bytes and content type to the pre-change private helper, which performed the same put_resp_content_type(\"application/json\") + Jason.encode! + send_resp(status, ...) sequence (see the diff at lib/letflow/router.ex:28-32).",
+      "OBSERVATION, non-blocking, routed to REVIEWER not a security BLOCKER: the router catch-all at lib/letflow/router.ex:24-26 still emits the legacy hand-built body {\"error\":\"not_found\"} as application/json rather than the RFC 9457 problem document (verified at runtime: {404, \"{\\\"error\\\":\\\"not_found\\\"}\", [\"application/json; charset=utf-8\"]}). This is a route-not-matched 404, not a tenant-scoped resource lookup, so it carries no cross-tenant existence signal and does not violate INV-5 today. It should be converted to Response.not_found/1 when S4's real routes land, so that an unmatched path and a tenant-scoped miss do not diverge in shape.",
+      "MIX_ENV=test mix compile: 'Generated letflow app' — the branch compiles; all runtime evidence above was produced against the compiled branch code, not inferred."
+    ],
+    "artifacts_out": ["handoffs/WF02-REQ066-20260820/step-02c-security-reviewer.json"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ066-20260820",
+      "commit_sha_list": ["d99be88", "4df266f", "f913bd2"],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Proceed to WF-02 Step 2d (REVIEWER). No rework required. Carry forward two notes for later requirements: (1) REQ-072 must check INV-5's timing clause — comparable DB round-trips between the cross-tenant and never-existed paths — which this diff cannot exercise; (2) the router catch-all 404 should move to Response.not_found/1 when the real S4 routes land."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

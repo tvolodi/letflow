@@ -5675,3 +5675,49 @@ history:
       REQ-065 and are stale in the same way router.ex/mix.exs were before this run. Worth
       a small follow-up doc fix; not filed as a separate issue by this run (out of
       REQ-065's scope boundary), flagging here for a future session.
+  - req: REQ-066
+    event: started
+    agent: ORCH
+    at: 2026-08-20T19:31:22Z
+    note: >
+      WF02-REQ066-20260820, claimed via letflow-queue get_next_task (task id 133).
+      Port src/api/errors.zig + src/api/response.zig as Letflow.Api.Error /
+      Letflow.Api.Response (RFC 9457 problem-details contract, S4). Step 00 (git
+      setup) complete: branch feature/WF02-REQ066-20260820 pushed. Depends_on
+      REQ-065 (done).
+  - req: REQ-066
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-20T21:15:15Z
+    note: >
+      WF02-REQ066-20260820 complete; RELEASE-VALIDATOR Step 5 PASS at cf82968 with all
+      six acceptance criteria independently re-verified, two of them by mutation testing.
+      Letflow.Api.Error (lib/letflow/api/error.ex) and Letflow.Api.Response
+      (lib/letflow/api/response.ex) now carry the single RFC 9457 problem-details
+      response/error contract for S4. 10 generic HTTP-status constructors were ported
+      (the 400/401/403/404/409/422/429/500 family enumerated from errors.zig); 9
+      domain-specific constructors were deliberately NOT ported here and are deferred to
+      their owning PIN-01/PIN-05/PRM-01/PAR-01 requirements rather than being guessed at
+      in advance. Letflow emits Content-Type: application/problem+json on error responses
+      where R-Co's response.zig emits application/json via CONTENT_TYPE_JSON -- a
+      deliberate RFC 9457 divergence, stated in the moduledoc, not accidental drift.
+      response.zig's HandlerResult struct is not transliterated: it is replaced by
+      conn-threading functions (send_json/3, created/2, no_content/1 and the error
+      counterparts), also stated in the moduledoc, because in Elixir the conn is the
+      result carrier. INV-4: a 500 from an unexpected exception carries a fixed
+      caller-safe detail that does not vary with the underlying exception (no exception
+      message, module name, SQL fragment or stack trace). INV-5: the never-existed 404
+      and the cross-tenant 404 are byte-identical by construction, both going through the
+      one not_found constructor -- REQ-072 will enforce the routing that relies on this.
+      lib/letflow/router.ex's catch-all was routed through Letflow.Api.Response.not_found/1
+      (9b7ec7b, REVIEWER rework 1), replacing the old hand-built {"error":"not_found"}
+      body, so no route renders an error body by hand.
+      Tests: 40 new/updated all green (14 error_test, 21 response_test, 5 router_test).
+      Full suite 1215-1216/1230 with 14-15 pre-existing environmental failures, none
+      attributable to this branch. Three issues were filed rather than fixed by this run,
+      all out of REQ-066's scope: ISS-0106/GH#354 (toolchain drift), ISS-0107/GH#358 and
+      ISS-0108/GH#360 (test-isolation flakes).
+      Docs: README.md's "Running it" now states the 404 body shape (the point of REQ-066
+      being a uniform contract); docs/migration/stage-4-api-surface.md's stale header
+      ("none started", "All 21 are pending") corrected -- REVIEWER sign-off section left
+      untouched.

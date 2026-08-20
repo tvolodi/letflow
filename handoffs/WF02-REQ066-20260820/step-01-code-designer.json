@@ -1,0 +1,54 @@
+{
+  "handoff_id": "02c7d749-fc6f-420b-bbda-a59dfd6c9131",
+  "run_id": "WF02-REQ066-20260820",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ066-20260820/step-01-code-designer.json",
+  "created_at": "2026-08-20T19:31:22Z",
+  "started_at": "2026-08-20T19:31:22Z",
+  "completed_at": "2026-08-20T19:36:31Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-066"],
+    "requirement_text": {
+      "REQ-066": "Port src/api/errors.zig (272 lines) and src/api/response.zig (69) as Letflow.Api.Error and Letflow.Api.Response -- the single response/error contract every S4 route emits. Nothing in this batch renders a response body by hand once these exist. errors.zig is an RFC 9457 Problem Details builder. Port: the ProblemDetails shape (type as an absolute URI under a configured base, title, status, detail, plus the trace id field errors.zig carries with a \"\" default), the per-status constructors (problemNotFound and its siblings for 400/401/403/404/409/422/429/500 -- enumerate them from the Zig source rather than guessing which exist), and serialisation to a JSON body. Emit Content-Type: application/problem+json on error responses, per RFC 9457, and state in the moduledoc whether R-Co does the same or emits application/json (check response.zig's CONTENT_TYPE_JSON usage) -- if Letflow diverges, that divergence is deliberate and documented, not accidental. response.zig defines the canonical HandlerResult (status_code, body, content_type defaulting to JSON) and the typed success constructors that keep positive responses on correct status codes (200 vs 201 vs 202 vs 204). In Elixir the conn IS the result carrier, so port these as functions that take and return a conn (send_json/3, created/2, no_content/1, and the error counterparts) rather than transliterating a HandlerResult struct -- Zig returns a value because it has no conn. State that translation in the moduledoc. SECURITY (INV-4, INV-5): an error body must never carry secret material, a raw Ecto/Postgrex error, or a stack trace -- detail is a caller-safe string chosen by the handler, and an unexpected internal error maps to a generic 500 problem document whose detail does not vary with the underlying exception. Separately, the not-found problem document is the exact response a cross-tenant probe receives (REQ-072 enforces the routing; this requirement guarantees the two bodies are byte-identical by construction, because both go through one constructor)."
+    },
+    "related_handoff_ids": ["187b7d6a-e499-468e-a86f-453987a8569c"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ066-20260820/step-00-git-setup.json"
+    ],
+    "owned_modules": ["lib/letflow/api/", "test/letflow/api/", "lib/letflow/design/req066-api-error-response.md"]
+  },
+  "task": {
+    "description": "On branch feature/WF02-REQ066-20260820 (already created and pushed by Step 00), produce the design artefact for REQ-066: lib/letflow/design/req066-api-error-response.md, covering Letflow.Api.Error and Letflow.Api.Response. Source files to port from (read directly, do not guess contents): c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\api\\errors.zig (272 lines, RFC 9457 ProblemDetails builder, BASE = \"https://bpm.example.com/problems/\", one serialise() function, and constructors: problemBadRequest/400, problemNotFound/404, problemConflict/409, problemUnprocessable/422, problemUnsupportedMediaType/415, problemInternalError/500, problemUnauthorized/401, problemForbidden/403, problemRateLimited/429, problemServiceUnavailable/503, problemPartitionMissingForWrite/503, problemUnresolvedCatalogRef/422, problemUnresolvedModuleRef/422, problemVariableSchemaViolation/422, problemUnresolvedPinOverride/422, problemUnknownPinRef/422, problemInstanceNotRebindable/409, problemEmptyPromotionPlan/422, problemInvalidPromotionSource/422) and c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\api\\response.zig (69 lines: HandlerResult struct, CONTENT_TYPE_JSON = \"application/json\", ok/1 -> 200, created/1 -> 201, noContent/0 -> 204, problemResponse/2 wrapping errors_mod.serialise). The requirement's own acceptance criteria only require the 400/401/403/404/409/422/429/500 family plus the 201/204 success helpers -- decide and state explicitly in the design whether to port every R-Co constructor (including the more specific 422/409/503 domain-specific ones like problemUnresolvedCatalogRef) now or only the generic HTTP-status family for this requirement's scope, with a stated rationale (note: several of the domain-specific constructors' underlying features, e.g. pin_overrides/PIN-05/PRM-01, are themselves later/other requirements -- decide whether it's premature to port their specific constructors now vs. generic constructors those later requirements can extend). Design must state: the ProblemDetails struct/map shape in Elixir (fields: type, title, status, detail, trace_id), the JSON serialisation approach (does Letflow already have a JSON library in mix.exs -- check before assuming Jason), the exact conn-threading function signatures for Letflow.Api.Response (send_json/3, created/2, no_content/1, and the RFC9457 error-sending counterpart(s)), the Content-Type header value used for success (application/json) vs error (application/problem+json) responses, how the 500-with-generic-detail invariant (INV-4) is enforced by construction (i.e. the design must make it structurally impossible for a raw exception message to reach the body, not just document a convention), and how the not-found-vs-cross-tenant byte-identical invariant (INV-5) is achieved (both paths must call the exact same constructor with the exact same detail string). State whether Letflow.Router (currently Plug/Bandit per decision 0001, not Phoenix -- see docs/migration/decisions/0001-web-framework.md and REQ-065) has a plug pipeline these functions integrate with, or whether these are pure conn -> conn functions callable from any handler. No implementation code in the design doc -- signatures and type shapes only.",
+    "acceptance_criteria": [
+      "Letflow.Api.Error produces a JSON body containing type, title, status and detail for every status constructor ported, with type an absolute URI, verified by a test per constructor",
+      "an error response carries Content-Type: application/problem+json and a success response carries application/json, each verified by asserting the response header rather than by inspection",
+      "a 500 produced from an unexpected exception has a detail string that is identical across two different underlying exception types, demonstrated by a test -- no exception message, module name, SQL fragment, or stack trace reaches the body (INV-4)",
+      "the 404 problem document produced for a resource that never existed and the one produced for a resource belonging to another tenant are byte-identical, demonstrated by a test comparing the two serialised bodies (INV-5)",
+      "Letflow.Api.Response's success helpers set 201 for creation and 204 with an empty body for deletion, each verified by a test asserting the status and (for 204) that the body is empty",
+      "the moduledoc states the Zig-to-Elixir translation explicitly: that response.zig's HandlerResult struct is replaced by conn-threading functions, and whether Letflow's problem+json content type diverges from R-Co's"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req066-api-error-response.md covering Letflow.Api.Error (pure ProblemDetails builder + Jason serialisation) and Letflow.Api.Response (conn-threading success/error helpers). Key decisions: (1) JSON lib = Jason, already a mix.exs dependency, no new dep; (2) constructor scope = generic HTTP-status family only (400/401/403/404/409/415/422/429/500/503) for this requirement, the 9 domain-specific errors.zig constructors (PIN-01/PIN-05/PRM-01/PAR-01) explicitly deferred to their owning requirements with rationale; (3) neither module is a Plug -- plain function libraries called from handlers/plugs, router.ex's own send_json/3 should delegate to Response.send_json/3, a catch-all exception-to-500 Plug.ErrorHandler is out of scope for this requirement; (4) INV-4 and INV-5 enforced structurally by making internal/0 and not_found/0 take zero detail-bearing arguments (detail is a module attribute, not a parameter), so no exception text or divergent 404 body can be constructed even by mistake; (5) Content-Type divergence stated explicitly: success application/json (matches R-Co), error application/problem+json (diverges from R-Co, which re-reading response.zig's problemResponse/2 directly actually defaults to application/json since it never overrides HandlerResult's content_type field -- Letflow's divergence is deliberate per AC2/RFC 9457 and documented in the moduledoc). Every acceptance criterion mapped to a concrete design element in doc section 4. Three open questions listed (shared builder vs pattern-copy, Jason.Encoder derive vs Map.from_struct, problems_base_uri config placeholder) -- none silently resolved.",
+    "artifacts_out": ["lib/letflow/design/req066-api-error-response.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ066-20260820",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

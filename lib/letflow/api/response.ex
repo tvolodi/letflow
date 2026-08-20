@@ -1,0 +1,181 @@
+defmodule Letflow.Api.Response do
+  @moduledoc """
+  The single response contract every S4 route emits — ports
+  `src/api/response.zig` (69 lines). Nothing renders a response body by hand
+  once this module exists.
+
+  ## Zig-to-Elixir translation
+
+  `response.zig` defines a `HandlerResult` struct (`status_code`, `body`,
+  `content_type` defaulting to `CONTENT_TYPE_JSON`) and returns it by value,
+  because Zig has no request object to carry the result. **In Elixir the conn
+  IS the result carrier**, so `HandlerResult` is not ported as a struct at all:
+  every function here takes a `Plug.Conn.t()` and returns a `Plug.Conn.t()`,
+  with status, body, and content type applied to the conn directly. `ok/2`,
+  `created/2`, and `no_content/1` correspond to `response.zig`'s `ok`,
+  `created`, and `noContent`; `send_problem/2` corresponds to
+  `problemResponse/2`.
+
+  `problemResponse/2`'s allocation-failure fallback (a hand-written literal 500
+  JSON body) has no Elixir analogue and is deliberately not ported — see
+  `Letflow.Api.Error`'s moduledoc.
+
+  ## Content-Type — a deliberate divergence from R-Co
+
+  **Success responses:** `application/json`, unchanged from R-Co.
+
+  **Error responses:** `application/problem+json`. This diverges from R-Co:
+  `response.zig`'s `problemResponse/2` never sets `content_type` on the
+  `HandlerResult` it returns, so R-Co's error responses fall through to the
+  struct default `CONTENT_TYPE_JSON = "application/json"` despite carrying an
+  RFC 9457-shaped body. Letflow emits `application/problem+json` instead, per
+  RFC 9457 §3. This is a considered divergence, documented here so it is not
+  mistaken for an oversight and "corrected" back.
+
+  Note that `Plug.Conn.put_resp_content_type/2` appends a charset, so the
+  header values actually emitted on the wire are
+  `application/json; charset=utf-8` and
+  `application/problem+json; charset=utf-8`.
+
+  ## Security invariants
+
+  `not_found/1` (INV-5) and `internal_error/1` (INV-4) take **no
+  detail-bearing argument** — their only parameter is the conn. There is no
+  slot through which a caught exception's message, a raw Ecto/Postgrex error,
+  or a stacktrace could reach the response body. Every other error helper takes
+  a `detail` the handler chooses and is responsible for keeping caller-safe.
+
+  Not a `Plug`: no `init/1`/`call/2`, no `@behaviour Plug`. Call these from
+  route handlers and from plugs.
+  """
+
+  import Plug.Conn
+
+  alias Letflow.Api.Error
+
+  @json_content_type "application/json"
+  @problem_content_type "application/problem+json"
+
+  # ── Success helpers ────────────────────────────────────────────────────────
+
+  @doc """
+  Encode `body` as JSON and send it at `status` with
+  `Content-Type: application/json`.
+
+  The shared primitive behind `ok/2` and `created/2`, and the single
+  generalisation of the private `send_json/3` `Letflow.Router` used to carry.
+  """
+  @spec send_json(Plug.Conn.t(), 100..599, map()) :: Plug.Conn.t()
+  def send_json(conn, status, body) do
+    conn
+    |> put_resp_content_type(@json_content_type)
+    |> send_resp(status, Jason.encode!(body))
+  end
+
+  @doc "HTTP 200 — OK, with a JSON body."
+  @spec ok(Plug.Conn.t(), map()) :: Plug.Conn.t()
+  def ok(conn, body), do: send_json(conn, 200, body)
+
+  @doc "HTTP 201 — Created, with a JSON body."
+  @spec created(Plug.Conn.t(), map()) :: Plug.Conn.t()
+  def created(conn, body), do: send_json(conn, 201, body)
+
+  @doc """
+  HTTP 204 — No Content.
+
+  Takes no `body` parameter (mirroring `noContent()` in `response.zig`), so an
+  accidental non-empty 204 body is impossible to pass in rather than merely
+  discouraged. No `Content-Type` is set: a 204 carries no representation.
+  """
+  @spec no_content(Plug.Conn.t()) :: Plug.Conn.t()
+  def no_content(conn), do: send_resp(conn, 204, "")
+
+  # ── Error helpers ──────────────────────────────────────────────────────────
+
+  @doc """
+  Send an already-built `Letflow.Api.Error` problem document.
+
+  The one primitive every per-status error helper funnels through. Resolves the
+  document's `trace_id`, then sends it at the document's own status with
+  `Content-Type: application/problem+json`.
+
+  `trace_id` resolution matches `errors.zig`'s `serialise/2` precedence exactly:
+
+    1. a non-empty `trace_id` already on the problem document wins (the
+       supported explicit-override mechanism R-Co documents for tests);
+    2. otherwise `conn.assigns[:trace_id]` — Letflow's conn-scoped stand-in for
+       R-Co's `trace_context` thread-local;
+    3. otherwise `""`.
+  """
+  @spec send_problem(Plug.Conn.t(), Error.t()) :: Plug.Conn.t()
+  def send_problem(conn, %Error{} = problem) do
+    problem = %{problem | trace_id: effective_trace_id(problem.trace_id, conn)}
+
+    conn
+    |> put_resp_content_type(@problem_content_type)
+    |> send_resp(problem.status, Error.serialise(problem))
+  end
+
+  @doc "HTTP 400 — Bad Request."
+  @spec bad_request(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
+  def bad_request(conn, detail), do: send_problem(conn, Error.bad_request(detail))
+
+  @doc """
+  HTTP 401 — Unauthorized. Set `WWW-Authenticate` on the conn yourself before
+  calling.
+  """
+  @spec unauthorized(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
+  def unauthorized(conn, detail), do: send_problem(conn, Error.unauthorized(detail))
+
+  @doc "HTTP 403 — Forbidden."
+  @spec forbidden(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
+  def forbidden(conn, detail), do: send_problem(conn, Error.forbidden(detail))
+
+  @doc """
+  HTTP 404 — Not Found.
+
+  Takes no `detail`, per INV-5 — the cross-tenant-probe response and the
+  genuine-missing-resource response are the same bytes because they are the
+  same call.
+  """
+  @spec not_found(Plug.Conn.t()) :: Plug.Conn.t()
+  def not_found(conn), do: send_problem(conn, Error.not_found())
+
+  @doc "HTTP 409 — Conflict."
+  @spec conflict(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
+  def conflict(conn, detail), do: send_problem(conn, Error.conflict(detail))
+
+  @doc "HTTP 415 — Unsupported Media Type."
+  @spec unsupported_media_type(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
+  def unsupported_media_type(conn, detail),
+    do: send_problem(conn, Error.unsupported_media_type(detail))
+
+  @doc "HTTP 422 — Unprocessable Entity."
+  @spec unprocessable(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
+  def unprocessable(conn, detail), do: send_problem(conn, Error.unprocessable(detail))
+
+  @doc """
+  HTTP 429 — Too Many Requests. Set `Retry-After` on the conn yourself before
+  calling.
+  """
+  @spec rate_limited(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
+  def rate_limited(conn, detail), do: send_problem(conn, Error.rate_limited(detail))
+
+  @doc """
+  HTTP 500 — Internal Server Error.
+
+  Takes no `detail`, per INV-4 — the body cannot vary with the underlying
+  exception because nothing about the exception can be passed in.
+  """
+  @spec internal_error(Plug.Conn.t()) :: Plug.Conn.t()
+  def internal_error(conn), do: send_problem(conn, Error.internal())
+
+  @doc "HTTP 503 — Service Unavailable."
+  @spec service_unavailable(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
+  def service_unavailable(conn, detail), do: send_problem(conn, Error.service_unavailable(detail))
+
+  # See send_problem/2's doc for the precedence this implements.
+  @spec effective_trace_id(String.t(), Plug.Conn.t()) :: String.t()
+  defp effective_trace_id("", conn), do: conn.assigns[:trace_id] || ""
+  defp effective_trace_id(trace_id, _conn) when is_binary(trace_id), do: trace_id
+end

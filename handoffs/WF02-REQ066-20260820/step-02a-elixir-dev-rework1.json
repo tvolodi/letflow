@@ -1,0 +1,68 @@
+{
+  "handoff_id": "feb7acaa-cb54-4a69-aa54-f286eed000c9",
+  "run_id": "WF02-REQ066-20260820",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ066-20260820/step-02a-elixir-dev-rework1.json",
+  "created_at": "2026-08-20T20:02:50Z",
+  "started_at": "2026-08-20T20:02:50Z",
+  "completed_at": "2026-08-20T20:05:53Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-066"],
+    "requirement_text": {
+      "REQ-066": "Port src/api/errors.zig (272 lines) and src/api/response.zig (69) as Letflow.Api.Error and Letflow.Api.Response -- the single response/error contract every S4 route emits. Nothing in this batch renders a response body by hand once these exist. errors.zig is an RFC 9457 Problem Details builder. Port: the ProblemDetails shape (type as an absolute URI under a configured base, title, status, detail, plus the trace id field errors.zig carries with a \"\" default), the per-status constructors (problemNotFound and its siblings for 400/401/403/404/409/422/429/500 -- enumerate them from the Zig source rather than guessing which exist), and serialisation to a JSON body. Emit Content-Type: application/problem+json on error responses, per RFC 9457, and state in the moduledoc whether R-Co does the same or emits application/json (check response.zig's CONTENT_TYPE_JSON usage) -- if Letflow diverges, that divergence is deliberate and documented, not accidental. response.zig defines the canonical HandlerResult (status_code, body, content_type defaulting to JSON) and the typed success constructors that keep positive responses on correct status codes (200 vs 201 vs 202 vs 204). In Elixir the conn IS the result carrier, so port these as functions that take and return a conn (send_json/3, created/2, no_content/1, and the error counterparts) rather than transliterating a HandlerResult struct -- Zig returns a value because it has no conn. State that translation in the moduledoc. SECURITY (INV-4, INV-5): an error body must never carry secret material, a raw Ecto/Postgrex error, or a stack trace -- detail is a caller-safe string chosen by the handler, and an unexpected internal error maps to a generic 500 problem document whose detail does not vary with the underlying exception. Separately, the not-found problem document is the exact response a cross-tenant probe receives (REQ-072 enforces the routing; this requirement guarantees the two bodies are byte-identical by construction, because both go through one constructor)."
+    },
+    "related_handoff_ids": [
+      "0d57dedd-4791-427d-89ca-f53203a98985",
+      "1f7d2bff-4f35-40b9-b8cc-ea6ecb04180e",
+      "a4ba5662-10ea-44ee-8d95-d83c45466a2c"
+    ],
+    "artifacts_in": [
+      "lib/letflow/api/error.ex",
+      "lib/letflow/api/response.ex",
+      "lib/letflow/router.ex",
+      "test/letflow/router_test.exs",
+      "lib/letflow/design/req066-api-error-response.md",
+      "handoffs/WF02-REQ066-20260820/step-02d-reviewer.json"
+    ],
+    "owned_modules": ["lib/letflow/api/", "test/letflow/api/", "lib/letflow/design/req066-api-error-response.md"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1: REVIEWER FAILed the Step 2d idiom/scope gate (handoff commit 8807851) with two blocking items. Everything else in your Step 2a work is explicitly signed off as-is -- REVIEWER's re-review scope on resubmission is narrow and limited to exactly the three things below. Do not re-open or restructure anything else in lib/letflow/api/error.ex or lib/letflow/api/response.ex.\n\nITEM REVIEWER-02d-1 (BLOCKER, yours): lib/letflow/router.ex:24-26's catch-all `match _ do send_json(conn, 404, %{error: \"not_found\"}) end` renders an error body by hand, which is precisely what REQ-066's own requirement text forbids ('Nothing in this batch renders a response body by hand once these exist'). Your Step 2a delegation of send_json/3 fixed the encode-and-send duplication but left the body SHAPE off the Problem Details contract, so the branch currently ships two structurally different 404 documents. Replace the catch-all body with Letflow.Api.Response.not_found(conn).\n\nITEM REVIEWER-02d-1b (consequence of the above): test/letflow/router_test.exs lines 47, 59, 68, 75 assert %{\"error\" => \"not_found\"} and will now fail. Update those four assertions to match the Problem Details body. REVIEWER verified their original REQ-046 regression intent (a 404 rather than a 500 from UndefinedFunctionError) is carried by the status-code assertion and survives the change -- preserve that intent, do not weaken those tests to only check the status if they currently check more. NOTE: test/ is normally TEST-DESIGNER's territory, but these are pre-existing tests broken by your own implementation change, so fixing them is Unblock-Everything scope for you, not new test design. Do not write any NEW tests for REQ-066's acceptance criteria -- TEST-DESIGNER still owns Step 3.\n\nITEM REVIEWER-02d-2 (MINOR, fix-or-document -- your call, but state which you chose and why): Response.send_problem/2 does `%{problem | trace_id: conn.assigns[:trace_id] || \"\"}`, unconditionally overwriting whatever trace_id the problem already carries. R-Co's errors.zig serialise/2 gives a non-empty p.trace_id precedence over the thread-local, and documents explicit setting as the supported test-override mechanism. There is no live bug today, but the moduledoc documents every other divergence from R-Co as deliberate and this one is undocumented. Either match R-Co's precedence (non-empty existing trace_id wins) or document the divergence in the moduledoc as deliberate with a reason.\n\nAfter the changes: re-run mix compile --warnings-as-errors and mix format --check-formatted SCOPED to the files you changed (main's repo-wide failures are pre-existing and already filed as docs/issues/ISS-0106.yaml / GH#354 / queue task 170 -- do not attempt to fix those, and do not treat them as your failure). Also actually run the router test file to confirm your assertion updates pass.",
+    "acceptance_criteria": [
+      "lib/letflow/router.ex's catch-all 404 goes through Letflow.Api.Response.not_found/1 -- no hand-built error body remains in the router",
+      "test/letflow/router_test.exs's four affected assertions updated to the Problem Details body, with the original REQ-046 regression intent (404 not 500) preserved",
+      "the router test file actually runs and passes, with real quoted output",
+      "send_problem/2's trace_id handling either matches R-Co's non-empty-wins precedence or is documented in the moduledoc as a deliberate divergence with a stated reason -- state which you chose",
+      "mix compile --warnings-as-errors introduces no new warning attributable to this run's files",
+      "mix format --check-formatted exits 0 on the files this run changed",
+      "no change made outside the three items above"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Rework 1 addressed exactly the three REVIEWER items; nothing else touched. (1) REVIEWER-02d-1: lib/letflow/router.ex's catch-all now calls Letflow.Api.Response.not_found(conn) instead of hand-building %{error: \"not_found\"} -- no hand-rendered error body remains in the router, and every 404 the app emits now goes through the single Letflow.Api.Error.not_found/0 constructor (INV-5's byte-identical guarantee). The private send_json/3 delegate stays, still used by GET /health. (2) REVIEWER-02d-1b: test/letflow/router_test.exs's four not_found assertions now compare against a new @not_found_body module attribute spelling out the full RFC 9457 document (type/title/status/detail/trace_id) literally; each test still asserts BOTH conn.status == 404 and full body equality, so the REQ-046 regression intent (404 rather than a 500 from UndefinedFunctionError) is preserved and the assertions were strengthened, not weakened. (3) REVIEWER-02d-2: chose FIX over document. Response.send_problem/2 now resolves trace_id via a private effective_trace_id/2 matching errors.zig serialise/2's precedence exactly -- non-empty problem.trace_id wins, else conn.assigns[:trace_id], else \"\" -- and send_problem/2's @doc states the three-step precedence. Rationale for fixing rather than documenting: R-Co documents explicit trace_id setting as the supported test-override mechanism, so preserving the precedence keeps a behaviour contract rather than dropping one; the fix is two clauses and removes a divergence instead of adding one to the moduledoc's divergence list. VERIFICATION (real output): mix test test/letflow/router_test.exs -> 'Finished in 0.08 seconds (0.08s async, 0.00s sync) / Result: 5 passed'. mix format --check-formatted on lib/letflow/router.ex lib/letflow/api/response.ex test/letflow/router_test.exs -> exit 0. mix compile --force --warnings-as-errors fails repo-wide, but the failure is entirely pre-existing ISS-0106/GH#354 material (Letflow.Engine.Transition type warnings et al.); grepping the full warning output for router.ex, api/error.ex, api/response.ex returned no matches, so this run's files introduce no new warning.",
+    "artifacts_out": [
+      "lib/letflow/router.ex",
+      "lib/letflow/api/response.ex",
+      "test/letflow/router_test.exs"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ066-20260820",
+      "commit_sha_list": ["9b7ec7b"],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route back to REVIEWER for the narrow Step 2d re-review (items REVIEWER-02d-1, -1b, -2 only). SECURITY-REVIEWER re-review is at ORCH's discretion: the 404 body change is on a tenant-data path in the INV-5 sense, but it moves the catch-all onto the already-approved constructor rather than introducing new detail-bearing output."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

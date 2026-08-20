@@ -482,6 +482,48 @@ defmodule Letflow.Definitions.GraphTest do
                "expected exactly :missing_endpoint for #{inspect(attributes)}, got #{inspect(codes(result))}"
       end
     end
+
+    test "endpoint absent but service_id non-blank -> no :missing_endpoint (route_kind: :catalog_service, ISS-0104/GH#334)" do
+      g =
+        graph(
+          [attr_node("st1", :SERVICE_TASK, %{"service_id" => "billing", "timeout_ms" => 1000})],
+          []
+        )
+
+      result = Graph.validate_node_attributes(g)
+
+      assert codes(result) == [],
+             "service_id-only SERVICE_TASK must pass CHK-10, got #{inspect(codes(result))}"
+    end
+
+    test "both endpoint and service_id absent/blank -> :missing_endpoint still fires (service_id is an alternative, not a bypass)" do
+      for service_id_attrs <- [%{}, %{"service_id" => ""}, %{"service_id" => "   "}] do
+        attributes = Map.put(service_id_attrs, "timeout_ms", 1000)
+        g = graph([attr_node("st1", :SERVICE_TASK, attributes)], [])
+        result = Graph.validate_node_attributes(g)
+
+        assert codes(result) == [:missing_endpoint],
+               "expected :missing_endpoint for #{inspect(attributes)}, got #{inspect(codes(result))}"
+      end
+    end
+
+    test "both endpoint and service_id non-blank -> no :missing_endpoint (endpoint alone already satisfied CHK-10; service_id alongside it is not a new violation)" do
+      g =
+        graph(
+          [
+            attr_node("st1", :SERVICE_TASK, %{
+              "endpoint" => "http://svc",
+              "service_id" => "billing",
+              "timeout_ms" => 1000
+            })
+          ],
+          []
+        )
+
+      result = Graph.validate_node_attributes(g)
+
+      assert codes(result) == []
+    end
   end
 
   # ---------------------------------------------------------------------

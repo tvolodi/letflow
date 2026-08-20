@@ -45,4 +45,22 @@ affected_files:
   - lib/letflow/design/req031-service-scope-validator.md
 queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
 github_issue: https://github.com/tvolodi/letflow/issues/334
-status: open
+status: resolved
+resolution: >
+  check_service_task_endpoint/1 (lib/letflow/definitions/graph.ex) now
+  filters out nodes with a non-blank "service_id" before flagging a
+  missing "endpoint" -- CHK-10 only fires :missing_endpoint when both
+  "endpoint" and "service_id" are blank/missing, mirroring
+  parse_config_from_node_attributes/1's own {nil, nil} ->
+  :missing_url_and_service_id condition and R-Co's service_task.zig.
+  route_kind: :catalog_service (service-id-only) definitions can now pass
+  graph validation. Design docs updated: req029 (CHK-10 row, new §4.1a)
+  and req031 (corrected the now-stale "service_id read nowhere else"
+  claim). Regression tests added to graph_test.exs (service_id-only ->
+  valid; both blank -> still invalid; both present -> valid) and
+  test/specs/REQ-029.md (5a/5b/5c). Full mix test suite run: 1157/1171
+  passed; the 14 failures are pre-existing, confined to
+  IdentityMigrationTest and Mix.Tasks.Letflow.Check.TestTest, unrelated to
+  this change (diff touches only graph.ex/graph_test.exs/design docs/
+  REQ-029 spec).
+resolved_at: "2026-08-20T09:10:00Z"

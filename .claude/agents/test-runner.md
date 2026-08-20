@@ -34,8 +34,12 @@ that explicitly instead of guessing at the result.
 
 ## Procedure
 
-1. `docker compose up -d` (Postgres on port 5462 — deliberately not
-   5432/5433 so it doesn't collide with R-Co's own stack).
+1. `docker compose up -d` (Postgres on port 5462 by default —
+   deliberately not 5432/5433 so it doesn't collide with R-Co's own
+   stack). If this workspace has an untracked `.env` setting
+   `LETFLOW_DB_PORT`, that port is used instead, by both compose and
+   Ecto — see `README.md`. Do not run `docker compose up` in a checkout
+   that has been told it shares another checkout's container.
 2. `mix test` (the `test` alias in `mix.exs` runs `ecto.create` and
    `ecto.migrate --quiet` first automatically).
 3. On failure: read the actual assertion output, find root cause,

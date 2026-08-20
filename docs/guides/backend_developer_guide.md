@@ -23,7 +23,8 @@ pattern.
 
 | Variable | Where set | Purpose |
 |---|---|---|
-| Postgres connection | `config/dev.exs`, `config/test.exs` | Port 5462 — deliberately not 5432/5433, which R-Co's own stack already uses |
+| Postgres connection | `config/dev.exs`, `config/test.exs` | Port 5462 by default — deliberately not 5432/5433, which R-Co's own stack already uses |
+| `LETFLOW_DB_PORT` | untracked `.env` at the project root, or the environment | Overrides that port for this workspace only. Read by both `docker-compose.yml` and `config/db_port.exs`, so the container and Ecto stay in sync. Needed when a second checkout of this repo runs its own PostgreSQL alongside the first — see `README.md` |
 | `LETFLOW_BOOTSTRAP_TOKEN` (or similar, per REQ-103) | `config/dev.exs` / env | MVP-1 dev-mode auth token — never hardcoded as a literal string in a committed `.ex` file |
 
 ### Bootstrap

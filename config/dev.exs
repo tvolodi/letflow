@@ -22,16 +22,23 @@ end
 # config/prod.exs's own comment that runtime-dependent values belong there.
 config :letflow, start_http: true, http_port: 4000
 
-# Deliberately on port 5462, not 5432 — R-Co's own docker-compose stack
-# already uses 5432 (dev) and 5433 (test), so Letflow gets its own
-# ports and can run alongside R-Co without colliding. (Previously
-# 5434, moved after that port turned out to already be in use.)
+# Deliberately not 5432 — R-Co's own docker-compose stack already uses 5432
+# (dev) and 5433 (test), so Letflow gets its own ports and can run alongside
+# R-Co without colliding. (Previously 5434, moved after that port turned out
+# to already be in use; then a hardcoded 5462.) The port is now per-workspace
+# local state resolved by config/db_port.exs — LETFLOW_DB_PORT from the
+# environment or the untracked .env, defaulting to 5462 — because this repo is
+# checked out into several workspaces at once and each runs its own
+# `docker compose up` against docker-compose.yml's ${LETFLOW_DB_PORT:-5462}
+# host-port mapping.
+{db_port, _bindings} = Code.eval_file(Path.expand("db_port.exs", __DIR__))
+
 config :letflow, Letflow.Repo,
   username: "letflow",
   password: "letflow",
   database: "letflow_dev",
   hostname: "localhost",
-  port: 5462,
+  port: db_port,
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10,

@@ -6,7 +6,14 @@ services:
       POSTGRES_PASSWORD: letflow
       POSTGRES_DB: letflow_dev
     ports:
-      - "5462:5432"
+      # Host port is per-workspace, not global: two workspaces (letflow,
+      # letflow-2) run this stack side by side against the same repo, so a
+      # hardcoded port would collide. Default 5462 keeps the original
+      # single-workspace behaviour; a workspace that needs its own instance
+      # sets LETFLOW_DB_PORT in an untracked .env next to this file (docker
+      # compose reads it automatically, and config/dev.exs + config/test.exs
+      # read the same file so Ecto and the container never disagree).
+      - "${LETFLOW_DB_PORT:-5462}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U letflow"]
       interval: 2s

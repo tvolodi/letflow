@@ -209,6 +209,17 @@ regardless) — but the extra container/volume/network were pure waste,
 and a small drift from this could plausibly have collided with the
 primary checkout's own container state instead of silently no-op'ing.
 
+Follow-up (2026-08-21): the shared-host-port half of this is now
+fixable rather than only avoidable — `docker-compose.yml` publishes
+`${LETFLOW_DB_PORT:-5462}` and `config/dev.exs`/`config/test.exs`
+resolve the same variable through `config/db_port.exs`, so a checkout
+that genuinely wants its own PostgreSQL sets `LETFLOW_DB_PORT` in an
+untracked `.env` and gets a container and an Ecto config that agree.
+This does *not* license running `docker compose up` in a checkout
+instructed to share another one's container — the rule above stands;
+it only removes the silent-empty-port-mapping failure mode for
+checkouts that are supposed to have their own.
+
 **Why this is easy to miss:** the agent's own verification (`mix test`
 passing) gave no signal that anything was wrong — a docker-compose
 port conflict silently producing an unreachable container is not the

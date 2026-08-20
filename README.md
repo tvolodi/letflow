@@ -108,9 +108,28 @@ This is a plain shell script, not a `mix` task, on purpose — see the
 comment at the top of `scripts/timed_test.sh` for why a `mix`-prefixed
 command structurally can't time this project's own compile step.
 
-Postgres runs on port 5462, not 5432 — R-Co's own docker-compose
-already uses 5432 (dev) and 5433 (test), so this can run alongside it
-without colliding.
+Postgres runs on port 5462 by default, not 5432 — R-Co's own
+docker-compose already uses 5432 (dev) and 5433 (test), so this can run
+alongside it without colliding.
+
+That default is per-workspace, not fixed. This repo is routinely checked
+out into more than one workspace at a time (`letflow`, `letflow-2`, plus
+git worktrees), each running its own `docker compose up`; a hardcoded
+host port makes the second one fail to bind (or, worse, silently come up
+with no port mapping at all — see `docs/anti-patterns.md`). To give a
+workspace its own PostgreSQL instance, create an untracked `.env` at the
+project root:
+
+```
+LETFLOW_DB_PORT=5472
+```
+
+Both `docker-compose.yml` (host-port mapping) and `config/dev.exs` /
+`config/test.exs` (via `config/db_port.exs`) read that one file, so the
+container and Ecto can't drift apart. An environment variable of the same
+name takes precedence over `.env`; with neither set, the port is 5462 and
+behaviour is unchanged. `.env` is gitignored on purpose — the port is
+local state of a checkout, not of the project.
 
 ## Notes
 

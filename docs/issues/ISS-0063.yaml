@@ -58,7 +58,40 @@ description: >
   argument instead of a hardcoded nil).
 affected_files:
   - lib/letflow/engine.ex
-status: open
+status: resolved
+resolved_in_run: WF02-REQ109-20260819
+resolved_at: "2026-08-20T01:02:49Z"
+fix_note: >
+  Closed by REQ-109 (`status: done`), exactly as the `scoping_note` below
+  predicted -- a port, not an invention. Shipped: a tenant-scoped
+  `variable_schemas` migration (guarded by `if prefix() do` and registered
+  in lib/letflow/tenant_provisioning.ex's
+  @tenant_scoped_migration_manifest), `Letflow.Engine.VariableSchema`
+  (lib/letflow/engine/variable_schema.ex -- the Ecto schema, the single
+  per-definition SELECT of `variable_key, json_schema`, and the pure
+  per-key validations builder), and the replacement of the hardcoded `nil`
+  `variable_validations` argument at lib/letflow/engine.ex's
+  VariableMerge.merge/3 call site with a real map built inside the same
+  already-open transaction and already-locked projection. REQ-049's
+  `{:rejected, ...}` -> ExecutionError.append_multi/3 branch is therefore
+  reachable through Engine.complete_task/3 for the first time. Validation
+  goes through REQ-024's pure `JsonSchema.validate/2` delegate directly
+  (no new mix.exs dependency, no second JSON Schema implementation);
+  storage was settled as a dedicated table rather than
+  `event_type_registry`, closing req049-variable-merge.md section 7.3.
+  Only overwrite candidates are validated; keys with no `variable_schemas`
+  row are omitted. The registration/INSERT path remains deliberately
+  deferred to REQ-078/REQ-082. Gate chain all PASS, RELEASE-VALIDATOR
+  independently re-verified 13/13 acceptance criteria.
+
+  ARITY NOTE (CODE-DESIGN-VALIDATOR N4): the function this issue's title
+  and description call `merge_output_variables/5` is now
+  `merge_output_variables/7` (lib/letflow/engine.ex:1633) -- REQ-109 added
+  the two arguments the lookup needs. The `/5` references above and in the
+  title are left verbatim because they record the arity as it actually was
+  at discovery time (2026-08-19); this note, not an edit to the historical
+  text, is the correction. The live forward-looking `/5` references in
+  REQ-109's own docs/requirements.yaml entry WERE updated to `/7`.
 github_issue: https://github.com/tvolodi/letflow/issues/212
 superseded_scoping_note: >
   SUPERSEDED 2026-08-19T19:10:03Z by `scoping_note` below -- its central claim

@@ -1,0 +1,82 @@
+id: ISS-0090
+title: "REQ-109 AC4 requires a VARIABLE_OVERWRITTEN event to be appended, but REQ-048's INV-EE48-5 forbids exactly that -- the AC is wrong, the code is right, and a literal reading fails correct code"
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF02-REQ109-20260819 (Step 3 / Step 3b)
+discovered_at: "2026-08-19T20:22:38Z"
+severity: MINOR
+tags:
+  - acceptance-criteria
+  - req-048
+  - req-109
+  - doc-correction
+description: >
+  REQ-109's AC4 reads, verbatim: "with the same seeded schema, completing a
+  task with a value that CONFORMS overwrites the key, leaves the instance
+  status unchanged, APPENDS A VARIABLE_OVERWRITTEN EVENT, and advances the
+  token -- verified by reading instance_projections and events back."
+
+  No VARIABLE_OVERWRITTEN event is ever appended, and none should be.
+  REQ-048's INV-EE48-5 forbids it. The comment above
+  `append_task_completed_event/5` (lib/letflow/engine.ex:2220-2224) states
+  verbatim: "merge_events (VARIABLE_OVERWRITTEN outcomes) are embedded as
+  informational metadata inside this one event's payload, NEVER APPENDED AS
+  THEIR OWN SEPARATE ROWS (INV-EE48-5)."
+
+  So merge outcomes live at `payload["merged_variable_events"]` inside the
+  single TASK_COMPLETED event. AC4's literal assertion would FAIL AGAINST
+  CORRECT CODE.
+
+  This is an acceptance-criterion defect, not an implementation defect. The
+  shipped behaviour is right and matches a shipped invariant; only REQ-109's
+  AC text is wrong. It was written without reconciling against REQ-048's
+  INV-EE48-5.
+
+  HOW IT WAS HANDLED IN THE TEST SUITE (already correct, no change needed).
+  TEST-DESIGNER asserted the real artefact -- `payload["merged_variable_events"]`
+  inside TASK_COMPLETED -- AND additionally asserted that
+  `events_of_type(..., "VARIABLE_OVERWRITTEN") == []`. That pins the
+  divergence explicitly rather than glossing it, so the suite documents the
+  discrepancy instead of hiding it. TEST-DESIGN-VALIDATOR independently
+  confirmed the INV-EE48-5 quote and ruled the AC wrong and the test right.
+
+  WHY THIS NEEDS FILING RATHER THAN LEAVING AS A HANDOFF NOTE.
+  RELEASE-VALIDATOR re-derives independently against acceptance-criteria
+  text, by design -- that is the point of the role. On a literal reading it
+  will score AC4 as a miss and can legitimately FAIL a correct
+  implementation. Every future re-derivation of REQ-109 hits the same trap
+  and has to re-adjudicate it from scratch. Correcting the source text ends
+  that permanently.
+
+  CHECKED AND NOT AFFECTED: AC2. An earlier gate summary suggested AC2's
+  wording framed the duplicate-insert failure as a `Postgrex.Error`. It does
+  not -- AC2 says only "demonstrated by an actual failing insert, not by
+  reading the migration source", which is method-neutral and correct as
+  written. The Postgrex-vs-Ecto.ConstraintError point was TEST-DESIGNER's
+  own expectation, not AC text. AC2 needs NO correction. Verified by reading
+  AC2 verbatim from docs/requirements.yaml before filing this.
+affected_files:
+  - docs/requirements.yaml
+status: open
+github_issue: https://github.com/tvolodi/letflow/issues/308
+related:
+  - ISS-0063
+scoping_note: >
+  Filed by ORCH during REQ-109's WF-02 run rather than fixed inline,
+  because editing an acceptance criterion mid-flight -- while
+  RELEASE-VALIDATOR is about to verify against it -- changes the target a
+  gate is measuring against while the run is still open. That is the
+  behaviour the pipeline exists to prevent, even when the edit is
+  obviously correct.
+
+  RECOMMENDED FIX, one clause: replace AC4's "appends a
+  VARIABLE_OVERWRITTEN event" with wording that matches INV-EE48-5 --
+  e.g. "records the overwrite in the TASK_COMPLETED event's
+  payload.merged_variable_events, with no separate VARIABLE_OVERWRITTEN
+  event appended (REQ-048 INV-EE48-5)". Owner: REQ-ANALYST, gated by
+  REQ-VALIDATOR as normal, since it is requirement text.
+
+  DO THIS BEFORE REQ-109 IS RE-DERIVED BY ANY LATER RUN. It does not block
+  REQ-109's current run: RELEASE-VALIDATOR is being told about the
+  divergence explicitly in its handoff, and the test suite already pins
+  both halves. But that handoff note protects exactly one run. The source
+  text protects all of them.

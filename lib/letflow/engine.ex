@@ -126,6 +126,99 @@ defmodule Letflow.Engine do
   by the caller. See `lib/letflow/design/req048-task-completion.md` for the
   full design.
 
+  ## Output-variable schema validation at the merge call site (REQ-109)
+
+  `merge_output_variables/7` builds a real `variable_validations` map via
+  `Letflow.Engine.VariableSchema.variable_validations/5` and passes it to
+  `Letflow.Engine.VariableMerge.merge/3`, which makes REQ-061's
+  `{:rejected, …}` → `Letflow.Engine.ExecutionError.append_multi/3` branch
+  reachable through the real completion path for the first time (ISS-0063 /
+  GH#212). Storage-side rationale — the table, the three R-Co "schema"
+  concepts, the deferred registration path — lives in
+  `Letflow.Engine.VariableSchema`'s own moduledoc; what follows is the
+  engine-side half.
+
+  ### The former hardcoded `nil` was design-sanctioned, not a defect
+
+  Before REQ-109 this call site passed `variable_validations: nil` literally.
+  That conformed to its own gate-approved design contract:
+  `lib/letflow/design/req049-variable-merge.md` §7.3 states outright that
+  "until that requirement exists, every real caller of `merge/3` legitimately
+  passes `variable_validations: nil`." **REQ-109 is that requirement.** The
+  `nil` was the documented placeholder for a lookup that had not been built,
+  not a regression — it had already been re-filed as one twice, and this
+  paragraph exists to stop a third time.
+
+  ### Why `JsonSchema.validate/2` rather than REQ-024's `validate_payload/3`
+
+  `Letflow.EventStore.Registry.JsonSchema.validate/2` is called directly, and
+  no JSON Schema dependency is added to `mix.exs`. This is a deliberate,
+  stated deviation from REQ-049 AC4's *wording* whose *substance* it still
+  satisfies: `JsonSchema.validate/2` **is** `validate_payload/3`'s own
+  internal pure delegate (`lib/letflow/event_store/registry.ex:147` is
+  literally `case JsonSchema.validate(decoded, schema) do`), so no second JSON
+  Schema implementation is introduced. `validate_payload/3` itself is bypassed
+  because it is bound to `get_type/2` → `event_type_registry`
+  (`registry.ex:165-175`), and REQ-109 resolved variable-schema storage as a
+  *dedicated* table rather than an `event_type_registry` reuse — calling it
+  would force exactly the variable-key-to-event-type name mangling that
+  resolution rejected.
+
+  Three consequences for `req049-variable-merge.md`:
+
+    * **§7.1 is superseded.** Its `{"value" => raw}` wrapper convention is
+      replaced by `%{key => value}` against
+      `%{"type" => "object", "properties" => %{key => schema}, "required" =>
+      [key]}` — the shape already proven at
+      `lib/letflow/engine/sub_process.ex:179-185`. Using the variable's own key
+      as the wrapper key makes each `ValidationFailure.field_path` name the
+      real variable (`/amount`, not `/value`).
+    * **§7.2's `{:error, :unknown_event_type} -> :ok` row is superseded.** "Not
+      registered" is now "no row for that `variable_key`", and such a key is
+      **omitted** from the map rather than mapped to an outcome; `merge/3`'s
+      own `Map.get(validations, key, :ok)` default already covers it.
+    * **`req049-variable-merge.md` §13.2's open question is CLOSED, not merely
+      re-mapped.** It asked how
+      `validate_payload/3`'s `{:error, :tenant_not_provisioned}` and
+      `{:error, term()}` cases should map into a `validation_outcome()`.
+      `JsonSchema.validate/2` is pure — it performs no `get_type/2` lookup and
+      no tenant resolution — so neither error surface exists at all and there
+      is nothing left to map.
+
+  A lookup *scoping* failure is a different kind of thing from a rejected
+  value and is never folded into "no schemas registered": it returns
+  `{:error, {:variable_schema_lookup_failed, reason}}`, which aborts the
+  `Ecto.Multi`, writes nothing, and leaves the task `pending` and the instance
+  `active`. A missing prefix has no tenant to commit an ERROR tail into, so
+  aborting is the only fail-closed answer available.
+
+  ### OPEN QUESTION for REVIEWER — REQ-059's pin vs. this live read
+
+  REQ-059 (PIN-01/PIN-03) freezes exactly one `:variable_schema` pin per
+  instance at start and forbids substituting a current version for a pinned
+  one, so that "a newer catalog version published mid-flight does not affect
+  an in-flight instance." The merge-time read above is **live**, so in
+  principle it can expose an in-flight instance to a schema edited after that
+  instance started. R-Co does both — the live read at merge
+  (`instance.zig:2318`) and a digest pinned at start
+  (`pin_resolver.zig:428`/`:490`) — and REQ-109 ports the live read.
+
+  **The conflict is latent, not live**, for three independent reasons:
+
+    1. `pin_resolver.ex:262-263`'s `default_lookup/0` returns
+       `{:ok, %{version: "unversioned", json_schema: nil}}` — a populated tuple
+       whose `json_schema` is nil — so the one `:variable_schema` pin every
+       instance records today carries **no schema content**. Nothing meaningful
+       is pinned, so nothing can be contradicted.
+    2. REQ-059 AC5's no-fallback guarantee is scoped to
+       `Letflow.Engine.PinResolver`, which REQ-109 does not touch.
+    3. The conflict activates only once `pin_resolver.ex`'s lookup is wired to
+       the real table, which REQ-109 explicitly defers.
+
+  No `docs/migration/decisions/` record is being re-decided — none of the six
+  covers variable schemas. If REVIEWER judges this a live conflict with
+  REQ-059, it belongs in a decision record, not in this requirement's code.
+
   ## `cancel_instance/3` (EE-08, REQ-052) — SUPERSESSION and scope boundary
 
   `lib/letflow/parallel_approval.ex` (`Letflow.ParallelApproval`) and
@@ -261,6 +354,7 @@ defmodule Letflow.Engine do
   alias Letflow.Engine.TokenRecord
   alias Letflow.Engine.Transition
   alias Letflow.Engine.VariableMerge
+  alias Letflow.Engine.VariableSchema
   alias Letflow.EventStore
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Repo
@@ -1167,6 +1261,7 @@ defmodule Letflow.Engine do
           | {:error,
              {:instance_execution_error, error_type :: ExecutionError.error_type(),
               affected :: ExecutionError.affected()}}
+          | {:error, {:variable_schema_lookup_failed, VariableSchema.error_reason()}}
           | {:error, Ecto.Changeset.t()}
           | {:error, term()}
 
@@ -1280,7 +1375,7 @@ defmodule Letflow.Engine do
     |> Multi.run(:snapshot_and_state, fn repo, %{task: task, instance_projection: projection} ->
       build_snapshot_and_state(repo, task, projection, prefix)
     end)
-    |> Multi.run(:merge, fn _repo,
+    |> Multi.run(:merge, fn repo,
                             %{
                               snapshot_and_state: %{seed_instance_state: seed_state},
                               instance_projection: projection
@@ -1290,7 +1385,9 @@ defmodule Letflow.Engine do
         actor_id,
         idempotency_key,
         seed_state.variables,
-        output_variables
+        output_variables,
+        repo,
+        prefix
       )
     end)
     |> Multi.run(:transition, fn _repo,
@@ -1511,36 +1608,92 @@ defmodule Letflow.Engine do
     }
   end
 
-  # M4 -- EE-09 variable merge (design doc §7 / req061 §5.1), pure. Never
-  # returns {:error, _} itself (req061 §5.1) -- a VariableMerge.merge/3
-  # rejection is routed into an ExecutionError.error_args() tagged
-  # {:execution_error, _} instead of aborting this Multi.run/3 step, so the
-  # enclosing Ecto.Multi can still commit an ERROR-transition tail
-  # (req061 §5.3) rather than rolling back everything. `projection`,
+  # M4 -- EE-09 variable merge (design doc §7 / req061 §5.1). A
+  # VariableMerge.merge/3 rejection is routed into an
+  # ExecutionError.error_args() tagged {:execution_error, _} instead of
+  # aborting this Multi.run/3 step, so the enclosing Ecto.Multi can still
+  # commit an ERROR-transition tail (req061 §5.3) rather than rolling back
+  # everything. `projection`,
   # `actor_id`, `idempotency_key` are threaded through here (widening this
   # function's own arity beyond req061 design doc §5.1's literal 2-arg
   # `merge_outcome_for/2` @spec -- flagged as a deliberate, safe deviation
   # for REVIEWER: error_args() needs `instance_id` (from the already-locked
   # `instance_projection`) and the caller's own `actor_id`/`idempotency_key`,
   # neither of which the design's own 2-arg signature has access to).
+  #
+  # REQ-109 widened this further, to /7: `repo` (which Ecto.Multi.run/3 has
+  # always handed this step and which was previously discarded as `_repo`) and
+  # `prefix` (already a closure variable of run_complete_task/6, used by the
+  # sibling :task/:instance_projection/:snapshot_and_state/:transition steps)
+  # are both needed by VariableSchema.variable_validations/5. The lookup key,
+  # `projection.definition_id`, needs no new plumbing at all -- it rides on the
+  # already-locked projection this function's first argument already carries.
+  # Unlike the two {:execution_error, _} routings, a lookup failure is NOT a
+  # business outcome: it returns {:error, _} and aborts the Multi (req109
+  # §5.3).
   @spec merge_output_variables(
           InstanceProjection.t(),
           Ecto.UUID.t() | nil,
           String.t(),
           current_variables :: map(),
-          output_variables :: map()
+          output_variables :: map(),
+          repo :: module(),
+          prefix :: String.t() | nil
         ) ::
           {:ok,
            {:merged, %{new_variables: map(), merge_events: [VariableMerge.merge_event()]}}
            | {:execution_error, ExecutionError.error_args()}}
+          | {:error, {:variable_schema_lookup_failed, VariableSchema.error_reason()}}
   defp merge_output_variables(
          projection,
          actor_id,
          idempotency_key,
          current_variables,
-         output_variables
+         output_variables,
+         repo,
+         prefix
        ) do
-    case VariableMerge.merge(current_variables, output_variables, nil) do
+    with {:ok, variable_validations} <-
+           VariableSchema.variable_validations(
+             repo,
+             projection.definition_id,
+             current_variables,
+             output_variables,
+             prefix: prefix
+           ) do
+      apply_variable_merge(
+        projection,
+        actor_id,
+        idempotency_key,
+        current_variables,
+        output_variables,
+        variable_validations
+      )
+    else
+      {:error, reason} -> {:error, {:variable_schema_lookup_failed, reason}}
+    end
+  end
+
+  @spec apply_variable_merge(
+          InstanceProjection.t(),
+          Ecto.UUID.t() | nil,
+          String.t(),
+          current_variables :: map(),
+          output_variables :: map(),
+          VariableMerge.variable_validations()
+        ) ::
+          {:ok,
+           {:merged, %{new_variables: map(), merge_events: [VariableMerge.merge_event()]}}
+           | {:execution_error, ExecutionError.error_args()}}
+  defp apply_variable_merge(
+         projection,
+         actor_id,
+         idempotency_key,
+         current_variables,
+         output_variables,
+         variable_validations
+       ) do
+    case VariableMerge.merge(current_variables, output_variables, variable_validations) do
       {:ok, new_variables, merge_events} ->
         {:ok, {:merged, %{new_variables: new_variables, merge_events: merge_events}}}
 

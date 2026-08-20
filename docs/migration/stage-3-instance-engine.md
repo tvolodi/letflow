@@ -1,8 +1,11 @@
 # Stage 3 — Instance engine
 
-Status: done -- all Stage 3 requirements shipped, REQ-060 (last
-pending) merged 2026-08-19. Depends on: S2 (all of REQ-022..REQ-042
-`done`).
+Status: in progress -- every Stage 3 requirement through REQ-062 has
+shipped (REQ-060 merged 2026-08-19), as has the later-added REQ-109
+(variable_schemas storage and per-key output-variable validation,
+closing ISS-0063 / GH#212, WF02-REQ109-20260819); one later-added S3
+requirement is still open: REQ-110. Depends on: S2 (all of
+REQ-022..REQ-042 `done`).
 Requirements: REQ-044 `done` (Pure transition kernel core types and
 dispatch skeleton); REQ-049 `done` (Variable scoping and merge, EE-09);
 REQ-050 `done` (Exclusive gateway evaluation and condition expressions,
@@ -121,8 +124,24 @@ PinResolver integration during the merge of feature/WF02-REQ062-20260819
 into main, since both requirements independently touched
 lib/letflow/engine.ex/lib/letflow/engine/reconstruction.ex; same
 header-sync gap-fix shape applied by this requirement's own
-DOC-UPDATER). All Stage 3 requirements (`docs/requirements.yaml`) are
-now `done`.
+DOC-UPDATER); REQ-109 `done` (variable_schemas storage and per-key
+output-variable validation at the merge call site, closing ISS-0063 /
+GH#212 -- ports R-Co migrations/012_event_retention.sql:32's
+variable_schemas table as a tenant-scoped migration plus
+Letflow.Engine.VariableSchema (Ecto schema, the single per-definition
+SELECT, and the pure validations builder), and replaces the hardcoded
+`nil` variable_validations argument at
+Letflow.Engine.merge_output_variables/7's VariableMerge.merge/3 call
+with a real map, making REQ-061's `{:rejected, ...}` ->
+ExecutionError.append_multi/3 branch reachable through
+complete_task/3 for the first time; validation goes through REQ-024's
+pure JsonSchema.validate/2 delegate with no new mix.exs dependency, and
+the registration/INSERT path is deferred to REQ-078/REQ-082; closes
+ISS-0063 / GH#212 and ISS-0075 / GH#296; same header-sync gap-fix shape
+applied by this requirement's own DOC-UPDATER);
+REQ-110 `pending`. Every Stage 3 requirement listed above through
+REQ-062 is `done` in `docs/requirements.yaml`, as is the later-added
+REQ-109; REQ-110 was added to this stage afterwards and is still open.
 
 ## Scope
 
@@ -325,4 +344,15 @@ GLOBAL, so none needs REQ-041's GLOBAL-exception flagging.
 
 ## REVIEWER sign-off
 
-(None yet — this stage hasn't started.)
+(Not yet populated — S3 is in progress. The stale "this stage hasn't
+started" wording this section carried until 2026-08-20 was left over from
+before S3 began and was corrected by REQ-109's DOC-UPDATER pass; it did
+not mean no reviews had happened. Every S3 requirement merged so far
+passed REVIEWER as a per-requirement WF-02 Step 2d gate, recorded in that
+requirement's own handoff under `handoffs/WF02-REQ0NN-*/`, and two such
+sign-offs are already cited inline in the requirement list above (REQ-061's
+ISS-0063 out-of-scope ruling, line 51; REQ-054's dead-call-site rework,
+line 89). The consolidated per-requirement sign-off section here is
+populated at the S3 stage gate (WF-04), not incrementally per requirement
+— same convention as `stage-2-event-store-definitions.md` states for S2 and
+`stage-1-identity.md`'s populated section followed for S1.)

@@ -1,0 +1,93 @@
+id: ISS-0088
+title: "JsonSchema.properties_violations/3 recurses into a subschema without an is_map guard, unlike its array_violations/3 sibling -- a nested non-map subschema raises FunctionClauseError; latent today, becomes reachable the moment REQ-078/REQ-082 insert the first variable_schemas row"
+discovered_by: SECURITY-REVIEWER
+discovered_in_run: WF02-REQ109-20260819 (Step 2b security gate)
+discovered_at: "2026-08-19T20:22:38Z"
+severity: MAJOR
+tags:
+  - crash-safety
+  - inv-8
+  - req-024
+  - req-078
+  - req-082
+  - req-109
+  - latent
+description: >
+  ASYMMETRIC GUARD in REQ-024's JSON Schema validator. Two sibling
+  recursion sites in `lib/letflow/event_store/registry/json_schema.ex`
+  treat a malformed subschema differently:
+
+    array_violations/3  (:177-179) guards
+      `case schema["items"] do items_schema when is_map(items_schema) ->`
+      -- a non-map `items` falls through to the `:191` catch-all, returns [].
+
+    properties_violations/3 (:146-150) guards only that `schema["properties"]`
+      is a map, then iterates `{name, _subschema}` and recurses into
+      `_subschema` WITHOUT checking it. A non-map subschema reaches a
+      function whose clauses require a map, and raises.
+
+  CONFIRMED BY EXECUTION, not by reading:
+
+    JsonSchema.validate(%{"x" => 1}, %{"properties" => %{"x" => "junk"}})
+      -> RAISED: FunctionClauseError
+    JsonSchema.validate(%{"a" => [1]},
+                        %{"properties" => %{"a" => %{"items" => "junk"}}})
+      -> [] (the guarded sibling handles the identical shape safely)
+
+  So the codebase already contains the correct treatment; `properties`
+  simply did not get it.
+
+  WHY IT MATTERS. `json_schema` is a `jsonb` column, which permits any JSON
+  value at any depth. REQ-109's `validations_for/3` guards the TOP-LEVEL
+  schema with `is_map` (design sec 6.3) and correctly degrades a non-map row
+  to "no constraint" -- but that guard cannot see a malformed value NESTED
+  inside an otherwise well-formed schema object. The raise would occur
+  inside an OPEN TRANSACTION on the task-completion hot path, which is
+  exactly the failure mode sec 6.3 exists to prevent.
+
+  NOT REACHABLE TODAY, AND REQ-109 DID NOT INTRODUCE IT. Nothing anywhere
+  in lib/ writes a `variable_schemas` row -- REQ-109 ports the table and the
+  read only, and defers every INSERT path to REQ-078/REQ-082. A malformed
+  nested subschema therefore cannot exist in production data yet, so INV-8's
+  reachability criterion (reachable from external I/O, tenant input, or
+  network data) is not met. The defect lives in REQ-024's validator and is
+  equally latent on the event-registry path today.
+affected_files:
+  - lib/letflow/event_store/registry/json_schema.ex
+status: open
+github_issue: https://github.com/tvolodi/letflow/issues/305
+related:
+  - ISS-0077
+scoping_note: >
+  Filed by ORCH from SECURITY-REVIEWER's Step 2b finding on REQ-109
+  (verdict PASS -- this was raised as a latent finding, explicitly NOT a
+  blocker, and ORCH re-confirmed the raise by execution before filing).
+
+  MUST LAND BEFORE OR WITH whichever of REQ-078 / REQ-082 first inserts a
+  `variable_schemas` row. That insertion is the moment this stops being
+  latent and becomes a crash on the completion hot path reachable from
+  tenant-authored definition content. Bind this to those requirements
+  rather than leaving it on a general backlog -- it has a specific
+  activation event, and the two requirements that cause it are already
+  written and depend on REQ-109.
+
+  TWO CANDIDATE FIXES, not equivalent -- decide deliberately:
+    (a) Add `when is_map(subschema)` to properties_violations/3's
+        recursion, mirroring array_violations/3 exactly. Cheap, local,
+        makes the validator total, and matches in-repo precedent. Silently
+        ignores a malformed subschema, consistent with how `items` already
+        behaves.
+    (b) Validate schema well-formedness at REGISTRATION time so a
+        malformed document can never be stored. Addresses the root cause
+        and is what req109-variable-schemas.md sec 11.3 (OQ-3) already
+        flags as unowned -- but it does not protect rows written before it
+        lands, nor the event-registry path.
+  These are complementary, not alternatives: (a) is the crash-safety fix
+  and (b) is the data-quality fix. Doing only (b) leaves the validator
+  partial; doing only (a) leaves malformed schemas silently inert, which
+  may itself surprise an operator who registered one.
+
+  SCOPE NOTE: this is REQ-024's module, shared with the event-type registry
+  path. A fix changes behaviour for BOTH consumers, so it is not a
+  variable_schemas-local change and should not be made inside a
+  variable_schemas-scoped requirement without saying so.

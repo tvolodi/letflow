@@ -4682,9 +4682,9 @@ requirements:
     depends_on: [REQ-083]
 
   - id: REQ-109
-    title: Port R-Co variable_schemas storage and wire per-key output-variable validation into merge_output_variables/5 (closes ISS-0063 / GH#212)
+    title: Port R-Co variable_schemas storage and wire per-key output-variable validation into merge_output_variables/7 (closes ISS-0063 / GH#212)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S3
     impl_order: 153  # letflow-queue task id
     description: >
@@ -4763,7 +4763,7 @@ requirements:
       requirement names. Then replace the hardcoded `nil` at
       lib/letflow/engine.ex:1543 with a real `variable_validations` map, built
       inside the same already-open transaction and already-locked projection
-      that `merge_output_variables/5` runs in. The lookup key is
+      that `merge_output_variables/7` runs in. The lookup key is
       `projection.definition_id`
       (lib/letflow/event_store/instance_projection.ex:113) -- already carried
       on the locked projection, so no new plumbing is needed to obtain it.

@@ -284,10 +284,16 @@ defmodule Letflow.TenantProvisioning do
   # REQ-064's ten Decision-0006-D2 tenant_id-drop migrations -- events,
   # events_archive, instance_projections, process_definitions, tokens, tasks,
   # promotion_reviews, promotion_assertion_runs, users, groups
-  # (lib/letflow/design/req064-drop-tenant-id.md §2), and REQ-054's
+  # (lib/letflow/design/req064-drop-tenant-id.md §2), REQ-054's
   # instance_state_snapshots migration
-  # (lib/letflow/design/req054-instance-state-snapshots.md §3) — twenty-eight
-  # entries in total. Each of these files carries the §4 guard pattern; registration here
+  # (lib/letflow/design/req054-instance-state-snapshots.md §3), and REQ-109's
+  # variable_schemas migration
+  # (lib/letflow/design/req109-variable-schemas.md §2/§2.3) — thirty-one
+  # entries in total. That total also counts two entries this prose does not
+  # enumerate by requirement id above: the sub-process parent-columns ALTER
+  # (20260819045553) and the lua_script_execution_audit migration
+  # (20260820000011); the list below, not this comment, is authoritative.
+  # Each of these files carries the §4 guard pattern; registration here
   # is the other mandatory half. REQ-063's own guarded DROP migration
   # (20260819000004_drop_legacy_public_identity_tables.exs) is deliberately NOT
   # listed here -- it is a global-schema migration, not tenant-scoped, per that
@@ -351,7 +357,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_820_000_011, Letflow.Repo.Migrations.CreateLuaScriptExecutionAudit,
      "20260820000011_create_lua_script_execution_audit.exs"},
     {20_260_821_000_001, Letflow.Repo.Migrations.CreateInstanceStateSnapshots,
-     "20260821000001_create_instance_state_snapshots.exs"}
+     "20260821000001_create_instance_state_snapshots.exs"},
+    {20_260_821_000_002, Letflow.Repo.Migrations.CreateVariableSchemas,
+     "20260821000002_create_variable_schemas.exs"}
   ]
 
   @doc """

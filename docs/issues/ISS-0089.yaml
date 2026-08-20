@@ -1,0 +1,93 @@
+id: ISS-0089
+title: "VariableSchema.validations_for/3's non-map defence is unreachable from its only production caller -- Ecto's :map loader raises on a non-object jsonb row first, so the guard sits one layer below the failure it was written to prevent"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ109-20260819 (Step 2d idiom gate)
+discovered_at: "2026-08-19T20:22:38Z"
+severity: MINOR
+tags:
+  - type-safety
+  - latent
+  - dead-branch
+  - req-024
+  - req-078
+  - req-082
+  - req-109
+description: >
+  `lib/letflow/engine/variable_schema.ex:337`'s `{:ok, _not_a_map}` clause in
+  `validations_for/3` cannot be reached through `fetch_schemas/3`, which is
+  its only production caller.
+
+  The clause exists (design sec 6.3) because `json_schema` is a NOT NULL
+  jsonb column, which permits an array, string, number or boolean. Such a
+  value would hit `JsonSchema.validate/2`'s `when is_map(schema)` guard and
+  raise inside an open transaction on the task-completion hot path. The
+  reasoning is sound; the placement is one layer too late.
+
+  `fetch_schemas/3` selects `vs.json_schema` as a TYPED FIELD
+  (variable_schema.ex:263), so Ecto applies the `:map` loader before any
+  Letflow code runs. Verified by execution:
+
+    Ecto.Type.load(:map, %{"a" => 1})  -> {:ok, %{"a" => 1}}
+    Ecto.Type.load(:map, [1, 2])       -> :error
+    Ecto.Type.load(:map, "str")        -> :error
+    Ecto.Type.load(:map, 42)           -> :error
+    Ecto.Type.load(:map, true)         -> :error
+
+  and `deps/ecto/lib/ecto/repo/queryable.ex:448` converts that `:error` into
+  `raise ArgumentError, "cannot load ... as type :map for field ..."`.
+
+  So a non-object jsonb row raises AT LOAD TIME, inside the transaction, on
+  the hot path -- precisely the failure mode the branch was written to
+  prevent -- and never reaches the branch. The defence is real code guarding
+  a door the caller cannot walk through.
+
+  NOT REACHABLE TODAY AND NOT INTRODUCED BY REQ-109. Nothing anywhere in
+  lib/ writes a `variable_schemas` row; registration is deferred to
+  REQ-078/REQ-082. No such row can exist yet, so nothing can raise. Same
+  standing as ISS-0088, which is the sibling finding one level deeper
+  (a malformed subschema NESTED inside a well-formed object, which the
+  `:map` loader accepts and passes through).
+
+  RELATIONSHIP TO ISS-0088 -- they are not duplicates and both matter:
+  this issue is about a top-level non-object row, caught by Ecto's loader
+  before Letflow sees it. ISS-0088 is about a well-formed object containing
+  a non-map subschema, which the loader ACCEPTS and which then raises deeper
+  in `JsonSchema.properties_violations/3`. Fixing either does not fix the
+  other.
+affected_files:
+  - lib/letflow/engine/variable_schema.ex
+status: open
+github_issue: https://github.com/tvolodi/letflow/issues/306
+related:
+  - ISS-0088
+scoping_note: >
+  Filed by ORCH from REVIEWER's Step 2d finding on REQ-109 (verdict PASS --
+  raised as non-blocking). ORCH independently re-confirmed the loader
+  behaviour by execution before filing.
+
+  IMMEDIATE CONSEQUENCE FOR TEST-DESIGNER, which is why this was filed
+  before the test step rather than after: a test that seeds a non-map
+  `json_schema` value and asserts graceful skipping CAN ONLY PASS by calling
+  `validations_for/3` directly. Such a test would certify a defence the
+  production path bypasses. It must be scoped explicitly as a unit test of
+  the pure function and must NOT be described as covering the production
+  failure mode. TEST-DESIGNER has been told this directly.
+
+  TWO CANDIDATE RESOLUTIONS, for whoever owns the fix:
+    (a) Select `json_schema` as a raw/untyped value so the Letflow guard is
+        actually the first thing to see it, and widen `error_reason()` with
+        a load-failure case. Makes the existing branch reachable and the
+        read total.
+    (b) Validate schema well-formedness at REGISTRATION time (OQ-3,
+        req109-variable-schemas.md sec 11.3) so a non-object row can never
+        be stored, and DELETE the read-side branch as genuinely dead rather
+        than leaving unreachable code that reads as a live defence.
+  (b) is cleaner if registration validation is going to exist anyway, but it
+  does not protect rows written before it lands. Do not do neither and leave
+  the branch: unreachable defensive code that looks live is worse than no
+  defence, because it stops anyone looking for the real one.
+
+  LIKELY OWNER: whichever of REQ-078 / REQ-082 first inserts a
+  `variable_schemas` row -- the same activation event as ISS-0088. Consider
+  resolving both together, since they are the same class of question about
+  where schema well-formedness is enforced.

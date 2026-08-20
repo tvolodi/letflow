@@ -1,0 +1,143 @@
+id: ISS-0091
+title: "complete_task/3's @spec advertises {:variable_schema_lookup_failed, reason} but neither error_reason() member is reachable from it; and InstanceProjection.definition_id is typed nullable in Ecto while its column is NOT NULL -- the typing mismatch is what made the guard look reachable"
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF02-REQ109-20260819 (Step 3 rework)
+discovered_at: "2026-08-19T20:22:38Z"
+severity: MINOR
+tags:
+  - dead-branch
+  - type-safety
+  - spec-accuracy
+  - req-043
+  - req-048
+  - req-109
+description: >
+  TWO RELATED FINDINGS, both discovered BY EXECUTION while attempting to
+  write an end-to-end test that then could not be made to pass for a
+  legitimate reason.
+
+  FINDING 1 -- {:variable_schema_lookup_failed, reason} is dead in
+  production. `merge_output_variables/7` (lib/letflow/engine.ex:1671) maps a
+  lookup error into `{:error, {:variable_schema_lookup_failed, reason}}`, and
+  `complete_task/3`'s @spec (:1263) advertises it. Neither member of
+  `VariableSchema.error_reason()` can actually occur on that path:
+
+    :missing_prefix -- complete_task/3 resolves the tenant via
+      TenantProvisioning.tenant_id_for_schema_name/1 at engine.ex:1315,
+      BEFORE run_complete_task/6 is entered. A nil or empty prefix fails
+      several steps upstream of the merge and never reaches the lookup.
+
+    :invalid_definition_id -- lib/letflow/event_store/instance_projection.ex:113
+      types the field as a nullable Ecto.UUID, but the COLUMN is
+      `null: false` and typed `uuid`
+      (20260818110001_alter_instance_projections_add_engine_columns.exs:71).
+      Forcing nil through Repo.update_all raises Postgrex.Error 23502
+      not_null_violation -- the state the guard defends against cannot be
+      constructed. A malformed non-UUID is rejected by the column type for
+      the same reason.
+
+  So the @spec advertises a return value the function cannot produce.
+  Harmless at runtime; misleading to a reader, and it costs a test-writer
+  real time before the reason becomes clear.
+
+  FINDING 2 -- the Ecto typing mismatch that CAUSED finding 1's second half.
+  `InstanceProjection`'s `definition_id` is declared nullable at the schema
+  level while the database column is NOT NULL. That mismatch is precisely
+  what made design sec 6.4's `{:error, :invalid_definition_id}` guard look
+  reachable when it is not: a designer reading the Ecto schema sees
+  `Ecto.UUID | nil` and correctly writes a nil guard; the column makes that
+  branch unreachable. Fixing the typing would have prevented the dead branch
+  from being specified in the first place.
+
+  THIS IS THE THIRD UNREACHABLE-DEFENSIVE-BRANCH FINDING ON REQ-109, after
+  ISS-0088 (properties_violations/3's unguarded recursion) and ISS-0089
+  (validations_for/3's non-map branch, unreachable because Ecto's :map loader
+  raises first). A defensive branch nobody can reach is not free: it reads
+  as a live defence, so it stops the next person looking for the real one,
+  and it costs a test-writer a cycle to discover it cannot be driven.
+
+  BUT THE THREE DO NOT SHARE ONE CAUSE -- they split 1/2, and conflating
+  them would produce the wrong fix. TEST-DESIGN-VALIDATOR's Step 3b re-gate
+  analysis, recorded here because it is the useful part:
+
+    ISS-0089 STANDS ON ITS OWN AND ITS GUARD SHOULD STAY. The jsonb COLUMN
+    genuinely permits scalars -- arrays, strings, numbers, booleans -- and
+    only Ecto's :map loader filters them first. The moment REQ-078/REQ-082
+    build the registration path, or anyone reads that column as raw or as
+    :string, the branch becomes live. That is real defence-in-depth against
+    a state the database actually allows.
+
+    THIS ISSUE'S :invalid_definition_id IS A DIFFERENT ANIMAL, and calling
+    it defence-in-depth flatters it. The column is `null: false`. The state
+    is not merely unreached -- it is FORBIDDEN BY THE DDL. The guard exists
+    only because instance_projection.ex:113 types the field as a NULLABLE
+    Ecto.UUID over a NOT NULL column. It is a symptom of the Elixir-side
+    type being wrong, not a considered defence.
+
+    AND THE @SPEC FINDING IS NOT A THIRD DATA POINT -- it is the downstream
+    consequence of the second. Because the guard exists, error_reason()
+    carries a member no execution produces; because that member exists,
+    complete_task/3's PUBLIC @spec advertises it as a returnable value. So
+    every caller writing an exhaustive `case` must handle a clause that can
+    never match, and Dialyzer is told something untrue.
+
+  THE GENERALISABLE RULE, which is the reason this issue is worth reading
+  at all:
+
+    (1) When a guard's unreachability traces to an Ecto field typed MORE
+        PERMISSIVELY than its column, the fix is to tighten the field to
+        match the DDL -- not to keep the guard.
+    (2) A guard retained for genuine defence-in-depth MUST NOT surface in a
+        public @spec as a returnable value. Doing so converts an internal
+        precaution into a CONTRACT OBLIGATION for every caller.
+affected_files:
+  - lib/letflow/engine.ex
+  - lib/letflow/event_store/instance_projection.ex
+status: open
+github_issue: https://github.com/tvolodi/letflow/issues/310
+related:
+  - ISS-0088
+  - ISS-0089
+scoping_note: >
+  Filed by ORCH from TEST-DESIGNER's Step 3 rework. Neither finding blocks
+  REQ-109: both are accuracy/readability defects, no runtime behaviour is
+  wrong, and TEST-DESIGNER correctly WITHDREW the end-to-end test on
+  evidence rather than forcing a DB-seeded test that would have certified a
+  path production cannot take -- the same disposition ISS-0089 got.
+
+  DO NOT "FIX" FINDING 1 BY MAKING THE BRANCH REACHABLE. The upstream
+  tenant resolution at engine.ex:1315 is correct and is defence-in-depth
+  worth keeping; the point is only that the downstream @spec and the
+  error-mapping advertise something unreachable.
+
+  SUGGESTED RESOLUTION, in dependency order:
+    1. Fix finding 2 first -- make InstanceProjection's definition_id
+       non-nullable at the Ecto level to match its column. That is the root
+       cause, and it is a one-line schema change plus whatever @type/@spec
+       follow from it.
+    2. Then decide finding 1 deliberately: either narrow complete_task/3's
+       @spec to drop the unreachable member, or keep the branch as explicit
+       defence-in-depth with a comment stating it is unreachable today AND
+       why it is retained. Do not leave it undocumented -- an unreachable
+       branch that reads as live is the specific harm recorded above.
+
+  OWNER: not REQ-109. Finding 2 belongs with REQ-043's schema (the
+  instance_projections engine columns); finding 1 with whoever next touches
+  complete_task/3's contract. Both are small enough to fold into an
+  unrelated run that already opens those files rather than scheduling their
+  own -- the pipeline overhead exceeds the edit.
+
+  RECOMMENDED CHEAP FOLLOW-UP, from the same Step 3b analysis: a standalone
+  sweep asking "which OTHER Ecto schema fields are typed nullable over NOT
+  NULL columns?" This instance was found only by accident, because a
+  test-writer happened to try driving the branch. The sweep is mechanical
+  (compare each schema's field declarations against its migration's
+  null: false constraints) and would find the rest deterministically.
+
+  DELIBERATELY NOT SCHEDULED AS A REQUIREMENT YET. On the evidence of ONE
+  instance it does not justify one -- fold it into whichever run fixes
+  finding 2, since that run already opens the schema files. If the sweep
+  comes back with more than a couple, it graduates: at that point it is a
+  systemic schema-vs-DDL fidelity question and warrants a record under
+  docs/migration/decisions/ rather than a pile of individual fixes. Do not
+  pre-judge which of those it is; measure first.

@@ -1,0 +1,103 @@
+id: ISS-0092
+title: "requirements.yaml impl_order values for REQ-109/110/111/112 were invented as file-max+1 instead of returned by register_task, so they COLLIDE with unrelated live queue tasks -- acting on one destroyed an unrelated task's status and closed the wrong GitHub issue"
+discovered_by: ORCH
+discovered_in_run: WF02-REQ109-20260819 (Step Final)
+discovered_at: "2026-08-20T01:10:07Z"
+severity: MAJOR
+tags:
+  - task-queue
+  - data-integrity
+  - process-defect
+  - req-109
+  - req-110
+  - req-111
+  - req-112
+description: >
+  THIS ISSUE RECORDS A REAL INCIDENT, NOT A HYPOTHETICAL. ORCH called
+  release_lock against letflow-queue task 153 believing it was REQ-109's
+  task, because REQ-109's docs/requirements.yaml entry carries
+  `impl_order: 153  # letflow-queue task id`. Task 153 is NOT REQ-109. It
+  is ISS-0087 (GH#304), an unrelated open issue filed earlier the same day.
+
+  CONSEQUENCES OF THE MISTAKEN CALL:
+    - queue task 153 (ISS-0087) was transitioned open -> done, so
+      get_next_task would never hand it out again;
+    - release_lock's best-effort GitHub sync CLOSED GH#304, an issue that
+      is genuinely unfixed.
+  Both were caught within minutes and repaired -- GH#304 reopened with an
+  explanation, and ISS-0087 re-registered as queue task 166 (status open)
+  to restore claimability, since the API exposes no status-reset. Queue
+  task 153 remains stranded as `done` and should be treated as dead.
+  docs/issues/ISS-0087.yaml was never altered and still correctly reads
+  `status: open`.
+
+  ROOT CAUSE -- an invented number treated as an authoritative id.
+  docs/agents/protocols/TASK_QUEUE.md's register_task section states that
+  the service RETURNS impl_order on creation and that ORCH must "record the
+  returned impl_order back into the requirement's entry in
+  docs/requirements.yaml". For REQ-109/110/111/112 that never happened:
+  none was ever registered via register_task, and their impl_order values
+  (153, 154, 155, 156) were assigned by REQ-ANALYST as file-max+1 -- a
+  number derived from docs/requirements.yaml alone, with nothing on the
+  queue side behind it. Because the deployed service assigns id and
+  impl_order identically (confirmed: the re-registration returned
+  `id: 166, impl_order: 166`), an invented impl_order silently addresses a
+  REAL, UNRELATED task when used in a /tasks/<id>/... URL.
+
+  So the inline comment `# letflow-queue task id` is actively harmful: it
+  asserts provenance the value does not have, and invites exactly the call
+  that caused this incident.
+
+  SCOPE -- FOUR REQUIREMENTS CARRY UNBACKED VALUES. REQ-109 (153),
+  REQ-110 (154), REQ-111 (155), REQ-112 (156). 153 is confirmed to belong
+  to ISS-0087. 154/155/156 were assigned in the same file-max+1 sweep and
+  must be assumed to collide with other live tasks until proven otherwise.
+  They were almost certainly minted around the same time as this session's
+  ISS-0085..0091 filings, which the queue mirrors.
+
+  DO NOT PROBE THE COLLISION BY CALLING release_lock OR lock ON 154/155/156.
+  That is precisely the destructive act this issue exists to prevent, and
+  the API offers no read-by-id (GET /tasks/<id> returns 404 for every id,
+  including ids that demonstrably exist -- verified against task 164, which
+  /tasks/next had just returned). There is currently NO non-destructive way
+  to resolve an id via the API.
+affected_files:
+  - docs/requirements.yaml
+  - docs/agents/protocols/TASK_QUEUE.md
+status: open
+github_issue: https://github.com/tvolodi/letflow/issues/314
+related:
+  - ISS-0087
+scoping_note: >
+  Filed by ORCH immediately after causing and repairing the incident.
+  Reported rather than quietly fixed because the damage touched an
+  unrelated issue's records and a third party (GH#304's readers) saw a
+  wrongly-closed issue.
+
+  IMMEDIATE MITIGATION APPLIED THIS RUN: the four unbacked impl_order
+  values are annotated in docs/requirements.yaml as NOT queue ids, so the
+  next agent cannot repeat the call. That is a warning, not a fix.
+
+  THE ACTUAL FIX, for whoever picks this up:
+    1. Register REQ-112 (and REQ-110/REQ-111 if the queue should reflect
+       that they are done) via register_task, and record the RETURNED
+       impl_order -- never a locally-derived one. REQ-109 is done and
+       merged; decide deliberately whether a done requirement needs a
+       queue task at all.
+    2. Correct TASK_QUEUE.md and the requirements.yaml schema convention
+       so `impl_order` is documented as "assigned by the queue on
+       register_task, absent until registered" rather than as a task id
+       an agent may invent. An unregistered requirement should carry NO
+       impl_order, not a guessed one.
+    3. Consider asking letflow-queue for a non-destructive read-by-id
+       (GET /tasks/<id>), whose absence is why this could not be checked
+       before acting. Its absence turns every id-addressed write into an
+       unverifiable gamble.
+
+  PROCESS LESSON, which generalises beyond the queue: ORCH acted on an
+  identifier whose provenance was asserted by a COMMENT rather than
+  verified against the system that owns it -- the same
+  inherited-claim failure recorded in docs/anti-patterns.md, but with a
+  destructive write at the end of it instead of a wasted cycle. Before an
+  id-addressed mutation against an external system, confirm the id maps to
+  what you think it does, or use an endpoint that fails safe.

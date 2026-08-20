@@ -82,6 +82,7 @@ defmodule Letflow.Engine.SubProcess do
   alias Letflow.Engine.TokenRecord
   alias Letflow.Engine.Transition
   alias Letflow.Engine.VariableMerge
+  alias Letflow.Engine.VariableSchema
   alias Letflow.EventStore
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.EventStore.Registry.JsonSchema
@@ -766,7 +767,7 @@ defmodule Letflow.Engine.SubProcess do
            error_idempotency_key
          )}
 
-      {:ok, graph, node, seed_state, token_records} ->
+      {:ok, graph, node, seed_state, token_records, definition_id} ->
         interface =
           node &&
             SubProcessInterface.parse_interface(
@@ -796,6 +797,7 @@ defmodule Letflow.Engine.SubProcess do
               parent_token,
               seed_state,
               token_records,
+              definition_id,
               actor_id,
               idempotency_key,
               error_idempotency_key,
@@ -805,6 +807,15 @@ defmodule Letflow.Engine.SubProcess do
     end
   end
 
+  # OQ-2 (req062-sub-process-runtime.md §9, GH#329): verified against R-Co
+  # (`R-Co/src/engine/instance.zig`'s `mergeVariables`, called at line 4956
+  # for the sub-process completion path with the exact same `variable_schemas`
+  # lookup as every other merge call, keyed only on `definition_id` -- never
+  # skipped for a sub-process output merge). The parent's own registered
+  # variable-type schemas DO apply here, the same way they already apply to a
+  # completed task's output merge (`Letflow.Engine.merge_output_variables/7`,
+  # REQ-109) -- reuses that same `VariableSchema.variable_validations/5`
+  # lookup rather than the previous literal `nil`.
   defp build_completion_multi_from_merge(
          multi,
          child_instance_id,
@@ -813,79 +824,120 @@ defmodule Letflow.Engine.SubProcess do
          parent_token,
          seed_state,
          token_records,
+         definition_id,
          actor_id,
          idempotency_key,
          error_idempotency_key,
          prefix
        ) do
-    {:ok, new_variables, merge_events} =
-      VariableMerge.merge(seed_state.variables, merge_variables, nil)
+    with {:ok, variable_validations} <-
+           VariableSchema.variable_validations(
+             Repo,
+             definition_id,
+             seed_state.variables,
+             merge_variables,
+             prefix: prefix
+           ),
+         {:ok, new_variables, merge_events} <-
+           VariableMerge.merge(seed_state.variables, merge_variables, variable_validations) do
+      state_with_merged = %InstanceState{seed_state | variables: new_variables}
+      parent_token_id_string = to_string(parent_token.id)
 
-    state_with_merged = %InstanceState{seed_state | variables: new_variables}
-    parent_token_id_string = to_string(parent_token.id)
+      case Transition.transition(
+             graph,
+             state_with_merged,
+             {:sub_process_completed, parent_token_id_string}
+           ) do
+        {:error, reason} ->
+          {:error,
+           to_error_args(
+             {:definition_not_found, {:transition_failed, reason}},
+             parent_token.instance_id,
+             parent_token.node_id,
+             state_with_merged.variables,
+             actor_id,
+             error_idempotency_key
+           )}
 
-    case Transition.transition(
-           graph,
-           state_with_merged,
-           {:sub_process_completed, parent_token_id_string}
-         ) do
-      {:error, reason} ->
+        {:ok, new_instance_state, _pending_events} ->
+          newly_pending =
+            Letflow.Engine.tokens_needing_dispatch(
+              state_with_merged.tokens,
+              new_instance_state.tokens,
+              parent_token_id_string
+            )
+
+          hop_limit = length(graph.nodes) * 4 + 10
+
+          case Letflow.Engine.advance_until_stable(
+                 graph,
+                 new_instance_state,
+                 newly_pending,
+                 hop_limit
+               ) do
+            {:error, reason} ->
+              {:error,
+               to_error_args(
+                 {:definition_not_found, {:activation_failed, reason}},
+                 parent_token.instance_id,
+                 parent_token.node_id,
+                 state_with_merged.variables,
+                 actor_id,
+                 error_idempotency_key
+               )}
+
+            {:ok, final_instance_state, _more_pending} ->
+              multi_with_steps =
+                build_completion_write_steps(
+                  multi,
+                  child_instance_id,
+                  parent_token,
+                  graph,
+                  seed_state,
+                  token_records,
+                  final_instance_state,
+                  merge_variables,
+                  merge_events,
+                  actor_id,
+                  idempotency_key,
+                  prefix
+                )
+
+              {:ok, multi_with_steps}
+          end
+      end
+    else
+      {:rejected, _unchanged_variables,
+       [{:execution_error, key, rejected_value, :variable_schema_rejected, failures}]} ->
         {:error,
-         to_error_args(
-           {:definition_not_found, {:transition_failed, reason}},
-           parent_token.instance_id,
-           parent_token.node_id,
-           state_with_merged.variables,
-           actor_id,
-           error_idempotency_key
-         )}
+         %{
+           instance_id: parent_token.instance_id,
+           error_type: :variable_schema_rejected,
+           affected: {:field, key},
+           reason: "variable '#{key}' failed schema validation",
+           variables: seed_state.variables,
+           details: %{rejected_value: rejected_value, failures: failures},
+           actor_id: actor_id,
+           idempotency_key: error_idempotency_key
+         }}
 
-      {:ok, new_instance_state, _pending_events} ->
-        newly_pending =
-          Letflow.Engine.tokens_needing_dispatch(
-            state_with_merged.tokens,
-            new_instance_state.tokens,
-            parent_token_id_string
-          )
-
-        hop_limit = length(graph.nodes) * 4 + 10
-
-        case Letflow.Engine.advance_until_stable(
-               graph,
-               new_instance_state,
-               newly_pending,
-               hop_limit
-             ) do
-          {:error, reason} ->
-            {:error,
-             to_error_args(
-               {:definition_not_found, {:activation_failed, reason}},
-               parent_token.instance_id,
-               parent_token.node_id,
-               state_with_merged.variables,
-               actor_id,
-               error_idempotency_key
-             )}
-
-          {:ok, final_instance_state, _more_pending} ->
-            multi_with_steps =
-              build_completion_write_steps(
-                multi,
-                child_instance_id,
-                parent_token,
-                graph,
-                seed_state,
-                token_records,
-                final_instance_state,
-                merge_variables,
-                merge_events,
-                actor_id,
-                idempotency_key,
-                prefix
-              )
-
-            {:ok, multi_with_steps}
-        end
+      {:error, reason} when reason in [:missing_prefix, :invalid_definition_id] ->
+        # Defensive only -- `prefix` and `definition_id` were already used
+        # successfully by load_parent_context/2's own reads a moment earlier
+        # in this same call, so neither failure is expected to be reachable
+        # in practice at this point.
+        {:error,
+         %{
+           instance_id: parent_token.instance_id,
+           error_type: :variable_schema_lookup_failed,
+           affected: {:node, parent_token.node_id},
+           reason:
+             "sub-process output merge could not look up registered variable schemas: #{inspect(reason)}",
+           variables: seed_state.variables,
+           details: %{reason: reason},
+           actor_id: actor_id,
+           idempotency_key: error_idempotency_key
+         }}
     end
   end
 
@@ -1053,7 +1105,7 @@ defmodule Letflow.Engine.SubProcess do
 
           node = Enum.find(graph.nodes, &(&1.id == parent_token.node_id))
 
-          {:ok, graph, node, seed_state, token_records}
+          {:ok, graph, node, seed_state, token_records, projection.definition_id}
       end
     end
   end

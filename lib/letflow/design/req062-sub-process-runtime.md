@@ -534,10 +534,15 @@ child can't double-fire the parent cascade. Called from exactly two sites:
 3. Success → load the parent's seed `InstanceState` (same
    `build_snapshot_and_state/4`-style reconstruction `complete_task/3`
    already performs, reused/generalized to accept a token_id instead of a
-   task_id as the anchor), merge `merge_variables` into it via
-   `VariableMerge.merge/3` (`variable_validations: nil` — see §9 OQ-2 on
-   why this design does not also re-check the parent's own registered
-   variable-type schemas here), then `Transition.transition(graph,
+   task_id as the anchor), look up the parent's own registered
+   variable-type schemas via `VariableSchema.variable_validations/5`
+   (`repo, parent_definition_id, seed_state.variables, merge_variables,
+   prefix: prefix` — REQ-109's own lookup, reused unchanged; see §9 OQ-2,
+   verified/RESOLVED 2026-08-20, GH#329) and merge `merge_variables` into
+   it via `VariableMerge.merge/3` using that result (a schema-lookup
+   failure or a `:rejected` outcome both route into the same
+   `ExecutionError.append_multi/3` path as step 2 above, never a partial
+   merge), then `Transition.transition(graph,
    state_with_merged_variables, {:sub_process_completed,
    parent_token.token_id |> to_string()})` (§2.4), then
    `advance_until_stable/4` for any further hops — which may itself surface
@@ -737,17 +742,33 @@ resolve fresh," which is REQ-059's own concern to state, not this one's.
   `SUB_PROCESS_DEFINITION_NOT_FOUND` code exists because of that gap, not
   despite it. R-Co closes the equivalent gap at `transition.zig:1903-1904`
   by rejecting the config outright.
-* **OQ-2 — Should the parent's own registered variable-type schemas
-  (`Letflow.EventStore.Registry`, the schemas `complete_task/3`'s
-  `variable_validations` argument checks) also apply to a sub-process
-  output merge, the way they already apply to a completed task's output
-  merge?** This design passes `variable_validations: nil` to
-  `VariableMerge.merge/3` in §3.4 step 3 (skip), reasoning that the
-  requirement text's "output schema violation" names only the interface's
-  own declared `json_schema`, not the registry's separate per-variable-name
-  schemas. Not verified against R-Co; a future requirement may need to
-  revisit this if a merged sub-process output value should also have been
-  registry-rejected.
+* **OQ-2 — RESOLVED 2026-08-20, GH#329.** Should the parent's own
+  registered variable-type schemas (`Letflow.Engine.VariableSchema`, the
+  same lookup `complete_task/3`'s `merge_output_variables/7` already uses,
+  REQ-109) also apply to a sub-process output merge, the way they already
+  apply to a completed task's output merge? Verified against R-Co
+  (`R-Co/src/engine/instance.zig`'s `mergeVariables`, called at line 4956
+  for the sub-process completion path with the exact same `variable_schemas`
+  lookup — keyed only on `definition_id`, via the same function every other
+  merge call site uses — as a completed task's own merge at line 1856; the
+  `task_id` parameter that call omits is used only to tag the
+  overwritten-variable event payload, never to skip or scope schema
+  validation). **Yes** — R-Co never special-cases a sub-process output merge
+  out of registry validation, so this design's previous `variable_validations:
+  nil` was a real divergence, not a deliberate simplification. Fixed: the
+  merge in §3.4 step 3 now calls `VariableSchema.variable_validations/5`
+  first (`Letflow.Engine.SubProcess.build_completion_multi_from_merge/12`),
+  exactly as `merge_output_variables/7` already does for a completed task,
+  keyed on the **parent's** `definition_id` (the instance whose variables are
+  being merged into, not the child's). A `:rejected` outcome routes into
+  `ExecutionError.append_multi/3` with `error_type: :variable_schema_rejected`
+  — the same error shape REQ-109 already produces for the task-completion
+  path — rather than silently merging a registry-invalid value. Covered by
+  `test/letflow/engine_sub_process_test.exs`'s new "OQ-2/GH#329" describe
+  block: an output value that passes the interface's own per-output
+  `json_schema` (SPC-01) but violates a stricter registry row for the same
+  key is still rejected, proving the registry lookup — not just the
+  interface's own check — is what fires.
 * **OQ-3 — Recursion depth for nested sub-processes (§3.3, §3.4) is
   unbounded** beyond the existing per-hop `hop_limit` (which bounds a
   *single* instance's own worklist, not the depth of a child-of-child-of-

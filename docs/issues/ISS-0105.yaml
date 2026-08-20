@@ -1,0 +1,59 @@
+id: ISS-0105
+title: "REQ-112: whether registry variable-type schemas should also apply to a sub-process output merge not verified against R-Co (req062-sub-process-runtime.md:748, OQ-2)"
+discovered_by: DOC-UPDATER
+discovered_in_run: WF02-REQ112-20260820
+discovered_at: "2026-08-20T00:00:00Z"
+severity: MINOR
+description: >
+  Filed by DOC-UPDATER during REQ-112 (ISS-0076 item 2 sweep, GH#317).
+  Deferred question (OQ-2): should the parent's own registered
+  variable-type schemas (Letflow.EventStore.Registry, the schemas
+  complete_task/3's variable_validations argument checks) also apply to a
+  sub-process output merge, the way they already apply to a completed
+  task's output merge? This design passes variable_validations: nil to
+  VariableMerge.merge/3, reasoning the requirement text's "output schema
+  violation" names only the interface's own declared json_schema, not the
+  registry's separate per-variable-name schemas -- not verified against
+  R-Co.
+  Letflow file:line: lib/letflow/design/req062-sub-process-runtime.md:748
+  R-Co source that could settle it: R-Co/src/engine/instance.zig
+  (sub-process output-merge path).
+affected_files:
+  - lib/letflow/design/req062-sub-process-runtime.md
+  - lib/letflow/engine/sub_process.ex
+  - test/letflow/engine_sub_process_test.exs
+queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
+github_issue: https://github.com/tvolodi/letflow/issues/329
+status: resolved
+resolution: >
+  R-Co/src/engine/instance.zig's mergeVariables (called at line 4956 for
+  the sub-process completion path) uses the exact same variable_schemas
+  lookup, keyed only on definition_id, as every other merge call site
+  (line 1856, the task-completion path) -- the task_id parameter that
+  call omits is used only to tag the overwritten-variable event payload,
+  never to skip or scope schema validation. Answer: yes, the parent's own
+  registered variable-type schemas DO apply to a sub-process output
+  merge, the same way they already apply to a completed task's output
+  merge.
+
+  Unlike ISS-0102/GH#330 and ISS-0103/GH#331 (pure verification, no code
+  change needed), this finding meant the existing design/implementation
+  was a real divergence from R-Co, not a defensible simplification --
+  lib/letflow/engine/sub_process.ex's build_completion_multi_from_merge/12
+  previously hardcoded `VariableMerge.merge(seed_state.variables,
+  merge_variables, nil)`. Fixed to call
+  Letflow.Engine.VariableSchema.variable_validations/5 first (REQ-109's
+  own lookup, reused unchanged, keyed on the parent's definition_id) and
+  pass its result into VariableMerge.merge/3, matching
+  Letflow.Engine.merge_output_variables/7's already-shipped pattern for
+  the task-completion path. A :rejected outcome now routes into
+  ExecutionError.append_multi/3 with error_type: :variable_schema_rejected
+  instead of silently merging a registry-invalid value.
+  lib/letflow/design/req062-sub-process-runtime.md's §3.4 step 3 and §9
+  OQ-2 updated accordingly. New test coverage in
+  test/letflow/engine_sub_process_test.exs (OQ-2/GH#329 describe block):
+  an output value that passes the interface's own per-output json_schema
+  (SPC-01) but violates a stricter registry row for the same key is
+  rejected, proving the registry lookup itself fired rather than only the
+  interface's own check.
+resolved_at: "2026-08-20T00:00:00Z"

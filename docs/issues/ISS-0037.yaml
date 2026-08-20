@@ -54,4 +54,37 @@ description: >
 affected_files:
   - lib/letflow/definitions/service_scope_validator.ex
 github_issue: https://github.com/tvolodi/letflow/issues/112
-status: open
+status: resolved
+resolved_at: "2026-08-20T15:00:00Z"
+resolution: >
+  This was filed 2026-08-17, before S4 had any requirements to carry the
+  obligation. S4 was expanded into 21 requirements (REQ-065..REQ-085) on
+  2026-08-19; confirmed by grep that none of them referenced this issue or
+  the underlying tension, even though REQ-082 -- the requirement that owns
+  handleActivate, the HTTP endpoint that would render
+  service_scope_validator.ex's Violation into a response -- was already
+  drafted by then. The gap this issue predicted (the tension being lost by
+  the time S4 built the renderer) was real and had already happened at the
+  requirements-drafting stage, not yet at implementation.
+
+  Fixed: docs/requirements.yaml REQ-082 gained an explicit paragraph
+  ("HANDLEACTIVATE AND THE SERVICE-EXISTENCE ORACLE") naming this issue and
+  choosing option (a) of the two named here -- collapse both
+  Violation.reason values (:service_not_registered,
+  :service_not_available_to_tenant) into one generic external 422 detail
+  string via REQ-066's Letflow.Api.Error, keeping the distinct internal
+  reason for logging only. Chosen because it is the only option consistent
+  with the identical INV-5 discipline already written into every other S4
+  requirement touching cross-tenant responses -- not left for
+  re-litigation when REQ-082 is eventually implemented. Three new
+  acceptance criteria added to REQ-082 testing the collapse, the absence of
+  the distinguishing text in the response body, and that internal
+  logging/telemetry still retains the distinct reason.
+
+  REQ-082 itself is still status: pending (S4 has not started
+  implementation -- REQ-065 gates the whole stage). This resolution is
+  requirements-level only: the obligation is now durably attached to the
+  requirement that will implement it, which is what this issue asked for
+  ("filed so the tension is not lost by the time S4 builds the renderer").
+  docs/status/requirement_status.yaml carries a `revised` event for
+  REQ-082 recording this. Closing GH#112.

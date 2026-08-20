@@ -701,6 +701,51 @@ encourages — running producing agents in parallel.
   what happened here and it was the right call. Then fix the GH body, and say so in the
   handoff so the coordinator knows the numbering is no longer dense.
 
+## `ISS-NNNN` collisions keep recurring because documenting the hazard doesn't reserve the number
+
+**Fired again on 2026-08-20**, during `WF02-REQ066-20260820`'s Step Final — the seventh
+recorded instance of this class (ISS-0034/0035, ISS-0036/0037/0039, ISS-0042/0043,
+ISS-0043/0044-0045, ISS-0051, ISS-0077/0079, and now ISS-0107). What makes this one worth
+adding is *not* the collision itself, which the entries above already cover, but that the
+run **predicted it in advance, wrote the mitigation into the Step Final handoff, and it
+happened anyway** — because a warning is not a lock. While the branch was in flight, a
+concurrent session (the letflow-2 workspace, PR #356) independently allocated `ISS-0107`
+for an unrelated Windows fake-mix issue and merged to `main` first. The rebase produced an
+add/add on `docs/issues/ISS-0107.yaml` plus a follow-on *content* conflict, because a
+later commit in the same branch had backfilled `queue_task_id`/`github_issue` into what
+was, post-resolution, main's file rather than this run's.
+
+The resolution was correct and is the shape to copy: neither `--ours` nor `--theirs` was
+used at any point (both stages read via `git show :2:` / `git show :3:` and identified by
+content), main's record was kept byte-identical, and *this* run's record was renumbered to
+`ISS-0109` — the next id genuinely free across every remote branch, not merely free
+locally — carrying a `renumbered_from` field so the audit trail survives. ISS-0108's three
+cross-references were repointed and GH#358's body was updated to cite the new filename
+while keeping its issue number. Historical handoffs and the Step 4 test report still say
+"ISS-0107" and were deliberately left as written rather than retroactively edited.
+
+**A second finding from the same resolution, worth its own note:** the post-rebase
+verification was done by *content diff*, per the existing "an add/add on this path can
+land without git flagging it" entry above — and that is what revealed `ISS-0106`'s raw
+diff showing every single line as changed. The cause was purely `LF`→`CRLF` checkout
+conversion on Windows, confirmed with `diff --strip-trailing-cr`. An agent trusting the
+raw diff would have concluded a file had been rewritten when nothing had changed at all;
+an agent trusting the exit code would have missed a real overwrite. Both failure modes
+are avoided only by diffing content *and* normalising line endings before judging it.
+
+**Correct alternative — the structural fix, not another warning.** The prior entries
+already say "allocate ids centrally" and "never overwrite an existing
+`docs/issues/ISS-NNNN.yaml`", and this run followed both and still collided, because the
+coordinator can only reserve ranges for agents *it* dispatched — it has no visibility into
+another host's concurrent session. Until `ISSUE_QUEUE.md` gains a real reservation
+mechanism (the obvious candidate: derive the id from `register_task`'s returned
+`impl_order`, which is already globally unique and atomically allocated by the one service
+that spans hosts, rather than from a directory scan), treat an ISS-number collision at
+rebase time as *expected* rather than exceptional: scan `docs/issues/` across every
+**remote** branch before picking a number, and renumber your own side on conflict as a
+matter of routine. Do not read the absence of a collision in one run as evidence the
+convention is safe.
+
 ## Working a user-named GitHub issue without ever locking it in letflow-queue
 
 An ORCH session resolving ISS-0086/GH#303 (a user-named, directly-selected issue —

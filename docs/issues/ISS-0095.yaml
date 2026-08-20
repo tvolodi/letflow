@@ -21,4 +21,23 @@ affected_files:
   - lib/letflow/design/req041-pack-update-diff-schema.md
 queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
 github_issue: https://github.com/tvolodi/letflow/issues/323
-status: open
+status: resolved
+resolution:
+  resolved_at: "2026-08-20T00:00:00Z"
+  summary: >
+    R-Co/src/design/sol-batch1-solution-pack.md:107 read directly:
+    `pack_id: string // generated UUID at export time`. R-Co/src/solution/store.zig:249,673
+    (newUuidStr -> uuid_util.newUuidV4) confirms pack_id is a canonical UUID v4 string
+    (36 hyphenated hex chars), generated once at export and carried unchanged through
+    install/lookup. R-Co/migrations/1158_sol02_solution_pack_installs.sql's pack_id column
+    is TEXT (unbounded), differing from Letflow's varchar(255) -- disposition
+    divergent_doc_only: the two DDLs differ, but since the identifier shape is always a
+    fixed 36-char UUID, varchar(255) never truncates or rejects a valid R-Co pack_id, so
+    shipped Letflow behaviour is unaffected. R-Co/src/api/routes/solution_packs.zig's
+    parseDocument (~L172-183) confirms no additional format/length validation is applied
+    beyond non-empty-string JSON extraction. varchar(255) (this project's default string
+    bound, matching process_definitions.name/def_id precedent) is retained as correct --
+    not narrowed to a UUID-specific column type, since R-Co itself treats pack_id as an
+    opaque string end-to-end, not a typed UUID column.
+  files_updated:
+    - lib/letflow/design/req041-pack-update-diff-schema.md

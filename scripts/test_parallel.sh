@@ -51,6 +51,21 @@
 # exhaustion (pg_stat_activity showed the DB well under max_connections both
 # during and immediately after the failure). If you hit this, wait a few
 # seconds and re-run rather than assuming a real regression.
+#
+# ISS-0219: on a host whose `nproc`-derived N exceeds what its Postgres
+# instance/CPU budget can sustain, every partition can crash outright during
+# `ecto.create`/`ecto.migrate` (DBConnection.ConnectionError + a build-
+# directory lock contention message), before any partition ever reaches a
+# Result: line. This is NOT fixed by capping N in this script's own
+# derivation logic -- req113-parallel-test-runner.md's AC4 (see design doc
+# section 4.1) requires N to derive from a real signal (env override or
+# nproc/getconf) and explicitly forbids a hardcoded fallback number anywhere
+# in this script's body, so silently capping the auto-derived value here
+# would re-decide that acceptance criterion rather than respect it. If N
+# derived from nproc/getconf crashes every partition before any Result: line,
+# set TEST_PARALLEL_N explicitly to a smaller value for this host (4 has
+# been verified clean on the host this note was written from) rather than
+# assuming a code regression.
 
 set -u
 

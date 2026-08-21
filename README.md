@@ -149,7 +149,13 @@ than the single-process `mix test` above on multi-core hosts):
 sh scripts/test_parallel.sh
 ```
 
-`N` defaults to `nproc` (override with `TEST_PARALLEL_N`). The script
+`N` defaults to `nproc` (override with `TEST_PARALLEL_N`). If the
+`nproc`-derived `N` exceeds this host's Postgres/CPU capacity, every
+partition can crash outright during `ecto.create`/`ecto.migrate`
+before any test result is produced (ISS-0219) — if that happens, set
+`TEST_PARALLEL_N` explicitly to a smaller value (`4` is known-good on
+at least one dev host) rather than assuming a code regression. The
+script
 pre-compiles `MIX_ENV=test` exactly once before launching any
 partition, then aggregates each partition's own reported pass/fail
 counts into one combined total and exits non-zero if any partition

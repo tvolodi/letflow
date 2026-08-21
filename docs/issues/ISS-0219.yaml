@@ -33,4 +33,25 @@ github_issue_note: >
   (449) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
   deliberately not called separately.
 
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0219-20260821
+resolved_at: "2026-08-21T21:05:00Z"
+resolution_note: >
+  Chose the documentation route, not the code-cap route, deliberately:
+  `lib/letflow/design/req113-parallel-test-runner.md`'s AC4 (section 4.1) is a
+  locked design decision requiring N to derive only from a real signal (env
+  override or nproc/getconf) and explicitly forbidding any hardcoded fallback
+  number anywhere in the script's body. Silently capping the auto-derived N at
+  some fixed value would re-decide that acceptance criterion rather than
+  respect it (per core-directives.md's "don't silently re-decide what a
+  decision record already settled") -- the requirement's own escape hatch for
+  this exact situation is the TEST_PARALLEL_N override, already documented,
+  just not prominently enough for this failure mode.
+
+  Added a note to scripts/test_parallel.sh's own header explaining the
+  ecto.create/ecto.migrate crash mode when auto-derived N exceeds host
+  capacity, and pointing at TEST_PARALLEL_N as the fix, explicitly citing why
+  the script itself doesn't self-cap. Also updated README.md's "Running it"
+  section (the more discoverable entry point) with the same pointer and the
+  known-good TEST_PARALLEL_N=4 value for this host profile. No logic change.
+  Docs-only, self-gated per ORCHESTRATOR.md §10.

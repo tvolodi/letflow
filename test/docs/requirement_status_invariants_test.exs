@@ -516,6 +516,52 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
     """
   end
 
+  # ── warranted_closure?/3 — direct unit coverage of its three own traps ──────
+  #
+  # A10 above and the negative controls below exercise warranted_closure?/3
+  # only through fully-under-ceiling or fully-over-ceiling fixtures, which
+  # cannot discriminate an "either" ceiling check from a "both" one, nor an
+  # accidentally-dropped status gate, nor a silently-defaulted missing field.
+  # These three tests target exactly those traps directly.
+
+  test "warranted_closure?/3: EITHER ceiling exceeded is sufficient -- not both" do
+    # lines over, bytes under -- an "and" mutant on the ceiling comparison
+    # would wrongly report this volume as not warranted.
+    assert SH.warranted_closure?(
+             %{status: "closed", lines: 2000, bytes_working_tree: 10},
+             1200,
+             120_000
+           )
+
+    # bytes over, lines under -- same trap, the other operand.
+    assert SH.warranted_closure?(
+             %{status: "closed", lines: 10, bytes_working_tree: 200_000},
+             1200,
+             120_000
+           )
+  end
+
+  test "warranted_closure?/3: a non-closed volume is never warranted, even if grossly over ceiling" do
+    refute SH.warranted_closure?(
+             %{status: "current", lines: 999_999, bytes_working_tree: 999_999},
+             1200,
+             120_000
+           )
+  end
+
+  test "warranted_closure?/3: raises rather than silently defaulting when a closed volume has no recorded lines:/bytes_working_tree:" do
+    assert_raise KeyError, fn ->
+      SH.warranted_closure?(%{status: "closed"}, 1200, 120_000)
+    end
+
+    # lines: 10 is UNDER max_lines, so the `or` cannot short-circuit true
+    # before reaching bytes_working_tree: -- this is the case that forces
+    # Map.fetch! to actually look up the missing field.
+    assert_raise KeyError, fn ->
+      SH.warranted_closure?(%{status: "closed", lines: 10}, 1200, 120_000)
+    end
+  end
+
   # ── A10 negative control — proof the assertion actually bites ──────────────
   #
   # This is the MINOR-4 laundering scenario CODE-DESIGN-VALIDATOR's own finding

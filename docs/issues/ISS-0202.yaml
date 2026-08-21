@@ -1,0 +1,51 @@
+id: ISS-0202
+title: >
+  result.artifacts_out is self-referential on 190 of 449 handoffs, making it useless as an index of what a run produced
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0200-20260821
+discovered_at: "2026-08-21T09:59:25Z"
+severity: MINOR
+
+description: >
+  Discovered while measuring `artifacts_out` for ISS-0200, and filed rather than absorbed per
+  ISSUE_QUEUE.md step 5 -- it is not ISS-0200's question and was not diagnosed.
+
+  MEASURED: 190 of the 449 handoffs carrying a non-empty `result.artifacts_out` list THEIR OWN
+  handoff file as one of their outputs. Among the 120 handoffs whose `result.summary` exceeds
+  6,000 chars, 85 do it.
+
+  WHY IT MATTERS: HANDOFF_PROTOCOL.md section 2 defines `artifacts_out` as the artefacts the step
+  produced. A handoff file is not an output of its own result block -- the result block is part of
+  that file. The self-reference makes the field unusable as a machine-readable index of what a run
+  actually produced, which is the one thing it is for. It also interacted with ISS-0200's own
+  measurement: the structural screen for a result-side cite-and-restate mechanism found only 46 of
+  120 large summaries naming any `artifacts_out` basename at all, and the self-references are noise
+  in that population.
+
+  RELATIONSHIP TO EXISTING ISSUES, deliberately not pre-decided: this is a data defect of the same
+  family as ISS-0190 (the 15 illegal top-level `status` values and 13 non-schema keys) and a
+  candidate check for ISS-0191's linter. Whoever picks it up should judge whether to fold it into
+  ISS-0190's scope rather than run it separately, and whether the correct fix is to correct the
+  existing files, to add a linter check, or both -- ISS-0191's own framing note says cleaned data
+  with no linter drifts again, and a linter with dirty data is red from its first run.
+
+  NOT DIAGNOSED: no root cause was established. It is plausible this is agents reading
+  `artifacts_out` as "where do I record what I wrote" rather than "what did this step produce",
+  but that is a hypothesis, not a measurement.
+
+affected_files:
+  - handoffs/
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+
+related:
+  - ISS-0190  # the sibling data-defect issue this may fold into
+  - ISS-0191  # the linter that would host a mechanical check
+  - ISS-0200  # the run that measured it
+
+queue_task_id: 202
+github_issue: https://github.com/tvolodi/letflow/issues/393
+github_issue_note: >
+  register_task created both the queue task (202) and its mirrored GitHub issue (#393) in one
+  call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called separately. The
+  id comes from register_task's `issue_ref`, not from a directory scan.
+status: open

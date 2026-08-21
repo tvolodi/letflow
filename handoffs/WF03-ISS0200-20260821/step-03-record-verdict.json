@@ -1,0 +1,67 @@
+{
+  "handoff_id": "8fe7533f-7408-4cad-8d2c-ba5f27fde5d3",
+  "run_id": "WF03-ISS0200-20260821",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF03-ISS0200-20260821/step-03-record-verdict.json",
+  "created_at": "2026-08-21T10:00:44Z",
+  "started_at": "2026-08-21T10:00:44Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0200-20260821/step-005-01-diagnose.json",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/issues/ISS-0191.yaml",
+      "docs/issues/ISS-0200.yaml",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "docs/agents/instructions/core-directives.md"
+    ],
+    "owned_modules": [
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/issues/ISS-0200.yaml",
+      "docs/issues/ISS-0191.yaml",
+      "docs/issues/ISS-0202.yaml"
+    ]
+  },
+  "task": {
+    "description": "Step 1's diagnosis returned a NO-CHANGE verdict on ISS-0200's actual question. Read it in full at handoffs/WF03-ISS0200-20260821/step-005-01-diagnose.json -- it is your input and it is not restated here. Your job is to record that verdict and close the two gaps it exposed. You are NOT writing a result-side size rule; the diagnosis measured that there is no defect for one to target, and writing one anyway would be the failure this run exists to avoid.\n\nORCH has ruled on the three decisions Step 1 left open. These are routing decisions, not content decisions -- the wording is yours:\n\nRULING 1 -- Steps 2 and 4 stay SKIPPED. Confirmed against Step 1's reasoning. Recorded in orchestrator.log, not as stub handoffs.\n\nRULING 2 -- Step 3 is NOT empty, contrary to Step 1's reading. Three edits are required, two of them by ISS-0200's own acceptance criteria and one by core-directives.md's Unblock-Everything. Make all three.\n\nRULING 3 -- the status-vocabulary gap is fixed in THIS run, not filed. It blocks Step 5: ISS-0200 cannot be closed without a legal terminal status, and both existing candidates assert something false. Unblock-Everything covers exactly this -- a problem that blocks completion of the current task is fixed here even when it sits outside the original scope. owned_modules is extended to docs/agents/protocols/ISSUE_QUEUE.md accordingly.\n\nTHE THREE EDITS:\n\n(A) docs/agents/protocols/ISSUE_QUEUE.md -- \"Issue status vocabulary\". Add a terminal status for an issue that was investigated, measured, and found to carry no defect. Constraints, all load-bearing: it must NOT weaken what `resolved` asserts (a root cause was actually removed, and a regression test proves it) -- that definition exists because the registry is read as a factual record of what is still broken, and blurring it is the exact harm it guards against. It must demand the SAME evidence discipline as the other two, so it can never become the easy exit for an issue nobody investigated: say what the record must carry to earn it. State that WF-03 and this vocabulary now agree, since WF-03 Step 5 already points at this section as canonical. Name ISS-0200 as the precedent that forced it. Choose the status name yourself.\n\n(B) docs/agents/shared/HANDOFF_PROTOCOL.md -- two separate places, and do not merge them:\n  (i) Section 2, immediately after the existing \"Why this rests on redundancy and not on brevity\" block: record the result-side finding as a measured NEGATIVE result. This is the counterpart to ISS-0198's rule and belongs beside it, per ISS-0200's AC3. It MUST be unmistakably labelled as NOT a rule and as stating no threshold -- a later reader must not be able to mistake it for a size constraint on result.summary. Carry the corpus figures, the mechanisms tested and their overlap ceilings, the asymmetry argument (the dispatch defect had a duplicated copy AND an empty structured outlet; neither exists on the result side), and Step 1's own recorded method limitation -- a negative result that hides the weakness of the test that produced it is worth less than no record at all. Its purpose is that the next agent who wonders about result.summary size reads a measurement instead of re-running the investigation.\n  (ii) The Enforcement note's existing \"Specified but NOT YET RUNNING -- H-SIZE-1/2/3\" block: extend H-SIZE-3's emit list with the result.summary figures. H-SIZE-3 is already INFO/never-fails, so this adds no gate. Add NO threshold and NO WARN -- Step 1 was explicit that a WARN here would be a length rule by the back door. The \"does not run today\" framing already on that block must cover the extension too.\n\n(C) docs/issues/ISS-0191.yaml -- add the same H-SIZE-3 extension to its scope, per ISS-0200's AC5, worded so nothing implies it runs today. Keep it consistent with (B)(ii) -- these two must not drift, which is why both are in this one step.\n\nCONSTRAINTS ON THE WHOLE EDIT:\n- ISS-0200 AC4 is verifiable and will be verified by the REVIEWER gate: HANDOFF_PROTOCOL.md section 4's validator-re-derivation requirement and section 2's four worked examples must come through byte-identical. Do not touch them. Run `git diff` on the file before you finish and confirm your changes are additive only.\n- Do not duplicate a threshold into another file (AC3). The 6,000 WARN threshold stays where it is, mentioned in exactly one place.\n- Do not edit docs/issues/ISS-0200.yaml -- Step 5 owns that file.\n- Section 2's JSON schema fence is declared machine-loadable and must still parse as JSON if you go near it. You should not need to.\n- Commit your own edits by explicit filename. Stage docs/issues/ISS-0202.yaml too if it is still uncommitted -- ORCH wrote it and it belongs on this branch.",
+    "acceptance_criteria": [
+      "ISSUE_QUEUE.md's status vocabulary gains a terminal status for the investigated-and-no-defect case, with an evidence bar stated so it cannot be claimed by an uninvestigated issue, and `resolved`'s existing definition left intact (quote the diff of that bullet to show it)",
+      "HANDOFF_PROTOCOL.md section 2 records the result-side NO-CHANGE finding beside ISS-0198's dispatch rule, labelled unmistakably as a measured negative result and NOT a rule, carrying the corpus figures, the mechanisms tested, the asymmetry argument, and Step 1's stated method limitation",
+      "The Enforcement note's H-SIZE-3 emit list gains the result.summary figures, with no threshold and no WARN added anywhere, and still under the existing does-not-run-today framing",
+      "docs/issues/ISS-0191.yaml's scope gains the matching H-SIZE-3 extension, worded so nothing implies it runs today, and consistent with the Enforcement-note wording",
+      "AC4 verified and quoted: `git diff` shows section 4's validator-re-derivation requirement and section 2's four worked examples unchanged, and the whole edit is additive",
+      "The 6,000 WARN threshold appears in exactly one place across the repo after the edit (quote the grep)",
+      "Section 2's JSON schema fence still parses as JSON (quote the check)",
+      "docs/issues/ISS-0200.yaml is NOT modified by this step",
+      "Edits committed by explicit filename; git status --porcelain quoted at completion"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0200-20260821",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

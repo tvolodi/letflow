@@ -1,0 +1,75 @@
+{
+  "handoff_id": "b9845c23-dd87-439a-b606-dddc23038283",
+  "run_id": "WF03-ISS0109-20260821",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0109-20260821/step-04-test-designer.json",
+  "created_at": "2026-08-21T02:32:27Z",
+  "started_at": "2026-08-21T02:32:27Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "fa02b1e8-4ede-418d-8c84-40c5920f57ed",
+      "7d12c955-1013-46f0-b8bd-d666dc9ad602",
+      "3bd0b5d5-3fdb-4e66-be2c-466a59c62dc5"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0109-provisioning-completeness-and-fixture-instrumentation.md",
+      "test/support/tenant_fixture.ex",
+      "handoffs/WF03-ISS0109-20260821/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0109-20260821/step-03d-reviewer.json",
+      "handoffs/WF03-ISS0109-20260821/step-02b-code-design-validator.json",
+      "docs/issues/ISS-0109.yaml",
+      "docs/anti-patterns.md",
+      "test/letflow/definitions/promotion_test.exs"
+    ],
+    "owned_modules": [
+      "test/specs/ISS-0109.md",
+      "test/letflow/support/"
+    ],
+    "branch_name": "feature/WF03-ISS0109-20260821",
+    "issue_ids": [
+      "ISS-0109"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 4 -- WRITE THE REGRESSION TESTS for the ISS-0109 fixture work. Both gates have\nPASSed the implementation (SECURITY-REVIEWER step-03c, REVIEWER step-03d); no rework is owed.\n\nBUILD FROM THE DESIGN'S FAIL-FIRST SECTION. The gate-approved design is lib/letflow/design/iss0109-provisioning-completeness-and-fixture-instrumentation.md -- its\nFAIL-FIRST PROVABILITY section enumerates cases C1 through C6 and is what you implement. Note\nthe design was corrected after the idiom gate: SS3.2's schema_state now types\nregistration_present? and schema_present? as `boolean() | nil`, where **false means\nobserved-absent and nil means not-observed**. Assert against that distinction; a test that\ntreats nil and false as interchangeable would erase the very property the correction exists to\nprotect.\n\nWRITE: a test spec at test/specs/ISS-0109.md and the test code itself. The module under test is\ntest/support/tenant_fixture.ex (Letflow.TenantFixture).\n\nREAD THE WF-03 FAIL-FIRST RULE CAREFULLY, BECAUSE THE LITERAL FORM OF IT DOES NOT APPLY HERE AND\nYOU MUST NOT FAKE IT. WF-03 Step 4 normally requires checking out the pre-fix commit, running the\nnew test, and confirming it FAILS there. That is impossible for this run in the literal sense:\nthe \"fix\" is a NEW MODULE that does not exist pre-fix, so a test calling it would not compile\nrather than fail meaningfully, and a non-compiling test is not a fail-first proof of anything.\n\nWhat the fail-first property actually means here -- and what your spec must state explicitly and\nhonestly -- is that the PRE-FIX DETECTION IS ABSENT, demonstrated on the broken state itself:\nthe old fixture asserted only that replay_migrations/1 returned {:ok, _}, and that assertion\nPASSES against a schema missing a table. This is already MEASURED, twice, and you should cite the\nmeasurements rather than re-deriving them from argument:\n  - CODE-DESIGN-VALIDATOR, step-02b: after dropping promotion_assertion_runs while leaving\n    version 20260818090001 recorded, a second replay_migrations/1 returned {:ok, []} and the\n    table was still absent.\n  - ELIXIR-DEV, step-03: the same state through the new capture yields\n    tables_missing: [\"promotion_assertion_runs\"], versions_missing: [].\nSo: the old assertion says fine, the new one says missing, on identical database state. THAT is\nthe regression proof. State it in the spec in those terms. Do NOT claim a pre-fix run of the new\ntest file, and do NOT dress a green post-fix run up as fail-first evidence.\n\nWhere a case CAN be shown to fail first in the ordinary way -- by mutating the new module and\nobserving the intended test go red -- that is stronger, and the design's SS7 says which cases\nqualify. Use it where it applies.\n\nBINDING INSTRUCTION FROM REVIEWER'S STEP-03D RULING 3, which exists specifically to stop you\nwriting a test that fails for the wrong reason: the SS3.3 ORACLE-ROT TEST MUST READ ITS OBSERVED\nSET FROM capture_schema_state/1's `tables_present` -- NOT by querying information_schema.tables\nitself. tables_present deliberately excludes schema_migrations (its contents are captured\nseparately as applied_versions), and expected_tenant_tables/0 excludes it too, so both-direction\nset equality holds unfiltered. A raw catalog read WOULD return schema_migrations and would fail\nthat equality spuriously. The guard must fail in BOTH directions: a table added to the manifest\nbut not the oracle, AND a table removed from the manifest but left in the oracle.\n\nALSO REQUIRED:\n- SS7.7's item has NO fail-first proof by construction (the two modules' adoption of the helper is\n  a zero-behaviour-delta refactor). The design already declares this. Do not invent a test that\n  pretends otherwise; the evidence for that item is the before/after module runs ELIXIR-DEV already\n  captured (8 and 12 passing before, 8 and 12 after), which TEST-RUNNER will re-derive.\n- Cover the capture's failure boundary per SS3.5, including the case that matters most: a degraded\n  tables_present must yield tables_missing == [] and NOT \"all 19 missing\" -- an unobserved set must\n  never be reported as an observed absence. Same rule for applied_versions/versions_missing.\n- Cover the teardown log line: the literal LETFLOW_TENANT_FIXTURE marker, a phase from the closed\n  vocabulary, and schema_present_before_drop, under CaptureLog.\n- Cover the negative case: a wholly absent tenant returns {:ok, state} with the present? flags\n  false and does NOT raise (INV-F-4).\n\nTEST NAME LENGTH: keep every test name under 255 characters. This repo has broken its own full\nsuite FOUR times on ExUnit's 255-char limit (see docs/anti-patterns.md and PR #351). Measure the\nlongest name mechanically before you finish -- do not eyeball it -- and report the measured\nmaximum.\n\nDO NOT: modify test/support/tenant_fixture.ex or either adopted module (both gates passed them;\nchanging them would invalidate those verdicts). Do not touch the other 39 fixture sites\n(ISS-0112). Do not fix ISS-0110/0111/0113/0107.\n\nTOOLCHAIN: plain `mix compile` only -- no --warnings-as-errors, no `mix format` (Elixir 1.20.3/OTP\n29 against a 1.18.3-otp-27 pin, ISS-0106, filed and not yours). Postgres for this workspace is on\nLETFLOW_DB_PORT from ./.env. You write the tests; TEST-RUNNER runs the suite at Step 4b -- but you\nshould still compile and run YOUR OWN new tests to confirm they work, and quote that output.\nBranch feature/WF03-ISS0109-20260821; commit by explicit filename, never `git add -A`. Note handoffs/orchestrator.log\nbelongs to ORCH -- leave it alone, and `git fetch` rather than pulling if a rebase refuses.\n",
+    "acceptance_criteria": [
+      "test/specs/ISS-0109.md exists and maps every design FAIL-FIRST case (C1..C6) to a named test",
+      "The spec states the fail-first position HONESTLY: that the literal pre-fix-run form does not apply because the fix is a new module, that the real proof is the absence of pre-fix detection on identical database state, and it cites the two existing measurements (step-02b's {:ok, []} replay and step-03's tables_missing capture) rather than claiming a pre-fix run of the new test file",
+      "The SS3.3 oracle-rot test reads its observed set from capture_schema_state/1's tables_present, NOT from a raw information_schema.tables query, and fails in BOTH directions",
+      "C1 is implemented: a table dropped while its migration version remains recorded is detected by the completeness assertion",
+      "The SS3.5 failure boundary is covered, including that a degraded tables_present yields tables_missing == [] rather than a false 'all missing', and the same for applied_versions/versions_missing",
+      "The boolean() | nil distinction is asserted as a distinction: false (observed-absent) and nil (not-observed) are not treated as interchangeable",
+      "The teardown log line is covered under CaptureLog: literal marker, closed-vocabulary phase, schema_present_before_drop",
+      "The INV-F-4 negative case is covered: a wholly absent tenant returns {:ok, state} with present? flags false and does not raise",
+      "Every test name is under 255 characters, verified MECHANICALLY, with the measured maximum reported",
+      "test/support/tenant_fixture.ex and both adopted test modules are unmodified, and no other fixture site is touched",
+      "The new tests were compiled and run, with real output quoted"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0109-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0109-20260821",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

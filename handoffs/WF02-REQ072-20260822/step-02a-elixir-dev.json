@@ -1,0 +1,54 @@
+{
+  "handoff_id": "b8b6a3d0-1e4f-4c2a-9a7d-0f3c5e8b9d21",
+  "run_id": "WF02-REQ072-20260822",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ072-20260822/step-02a-elixir-dev.json",
+  "created_at": "2026-08-22T02:11:00Z",
+  "started_at": "2026-08-22T02:00:00Z",
+  "completed_at": "2026-08-22T02:11:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-072"],
+    "artifacts_in": [
+      "lib/letflow/design/req072-tenant-request-context.md",
+      "handoffs/WF02-REQ072-20260822/step-01b-code-design-validator.json"
+    ],
+    "owned_modules": ["lib/letflow/api/context.ex"],
+    "branch_name": "feature/WF02-REQ072-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 2a — implement lib/letflow/api/context.ex (Letflow.Api.Context) per the validated design doc: assign_trace_id/1, generate_trace_id/0, scoped_repo_opts/1; mount assign_trace_id/1 first in Letflow.Plugs.ApiPipeline's chain; build the test-only req072_probe fixture; write context_test.exs covering all 7 acceptance criteria.",
+    "acceptance_criteria": [
+      "the trace id is carried on conn.assigns and no module in lib/letflow/api/ uses Process.put/Process.get or an ETS table for per-request context, confirmed by grep and stated in the moduledoc as the deliberate translation of Zig's threadlocal",
+      "the same trace id appears on the response header and in a log line emitted during the request, demonstrated by a test capturing both",
+      "the scoping function derives its Ecto :prefix solely from conn.assigns[:auth_context][:tenant_id]; a test supplying a conflicting tenant id in the request path, in a query parameter, and in an X-Tenant-Id header confirms all three are ignored and the token's tenant is used (INV-1)",
+      "a GET for a resource id that exists in tenant B, issued by a caller authenticated for tenant A, returns a response byte-identical to a GET for a randomly generated id that exists nowhere -- same status, same body, demonstrated by a test comparing the two responses directly (INV-5)",
+      "the cross-tenant path and the never-existed path execute the same number of database queries, demonstrated by counting queries via telemetry in both cases, so no early-exit timing signal distinguishes them (INV-5)",
+      "no function in this module accepts a tenant id, schema name, or prefix as a caller-supplied argument -- confirmed by inspection of every public function's signature and stated in the moduledoc",
+      "the moduledoc explains why a cross-tenant existence check is prohibited even to improve an error message, citing INV-5"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented Letflow.Api.Context (lib/letflow/api/context.ex): assign_trace_id/1 (plug-shaped conn->conn, not a full @behaviour Plug), generate_trace_id/0 (Ecto.UUID.generate/0), scoped_repo_opts/1 (@spec Plug.Conn.t() -> {:ok, prefix: String.t()} | {:error, :missing_auth_context | :invalid_tenant_id}, reads only conn.assigns[:auth_context][:tenant_id], calls TenantProvisioning.schema_name_for_tenant/1, no fallthrough to an unscoped query on either error branch). Moduledoc covers all four required points per design §5: threadlocal-to-assigns translation (§0/§5.1), no-process-dictionary/no-ETS statement worded to avoid literally matching the AC1 grep pattern itself while still stating the property in prose, AC6's per-function enumeration, and AC7's INV-5 argument against a cross-tenant existence check, citing INV-5 by name. Mounted assign_trace_id/1 first in Letflow.Plugs.ApiPipeline's chain (immediately after Plug.Parsers, before Letflow.Plugs.AuthPipeline) via a thin 2-arity private wrapper (defp assign_trace_id(conn, _opts)) because Plug.Router/Plug.Builder's `plug` DSL only accepts an atom naming a local 2-arity function or a module, not a remote function capture -- noted in a code comment; the real logic stays entirely in Letflow.Api.Context. Removed the now-redundant `Letflow.Plugs.Trace` deferred-plug row from that module's moduledoc table since trace.zig's port landed via this requirement, and added a short note pointing at REQ-072. Added test/support/req072_probe.ex (Letflow.Api.Context.Test.Probe Ecto schema, id :: binary_id PK + label :: String.t(), and Letflow.Api.Context.Test.ProbeMigration guarded the same way test/support/req022_migration_fixture.ex is) and test/letflow/api/context_test.exs covering: trace-id propagation/generation/truncation (§2.3), log correlation via ExUnit.CaptureLog with explicit metadata: [:trace_id] passed to capture_log/2 (the default :logger format prints no metadata keys, so this was required to make the assertion meaningful -- a deviation from the design's literal capture_log/1 call shown in §2.3, noted here since it's a testing-mechanics detail the design didn't specify at that level), scoped_repo_opts/1 ignoring path/query/header tenant hints plus its own arity/error-branch tests (§3.3), and the cross-tenant-404 test comparing byte-identical Repo.get/3 responses plus a telemetry query-count comparison via :telemetry.attach/4 on [:letflow, :repo, :query] (§4). Two provisioned tenants per describe block use Letflow.TenantFixture.provisioned_tenant!/1 (test/support/tenant_fixture.ex), then TenantProvisioning.replay_migrations/2 with an explicit migration_source naming only ProbeMigration (version 20_260_822_000_001, chosen above the real manifest's highest version 20_260_821_000_002 to avoid a schema_migrations collision) to add the probe table into both schemas, matching design §4.2's exact sequencing. No production route/handler was added to any lib/letflow/routers/*.ex stub, per the design's explicit §4.1 reasoning and this task's own constraint. Did not touch lib/letflow/plugs/auth_pipeline.ex or lib/letflow/plugs/tenant_status.ex. `mix compile --warnings-as-errors`: clean, no warnings. `mix format --check-formatted` on all changed files: clean after one reformat pass. `grep -rn \"Process\\.(put|get)|:ets\\.\" lib/letflow/api/`: zero hits (verified after rewording the moduledoc so its own prose describing the invariant did not itself trip the literal grep pattern -- a real near-miss worth flagging to REVIEWER/anti-patterns: a moduledoc stating 'this module never calls Process.put/2' will itself match a naive grep for that pattern). `mix test test/letflow/api/context_test.exs test/letflow/plugs/api_pipeline_integration_test.exs test/letflow/router_test.exs`: 32 tests, 0 failures (confirms REQ-071's mounted pipeline still works with assign_trace_id added ahead of it). No state-transition change (process_instance.ex untouched), no migration added to priv/repo/migrations/ (only a test-only fixture under test/support/, matching design §9's explicit 'none in lib/letflow/api/context.ex' statement).",
+    "artifacts_out": [
+      "lib/letflow/api/context.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "test/support/req072_probe.ex",
+      "test/letflow/api/context_test.exs",
+      "handoffs/WF02-REQ072-20260822/step-02a-elixir-dev.json"
+    ],
+    "issues": [
+      "MINOR: design §2.3 shows capture_log/1's single-arity form for the log-correlation test; implementation needed capture_log/2 with an explicit metadata: [:trace_id] option because the project's default :logger config prints no metadata keys, so Logger.metadata(trace_id: ...) alone would not appear in captured text. No moduledoc/behavior change, test-mechanics only.",
+      "MINOR (anti-pattern candidate): AC1's grep obligation (`grep -rn \"Process\\.(put|get)|:ets\\.\" lib/letflow/api/` must return zero hits) is in tension with a moduledoc that documents the absence of Process.put/2/Process.get/1/:ets usage in prose, since writing those exact strings in a doc comment trips the same grep. Worked around by describing the invariant without using the literal substrings; flagging in case a future module hits the same trap and a docs/anti-patterns.md entry is warranted."
+    ],
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c) -- this change adds a new tenant-scoping primitive on the request path (conn.assigns[:auth_context] -> Repo :prefix), so it is gated per INV-1/INV-5/INV-6 before REVIEWER's idiom/scope-creep pass and before TEST-DESIGNER."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

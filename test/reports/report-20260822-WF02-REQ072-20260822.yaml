@@ -1,0 +1,107 @@
+report_id: report-20260822-WF02-REQ072-20260822
+agent: TEST-RUNNER
+requirement: REQ-072
+workflow_step: WF-02 Step 4 (full-suite test run)
+handoff: handoffs/WF02-REQ072-20260822/step-04-test-runner.json
+branch: feature/WF02-REQ072-20260822
+date: 2026-08-22
+command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+
+toolchain:
+  platform: "Windows 11"
+
+environment:
+  postgres: >
+    letflow-postgres-1, confirmed already Up (healthy) via `docker compose ps` --
+    not (re)started this run.
+  db_setup: >
+    Each test_parallel.sh partition's own `mix test` invocation performs
+    ecto.create/ecto.migrate --quiet automatically via the `test` alias -- no separate
+    DB-setup step taken here.
+  parallel_n: >
+    Set explicitly via TEST_PARALLEL_N=4 per dispatch instructions (ISS-0219: this
+    host's auto-derived nproc value crashes every partition outright). Not left to
+    auto-derivation.
+
+# ---------------------------------------------------------------------------
+# Run
+# ---------------------------------------------------------------------------
+
+run:
+  command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+  result: >
+    test_parallel: N=4 (source: env override)
+    partition 1: 308 tests, 2 properties, 0 failures, exit 0
+    partition 2: 335 tests, 0 properties, 0 failures, exit 0
+    partition 3: 392 tests, 1 property, 0 failures, exit 0
+    partition 4: 415 tests, 2 properties, 0 failures, exit 0
+    combined: 1450 tests, 5 properties, 0 failures (1455/1455 passed)
+  exit_code: 0
+  failures_found: 0
+
+verdict: PASS
+
+summary_line: >
+  1455/1455 passed (1450 tests + 5 properties combined), 0 failures. No recurrence of
+  ISS-0220's SandboxPool claim-timeout class this run -- all partitions green.
+
+# ---------------------------------------------------------------------------
+# REQ-072 own tests (test/letflow/api/context_test.exs + test/support/req072_probe.ex)
+# ---------------------------------------------------------------------------
+
+req072_tests:
+  verification_method: >
+    Grepped all 4 partition logs for "context_test" and "req072_probe" -- found real
+    DB activity for req072_probe fixture inserts/selects across freshly-provisioned
+    tenant schemas in partition-4.log (e.g. INSERT INTO "tenant_...".req072_probe,
+    SELECT ... FROM "tenant_...".req072_probe scoped by two distinct tenant schemas in
+    the cross-tenant-404 test group). Zero failures attributed to
+    Letflow.Api.ContextTest anywhere in the 0-failure combined total. Consistent with
+    TEST-DESIGN-VALIDATOR's isolated 32/32 at step 3b (handoff step-03b, which also
+    included router_test.exs and api_pipeline_integration_test.exs from REQ-071).
+  result: "PASS -- all context_test.exs/req072_probe.ex assertions passed inside the full run, 0 failures."
+
+# ---------------------------------------------------------------------------
+# ISS-0220 check (SandboxPool claim-timeout contention)
+# ---------------------------------------------------------------------------
+
+iss_0220_check:
+  status: >
+    Not reproduced this run. All partitions returned exit 0 with 0 failures;
+    Letflow.SandboxPoolTest, Letflow.SandboxPool.FixtureLoaderTest, and
+    Letflow.Definitions.PromotionAssertionRerunTest all passed cleanly (no
+    GenServer.call claim-timeout / Postgrex disconnect pattern observed in any
+    partition log this run).
+  note: >
+    Re-derived fresh per core-directives.md's "attribution must be re-derived each
+    run, not copied from the prior run's conclusion" -- this run simply did not hit
+    the contention (0 failures overall), so no attribution route was needed.
+
+# ---------------------------------------------------------------------------
+# Scope check
+# ---------------------------------------------------------------------------
+
+branch_diff:
+  command: "git diff --name-only main...HEAD"
+  files:
+    - docs/anti-patterns.md
+    - docs/requirements.yaml
+    - docs/status/requirement_status.index.yaml
+    - docs/status/requirement_status.v2.yaml
+    - handoffs/WF02-REQ072-20260822/*  # this run's own handoffs
+    - handoffs/orchestrator.log
+    - handoffs/registry.json
+    - lib/letflow/api/context.ex
+    - lib/letflow/design/req072-tenant-request-context.md
+    - lib/letflow/plugs/api_pipeline.ex
+    - test/letflow/api/context_test.exs
+    - test/support/req072_probe.ex
+
+artifacts_out:
+  - test/reports/report-20260822-WF02-REQ072-20260822.yaml
+  - handoffs/WF02-REQ072-20260822/step-04-test-runner.json
+
+next_action: >
+  PASS -- full suite green, 0 failures, REQ-072's own test files verified passing
+  inside the run. Route to RELEASE-VALIDATOR (Step 5), which will re-run the suite
+  independently.

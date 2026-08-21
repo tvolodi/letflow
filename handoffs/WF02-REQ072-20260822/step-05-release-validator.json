@@ -1,0 +1,47 @@
+{
+  "handoff_id": "9f2a6d3e-1c7b-4a2f-8e5d-3b7f0c1a9e42",
+  "run_id": "WF02-REQ072-20260822",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ072-20260822/step-05-release-validator.json",
+  "created_at": "2026-08-22T02:55:00Z",
+  "started_at": "2026-08-22T02:38:00Z",
+  "completed_at": "2026-08-22T02:55:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-072"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ072-20260822/step-04-test-runner.json",
+      "lib/letflow/api/context.ex",
+      "test/letflow/api/context_test.exs",
+      "test/support/req072_probe.ex"
+    ],
+    "branch_name": "feature/WF02-REQ072-20260822"
+  },
+  "task": {
+    "description": "Independently re-verify all 7 of REQ-072's acceptance criteria against the actual shipped code and tests -- not against prior handoffs' claims -- and independently re-run the full test suite before REQ-072 is flipped to done."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read docs/requirements.yaml's REQ-072 entry verbatim in full and lib/letflow/api/context.ex (233 lines) and test/letflow/api/context_test.exs (246 lines) end to end myself. Independent verdict per AC:\n\nAC1 (trace id on assigns, no Process dict/ETS): confirmed. `grep -rn \"Process\\.(put|get)|:ets\\.\" lib/letflow/api/` returns zero hits. assign_trace_id/1 assigns :trace_id via Plug.Conn.assign/3 only. Moduledoc's 'No process dictionary, no ETS' section correctly distinguishes Logger.metadata/1's own internal implementation from a direct call this module makes. PASS.\n\nAC2 (trace id on response header AND log line): re-ran 'log correlation (AC2)' test myself -- passes. Read it: it captures a real Logger.info call via ExUnit.CaptureLog with metadata: [:trace_id] explicitly listed (correctly needed since default :logger format omits metadata), asserts the captured text contains the trace id AND the response header carries the same value. Not a stub. PASS.\n\nAC3 (scoping ignores path/query/header hints): read scoped_repo_opts/1 and tenant_id_from_auth_context/1 -- the only field read is conn.assigns[:auth_context][:tenant_id]; no conn.params/query_params/get_req_header call anywhere in the function. Re-ran the negative-input test (conn built with a conflicting tenant id in path_params, query string, AND x-tenant-id header) -- passes. I do not take this on faith: I mutated tenant_id_from_auth_context/1 myself to add a get_req_header(conn, \"x-tenant-id\") fallback (a realistic 'helpful debug override' bug shape), re-ran test/letflow/api/context_test.exs, and confirmed it dropped to 10/11 with exactly that AC3 test failing (test_scoped_repo_opts/1_ignores_request-supplied_tenant_hints...). Reverted the file (git diff clean afterward, confirmed via git status/diff). PASS -- test has real teeth.\n\nAC4 (cross-tenant GET byte-identical to never-existed GET): read the test in full. It provisions two real tenant schemas via TenantProvisioning.replay_migrations, inserts a real row into tenant B's schema only, then calls Context.scoped_repo_opts on a conn authenticated for tenant A and does two Repo.get calls (tenant B's real id, and a fresh random UUID) through the SAME resolved prefix, asserting status and resp_body are identical. This is a genuine byte-for-byte comparison, not two independently-constructed literals. Because Letflow.TenantProvisioning.schema_name_for_tenant/1 is a pure UUID-derivation with no caching/lookup surface (confirmed by reading lib/letflow/tenant_provisioning.ex:101-106), the only way Context could leak cross-tenant here is via the same request-hint channel AC3 already covers, which I already mutation-tested above. Re-ran this specific test standalone -- passes. PASS.\n\nAC5 (equal query counts): read the test -- attaches a real :telemetry handler on [:letflow, :repo, :query] (Ecto's real default telemetry_prefix for Letflow.Repo, confirmed no override in config/*.exs), counts actual emitted events via :counters across both the cross-tenant and never-existed Repo.get calls, asserts equal counts. This is measuring real telemetry, not a mocked count. Re-ran -- passes. PASS.\n\nAC6 (no tenant/schema/prefix argument on any public function): inspected all three public functions' actual @spec and def lines myself: assign_trace_id(conn), generate_trace_id() (0-arity), scoped_repo_opts(conn) -- all take only conn or nothing. No parameter slot exists for a caller-supplied tenant hint. The moduledoc's 'No function here takes a tenant/schema/prefix argument' section correctly enumerates all three. Re-ran the arity test (function_exported?/3 checks for /1 true, /2../4 false) -- passes in isolation (5/5 repeated runs). PASS.\n\nAC7 (moduledoc explains why no cross-tenant existence check, citing INV-5): read the actual moduledoc text (lines 66-90). It correctly derives that the 404 is not a suppressed result but the only possible result given schema-only scoping, and explicitly lists three concrete harms (caller-supplied tenant param required, query-count asymmetry, timing/error-body leak) an added existence check would cause, closing with 'This is INV-5.' Substantively argued, not just a citation. PASS.\n\nIndependent full-suite re-run: `TEST_PARALLEL_N=4 bash scripts/test_parallel.sh` (this host's auto-derived N=16 crashes partitions on hard-link build-lock contention per ISS-0219, consistent with TEST-RUNNER's own step-04 note). First attempt (run immediately after a prior 16-way run I'd just done for AC-probing) showed 2 spurious failures -- Letflow.SandboxPoolTest's owning-process-killed reclaim test, and this file's arity test -- both are known-flaky-under-launch-contention per ISS-0222's documented note about launching this script again immediately after a prior run. Reproduced neither in isolation (context_test.exs run standalone 5/5 clean) nor in a second full-suite run after a short pause: `TEST_PARALLEL_N=4 bash scripts/test_parallel.sh` -> partition 1: 308 tests/2 properties/0 failures; partition 2: 335/0/0; partition 3: 392/1/0; partition 4: 415/2/0 -- combined 1455/1455 passed, 0 failures. Matches TEST-RUNNER's step-04 result exactly. Ran as a normal blocking foreground call both times, no Monitor/background use.\n\nOverall verdict: PASS, all 7 ACs independently confirmed against real code/tests, full suite independently re-run clean (1455/1455).",
+    "artifacts_out": [
+      "handoffs/WF02-REQ072-20260822/step-05-release-validator.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ072-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ072-20260822",
+      "push_status": "pending -- set by this same turn's push",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER -- flip REQ-072 to done in docs/requirements.yaml, append status-history event with a real UTC timestamp."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

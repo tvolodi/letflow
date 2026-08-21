@@ -1,0 +1,63 @@
+{
+  "handoff_id": "c7a4e9d2-8b1f-4a6e-9d3c-5f2b8e1a6c47",
+  "run_id": "WF02-REQ072-20260822",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ072-20260822/step-06-doc-updater.json",
+  "created_at": "2026-08-21T22:01:03Z",
+  "started_at": "2026-08-21T22:01:03Z",
+  "completed_at": "2026-08-21T22:01:03Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-072"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ072-20260822/step-05-release-validator.json",
+      "docs/status/requirement_status.index.yaml",
+      "docs/status/requirement_status.v2.yaml",
+      "docs/requirements.yaml",
+      "docs/migration/stage-4-api-surface.md",
+      "README.md"
+    ],
+    "branch_name": "feature/WF02-REQ072-20260822"
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR (Step 5, 5efd325) PASSed REQ-072 -- all 7 acceptance criteria independently confirmed, full suite re-run clean at 1455/1455. Flip REQ-072's status to done in docs/requirements.yaml, append a `done` event to the current run-history volume (found via the index, not assumed), verify the append with git diff --numstat (0 deletions) and a tail re-read, increment that volume's entries: count in the index in the same commit, and confirm whether any docs/migration/stage-N-*.md or decisions/*.md file named by REQ-072's acceptance criteria still needs updating.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-072 status is done",
+      "exactly one new `done` event appended to the current run-history volume, verified via git diff --numstat showing 0 deletions",
+      "the run-history volume's entries: count in the index is incremented in the same commit",
+      "any docs/migration/*.md file named by REQ-072's acceptance criteria is confirmed already updated, not silently skipped"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Confirmed on branch feature/WF02-REQ072-20260822. Read docs/status/requirement_status.index.yaml fresh (not assumed) -- current volume is docs/status/requirement_status.v2.yaml, declared entries: 17. Read that volume in full (543 lines before my append, well inside the 1,200-line / 120,000-byte roll ceiling -- no roll needed). Flipped docs/requirements.yaml's REQ-072 entry from status: in_progress to status: done (docs/requirements.yaml:4069). Appended one `done` event to requirement_status.v2.yaml's history: list with a real clock timestamp (2026-08-21T22:01:03Z) summarizing: Letflow.Api.Context (scoped_repo_opts/1, assign_trace_id/1) mounted first in ApiPipeline; all 7 gates passed with commit SHAs; the two independent mutation tests (TEST-DESIGN-VALIDATOR step 3b, RELEASE-VALIDATOR step 5) each separately breaking scoped_repo_opts/1 and catching the regression; the design decision to test cross-tenant-404 one level below full HTTP dispatch via a test-only probe table since REQ-070's sub-routers remain stubs; and the anti-patterns.md addition on grep-shaped ACs vs. moduledoc prose. Verified with `git diff --numstat docs/status/requirement_status.v2.yaml` -> 38 insertions, 0 deletions. Re-read the file's tail to confirm the note landed intact. Incremented volume 2's entries: count in the index from 17 to 18 in this same change set. Checked docs/migration/stage-4-api-surface.md directly: none of REQ-072's 7 acceptance_criteria name this file, so no AC-mandated update is outstanding, but flagged a real gap in the append note anyway -- the 'Shared conventions' section (line 174) still reads 'an idiom translation REVIEWER should confirm' in future tense even though REVIEWER did confirm it (e5964d1); unlike REQ-065/070/071/084, this run's REVIEWER pass recorded its sign-off in docs/anti-patterns.md and the step-02d handoff file rather than as a dated entry in stage-4-api-surface.md's 'REVIEWER sign-off' section, so that section has no REQ-072 entry. Not fixed here since it isn't an AC-named gap and authoring that confirmation analysis is REVIEWER's remit, not DOC-UPDATER's -- reported to ORCH as a gap to flag, not papered over. Checked README.md directly (grep for Context/tenant-scoping/trace-id/scoped_repo_opts): no hit needing an update -- no route calls Letflow.Api.Context directly yet, so there is no externally-visible surface to document until the first S4 route requirement lands.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v2.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "handoffs/WF02-REQ072-20260822/step-06-doc-updater.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "docs/migration/stage-4-api-surface.md line 174 still says the threadlocal-to-conn.assigns idiom translation is something 'REVIEWER should confirm' (future tense), even though REVIEWER confirmed it in this run (e5964d1). Unlike REQ-065/070/071/084, no dated entry was added to this file's 'REVIEWER sign-off' section for REQ-072. Not required by any of REQ-072's acceptance_criteria, so left unfixed here; flagged for ORCH/REVIEWER to decide whether to backfill."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ072-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ072-20260822",
+      "push_status": "pending -- set by this same turn's push",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ORCH for Step Final (git merge). One MINOR doc-staleness gap noted above, not blocking."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

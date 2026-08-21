@@ -1,0 +1,52 @@
+{
+  "handoff_id": "fe330c80-9815-4ab6-963e-b05fc0a81241",
+  "run_id": "WF02-REQ072-20260822",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ072-20260822/step-00-git-setup.json",
+  "created_at": "2026-08-21T20:53:32Z",
+  "started_at": "2026-08-21T20:53:32Z",
+  "completed_at": "2026-08-21T20:55:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-072"],
+    "requirement_text": {
+      "REQ-072": "Port src/api/tenant_context.zig (104 lines) and src/api/trace_context.zig (55) as the per-request context every tenant-scoped handler reads, and build the single shared mechanism that turns a cross-tenant access into an indistinguishable 404. This requirement exists so INV-5 is discharged once, structurally, instead of being re-implemented and re-tested in each of the fifteen route requirements that follow. IDIOM TRANSLATION, mandatory: trace_context.zig and pipeline_context.zig (45) use Zig threadlocal storage for the per-request correlation id -- carry the trace id explicitly on conn.assigns (mirrored into Logger.metadata/1 for log correlation only), do NOT port a process-dictionary or ETS global standing in for a thread-local. pipeline_context.zig itself has no separate Letflow module: its content folds into this one, stated in the moduledoc rather than silently dropped. THE SCOPING MECHANISM (load-bearing half): one function derives the Ecto :prefix from conn.assigns[:auth_context][:tenant_id] via Letflow.TenantProvisioning.schema_name_for_tenant/1 (REQ-022's existing mechanism, per decision 0003 Dimension B and decision 0006, which removed tenant_id from schema-isolated tables entirely -- so the Postgres schema IS the only scoping these rows have). Handlers obtain their prefix ONLY from this function; no handler constructs a schema name itself or accepts a tenant identifier from the request path, query string, body, or a header. Because the prefix comes from the authenticated token rather than the request, a lookup for another tenant's resource simply finds nothing in the caller's schema -- making the 404 identical to a never-existed 404 by construction, with no separate existence check to leak timing. SECURITY (INV-1, INV-5, INV-6): this module is where all three are discharged for the whole stage."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/api/context.ex"
+    ],
+    "branch_name": "feature/WF02-REQ072-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 00 — Git setup for REQ-072 (Tenant-scoped request context and the cross-tenant 404 mechanism).\n\nProcedure per docs/agents/protocols/GIT_SETUP.md:\n1. git checkout main\n2. git pull --ff-only origin main — STOP and FAIL if non-fast-forward\n3. git checkout -b feature/WF02-REQ072-20260822\n4. git branch --show-current — must equal feature/WF02-REQ072-20260822\n5. git push -u origin feature/WF02-REQ072-20260822\n\nThis requirement is squarely security-load-bearing (INV-1/INV-5/INV-6 all discharged here for the whole S4 stage) and depends on REQ-071 (confirmed done on main, merged 381848b). Full WF-02 pipeline warranted: Step 1 design -> 1b gate -> 2a implement -> 2c security gate (in scope, this is the tenant-scoping mechanism itself) -> 2d idiom/decision-record gate -> 3 test design -> 3b gate -> 4 test run -> 5 release validation -> 6 doc update -> Step Final merge.\n\nKey design constraint to carry into Step 1: no handler may construct a schema name itself or accept a tenant identifier from the request path/query/body/header -- the scoping function's only input is conn.assigns[:auth_context][:tenant_id], already resolved by REQ-071's AuthPipeline. The cross-tenant 404 property must be demonstrated by BYTE-IDENTICAL responses (same status, same body) between a real cross-tenant access and a never-existed-id access, AND by equal query counts between the two paths (no early-exit timing signal) -- both are explicit acceptance criteria, not implementation details to infer.\n\nComplete the handoff: set status COMPLETED, fill result.git_evidence with branch_name and push_status, set next_action to 'Route to CODE-DESIGNER (Step 1)'.",
+    "acceptance_criteria": [
+      "git branch --show-current == 'feature/WF02-REQ072-20260822'",
+      "git push -u origin feature/WF02-REQ072-20260822 succeeds (exit 0 or * [new branch] in output)",
+      "local main was fast-forward with origin/main before branching"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Feature branch created from fast-forward main and pushed to origin successfully. docs/requirements.yaml REQ-072 status flipped pending -> in_progress; started event appended to docs/status/requirement_status.v2.yaml (verified via git diff --numstat: 17 insertions, 0 deletions, plus a tail re-read confirming exact text); index's volume-2 entries count incremented 16 -> 17 in the same commit (ae4a65b).",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ072-20260822",
+      "commit_sha_list": ["ae4a65b"],
+      "remote_branch": "origin/feature/WF02-REQ072-20260822",
+      "push_status": "* [new branch] feature/WF02-REQ072-20260822 -> feature/WF02-REQ072-20260822",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER (Step 1)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

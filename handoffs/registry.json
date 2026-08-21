@@ -1888,6 +1888,24 @@
       "queue_task_id": 138,
       "queue_agent_id": "tvolo-win-orch",
       "note": "WF-02 for REQ-071 (GH#278, queue task 138, stage S4), claimed after project owner's \"Check again\". Deps REQ-069/REQ-070 confirmed done. Reading lib/letflow/plugs/api_pipeline.ex found AuthPipeline and TenantStatus already mounted there in the required order, an unplanned side effect of REQ-070's router decomposition (cc1051b) -- this run's real scope was verifying that wiring, fixing both plugs' stale moduledocs (AC6), confirming TenantStatus's fail-closed behavior for OQ-14 (AC7, REVIEWER sign-off recorded in stage-4-api-surface.md), and writing the five missing end-to-end tests (AC1-AC5), not re-mounting from scratch. Incidentally found and fixed ISS-0218 (stray conflict marker in requirement_status.v2.yaml) directly on main (925417f) during Step 00, per ORCHESTRATOR.md §10's direct-action rule; queue task 218 released done, GH#447 closed. Full pipeline: Step 1 design (59b52b1) -> 1b gate (ade859f) -> 2a implement (6e2a1b6) -> 2c security gate PASS (8927d7e) -> 2d REVIEWER PASS + AC7 sign-off (1cec821) -> 3b test-design-validator gate PASS (5964add, Step 3 merged into 2a since the design fully specified the tests) -> 4 TEST-RUNNER full suite PASS, 16 pre-existing failures Route-1-attributed (1c5d620) -> 5 RELEASE-VALIDATOR independently re-verified all 7 ACs, full suite re-run clean 1444/1444 (fd0bed5) -> 6 DOC-UPDATER flipped to done (b568685) -> Step Final merged (381848b, PR #456). rework_count 0 of 3 throughout -- every gate PASS first attempt. Three follow-on issues filed and forwarded: ISS-0219 (test_parallel.sh N auto-derivation too high for this host), ISS-0220 (SandboxPool claim-timeout contention, pre-existing/unrelated files), ISS-0222 (transient connection spike on back-to-back script launches). Also filed ISS-0223 (pattern-level: three subagents in this run independently stalled on an illegal background-wait-for-cross-turn-notification despite core-directives.md's existing ISS-0213 rule; ORCH redirected each to finish synchronously)."
+    },
+    {
+      "run_id": "WF02-REQ072-20260822",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-072"],
+      "stage": "S4",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/api/context.ex"
+      ],
+      "lock_acquired_at": "2026-08-21T20:53:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 PASS — branch feature/WF02-REQ072-20260822 created and pushed, commit ae4a65b. Next: Step 1 (CODE-DESIGNER).",
+      "backfilled": false,
+      "queue_task_id": 139,
+      "queue_agent_id": "tvolo-win-orch",
+      "note": "WF-02 for REQ-072 (GH#279, queue task 139, stage S4), claimed via get_next_task immediately after REQ-071's close. Dep REQ-071 confirmed done on main (381848b). Ports R-Co's tenant_context.zig + trace_context.zig as the per-request context every tenant-scoped handler reads, plus the single shared Ecto :prefix-scoping function that discharges INV-1/INV-5/INV-6 once, structurally, for the whole S4 stage -- security-load-bearing, full WF-02 pipeline warranted. Idiom translation required: Zig threadlocal trace id becomes an explicit conn.assigns field (mirrored into Logger.metadata/1), not a process-dictionary/ETS global."
     }
   ]
 }

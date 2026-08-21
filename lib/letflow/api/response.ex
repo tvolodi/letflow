@@ -145,6 +145,13 @@ defmodule Letflow.Api.Response do
   @spec conflict(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
   def conflict(conn, detail), do: send_problem(conn, Error.conflict(detail))
 
+  @doc """
+  HTTP 413 — Content Too Large. See `Letflow.Api.Error.payload_too_large/1`
+  (REQ-068) for why this has no R-Co source counterpart.
+  """
+  @spec payload_too_large(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
+  def payload_too_large(conn, detail), do: send_problem(conn, Error.payload_too_large(detail))
+
   @doc "HTTP 415 — Unsupported Media Type."
   @spec unsupported_media_type(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
   def unsupported_media_type(conn, detail),

@@ -822,7 +822,7 @@ defmodule Letflow.Engine.SubProcess do
          merge_variables,
          graph,
          parent_token,
-         seed_state,
+         %InstanceState{} = seed_state,
          token_records,
          definition_id,
          actor_id,

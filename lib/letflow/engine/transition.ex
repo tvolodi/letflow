@@ -602,7 +602,12 @@ defmodule Letflow.Engine.Transition do
   @spec dispatch_parallel_gateway(Graph.t(), InstanceState.t(), Token.t(), Node.t()) ::
           {:ok, InstanceState.t(), [pending_event()]}
           | {:error, transition_error()}
-  defp dispatch_parallel_gateway(definition_snapshot, instance_state, token, node) do
+  defp dispatch_parallel_gateway(
+         definition_snapshot,
+         %InstanceState{} = instance_state,
+         %Token{} = token,
+         node
+       ) do
     case gateway_role(definition_snapshot, node) do
       :split ->
         dispatch_parallel_split(definition_snapshot, instance_state, token, node)
@@ -648,7 +653,12 @@ defmodule Letflow.Engine.Transition do
   @spec dispatch_parallel_split(Graph.t(), InstanceState.t(), Token.t(), Node.t()) ::
           {:ok, InstanceState.t(), [pending_event()]}
           | {:error, transition_error()}
-  defp dispatch_parallel_split(definition_snapshot, instance_state, token, node) do
+  defp dispatch_parallel_split(
+         definition_snapshot,
+         %InstanceState{} = instance_state,
+         token,
+         node
+       ) do
     edges_out = Enum.filter(definition_snapshot.edges, &(&1.source == node.id))
 
     new_tokens =
@@ -764,7 +774,7 @@ defmodule Letflow.Engine.Transition do
   @spec dispatch_parallel_join(Graph.t(), InstanceState.t(), Token.t(), Node.t()) ::
           {:ok, InstanceState.t(), [pending_event()]}
           | {:error, transition_error()}
-  defp dispatch_parallel_join(definition_snapshot, instance_state, token, node) do
+  defp dispatch_parallel_join(definition_snapshot, %InstanceState{} = instance_state, token, node) do
     with %JoinCounter{} = counter <- Map.get(instance_state.join_counters, node.id),
          true <- MapSet.member?(counter.expected_from_branches, token.branch_id) do
       tokens_without = Enum.reject(instance_state.tokens, &(&1.token_id == token.token_id))
@@ -820,7 +830,13 @@ defmodule Letflow.Engine.Transition do
   @spec fire_join(Graph.t(), InstanceState.t(), [Token.t()], JoinCounter.t(), Node.t()) ::
           {:ok, InstanceState.t(), [pending_event()]}
           | {:error, transition_error()}
-  defp fire_join(definition_snapshot, instance_state, tokens_without, counter, node) do
+  defp fire_join(
+         definition_snapshot,
+         %InstanceState{} = instance_state,
+         tokens_without,
+         counter,
+         node
+       ) do
     {_merge_status, merged_variables, merge_events} =
       VariableMerge.merge(instance_state.variables, %{}, nil)
 
@@ -861,7 +877,7 @@ defmodule Letflow.Engine.Transition do
   @spec dispatch_cancel_branch(Graph.t(), InstanceState.t(), String.t()) ::
           {:ok, InstanceState.t(), [pending_event()]}
           | {:error, transition_error()}
-  defp dispatch_cancel_branch(definition_snapshot, instance_state, branch_id) do
+  defp dispatch_cancel_branch(definition_snapshot, %InstanceState{} = instance_state, branch_id) do
     case Enum.find(instance_state.tokens, &(&1.branch_id == branch_id)) do
       nil ->
         {:error, {:unknown_branch_id, branch_id}}
@@ -875,7 +891,7 @@ defmodule Letflow.Engine.Transition do
           nil ->
             {:ok, %InstanceState{instance_state | tokens: tokens_without}, []}
 
-          counter ->
+          %JoinCounter{} = counter ->
             join_node_id = counter.join_node_id
             updated_cancelled = MapSet.put(counter.cancelled_branches, branch_id)
             updated_counter = %JoinCounter{counter | cancelled_branches: updated_cancelled}

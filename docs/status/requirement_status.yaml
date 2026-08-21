@@ -5839,3 +5839,34 @@ history:
       agent_id ai-dala-orch. Dependency REQ-113 confirmed done on main (8570dc7).
       Branch feature/WF02-REQ114-20260821 created and pushed from origin/main. Routing
       through full WF-02 producer/validator pipeline per instruction.
+  - req: REQ-114
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-21T08:17:23Z
+    note: >
+      Replaced plain `mix test` full-suite invocations with REQ-113's
+      scripts/test_parallel.sh across the 7 edit sites identified in scope:
+      docs/agents/workflows/WF-02_requirement_implementation.md's Step 4
+      (TEST-RUNNER) and Step 5 (RELEASE-VALIDATOR), WF-04_full_test_run.md's
+      overview diagram and Step 1 (TEST-RUNNER), and
+      .claude/agents/test-runner.md and .claude/agents/release-validator.md's
+      own literal invocations found during the audit. WF-03_issue_resolving.md
+      confirmed (not assumed) to need no edit of its own: its "Steps 2-4"
+      section mirrors WF-02's Step 1/1b/2a-2d/3/3b/4 by reference rather than
+      restating a `mix test` invocation. Process gap this run hit and fixed:
+      RELEASE-VALIDATOR's Step 5 first pass correctly FAILed on missing
+      handoff records and an unconfirmed docs/migration/decisions/0008 REVIEWER
+      sign-off; both were backfilled and REVIEWER's confirmation properly
+      recorded (decisions/0008's "REVIEWER sign-off — 2026-08-21" section)
+      before Step 5 was re-run and PASSed
+      (handoffs/WF02-REQ114-20260821/step-05-release-validator-rerun.json).
+      REVIEWER's Step 2d confirmed both of decisions/0008's Option A picks:
+      the stage tag question was out of scope for that gate (not evaluated),
+      and DOC-UPDATER's remit widening to cover docs/agents/workflows/*.md
+      edits was confirmed, not overridden. README.md's "Running it" section
+      updated to remove the stale "not yet wired into TEST-RUNNER/
+      RELEASE-VALIDATOR (REQ-114)" caveat now that the wiring is done. No
+      docs/migration/stage-N-*.md file was named by this requirement's
+      acceptance criteria. test/reports/ not applicable: this is a docs-only
+      requirement and TEST-RUNNER/TEST-DESIGN-VALIDATOR were skipped by
+      Step 3's scope test.

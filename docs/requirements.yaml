@@ -5456,7 +5456,7 @@ requirements:
   - id: REQ-114
     title: Wire the parallel test-runner script into TEST-RUNNER Step 4 and RELEASE-VALIDATOR Step 5
     owner: DOC-UPDATER
-    status: in_progress
+    status: done
     stage: S4
     impl_order: 189  # letflow-queue task id (registered 2026-08-21, mirrors GH#377)
     description: >

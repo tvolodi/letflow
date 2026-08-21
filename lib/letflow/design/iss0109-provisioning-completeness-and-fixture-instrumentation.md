@@ -118,15 +118,29 @@ incidental — it is stated in three decided artefacts:
   requirement sequences them explicitly; that orchestration is not built here."*
 - `lib/letflow/design/req022-tenant-schema-provisioning.md:288–294` — the **"No implicit
   chaining invariant"**, gate-approved, justified against R-Co's own
-  `bpm_provision_tenant_schema` / `runForSchema` split.
+  `bpm_provision_tenant_schema` / `runForSchema` split. Quoted precisely, that record
+  decides that *"`provision_tenant_schema/1` never calls `replay_migrations/2`, and
+  `replay_migrations/2` never calls `provision_tenant_schema/1`. They are two separate,
+  composable steps a caller sequences explicitly"* — i.e. it forbids **chaining**, and
+  leaves the onboarding orchestration to a future requirement.
 - `replay_migrations/2`'s own contract (:239–:244): it returns
   `{:error, :tenant_not_provisioned}` rather than provisioning on the fly.
 
-Making `provision_tenant_schema/1` guarantee table completeness — by chaining replay, by
-verifying tables, or by returning a new error when tables are absent — would therefore
-**contradict a gate-approved design record**. Per `core-directives.md` §"Instruction
-Precedence" ("A `docs/migration/decisions/` record is never overridden… stop and flag"),
-this design does not do that. Nor does it need to: the obligation to verify completeness
+Making `provision_tenant_schema/1` guarantee table completeness **by chaining replay** is
+squarely what that record forbids, so this design does not propose it. The narrower
+variants — having `provision_tenant_schema/1` *verify* tables, or return a new error when
+tables are absent — are **not literally decided by req022**; the record speaks about
+calling, not verifying. They are declined here on their own merits rather than on the
+record's authority: verifying table completeness inside the provisioning primitive would
+make it assert an outcome that, by req022's own separation, it is not the step responsible
+for producing, and would give it a failure mode no caller in `lib/` can currently cause.
+Note also the precedence route: req022 is a **gate-approved design artefact** under
+`lib/letflow/design/`, not a `docs/migration/decisions/` record — so
+`core-directives.md` §"Instruction Precedence" ("A `docs/migration/decisions/` record is
+never overridden… stop and flag") does not itself bind here. The correct route for
+contradicting a gate-approved design artefact would be REVIEWER sign-off, which this
+design does not need, because it **declines** the contradiction rather than resolving it.
+Nor does it need to: the obligation to verify completeness
 belongs to **whoever sequences the two primitives**. In both ISS-0109 failures that
 sequencer is the test fixture (`promotion_test.exs:78–98`,
 `promotion_assertion_rerun_test.exs:112–133`), which today asserts only that
@@ -179,7 +193,7 @@ Four public functions. Names, arities, argument shapes and return shapes are nor
 @type opts :: [
         slug_prefix: String.t(),
         display_name: String.t(),
-        status: :disabled | :active | :migrating,
+        oidc_mode: :enabled | :disabled,
         expected_tables: [String.t()] | :default,
         teardown: boolean()
       ]
@@ -218,9 +232,36 @@ completeness check and the failure capture. Its steps, in order:
 1. `Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)` — **unchanged from today**
    (`promotion_test.exs:79`, `promotion_assertion_rerun_test.exs:113`). Deliberately still
    not restored to `:manual`; that is ISS-0113 and is out of scope (INV-F-6).
-2. Insert a `Letflow.Identity.Tenant` via `Tenant.create_changeset/3` with
-   `Letflow.TenantSlugFixture.unique_slug(opts[:slug_prefix])` and `opts[:status]`
-   (default `:disabled`, matching both current sites).
+2. Insert a `Letflow.Identity.Tenant` via `Tenant.create_changeset/3`, called with
+   **exactly two cast attributes** — `slug:` from
+   `Letflow.TenantSlugFixture.unique_slug(opts[:slug_prefix])` and `display_name:` from
+   `opts[:display_name]` — and with `opts[:oidc_mode]` as the **third positional
+   argument**, defaulting to `:disabled`.
+
+   This is the contract as it really is, verified at source rather than inferred:
+
+   - `Letflow.Identity.Tenant.create_changeset/3`
+     (`lib/letflow/identity/tenant.ex:76–79` — `@spec` and head) has the signature
+     `create_changeset(tenant, attrs, oidc_mode)` with a guard
+     `when oidc_mode in [:enabled, :disabled]`. The third argument is the **OIDC mode**,
+     not a status.
+   - The `:disabled` appearing at both current fixture sites
+     (`promotion_test.exs:62–72`, `promotion_assertion_rerun_test.exs:95–105`) is that
+     third argument. Both sites pass `%{slug: …, display_name: …}` as `attrs` and pass
+     **no `:status` at all**.
+   - `lib/letflow/identity/tenant.ex:56` declares
+     `field(:status, Ecto.Enum, values: [:active, :migrating], default: :active)`.
+     `:disabled` is **not** a member of that enum; casting it produces an invalid
+     changeset (`validation: :inclusion`), so a helper that passed it would raise on every
+     insert.
+
+   Consequently `opts` carries **no `:status` key**. Omitting the field is what preserves
+   today's behaviour: both adopted sites currently get the schema default `:active`
+   (INV-F-5). A future adopter (ISS-0112) that genuinely needs a non-default status may add
+   a `:status` key then, constrained to `:active | :migrating` — the only legal values —
+   but it MUST NOT be added speculatively here. `create_changeset/3` does cast `:status`
+   and `:idp_realm_id`, so such an extension is possible later without changing production
+   code; it is simply not part of this design.
 3. Register the `on_exit/1` teardown described in §3.6 — registered **before**
    provisioning, exactly as today (`promotion_test.exs:83` precedes `:93`), so a failure in
    step 4/5/6 still cleans up.
@@ -230,10 +271,12 @@ completeness check and the failure capture. Its steps, in order:
    §3.5 with `phase=replay_failed`.
 6. `assert_schema_complete!/2` (§3.4); on incompleteness, raise per §3.5 with
    `phase=incomplete_schema`.
-7. Return the `tenant_fixture()` map. The two existing call sites destructure
-   `%{tenant_id: _, schema_name: _}`, so the added `:tenant` key is additive and
-   non-breaking at all 19 call sites (`promotion_test.exs` ×8,
-   `promotion_assertion_rerun_test.exs` ×11).
+7. Return the `tenant_fixture()` map. Existing call sites destructure either
+   `%{tenant_id: _, schema_name: _}` or, in some cases, `%{tenant_id: _}` alone
+   (e.g. `promotion_test.exs:464–465`). Map destructuring is partial in Elixir, so the
+   added `:tenant` key is additive and non-breaking at all 19 call sites
+   (`promotion_test.exs` ×8, `promotion_assertion_rerun_test.exs` ×11) regardless of
+   which subset each one binds.
 
 `opts[:teardown]` defaults to `true`; `false` exists only so §7's fail-first tests can
 construct a broken state without the fixture's own teardown racing their assertions. It is
@@ -309,13 +352,30 @@ during the ISS-0109 diagnosis:
 
 Failure-mode contract:
 
-- **Never raises to its caller.** Any exception while gathering is caught and returned as
-  `{:error, {:capture_failed, exception}}`; the caller then raises its own assertion error
-  carrying that tagged value. A capture that blew up must never replace the real failure
-  with its own — this mirrors `TenantSchemaReaper.sweep_orphans/2`'s "never raises to its
-  caller" contract (`test/support/tenant_schema_reaper.ex:50–56`).
-- **Best-effort per field.** A field whose query fails is `nil` (or `[]` for lists); the
-  rest of the report still renders. Partial evidence beats no evidence.
+- **Never raises to its caller.** No exception escapes `capture_schema_state/1`. The
+  caller then raises its own assertion error carrying whatever `capture_schema_state/1`
+  returned. A capture that blew up must never replace the real failure with its own —
+  this mirrors `TenantSchemaReaper.sweep_orphans/2`'s "never raises to its caller"
+  contract (`test/support/tenant_schema_reaper.ex:50–56`).
+- **Failure boundary — per-field `nil` vs `{:error, {:capture_failed, _}}`.** These two
+  rules are not alternatives; they are nested, and the boundary between them is
+  **normative**, not an implementer's choice:
+  - **Each individual field is gathered inside its own guard.** If gathering *that field*
+    raises (a failed query, an unexpected result shape), that field alone degrades — to
+    `nil` for scalar fields and `[]` for list fields — and the call still returns
+    `{:ok, schema_state()}` with every other field populated. **A single failing query is
+    always a per-field degradation, never a whole-call failure.**
+  - **Derived fields follow their inputs.** If `tables_present` degraded to `[]`, then
+    `tables_missing` is `[]` as well — *not* "all 19 missing" — because an unobserved
+    set must never be reported as an observed absence. Same for
+    `applied_versions`/`versions_missing`.
+  - **`{:error, {:capture_failed, exception}}` is the outer safety net only.** It is
+    returned when the failure is *outside* the per-field guards — e.g. assembling the
+    result map itself raises, or the `tenant_id` argument is malformed so that no field
+    can be attempted at all. It is **not** reachable by any single field's query failing.
+  - A tenant that simply does not exist, or whose schema is absent, is **not** a capture
+    failure: it returns `{:ok, state}` with the `present?` flags `false` (INV-F-4, and
+    C4's negative case in §7).
 - **One shot.** All fields are gathered in one call at the moment of failure. No retry, no
   polling — a retry would observe a *different* state than the one that failed.
 - **Emitted twice, deliberately:** into the raised `ExUnit.AssertionError` message (so it

@@ -1,0 +1,67 @@
+id: ISS-0117
+title: >
+  HANDOFF_PROTOCOL.md defines no recovery path for a step whose agent dies AFTER acting but BEFORE writing its result block
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0109-20260821
+discovered_at: "2026-08-21T03:30:12Z"
+severity: MINOR
+
+description: >
+  Discovered by ORCH during WF03-ISS0109-20260821's Step Final. Filed per ISSUE_QUEUE.md.
+
+  WHAT HAPPENED: ELIXIR-DEV terminated on an API error ("Connection lost mid-response") during
+  Step Final, after the rebase, push, PR creation, squash-merge and branch cleanup had ALL
+  completed successfully, and before it could write its own `result` block. The work landed
+  (PR #371, merge commit 0bd718f); only the record of it was missing.
+
+  THE GAP: this leaves a handoff that is COMPLETED in reality and IN_PROGRESS on disk, and
+  `docs/agents/shared/HANDOFF_PROTOCOL.md` says nothing about who may write that result block,
+  or how it must be marked. That silence matters more than it looks, because the project's whole
+  gate model rests on a handoff's `result` being the acting agent's own attested report. If ORCH
+  (or any other agent) may quietly fill one in, then a `result` block stops being evidence of
+  what an agent did and becomes evidence of what someone believed it did -- and nothing in the
+  file distinguishes the two afterwards.
+
+  WHAT ORCH DID THIS TIME, offered as a candidate convention rather than a decision:
+    - Re-derived every claim independently from git and the GitHub API (branch state, absence of
+      an interrupted rebase, HEAD == origin/main, local and remote branch deletion, `gh pr view`
+      merge state and merge sha, a yaml.safe_load over all eight affected issue records to
+      confirm no ISS-number collision or renumbering, and the presence of all five shipped
+      artefacts on main).
+    - Wrote the result block, but opened `result.summary` with an explicit statement that it was
+      NOT written by the acting agent, and added a separate `orch_reconstruction` object listing
+      the exact commands run and what each established.
+    - Listed explicitly what CANNOT be verified after the fact -- whether the rebase hit any
+      conflict (a clean rebase leaves no trace), and whether `git stash` was avoided as
+      instructed -- rather than letting silence imply verification.
+
+  This follows the precedent set by the `orch_timestamp_correction` field in
+  `handoffs/WF02-REQ023-20260816/step-06-doc-updater.json`, and the principle
+  docs/anti-patterns.md draws from it: a reconstruction that is indistinguishable from a
+  measurement defeats the audit trail it exists to preserve.
+
+  WHAT A FIX SHOULD DECIDE (do not assume the above is right just because it is written down):
+    1. Who may complete a dead agent's handoff -- ORCH only, a fresh instance of the same role,
+       or nobody (leave it IN_PROGRESS with a separate incident record)?
+    2. What the mandatory marking is, so a reconstructed result is never mistaken for an attested
+       one. A required field name would be better than a convention, since a convention is
+       exactly what a weak model skips.
+    3. Whether a step that died mid-action -- as opposed to after completing it -- has a
+       different recovery path, since a partially-applied git operation is a materially different
+       situation from a missing report.
+    4. Whether `handoffs/registry.json`'s `last_known_step` should record agent death at all, so
+       a later reader can tell a clean run from a recovered one.
+
+  Not urgent: the work is verified and merged, and this cost one ORCH turn to handle. It is worth
+  writing down because it will recur, and because the next occurrence may be a step that died
+  mid-action rather than after it, where the right move is much less obvious.
+
+affected_files:
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+  - docs/agents/ORCHESTRATOR.md
+
+queue_task_id: 185
+github_issue: https://github.com/tvolodi/letflow/issues/372
+github_issue_note: >
+  Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (185) and its mirrored GitHub issue (#372) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
+status: open

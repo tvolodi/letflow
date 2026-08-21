@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0109-20260821/step-final-git-merge.json",
   "created_at": "2026-08-21T03:24:18Z",
   "started_at": "2026-08-21T03:24:18Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-21T03:29:36Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": null,
@@ -49,20 +49,50 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "Step Final completed successfully, but this result block was NOT written by ELIXIR-DEV. The agent terminated on an API error ('Connection lost mid-response') after the merge had already landed and before it could fill in its own result. Everything below was RE-DERIVED INDEPENDENTLY BY ORCH from git and the GitHub API after the fact -- it is verification, not a transcription of an agent's self-report, and is marked as such so no later reader mistakes it for one. See orch_reconstruction below for the exact commands and what each established. OUTCOME: PR #371 (https://github.com/tvolodi/letflow/pull/371), titled with the WF-03 `fix:` prefix, squash-merged to main at 2026-08-21T03:26:15Z as 0bd718fb9edac67eec76ee68ab74e0b890cf6531. Local and remote feature branches are both gone; the checkout is on main with a clean tree and up to date with origin/main. NO ISS-NUMBER COLLISION OCCURRED. This was the run's main rebase risk -- it filed seven new issue records while another host was demonstrably active (the queue allocated task ids 176/177 elsewhere mid-run) and its predecessor hit exactly this add/add conflict at exactly this step. ORCH verified all eight records landed on main with their original ids and their queue/GitHub mappings intact: ISS-0110/task 178/GH#364, ISS-0111/179/#365, ISS-0112/180/#366, ISS-0113/181/#367, ISS-0114/182/#368, ISS-0115/183/#369, ISS-0116/184/#370, and ISS-0109 at status instrumented with superseded_by ISS-0116 (its renumbered_from: ISS-0107 is inherited from the earlier run that filed it, not from this one). No renumbering was needed. All five shipped artefacts are present on main: test/support/tenant_fixture.ex, test/letflow/support/tenant_fixture_test.exs, test/specs/ISS-0109.md, test/reports/report-20260821-WF03-ISS0109-20260821.yaml and lib/letflow/design/iss0109-provisioning-completeness-and-fixture-instrumentation.md. `mix letflow.check` was correctly NOT used as a merge gate: it fails on main itself under this host's Elixir 1.20.3/OTP 29 against a .tool-versions pin of 1.18.3-otp-27 (ISS-0106/GH#354, filed and not this run's), and per GIT_MERGE.md's Precondition no .github/workflows/ CI exists yet (REQ-013 pending), so there was no check to wait on. The merge evidence is TEST-RUNNER's full-suite run recorded in test/reports/report-20260821-WF03-ISS0109-20260821.yaml. TWO THINGS ORCH CANNOT VERIFY AFTER THE FACT, stated rather than assumed: whether the rebase hit any conflict at all (a clean rebase leaves no trace, and the absence of renumbering is consistent with but does not prove no conflict occurred), and whether `git stash` was avoided as instructed -- though the three foreign stash entries were confirmed still present and intact afterwards, which is the outcome that actually mattered.",
+    "artifacts_out": [
+      "PR #371 (squash-merged to main as 0bd718f; feature/WF03-ISS0109-20260821 deleted local + remote)"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "ELIXIR-DEV terminated on an API error ('Connection lost mid-response') during Step Final, after the rebase, push, PR creation, merge and branch cleanup had all completed but before it wrote its own result block. The work itself is unaffected and independently verified. The gap this exposes is in the audit trail rather than the repo: a step whose agent dies after acting but before reporting leaves a COMPLETED-in-reality / IN_PROGRESS-on-disk handoff, and nothing in HANDOFF_PROTOCOL.md says who may write that result or how it must be marked. ORCH filled it here and labelled every field as ORCH-reconstructed-from-evidence rather than agent-reported, following the precedent of the orch_timestamp_correction field in handoffs/WF02-REQ023-20260816/step-06-doc-updater.json -- a reconstruction that is indistinguishable from a measurement defeats the audit trail it is meant to preserve. Worth a protocol note so the next occurrence does not have to re-derive the convention.",
+        "affected_requirement": null
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0109-20260821",
-      "commit_sha_list": [],
-      "remote_branch": "origin/feature/WF03-ISS0109-20260821",
-      "push_status": null,
-      "pr_url": null,
+      "commit_sha_list": [
+        "0bd718fb9edac67eec76ee68ab74e0b890cf6531"
+      ],
+      "remote_branch": "origin/feature/WF03-ISS0109-20260821 (deleted on merge)",
+      "push_status": "ok",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/371",
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "ORCH marks the run COMPLETED, releases the owned_modules lock in handoffs/registry.json, and writes the RUN_DONE line. Both letflow-queue tasks (172 and 175) were already released status: done before this step."
   },
   "rework_count": 0,
-  "max_rework": 3
+  "max_rework": 3,
+  "orch_reconstruction": {
+    "reconstructed_by": "ORCH",
+    "reconstructed_at": "2026-08-21T03:29:36Z",
+    "reason": "ELIXIR-DEV terminated on an API error after the merge landed and before writing result. This block is ORCH's independent verification, not a transcription of an agent's claim.",
+    "commands_run": [
+      "git status --short / git branch --show-current -> on main, clean tree",
+      "ls .git/rebase-merge .git/rebase-apply -> no rebase in progress (no interrupted rebase left behind)",
+      "git log --oneline -5 -> 0bd718f squash commit is HEAD, directly atop 159fe9e",
+      "git fetch origin && git rev-list --left-right --count origin/main...HEAD -> 0 0 (HEAD is exactly origin/main)",
+      "git branch --list 'feature/WF03*' -> this run's branch absent (other runs' stale branches remain, not this run's concern)",
+      "git ls-remote --heads origin feature/WF03-ISS0109-20260821 -> empty (remote branch deleted)",
+      "gh pr view 371 --json url,state,mergedAt,mergeCommit,title -> MERGED 2026-08-21T03:26:15Z, mergeCommit 0bd718fb9edac67eec76ee68ab74e0b890cf6531",
+      "yaml.safe_load over docs/issues/ISS-0109..0116.yaml -> all eight present with original ids, queue_task_id and github_issue intact, no renumbering",
+      "ls over the five shipped artefact paths -> all present on main"
+    ],
+    "not_verifiable_after_the_fact": [
+      "whether the rebase encountered and resolved any conflict (a clean rebase leaves no trace)",
+      "whether git stash was used during the step (the three foreign stash entries were confirmed intact afterwards)"
+    ]
+  }
 }

@@ -1355,7 +1355,7 @@
         "ISS-0109"
       ],
       "stage": null,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "test/support/",
         "test/letflow/definitions/promotion_test.exs",
@@ -1363,14 +1363,30 @@
         "test/test_helper.exs"
       ],
       "lock_acquired_at": "2026-08-21T01:00:37Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00",
+      "lock_released_at": "2026-08-21T03:31:14Z",
+      "released_lock": true,
+      "last_known_step": "Step Final",
       "queue_task_ids": [
         175,
         172
       ],
-      "note": "WF-03 resolving ISS-0109/GH#358 (full-suite-only tenant-schema teardown race hitting PromotionTest and PromotionAssertionRerunTest). Claimed from letflow-queue as task 175 (the GitHub-import mirror of #358) by agent_id letflow-2-orch; the register_task-side task for the same issue is 172 per docs/issues/ISS-0109.yaml. owned_modules is provisional pending ISSUE-FIXER's diagnosis and will be widened if the root cause lands outside test/. Concurrent state observed at claim time: origin/feature/WF03-ISS0106-20260821 exists with zero commits ahead of main (sibling session, ISS-0106 toolchain drift); WF03-ISS0030-20260817 remains BLOCKED holding test/letflow/tenant_provisioning_test.exs -- no overlap with this run's provisional set."
+      "note": "WF-03 resolving ISS-0109/GH#358 (full-suite-only tenant-schema teardown race hitting PromotionTest and PromotionAssertionRerunTest). Claimed from letflow-queue as task 175 (the GitHub-import mirror of #358) by agent_id letflow-2-orch; the register_task-side task for the same issue is 172 per docs/issues/ISS-0109.yaml. owned_modules is provisional pending ISSUE-FIXER's diagnosis and will be widened if the root cause lands outside test/. Concurrent state observed at claim time: origin/feature/WF03-ISS0106-20260821 exists with zero commits ahead of main (sibling session, ISS-0106 toolchain drift); WF03-ISS0030-20260817 remains BLOCKED holding test/letflow/tenant_provisioning_test.exs -- no overlap with this run's provisional set. | CLOSED 2026-08-21T03:31:14Z: PR #371 squash-merged as 0bd718f; branch deleted local + remote; letflow-queue tasks 175 AND 172 both released status: done (two tasks tracked this one issue -- 172 from register_task, 175 from a later GitHub-import of the same #358 -- and releasing only the claimed one would have left 172 claimable forever). owned_modules stayed within the provisional set: the root cause turned out to be test-side, so no production file was ever touched and the lock never needed widening. Step Final's ELIXIR-DEV died on an API error AFTER the merge landed and before writing its result block; ORCH re-derived and recorded it, marked as reconstruction rather than attestation (see that handoff's orch_reconstruction field), and filed the protocol gap as ISS-0117/GH#372.",
+      "issues_filed": [
+        "ISS-0110",
+        "ISS-0111",
+        "ISS-0112",
+        "ISS-0113",
+        "ISS-0114",
+        "ISS-0115",
+        "ISS-0116",
+        "ISS-0117"
+      ],
+      "queue_tasks_released": true,
+      "merge": {
+        "pr": 371,
+        "squash_commit": "0bd718fb9edac67eec76ee68ab74e0b890cf6531",
+        "merged_at": "2026-08-21T03:26:15Z"
+      }
     }
   ]
 }

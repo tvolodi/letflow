@@ -1,0 +1,46 @@
+{
+  "handoff_id": "b7e1a4c2-3f6d-4e2a-9a5b-1d8f6c2e9a01",
+  "run_id": "WF02-REQ072-20260822",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ072-20260822/step-01-code-designer.json",
+  "created_at": "2026-08-21T20:59:35Z",
+  "started_at": "2026-08-21T20:59:35Z",
+  "completed_at": "2026-08-21T20:59:35Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-072"],
+    "requirement_text": {
+      "REQ-072": "Port src/api/tenant_context.zig (104 lines) and src/api/trace_context.zig (55) as the per-request context every tenant-scoped handler reads, and build the single shared mechanism that turns a cross-tenant access into an indistinguishable 404. IDIOM TRANSLATION mandatory: carry the trace id explicitly on conn.assigns (mirrored into Logger.metadata/1 for log correlation only), do NOT port a process-dictionary or ETS global standing in for a thread-local; pipeline_context.zig folds into this one module. THE SCOPING MECHANISM: one function derives the Ecto :prefix from conn.assigns[:auth_context][:tenant_id] via Letflow.TenantProvisioning.schema_name_for_tenant/1; handlers obtain their prefix ONLY from this function; no handler constructs a schema name itself or accepts a tenant identifier from the request path, query string, body, or a header. SECURITY (INV-1, INV-5, INV-6): this module is where all three are discharged for the whole stage."
+    },
+    "related_handoff_ids": ["fe330c80-9815-4ab6-963e-b05fc0a81241"],
+    "artifacts_in": ["handoffs/WF02-REQ072-20260822/step-00-git-setup.json"],
+    "owned_modules": ["lib/letflow/api/context.ex"],
+    "branch_name": "feature/WF02-REQ072-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 1 — Code design for REQ-072. Write lib/letflow/design/req072-tenant-request-context.md covering: (1) module structure folding tenant_context.zig + trace_context.zig + pipeline_context.zig into one Letflow.Api.Context module, stated in the moduledoc; (2) the trace-id mechanism (conn.assigns key, generation, Logger.metadata mirroring, response header); (3) the scoped_repo_opts/1 scoping function's exact signature/contract, including explicit {:error, _} handling with no silent unscoped fallback; (4) the cross-tenant-404 test design proving AC4 (byte-identical responses) and AC5 (equal query counts via telemetry), including the design decision on how to test it given REQ-070's sub-routers are still stubs; (5) AC3's negative-input test design (path/query/header tenant hints all ignored); (6) moduledoc content satisfying AC1, AC6, AC7. Design/spec only, no implementation code.",
+    "acceptance_criteria": [
+      "the trace id is carried on conn.assigns and no module in lib/letflow/api/ uses Process.put/Process.get or an ETS table for per-request context, confirmed by grep and stated in the moduledoc as the deliberate translation of Zig's threadlocal",
+      "the same trace id appears on the response header and in a log line emitted during the request, demonstrated by a test capturing both",
+      "the scoping function derives its Ecto :prefix solely from conn.assigns[:auth_context][:tenant_id]; a test supplying a conflicting tenant id in the request path, in a query parameter, and in an X-Tenant-Id header confirms all three are ignored and the token's tenant is used (INV-1)",
+      "a GET for a resource id that exists in tenant B, issued by a caller authenticated for tenant A, returns a response byte-identical to a GET for a randomly generated id that exists nowhere -- same status, same body, demonstrated by a test comparing the two responses directly (INV-5)",
+      "the cross-tenant path and the never-existed path execute the same number of database queries, demonstrated by counting queries via telemetry in both cases, so no early-exit timing signal distinguishes them (INV-5)",
+      "no function in this module accepts a tenant id, schema name, or prefix as a caller-supplied argument -- confirmed by inspection of every public function's signature and stated in the moduledoc",
+      "the moduledoc explains why a cross-tenant existence check is prohibited even to improve an error message, citing INV-5"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req072-tenant-request-context.md. Module: Letflow.Api.Context (new, lib/letflow/api/context.ex), folding tenant_context.zig/trace_context.zig/pipeline_context.zig per the requirement's own instruction (moduledoc section 0 states why: Zig threadlocal stands in for a per-request object Elixir already has via conn). Trace-id mechanism: assign_trace_id/1, a plug-shaped conn->conn function mounted first in Letflow.Plugs.ApiPipeline (before AuthPipeline, matching trace.zig's own 'must run first' doc comment); reads/propagates x-trace-id request header (256-byte truncation, no UUID validation, matching R-Co behavior) or generates a UUID v4 via Ecto.UUID.generate/0; assigns conn.assigns[:trace_id] (the same key REQ-066's Letflow.Api.Response.send_problem/2 already reads -- confirmed by reading response.ex directly rather than inventing a second key name); mirrors into Logger.metadata/1, with the moduledoc explicitly distinguishing 'we call the public Logger.metadata/1 API' from 'we touch the process dictionary ourselves' so AC1's grep-based check isn't misled by Logger's own internal implementation; sets the x-trace-id response header eagerly via put_resp_header/3. Scoping function: scoped_repo_opts/1 (picked over the requirement's fetch_scoped/3 alternative specifically because a 1-arity conn->opts signature makes 'no caller-supplied tenant/schema/prefix argument' true by construction, not just convention); returns {:ok, prefix: schema_name} | {:error, :missing_auth_context | :invalid_tenant_id}, with the design explicitly stating callers must not fall through to an unscoped query on error (mirrors AuthPipeline's own provision_user/3 precedent for the :invalid_tenant_id tuple). AC4/AC5 test design (the hardest pair): explicit design decision recorded in section 4.1 to prove the property one level below full HTTP dispatch, against a minimal test-only fixture table under test/support/ (reusing the req022_migration_fixture.ex precedent), rather than inventing a fake production route inside one of REQ-070's still-stub sub-routers -- reasoned out in full (two options weighed, (a) fake route rejected as scope creep, (b) direct scoping-function + Repo.get/3 level adopted because the module's actual contract has no route/handler of its own and the property is one of the scoping mechanism, inherited identically by all fifteen future route requirements). Test design: two real tenant schemas provisioned via TenantProvisioning, one probe row inserted only into tenant B's schema, cross-tenant Repo.get(prefix: schema_a, tenant_b_row_id) vs never-existed Repo.get(prefix: schema_a, random_uuid) compared for byte-identical Plug.Conn responses (via Response.not_found/1, which itself takes no varying argument) and equal :telemetry.attach'd [:letflow, :repo, :query] event counts. AC3 test design: conn built with conflicting tenant hints in params, query_params, and the X-Tenant-Id header simultaneously with a real auth_context tenant, asserting scoped_repo_opts/1 returns only the auth_context tenant's schema. Moduledoc content for AC1/AC6/AC7 fully specified in section 5, each point enumerated against the module's actual (small) function list. Four open questions recorded explicitly rather than silently resolved: OQ-1 (Logger.metadata/1's per-process scope vs. Bandit's request-handling process model, unverified here), OQ-2 (this design does not prescribe which HTTP status each scoped_repo_opts/1 error maps to -- left to the fifteen route requirements), OQ-3 (tenant_context.zig's StorageMode/LEGACY_RLS enum deliberately not ported -- no such mode exists under decision 0003), OQ-4 (pipeline_run_id key reserved on conn.assigns but no current writer -- pipeline_context.zig has no live Letflow caller yet).",
+    "artifacts_out": ["lib/letflow/design/req072-tenant-request-context.md"],
+    "issues": [],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -89,13 +89,13 @@ defmodule Letflow.Engine.VariableMerge do
   prior recipe here grepped the whole file including this moduledoc's own
   prose, which necessarily *names* the functions it promises never to
   *call* and so registered false positives against itself, including its
-  own recipe line. This recipe strips every `"""`-delimited doc block (the
+  own recipe line. This recipe strips every `\"""`-delimited doc block (the
   `@moduledoc` and every `@typedoc` in this file) before grepping, so it
   checks call sites in the actual code, not mentions in documentation of
   what the caller does):
 
   ```bash
-  awk '/"""/{f=!f; next} !f' lib/letflow/engine/variable_merge.ex \
+  awk '/\"""/{f=!f; next} !f' lib/letflow/engine/variable_merge.ex \
     | grep -n "Repo\\.\\|Logger\\.\\|DateTime\\.\\|System\\.os_time\\|System\\.system_time\\|HTTPoison\\|Req\\.\\|File\\.\\|:rand\\.\\|:crypto\\.\\|Registry\\.validate_payload\\|Registry\\.get_type\\|Registry\\.register_type"
   ```
 

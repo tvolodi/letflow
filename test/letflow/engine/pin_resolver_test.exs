@@ -236,7 +236,9 @@ defmodule Letflow.Engine.PinResolverTest do
       g = graph([service_task("n1", "svc-a")])
       def_ = definition("stale-override-process")
 
-      lookup = const_lookup({:ok, %{resolved_id: "real-sid", version: "2.0.0"}}, {:error, :not_found})
+      lookup =
+        const_lookup({:ok, %{resolved_id: "real-sid", version: "2.0.0"}}, {:error, :not_found})
+
       overrides = [%{kind: :catalog_entry, ref: "svc-a", version: "1.0.0-stale"}]
 
       assert {:error, {:unresolved_pin_override, "svc-a"}} =
@@ -319,7 +321,9 @@ defmodule Letflow.Engine.PinResolverTest do
       g = graph([sub_process("n1", "mod-a")])
       def_ = definition("module-override-process")
 
-      lookup = const_lookup({:error, :not_found}, {:ok, %{resolved_id: "real-mid", version: "4.0.0"}})
+      lookup =
+        const_lookup({:error, :not_found}, {:ok, %{resolved_id: "real-mid", version: "4.0.0"}})
+
       overrides = [%{kind: :module, ref: "mod-a", version: "4.0.0"}]
 
       assert {:ok, pins, _schema} = PinResolver.resolve(g, def_, lookup, overrides)

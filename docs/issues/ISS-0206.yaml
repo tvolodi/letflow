@@ -1,0 +1,46 @@
+id: ISS-0206
+title: >
+  HANDOFF_PROTOCOL 1.2 leaves two edges of the started_at rule unclosed: no threshold for
+  "immediately", and no defined action for a reported null
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0204-20260821
+discovered_at: "2026-08-21T10:23:10Z"
+severity: MINOR
+
+description: >
+  Filed by ORCH from MINOR findings 1 and 2 in
+  `handoffs/WF03-ISS0204-20260821/step-03b-reviewer-gate.json`'s `result.issues`, raised
+  by the REVIEWER while gating the ISS-0204 settlement. Read them there.
+
+  Finding 1: §1.2 step 2 carries an exception branch -- a handoff created but not
+  dispatched immediately must have `started_at` re-read and overwritten at spawn time --
+  but gives no threshold for what counts as immediate. It is a judgement call inside a
+  procedure written specifically to remove judgement. The REVIEWER judged it fail-safe
+  (neither reading of the branch can reproduce the negative-gap class), which is why it is
+  MINOR and not gating.
+
+  Finding 2, the more substantive: §1 step 3 tells a receiving agent to leave a null
+  `started_at` null and report it MINOR "so ORCH fixes the dispatch", while §1.2's final
+  paragraph rules that nulls are not backfilled. No step tells ORCH what "fix" then means,
+  so a weak ORCH receiving that MINOR has no mechanical action available. The intended
+  answer is presumably "do not backfill this one, stamp the next dispatch correctly" --
+  exactly what WF03-ISS0204-20260821 did in practice -- but it is inferable only, and the
+  loop the protocol opens is never closed.
+
+  Both land in `HANDOFF_PROTOCOL.md` §1.2, the section ISS-0204 created as the single
+  canonical statement of this rule. Fix them there; do not add a second statement elsewhere.
+
+affected_files:
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+
+related:
+  - ISS-0204  # the run whose gate raised it, against the section that run created
+  - ISS-0207  # the third MINOR from the same gate
+
+queue_task_id: 206
+github_issue: https://github.com/tvolodi/letflow/issues/397
+github_issue_note: >
+  `register_task` created both the queue task (206) and its mirrored GitHub issue (#397)
+  in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
+  separately. The id comes from `register_task`'s `issue_ref`, not a directory scan.
+status: open

@@ -1,0 +1,44 @@
+id: ISS-0207
+title: >
+  HANDOFF_PROTOCOL 1.2 quotes corpus counts as reproducible, but two of its buckets grow
+  with every handoff written
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0204-20260821
+discovered_at: "2026-08-21T10:23:10Z"
+severity: MINOR
+
+description: >
+  Filed by ORCH from MINOR finding 3 in
+  `handoffs/WF03-ISS0204-20260821/step-03b-reviewer-gate.json`'s `result.issues`. Read it
+  there.
+
+  §1.2 presents its measurement as reproducible and quotes exact figures (606 files, 468
+  gap-zero, 14, 89, 25, 20-of-25). Two of those buckets -- total files and the gap-zero
+  count -- grow with every handoff the pipeline writes. The gate's own re-run, three
+  minutes after the producing step measured, already returned 607 and 469. It reconciled
+  exactly to this run's own step-03b handoff, so nothing was wrong; but a later reader who
+  re-runs the command and gets different numbers has no way to tell expected growth from a
+  defect, and the section gives them none.
+
+  The finding the measurement supports is the SHAPE -- a roughly 5:1 majority for
+  ORCH-stamping, and a 25-file negative-gap class concentrated on round `:00` minutes --
+  not the absolute counts. A dated as-of note saying so would stop drift being read as a
+  discrepancy. Same staleness class as ISS-0022 (a snapshot count written into prose that
+  goes stale by construction) and as `ORCHESTRATOR.md` §7.2's own `last_known_step` count,
+  which was wrong for exactly this reason and is now stated without a figure.
+
+affected_files:
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+
+related:
+  - ISS-0204  # the run whose gate raised it, against the section that run created
+  - ISS-0206  # findings 1 and 2 from the same gate
+  - ISS-0022  # the same staleness class, on a different snapshot count
+
+queue_task_id: 207
+github_issue: https://github.com/tvolodi/letflow/issues/398
+github_issue_note: >
+  `register_task` created both the queue task (207) and its mirrored GitHub issue (#398)
+  in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
+  separately. The id comes from `register_task`'s `issue_ref`, not a directory scan.
+status: open

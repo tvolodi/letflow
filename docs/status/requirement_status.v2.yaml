@@ -638,3 +638,53 @@ history:
       (cross-tenant 404 via REQ-072's mechanism). Branch
       feature/WF02-REQ073-20260822 created off origin/main and pushed (Step 00).
       Status flipped pending -> in_progress here.
+  - req: REQ-073
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-21T23:36:24Z"
+    note: >
+      Shipped the first real route handlers mounted anywhere in S4:
+      lib/letflow/routers/identity.ex, five routes (create/list/get/patch/
+      status-update for users), replacing the REQ-070 stub. Backed by five
+      new Letflow.Identity functions plus one additive
+      Authorization.endpoint_policy_key/2 clause. First requirement to
+      exercise the whole S4 security chain end-to-end: REQ-066's response
+      builders, REQ-067's pagination, REQ-068's validation, REQ-069's
+      authorization, and REQ-072's tenant scoping, all through one real
+      router dispatch. Two honest rework cycles, both catching real gaps
+      rather than cosmetic ones: Step 1b FAILed the design on a missing AC6
+      element (moduledoc not naming which Identity functions each handler
+      calls), reworked and re-PASSed (0e8e0a4/391529f); Step 5
+      RELEASE-VALIDATOR FAILed on AC5 -- the allowlist test asserted
+      individual fields were present/absent but never the full key set, so
+      an added field could have slipped through undetected -- reworked
+      (9a7f95f/e6280fd), then TEST-DESIGN-VALIDATOR (695d43a), TEST-RUNNER
+      (106beb9, 1482/1482), and RELEASE-VALIDATOR (4962fb2) all
+      independently re-confirmed. ELIXIR-DEV also caught and fixed a real
+      pre-expiry cursor-pagination bug during implementation (the cursor's
+      freshness field was row-time instead of mint-time), and REVIEWER's
+      Step 2d (9f2165a) updated the design doc's cursor-pagination section
+      to match that legitimate deviation. Mutation testing: AC2's
+      cross-tenant-404 property was independently mutation-tested at three
+      points across this run's full history -- Step 3b's
+      TEST-DESIGN-VALIDATOR breaking Identity.get_user/2's scoping and
+      Step 5's RELEASE-VALIDATOR breaking the router's opts-threading, both
+      confirming the suite caught the regression. AC5's allowlist was
+      independently mutation-tested twice, once per rework side --
+      TEST-DESIGN-VALIDATOR and RELEASE-VALIDATOR each added a stray 9th
+      key to the response map and confirmed the new full-key-set assertion
+      caught it. Full gate chain: Step 1 design (af67ee5) -> Step 1b FAIL
+      (00cbc95) -> rework (0e8e0a4) -> Step 1b PASS (391529f) -> Step 2a
+      implement (32c1f4f) -> Step 2c SECURITY-REVIEWER PASS (a4f2233) ->
+      Step 2d REVIEWER PASS (9f2165a) -> Step 3b TEST-DESIGN-VALIDATOR PASS
+      (7dc37d3) -> Step 4 TEST-RUNNER PASS (738e809, 1482/1482) -> Step 5
+      RELEASE-VALIDATOR FAIL (06fb22e) -> rework (9a7f95f/e6280fd) -> Step 3b
+      re-PASS (695d43a) -> Step 4 re-PASS (106beb9) -> Step 5 re-PASS
+      (4962fb2). docs/migration/stage-4-api-surface.md checked directly:
+      no REQ-073 acceptance criterion names this file or any
+      docs/migration/decisions/*.md file, and the doc's own header states it
+      deliberately keeps no per-requirement status snapshot
+      (docs/requirements.yaml is the authority, per ISS-0022) -- no edit
+      made there. README.md checked directly (grep for identity/Identity):
+      no hit needing an update -- no externally-visible behavior
+      documented there changes.

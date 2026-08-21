@@ -55,7 +55,7 @@ volumes:
     path: docs/status/requirement_status.v2.yaml
     status: current
     opened: 2026-08-21
-    entries: 20
+    entries: 21
     note: >
       Opened by ISS-0119's fix. Successor to volume 1. `entries:` corrected
       2026-08-21 (ISS-0199, run WF03-ISS0199-20260821) from a stale declared 0
@@ -67,7 +67,8 @@ volumes:
       (Step 6/DOC-UPDATER), then to 11 when WF02-REQ067-20260821's Step Final
       rebase composed both of that run's entries with two concurrently-landed
       entries from main (REQ-068 done, REQ-069 done) that had independently
-      incremented it to 9 there.
+      incremented it to 9 there. Incremented to 21 in the same commit as
+      WF02-REQ073-20260822's own done-event append (Step 6/DOC-UPDATER).
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

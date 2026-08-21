@@ -223,9 +223,14 @@ every other reader point here rather than restating it.
      result instead of inheriting it as settled. A negative result that hides the weakness
      of the test that produced it is worth less than no record at all.
   4. the **run-id and timestamp** of the run that reached the verdict, recorded under the
-     key pair `closed_in_run:` / `closed_at:` — **not** `resolved_in_run:` /
+     key pair `verdict_in_run:` / `verdict_at:` — **not** `resolved_in_run:` /
      `resolved_at:`, which assert a resolution that a `no_defect` record explicitly did
-     not perform and would re-introduce the false claim this status exists to prevent.
+     not perform and would re-introduce the false claim this status exists to prevent, and
+     **not** `closed_in_run:` / `closed_at:`, because `closed_at:` already carries a
+     different meaning in this registry — the moment GitHub closed the mirrored issue
+     (`ISS-0109.yaml`) — and one key name with two meanings distinguished only by nesting
+     depth is not readable by the mechanical linter ISS-0191 specifies. `verdict_at:` is
+     when the run reached its verdict, which is not the same event as the GitHub close.
 
   This is deliberately the hardest of the three to earn cheaply, because it is the one an
   uninvestigated issue would most like to take. An issue nobody investigated cannot reach

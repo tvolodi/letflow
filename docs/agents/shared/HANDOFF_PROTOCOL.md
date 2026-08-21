@@ -426,9 +426,9 @@ copy *and* an empty structured field the content should have travelled in
 (`requirement_text == {}` in 66 of 69). Neither half exists on the result side.
 Where `artifacts_out` points at a real produced artefact, the summary does not duplicate
 it. (No raw presence count for `artifacts_out` is quoted here, on purpose: ISS-0202
-measured that population to be heavily self-referential — handoffs whose `artifacts_out`
-names only their own file — so a bare count is contaminated; and being a presence count
-over all steps, including gate steps that correctly produce no artefact, it is the wrong
+measured that population to be heavily self-referential — handoffs that list their own
+handoff file among their outputs — so a bare count is contaminated; and being a presence
+count over all steps, including gate steps that correctly produce no artefact, it is the wrong
 counterpart to the dispatch side's `requirement_text == {}` either way.) A duplicated copy
 is unmeasurable and drifts from the source it was copied from — that was the entire case
 for the rule above.

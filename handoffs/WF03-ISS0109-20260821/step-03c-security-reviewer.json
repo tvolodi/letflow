@@ -1,0 +1,65 @@
+{
+  "handoff_id": "7d12c955-1013-46f0-b8bd-d666dc9ad602",
+  "run_id": "WF03-ISS0109-20260821",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0109-20260821/step-03c-security-reviewer.json",
+  "created_at": "2026-08-21T02:15:58Z",
+  "started_at": "2026-08-21T02:15:58Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "736e6322-a586-4bc1-845a-a9bd392c3501",
+      "fa02b1e8-4ede-418d-8c84-40c5920f57ed"
+    ],
+    "artifacts_in": [
+      "test/support/tenant_fixture.ex",
+      "test/letflow/definitions/promotion_test.exs",
+      "test/letflow/definitions/promotion_assertion_rerun_test.exs",
+      "lib/letflow/design/iss0109-provisioning-completeness-and-fixture-instrumentation.md",
+      "handoffs/WF03-ISS0109-20260821/step-03-elixir-dev.json",
+      "docs/agents/instructions/security-invariants.md",
+      "lib/letflow/tenant_provisioning.ex"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0109-20260821",
+    "issue_ids": [
+      "ISS-0109"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 3c -- SECURITY GATE on the ISS-0109 implementation (commits 5556767 / 8367b4d on\nfeature/WF03-ISS0109-20260821). Review the DIFF, not the developer's account of it:\n`git diff 70736d5..HEAD -- test/` plus `git diff 70736d5..HEAD --stat`.\n\nWHAT SHIPPED: one new test-only module test/support/tenant_fixture.ex (Letflow.TenantFixture)\nand its adoption in exactly two test modules (test/letflow/definitions/promotion_test.exs,\ntest/letflow/definitions/promotion_assertion_rerun_test.exs). The gate-approved design is\nlib/letflow/design/iss0109-provisioning-completeness-and-fixture-instrumentation.md.\n\nFIRST, RUN YOUR OWN SCOPE TEST AND STATE THE VERDICT EXPLICITLY. ELIXIR-DEV and the design\nboth assert this change touches NO tenant-data path -- no lib/ change at all, test-only code.\nIf that holds, most of INV-1..INV-8 are NOT-APPLICABLE and saying so per invariant is the\ncorrect output; do not manufacture findings to justify the step. But VERIFY the premise\nyourself rather than inheriting it: confirm from the diff that lib/ is genuinely untouched\n(the design artefact itself is the only permitted lib/ path), and that the new module is\nnever referenced from shipped code and never enters lib/letflow/application.ex's supervision\ntree.\n\nTHEN CHECK THE TWO INVARIANTS THE DESIGN ITSELF WROTE, because they are the reason this gate\nruns at all on a test-only change -- this helper issues raw SQL against a multi-tenant\ndatabase:\n\nINV-F-8 (design SS4): every query the helper issues is either (a) parameterized and scoped to\nthe single tenant/schema under test, or (b) a read of Postgres catalog metadata\n(information_schema.schemata / information_schema.tables) filtered by table_schema = $1. No\nvalue belonging to another tenant is ever read, logged, or returned. NO UNSCOPED CATALOG\nENUMERATION. Check every query in the new module against this, one by one. An unscoped\ncatalog read in a test helper is not harmless: it would make the failure-capture report leak\nother tenants' schema names into logs, and this repo already has ISS-0111/GH#365 open for a\ntest that mutates shared tenant state globally.\n\nINV-F-9 (design SS4): the ONLY raw-SQL identifier interpolation is DROP SCHEMA IF EXISTS\n\"<name>\" CASCADE and \"<name>\".schema_migrations, and <name> is ALWAYS the output of\nTenantProvisioning.schema_name_for_tenant/1 -- never a caller-supplied string. Everything else\nis $1-parameterized. Verify by reading every interpolation site in the new file. This is the\nsame argument tenant_provisioning.ex:180-187 already makes for production; confirm the helper\nactually earns it rather than merely claiming it.\n\nALSO CHECK, since it is a new logging surface: the teardown log line the helper emits at :info\ncarries schema name, tenant_id, schema_present_before_drop, test module and test name. Confirm\nit contains NOTHING beyond the tenant under test -- no other tenant's identifiers, no\ncredentials, no connection string, no arbitrary exception text. A capture/logging helper is\nexactly where a leak would be introduced casually and would then be copied into 39 more call\nsites later (ISS-0112).\n\nCONSTRAINTS: you gate, you do not edit. Report per-invariant verdicts (APPLIES PASS / APPLIES\nFAIL / NOT-APPLICABLE with the reason). Toolchain here is Elixir 1.20.3/OTP 29 against a\n1.18.3-otp-27 pin (ISS-0106, filed, not yours) -- plain `mix compile` only, no\n--warnings-as-errors, no `mix format`. Branch feature/WF03-ISS0109-20260821; commit by explicit filename.\n",
+    "acceptance_criteria": [
+      "An explicit scope verdict is stated, derived from the diff rather than from ELIXIR-DEV's claim: whether this change touches a tenant-data path, including confirmation that lib/ is untouched apart from the design artefact and that Letflow.TenantFixture is never referenced from shipped code or added to the supervision tree",
+      "A per-invariant verdict (APPLIES PASS / APPLIES FAIL / NOT-APPLICABLE with reason) is given for INV-1 through INV-8",
+      "INV-F-8 is checked query by query against the new module: every query is either tenant/schema-scoped and parameterized, or a catalog read filtered by table_schema = $1, with no unscoped catalog enumeration",
+      "INV-F-9 is checked interpolation site by interpolation site: the only raw-SQL identifier interpolation is the schema name from TenantProvisioning.schema_name_for_tenant/1, never a caller-supplied string",
+      "The new teardown log line's contents are checked field by field and confirmed to carry nothing beyond the tenant under test -- no other tenant's identifiers, no credentials, no connection string, no arbitrary exception text",
+      "A single overall verdict (PASS or FAIL) is stated; on FAIL each finding names the specific line and the invariant it violates"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0109-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0109-20260821",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

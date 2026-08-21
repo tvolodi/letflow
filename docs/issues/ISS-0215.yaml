@@ -30,4 +30,10 @@ github_issue_note: >
   register_task created both the queue task (215) and its mirrored GitHub issue (432) in
   one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
   separately.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0215-20260821
+resolved_at: "2026-08-21T14:15:14Z"
+resolution_note: >
+  Ran `mix format test/docs/requirement_status_invariants_test.exs`, confirmed
+  `mix format --check-formatted` now passes, `mix test` on the file: 20/20 passed
+  post-format. No other file touched. Merged as PR #434, commit 539ef0f.

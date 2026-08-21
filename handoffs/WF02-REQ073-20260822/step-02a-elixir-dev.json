@@ -1,0 +1,50 @@
+{
+  "handoff_id": "d3f7a2b1-9c4e-4a6f-8b2d-1e5c9a7f3d62",
+  "run_id": "WF02-REQ073-20260822",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ073-20260822/step-02a-elixir-dev.json",
+  "created_at": "2026-08-21T22:52:19Z",
+  "started_at": "2026-08-21T22:52:19Z",
+  "completed_at": "2026-08-21T22:52:19Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-073"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ073-20260822/step-01b-code-design-validator-rework1.json"
+    ],
+    "artifacts_in": ["lib/letflow/design/req073-identity-user-routes.md"],
+    "branch_name": "feature/WF02-REQ073-20260822"
+  },
+  "task": {
+    "description": "Implement REQ-073: five real handlers (POST /users, GET /users, GET /users/:id, PATCH /users/:id, POST /users/:id/status) mounted into lib/letflow/routers/identity.ex, per the validated design doc.",
+    "acceptance_criteria": [
+      "AC1: five end-to-end tests (create 201, list cursor page, get 200, patch updated, status-update persisted)",
+      "AC2/INV-5: cross-tenant 404 byte-identical to a never-existed 404",
+      "AC3/INV-1: list is tenant-isolated",
+      "AC4: authorization checked before any Repo call in every handler; 403 leaves the database unchanged",
+      "AC5/INV-2: response allowlist excludes password_hash/external_id/external_realm, hand-built not derived",
+      "AC6: Letflow.Routers.Identity's @moduledoc names each route's Letflow.Identity function(s) verbatim"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented all five handlers and their backing Letflow.Identity functions per the design, plus the one additive Authorization clause. Files touched: lib/letflow/identity/user.ex (added create_changeset/2, profile_changeset/2, status_changeset/2), lib/letflow/identity.ex (added create_user/2, list_users/2, get_user/2, update_user_profile/3, update_user_status/3, plus private cursor-pagination helpers), lib/letflow/api/authorization.ex (one additive clause: endpoint_policy_key(\"POST\", \"/users/:id/status\") -> :UsersManage), lib/letflow/routers/identity.ex (full rewrite of the REQ-070 stub: five routes, shared scoped-prefix+authorization preamble per handler before any Repo call, per-handler Letflow.Api.Validation schemas, hand-built user_map/1 allowlist, AC6 moduledoc), test/letflow/routers/identity_test.exs (new, 23 tests).\n\nOQ-3 (password_hash placeholder): chose \"__NO_PASSWORD_SET__\", mirroring jit_changeset/2's existing \"__OIDC_ONLY__\" sentinel exactly as the design suggested.\n\nOQ-5 (status_changeset vs. reusing profile_changeset): gave update_user_status/3 its own User.status_changeset/2 with validate_required([:status]), since this changeset's one caller always supplies a validated status and a distinct function documents that contract explicitly rather than relying on profile_changeset/2's all-optional shape.\n\nOQ-2 (timestamp JSON shape): grepped for precedent per the design's instruction -- found lib/letflow/definitions/export_import.ex:97 and lib/letflow/engine/execution_error.ex:231 both using DateTime.to_iso8601/1 for a response-body timestamp. Used the same convention (NaiveDateTime -> DateTime.from_naive!(\"Etc/UTC\") -> to_iso8601/1), noted in the router's own code comment.\n\nDeviation from the design worth flagging explicitly (OQ-1's cursor shape): the design's literal walkthrough (Sec 2.2/Sec 7 gap 2) suggested Pagination.decode_cursor(cursor, \"U:\", 0) and using a row's own inserted_at as both the sort key and the cursor's freshness-check timestamp. Implementing that literally would make decode_cursor/4's 24h expiry check compare 'now' against the target ROW's inserted_at rather than against when the cursor was minted -- a user created more than 24h ago would make any cursor built from their row appear already-expired the instant it's issued, which contradicts what cursor expiry is supposed to mean (confirmed by reading Letflow.Api.Pagination's own moduledoc/lib/letflow/design/api-pagination.md Sec 5.1: the expiry field is meant to be a mint-time marker). Implemented instead: the cursor payload's first field (checked by decode_cursor's expiry_ts_offset = byte_size(\"U:\") = 2) carries System.system_time(:microsecond) captured at build_next_cursor/1 time; the row's actual inserted_at and id (the real sort key and tiebreaker) are carried in the payload's second/third fields, parsed out in Letflow.Identity's own decode_users_cursor/1 (not by Pagination's generic helpers, which don't interpret cursor contents themselves per that module's own design). This is a field-slot repurposing over Pagination.build_raw_cursor_timestamp_key/4's literal parameter names, not a change to Pagination itself -- documented in-line in lib/letflow/identity.ex's decode_users_cursor/1 comment. Flagging for REVIEWER since it diverges from the design doc's literal offset value (0 vs. 2) and field semantics; I believe the design's own text has a latent bug here (offset 0 would try to parse the \"U:\" prefix bytes themselves as digits) rather than this being a case where I should have followed it as written.\n\nTest results (real, run to completion this turn): mix compile --warnings-as-errors -- 0 errors, 0 warnings. mix format --check-formatted -- clean after running mix format once (only whitespace/line-wrap changes). test/letflow/routers/identity_test.exs: 23/23 passed. Combined with test/letflow/identity_test.exs, test/letflow/router_test.exs, test/letflow/identity/user_test.exs: 78/78 passed. Full project suite (mix test): 1482 passed (5 properties, 1477 tests), 0 failures, 363.9s.\n\nNo change to lib/letflow/api/context.ex, lib/letflow/plugs/*.ex, or any other already-done requirement's module beyond the one additive Authorization clause the design named explicitly. No touch to process_instance.ex/InstanceSupervisor -- no state-diagram update needed.",
+    "artifacts_out": [
+      "lib/letflow/identity/user.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/routers/identity.ex",
+      "test/letflow/routers/identity_test.exs",
+      "handoffs/WF02-REQ073-20260822/step-02a-elixir-dev.json"
+    ],
+    "issues": [
+      "Design doc lib/letflow/design/req073-identity-user-routes.md Sec 2.2/Sec 7 gap 2 (OQ-1) has a likely error in its literal decode_cursor(cursor, \"U:\", 0) offset and in using a row's own inserted_at as the cursor's freshness-check timestamp -- see summary above for the corrected implementation actually shipped. Not filed as a separate ISS since it's caught and resolved within this same implementation step; flagged here for REVIEWER/TEST-DESIGNER awareness rather than silently diverging."
+    ],
+    "next_action": "Route to SECURITY-REVIEWER (tenant-data path: new user-CRUD routes, response allowlist, authorization ordering) per docs/agents/workflows/WF-02_requirement_implementation.md Step 2b, then REVIEWER (Step 2d) before TEST-DESIGNER."
+  }
+}

@@ -211,6 +211,7 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("POST", "/users"), do: :UsersManage
   def endpoint_policy_key("GET", path) when path in ["/users", "/users/:id"], do: :UsersManage
   def endpoint_policy_key("PATCH", "/users/:id"), do: :UsersManage
+  def endpoint_policy_key("POST", "/users/:id/status"), do: :UsersManage
 
   def endpoint_policy_key(method, "/groups" <> _rest)
       when method in ["POST", "DELETE", "GET"],

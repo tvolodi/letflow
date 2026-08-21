@@ -1,0 +1,45 @@
+{
+  "handoff_id": "d2a9f5e6-7c1b-4a3f-9e0d-6b8a2f4c1e02",
+  "run_id": "WF02-REQ072-20260822",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ072-20260822/step-01b-code-design-validator.json",
+  "created_at": "2026-08-21T21:03:40Z",
+  "started_at": "2026-08-21T21:03:40Z",
+  "completed_at": "2026-08-21T21:03:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-072"],
+    "requirement_text": {
+      "REQ-072": "Port src/api/tenant_context.zig (104 lines) and src/api/trace_context.zig (55) as the per-request context every tenant-scoped handler reads, and build the single shared mechanism that turns a cross-tenant access into an indistinguishable 404. IDIOM TRANSLATION mandatory: carry the trace id explicitly on conn.assigns (mirrored into Logger.metadata/1 for log correlation only), do NOT port a process-dictionary or ETS global standing in for a thread-local; pipeline_context.zig folds into this one module. THE SCOPING MECHANISM: one function derives the Ecto :prefix from conn.assigns[:auth_context][:tenant_id] via Letflow.TenantProvisioning.schema_name_for_tenant/1; handlers obtain their prefix ONLY from this function; no handler constructs a schema name itself or accepts a tenant identifier from the request path, query string, body, or a header. SECURITY (INV-1, INV-5, INV-6): this module is where all three are discharged for the whole stage."
+    },
+    "artifacts_in": ["lib/letflow/design/req072-tenant-request-context.md", "handoffs/WF02-REQ072-20260822/step-01-code-designer.json"],
+    "owned_modules": ["lib/letflow/api/context.ex"],
+    "branch_name": "feature/WF02-REQ072-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 1b — hard gate on CODE-DESIGNER's lib/letflow/design/req072-tenant-request-context.md. Verified independently: (1) all 7 acceptance criteria map to concrete design elements; (2) no implementation code present; (3) scoped_repo_opts/1's contract for structural gaps; (4) the AC4/AC5 cross-tenant-404 test design, including the stub-router premise and the query-count telemetry claim; (5) buildability of assign_trace_id/1, scoped_repo_opts/1, and the test fixture without undocumented judgment calls, including the req022_migration_fixture.ex reuse claim; (6) genuineness of OQ-1..OQ-4; (7) decision-record consistency against 0003-ecto-schema-strategy.md Dimension B and 0006-identity-tables-schema-per-tenant.md.",
+    "acceptance_criteria": [
+      "the trace id is carried on conn.assigns and no module in lib/letflow/api/ uses Process.put/Process.get or an ETS table for per-request context, confirmed by grep and stated in the moduledoc as the deliberate translation of Zig's threadlocal",
+      "the same trace id appears on the response header and in a log line emitted during the request, demonstrated by a test capturing both",
+      "the scoping function derives its Ecto :prefix solely from conn.assigns[:auth_context][:tenant_id]; a test supplying a conflicting tenant id in the request path, in a query parameter, and in an X-Tenant-Id header confirms all three are ignored and the token's tenant is used (INV-1)",
+      "a GET for a resource id that exists in tenant B, issued by a caller authenticated for tenant A, returns a response byte-identical to a GET for a randomly generated id that exists nowhere -- same status, same body, demonstrated by a test comparing the two responses directly (INV-5)",
+      "the cross-tenant path and the never-existed path execute the same number of database queries, demonstrated by counting queries via telemetry in both cases, so no early-exit timing signal distinguishes them (INV-5)",
+      "no function in this module accepts a tenant id, schema name, or prefix as a caller-supplied argument -- confirmed by inspection of every public function's signature and stated in the moduledoc",
+      "the moduledoc explains why a cross-tenant existence check is prohibited even to improve an error message, citing INV-5"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read lib/letflow/design/req072-tenant-request-context.md in full (not the producer's handoff summary) and re-derived every check independently against the requirement's verbatim yaml entry (docs/requirements.yaml REQ-072, 7 acceptance_criteria) and against source. AC map: all 7 ACs map 1:1 to concrete design sections (AC1->S2.1/2.4/5.1, AC2->S2.3, AC3->S3.3, AC4->S4.3, AC5->S4.4, AC6->S3.1/5.2/S3.3's arity check, AC7->S5.3) -- none dropped, none merged, no TBD/deferral language anywhere. No implementation code present: every code-shaped block is an @spec signature or numbered prose behavior description, no def bodies. Check 3 (scoped_repo_opts/1 contract): the function's only parameter is conn, so there is no argument slot through which a caller could supply a schema/prefix/tenant-id -- confirmed structural, not just documented, by reading the @spec itself (1-arity) and by S3.2's explicit statement that path/query/header tenant hints are never read anywhere in the module. The design is honest about the one place enforcement is NOT structural: whether a future route handler actually respects an {:error,_} return and halts rather than falling through is caller discipline, not something this function's return type can force -- correctly scoped out via OQ-2 (status-code mapping left to the 15 route reqs) rather than mis-claimed as solved here; REQ-072's own ACs do not require solving that (INV-6 requires each future route to prove its own scoping at its own gate). Check 4: verified the stub-router premise directly -- grep -c \"match _\" lib/letflow/routers/identity.ex returns 1, i.e. only the catch-all clause exists, confirming option (b) (test at the scoping-function+generic Repo.get/3 level) was the right call over inventing a fake production route. The generic test genuinely establishes INV-5 for the scoping mechanism itself (schema-per-tenant + Repo.get/3 has no branch that can distinguish the two cases); a future route adding its own extra queries/joins would need its own INV-6 sign-off for any asymmetry it introduces, which is consistent with, not contradicted by, this design. Telemetry claim (S4.4): confirmed no real flaw -- Repo.get/3 on a primary key emits exactly one SQL SELECT regardless of hit/miss (Postgres returns 0 or 1 rows to the same query), so there is no Ecto/Postgres asymmetry between the two probes. Check 5: read lib/letflow/tenant_provisioning.ex directly -- replay_migrations(tenant_id, migration_source \\\\ nil) accepts an explicit migration_source exactly as the design assumes; read test/support/req022_migration_fixture.ex directly -- it lives under test/support/, guards on prefix()-truthiness, and is exactly the precedent the design cites; compatible. Also confirmed lib/letflow/api/response.ex's not_found/1 takes conn only (no detail arg) and resolves trace_id from conn.assigns[:trace_id], and lib/letflow/plugs/api_pipeline.ex's actual plug order (Plug.Parsers, then AuthPipeline, then TenantStatus) is consistent with the design's stated mount point for assign_trace_id/1 (between Parsers and AuthPipeline). Check 6: OQ-1..OQ-4 are genuine open questions (Logger.metadata per-process/Bandit model, error-to-status mapping left to future route reqs, StorageMode non-port, pipeline_run_id reserved-not-wired) -- none is a decision the design should have made itself; each is either out of this module's scope or requires runtime verification not available at design time. Check 7: read docs/migration/decisions/0003-ecto-schema-strategy.md Dimension B and 0006-identity-tables-schema-per-tenant.md in full -- 0006 D2 confirms tenant_id was dropped from all schema-isolated business tables (schema is the only scoping), which is exactly what the design's S3/S4 premise rests on; no divergence found.",
+    "artifacts_out": ["handoffs/WF02-REQ072-20260822/step-01b-code-design-validator.json"],
+    "issues": [],
+    "next_action": "Route to ELIXIR-DEV (Step 2a)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

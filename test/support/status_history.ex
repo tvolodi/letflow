@@ -144,6 +144,35 @@ defmodule Letflow.Test.StatusHistory do
   end
 
   @doc """
+  Whether a **closed** volume's closure was actually warranted — design
+  §13.12.4 (ISS-0193, ISS-0119 §13.6/§13.12).
+
+  `volume` is one element of `parse_index/1`'s `:volumes` list. Returns `true`
+  only when `volume.status == "closed"` **and** the volume's own
+  index-recorded closure-time snapshot — `lines:`/`bytes_working_tree:` —
+  exceeds either ceiling. Returns `false` for a non-closed volume.
+
+  Deliberately reads the index's *recorded* snapshot, never a live
+  re-measurement of the working-tree file: the volume is frozen (A6 already
+  pins its frozen prefix by digest), and a live re-measurement would both
+  duplicate A6's job and pick up the closure footer's own bytes, which sit
+  beyond the frozen prefix by design. `lines:`/`bytes_working_tree:` are the
+  measurement taken once at roll time and never touched again — that is what
+  "warranted at the moment of closure" means operationally.
+
+  Raises via `Map.fetch!/2` (never defaults via `Map.get/2`) if a `status:
+  closed` volume is missing either field — a closed volume silently missing
+  its own recorded size is a data-integrity gap, not a "not warranted"
+  verdict, and the two must not be conflated into the same boolean.
+  """
+  @spec warranted_closure?(map(), pos_integer(), pos_integer()) :: boolean()
+  def warranted_closure?(volume, max_lines, max_bytes) do
+    Map.get(volume, :status) == "closed" and
+      (Map.fetch!(volume, :lines) > max_lines or
+         Map.fetch!(volume, :bytes_working_tree) > max_bytes)
+  end
+
+  @doc """
   Every history entry in a volume.
 
   Each entry carries `req/event/agent/at` (`nil` when the field is absent), the

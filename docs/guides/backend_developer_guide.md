@@ -14,8 +14,13 @@ pattern.
 ## 1. Environment setup
 
 ### Required tools
-- Elixir 1.17+ / OTP 26+ (the project was scaffolded on 1.14/OTP 25 via apt; nothing
-  depends on that specific version — see `README.md`'s Notes)
+- Elixir 1.20.3 / OTP 29 — the pinned toolchain, selected by the repo-root
+  `.tool-versions` (see `docs/migration/decisions/0005-pin-formatting-toolchain.md`).
+  The version is load-bearing: formatter and type-checker output differ between
+  versions, so an off-pin host produces diffs and warnings that disagree with the
+  pin. An off-pin host is warned rather than blocked — `mix letflow.check`'s first
+  step, `mix letflow.check_toolchain`, prints a stderr warning naming both the
+  expected and the running versions, and never changes an exit code.
 - PostgreSQL client tools (`psql`) if connecting outside Docker
 - Docker (for the test database, and as the fallback toolchain — see §7)
 

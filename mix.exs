@@ -53,7 +53,16 @@ defmodule Letflow.MixProject do
       # measure — this alias needs neither (it wants `mix compile` to run as one of its
       # own steps regardless, and reads from `mix.exs` data, never from a compiled
       # `lib/` module), so the concern doesn't apply.
+      #
+      # ISS-0106 update: the alias's *first step* now IS such a `lib/mix/tasks/` task
+      # (`letflow.check_toolchain`), so Mix must load that module before running it and
+      # the alias therefore forces a project compile before the format check. The
+      # hazard that raises is whether the later `compile --warnings-as-errors` step is
+      # weakened by finding nothing left to recompile. It is not: measured (design
+      # doc M5, re-verified as V4/V5) that an already-compiled project still exits 1
+      # from that step, with the warnings re-emitted from the compile manifest.
       "letflow.check": [
+        "letflow.check_toolchain",
         "format --check-formatted",
         "compile --warnings-as-errors",
         "letflow.check.test"

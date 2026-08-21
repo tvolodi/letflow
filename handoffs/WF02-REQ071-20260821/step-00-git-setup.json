@@ -1,0 +1,60 @@
+{
+  "handoff_id": "ee2baf78-6717-4cf3-9bce-2f004501fb90",
+  "run_id": "WF02-REQ071-20260821",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ071-20260821/step-00-git-setup.json",
+  "created_at": "2026-08-21T18:29:56Z",
+  "started_at": "2026-08-21T18:29:56Z",
+  "completed_at": "2026-08-21T18:31:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-071"],
+    "requirement_text": {
+      "REQ-071": "Mount Letflow.Plugs.AuthPipeline and Letflow.Plugs.TenantStatus (both built, compiled and tested by REQ-021, both explicitly \"not mounted in front of any route today ... left available for S4\" per their own moduledocs) in front of the tenant-scoped API surface, in that order. AC1: a request to a tenant-scoped path with no Authorization header returns 401. AC2: a request with a valid token reaches the handler. AC3: GET /health returns 200 while the OIDC provider configuration worker is unavailable (health stays outside the auth/tenant-status chain). AC4: a POST against a tenant whose status is :migrating returns 503; a tenant-status lookup failure on one request does not affect a concurrent request. AC6: both plugs' moduledocs no longer contain the phrase 'Not mounted in front of any route today'. AC7: the REQ-021 OQ-14 fail-open-vs-fail-closed divergence is explicitly confirmed by REVIEWER, recorded in docs/migration/stage-4-api-surface.md."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/plugs/tenant_status.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "docs/migration/stage-4-api-surface.md"
+    ],
+    "branch_name": "feature/WF02-REQ071-20260821"
+  },
+  "task": {
+    "description": "WF-02 Step 00 — Git setup for REQ-071 (Mount the built auth and tenant-status plugs in front of the tenant-scoped pipeline).\n\nProcedure per docs/agents/protocols/GIT_SETUP.md:\n1. git checkout main\n2. git pull --ff-only origin main — STOP and FAIL if non-fast-forward\n3. git checkout -b feature/WF02-REQ071-20260821\n4. git branch --show-current — must equal feature/WF02-REQ071-20260821\n5. git push -u origin feature/WF02-REQ071-20260821\n\nIncidental finding during this step: reading docs/status/requirement_status.v2.yaml in full (mandatory before appending REQ-071's own started event) found a stray orphaned `<<<<<<< HEAD` conflict-marker line left by REQ-067's earlier Step Final merge (51ac8ce0), with no matching close markers anywhere in the file. Filed and fixed same-turn as ISS-0218/GH#447 (queue task 218), committed directly to main (925417f) per ORCHESTRATOR.md §10's direct-action sizing rule (one file, no new interface, no migration, no tenant-data path), then this branch was rebased onto the fix before continuing. This is reported here for the record; it is not part of REQ-071's own acceptance criteria.\n\nScoping note for Step 1 (CODE-DESIGNER): reading lib/letflow/plugs/api_pipeline.ex found Letflow.Plugs.AuthPipeline and Letflow.Plugs.TenantStatus ALREADY mounted there, in the requirement's own required order, as an unplanned side effect of REQ-070's router decomposition (cc1051b, PR #446) — confirmed via `git log --oneline -- lib/letflow/plugs/api_pipeline.ex` showing only that one commit touching the file. This run's real remaining scope is: (a) verify the existing wiring actually satisfies AC1-AC5's ordering/health-exclusion/fail-closed claims rather than re-porting or re-mounting either plug (DO NOT RE-PORT EITHER PLUG — both already exist, built and tested, per REQ-021); (b) design the exact moduledoc replacement text for both plugs so AC6's stale 'Not mounted in front of any route today' phrase is removed and replaced with an accurate statement of where each is mounted; (c) verify Letflow.Plugs.TenantStatus's actual implementation to confirm whether it truly fails closed on a genuine DB error as OQ-14 (lib/letflow/design/req021-auth-plug-pipeline.md §6.4, lines 623 and 817-818) describes, ahead of REVIEWER's AC7 confirmation; (d) specify the five missing end-to-end test scenarios precisely, through the real mounted router/pipeline chain, not the plugs in isolation — the three existing test files (test/letflow/plugs/auth_pipeline_test.exs, auth_pipeline_configurable_verifier_test.exs, tenant_status_test.exs) test the plugs standalone and do not yet cover AC1-AC5 end-to-end. Check whether docs/migration/stage-4-api-surface.md already has a REVIEWER sign-off section (REQ-084's run added one for OQ-2; confirm/extend rather than assume none exists) before specifying where AC7's confirmation gets recorded. Any discovered behavioral gap in either plug is a NEW finding to file via ISSUE_QUEUE.md, not silently absorbed into this requirement's scope.\n\nComplete the handoff: set status COMPLETED, fill result.git_evidence with branch_name and push_status, set next_action to 'Route to CODE-DESIGNER (Step 1)'.",
+    "acceptance_criteria": [
+      "git branch --show-current == 'feature/WF02-REQ071-20260821'",
+      "git push -u origin feature/WF02-REQ071-20260821 succeeds (exit 0 or * [new branch] in output)",
+      "local main was fast-forward with origin/main before branching"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Feature branch created from fast-forward main and pushed to origin successfully. Rebased once more after ISS-0218's fix landed on main mid-step; rebase was clean, 0 conflicts (this branch carried no commits of its own yet at rebase time). docs/requirements.yaml REQ-071 status flipped pending -> in_progress; started event appended to docs/status/requirement_status.v2.yaml (verified via git diff --numstat: 23 insertions, 0 deletions, plus a tail re-read confirming exact text); index's volume-2 entries count incremented 14 -> 15 in the same commit (764a512).",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "ISS-0218 (stray conflict marker in requirement_status.v2.yaml) discovered and fixed directly during this step, committed to main at 925417f, queue task 218 released done, GH#447 closed. See docs/issues/ISS-0218.yaml for the full record."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ071-20260821",
+      "commit_sha_list": ["764a512"],
+      "remote_branch": "origin/feature/WF02-REQ071-20260821",
+      "push_status": "* [new branch] feature/WF02-REQ071-20260821 -> feature/WF02-REQ071-20260821, then updated via git push after the ISS-0218 rebase",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER (Step 1)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

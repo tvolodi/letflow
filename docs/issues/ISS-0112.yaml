@@ -47,3 +47,37 @@ carried_findings:
       logs on failure will, at that point, be what 41 call sites log on failure --
       so the decision about exception-text handling is cheapest to make once, here,
       before the copy count goes back up.
+  - from_run: WF03-ISS0109-20260821
+    from_agent: REVIEWER
+    at: "2026-08-21T02:31:28Z"
+    severity: MINOR
+    finding: >
+      Five non-blocking items from the step-03d idiom gate on
+      test/support/tenant_fixture.ex. REVIEWER PASSed the module; none of these
+      blocks anything, and all of them land on the file ISS-0112's own run will be
+      editing anyway.
+
+      (1) PAIRED WITH THE SECURITY FINDING ABOVE, AND THEY PULL IN OPPOSITE
+      DIRECTIONS -- decide them together, not separately. The failure paths at
+      tenant_fixture.ex:274 and :382 log raw Exception.message(exception).
+      SECURITY-REVIEWER wants LESS in that string (a DBConnection.ConnectionError
+      message can carry host:port). REVIEWER wants MORE: the reaper uses
+      Exception.format(:error, ex, __STACKTRACE__), and for a module whose entire
+      purpose is attributability, dropping the stacktrace loses the most attributable
+      part. Both are right about their own axis; the resolution is a single decision
+      about what that string should contain, made once.
+
+      (2) Dead map key: do_capture/2's observed.registration is never read.
+
+      (3) rescue does not catch exits, so a DBConnection owner-death exit would
+      escape capture_schema_state/1 -- INV-F-4's letter survives, its spirit does
+      not. NOT a new gap: test/support/tenant_schema_reaper.ex makes the same
+      rescue-only choice, so this is the established level for test/support/. If it
+      is ever tightened, tighten both together.
+
+      (4) Default args leave provisioned_tenant!/0 and assert_schema_complete!/1
+      unspecced -- cosmetic, and a repo-wide pattern rather than a defect here.
+
+      (5) Style nits: the magic depth 4 in parent_chain/2; TenantSlugFixture
+      fully-qualified despite the alias block; and the bare __struct__ match in
+      current_test_of/1 wanting its one-line justification comment.

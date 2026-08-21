@@ -200,13 +200,31 @@ Four public functions. Names, arities, argument shapes and return shapes are nor
 
 @spec provisioned_tenant!(opts()) :: tenant_fixture()
 
+> **Correction, 2026-08-21 (WF03-ISS0109-20260821, REVIEWER ruling at step 03d).**
+> `registration_present?` and `schema_present?` were originally typed `boolean()` here,
+> which contradicted §3.5 — the section INV-F-4 names as **normative** for
+> `capture_schema_state/1`'s failure boundary, and which requires a scalar whose query
+> failed to degrade to `nil`. Both could not hold. The types above are corrected to
+> `boolean() | nil`: **`false` means observed-absent, `nil` means not-observed.**
+>
+> The literal `boolean()` was not merely a narrower type — it broke INV-F-10. A capture
+> whose `information_schema.schemata` query failed would report `schema_present?: false`,
+> `incompleteness_reasons/2` would emit "schema is absent", and `assert_schema_complete!/2`
+> would raise against a schema that was perfectly healthy — turning a passing test red on
+> a failure of the diagnostic itself. Field names are deliberately unchanged; renaming
+> would churn the report format and moduledoc for no gain.
+>
+> Neither CODE-DESIGN-VALIDATOR pass caught this: the type table was checked for internal
+> well-formedness, but not against the section this design itself declares normative. See
+> `docs/anti-patterns.md`.
+
 @type schema_state :: %{
         schema_name: String.t(),
         tenant_id: Ecto.UUID.t(),
-        registration_present?: boolean(),
+        registration_present?: boolean() | nil,
         provisioned_at: NaiveDateTime.t() | nil,
         migrations_applied_at: NaiveDateTime.t() | nil,
-        schema_present?: boolean(),
+        schema_present?: boolean() | nil,
         tables_present: [String.t()],
         tables_missing: [String.t()],
         applied_versions: [integer()],

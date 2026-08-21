@@ -43,6 +43,14 @@
 #
 # Overridable knob: TEST_PARALLEL_N=<positive integer> to force the
 # partition count instead of deriving it from nproc/getconf.
+#
+# ISS-0222: running this script again immediately after a prior full-suite run
+# on the same host (no gap between two consecutive launches) can produce a
+# transient "too_many_connections"/DBConnection.ConnectionError in one
+# partition -- a launch-time connection-count spike, not steady-state pool
+# exhaustion (pg_stat_activity showed the DB well under max_connections both
+# during and immediately after the failure). If you hit this, wait a few
+# seconds and re-run rather than assuming a real regression.
 
 set -u
 

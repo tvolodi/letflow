@@ -37,4 +37,20 @@ github_issue_note: >
   (454) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
   deliberately not called separately.
 
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0222-20260821
+resolved_at: "2026-08-21T20:50:00Z"
+resolution_note: >
+  Added a documentation note to scripts/test_parallel.sh's own header comment
+  (immediately after the Usage/knob section) explaining the transient
+  connection-count spike observed on back-to-back launches, citing the
+  pg_stat_activity evidence from the original filing (6 connections, well
+  under max_connections=100, both during and immediately after the failure --
+  confirming this is a launch-timing spike, not steady-state exhaustion), and
+  recommending waiting a few seconds and re-running rather than assuming a
+  real regression. No logic change -- the script's actual connection/retry
+  behavior is unchanged, since the underlying spike is a Postgres-side
+  transient condition around consecutive launches, not a bug in this script's
+  own connection handling. Root cause and fix were both fully specified in the
+  original filing's own resolution suggestion; self-gated (docs-only change,
+  ORCHESTRATOR.md §10 direct-action allowance), no code/test change needed.

@@ -1,0 +1,59 @@
+{
+  "handoff_id": "8dfdc18c-1f83-4c12-b02d-c40d3785e372",
+  "run_id": "WF02-REQ070-20260821",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ070-20260821/step-03b-test-design-validator.json",
+  "created_at": "2026-08-21T16:41:39Z",
+  "started_at": "2026-08-21T16:41:39Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-070"],
+    "requirement_text": {
+      "REQ-070": "Router decomposition into per-subsystem sub-routers (OQ-1). Acceptance criteria: (AC1) GET /health 200+{\"status\":\"ok\"} no auth/DB; (AC2) sub-router isolation test; (AC3) unrouted path returns RFC 9457 404 with Content-Type: application/problem+json; (AC4) single shared middleware declaration site grep-verified; (AC5) moduledoc lists all 11 deferred routes with stages; (AC6) moduledoc cites REQ-065 addendum by name."
+    },
+    "related_handoff_ids": ["ca0cf9d1-5b33-46ad-bcb9-75ce1d218fcd"],
+    "artifacts_in": [
+      "test/letflow/router_test.exs",
+      "test/specs/REQ-070.md"
+    ],
+    "owned_modules": [
+      "test/letflow/router_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ070-20260821"
+  },
+  "task": {
+    "description": "WF-02 Step 3b — HARD GATE: Validate TEST-DESIGNER's test coverage for REQ-070.\n\nRead test/letflow/router_test.exs and test/specs/REQ-070.md directly. Do NOT rely on TEST-DESIGNER's summary.\n\nFor each acceptance criterion, verify a runnable test exists:\n\nAC1 (GET /health, no DB): Is there a test that calls GET /health via Plug.Test WITHOUT starting Ecto.Sandbox? Does it assert status 200 AND body == {\"status\":\"ok\"}?\n\nAC2 (sub-router isolation): Is there a test that mounts a sub-router (e.g. Letflow.Routers.Identity) directly via Plug.Test without going through the top-level router? Does it call call/2 on the sub-router module directly?\n\nAC3 (RFC 9457 404): Is there a test that calls an unrouted path on the top-level router? Does it assert BOTH (a) Content-Type contains \"application/problem+json\" AND (b) the body contains RFC 9457 keys (type/title/status/detail or equivalent from lib/letflow/api/error.ex)? Does it verify the body does NOT have the old {\"error\":\"not_found\"} shape?\n\nAC4 (single middleware site): Is there a test that verifies Plug.Parsers and AuthPipeline each appear in exactly one file in lib/? Does it use the invocation-form string (not just the module name, since the module name appears in type annotations and imports)?\n\nAC5 (moduledoc deferred routes): Is there a test that reads lib/letflow/router.ex as text and asserts all 11 deferred route names appear?\n\nAC6 (moduledoc addendum citation): Is there a test that asserts the file contains the addendum date or document name?\n\nAdditional checks:\n- No shared/destructive state across tests (each test is independent)\n- No hardcoded secrets or connection strings in the test file\n- Test names match the AC numbers they cover (makes failures readable)\n- mix compile --warnings-as-errors confirmed passing with these tests\n\nFAIL immediately on any missed AC. No partial credit for 'mostly covered'.\n\nComplete the handoff: status COMPLETED, result.status PASS or FAIL. On FAIL: list each missed AC in result.issues at BLOCKER severity, next_action 'Rework TEST-DESIGNER (Step 3 rework)'. On PASS: next_action 'Route to TEST-RUNNER (Step 4)'. Commit the completed handoff on branch feature/WF02-REQ070-20260821 by explicit path.",
+    "acceptance_criteria": [
+      "Each of the 6 ACs has at least one runnable test",
+      "AC1 test does not use Ecto.Sandbox",
+      "AC2 test calls a sub-router module directly without the top-level router",
+      "AC3 test asserts both Content-Type header and RFC 9457 body shape",
+      "AC4 test uses invocation-form string search (not bare module name)",
+      "AC5/AC6 use source-text (File.read!) assertions",
+      "No shared state between tests"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ070-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ070-20260821",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

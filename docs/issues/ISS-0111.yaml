@@ -1,0 +1,27 @@
+id: ISS-0111
+title: >
+  identity_migration_test's with_only_this_tenant_visible!/2 bulk-DELETEs every other tenant's tenant_schemas row -- a globally destructive write on a table shared across mix test invocations
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0109-20260821
+discovered_at: "2026-08-21T01:30:54Z"
+severity: MAJOR
+
+description: >
+  Discovered by ISSUE-FIXER during WF03-ISS0109-20260821's Step 1 enumeration of every `DELETE FROM tenant_schemas` writer in the tree. Not fixed there (incidental, not blocking that run's acceptance criteria) -- filed per ISSUE_QUEUE.md.
+
+  `test/letflow/identity_migration_test.exs`'s `with_only_this_tenant_visible!/2` (lines 244-284, itself the shipped fix for ISS-0060) performs a bulk `DELETE FROM public.tenant_schemas` of EVERY other tenant's registry row into a backup table, runs the guard assertion, then restores the rows afterwards. Within a single serialized invocation this is sound and it correctly fixed ISS-0060's race.
+
+  The hazard is the assumption underneath it: that no other `mix test` invocation touches the database concurrently. ISS-0107/GH#357 demonstrably breaks that assumption -- `Mix.Tasks.Letflow.Check.Test.stream_and_capture/2` spawns a nested `mix test` via `Port.open({:spawn_executable, ...})`, which inherits `LETFLOW_DB_PORT`/`MIX_TEST_PARTITION` and so lands on the same database. While the snapshot is held, a concurrent invocation sees an empty `tenant_schemas` table: its own provisioning, teardown and reaper logic all run against a registry that has had every row removed underneath them.
+
+  This is corroborated rather than hypothetical: `restore_orphaned_guard_backup_rows!/0` -- this same mechanism's restore path -- produced 10 of the 14 failures in the run that discovered ISS-0109, and the same orphaned tenant_id recurs byte-identically across separate runs (ISS-0048/0050/0060/0062/0064 family).
+
+  Same hazard class as ISS-0110 (reaper min_age), different code. Filed separately because the fix is different: ISS-0110 is about a time-based guess, this is about a global mutation of shared state that no time window makes safe.
+
+affected_files:
+  - test/letflow/identity_migration_test.exs
+
+queue_task_id: 179
+github_issue: https://github.com/tvolodi/letflow/issues/365
+github_issue_note: >
+  Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (179) and its mirrored GitHub issue (#365) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
+status: open

@@ -131,8 +131,19 @@ reproducibility: >
 
 suggested_owner: ISSUE-FIXER
 blocks: []
-status: open
+status: in_progress
 queue_task_id: 172
+queue_task_id_secondary: 175
+queue_task_id_note: >
+  TWO letflow-queue tasks address this one issue and BOTH must be released on
+  resolution. 172 is the register_task-side task filed by ISS-0109's own discovering
+  run (its auto-mirror GH#359 was closed as a duplicate of the canonical GH#358).
+  175 is a SEPARATE task letflow-queue created later by get_next_task's GitHub-import
+  step, which imports open issues it is not already tracking -- it did not recognise
+  #358 as already covered by 172. WF03-ISS0109-20260821 claimed 175 (that is what
+  get_next_task handed out) and must release 172 as well, or 172 stays open and
+  claimable forever. Recorded here 2026-08-21 so a later run does not have to
+  rediscover it.
 github_issue: https://github.com/tvolodi/letflow/issues/358
 github_issue_note: >
   Filed by ORCH on TEST-RUNNER's behalf (TEST-RUNNER wrote the local record but

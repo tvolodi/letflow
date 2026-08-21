@@ -1,0 +1,61 @@
+{
+  "handoff_id": "b5ea5a7b-b316-48f6-adaa-a30974ca5941",
+  "run_id": "WF03-ISS0193-20260821",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0193-20260821/step-02b-code-design-validator.json",
+  "created_at": "2026-08-21T12:09:07Z",
+  "started_at": "2026-08-21T12:09:07Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["034c6b67-b7e0-41c6-925a-d7f3e104e119"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0193-20260821/step-02-code-designer.json",
+      "docs/issues/ISS-0193.yaml",
+      "lib/letflow/design/iss-0119-status-file-readability.md",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/iss-0119-status-file-readability.md"
+    ]
+  },
+  "task": {
+    "description": "Gate CODE-DESIGNER's amendment to `lib/letflow/design/iss-0119-status-file-readability.md`, commit `c756b82` on `feature/WF03-ISS0193-20260821`. This design closes ISS-0193, which is ITSELF a finding from this same design's own PRIOR gate (WF03-ISS0119-20260821 Step 4e) -- the shape mechanism got the closed-and-pinned rule then and it worked; the vocabulary mechanism (A5) did not, and that gap is what you are now checking was actually closed, not merely described as closed. Read the producer's own report in `handoffs/WF03-ISS0193-20260821/step-02-code-designer.json` `result`, then re-derive from the diff -- don't trust the summary.\n\nRE-DERIVE, each item names what to check yourself:\n\n1. THE NEW A5 RULE. Open the new §13.6 (or wherever it landed) and confirm it states, unambiguously and independent of set equality: every `known_anomalies:` record's `path:` must name a volume whose index entry has `status: closed` AND a `frozen_prefix_sha256:`. Compare its exact wording against A4b's §13.5 text side by side -- confirm it is a correct mirror (same enforcement strength, same failure independence), not a weaker paraphrase.\n\n2. THE THREE EXISTING RECORDS -- CHECK THE FILE YOURSELF. Open `docs/status/requirement_status.index.yaml` directly. Confirm each of the three `known_anomalies:` records' `path:` and the cited volume's `status:`/`frozen_prefix_sha256:` fields, at the exact line numbers the design claims (74/81/88 for the records; 32-52, specifically 34/46, for the volume entry). Do not accept the producer's line citations without opening the file and reading them yourself -- a wrong citation here would mean the fix is unverified against its own only real-world test case.\n\n3. THE A10 SHARED ASSERTION -- THE PART MOST LIKELY TO HIDE A SOFT SPOT. `warranted_closure?(volume, max_lines, max_bytes) :: boolean()` is supposed to prevent the laundering route your own predecessor gate found (MINOR-4 on WF03-ISS0119-20260821: closing a volume in the same commit as a declaration passes every existing check because nothing asserts the roll was warranted). Confirm the design specifies EXACTLY what 'actually exceeded at closure' compares -- the index's recorded `lines:`/`bytes_working_tree:` snapshot at closure time, not a live re-measurement (a live re-measurement would be meaningless once later volumes exist) -- and confirm it is genuinely SHARED (both A4b and the new A5 rule call the same function) rather than reimplemented twice with a chance to diverge. Stress-test it mentally against the exact laundering scenario MINOR-4 described: does A10, as specified, actually block it now? Walk through the scenario step by step and state the walk-through in your result.\n\n4. VOLUME 1 COMPATIBILITY. Confirm from the index file directly that volume 1's `lines: 5766` / `bytes_working_tree: 361376` exceeds `roll_rule.max_lines: 1200` / `max_bytes: 120000` (or whatever the actual current roll_rule values are -- read them, don't assume the numbers in this dispatch are current). A10 must not retroactively fail the one closed volume that exists.\n\n5. SECTION 13.3's RECONCILED WORDING. Read it in its new form and confirm it reads as settled fact with an ISS-0193 citation, not left as a stale forward-looking caveat and not silently deleted.\n\n6. NO WEAKENING. Confirm A5's bidirectional set-equality property is untouched, and the three existing `known_anomalies:` records are untouched (not edited, not deleted, not renumbered).\n\n7. TEST/SUPPORT SPECIFICATION IS ACTUALLY IMPLEMENTABLE. Read the test/support-file specification section. Could TEST-DESIGNER and ELIXIR-DEV implement `warranted_closure?/3`, the renamed `closed_pinned_and_warranted?/3`, the A10 test, and the negative-control fixtures directly from what is written, without having to invent a missing detail? Name any gap.\n\n8. DESIGN-ARTEFACT DISCIPLINE. Confirm no `.ex` implementation body was written -- signatures, type shapes and assertion prose only, per this project's standing design-artefact rule.\n\n9. SCOPE. `git show --stat c756b82`: only `lib/letflow/design/iss-0119-status-file-readability.md` and this run's own handoff should appear.\n\nSCOPE OF `result.issues`: only genuine defects -- something that fails a criterion, would let a fresh violation still be laundered, contradicts the file's own established convention, or would leave TEST-DESIGNER/ELIXIR-DEV unable to implement without guessing. Not style or wording preference.\n\nVERDICT: PASS or FAIL against the seven acceptance criteria on the Step 02 handoff plus the items above. A FAIL names each failed criterion and the specific gap, and if it concerns A10, states precisely how the laundering route would still succeed against the design as written. Commit your own handoff file to this branch. Do not write `registry.json` or `orchestrator.log`.",
+    "acceptance_criteria": [
+      "The new A5 rule's wording is compared side-by-side against A4b's and confirmed to be an equally strong mirror, not a weaker paraphrase",
+      "All three existing known_anomalies: records and volume 1's status/frozen_prefix_sha256 fields were read directly from docs/status/requirement_status.index.yaml at the cited line numbers, not accepted from the design's citation",
+      "A10's exact comparison basis (index-recorded closure-time snapshot, not live re-measurement) is confirmed, its sharing between A4b and A5 is confirmed (not reimplemented twice), and a step-by-step walkthrough confirms it actually blocks the MINOR-4 laundering scenario",
+      "Volume 1's recorded lines/bytes are confirmed, from the index file directly, to exceed the current roll_rule ceiling, so A10 does not retroactively fail it",
+      "Section 13.3's reconciled wording is read in its new form and confirmed settled-fact with an ISS-0193 citation",
+      "A5's bidirectional set equality and the three existing records are confirmed untouched",
+      "The test/support-file specification is confirmed directly implementable, with any gap named",
+      "No .ex implementation body is present -- signatures, type shapes and assertion prose only",
+      "git show --stat confirms scope is limited to the design file and this run's own handoff",
+      "result.issues contains only genuine defects, not stylistic observations"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0193-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0193-20260821",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

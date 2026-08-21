@@ -1825,6 +1825,25 @@
       "queue_task_id": 179,
       "queue_agent_id": "tvolo-win-orch",
       "note": "WF-03 for the legacy hand-numbered ISS-0111.yaml (queue task 179, GH#365), claimed by get_next_task. Same hazard family as ISS-0110/ISS-0182 (a nested mix test sharing the parent's database, ISS-0107, still open), different code: with_only_this_tenant_visible!/2 bulk-DELETEs every other tenant's tenant_schemas row for the duration of a guarded migration run, which is unsafe under concurrent invocation. Root cause already well-diagnosed in the issue filing itself (from ISS-0109's original investigation) -- Steps 0.5/1 SKIPPED, straight to Step 2 (CODE-DESIGNER) to weigh three real options (Postgres advisory lock, transactional isolation, defer to ISS-0107) against the actual migration/sandbox code, since the underlying production migration (priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs) does an intentionally unscoped whole-table scan and cannot simply be given a WHERE clause without changing real deployment semantics."
+    },
+    {
+      "run_id": "WF02-REQ070-20260821",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-070"],
+      "stage": "S4",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/router.ex",
+        "lib/letflow/routers/"
+      ],
+      "lock_acquired_at": "2026-08-21T16:02:53Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 PENDING",
+      "backfilled": false,
+      "queue_task_id": 137,
+      "queue_agent_id": "orch-letflow-3",
+      "note": "WF-02 for REQ-070 (Router decomposition into per-subsystem sub-routers, OQ-1). Claimed from letflow-queue task 137. Framework settled as Plug/Bandit by REQ-065 addendum 2026-08-20. Depends on REQ-065 (done) and REQ-066 (done)."
     }
   ]
 }

@@ -1,0 +1,53 @@
+{
+  "handoff_id": "00aac8d8-d854-4e22-a329-d749e99d44bb",
+  "run_id": "WF02-REQ070-20260821",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ070-20260821/step-00-git-setup.json",
+  "created_at": "2026-08-21T16:02:53Z",
+  "started_at": "2026-08-21T16:02:53Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-070"],
+    "requirement_text": {
+      "REQ-070": "Replace lib/letflow/router.ex's single flat route table -- today GET /health plus a 404 catch-all, per its own moduledoc -- with the decomposed structure the rest of S4 mounts into. This resolves stage-4-api-surface.md's OQ-1.\nThe shape is per-subsystem sub-routers under an /api/v1 prefix, one module per R-Co route file group, delegated to from a top-level router: identity, instances, definitions, tasks, promotion, onboarding, audit, tenant_config, validation, health, metrics. Under Plug that is Plug.Router.forward/2 to a sub-router module per subsystem; under Phoenix it is scope plus a controller per subsystem. REQ-065 settles which -- this requirement executes whichever survives and MUST NOT re-open it. What is framework-independent, and is what this requirement is actually accountable for, is: one module per subsystem, no subsystem declaring another's paths, a single place where the shared middleware chain is declared (not repeated per sub-router), and the existing GET /health preserved byte-compatibly.\nGET /health MUST keep its current contract exactly -- 200 with {\"status\":\"ok\"}, no auth, no DB dependency -- because deploy/redeploy-test.sh's post-deploy check consumes it and a change breaks deployment, not just a test. R-Co's routes/health.zig (221 lines, handleLive/handleReady) adds a readiness endpoint backed by src/api/health/readiness.zig (245) and subsystems.zig (112); porting readiness is NOT this requirement (it needs subsystem health probes that pair with S6 observability) -- keep liveness, name readiness as deferred.\nThe unmatched-route response becomes REQ-066's 404 problem document rather than today's ad-hoc {\"error\":\"not_found\"} map, so a caller sees one error shape across the whole surface.\nThe moduledoc MUST carry the deferred-route list so the gap is visible in code and not only in docs: dlq, services, platform_migrations, webhooks (S6), simulation_test (S7), process_modules (S5), entities and entity_query (S5/S6), and the three agent_* routes (runtime-agent orchestration, deferred per docs/migration/README.md), each with its owning stage."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/router.ex",
+      "lib/letflow/routers/"
+    ],
+    "branch_name": "feature/WF02-REQ070-20260821"
+  },
+  "task": {
+    "description": "WF-02 Step 00 — Git setup for REQ-070 (Router decomposition into per-subsystem sub-routers, OQ-1).\n\nProcedure per docs/agents/protocols/GIT_SETUP.md:\n1. git checkout main\n2. git pull --ff-only origin main — STOP and FAIL if non-fast-forward\n3. If feature/WF02-REQ070-20260821 already exists: git branch -D feature/WF02-REQ070-20260821\n4. git checkout -b feature/WF02-REQ070-20260821\n5. git branch --show-current — must equal feature/WF02-REQ070-20260821\n6. git push -u origin feature/WF02-REQ070-20260821\n\nComplete the handoff: set status COMPLETED, fill result.git_evidence with branch_name and push_status, set next_action to 'Route to CODE-DESIGNER (Step 1)'.",
+    "acceptance_criteria": [
+      "git branch --show-current == 'feature/WF02-REQ070-20260821'",
+      "git push -u origin feature/WF02-REQ070-20260821 succeeds (exit 0 or * [new branch] in output)",
+      "local main was fast-forward with origin/main before branching"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,59 @@
+{
+  "handoff_id": "7b29b615-3d0d-4173-a038-a6aede79a175",
+  "run_id": "WF02-REQ067-20260821",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ067-20260821/step-01-code-designer.json",
+  "created_at": "2026-08-21T14:55:48Z",
+  "started_at": "2026-08-21T14:55:48Z",
+  "completed_at": "2026-08-21T15:01:07Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-067"],
+    "requirement_text": {
+      "REQ-067": "Port src/api/pagination.zig (406 lines, R-Co's API-06) as Letflow.Api.Pagination -- the shared cursor encode/decode, prefix validation, expiry checking, page-size validation, and standardised page response that every S4 list endpoint delegates to. pagination.zig's own header states the rule this requirement inherits: \"All list endpoints SHALL delegate pagination concerns to this module, eliminating duplicated encode/decode/expiry code.\" Port the constants exactly as R-Co declares them rather than rounding: MAX_PAGE_SIZE 200, DEFAULT_PAGE_SIZE 50, MIN_PAGE_SIZE 1, CURSOR_EXPIRY_US 86_400_000_000 (24 hours). A requested page size above MAX_PAGE_SIZE, below MIN_PAGE_SIZE, or non-numeric is a 400 via REQ-066's problem document, not a silent clamp -- confirm against pagination.zig's own error set which of clamp-vs-reject R-Co does, and port R-Co's behaviour, stating it in the moduledoc either way. A cursor carries a type prefix so a cursor minted by one endpoint cannot be replayed against another; port that prefix validation. An expired cursor (older than CURSOR_EXPIRY_US) is rejected rather than honoured. SECURITY (INV-1, INV-5): a cursor is caller-supplied, tamperable input that decodes into query parameters. It must NOT be able to carry a tenant identity, schema prefix, or any value that widens the query's scope -- tenant scoping comes exclusively from REQ-072's resolved request context, never from the cursor. State this as an explicit invariant in the moduledoc, and make it structurally true (the decoded cursor struct has no tenant field to set). A cursor minted in tenant A and replayed against tenant B must return tenant B's page or an error, never tenant A's rows. The page response shape (items plus next-cursor, per pagination.zig's PageResponse(T)) is the shape every list route in this batch returns."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/guides/backend_developer_guide.md",
+      "docs/migration/stage-4-api-surface.md",
+      "lib/letflow/api/error.ex",
+      "lib/letflow/api/response.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/api-pagination.md"
+    ]
+  },
+  "task": {
+    "description": "Design `Letflow.Api.Pagination`, porting R-Co's `src/api/pagination.zig` (path: `c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\api\\pagination.zig` -- read the real file yourself, this dispatch does not reproduce all 406 lines). It is the shared cursor encode/decode, prefix validation, expiry checking, page-size validation, and standardised page response every S4 list endpoint will delegate to.\n\nR-Co's ACTUAL BEHAVIOR, confirmed by reading the source rather than assumed (verify this yourself against the real file too): `validatePageSize/1` (Zig) REJECTS, never clamps -- `raw == null` returns `DEFAULT_PAGE_SIZE`, `raw == 0` returns `error.PageSizeTooLarge`, `raw > MAX_PAGE_SIZE` returns `error.PageSizeTooLarge`, otherwise returns the value. Port this exactly: a page size of 0 or >200 is a 400 (via `Letflow.Api.Error`/`Letflow.Api.Response`, already shipped -- read both files in `context.artifacts_in` for the existing problem-document contract to reuse rather than reinvent), not a clamp to the nearest bound. A non-numeric `page_size` query param (e.g. `page_size=abc`) is ALSO a 400 -- R-Co's Zig type system makes this a parse-time concern at the HTTP-parameter-decoding layer rather than inside `validatePageSize` itself; decide and state explicitly in your design where in the Elixir/Plug pipeline this check belongs, since Elixir has no equivalent compile-time type boundary.\n\n`decodeCursor/5`'s three checks, in order: (1) base64url decode (Elixir has `Base.url_decode64/2` built in -- use it, `padding: false` per R-Co's `url_safe_no_pad`); (2) prefix match -- decoded value must start with the caller-supplied prefix literal (e.g. `\"T:\"`, `\"I:\"`), else reject; (3) expiry -- decoded value embeds a creation timestamp at a caller-specified byte offset (R-Co's `expiry_ts_offset` parameter), decimal-encoded microseconds, terminated by the next `:` or end-of-string; if `now_us - ts > expiry_window_us`, reject. Port `buildRawCursor/4` and `buildRawCursorTimestampKey/5`'s two raw-cursor-payload formats (`\"PREFIX:ts_us:key\"` and `\"PREFIX:sort_ts_us:key:created_ts_us\"`) as the encode-side counterpart.\n\nDESIGN-ARTEFACT DISCIPLINE (this project's standing rule): `lib/letflow/design/api-pagination.md` gets public function signatures with `@spec`-style types, the `Cursor`/`PageResponse(T)`-equivalent struct/type shapes, the exact module attribute names and values for the four constants, the exact error-tuple shapes each function returns, and the moduledoc's stated invariants -- no `.ex` implementation bodies.\n\nWHAT MUST BE STRUCTURALLY TRUE, NOT MERELY DOCUMENTED (INV-1/INV-5, this project's per-tenant-isolation invariants -- read `docs/agents/instructions/security-invariants.md` if you haven't already this session): design the decoded cursor's type/struct so that IT HAS NO FIELD CAPABLE OF CARRYING A TENANT ID, SCHEMA NAME, OR ANY SCOPE-WIDENING VALUE. The cursor's `inner`/payload value is opaque to callers (per R-Co's own comment: \"Callers do not interpret this -- they pass it to their store/list function\") -- state explicitly in the design that any endpoint's own store/list function must derive tenant scope from the ALREADY-AUTHENTICATED request context (REQ-072, not yet implemented -- reference it as the intended future caller, do not implement or stub it), never from anything decoded out of the cursor. This is the design property TEST-DESIGNER will need to write a test against (a cursor minted while \"scoped\" to tenant A, replayed against a request scoped to tenant B, must never leak tenant A rows) -- make sure the design gives that test something concrete to assert against.\n\nEVERY ACCEPTANCE CRITERION ON REQ-067 (in `task.acceptance_criteria` below) needs a concrete design element. Do not leave any as TBD.",
+    "acceptance_criteria": [
+      "MAX_PAGE_SIZE is 200, DEFAULT_PAGE_SIZE is 50, MIN_PAGE_SIZE is 1 and the cursor expiry window is 86_400_000_000 microseconds, each asserted against a named module attribute rather than a literal buried in a function",
+      "a page-size request of 201, of 0, and of a non-numeric string each produce the behaviour R-Co's pagination.zig produces (reject-with-400 or clamp, whichever the port confirms), with all three cases covered by explicit tests and the chosen behaviour named in the moduledoc",
+      "a cursor minted by one endpoint and submitted to a different endpoint is rejected on prefix mismatch, demonstrated by a test",
+      "a cursor whose timestamp is older than the 24-hour expiry window is rejected, demonstrated by a test that constructs an old cursor rather than by waiting",
+      "the decoded cursor struct has no tenant_id, schema, or prefix field -- confirmed by inspection and stated in the moduledoc -- and a test replays a cursor minted while scoped to tenant A against a request scoped to tenant B and asserts that no tenant A row appears in the response (INV-1)",
+      "paging through more rows than one page holds returns every row exactly once with no duplicate and no gap across at least three successive pages, demonstrated by a test"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Designed Letflow.Api.Pagination in lib/letflow/design/api-pagination.md, porting src/api/pagination.zig (406 lines, API-06) after reading the real file. Constants ported verbatim (MAX_PAGE_SIZE 200, DEFAULT_PAGE_SIZE 50, MIN_PAGE_SIZE 1, CURSOR_EXPIRY_US 86_400_000_000) as module attributes plus public zero-arg accessors so AC1 is checkable independent of the range-check behavior. Page-size validation ports validatePageSize/1's confirmed reject-not-clamp behavior exactly (0 and >200 both -> {:error, :page_size_too_large}); the non-numeric-string check is placed in a separate new parse_page_size_param/1 (parse-time concern, run before validate_page_size/1, called directly by the route handler per the with/else composition shown in section 0.1 -- no new Plug introduced). Cursor decode/encode ports decodeCursor/5's three ordered checks (base64url via Base.url_decode64/2 padding:false, prefix match -> :wrong_endpoint, expiry via System.system_time(:microsecond) -> :expired) plus buildRawCursor/4 and buildRawCursorTimestampKey/5's two payload formats and the PageResponse(T)-equivalent Page struct. Every acceptance criterion maps to a concrete design element (section 10 restates all six). Two flagged, not silently resolved, divergences: (1) page-size rejection status follows the requirement dispatch's explicit 400 over pagination.zig's own doc comment saying 422 (section 0.2); (2) decode_cursor/4 splits :invalid_cursor from :invalid_base64 for malformed-timestamp-slice failures that Zig conflates under one error (section 5, open question 3). No implementation code included -- signatures, @spec types, struct/attribute shapes, and error-tuple shapes only.",
+    "artifacts_out": ["lib/letflow/design/api-pagination.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ067-20260821",
+      "commit_sha_list": ["1fa693449070c1622800a6e38b1051d34bfc0003"],
+      "remote_branch": "origin/feature/WF02-REQ067-20260821",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "CODE-DESIGN-VALIDATOR to gate this design before ELIXIR-DEV implements lib/letflow/api/pagination.ex"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

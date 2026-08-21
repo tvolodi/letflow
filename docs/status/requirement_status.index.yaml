@@ -55,13 +55,19 @@ volumes:
     path: docs/status/requirement_status.v2.yaml
     status: current
     opened: 2026-08-21
-    entries: 9
+    entries: 11
     note: >
       Opened by ISS-0119's fix. Successor to volume 1. `entries:` corrected
       2026-08-21 (ISS-0199, run WF03-ISS0199-20260821) from a stale declared 0
       to the real on-disk count of 7 -- HOW-TO-APPEND step 6 previously had no
       instruction to keep this updated, so 7 real appends had landed with the
-      declared count never moved. Now checked by assertion A9.
+      declared count never moved. Now checked by assertion A9. Incremented to
+      8 in the same commit as WF02-REQ067-20260821's own started-event append,
+      then to 9 in the same commit as that run's own done-event append
+      (Step 6/DOC-UPDATER), then to 11 when WF02-REQ067-20260821's Step Final
+      rebase composed both of that run's entries with two concurrently-landed
+      entries from main (REQ-068 done, REQ-069 done) that had independently
+      incremented it to 9 there.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

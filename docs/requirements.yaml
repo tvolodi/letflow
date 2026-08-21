@@ -3779,7 +3779,7 @@ requirements:
   - id: REQ-067
     title: Cursor pagination contract for every list endpoint (pagination.zig, API-06)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 134  # letflow-queue task id
     description: >

@@ -1,0 +1,51 @@
+{
+  "handoff_id": "d1a5f8c2-6e0b-4a37-9b8d-1f3c5e7a9b02",
+  "run_id": "WF02-REQ067-20260821",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ067-20260821/step-04-test-runner.json",
+  "created_at": "2026-08-21T15:26:12Z",
+  "started_at": "2026-08-21T15:26:12Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-067"],
+    "requirement_text": {},
+    "related_handoff_ids": ["b7354b78-4364-472f-bf7f-0f3eb94b630b"],
+    "artifacts_in": [
+      "test/letflow/api/pagination_test.exs",
+      "handoffs/WF02-REQ067-20260821/step-03b-test-design-validator.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Run the FULL project test suite on `feature/WF02-REQ067-20260821` (already checked out) per WF-02 Step 4. The new module's own tests (38/38) already passed and were independently re-run by the test-design gate -- this step is the full-suite regression check, not a re-check of the new file alone.\n\nUse `TEST_PARALLEL_N=4 sh scripts/test_parallel.sh` (this host's known pool-sizing constraint). Mix is at `/c/Program Files/Elixir/bin/mix` if not on PATH.\n\nUNBLOCK-EVERYTHING: a pre-existing failure masking your results must be fixed too, unless it's unrelated and gets forwarded per ISSUE_QUEUE.md. Attribute every failure structurally per `core-directives.md`'s 'Failure Attribution Is Structural, Never By Count-Matching'. This branch's diff is `lib/letflow/design/api-pagination.md`, `lib/letflow/api/pagination.ex`, `test/specs/REQ-067.md`, `test/letflow/api/pagination_test.exs`, plus this run's own handoffs -- any failure outside that set needs route 1/2/3 evidence, not assumption.\n\nWrite the test report per this project's convention (`test/reports/`) and record it in `artifacts_out`. Complete your work synchronously within this turn per `core-directives.md`'s rule.",
+    "acceptance_criteria": [
+      "The full suite was actually run via TEST_PARALLEL_N=4 sh scripts/test_parallel.sh and real pass/fail counts are quoted",
+      "Every failure is attributed structurally, never by count-matching against a prior run",
+      "Any failure whose module appears in this branch's diff is checked for genuine causal connection, not cleared by presence alone",
+      "A test report is written to test/reports/ and listed in artifacts_out"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ067-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ067-20260821",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

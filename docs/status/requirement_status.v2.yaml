@@ -469,3 +469,26 @@ history:
       preserved byte-compatibly outside the tenant-scoped pipeline. OQ-1 in
       stage-4-api-surface.md resolved. All 6 ACs independently verified by
       RELEASE-VALIDATOR: 1400/1400 tests passing.
+  - req: REQ-071
+    event: started
+    agent: ORCH
+    at: "2026-08-21T18:29:56Z"
+    note: >
+      Picking up queue task 138 (GH#278) after project owner's "Check again". Deps
+      REQ-069/REQ-070 confirmed done on main. Branch feature/WF02-REQ071-20260821
+      created off origin/main and pushed (Step 00). Status flipped pending ->
+      in_progress here. Incidentally, while reading this file in full per its own
+      HOW-TO-APPEND procedure, found and fixed a stray orphaned `<<<<<<< HEAD`
+      conflict-marker line left by REQ-067's Step Final merge (51ac8ce0) -- filed
+      and resolved same-turn as ISS-0218/GH#447 (queue task 218), committed
+      directly to main (925417f) per ORCHESTRATOR.md §10's direct-action sizing
+      rule, before rebasing this branch onto the fix. Scoping note for this run:
+      reading lib/letflow/plugs/api_pipeline.ex found Letflow.Plugs.AuthPipeline
+      and Letflow.Plugs.TenantStatus already mounted there, in the requirement's
+      own required order, as an unplanned side effect of REQ-070's router
+      decomposition (cc1051b) -- so this run's real remaining scope is verifying
+      that existing wiring against REQ-071's ordering/security claims, updating
+      both plugs' stale "Not mounted in front of any route today" moduledoc text
+      (AC6), confirming TenantStatus's actual fail-closed behavior for OQ-14
+      (AC7), and writing the five missing end-to-end tests (AC1-AC5) -- not
+      building new mounting code from scratch.

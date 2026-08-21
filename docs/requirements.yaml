@@ -4017,7 +4017,7 @@ requirements:
   - id: REQ-071
     title: Mount the built auth and tenant-status plugs in front of the tenant-scoped pipeline
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S4
     impl_order: 138  # letflow-queue task id
     description: >

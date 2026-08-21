@@ -1,0 +1,165 @@
+# Requirement run-history index.
+#
+# THIS FILE IS THE ENTRY POINT. To append a status event, or to look one up, read
+# this file first — it is small and always readable in one call — then act on the
+# volume it names. Do not guess volume filenames; they are listed here.
+#
+# The run history is kept as a sequence of VOLUMES. Exactly one volume is
+# `current` at a time; all others are `closed` and frozen. A volume is closed and
+# a successor opened when it crosses the size ceiling below, so that the current
+# volume is ALWAYS small enough to read in a single un-scoped Read call. That
+# bound is the whole point: the append-only safeguard requires seeing the file's
+# schema before appending, and a file too large to read cannot deliver it.
+#
+# The append-only rule is unchanged and absolute: entries are appended, never
+# edited, never reordered, never deleted, in any volume, closed or current.
+
+roll_rule:
+  # Checked by DOC-UPDATER AFTER writing its entry, and by the Step 4 invariant
+  # test on every `mix test` run. Measure the WORKING-TREE file (CRLF on Windows),
+  # because that is what the Read tool measures.
+  max_lines: 1200
+  max_bytes: 120000
+  read_tool_hard_limit_bytes: 262144   # headroom is deliberate, do not raise the ceiling
+  read_tool_default_line_limit: 2000   # a "full read" past this silently truncates
+  on_exceed: >
+    Close the current volume (append the closure footer, set status: closed here),
+    create the next volume with the SAME header text and an empty `history:` list,
+    and set it current here. Full procedure: the "WHEN THIS VOLUME IS FULL" section
+    of the current volume's own header.
+
+volumes:
+  - volume: 1
+    path: docs/status/requirement_status.yaml
+    status: closed
+    opened: 2026-08-13
+    closed: 2026-08-21
+    entries: 182
+    lines: 5766
+    bytes_working_tree: 361376
+    # SHA-256 of lines 1..5766 with CRLF normalised to LF, i.e. the frozen prefix.
+    # The hashed stream terminates EVERY line with a single \n, including the
+    # last, so it ends in \n. Exact definition and reference implementations:
+    # lib/letflow/design/iss-0119-status-file-readability.md §8.
+    # Asserted unchanged by test/docs/requirement_status_invariants_test.exs.
+    frozen_prefix_lines: 5766
+    frozen_prefix_sha256: "5a1a64ab0b999da3fd86be90109ecee46b9d538d9e9945c0d39fddb10075a804"
+    note: >
+      Closed under ISS-0119 at 361,376 bytes, above the 262,144-byte read limit.
+      Not split and not renamed: ~103 historical run records under handoffs/ and
+      test/reports/ cite this path, and
+      lib/letflow/design/iss-0078-pin-rebind-provenance.md:367 cites line 5158 by
+      number. Freezing in place keeps every one of those citations valid.
+
+  - volume: 2
+    path: docs/status/requirement_status.v2.yaml
+    status: current
+    opened: 2026-08-21
+    entries: 0
+    note: Opened by ISS-0119's fix. Successor to volume 1.
+
+known_anomalies:
+  # Entries that do not conform to the documented vocabulary and are LEFT AS
+  # WRITTEN, because correcting a past entry is precisely what the append-only
+  # rule forbids. Declared here so they are discoverable without a survey, and so
+  # the invariant test can distinguish "known, tolerated" from "new drift".
+  # The test asserts this list matches the anomalies actually on disk EXACTLY:
+  # a new undocumented value fails, and a silent normalisation of one of these
+  # ALSO fails.
+  - path: docs/status/requirement_status.yaml
+    line: 3490
+    req: REQ-031
+    field: event
+    value: SCOPE-CHANGE
+    should_have_been: "req: SCOPE-CHANGE with event: done"
+    cause: docs/agents/protocols/TASK_QUEUE.md:133 stated the convention in the wrong field
+  - path: docs/status/requirement_status.yaml
+    line: 3577
+    req: REQ-042
+    field: event
+    value: SCOPE-CHANGE
+    should_have_been: "req: SCOPE-CHANGE with event: done"
+    cause: docs/agents/protocols/TASK_QUEUE.md:133 stated the convention in the wrong field
+  - path: docs/status/requirement_status.yaml
+    line: 3744
+    req: REQ-038
+    field: event
+    value: SCOPE-CHANGE
+    should_have_been: "req: SCOPE-CHANGE with event: done"
+    cause: docs/agents/protocols/TASK_QUEUE.md:133 stated the convention in the wrong field
+
+known_shape_anomalies:
+  # Entries whose FIELD SET or FIELD NAMES do not conform to the five-field entry
+  # shape documented in the current volume's header, and which are LEFT AS
+  # WRITTEN for the same reason as `known_anomalies:` above: correcting a past
+  # entry is precisely what the append-only rule forbids.
+  #
+  # This is a SEPARATE key from `known_anomalies:` deliberately. That key declares
+  # VOCABULARY violations -- an entry that HAS a field whose VALUE is not in the
+  # documented list -- and is keyed {path, line, field, value}. It cannot express
+  # these: a MISSING field has no line and no value to cite, and a MISNAMED
+  # field's value is perfectly legal. Assertion A5 asserts set equality over
+  # vocabulary violations in BOTH directions, so filing a shape defect under
+  # `known_anomalies:` would turn A5 red. The two sets are disjoint by
+  # construction and are asserted separately: A5 over `known_anomalies:`,
+  # A4b over `known_shape_anomalies:`.
+  #
+  # `entry_line` is the entry's own `- req:` line. It is a stable address because
+  # volume 1 is frozen and pinned by `frozen_prefix_sha256` above.
+  #
+  # A RECORD MAY ONLY CITE A CLOSED, DIGEST-PINNED VOLUME. `path:` must name a
+  # volume whose `volumes:` entry above has `status: closed` AND a
+  # `frozen_prefix_sha256:`. A4b asserts this. A shape defect in the CURRENT
+  # volume must be FIXED in the working tree before it is committed -- it can
+  # never be declared here. This is what keeps the list bounded: a closed
+  # volume's defect set can never grow, so this list can never grow either
+  # except when a volume is closed with a defect already in it.
+  #
+  # `kind:` is one of: missing_field | misnamed_field | extra_field | field_order.
+  # Only the first two occur today. A `misnamed_field` record accounts for BOTH
+  # the absence of `field:` AND the presence of `found_as:` -- it is ONE
+  # violation, not two.
+  #
+  # Assertion A4b asserts this list equals the shape violations actually on disk
+  # EXACTLY, in both directions: a new shape defect fails (drift detected), and a
+  # silent "correction" of one of these fails too (a past entry was rewritten).
+  # These three were found by A4 on its first ever run, 2026-08-21, under
+  # ISS-0119. They had been on disk, undetected, since 2026-08-19.
+  - path: docs/status/requirement_status.yaml
+    entry_line: 4803
+    req: REQ-053
+    event: started
+    kind: missing_field
+    field: note
+    found_as: null
+    found_line: null
+    should_have_been: "note: <short free-text>, as the fifth and last field"
+    cause: >
+      Appended with four fields instead of five. No mechanical check on entry
+      shape existed at the time -- ISS-0119's assertion A4 is the first one, and
+      it found this on its first run.
+  - path: docs/status/requirement_status.yaml
+    entry_line: 4896
+    req: REQ-056
+    event: started
+    kind: misnamed_field
+    field: at
+    found_as: timestamp
+    found_line: 4899
+    should_have_been: 'at: "2026-08-19T02:40:35Z"'
+    cause: >
+      The timestamp field was written as `timestamp:` instead of `at:`. The VALUE
+      is correct and is valid ISO-8601; only the field NAME is wrong. `at:` is
+      the documented name and is used by the other 181 entries in this volume.
+  - path: docs/status/requirement_status.yaml
+    entry_line: 5050
+    req: REQ-054
+    event: started
+    kind: missing_field
+    field: note
+    found_as: null
+    found_line: null
+    should_have_been: "note: <short free-text>, as the fifth and last field"
+    cause: >
+      Same as line 4803: appended with four fields instead of five, in the same
+      period and by the same appending pattern.

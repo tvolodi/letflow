@@ -5764,109 +5764,41 @@ history:
       entry ("Attributing a failure to toolchain drift without ever running the pinned
       toolchain") records the transferable lesson: a line over the formatter's configured
       line_length is unformatted under every version, measurable with no toolchain at all.
-  - req: REQ-113
-    event: started
-    agent: ORCH
-    at: 2026-08-21T05:52:25Z
-    note: >
-      Picking up queue task 188 (GH#376), named directly by the project owner. set_lock
-      claimed it under agent_id ai-dala-orch (200, locked; was open/unlocked). REQ-113
-      was already drafted and REQ-VALIDATOR-passed on origin/main via run
-      WF01-TESTPARALLEL-20260821 (handoffs/WF01-TESTPARALLEL-20260821/) before this
-      session started, along with its dependent follow-on REQ-114 (wiring the script
-      into TEST-RUNNER/RELEASE-VALIDATOR, out of scope for this run). Routing through
-      WF-02 (Requirement Implementation) per the project owner's explicit instruction to
-      use the full producer/validator pipeline. Branch feature/WF02-REQ113-20260821
-      created off origin/main and pushed (Step 00). Status flipped pending -> in_progress
-      here.
-  - req: REQ-113
-    event: done
-    agent: DOC-UPDATER
-    at: 2026-08-21T07:29:31Z
-    note: >
-      Implemented scripts/test_parallel.sh, wrapping Elixir's native `mix test
-      --partitions N` (N from an env override or `nproc`, never hardcoded): one
-      `MIX_ENV=test mix compile` up front to avoid the concurrent-compile race, N
-      background `MIX_TEST_PARTITION=<i> mix test --partitions N` processes against the
-      shared Postgres instance, then a wait and an aggregation step that parses and sums
-      each partition's own reported pass/fail/property counts rather than trusting exit
-      status alone, exiting non-zero if any partition failed. Mid-run rework: the
-      original parsing regex was written against an assumed ExUnit summary shape
-      ("N tests, M failures") that does not match this toolchain's real
-      `ExUnit.CLIFormatter` output -- actual lines are "Result: N[/M] passed (...)" plus
-      a separate "Failed: N tests" line when failures exist. CODE-DESIGNER reworked the
-      design (376bb81, df5b2a9) and ELIXIR-DEV reworked the script (dc93092, cf28a46) to
-      match the real output shape; RELEASE-VALIDATOR's rerun
-      (handoffs/WF02-REQ113-20260821/step-05-release-validator-rerun.json,
-      test/reports/report-20260821-WF02-REQ113-20260821-rerun.yaml) then PASSed all six
-      acceptance criteria at commit 6c55a33, including live verification of the
-      aggregation logic against both an injected failure and real non-injected
-      per-partition failures. Incidentally surfaced during that rerun and forwarded, not
-      fixed here: at N=8 (this host's real nproc) the script's own per-partition
-      Postgres pool (pool_size = schedulers_online()*2 = 16) times 8 partitions plus
-      Mix's build-directory lock serializing partition startup triggers Postgres
-      "too_many_connections" -- a real environment-capacity finding, not a REQ-113
-      defect (no AC requires collision-freedom at arbitrary N, and TEST_PARALLEL_N
-      already provides a safe override), filed as ISS-0194 (letflow-queue task 194,
-      GH#382). README.md's "Running it" section updated to mention
-      scripts/test_parallel.sh alongside the existing scripts/timed_test.sh entry; no
-      docs/migration/stage-N-*.md or docs/migration/decisions/*.md file was named by
-      this requirement's acceptance criteria, so step 4 of WF-02 Step 6 is N/A here.
-  - req: REQ-113
-    event: done
-    agent: ORCH
-    at: 2026-08-21T07:56:20Z
-    note: >
-      Step Final (git merge) resumed and completed after the prior session's BLOCKED
-      log (2026-08-21T07:34:29Z, gh unauthenticated). gh CLI now authenticated
-      (user tvolodi, repo+workflow scopes). Branch had drifted since the BLOCKED log
-      (origin/main moved to b816a64), so re-fetched and re-rebased clean onto current
-      main (0 conflicts, 16 commits), force-with-lease pushed (tip ee352a5).
-      mix compile --warnings-as-errors: 0 warnings. mix test: 1274 passed, 0 failed.
-      Opened PR #384, merged via `gh pr merge --squash --delete-branch`
-      (main fast-forwarded b816a64 -> 8570dc7). Local cleanup verified: on main,
-      log shows the squash commit, clean tree, single worktree, remote branch
-      confirmed deleted. This is the event that makes REQ-113 actually present on
-      main -- the earlier DOC-UPDATER `done` event above reflected only the feature
-      branch. Queue task 188 released as done via letflow-queue, closing GH#376
-      (confirmed via `gh issue view 376`: state CLOSED).
-  - req: REQ-114
-    event: started
-    agent: ORCH
-    at: 2026-08-21T08:00:20Z
-    note: >
-      Named directly by project owner (letflow-queue task 189, GH#377), locked under
-      agent_id ai-dala-orch. Dependency REQ-113 confirmed done on main (8570dc7).
-      Branch feature/WF02-REQ114-20260821 created and pushed from origin/main. Routing
-      through full WF-02 producer/validator pipeline per instruction.
-  - req: REQ-114
-    event: done
-    agent: DOC-UPDATER
-    at: 2026-08-21T08:17:23Z
-    note: >
-      Replaced plain `mix test` full-suite invocations with REQ-113's
-      scripts/test_parallel.sh across the 7 edit sites identified in scope:
-      docs/agents/workflows/WF-02_requirement_implementation.md's Step 4
-      (TEST-RUNNER) and Step 5 (RELEASE-VALIDATOR), WF-04_full_test_run.md's
-      overview diagram and Step 1 (TEST-RUNNER), and
-      .claude/agents/test-runner.md and .claude/agents/release-validator.md's
-      own literal invocations found during the audit. WF-03_issue_resolving.md
-      confirmed (not assumed) to need no edit of its own: its "Steps 2-4"
-      section mirrors WF-02's Step 1/1b/2a-2d/3/3b/4 by reference rather than
-      restating a `mix test` invocation. Process gap this run hit and fixed:
-      RELEASE-VALIDATOR's Step 5 first pass correctly FAILed on missing
-      handoff records and an unconfirmed docs/migration/decisions/0008 REVIEWER
-      sign-off; both were backfilled and REVIEWER's confirmation properly
-      recorded (decisions/0008's "REVIEWER sign-off — 2026-08-21" section)
-      before Step 5 was re-run and PASSed
-      (handoffs/WF02-REQ114-20260821/step-05-release-validator-rerun.json).
-      REVIEWER's Step 2d confirmed both of decisions/0008's Option A picks:
-      the stage tag question was out of scope for that gate (not evaluated),
-      and DOC-UPDATER's remit widening to cover docs/agents/workflows/*.md
-      edits was confirmed, not overridden. README.md's "Running it" section
-      updated to remove the stale "not yet wired into TEST-RUNNER/
-      RELEASE-VALIDATOR (REQ-114)" caveat now that the wiring is done. No
-      docs/migration/stage-N-*.md file was named by this requirement's
-      acceptance criteria. test/reports/ not applicable: this is a docs-only
-      requirement and TEST-RUNNER/TEST-DESIGN-VALIDATOR were skipped by
-      Step 3's scope test.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 1 — CLOSED 2026-08-21. DO NOT APPEND TO THIS FILE.
+#
+# This volume holds the complete requirement run history from 2026-08-13 through
+# 2026-08-21 (182 entries, lines 1-5766). It is frozen: every line above this
+# comment is preserved byte-for-byte, because ~103 historical run records under
+# handoffs/ and test/reports/ cite this path, and
+# lib/letflow/design/iss-0078-pin-rebind-provenance.md:367 cites line 5158 of it
+# by number. Nothing here is rewritten, corrected, renumbered or moved. Reads of
+# this volume are TARGETED reads only — a line range or a pattern match, never a
+# whole-file read; it is 361,376 bytes and a whole-file read is refused by the
+# Read tool. Use whichever your shell has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v2.yaml
+#
+# Why this file was closed rather than split: ISS-0119. See
+# lib/letflow/design/iss-0119-status-file-readability.md.
+#
+# KNOWN ANOMALIES IN THIS VOLUME, recorded and deliberately NOT corrected
+# (correcting them would be rewriting past entries — the exact act this file's
+# append-only rule exists to prevent):
+#   line 3490 (REQ-031), line 3577 (REQ-042), line 3744 (REQ-038) — all agent
+#   ORCH, 2026-08-17 — carry `event: SCOPE-CHANGE`. SCOPE-CHANGE is a `req:`
+#   value, not an `event:` value (31 entries in this volume use it correctly).
+#   These three followed docs/agents/protocols/TASK_QUEUE.md:133, which stated
+#   the convention in the wrong field; that instruction is corrected as part of
+#   ISS-0119. The entries stay as written. They are declared in the index under
+#   `known_anomalies:` and the Step 4 invariant test asserts they are still
+#   present and still wrong — a silent normalization fails the suite.
+# ─────────────────────────────────────────────────────────────────────────────

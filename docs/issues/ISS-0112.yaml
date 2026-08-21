@@ -81,3 +81,41 @@ carried_findings:
       (5) Style nits: the magic depth 4 in parent_chain/2; TenantSlugFixture
       fully-qualified despite the alias block; and the bare __struct__ match in
       current_test_of/1 wanting its one-line justification comment.
+  - from_run: WF03-ISS0119-20260821
+    from_agent: TEST-RUNNER
+    at: "2026-08-21T09:04:52Z"
+    severity: MINOR
+    finding: >
+      TWO FURTHER MODULES FOR THE Letflow.TenantFixture ADOPTION LIST, each identified by
+      reproducing ISS-0109's 3F000 signature from its OWN hand-rolled provisioned_tenant/0
+      -- i.e. found the expensive way, by failing without instrumentation, which is exactly
+      the cost this issue exists to remove:
+
+        - test/letflow/engine_test.exs:87 (Letflow.EngineTest) -- failure surfaced at :1177,
+          "create/2 (REQ-059 AC6) -- child pin inheritance and conflict recording".
+        - test/letflow/engine/reconstruction_test.exs:85 (Letflow.Engine.ReconstructionTest)
+          -- failure surfaced at :640, "AC6 -- {:lock_contention, instance_id} is its own
+          distinct error shape".
+
+      Both four-axis match the ISS-0109 failure-3 / ISS-0116 RollbackTest signature: 3F000
+      :invalid_schema_name via get_namespace_oid, {:error, {:migration_failed,
+      %MatchError{...}}}, the assertion assert {:ok, _applied_versions} =
+      TenantProvisioning.replay_migrations(tenant.id), raised from each module's own
+      copy-pasted fixture helper.
+
+      OBSERVED ON MAIN, NOT ON THE ISS-0119 BRANCH, and read as ONE EVENT, NOT TWO. Both
+      occurred in the SAME run (main run 1) on adjacent connection ids 28579 and 28585
+      about 15 seconds apart. TEST-RUNNER's reading, recorded as its reading rather than as
+      fact: one transient window catching two consecutive modules, not two independent
+      defects. One observation each, so neither is characterised as a stable main failure.
+
+      CROSS-LINK TO ISS-0116: this extends ISS-0116's scope exactly as ISS-0116 itself
+      predicts -- the condition is not specific to the modules ISS-0109 happened to name,
+      and the un-instrumented population is where it keeps turning up. That is also why the
+      sequencing ISS-0116 states still holds: ISS-0112 first, because until these modules
+      use the shared fixture their failures arrive as bare Postgrex errors with no
+      capture_schema_state/1 report, and ISS-0116 cannot be diagnosed from those.
+      ISS-0116 carries a separate, differently-shaped observation from the same run
+      (:event_type_seed_failed / :tenant_not_provisioned in RoleRegistryTest), pointing at
+      the registry row rather than the schema -- test/letflow/role_registry_test.exs also
+      still carries a hand-rolled fixture and is worth the same adoption treatment.

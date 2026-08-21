@@ -1,0 +1,58 @@
+{
+  "handoff_id": "087f7db0-c969-4daa-983e-094ec3f7ae1f",
+  "run_id": "WF03-ISS0119-20260821",
+  "workflow_id": "WF-03",
+  "step": "0.5",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0119-20260821/step-005-issue-fixer-registry-lookup.json",
+  "created_at": "2026-08-21T04:47:24Z",
+  "started_at": "2026-08-21T04:47:24Z",
+  "completed_at": "2026-08-21T04:57:35Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "6595558d-3c0d-459a-aac4-c213eb9f1a14"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0119.yaml",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "docs/status/requirement_status.yaml",
+      "docs/status/",
+      "docs/agents/instructions/core-directives.md",
+      "docs/anti-patterns.md",
+      "docs/issues/ISS-0119.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0119-20260821",
+    "issue_ids": [
+      "ISS-0119"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 (issue-registry lookup) for ISS-0119. Read docs/issues/ISS-0119.yaml in full first -- it is the authoritative statement of the defect. Then search docs/issues/*.yaml for any prior entry (resolved or open) describing similar symptoms, and specifically for any prior attempt to bound, split, or restructure docs/status/requirement_status.yaml, or to fix the append-only safeguard. Grep is the right tool here; do not read every issue file. Determine and state explicitly: (a) has this exact root cause been seen before, (b) is this a RECURRENCE of a previously-resolved issue (if so, WF-03 Step 0.5 requires flagging severity at least MAJOR regardless of the original severity), (c) which prior issues are ADJACENT but distinct and must not be conflated. Note that ISS-0119 itself carries renumbered_from: ISS-0111 -- main's ISS-0111 is a DIFFERENT finding (identity_migration_test's bulk DELETE on tenant_schemas); do not treat the two as related. Do not diagnose root cause in this step and do not propose a fix; that is Step 1.",
+    "acceptance_criteria": [
+      "docs/issues/ was searched for prior entries with matching symptoms and the search method is stated",
+      "result.summary states explicitly whether a prior match was found, naming the ISS ids checked and the verdict for each",
+      "result.summary states whether this is a recurrence of a previously-resolved issue, and if so raises severity to at least MAJOR with the reasoning",
+      "No fix is proposed and no file outside this handoff is modified"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "WF-03 Step 0.5 registry lookup for ISS-0119. VERDICT: NO PRIOR MATCH. This is NOT a recurrence. Severity stays MAJOR (as filed) -- the Step 0.5 recurrence escalation clause does not fire because no previously-resolved issue describes this root cause.\n\nSEARCH METHOD (grep over docs/issues/*.yaml, 115 files; no file read in bulk). Five symptom-axis greps plus two confirmation passes:\n  (A) grep -l \"requirement_status\" docs/issues/*.yaml -> 10 hits: ISS-0003, 0008, 0009, 0010, 0034, 0037, 0039, 0077, 0109, 0119.\n  (B) grep -il \"256KB|read tool|read-tool|too large to read|file size limit|outgrown\" -> 1 hit: ISS-0119 itself. No other issue in the registry has ever mentioned a read-tool size limit.\n  (C) grep -il \"append-only|append only|overwrit|schema drift\" -> 15 hits: ISS-0021, 0033, 0039, 0041, 0043, 0045, 0063, 0075, 0077, 0079, 0090, 0105, 0106, 0109, 0119.\n  (D) grep -il \"SCOPE-CHANGE\" -> 2 hits: ISS-0039, ISS-0119.\n  (E) grep -il \"split the file|split by|bound its growth|rotate|archive\" -> 6 hits: ISS-0005, 0013, 0014, 0020, 0025, 0119.\n  (F) confirmation: grep -iln \"REQ-003\" docs/issues/*.yaml -> ISS-0119 only. The originating REQ-003 overwrite incident lives in docs/anti-patterns.md, never in the issue registry, so there is no prior issue record of the safeguard itself.\n  (G) confirmation: grep -iln \"read in full|whole file|context window|token limit\" -> ISS-0005, 0018, 0044, 0045, 0051, 0054, 0080, 0119.\n\nPER-CANDIDATE VERDICTS (each title/severity/status header inspected):\n  ISS-0003 (MINOR, resolved) -- decision-doc header stale vs REQ-010. Cites requirement_status.yaml only as evidence of a done timestamp. NOT RELATED.\n  ISS-0008 (BLOCKER, resolved) -- mix format drift under Elixir 1.20.3. Passing mention of a REQ-013 entry. NOT RELATED.\n  ISS-0009 (MINOR, resolved) -- stage-0-foundation.md decision list stale. Passing mention. NOT RELATED.\n  ISS-0010 (MINOR, resolved) -- handoffs/registry.json never created. Names requirement_status.yaml only as one of the sources used to reconstruct history. NOT RELATED.\n  ISS-0034 (MINOR, resolved) -- stage-2 doc header stale vs REQ-039. Passing mention. NOT RELATED.\n  ISS-0037 (MINOR, resolved) -- S4 422 renderer / INV-5 tension. Mentions a `revised` event only. NOT RELATED.\n  ISS-0039 (MAJOR, resolved in WF02-REQ042-20260817) -- ADJACENT BUT DISTINCT, and the closest thing in the registry. It is about a Step Final that silently OVERWROTE an already-resolved docs/issues/ISS-0036.yaml with unrelated content. Same failure GENUS (an append/never-rewrite expectation violated, content silently lost) but a different file, a different mechanism (a bad git/file-write in a merge step, not a read that cannot complete), and a different root cause. It also happens to be the one prior issue that mentions SCOPE-CHANGE -- but only as the label of a postscript note it wrote, not as a convention question. MUST NOT BE CONFLATED with ISS-0119.\n  ISS-0077 (MAJOR, resolved) -- VariableMerge.merge/3 validation gap. Names requirement_status.yaml only in its affected-files/bookkeeping tail. NOT RELATED.\n  ISS-0105 (MINOR, resolved) -- REQ-112 sub-process output-merge schema question. Matched grep (C) on the word \"overwrite\" in a variable-merge sense. NOT RELATED.\n  ISS-0106 (MAJOR, resolved) -- toolchain drift, format/compile failures on main. This is the run (WF03-ISS0106-20260821) whose Step 5b INCIDENTALLY DISCOVERED ISS-0119; it is the parent context, not a prior occurrence of the same defect. NOT A PRIOR MATCH.\n  ISS-0109 (MINOR, instrumented) -- tenant-schema-disappears-mid-test failure class. Mentions requirement_status.yaml only to disambiguate its own renumbering. NOT RELATED.\n  ISS-0021 / ISS-0033 (MINOR, resolved) -- both about handoffs/registry.json ownership and a stuck BLOCKED entry. Different file, different concern. NOT RELATED.\n  ISS-0005 / 0013 / 0014 / 0020 / 0025 -- matched grep (E) only on generic words (\"archive\", \"stale\"); all are S0/S1 content questions about tenant modelling, event_retention_policies, Store.archive(), REQ-023 rationale and process_definitions.tenant_id. None proposes splitting or bounding any file. NOT RELATED.\n  ISS-0018 / 0044 / 0045 / 0051 / 0054 / 0080 -- matched grep (G) only on incidental phrasing (\"grepped the whole file\", \"read in full\" as evidence of diligence, \"the whole file's compilation\"). None is about a file being too large to read. NOT RELATED.\n\n(a) HAS THIS EXACT ROOT CAUSE BEEN SEEN BEFORE? No. No entry in docs/issues/ has ever recorded that a doc/status file outgrew a tool limit, nor that an instruction became literally unexecutable because of a file's size. Grep (B) returns ISS-0119 alone.\n\n(b) IS THIS A RECURRENCE? No. A recurrence requires a previously-RESOLVED issue whose fix did not hold; no prior issue was ever opened or resolved on this root cause, so there is no earlier fix that could have failed. The WF-03 Step 0.5 rule \"if it is recurring, flag severity as at least MAJOR regardless of the original severity\" therefore does not apply. Severity remains MAJOR exactly as filed by DOC-UPDATER, on its own merits (a disarmed safeguard protecting an audit trail), not by escalation. Note for the record that the underlying HARM has occurred once before -- ELIXIR-DEV rewriting docs/status/requirement_status.yaml from scratch during REQ-003 -- but that incident is recorded ONLY in docs/anti-patterns.md (\"Overwriting docs/status/requirement_status.yaml instead of appending\") and was never filed as an ISS record, so it is not a registry recurrence. It is the reason the safeguard exists, which is context for Step 1, not a duplicate.\n\n(c) ADJACENT BUT DISTINCT -- must not be conflated:\n  - ISS-0039: silent overwrite of docs/issues/ISS-0036.yaml. Same genus (append expectation violated), different file and different mechanism. Do not merge scope.\n  - main's ISS-0111: identity_migration_test's globally destructive bulk DELETE on tenant_schemas. Confirmed by reading its title header: a MAJOR, still-open, entirely unrelated finding. ISS-0119 carries renumbered_from: ISS-0111 purely because of the concurrent-session numbering collision documented in its renumbered_note; the two records share nothing but a retired number.\n  - ISS-0118 (MAJOR, open): three runs merged unformatted code past a red format gate. A gate-integrity failure, not a file-size failure. Adjacent only in that both are pipeline-hygiene defects.\n  - ISS-0106: parent run, not a prior occurrence.\n\nNO PRIOR ATTEMPT TO SPLIT/BOUND/RESTRUCTURE docs/status/requirement_status.yaml exists anywhere in docs/issues/ (greps A and E), and no prior attempt to fix the append-only safeguard exists (greps C and F). CODE-DESIGNER is designing on green field here, with no superseded prior remedy to account for.\n\nNo root-cause diagnosis and no fix are offered in this step (that is Step 1). No file outside this handoff was modified.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0119-20260821/step-005-issue-fixer-registry-lookup.json"
+    ],
+    "issues": [],
+    "next_action": "Proceed to WF-03 Step 1 (root-cause diagnosis, same agent). No recurrence escalation required; severity stays MAJOR."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

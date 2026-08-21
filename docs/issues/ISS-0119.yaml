@@ -85,4 +85,134 @@ affected_files:
   - docs/agents/instructions/core-directives.md
 queue_task_id: 186
 github_issue: https://github.com/tvolodi/letflow/issues/373
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0119-20260821
+resolved_at: "2026-08-21T08:57:06Z"
+resolution: >
+  RESOLVED, re-derived by ISSUE-FIXER at WF-03 Step 5 against the tree as it
+  stands, not from the run's own reports. The root cause named in this record —
+  "the instruction every agent is given before touching that file ... is no
+  longer literally executable by any agent in this pipeline" — is removed: the
+  append target is now a bounded current volume that IS readable in one call,
+  the bound is mechanically enforced, and a regression assertion shown red
+  before the fix is green after.
+
+  EVIDENCE, MEASURED AT STEP 5 (each item generated or read directly by
+  ISSUE-FIXER, not quoted from an upstream handoff):
+
+  1. READABLE IN ONE CALL. The current append target is
+  docs/status/requirement_status.v2.yaml at 140 lines / 7,994 bytes (wc -l /
+  wc -c, working tree), and the entry point
+  docs/status/requirement_status.index.yaml at 165 lines / 7,884 bytes. Both
+  are far inside the Read tool's 262,144-byte and 2,000-line limits, and both
+  were in fact read in full, unscoped, in this step.
+
+  2. THE PRESCRIBED PROCEDURE EXECUTES ON BOTH SHELLS this project uses. The
+  v2 header's "HOW TO APPEND" step-1 one-liners were run as written —
+  `grep -n 'status: current' -B 2 docs/status/requirement_status.index.yaml`
+  under Bash and `Select-String -Path docs/status/requirement_status.index.yaml
+  -Pattern 'status: current' -Context 2,0` under PowerShell. Both printed the
+  `- volume: 2` / `path:` pair above the marker, i.e. both resolve the append
+  target correctly. The step-2 and roll-rule measurement pairs (wc -l / wc -c
+  vs (Get-Content).Count / (Get-Item).Length) and the step-3 clock pairs were
+  likewise both run; the PowerShell clock line returned 2026-08-21T08:56:14Z.
+
+  3. FULL HISTORY PRESERVED, AND MECHANICALLY — not merely intentionally.
+  Volume 1 was frozen in place rather than split or renamed, so all 182 entries
+  survive byte-for-byte (grep -c '^  - req:' = 182) and the ~103 historical run
+  records citing that path, plus the by-line citation at
+  lib/letflow/design/iss-0078-pin-rebind-provenance.md:367, stay valid. The
+  freeze is enforced by digest, and the digest was recomputed here independently
+  of the suite: head -5766 of volume 1, CRLF normalised to LF, sha256 =
+  5a1a64ab0b999da3fd86be90109ecee46b9d538d9e9945c0d39fddb10075a804, matching the
+  index's frozen_prefix_sha256 exactly. Assertion A6 asserts that same digest on
+  every `mix test` run, so a future rewrite of a past entry goes red rather than
+  passing unnoticed.
+
+  4. THE APPEND-ONLY RULE WAS NOT RELAXED ANYWHERE. This record forbade that
+  resolution route outright, so it was checked directly rather than assumed.
+  `git diff main...HEAD` over docs/anti-patterns.md,
+  docs/agents/instructions/core-directives.md,
+  docs/agents/protocols/TASK_QUEUE.md, .claude/agents/doc-updater.md,
+  .claude/agents/release-validator.md, CLAUDE.md, AGENT_SYSTEM.md and WF-02
+  shows the rule STRENGTHENED in every place it is restated: it now binds
+  explicitly "in this volume or any closed one", adds a `git diff --numstat`
+  deletions-must-be-zero confirmation step, and core-directives.md item 3 now
+  states the precedence this record said nothing recorded — the general "Load
+  Scoped Context, Not Whole Files" rule governs closed volumes and every other
+  large file, and the CURRENT volume is the single full-read exception, an
+  exception only because the roll rule makes that full read executable. No edit
+  anywhere permits a partial read followed by an append.
+
+  5. THE `req:`/`event:` VOCABULARY IS DOCUMENTED WHERE AN APPENDING AGENT
+  ACTUALLY LANDS. The v2 header states both complete lists — `req:` has exactly
+  two legal values (REQ-NNN | SCOPE-CHANGE) and names `req: ISS-NNNN` as the
+  obvious wrong guess with zero precedent; `event:` has exactly six, correcting
+  volume 1's own header, which listed three while three more were already in
+  use. The instruction that CAUSED the malformed entries — TASK_QUEUE.md's "as
+  a SCOPE-CHANGE event" — is corrected to name the field explicitly.
+
+  6. A REGRESSION TEST PROVES IT, AND WAS SHOWN TO FAIL FIRST. Assertion A3
+  ("the current volume is within the roll-rule ceilings") resolves the volume
+  through the index and takes its ceilings from the index — it hardcodes
+  neither, which is what makes it directional. It was run in a throwaway
+  worktree at pre-fix commit 3d19e8c and failed on SIZE (over: [:lines, :bytes],
+  4,217 lines / 264,861 bytes), then passed unmodified on the fix branch.
+  ISSUE-FIXER re-ran the file at Step 5: `mix test
+  test/docs/requirement_status_invariants_test.exs` → "13 passed", 0.4s.
+  TEST-RUNNER separately confirmed all 13 green in full-suite context in both
+  branch runs.
+
+  ON REMEDY (a) AS WORDED. This record suggested "make the file readable again —
+  split by period ... or otherwise bound its growth". What shipped is the second
+  form, and the distinction should not be blurred: volume 1 itself is still
+  363,951 bytes and a whole-file read of it is still refused. What changed is
+  that no instruction asks for one any more — it is closed, frozen, off the
+  append path, and reachable only by targeted read. The safeguard's mechanism
+  (see the whole file, therefore notice the schema, therefore append rather than
+  invent) is restored on the file agents actually append to.
+not_closed_by_this_run: >
+  Recorded so the registry does not overstate what shipped. Each of these was
+  established by this run's own gates, not found afterwards.
+
+  1. REMEDY (b) IS ASSERTED AT TOKEN LEVEL ONLY. TEST-DESIGN-VALIDATOR recorded
+  this: A8 checks that the current volume's header CONTAINS the required tokens
+  and that its restated ceilings match the index. It cannot assert that the
+  HOW-TO-APPEND prose is genuinely executable, because prose executability is
+  not mechanically assertable by a unit test. The both-shells execution in
+  evidence item 2 above is a one-time check performed by this step, not a
+  standing assertion — a future edit that left the tokens in place while
+  breaking the procedure would still pass A8.
+
+  2. THE TASK_QUEUE.md:133 INSTRUCTION FIX HAS NO ASSERTION BEHIND IT. A4a
+  asserts the DATA (entries on disk conform to the documented vocabulary), never
+  the INSTRUCTION. A future edit could reintroduce the wrong-field convention,
+  and A4a would only notice after entries had been written under it — it detects
+  the damage, not the cause.
+
+  3. THE THREE MALFORMED VOLUME-1 ENTRIES ARE DECLARED, NOT CORRECTED — lines
+  3490 (REQ-031), 3577 (REQ-042) and 3744 (REQ-038), all carrying
+  `event: SCOPE-CHANGE`. By design they can never be corrected: volume 1 is
+  frozen and A6-pinned, and correcting a past entry is the exact act the
+  append-only rule forbids. The same holds for the three shape anomalies A4
+  found on its first ever run (4803/REQ-053 and 5050/REQ-054 missing `note:`,
+  4896/REQ-056 writing `timestamp:` where `at:` belongs), which had been on disk
+  undetected since 2026-08-19.
+
+  4. THE DECLARE-TO-SILENCE HOLE SURVIVES IN `known_anomalies:`/A5. A4b was
+  given a closed-and-pinned rule so `known_shape_anomalies:` cannot be used to
+  silence a defect in the current volume; the equivalent rule was NOT added to
+  `known_anomalies:`/A5, and a roll-boundary variant of the same hole remains.
+  That work is carried by ISS-0193 (queue task 193, GH#381), filed by this run.
+  It is a bounded, separately-tracked residue — not part of ISS-0119's own root
+  cause, which is why it does not hold this record open.
+see_also:
+  - ISS-0193   # declare-to-silence hole surviving in known_anomalies:/A5, plus the roll-boundary variant
+resolution_artifacts:
+  - docs/status/requirement_status.index.yaml
+  - docs/status/requirement_status.v2.yaml
+  - docs/status/requirement_status.yaml
+  - test/docs/requirement_status_invariants_test.exs
+  - test/support/status_history.ex
+  - test/specs/ISS-0119.md
+  - lib/letflow/design/iss-0119-status-file-readability.md

@@ -81,9 +81,11 @@ existing sizing/schema) rather than skipping ahead into an unscoped
 stage.
 
 After finishing a requirement: flip its `status` in
-`docs/requirements.yaml`, and append one event to
-`docs/status/requirement_status.yaml` (started/done/blocked, with a
-real UTC timestamp — from the clock, not memory).
+`docs/requirements.yaml`, and append one event to the current
+run-history volume (find it via
+`docs/status/requirement_status.index.yaml`) —
+started/done/blocked/cancelled/revised/verified, with a real UTC
+timestamp from the clock, not memory.
 
 ## Core rules (apply to every agent)
 

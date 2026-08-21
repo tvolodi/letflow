@@ -76,11 +76,13 @@ entry per event. Never rewrite past entries" — this is exactly the
 mistake that comment exists to prevent. ORCH caught it by diffing
 against what it had just written and restored the lost entries.
 
-**Correct alternative:** always read the existing file in full before
-touching it, preserve its established schema even if a different shape
-seems cleaner, and append (don't replace). If the file is genuinely
-missing, use the header/entry shape already documented in this repo's
-other status files or CLAUDE.md, not an invented one.
+**Correct alternative:** start at `docs/status/requirement_status.index.yaml`, read the
+**current volume** it names in full — volumes are capped, at the ceilings the index's
+`roll_rule:` records, precisely so that read is possible — preserve its established
+schema even if a different shape seems cleaner, and append (never replace). Confirm with
+`git diff --numstat` that the deletions count for the file is 0. Never edit a closed
+volume. If the file is genuinely missing, use the header/entry shape documented in the
+index and the current volume's own header, not an invented one.
 
 ## Extrapolating handoff timestamps instead of reading the clock (ORCH)
 
@@ -1086,3 +1088,71 @@ of what was asked*.
 * **Commit the handoff at dispatch, not only at completion.** An untracked file has no
   prior version to restore from; here the text survived by luck — the dispatching session
   happened to still be alive.
+## An instruction whose mechanism has silently become unexecutable
+
+`docs/status/requirement_status.yaml` grew past the Read tool's 256KB limit on
+2026-08-18. For ~2.5 days every agent was instructed to "read the file in full before
+appending" while that read returned a hard refusal, and no written rule said what to do
+instead — so each agent improvised a different partial read, and the safeguard read as
+followed while being unexecutable. The prior drift (three entries putting `SCOPE-CHANGE`
+in the `event` field) proves the same point from the other side: it happened while the
+file was still readable, because "read it all" was never a reliable way to transmit a
+convention buried in one of 182 entries.
+
+**Correct alternative:** when a safeguard's mechanism has a physical limit, bound the
+thing so the mechanism keeps working, state the convention explicitly instead of leaving
+it to be inferred from precedent, and add a mechanical check that fails when the bound is
+next crossed. A rule enforced only by an agent's eyes has no second line of defence. See
+ISS-0119 and `lib/letflow/design/iss-0119-status-file-readability.md`.
+
+## Presuming an in-progress artefact dead and writing that presumption into a handoff as fact (ORCH)
+
+**WF03-ISS0119-20260821, Step 4c.** The TEST-RUNNER agent running the full suite was
+stopped mid-step. ORCH went to salvage the leftover logs and found
+`tmp-testrunner/main2.log` carrying a START line but no END line and no result line, and
+concluded it had been killed mid-run. ORCH then wrote that conclusion into the
+replacement agent's handoff **as fact**: "main2.log — INCOMPLETE, killed mid-run …
+Treat as unusable; do not re-run it."
+
+**It was not incomplete.** The run was still executing at the moment ORCH looked at it,
+and it finished normally minutes later: `Finished in 530.2 seconds`, `Result: 1261/1274
+passed`, `END 2026-08-21T08:41:34Z`. The replacement TEST-RUNNER re-checked the file
+instead of accepting the briefing, recovered it, and thereby turned a 2-branch-runs-vs-1-
+main-run comparison into 2-vs-2 — removing the sample asymmetry the briefing itself had
+flagged as a limit, and materially strengthening the merge verdict. **That recovery is
+the behaviour the whole validator design depends on, and it is why this entry exists
+rather than a wrong verdict.**
+
+**Why the usual defences miss it:**
+
+* **An in-progress append-mode log and an abandoned one are byte-identical in shape.**
+  Both lack the terminator. Absence of an end marker is evidence of "not finished
+  *yet*", which is not the same proposition as "never will be". Nothing about the file
+  distinguishes them; only the *writer's* liveness does, and that was never checked.
+* **The observation laundered itself into an assertion by being written down.**
+  `core-directives.md`'s Instruction Precedence puts a handoff's `task` block FIRST,
+  above every protocol and directive. An agent that had simply believed ORCH would have
+  been following the rules *correctly* — and would have produced a weaker verdict on
+  three runs instead of four. A coordinator's guess acquires more authority than its
+  evidence the moment it crosses a handoff boundary, and the receiving agent has no way
+  to see how thin the basis was.
+* **"Do not re-run it" closed the cheapest check.** The instruction did not merely state
+  a belief; it pre-emptively forbade the one action that would have tested it.
+
+**Correct alternative:**
+
+* **Check liveness, never infer it from an artefact's shape.** Before declaring a
+  process or its outputs dead: is the writing process still running, is the file still
+  *growing* (compare size across a few seconds — one command), is there a lock or an
+  open handle. A file that grew between two looks is not abandoned.
+* **Mark environmental observations as observations, with their basis and their
+  timestamp.** "As of 08:36 main2.log had no END line; I did not check whether the
+  writer was still alive" is honest, costs nothing, and tells the receiving agent it may
+  re-check. "INCOMPLETE, killed mid-run" tells it not to.
+* **Never pair a shaky premise with a prohibition on testing it.** If the conclusion is
+  uncertain, the derived instruction must leave the verification path open.
+
+This is the same failure as **"Inheriting a claim from a record instead of re-deriving it
+from the source"** above, with the record being a handoff and the author being the
+coordinator — filed separately because the artefact here is a *live* one, and the
+distinguishing test (does it grow?) is specific and cheap.

@@ -14,8 +14,14 @@ AGENT_ID: DOC-UPDATER
 - `docs/agents/instructions/core-directives.md` — especially the append-only
   bookkeeping rules
 - `docs/agents/workflows/WF-02_requirement_implementation.md` Step 6
-- `docs/status/requirement_status.yaml` **in full** — you append to it, and you must
-  match its existing schema exactly, so a full read is genuinely required here.
+- `docs/status/requirement_status.index.yaml`, then **the current volume it names, in
+  full** — you append to that volume and must match its schema exactly, and the volume
+  is bounded — see `roll_rule:` in the index for the current ceilings — specifically so a
+  full read is possible. Closed volumes are frozen: read them only with a targeted read
+  — the Read tool with `offset`/`limit`, or `grep`/`sed` on Bash, or `Select-String` on
+  PowerShell — never in full. See `core-directives.md` §"Bookkeeping Is Not Optional"
+  item 3 for why this file is the one exception to "Load Scoped Context, Not Whole
+  Files".
 - `docs/requirements.yaml` — **only the entries you are flipping.** You edit one field
   per requirement; you don't need the other 69 entries. Locate each with a targeted read
   (`awk '/^  - id: REQ-039$/,/^  - id: REQ-04[0-9]$/' docs/requirements.yaml`) and edit
@@ -28,11 +34,14 @@ AGENT_ID: DOC-UPDATER
 
 1. Flip the requirement(s)' `status` field in `docs/requirements.yaml`
    (`pending`/`in_progress` → `done`).
-2. Append one event to `docs/status/requirement_status.yaml` using the file's
-   **existing** schema (`req`/`event`/`agent`/`at`/`note`) — read the file in full
-   first, never guess the schema, never rewrite prior entries. Use a real UTC
-   timestamp from the clock (`(Get-Date).ToUniversalTime().ToString(...)` or
-   `date -u +"%Y-%m-%dT%H:%M:%SZ"`), never from memory.
+2. Append one event to the **current** run-history volume — find it in
+   `docs/status/requirement_status.index.yaml`, never by assuming a filename. Follow the
+   "HOW TO APPEND" procedure in that volume's own header: read the volume in full, take
+   the timestamp from the clock, append (never rewrite), then confirm with
+   `git diff --numstat` that the deletions count is 0. Then apply the header's roll rule:
+   if the volume is now over the `roll_rule:` ceilings recorded in the index, close it and
+   open the next one in this same commit. Read the ceilings from the index; do not carry a
+   remembered number.
 3. Update `README.md` if the change altered documented current behavior (the ASCII
    state diagram, the "Running it" section, etc.).
 4. If the requirement's acceptance criteria named a `docs/migration/stage-N-*.md` or
@@ -49,3 +58,9 @@ different schema**, even if the existing one seems inconvenient — this has hap
 before (see `docs/anti-patterns.md`) and destroyed prior history until ORCH caught and
 restored it. Append only. Don't claim a file was updated in `artifacts_out` without
 having actually written to it this step.
+
+This applies to **every** volume, closed or current. Never edit, reorder, renumber or
+"clean up" an entry in a closed volume — including the three known-anomalous
+`event: SCOPE-CHANGE` entries declared in the index. They are wrong on purpose; correcting
+them is the rewrite this rule exists to prevent, and
+`test/docs/requirement_status_invariants_test.exs` will fail if you do.

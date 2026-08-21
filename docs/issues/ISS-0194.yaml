@@ -1,0 +1,22 @@
+id: ISS-0194
+title: scripts/test_parallel.sh at nproc-default N hits Postgres too_many_connections
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ113-20260821
+discovered_at: 2026-08-21T07:29:01Z
+severity: MINOR
+description: >
+  Running scripts/test_parallel.sh with N derived from nproc (8 on the measuring
+  host) hits Postgres too_many_connections: config/test.exs sizes each partition
+  process's own pool as schedulers_online()*2, and 8 concurrently-launched
+  partition processes multiply that, compounded by Mix's build lock serializing
+  partition startup. Not a REQ-113 script defect -- the script correctly reported
+  the real failures/aborts it observed -- but a real operational limit worth a
+  follow-up decision record on pool_size vs max usable partition count. See
+  test/reports/report-20260821-WF02-REQ113-20260821-rerun.yaml for the captured
+  evidence (AC1/AC2/AC3 demonstrations both used TEST_PARALLEL_N=2 to avoid this).
+affected_files:
+  - scripts/test_parallel.sh
+  - config/test.exs
+queue_task_id: 194
+github_issue: 382
+status: open

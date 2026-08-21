@@ -1041,3 +1041,4 @@
 2026-08-21T10:20:01Z | DISPATCH | WF-03 | WF03-ISS0204-20260821 | ORCH -> REVIEWER | step-03b-reviewer-gate.json PENDING (closing gate); started_at stamped by ORCH from the same clock read as created_at, per the section 1.2 rule just adopted
 2026-08-21T10:28:20Z | STEP_COMPLETE | WF-03 | WF03-ISS0204-20260821 | REVIEWER -> ORCH | step-03b-reviewer-gate.json PASS, commits 4040f60/05e93f6, all eight criteria met, three MINOR non-gating findings
 2026-08-21T10:28:20Z | ISSUE_FILED | WF-03 | WF03-ISS0204-20260821 | ORCH -> queue | ISS-0206 (task 206, GH#397) findings 1+2; ISS-0207 (task 207, GH#398) finding 3
+2026-08-21T10:29:40Z | RUN_DONE | WF-03 | WF03-ISS0204-20260821 | ORCH -> - | pushed 071e6a5..13b094b to origin/main; queue task 204 released status=done, GH#395 closed by the release sync; rework 0, gate PASS first time

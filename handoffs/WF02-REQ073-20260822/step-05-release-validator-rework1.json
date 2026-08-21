@@ -1,0 +1,70 @@
+{
+  "handoff_id": "req073-step05-rework1",
+  "run_id": "WF02-REQ073-20260822",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ073-20260822/step-05-release-validator-rework1.json",
+  "created_at": "2026-08-22T04:40:00Z",
+  "started_at": "2026-08-22T04:37:00Z",
+  "completed_at": "2026-08-22T04:52:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "max_rework": 3,
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-073"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ073-20260822/step-05-release-validator.json",
+      "handoffs/WF02-REQ073-20260822/step-03b-test-design-validator-rework1.json",
+      "handoffs/WF02-REQ073-20260822/step-04-test-runner-rework1.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml (REQ-073 entry)",
+      "lib/letflow/routers/identity.ex@106beb9",
+      "lib/letflow/identity.ex@106beb9",
+      "test/letflow/routers/identity_test.exs@106beb9",
+      "handoffs/WF02-REQ073-20260822/step-04-test-runner-rework1.json"
+    ],
+    "owned_modules": ["lib/letflow/routers/identity.ex", "test/letflow/routers/identity_test.exs"],
+    "branch_name": "feature/WF02-REQ073-20260822"
+  },
+  "task": {
+    "description": "Re-review after the AC5-only prior FAIL (step-05-release-validator.json, commit 06fb22e). Re-verify AC5 independently against the rework (9a7f95f/e6280fd/695d43a/106beb9): read the actual added assertions myself, run my own confirmation (mutation or code-reading), spot-check AC1-AC4/AC6 still hold, and re-run the suite myself.",
+    "acceptance_criteria": [
+      "AC1: five end-to-end tests through the real router (create/list/get/patch/status)",
+      "AC2: cross-tenant-404 byte-identical via REQ-072's mechanism (INV-5)",
+      "AC3: tenant-isolation on list, seeded with similarly-named users in both tenants (INV-1)",
+      "AC4: permission-denial x3 write handlers, DB-unchanged asserted (not just status code)",
+      "AC5: response allowlist -- exactly 8 keys, full key-set assertion in the test, not just presence checks (INV-2)",
+      "AC6: moduledoc names the handler-to-Letflow.Identity-function mapping"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Confirmed branch feature/WF02-REQ073-20260822 at commit 106beb9 (git branch --show-current, git log -5).\n\nAC5 RE-VERIFICATION (independent, not trusting either prior handoff's description): read lib/letflow/routers/identity.ex's user_map/1 (lines 321-333) directly -- confirmed exactly 8 keys: id, username, display_name, email, status, auth_source, inserted_at, updated_at. Then read all five AC5 assertion sites added to test/letflow/routers/identity_test.exs myself (grep + Read, lines 110-119 create, 142-151 list-item, 168-177 get, 195-204 patch, 224-233 status-update): every site asserts `Map.keys(...) |> Enum.sort() == [\"auth_source\", \"display_name\", \"email\", \"id\", \"inserted_at\", \"status\", \"updated_at\", \"username\"]` -- the complete sorted 8-key set, matching user_map/1 exactly, not a presence/exclusion check. All 5 response-producing routes (create, list, get, patch, status-update) are covered.\n\nOWN INDEPENDENT MUTATION (in addition to reading the code -- did not rely solely on TEST-DESIGN-VALIDATOR's 695d43a probe): added a 9th key (`\"release_validator_mutation_probe\" => true`) to user_map/1, ran `mix test test/letflow/routers/identity_test.exs` -- 5 of 23 tests failed immediately, each at its AC5 full-key-set assertion (left side showed the stray key inserted into the sorted list), confirming all 5 sites genuinely discriminate an unnamed extra key. Reverted the edit; `git diff`/`git status --short` confirmed clean, no residual mutation.\n\nAC1/AC3/AC4/AC6 SPOT-CHECK: re-read the AC1 describe block (lines 79-236, all five routes dispatch through the real router and assert status/body/persistence), the AC3 tenant-isolation test (similarly-named users in tenant A and B, list scoped correctly), the AC4 permission-denial block (403 + Repo.aggregate/full-row-equality unchanged for all three write routes x two role scenarios), and the moduledoc (lines 1-35, explicit route-to-Identity-function mapping) -- all unchanged by the rework (which only added test assertions, touched no implementation) and still hold as previously confirmed. AC2 not re-derived from scratch per instructions (already independently mutation-tested by me at commit 738e809 and by TEST-DESIGN-VALIDATOR at a different link -- unaffected by this rework, which touched only test/letflow/routers/identity_test.exs).\n\nFULL SUITE RE-RUN (own, fresh): first `bash scripts/test_parallel.sh` run showed 1481/1482 (one failure in test/letflow/api/context_test.exs, unrelated module -- scoped_repo_opts/1 arity assertion). Isolated re-run of that file alone (`mix test test/letflow/api/context_test.exs`) passed 11/11 cleanly, and a second full parallel run came back 'combined: 1477 tests, 5 properties, 0 failures (1482/1482 passed)' -- confirming the first failure was parallel-run flake/ordering noise unrelated to REQ-073 (context_test.exs has no relationship to identity.ex or this rework), not a regression. Matches TEST-RUNNER's step-04-rework1 count exactly, independently reproduced by me.\n\nPER-AC VERDICT: AC1 MET, AC2 MET (carried over, unaffected by rework), AC3 MET, AC4 MET, AC5 MET (fully re-verified independently this round -- the specific gap from the prior FAIL is closed), AC6 MET.\n\nAll six acceptance criteria are now genuinely confirmed met by direct inspection and independent test execution, not by trusting any prior report.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ073-20260822/step-05-release-validator-rework1.json"
+    ],
+    "issues": [],
+    "test_run_evidence": {
+      "isolated_command": "mix test test/letflow/routers/identity_test.exs",
+      "isolated_result": "23 tests, 0 failures",
+      "mutation_probe_ac5": "user_map/1 given a 9th key -- 5/23 tests failed, each at its own Map.keys full-set assertion, showing the stray key; reverted, git diff clean",
+      "full_suite_command": "bash scripts/test_parallel.sh",
+      "full_suite_result_run1": "1481/1482 passed (1 unrelated failure in test/letflow/api/context_test.exs)",
+      "full_suite_result_run2": "combined: 1477 tests, 5 properties, 0 failures (1482/1482 passed)",
+      "context_test_isolated_rerun": "test/letflow/api/context_test.exs: 11 passed, 0 failures -- confirms run1's failure was parallel-run flake, not a real regression"
+    },
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ073-20260822",
+      "commit_sha_at_review": "106beb9",
+      "remote_branch": "origin/feature/WF02-REQ073-20260822",
+      "push_status": "pending"
+    },
+    "next_action": "Route to DOC-UPDATER (Step 6) to flip REQ-073's status to done and append status history."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

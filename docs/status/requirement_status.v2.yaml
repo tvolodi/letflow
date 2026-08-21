@@ -65,6 +65,16 @@
 #     at: <UTC timestamp from the clock, not memory>
 #     note: short free-text (what shipped, or what's blocking)
 #
+#   ALL FIVE FIELDS ARE REQUIRED, INCLUDING `note:`. The timestamp field is named
+#   `at:` — never `timestamp:`. Three volume-1 entries break this: line 4803
+#   (REQ-053) and line 5050 (REQ-054) have no `note:` at all, and line 4896
+#   (REQ-056) writes `timestamp:` where `at:` belongs. They are declared in
+#   docs/status/requirement_status.index.yaml under `known_shape_anomalies:` and
+#   are LEFT AS WRITTEN, for the same reason the `event: SCOPE-CHANGE` entries
+#   are — correcting a past entry is what this file forbids. Do not copy them,
+#   and do not "clean them up": assertion A4b in
+#   test/docs/requirement_status_invariants_test.exs fails either way.
+#
 # ── `req:` — THE COMPLETE LIST. Exactly two legal values ──────────────────────
 #
 #   REQ-NNN        A requirement in docs/requirements.yaml. Three digits, zero-

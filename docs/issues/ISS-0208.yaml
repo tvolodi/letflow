@@ -43,4 +43,6 @@ github_issue_note: >
   `register_task` created both the queue task (208) and its mirrored GitHub issue (#399)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
   separately. The id comes from `register_task`'s `issue_ref`, not a directory scan.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0208-20260821
+resolved_at: "2026-08-21T11:31:00Z"

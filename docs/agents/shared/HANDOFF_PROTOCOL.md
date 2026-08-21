@@ -139,10 +139,12 @@ defect. **Two buckets grow with the corpus:** `files`, and `gap==0`. Every hando
 pipeline writes adds one file, and under the rule this subsection states it lands at gap
 zero. Growth in those two is **expected and exactly reconcilable**: the difference from the
 figures above must equal the handoffs written since `ef62d4b`, which you can enumerate by
-`created_at`. Twice already: the ISS-0204 gate re-ran it three minutes later and got
-607/469 (+1/+1 — its own `WF03-ISS0204-20260821/step-03b-reviewer-gate.json`), and ISS-0207
-re-ran it thirteen minutes after that and got 608/470 (+2/+2 — that file plus
-`WF03-ISS0207-20260821/step-03-date-scope-figures.json`). Both reconciled to the unit.
+`created_at`. One illustrative reading, kept for shape only: the ISS-0204 gate re-ran it
+three minutes later and got 607/469 (+1/+1 — its own
+`WF03-ISS0204-20260821/step-03b-reviewer-gate.json`), reconciled to the unit. **No reader
+is expected to append their own re-run reading here** — the procedure above is what
+reconciles a re-run, not a growing log of past ones, so this single example carries no
+obligation to be kept current or extended as further runs re-check it.
 
 **Every other bucket is a fixed historical set, and that asymmetry is what makes this
 marker useful rather than merely defensive.** The 25 negative-gap files, the 20 of them on

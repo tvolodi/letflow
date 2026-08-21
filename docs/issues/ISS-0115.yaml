@@ -66,3 +66,15 @@ resolution_note: >
   ISS-0109 (predecessor, instrumented), ISS-0116 (sibling successor issue in the same
   family, also instrumented this session), ISS-0112 (broader 41-file fixture
   migration, still open, out of scope here).
+
+  POST-VERIFICATION UPDATE: the full-suite run attempted above for extra confirmation
+  did in fact complete (594.4s, 1275/1288 passed, 13 pre-existing unrelated failures --
+  matching ISS-0116's own count, corroborating nothing new broke). Its tail output
+  (piped through `tail -30`/`tail -15`, a mistake -- see ISS-0214) captured a live,
+  first-hand reproduction of this exact failure family: a tenant whose provisioning
+  completed (registration present, both timestamps real) but whose schema was found
+  completely empty of tables (19/19 missing) at teardown. Filed separately as
+  ISS-0214/GH#424 rather than absorbed here, since it is adjacent (undiagnosed,
+  unattributed to a specific test module) rather than blocking this run's own scope,
+  per ISSUE_QUEUE.md. This is the first live catch since ISS-0116's fixture adoption
+  landed, and is worth priority attention.

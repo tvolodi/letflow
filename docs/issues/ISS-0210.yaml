@@ -1,0 +1,66 @@
+id: ISS-0210
+title: >
+  GIT_MERGE.md step 6 does not address the non-fast-forward its own step 5 guarantees, and the no-force rule can deadlock a twice-rebased Step Final
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF03-ISS0200-20260821
+discovered_at: "2026-08-21T10:59:54Z"
+severity: MINOR
+
+description: >
+  Filed by ORCH from four findings in
+  `handoffs/WF03-ISS0200-20260821/step-final-git-merge.json`'s `result.issues`. None gated that
+  run. Read that handoff for the findings as ELIXIR-DEV stated them; summarised here only enough to
+  size the work, per the rule ISS-0198 added to HANDOFF_PROTOCOL.md section 2.
+
+  (1) THE STRUCTURAL GAP. GIT_MERGE.md step 5 rebases the feature branch onto `origin/main`. Step 6
+  then says plainly `git push origin feature/<run-id>`. If the branch was ALREADY PUSHED at Step 00
+  -- which GIT_SETUP.md step 7 mandates, as the coordination signal -- then step 5 GUARANTEES step 6
+  is a non-fast-forward, and step 6 never says so or says what to do about it. Every Step Final that
+  rebases hits this, and the protocol is silent.
+
+  (2) WHY IT CAN DEADLOCK. ORCHESTRATOR.md section 7.1 says do not force. Read literally alongside
+  step 6, a run whose branch was rebased has no legal way to publish. WF03-ISS0200-20260821 hit this
+  for real: ORCH had written an over-broad "no force-push under any circumstance" into the Step Final
+  dispatch, then corrected it mid-step to authorize `--force-with-lease` on the run's own branch
+  while keeping the prohibition on `main` and other sessions' commits. The agent did NOT use the
+  authorization -- it reset to the published tip and merged `origin/main` instead, then PROVED
+  equivalence (merge tree byte-identical to the discarded rebase tree) -- but the correction should
+  not have been needed, and the next run will face the same gap.
+
+  (3) BYTE-IDENTITY CHECKS ARE LINE-ENDING SENSITIVE. AC4-style span hashing in this project reads
+  from the WORKING TREE, which `core.autocrlf` rewrites: on this host the same content hashed
+  differently by exactly +1 byte per line immediately after a rebase. The method should be pinned to
+  the git BLOB, not the checkout. Non-blocking on that run only because the discrepancy was
+  recognised as a checkout artefact and re-measured on the committed blob.
+
+  (4) A RECURRING CONFLICT CLASS WITH A POSSIBLE MECHANICAL FIX. A `.gitattributes` union merge
+  driver for `handoffs/orchestrator.log` and `handoffs/registry.json` would auto-resolve a conflict
+  class now hit by every concurrent run -- both files are append-only by protocol. Whether a union
+  driver is SAFE for `registry.json` (it is JSON, and a naive union would corrupt it) is part of the
+  work, deliberately not pre-decided here.
+
+  Also recorded from the same handoff, as an INFO-level wording point: "the section-2 JSON fence must
+  still parse" is ambiguous, because five fences exist in HANDOFF_PROTOCOL.md and four are bare
+  `"result": {...}` fragments that are not standalone JSON by design.
+
+  A NO-CHANGE outcome on any individual item is legitimate if the measurement does not support it --
+  see ISS-0200 for the `no_defect` status such an outcome would use.
+
+affected_files:
+  - docs/agents/protocols/GIT_MERGE.md
+  - docs/agents/ORCHESTRATOR.md
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+
+related:
+  - ISS-0200  # the run that hit all four, and the no_defect status a no-change outcome would use
+  - ISS-0205  # the other git-mechanics gap this run filed
+  - ISS-0191  # the linter that could check handoff byte-identity claims mechanically
+
+queue_task_id: 210
+github_issue: https://github.com/tvolodi/letflow/issues/402
+github_issue_note: >
+  register_task created both the queue task (210) and its mirrored GitHub issue (#402) in one call,
+  per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called separately. The id comes
+  from register_task's `issue_ref`, not from a directory scan. Ids between 205 and 210 were consumed
+  by other sessions' registrations and carry no ISS- record here -- non-contiguity is expected.
+status: open

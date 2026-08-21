@@ -48,7 +48,10 @@ full — both directly applicable here); `lib/letflow/design/req039-sandbox-pool
 `deps/ecto_sql/lib/ecto/adapters/postgres.ex` (`lock_for_migrations/3`);
 `deps/db_connection/lib/db_connection/ownership/proxy.ex`;
 `scratch/provision_latency.awk` and `scratch/claim_latency.exs` (ISSUE-FIXER's
-measurement instruments, read to confirm what they actually measure).
+measurement instruments, read to confirm what they actually measure — the `.awk`
+instrument's sampling bias, found by reading it, is §10.4's caveat); and every
+ISSUE-FIXER **output** file now present in `scratch/`, read line by line rather than
+via its summary — see the evidence table below.
 
 **Verified first-hand in this worktree** (VERIFIED = read from source, or a command
 was run and its real output observed):
@@ -73,13 +76,50 @@ was run and its real output observed):
 
 **Could NOT be verified in this worktree, and this design does not depend on the
 unverified parts:** every latency number in §4 is **ISSUE-FIXER's measurement,
-attributed as such** — the partition logs are not present here, `scratch/` holds
-only the two instruments and not their output, and this run is explicitly forbidden
-to run the suite. §4's derivation is constructed to hold for any distribution
-consistent with those samples, and §10's regression-test contract depends on no
-latency measurement at all. The `max_connections = 100` reading on
-`letflow-2-postgres-1` is likewise ISSUE-FIXER's (no container access here); it
-enters only §13, which argues that number is *not* the mechanism.
+attributed as such** — this run is explicitly forbidden to run the suite, so none of it
+could be reproduced here.
+
+**What `scratch/` actually contains — corrected.** An earlier revision of this paragraph
+said `scratch/` "holds only the two instruments and not their output". That was true when
+it was written and is no longer: ISSUE-FIXER left its raw output there as well, and this
+revision read all of it.
+
+| `scratch/` file | What it holds | Produced by | Used by |
+|---|---|---|---|
+| `claim_latency.exs` | the direct probe (instrument) | ISSUE-FIXER | §4.1, OQ-1 |
+| `provision_latency.awk` | the log-gap extractor (instrument) | ISSUE-FIXER | §4.1, §10.4 |
+| `db_load.sh` | the **controlled load generator** used to produce the "loaded host" condition | ISSUE-FIXER | §2.2, §4.1 rows 2–3 |
+| `claim-latency-quiet-host.txt` | quiet-host n=20 raw series + summary | ISSUE-FIXER | §4.1 row 1 |
+| `claim-latency-sample-B.txt` | loaded-host n=20 raw series + summary | ISSUE-FIXER | §4.1 row 3, §4.2 |
+| `failing-run-provision-latency.txt` | log-derived partition-4 series, run 1 | ISSUE-FIXER | §4.1 row 4 |
+| `green-run-provision-latency.txt` | log-derived series, 2026-08-21 green run | ISSUE-FIXER | §4.1 row 5 |
+| `run2-N4-reproduction.log` | pre-fix N=4 run 2 summary (11 failures) | ISSUE-FIXER | §2.3, §10.4 |
+| `run3-prefix-quiet-N4.log` | pre-fix N=4 run 3 summary (5 failures, siblings idle) | ISSUE-FIXER | §10.4 |
+| `run3-provision-latency-p4.txt` | run 3's partition-4 provision series | ISSUE-FIXER | §10.4 |
+
+**Provenance is uniform: ISSUE-FIXER produced every one of them**, including run 3, which
+it ran after the first gate round. This design step produced no measurement of its own and
+re-ran none of them; the only things it executed are the three `iss0220_*` probes behind
+V5/V6/V7 (§14).
+
+**`scratch/` is gitignored, so a future reader of this document cannot open any of those
+files.** Every load-bearing figure is therefore **quoted inline where it is used** rather
+than cited by filename: §4.1's table carries each series' own summary line verbatim, and
+§10.4 carries run 3's complete partition-4 series and per-partition failure counts.
+
+**One figure has no artefact in this worktree, and it is the load-bearing one.** The
+loaded-host **sample A** series (§4.1 row 2) is not in `scratch/`; only ISSUE-FIXER's
+reported summary exists for it — n=20, min 2112, median 3407, **max 15 373**, 3/20 over
+5000 ms. Since **floor 1 = 15 373 ms is taken from sample A**, and §4.5's P4 separation
+rule is derived from that same number at the other end, the single most load-bearing input
+to §4.5 rests on a report rather than on an artefact this run inspected. Stated plainly
+here and carried into **OQ-1**.
+
+§4's derivation is constructed to hold for any distribution consistent with those samples,
+and §10's regression-test contract depends on no latency measurement at all. The
+`max_connections = 100` reading on `letflow-2-postgres-1` is likewise ISSUE-FIXER's (no
+container access here); it enters only §13, which argues that number is *not* the
+mechanism.
 
 ---
 
@@ -155,9 +195,29 @@ measured rather than converted into an exit) shows:
   dropping 197% → 0.42% CPU and `letflow-2-postgres-1` 20.95% → 4.95% before the
   run), n=20, the observed maximum is **3621 ms against a 5000 ms budget — a margin
   of 1.38×.**
-- On the same host under its ordinary load, single-process still, n=40: **8 of 40
-  provisions (20%) exceed the entire `claim(0)` budget**, with a maximum of
+- On the same host under a **controlled synthetic load**, single-process still, n=40:
+  **8 of 40 provisions (20%) exceed the entire `claim(0)` budget**, with a maximum of
   **15 373 ms — 3.07× the budget.**
+
+  **"Loaded" here means deliberately generated, and an earlier revision of this section
+  wrongly called it "the host's ordinary load".** Reading `scratch/db_load.sh` for this
+  revision corrected it: the load is four shell workers, each looping `CREATE SCHEMA` +
+  28 `CREATE TABLE` + `DROP SCHEMA CASCADE` against `letflow-2-postgres-1`. That matters
+  and is stated rather than glossed, because **floor 1 (15 373 ms) comes from this
+  condition**, so the reader must know it was manufactured, not observed in the wild.
+  **It is nonetheless the right condition to size against, for a reason established
+  independently in §10.4:** the generator reproduces *the same shape of work* the N=4
+  suite inflicts on itself, and run 3 showed the suite producing over-budget provisions
+  with the sibling workspaces verifiably idle — i.e. the contention this budget must
+  survive is generated by the suite itself, and `db_load.sh` is a controllable stand-in
+  for it rather than an artificial stressor with no counterpart in operation.
+
+  One detail, noted because C1 makes it relevant: each generator worker creates **28**
+  tables per cycle, the same superseded figure C1 corrects to 31. The generator is
+  therefore marginally *lighter* than the real provisioning shape, ~10% per cycle. The
+  direction is favourable — floor 1 is not inflated by an over-heavy stand-in — so no
+  re-measurement is required on this account, but it is recorded so nobody later reads
+  the load as calibrated to the real unit when it is not.
 
 1.38× headroom at rest is not engineering margin; it is a coin flip against ordinary
 host jitter, for an operation that is 32 transactions of DDL whose latency is
@@ -167,10 +227,14 @@ is N concurrent partitions, and `docs/anti-patterns.md`'s "Running `docker compo
 up` from a secondary worktree checkout" documents the several-workspaces-each-with-
 its-own-Postgres arrangement this repo is actually checked out into.
 
-So the budget is under-sized against `provision_sandbox/0`'s **own single-threaded
-cost distribution**, not merely against a contended one. N=4 contention is what makes
-it fail *often*; it is not what makes it wrong. **The contention is evidence, not
-cause.**
+So the budget is under-sized against `provision_sandbox/0`'s cost distribution when it
+is the **only claim in flight** — one BEAM, one pool, `max_concurrent: 1`, no partitions,
+nothing else claiming. The precise claim, stated so the synthetic load above cannot be
+read as smuggling contention back in: the *host* is contended in samples A and B, and
+deliberately so; the **pool and the caller are not**. `TEST_PARALLEL_N=4` is therefore
+not a precondition of the failure — it only makes it fail *often*, by supplying the host
+contention `db_load.sh` supplies on purpose. It is not what makes the budget wrong.
+**The contention is evidence, not cause.**
 
 ### 2.3 Why the failure set has exactly the shape it has
 
@@ -213,9 +277,18 @@ tests are exposed) and on §2.4's demonstrated mechanism (route 3), never on a c
 V4 is load-bearing and was not in the diagnosis. `Ecto.Migrator` applies
 `timeout: :infinity` at every level it controls: the per-migration `Task.await`, the
 per-migration transaction, and the migration lock. A slow — or genuinely hung —
-provisioning has **no server-side deadline whatever**. Before this fix, the caller's
-5_000 ms `GenServer.call` timeout was the single deadline in the entire path, and it
-was set by a constant chosen for an unrelated reason.
+provisioning therefore has **no server-side deadline at any level `Ecto.Migrator`
+controls**.
+
+One qualification, carried with the same hedge as the sentence above so the claim is not
+read as broader than it is: **DBConnection's `:queue_target`/`:queue_interval` still
+govern connection *checkout*** and can drop a request that cannot obtain a connection —
+§2.5 C3 counts exactly one genuine queue drop in the run-2 failure log. That timer bounds
+*waiting for a connection*, not the DDL executed once one is held, so it is not a deadline
+on provisioning work; it is named here so a reader who finds it later does not conclude
+§2.4 overlooked it. Before this fix, the caller's 5_000 ms `GenServer.call` timeout was
+the single deadline on the provisioning *work* in the entire path, and it was set by a
+constant chosen for an unrelated reason.
 
 Two consequences that shape §4 and §5:
 
@@ -339,7 +412,7 @@ leaves open, and §3.2 does not pre-empt it.
 
 ### 3.3 Alternatives considered and rejected
 
-- **(A) Just raise `@call_timeout_buffer_ms` to 45_000.** Rejected. It leaves the
+- **(A) Just raise `@call_timeout_buffer_ms` to 44_000.** Rejected. It leaves the
   same untestable, undocumented, unconfigurable magic constant in place, one edit
   away from the identical failure — and it gives the tests nothing to derive their
   own bounds from, so §8's second magic-number class (which produced 2 of the 11
@@ -374,7 +447,7 @@ leaves open, and §3.2 does not pre-empt it.
 
 ---
 
-## 4. The default: 45 000 ms, derived from measurement
+## 4. The default: 44 000 ms, derived from measurement
 
 **Constraint on this section, from the run's own task block:** the number is
 justified from the measured distribution, never from "what made the run go green." No
@@ -397,14 +470,41 @@ pool)` so a slow provision is measured rather than converted into an exit, timed
 | Conditions | Instrument | n | min | median | max | > 5000 ms |
 |---|---|---|---|---|---|---|
 | **quiet host, single process** (`docker stats` confirmed idle) | direct probe | 20 | 918 ms | 1662 ms | **3621 ms** | 0/20 |
-| **loaded host, single process** (sample A) | direct probe | 20 | 2112 ms | 3407 ms | **15 373 ms** | 3/20 |
-| **loaded host, single process** (sample B) | direct probe | 20 | 1119 ms | 2471 ms | 8711 ms | 5/20 |
+| **loaded host, single process** (sample A) — load from `scratch/db_load.sh`, §2.2 | direct probe | 20 | 2112 ms | 3407 ms | **15 373 ms** | 3/20 |
+| **loaded host, single process** (sample B) — same generated load | direct probe | 20 | 1119 ms | 2471 ms | 8711 ms | 5/20 |
 | loaded host, N=4 suite, partition 4 | log-derived | 5 | 4594 ms | 5596 ms | 12 053 ms | 3/5 |
 | green N=4 suite, 2026-08-21 | log-derived | 26 | 897 ms | ≈1240 ms | 2302 ms | 0/26 |
+
+**Quoted inline, because `scratch/` is gitignored (§0)** — each direct-probe file's own
+trailing summary line, verbatim, and the two log-derived series in full:
+
+```
+claim-latency-quiet-host.txt : n=20 min=918ms  max=3621ms  median=1662ms mean=1831ms
+                               samples over 5000ms: 0/20
+claim-latency-sample-B.txt   : n=20 min=1119ms max=8711ms  median=2471ms mean=3287ms
+                               samples over 5000ms: 5/20
+                               -- "loaded" = scratch/db_load.sh, 4 synthetic DDL
+                                  workers; see §2.2 for why that is the right
+                                  condition to size against
+loaded-host sample A         : n=20 min=2112ms max=15373ms median=3407ms  (3/20 over 5000)
+                               -- ISSUE-FIXER's reported summary; no raw file in scratch/ (§0)
+failing-run-provision-latency.txt (run 1, partition 4, log-derived, n=5):
+                               4594, 4903, 5849, 12053, 5596  ms
+green-run-provision-latency.txt (2026-08-21 green run, log-derived, n=26):
+                               1900 1200 1201 1135 1088 1146 1240 1473 1302 1154 1420
+                               1484 1432  995  897 1947 1162 1341 1242 1207 1045 1291
+                               1041 2302 1177 1428  ms
+```
 
 Combined direct-probe measurement under load: **n=40, 8/40 = 20% of provisions exceed
 the entire `claim(0)` budget of 5000 ms. Highest single observed provision across
 every measurement: 15 373 ms.**
+
+**Both log-derived rows (4 and 5) are biased low and must not be read as tail estimates**
+— `provision_latency.awk` can only report provisions that *completed*, so a provisioning
+killed by its caller's timeout is invisible to it. §10.4 states the mechanism and its
+consequence in full. This is why §4.4's floor 1 comes from a direct-probe sample, where
+`max_wait_ms: 600_000` guarantees the slow cases are measured rather than dropped.
 
 `DROP SCHEMA … CASCADE`, for completeness: 20–498 ms across the same 40 samples, max
 687 ms under N=4 load. Used in §3.2 and §8.2.
@@ -475,85 +575,160 @@ the same class of error as `@call_timeout_buffer_ms` itself.
 **Ceiling — ExUnit's default per-test timeout, 60 000 ms (V5).** The provisioning
 budget must stay meaningfully below it so ExUnit's own timeout remains the outer
 bound and a genuinely stuck claim is reported as a legible `claim/2` timeout rather
-than pre-empting, or being pre-empted by, the framework's deadline. Per **C2**,
+than pre-empting, or being pre-empted by, the framework's deadline. **"Meaningfully
+below" is quantified in §4.5 as P4** — the separation must itself be at least one
+worst-observed provisioning — and that quantification, not a preference for round
+distances, is what selects the value. Per **C2**,
 `:ownership_timeout` (120 000 ms, and inactive under `:auto` mode anyway) is **not** a
 ceiling here and is not used as one.
 
-### 4.5 Decision: 45 000 ms
+### 4.5 Decision: 44 000 ms
 
-**The decision rule, stated before the number so it can be checked against it.** Three
-premises, each established elsewhere in this document and none of them statistical:
+**The decision rule, stated before the number so it can be checked against it.** Four
+premises. Each is established elsewhere in this document, and none is a tail estimate —
+P1 and P4 both use a single *observed* quantity (15 373 ms), not an extrapolation from
+one:
 
 - **(P1)** Floor 1 is a hard exclusion: 15 373 ms was *observed* as legitimate work
   (§4.4).
-- **(P2)** This budget is the **only deadline anywhere in the provisioning path**
-  (§2.4 / V4 — `Ecto.Migrator` pins `timeout: :infinity` at all three levels it
-  controls). It therefore must **not** be sized as a pathology detector; it has no such
-  job, and ExUnit's 60 000 ms per-test timeout is the actual backstop for a genuine
-  hang.
+- **(P2)** This budget is the **only deadline on the provisioning work anywhere in the
+  path** (§2.4 / V4 — `Ecto.Migrator` pins `timeout: :infinity` at all three levels it
+  controls; DBConnection's checkout timers bound waiting for a *connection*, not the DDL
+  run once one is held, per §2.4's qualification). It therefore must **not** be sized as
+  a pathology detector; it has no such job, and ExUnit's 60 000 ms per-test timeout is
+  the actual backstop for a genuine hang.
 - **(P3)** The error costs are strongly asymmetric. Sizing too small produces **false
   failures on correct work** — the actual issue, 9 of the 11 measured failures, and a
   class that recurs indefinitely because it is load-dependent. Sizing too large costs
   only **late detection of a hang**, bounded by ExUnit at 60 s, in a case that has
   never been observed (the measured failure set contains zero ExUnit test timeouts).
+  **P3 is not free — §4.6 quantifies what sizing large actually costs, and §4.5's "Why
+  not 30 000" weighs it rather than dismissing it.**
+- **(P4)** **Separation from the ceiling must itself be at least one worst-observed
+  provisioning: ≥ 15 373 ms.** This is not a preference for round distances; it is the
+  condition under which the two deadlines stay *distinguishable outcomes*. If the gap
+  between the budget and ExUnit's 60 000 ms is smaller than a single legitimate
+  provisioning, then one slow-but-legitimate provisioning plus ordinary test overhead
+  can straddle both, and which deadline fires first becomes a coin flip — destroying
+  exactly the legibility the claim timeout exists to provide (§4.6). Note that the same
+  measured quantity does two different jobs at the two ends: floor 1 excludes budgets
+  *below* 15 373 ms, and P4 excludes budgets above `60 000 − 15 373`.
 
 Since the tail is not estimable (§4.4) and the costs are asymmetric (P3), the rational
-choice is **the largest value that still preserves clear separation from the ceiling**
-— not the smallest value that clears some manufactured floor.
+choice is **the largest value P4 admits** — not the smallest value that clears some
+manufactured floor. P1 and P4 together bound the interval from both sides, and P2/P3
+say which end of it to take:
 
 ```
-hard exclusion (§4.4 floor 1):   > 15 373 ms
-ceiling        (§4.4):           <  60 000 ms, with clear separation
-rule           (P1-P3):          take the largest value preserving that separation
-chosen:                             45 000 ms   (0.75x ceiling, 15 000 ms separation)
+hard exclusion   (§4.4 floor 1, P1):   budget            >  15 373 ms
+ceiling          (§4.4):               budget            <  60 000 ms
+separation rule  (P4):                 60 000 - budget   >= 15 373 ms
+                                    => budget            <= 44 627 ms
+admissible interval:                   (15 373 ms, 44 627 ms]
+selection        (P2, P3):             take the largest admissible value
+chosen:                                44 000 ms
+                                       separation 16 000 ms  (> 15 373, P4 satisfied)
+                                       2.86x floor 1, 0.73x the ceiling
+                                       627 ms below the admissible ceiling, trimmed
+                                       downward to a clean kilosecond
 ```
+
+**45 000 ms — this document's previous choice — is excluded by this rule, by 373 ms.**
+Recorded rather than quietly replaced, because §5.1's `@doc` sends a future reader here
+to redo the derivation and they must be able to see what went wrong. The earlier
+revision chose 45 000 and justified it with "45 000 keeps a full observed
+provisioning's worth of separation, and then some" — which is arithmetically false:
+`60 000 − 45 000 = 15 000`, and the worst observed provisioning is `15 373`, so the
+separation was **0.976** of one provisioning, not "a full one", and certainly not "and
+then some". What actually produced 45 000 was `0.75 × 60 000`; §4.5 then presented
+`0.75×` as a *property* of the number rather than as the rule that generated it, and
+bolted on a data anchor the number misses. CODE-DESIGN-VALIDATOR caught it. The fix is
+not to soften the sentence but to let the stated basis determine the value, which it
+does: `≤ 44 627`. Nothing here is chosen for roundness except the final 627 ms trim,
+which moves in the conservative direction the rule already points.
 
 Its multiples:
 
-| Reference | Multiple at 45 000 ms |
+| Reference | Multiple at 44 000 ms |
 |---|---|
-| quiet-host median (1662 ms) | **27.1×** |
-| quiet-host max (3621 ms) | **12.4×** |
-| green N=4 max (2302 ms) | **19.5×** |
-| N=4 partition-4 max (12 053 ms) | **3.73×** |
-| **highest observed sample (15 373 ms)** | **2.93×** |
-| ExUnit per-test ceiling (60 000 ms) | **0.75×** (15 000 ms separation) |
+| quiet-host median (1662 ms) | **26.5×** |
+| quiet-host max (3621 ms) | **12.1×** |
+| green N=4 max (2302 ms) | **19.1×** |
+| N=4 partition-4 max (12 053 ms) | **3.65×** |
+| **highest observed sample (15 373 ms)** | **2.86×** |
+| ExUnit per-test ceiling (60 000 ms) | **0.73×** (16 000 ms separation) |
 
 Per-migration sanity check on the mechanism rather than the statistics: 31 migrations
 / 32 transactions. Quiet-host median ≈ 54 ms per migration; the worst observed sample
-≈ 496 ms per migration (≈9× degradation); a 45 000 ms budget tolerates ≈1450 ms per
-migration, ≈27× the quiet-host per-migration cost. For a `CREATE TABLE`-shaped DDL
+≈ 496 ms per migration (≈9× degradation); a 44 000 ms budget tolerates ≈1420 ms per
+migration, ≈26× the quiet-host per-migration cost. For a `CREATE TABLE`-shaped DDL
 statement in its own transaction against a local containerised Postgres, ~1.4 s per
 statement is a generous but not absurd ceiling.
 
-**Why not higher (55 000).** Separation from the ceiling would collapse to 5000 ms —
-**less than a third of a single observed provisioning (15 373 ms)**. At that point the
-budget and ExUnit's deadline are no longer distinguishable outcomes: one slow-but-legitimate
-provisioning plus ordinary test overhead can straddle both, and the claim timeout stops
-being the legible failure it exists to be. 45 000 keeps a full observed provisioning's
-worth of separation, and then some.
+**Why not higher.** P4 excludes it arithmetically rather than by taste: every value
+above 44 627 ms leaves less than one observed provisioning between the budget and
+ExUnit's deadline. At 55 000 the separation collapses to 5000 ms — **less than a third
+of a single observed provisioning (15 373 ms)** — and the two deadlines stop being
+distinguishable outcomes at all: one slow-but-legitimate provisioning plus ordinary test
+overhead straddles both, and the claim timeout stops being the legible failure it exists
+to be. 44 000 leaves 16 000 ms, which is one full observed provisioning with 627 ms to
+spare, and that "to spare" is the entire margin this rule allows itself.
 
-**Why not 30 000 (the value both the handoff and ISSUE-FIXER proposed).** It is not
-excluded by any floor — with floor 2 withdrawn (§4.4), nothing in the data rules it
-out, and this document should not pretend otherwise. It is rejected on **P3** alone:
-30 000 gives up 15 000 ms of coverage against a tail we have explicitly established is
-*not estimable*, and buys in exchange only 15 seconds' earlier detection of a hang
-that has never been observed and that ExUnit catches anyway. That is trading an
-expensive error class for a cheap one in the wrong direction. ISSUE-FIXER explicitly
-invited this re-derivation ("I would rather ship your derivation than my guess") after
-its own direct probe raised the observed maximum from 12 053 ms to 15 373 ms, cutting
-its stated 2.5× multiple to ~1.95×.
+**Why not 30 000 (the value both the handoff and ISSUE-FIXER proposed).** It is fully
+**admissible**: it clears floor 1, and its separation from the ceiling (30 000 ms) is
+nearly twice what P4 demands. Nothing in the data excludes it, and this document should
+not pretend otherwise. It is rejected on **P3** — and because P3 is then the whole load
+the decision rests on, both sides of the trade are stated rather than one:
 
-**What would change this number.** Not a green run, and not a preference. Only a
-direct measurement (`scratch/claim_latency.exs`) producing an observed legitimate
-provisioning above 15 373 ms, which moves floor 1 — or a change to `tenant_scoped_migrations/0`'s
-size, which changes the mechanism. See OQ-1.
+*In 30 000's favour — a real, non-zero cost of the higher value.* §4.6's
+failure-legibility property is lost when a test's **first** provisioning exceeds
+`60 000 − budget`: that threshold is **16 000 ms at 44 000** and **30 000 ms at
+30 000**. The worst observed provisioning is 15 373 ms, so at 44 000 the loss region
+starts just above the top of the measured data — close enough to sit inside measurement
+noise — while at 30 000 it starts at roughly twice the observed maximum. §4.6 therefore
+**does** discriminate between the candidates, in 30 000's favour, right at the margin the
+data reaches. An earlier revision of §4.6 asserted the opposite ("it cannot discriminate
+between the candidates at all"), which zeroed out precisely the counterweight P3 has to
+be argued *against*; CODE-DESIGN-VALIDATOR caught it, and §4.6 now quantifies it.
+
+*Against 30 000, decisively — the asymmetry P3 names.* What §4.6 costs is the
+*legibility of a failure in a case that is already a failure*: two pathological
+provisionings inside one test, where both outcomes are failures and **no false pass is
+available in either direction**, in a scenario the measured failure set contains **zero**
+instances of. What sizing too small costs is a **false failure on correct work** — the
+actual issue, 9 of the 11 measured failures, recurring indefinitely because it is
+load-dependent. 30 000 gives up 14 000 ms of coverage against a tail §4.4 establishes is
+*not estimable*, and buys in exchange a legibility improvement in a never-observed case
+plus 14 seconds' earlier detection of a hang that has also never been observed and that
+ExUnit catches anyway. That is trading an expensive, observed error class for a cheap,
+hypothetical one.
+
+The higher value therefore wins on a weighed argument, not on an empty one. ISSUE-FIXER
+explicitly invited this re-derivation ("I would rather ship your derivation than my
+guess") after its own direct probe raised the observed maximum from 12 053 ms to
+15 373 ms, cutting its stated 2.5× multiple to ~1.95×.
+
+**What would change this number.** Not a green run, and not a preference. Only a direct
+measurement (`scratch/claim_latency.exs`) producing an observed *legitimate* provisioning
+above 15 373 ms — or a change to `tenant_scoped_migrations/0`'s size, which changes the
+mechanism. See OQ-1.
+
+**Note that 15 373 ms now enters the derivation at both ends**, so a new maximum `M` moves
+both: floor 1 rises to `M`, and P4's admissible ceiling falls to `60 000 − M`. The
+admissible interval `(M, 60 000 − M]` is therefore non-empty **only while `M < 30 000 ms`**.
+If a legitimate provisioning above 30 000 ms is ever observed, this rule admits no value at
+all against a 60 000 ms ceiling, and the correct response is to raise the *framework*
+deadline (`@moduletag timeout:`, §4.6) rather than to abandon P4 — the conclusion that the
+two deadlines must stay one provisioning apart does not weaken just because it becomes
+inconvenient.
 
 ### 4.6 The one consequence this choice accepts, stated explicitly
 
-At 45 000 ms, a single test performing **two** pathological provisionings reaches
-ExUnit's 60 000 ms per-test timeout before the second claim's own timeout fires, so it
-would fail as an ExUnit test timeout rather than as a clean claim timeout.
+At 44 000 ms, a single test performing **two** pathological provisionings can reach
+ExUnit's 60 000 ms per-test timeout before the second claim's own timeout fires, in
+which case it fails as an opaque ExUnit test timeout rather than as a clean, legible
+claim timeout. "Can", not "does" — the exact condition is derived below, and at 44 000
+it requires the *first* provisioning alone to exceed 16 000 ms.
 
 **Four** tests in `sandbox_pool_test.exs` perform two real provisionings — enumerated
 by re-reading every `SandboxPool.claim(` site in the file, not estimated (an earlier
@@ -564,14 +739,51 @@ standard):
 | Test | Provisioning claims | Note |
 |---|---|---|
 | `:180` two immediate claims | `:184`, `:189` | |
-| `:216` queued waiter is served | `:220`, `:242` | **tightest post-change** — `:242`'s waiter also carries `max_wait_ms: 2_000`, so its own call timeout is 47 000 ms, and the two claims plus that queue wait are the closest this file comes to ExUnit's 60 000 ms |
+| `:216` queued waiter is served | `:220`, `:242` | **tightest post-change** — `:242`'s waiter also carries `max_wait_ms: 2_000`, so its own call timeout is 46 000 ms, and the two claims plus that queue wait are the closest this file comes to ExUnit's 60 000 ms |
 | `:319` release frees the slot | `:323`, `:340` | the `claim(0)` at `:331` provisions nothing |
 | `:367` killed owner reclaimed | `:379`, `:413` | the `claim(0)` at `:396` provisions nothing |
 
-This is a **failure-legibility** cost in an already-pathological case, not a
-correctness one — both outcomes are failures, neither is a false pass. It is **not** a
-reason to choose a lower value: the property is already lost at 30 000 (2 × 30 000 =
-60 000, exactly the ceiling), so it cannot discriminate between the candidates at all.
+**What this costs, quantified — because §4.5 rejects 30 000 on P3, P3 is the claim that
+sizing too large costs *only* late detection of a hang, and with floor 2 withdrawn (§4.4)
+nothing else in the data excludes 30 000. This section is where the counterweight to P3
+is measured, so it must not be zeroed out.**
+
+For a budget `B` and a first provisioning of `T1` ms, a second pathological provisioning
+still produces a **clean claim timeout** at `T1 + B`, unless ExUnit fires first at
+60 000. The legibility is therefore lost exactly when `T1 ≥ 60 000 − B`:
+
+| Budget | Legibility lost once the first provisioning exceeds | vs. the observed maximum (15 373 ms) |
+|---|---|---|
+| **44 000 ms** (chosen) | **16 000 ms** | just *above* it — within measurement noise of the data |
+| 30 000 ms | 30 000 ms | ~2× it — never observed |
+| 45 000 ms (previous revision) | 15 000 ms | *below* it — the data already contains such a provisioning |
+
+So the property **does** discriminate between the candidates, and it discriminates in
+favour of the lower budget, right at the margin the data actually reaches. **An earlier
+revision of this section claimed it "cannot discriminate between the candidates at all",
+on the grounds that "the property is already lost at 30 000 (2 × 30 000 = 60 000,
+exactly the ceiling)". That is false.** `2 × B = 60 000` describes only the case where
+the *first* provisioning consumes its **entire** budget — 30 000 ms of legitimate
+provisioning, never observed anywhere in §4.1. The real threshold is `T1 ≥ 60 000 − B`,
+which is a far more demanding condition at `B = 30 000` than at `B = 44 000`.
+CODE-DESIGN-VALIDATOR caught it. It is recorded rather than silently deleted, because
+erasing this counterweight is exactly what made §4.5's P3 argument look free when it is
+not.
+
+**It is nonetheless not a reason to choose the lower value — and §4.5 now makes that
+argument instead of assuming it.** The cost is failure *legibility* in a case that is
+already a failure (no false pass is available in either direction), and it requires two
+pathological provisionings inside one test, of which the measured failure set contains
+zero instances. The cost it is weighed against is a false failure on correct work,
+observed 9 times out of 11. §4.5's "Why not 30 000" states both sides and does the
+weighing.
+
+**One consequence worth stating, since B1's re-derivation moved the number anyway:**
+this is a second, independent point in 44 000's favour over the 45 000 an earlier
+revision chose. At 45 000 the loss region begins at `T1 ≥ 15 000 ms`, which is *below*
+the observed maximum of 15 373 — the measured data already contains a provisioning that
+would trigger it. At 44 000 it begins at 16 000 ms, just outside the data. The
+rule-derived value is better on this axis too, not merely more honestly derived.
 
 If it is ever observed for real, the correct response is `@moduletag timeout: <n>` on
 that file — which raises a *framework* deadline, not an assertion — **not** lowering
@@ -604,9 +816,11 @@ constant that can drift (ISS-0220).
 @spec claim_call_timeout(max_wait_ms :: non_neg_integer()) :: pos_integer()
 
 @doc """
-The GenServer.call/3 timeout release/2 uses: `provision_timeout_ms()` -- sized
-for one in-flight provisioning ahead of it in the pool's mailbox, not for the
-DROP itself. See the design doc's §3.2.
+The GenServer.call/3 timeout release/2 uses: `provision_timeout_ms()` -- the same
+calibrated number, so the release path has a derived bound rather than
+GenServer.call/2's implicit 5_000 ms default. It is not sized from the DROP cost,
+and not because anything currently blocks the pool's mailbox ahead of a release.
+See the design doc's §3.2.
 """
 @spec release_call_timeout() :: pos_integer()
 ```
@@ -652,14 +866,14 @@ sweeps `sandbox_%` schemas. Pre-existing behaviour, unchanged here, and the reas
 
 ```
 # lib/letflow/sandbox_pool.ex
-@default_provision_timeout_ms 45_000
+@default_provision_timeout_ms 44_000
 ```
 
 ```
 # optional override, in any config/*.exs -- NOT added to any of them by this fix
 config :letflow, :sandbox_pool,
   max_concurrent_sandboxes: 1,
-  provision_timeout_ms: 45_000
+  provision_timeout_ms: 44_000
 ```
 
 **Resolution order, normative:**
@@ -734,8 +948,13 @@ the release path needs a budget at all (§3.2).
 Add a section titled **"Two budgets: queue wait vs. provisioning"** stating, in prose:
 that `max_wait_ms` bounds queue parking only; that `provision_timeout_ms/0` bounds one
 provisioning; that the two are summed for `claim/2`'s call timeout and that `release/2`
-uses the provisioning budget alone (and why — head-of-line blocking, not DROP cost);
-that the budget is a **caller-side** allowance and not a server-side abort (§5.3); and
+uses the provisioning budget alone — and why, stated as §3.2 and §7.3 now state it:
+**not** because the DROP costs anything like that (it does not, by two orders of
+magnitude) and **not** because anything currently blocks the pool's mailbox ahead of a
+release (nothing does — INV-SP-T4, §12), but so that the release path has a *derived*
+bound instead of `GenServer.call/2`'s implicit 5_000 ms default, and so it is already
+correctly sized once §12's head-of-line blocking is fixed; that the budget is a
+**caller-side** allowance and not a server-side abort (§5.3); and
 that the default is derived in
 `lib/letflow/design/iss0220-sandbox-pool-provision-timeout.md` §4, with an explicit
 "do not change this number without redoing that derivation."
@@ -810,11 +1029,11 @@ assumed, because the whole approach depends on it.
 
 | Site | Current | New | What the site waits for | Why the new bound is the right one |
 |---|---|---|---|---|
-| `:387` `assert_receive {:owner_claimed, …}, 2_000` | 2000 ms | `claim_rendezvous_timeout(1_000)` = 47 000 ms | a spawned owner's `claim(1_000, pool)` to complete and relay | **NOT fixed by the `claim/2` change** — one of the two measured mechanism-(2) failures (`SandboxPoolTest:367`, `no matching message after 2000ms`). 2000 ms is **0.55×** the quiet-host max (3621 ms) and **0.13×** the worst observed (15 373 ms) for the operation it waits on. |
-| `:262` `assert_receive {:waiter_claimed, …}, 3_000` | 3000 ms | `claim_rendezvous_timeout(2_000)` = 48 000 ms | the queued waiter's `claim(2_000, pool)` to be served after `release(held_id)` frees the slot | The other measured mechanism-(2) failure (`SandboxPoolTest:216`, `no matching message after 3000ms`). The waited-on work is a full cold-start provisioning; the bound must be the claim budget, not a hand-picked 3000 (0.83× the quiet-host max). |
-| `:249` waiter's `receive … after 3_000 -> flunk(…)` | 3000 ms | `pool_op_rendezvous_timeout()` = 46 000 ms | the **test process** to send `:release_waiter_claim`, which it does after `:262` succeeds plus two asserts and one `schema_exists?/1` query | Must not expire before the test process gets there. Derived from the pool-operation budget rather than inventing a "one Repo query" constant — one source of truth, generous in the safe direction (if the test process dies, `Task.async`'s link kills the waiter regardless, so an over-generous bound cannot hang the suite). |
-| `:273` `Task.await(waiter, 3_000)` | 3000 ms | `pool_op_rendezvous_timeout()` = 46 000 ms | the waiter's own `SandboxPool.release/2` (mailbox wait + `DROP … CASCADE`) plus its return | Release-only: `:262` has already succeeded, so no provisioning remains *for this caller* — but the pool may still be busy. Pairs exactly with §3.2's `release_call_timeout/0`; raising this bound without §3.2 would only relocate the failure into the release call. |
-| `:130` `wait_until_schema_dropped(schema_name, attempts \\ 400)` | 400 × 5 ms = 2000 ms | **deadline-based**, default `SandboxPool.release_call_timeout()` = 45 000 ms | the pool's `handle_info({:DOWN, …})` reclaim to finish a `DROP SCHEMA … CASCADE` over a 31-table schema | **Prophylactic, and labelled as such — see the note below.** The attempts→deadline conversion is the real improvement: an attempt count is an implicit time bound that silently changes meaning if the poll interval ever changes. Use `System.monotonic_time(:millisecond)` with the existing 5 ms poll interval. **`flunk/1` on expiry is retained verbatim.** |
+| `:387` `assert_receive {:owner_claimed, …}, 2_000` | 2000 ms | `claim_rendezvous_timeout(1_000)` = 46 000 ms | a spawned owner's `claim(1_000, pool)` to complete and relay | **NOT fixed by the `claim/2` change** — one of the two measured mechanism-(2) failures (`SandboxPoolTest:367`, `no matching message after 2000ms`). 2000 ms is **0.55×** the quiet-host max (3621 ms) and **0.13×** the worst observed (15 373 ms) for the operation it waits on. |
+| `:262` `assert_receive {:waiter_claimed, …}, 3_000` | 3000 ms | `claim_rendezvous_timeout(2_000)` = 47 000 ms | the queued waiter's `claim(2_000, pool)` to be served after `release(held_id)` frees the slot | The other measured mechanism-(2) failure (`SandboxPoolTest:216`, `no matching message after 3000ms`). The waited-on work is a full cold-start provisioning; the bound must be the claim budget, not a hand-picked 3000 (0.83× the quiet-host max). |
+| `:249` waiter's `receive … after 3_000 -> flunk(…)` | 3000 ms | `pool_op_rendezvous_timeout()` = 45 000 ms | the **test process** to send `:release_waiter_claim`, which it does after `:262` succeeds plus two asserts and one `schema_exists?/1` query | Must not expire before the test process gets there. Derived from the pool-operation budget rather than inventing a "one Repo query" constant — one source of truth, generous in the safe direction (if the test process dies, `Task.async`'s link kills the waiter regardless, so an over-generous bound cannot hang the suite). |
+| `:273` `Task.await(waiter, 3_000)` | 3000 ms | `pool_op_rendezvous_timeout()` = 45 000 ms | the waiter's own `SandboxPool.release/2` (`DROP … CASCADE`) plus its return | **Prophylactic, like `:130` — not in the measured failure set.** Per §3.2 the pool is **idle** at this point: `:262` has already succeeded, this per-test pool has one active claim and an empty `waiting` queue, and no other caller exists — so nothing can be ahead of this release in the mailbox, and the measured DROP (20–498 ms, max 687 ms) fits ~7× inside even the *existing* 3000 ms bound. The raise is taken for the two reasons that apply with the pool idle: it makes the bound **derived from the one source of truth** (`release_call_timeout/0`) instead of hand-picked, so it tracks a config override automatically; and it **future-proofs against §12**, after which a release genuinely can queue behind an in-flight provisioning. **An earlier revision instead justified this row by claiming it "pairs exactly with §3.2's `release_call_timeout/0`; raising this bound without §3.2 would only relocate the failure into the release call" — §3.2 has since withdrawn exactly that claim as unmeasured and self-contradictory (it presumed head-of-line blocking that INV-SP-T4 says is unreachable today), and it must not survive here.** |
+| `:130` `wait_until_schema_dropped(schema_name, attempts \\ 400)` | 400 × 5 ms = 2000 ms | **deadline-based**, default `SandboxPool.release_call_timeout()` = 44 000 ms | the pool's `handle_info({:DOWN, …})` reclaim to finish a `DROP SCHEMA … CASCADE` over a 31-table schema | **Prophylactic, and labelled as such — see the note below.** The attempts→deadline conversion is the real improvement: an attempt count is an implicit time bound that silently changes meaning if the poll interval ever changes. Use `System.monotonic_time(:millisecond)` with the existing 5 ms poll interval. **`flunk/1` on expiry is retained verbatim.** |
 
 **Note on `:130`, added after CODE-DESIGN-VALIDATOR review — this row is the weakest
 in the table and is not disguised as the others' equal.** It is **not** in the measured
@@ -825,7 +1044,7 @@ the existing 2000 ms with ~3× to spare. So the raise is **prophylactic** — it
 against a DROP excursion nobody has observed.
 
 It also carries a real cost, stated rather than hidden: a schema that is *never*
-dropped (a genuine reclaim regression) now takes 45 s to report instead of 2 s, and in
+dropped (a genuine reclaim regression) now takes 44 s to report instead of 2 s, and in
 `:367` — which per §4.6 also performs two provisionings — that will often collide with
 ExUnit's 60 000 ms per-test timeout, **replacing a legible `flunk/1` message with an
 opaque framework timeout**. That is a real regression in failure legibility for the
@@ -840,7 +1059,7 @@ one default from measured DROP cost (say 5 000 ms, ~7× the 687 ms maximum) is a
 defensible alternative and **this design does not object to it**; what it rules out is
 leaving the value un-derived, or leaving the attempts-based form in place.
 
-Derived values shown at the 45 000 ms default; every one tracks a config override
+Derived values shown at the 44 000 ms default; every one tracks a config override
 automatically, which is the point of deriving them.
 
 ### 8.3 Three bounds in the same file deliberately NOT changed
@@ -864,7 +1083,7 @@ None appears in the measured failure set (§2.3).
   timeout path cannot be what produces the success — i.e. the number is load-bearing for
   what the test *proves*, and moving it would change what is measured, which §8.0
   forbids and `core-directives.md` §"Never Satisfy a Gate by Editing What It Measures"
-  forbids outright. Its *call* timeout does rise (to 47 000 ms) via §7.2, which is the
+  forbids outright. Its *call* timeout does rise (to 46 000 ms) via §7.2, which is the
   correct fix; its queue-wait semantics stay exactly as they are. Named here because
   §8.3 exists so that absences read as decisions, and this is the one omission a
   reviewer would most reasonably question.
@@ -873,7 +1092,7 @@ None appears in the measured failure set (§2.3).
 
 - **`test/letflow/sandbox_pool/fixture_loader_test.exs`.** Its only bound is
   `SandboxPool.claim(2_000, pool)` inside `claim_schema!/0` (`:63`), whose call timeout
-  rises from 7000 to 47 000 by §7.2 alone. Its measured failure (`:170`) is a
+  rises from 7000 to 46 000 by §7.2 alone. Its measured failure (`:170`) is a
   mechanism-(1) `GenServer.call(pid, {:claim, 2000}, 7000)` timeout — a library
   failure, not a test-side bound. The file contains no `assert_receive`, no
   `Task.await`, no `receive … after`, and no polling helper (grepped). **No edit.**
@@ -1064,7 +1283,7 @@ without RT-3 nothing prevents `release/2` silently reverting to `GenServer.call/
 With **no** `:provision_timeout_ms` key present (the shipped state per §6):
 
 ```
-assert SandboxPool.provision_timeout_ms() == 45_000
+assert SandboxPool.provision_timeout_ms() == 44_000
 assert SandboxPool.provision_timeout_ms() < 60_000     # ExUnit's per-test ceiling, §4.4
 assert SandboxPool.provision_timeout_ms() > 15_373     # the highest observed provisioning, §4.1
 ```
@@ -1109,21 +1328,73 @@ justification in the comment, and do not report them as separate coverage.
   has since been refuted by direct measurement and must not be carried into
   RELEASE-VALIDATOR's writeup.**
 
-  ISSUE-FIXER ran the suite pre-fix at `TEST_PARALLEL_N=4` with the sibling workspaces
-  verifiably idle (`docker stats` during the run: letflow-postgres-1 5.84%,
-  letflow-3-postgres-1 6.32%, i.e. neither sibling running a suite) and got **5
-  failures, all in the three ISS-0220 files, zero elsewhere** — three
+  **The refuting measurement (run 3), attributed and quoted.** ISSUE-FIXER ran the suite
+  pre-fix at `TEST_PARALLEL_N=4` with the sibling workspaces verifiably idle
+  (`docker stats` during the run: `letflow-postgres-1` 5.84%, `letflow-3-postgres-1`
+  6.32% — i.e. neither sibling running a suite) and got **5 failures out of 1433 tests /
+  5 properties, zero anywhere outside the ISS-0220 files** — three
   `GenServer.call({:claim, N}, max_wait_ms + 5000)` timeouts plus the two `:367`/`:216`
-  `assert_receive` bounds. The reason is that the N=4 run **self-inflicts** the
-  contention: partition-4 provisions in that same run measured 2745, 2785, 2977, 4288,
-  4848 and **6642** ms — three over the 5000 ms budget with no sibling load whatever.
+  `assert_receive` bounds. Per-partition: `partition 1: 0 failures`, `partition 2: 0
+  failures`, `partition 3: 1 failure`, `partition 4: 4 failures`.
+  **Those five span only *two* of the three ISS-0220 files** —
+  `test/letflow/definitions/promotion_assertion_rerun_test.exs` contributed none in this
+  run. "All in the ISS-0220 files" is true as set membership and is the claim being made;
+  it is *not* a claim that each of the three files failed.
 
-  The single-process probe and the N=4 suite are therefore measuring different regimes,
-  and only the latter is the regime the issue lives in. **A green N=4 run with idle
-  siblings IS meaningful post-fix evidence**, and RELEASE-VALIDATOR should reproduce that
-  condition and state explicitly whether siblings were idle when reporting it. What
-  remains true is that the run is load-dependent and slow, and that RT-1..RT-4 pin the
-  defect deterministically — the suite run corroborates, it is not the proof.
+  **The count correction, and it matters more than it looks.** An earlier revision of
+  this bullet wrote that "partition-4 provisions in that same run measured 2745, 2785,
+  2977, 4288, 4848 and 6642 ms — **three** over the 5000 ms budget." **Only one of those
+  six exceeds 5000.** The six figures are the complete partition-4 series and are
+  correct; the count is not. Re-measured by CODE-DESIGN-VALIDATOR and re-read from the
+  raw series here: within partition 4 it is **1 of 6** (`6642`); the figure "three" is
+  correct only at **run level — 3 of 20 completed provisions across all four partitions
+  (p1 `5083`, p3 `5007`, p4 `6642`)**. The count arrived with ISSUE-FIXER's report of
+  run 3 and was inherited into this document unchecked: a **run-level** count attached to
+  a **partition-level** list, which is this repo's own documented anti-pattern
+  ["Re-deriving the count while inheriting the unit being counted"](../../../docs/anti-patterns.md)
+  — the same anti-pattern §2.5 C1 invokes against the "28 migrations" figure, recurring
+  in this document's own text rather than in the source it was auditing. ISSUE-FIXER
+  re-measured and flagged it. The correct statements are: partition 4 → **1 of 6 over
+  5000 ms, max 6642 ms**; whole run → **3 of 20 over 5000 ms**, with no sibling load
+  whatever.
+
+  **The methodological caveat, which is the more important half of this correction.**
+  `scratch/provision_latency.awk` measures the gap from a logged `CREATE SCHEMA
+  "sandbox_X"` to the **next logged query naming the same `sandbox_X`**. A provisioning
+  that never reaches a subsequent logged query — because the caller's `GenServer.call`
+  timeout fired, the test process exited, and the migration's connection was torn down
+  with it (§2.4 / §2.5 C3) — **never closes that gap and is therefore invisible to the
+  instrument entirely.** The instrument thus **systematically under-samples exactly the
+  tail this design is arguing about**: it can only ever report provisions that finished.
+  That is why a run producing **three `{:claim, N}` call-timeout failures** simultaneously
+  shows only **3 of 20 *completed* provisions** over 5000 ms — those three timeouts are
+  themselves evidence of three further over-budget provisions the instrument could not
+  see. On the reading that each timeout corresponds to one distinct provisioning in
+  flight — which these per-test pools support, holding at most one claim at a time
+  (INV-SP-T4) — run 3's true over-budget count is **at least 6 of at least 23**, not
+  3 of 20. The exact number is not recoverable from the logs; the *direction* is, and
+  the direction is the point. **This is a real limitation on every log-derived latency
+  figure in §4.1 (rows 4 and 5), and it biases all of them low.** It does not touch the
+  direct-probe rows (1–3), which use
+  `max_wait_ms: 600_000` precisely so a slow provision is measured rather than converted
+  into an exit — which is why §4.4's floor 1 is taken from a direct-probe sample and not
+  from a log-derived one.
+
+  **Why a post-fix green N=4 run is informative at all: the pre-fix base rate.** Two of
+  two pre-fix N=4 runs in this worktree were red — **run 2: 11 failures** (partitions
+  1/3/4 at 5/1/5), **run 3: 5 failures with siblings verifiably idle**. A condition that
+  reproduces 2 out of 2 is what licenses reading a subsequent green as evidence of
+  anything. **The signal is asymmetric, and RELEASE-VALIDATOR must not treat the two
+  directions as equivalent:** a **red** N=4 run whose failures land in the ISS-0220 files
+  means the fix did not land — that is a strong, near-conclusive signal. A **green** N=4
+  run is **corroboration only**, because the failure is load-dependent and a green run is
+  also what a lucky run looks like.
+
+  The single-process probe and the N=4 suite are measuring different regimes, and only
+  the latter is the regime the issue lives in. **A green N=4 run with idle siblings IS
+  meaningful post-fix evidence**, and RELEASE-VALIDATOR should reproduce that condition
+  and state explicitly whether siblings were idle when reporting it — but it corroborates;
+  RT-1..RT-4 are the proof.
 
 ---
 
@@ -1166,8 +1437,10 @@ provisioning — **measured at up to 15 373 ms**, against `max_wait_ms` values c
 routinely set to 1000–2000 ms. Since `max_wait_ms` is documented as the bound on that
 wait (`claim/2`'s `@doc`, `req039-…md` §4.4 step 3), this is a genuine violation of a
 documented contract, not a quality-of-service nicety. It is also why INV-SP-T4 must be
-stated as a limit rather than a guarantee, and why §3.2's `release_call_timeout/0` has
-to absorb a possible in-flight provisioning ahead of it.
+stated as a limit rather than a guarantee, and why §3.2's `release_call_timeout/0` is
+sized to absorb a possible in-flight provisioning ahead of it **once this case becomes
+reachable** — it is not reachable today, which is exactly why §3.2 rests on
+`safe_release/2`'s `rescue` hole rather than on head-of-line blocking.
 
 **Why it is deliberately scoped out of ISS-0220.** The fix means moving provisioning
 into a monitored `Task` and carrying slot bookkeeping across an asynchronous
@@ -1230,7 +1503,7 @@ moduledoc section is the in-code pointer to it.
 
 | File | Change | Owner |
 |---|---|---|
-| `lib/letflow/sandbox_pool.ex` | Delete `@call_timeout_buffer_ms` + comment (§7.1). Add `@default_provision_timeout_ms 45_000`. Add public `provision_timeout_ms/0`, `claim_call_timeout/1`, `release_call_timeout/0` with `@spec`s + `@doc`s (§5.1, §6). Change `claim/2`'s and `release/2`'s `GenServer.call` timeout arguments (§7.2, §7.3). Add the moduledoc section (§7.4). | ELIXIR-DEV |
+| `lib/letflow/sandbox_pool.ex` | Delete `@call_timeout_buffer_ms` + comment (§7.1). Add `@default_provision_timeout_ms 44_000`. Add public `provision_timeout_ms/0`, `claim_call_timeout/1`, `release_call_timeout/0` with `@spec`s + `@doc`s (§5.1, §6). Change `claim/2`'s and `release/2`'s `GenServer.call` timeout arguments (§7.2, §7.3). Add the moduledoc section (§7.4). | ELIXIR-DEV |
 | `test/letflow/sandbox_pool_test.exs` | Add `@rendezvous_slack_ms` + the two derived helpers (§8.1). Re-size the five bounds in §8.2, including converting `wait_until_schema_dropped/2` to a deadline. **No assertion changes** (§8.0). | ELIXIR-DEV (mechanical, per §8.2) |
 | `test/letflow/sandbox_pool_call_timeout_test.exs` | **New.** RT-1..RT-4 (§10). | TEST-DESIGNER |
 | `test/specs/ISS-0220.md` | **New.** Case rationale + the §8.0 no-weakening statement (§10.4). | TEST-DESIGNER |
@@ -1246,7 +1519,11 @@ moduledoc section is the in-code pointer to it.
 **Scratch artefacts produced by this design step** (git-ignored per
 `core-directives.md` §"File Placement Rules", safe to delete):
 `scratch/iss0220_assert_receive_probe.exs`, `scratch/iss0220_exunit_defaults.exs`,
-`scratch/iss0220_exit_shape_probe.exs` — the three probes behind V5, V6, V7.
+`scratch/iss0220_exit_shape_probe.exs` — the three probes behind V5, V6, V7 — plus
+`scratch/b1_cascade.py`, `scratch/b1b2_prose.py`, `scratch/b3b4_prose.py`,
+`scratch/s0_prose.py`, `scratch/final_prose.py`, which are edit scripts for this
+document's rework rounds and carry no findings of their own. **None of these is
+ISSUE-FIXER's evidence** — that set is listed, with its provenance, in §0.
 
 ---
 
@@ -1260,28 +1537,49 @@ Precedence chain), which enumerated five, plus its closing instruction.
 |---|---|---|---|
 | 1 | Split the two budgets `claim/2` conflates; `max_wait_ms` keeps its meaning; introduce a configurable provisioning budget; call timeout becomes the sum; expose the derivation publicly so tests derive from one source of truth | §3.1, §5.1, §6, §7.2 | `provision_timeout_ms/0`, `claim_call_timeout/1`, `release_call_timeout/0`; `config :letflow, :sandbox_pool, provision_timeout_ms:`; INV-SP-T1/T2/T5 |
 | 1a | *(sub-decision)* per-pool override via `start_link/1` — "if that is coherent with the existing `:max_concurrent` precedent" | §3.3 (C) | **Rejected with reasons** — not coherent: the budget is consumed client-side, `:max_concurrent` server-side. Deferred as OQ-2. |
-| 2 | Justify the default from the measurements, never from "what made the run go green"; state the number, the distribution, the multiples, the ceiling | §4 (all), §4.5 | **45 000 ms**; hard exclusion at floor 1 = 15 373 ms (observed legitimate max); tail explicitly **not estimable** from n=40 cold-start samples, and no second numeric floor manufactured (§4.4 records the withdrawn one and why); selection by decision rule P1-P3; ceiling 60 000 ms (ExUnit) with 15 000 ms separation; 27.1× quiet median, 12.4× quiet max, 2.93× the highest observed sample, 0.75× ceiling |
+| 2 | Justify the default from the measurements, never from "what made the run go green"; state the number, the distribution, the multiples, the ceiling | §4 (all), §4.5 | **44 000 ms**; hard exclusion at floor 1 = 15 373 ms (observed legitimate max); tail explicitly **not estimable** from n=40 cold-start samples, and no second numeric floor manufactured (§4.4 records the withdrawn one and why); separation rule: ceiling − floor 1 = 60 000 − 15 373 = **44 627 ms admissible ceiling**, largest clean value below it = 44 000 (separation 16 000 ms > 15 373); 26.5× quiet median, 12.1× quiet max, 2.86× the highest observed sample, 0.73× the ExUnit ceiling |
 | 3 | Re-size the test-side bounds from the same source of truth; every assertion stays intact; say so explicitly | §8.0, §8.1, §8.2, §8.3, §8.4 | five sites re-sized via `claim_rendezvous_timeout/1` / `pool_op_rendezvous_timeout/0`; §8.0's explicit no-weakening statement; two bounds deliberately unchanged with reasons; two files verified to need no edit, cross-checked against the measured failure decomposition |
 | 4 | Name but do not fix the adjacent defect (provisioning blocks the mailbox); recommend a successor issue with reasoning | §12, INV-SP-T4 | successor-issue title, statement, why-scoped-out, severity; INV-SP-T4 states the limit rather than over-claiming a bound |
-| 5 | Specify a regression-test contract that fails pre-fix and passes post-fix, and is not vacuous | §10 (all) | RT-1..RT-4; black-hole + `catch_exit` technique; RT-2/RT-3 pin the derived integer inside the real call's own exit reason (V7) and fail pre-fix **behaviourally**, not by compile error; RT-4's ceiling/floor assertions are real properties |
-| 6 | *(closing instruction)* report anything in the diagnosis that is wrong | §2.5 | **C1** 31 migrations, not 28. **C2** `:ownership_timeout` is 120 000 ms, not 60 000 — and inapplicable under `:auto` mode, so ExUnit's 60 000 is the sole ceiling. **C3** the filing's contention hypothesis is wrong (adopted, and re-grounded on the zero-parallelism probe rather than the log tally this worktree cannot see). **C4** one omission: `release/2`'s own 5000 ms default (§3.2). Plus §4.5: the proposed 30 000 ms default is raised to 45 000 ms, because ISSUE-FIXER's own superseding n=40 data cut its stated multiple to ~1.95×. |
+| 5 | Specify a regression-test contract that fails pre-fix and passes post-fix, and is not vacuous | §10 (all) | RT-1..RT-4; black-hole + `catch_exit` technique; RT-2/RT-3 pin the derived integer inside the real call's own exit reason (V7) and fail pre-fix **behaviourally**, not by compile error; RT-1/RT-4 are drift guards, reported as such and not counted toward Step 4's evidence (§10.3's weight table) |
+| 6 | *(closing instruction)* report anything in the diagnosis that is wrong | §2.5 | **C1** 31 migrations, not 28. **C2** `:ownership_timeout` is 120 000 ms, not 60 000 — and inapplicable under `:auto` mode, so ExUnit's 60 000 is the sole ceiling. **C3** the filing's contention hypothesis is wrong (adopted, and re-grounded on the zero-parallelism probe rather than the log tally this worktree cannot see). **C4** one omission: `release/2`'s own 5000 ms default (§3.2). Plus §4.5: the proposed 30 000 ms default is raised to 44 000 ms, because ISSUE-FIXER's own superseding n=40 data cut its stated multiple to ~1.95×. |
 
 ---
 
 ## 16. Open questions (explicit — not silently resolved)
 
-**OQ-1 — the 45 000 ms default rests on ISSUE-FIXER's measurements, which this worktree
-could not re-run.** §0 states which premises were verified first-hand and which were
-not; every latency figure in §4.1 is in the "not re-verified" set (the partition logs
-are absent here, and re-measuring means running the suite, which this run is explicitly
-forbidden to do). §10's contract depends on none of them.
+**OQ-1 — the 44 000 ms default rests on ISSUE-FIXER's measurements, which this worktree
+could not re-run.** §0 states which premises were verified first-hand and which were not;
+every latency figure in §4.1 is in the "not re-verified" set, because re-measuring means
+running the suite or the probe, which this run is forbidden to do. §10's contract depends
+on none of them.
+
+**Two specific weaknesses, named rather than averaged into "measurements":**
+
+1. **Floor 1's artefact is absent.** Of the nine ISSUE-FIXER files in `scratch/` (§0),
+   none is the loaded-host **sample A** series — yet that is where **15 373 ms** comes
+   from, and §4.5 uses that one number twice: as floor 1, and (via P4) to fix the
+   admissible ceiling at 44 627 ms. Both ends of the decision therefore rest on a
+   reported summary this run could not inspect. Compounding it, sample A was taken under
+   a **deliberately generated** load (`scratch/db_load.sh`, §2.2), not an observed one —
+   so floor 1 is "the worst legitimate provisioning under a load we chose", and the
+   choice of load is itself an input to the answer. §2.2 argues that choice is the right
+   one (the generator matches the shape of contention the N=4 suite self-inflicts, per
+   §10.4's run 3), but it is an argument, not a measurement. If sample A's raw series is
+   ever recovered, or re-measured under a different load, and its maximum differs, **redo
+   §4.5's rule** — do not adjust the answer.
+2. **The log-derived rows under-sample the tail by construction** (§10.4): a provisioning
+   killed by its caller's timeout never completes the gap `provision_latency.awk`
+   measures. Rows 4 and 5 of §4.1 are therefore lower bounds on their own distributions.
+   This biases against the chosen value, not for it — the real tail is at least as heavy
+   as the one 44 000 was sized against — but it must not be forgotten when anyone reads
+   those rows as evidence that provisioning is fast.
 
 **What would force a re-derivation**, stated precisely because §5.1's `@doc` sends a
 future reader here: a direct measurement producing an observed *legitimate*
 provisioning above **15 373 ms**, which moves floor 1 — the only numeric input the
 decision actually has (§4.4/§4.5). Nothing else does: not a green suite run, not a red
 one, not a differing failure count, and not a preference. If floor 1 moves, redo §4.5's
-rule against the new value; do **not** nudge 45 000. `scratch/claim_latency.exs` is the
+rule against the new value; do **not** nudge 44 000. `scratch/claim_latency.exs` is the
 instrument and is already written.
 
 **And do not re-invent a second numeric floor from window-maximum ratios** — §4.4
@@ -1299,18 +1597,20 @@ when a concrete caller needs a non-global budget — not pre-emptively.
 **OQ-3 — whether `release_call_timeout/0` should eventually diverge from
 `provision_timeout_ms/0`.** §3.2 deliberately reuses the one calibrated number, and the
 measurements now show why the two are *currently* the same size for a reason that is
-not about the DROP at all: the DROP costs 20–498 ms (max 687 ms), while the mailbox
-wait ahead of it costs up to 15 373 ms. Once §12's successor issue removes head-of-line
+not about the DROP at all: the DROP costs 20–498 ms (max 687 ms), whereas a mailbox wait
+behind an in-flight provisioning **would** cost up to 15 373 ms. That wait is not
+reachable today (INV-SP-T4), so reusing the calibrated number is one-source-of-truth plus
+future-proofing, not a present mechanism (§3.2). Once §12's successor issue removes head-of-line
 blocking, the release path's real requirement collapses to just the DROP cost, and a
 much smaller, independently derived number becomes correct. Left open rather than
 pre-committed, because the successor issue's shape determines it.
 
 **OQ-4 — a production HTTP timeout for the sandbox path, once one exists.** V15
 confirms no HTTP route currently reaches `apply_promotion_assertion_rerun/6`, so a
-45 000 ms client-side budget has no user-facing latency consequence today. When PRM-06's
+44 000 ms client-side budget has no user-facing latency consequence today. When PRM-06's
 HTTP integration lands (REQ-040's own deferred half), that route needs its own
-request-level deadline and must not simply inherit this one — a 45-second hanging HTTP
-request is a different, worse failure than a 45-second hanging test. Named now so the
+request-level deadline and must not simply inherit this one — a 44-second hanging HTTP
+request is a different, worse failure than a 44-second hanging test. Named now so the
 route's designer does not discover the coupling by accident.
 
 **OQ-5 — nothing sweeps orphaned `sandbox_%` schemas** (V13:

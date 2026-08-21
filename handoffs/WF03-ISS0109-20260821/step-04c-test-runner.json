@@ -88,11 +88,13 @@
     ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0109-20260821",
-      "commit_sha_list": [],
+      "commit_sha_list": [
+        "f6c65d14d1dc3d1fbc21179f25f9fded54b6a964"
+      ],
       "remote_branch": "origin/feature/WF03-ISS0109-20260821",
-      "push_status": null,
+      "push_status": "PUSHED -- 12286e8..f6c65d1 to origin/feature/WF03-ISS0109-20260821",
       "pr_url": null,
-      "pr_create_error": null
+      "pr_create_error": "N/A -- TEST-RUNNER does not open the PR for this run; ORCH owns PR creation after WF-04 Step 1."
     },
     "next_action": "ORCH to triage the three UNATTRIBUTED failures per ISSUE_QUEUE.md, then proceed to WF-04 Step 1 (RELEASE-VALIDATOR) for the independent re-run. No rework is required of any upstream step: the branch introduces zero failures, the two adopted modules are green, and the fixture instrumentation emitted 19/19 clean teardown markers with no provision_failed or replay_failed. Candidate follow-up: extend the TenantFixture adoption to rollback_test.exs, engine_concurrency_test.exs and identity_test.exs."
   },

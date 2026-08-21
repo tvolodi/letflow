@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0213-20260821/step-03b-reviewer-gate.json",
   "created_at": "2026-08-21T13:24:46Z",
   "started_at": "2026-08-21T13:24:46Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-21T13:28:15Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -41,9 +41,9 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "PASS on all eight acceptance criteria, re-derived rather than accepted from the report. (1) Read the new core-directives.md section in full via `git show 155ae7c`: it states plainly that a dispatched agent must complete work within its own tool-call loop, long-running operations must be run and waited on SYNCHRONOUSLY to completion with the real result read before the turn ends, and a subagent must never end its turn expecting a future cross-turn notification -- that mechanism is stated to exist only for the top-level orchestrating session. Unambiguous. (2) Opened `handoffs/WF03-ISS0193-20260821/step-final-git-merge.json` and read its `result`/`not_agent_attested` fields directly: the stalled agent's own words were exactly 'waiting for a background test monitor', the orphaned erl.exe/mix-test processes re-saturated the shared Postgres pool as stated, and ORCH's own `not_agent_attested.reason` names case (a-2) of HANDOFF_PROTOCOL section 4.1 as the recovery path used -- the new section's citation matches this actual record, not just the summary. (3) `git show 155ae7c -- docs/agents/shared/HANDOFF_PROTOCOL.md` produced zero output -- the file does not appear in this commit at all; section 4.1 is genuinely untouched, confirming the load-bearing scope boundary. (4) `.claude/agents/elixir-dev.md`'s addition is a genuine pointer: it names the concrete temptation (GIT_MERGE.md's post-rebase mix test/compile checks), states the rule in one sentence, then explicitly says 'read it there; it is not restated here' and cites core-directives.md's section by name -- no independent restatement. Canonical-home choice (core-directives.md) is agreed: the hazard -- a dispatched subagent backgrounding a long operation and idling for a cross-turn wake -- is a structural property of how any spawned subagent's tool-call loop works, not specific to ELIXIR-DEV or to mix test, so the cross-cutting file (stated audience: every agent in the pipeline) is the correct canonical home; elixir-dev.md correctly gets only a pointer since it is the role that concretely hit it. (5) Independently grepped (not trusting the report's claim) four of the six claimed-searched files -- ORCHESTRATOR.md, docs/agents/workflows/WF-02_requirement_implementation.md, .claude/agents/test-runner.md, .claude/agents/orchestrator.md -- for background|notification|async|polling|monitor: zero matches in all four, confirming this is fresh text and not an undetected duplicate. (6) `gh issue view 421 --json state,closedAt` returned state CLOSED, closedAt 2026-08-21T13:22:47Z; `docs/issues/ISS-0213.yaml` read directly shows status: resolved, resolved_in_run: WF03-ISS0213-20260821, resolved_at: 2026-08-21T13:22:24Z (both timestamps consistent and plausible, resolved_at preceding the GH close by 23s). (7) `git show --stat 155ae7c` touches exactly four paths: .claude/agents/elixir-dev.md, docs/agents/instructions/core-directives.md, docs/issues/ISS-0213.yaml, and handoffs/WF03-ISS0213-20260821/step-03-no-background-wait.json -- no scope creep. `git show 155ae7c --numstat -- handoffs/orchestrator.log handoffs/registry.json` produced no output (neither file is part of the commit at all, i.e. 0 deletions and left alone as instructed). The step-03 handoff's own top-level `status` field reads COMPLETED (grep-confirmed), correcting the stale IN_PROGRESS the task description flagged. (8) No genuine defects found anywhere in this run -- issues list below is empty accordingly.",
+    "artifacts_out": ["handoffs/WF03-ISS0213-20260821/step-03b-reviewer-gate.json"],
     "issues": [],
     "git_evidence": {
       "branch_name": null,
@@ -53,7 +53,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "ORCH may treat WF03-ISS0213-20260821 as fully closed -- REVIEWER gate PASS, no rework needed"
   },
   "rework_count": 0,
   "max_rework": 3

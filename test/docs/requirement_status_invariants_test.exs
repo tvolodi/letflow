@@ -498,12 +498,7 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
     assert unwarranted == [], """
     A10 — A CLOSED VOLUME'S CLOSURE WAS NOT WARRANTED.
 
-    #{Enum.map_join(unwarranted, "\n", fn v ->
-      "  volume #{v.volume} (#{v.path}): lines=#{inspect(Map.get(v, :lines))} " <>
-        "bytes_working_tree=#{inspect(Map.get(v, :bytes_working_tree))}, ceilings: " <>
-        "#{roll_rule.max_lines} lines / #{roll_rule.max_bytes} bytes " <>
-        "— closed without exceeding either ceiling — closure was not warranted"
-    end)}
+    #{Enum.map_join(unwarranted, "\n", fn v -> "  volume #{v.volume} (#{v.path}): lines=#{inspect(Map.get(v, :lines))} " <> "bytes_working_tree=#{inspect(Map.get(v, :bytes_working_tree))}, ceilings: " <> "#{roll_rule.max_lines} lines / #{roll_rule.max_bytes} bytes " <> "— closed without exceeding either ceiling — closure was not warranted" end)}
 
     A volume may only be rolled to `closed` when it actually exceeded
     `roll_rule`'s ceilings (design §13.12.4, ISS-0193). Without this check, a
@@ -799,7 +794,8 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
 
         records ->
           Enum.map_join(records, "\n", fn record ->
-            "      " <> a4b_line(record) <> "  -> " <> disqualification(volumes, roll_rule, record)
+            "      " <>
+              a4b_line(record) <> "  -> " <> disqualification(volumes, roll_rule, record)
           end)
       end
 

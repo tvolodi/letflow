@@ -484,20 +484,40 @@ location:
 - `anomalies(volume_path, legal_reqs, legal_events) :: [%{path:, line:, field:, value:}]`
 - `frozen_prefix_digest(volume_path, line_count) :: String.t()` — the §8 byte-stream
   convention, lowercase hex
+- `default_ceilings() :: {max_lines :: pos_integer, max_bytes :: pos_integer}` — `{1200, 120000}`.
+  Used **only** by the degraded resolution below, when there is no index to read them from.
+  Pinned to the index by A8, so it is a machine-checked copy, not a prose copy.
+- `current_volume(index_path, status_dir) :: {:index, path} | {:no_index_fallback, path}` —
+  the resolution rule §7.1 depends on. If `index_path` exists, parse it and return
+  `{:index, <the volume whose status: is current>}`. **If and only if `index_path` does not
+  exist, return `{:no_index_fallback, Path.join(status_dir, "requirement_status.yaml")}`** —
+  the pre-index layout's one and only status file. The two-element tag is deliberate: a
+  caller cannot consume the degraded answer without seeing that it is degraded.
 
 The test file wires these to the real index; §7.1 wires `within_bounds?/3` to the pre-fix
-state. Nothing in the module knows that `docs/status/requirement_status.index.yaml` exists.
+state through `current_volume/2`. Nothing in the module knows that
+`docs/status/requirement_status.index.yaml` exists — the index path is always passed in.
 
 Assertions, all derived from the index file so the test never hardcodes a volume list:
 
+- **A0 — The index exists and resolution is not degraded.**
+  `StatusHistory.current_volume("docs/status/requirement_status.index.yaml", "docs/status")`
+  returns an `{:index, _}` tuple, never `{:no_index_fallback, _}`. This is the guard that
+  keeps §7.1's degraded path unreachable on any post-fix tree: if the index is ever deleted,
+  renamed or corrupted, the suite goes red here rather than quietly resolving to volume 1.
 - **A1 — Index/disk agreement.** Every `path:` in `volumes:` exists; every file matching
   `docs/status/requirement_status*.yaml` on disk appears in `volumes:`. No orphan volume,
   no dangling entry.
 - **A2 — Exactly one current volume.** Exactly one entry has `status: current`; all others
   `closed`.
-- **A3 — THE ISS-0119 REGRESSION ASSERTION.**
-  `StatusHistory.within_bounds?(current_volume_path, roll_rule.max_lines, roll_rule.max_bytes)`
-  returns `:ok`. Paired with **A3b**, its fail-first counterpart, in §7.1.
+- **A3 — THE ISS-0119 REGRESSION ASSERTION, and the fail-first test.** Resolve the current
+  volume with `StatusHistory.current_volume/2` (**not** by hardcoding a path), then assert
+  `StatusHistory.within_bounds?(current_volume_path, max_lines, max_bytes)` returns `:ok`,
+  where the bounds are `roll_rule.max_lines`/`roll_rule.max_bytes` when the index resolved
+  and `StatusHistory.default_ceilings()` when it did not. **This single assertion is the
+  fail-first demonstration** — see §7.1 for why, and for the exact procedure that shows it
+  failing on the pre-fix commit. A3b (§7.1) is a separate detector-calibration guard, not
+  the fail-first proof.
 - **A4 — Vocabulary conformance.** Across every volume, every `req:` value matches
   `REQ-\d{3}` or `SCOPE-CHANGE`; every `event:` value is one of the six legal values; every
   entry carries all five fields in order with a parseable ISO-8601 `at:`. Exceptions only
@@ -519,69 +539,141 @@ Assertions, all derived from the index file so the test never hardcodes a volume
   asserts that the two ceiling numbers quoted in the current volume's header text
   (`under 1,200 lines / 120,000 bytes` in HOW-TO-APPEND step 2, and
   `lines > 1200 OR bytes > 120000` in the roll rule) equal `roll_rule.max_lines` and
-  `roll_rule.max_bytes` from the index.** This is the answer to a restatement hazard the
+  `roll_rule.max_bytes` from the index, and that `StatusHistory.default_ceilings()` returns
+  the same pair.** This is the answer to a restatement hazard the
   design otherwise carries: the ceilings appear in five places — the index `roll_rule`, every
   volume header, the `core-directives.md:328` replacement (§10.3), the `doc-updater.md:31`
   replacement (§10.2) and the `anti-patterns.md` replacement (§10.5) — and the index is the
   single source of truth. A8 pins the volume header, which is the copy an appending agent
   actually reads. **The three prose copies in §10.2/10.3/10.5 are deliberately written to
   point at the index rather than restate the numbers** (see those sections' text), so after
-  this design there are exactly two machine-checked copies and no unchecked prose copy.
+  this design there are exactly three machine-checked copies — the index `roll_rule`, the
+  current volume's header, and `StatusHistory.default_ceilings()` — and no unchecked prose
+  copy.
 
-**Scope note for TEST-DESIGNER:** A3/A3b and A6 are the three that matter most — A3b is the
-fail-first proof for ISS-0119, A3 its live guard; A6 is the enforcement of the append-only
-rule that has, until now, had no enforcement mechanism at all.
+**Scope note for TEST-DESIGNER:** A0, A3 and A6 are the three that matter most — **A3 is
+both the live guard and the fail-first proof for ISS-0119** (§7.1), A0 is what stops A3's
+degraded resolution from ever being reached silently, and A6 is the enforcement of the
+append-only rule that has, until now, had no enforcement mechanism at all. A3b is a
+detector-calibration guard and is explicitly **not** the fail-first proof.
 
-### 7.1 The fail-first demonstration — how A3 is shown to fail pre-fix
+### 7.1 The fail-first demonstration — A3 fails on the pre-fix commit
 
-WF-03 Step 4 requires a test *shown* to fail against the pre-fix state and pass against the
-post-fix state. **A naive checkout of `3d19e8c` cannot demonstrate that here**, and TEST-DESIGNER
-must not have to discover this: every assertion is derived from
+WF-03 Step 4 requires a test **shown** to fail against the pre-fix state and pass against
+the post-fix state: *"checked out the pre-fix commit, ran the new test, confirms it failed;
+then confirms it passes on the fix branch."* That obligation is mandatory and this design
+does not declare it satisfied without being performed. The procedure below is **required**,
+not optional, and TEST-DESIGNER must quote its actual output in the test spec.
+
+**The obstacle, stated first because it is real.** A *naive* checkout of `3d19e8c` cannot
+demonstrate anything on its own: every assertion in §7 is derived from
 `docs/status/requirement_status.index.yaml`, which does not exist at `3d19e8c` or at any
-pre-fix commit. Running the new test on the pre-fix tree therefore errors on a *missing index*
-— a failure any test of any new file produces, which proves nothing about coverage of this bug.
+pre-fix commit. A test that simply reads the index there errors on a *missing file* — a
+failure any test of any new file produces, which proves nothing about coverage of this bug.
 
-**The design's answer: the pre-fix state is preserved in-tree by the fix itself, so no
-checkout, no fixture and no git extraction is needed.** Freeze-and-roll leaves
-`docs/status/requirement_status.yaml` on disk, byte-identical through line 5,766, forever.
-That file *is* the pre-fix current volume — it is precisely the object whose unreadability
-ISS-0119 reports. So:
+**The design decision that removes the obstacle: current-volume resolution degrades.**
+`StatusHistory.current_volume/2` (§7) returns `{:index, path}` when the index exists and
+`{:no_index_fallback, "docs/status/requirement_status.yaml"}` when it does not — because
+that single file *was* the entire status history before this fix, so it is the correct
+answer to "which volume is current?" in the pre-index world. Bounds degrade with it:
+`default_ceilings()` when there is no index to read `roll_rule` from.
 
-- **A3b — FAIL-FIRST PROOF, a permanent test case.**
+**Consequence — A3 becomes directional, with no change to what it asserts:**
+
+| tree | `current_volume/2` resolves to | measured | A3 (`within_bounds? == :ok`) |
+|---|---|---|---|
+| pre-fix (`3d19e8c`) | `requirement_status.yaml` (fallback) | 4,217 lines / 260,644 bytes in the blob | **FAILS** — over both ceilings |
+| post-fix (fix branch) | `requirement_status.v2.yaml` (index) | far under both | **PASSES** |
+
+One artefact, one assertion, two different verdicts in the two states, and the pre-fix
+failure is a *size* failure — exactly the defect ISS-0119 reports — not a missing-file
+error. That is the property WF-03 Step 4 asks for, met literally.
+
+**The required Step 4 procedure.** Run it in a throwaway git worktree so the fix branch is
+never disturbed. `test/support` is on the `:test` load path at `3d19e8c` — verified: that
+commit's `mix.exs:20` already reads `defp elixirc_paths(:test), do: ["lib", "test/support"]`
+— so the two new files compile there without any build-config change.
+
+```bash
+git worktree add /tmp/iss0119-prefix 3d19e8c
+cp test/support/status_history.ex /tmp/iss0119-prefix/test/support/
+mkdir -p /tmp/iss0119-prefix/test/docs
+cp test/docs/requirement_status_invariants_test.exs /tmp/iss0119-prefix/test/docs/
+cd /tmp/iss0119-prefix ; mix deps.get ; mix test test/docs/requirement_status_invariants_test.exs
+```
+```powershell
+git worktree add $env:TEMP/iss0119-prefix 3d19e8c
+Copy-Item test/support/status_history.ex $env:TEMP/iss0119-prefix/test/support/
+New-Item -ItemType Directory -Force $env:TEMP/iss0119-prefix/test/docs | Out-Null
+Copy-Item test/docs/requirement_status_invariants_test.exs $env:TEMP/iss0119-prefix/test/docs/
+Set-Location $env:TEMP/iss0119-prefix ; mix deps.get ; mix test test/docs/requirement_status_invariants_test.exs
+```
+
+**What TEST-DESIGNER must quote in the test spec** — all four, verbatim, no paraphrase:
+
+1. The pre-fix run's **A3 failure**, showing it failed on `over: [:lines, :bytes]` at
+   ~4,217 lines / ~260,644 bytes against the ceilings, i.e. on *size*.
+2. That A3's pre-fix resolution was `{:no_index_fallback, "docs/status/requirement_status.yaml"}`,
+   proving the failure came from measuring the pre-fix current volume and not from a
+   missing index. (A0 is *expected* to fail in the same pre-fix run, for exactly that
+   reason; say so, so a reader is not misled by two red assertions.)
+3. The same test passing on the fix branch, A3 and A0 both green.
+4. The worktree teardown (`git worktree remove ...`), so nothing is left behind.
+
+**Cleanup is part of the procedure**, not an afterthought: a stale worktree at a pre-fix
+commit is itself a trap for a later agent.
+
+**THE TRAP THIS FALLBACK MUST NOT BECOME, and how it is closed.** A degraded resolution
+that silently answers "volume 1" is a route by which a future agent could append to a frozen
+volume. Four independent barriers, each sufficient alone:
+
+1. **It is test-only code.** `Letflow.Test.StatusHistory` lives in `test/support/` and
+   compiles only under `MIX_ENV=test` (`mix.exs:20`). It is unreachable from `lib/`, from
+   any mix task, and from any agent procedure.
+2. **No instruction file mentions it.** The append target is resolved *exclusively* by §4's
+   HOW-TO-APPEND step 1, reading `status: current` from the index — and that procedure has
+   **no fallback by design**: §4 step 1 and §10.3 both say that if the index cannot be read,
+   STOP and file a defect. An agent never consults `current_volume/2`.
+3. **A0 makes the degraded path loudly unreachable post-fix.** On any tree that has the fix,
+   the index exists; if it is ever deleted or renamed, A0 fails before A3 is even
+   interesting. The fallback can never be *silently* active.
+4. **The tag makes it impossible to consume by accident.** `current_volume/2` returns
+   `{:no_index_fallback, path}`, not a bare path. A caller must destructure the degraded tag
+   deliberately; A3 asserts on whichever it got, A0 asserts it got `{:index, _}`.
+
+**A3b — DETECTOR-CALIBRATION GUARD (kept, and honestly labelled).**
   `StatusHistory.within_bounds?("docs/status/requirement_status.yaml", roll_rule.max_lines, roll_rule.max_bytes)`
-  must return `{:error, %{over: [:lines, :bytes]}}` with `lines: 5766` and `bytes: 361376`
-  (working tree; 355,610 in the git blob — the assertion checks `> max_bytes`, not an exact
-  value, so it is checkout-independent). Volume 1 is frozen and covered by A6, so these
-  numbers cannot drift.
+  returns `{:error, %{over: [:lines, :bytes]}}` at 5,766 lines / 361,376 working-tree bytes
+  (355,610 in the blob — the assertion checks `> max_bytes`, not an exact value, so it is
+  checkout-independent).
 
-  A3b is the *same function* A3 calls, with the *same bounds* A3 uses, applied to the file
-  that was the current volume before the fix. It therefore demonstrates the exact property
-  WF-03 Step 4 asks for — this check fails on the pre-fix state and passes on the post-fix
-  state — as a runnable assertion rather than as arithmetic in a document, and it keeps
-  demonstrating it on every future `mix test` run instead of only once at Step 4.
-
-- **The literal pre-fix-commit run, for the Step 4 record.** If TEST-DESIGNER or TEST-RUNNER
-  is additionally required to exercise the pre-fix *commit*, do it against the extracted file
-  rather than by checking the tree out — the helper is path-parameterised precisely so this
-  works:
-
-  ```bash
-  git show 3d19e8c:docs/status/requirement_status.yaml > /tmp/prefix.yaml
-  mix run -e 'IO.inspect Letflow.Test.StatusHistory.within_bounds?("/tmp/prefix.yaml", 1200, 120000)'
-  ```
-  ```powershell
-  git show 3d19e8c:docs/status/requirement_status.yaml | Set-Content $env:TEMP\prefix.yaml
-  mix run -e "IO.inspect Letflow.Test.StatusHistory.within_bounds?(\"$env:TEMP/prefix.yaml\", 1200, 120000)"
-  ```
-  Expected: `{:error, %{over: [:lines, :bytes], ...}}`. (`MIX_ENV=test` is required for
-  `test/support` to be on the load path.) This is **optional corroboration**; A3b is the
-  design's fail-first mechanism and is sufficient on its own.
+  **This is NOT the fail-first proof and must not be described as one.** Volume 1 is over
+  both ceilings *before* the fix and *after* it, so A3b is green in both worlds and is never
+  shown to fail; and under this design that file is frozen, pinned by A6, no longer the
+  append target, and *expected* to be oversized — so asserting it is oversized restates the
+  freeze rather than testing a regression. What A3b genuinely buys, and why it is kept: it
+  proves `within_bounds?/3` actually fires at the index's real ceilings against a real
+  361 KB artefact, so it fails if the helper's line or byte measurement regresses, or if a
+  future agent raises the ceilings toward the tool limits (which §12 #2 forbids). That is a
+  calibration guard on the detector, and it is worth having next to A3 — it is simply not
+  the thing that satisfies Step 4.
 
 **Rejected alternatives, recorded so they are not re-proposed:** a checked-in oversized
 fixture under `test/fixtures/` — it would have to be ≥120,000 bytes to trip the ceiling, and a
 *synthetic* file that large proves the arithmetic, not the regression; and a setup-time
 `git show` into a temp file as the *primary* mechanism — it makes the suite fail on a shallow
 clone for a reason unrelated to the invariant.
+
+A third route was considered and rejected on this pass: **a mandatory one-off
+`git show 3d19e8c:docs/status/requirement_status.yaml` extraction, exercising
+`within_bounds?/3` against the extracted file via `mix run`, quoted into the Step 4 record.**
+It is workable, and it removes the fallback path entirely. It was rejected because it does
+not meet Step 4's words as literally as the degraded-resolution route does: what fails there
+is a *helper call on an extracted blob*, not "the new test" run against "the pre-fix commit",
+so the two-verdict pair would be demonstrated beside the test rather than by it — and the
+demonstration would be a one-time transcript rather than a property of the assertion. The
+degraded-resolution route makes fail-first intrinsic to A3, at the cost of one fallback that
+this section closes with four independent barriers.
 
 ---
 
@@ -631,11 +723,18 @@ Reference implementations, all of which must agree:
 
 - Elixir (the test): `File.stream!(path) |> Enum.take(n) |> Enum.map_join("", &(String.trim_trailing(&1, "\r\n") <> "\n")) |> then(&:crypto.hash(:sha256, &1)) |> Base.encode16(case: :lower)`
 - Bash: `head -n 5766 $SF | tr -d '\r' | sha256sum`
-- PowerShell: build the stream, write it with no extra terminator, then hash the temp file —
-  `(Get-Content $SF -TotalCount 5766 | ForEach-Object { $_ + "`n" }) -join ''` written via
-  `[IO.File]::WriteAllText($tmp, $s, [Text.UTF8Encoding]::new($false))`, then
-  `Get-FileHash $tmp -Algorithm SHA256`. Note `Get-Content` already strips `\r\n`, so no
-  separate CRLF step is needed.
+- PowerShell: build the stream, write it with no extra terminator, then hash the temp file.
+  Given as a fenced block, not inline, because the command contains PowerShell's backtick
+  newline escape and markdown would truncate an inline span at it:
+
+  ```powershell
+  $s = (Get-Content $SF -TotalCount 5766 | ForEach-Object { $_ + "`n" }) -join ''
+  [IO.File]::WriteAllText($tmp, $s, [Text.UTF8Encoding]::new($false))
+  Get-FileHash $tmp -Algorithm SHA256
+  ```
+
+  Note `Get-Content` already strips the CR of a CRLF pair itself, so no separate
+  CRLF-normalisation step is needed here.
 
 **The Bash form is normative** — `head` emits a terminator after every line it prints,
 including the last, which is exactly the convention above, so it is the shortest correct

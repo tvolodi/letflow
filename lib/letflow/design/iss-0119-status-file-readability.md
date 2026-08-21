@@ -11,9 +11,19 @@ that explicitly, because the defect *is* the current header's wording.
 > **AMENDED 2026-08-21, AFTER THIS ARTEFACT PASSED ITS GATE — see §13.** Assertion A4 was
 > implemented and run for the first time at Step 4 and found three previously undeclared
 > malformed entries in frozen volume 1 (lines 4803, 4896, 5050). §13 is the amendment: a new
-> `known_shape_anomalies:` index key, A4 split into A4a/A4b, A5 unchanged, volume 1 not
-> edited, `frozen_prefix_sha256` unchanged. §§1–12 are the gated design and carry only
-> cross-reference markers to §13.
+> `known_shape_anomalies:` index key, A4 split into A4a/A4b, A5 unchanged **at the time**,
+> volume 1 not edited, `frozen_prefix_sha256` unchanged. §§1–12 are the gated design and carry
+> only cross-reference markers to §13.
+>
+> **FURTHER AMENDED 2026-08-21 — ISS-0193 — see §13.6 and §13.12.** A4b's closed-and-pinned
+> rule (above) had no counterpart on A5/`known_anomalies:`, so a new *vocabulary* violation in
+> the current volume could be declared away with no gate tripped, exactly as the shape hole
+> could before it was fixed. A5 gains the identical rule (§13.6). A new assertion **A10**
+> (§13.12.4) asserts a closed volume actually exceeded `roll_rule` at closure, closing the
+> separate laundering route (close-then-declare) CODE-DESIGN-VALIDATOR flagged as MINOR-4 at
+> the same gate; both A4b and A5's closed-and-pinned checks now depend on it rather than each
+> re-deriving it. Nothing in §§1–13.11 changes in substance except §13.6's own text and one
+> bullet in §13.3.
 
 ---
 
@@ -566,13 +576,18 @@ Assertions, all derived from the index file so the test never hardcodes a volume
   as declared in A5. **§13 splits this into A4a (vocabulary, exceptions declared in the
   index's `known_anomalies:` — unchanged) and A4b (shape, exceptions declared in the
   index's new `known_shape_anomalies:`), and states the exact behaviour of each.**
-- **A5 — Anomaly set is exact (protects C2 in both directions).** *(§13 confirms A5 is
-  substantively UNCHANGED: it stays scoped to vocabulary violations only, its three
-  declared entries are untouched, and it ignores `known_shape_anomalies:` entirely.)* The set of
-  vocabulary violations found on disk, keyed by `{path, line, field, value}`, equals the
-  index's `known_anomalies:` set exactly. A new violation fails (drift detected); a missing
-  one fails (a past entry was silently normalized or deleted — the very act the append-only
-  rule forbids).
+- **A5 — Anomaly set is exact (protects C2 in both directions). ⚠ AMENDED 2026-08-21
+  (ISS-0193) — §13.6/§13.12 are normative; read them before implementing A5.** *(§13
+  originally confirmed A5 was substantively unchanged: scoped to vocabulary violations only,
+  its three declared entries untouched, ignoring `known_shape_anomalies:` entirely. That part
+  still holds. §13.6 as amended by ISS-0193 adds one more thing: A5 gains A4b's
+  closed-and-pinned rule.)* The set of vocabulary violations found on disk, keyed by
+  `{path, line, field, value}`, equals the index's `known_anomalies:` set exactly. A new
+  violation fails (drift detected); a missing one fails (a past entry was silently normalized
+  or deleted — the very act the append-only rule forbids). **Additionally (ISS-0193, §13.6):**
+  every declared record's `path:` must name a volume that is `status: closed` and carries a
+  `frozen_prefix_sha256:`, **and** that volume must independently pass the new **A10**
+  warranted-closure check (§13.12.4).
 - **A6 — Closed volumes are frozen.** For each closed volume, SHA-256 over its first
   `frozen_prefix_lines` lines (CRLF normalized to LF, so the digest is platform-stable)
   equals `frozen_prefix_sha256`. Volume 1's entire history is covered; the closure footer
@@ -602,6 +617,14 @@ Assertions, all derived from the index file so the test never hardcodes a volume
   and the roll rule's step 3 are what keep the declared count current; A9 is what catches
   it going stale if either is skipped. Found live: volume 2 sat at declared `entries: 0`
   with 7 real entries already appended, because nothing before A9 compared the two.
+- **A10 — A closed volume's closure was warranted (added 2026-08-21, ISS-0193; §13.12.4 is
+  normative).** For every volume whose `status:` is `closed`, its recorded `lines:` and
+  `bytes_working_tree:` (the index's own snapshot, not a live re-measurement — see §13.12.4
+  for why) exceed `roll_rule.max_lines` or `roll_rule.max_bytes` respectively. This is the
+  shared instrument A4b's and A5's closed-and-pinned rules both depend on, so that "closed and
+  pinned" cannot be satisfied by a volume that was rolled early, in the same commit that
+  declares an anomaly against it, purely to launder a fresh violation into a permanently
+  declared one (CODE-DESIGN-VALIDATOR's MINOR-4 at ISS-0119's own Step 4e re-gate).
 
 **Scope note for TEST-DESIGNER:** A0, A3 and A6 are the three that matter most — **A3 is
 both the live guard and the fail-first proof for ISS-0119** (§7.1), A0 is what stops A3's
@@ -1180,7 +1203,15 @@ the shape exceptions are declared in a new, separately-keyed index list that A4b
   three fail, which is protection A4 did not have before this amendment.
 - **It is the design's own established pattern, applied to a second defect class:** never
   edit, always declare (§5's four-point handling, and the `known_anomalies:` mechanism it
-  produced). A reader who already understands one understands the other.
+  produced). A reader who already understands one understands the other. **This bullet was
+  written as a forward-looking claim, not yet a fully accurate one: at the time, A4b's
+  exception list carried the closed-and-pinned rule below and A5's did not, so the two
+  mechanisms were parity in intent only — a fact CODE-DESIGN-VALIDATOR recorded as an
+  incidental finding at this same gate (filed as ISS-0193) rather than blocking this section
+  on it, since widening an already-gated section's own guarantee is separate design work.
+  ISS-0193 closed that gap (§13.6, §13.12): A5 now carries the identical closed-and-pinned
+  rule, so as of that fix this sentence reads as settled fact rather than aspiration, and no
+  further rewording is needed here.**
 - **The exception list is bounded and permanent, not a growing suppression list — and that
   is asserted, not merely argued.** Volume 1 is frozen and digest-pinned, so its shape
   defects are a closed, finite set that can never grow. Volumes 2 onward are checked live
@@ -1378,11 +1409,11 @@ the index, closed and current — the scope is unchanged.
   **A4b runs on every volume, permanently.** It is not narrowed to the current volume — see
   §13.3 for why that was rejected.
 
-### 13.6 A5 is UNCHANGED — stated explicitly
+### 13.6 A5 — unchanged in substance at the original amendment; gains the closed-and-pinned rule under ISS-0193
 
-A5 keeps its exact current text and behaviour: set equality, in both directions, over
-**vocabulary** violations keyed `{path, line, field, value}`, against the index's
-`known_anomalies:`.
+**As originally written (2026-08-21, this amendment's first pass):** A5 keeps its exact
+current text and behaviour: set equality, in both directions, over **vocabulary** violations
+keyed `{path, line, field, value}`, against the index's `known_anomalies:`.
 
 - **A5's three declared vocabulary anomalies are unchanged**: lines 3490 (REQ-031), 3577
   (REQ-042), 3744 (REQ-038), all `field: event`, `value: SCOPE-CHANGE`. This amendment adds
@@ -1392,6 +1423,47 @@ A5 keeps its exact current text and behaviour: set equality, in both directions,
   entries carry `req: REQ-053` / `REQ-056` / `REQ-054` and `event: started` — all legal
   vocabulary. They do not appear in A5's on-disk set, so A5's verdict is arithmetically
   unaffected by this amendment.
+
+**FURTHER AMENDED 2026-08-21 — ISS-0193.** The paragraph above is still correct — set
+equality and the three records are genuinely untouched — but it was incomplete: it gave A5
+no restriction on *which volume* a declared record may cite, unlike A4b above. CODE-DESIGN-
+VALIDATOR flagged this as an incidental MAJOR finding at ISS-0119's own Step 4e gate (filed
+as ISS-0193 rather than fixed in place, since ISS-0119's design had already cleared its hard
+gate and widening it would be scope creep on that pass). Full detail: §13.12.
+
+**A5 additionally asserts** (mirroring A4b's rule in §13.5 verbatim, applied to
+`known_anomalies:` in place of `known_shape_anomalies:`): **every `known_anomalies:` record's
+`path:` names a volume whose `volumes:` entry in the index has `status: closed` AND carries a
+`frozen_prefix_sha256:`.** A record citing the current (open, unpinned) volume, or a path that
+is not a volume in the index at all, fails A5 — independently of set equality, and even when
+the on-disk violation it cites genuinely exists. This is the rule that makes the "declare,
+don't edit" pattern's boundedness mechanical for vocabulary anomalies the same way §13.5 made
+it mechanical for shape anomalies: without it, a future agent could append an entry carrying
+a new illegal vocabulary value to the current volume, add a matching record to
+`known_anomalies:` in the same commit, and leave A5 permanently green with no gate tripped —
+satisfying a gate by editing what it measures (`core-directives.md`'s named failure mode).
+With it, the only route for a vocabulary violation in the current volume is to fix it in the
+working tree before committing.
+
+**A5's closed-and-pinned rule additionally requires the cited volume to pass A10 (§13.12.4).**
+Closed-and-pinned alone is not sufficient, per CODE-DESIGN-VALIDATOR's own MINOR-4 finding at
+the same gate (quoted in full in ISS-0193's description): a volume can be rolled to `closed`
+in the *same* commit that declares a record against it, which would satisfy "closed and
+pinned" without ever having been a legitimate roll. A10 closes that route for both A4b and A5
+by requiring the cited volume to have actually exceeded `roll_rule` at closure — see §13.12.4
+for the shared instrument both rules call into, rather than each re-deriving it.
+
+**It changes none of the three existing `known_anomalies:` records** — verified directly
+against the index on disk, not assumed; see §13.12.2 for the exact lines checked.
+
+**A5's failure output is specified, not left to the implementer**, mirroring A4b's
+requirement in §13.5: on any failure — either direction of set equality, the closed-and-pinned
+rule, or A10 — the assertion message must name **every** element of the symmetric difference,
+one per line, printing `path`, `line`, `field`, `value` for each set-equality miss, labelled by
+which side it came from (`on disk but not declared` / `declared but not on disk`), plus every
+record that failed the closed-and-pinned-and-warranted rule with the specific reason
+(not-closed, not-pinned, or not-warranted) and the volume's status/digest/roll-numbers that
+disqualified it.
 
 ### 13.7 What else does and does not change
 
@@ -1506,3 +1578,173 @@ this whole run exists to stop, in either volume.
    anomaly class exists? Cosmetic, and it would touch A5's parse path and three existing
    records. Not proposed here; noted so the naming asymmetry is on record rather than a
    surprise.
+
+---
+
+## 13.12. POST-GATE AMENDMENT — 2026-08-21 — ISS-0193 — A5 gains the closed-and-pinned rule; a shared closure-warranted assertion (A10)
+
+**Status:** amendment to the §13 amendment. Written 2026-08-21, closing ISS-0193 — an
+incidental MAJOR finding CODE-DESIGN-VALIDATOR raised at ISS-0119's own Step 4e re-gate
+(quoted in full in `docs/issues/ISS-0193.yaml`) but deliberately did not fix there, since
+`known_anomalies:`/A5 had already cleared the hard gate on an earlier pass and widening that
+pass would have been scope creep on it. §13.6 above carries the normative text for A5 itself
+and for A10's dependency; this subsection is the record of the gap, the verification
+performed, and the reasoning, per this project's own rule that a design records *why*, not
+only *what*.
+
+**Dispatched as:** `handoffs/WF03-ISS0193-20260821/step-02-code-designer.json`.
+
+### 13.12.1 The gap, restated precisely
+
+`known_shape_anomalies:`/A4b (§13.3–§13.5) and `known_anomalies:`/A5 (§13.6, §5) are both
+"declare, don't edit" exception lists asserted by bidirectional set equality. A4b's own gate
+(re-amendment iteration 1, §13's intro note) added a rule that a declared record may only cite
+a **closed, digest-pinned** volume — closing the route where a fresh defect in the *current*
+volume is silenced by declaring it in the same commit instead of fixing it. A5 never received
+the equivalent rule, because the two mechanisms were introduced and gated in the same design
+pass but A5's own text (§13.6, original) was written as "unchanged" — correctly, for what it
+addressed (set equality, the three records, disjointness from shape anomalies), but silently
+carrying forward the pre-existing absence of any volume restriction, which A4b did not have
+either until its own re-gate. §13.6 above now carries the fix; this is the record of why it
+was needed and how it was checked.
+
+### 13.12.2 Verification against the actual index — exact lines checked
+
+Task (a) requires this be verified against the file on disk, not assumed. Read in full during
+this amendment (`docs/status/requirement_status.index.yaml`, current working tree):
+
+- **The three `known_anomalies:` records** (lines 74–94 of the index): each has
+  `path: docs/status/requirement_status.yaml` — lines 74, 81, 88. All three cite the same
+  path; none cites `requirement_status.v2.yaml`.
+- **Volume 1's own `volumes:` entry** (lines 32–52): `path: docs/status/requirement_status.yaml`
+  (line 33) — the same path the three records cite — carries `status: closed` (line 34) and
+  `frozen_prefix_sha256: "5a1a64ab0b999da3fd86be90109ecee46b9d538d9e9945c0d39fddb10075a804"`
+  (line 46), a non-empty digest string.
+- **Conclusion:** all three existing records satisfy A5's new closed-and-pinned rule.
+  `path:` resolves to a volume entry, that entry's `status:` is exactly `"closed"`, and
+  `frozen_prefix_sha256:` is present and non-blank. No record needs to move, and no existing
+  behaviour changes for these three.
+- **A10 compatibility, same read:** volume 1's `volumes:` entry also carries `lines: 5766`
+  (line 38) and `bytes_working_tree: 361376` (line 39). Against `roll_rule.max_lines: 1200`
+  and `roll_rule.max_bytes: 120000` (lines 21–22), `5766 > 1200` and `361376 > 120000` — both
+  true, so volume 1 independently passes A10 (§13.12.4). Volume 2 (lines 54–64) carries
+  `status: current`, so A10 does not apply to it (A10 only examines `status: closed` volumes),
+  and no existing `known_anomalies:` or `known_shape_anomalies:` record cites it.
+
+### 13.12.3 §13.3's parity bullet — reconciled in place, not here
+
+Handled directly in §13.3 (the "reader who already understands one understands the other"
+bullet, second bullet under "Why (i), on the merits"): that sentence was forward-looking when
+written — A4b already had the closed-and-pinned rule and A5 did not, so the parity it claimed
+was of intent, not of enforced behaviour. It is edited in place, at the sentence it concerns,
+to say so explicitly and to state that ISS-0193 (this amendment) is what makes it now read as
+settled fact. No separate rewording is needed here; duplicating the same prose in two places
+would itself become a restatement hazard of the kind §7's A8 rationale (§7, A8 bullet) already
+warns against.
+
+### 13.12.4 A10 — the shared closure-warranted assertion
+
+**The question, carried across from CODE-DESIGN-VALIDATOR's own MINOR-4 finding at ISS-0119's
+Step 4e re-gate (quoted in `docs/issues/ISS-0193.yaml`, not re-derived here):** may a volume be
+rolled to `closed` in the *same* commit that declares a record (shape or vocabulary) against
+it? Answer, carried forward as-is: **the route is open today**, because nothing asserts a roll
+was *warranted* — A3 (§7) only bounds the *current* volume from above, and `on_exceed` (the
+index's `roll_rule:`) is prose, not a check. A volume closed early, with numbers still under
+ceiling, would still pass A1/A2/A6/A7/A8/A4b's-and-A5's closed-and-pinned checks on a
+correctly-performed roll. It is judged MINOR rather than MAJOR for the two reasons the finding
+itself gives (fabricating a closure survives strictly less scrutiny than fixing the defect
+would have taken; and the identical window is also the *legitimate* case — a defect noticed
+only after a genuine roll must remain declarable) — both preserved unchanged from the
+finding; this amendment does not re-litigate the severity, only builds the instrument the
+finding proposed.
+
+**The instrument — one assertion, shared by both mechanisms:**
+
+- `StatusHistory.warranted_closure?(volume :: map(), max_lines :: pos_integer(), max_bytes :: pos_integer()) :: boolean()`
+  — new public function in `test/support/status_history.ex`, alongside `within_bounds?/3`
+  and following its convention (pure, explicit bounds, no hardcoded path). `volume` is one
+  element of `parse_index/1`'s `:volumes` list (already carrying `status:`, `lines:`,
+  `bytes_working_tree:` as parsed today for volume 1 — see §13.12.2). Returns `true` only
+  when `Map.get(volume, :status) == "closed"` **and** (`Map.fetch!(volume, :lines) > max_lines`
+  **or** `Map.fetch!(volume, :bytes_working_tree) > max_bytes`). Returns `false` for a
+  non-closed volume, and **must raise (via `Map.fetch!/2`, not default-to-false via
+  `Map.get/2`)** if a `status: closed` volume is missing either field — a closed volume
+  silently missing its own recorded size is a data-integrity gap, not a "not warranted"
+  verdict, and the two must not be conflated into the same boolean.
+- **Why the index's recorded snapshot, not a live re-measurement of the file:** the volume is
+  frozen; A6 (§7) already asserts the frozen prefix's bytes have not changed since closure via
+  its digest. Re-measuring `lines`/`bytes_working_tree` live would (a) duplicate A6's job for
+  the prefix portion and (b) pick up the closure footer's own bytes, which sit **beyond** the
+  frozen prefix by design (§13.3's rejected sub-option, §8) and were never part of "the volume
+  at the moment it was judged full". The index's `lines:`/`bytes_working_tree:` fields *are*
+  that moment's measurement, recorded once at roll time and never touched again — using them
+  is what "at the moment of closure" (ISS-0193's own phrasing) means operationally.
+- **A10 itself — new top-level test, `test/docs/requirement_status_invariants_test.exs`,**
+  placed after the existing A9 test: for every volume in `parse_index(@index_path).volumes`
+  with `status == "closed"`, assert `SH.warranted_closure?(volume, roll_rule.max_lines,
+  roll_rule.max_bytes)`. On failure, name every volume that failed, printing its `volume:`
+  number, `path:`, recorded `lines:`/`bytes_working_tree:`, and the two ceilings, labelled
+  "closed without exceeding either ceiling — closure was not warranted".
+- **Sharing, not duplicating (the point of task (c)):** the test file's existing private
+  helper `closed_and_pinned?/2` (used today only by A4b, `test/docs/requirement_status_invariants_test.exs`
+  around the A4b findings block) is **renamed and extended** to
+  `closed_pinned_and_warranted?(volumes :: [map()], roll_rule :: map(), record :: map()) ::
+  boolean()`. It returns `true` only when the cited volume is found, `status == "closed"`,
+  `frozen_prefix_sha256:` is present (the existing two checks, unchanged), **and**
+  `SH.warranted_closure?(volume, roll_rule.max_lines, roll_rule.max_bytes)` (the new check,
+  delegating to the one shared function above rather than re-comparing lines/bytes inline).
+  Both A4b's `not_closed_and_pinned` finding (over `known_shape_anomalies:` records) and A5's
+  new equivalent finding (over `known_anomalies:` records, §13.6) call this same renamed
+  helper with their own record list — the roll-rule comparison itself is written exactly
+  once, in `SH.warranted_closure?/3`.
+- **Failure-message consequence:** both A4b's and A5's "closed-and-pinned" failure branch
+  (§13.5, §13.6) must now be able to report *which* of the three reasons disqualified a record
+  — not closed, not pinned, or not warranted — since `closed_pinned_and_warranted?/3`
+  collapses to one boolean but the message must not. Specify the reason lookup as a sibling
+  private function, e.g. `disqualifying_reason(volumes, roll_rule, record) :: :not_closed |
+  :not_pinned | :not_warranted | :ok`, used only for message construction, never for the
+  pass/fail verdict (the verdict stays a single boolean per record so the set-equality and
+  closed-and-pinned findings compose the same way A4b already does today).
+
+### 13.12.5 Exact `test/docs/requirement_status_invariants_test.exs` and `test/support/status_history.ex` changes
+
+For **`test/support/status_history.ex`**:
+
+- Add `warranted_closure?/3` as specified in §13.12.4 — a new public function, documented,
+  alongside `within_bounds?/3`.
+- No other function in this module changes. `parse_index/1`'s return shape is unchanged —
+  `:volumes` already carries `status:`, `lines:`, `bytes_working_tree:` per §13.12.2's read of
+  the current parser output; nothing new needs to be parsed.
+
+For **`test/docs/requirement_status_invariants_test.exs`**:
+
+- Add one new test, **A10** (§13.12.4), placed immediately after the existing A9 test.
+- In the A5 test block: add the closed-and-pinned finding (mirroring the A4b findings block's
+  shape) computed via the renamed `closed_pinned_and_warranted?/3` helper, and extend A5's
+  failure message per §13.6's failure-output paragraph.
+- Rename the existing private helper `closed_and_pinned?/2` to `closed_pinned_and_warranted?/3`
+  (new `roll_rule` parameter) and update its one existing call site (A4b's findings function)
+  to pass `roll_rule` through — `roll_rule` is already in scope there via `parse_index/1`'s
+  return value, so no new parsing is needed at the call site either.
+- Add the `disqualifying_reason/3` sibling helper (§13.12.4) and use it in both A4b's and A5's
+  failure-message construction in place of the current binary "not closed-and-pinned" label.
+- Two new negative-control fixtures, mirroring the existing A4b negative controls
+  (`test/docs/requirement_status_invariants_test.exs`'s fixtures block): one closed, pinned,
+  *unwarranted* volume (closed with `lines`/`bytes_working_tree` both under ceiling) cited by
+  a declared record, to prove A10 (and the shared helper) actually bites rather than being
+  green by construction — the same "negative control" discipline §13.5's own test coverage
+  already applies to the closed-and-pinned rule.
+- No change to A5's existing set-equality assertion, its bidirectionality, or the three
+  existing `known_anomalies:` fixtures/records — task (a)/(e)'s constraint, preserved.
+
+### 13.12.6 What does not change
+
+- `docs/status/requirement_status.index.yaml` — **no edit required by this amendment.** The
+  three existing `known_anomalies:` records already satisfy the new rule and A10 (§13.12.2).
+  This amendment is a design-only change; ELIXIR-DEV/TEST-DESIGNER apply §13.12.4/§13.12.5,
+  same division of labour as §13.10 established for §13's earlier amendment.
+- A4b, `known_shape_anomalies:`, and the three shape-anomaly records (§13.3–§13.5) — unchanged
+  in behaviour; A4b's closed-and-pinned check now additionally implies A10 via the shared
+  helper, which volume 1 already satisfies (§13.12.2), so A4b's verdict is unaffected.
+- Bidirectional set equality on A5, and the three existing `known_anomalies:` records —
+  unchanged, per this amendment's own explicit instruction not to weaken or remove either.

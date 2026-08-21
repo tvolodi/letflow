@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0193-20260821/step-02-code-designer.json",
   "created_at": "2026-08-21T12:00:16Z",
   "started_at": "2026-08-21T12:00:16Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-21T12:07:24Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -39,9 +39,11 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Amended lib/letflow/design/iss-0119-status-file-readability.md to close ISS-0193. (a) A5 (section 13.6) now carries A4b's closed-and-pinned rule verbatim-mirrored: a declared known_anomalies: record's path must name a volume that is status: closed and carries frozen_prefix_sha256:. Verified directly against docs/status/requirement_status.index.yaml on disk (not assumed, cited in 13.12.2): the three known_anomalies: records (lines 74/81/88) all cite path docs/status/requirement_status.yaml, and that volume's entry (lines 32-52) has status: closed (line 34) and frozen_prefix_sha256 (line 46) -- all three pass. (b) Section 13.3's 'a reader who already understands one understands the other' bullet was the forward-looking parity claim; reworded in place to say it was aspirational at the time (A4b had the rule, A5 didn't) and now reads as settled fact after this fix, citing ISS-0193. (c) Added assertion A10 (continuing A1-A9's sequence) -- a closed volume's recorded lines:/bytes_working_tree: (the index's own closure-time snapshot, not a live re-measurement) must exceed roll_rule.max_lines or max_bytes; volume 1 (5766/361376 vs 1200/120000) passes. A10 is shared: the test file's private closed_and_pinned?/2 helper is renamed/extended to closed_pinned_and_warranted?/3 (new roll_rule param) and both A4b's and A5's closed-and-pinned findings call it, so the roll-rule comparison is written once in StatusHistory.warranted_closure?/3. Full spec in section 13.12 (new): 13.12.1 restates the gap, 13.12.2 the verification, 13.12.3 the 13.3 reconciliation note, 13.12.4 A10's design and the shared-helper rename, 13.12.5 the exact test/support/status_history.ex and test/docs/requirement_status_invariants_test.exs changes (signatures/assertion-prose only, no .ex bodies), 13.12.6 what stays unchanged (no index edit needed; A5's bidirectional set equality and its three existing records untouched). Only lib/letflow/design/iss-0119-status-file-readability.md and this handoff file were modified.",
+    "artifacts_out": [
+      "lib/letflow/design/iss-0119-status-file-readability.md"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0193-20260821",
@@ -51,7 +53,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for the hard gate on this amendment."
   },
   "rework_count": 0,
   "max_rework": 3

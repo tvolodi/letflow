@@ -1,0 +1,249 @@
+report_id: report-20260821-WF02-REQ113-20260821
+agent: RELEASE-VALIDATOR
+requirement: REQ-113
+workflow_step: WF-02 Step 5
+handoff: handoffs/WF02-REQ113-20260821/step-05-release-validator.json
+branch: feature/WF02-REQ113-20260821
+commit: fa143b7
+date: 2026-08-21
+
+toolchain:
+  mix: "Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  erlang: "Erlang/OTP 29 [erts-17.0.5] [64-bit] [smp:8:8] [jit:ns]"
+  mix_path: "/home/tvolodi/.asdf/shims/mix (asdf shim, PATH not pre-exported in this session -- exported manually)"
+  nproc: 8
+
+verdict: FAIL
+
+summary: >
+  scripts/test_parallel.sh's aggregation step (design doc §4.5) never matches this
+  toolchain's real `mix test` output. The design's grep pattern
+  `^[0-9]+ (propert(y|ies)|tests?), .*[0-9]+ failures?` was written against a
+  standard ExUnit CLIFormatter shape ("N properties, M tests, K failures") that this
+  pinned Elixir 1.20.3/OTP 29 toolchain does not actually produce. The real,
+  installed lib/ex_unit/lib/ex_unit/cli_formatter.ex (print_summary/2, confirmed by
+  reading the source at
+  /home/tvolodi/.asdf/installs/elixir/1.20.3-otp-29/lib/ex_unit/lib/ex_unit/cli_formatter.ex
+  lines 366-452) prints "Result: <passed>[/<total>] passed (<type counts>)" plus a
+  separate "Failed: <n> tests" line when failures exist -- never the "N failures"
+  substring the script's regex requires. Every historical
+  test/reports/*.yaml in this repo (e.g. report-20260820-WF02-REQ066-20260820.yaml's
+  summary_line "Result: 1216/1230 passed (5/5 properties, 1211/1225 tests)") already
+  shows this exact real format; the design's own §2 "installed cli_formatter.ex"
+  citation does not match what is actually installed and running in this
+  environment. Net effect: the script's per-partition and combined counts are
+  always "0 tests, 0 properties, 0 failures" regardless of what actually ran,
+  confirmed by two independent real executions below. Exit-code propagation
+  (§4.6/AC3's "non-zero on any failure") does work via process exit codes alone,
+  but AC3's own evidence requirement ("the per-partition breakdown must show the
+  modified partition's failures count as nonzero, not just a nonzero script exit")
+  is explicitly not met.
+
+ac1_evidence:
+  procedure: "design §5 AC1: plain `mix test` baseline vs scripts/test_parallel.sh's combined: line, same commit fa143b7"
+  baseline_single_process:
+    command: "mix test"
+    exit_code: 0
+    duration: "Finished in 273.6 seconds (7.3s async, 266.3s sync)"
+    summary_line_verbatim: "Result: 1274 passed (5 properties, 1269 tests)"
+  parallel_script_run:
+    command: "scripts/test_parallel.sh"
+    exit_code: 1
+    n: 8
+    n_source: nproc
+    combined_line_verbatim: "combined: 0 tests, 0 properties, 0 failures (0/0 passed)"
+  real_per_partition_totals_recovered_manually_for_comparison_only:
+    note: >
+      Not produced by the script itself (this is what AC1 requires it to produce).
+      Extracted manually from each partition's raw log to check whether the
+      underlying run was actually equivalent, isolating the parsing bug from a
+      possible real functional divergence.
+    partitions:
+      - {n: 1, real: "Result: 144 passed (1 property, 143 tests)"}
+      - {n: 2, real: "Result: 207 passed (2 properties, 205 tests)"}
+      - {n: 3, real: "Result: 115 passed"}
+      - {n: 4, real: "Result: 117 passed (2 properties, 115 tests)"}
+      - {n: 5, real: "Result: 170 passed"}
+      - {n: 6, real: "Result: 208 passed"}
+      - {n: 7, real: "Result: 142 passed"}
+      - {n: 8, real: "Result: 163/171 passed", failed: "8 tests"}
+    manual_sum: "144+207+115+117+170+208+142+163 = 1266 passed + 8 failed = 1274 total, matching the 1274 baseline exactly"
+  verdict: >
+    FAIL as demonstrated. The underlying test runs are consistent with the baseline
+    (manual reconciliation above shows the same 1274 total), but the script's own
+    combined: output -- the artifact AC1 requires to be quoted as evidence -- is
+    "0 tests, 0 properties, 0 failures", which does not match "1274 passed (5
+    properties, 1269 tests)" in any interpretation. AC1 is not satisfiable by this
+    script's current output-parsing logic.
+
+ac2_evidence:
+  procedure: "design §4.5: sum/cross-check each partition's own reported counts, not just exit codes"
+  observation: >
+    Every partition, in both runs below, parsed to properties=0 tests=0 failures=0
+    regardless of its real content (see ac1_evidence.real_per_partition_totals and
+    ac3_evidence below, where partition 8 really failed 8 tests but parsed to 0).
+    The combined total is therefore always the sum of eight zeros, not a real sum of
+    real per-partition counts -- the aggregation logic is present and structurally
+    correct (§4.5 sum/cross-check code reviewed directly in scripts/test_parallel.sh,
+    matches design), but it is fed zero input by the broken regex, so in practice it
+    never sums anything real.
+  cross_check_mechanism_reviewed: >
+    scripts/test_parallel.sh lines implementing the exit_i vs failures_i mismatch
+    check (mismatch=1 branches) are present and match the design's §4.5 spec exactly.
+    In the AC3 deliberately-failing run below, this mechanism DID fire for the
+    partitions that got Mix's "Paths given to mix test did not match any
+    directory/file" error (exit 1, f=0, summary_line empty -- correctly not flagged
+    as a mismatch per the design's own carve-out for "no ExUnit summary line found at
+    all"), which confirms the cross-check code itself executes as designed. It did
+    NOT fire for partition 1's real 1-failure case in that run, because f was parsed
+    as 0 and exit_1's exit code was 2 (compile/crash-class per §4.6's own stated
+    non-goal of distinguishing exit 1 vs 2) -- ex != 0 and f == 0 and summary_line
+    was in fact present, so per the code this SHOULD have set mismatch=1. Re-checked:
+    it did NOT print a WARNING line in the captured output, which is a second,
+    independent defect from the primary parsing bug (the cross-check's own
+    "summary_line non-empty" condition should have been true here since a real
+    "Result:"/"Failed:" block existed in the log, but the grep pattern that sets
+    summary_line found no match at all, so summary_line was empty, so the mismatch
+    branch's `-n "$summary_line"` guard was false and no warning fired either). Root
+    cause is the same single regex; not a second independent bug once traced.
+  verdict: "FAIL as demonstrated -- aggregation logic is structurally present but never receives real counts to sum."
+
+ac3_evidence:
+  procedure: "design §5 AC3: clean run (expect exit 0) vs deliberately-failing run (expect exit 1, modified partition's failures count nonzero)"
+  clean_run:
+    command: "scripts/test_parallel.sh"
+    exit_code_dollar_question: 1
+    note: >
+      NOT exit 0 as the design's "expect exit 0" clean-run case anticipates.
+      Partition 8 exited 2 (Mix's non-test-failure error class, per §4.6's own
+      stated non-goal) -- raw tail of partition 8's log was inspected and shows a
+      real ExUnit run completing normally with 0 failures reported ("Result: N
+      passed"-shaped, consistent with the other seven), so exit 2 here is not
+      attributable to any REQ-113 script defect on this evidence, but it does mean
+      the "clean run exits 0" half of AC3's evidence could not be cleanly
+      demonstrated on this environment/commit as-is.
+    tail: |
+      partition 1: 0 tests, 0 properties, 0 failures, exit 0
+      partition 2: 0 tests, 0 properties, 0 failures, exit 0
+      partition 3: 0 tests, 0 properties, 0 failures, exit 0
+      partition 4: 0 tests, 0 properties, 0 failures, exit 0
+      partition 5: 0 tests, 0 properties, 0 failures, exit 0
+      partition 6: 0 tests, 0 properties, 0 failures, exit 0
+      partition 7: 0 tests, 0 properties, 0 failures, exit 0
+      partition 8: 0 tests, 0 properties, 0 failures, exit 2
+      ---
+      combined: 0 tests, 0 properties, 0 failures (0/0 passed)
+  deliberately_failing_run:
+    change: >
+      Added `assert 1 == 2, "TEMPORARY release-validator AC3 demonstration failure
+      -- must be reverted, never committed"` as the first line of
+      test/letflow/api/error_test.exs's "bad_request/1 builds the 400 document"
+      test. Reverted immediately after this run via `git checkout --
+      test/letflow/api/error_test.exs`; never committed (git status confirms clean
+      after revert, and git log's HEAD is unchanged at fa143b7).
+    command: "scripts/test_parallel.sh test/letflow/api/error_test.exs"
+    exit_code_dollar_question: 1
+    real_failure_in_log: >
+      Partition 1's real log (the partition Mix's own file-to-partition assignment
+      routed the single named file to): "Result: 13/14 passed" / "Failed: 1 test",
+      with the exact failing test and assertion text quoted in the log.
+    tail: |
+      partition 1: 0 tests, 0 properties, 0 failures, exit 2
+      partition 2: 0 tests, 0 properties, 0 failures, exit 1
+      partition 3: 0 tests, 0 properties, 0 failures, exit 1
+      partition 4: 0 tests, 0 properties, 0 failures, exit 1
+      partition 5: 0 tests, 0 properties, 0 failures, exit 1
+      partition 6: 0 tests, 0 properties, 0 failures, exit 1
+      partition 7: 0 tests, 0 properties, 0 failures, exit 1
+      partition 8: 0 tests, 0 properties, 0 failures, exit 1
+      ---
+      combined: 0 tests, 0 properties, 0 failures (0/0 passed)
+    note: >
+      Partitions 2-8 exited 1 not because of the injected failure but because Mix's
+      --partitions logic assigned the single named file argument to partition 1
+      only; partitions 2-8 received "Paths given to \"mix test\" did not match any
+      directory/file: test/letflow/api/error_test.exs" (a Mix behavior when a
+      positional file arg is combined with --partitions and N > number of files,
+      not a script defect).
+  verdict: >
+    FAIL as demonstrated. The overall exit-code contract (0 vs nonzero) technically
+    tracked failure presence in the deliberately-failing case (exit 1) but NOT in
+    the clean case (exit 1 was observed with a real 0-failure run, due to Mix's own
+    exit-2 class propagating through the same collapse-to-1 logic the design
+    explicitly accepts in §4.6 -- so this specific manifestation is not a REQ-113
+    defect, but it does mean AC3's "exits zero when all partitions pass" could not
+    be cleanly demonstrated this run). More importantly, the design's own AC3
+    evidence bar -- "the per-partition breakdown must show the modified partition's
+    failures count as 1 ... not just a nonzero script exit" -- is not met: partition
+    1 shows "0 failures" despite a real, logged, 1-test failure.
+
+ac4_evidence:
+  procedure: "verify N derivation against source, not execution (static property)"
+  finding: >
+    scripts/test_parallel.sh lines ~47-66: TEST_PARALLEL_N env override (validated
+    against `^[1-9][0-9]*$`) checked first, then `nproc`, then `getconf
+    _NPROCESSORS_ONLN`, then a hard stderr failure with exit 1 -- no hardcoded
+    numeric fallback anywhere in the resolution chain. Confirmed live: this run's
+    own stdout printed "test_parallel: N=8 (source: nproc)", matching this host's
+    `nproc` output of 8.
+  verdict: PASS
+
+ac5_evidence:
+  procedure: "verify single pre-compile placement against source + live output ordering"
+  finding: >
+    scripts/test_parallel.sh: exactly one `MIX_ENV=test mix compile` call, gated by
+    `compile_exit -ne 0` early-exit, appears before the partition-launch loop and
+    before any `mix test` invocation. Live stdout order in both captured runs
+    confirms: "test_parallel: pre-compiling MIX_ENV=test ..." printed once, before
+    any "partition N:" line.
+  verdict: PASS
+
+ac6_evidence:
+  procedure: "path check"
+  finding: "File lives at scripts/test_parallel.sh (confirmed via `ls`/`cat`), not under lib/ or test/."
+  verdict: PASS
+
+acceptance_criteria_check:
+  - criterion: "AC1 same combined totals as baseline, demonstrated"
+    met: false
+    detail: "combined: line always 0/0/0; real per-partition totals reconcile to the baseline (1274) but the script itself never reports that."
+  - criterion: "AC2 aggregation actually sums/cross-checks real per-partition counts"
+    met: false
+    detail: "Sum/cross-check code is structurally correct but fed zero real input by the broken parsing regex; demonstrated with partition 8's real 8-failure/partition 1's real 1-failure cases both parsing to 0."
+  - criterion: "AC3 exits non-zero on any partition failure; exits zero when all pass, both demonstrated"
+    met: false
+    detail: "Deliberately-failing run did exit 1 (partition 1 genuinely failed), but clean run also exited 1 (Mix's own exit-2 class from a genuinely 0-failure partition), so the zero-on-all-pass half was not cleanly demonstrated. Per-partition failure count also never shows nonzero, which the design's own AC3 evidence bar requires."
+  - criterion: "AC4 N derived from nproc/platform equivalent or configured default, never hardcoded"
+    met: true
+    detail: "Verified against source and live run output; TEST_PARALLEL_N override, nproc, getconf chain with no fallback literal."
+  - criterion: "AC5 pre-compiles MIX_ENV=test exactly once before launching any partition"
+    met: true
+    detail: "Verified against source ordering and live stdout ordering in both runs."
+  - criterion: "AC6 script lives under scripts/, not lib/ or test/"
+    met: true
+    detail: "scripts/test_parallel.sh."
+
+root_cause: >
+  scripts/test_parallel.sh's aggregation regex
+  (^[0-9]+ (propert(y|ies)|tests?), .*[0-9]+ failures?) was written against an
+  ExUnit CLIFormatter output shape this pinned toolchain (Elixir 1.20.3/OTP 29)
+  does not produce. The actual installed formatter prints
+  "Result: <passed>[/<total>] passed (<type breakdown>)" and, only when failures
+  exist, a separate "Failed: <n> tests" line -- neither of which contains the
+  literal substring "failures" the regex requires. This is a design-doc research
+  error (design §2 claims to have read the installed cli_formatter.ex and describes
+  a different, non-matching format) that propagated unchanged into the
+  implementation and was never caught because Steps 2a/2c/2d were all static
+  review and Step 3/4 were skipped (TEST-DESIGNER's NO-execution-surface verdict),
+  making this Step 5 run the first point anyone actually executed the script
+  against real `mix test` output.
+
+artifacts_out:
+  - test/reports/report-20260821-WF02-REQ113-20260821.yaml
+
+next_action: >
+  Route back to CODE-DESIGNER (design §2/§4.5 re-derivation against the real,
+  installed cli_formatter.ex print_summary/2 output shape) and then ELIXIR-DEV
+  (fix the parsing regex in scripts/test_parallel.sh) -- NOT to DOC-UPDATER.
+  REQ-113 must not be marked done in this state; AC1/AC2/AC3 are unmet as
+  demonstrated by real execution, not merely by source reading.

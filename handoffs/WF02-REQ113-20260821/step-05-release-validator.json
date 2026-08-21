@@ -1,0 +1,58 @@
+{
+  "handoff_id": "req113-step05",
+  "run_id": "WF02-REQ113-20260821",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ113-20260821/step-05-release-validator.json",
+  "created_at": "2026-08-21T06:52:00Z",
+  "started_at": "2026-08-21T06:52:00Z",
+  "completed_at": "2026-08-21T07:02:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-113"],
+    "artifacts_in": [
+      "scripts/test_parallel.sh@3405a0b",
+      "lib/letflow/design/req113-parallel-test-runner.md@99ff884",
+      "handoffs/WF02-REQ113-20260821/step-03-test-designer.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 5 independent re-verification of REQ-113's AC1-AC6, including performing the AC1/AC3 real-execution demonstration runs the design doc's section 5 requires and that no earlier step had produced (TEST-DESIGNER's NO-execution-surface verdict skipped Steps 3b/4 entirely).",
+    "acceptance_criteria": [
+      "AC1: same combined pass/fail/property totals as single-process mix test, demonstrated side by side",
+      "AC2: aggregation actually sums/cross-checks each partition's reported counts, not just process exit",
+      "AC3: exits non-zero on any partition failure (demonstrated by injecting one), exits zero when all pass",
+      "AC4: N derived from nproc/platform equivalent or explicit configured default, never hardcoded",
+      "AC5: pre-compiles MIX_ENV=test exactly once before launching any partition",
+      "AC6: script lives under scripts/, not lib/ or test/"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Confirmed branch feature/WF02-REQ113-20260821, commit fa143b7. Toolchain (asdf shims, not on default PATH in this session) resolved to Mix 1.20.3/OTP 29; Postgres reachable on localhost:5462 (letflow-postgres-1, already up). Ran plain `mix test` (baseline, exit 0, 'Result: 1274 passed (5 properties, 1269 tests)', 273.6s) and `scripts/test_parallel.sh` (N=8 via nproc) twice: once clean and once with a temporary injected failing assertion in test/letflow/api/error_test.exs (reverted immediately via `git checkout --`, confirmed clean afterward, never committed). Both real runs show scripts/test_parallel.sh's combined: line always reporting '0 tests, 0 properties, 0 failures' regardless of what actually ran. Root cause: the script's aggregation regex (design doc section 4.5) targets an ExUnit CLIFormatter output shape ('N properties, M tests, K failures') that this pinned Elixir 1.20.3/OTP 29 toolchain's actual installed cli_formatter.ex (print_summary/2) does not produce -- the real format is 'Result: <passed>[/<total>] passed (<type breakdown>)' plus a separate 'Failed: <n> tests' line, confirmed both by reading the installed source directly and by every historical test/reports/*.yaml in this repo already using that exact format. Manually reconciling the real per-partition numbers (grep'd directly from each partition's raw log) against the baseline shows the underlying test execution IS consistent (1266 passed + 8 failed = 1274, matching baseline exactly) -- this is a parsing/reporting defect in the script, not a functional divergence in the partitioned test execution itself. AC2's sum/cross-check code is structurally present and correct but is fed all-zero input by the broken regex, so it never performs a real sum in practice; the deliberately-injected failure (partition 1, real 'Result: 13/14 passed'/'Failed: 1 test') parsed to 0 failures. AC3's exit-code contract also did not cleanly demonstrate 'zero when all pass' -- the clean run exited 1 overall because one partition legitimately exited 2 (Mix's own non-test-failure exit class, which section 4.6 explicitly declines to distinguish from real failures) despite that partition's real log showing 0 ExUnit failures. AC4, AC5, AC6 verified directly against source and live run output and PASS.",
+    "artifacts_out": [
+      "test/reports/report-20260821-WF02-REQ113-20260821.yaml"
+    ],
+    "issues": [
+      "scripts/test_parallel.sh's per-partition/combined aggregation regex never matches this toolchain's real mix test output shape ('Result: N[/M] passed (...)' / 'Failed: N tests'), so AC1 and AC2 cannot be satisfied by the current implementation -- confirmed by two independent real executions, not by source reading alone.",
+      "AC3's 'exits zero when all partitions pass' half was not cleanly demonstrable in this environment because a genuinely-passing partition exited 2 (Mix's own exit-2 class, a design-acknowledged non-goal to distinguish from exit 1) -- separate from, but compounding, the primary parsing defect.",
+      "docs/requirements.yaml REQ-113 status (in_progress) and docs/status/requirement_status.yaml are NOT stale -- left untouched, this is not a done requirement."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ113-20260821",
+      "commit_sha_list": ["fa143b7"],
+      "remote_branch": "origin/feature/WF02-REQ113-20260821",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER for rework of design section 4.5's parsing rule (re-derive against the actually-installed cli_formatter.ex print_summary/2 output, not the shape currently cited), then ELIXIR-DEV to fix scripts/test_parallel.sh's regex accordingly, then re-run Steps 2c/2d/5. Do NOT route to DOC-UPDATER -- REQ-113 is not done."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

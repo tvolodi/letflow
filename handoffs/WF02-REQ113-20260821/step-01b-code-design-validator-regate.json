@@ -1,0 +1,48 @@
+{
+  "handoff_id": "req113-step01b-regate",
+  "run_id": "WF02-REQ113-20260821",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ113-20260821/step-01b-code-design-validator-regate.json",
+  "created_at": "2026-08-21T06:39:15Z",
+  "started_at": "2026-08-21T06:39:15Z",
+  "completed_at": "2026-08-21T06:40:30Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-113"],
+    "artifacts_in": ["lib/letflow/design/req113-parallel-test-runner.md@99ff884"],
+    "owned_modules": ["lib/letflow/design/req113-parallel-test-runner.md"]
+  },
+  "task": {
+    "description": "Re-gate WF-02 Step 1b after rework 1 (removal of section 4.3's literal shell command).",
+    "acceptance_criteria": [
+      "same combined totals as baseline, demonstrated",
+      "aggregation actually sums/cross-checks",
+      "non-zero exit on any partition failure, zero on all-pass, both demonstrated",
+      "N derived from nproc/platform/configured default, never hardcoded",
+      "pre-compiles MIX_ENV=test exactly once before any partition",
+      "lives under scripts/"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Diffed 3405a0b->99ff884: exactly the one hunk in section 4.3 changed (fenced code removed, replaced with prose), nothing else touched. Re-ran full checklist (a)-(e) against all six ACs: no failed checks. Remaining fenced blocks in the document are illustrative ExUnit/script output-text examples (data shapes being parsed/produced), not executable code -- within the allowed carve-out. Design is ready to proceed to WF-02 Step 2.",
+    "artifacts_out": ["handoffs/WF02-REQ113-20260821/step-01b-code-design-validator-regate.json"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ113-20260821",
+      "commit_sha_list": ["99ff884"],
+      "remote_branch": "origin/feature/WF02-REQ113-20260821",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (Step 2a). Backend-only (tooling) requirement; no Step 2b frontend work."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

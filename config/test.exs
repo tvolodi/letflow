@@ -28,10 +28,20 @@ config :letflow, Letflow.Repo,
   # regularly did). A plain `mix test` (no test_parallel.sh, TEST_POOL_SIZE
   # unset) keeps the original sizing unchanged. See
   # docs/migration/decisions/0009-test-parallel-pool-sizing.md.
-  pool_size: (case System.get_env("TEST_POOL_SIZE") do
-                nil -> System.schedulers_online() * 2
-                value -> String.to_integer(value)
-              end)
+  pool_size:
+    (case System.get_env("TEST_POOL_SIZE") do
+       nil -> System.schedulers_online() * 2
+       value -> String.to_integer(value)
+     end),
+  # ISS-0110: tags every Postgres connection this `mix test` invocation opens with
+  # this invocation's own OS pid, so Letflow.TenantSchemaReaper.sweep_orphans/2 can
+  # tell "another mix test invocation is currently connected to this database" from
+  # pg_stat_activity alone, with no new table/column and no change to any of the
+  # existing tenant-provisioning call sites. A nested invocation (ISS-0107) gets its
+  # own distinct OS pid (Port.open spawns a new OS process), so this tag reliably
+  # distinguishes invocations even when they share one database. See
+  # test/support/tenant_schema_reaper.ex's moduledoc for how the tag is used.
+  parameters: [application_name: "letflow_mixtest_#{System.pid()}"]
 
 # Placeholder — no real Keycloak instance exists yet. Replace with a real
 # per-environment issuer URL once realm provisioning (deferred past S1, see

@@ -261,6 +261,78 @@ defmodule Letflow.TenantSchemaReaperTest do
   # for why that was judged impractical for this file and left uncovered.
   # ---------------------------------------------------------------------------------
 
+  # ---------------------------------------------------------------------------------
+  # Criterion 5 (ISS-0110) -- concurrent-invocation liveness guard: an old row is
+  # spared while ANOTHER "mix test invocation" (a real, separate Postgres connection
+  # tagged with a distinct letflow_mixtest_* application_name) is connected, and
+  # reclaimed once that connection closes -- proving both directions of the fix
+  # without needing to spawn a second OS process.
+  # ---------------------------------------------------------------------------------
+
+  describe "sweep_orphans/2 concurrent-invocation liveness guard (ISS-0110)" do
+    test "spares an old row while another invocation's connection is open, reclaims it once that connection closes" do
+      tenant = insert_tenant!()
+      schema_name = valid_schema_name()
+      create_schema!(schema_name)
+
+      old_provisioned_at = naive_now() |> NaiveDateTime.add(-10_000, :second)
+      row_id = insert_tenant_schemas_row!(tenant.id, schema_name, old_provisioned_at)
+
+      on_exit(fn -> drop_schema!(schema_name) end)
+
+      # A real, separate Postgres connection tagged as a DIFFERENT mix test
+      # invocation -- exactly what config/test.exs's own connections carry, just
+      # with a fake pid suffix a real invocation could never coincidentally share.
+      fake_tag = "letflow_mixtest_fake#{System.unique_integer([:positive])}"
+      repo_config = Repo.config()
+
+      {:ok, other_conn} =
+        Postgrex.start_link(
+          hostname: Keyword.fetch!(repo_config, :hostname),
+          port: Keyword.fetch!(repo_config, :port),
+          username: Keyword.fetch!(repo_config, :username),
+          password: Keyword.fetch!(repo_config, :password),
+          database: Keyword.fetch!(repo_config, :database),
+          parameters: [application_name: fake_tag]
+        )
+
+      # Sanity: the fake connection really is visible to Postgres under its tag --
+      # otherwise this test would pass for the wrong reason (a no-op guard).
+      %{rows: [[1]]} =
+        Postgrex.query!(
+          other_conn,
+          "SELECT 1 FROM pg_stat_activity WHERE application_name = $1",
+          [fake_tag]
+        )
+
+      assert {:ok, %{reclaimed: 0, skipped_invalid_format: _}} =
+               TenantSchemaReaper.sweep_orphans(Repo, 1)
+
+      Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+
+      # Deferred, not reclaimed -- the row and its real schema both survive despite
+      # being 10_000s old and comfortably past min_age_seconds: 1.
+      assert schema_exists?(schema_name)
+      assert tenant_schemas_row_exists?(row_id)
+      assert tenants_row_exists?(tenant.id)
+
+      # Close the "other invocation" -- its connection, and therefore its tag,
+      # disappears from pg_stat_activity exactly as a genuinely dead invocation's
+      # would (TCP-level, unconditional).
+      GenServer.stop(other_conn)
+
+      assert {:ok, %{reclaimed: reclaimed, skipped_invalid_format: _}} =
+               TenantSchemaReaper.sweep_orphans(Repo, 1)
+
+      Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+
+      assert reclaimed >= 1
+      refute schema_exists?(schema_name)
+      refute tenant_schemas_row_exists?(row_id)
+      refute tenants_row_exists?(tenant.id)
+    end
+  end
+
   describe "sweep_orphans/2 return-shape contract" do
     test "returns {:ok, %{reclaimed: _, skipped_invalid_format: _}} with no orphans present" do
       assert {:ok, %{reclaimed: reclaimed, skipped_invalid_format: skipped}} =

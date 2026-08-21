@@ -52,4 +52,43 @@ queue_task_id: 178
 github_issue: https://github.com/tvolodi/letflow/issues/364
 github_issue_note: >
   Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (178) and its mirrored GitHub issue (#364) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0110-20260821
+resolved_at: "2026-08-21T14:06:23Z"
+resolution_note: >
+  Added a liveness check ahead of the existing age-threshold filter, rather than
+  retuning min_age (explicitly declined per this issue's own "do not assume" note --
+  raising it would trade this hazard for the orphan accumulation ISS-0064 exists to
+  prevent). config/test.exs tags every connection a `mix test` invocation opens with
+  `application_name: "letflow_mixtest_#{System.pid()}"` (one tag per invocation's OS
+  process, distinct for a nested invocation per ISS-0107 since Port.open spawns a new
+  OS process). `Letflow.TenantSchemaReaper.sweep_orphans/2` now checks
+  `pg_stat_activity` for any OTHER such tag before running its age-based sweep at
+  all; if one is present, the sweep defers entirely (not just that invocation's own
+  rows -- no per-row ownership is tracked, so a live invocation's row can't be told
+  apart from a different, genuinely dead invocation's row without one) and retries on
+  the next boundary call.
+
+  Full design/reasoning in lib/letflow/design/iss064-orphaned-tenant-schemas-fix.md
+  §11 (new section, added this run -- self-authored per the "do not add behavior
+  beyond it without a design update" rule that module's moduledoc states, no
+  CODE-DESIGNER/CODE-DESIGN-VALIDATOR role split available in this execution
+  context).
+
+  VERIFIED both directions with a real test (test/support/tenant_schema_reaper_test.exs,
+  new "concurrent-invocation liveness guard (ISS-0110)" describe block): opened a
+  second, real Postgres connection tagged as a distinct fake invocation, confirmed a
+  10,000s-old row is spared while that connection stays open, closed it, confirmed
+  the same row is then reclaimed on the next sweep call. 6/6 reaper tests pass;
+  129/129 across the reaper + tenant_provisioning + identity/engine/rollback test
+  modules pass (excludes test/letflow/identity_migration_test.exs, which fails
+  0/10 identically with and without this change -- confirmed via `git stash` --
+  pre-existing DB-state pollution unrelated to this fix, matching what several other
+  runs this session independently reported as ~13 pre-existing unrelated failures;
+  not filed as a new issue here to avoid duplicating an already-noticed finding, but
+  flagged for the coordinating session's awareness).
+
+  No new table/column/migration; zero change to any of the ~40 test files that call
+  `provision_tenant_schema/1` directly. ISS-0113 (a related but separate
+  Sandbox.mode(:auto) leak in the copy-pasted fixture template) is NOT fixed here --
+  investigated and reverted separately this session as unsafe for a blanket fix.

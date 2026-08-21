@@ -613,3 +613,42 @@ rather than trusting per-test cleanup to always fire.
 | No implementation code | This entire document is `@spec`s, prose algorithm steps, and a pseudocode-style DROP/DELETE statement shape (§3.2) — no `.ex`/`.exs` function bodies |
 | **(Rework iteration 1)** Failure-mode contract for `sweep_orphans/2` is internally consistent between the interface doc and the algorithm | §3.1 (precise contract: outer `try/rescue/after`, two failure classes, exact return value and logging for each) and §3.2 step 0/step 4 (the algorithm that actually implements that contract) — no remaining claim in §3.1 that isn't backed by a concrete step in §3.2 |
 | **(Rework iteration 1)** Concurrent-invocation safety argument covers the actual default (`MIX_TEST_PARTITION` unset/shared DB), not only the partitioned case | §2.3 (rewritten: confirms no CI enforcement exists, §0's new bullet backs this with a direct repo check) and §4 INV-R-5 (the real mitigation — an age-threshold filter, not a documentation-only claim) |
+
+---
+
+## 11. Extension (ISS-0110, 2026-08-21) — the age-threshold filter alone is no longer sufficient
+
+**Executed directly by ORCH (self-diagnosed/designed/reviewed — no CODE-DESIGNER/CODE-DESIGN-VALIDATOR/REVIEWER role split available in this execution context; stated here plainly per this session's established convention for that deviation).**
+
+§4 INV-R-5's age-threshold filter (`min_age_seconds`, default 300s) was this design's whole
+concurrent-invocation mitigation. Two facts falsified it after the fact, both measured, not
+argued: (1) the suite now runs 564-609s, well past 300s, so a schema provisioned early in a
+long run is "safely old" by this filter's own test while still genuinely in use; (2) ISS-0107
+demonstrated a nested `mix test` invocation really can inherit the same
+`LETFLOW_DB_PORT`/`MIX_TEST_PARTITION` as its parent and land on the identical database. The
+age filter alone cannot tell "old and truly orphaned" from "old and still owned by a
+long-running or nested invocation" — it was never meant to (§2.3 explicitly reasoned about
+CI-enforced partitioning, not about invocation lifetime).
+
+**The fix adds a liveness check ahead of the age filter, not a replacement for it.**
+`config/test.exs` tags every Postgres connection a `mix test` invocation opens with
+`application_name: "letflow_mixtest_#{System.pid()}"` — one tag per invocation's OS process,
+stable for its whole lifetime, and distinct from a nested invocation's own tag (a new OS
+process gets a new `System.pid()`). `sweep_orphans/2` now checks `pg_stat_activity` for any
+*other* `letflow_mixtest_*` tag before running its existing age-based sweep at all. If one is
+present, the entire sweep defers (not just that invocation's own rows — this module tracks no
+per-row ownership, so there is no way to tell a live invocation's old row from a different,
+genuinely dead invocation's old row without one) and retries on the next boundary call. If none
+is present, §3.2's original algorithm runs completely unchanged.
+
+**Why this is additive, not a redesign:** zero change to `reclaim_row/2`, the schema-name
+validation, the outer `try/rescue/after` contract (§3.1), or the return shape. One new
+production-adjacent config line (`config/test.exs`, test-env only) and two new private
+functions in the same test-only module. No new table, no new column, no migration, no touch to
+any of the ~40 test files that call `provision_tenant_schema/1` (rejected explicitly — either a
+production migration for a test-only concern, or a 40-file hook, both disproportionate to the
+hazard).
+
+**What this does NOT fix:** ISS-0110's own related finding (`docs/issues/ISS-0113.yaml`) — a
+separate `Sandbox.mode(:auto)`-leak hazard in the copy-pasted fixture template — is unrelated
+to this reaper and was investigated/reverted separately this session, not folded in here.

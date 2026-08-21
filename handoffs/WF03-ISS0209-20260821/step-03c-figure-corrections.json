@@ -1,0 +1,67 @@
+{
+  "handoff_id": "5e99a92e-43e3-487f-b497-594d49e30e7e",
+  "run_id": "WF03-ISS0209-20260821",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF03-ISS0209-20260821/step-03c-figure-corrections.json",
+  "created_at": "2026-08-21T11:09:00Z",
+  "started_at": "2026-08-21T11:09:00Z",
+  "completed_at": "2026-08-21T11:12:36Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "35e461a3-3497-4796-bc12-42096988f848",
+      "a04d8773-df4c-4e36-9803-b3c08cc93096"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0209-20260821/step-03b-reviewer-gate.json",
+      "handoffs/WF03-ISS0209-20260821/step-03-commit-sha-list-scope.json",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/issues/ISS-0209.yaml"
+    ],
+    "owned_modules": [
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/issues/ISS-0209.yaml"
+    ]
+  },
+  "task": {
+    "description": "In-run correction, not rework. The gate PASSED your Step 03 work on all nine acceptance criteria and its verdict stands -- but its independent re-derivation found three figures in the text you shipped that are false. They are now quoted in `HANDOFF_PROTOCOL.md` section 2, in `docs/issues/ISS-0209.yaml` and in commit `12f8f4c`'s message. A protocol document asserting a checkable number that is wrong is precisely the defect class this project keeps paying for, so it is corrected now, in the run that created it, rather than filed as a new issue for a later run.\n\n`rework_count` is NOT incremented and this is not a FAIL. Read the gate's own `result` in `handoffs/WF03-ISS0209-20260821/step-03b-reviewer-gate.json` for the full derivation of each corrected figure -- its numbers are the source, and you should confirm rather than assume them.\n\nTHE THREE CORRECTIONS:\n\n1. THE HEADLINE FRACTION IS NINE SHAS WRONG. You reported 284 of 502 unresolvable (57%). The true figure at your own measurement moment was 293 of 502 (58.4%). The cause is diagnosable and worth understanding before you edit: the 9 non-sha-shaped strings you correctly found and reported in your own second MINOR were then counted in the RESOLVING bucket, although they resolve to nothing. Your underlying resolving count of 209 is right; it is the complement that was mis-split. Correct the fraction wherever it appears, and state it as 58% rather than 57%.\n\n2. `12 of the 63 run directories` IS 11. The 21 write-back commits and the 63 directories are both correct; the distinct-directory count is not.\n\n3. THE `EVERY ONE` CLAIM IS TOO STRONG, AND ITS EXCEPTIONS MATTER MORE THAN THE CLAIM DID. You wrote that every write-back records exactly its immediate predecessor. That holds for 17 of 21. `426814c` additionally records an earlier commit. More significantly, `d4e80ed`, `09aaaef` and `f7dc7a2` record a POST-MERGE SQUASH sha rather than a parent -- `d4e80ed` records `717208d`, not its parent `419f1f2`. Your refutation of the infinite-regress premise is untouched by this and stays exactly as written; it is the universal quantifier that needs weakening to the true count.\n\nAND ONE ADDITION, WHICH IS WHY CORRECTION 3 IS THE INTERESTING ONE:\n\n4. Your own Step 03 report proposed, as a follow-on, that recording the post-merge squash sha would give each run one DURABLE pointer -- fixing this field for writers rather than only for readers. The gate then found that three write-backs in this repository ALREADY DO EXACTLY THAT. That is prior art, not a deviation, and the subsection currently frames it as one. Add a short note -- a few lines, in the subsection you wrote, no new section -- recording the option, naming those three commits as evidence that it has been done here before, and stating plainly that it is not adopted by this ruling and would need its own run. This is deliberately being kept as a note rather than filed as a queue task: it is an enhancement, not a defect, and ORCH is not spawning a further run for it. Do not design the mechanism, do not change what the ruling decides, and do not promote the write-back from OPTIONAL.\n\nSCOPE:\n- `HANDOFF_PROTOCOL.md` section 2's subsection and `docs/issues/ISS-0209.yaml`'s `resolution:` block are the only two files in scope. Commit `12f8f4c`'s message is wrong and stays wrong -- git history is not rewritten, and the corrected figure landing in a later commit is the normal way this project fixes a committed claim.\n- Do NOT touch section 1.2. ISS-0206 and ISS-0208 are open against it.\n- Do NOT alter the ruling, the boundary commit, or the refutation's substance.\n- Do NOT backfill any historical handoff.\n- `result.status` must be one of PASS/FAIL/PARTIAL/BLOCKED/SKIPPED.\n- Read the clock in its OWN command before each timestamp you write.\n- `started_at` was stamped by ORCH at dispatch. Claim by setting `status` to `IN_PROGRESS` only.\n- Commit `docs/` and this handoff. Do NOT write `handoffs/registry.json` or `handoffs/orchestrator.log`.",
+    "acceptance_criteria": [
+      "The unresolvable fraction reads 293 of 502 / 58% everywhere it appears in HANDOFF_PROTOCOL.md section 2 and docs/issues/ISS-0209.yaml, and the 9-malformed-string mis-split is confirmed as the cause rather than assumed",
+      "The run-directory count reads 11, not 12",
+      "The 'every one records its immediate predecessor' claim is weakened to the true 17 of 21, with the four exceptions characterised correctly",
+      "The infinite-regress refutation's substance is unchanged -- only the universal quantifier moves",
+      "A short note records the post-merge-squash-sha option, names d4e80ed / 09aaaef / f7dc7a2 as existing prior art, and states it is not adopted here and needs its own run",
+      "The ruling, the OPTIONAL status of the write-back, and the 12f8f4c boundary are all unchanged",
+      "Section 1.2 is untouched and no historical handoff file is modified; no file outside docs/ and handoffs/WF03-ISS0209-20260821/ is changed",
+      "The corrected figures were confirmed against the gate handoff's own derivation rather than copied on trust"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "All three corrections applied and the note added; all eight acceptance criteria met. EVERY FIGURE WAS RE-DERIVED FROM THE REPOSITORY BEFORE BEING WRITTEN -- I did not copy the gate's numbers, and I say so specifically because copying a corrected figure on trust would repeat, in the opposite direction, the exact defect being corrected. (1) THE FRACTION, CONFIRMED AND THE MIS-SPLIT DIAGNOSED INDEPENDENTLY. Own script, repo root: walk handoffs/ excluding registry.json, collect every recorded sha, partition into (a) not sha-shaped by `[0-9a-f]{7,40}`, (b) sha-shaped but `git cat-file -t` non-zero, (c) resolving. TODAY: 504 shas = 9 malformed + 284 dead + 211 resolving; unresolvable 293 = 58.1%. Subtracting this run's own two recorded shas (12f8f4c, 389eb0b, both on the step-03 handoff, both resolving) recovers the step-03 measurement moment exactly: 293 of 502 = 58.4%, and resolving 211-2 = 209. So the gate's diagnosis is confirmed on my own numbers rather than accepted: my 209 was right and my 284 was right, but I wrote '218 that resolve (209 after dropping 9 malformed)' -- which put the 9 on the resolving side of the split while simultaneously reporting, in my own second MINOR, that they resolve to nothing. Both halves of that sentence were mine and they contradicted each other; the 9 belong with the dead. This is a classification error at the moment of writing, not drift, and the two figures move together: 284 -> 293 and 57% -> 58%. (2) 11, NOT 12, CONFIRMED BY RE-COUNTING FROM THE COMMITS. I re-identified the write-backs structurally rather than by subject -- for each of the 23 subject-matching commits, `git show -U0` and test whether any added line actually adds a quoted sha -- which returns 21 genuine and 2 false positives, and names the second false positive the gate caught that my step-03 count had left unnamed (6c999e4, same 'shape' cause as 25440db). Taking the run directory from the path of the handoff file each of the 21 touches gives 11 distinct directories: WF03-ISS0204(1), WF03-ISS0201(2), WF03-ISS0198(2), WF03-ISS0119(3), ADHOC-20260821-002(1), WF02-REQ060(1), WF02-REQ049(7), WF03-ISS0043(1), WF03-ISS0029(1), WF02-REQ037(1), WF02-REQ036(1) = 21. The 21 and the 63 were right; only the distinct count was wrong. (3) 17 OF 21, WITH THE FOUR EXCEPTIONS RE-DERIVED. For each write-back I compared its recorded shas against `git rev-parse <sha>^`. Exactly four fail 'exactly one sha, and it is the parent': 426814c records bc9e0e8 (its parent) PLUS 6443eb2; and d4e80ed, 09aaaef, f7dc7a2 -- all three Step Final handoffs, all three with 'record PR URL + merge commit SHA' subjects -- record a post-merge merge/squash sha instead of a parent, d4e80ed recording 717208d against its actual parent 419f1f2. Matches the gate's characterisation on all four. (4) THE REFUTATION'S SUBSTANCE IS UNCHANGED, AND I RE-CONFIRMED THE HALF IT RESTS ON. Testing all 21 write-back shas against every sha recorded anywhere in the corpus, in both prefix directions: ZERO hits. So only the universal quantifier moved. The text now reads '17 of the 21 record exactly their immediate predecessor and stop, and NOT ONE of the 21 is itself recorded anywhere in the corpus', followed by a sentence making explicit which half carries the argument -- an improvement on what I shipped, because the original phrasing let a reader think the refutation depended on the predecessor claim when it never did. The instruction that follows ('record only the commit before it, and do not record the write-back') is unchanged. (5) THE NOTE, AND ONE THING I FOUND WHILE WRITING IT THAT THE NOTE HAD TO SAY. A short paragraph in the same subsection now names 426814c and the three Step-Final commits, and states that d4e80ed/09aaaef/f7dc7a2 are PRIOR ART for recording the sha the merge produces rather than the branch shas it destroys -- explicitly an option this ruling does not adopt, changing what agents write and so needing its own run and gate. I did not design the mechanism. But I checked those three recorded shas rather than presenting them as a proven durable pointer, and 717208d, 6732b3e and 297a7e7 DO NOT RESOLVE IN THIS CLONE EITHER -- they are themselves among the 293. The note says so in one clause, because a future run picking this up should know from the outset that the prior art demonstrates the practice and not yet the payoff. That is a fact I measured, not a design. (6) SCOPE. `git diff --numstat` before commit: HANDOFF_PROTOCOL.md 25/9 and ISS-0209.yaml 17/5, nothing else. Section 1.2 spans lines 78-204; every edit is at line 337 or later, so it is untouched and ISS-0206's and ISS-0208's subject matter was not taken. The ruling, the OPTIONAL status of the write-back (line 354, verbatim) and the boundary commit `12f8f4c` (line 389, verbatim) are all unchanged -- grepped to confirm rather than assumed. No historical handoff file was modified; no file outside docs/ and this run's directory was touched. `handoffs/registry.json` (20/0) and `handoffs/orchestrator.log` (11/0) show zero deletions and I did not open either. ISS-0209.yaml re-parses under yaml.safe_load. Commit 12f8f4c's message still carries the superseded figures and was deliberately left alone; the correction lands in d03a280, and ISS-0209.yaml's resolution block records that it was superseded so a reader meeting the old figure in git log has the trail. `rework_count` remains 0 and this is not a FAIL -- the gate's PASS stands. Both timestamps came from `date -u` issued in its own command with the write as a separate later call; `started_at` (11:09:00Z) was not touched and the claim was status -> IN_PROGRESS only.",
+    "artifacts_out": [
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/issues/ISS-0209.yaml",
+      "handoffs/WF03-ISS0209-20260821/step-03c-figure-corrections.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "main",
+      "commit_sha_list": ["d03a280"],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH: close the run. d03a280 carries both corrected files; this handoff's own commit follows it and is structurally absent from the list above, per the ruling this run landed -- no write-back is owed. Four commits are now local and unpushed for this run: 12f8f4c, 389eb0b, 483726a, d03a280, plus this one. GH#400 is already closed and docs/issues/ISS-0209.yaml reads status: resolved. Release queue task 209 and commit handoffs/registry.json and handoffs/orchestrator.log (yours, uncommitted, 20/0 and 11/0). No follow-on issue is owed from this step: the two MINORs the gate raised are both fixed here, and the post-merge-squash-sha option is recorded in the subsection as a note per your instruction rather than filed. One thing that note now carries which the dispatch did not anticipate: the three prior-art commits' recorded shas do not resolve in this clone either, so if that option is ever taken up, whether the post-merge sha is genuinely durable is the first thing that run has to establish."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,62 @@
+{
+  "handoff_id": "ffbe4cae-94c0-4d3f-acc7-aefc906f877e",
+  "run_id": "WF03-ISS0200-20260821",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0200-20260821/step-03b-reviewer-gate.json",
+  "created_at": "2026-08-21T10:08:16Z",
+  "started_at": "2026-08-21T10:08:16Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0200-20260821/step-005-01-diagnose.json",
+      "handoffs/WF03-ISS0200-20260821/step-03-record-verdict.json",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/issues/ISS-0191.yaml",
+      "docs/issues/ISS-0200.yaml",
+      "docs/issues/ISS-0202.yaml",
+      "docs/agents/instructions/core-directives.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Closing REVIEWER gate on WF-03 / ISS-0200. Two things are under review and they are not the same object -- gate BOTH, and say so separately in your verdict:\n\n(1) THE NO-CHANGE VERDICT ITSELF, at handoffs/WF03-ISS0200-20260821/step-005-01-diagnose.json. This is the unusual part of this gate and the reason it exists. core-directives.md's \"every producing step has a validating step\" is not suspended by a producing step concluding \"no defect\" -- an unvalidated NO-CHANGE is exactly the shape of an unchecked claim, and it is the shape most likely to be waved through, because nothing changed. Step 1 itself asked for this gate.\n\n(2) THE EDIT, commit 69fc2a1, at handoffs/WF03-ISS0200-20260821/step-03-record-verdict.json. Three files: docs/agents/protocols/ISSUE_QUEUE.md, docs/agents/shared/HANDOFF_PROTOCOL.md, docs/issues/ISS-0191.yaml.\n\nBoth handoffs state their evidence and quote their own commands. Re-derive; do not copy. core-directives.md's \"Re-derive under the conditions the property is actually about\" binds here: a check run where the property could not have failed is not evidence.\n\nON (1) -- WHAT TO ACTUALLY TEST. The verdict rests on three legs, and the diagnosis says openly that the first is weak on its own. Your job is to decide whether they hold TOGETHER, not to re-run the whole measurement.\n  - The shingle figures. The diagnosis reports its own calibration against the known-true-positive dispatch population (max 0.347) and concludes the numbers are load-bearing only COMPARATIVELY. Check that reasoning survives -- and specifically, check that the comparison is between comparable populations rather than between two differently-constructed ones.\n  - Evidence density and the hand-read of the worst-scoring large summary. Read that summary yourself if you doubt it; it is named in the diagnosis.\n  - The asymmetry argument (the dispatch defect had a duplicated copy AND an empty structured outlet; neither exists on the result side). This is the load-bearing conceptual claim. `requirement_text` empty in 66 of 69 was the dispatch-side evidence -- check whether the result-side counterpart claim (`artifacts_out` non-empty on 449 of 605) actually establishes what it is being used to establish, given ISS-0202's finding that 190 of those 449 are self-referential. ORCH flags this as the single most likely soft spot and did not resolve it.\nA verdict of \"the measurement is sound but the conclusion overreaches\" is a legitimate FAIL and is more useful than a pass.\n\nON (2) -- ISS-0200's AC4 IS THE HARD ONE and it is verifiable: HANDOFF_PROTOCOL.md section 4's validator-re-derivation requirement and section 2's four worked examples must be byte-identical to their pre-edit state. Step 3 quotes sha256 spans and a 0-deletions numstat; re-derive that independently, by your own method, against the merge-base rather than against Step 3's arithmetic.\nAlso gate: that the new section-2 block cannot be read as a rule or as stating a threshold (this is the whole risk of recording a negative result in a rules document -- a later agent citing it as a size constraint is the failure mode); that no WARN or threshold was added anywhere; that the 6,000 threshold is still declared in exactly one place; that (B)(ii) and (C) say the same thing and cannot drift; that the new `no_defect` status does not weaken what `resolved` asserts and that its evidence bar genuinely cannot be met by an uninvestigated issue; and that section 2's JSON fence still parses.\n\nSCOPE: gate only. Change no file except your own handoff. If you find a defect, FAIL with the specific gap named per file and line -- do not fix it yourself. If you find something real but non-gating, put it in result.issues at MINOR and let it be filed, as the ISS-0198 gate did; do not absorb it into a PASS silently.\nORCH's own two notes for you, neither pre-decided: DOC-UPDATER recorded its status-name reasoning (`no_defect` over `no_change`/`not_reproduced`) in result.issues -- rule on it. And Step 3 landed as TWO commits, 69fc2a1 (content) then 574c91d, the second recording the first's sha into its own git_evidence, on the ground that a sha cannot be recorded inside the commit it names. Rule on whether that is the right mechanism -- HANDOFF_PROTOCOL.md section 5's append-only rule and section 4.1(b)'s `backfill_note` are the relevant provisions, and WF03-ISS0198-20260821's commit 3b845b3 is the precedent.",
+    "acceptance_criteria": [
+      "A verdict on the NO-CHANGE verdict itself, stated separately from the verdict on the edit, naming which of its three legs you re-derived and how",
+      "An explicit ruling on whether `artifacts_out` non-empty on 449/605 establishes the asymmetry claim it is used for, given that ISS-0202 measured 190 of those 449 as self-referential",
+      "ISS-0200 AC4 re-derived independently against the merge-base by your own method, not by checking Step 3's arithmetic: section 4's re-derivation requirement and section 2's four worked examples byte-identical",
+      "A ruling that the new section-2 block cannot be read as a rule or as stating a threshold, quoting the wording that makes that unambiguous",
+      "Confirmed: no WARN and no threshold added anywhere; the 6,000 threshold still declared in exactly one place; (B)(ii) and (C) consistent",
+      "A ruling on whether `no_defect`'s evidence bar can be met by an issue nobody investigated, and on the status name itself",
+      "Section 2's JSON fence still parses (your own check, not Step 3's)",
+      "A ruling on whether Step 3 two-commit sha-recording mechanism (69fc2a1 then 574c91d) is the authorised way to record a commit sha into its own handoff, against section 5 and section 4.1(b)",
+      "No file modified except this handoff (quote git status --porcelain)"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0200-20260821",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -4674,7 +4674,7 @@ requirements:
   - id: REQ-084
     title: OpenAPI spec strategy decision record (OQ-2) -- hand-build vs. open_api_spex vs. defer to S6
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 151  # letflow-queue task id
     description: >

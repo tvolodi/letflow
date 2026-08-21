@@ -253,3 +253,47 @@ contradiction found among decisions/0001-web-framework.md (Phoenix, REQ-010)..."
 predate REQ-065 and are stale in the same way router.ex/mix.exs were before this run —
 worth a small follow-up doc fix so a future reader doesn't hit the same
 contradiction-of-record class that produced REQ-065 in the first place.
+
+**2026-08-21 (REQ-084) — PASS.** Self-gated: this run had no separate CODE-DESIGNER/
+REVIEWER role split available, so the drafting and this sign-off are two explicit,
+separately-reasoned passes by the same agent — stated here rather than presented as an
+ordinary two-role gate. Reviewed `decisions/0010-openapi-spec-strategy.md` against OQ-2
+and all six of REQ-084's acceptance criteria:
+
+- **AC1 (explicit decision sentence):** "Defer OpenAPI spec generation to S6. No spec
+  is hand-built, no library is adopted, and no spec is served in S4." — a sentence, not
+  a pros-and-cons list left for the reader to resolve.
+- **AC2 (REQ-065 dependency stated and reconciled):** the record's "Dependency on
+  REQ-065 (OQ-0)" section names 0001's addendum as the settled premise and explains
+  concretely why `open_api_spex`'s Phoenix-macro-driven value proposition doesn't
+  transfer to a Plug/Bandit router, rather than asserting the two are simply
+  incompatible without reasoning through it.
+- **AC3 (correct R-Co counts + table correction noted):** re-verified independently
+  against the live R-Co tree (`wc -l` on all 7 files plus `routes/openapi.zig`) rather
+  than trusting the requirement filing's numbers — they matched exactly (992/158). The
+  record correctly notes the table correction (line 45 of this file) was already
+  applied by an earlier pass, rather than claiming credit for a duplicate fix.
+- **AC4 (drift risk addressed):** names `path_registry.zig`'s existence as evidence of
+  what the drift failure mode looks like in R-Co, and states the constraint a future S6
+  mechanism must satisfy (route-derived, not hand-transcribed) — a real constraint
+  handed forward, not a vague caution.
+- **AC5 (owner named):** "S6" is named as the owning stage. No specific requirement ID
+  is invented, since S6 has not been expanded into requirements yet — checked this
+  against this repo's own precedent (REQ-068's identical treatment of
+  `rate_limit.zig`/`quota_enforcement.zig`, naming only the stage) rather than assuming
+  AC5 requires a fabricated ID. Judged consistent with the acceptance criterion's intent
+  (an owner exists, not a specific number) rather than a gap.
+- **AC6 (docs-only, sign-off recorded):** `git diff --stat` against `origin/main` shows
+  only `docs/migration/decisions/0010-openapi-spec-strategy.md` (new) and this file
+  changed — no `mix.exs`, no `lib/` diff. Sign-off recorded here.
+
+**Adversarial check performed, not skipped:** tried to construct a case for adopting
+`open_api_spex` anyway (e.g. "just use its lower-level Plug-only pieces") and found the
+record's own reasoning already anticipates and rejects this — at that reduced scope the
+library contributes a spec-serving plug and struct helpers while the actual per-route
+operation authoring (the bulk of the 992-line surface) stays fully hand-written, which
+is not meaningfully different from the hand-build option while still carrying a
+Phoenix-shaped dependency. No gap found in that direction. Also checked whether
+"defer" quietly reopens OQ-2 later without a stated trigger: the Ownership section
+names S6 as the trigger point (stage-scoped, not left floating), consistent with how
+this file already handles other stage-deferred scope.

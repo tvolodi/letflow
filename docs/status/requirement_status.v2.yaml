@@ -428,3 +428,27 @@ history:
       README.md checked (grep for "pagination"): no hit, confirming no
       externally-visible HTTP surface yet (no route wired up until REQ-072-onward)
       -- no README update needed.
+  - req: REQ-084
+    event: done
+    agent: ELIXIR-DEV
+    at: "2026-08-21T16:19:00Z"
+    note: >
+      OpenAPI spec strategy decision record (OQ-2) -- docs/migration/decisions/
+      0010-openapi-spec-strategy.md decides DEFER to S6: no spec hand-built, no
+      open_api_spex adopted, none served in S4. R-Co's src/api/openapi/ (7
+      modules, 992 lines) plus routes/openapi.zig (158) reverified directly
+      against the live tree, matching the requirement's own figures exactly.
+      open_api_spex ruled out as downstream of decisions/0001-web-framework.md's
+      REQ-065 addendum (Plug/Bandit stands): the library's Phoenix-macro-driven
+      value proposition doesn't transfer to a Plug/Bandit router, so adopting it
+      would carry a Phoenix-shaped dependency for a fraction of its value.
+      Reasoning: no consumer exists yet (web/ grepped directly, S8 owns
+      integration), a hand-built spec not derived from the real route table
+      would drift the way R-Co's own path_registry.zig exists to prevent, and no
+      Ecto-to-JSON-Schema equivalent to schema_registry.zig exists in lib/ today
+      (checked directly). Ownership handed to S6 by name, no requirement ID
+      invented, matching REQ-068's identical treatment of its own deferred
+      scope. Self-gated REVIEWER sign-off recorded in
+      docs/migration/stage-4-api-surface.md (no separate role split available in
+      this execution context, stated plainly there); git diff --stat confirmed
+      docs-only.

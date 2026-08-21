@@ -33,9 +33,25 @@ description: >
 affected_files:
   - docs/agents/shared/HANDOFF_PROTOCOL.md
 
+scoping_note_added_2026-08-21T10:45:42Z: >
+  Added by ORCH from MINOR finding 2 in
+  `handoffs/WF03-ISS0207-20260821/step-03b-reviewer-gate.json`, so the run that eventually
+  claims this issue does not have to re-derive it. ISS-0207 has since edited the same §1.2
+  and, in doing so, sharpened gap 2 into a visible contradiction: the new framing says
+  "nothing written under this rule can join" the 10 null-`started_at` files, while §1 step 3
+  still explicitly contemplates a handoff *arriving* with a null `started_at`. Such a case
+  would make it 11 and correctly trip the new ALARM framing -- so ISS-0207's text is sound,
+  but the two clauses now read as contradictory side by side, and gap 2's missing clause is
+  exactly what reconciles them. The REVIEWER's judgement was that ISS-0207 did not resolve,
+  foreclose or complicate either gap, and if anything the ALARM framing gives this fix a
+  hook to hang on. Note also that §1.2's paragraph structure has changed since this issue
+  was filed (ISS-0207 added three paragraphs, commit `dd31ad6`) -- read the section as it
+  now stands rather than as this record describes it.
+
 related:
   - ISS-0204  # the run whose gate raised it, against the section that run created
-  - ISS-0207  # the third MINOR from the same gate
+  - ISS-0207  # the third MINOR from the same gate; has since edited the same section
+  - ISS-0208  # a further MINOR against the same section, from ISS-0207's own gate
 
 queue_task_id: 206
 github_issue: https://github.com/tvolodi/letflow/issues/397

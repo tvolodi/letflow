@@ -1,0 +1,48 @@
+id: ISS-0209
+title: >
+  result.git_evidence.commit_sha_list structurally cannot record the commit that commits
+  the handoff, so every run has an audit gap of at least one commit
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0207-20260821
+discovered_at: "2026-08-21T10:42:09Z"
+severity: MINOR
+
+description: >
+  Filed by ORCH from MINOR finding 3 in
+  `handoffs/WF03-ISS0207-20260821/step-03b-reviewer-gate.json`'s `result.issues`. Read it
+  there.
+
+  `HANDOFF_PROTOCOL.md` §2 gives every handoff a `result.git_evidence.commit_sha_list`. A
+  completing agent fills it in, then commits the handoff -- so the commit that carries the
+  handoff into git can never appear in the list inside it, and neither can any later
+  correction to that same file. On WF03-ISS0207-20260821 this left `dd31ad6` recorded and
+  `623fc9b` and `6084dae` unrecordable, and the gate's own `4826dd6` likewise absent from
+  its own list. A reader has no way to tell structural incompleteness from careless
+  filling.
+
+  Today the gap is closed only by ad hoc means: ORCH has been making a separate follow-up
+  commit per run that writes the sha back into `git_evidence` (see the ISS-0201 run, and
+  the same pattern on ISS-0204). That works but is unwritten, doubles the commit count,
+  and is itself unrecordable by the same argument -- the follow-up commit cannot record
+  itself either.
+
+  Two candidate resolutions, and the choice is genuinely open: make the write-back an
+  explicit protocol step so it stops depending on an ORCH remembering it, or state in §2
+  that handoff-own commits are out of the field's scope so readers stop reading the list
+  as complete. The second is cheaper and arguably more honest; the first preserves more of
+  the audit trail. Whichever is chosen must explain what a reader may and may not conclude
+  from the list.
+
+affected_files:
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+
+related:
+  - ISS-0207  # the run whose gate raised it
+
+queue_task_id: 209
+github_issue: https://github.com/tvolodi/letflow/issues/400
+github_issue_note: >
+  `register_task` created both the queue task (209) and its mirrored GitHub issue (#400)
+  in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
+  separately. The id comes from `register_task`'s `issue_ref`, not a directory scan.
+status: open

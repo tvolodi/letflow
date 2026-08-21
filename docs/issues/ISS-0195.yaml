@@ -71,4 +71,28 @@ queue_task_id: 195
 github_issue: https://github.com/tvolodi/letflow/issues/383
 github_issue_note: >
   Filed by ORCH on REVIEWER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (195) and its mirrored GitHub issue (#383) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0195-20260821
+resolved_at: "2026-08-21T11:52:57Z"
+resolution_note: >
+  Placed docs/agents/ORCHESTRATOR.md at a new rank 3 (between role files and workflow
+  docs, not folded into either) -- reasoning: .claude/agents/orchestrator.md (the real
+  rank-2 role file) explicitly defers to it by reference ("that file is where the
+  actual procedure lives"), so the two don't compete; but ORCHESTRATOR.md is read by
+  other roles too (e.g. GIT_MERGE.md's rework/escalation handling) and its §10/§8/§5
+  policies must not be silently overridable by a workflow doc, so it ranks above
+  workflow docs (now rank 4). docs/agents/AGENT_SYSTEM.md added to rank 5 alongside
+  protocol docs (its canonical content is mostly reference/descriptive; its two real
+  behavioural rules -- §7 registry check, §8 default AGENT_ID -- are protocol-shaped
+  mechanics). Audited every "canonical"/"authoritative" claim in docs/, CLAUDE.md,
+  .claude/agents/*.md (grep quoted in the chain's own note) -- security-invariants.md
+  already has its own explicit above-the-chain statement (out of scope, same shape as
+  the decisions/ override); no further omission found. Renumbering is pure insertion:
+  no pairwise ordering among the six pre-existing ranks changed, stated explicitly in
+  the doc. Self-gated (REVIEWER role performed in-run, no subagent spawn available in
+  this execution context) -- adversarial check: could a role file (rank 2) contradict
+  ORCHESTRATOR.md (rank 3) for that role's own conduct? Checked all role files: none
+  currently legislate on ORCHESTRATOR.md's topics; ruled acceptable by design (role
+  file is the most-specific statement for that role's own action space, same
+  most-specific-wins principle rank 1 already rests on). Full reasoning lives in
+  core-directives.md itself, inline with the chain, not restated here.

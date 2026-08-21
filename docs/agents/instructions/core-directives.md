@@ -131,12 +131,102 @@ When two instruction sources disagree, apply them in this order — **first matc
 1. **Your handoff's `task` block** — the specific work, its acceptance criteria, and any
    rework notes. Most specific, so it wins.
 2. **Your role file** (`.claude/agents/<role>.md`) — what your role may and may not do.
-3. **Your workflow's step** (`docs/agents/workflows/WF-0N_*.md`) — the procedure for the
+3. **`docs/agents/ORCHESTRATOR.md`** — orchestration decision logic: the sizing rule
+   (§10), stage gates (§8), rework/escalation rules (§5), the `owned_modules` lock and
+   two-ORCH-sessions rules (§7/§7.1), registry run-entry field definitions (§7.2). Added
+   here 2026-08-21 (ISS-0195) — see the note below the table for why this rank and not
+   rank 2 or rank 4, and for its relationship to `.claude/agents/orchestrator.md`.
+4. **Your workflow's step** (`docs/agents/workflows/WF-0N_*.md`) — the procedure for the
    step you are executing.
-4. **Protocol docs** (`docs/agents/protocols/*.md`,
-   `docs/agents/shared/HANDOFF_PROTOCOL.md`) — handoff mechanics, git, queue, issues.
-5. **This file** (`core-directives.md`) — cross-cutting behavioural rules.
-6. **`CLAUDE.md`** — the session-start pointer.
+5. **Protocol docs** (`docs/agents/protocols/*.md`,
+   `docs/agents/shared/HANDOFF_PROTOCOL.md`, `docs/agents/AGENT_SYSTEM.md`) — handoff
+   mechanics, git, queue, issues, roster/identity/conflict-prevention mechanics.
+   `AGENT_SYSTEM.md` added here 2026-08-21 (ISS-0195) — see the note below.
+6. **This file** (`core-directives.md`) — cross-cutting behavioural rules.
+7. **`CLAUDE.md`** — the session-start pointer.
+
+**Renumbering note (ISS-0195, 2026-08-21).** Ranks 3-7 above were ranks 2-6 before this
+edit; `docs/agents/ORCHESTRATOR.md` and `docs/agents/AGENT_SYSTEM.md` were inserted, not
+swapped. **No pairwise ordering among the six pre-existing entries changed** — a role
+file still outranks a workflow step, which still outranks a protocol doc, which still
+outranks this file, which still outranks `CLAUDE.md`, exactly as before. Only the printed
+numbers shifted because two new entries were added above/among them. No existing conflict
+resolution changes as a result; there is nothing to name per the "no existing rank is
+renumbered in a way that silently changes an existing resolution" rule, because none does.
+
+**Why `docs/agents/ORCHESTRATOR.md` is its own rank (3), not folded into rank 2 or rank 4
+(ISS-0195).** It is not a role file: `.claude/agents/orchestrator.md` is ORCH's actual
+rank-2 role file, and it says so itself — "This file (the `.claude/agents/` copy) is the
+entry point; that file [`docs/agents/ORCHESTRATOR.md`] is where the actual procedure
+lives — read it in full, don't route from memory of this summary alone." So for ORCH
+specifically, rank 2 explicitly defers to `docs/agents/ORCHESTRATOR.md` by reference
+rather than duplicating it — the two files do not compete, and nothing about placing
+`ORCHESTRATOR.md` one rank below ORCH's own role file weakens that role file's authority
+over ORCH's own conduct. But `docs/agents/ORCHESTRATOR.md` is also read and applied by
+**other** roles — e.g. `GIT_MERGE.md` (a workflow-adjacent protocol step, executed by
+`ELIXIR-DEV`/`FRONTEND-DEV`) points at its rework/escalation rules for `max_rework`
+handling — so treating it as *part of* ORCH's role file would not make sense for those
+readers, who have their own, different role file at rank 2. It is also not protocol-doc
+material (rank 5/formerly 4): §10's sizing rule, §8's stage gates, and §5's
+rework/escalation are policy the pipeline's *workflow steps* must not be able to quietly
+override — `docs/requirements.yaml`-adjacent workflow docs (rank 4) are written and
+edited far more often than this file, and a workflow author changing a step's wording
+must not be able to silently loosen an escalation threshold or a stage gate by omission.
+Ranking `ORCHESTRATOR.md` above workflow docs (rank 4) prevents exactly that, and matches
+what `AGENT_SYSTEM.md` §9 already calls it: canonical for "Orchestration decision logic,
+stage gates" — a claim that only holds if a rank-4 workflow step cannot override it.
+This is also consistent with the one concrete case the issue observed:
+`WF-01_requirement_development.md:102` (a workflow doc) explicitly defers to
+`ORCHESTRATOR.md` §5 rather than restating it — the harmless outcome the issue found is
+exactly what this ranking would produce even if a future workflow doc tried to disagree.
+
+**Why `docs/agents/AGENT_SYSTEM.md` joins rank 5 (protocol docs), not its own rank
+(ISS-0195).** Most of its canonical content (roster, handoff schema pointer, capability
+matrix, artifact-ownership table) is reference/descriptive material — it does not itself
+instruct an agent to take an action that could conflict with another source, so most of
+it has nothing to resolve. It does carry two real behavioural rules — §7's mandatory
+registry check before starting work, and §8's default-`AGENT_ID`-is-`ORCH` rule — and
+both are pipeline-coordination *mechanics* of the same shape as the existing rank-5
+entries (git/queue/issue mechanics), not a workflow-level or role-level policy, so it
+sits alongside them rather than getting a rank of its own.
+
+**Audit performed for this fix (ISS-0195), so "looked and found none further" is
+distinguishable from "never looked":** grepped `docs/`, `CLAUDE.md`, and `.claude/agents/*.md`
+for "canonical" and "authoritative" and read every match in context.
+- `docs/agents/AGENT_SYSTEM.md` §9's own "Canonical instruction surfaces" table was the
+  most direct source — it lists exactly nine content categories, all of which resolve
+  to entries already in this chain (role files → rank 2; core-directives.md → rank 6;
+  security-invariants.md → covered separately, see below; HANDOFF_PROTOCOL.md,
+  GIT_SETUP.md/GIT_MERGE.md, ISSUE_QUEUE.md, TASK_QUEUE.md → rank 5; workflow docs →
+  rank 4; AGENT_SYSTEM.md itself → rank 5, per above; ORCHESTRATOR.md → rank 3, per
+  above) except the two this fix adds.
+- `docs/agents/instructions/security-invariants.md` declares itself "Canonical for
+  security constraints" and states its own precedence explicitly: placed *above every
+  level* of this chain by name, already — not a numbered-rank gap, and out of scope for
+  this fix (it is the same shape as the `docs/migration/decisions/` override already
+  listed below, not a missing entry in the numbered list).
+- `docs/agents/shared/HANDOFF_PROTOCOL.md`'s own internal "canonical statement of X"
+  markers (§1.2, the structure rule, `commit_sha_list`) are subsections of a single
+  rank-5 document, not separate surfaces.
+- `docs/agents/protocols/TASK_QUEUE.md` calls `letflow-queue` itself "authoritative for
+  claiming" — that is a claim about a live service's data, not a document in this
+  instruction chain, and out of scope.
+- No other file-level "is canonical" / "is authoritative" claim found naming a document
+  outside the set above.
+
+**Self-review finding (ISS-0195; REVIEWER sign-off performed in-run — see this run's own
+handoff for why, no separate REVIEWER dispatch was available).** Ranking role files above
+`ORCHESTRATOR.md` means a role file could, in principle, contradict an ORCHESTRATOR.md
+rule for that role's own conduct and win. Checked whether this is a real gap rather than
+a theoretical one: no existing role file under `.claude/agents/` currently legislates on
+any topic §5/§7/§7.1/§7.2/§8/§10 governs — rework counting, `owned_modules` locking, and
+sizing are exclusively ORCH's own bookkeeping in every role file that mentions them, never
+contested. This is the intended shape, not an accident: a role file is, by construction,
+the most specific statement of what *that* role may do, the same "most specific wins"
+principle rank 1 already rests on — so a role file appropriately wins for its own role's
+action space, while `ORCHESTRATOR.md` still outranks workflow docs, protocol docs, this
+file, and `CLAUDE.md` for everyone, including ORCH. No change made as a result; recorded
+here so the next reader does not re-derive the same question from scratch.
 
 Two rules override the chain, always, at every level:
 

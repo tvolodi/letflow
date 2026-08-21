@@ -24,4 +24,6 @@ queue_task_id: 179
 github_issue: https://github.com/tvolodi/letflow/issues/365
 github_issue_note: >
   Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (179) and its mirrored GitHub issue (#365) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0179-20260821
+resolved_at: "2026-08-21T14:30:44Z"

@@ -186,6 +186,7 @@ defmodule Letflow.Api.PaginationTest do
 
       assert Enum.all?(tenant_b_rows, &(&1.tenant == :tenant_b))
       refute Enum.any?(tenant_b_rows, &(&1.tenant == :tenant_a))
+
       assert tenant_b_rows == [
                %{tenant: :tenant_b, id: "b-1", name: "bravo-one"},
                %{tenant: :tenant_b, id: "b-2", name: "bravo-two"}
@@ -218,7 +219,10 @@ defmodule Letflow.Api.PaginationTest do
             # The prefix "T:" itself contains a colon (the 1st), so the
             # timestamp/key separator is the 2nd colon in the payload.
             colon = Pagination.find_nth_colon(inner, 2)
-            {:ok, key} = Pagination.parse_int_from_cursor(inner, colon + 1, byte_size(inner) - colon - 1)
+
+            {:ok, key} =
+              Pagination.parse_int_from_cursor(inner, colon + 1, byte_size(inner) - colon - 1)
+
             key
         end
 
@@ -236,7 +240,13 @@ defmodule Letflow.Api.PaginationTest do
           # The timestamp component is the current time (this fixture cares
           # about the sort key carried after the colon, not expiry); a fixed
           # past literal here would be rejected as expired by decode_cursor/4.
-          raw = Pagination.build_raw_cursor("T:", System.system_time(:microsecond), "#{last.sort_key}")
+          raw =
+            Pagination.build_raw_cursor(
+              "T:",
+              System.system_time(:microsecond),
+              "#{last.sort_key}"
+            )
+
           encoded = Pagination.encode_cursor(raw)
           {:ok, decoded} = Pagination.decode_cursor(encoded, "T:", 2)
           decoded

@@ -1,0 +1,57 @@
+id: ISS-0223
+title: >
+  core-directives.md No-Background-Wait rule (ISS-0213) is not preventing
+  repeat stalls -- three independent subagents hit it in one run
+  (WF02-REQ071-20260821)
+discovered_by: ORCH
+discovered_in_run: WF02-REQ071-20260821
+discovered_at: "2026-08-21T20:29:43Z"
+severity: MINOR
+
+description: >
+  During WF02-REQ071-20260821, three separately-dispatched subagents
+  (TEST-RUNNER at Step 4, RELEASE-VALIDATOR at Step 5, and ELIXIR-DEV at Step
+  Final) each independently launched a long-running command (mix test /
+  scripts/test_parallel.sh) via a background mechanism (Monitor, background
+  Bash, or a blocking-wait tool) and then paused, explicitly waiting for a
+  cross-turn notification to tell them it finished -- exactly the failure
+  core-directives.md's "No Background Wait For A Cross-Turn Notification"
+  section (added this session under ISS-0213) already documents as illegal for
+  a dispatched subagent, since only the top-level orchestrating session
+  receives such notifications. In all three cases ORCH had to intervene with an
+  explicit SendMessage redirecting the agent to poll/run synchronously instead,
+  before it could finish.
+
+  The rule exists and is textually correct, but is evidently not surfacing
+  strongly enough in practice: for at least this run's three agent types
+  (TEST-RUNNER, RELEASE-VALIDATOR, ELIXIR-DEV), each independently made the same
+  mistake despite the rule being in core-directives.md, one of the
+  mandatory-reading files every role is supposed to have read.
+
+  Worth investigating: (a) whether the rule's current wording/placement is too
+  easy to miss or too easy to rationalize past when a long-running full-suite
+  test is genuinely slow and using a background/Monitor tool feels natural, (b)
+  whether a more prominent restatement is needed in the specific role
+  instructions (test-runner.md, release-validator.md, elixir-dev.md) rather than
+  relying solely on the shared core-directives.md pointer, or (c) whether the
+  fix should be structural instead of textual -- e.g. a note in each of those
+  three role files' own reminders directly at the point where they'd naturally
+  reach for a background test-runner mechanism.
+
+affected_files:
+  - docs/agents/instructions/core-directives.md
+  - .claude/agents/test-runner.md
+  - .claude/agents/release-validator.md
+  - .claude/agents/elixir-dev.md
+
+related:
+  - ISS-0213  # the original finding that added the rule this issue says isn't sticking
+
+queue_task_id: 223
+github_issue: 455
+github_issue_note: >
+  register_task created both the queue task (223) and its mirrored GitHub issue
+  (455) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
+  deliberately not called separately.
+
+status: open

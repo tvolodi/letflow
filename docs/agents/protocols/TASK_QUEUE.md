@@ -130,8 +130,12 @@ sequencing (this doubles as a live confirmation of *which* task id each REQ actu
 mapped to, since `get_next_task` always returns the true lowest-open one — don't assume
 `impl_order:`'s comment is correct without this check). This also re-closes each task's
 linked GitHub Issue via `release_lock`'s sync (harmless no-op if already closed by
-hand). Record the reconciliation in `docs/status/requirement_status.yaml` as a
-`SCOPE-CHANGE` event, same as any other manual queue bookkeeping.
+hand). Record the reconciliation in the current run-history volume (find it via
+`docs/status/requirement_status.index.yaml`) as an entry with **`req: SCOPE-CHANGE`** and
+a normal `event:` value (usually `done`), naming the reconciliation in `note:`. Note the
+field: `SCOPE-CHANGE` is a **`req`** value, never an `event` value. An earlier version of
+this line said "as a `SCOPE-CHANGE` event" and produced three malformed entries, now
+recorded as known anomalies in the index.
 
 ---
 
@@ -410,9 +414,9 @@ Concretely:
 
 `letflow-queue` is deployed and live at `https://queue-test.ai-dala.com` (`ai-dala-infra`'s
 `T-0107`/`T-0108`, both `done` as of 2026-08-15). The S0/MVP-1 backlog (REQ-010..014,
-REQ-101..108) is registered — see `docs/status/requirement_status.yaml`'s
-`SCOPE-CHANGE` entry for the full REQ-ID ↔ queue-task-id mapping. A prod deployment
-(`queue.ai-dala.com`) is not yet planned — test only, per T-0107's notes.
+REQ-101..108) is registered — see `docs/status/requirement_status.yaml`'s (volume 1,
+closed) entries with `req: SCOPE-CHANGE` for the full REQ-ID ↔ queue-task-id mapping.
+A prod deployment (`queue.ai-dala.com`) is not yet planned — test only, per T-0107's notes.
 
 The `task_type` field and its two-tier `get_next_task` claim priority (issue-vs-
 requirement, above) shipped 2026-08-17 (`letflow-queue` PR #1) and are live on

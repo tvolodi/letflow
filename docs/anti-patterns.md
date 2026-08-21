@@ -76,11 +76,13 @@ entry per event. Never rewrite past entries" — this is exactly the
 mistake that comment exists to prevent. ORCH caught it by diffing
 against what it had just written and restored the lost entries.
 
-**Correct alternative:** always read the existing file in full before
-touching it, preserve its established schema even if a different shape
-seems cleaner, and append (don't replace). If the file is genuinely
-missing, use the header/entry shape already documented in this repo's
-other status files or CLAUDE.md, not an invented one.
+**Correct alternative:** start at `docs/status/requirement_status.index.yaml`, read the
+**current volume** it names in full — volumes are capped, at the ceilings the index's
+`roll_rule:` records, precisely so that read is possible — preserve its established
+schema even if a different shape seems cleaner, and append (never replace). Confirm with
+`git diff --numstat` that the deletions count for the file is 0. Never edit a closed
+volume. If the file is genuinely missing, use the header/entry shape documented in the
+index and the current volume's own header, not an invented one.
 
 ## Extrapolating handoff timestamps instead of reading the clock (ORCH)
 
@@ -1086,3 +1088,19 @@ of what was asked*.
 * **Commit the handoff at dispatch, not only at completion.** An untracked file has no
   prior version to restore from; here the text survived by luck — the dispatching session
   happened to still be alive.
+## An instruction whose mechanism has silently become unexecutable
+
+`docs/status/requirement_status.yaml` grew past the Read tool's 256KB limit on
+2026-08-18. For ~2.5 days every agent was instructed to "read the file in full before
+appending" while that read returned a hard refusal, and no written rule said what to do
+instead — so each agent improvised a different partial read, and the safeguard read as
+followed while being unexecutable. The prior drift (three entries putting `SCOPE-CHANGE`
+in the `event` field) proves the same point from the other side: it happened while the
+file was still readable, because "read it all" was never a reliable way to transmit a
+convention buried in one of 182 entries.
+
+**Correct alternative:** when a safeguard's mechanism has a physical limit, bound the
+thing so the mechanism keeps working, state the convention explicitly instead of leaving
+it to be inferred from precedent, and add a mechanical check that fails when the bound is
+next crossed. A rule enforced only by an agent's eyes has no second line of defence. See
+ISS-0119 and `lib/letflow/design/iss-0119-status-file-readability.md`.

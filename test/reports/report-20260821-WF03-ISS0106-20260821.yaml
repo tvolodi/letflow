@@ -1,0 +1,562 @@
+report_id: report-20260821-WF03-ISS0106-20260821
+agent: TEST-RUNNER
+requirement: ISS-0106
+workflow_step: WF-03 Step 4 (test execution; WF-02 Step 4 equivalent)
+handoff: handoffs/WF03-ISS0106-20260821/step-04c-test-run.json
+branch: feature/WF03-ISS0106-20260821
+commit: ec32dcd
+date: 2026-08-21
+command: "mix test"
+seed: 928451
+max_cases: 32
+
+toolchain:
+  mix: "Elixir 1.20.3 (compiled with Erlang/OTP 29)"
+  erlang: "Erlang/OTP 29 [erts-17.0.5] [source] [64-bit] [smp:16:16] [jit:ns]"
+  tool_versions_file: "elixir 1.20.3-otp-29 / erlang 29.0.5  (repinned BY this branch)"
+  note: >
+    The running toolchain and the pin now agree, which is the whole point of
+    Part A. `mix letflow.check_toolchain` confirmed it at run time -- see the
+    letflow_check section below.
+
+environment:
+  postgres: >
+    letflow-postgres-1 (0.0.0.0:5462->5432), "Up 26 hours (healthy)" per docker ps
+    at the start of this run. Matches config/test.exs (config/db_port.exs resolves
+    to 5462; no .env LETFLOW_DB_PORT override in this checkout -- .env contains only
+    QUEUE_AUTH_TOKEN). `docker compose up` was NOT run, per docs/anti-patterns.md
+    "Running `docker compose up` from a secondary worktree checkout" and the handoff's
+    explicit instruction. A second container letflow-2-postgres-1 (port 5472) serves
+    the other worktree and was not touched.
+  contention: >
+    `grep -c too_many_connections` over the full 77462-line run log = 0. But this run
+    did NOT have a quiet database: see the orphaned-BEAM finding below, which is both
+    the cause of one failure group and the mechanism behind this suite's documented
+    load-dependence.
+  compiler_warnings: >
+    `grep -c '^warning:'` over the full run log = 0.
+
+verdict: PASS
+
+summary_line: "Result: 1247/1260 passed (5/5 properties, 1242/1255 tests)"
+duration: "Finished in 495.1 seconds (6.8s async, 488.3s sync)"
+
+raw_output_tail: |
+  Finished in 495.1 seconds (6.8s async, 488.3s sync)
+
+  Result: 1247/1260 passed (5/5 properties, 1242/1255 tests)
+  Failed: 13 tests
+
+exit_code: 2
+
+failure_count: 13
+failures_caused_by_this_branch: 0
+failures_pre_existing_already_filed: 13
+failures_not_covered_by_an_existing_issue: 0
+
+# ---------------------------------------------------------------------------
+# The 30 new tests, INSIDE the full run
+# ---------------------------------------------------------------------------
+
+iss_0106_own_tests:
+  file: test/mix/tasks/letflow_check_toolchain_test.exs
+  expected_by_handoff: 30
+  result: PASS (30/30, within the full run)
+  evidence:
+    - method: "in-run derivation that needs no prior baseline"
+      detail: >
+        Three facts measured on this run alone. (1) The file defines exactly 30
+        tests: `grep -c '^    test \"'` = 30, matching the 30-row inventory in
+        test/specs/ISS-0106.md section 3.3. (2) Nothing can have been skipped or
+        excluded: grep for @tag/@moduletag/:skip in the file returns nothing,
+        test/test_helper.exs is a bare `ExUnit.start()` with no :exclude, mix.exs
+        sets no test_paths/test_pattern override, and the ExUnit summary line
+        carries no "skipped" or "excluded" term at all. The file therefore ran in
+        full. (3) None of the 13 numbered failure blocks names
+        Mix.Tasks.Letflow.CheckToolchainTest or
+        test/mix/tasks/letflow_check_toolchain_test.exs -- the string
+        "CheckToolchain" appears zero times in the entire 77462-line run log.
+        30 defined, 0 excluded, 0 skipped, 0 failed => 30 passed in the full run.
+    - method: "totals arithmetic (corroboration only)"
+      detail: >
+        This run totals 1260 tests. The most recent recorded full-suite total is
+        1230 (test/reports/report-20260820-WF02-REQ066-20260820.yaml), and the only
+        test-file changes on this branch are the new 30-test file plus two
+        whitespace-only re-wraps that add no tests. 1230 + 30 = 1260, exactly.
+        Flagged as CORROBORATION rather than proof because 1230 is a number
+        inherited from another report rather than re-measured here; the derivation
+        above stands without it.
+    - method: "second independent full run (the gate's nested suite)"
+      detail: >
+        `mix letflow.check`'s step 4 ran the whole suite again, seed 613644: total
+        1260 tests again, and "CheckToolchain" appears zero times in that 80_000+
+        line log too, so none of the 30 appears among its 15 failures either. Two
+        full runs, two different failure sets, the same 30/30 for this file.
+    - method: "first real full-run compile of the file"
+      detail: >
+        TEST-DESIGNER and TEST-DESIGN-VALIDATOR both ran this file alone. This run
+        is its first compile alongside the whole suite; `grep -c '^warning:'` over
+        the run log = 0, so it introduced no compiler warning either.
+
+# ---------------------------------------------------------------------------
+# The cwd-mutation interaction risk (handoff's specific caution #2)
+# ---------------------------------------------------------------------------
+
+cwd_interaction_risk:
+  question: >
+    letflow_check_toolchain_test.exs moves the VM-wide working directory
+    (File.cd!/2) around each call to the task under test. The full run is the
+    first time that is exercised alongside everything else. Could any failure in
+    this suite stem from another test observing a changed cwd?
+  verdict: "NO -- not plausibly attributable to any of the 13 failures. This is not a defect introduced by this branch."
+  evidence:
+    - method: "structural -- ExUnit cannot overlap this module with anything"
+      detail: >
+        Read from the installed ExUnit 1.20.3 source on this host,
+        'C:/Program Files/Elixir/lib/ex_unit/lib/ex_unit/runner.ex' lines 108-137,
+        not from memory: async_loop/4 keeps taking async modules while any remain;
+        only when take_async_modules/1 is exhausted does it call
+        take_sync_modules/0, and it then asserts `0 = ...map_size()` after waiting
+        out every running async module before entering `for pair <- sync_modules`,
+        which spawns sync modules ONE AT A TIME. The test file is `async: false`.
+        So it can overlap neither an async module (all finished by then) nor
+        another sync module (strictly serialised). The window is additionally
+        scoped to a single run/1 call by File.cd!/2, which restores the previous
+        directory when the function returns.
+    - method: "structural -- nothing else in the repo touches the cwd"
+      detail: >
+        `grep -rn 'File.cd' lib/ test/` returns hits in
+        test/mix/tasks/letflow_check_toolchain_test.exs and nowhere else. No
+        file-backed Logger handler is configured in config/ either, so no
+        background process is writing to a relative path during the window.
+    - method: "positive evidence at the most cwd-sensitive point in the suite"
+      detail: >
+        The one thing in this suite that would break loudest on a leaked cwd is
+        Mix.Tasks.Letflow.Check.Test.run/1's Port.open({:spawn_executable, ...}),
+        which inherits the VM's working directory at spawn time: launched from a
+        temp dir it would die immediately with "Could not find a Mix.Project".
+        It did not. Measured live with Get-CimInstance during this run, three
+        child erl.exe processes were running the project's real `mix test` from
+        the project directory (PIDs 28220, 9356, 31352, created 8:12:36, 8:12:43,
+        8:13:36 local), and they went on to open 65 connections to letflow_test.
+        A child that had inherited a deleted temp cwd could not have done that.
+        `grep -c 'Could not find a Mix.Project'` over the run log = 0.
+    - method: "symptom shape"
+      detail: >
+        A cwd leak surfaces as :enoent/:eacces on a relative path, or as a Mix
+        project-not-found error. All 13 failures are one of two shapes instead:
+        a Postgrex 23503 foreign_key_violation, or an ExUnit 60s timeout inside
+        Mix.Tasks.Letflow.Check.Test.collect/2 waiting on a subprocess. Neither
+        is a path error, and both are fully explained by causes that predate this
+        branch (below).
+    - method: "the module's own 30 tests all passed"
+      detail: >
+        Including T-F7, the test that deliberately deletes its own working
+        directory. A corrupted or unrestored cwd would have failed that module
+        first and loudest.
+
+# ---------------------------------------------------------------------------
+# Per-failure attribution -- re-derived, not inherited
+# ---------------------------------------------------------------------------
+
+attribution_method: >
+  Per docs/anti-patterns.md "Inheriting a claim from a record instead of
+  re-deriving it from the source", and per the handoff's explicit instruction, no
+  attribution here rests on an earlier agent's report or on matching a
+  previously-reported count. Each group below was derived from (a) this branch's
+  actual 28-file `git diff --stat main...HEAD`, (b) reading the failing code and
+  the code it calls, and (c) live measurement of this host's process table and
+  database taken during and immediately after this run. The prior report's
+  numbers were read AFTER the derivation and are cited only where they
+  independently corroborate it. Notably the previously-reported set does NOT
+  match this run (see load_dependence below), which is exactly why matching was
+  not used as a criterion.
+
+failures:
+  - group: Letflow.IdentityMigrationTest
+    count: 10
+    file: test/letflow/identity_migration_test.exs
+    numbered_in_run: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    failing_lines: [315, 330, 359, 381, 406, 454, 503, 564, 706, 744]
+    root_error: |
+      ** (Postgrex.Error) ERROR 23503 (foreign_key_violation) insert or update on table
+      "tenant_schemas" violates foreign key constraint "tenant_schemas_tenant_id_fkey"
+
+          table: tenant_schemas
+          constraint: tenant_schemas_tenant_id_fkey
+
+      Key (tenant_id)=(c3a201b9-04da-4b0d-bfb6-bba6a18800ea) is not present in table "tenants".
+      stacktrace:
+        (ecto_sql 3.14.0) lib/ecto/adapters/sql.ex:1121: Ecto.Adapters.SQL.raise_sql_call_error/1
+        test/letflow/identity_migration_test.exs:242: Letflow.IdentityMigrationTest.restore_orphaned_guard_backup_rows!/0
+        test/letflow/identity_migration_test.exs:1: Letflow.IdentityMigrationTest.__ex_unit__/2
+    uniformity: >
+      All 10 blocks carry the byte-identical error and the identical stacktrace
+      through restore_orphaned_guard_backup_rows!/0 at line 242 -- the module's
+      shared setup, i.e. ONE root cause taking out all 10 tests, not 10 defects.
+    determination: "PRE-EXISTING shared-database state. NOT caused by this branch. Covered by ISS-0107 (open, GH#357), which documents this exact cascade."
+    evidence:
+      - method: "direct measurement of the live database (primary; re-derived here, not read from any report)"
+        detail: |
+          Queried the shared test database directly after the run:
+
+            $ docker exec letflow-postgres-1 psql -U letflow -d letflow_test \
+                -c "select tenant_id, schema_name from public.iss060_tenant_schemas_guard_backup;"
+                          tenant_id               |               schema_name
+            --------------------------------------+-----------------------------------------
+             c3a201b9-04da-4b0d-bfb6-bba6a18800ea | tenant_c3a201b904da4b0dbfb6bba6a18800ea
+             398a29c9-845d-4ae3-9a9c-f9f63fa9a3c2 | tenant_398a29c9845d4ae39a9cf9f63fa9a3c2
+             74f0de26-0d0e-4753-ac5b-e0c34141bc92 | tenant_74f0de260d0e4753ac5be0c34141bc92
+             482ef17c-6277-4765-b58f-a1a4b68a6231 | iss0060_fake_racer_schema
+            (4 rows)
+
+            $ ... -c "select count(*) from public.tenants where id='c3a201b9-04da-4b0d-bfb6-bba6a18800ea';"
+             0
+
+          Four stale rows sit in the guard-backup table; the parent tenants row for
+          the first one is gone. restore_orphaned_guard_backup_rows!/0 re-inserts
+          from that table into tenant_schemas, so the FK violation is forced by
+          leftover rows in a SHARED database before a single line of this branch is
+          reached. This is a property of the database, not of the code under test.
+      - method: "structural -- branch diff"
+        detail: >
+          `git diff --stat main...HEAD` lists 28 files. Neither
+          test/letflow/identity_migration_test.exs nor
+          lib/letflow/identity_migration.ex nor any migration under
+          priv/repo/migrations/ appears in it. The branch touches
+          .tool-versions, README.md, docs/guides/backend_developer_guide.md,
+          a decision record, 11 handoff JSONs, a design doc, six files under
+          lib/letflow/engine* plus lib/letflow/engine.ex, the new
+          lib/mix/tasks/letflow.check_toolchain.ex, mix.exs, two whitespace-only
+          test re-wraps, the new test file, and test/specs/ISS-0106.md.
+      - method: "causal impossibility"
+        detail: >
+          The branch's only behavioural change to shipped code is 16 struct-update
+          bind-site annotations in the engine (adding %InstanceState{}/%Token{}
+          patterns at defp heads) plus a new advisory mix task that issues no
+          database query at all. IdentityMigrationTest exercises
+          Letflow.IdentityMigration and a migration guard; it references neither
+          the engine modules nor the new task. There is no path from the diff to
+          a foreign key on tenant_schemas.
+      - method: "the state predates the branch (independent timestamp check)"
+        detail: >
+          The same literal tenant_id c3a201b9-04da-4b0d-bfb6-bba6a18800ea is
+          recorded in test/reports/report-20260820-WF02-REQ066-20260820.yaml, on a
+          different branch, on 2026-08-20 -- before this branch's first commit
+          (b110f7d, 2026-08-21). Cited as an independent corroboration of the
+          live query above, not as its basis.
+    not_fixed_deliberately: >
+      Deleting the four stale rows would very likely turn this group green
+      (ISS-0107 records that killing the orphans and recreating the database
+      restored 10/10), but it was NOT done here: it is out of this step's scope,
+      it would mutate state shared with the letflow-2 worktree, and it would
+      destroy the evidence RELEASE-VALIDATOR needs to re-derive this attribution
+      independently. The clearing statement, for whoever fixes ISS-0107:
+      `delete from public.iss060_tenant_schemas_guard_backup;`
+    action: "FORWARDED to ISS-0107 (already open, GH#357, queue task 171). No test loosened, no application code touched."
+
+  - group: Mix.Tasks.Letflow.Check.TestTest
+    count: 3
+    file: test/mix/tasks/letflow_check_test_test.exs
+    numbered_in_run: [11, 12, 13]
+    failing_tests:
+      - line: 147
+        name: "raises when the subprocess itself exits nonzero, regardless of the substring"
+        symptom: "** (ExUnit.TimeoutError) test timed out after 60000ms -- in Mix.Tasks.Letflow.Check.Test.collect/2 (lib/mix/tasks/letflow.check.test.ex:110)"
+      - line: 126
+        name: "passes (no raise) when the subprocess exits 0 and the target substring is absent, even with unrelated warnings present"
+        symptom: "** (ExUnit.TimeoutError) test timed out after 60000ms -- same collect/2 frame"
+      - line: 105
+        name: "raises and reports the offending line when the target substring is present, even though the underlying subprocess exited 0"
+        symptom: |
+          Wrong message for Mix.Error
+          expected:
+            ~r/default\ values\ for\ the\ optional\ arguments/
+          actual:
+            "mix letflow.check.test: FAILED -- underlying `mix test` run exited 1 (real test failure/error)."
+    determination: "PRE-EXISTING, POSIX-only test fixture failing on Windows. NOT caused by this branch, and specifically NOT caused by the new letflow.check alias step. Covered by ISS-0107 (open, GH#357)."
+    root_cause_rederived_from_source: >
+      Read from test/mix/tasks/letflow_check_test_test.exs directly. install_fake_mix/2
+      (lines 81-102) writes an EXTENSIONLESS file named `mix` containing `#!/bin/sh`
+      and prepends its directory onto PATH with a ":" separator
+      (`System.put_env("PATH", dir <> ":" <> ...)`). On Windows the PATH separator is
+      ";", so that produces one malformed entry rather than a new first entry, and
+      System.find_executable/1 will not resolve an extensionless file (PATHEXT wants
+      .bat/.cmd/.exe). The fake is therefore never used and
+      Mix.Tasks.Letflow.Check.Test.run/1 shells out to the REAL mix, recursing the
+      suite into a full nested `mix test` that cannot finish inside ExUnit's 60s
+      default. Failure 13 is the same cause showing its other face: the nested real
+      run returned a genuine nonzero exit, and its message
+      ("underlying `mix test` run exited 1") is proof on its own that the fake was
+      not in the exec path.
+    evidence:
+      - method: "live process-table measurement during this run (primary)"
+        detail: |
+          Get-CimInstance Win32_Process while the suite was running:
+            PID 28220  created 8:12:36  "erl.exe" ... -extra "c:\PROGRA~1\Elixir\bin\\mix" test
+            PID 9356   created 8:12:43  "erl.exe" ... -extra "c:\PROGRA~1\Elixir\bin\\mix" test
+            PID 31352  created 8:13:36  "erl.exe" ... -extra "c:\PROGRA~1\Elixir\bin\\mix" test
+          Three children, one per test in the module, all running the REAL mix
+          (the Windows PROGRA~1 wrapper path), none running a temp-dir fake. That
+          is the mechanism observed directly rather than inferred.
+      - method: "structural -- branch diff"
+        detail: >
+          Neither test/mix/tasks/letflow_check_test_test.exs nor
+          lib/mix/tasks/letflow.check.test.ex appears in this branch's 28-file
+          `git diff --stat main...HEAD`. Both are byte-identical to main.
+      - method: "the alias question, answered rather than assumed (see alias_step_analysis below)"
+        detail: >
+          The child command is `mix test`, which resolves mix.exs's `test` alias
+          (ecto.create --quiet, ecto.migrate --quiet, test). The new
+          letflow.check_toolchain step was added to the SEPARATE `letflow.check`
+          alias, which nothing in this path invokes.
+    orphaned_processes_finding:
+      severity: "MAJOR -- already filed as ISS-0107, re-observed first-hand here"
+      detail: |
+        All three nested `mix test` children OUTLIVED the parent suite. After `mix test`
+        had exited (exit code 2), PIDs 28220, 9356 and 31352 were still alive and still
+        connected:
+          select count(*) from pg_stat_activity where datname='letflow_test';  -->  65
+        After `Stop-Process -Id 28220,9356,31352 -Force`:
+          select count(*) from pg_stat_activity where datname='letflow_test';  -->   1
+        This is the mechanism behind this suite's documented load-dependence: every run
+        of this module leaves long-lived BEAMs hammering the shared test database, which
+        is what makes the environmental failure set vary run to run rather than being a
+        fixed list. The three orphans WERE killed as environment hygiene (they are not
+        this branch's product and would have corrupted every later run on this host,
+        including RELEASE-VALIDATOR's). The stale guard-backup rows were left in place --
+        see the not_fixed_deliberately note above.
+    action: "FORWARDED to ISS-0107. No test edited, no application code touched."
+
+# ---------------------------------------------------------------------------
+# Load-dependence: honoured, not assumed away
+# ---------------------------------------------------------------------------
+
+load_dependence:
+  handoff_caution: >
+    "Do not treat 'matches the previously-reported set' as proof of pre-existence,
+    and do not treat a count that differs by one or two as proof of regression."
+  demonstrated_first_hand_in_this_step: >
+    This step did not have to take load-dependence on faith: it ran the full suite
+    TWICE on the same commit, ten minutes apart, and got different failure sets.
+      * Run 1 -- `mix test`, seed 928451: 1247/1260 passed, 13 failed, 495.1s.
+      * Run 2 -- the nested full suite inside `mix letflow.check`, seed 613644:
+        1245/1260 passed, 15 failed, 501.7s.
+    Same commit (ec32dcd), same database, same host, no code change between them.
+    Run 2 added exactly two failures that Run 1 did not have:
+    Letflow.Definitions.MigrationsTest (migrations_test.exs:662) and
+    Letflow.Engine.PinRebindTest (pin_rebind_test.exs:351) -- both with
+    invalid_schema_name on a tenant schema the test itself had just provisioned.
+    Run 2 was the more contended of the two by construction: it is a child process
+    of the gate, and its own Check.TestTest spawned three more nested suites
+    against the same database. That is the load-dependence, measured here rather
+    than quoted.
+  the_pin_rebind_failure_deserved_extra_scrutiny_and_got_it: >
+    Letflow.Engine.PinRebindTest is the one failing module whose FILE IS IN THIS
+    BRANCH'S DIFF, so "not in the diff" was not available as an argument and was
+    not used. Derivation instead: (1) the branch's only hunk in
+    test/letflow/engine/pin_rebind_test.exs re-wraps a single `"entries" => [...]`
+    list literal across lines 513-517 inside an event payload -- whitespace only,
+    verified by reading `git diff main...HEAD` on that file; the token stream is
+    unchanged. (2) The failure is at line 351, in provisioned_tenant/0 called from
+    line 78 -- a different test, several hundred lines away from the hunk.
+    (3) The symptom is a Postgres schema vanishing mid-test
+    (3F000 invalid_schema_name, "schema tenant_2d2b... does not exist") during
+    TenantProvisioning.replay_migrations/1. Re-wrapping a list literal cannot drop
+    a Postgres schema. (4) It did NOT occur in Run 1 on the same code, only in the
+    contended Run 2. Determination: same full-suite-only tenant-schema teardown
+    race as ISS-0109, NOT caused by this branch's edit to that file.
+  contrast_with_the_previously_recorded_run: >
+    Read after the derivations above, purely as a cross-check, the prior record
+    (report-20260820-WF02-REQ066-20260820.yaml) also does not match: 14 failures
+    there vs 13 in Run 1; TWO Check.TestTest failures there (lines 105, 126, with
+    147 passing) vs THREE in both runs here; and its two
+    Letflow.Definitions.Promotion* failures recur in neither run here. Had
+    "matches the previously-reported set" been the criterion, Run 1 would have
+    been mis-scored as both a regression and a fix. It was not used as one.
+  newly_uncovered_failures: >
+    NONE that lacks an existing issue record, but ONE gap in an existing record is
+    called out rather than glossed. The 13 failures of the measured run all fall
+    inside ISS-0107's documented cascade (its description names both the
+    timeout/exit-1 failures in letflow_check_test_test.exs AND the
+    IdentityMigrationTest foreign_key_violation on stale
+    iss060_tenant_schemas_guard_backup rows as one consequence chain). The two
+    EXTRA failures seen only in Run 2 are the class ISS-0109 covers -- but
+    ISS-0109's title enumerates the modules it was filed for
+    (Letflow.Definitions.PromotionTest, Letflow.Definitions.PromotionAssertionRerunTest),
+    and Letflow.Definitions.MigrationsTest and Letflow.Engine.PinRebindTest are
+    not among them, exactly as those modules were not among ISS-0048/0050/0060/
+    0062/0064's either. Stated here as an observation for ORCH (see
+    findings_for_orch); no new issue was filed, because the class already has an
+    open record and filing a fourth ID for the same race would repeat the
+    ISS-numbering collision docs/anti-patterns.md warns about.
+
+# ---------------------------------------------------------------------------
+# Did this branch's new alias step change Mix.Tasks.Letflow.Check.TestTest?
+# ---------------------------------------------------------------------------
+
+alias_step_analysis:
+  question: >
+    This branch prepends "letflow.check_toolchain" to the letflow.check alias. Did
+    that change Mix.Tasks.Letflow.Check.TestTest's behaviour, or is its failure the
+    same timeout as before?
+  answer: "NO. The new step is not on that test's execution path at all. Answered from mix.exs and lib/mix/tasks/letflow.check.test.ex, not assumed."
+  derivation:
+    - "mix.exs defines TWO separate aliases. `test: [\"ecto.create --quiet\", \"ecto.migrate --quiet\", \"test\"]` is untouched by this branch (the diff on mix.exs adds only a comment block and the one line \"letflow.check_toolchain\" inside the OTHER alias)."
+    - "lib/mix/tasks/letflow.check.test.ex:63 calls stream_and_capture(\"mix\", [\"test\"]) -- argument list [\"test\"], so the child resolves the `test` alias. It never invokes `letflow.check`, and that file is byte-identical to main on this branch."
+    - "Confirmed against the live children: all three spawned command lines end in `mix test`, with no `letflow.check` anywhere. `grep -c 'letflow.check_toolchain' <run log>` = 0 -- the new task's name never appears in the suite's output, in a run where it would have printed had it executed."
+  second_order_effect_considered_and_excluded: >
+    The branch does enlarge the nested child's workload by 30 tests. That is a
+    change of roughly ten seconds against a child suite that takes ~500 seconds
+    versus a 60-second parent timeout -- it cannot convert a passing test into a
+    timing-out one, and the timeout predates the branch (it is the failure mode
+    ISS-0107 was filed on, on 2026-08-20, from a checkout without these commits).
+    Failure 13's non-timeout shape is likewise explained by the child returning a
+    real nonzero exit, which the 60s window happened to admit this time.
+  conclusion: >
+    Same pre-existing POSIX-only-fixture failure as before, expressing itself with
+    a different per-test subset because of load. Not affected by the new alias step.
+
+# ---------------------------------------------------------------------------
+# mix letflow.check, end to end -- the gate ISS-0106 was filed about
+# ---------------------------------------------------------------------------
+
+letflow_check:
+  command: "mix letflow.check"
+  run_at: "2026-08-21T03:19 UTC (separately, after the full suite, on the same commit)"
+  alias_definition: ["letflow.check_toolchain", "format --check-formatted", "compile --warnings-as-errors", "letflow.check.test"]
+  step_1_letflow_check_toolchain:
+    printed_first_among_the_aliases_own_steps: true
+    evidence: >
+      The captured stdout's FIRST line, byte for byte, is:
+        letflow.check_toolchain: OK -- Elixir 1.20.3 / OTP 29 matches .tool-versions.
+      Nothing precedes it -- not even compiler output, because the project was
+      already compiled in this checkout (the module's own moduledoc is careful to
+      claim only "first among the alias's own steps", since Mix must compile to
+      load a lib/mix/tasks/ task and on a cold build compiler output can precede it).
+    stderr: >
+      Empty at this point. Correct: the running toolchain matches the repinned
+      .tool-versions, so this is the MATCH path, which prints an affirmative line to
+      stdout and no warning block to stderr. The drift-warning path was not exercised
+      by this run of the gate -- it is what the 30 new tests cover instead.
+  step_2_format_check_formatted:
+    result: PASS
+    evidence: >
+      Produced no output and did not abort the alias (a failure prints the offending
+      file list and raises). This is ISS-0106's Symptom 1 -- four files failing the
+      format gate -- now green.
+  step_3_compile_warnings_as_errors:
+    result: PASS
+    evidence: >
+      Produced no output and did not abort the alias. This is ISS-0106's Symptom 2 --
+      the struct-update warnings under Elixir 1.20/OTP 29 -- now green. Corroborated
+      independently by the full-suite run's own compile pass: `grep -c '^warning:'`
+      over the 77462-line log = 0.
+  step_4_letflow_check_test:
+    result: FAIL
+    nested_run_summary: |
+      Finished in 501.7 seconds (7.3s async, 494.3s sync)
+
+      Result: 1245/1260 passed (5/5 properties, 1240/1255 tests)
+      Failed: 15 tests
+    raised: |
+      ** (Mix) mix letflow.check.test: FAILED -- underlying `mix test` run exited 2 (real test failure/error).
+    detail: >
+      Ran a full nested `mix test` (seed 613644, max_cases 32) and streamed it live,
+      exactly as designed. Its 15 failures are the 13 attributed above plus the two
+      contention-only failures analysed in load_dependence
+      (Letflow.Definitions.MigrationsTest, Letflow.Engine.PinRebindTest). None is
+      attributable to this branch. Note the totals: 1260 tests again, independently
+      confirming the 30 new tests are present and, with no CheckToolchainTest among
+      the 15 failures ("CheckToolchain" appears 0 times in this log too), passing in
+      a second full run as well.
+  overall_exit_code: 1
+  overall_verdict: >
+    The gate is RED end to end, but red at step 4 only. Both halves ISS-0106 was
+    filed about -- the format gate and the warnings-as-errors gate -- pass, and the
+    new advisory step reports a matching toolchain. The remaining red is ISS-0107's
+    self-recursion, which is a separate open issue with its own queue task, and
+    which this run has now shown to be self-sustaining: `mix letflow.check` runs
+    `mix test`, whose Check.TestTest spawns `mix test` again, so the gate can only
+    go green once ISS-0107's POSIX-only fixture is fixed.
+
+# ---------------------------------------------------------------------------
+
+acceptance_criteria_check:
+  - criterion: "The full suite was run with the real command and real output quoted -- totals, duration, exit code"
+    met: true
+    detail: "`mix test` (no file arguments), seed 928451, 495.1s, exit code 2. Summary quoted verbatim; every one of the 13 failure blocks was extracted from the captured 77462-line log."
+  - criterion: "test/reports/report-20260821-WF03-ISS0106-20260821.yaml exists and follows the existing schema"
+    met: true
+    detail: "This file, modelled on report-20260820-WF02-REQ066-20260820.yaml (read first)."
+  - criterion: "Every failure attributed individually, RE-DERIVED, stating whether the failing code is in this branch's diff"
+    met: true
+    detail: "13/13 attributed across two groups, plus the 2 extra failures the gate's nested run added. Diff status stated for each: test/letflow/identity_migration_test.exs, lib/letflow/identity_migration.ex, test/mix/tasks/letflow_check_test_test.exs, lib/mix/tasks/letflow.check.test.ex and test/letflow/definitions/migrations_test.exs are NOT in this branch's 28-file diff and are byte-identical to main. test/letflow/engine/pin_rebind_test.exs IS in the diff -- that one is derived from the hunk's location and content instead, not from absence."
+  - criterion: "Load-dependence honoured; anything uncovered by an existing issue called out"
+    met: true
+    detail: "Load-dependence was demonstrated in this step rather than quoted: two full runs of the same commit ten minutes apart produced 13 and 15 failures. The previously-reported set matches neither, in count or composition, and that is documented rather than smoothed over. Nothing was attributed by matching a count. The two contention-only failures are the class ISS-0109 covers in modules ISS-0109 does not name, and that gap is called out explicitly in findings_for_orch rather than folded silently into the known set."
+  - criterion: "All 30 tests in the new file confirmed passing WITHIN the full run"
+    met: true
+    detail: "30 defined, 0 excluded, 0 skipped, 0 failed, and zero occurrences of 'CheckToolchain' in the run log. Derivation does not depend on any prior baseline."
+  - criterion: "The cwd-mutation interaction risk addressed explicitly"
+    met: true
+    detail: "No failure is plausibly attributable to it. Established from ExUnit 1.20.3's runner source (sync modules cannot overlap async or each other), from the absence of any other File.cd in the repo, from positive evidence that the cwd-sensitive subprocess spawn inherited a valid project directory, and from the symptom shape of all 13 failures."
+  - criterion: "Mix.Tasks.Letflow.Check.TestTest examined specifically for whether the new alias step changed it"
+    met: true
+    detail: "Examined and answered NO, from mix.exs's two distinct aliases, from letflow.check.test.ex:63 passing [\"test\"], and from the live child command lines. The second-order 'nested suite is now 30 tests longer' effect was considered and excluded quantitatively."
+  - criterion: "`mix letflow.check` run and its end-to-end behaviour recorded"
+    met: true
+    detail: "Run to completion. Toolchain step prints first among the alias's own steps (its OK line is the first byte of stdout); format and compile gates both green; letflow.check.test's nested suite returned 15 failures and raised; overall exit code 1, captured as LETFLOW_CHECK_EXIT=1."
+  - criterion: "No source file under lib/ and no existing test modified"
+    met: true
+    detail: "`git status --porcelain lib/ test/` shows only the new untracked report file. Nothing under lib/ was touched by this step, and no test was edited."
+
+findings_for_orch:
+  - severity: MINOR
+    finding: >
+      ISS-0107 is now self-reinforcing at the gate level, which its record does not
+      yet say: `mix letflow.check` -> `letflow.check.test` -> a nested `mix test`
+      whose Check.TestTest spawns yet another `mix test`. Until ISS-0107 is fixed,
+      `mix letflow.check` cannot exit 0 on Windows regardless of code quality, and
+      each invocation leaves three orphaned BEAMs on the host. Worth adding to
+      ISS-0107 as an observation. Not filed as a new issue -- it is the same defect.
+  - severity: MINOR
+    finding: >
+      SIX orphaned nested BEAMs were killed by this step as environment hygiene --
+      three from the measured run (PIDs 28220, 9356, 31352, holding 65 letflow_test
+      connections, dropping to 1 once killed) and three more from the gate run
+      (PIDs 34288, 38716, 23920, holding 97 connections, again dropping to 1).
+      Two invocations, six orphans, ~160 leaked connections: that rate is worth
+      adding to ISS-0107 as measured impact. The host was left clean (zero erl.exe
+      running, 1 connection). Four stale rows in
+      public.iss060_tenant_schemas_guard_backup were deliberately LEFT so
+      RELEASE-VALIDATOR can re-derive the IdentityMigrationTest attribution from the
+      same evidence. If RELEASE-VALIDATOR's re-run shows those 10 failures again,
+      that is expected and confirms this attribution rather than contradicting it.
+  - severity: MINOR
+    finding: >
+      ISS-0109 covers the full-suite-only tenant-schema teardown race, but names only
+      Letflow.Definitions.PromotionTest and
+      Letflow.Definitions.PromotionAssertionRerunTest. This step observed the same
+      race in two further modules: Letflow.Definitions.MigrationsTest
+      (migrations_test.exs:662) and Letflow.Engine.PinRebindTest
+      (pin_rebind_test.exs:351), both 3F000 invalid_schema_name inside
+      TenantProvisioning.replay_migrations/1, both only in the contended run.
+      ISS-0109's affected-module list should be extended rather than a fourth ID
+      allocated for the same race. Not edited here -- ISS-0109 is not this step's
+      artefact and a concurrent edit would risk the add/add collision class
+      docs/anti-patterns.md records.
+
+artifacts_out:
+  - test/reports/report-20260821-WF03-ISS0106-20260821.yaml
+
+next_action: >
+  Proceed to WF-04 Step 1 (RELEASE-VALIDATOR), which re-runs the suite independently.
+  Expect a similar-but-NOT-identical failure set -- this step's own two runs differed
+  by two. The stable core is 10 Letflow.IdentityMigrationTest failures (the four stale
+  guard-backup rows are still in the shared database, deliberately) plus 1-3 of
+  Mix.Tasks.Letflow.Check.TestTest's tests; a contended run may add tenant-schema
+  teardown-race failures in Definitions/Engine modules. None of it belongs to ISS-0106.
+  Two housekeeping items for ORCH: kill any erl.exe orphans left by the re-run before
+  judging its results (the host was left clean by this step), and consider extending
+  ISS-0109's module list per findings_for_orch.

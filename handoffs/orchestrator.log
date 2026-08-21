@@ -1030,3 +1030,4 @@
 2026-08-21T10:08:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0201-20260821 | REVIEWER -> ORCH | step-03b-reviewer-gate.json PASS, commits a841201/5d857b4, three MINOR non-gating findings
 2026-08-21T10:08:00Z | ISSUE_FILED | WF-03 | WF03-ISS0201-20260821 | ORCH -> queue | ISS-0203 (task 203, GH#394) findings 1+2; ISS-0204 (task 204, GH#395) finding 3
 2026-08-21T10:06:30Z | CORRECTION | WF-03 | WF03-ISS0201-20260821 | ORCH -> - | the two lines above were stamped 10:08:00Z; the clock read 10:05:51Z when they were written. Corrected by appending, not editing (append-only). registry lock_released_at corrected to 10:05:51Z before commit.
+2026-08-21T10:07:16Z | RUN_DONE | WF-03 | WF03-ISS0201-20260821 | ORCH -> - | pushed 7322185..f38789c to origin/main; queue task 201 released status=done, GH#392 closed by the release sync; rework 0, gate PASS first time

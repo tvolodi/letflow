@@ -363,3 +363,25 @@ history:
       cap. No route wires these plugs in yet -- infrastructure for REQ-069 onward. Self-
       gated (single agent performing every WF-02 role) since this execution context
       cannot spawn subagents.
+  - req: REQ-069
+    event: done
+    agent: ELIXIR-DEV
+    at: "2026-08-21T15:46:31Z"
+    note: >
+      Ported authorization.zig as Letflow.Api.Authorization (5 Roles, 14 Permissions,
+      3-variant AccessDecisionKind, R-Co's exact names as atoms). AllowWithRowFilter's
+      scope is structurally derived only from AccessContext.user_id -- evaluate_access/2
+      has no parameter a caller-supplied filter could reach (INV-2). roles_from_strings/1
+      safely converts the untrusted [String.t()] AuthPipeline actually populates
+      conn.assigns[:auth_context][:roles] with (not R-Co's enum directly) into the closed
+      role set, dropping unrecognized strings rather than crashing or defaulting to allow;
+      avoids String.to_existing_atom/1 (unbounded-atom-creation vector). 24+1 tests
+      covering all 9 acceptance criteria, all passing (153/153 across test/letflow/api/ +
+      test/letflow/plugs/, nothing else broken); AC9 runs the real AuthPipeline plug via a
+      unique-realm tenant (deliberately not the shared bpm-default seed, to avoid
+      ISS-0108's live collision class) rather than a hand-built assigns map. Adversarial
+      security self-review: case/whitespace role-string variants, 100k garbage strings,
+      duplicate/order-independence, nil input -- all safe, no bypass found. Moduledoc
+      states the 403-vs-404/INV-5 boundary and names AGENT_RUNNER/DlqOperate/
+      WebhooksManage as ported-but-unreachable. Self-gated (single agent performing every
+      WF-02 role) since this execution context cannot spawn subagents.

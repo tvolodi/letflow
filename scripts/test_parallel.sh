@@ -25,13 +25,18 @@
 #      temp directory.
 #   3. Wait for each one individually (`wait "$pid"` per PID, not a bare
 #      `wait`) so each partition's own exit code is recoverable.
-#   4. Parse each partition's log for its ExUnit summary line
-#      (`"<N> tests, <M> failures"`, optionally prefixed with
-#      `"<K> properties, "`) and sum properties/tests/failures across all
-#      partitions into one combined total, cross-checking each partition's
-#      parsed failure count against its process exit code.
-#   5. Exit 0 only if every partition exited 0 and no cross-check
-#      mismatch fired; exit 1 otherwise.
+#   4. Parse each partition's log for its ExUnit summary -- a
+#      `"Result: <passed>[/<total>] passed [(<type breakdown>)]"` line
+#      (always present) plus an optional `"Failed: <n> <type>[, ...]"`
+#      line (present only when that partition had real failures) -- and
+#      sum properties/tests/failures across all partitions into one
+#      combined total, cross-checking each partition's parsed failure
+#      count against its process exit code (see design doc section 2.2:
+#      on this toolchain exit 2, not 1, is the normal "had ExUnit
+#      failures" code).
+#   5. The parsed failure count (not the raw per-partition exit code) is
+#      the authoritative success signal: exit 0 only if every partition
+#      has a Result: line and 0 parsed failures; exit 1 otherwise.
 #
 # Usage: scripts/test_parallel.sh [args passed through to every
 # partition's `mix test` invocation, e.g. a path filter or --seed]
@@ -104,29 +109,67 @@ while [ "$i" -le "$N" ]; do
 done
 
 # --- Step 4: aggregate each partition's real reported counts (AC1, AC2) ---
+#
+# Real ExUnit summary shape on this toolchain (design doc section 4.5, not
+# the "<N> tests, <M> failures" shape an earlier design iteration wrongly
+# assumed):
+#   Result: <passed> passed[/<total>][ (<type breakdown>)]
+#   Failed: <n> <type>[, <n> <type>...]     (only present when >0 failures)
 
 total_properties=0
 total_tests=0
 total_failures=0
-any_mismatch=0
+any_failed=0
 
 i=1
 while [ "$i" -le "$N" ]; do
   log="$tmp_dir/partition-$i.log"
-  summary_line=$(grep -E '^[0-9]+ (propert(y|ies)|tests?), .*[0-9]+ failures?' "$log" | tail -n 1)
+  ex="${exits[$i]}"
 
-  if [ -n "$summary_line" ]; then
-    if printf '%s' "$summary_line" | grep -q 'propert'; then
-      p=$(printf '%s' "$summary_line" | grep -oE '[0-9]+ propert(y|ies)' | grep -oE '[0-9]+')
-    else
-      p=0
+  result_line=$(grep -E '^Result: ' "$log" | tail -n 1)
+  failed_line=$(grep -E '^Failed: ' "$log" | tail -n 1)
+
+  has_result=1
+  if [ -z "$result_line" ]; then
+    has_result=0
+  fi
+
+  passed_i=0
+  total_i=0
+  if printf '%s' "$result_line" | grep -Eq '^Result: [0-9]+/[0-9]+ passed'; then
+    nums=$(printf '%s' "$result_line" | grep -oE '^Result: [0-9]+/[0-9]+' | grep -oE '[0-9]+')
+    passed_i=$(printf '%s\n' "$nums" | sed -n '1p')
+    total_i=$(printf '%s\n' "$nums" | sed -n '2p')
+  elif printf '%s' "$result_line" | grep -Eq '^Result: [0-9]+ passed'; then
+    passed_i=$(printf '%s' "$result_line" | grep -oE '^Result: [0-9]+' | grep -oE '[0-9]+')
+    total_i="$passed_i"
+  fi
+
+  # Parenthesized per-type breakdown, e.g. "(5 properties, 1269 tests)" or
+  # "(2/5 properties, 115/117 tests)". Absent entirely when only one test
+  # type ran in this partition.
+  paren=$(printf '%s' "$result_line" | grep -oE '\([^)]*\)')
+
+  p=0
+  t=0
+  if [ -n "$paren" ]; then
+    prop_entry=$(printf '%s' "$paren" | grep -oE '[0-9]+(/[0-9]+)? propert(y|ies)')
+    test_entry=$(printf '%s' "$paren" | grep -oE '[0-9]+(/[0-9]+)? tests?')
+    if [ -n "$prop_entry" ]; then
+      p=$(printf '%s' "$prop_entry" | grep -oE '[0-9]+' | tail -n 1)
     fi
-    t=$(printf '%s' "$summary_line" | grep -oE '[0-9]+ tests?,' | grep -oE '[0-9]+')
-    f=$(printf '%s' "$summary_line" | grep -oE '[0-9]+ failures?' | grep -oE '[0-9]+')
+    if [ -n "$test_entry" ]; then
+      t=$(printf '%s' "$test_entry" | grep -oE '[0-9]+' | tail -n 1)
+    fi
   else
-    p=0
-    t=0
-    f=0
+    # No breakdown present -> exactly one type ran. Attributed to plain
+    # tests per design doc section 4.5's documented assumption (OQ-2b).
+    t="$total_i"
+  fi
+
+  f=0
+  if [ -n "$failed_line" ]; then
+    f=$(printf '%s' "$failed_line" | grep -oE '[0-9]+ (propert(y|ies)|tests?)' | grep -oE '^[0-9]+' | awk '{s+=$1} END{print s+0}')
   fi
 
   properties[$i]="$p"
@@ -137,18 +180,29 @@ while [ "$i" -le "$N" ]; do
   total_tests=$((total_tests + t))
   total_failures=$((total_failures + f))
 
-  # Cross-check: exit code vs parsed failure count must agree, or the log
-  # must show no summary line at all (compile/crash error case).
-  ex="${exits[$i]}"
-  mismatch=0
-  if [ "$ex" -eq 0 ] && [ "$f" -ne 0 ]; then
-    mismatch=1
-  elif [ "$ex" -ne 0 ] && [ "$f" -eq 0 ] && [ -n "$summary_line" ]; then
-    mismatch=1
-  fi
-  if [ "$mismatch" -eq 1 ]; then
+  # Cross-check (design doc section 4.5/2.2): on this toolchain exit 2 is
+  # the normal "had ExUnit failures" code, not 1 -- and the parsed
+  # failure count, not the raw exit code, is authoritative for AC3.
+  partition_failed=0
+  if [ "$has_result" -eq 0 ]; then
+    echo "test_parallel: WARNING partition $i has no Result: line in its log (compile/config/crash abort), exit=$ex" >&2
+    partition_failed=1
+  elif [ "$ex" -eq 0 ] && [ "$f" -eq 0 ]; then
+    : # consistent clean pass, no warning
+  elif [ "$ex" -eq 2 ] && [ "$f" -gt 0 ]; then
+    : # consistent failure, no warning
+  elif [ "$ex" -eq 2 ] && [ "$f" -eq 0 ]; then
+    echo "test_parallel: WARNING partition $i exit 2 but 0 parsed failures (see design section 2.2/OQ-5)" >&2
+  else
     echo "test_parallel: WARNING partition $i exit code / parsed count mismatch (exit=$ex, failures=$f)" >&2
-    any_mismatch=1
+    partition_failed=1
+  fi
+
+  if [ "$f" -gt 0 ]; then
+    partition_failed=1
+  fi
+  if [ "$partition_failed" -eq 1 ]; then
+    any_failed=1
   fi
 
   plural_p="properties"
@@ -165,17 +219,9 @@ echo "---"
 echo "combined: $total_tests tests, $total_properties properties, $total_failures failures ($total_passed/$total_all passed)"
 
 # --- Step 5: exit-code contract (AC3) --------------------------------------
+#
+# Authoritative signal is the parsed failure count (any_failed, set above
+# from failures_i and the has-Result-line check), not raw per-partition
+# exit codes -- see design doc section 4.6.
 
-overall=0
-i=1
-while [ "$i" -le "$N" ]; do
-  if [ "${exits[$i]}" -ne 0 ]; then
-    overall=1
-  fi
-  i=$((i + 1))
-done
-if [ "$any_mismatch" -eq 1 ]; then
-  overall=1
-fi
-
-exit "$overall"
+exit "$any_failed"

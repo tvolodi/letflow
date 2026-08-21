@@ -50,7 +50,7 @@
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ067-20260821",
-      "commit_sha_list": ["PENDING_COMMIT"],
+      "commit_sha_list": ["6df6e8e"],
       "remote_branch": "origin/feature/WF02-REQ067-20260821",
       "push_status": "skipped",
       "pr_url": null,

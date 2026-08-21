@@ -133,14 +133,21 @@ defmodule Letflow.RouterTest do
     test "Plug.Parsers invoked in exactly one lib/ file" do
       files = Path.wildcard("lib/**/*.ex")
       # Search for the plug invocation — not references in module docs/comments.
-      matches = Enum.filter(files, fn f -> String.contains?(File.read!(f), "plug(Plug.Parsers,") end)
+      matches =
+        Enum.filter(files, fn f -> String.contains?(File.read!(f), "plug(Plug.Parsers,") end)
+
       assert length(matches) == 1
       assert hd(matches) =~ "api_pipeline"
     end
 
     test "AuthPipeline plug registered in exactly one lib/ file" do
       files = Path.wildcard("lib/**/*.ex")
-      matches = Enum.filter(files, fn f -> String.contains?(File.read!(f), "plug(Letflow.Plugs.AuthPipeline)") end)
+
+      matches =
+        Enum.filter(files, fn f ->
+          String.contains?(File.read!(f), "plug(Letflow.Plugs.AuthPipeline)")
+        end)
+
       assert length(matches) == 1
       assert hd(matches) =~ "api_pipeline"
     end

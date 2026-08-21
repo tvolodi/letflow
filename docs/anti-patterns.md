@@ -84,6 +84,40 @@ schema even if a different shape seems cleaner, and append (never replace). Conf
 volume. If the file is genuinely missing, use the header/entry shape documented in the
 index and the current volume's own header, not an invented one.
 
+## Issuing the clock read and the timestamped write as ONE shell command (ORCH)
+
+**Found 2026-08-21, twice inside four minutes, during WF03-ISS0204-20260821's own run
+closure — the run that had just finished documenting this exact class.** ORCH wrote its
+`RUN_DONE` line as a single command of the shape:
+
+```bash
+date -u +"%Y-%m-%dT%H:%M:%SZ" && cat >> handoffs/orchestrator.log <<'EOF'
+2026-08-21T10:29:40Z | RUN_DONE | ...
+EOF
+```
+
+The clock read is *in* the command, so it looks measured. It is not: the literal
+`10:29:40Z` had to be composed before the command ran, and the real reading came back
+`10:29:12Z` — 28s fast. The correction line appended to fix it was issued the same way
+and was 55s fast. **The defect is structural, not a lapse of care.** Batching the two
+makes an extrapolated stamp *unavoidable* regardless of how carefully the writer is
+trying to follow the entry below; the `date` output is only ever visible after the write
+it was supposed to inform.
+
+**Why this is easy to miss:** the command *contains* a real clock read, and its output
+is right there in the transcript. Nothing looks wrong — it reads as measure-then-write,
+and the two values are close enough that the discrepancy is invisible unless someone
+compares them line by line. This is the same "wrong in a way the output string does not
+reveal" shape as the `.ToUniversalTime()` hazard and the entry below, arriving through a
+different door: not memory, not rounding, but *ordering inside a single tool call*.
+
+**Correct alternative:** read the clock in its **own** tool call, let the value come
+back, then write the line in a **second** call using the value returned. Never put
+`date -u` and the write that consumes its output in one command — not with `&&`, not
+with `;`, not in the same heredoc. If a stamp has already been committed wrong, correct
+it by **appending**, never by editing (the log is append-only), and name the mechanism
+rather than only the number, so the next reader fixes the cause and not the symptom.
+
 ## Extrapolating handoff timestamps instead of reading the clock (ORCH)
 
 During REQ-023's WF-02 run, ORCH stamped each dispatched handoff's

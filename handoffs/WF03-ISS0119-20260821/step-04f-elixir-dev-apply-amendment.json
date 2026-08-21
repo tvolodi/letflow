@@ -30,7 +30,9 @@
       "docs/status/requirement_status.v2.yaml"
     ],
     "branch_name": "feature/WF03-ISS0119-20260821",
-    "issue_ids": ["ISS-0119"]
+    "issue_ids": [
+      "ISS-0119"
+    ]
   },
   "task": {
     "description": "Apply the GATED design amendment (§13) for ISS-0119. §13 passed CODE-DESIGN-VALIDATOR's hard gate on re-gate pass 2 (commit dd2d615) after one FAIL and one re-amendment. Two edits, both verbatim from the artefact:\n\n1. APPEND §13.4's verbatim YAML block to `docs/status/requirement_status.index.yaml`, at the insertion point §13.4 names (after the existing `known_anomalies:` block). It declares the three shape anomalies in frozen volume 1 -- line 4803 REQ-053 (missing `note:`), line 4896 REQ-056 (`timestamp:` at line 4899 instead of `at:`), line 5050 REQ-054 (missing `note:`) -- plus the block's comment header, INCLUDING the paragraph stating that a record may only cite a closed, digest-pinned volume.\n\n2. INSERT §13.8's verbatim addendum into `docs/status/requirement_status.v2.yaml`'s header, at the anchor §13.8 names (the 'ENTRY SHAPE' block, which the gate confirmed exists on disk at v2:60). Nine comment lines naming all three anomalies by line and req id and saying do not copy them and do not clean them up.\n\nUSE THE ARTEFACT'S EXACT TEXT. Both blocks are quoted verbatim in §13 precisely so this step involves no invention. The gate parsed §13.4's YAML with a real loader and confirmed it well-formed with all three records matching disk, including `found_line: 4899`. If your own reading of the on-disk entries disagrees with a record in any particular, STOP and report it rather than adjusting either side -- a mismatch would mean the gate and your read disagree about the data, which is worth knowing before it lands.\n\nWHAT YOU MUST NOT DO. Do not edit `docs/status/requirement_status.yaml` -- volume 1 is frozen, and §13.3 explicitly rejected the option of also recording these in its closure footer, so this amendment writes ZERO bytes into it. Do not change `frozen_prefix_sha256` -- the digest covers volume 1's first 5,766 lines, which are not being touched, so it must remain 5a1a64ab0b999da3fd86be90109ecee46b9d538d9e9945c0d39fddb10075a804. Do not edit the test files -- TEST-DESIGNER applies §13.5/§13.7 next. Do not edit the design artefact. Do not touch the existing `known_anomalies:` records or A5.\n\nVERIFY, DO NOT ASSERT:\n  - Re-read the three on-disk entries (volume 1 lines ~4799-4812, ~4894-4906, ~5046-5058) and confirm each §13.4 record matches by line, req, event and field detail. Quote what you read.\n  - Parse the edited index with a real YAML parser and confirm it is well-formed and that `known_anomalies:` and `known_shape_anomalies:` are both present as distinct top-level keys with 3 records each.\n  - Confirm `git diff --numstat` shows ZERO changes to docs/status/requirement_status.yaml.\n  - Confirm the index's `volumes:` entry for docs/status/requirement_status.yaml still reads `status: closed` WITH the digest -- this is what makes the three new records legal under A4b's closed-and-pinned rule, and the gate verified it on disk at index lines 34/46. If that ever changed, every record would fail.\n  - Run `mix letflow.check` and quote the real result. The suite is expected RED for the pre-existing ISS-0109/ISS-0116 tenant-schema class; REVIEWER established at Step 3d that this branch adds no failure main lacks, BUT that proof EXPIRED when Step 4 added .exs files, so do not restate it. Report what you observe and attribute only what you can evidence. TEST-RUNNER re-establishes the baseline at Step 4c.\n\nNote the invariant test currently on the branch still implements the PRE-amendment A4, so it is expected to be RED on the three shape anomalies until TEST-DESIGNER applies §13.5. That is expected, not a regression you caused -- say so plainly rather than treating it as your failure or as success.\n\nhandoffs/orchestrator.log has uncommitted ORCH edits and docs/issues/ISS-0193.yaml is a new untracked ORCH file -- leave BOTH alone, do not commit them. Stage by explicit path, never `git add -A`.",
@@ -61,9 +63,11 @@
     ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0119-20260821",
-      "commit_sha_list": ["PENDING"],
+      "commit_sha_list": [
+        "25440dbab4fb3586c73bb8aa066beaefef3f8dba"
+      ],
       "remote_branch": "origin/feature/WF03-ISS0119-20260821",
-      "push_status": "PENDING",
+      "push_status": "PUSHED (dd2d615..25440db). A follow-up bookkeeping commit records this git_evidence block and is pushed on the same branch.",
       "pr_url": null,
       "pr_create_error": null
     },

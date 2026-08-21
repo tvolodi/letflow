@@ -36,6 +36,40 @@ If no PENDING handoff exists for you and none was named directly by the caller: 
 that and stop. Do not invent work — check `docs/requirements.yaml` for the next
 `pending` requirement instead, per `docs/agents/ORCHESTRATOR.md`.
 
+## 1.1 A handoff's factual premises are checkable, and may be wrong
+
+`core-directives.md`'s **Instruction Precedence** puts your handoff's `task` block at
+rank 1. That makes it the highest authority on **what to do**. It says nothing about the
+handoff's **factual claims**, and agents have read it as covering both. It does not: a
+handoff is a record written by another agent, and `docs/anti-patterns.md`'s "Inheriting
+a claim from a record instead of re-deriving it from the source" applies to it exactly
+as it applies to any other record.
+
+**The rule.** When a handoff makes a *checkable factual claim* your work depends on — a
+file exists, a path follows a convention, a conflict cannot occur, a count is N — verify
+it before building on it. **A verified disagreement outranks the handoff:** report it in
+`result.issues`, act on what you measured, and state plainly what you did and why.
+
+**This is not licence to disregard the handoff's instructions.** Instruction Precedence
+still governs those, and a **safety/gate rule is never overridable** by anything,
+including your own measurement. The distinction is between what you are told to **do**
+and what you are told **is true**. Silently complying with a false premise and silently
+ignoring a correct instruction are both failures.
+
+**Evidence — twice in one run (WF03-ISS0106-20260821) an ORCH handoff asserted a false
+premise, and the receiving agent was right to check rather than comply:**
+
+1. Step 4's handoff named the new test file with a **dotted** filename. TEST-DESIGNER
+   found the repo's existing mix-task test is **underscored**, deviated, and *reported
+   the deviation* instead of silently complying. ORCH verified and confirmed the handoff
+   was wrong.
+2. Step Final's handoff asserted that an add/add conflict on the renumbered issue files
+   **could not occur**, and that if it did it meant a third concurrent session and must
+   be escalated. ELIXIR-DEV checked instead of obeying and showed the reasoning was
+   false: a rebase replays commits individually, so the intermediate commit that
+   *created* those files collides regardless of a later commit renumbering them. It
+   confirmed provenance on both sides before proceeding.
+
 ---
 
 ## 2. Handoff file schema
@@ -226,6 +260,12 @@ in `registry.json` on your behalf once it receives your completed handoff —
 set correctly, and every completing agent writing it directly would be a concurrent-write
 hazard across this project's multi-worktree/multi-host setup. Your own handoff file
 (steps 1-3 above) is the only file this section asks you to write.
+
+**ORCH: that rule alone does not make your own registry write safe.** It removes the
+subagents from the race, not a second ORCH-role session running in the *same* checkout —
+which has happened (`ADHOC-20260821-001` / `WF01-TESTPARALLEL-20260821`). The
+re-read-before-write, append-only, and single-SHA push rules for that case are in
+`ORCHESTRATOR.md` §7.1 and are not restated here.
 
 **Before marking PASS, ask: did I independently verify this, or am I trusting a claim?**
 If your role is a validator (see the producer/validator table in `core-directives.md`),

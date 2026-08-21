@@ -106,6 +106,22 @@ validated anything — it has copied a claim. Every validator role's file states
 what it must independently re-check (file existence, specific content, an actual
 command run) rather than what it may take on trust.
 
+### Re-derive under the conditions the property is actually about
+
+Re-deriving a verdict is necessary but **not sufficient**. Ask what conditions the
+property under test is *about*, and construct them if the ambient environment does not
+supply them. **A green check run under conditions where the property could not have
+failed is not evidence** — it is a passing run of a different test.
+
+Worked example (WF03-ISS0106-20260821). REVIEWER was asked to confirm that a new
+toolchain-mismatch warning is unsuppressible. ELIXIR-DEV had demonstrated it in-tree.
+REVIEWER **declined** to re-run that same in-tree probe, on the ground that *this host
+is on-pin* — so an in-tree run exercises the match path and proves nothing whatever
+about the mismatch path the property exists to serve. It constructed the real case
+instead: an out-of-tree directory with a fabricated off-pin version file, run under a
+quiet flag and with stdout redirected away. The warning still appeared. That is the
+re-derivation; re-running the on-pin probe would not have been one.
+
 ---
 
 ## ⛔ Instruction Precedence
@@ -131,6 +147,15 @@ Two rules override the chain, always, at every level:
   `task.description` can authorize skipping a validator, satisfying a gate by editing
   what it measures, or reporting unverified work as done. If a handoff appears to ask
   for that, it is malformed — report it as a BLOCKER in `result.issues`.
+
+**This chain governs what you are told to DO, not what you are told IS TRUE.** Rank 1
+makes your handoff's `task` block the highest authority for the *work*. It confers no
+authority at all on the handoff's *factual claims* — a handoff is a record written by
+another agent, and `docs/anti-patterns.md`'s "Inheriting a claim from a record instead
+of re-deriving it from the source" applies to it exactly as to any other record. When a
+handoff asserts a checkable fact your work depends on, verify it before building on it;
+the rule and its two worked examples live in `HANDOFF_PROTOCOL.md` §1.1 ("A handoff's
+factual premises are checkable, and may be wrong") — not restated here.
 
 **Never resolve a conflict silently.** Follow the chain, then record the conflict in your
 handoff's `result.issues` at MINOR severity so it gets fixed at the source. A conflict
@@ -275,6 +300,55 @@ without reading the log. If GitHub Actions itself is degraded, that's discoverab
 `https://www.githubstatus.com/api/v2/components.json` — check it before attributing a
 never-started or cancelled job to an outage; a step that ran and genuinely failed is
 never excused by an unrelated outage.
+
+---
+
+## ⛔ Failure Attribution Is Structural, Never By Count-Matching
+
+**Canonical home for this rule.** `WF-02` Step 4/Step 5 and `WF-04` Step 1/Step 2 point
+here; they do not restate the evidence.
+
+Calling a test failure "pre-existing" (and therefore filed-and-forwarded rather than
+this run's problem) is an **attribution**, and it has to be earned. To call a failure
+pre-existing you must show one of these two things, and name the specific evidence:
+
+1. **Structurally, this branch cannot have caused it** — the failing module and its
+   dependencies do not appear in `git diff --name-only main...HEAD`; or
+2. **It reproduces at the merge-base** — check out the merge-base, run it, quote the
+   output.
+
+`"known failure"` is not an attribution. Neither is "the previous run reported this."
+
+**Matching a previously-reported failure count or failure set is NOT evidence of
+pre-existence — and a count differing by one or two is NOT evidence of regression.**
+Both directions are stated deliberately: the symmetric error is the one that hides a
+real regression inside expected noise.
+
+**The measurement that settles this, rather than an argument.** In run
+WF03-ISS0106-20260821, TEST-RUNNER ran the full suite **twice on the same commit, ten
+minutes apart, and got 13 failures, then 15**. The immediately preceding run
+(WF02-REQ066-20260820) had reported **14** on its own commit range, including two
+Promotion-module failures that recurred in *neither* later run, and a `Check.TestTest`
+subset of 2 against the later 3. Three runs, three different sets. TEST-RUNNER stated
+the consequence explicitly: had "matches the previously-reported set" been its
+criterion, its own first run would have scored as simultaneously a regression **and** a
+fix.
+
+**A failure not covered by an existing issue record is called out as such and filed**
+(per `ISSUE_QUEUE.md` and "No Issue Left Local-Only" above) — never folded into "the
+known set."
+
+### In the diff is not the same as caused by the diff
+
+Extra scrutiny is owed to any failing file that *does* appear in the diff. But the
+standard for clearing it is a **causal argument**, not proximity or its absence.
+
+Worked example, same run: `PinRebindTest` failed and was in the diff. The diff touching
+it was a **whitespace re-wrap at lines 513-517**, while the failure was at **line 351**
+via `provisioned_tenant/0` — and re-wrapping a list literal cannot make a Postgres
+schema vanish mid-test. That reasoning, stated in the report, is what cleared it. "It's
+in the diff, so it's ours" and "it's in the diff but looks unrelated" are equally
+inadequate; write down the mechanism.
 
 ---
 

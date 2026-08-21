@@ -102,6 +102,35 @@ explicitly in the test spec (checked out the pre-fix commit, ran the new test, c
 it failed; then confirms it passes on the fix branch). A test that only ever ran
 against already-fixed code proves nothing about whether it actually covers the bug.
 
+### When the pre-fix failure is "the code under test does not exist"
+
+The fail-then-pass rule above is right for a fix to **existing** behaviour. It is
+**trivially satisfiable** when the fix *adds* a module: the pre-fix failure is then
+`UndefinedFunctionError` for every test in the file, which proves the module is new and
+nothing whatever about whether the tests discriminate a **correct** implementation from
+a **wrong** one. A suite can fail against a missing module and still be vacuous against
+a broken one.
+
+**So: where the pre-fix failure is non-existence, the fail-first requirement is
+satisfied ONLY by additionally MUTATING the shipped logic and recording which tests fail
+for each mutant.** The mutants must target the specific traps the fix exists to handle,
+not arbitrary breakage.
+
+**And TEST-DESIGN-VALIDATOR must independently APPLY at least one of the reported
+mutants and run it** — accepting the reported pass counts is copying a claim, not
+validating one (`core-directives.md`, "Every producing step has a validating step").
+
+Worked example — WF03-ISS0106-20260821's TEST-DESIGNER mutated three ways and recorded
+each: a naive full-string OTP comparison (**17/30 pass**), an unstripped version suffix
+(**24/30**), warnings routed to stdout (**11/30**). The coverage was thereby
+demonstrably *sensitive to each specific trap*, rather than merely present.
+TEST-DESIGN-VALIDATOR on that run applied two of the three itself and reproduced both
+counts exactly.
+
+**Isolation technique worth copying from that run:** the pre-fix side was run as `main`
+plus **only the new module** — nothing else from the branch. That proves the tests track
+*that module* rather than anything else the branch happens to change.
+
 ## Step 5 — Close the issue
 
 **Agent:** `ISSUE-FIXER`

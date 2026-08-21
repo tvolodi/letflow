@@ -364,6 +364,27 @@ Failures caused by this run's own implementation are reworked on this branch. Fa
 unrelated to this run's own acceptance criteria (pre-existing) are filed and forwarded
 per `ISSUE_QUEUE.md` — not fixed here, don't block this step's own PASS verdict.
 
+**How "pre-existing" is established — structurally, never by count-matching.** This step
+previously said the sentence above without saying how the attribution is made, and in
+practice agents made it by observing that the failure set matched a previous run's. That
+method is unsound. Rule and evidence: `core-directives.md`'s "Failure Attribution Is
+Structural, Never By Count-Matching" — read it; the operative test here is:
+
+```
+1. To call a failure pre-existing, name the evidence: either the failing module and its
+   dependencies do not appear in  git diff --name-only main...HEAD , or you reproduced
+   it at the merge-base and quoted the output. "Known failure" is not an attribution.
+2. Matching a previously-reported count/set is NOT evidence of pre-existence, and a
+   count differing by one or two is NOT evidence of regression. Both directions.
+   (Same commit, ten minutes apart, gave 13 then 15 in WF03-ISS0106-20260821 against a
+   prior run's 14 — three runs, three sets. See core-directives.md for the measurement.)
+3. A failure with no existing issue record is called out AS SUCH and filed — never
+   folded into "the known set".
+4. A failing file that IS in the diff gets extra scrutiny, and is cleared only by a
+   causal argument about mechanism, not by proximity (see the PinRebindTest worked
+   example in core-directives.md).
+```
+
 ## Step 5 — Release validation
 
 **Agent:** `RELEASE-VALIDATOR`
@@ -379,6 +400,12 @@ per `ISSUE_QUEUE.md` — not fixed here, don't block this step's own PASS verdic
 4. Complete the handoff: PASS → "Route to DOC-UPDATER" |
    FAIL → identify the blocking issue and name which agent it routes back to.
 ```
+
+**Your re-run will not reproduce Step 4's failure set, and that is expected.** Do not
+treat a differing count as either confirmation or regression, and do not accept Step 4's
+pre-existence attributions on its say-so — re-derive each one structurally, per
+`core-directives.md`'s "Failure Attribution Is Structural, Never By Count-Matching" (and
+per the producer/validator rule that already forbids trusting TEST-RUNNER's report).
 
 ## Step 6 — Documentation update
 

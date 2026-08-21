@@ -54,6 +54,18 @@ scheduled/requested full-suite validation.
 4. Complete the handoff: PASS/FAIL, artifacts_out: ["test/reports/..."].
 ```
 
+**Attribution rule for every failure this step reports** — the overview's branch (b),
+"pre-existing and unrelated," is an attribution that must be earned structurally, never
+by observing that the failure set matches a previous run's. Full rule and its evidence
+(the same-commit 13-then-15 vs. a prior run's 14 measurement, and the `PinRebindTest`
+in-the-diff-but-not-the-cause case): `core-directives.md`'s "Failure Attribution Is
+Structural, Never By Count-Matching". In short: name the evidence — the failing module
+and its dependencies absent from `git diff --name-only main...HEAD`, or a reproduction
+at the merge-base. A matching count is not evidence of pre-existence and a count off by
+one or two is not evidence of regression; a failure with no issue record is called out
+and filed, not folded into "the known set"; and a failing file that *is* in the diff is
+cleared only by a causal argument, not by proximity.
+
 ## Step 2 — Release validation
 
 **Agent:** `RELEASE-VALIDATOR`

@@ -152,6 +152,33 @@ the registry: no other active run may share `owned_modules` with this new run. I
 overlap: defer this run (log `DEFER_RUN`), dispatch once the conflicting run reaches
 Step Final PASS. After Step Final PASS, release the lock and check the deferred queue.
 
+### 7.1 Two ORCH-role sessions in the SAME checkout
+
+The `owned_modules` lock above coordinates runs that *share* one registry, and
+`HANDOFF_PROTOCOL.md` §4's ORCH-only registry rule was written against
+"multi-worktree/multi-host." Both assume the concurrent writers are an ORCH and its own
+subagents, or separate checkouts. **Neither covers two ORCH-role sessions running in the
+same working tree** — and that is not hypothetical. During `ADHOC-20260821-001`, session
+`WF01-TESTPARALLEL-20260821` was live in this same working tree and (a) wrote
+`handoffs/registry.json` between that session's read and its write — which surfaced only
+because the edit tooling rejected the stale read — and (b) committed on top of that
+session's commit and pushed both.
+
+**The ORCH-only rule does not by itself make the write safe. It removes the *subagents*
+from the race; it does not remove another ORCH-role session.** So:
+
+- **Re-read `handoffs/registry.json` immediately before writing it, every time.** Append
+  after whatever entry is now last. Never overwrite, reorder, or re-serialise another
+  session's entry, and re-validate that the file still parses afterwards.
+- **The same applies to `handoffs/orchestrator.log`:** append, and never assume the tail
+  you last read is still the tail.
+- **On push, when another session has unpushed commits on the same branch, push only
+  your own:** `git push origin <your-sha>:main`, rather than publishing work that
+  session may not consider ready. **If that push is rejected as non-fast-forward,
+  re-check before doing anything else** — it may simply mean the other session already
+  pushed and your commit is already on the remote, which is exactly what happened in the
+  incident above and needed no action at all. **Do not force.**
+
 ## 8. Stage gate enforcement
 
 Before routing WF-02 implementation handoffs for Stage N+1, ORCH verifies:

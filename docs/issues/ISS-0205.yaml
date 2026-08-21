@@ -1,0 +1,55 @@
+id: ISS-0205
+title: >
+  The two-commit sha-recording mechanism is authorised only by precedent and silence, and gets re-litigated every run
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0200-20260821
+discovered_at: "2026-08-21T10:18:29Z"
+severity: MINOR
+
+description: >
+  Filed by ORCH from a MINOR finding in
+  `handoffs/WF03-ISS0200-20260821/step-03b-reviewer-gate.json`'s `result.issues`. It did not gate
+  that run. Read that handoff for the finding as the REVIEWER stated it; summarised here only
+  enough to size the work, per the rule ISS-0198 added to HANDOFF_PROTOCOL.md section 2.
+
+  A commit sha cannot be recorded inside the commit it names, so an agent recording its content
+  commit into its own handoff's `git_evidence.commit_sha_list` must make a second,
+  sha-recording-only commit. Nothing in `docs/` says this is allowed. It is currently authorised by
+  absence of prohibition plus the `3b845b3` precedent on WF03-ISS0198-20260821, which
+  WF03-ISS0200-20260821 then repeated as `574c91d` and `bd9115a`.
+
+  COST, measured rather than asserted: the ISS-0198 gate spent effort ruling on it, and the
+  ISS-0200 gate spent effort ruling on it again, reaching the same conclusion independently. That
+  is the signature of a rule that exists in practice but not in writing.
+
+  THE BOUNDARY MATTERS AS MUCH AS THE PERMISSION. The nearest-looking provision is
+  HANDOFF_PROTOCOL.md section 4.1(b)'s `backfill_note` -- and borrowing it would be wrong twice
+  over: that exception is declared SPENT at HANDOFF_PROTOCOL.md:682 (it authorised one named
+  file), and it belongs to the `not_agent_attested` marker, so applying it to a live agent
+  recording its own sha asserts `not_agent_attested` falsely about a handoff its own agent did
+  attest. An agent reaching for the nearest provision could plausibly do exactly this.
+
+  Also in scope, since it is the same sentence: section 5's append-only rule. The ISS-0200 gate
+  ruled no conflict -- section 5 binds `orchestrator.log` and `registry.json` by name and forbids a
+  commit that REDUCES either, while a sha-recording commit fills an empty array and is additive.
+  Worth stating rather than re-deriving.
+
+  A NO-CHANGE outcome is legitimate if a written rule would say less than the precedent already
+  does. See ISS-0200 for the `no_defect` status that outcome would use.
+
+affected_files:
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+
+related:
+  - ISS-0200  # the run whose gate filed this, and the `no_defect` status a no-change outcome would use
+  - ISS-0198  # the earlier gate that ruled on the same question independently
+  - ISS-0191  # the linter that could check git_evidence completeness mechanically
+
+queue_task_id: 205
+github_issue: https://github.com/tvolodi/letflow/issues/396
+github_issue_note: >
+  register_task created both the queue task (205) and its mirrored GitHub issue (#396) in one
+  call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called separately. The
+  id comes from register_task's `issue_ref`, not from a directory scan. Ids 203-204 were consumed
+  by other registrations and carry no ISS- record here -- non-contiguity is expected.
+status: open

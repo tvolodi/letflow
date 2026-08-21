@@ -1610,6 +1610,31 @@
       "outcome_note": "Section 1.2's corpus figures now carry a dated as-of marker (2026-08-21, commit ef62d4b, identified from git log over the file rather than from prose), plus an explicit split between the two buckets that GROW with the corpus (files, gap==0 -- one per handoff written, expected and exactly reconcilable by enumerating created_at since the baseline) and the five that are a FIXED historical set (10 null, 14, 89, 25 negative, 20 round-minute -- closed records of defects nothing written under the current rule can join, so any movement is an ALARM rather than drift). 32 insertions, 0 deletions: no figure removed, the command still verbatim. The edit turned a passive count into a standing tripwire, which is why the gate had something falsifiable to check -- and it held: the REVIEWER's independent re-run returned 609/471 on the growing pair, reconciling by enumeration to exactly three named handoff files created since ef62d4b (the ISS-0204 gate's, this run's step 03, and its own), with the five fixed buckets unmoved at 10/14/89/25/20. Three MINOR findings filed as ISS-0208 (task 208, GH#399) and ISS-0209 (task 209, GH#400); the third was not a new issue but scope guidance for ISS-0206's eventual run, and was written into docs/issues/ISS-0206.yaml as a scoping_note rather than filed separately.",
       "schema_correction_note": "Step 03's handoff came back with result.status set to COMPLETED, which is not a legal value -- section 2's enum admits only PASS/FAIL/PARTIAL/BLOCKED/SKIPPED, and COMPLETED belongs to the top-level status field, which also (correctly) carried it. ORCH did NOT overwrite it: result is the receiving agent's own attested field per section 3's table, so the correction was routed back to the acting agent, which checked the enum on disk before making it and committed a one-line change (6084dae, 1 insertion 1 deletion, top-level status untouched). Recorded because this is the mirror image of the violation class section 2's Enforcement note already counts on disk, and because the routing -- not the fix -- is the part worth copying.",
       "overlap_note": "ISS-0206 (task 206, GH#397, still open and unclaimed) targets the SAME section 1.2 and was filed by the same gate. It is deliberately not batched into this run: ORCH may not select it, only the queue may hand it out, and combining them would mean working an unclaimed task. The Step 03 dispatch therefore carries an explicit constraint to leave ISS-0206's subject matter alone despite editing the same section. Expect ISS-0206 as a subsequent run against a section this run will have already changed."
+    },
+    {
+      "run_id": "WF03-ISS0200-20260821",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "issue_ids": [
+        "ISS-0200"
+      ],
+      "stage": null,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "docs/agents/shared/HANDOFF_PROTOCOL.md",
+        "docs/agents/protocols/ISSUE_QUEUE.md",
+        "docs/issues/ISS-0200.yaml",
+        "docs/issues/ISS-0191.yaml",
+        "docs/issues/ISS-0202.yaml"
+      ],
+      "lock_acquired_at": "2026-08-21T09:48:05Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 PASS (branch from 7322185). Step 0.5+1 COMPLETED PASS, commit 40a348f, verdict NO-CHANGE. Steps 2 and 4 recorded SKIPPED with reasons in orchestrator.log, not as stub handoffs. Step 03 dispatched to DOC-UPDATER. rework_count 0 of 3.",
+      "backfilled": false,
+      "queue_task_id": 200,
+      "queue_agent_id": "letflow2-orch",
+      "note": "WF-03 for ISS-0200 (GH#391, queue task 200), selected by get_next_task at 2026-08-21T09:48:05Z, agent_id letflow2-orch -- not by ORCH reading a file. ISS-0200 is the deliberately deferred other half of ISS-0198: that run fixed task.description only, and measured result.summary at 2.1x the dispatch side. Deliverable is a prose amendment (or a reasoned NO-CHANGE verdict, which the issue's own AC2 declares a legitimate resolution) to docs/agents/shared/HANDOFF_PROTOCOL.md section 2. Registry scanned before dispatch: the only entry with released_lock false is WF03-ISS0030-20260817, BLOCKED, whose owned_modules (test/letflow/tenant_provisioning_test.exs) do not overlap; ISS-0033 records that run as a resolved false positive superseded by its -resume entry. No overlap with the sibling worktree branch fix/ISS-0096-GH324-pack-resolution-enum either. Local main fast-forwarded cecda9a..7322185 before dispatch, picking up the sibling session's merged ISS-0198 run -- ISS-0200.yaml did not exist locally until that pull. Expected shape, per the WF03-ISS0198-20260821 precedent for a prose-amendment WF-03: Step 2 (CODE-DESIGNER) and Step 4 (regression test) recorded SKIPPED with stated reasons rather than as stub handoffs; producer/validator pair DOC-UPDATER/REVIEWER. Step 1 is asked to confirm or reject that shape rather than ORCH pre-deciding it. This run's own result.summary lengths are the subject matter, so they are being measured and will be reported at close as evidence for or against whatever the fix concludes. STEP 1 OUTCOME: NO-CHANGE -- result.summary measured to carry no redundancy defect distinct from justified length, 0 of 120 large summaries above 0.30 overlap on any of six candidate mechanisms. ISS-0200's own figures confirmed exactly and its generalisation corrected UPWARD (2.92x pooled over 605 files, not 2.1x). owned_modules extended at Step 03 to add docs/agents/protocols/ISSUE_QUEUE.md: its status vocabulary has no terminal state for an investigated-and-no-defect outcome, which blocks Step 5, so it is fixed in-run under Unblock-Everything rather than filed. ISS-0202 (queue 202, GH#393) filed rather than absorbed."
     }
   ]
 }

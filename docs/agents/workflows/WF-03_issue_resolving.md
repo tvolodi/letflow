@@ -156,19 +156,37 @@ acceptance criterion to revert-and-verify; its TEST-DESIGN-VALIDATOR reverted vi
 **Agent:** `ISSUE-FIXER`
 
 ```
-1. docs/issues/ISS-NNNN.yaml: status: resolved, resolved_in_run: <run-id>,
-   resolved_at: <real UTC timestamp>.
-2. If github_issue is set and gh is reachable: gh issue close <n> --comment
-   "Fixed in <run-id>. See docs/issues/ISS-NNNN.yaml and the regression test at
-   <test file path>."
+1. docs/issues/ISS-NNNN.yaml: status: <resolved | instrumented | no_defect>,
+   plus THAT status's own key pair and its own required evidence.
+   NOT every run ends in `resolved`. Each terminal value takes different keys:
+   `resolved` uses resolved_in_run:/resolved_at:; `instrumented` uses
+   resolved_in_run:/resolved_at: and a required superseded_by:; `no_defect` uses
+   verdict_in_run:/verdict_at:, never resolved_*. Check which one this run's outcome
+   actually supports against ISSUE_QUEUE.md BEFORE writing this line -- writing the
+   wrong one asserts something about reality that did not happen.
+2. If github_issue is set and gh is reachable: gh issue close <n> --comment "<...>".
+   The comment BRANCHES ON THE STATUS -- it is published to an external audience, so
+   it must claim only what the run actually did:
+     resolved     -> "Fixed in <run-id>. See docs/issues/ISS-NNNN.yaml and the
+                      regression test at <test file path>."
+     instrumented -> "Investigated in <run-id>; verified work shipped but the root
+                      cause is NOT removed. See docs/issues/ISS-NNNN.yaml and the
+                      successor issue <ISS-NNNN>."
+     no_defect    -> "Investigated and measured in <run-id>; no defect found and
+                      nothing was changed. No fix was made and there is no
+                      regression test. See docs/issues/ISS-NNNN.yaml and the
+                      diagnosis handoff at <handoff path>."
+   Never claim a fix or cite a regression test on a non-`resolved` close.
 3. Complete the handoff: PASS, next_action: "Route to Step Final".
 ```
 
 `resolved` is the normal terminal state, but not the only legal one: it asserts that a
 root cause was actually removed. A run that shipped verified work without removing the
-root cause uses `instrumented` (with a required `superseded_by:` pointer) instead — see
-`docs/agents/protocols/ISSUE_QUEUE.md`'s "Issue status vocabulary" for the definitions
-and the conditions; do not restate them here.
+root cause uses `instrumented` (with a required `superseded_by:` pointer) instead, and a
+run whose Step 1 reached a reasoned NO-CHANGE verdict — investigated and measured, no root
+cause there to remove — uses `no_defect`, which carries its own evidence bar and its own
+`verdict_in_run:`/`verdict_at:` keys. See `docs/agents/protocols/ISSUE_QUEUE.md`'s "Issue
+status vocabulary" for the definitions and the conditions; do not restate them here.
 
 **ORCH, immediately on this step's PASS** (same turn, before writing the `RUN_DONE` log
 line): if this issue has a real `letflow-queue` task (registered via `register_task`,

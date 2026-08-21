@@ -1,0 +1,70 @@
+{
+  "handoff_id": "req113-step-final",
+  "run_id": "WF02-REQ113-20260821",
+  "workflow_id": "WF-02",
+  "step": "final",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ113-20260821/step-final-git-merge.json",
+  "created_at": "2026-08-21T00:00:00Z",
+  "started_at": "2026-08-21T00:00:00Z",
+  "completed_at": "2026-08-21T00:00:00Z",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-113"],
+    "requirement_text": {
+      "REQ-113": "Parallel test-runner script (scripts/test_parallel.sh) via Elixir's native --partitions. Dev-pipeline tooling, not an R-Co port."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ113-20260821/step-05-release-validator-rerun.json",
+      "handoffs/WF02-REQ113-20260821/step-06-doc-updater.json"
+    ],
+    "artifacts_in": ["scripts/test_parallel.sh", "lib/letflow/design/req113-parallel-test-runner.md"],
+    "owned_modules": ["scripts/test_parallel.sh", "lib/letflow/design/req113-parallel-test-runner.md"]
+  },
+  "task": {
+    "description": "Step Final (git merge) per docs/agents/protocols/GIT_MERGE.md: rebase feature/WF02-REQ113-20260821 onto origin/main, push, open PR, merge to main, confirm landed.",
+    "acceptance_criteria": [
+      "git rebase origin/main exits 0 with no unresolved conflicts",
+      "git push origin feature/WF02-REQ113-20260821 exits 0",
+      "gh pr create exits 0 and produces a PR URL",
+      "gh pr merge --squash --delete-branch exits 0 (or PR shows state MERGED)",
+      "git branch --show-current is main after cleanup",
+      "git log --oneline -1 on main shows the merged change"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "Rebased feature/WF02-REQ113-20260821 onto origin/main cleanly (no conflicts, fast-forward-style rebase of 15 commits landing on top of 2feba1a), force-with-lease pushed the rebased branch (old tip 4d59554 -> new tip 1e1c0e4) to origin. PR creation and merge could NOT be performed: the `gh` CLI is not installed in this environment (`command not found`, checked PATH and common install locations) and no GITHUB_TOKEN / gh host config was available as a fallback for the GitHub API, so `gh pr create` / `gh pr merge` were never invoked. Per GIT_MERGE.md's documented fallback ('If gh is unavailable ... record git_evidence.pr_create_error, skip to step 9 with the branch left pushed but unmerged, and set result.status = PARTIAL'), local cleanup (step 9) was still run: checked out main, fast-forward-pulled origin/main (f424c08..2feba1a, unrelated ADHOC-20260821-002 changes merged by another run in the interim), and `git branch -d feature/WF02-REQ113-20260821` succeeded (git treated it as merged because the local branch tip matched its own remote-tracking ref) -- this deleted only the LOCAL branch ref; the remote branch origin/feature/WF02-REQ113-20260821 and its rebased tip commit 1e1c0e4 remain intact and fetchable, so no work is lost. main does NOT yet contain REQ-113's changes -- a PR against main still needs to be opened and merged once `gh` auth/binary is available, or via direct API/manual merge.",
+    "artifacts_out": [
+      "branch: origin/feature/WF02-REQ113-20260821 (rebased, tip 1e1c0e4, pushed, NOT merged, local ref deleted but remote ref intact)"
+    ],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "gh CLI unavailable in this environment (not on PATH, no ~/.config/gh/hosts.yml, no GITHUB_TOKEN env var) -- PR could not be created or merged. REQ-113's implementation is fully validated (RELEASE-VALIDATOR PASS, all 6 ACs) and pushed to origin/feature/WF02-REQ113-20260821 at commit 1e1c0e4, rebased cleanly onto current main (2feba1a), but is not yet on main."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ113-20260821",
+      "pre_rebase_tip": "4d59554",
+      "post_rebase_tip": "1e1c0e4",
+      "rebase_base": "2feba1a",
+      "rebase_conflicts": 0,
+      "push_status": "success",
+      "push_command": "git push --force-with-lease origin feature/WF02-REQ113-20260821",
+      "remote_branch": "origin/feature/WF02-REQ113-20260821",
+      "pr_url": null,
+      "pr_create_error": "gh: command not found (PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin; no ~/.config/gh/hosts.yml; no GITHUB_TOKEN env var found as fallback)",
+      "merge_commit_sha": null,
+      "local_branch_deleted": true,
+      "remote_branch_deleted": false,
+      "main_after_cleanup": "2feba1a (fast-forwarded, does not yet include REQ-113)"
+    },
+    "next_action": "ORCH: either (a) resume this step once `gh` is installed/authenticated in a session with network+auth, using origin/feature/WF02-REQ113-20260821 (tip 1e1c0e4, already rebased onto current main) to open and merge the PR -- no re-rebase needed unless main has moved again, or (b) merge via direct GitHub API call with a token if one becomes available. REQ-113 remains flipped to `done` in docs/requirements.yaml on this branch/commit but main will not reflect that until the merge completes; do not treat docs/requirements.yaml on main as authoritative for REQ-113 status until this PR lands."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

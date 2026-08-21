@@ -5764,3 +5764,51 @@ history:
       entry ("Attributing a failure to toolchain drift without ever running the pinned
       toolchain") records the transferable lesson: a line over the formatter's configured
       line_length is unformatted under every version, measurable with no toolchain at all.
+  - req: REQ-113
+    event: started
+    agent: ORCH
+    at: 2026-08-21T05:52:25Z
+    note: >
+      Picking up queue task 188 (GH#376), named directly by the project owner. set_lock
+      claimed it under agent_id ai-dala-orch (200, locked; was open/unlocked). REQ-113
+      was already drafted and REQ-VALIDATOR-passed on origin/main via run
+      WF01-TESTPARALLEL-20260821 (handoffs/WF01-TESTPARALLEL-20260821/) before this
+      session started, along with its dependent follow-on REQ-114 (wiring the script
+      into TEST-RUNNER/RELEASE-VALIDATOR, out of scope for this run). Routing through
+      WF-02 (Requirement Implementation) per the project owner's explicit instruction to
+      use the full producer/validator pipeline. Branch feature/WF02-REQ113-20260821
+      created off origin/main and pushed (Step 00). Status flipped pending -> in_progress
+      here.
+  - req: REQ-113
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-21T07:29:31Z
+    note: >
+      Implemented scripts/test_parallel.sh, wrapping Elixir's native `mix test
+      --partitions N` (N from an env override or `nproc`, never hardcoded): one
+      `MIX_ENV=test mix compile` up front to avoid the concurrent-compile race, N
+      background `MIX_TEST_PARTITION=<i> mix test --partitions N` processes against the
+      shared Postgres instance, then a wait and an aggregation step that parses and sums
+      each partition's own reported pass/fail/property counts rather than trusting exit
+      status alone, exiting non-zero if any partition failed. Mid-run rework: the
+      original parsing regex was written against an assumed ExUnit summary shape
+      ("N tests, M failures") that does not match this toolchain's real
+      `ExUnit.CLIFormatter` output -- actual lines are "Result: N[/M] passed (...)" plus
+      a separate "Failed: N tests" line when failures exist. CODE-DESIGNER reworked the
+      design (376bb81, df5b2a9) and ELIXIR-DEV reworked the script (dc93092, cf28a46) to
+      match the real output shape; RELEASE-VALIDATOR's rerun
+      (handoffs/WF02-REQ113-20260821/step-05-release-validator-rerun.json,
+      test/reports/report-20260821-WF02-REQ113-20260821-rerun.yaml) then PASSed all six
+      acceptance criteria at commit 6c55a33, including live verification of the
+      aggregation logic against both an injected failure and real non-injected
+      per-partition failures. Incidentally surfaced during that rerun and forwarded, not
+      fixed here: at N=8 (this host's real nproc) the script's own per-partition
+      Postgres pool (pool_size = schedulers_online()*2 = 16) times 8 partitions plus
+      Mix's build-directory lock serializing partition startup triggers Postgres
+      "too_many_connections" -- a real environment-capacity finding, not a REQ-113
+      defect (no AC requires collision-freedom at arbitrary N, and TEST_PARALLEL_N
+      already provides a safe override), filed as ISS-0194 (letflow-queue task 194,
+      GH#382). README.md's "Running it" section updated to mention
+      scripts/test_parallel.sh alongside the existing scripts/timed_test.sh entry; no
+      docs/migration/stage-N-*.md or docs/migration/decisions/*.md file was named by
+      this requirement's acceptance criteria, so step 4 of WF-02 Step 6 is N/A here.

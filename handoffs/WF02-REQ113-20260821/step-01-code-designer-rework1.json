@@ -1,0 +1,41 @@
+{
+  "handoff_id": "req113-step01-rework1",
+  "run_id": "WF02-REQ113-20260821",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ113-20260821/step-01-code-designer-rework1.json",
+  "created_at": "2026-08-21T06:37:30Z",
+  "started_at": "2026-08-21T06:37:30Z",
+  "completed_at": "2026-08-21T06:39:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-113"],
+    "artifacts_in": ["handoffs/WF02-REQ113-20260821/step-01b-code-design-validator.json"],
+    "owned_modules": ["lib/letflow/design/req113-parallel-test-runner.md"]
+  },
+  "task": {
+    "description": "Rework: replace section 4.3's literal executable shell command fenced block with a prose/parametrized description of the same invocation, per step-01b's single failed check (e). No other section to be touched.",
+    "acceptance_criteria": ["check (e) satisfied: no literal bash/sh code blocks remain in the document"]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Section 4.3's fenced literal command replaced with prose covering the same content (mix test launched as a background job, MIX_TEST_PARTITION set to the partition's 1-based index, --partitions N and --no-color flags, stdout+stderr redirected to the partition's log file). Diff is exactly this one hunk (7 insertions/6 deletions); nothing else in the document or in scripts/test_parallel.sh touched. Committed 99ff884 and pushed.",
+    "artifacts_out": ["lib/letflow/design/req113-parallel-test-runner.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ113-20260821",
+      "commit_sha_list": ["99ff884"],
+      "remote_branch": "origin/feature/WF02-REQ113-20260821",
+      "push_status": "success",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (re-gate)"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

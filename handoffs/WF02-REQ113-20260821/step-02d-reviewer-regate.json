@@ -1,0 +1,47 @@
+{
+  "handoff_id": "req113-step02d-regate",
+  "run_id": "WF02-REQ113-20260821",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ113-20260821/step-02d-reviewer-regate.json",
+  "created_at": "2026-08-21T07:40:00Z",
+  "started_at": "2026-08-21T07:40:00Z",
+  "completed_at": "2026-08-21T07:52:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-113"],
+    "artifacts_in": [
+      "scripts/test_parallel.sh@cf28a46",
+      "lib/letflow/design/req113-parallel-test-runner.md@df5b2a9",
+      "handoffs/WF02-REQ113-20260821/step-05-release-validator.json",
+      "handoffs/WF02-REQ113-20260821/step-01-code-designer-rework2.json",
+      "handoffs/WF02-REQ113-20260821/step-02a-elixir-dev-rework.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 2d re-gate after RELEASE-VALIDATOR FAIL (aggregation regex never matched real mix test output), CODE-DESIGNER rework2 (376bb81, re-passed df5b2a9), and ELIXIR-DEV's script rework (dc93092, cf28a46). Confirm the fix is a genuine correction matching the new design, not a new hack, doesn't loosen what counts as a pass, and stays within REQ-113's scope.",
+    "acceptance_criteria": ["fix matches reworked design exactly", "no gate-loosening (e.g. swallowing failures)", "no scope creep into REQ-114"]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Diffed dc93092/cf28a46 against design df5b2a9's section 4.5/4.6 line by line. Parsing now targets the real installed cli_formatter.ex shape confirmed by RELEASE-VALIDATOR's live runs: a 'Result: <passed>[/<total>] passed[ (<breakdown>)]' line (always present, three sub-cases matched: N/M, bare N, degenerate 0-tests) plus a separate 'Failed: <n> <type>[, ...]' line (present only on real failures, summed correctly for multi-type). The parenthetical breakdown extraction and the no-parenthetical-means-single-type attribution (tests_i=total_i, properties_i=0) match section 4.5's documented OQ-2b assumption verbatim, including its caveat. The four-way exit_i/failures_i cross-check (0/0 clean, 2/>0 consistent-failure, 2/0 anomaly-WARNING-only, anything-else WARNING+failed) is implemented exactly as section 4.5/2.2 specifies, and Step 5's exit code (`exit \"$any_failed\"`) is now purely a function of parsed failures_i and has-Result-line, not raw exit_i, matching section 4.6's corrected contract. This is a genuine correction, not a gate-loosening hack: the fix makes the script correctly read what mix test actually printed (a parsing-target fix), it does not widen what counts as a pass -- the one case that stays non-failing on a favorable read (exit 2, 0 parsed failures) still prints an explicit, non-swallowed WARNING and is traceable to design section 2.2/OQ-5's own source-level investigation of Mix's exit code path, not an arbitrary carve-out invented to make the script pass. Checked docs/anti-patterns.md's 'never satisfy a gate by editing what it measures' framing (cited at lines 302/387) -- this fix is the opposite pattern: it corrected the measurement instrument (the regex/parsing rule) to match verified reality, it did not touch requirements.yaml, the design's acceptance criteria, or add any --skip/--ignore-failures style bypass. Scope: `git show --stat dc93092` and `cf28a46` show only scripts/test_parallel.sh plus this run's own handoff JSON touched -- no workflow-doc, CI config, or REQ-114 wiring/aggregation-across-hosts work present. No Elixir/OTP code touched (N/A for supervision question). No new type-safety-representable invalid state introduced (still a bash script parsing text; the existing struct/type surface of the Elixir app is unaffected) so no docs/issues/ filing needed.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ113-20260821",
+      "commit_sha_list": ["dc93092", "cf28a46"],
+      "remote_branch": "origin/feature/WF02-REQ113-20260821",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (Step 3, re-run) then RELEASE-VALIDATOR (Step 5, re-run with real execution)"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

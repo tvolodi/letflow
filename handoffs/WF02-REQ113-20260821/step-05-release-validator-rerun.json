@@ -1,0 +1,57 @@
+{
+  "handoff_id": "req113-step05-rerun",
+  "run_id": "WF02-REQ113-20260821",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ113-20260821/step-05-release-validator-rerun.json",
+  "created_at": "2026-08-21T07:20:00Z",
+  "started_at": "2026-08-21T07:20:00Z",
+  "completed_at": "2026-08-21T07:27:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-113"],
+    "artifacts_in": [
+      "scripts/test_parallel.sh@cf28a46",
+      "lib/letflow/design/req113-parallel-test-runner.md@df5b2a9",
+      "handoffs/WF02-REQ113-20260821/step-05-release-validator.json",
+      "test/reports/report-20260821-WF02-REQ113-20260821.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 5 re-verification (rework_count 1) of REQ-113's AC1-AC6 following CODE-DESIGNER's design rework (376bb81/df5b2a9) and ELIXIR-DEV's script rework (dc93092/cf28a46) that fixed the parsing regex to match this toolchain's real 'Result: .../Failed: ...' mix test output shape, and re-passed Steps 2c/2d/3 (af8b6c4, 5360f7f, 6c55a33).",
+    "acceptance_criteria": [
+      "AC1: same combined pass/fail/property totals as single-process mix test, demonstrated side by side",
+      "AC2: aggregation actually sums/cross-checks each partition's reported counts, not just process exit",
+      "AC3: exits non-zero on any partition failure (demonstrated by injecting one), exits zero when all pass",
+      "AC4: N derived from nproc/platform equivalent or explicit configured default, never hardcoded",
+      "AC5: pre-compiles MIX_ENV=test exactly once before launching any partition",
+      "AC6: script lives under scripts/, not lib/ or test/"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Confirmed branch feature/WF02-REQ113-20260821, commit 6c55a33. Re-ran plain `mix test` baseline (exit 0, 'Result: 1274 passed (5 properties, 1269 tests)', 265.2s) and scripts/test_parallel.sh multiple times: TEST_PARALLEL_N=2 clean run matched the baseline exactly ('combined: 1269 tests, 5 properties, 0 failures (1274/1274 passed)', exit 0); TEST_PARALLEL_N=2 with a temporary injected failing assertion in test/letflow/api/error_test.exs (reverted via `git checkout --`, confirmed clean, never committed) correctly parsed 1 failure and exited 1, with the modified partition's own raw exit code 2 (this toolchain's real ExUnit-failure exit code) correctly not conflated with the script's own collapsed exit contract. A separate real N=8 (nproc-derived, no override) run independently confirmed the parser correctly sums genuine non-injected per-partition failures (verified against raw per-partition logs by hand: partition 6 'Failed: 1 test' -> parsed 1; partition 7 'Failed: 16 tests' -> parsed 16, both exact matches) -- this run also surfaced a real environment-capacity finding (Postgres 'too_many_connections' under 8-way full-pool concurrency, config/test.exs pool_size = schedulers_online()*2 = 16/partition, plus Mix's own build-directory lock serializing partition startup) that is NOT a script/parsing defect (the script correctly reported the real failures/aborts it saw) but does mean N=8/nproc is not currently collision-free on this host's Postgres config -- documented as a follow-up recommendation, not a REQ-113 AC failure, since no AC requires collision-freedom at arbitrary N. AC4 (env override + nproc derivation), AC5 (single pre-compile, ordering confirmed both by source and live run output), AC6 (path) verified directly against source and live runs and PASS.",
+    "artifacts_out": [
+      "test/reports/report-20260821-WF02-REQ113-20260821-rerun.yaml"
+    ],
+    "issues": [
+      "Environment-capacity finding (not an AC failure): running scripts/test_parallel.sh at N=8 (this host's real nproc) triggers Postgres 'too_many_connections' due to config/test.exs's per-partition pool_size (schedulers_online()*2=16) times 8 partitions, plus Mix's own build-lock serialization bunching connection acquisition into a burst. Recommend a follow-up requirement/decision record on pool_size vs max-partition-count; TEST_PARALLEL_N override already provides a safe workaround today."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ113-20260821",
+      "commit_sha_list": ["6c55a33"],
+      "remote_branch": "origin/feature/WF02-REQ113-20260821",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER (Step 6)"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

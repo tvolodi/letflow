@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+# Runs the suite as N parallel `mix test --partitions N` processes and
+# aggregates their real reported counts into one combined total.
+#
+# Why bash and not POSIX sh (a deliberate deviation from
+# scripts/timed_test.sh's `#!/bin/sh` precedent, not a silent
+# inconsistency): this script needs PID-indexed bookkeeping across N
+# background jobs (`pids[i]`, `exits[i]`, per-partition counts), which is
+# materially simpler with bash arrays than with POSIX-sh workarounds.
+# bash is present on every host this repo's dev/CI guide names (Linux,
+# per docs/guides/backend_developer_guide.md).
+#
+# What this does, in order (see lib/letflow/design/req113-parallel-test-
+# runner.md for the full design/rationale this implements):
+#   0. Derive N: $TEST_PARALLEL_N env override, else `nproc`, else
+#      `getconf _NPROCESSORS_ONLN`, else hard-fail (never a hardcoded
+#      fallback number).
+#   1. `MIX_ENV=test mix compile` exactly once, before any partition is
+#      launched, so no two partition processes ever race to compile the
+#      same _build/test artifacts.
+#   2. Launch N background `MIX_TEST_PARTITION=<i> mix test --partitions N
+#      --no-color "$@"` processes (1-based partition indices, as required
+#      by Mix's own MIX_TEST_PARTITION contract), each partition's
+#      stdout+stderr captured to its own log file under a `mktemp -d`
+#      temp directory.
+#   3. Wait for each one individually (`wait "$pid"` per PID, not a bare
+#      `wait`) so each partition's own exit code is recoverable.
+#   4. Parse each partition's log for its ExUnit summary -- a
+#      `"Result: <passed>[/<total>] passed [(<type breakdown>)]"` line
+#      (always present) plus an optional `"Failed: <n> <type>[, ...]"`
+#      line (present only when that partition had real failures) -- and
+#      sum properties/tests/failures across all partitions into one
+#      combined total, cross-checking each partition's parsed failure
+#      count against its process exit code (see design doc section 2.2:
+#      on this toolchain exit 2, not 1, is the normal "had ExUnit
+#      failures" code).
+#   5. The parsed failure count (not the raw per-partition exit code) is
+#      the authoritative success signal: exit 0 only if every partition
+#      has a Result: line and 0 parsed failures; exit 1 otherwise.
+#
+# Usage: scripts/test_parallel.sh [args passed through to every
+# partition's `mix test` invocation, e.g. a path filter or --seed]
+#
+# Overridable knob: TEST_PARALLEL_N=<positive integer> to force the
+# partition count instead of deriving it from nproc/getconf.
+
+set -u
+
+# --- Step 0: derive N (AC4 -- never hardcoded) ---------------------------
+
+n_source=""
+if [ -n "${TEST_PARALLEL_N:-}" ] && printf '%s' "$TEST_PARALLEL_N" | grep -Eq '^[1-9][0-9]*$'; then
+  N="$TEST_PARALLEL_N"
+  n_source="env override"
+elif command -v nproc >/dev/null 2>&1; then
+  N=$(nproc)
+  n_source="nproc"
+elif command -v getconf >/dev/null 2>&1 && getconf _NPROCESSORS_ONLN >/dev/null 2>&1; then
+  N=$(getconf _NPROCESSORS_ONLN)
+  n_source="getconf"
+else
+  echo "test_parallel: ERROR could not derive partition count (no TEST_PARALLEL_N, no nproc, no getconf)" >&2
+  exit 1
+fi
+
+if ! printf '%s' "$N" | grep -Eq '^[1-9][0-9]*$'; then
+  echo "test_parallel: ERROR derived N='$N' (source: $n_source) is not a positive integer" >&2
+  exit 1
+fi
+
+echo "test_parallel: N=$N (source: $n_source)"
+
+# --- Step 1: pre-compile MIX_ENV=test exactly once (AC5) -----------------
+
+echo "test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)"
+MIX_ENV=test mix compile
+compile_exit=$?
+if [ "$compile_exit" -ne 0 ]; then
+  echo "test_parallel: ERROR pre-compile failed with exit $compile_exit -- no partition launched" >&2
+  exit "$compile_exit"
+fi
+
+# --- Step 2: launch N background partitions -------------------------------
+
+tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/letflow_test_parallel.XXXXXX")
+echo "test_parallel: partition logs in $tmp_dir"
+
+declare -a pids
+declare -a exits
+declare -a properties
+declare -a tests_count
+declare -a failures
+
+i=1
+while [ "$i" -le "$N" ]; do
+  MIX_TEST_PARTITION="$i" mix test --partitions "$N" --no-color "$@" \
+    > "$tmp_dir/partition-$i.log" 2>&1 &
+  pids[$i]=$!
+  i=$((i + 1))
+done
+
+# --- Step 3: wait for each partition individually --------------------------
+
+i=1
+while [ "$i" -le "$N" ]; do
+  wait "${pids[$i]}"
+  exits[$i]=$?
+  i=$((i + 1))
+done
+
+# --- Step 4: aggregate each partition's real reported counts (AC1, AC2) ---
+#
+# Real ExUnit summary shape on this toolchain (design doc section 4.5, not
+# the "<N> tests, <M> failures" shape an earlier design iteration wrongly
+# assumed):
+#   Result: <passed> passed[/<total>][ (<type breakdown>)]
+#   Failed: <n> <type>[, <n> <type>...]     (only present when >0 failures)
+
+total_properties=0
+total_tests=0
+total_failures=0
+any_failed=0
+
+i=1
+while [ "$i" -le "$N" ]; do
+  log="$tmp_dir/partition-$i.log"
+  ex="${exits[$i]}"
+
+  result_line=$(grep -E '^Result: ' "$log" | tail -n 1)
+  failed_line=$(grep -E '^Failed: ' "$log" | tail -n 1)
+
+  has_result=1
+  if [ -z "$result_line" ]; then
+    has_result=0
+  fi
+
+  passed_i=0
+  total_i=0
+  if printf '%s' "$result_line" | grep -Eq '^Result: [0-9]+/[0-9]+ passed'; then
+    nums=$(printf '%s' "$result_line" | grep -oE '^Result: [0-9]+/[0-9]+' | grep -oE '[0-9]+')
+    passed_i=$(printf '%s\n' "$nums" | sed -n '1p')
+    total_i=$(printf '%s\n' "$nums" | sed -n '2p')
+  elif printf '%s' "$result_line" | grep -Eq '^Result: [0-9]+ passed'; then
+    passed_i=$(printf '%s' "$result_line" | grep -oE '^Result: [0-9]+' | grep -oE '[0-9]+')
+    total_i="$passed_i"
+  fi
+
+  # Parenthesized per-type breakdown, e.g. "(5 properties, 1269 tests)" or
+  # "(2/5 properties, 115/117 tests)". Absent entirely when only one test
+  # type ran in this partition.
+  paren=$(printf '%s' "$result_line" | grep -oE '\([^)]*\)')
+
+  p=0
+  t=0
+  if [ -n "$paren" ]; then
+    prop_entry=$(printf '%s' "$paren" | grep -oE '[0-9]+(/[0-9]+)? propert(y|ies)')
+    test_entry=$(printf '%s' "$paren" | grep -oE '[0-9]+(/[0-9]+)? tests?')
+    if [ -n "$prop_entry" ]; then
+      p=$(printf '%s' "$prop_entry" | grep -oE '[0-9]+' | tail -n 1)
+    fi
+    if [ -n "$test_entry" ]; then
+      t=$(printf '%s' "$test_entry" | grep -oE '[0-9]+' | tail -n 1)
+    fi
+  else
+    # No breakdown present -> exactly one type ran. Attributed to plain
+    # tests per design doc section 4.5's documented assumption (OQ-2b).
+    t="$total_i"
+  fi
+
+  f=0
+  if [ -n "$failed_line" ]; then
+    f=$(printf '%s' "$failed_line" | grep -oE '[0-9]+ (propert(y|ies)|tests?)' | grep -oE '^[0-9]+' | awk '{s+=$1} END{print s+0}')
+  fi
+
+  properties[$i]="$p"
+  tests_count[$i]="$t"
+  failures[$i]="$f"
+
+  total_properties=$((total_properties + p))
+  total_tests=$((total_tests + t))
+  total_failures=$((total_failures + f))
+
+  # Cross-check (design doc section 4.5/2.2): on this toolchain exit 2 is
+  # the normal "had ExUnit failures" code, not 1 -- and the parsed
+  # failure count, not the raw exit code, is authoritative for AC3.
+  partition_failed=0
+  if [ "$has_result" -eq 0 ]; then
+    echo "test_parallel: WARNING partition $i has no Result: line in its log (compile/config/crash abort), exit=$ex" >&2
+    partition_failed=1
+  elif [ "$ex" -eq 0 ] && [ "$f" -eq 0 ]; then
+    : # consistent clean pass, no warning
+  elif [ "$ex" -eq 2 ] && [ "$f" -gt 0 ]; then
+    : # consistent failure, no warning
+  elif [ "$ex" -eq 2 ] && [ "$f" -eq 0 ]; then
+    echo "test_parallel: WARNING partition $i exit 2 but 0 parsed failures (see design section 2.2/OQ-5)" >&2
+  else
+    echo "test_parallel: WARNING partition $i exit code / parsed count mismatch (exit=$ex, failures=$f)" >&2
+    partition_failed=1
+  fi
+
+  if [ "$f" -gt 0 ]; then
+    partition_failed=1
+  fi
+  if [ "$partition_failed" -eq 1 ]; then
+    any_failed=1
+  fi
+
+  plural_p="properties"
+  [ "$p" -eq 1 ] && plural_p="property"
+  echo "partition $i: $t tests, $p $plural_p, $f failures, exit $ex"
+
+  i=$((i + 1))
+done
+
+total_passed=$((total_properties + total_tests - total_failures))
+total_all=$((total_properties + total_tests))
+
+echo "---"
+echo "combined: $total_tests tests, $total_properties properties, $total_failures failures ($total_passed/$total_all passed)"
+
+# --- Step 5: exit-code contract (AC3) --------------------------------------
+#
+# Authoritative signal is the parsed failure count (any_failed, set above
+# from failures_i and the has-Result-line check), not raw per-partition
+# exit codes -- see design doc section 4.6.
+
+exit "$any_failed"

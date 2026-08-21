@@ -1,0 +1,47 @@
+{
+  "handoff_id": "req073-step02a-rework1",
+  "run_id": "WF02-REQ073-20260822",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ073-20260822/step-02a-elixir-dev-rework1.json",
+  "created_at": "2026-08-22T00:30:00Z",
+  "started_at": "2026-08-22T00:25:00Z",
+  "completed_at": "2026-08-22T00:35:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-073"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ073-20260822/step-05-release-validator.json"
+    ],
+    "artifacts_in": ["test/letflow/routers/identity_test.exs@06fb22e"],
+    "owned_modules": ["test/letflow/routers/identity_test.exs"],
+    "branch_name": "feature/WF02-REQ073-20260822"
+  },
+  "task": {
+    "description": "Fix the sole blocking finding from RELEASE-VALIDATOR's Step 5 FAIL (commit 06fb22e): AC5 ('exactly an explicit allowlist of fields, demonstrated by a test asserting the full key set of the response body') was only satisfied by presence + named-exclusion checks, not a full key-set assertion. Add the missing assertion; no other AC was in question (all other 5 confirmed MET independently, including two separate AC2 mutation probes).",
+    "acceptance_criteria": [
+      "AC5: response allowlist -- exactly 8 keys, full key-set assertion in the test, not just presence checks (INV-2)"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Added a full key-set equality assertion (`Map.keys(body) |> Enum.sort() == [\"auth_source\", \"display_name\", \"email\", \"id\", \"inserted_at\", \"status\", \"updated_at\", \"username\"]`) to every AC1 end-to-end test in test/letflow/routers/identity_test.exs whose response body goes through user_map/1 -- create (line ~79), list (asserted per-item over body[\"items\"]), get, patch, and status-update. Followed this codebase's existing full-key-set-assertion convention from test/letflow/api/error_test.exs:153-157 (`Error.conflict(\"x\") |> decode() |> Map.keys() |> Enum.sort()`). Confirmed the expected 8-key set directly against lib/letflow/routers/identity.ex's user_map/1 (lines 322-333) before writing the assertions, rather than trusting the handoff's suggested list. No other test, no application code, no design doc touched -- git diff confined to this one file. Ran `mix test test/letflow/routers/identity_test.exs` myself: 23 tests, 0 failures (matches the pre-rework count; no new tests added, existing ones strengthened).",
+    "artifacts_out": ["test/letflow/routers/identity_test.exs"],
+    "issues": [],
+    "test_run_evidence": {
+      "command": "mix test test/letflow/routers/identity_test.exs",
+      "result": "23 tests, 0 failures"
+    },
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ073-20260822",
+      "commit_sha": "PENDING_FILL_AFTER_COMMIT"
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b re-review) to confirm the strengthened assertions satisfy AC5, then TEST-RUNNER (Step 4) and RELEASE-VALIDATOR (Step 5) again before DOC-UPDATER."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

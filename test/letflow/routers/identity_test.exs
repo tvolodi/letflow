@@ -105,6 +105,19 @@ defmodule Letflow.Routers.IdentityTest do
       refute Map.has_key?(body, "external_id")
       refute Map.has_key?(body, "external_realm")
 
+      # AC5 — full key-set assertion (not just presence/exclusion checks):
+      # a stray 9th key under any other name would be caught here.
+      assert Map.keys(body) |> Enum.sort() == [
+               "auth_source",
+               "display_name",
+               "email",
+               "id",
+               "inserted_at",
+               "status",
+               "updated_at",
+               "username"
+             ]
+
       assert Repo.get_by!(User, [username: "alice"], prefix: tenant.schema_name)
     end
 
@@ -123,6 +136,20 @@ defmodule Letflow.Routers.IdentityTest do
       assert Map.has_key?(body, "count")
       assert body["count"] == length(body["items"])
       assert Enum.any?(body["items"], &(&1["username"] == "bob"))
+
+      # AC5 — full key-set assertion on each item's user_map/1 shape.
+      for item <- body["items"] do
+        assert Map.keys(item) |> Enum.sort() == [
+                 "auth_source",
+                 "display_name",
+                 "email",
+                 "id",
+                 "inserted_at",
+                 "status",
+                 "updated_at",
+                 "username"
+               ]
+      end
     end
 
     test "GET /users/:id returns 200 with the user", %{tenant: tenant} do
@@ -136,6 +163,18 @@ defmodule Letflow.Routers.IdentityTest do
       body = Jason.decode!(conn.resp_body)
       assert body["id"] == user.id
       assert body["username"] == "carol"
+
+      # AC5 — full key-set assertion.
+      assert Map.keys(body) |> Enum.sort() == [
+               "auth_source",
+               "display_name",
+               "email",
+               "id",
+               "inserted_at",
+               "status",
+               "updated_at",
+               "username"
+             ]
     end
 
     test "PATCH /users/:id returns the updated user", %{tenant: tenant} do
@@ -151,6 +190,18 @@ defmodule Letflow.Routers.IdentityTest do
       assert conn.status == 200
       body = Jason.decode!(conn.resp_body)
       assert body["display_name"] == "Dave Updated"
+
+      # AC5 — full key-set assertion.
+      assert Map.keys(body) |> Enum.sort() == [
+               "auth_source",
+               "display_name",
+               "email",
+               "id",
+               "inserted_at",
+               "status",
+               "updated_at",
+               "username"
+             ]
 
       assert Repo.get!(User, user.id, prefix: tenant.schema_name).display_name == "Dave Updated"
     end
@@ -168,6 +219,18 @@ defmodule Letflow.Routers.IdentityTest do
       assert conn.status == 200
       body = Jason.decode!(conn.resp_body)
       assert body["status"] == "inactive"
+
+      # AC5 — full key-set assertion.
+      assert Map.keys(body) |> Enum.sort() == [
+               "auth_source",
+               "display_name",
+               "email",
+               "id",
+               "inserted_at",
+               "status",
+               "updated_at",
+               "username"
+             ]
 
       assert Repo.get!(User, user.id, prefix: tenant.schema_name).status == :inactive
     end

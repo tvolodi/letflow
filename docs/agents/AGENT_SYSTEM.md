@@ -43,7 +43,7 @@ producer/validator table — restated here as the roster's organizing shape.
 | `TEST-RUNNER` | Test Runner | Executes `mix test`, diagnoses failures, produces a structured test report | `test/reports/`, `handoffs/` |
 | `ISSUE-FIXER` | Issue Fixer | Root-cause diagnosis for a queued issue (WF-03 Step 0.5/1). Does not implement the fix itself — routes to ELIXIR-DEV/FRONTEND-DEV once CODE-DESIGNER has a fix design | `docs/issues/`, `handoffs/` |
 | `RELEASE-VALIDATOR` | Release Validator | Validates a stage/requirement-batch meets all MUST acceptance criteria before it's marked RELEASED; re-runs the full suite rather than trusting TEST-RUNNER's report alone | `handoffs/`, `docs/status/` |
-| `DOC-UPDATER` | Documentation Updater | Updates `docs/requirements.yaml` status, `docs/status/requirement_status.yaml`, `README.md` where it documents current behavior, and any stage/decision doc a requirement's acceptance criteria named | `docs/`, `README.md`, `handoffs/` |
+| `DOC-UPDATER` | Documentation Updater | Updates `docs/requirements.yaml` status, `docs/status/requirement_status*.yaml` (the index and all volumes), `README.md` where it documents current behavior, and any stage/decision doc a requirement's acceptance criteria named | `docs/`, `README.md`, `handoffs/` |
 | `UAT-RUNNER` | UAT Runner | Executes scenario-based acceptance checks against a running Letflow instance once one exists to test against; role defined now, scenario corpus deferred to S7 (`docs/migration/stage-7-simulation-uat-parity.md`) | `test/uat-reports/`, `handoffs/` |
 
 **Deliberately not reproduced yet:** R-Co's `BO-SWIFTROUTE`/`BO-VORTEX`/`BO-MERIDIAN`
@@ -103,7 +103,8 @@ matters; forcing it onto a one-line typo fix would be ceremony without benefit.
 `docs/requirements.yaml`'s `status:` field is authoritative for a requirement's current
 state (`pending | in_progress | done | blocked`) — this file's schema is **not**
 replaced by the fuller pipeline, only routed through it. `docs/status/requirement_status.yaml`
-remains the append-only event history (started/done/blocked), same as before.
+remains the append-only event history (`started`/`done`/`blocked`/`cancelled`/`revised`/`verified`), kept in bounded volumes behind
+`docs/status/requirement_status.index.yaml`.
 
 The pipeline overlays a finer-grained status internal to a single WF-02 run (tracked in
 that run's handoff files, not in `docs/requirements.yaml` itself):
@@ -133,7 +134,7 @@ requirement's file-level status stays exactly as terse as it's always been.
 | UAT reports | `test/uat-reports/` | `UAT-RUNNER` | `.yaml` |
 | Handoff files | `handoffs/` | all (via ORCH) | `.json` (exception) |
 | Requirement queue | `docs/requirements.yaml` | `ORCH`/`DOC-UPDATER` (status field) | `.yaml` (pre-existing schema, unchanged) |
-| Requirement event history | `docs/status/requirement_status.yaml` | `DOC-UPDATER` | `.yaml` |
+| Requirement event history | `docs/status/requirement_status*.yaml` (index + all volumes) | `DOC-UPDATER` | `.yaml` |
 | Issue registry | `docs/issues/` | `ORCH` (queue calls) / any agent (finding content), via ISSUE_QUEUE protocol | `.yaml` (`queue_task_id` cross-refs `letflow-queue`, added 2026-08-20) |
 | Release decisions | `docs/status/` | `RELEASE-VALIDATOR` | `.yaml` |
 | Migration decision records | `docs/migration/decisions/` | any agent, REVIEWER sign-off | `.md` |

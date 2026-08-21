@@ -197,7 +197,10 @@ the check is targeted, and read in full only when the check genuinely is global.
 
 The same rule generalizes: prefer a targeted read over a whole-file read for any file
 above a few hundred lines. `git diff main...HEAD` beats reading every changed file;
-`grep -n` beats reading a 3,000-line YAML to find one key.
+`grep -n` beats reading a 3,000-line YAML to find one key. The one deliberate exception
+is the **current** requirement-status volume, which you must read in full before
+appending to it — and which is deliberately kept small enough that you can. See
+§"Bookkeeping Is Not Optional" item 3.
 
 **The same anti-duplication principle governs the writing side — what a handoff restates
 from files it already lists in its own `context.artifacts_in`.** That rule is stated once,
@@ -405,7 +408,7 @@ inadequate; write down the mechanism.
 | Design artefacts | `lib/letflow/design/` |
 | Test specs | `test/specs/` |
 | Test run reports | `test/reports/` |
-| Requirement status history | `docs/status/requirement_status.yaml` |
+| Requirement status history | `docs/status/requirement_status.index.yaml` (names the current volume) |
 | Release decisions | `docs/status/` |
 | Issue registry | `docs/issues/` |
 | Scratch (one-off scripts, debug dumps, logs) | `scratch/` (git-ignored) |
@@ -443,10 +446,22 @@ date -u +"%Y-%m-%dT%H:%M:%SZ"
 wearing a `Z` suffix — always call `.ToUniversalTime()` first. `completed_at` must never
 precede `started_at`.
 
-**3. `docs/status/requirement_status.yaml` is append-only.** Read the existing file in
-full before touching it, preserve its established schema, append — never rewrite. This
-file's own header says so, and an agent has gotten this wrong before (see
+**3. The requirement run history is append-only, and it is kept in bounded volumes.**
+Start at `docs/status/requirement_status.index.yaml`; it names the current volume. Read
+**that volume in full** before appending, preserve its schema, append — never rewrite,
+reorder or delete an entry, in any volume. An agent has gotten this wrong before (see
 `docs/anti-patterns.md`).
+
+**Precedence, so this is not ambiguous:** "Load Scoped Context, Not Whole Files" above is
+the general rule and it governs *closed* volumes and every other large file — read those
+with a targeted read only: the Read tool with `offset`/`limit`, or `grep`/`sed`/`awk` under
+Bash, or `Select-String`/`Get-Content -TotalCount` under PowerShell (this repo runs both
+shells and `grep` does not exist in PowerShell — see the pairs at `:156-161` above). The
+**current** volume is the single exception, and it is an exception only because the roll
+rule (`roll_rule:` in the index — that file holds the authoritative ceilings) keeps it
+small enough that the full read is actually executable. If a full read of the current
+volume is ever refused or truncated, that is a defect in the roll rule: stop and file it
+(ISS-0119 is the precedent), do not substitute a partial read and append anyway.
 
 ---
 

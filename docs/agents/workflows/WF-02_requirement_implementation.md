@@ -103,7 +103,9 @@
 
 ORCH supplies `context.branch_name = "feature/<run-id>"`. On PASS: ORCH flips the
 requirement(s)' status to `in_progress` in `docs/requirements.yaml` and appends a
-`started` event to `docs/status/requirement_status.yaml` (real UTC timestamp).
+`started` event to the current run-history volume (via
+`docs/status/requirement_status.index.yaml`) — append, do not rewrite prior entries
+(real UTC timestamp).
 
 **ORCH also extracts the requirement text once, here, for the whole run.** Copy each
 in-scope requirement's full `description` from `docs/requirements.yaml` into
@@ -434,8 +436,9 @@ per the producer/validator rule that already forbids trusting TEST-RUNNER's repo
 ```
 1. For each requirement_id: flip status "pending"/"in_progress" → "done" in
    docs/requirements.yaml.
-2. Append a "done" event to docs/status/requirement_status.yaml (real UTC timestamp,
-   append — do not rewrite prior entries).
+2. Append a "done" event to the current run-history volume (via
+   docs/status/requirement_status.index.yaml) — append, do not rewrite prior entries
+   (real UTC timestamp).
 3. Update README.md if the change altered documented current behavior (e.g. the ASCII
    state diagram, the "Running it" section).
 4. If the requirement named a docs/migration/stage-N-*.md or docs/migration/decisions/

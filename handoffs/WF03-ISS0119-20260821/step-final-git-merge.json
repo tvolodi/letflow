@@ -1,0 +1,79 @@
+{
+  "handoff_id": "8c4e2f19-6b70-4d53-ae91-0f3d5a8c7261",
+  "run_id": "WF03-ISS0119-20260821",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0119-20260821/step-final-git-merge.json",
+  "created_at": "2026-08-21T09:09:34Z",
+  "started_at": "2026-08-21T09:09:34Z",
+  "completed_at": "2026-08-21T09:16:11Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "5d21b7ae-9c34-4f08-b6d2-71ea3c9d8f55"
+    ],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_MERGE.md",
+      "handoffs/WF03-ISS0119-20260821/step-04c-test-runner.json",
+      "handoffs/WF03-ISS0119-20260821/step-06-doc-updater.json"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0119-20260821",
+    "issue_ids": [
+      "ISS-0119"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step Final (git merge) for run WF03-ISS0119-20260821. Execute `docs/agents/protocols/GIT_MERGE.md`. All gates are green and the merge is pre-authorized -- do not pause to ask.\n\n=== FIRST: STAGE ORCH'S OUTSTANDING BOOKKEEPING, by explicit path ===\n\nThree files ORCH wrote are uncommitted and MUST go into your step-2 commit:\n  - `handoffs/orchestrator.log` (modified -- APPEND-ONLY, see below)\n  - `docs/issues/ISS-0193.yaml` (new, untracked)\n  - `docs/issues/ISS-0199.yaml` (new, untracked)\n  - `handoffs/registry.json` (modified -- APPEND-ONLY; ORCH just flipped this run's entry to COMPLETED / released_lock true)\n  - this handoff file\nStage each by explicit path. NEVER `git add -A`.\n\n=== MAIN HAS MOVED -- A SIBLING RUN MERGED WHILE THIS ONE WAS IN FLIGHT ===\n\n`origin/main` is ahead by at least 5 commits from `WF03-ISS0117-20260821`, a sibling session's run (572cc7a, 47c4c39, 6c7698a, c6ec3c1, cf50350 and possibly more by the time you fetch). That run edited pipeline documentation -- HANDOFF_PROTOCOL.md §4.1 gained a recovery rule -- and it filed its own issues (ISS-0191, ISS-0192, ISS-0198). EXPECT CONFLICTS and treat them as routine, per docs/anti-patterns.md's own guidance that a rebase-time collision in this repo is expected rather than exceptional.\n\nHIGH-PROBABILITY CONFLICT SITES, and how each must be resolved:\n  - `handoffs/orchestrator.log` -- APPEND-ONLY. Both runs appended. The correct resolution KEEPS BOTH SIDES' lines. This file must never shrink; a resolution that drops either side's entries is a defect, not a cleanup.\n  - `handoffs/registry.json` -- APPEND-ONLY. Both runs added a run entry. KEEP BOTH ENTRIES. Verify the resulting JSON parses (`jq -e '.runs | length'`) and that the count went UP, not sideways.\n  - `docs/anti-patterns.md` -- both runs likely appended entries. KEEP BOTH.\n  - `docs/agents/shared/HANDOFF_PROTOCOL.md`, `docs/agents/instructions/core-directives.md`, `docs/agents/AGENT_SYSTEM.md` -- the sibling run edited pipeline docs; this run edited the same files for the volume-layout repointing. Compose both intents; do not pick a side.\n  - `docs/issues/` -- NO collision expected. ISS numbers here are now derived from letflow-queue task ids (ISS-0193 = task 193, ISS-0199 = task 199), and the sibling's are ISS-0191/0192/0198, also queue-derived. That is precisely the structural fix that ends this collision class -- but VERIFY rather than assume: if a same-path add/add appears, renumber YOUR side and say so.\n\nCONFLICT RULES THAT HAVE BITTEN THIS PROJECT BEFORE -- read GIT_MERGE.md's conflict section, these are its hard-won points:\n  - `--ours`/`--theirs` are INVERTED during `git rebase` versus `git merge`. Do not use either from merge-trained habit. Read the actual conflict markers, or `git show :2:<path>` / `git show :3:<path>`, and hand-resolve.\n  - After resolving, INDEPENDENTLY RE-READ the resulting file before writing any claim about what was kept. A prior run's log claimed a resolution it had not actually made.\n  - Watch for SEMANTIC conflicts with no textual marker -- both sides may have rewritten the same guidance in incompatible ways.\n  - CRLF TRAP: this repo is CRLF on disk, LF in git. A raw diff can report every line changed when nothing changed. Verify content with `diff --strip-trailing-cr` before concluding a file was rewritten.\n\n=== THE ONE FILE THAT MUST SURVIVE BYTE-IDENTICAL ===\n\n`docs/status/requirement_status.yaml` is CLOSED, FROZEN volume 1, pinned by a SHA-256 over its first 5,766 lines. After the rebase and before the PR, re-verify: `head -n 5766 docs/status/requirement_status.yaml | tr -d '\\r' | sha256sum` must equal `5a1a64ab0b999da3fd86be90109ecee46b9d538d9e9945c0d39fddb10075a804`. If it does not, STOP and report -- do not 'fix' it by updating the digest, which would be satisfying a gate by editing what it measures.\n\n=== VERIFY, THEN MERGE ===\n\nAfter the rebase, run `mix test test/docs/requirement_status_invariants_test.exs` and confirm 13 passed. That file is fast (~2s), has no DB dependency, and is the direct check that the rebase preserved this run's own work.\n\nDO NOT re-run the full suite as a merge condition. TEST-RUNNER established at Step 4c, on 2 branch runs vs 2 main runs with DB state normalized identically on both sides, that this branch adds NO failure main does not already have. `mix letflow.check` is RED ON BOTH SIDES for the pre-existing ISS-0109/ISS-0116 tenant-schema class (ISS-0109 is `instrumented`, successor ISS-0116 open). Per that finding, STEP FINAL PROCEEDS ON 'ADDS NO NEW FAILURE', NOT ON 'THE GATE IS GREEN' -- state that distinction explicitly in the PR body rather than implying CI is clean. If the rebase brings in sibling commits that change the failure picture, report it; do not silently absorb it.\n\n=== PR AND MERGE ===\n\nUse `--title \"fix: bound the requirement run history into readable volumes [WF03-ISS0119-20260821]\"`. In the body cover: what shipped (freeze-and-roll volumes + index + executable append header + the first mechanical enforcement of the append-only rule via a SHA-256 pin); that ISS-0119 is `resolved` and GH#373 closed; the honest test position above; and the three issues this run filed rather than absorbed (ISS-0193/GH#381, ISS-0199/GH#389, plus evidence appended to ISS-0116 and ISS-0112). Then `gh pr merge --squash --delete-branch`.\n\nWORKTREE NOTE: `git worktree list` shows a sibling at letflow-wt2 on another branch. THIS checkout holds local `main`, so GIT_MERGE.md's normal steps 8-9 apply, NOT the worktree variant. Do not touch the sibling worktree.\n\nFinally: `git checkout main`, `git pull --ff-only origin main`, delete the local feature branch, and verify -- `git branch --show-current` is `main`, `git log --oneline -1` shows the squash-merge, `git status` is clean.",
+    "acceptance_criteria": [
+      "All four ORCH bookkeeping files plus this handoff were staged by explicit path and committed; git add -A was never used",
+      "The rebase onto origin/main completed, and every conflict resolution is described with what was kept from each side",
+      "handoffs/orchestrator.log and handoffs/registry.json both GREW or stayed equal -- neither shrank -- and registry.json parses with a run count that went up",
+      "docs/status/requirement_status.yaml's frozen-prefix digest still equals 5a1a64ab...804, verified after the rebase and quoted",
+      "mix test test/docs/requirement_status_invariants_test.exs reports 13 passed after the rebase",
+      "The PR body states the merge proceeds on 'adds no new failure' rather than on a green gate, and names the pre-existing red class",
+      "gh pr merge --squash --delete-branch exited 0, or a PARTIAL was correctly reported if gh was unavailable",
+      "Local cleanup done: on main, ff-only pull succeeded, feature branch deleted, working tree clean",
+      "No ISS-number collision occurred, or if one did, this run's side was renumbered and the renumbering is recorded"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "GIT_MERGE.md executed end to end; PR #390 squash-merged to main as 0f5af46, branch deleted local and remote. STEP 2: the four ORCH bookkeeping files (handoffs/orchestrator.log, handoffs/registry.json, docs/issues/ISS-0193.yaml, docs/issues/ISS-0199.yaml) plus this handoff were staged by explicit path -- git add -A was never used -- and committed as 52c9fc0 (pre-rebase). STEP 5 REBASE: main had moved 29 commits, not 5. Four conflicts, ALL resolved by keeping both sides; --ours/--theirs were never used, each hunk was hand-resolved from git show :2:/:3: and the marker text. (1) handoffs/orchestrator.log -- main's 16 appended lines and this run's 1 both kept; md5 of each side's block verified present in the result. Final 1007 lines vs 977 base / 993 main / 991 branch; diff vs origin/main is the single hunk '993a994,1007', i.e. a pure tail append with nothing of main's dropped. (2) handoffs/registry.json -- main's 4 new run entries and this run's WF03-ISS0119-20260821 entry both kept, rejoined with the '},{' separator the markers had swallowed. jq -e '.runs|length' = 64 (59 base + 4 + 1), parses; a scripted set-difference confirms ZERO main run_ids missing and exactly one added. Count went UP. (3) docs/anti-patterns.md -- both sides' entries kept; 1158 lines vs 1088 on main; diff vs origin/main shows exactly two hunks, this run's intended volume-index repointing edit at 79-85 and its 68-line append. Nothing of main's 181 added lines lost. (4) docs/status/requirement_status.v2.yaml -- both sides' entries kept; 6 entries, chronological, yaml.safe_load parses. THE SEMANTIC CONFLICT: main had appended 106 lines of REQ-113/REQ-114 status events to volume 1 AFTER the line this run froze it at. Neither side was presumptively right -- taking main's would have broken the freeze, taking this run's would have destroyed real history. Resolution composed both intents: volume 1 was left byte-identical to this branch's frozen version (verified by a full diff against git show :3:), and main's 106 event lines were MOVED INTO VOLUME 2, which is exactly what the new roll rule prescribes. FROZEN DIGEST: re-verified after the rebase, after the push, and again on main post-merge -- head -n 5766 | tr -d '\r' | sha256sum = 5a1a64ab0b999da3fd86be90109ecee46b9d538d9e9945c0d39fddb10075a804, equal to the pin. Never touched, never 'fixed'. ISS COLLISION: none. git diff --diff-filter=A origin/main HEAD -- docs/issues/ shows only ISS-0193 and ISS-0199 added; main's ISS-0191/0192/0198 survive untouched. The queue-task-id-derived numbering held, verified rather than assumed; no renumbering was needed. TESTS: mix test test/docs/requirement_status_invariants_test.exs -> 'Result: 13 passed' in 0.4s after the rebase. mix compile --warnings-as-errors clean. The full suite was NOT re-run as a merge condition, per the dispatch: TEST-RUNNER established at Step 4c that this branch adds no failure main lacks, and mix letflow.check is red on BOTH sides for the pre-existing ISS-0109/ISS-0116 tenant-schema class. The PR body states that distinction explicitly under a heading reading 'Test position -- please read, this does not merge on a green gate'. The sibling commits do NOT change the failure picture: git diff be74d62..origin/main over lib/, test/, priv/, config/, mix.exs returns only design markdown and test-report YAML -- no compilable code changed. STEPS 8-9 (normal variant, not the worktree variant -- this checkout holds local main; the sibling worktree at letflow-wt2 was not touched): gh pr merge --squash --delete-branch exited 0, gh pr view confirms state MERGED, mergeCommit 0f5af46f24993208e8fb2b203ad9ea1bfd731d69. On main, ff-only pull up to date, feature branch gone locally and on the remote (git ls-remote returns nothing), git status clean, git log --oneline -1 shows the squash-merge.",
+    "artifacts_out": [
+      "branch: feature/WF03-ISS0119-20260821 (squash-merged into main as 0f5af46, branch deleted local and remote)",
+      "https://github.com/tvolodi/letflow/pull/390"
+    ],
+    "issues": [
+      {
+        "severity": "LOW",
+        "description": "docs/status/requirement_status.index.yaml records `entries: 0` for volume 2 while volume 2 now holds 6 entries. This is NOT rebase damage -- the field was already stale as shipped and gate-passed on this branch (git show 4ffed92:docs/status/requirement_status.index.yaml shows `entries: 0` with 1 entry on disk), and test/docs/requirement_status_invariants_test.exs does not assert it for the current volume. Reported rather than edited at Step Final: correcting it would reopen content three gates already passed. Worth either maintaining the field on append or deleting it for the current volume, since a count that is only correct at open is a trap for the next reader."
+      },
+      {
+        "severity": "LOW",
+        "description": "Seven stale local feature branches predating this run remain in this checkout (feature/WF02-REQ109-20260819, feature/WF03-ISS0063/0067/0071/0072-20260819, feature/WF03-ISS0075/0079-20260820). Not this run's branches and out of its scope; noted so the accumulation is visible to ORCH rather than growing silently."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0119-20260821",
+      "commit_sha_list": [
+        "52c9fc0",
+        "0b45374",
+        "0f5af46"
+      ],
+      "remote_branch": "origin/feature/WF03-ISS0119-20260821 (deleted after merge)",
+      "push_status": "PUSHED (force-with-lease after rebase: 4ffed92...0b45374), then MERGED and deleted",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/390",
+      "pr_create_error": null
+    },
+    "next_action": "ORCH marks run WF03-ISS0119-20260821 COMPLETED and releases owned_modules lock (registry entry already flipped to COMPLETED / released_lock true by ORCH pre-merge and carried through the rebase intact)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

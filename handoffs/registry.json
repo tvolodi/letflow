@@ -290,8 +290,8 @@
         "test/letflow/tenant_provisioning_test.exs"
       ],
       "lock_acquired_at": "2026-08-17T06:57:41Z",
-      "lock_released_at": null,
-      "released_lock": false,
+      "lock_released_at": "2026-08-21T09:10:00Z",
+      "released_lock": true,
       "last_known_step": "Fix committed locally (e48942b) on feature/WF03-ISS0030-fix-20260817, REVIEWER-verified PASS. Step Final (git-merge) BLOCKED at push: this host (ubuntu-16gb-nbg1-1) has no GitHub credentials of any kind -- no gh CLI installed, no git credential helper, no ~/.git-credentials, no GH_TOKEN/GITHUB_TOKEN in env or .bashrc/.profile, no SSH private key for git@github.com (only authorized_keys present, for inbound SSH). `git push -u origin feature/WF03-ISS0030-fix-20260817` fails with 'could not read Username for https://github.com'. Did NOT attempt to install gh or configure credentials -- both are outside ~/letflow per this session's own hard boundary #1 (operate only within the letflow checkout), and no actual token/credential exists anywhere on this host to configure even if that boundary didn't apply.",
       "backfilled": false,
       "queue_task_id": 76,
@@ -1499,6 +1499,31 @@
       "queue_task_id": 185,
       "queue_agent_id": "tvolodi-orch",
       "note": "WF-03 for ISS-0117 (GH#372, queue task 185, claimed 2026-08-21T06:45:52Z by tvolodi-orch). Selected by get_next_task, not by ORCH reading a file. The deliverable is a prose amendment to the pipeline's own protocol docs, not code, so three WF-03 steps are structurally inapplicable and will be recorded as SKIPPED with a stated why rather than dropped: Step 2's design artefact (CODE-DESIGNER produces module interfaces and @specs -- wrong role for a prose rule; the producer/validator pair here is DOC-UPDATER/REVIEWER, per the ADHOC-20260821-002 precedent where REVIEWER gated the same class of change three times and caught three real BLOCKERs), SECURITY-REVIEWER at Step 3 (no tenant-data path in the diff), and possibly Step 4's regression test -- that one is deliberately left open for Step 1 to settle by measurement rather than assumed either way, since a required-field amendment may well be mechanically checkable over handoffs/**/*.json. Running WF-03 rather than an ad-hoc workflow because ORCHESTRATOR.md section 3 forbids routing around a standard workflow whose trigger matches, and 'a queued docs/issues/ISS-NNNN.yaml entry' matches exactly; SKIPPED is the mechanism HANDOFF_PROTOCOL.md section 2 already provides for a step that does not apply to a run. No git wrapper: the run touches no lib/, priv/repo/migrations/ or web/ path, which is the scope ORCHESTRATOR.md makes the Step 00/Step Final wrapper a hard gate over, and ADHOC-20260821-002 committed the same class of docs-only change directly to main. Registry check before dispatch: the only unreleased lock across 62 runs is WF03-ISS0030-20260817 (BLOCKED, test/letflow/tenant_provisioning_test.exs), no overlap."
+    },
+    {
+      "run_id": "WF03-ISS0119-20260821",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "issue_ids": [
+        "ISS-0119"
+      ],
+      "stage": null,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "docs/status/requirement_status.yaml",
+        "docs/status/",
+        "docs/agents/instructions/core-directives.md",
+        "docs/anti-patterns.md",
+        "docs/issues/ISS-0119.yaml"
+      ],
+      "lock_acquired_at": "2026-08-21T04:41:48Z",
+      "lock_released_at": "2026-08-21T09:10:00Z",
+      "released_lock": true,
+      "last_known_step": "Steps 00 through 6 all PASS; letflow-queue task 186 released status done (verified: response returned status done); Step Final (git merge) dispatched to ELIXIR-DEV. ISS-0119 resolved. Design gate took 2 FAILs + 2 rework iterations; the post-gate amendment took a further FAIL + 1 re-amendment. Three issues filed rather than absorbed: ISS-0193 (declare-to-silence hole surviving in known_anomalies:/A5, plus the roll-boundary laundering route), ISS-0199 (append procedure step 5 verifies that you appended, not what you appended -- its first live user corrupted the file behind a green check; plus the unowned index entries: count), and evidence appended to the existing ISS-0116 and ISS-0112 rather than fragmenting them.",
+      "backfilled": false,
+      "queue_task_id": 186,
+      "queue_agent_id": "letflow-2-orch",
+      "note": "Resolves ISS-0119 / GH#373 -- docs/status/requirement_status.yaml (357,972 bytes / 5,723 lines / 182 entries) has outgrown the 256KB Read-tool limit, so the append-only safeguard that depends on reading it in full is no longer executable by any agent; plus a second, smaller gap (the `req: SCOPE-CHANGE` convention for non-requirement work is established by ~30 precedent entries and documented nowhere). Claimed via get_next_task as task 186, agent_id letflow-2-orch, locked 2026-08-21T04:41:48Z. NOTE ON IDENTITY: task 186's own description names its local record as docs/issues/ISS-0111.yaml -- that is stale. WF03-ISS0106-20260821 renumbered the record to ISS-0119 at 2026-08-21T03:46:21Z after a cross-session collision with WF03-ISS0109-20260821's independently-allocated ISS-0110..0117 (see the yaml's renumbered_note; this is the eighth recorded instance of the ISS-collision class in docs/anti-patterns.md). Confirmed the right record by reading docs/issues/ISS-0119.yaml, whose queue_task_id is 186 AND whose github_issue is #373 -- an exact match on both fields -- so no fresh ISS number was allocated and main's ISS-0111 (a different finding) was left untouched. Registry scanned before dispatch: zero IN_PROGRESS / released_lock:false entries, so no owned_modules collision. owned_modules are docs-only, with zero overlap against the two open PRs (#342, #340) or the sibling worktree branch fix/ISS-0096-GH324-pack-resolution-enum."
     },
     {
       "run_id": "WF03-ISS0198-20260821",

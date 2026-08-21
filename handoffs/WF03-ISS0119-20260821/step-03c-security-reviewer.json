@@ -1,0 +1,53 @@
+{
+  "handoff_id": "2e0d7120-f319-4934-9546-0986eb01f613",
+  "run_id": "WF03-ISS0119-20260821",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0119-20260821/step-03c-security-reviewer.json",
+  "created_at": "2026-08-21T06:24:15Z",
+  "started_at": "2026-08-21T06:24:15Z",
+  "completed_at": "2026-08-21T06:26:05Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "203d3c65-a72e-4036-98d4-a7c05b57ba8b"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0119-20260821/step-03-elixir-dev.json",
+      "lib/letflow/design/iss-0119-status-file-readability.md",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0119-20260821",
+    "issue_ids": [
+      "ISS-0119"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 3 security gate for ISS-0119's fix, implemented at commit 8ad3bb4 (11 files, 349 insertions, 32 deletions).\n\nRUN YOUR OWN SCOPE TEST FIRST against `git diff main...HEAD`, and state the verdict explicitly rather than assuming. ORCH's read is that this change is OUT OF SCOPE -- it is documentation and process bookkeeping: two new YAML files under docs/status/ that carry an audit-trail index and an empty history volume, an EOF-only append to the existing history file, and instruction-text edits across nine docs and agent role files. No route, no migration, no query, no response shaping, no config, no secret. BUT ORCH'S READ IS NOT THE GATE -- yours is. Derive it from the diff.\n\nTwo specifics worth checking rather than waving through, because 'it's only docs' is exactly the assumption a gate exists to test:\n  1. docs/status/requirement_status.index.yaml is NEW and carries a sha256 digest plus structured metadata about the history volumes. Confirm nothing in it, or in requirement_status.v2.yaml, embeds tenant identifiers, tenant schema names, connection strings, tokens or any other secret material -- the run history it indexes is full of real REQ/ISS narrative text and this is the first time that content has been summarised into a new machine-readable file.\n  2. The diff edits docs/agents/protocols/TASK_QUEUE.md, which is the document describing $QUEUE_AUTH_TOKEN handling. Confirm the edits are confined to the SCOPE-CHANGE field correction and the status-file pointers, and that no token value, no example credential, and no weakening of the token-handling guidance was introduced.\n\nRecord a verdict per invariant, INV-1 through INV-8, each marked APPLIES or NOT-APPLICABLE with a reason -- an unlisted invariant reads as an unrun check. See HANDOFF_PROTOCOL.md §2's security-reviewer-scoped worked example for the required shape.\n\nIf your scope test concludes the change is out of scope for the security invariants, the correct result.status is PASS with every invariant dispositioned, not SKIPPED -- you ran the test and it produced a verdict. Do not modify any file other than your own handoff.",
+    "acceptance_criteria": [
+      "A scope test was run against git diff main...HEAD and its verdict is stated with reasoning, not inherited from ORCH's read",
+      "A per-invariant verdict is recorded for INV-1 through INV-8, each APPLIES or NOT-APPLICABLE with a reason",
+      "The two new files under docs/status/ are confirmed free of tenant identifiers, schema names, credentials or other secret material",
+      "The TASK_QUEUE.md edits are confirmed to introduce no token value, example credential, or weakening of token-handling guidance",
+      "No file other than this handoff was modified"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "SCOPE TEST (run by me against `git diff main...HEAD`, not inherited from ORCH): OUT OF SCOPE -- no tenant-data path is touched. The branch diff is 20 files / 1,881 insertions, of which implementation commit 8ad3bb4 is 11 files / 349 insertions / 32 deletions; the remainder is this run's own handoff JSON plus lib/letflow/design/iss-0119-status-file-readability.md. Checked mechanically against all five scope-test triggers: `git diff main...HEAD --name-only` filtered for '\\.(ex|exs)$' returns EMPTY, and filtered for 'migration' returns EMPTY -- the branch changes ZERO Elixir source files and ZERO migrations. So there is no API route, no Ecto schema or query, no response-shaping code and no lookup-by-ID handler anywhere in the diff. The only secret-adjacent trigger is documentation OF secret handling (TASK_QUEUE.md), which I treated as APPLIES under INV-4 rather than waving through. Per the role file's out-of-scope rule the verdict is PASS with every invariant dispositioned, not SKIPPED.\n\nPER-INVARIANT VERDICTS (INV-1..INV-8):\n- INV-1 tenant data isolation -- NOT-APPLICABLE. Explicitly NOT a default skip: per security-invariants.md's 2026-08-17 ISS-0026/GH#84 update and my role file, INV-1 is LIVE today (S1 done, S2 migrations exist, 0003-ecto-schema-strategy.md decided) and applies to any diff touching a tenant-scoped table, schema or migration. I ran that test against the diff: no Ecto schema module, no migration, no query of any kind, so sub-checks (a) :prefix-scoping, (b) table not silently left in public, (c) tenant_id derived from the resolved :prefix have nothing to bind to. Corroborated by grepping 8ad3bb4's added lines for (tenant|search_path|schema_name|prefix:) -- ZERO hits; same grep over the design doc -- ZERO hits. NOT-APPLICABLE on evidence, not by default.\n- INV-2 server-side field authorisation -- NOT-APPLICABLE. No API response type, controller, plug, view module or Jason.Encoder derivation in the diff; S4 has not started and this diff does not reach ahead into it.\n- INV-3 untrusted runtime sandboxing -- NOT-APPLICABLE. No Lua/WASM host function, NIF or Port; S5 not started and untouched here.\n- INV-4 secrets by reference only -- APPLIES -> PASS. Applied because the diff edits docs/agents/protocols/TASK_QUEUE.md (the document governing $QUEUE_AUTH_TOKEN) and adds two new files under docs/status/, one of which summarises run-history content into a new machine-readable form for the first time. Four checks, all clean:\n  (1) All added lines of 8ad3bb4 grepped case-insensitively for (password|secret|client_secret|token|api_key|api-key|bearer|authorization|postgres://|postgresql://|connection string): ZERO hits across all 11 files. No secret material was introduced anywhere in the change.\n  (2) docs/status/requirement_status.index.yaml reviewed line by line: it carries only volume paths, open/close dates, entry/line/byte counts, the roll-rule ceilings, three REQ ids (REQ-031/042/038) with line numbers, and prose notes. The sha256 5a1a64ab0b999da3fd86be90109ecee46b9d538d9e9945c0d39fddb10075a804 is a content digest of a tracked, non-secret documentation file (volume 1's frozen prefix) used as a tamper check -- it is not key material, is not a credential, and discloses nothing about the file it hashes. No tenant identifier, no tenant schema name, no connection string, no token.\n  (3) docs/status/requirement_status.v2.yaml is header text plus a bare `history:` key with zero entries. It summarises only volume 1's VOCABULARY (the two req values, the six event values, and per-value counts) -- never the narrative content of any entry. No tenant or secret material.\n  (4) TASK_QUEUE.md edits are confined to exactly the two hunks claimed: the :133 SCOPE-CHANGE field correction (it is a `req` value, never an `event` value) and the :380 status-file pointer. I diffed the token guidance directly, comparing every line matching QUEUE_AUTH_TOKEN or token between main and HEAD: all 18 lines are BYTE-IDENTICAL in text, differing only by a uniform +4 line-number shift caused by the earlier hunk's net insertion. Surviving unchanged: 'token supplied via environment -- never hardcoded', the .env-is-gitignored note, the 'never invent a substitute value, and never hand-edit .env' rule, the secret-manager reference, and all six 'Authorization: Bearer $QUEUE_AUTH_TOKEN' examples. No token value, no example credential, and no weakening of token-handling guidance was introduced.\n- INV-5 not-found/forbidden indistinguishability -- NOT-APPLICABLE. No lookup-by-ID endpoint and no HTTP surface at all in the diff; S4 not started.\n- INV-6 new data-access paths prove their scoping -- NOT-APPLICABLE as a constraint on this change: it introduces no new API route, no host function touching tenant data, and no migration creating a business table, so there is no data-access path requiring proof. This handoff is nevertheless the INV-6 record for the change -- all eight invariants carry an explicit disposition.\n- INV-7 no SQL string interpolation -- NOT-APPLICABLE. The diff contains no SQL and no Elixir. For completeness I ran the invariant's grep over the repo: the seven Repo.query hits (sandbox_pool/fixture_loader.ex:111/118/150, sandbox_pool.ex:298/321, tenant_provisioning.ex:174/188) are all pre-existing on main and byte-unchanged by this branch -- outside this diff's scope and not re-adjudicated here.\n- INV-8 no unhandled crashes on realistic failure paths -- NOT-APPLICABLE. No Elixir source changed, so no new error-handling path exists to assess. The existing '{:ok, _} =' matches under lib/letflow/ are untouched by this branch.\n\nWORKSPACE: no file other than this handoff was modified by me. handoffs/orchestrator.log carries ORCH's uncommitted edits and was left untouched as instructed; my commit names this handoff by explicit path only. handoffs/registry.json not written, per HANDOFF_PROTOCOL.md section 4.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0119-20260821/step-03c-security-reviewer.json"
+    ],
+    "issues": [],
+    "next_action": "Route to REVIEWER (WF-03 Step 3d) -- security gate PASS, no invariant failed, no rework required."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

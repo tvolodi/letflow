@@ -20,7 +20,8 @@ AGENT_ID: RELEASE-VALIDATOR
   (`awk '/stage: S3/,/^  - id:/' docs/requirements.yaml`, or grep the stage's IDs and
   read those entries) — see `core-directives.md`'s "Load Scoped Context, Not Whole
   Files."
-- `docs/status/requirement_status.yaml`
+- `docs/status/requirement_status.index.yaml` and, for any entry you need, a targeted
+  read of the volume it lives in — do not read closed volumes in full.
 
 ## What you do — independent re-verification, not report-copying
 

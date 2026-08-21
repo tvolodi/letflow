@@ -1,0 +1,520 @@
+report_id: report-20260821-WF03-ISS0119-20260821
+agent: TEST-RUNNER
+issue: ISS-0119
+workflow_step: WF-03 Step 4c
+handoff: handoffs/WF03-ISS0119-20260821/step-04c-test-runner.json
+branch: feature/WF03-ISS0119-20260821
+commit: a678630
+main_base_commit: be74d62
+date: 2026-08-21
+command: "mix letflow.check (wrapping mix test), via tmp-testrunner/run.sh"
+seeds:
+  branch1: 926440
+  branch2: 122451
+  main1: 478380
+  main2: 67556
+max_cases: 32
+
+basis_of_this_report:
+  runs_performed_by_this_step: 0
+  statement: >
+    THIS STEP RAN NO SUITE. All four runs analysed here are surviving on-disk artefacts of a
+    PREVIOUS TEST-RUNNER attempt on this same run id that was stopped mid-step. The user
+    explicitly directed this step to finish from the existing logs rather than re-run, so every
+    figure below is quoted from those logs and none was generated here. This is stated first so
+    the report does not overstate its own basis.
+  correction_to_the_briefing: >
+    The step briefing described tmp-testrunner/main2.log as INCOMPLETE -- killed mid-run, with a
+    START line but no END and no result line -- and instructed that it be treated as unusable,
+    leaving one usable main run against two branch runs. THAT IS NOT WHAT THE FILE CONTAINS.
+    main2.log is COMPLETE: it carries `START 2026-08-21T08:32:41Z`, a full
+    `Finished in 530.2 seconds`, `Result: 1261/1274 passed (5/5 properties, 1256/1269 tests)`,
+    `Failed: 13 tests`, `LETFLOW_CHECK_EXIT=1`, and `END 2026-08-21T08:41:34Z`. The run evidently
+    completed after the observation that judged it incomplete was made. It was recovered and IS
+    used below. The consequence is material and favourable: the comparison is 2 branch runs
+    against 2 main runs, NOT 2-against-1, so the sample asymmetry the briefing warned about does
+    not apply to this report. The residual limits are recorded under `limits_of_this_evidence`.
+
+toolchain:
+  mix: "Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  erlang: "Erlang/OTP 29 [erts-17.0.5] [64-bit] [smp:16:16] [jit:ns]"
+  gates_deliberately_not_run: >
+    `mix format --check-formatted` and `mix compile --warnings-as-errors` were not run by this
+    step, consistent with report-20260821-WF03-ISS0109-20260821.yaml: both fail on main itself
+    under this host's Elixir 1.20.3/OTP 29 against the 1.18.3-otp-27 pin (ISS-0106 / GH#354).
+    A red gate this branch did not cause is not this branch's verdict.
+
+environment:
+  postgres: >
+    LETFLOW_DB_PORT=5472 (this workspace's untracked ./.env), exported explicitly by
+    tmp-testrunner/run.sh for all four runs, so both sides addressed the same database on the
+    same port. No `docker compose up` was issued by this step.
+  contention: >
+    `grep -c too_many_connections` over each of the four ~9 MB logs returns 0/0/0/0. No Postgrex
+    connection saturation in ANY of the four runs -- so the connection-pressure confound that
+    ELIXIR-DEV observed at Step 3 (Postgres at max_connections after 11h uptime) was NOT active
+    during this evidence set, on either side.
+
+db_state_normalisation:
+  applied_to: "BOTH sides, identically"
+  method: >
+    tmp-testrunner/run.sh runs `MIX_ENV=test mix ecto.drop --quiet` immediately before EVERY run,
+    on both the branch workspace and the main worktree, before the START marker is emitted. The
+    known accumulated-state confound -- orphaned `public.iss060_tenant_schemas_guard_backup` rows
+    whose parent `tenants` rows are gone, which ELIXIR-DEV showed at Step 3 could move one test
+    file from 12 failures to 3 -- was therefore normalised to the same starting condition for all
+    four runs. The prior harness is methodologically sound on this axis and this step endorses it:
+    the intervention was symmetric, automatic, and pre-START, which is exactly what the handoff
+    required.
+  main_side_isolation: >
+    The main-side runs came from a throwaway `git worktree` at C:/Users/tvolo/dev/ai-dala/
+    letflow-mainbase, commit be74d62, detached HEAD. NO `git checkout` was performed in this
+    checkout, which holds local `main` and has a live sibling worktree at letflow-wt2 on
+    fix/ISS-0096-GH324-pack-resolution-enum. The worktree was removed by this step; see
+    `cleanup_performed`.
+
+raw_results:
+  branch1:
+    log: scratch/testrunner-WF03-ISS0119-20260821/branch1.log
+    window: "START 2026-08-21T08:06:23Z -> END 2026-08-21T08:14:26Z"
+    duration: "Finished in 476.5 seconds (6.0s async, 470.5s sync)"
+    summary_line: "Result: 1274/1287 passed (5/5 properties, 1269/1282 tests)"
+    failed: 13
+    exit: "LETFLOW_CHECK_EXIT=1 -- ** (Mix) mix letflow.check.test: FAILED -- underlying `mix test` run exited 2 (real test failure/error)."
+  branch2:
+    log: scratch/testrunner-WF03-ISS0119-20260821/branch2.log
+    window: "START 2026-08-21T08:24:14Z -> END 2026-08-21T08:32:35Z"
+    duration: "Finished in 498.6 seconds (5.7s async, 492.9s sync)"
+    summary_line: "Result: 1273/1287 passed (5/5 properties, 1268/1282 tests)"
+    failed: 14
+    exit: "LETFLOW_CHECK_EXIT=1 -- same Mix error line"
+  main1:
+    log: scratch/testrunner-WF03-ISS0119-20260821/main1.log
+    window: "START 2026-08-21T08:14:54Z -> END 2026-08-21T08:23:26Z"
+    duration: "Finished in 508.7 seconds (6.6s async, 502.1s sync)"
+    summary_line: "Result: 1259/1274 passed (5/5 properties, 1254/1269 tests)"
+    failed: 15
+    exit: "LETFLOW_CHECK_EXIT=1 -- same Mix error line"
+  main2:
+    log: scratch/testrunner-WF03-ISS0119-20260821/main2.log
+    window: "START 2026-08-21T08:32:41Z -> END 2026-08-21T08:41:34Z"
+    duration: "Finished in 530.2 seconds (6.5s async, 523.7s sync)"
+    summary_line: "Result: 1261/1274 passed (5/5 properties, 1256/1269 tests)"
+    failed: 13
+    exit: "LETFLOW_CHECK_EXIT=1 -- same Mix error line"
+    note: "Recovered; the briefing believed this run unusable. See basis_of_this_report."
+
+total_count_delta:
+  branch_total: 1287
+  main_total: 1274
+  delta: 13
+  branch_tests: 1282
+  main_tests: 1269
+  test_delta: 13
+  properties: "5/5 on BOTH sides -- unchanged, so the entire delta is example-based tests"
+  verified_not_assumed: >
+    The handoff required this delta be CONFIRMED as the new invariant assertions rather than
+    assumed. It was, three ways. (a) `git diff --name-status be74d62..HEAD` shows exactly one new
+    test module on the branch: test/docs/requirement_status_invariants_test.exs. No other .exs was
+    added or modified; test/support/status_history.ex is a support module declaring no tests.
+    (b) A count of `test "` declarations in that file returns exactly 13. (c) 1282 - 1269 = 13.
+    The three agree, and the property count is identical on both sides. The delta IS the invariant
+    file and nothing else.
+
+invariant_assertions_check:
+  required_by_handoff: "Confirm the 13 assertions (A0-A8 incl. A4a/A4b, A3b, and the two negative controls) pass in FULL-SUITE context, not only in isolation"
+  module: Letflow.Docs.RequirementStatusInvariantsTest
+  file: test/docs/requirement_status_invariants_test.exs
+  async: true
+  result: "PASS -- 13/13, in both full-suite branch runs"
+  the_13_enumerated:
+    - "A0: the index exists and current-volume resolution is not degraded (line 38)"
+    - "A1: every indexed volume exists on disk, and every volume on disk is indexed (line 57)"
+    - "A2: exactly one volume is current and all others are closed (line 86)"
+    - "A3: the current volume is within the roll-rule ceilings (line 105)"
+    - "A3b: within_bounds?/3 actually fires at the index ceilings against frozen volume 1 (line 143)"
+    - "A4a: every entry in every volume uses the documented req/event vocabulary (line 162)"
+    - "A4b: the on-disk shape-violation set equals known_shape_anomalies:, and every record cites a closed, pinned volume (line 192)"
+    - "A4b (negative control 1): a declared record that is not on disk is reported, by side (line 206)"
+    - "A4b (negative control 2): a record citing an open, unpinned volume fails even though the violation is really on disk (line 238)"
+    - "A5: the on-disk vocabulary-anomaly set equals the index's declared set exactly (line 278)"
+    - "A6: every closed volume's frozen prefix still hashes to its recorded digest (line 305)"
+    - "A7: every closed volume's footer names the next volume in the index (line 334)"
+    - "A8: the current volume's header documents the full vocabulary and the real ceilings (line 383)"
+  method: >
+    ExUnit prints a module name in the output only for a FAILING test, so absence from the failure
+    list is the direct evidence of passing -- but absence alone would not prove the tests RAN.
+    Both halves were established. RAN: the branch-side totals are 13 higher than main's in exactly
+    the test column, which is only possible if all 13 executed. PASSED: a grep for
+    `RequirementStatusInvariantsTest` across all four logs returns 0 occurrences, and all 13 and 14
+    numbered failure headers in branch1/branch2 were extracted and read individually -- none names
+    this module or this file. Both branch runs therefore ran 13 and failed 0.
+  amended_a4_confirmed_fixed: >
+    The A4 failure observed at Step 4f (before the Step 4d/4e/4f amendment) is GONE. It appears in
+    neither branch run's failure list. TEST-DESIGN-VALIDATOR's isolated 13-passed result at Step 4b
+    holds under full-suite concurrency as well, which is the stronger claim the handoff asked for
+    and which an isolated run could not have established.
+
+set_comparison:
+  method: >
+    Comparison is by failing test IDENTITY (module + full test name), extracted from every numbered
+    ExUnit failure header in all four logs, NOT by count. Counts were used only as a checksum
+    against the extracted set sizes: 13/14/15/13 headers extracted, matching each log's reported
+    `Failed:` line exactly.
+
+  both_sides_stable:
+    description: "Present in ALL FOUR runs -- 2/2 branch, 2/2 main. Pre-existing; not this branch's."
+    count: 12
+    Letflow.IdentityMigrationTest:
+      count: 10
+      tests:
+        - "IdentityMigration.copy_tenant/2 and copy_all_tenants/0 (REQ-063 4) copies groups/users/tenant_role from public into the tenant's own schema, preserving id, ordering tenant_role after groups (FK dependency)"
+        - "IdentityMigration.copy_tenant/2 and copy_all_tenants/0 (REQ-063 4) copy_tenant/2 is idempotent: re-running after a successful copy re-copies nothing (on_conflict: :nothing), same counts settle at zero on the second call"
+        - "IdentityMigration.copy_tenant/2 and copy_all_tenants/0 (REQ-063 4) copy_all_tenants/0 processes every registered tenant and aggregates counts"
+        - "IdentityMigration.copy_tenant/2 and copy_all_tenants/0 (REQ-063 4) an orphaned tenant_role (group_id matching no groups row) aborts that tenant's copy with {:error, {:orphaned_tenant_role, id}}, and no partial rows are committed for that tenant"
+        - "DropLegacyPublicIdentityTables migration guard (REQ-063 5) -- idempotency re-running after it already succeeded is a no-op"
+        - "DropLegacyPublicIdentityTables migration guard (REQ-063 5) -- skip-on-uncopied-row an uncopied row (present in public, absent from the tenant's schema copy) makes the guard SKIP the drop entirely -- all three public tables survive"
+        - "DropLegacyPublicIdentityTables migration guard (REQ-063 5) -- skip-on-uncopied-row ISS-0050 regression: a tenant schema missing one identity table makes the guard SKIP the drop, not raise 42P01"
+        - "DropLegacyPublicIdentityTables migration guard (REQ-063 5) -- skip-on-uncopied-row once the copy is completed for every registered tenant, the guard PROCEEDS and drops all three public tables"
+        - "ISS-0060: with_only_this_tenant_visible!/2 guard fix hides the racer tenant, flips guard SKIP into PROCEED"
+        - "ISS-0060: self-heal of an interrupted guard run restore_orphaned_guard_backup_rows!/0 restores the stale row"
+      attribution: ATTRIBUTED
+      class: "ISS-0048 / ISS-0050 / ISS-0060 / ISS-0062 / ISS-0064 guard-backup class"
+      match_quality: >
+        The same TEN test names, identical across all four runs and identical to the ten enumerated
+        in report-20260821-WF03-ISS0109-20260821.yaml and report-20260819-WF02-REQ109-20260819.yaml.
+        This is the only genuinely stable block in the whole comparison and it is 10/10 identical on
+        both sides.
+      caused_by_this_branch: "NO -- identical on main, and identity_migration_test.exs is absent from the branch diff"
+    Mix.Tasks.Letflow.Check.TestTest:
+      count: 2
+      tests:
+        - "detects a recurrence of ISS-0069's own warning class raises and reports the offending line when the target substring is present, even though the underlying subprocess exited 0"
+        - "detects a recurrence of ISS-0069's own warning class passes (no raise) when the subprocess exits 0 and the target substring is absent, even with unrelated warnings present"
+      attribution: ATTRIBUTED
+      class: "ISS-0107 -- POSIX-only fake-mix fixture on Windows; ExUnit.TimeoutError at the 60000ms default"
+      caused_by_this_branch: "NO -- identical on main; neither the test file nor lib/mix/tasks/letflow.check.test.ex is in the branch diff"
+
+  both_sides_near_stable:
+    description: "Present in 3 of 4 runs -- branch2, main1, main2. Absent only from branch1."
+    count: 1
+    entries:
+      - module: Mix.Tasks.Letflow.Check.TestTest
+        test: "detects a recurrence of ISS-0069's own warning class raises when the subprocess itself exits nonzero, regardless of the substring"
+        attribution: ATTRIBUTED
+        class: "Same ISS-0107 timeout class as the two above -- same module, same error class, same 60s subprocess budget"
+        reading: >
+          Present on BOTH sides and on main TWICE. Its one absence is on the BRANCH side, i.e. the
+          branch ran one FEWER of these than main did, which is the opposite direction from a
+          merge concern. ISS-0108's cross_run_variance already records this module oscillating
+          2 <-> 3 under load. Not this branch's.
+        caused_by_this_branch: "NO"
+
+  branch_only:
+    description: "Observed on the branch and never on main across this evidence set. These are the merge-blocker candidates and are examined individually below."
+    count: 2
+    entries:
+      - id: B1
+        module: Letflow.Identity.RoleRegistryTest
+        file: test/letflow/role_registry_test.exs
+        test: "list_roles/0 (acceptance criterion 1) returns [] (not an error) against an empty tenant_role table (line 174)"
+        seen_in: [branch1]
+        not_seen_in: [branch2, main1, main2]
+        error_class: "application-level {:error, {:event_type_seed_failed, :tenant_not_provisioned}}"
+        root_error: |
+          match (=) failed
+          code:  assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+          left:  {:ok, _applied_versions}
+          right: {:error, {:event_type_seed_failed, :tenant_not_provisioned}}
+          stacktrace:
+            test/letflow/role_registry_test.exs:133: Letflow.Identity.RoleRegistryTest.__ex_unit_setup_1/1
+            test/letflow/role_registry_test.exs:1: Letflow.Identity.RoleRegistryTest.__ex_unit__/2
+        attribution: "RELATED TO THE ISS-0109/ISS-0116 FAMILY, BUT NOT A FOUR-AXIS MATCH -- reported as a variant, not attributed"
+        match_analysis: >
+          MATCHES on two axes: the same failing assertion
+          `assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)`, raised
+          from the module's own setup helper -- structurally identical to ISS-0109's failure 3 and
+          ISS-0116's RollbackTest reproduction -- and the same full-suite-only character (the module
+          passed in the other three runs).
+          DIFFERS on the error axis, and the difference is not cosmetic. Every signature ISS-0109 and
+          ISS-0116 record carries a raw Postgrex error: 3F000 :invalid_schema_name ("schema ... does
+          not exist") or 42P01 :undefined_table ("relation tenant_X.Y does not exist"), wrapped in
+          {:error, {:migration_failed, %MatchError{...}}}. This one carries NO Postgrex error at all.
+          Per lib/letflow/design/req022-tenant-schema-provisioning.md:266 and
+          req024-event-type-registry.md, `:tenant_not_provisioned` is returned when the
+          `tenant_schemas` REGISTRATION ROW is absent -- a registry-level miss that short-circuits
+          BEFORE any SQL against the tenant schema is attempted. So the observed condition is "the
+          registration row was not there", not "the schema or its tables were not there". That is a
+          DISTINCT sub-signature which neither ISS-0109 nor ISS-0116 records.
+          It is therefore recorded as a new observed VARIANT of the family and forwarded to ORCH, not
+          folded into the class. Per the handoff, attributing to the class requires showing a failure
+          MATCHES the class; this one matches it only partly, and the gap is stated rather than glossed.
+        caused_by_this_branch: "NO -- see causal_analysis"
+      - id: B2
+        module: Letflow.Definitions.PromotionAssertionRerunTest
+        file: test/letflow/definitions/promotion_assertion_rerun_test.exs
+        test: "AC2 -- sandbox receives only artifact fixtures organic tenant row absent; only the fixture row lands in the sandbox (line 479)"
+        seen_in: [branch2]
+        not_seen_in: [branch1, main1, main2]
+        error_class: "Postgrex.Error 42P01 undefined_table, wrapped in {:error, {:transaction_failed, %Postgrex.Error{}}}"
+        root_error: |
+          match (=) failed
+          code:  assert {:ok, result} = Definitions.apply_promotion_assertion_rerun(...)
+          right: {:error,
+                  {:transaction_failed,
+                   %Postgrex.Error{
+                     postgres: %{
+                       code: :undefined_table,
+                       message: "relation \"tenant_7b62d72b00ae4e6ba45bf90b502e4411.promotion_assertion_runs\" does not exist",
+                       routine: "parserOpenTable",
+                       pg_code: "42P01"
+                     },
+                     connection_id: 31473,
+                     query: "UPDATE \"tenant_7b62d72b00ae4e6ba45bf90b502e4411\".\"promotion_assertion_runs\" SET ..."
+                   }}}
+          stacktrace:
+            test/letflow/definitions/promotion_assertion_rerun_test.exs:498: (test)
+        attribution: "ATTRIBUTED -- ISS-0109 class, four-axis match"
+        match_analysis: >
+          This is the single strongest class match in the report, and it matches ISS-0109's OWN
+          enumerated evidence rather than a resemblance. ISS-0109's failure 14 is in this SAME module,
+          on this SAME table, with this SAME error code and this SAME wrapper:
+            "right: {:error, {:transaction_failed, %Postgrex.Error{postgres: %{code: :undefined_table,
+             pg_code: 42P01, message: relation tenant_cb34d76b2b9c498a8b38f065c7682989.
+             promotion_assertion_runs does not exist}}}}"
+          Four axes: module (Letflow.Definitions.PromotionAssertionRerunTest -- one of the two modules
+          ISS-0109 is FILED ABOUT, by name, in its own title); error class (42P01 :undefined_table);
+          the specific relation (promotion_assertion_runs, inside a tenant schema the test itself just
+          provisioned); and the wrapper shape ({:error, {:transaction_failed, %Postgrex.Error{}}}). Only
+          the test name within the module differs (AC2 here, INV-AR-6 in ISS-0109), and the tenant UUID
+          differs, which is expected since it is per-run. This is the ISS-0109 symptom recurring in the
+          module ISS-0109 was opened for.
+        caused_by_this_branch: "NO -- see causal_analysis"
+
+  main_only:
+    description: "Observed on main and never on the branch. Reported, not acted on, per the handoff."
+    count: 2
+    entries:
+      - id: M1
+        module: Letflow.EngineTest
+        file: test/letflow/engine_test.exs
+        test: "create/2 (REQ-059 AC6) -- child pin inheritance and conflict recording a child agreeing with its parent's pin has zero conflicts, but pin_conflicts: [] is still present (vs. root's omitted key) (line 1177)"
+        seen_in: [main1]
+        not_seen_in: [main2, branch1, branch2]
+        error_class: "Postgrex.Error 3F000 invalid_schema_name, wrapped in {:error, {:migration_failed, %MatchError{}}}"
+        root_error: |
+          code:  assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+          right: {:error, {:migration_failed, %MatchError{term: {:error, %Postgrex.Error{
+                   postgres: %{code: :invalid_schema_name, line: "3096",
+                     message: "schema \"tenant_55f5bb7af09d458281c8b0afbb99495d\" does not exist",
+                     file: "namespace.c", routine: "get_namespace_oid", pg_code: "3F000"},
+                   connection_id: 28579}}}}}
+          stacktrace:
+            test/letflow/engine_test.exs:87: Letflow.EngineTest.provisioned_tenant/0
+            test/letflow/engine_test.exs:1178: (test)
+        attribution: "ATTRIBUTED -- ISS-0109/ISS-0116 class, four-axis match"
+        match_analysis: >
+          Signature-identical to ISS-0109's failure 3 and to ISS-0116's RollbackTest reproduction on
+          all four axes that class is defined by: error code 3F000 :invalid_schema_name with routine
+          get_namespace_oid; the {:error, {:migration_failed, %MatchError{term: {:error,
+          %Postgrex.Error{...}}}}} wrapper; the assertion
+          `assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)`; and
+          being raised from the module's OWN hand-rolled `provisioned_tenant/0` helper
+          (engine_test.exs:87), exactly as ISS-0109's failure 3 was raised from promotion_test.exs:96
+          and ISS-0116's from rollback_test.exs:120. Letflow.EngineTest has not adopted
+          Letflow.TenantFixture and still carries its own copy of the helper -- which is precisely the
+          population ISS-0116 predicts the failure appears in.
+      - id: M2
+        module: Letflow.Engine.ReconstructionTest
+        file: test/letflow/engine/reconstruction_test.exs
+        test: "AC6 -- {:lock_contention, instance_id} is its own distinct error shape matches {:error, {:lock_contention, ^instance_id}}, never a bare generic error (line 640)"
+        seen_in: [main1]
+        not_seen_in: [main2, branch1, branch2]
+        error_class: "Postgrex.Error 3F000 invalid_schema_name, wrapped in {:error, {:migration_failed, %MatchError{}}}"
+        root_error: |
+          code:  assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+          right: {:error, {:migration_failed, %MatchError{term: {:error, %Postgrex.Error{
+                   postgres: %{code: :invalid_schema_name, line: "3096",
+                     message: "schema \"tenant_06a57277a81545508ef2fd90d21b163e\" does not exist",
+                     file: "namespace.c", routine: "get_namespace_oid", pg_code: "3F000"},
+                   connection_id: 28585}}}}}
+          stacktrace:
+            test/letflow/engine/reconstruction_test.exs:85: Letflow.Engine.ReconstructionTest.provisioned_tenant/0
+            test/letflow/engine/reconstruction_test.exs:641: (test)
+        attribution: "ATTRIBUTED -- ISS-0109/ISS-0116 class, four-axis match"
+        match_analysis: >
+          Identical analysis to M1, in a second un-instrumented module with its own hand-rolled
+          provisioned_tenant/0 at reconstruction_test.exs:85. Note M1 and M2 occurred in the SAME run
+          (main1) on adjacent connection ids (28579 and 28585) roughly 15 seconds apart -- consistent
+          with one transient window affecting two consecutive modules, not two independent defects.
+        forwarded: >
+          M1 and M2 are new modules for this family -- neither is named in ISS-0109 or ISS-0116.
+          Reported to ORCH as evidence extending ISS-0116's scope. NOT acted on here, per the handoff.
+
+causal_analysis:
+  question: "Is there any mechanism by which this branch could produce B1 or B2?"
+  change_surface:
+    method: "git diff --name-status be74d62..HEAD, then narrowed to compiled paths"
+    production_code_changed: >
+      NONE. `git diff --stat be74d62..HEAD -- lib/ priv/ config/ mix.exs` returns exactly one path
+      and it is a markdown design document: lib/letflow/design/iss-0119-status-file-readability.md.
+      No .ex file under lib/, no migration under priv/repo/migrations/, no config, no mix.exs change.
+    compiled_code_added_by_the_branch:
+      - "test/support/status_history.ex (new, 522 lines -- compiled in MIX_ENV=test)"
+      - "test/docs/requirement_status_invariants_test.exs (new, 739 lines, 13 tests, async: true)"
+    data_files_added_or_changed:
+      - "docs/status/requirement_status.index.yaml (new)"
+      - "docs/status/requirement_status.v2.yaml (new)"
+      - "docs/status/requirement_status.yaml (modified)"
+    everything_else: >
+      handoff JSONs, .claude/agents/*.md, docs/agents/*.md, docs/anti-patterns.md,
+      test/specs/ISS-0119.md, handoffs/registry.json -- none compiled, none read by any test.
+  the_decisive_check: >
+    REVIEWER's Step 3d proof (zero compiled code changed, therefore no causal path) has expired and is
+    NOT relied on here. It is replaced with a narrower proof re-derived from the two new files' own
+    content. The ISS-0109/ISS-0116 family is entirely DATABASE-MEDIATED: every member is a tenant
+    schema, a table inside one, or a tenant_schemas registration row being absent at query time. So the
+    question reduces to whether the branch's new compiled code touches that machinery at all.
+    IT DOES NOT. `grep -nE 'Repo|Ecto|Postgrex|Sandbox|tenant|prefix:|SQL'` over
+    test/support/status_history.ex returns ZERO matches. The same grep over
+    test/docs/requirement_status_invariants_test.exs returns ZERO matches -- it does not even
+    `use Letflow.DataCase`; it is `use ExUnit.Case, async: true`. Both files are pure filesystem/YAML
+    readers over docs/status/. Neither opens a database connection, checks out a sandbox connection,
+    provisions a tenant, or issues any SQL.
+    Reach is likewise bounded: `grep -rln 'StatusHistory|status_history'` over test/ and lib/ returns
+    the new support module, the new test module, and two markdown files -- and nothing else. No
+    pre-existing test module references the new code. The changed docs/status/*.yaml data files are read
+    by those same two new files and by nothing else in the suite.
+    Neither Letflow.Identity.RoleRegistryTest (B1) nor Letflow.Definitions.PromotionAssertionRerunTest
+    (B2) references the new module, and both talk to Postgres through code paths byte-identical to main.
+  the_one_non_zero_path_stated_honestly: >
+    There is exactly one channel that is not literally zero, and it is stated rather than dismissed: the
+    13 new tests run `async: true`, so they add marginal scheduler and BEAM-process load to a suite whose
+    failure family is timing-sensitive. That is a LOAD path, not a code path -- it cannot introduce a new
+    failure MODE, only in principle perturb the odds of an existing race. Two pieces of evidence bound it.
+    First, measured async time did not rise on the branch: 6.0s and 5.7s async on branch1/branch2 versus
+    6.6s and 6.5s on main1/main2 -- the branch side is LOWER on both runs, and the 13 added tests are pure
+    file I/O with no DB connection to contend for. Second, `too_many_connections` is 0 in all four logs,
+    so the pool was not near saturation in any run. There is no evidence this channel was active, and it
+    cannot be excluded absolutely from four runs; see limits_of_this_evidence.
+  symmetry_evidence: >
+    The strongest single argument is the shape of the data rather than any one failure. Across two runs
+    per side, EACH side produced exactly TWO singleton extras beyond the shared 12-13 core, and on each
+    side neither singleton reproduced in that side's own second run. Branch: B1 in run 1, B2 in run 2.
+    Main: M1 and M2, both in run 1, neither in run 2. All four sit in the same tenant-schema-provisioning
+    family, and three of the four (B2, M1, M2) are four-axis matches to the ISS-0109/ISS-0116 signature
+    while the fourth (B1) is a partial match on the same assertion. Same count, same character, same
+    family, both sides. That is the signature of a shared environmental condition sampled twice per side,
+    not of a branch introducing something.
+
+verdict:
+  central_question: "Does this branch add any failure that main does not already have?"
+  answer: "NO"
+  confidence: "HIGH for the reproducible failure set; MODERATE for the singleton tail -- stated explicitly under limits_of_this_evidence"
+  evidence_summary: >
+    The reproducible failure set is IDENTICAL on both sides: the same 12 failures in all four runs
+    (10 Letflow.IdentityMigrationTest, 2 Mix.Tasks.Letflow.Check.TestTest), plus a 13th
+    Check.TestTest timeout present in 3 of 4 runs -- and that 13th appears on main TWICE and on the
+    branch ONCE, i.e. the branch ran FEWER of it, not more. No failure that repeats is branch-only.
+    The two branch-only singletons are each single observations that did not reproduce in the
+    branch's own second run. B2 is a four-axis match to ISS-0109's own enumerated failure 14 -- same
+    module ISS-0109 is filed about, same promotion_assertion_runs table, same 42P01, same
+    transaction_failed wrapper. B1 is a partial match, deliberately NOT attributed to the class, and
+    forwarded as a new variant. Main produced its own two singletons of the same family in the same
+    way. And the branch has no mechanism: its entire new compiled surface -- two files -- contains
+    zero references to Repo, Ecto, Postgrex, Sandbox, tenant, prefix: or SQL, is referenced by no
+    pre-existing test module, and the failure family is exclusively database-mediated.
+  merge_recommendation: >
+    NOT BLOCKED by this step. No branch-only failure survives as a repeated observation, none has a
+    causal path from the branch, and the 13 new invariant assertions pass 13/13 in full-suite
+    concurrent context in both branch runs. The pipeline is red on both sides for the same
+    pre-existing reasons and this branch does not make it redder.
+  what_this_step_does_NOT_claim: >
+    It does not claim the suite is green -- it is red, on both sides, exit 1 in all four runs. It does
+    not claim ISS-0109/ISS-0116 is fixed; ISS-0109 remains `instrumented` and ISS-0116 open, and this
+    evidence set adds four more observations of that family in four new modules. It does not claim
+    B1 belongs to that class -- B1 is a variant with a stated gap.
+
+limits_of_this_evidence:
+  - "Two runs per side. A singleton observed once cannot be classified as 'stable' or 'flaky' on that basis; B1, B2, M1 and M2 are each recorded as OBSERVED ONCE, NOT REPRODUCED IN THAT SIDE'S SECOND RUN, which is a statement of observation and not a flakiness verdict. In particular M1 and M2 are main-only on ONE observation each and this report does not call them stable main failures."
+  - "This step ran nothing. Every figure is read from a prior attempt's logs. The runs were not re-executed and the analysis could not probe anything the logs do not already contain -- for example no fresh isolation run of role_registry_test.exs was possible to see whether B1 reproduces alone."
+  - "The four runs were sequential, not interleaved, over 08:06-08:41Z: branch1, main1, branch2, main2. Ordering is alternated, which is good practice and limits monotonic drift, but a slow environmental trend across the 35-minute window would still not be fully controlled."
+  - "Seeds differ across all four runs (926440 / 122451 / 478380 / 67556), so test ORDER differs in every run. This cuts both ways: it means the shared 12-failure core is robust to ordering, and it also means the singleton tail is partly a function of which orderings were sampled."
+  - "The async-load channel described in causal_analysis cannot be excluded absolutely from four runs, only bounded by the measured async times and the zero connection saturation."
+
+cleanup_performed:
+  scratch: >
+    tmp-testrunner/ sat in the project root, which core-directives.md's file-placement rules forbid.
+    All four logs and run.sh were moved to scratch/testrunner-WF03-ISS0119-20260821/ (git-ignored)
+    after the evidence above was extracted, and the project-root directory removed.
+  worktree: >
+    C:/Users/tvolo/dev/ai-dala/letflow-mainbase (be74d62, detached) removed via `git worktree remove`
+    and confirmed absent from `git worktree list`. The live sibling worktree letflow-wt2 on
+    fix/ISS-0096-GH324-pack-resolution-enum was left untouched.
+
+files_not_touched:
+  - "No test file or source file was modified by this step."
+  - "Nothing under docs/status/ was touched."
+  - "handoffs/orchestrator.log (uncommitted ORCH edits) and docs/issues/ISS-0193.yaml (untracked ORCH file) were left alone and NOT committed. Staging was by explicit path; `git add -A` was not used."
+  - "handoffs/registry.json was not written -- ORCH owns it (HANDOFF_PROTOCOL.md 4)."
+
+acceptance_criteria_check:
+  - criterion: "A full mix letflow.check run on the branch was performed and its real output quoted, including enumerated failures by module and test name"
+    met: true
+    caveat: "Performed by the PRIOR attempt, not by this step; the user directed this step not to re-run. Two complete branch runs, both quoted verbatim with all 13 and 14 failures enumerated by module and test name."
+  - criterion: "A full run on main was performed from a throwaway git worktree (never a checkout in this checkout) and its real output quoted"
+    met: true
+    caveat: "Same provenance. TWO usable main runs, not one -- main2 was recovered after the briefing judged it incomplete. Worktree at letflow-mainbase, be74d62, detached; no checkout in this workspace."
+  - criterion: "A set comparison of failing test identities is given: both-sides, branch-only, main-only"
+    met: true
+    detail: "12 both-sides-stable (4/4 runs) + 1 both-sides-near-stable (3/4, main-heavy); 2 branch-only singletons; 2 main-only singletons. Compared by module + full test name, with counts used only as a checksum."
+  - criterion: "A verdict on whether this branch adds any failure main does not already have, supported by generated evidence and not by REVIEWER's expired proof"
+    met: true
+    detail: "NO. REVIEWER's zero-compiled-code argument is explicitly not relied on; it is replaced by a re-derived proof from the two new files' own content (zero DB surface, zero inbound references from pre-existing modules) plus the observed both-sides symmetry."
+  - criterion: "Any attribution to the ISS-0109/ISS-0116 class shows the failure matches that class rather than asserting it"
+    met: true
+    detail: "B2, M1 and M2 are each matched on four named axes against the signatures quoted in ISS-0109.yaml and ISS-0116.yaml. B1 is explicitly NOT attributed: it matches on assertion and full-suite-only character but carries {:error, {:event_type_seed_failed, :tenant_not_provisioned}} with no Postgrex error, a registration-row-absent condition neither record documents. The gap is stated and B1 is forwarded as a variant."
+  - criterion: "The 13 invariant assertions are confirmed passing in full-suite context, not only in isolation"
+    met: true
+    detail: "13/13 in BOTH full-suite branch runs. Established in two halves: that they RAN (branch totals exceed main's by exactly 13 in the test column) and that they PASSED (zero occurrences of RequirementStatusInvariantsTest across all four logs; all 27 numbered failure headers on the branch side read individually). The Step 4f A4 failure is gone."
+  - criterion: "Database-state or connection-pressure interventions, if any, were applied to both sides or neither, and are described"
+    met: true
+    detail: "`MIX_ENV=test mix ecto.drop --quiet` ran pre-START before every one of the four runs on both sides, normalising the orphaned guard-backup-row confound identically. No connection-pressure intervention was needed: too_many_connections is 0 in all four logs."
+  - criterion: "A structured YAML report exists at test/reports/report-20260821-WF03-ISS0119-20260821.yaml following the schema of the ISS-0109 report"
+    met: true
+    detail: "This file. Follows report-20260821-WF03-ISS0109-20260821.yaml's shape, with per-failure attribution and the set comparison added as required."
+  - criterion: "The throwaway worktree was removed and its removal confirmed"
+    met: true
+    detail: "See cleanup_performed.worktree -- removed and confirmed absent from git worktree list."
+  - criterion: "No test or source file was modified, nothing under docs/status/ was touched, orchestrator.log/ISS-0193.yaml not committed"
+    met: true
+    detail: "See files_not_touched."
+
+artifacts_out:
+  - test/reports/report-20260821-WF03-ISS0119-20260821.yaml
+
+conclusion: >
+  The branch adds NO failure that main does not already have. The reproducible set is identical on both
+  sides -- 12 failures in all four runs plus a 13th present in 3 of 4 and MORE often on main than on the
+  branch. Each side independently produced exactly two non-reproducing singletons from the same
+  tenant-schema-provisioning family, three of the four being four-axis matches to the ISS-0109/ISS-0116
+  signature. The branch has no mechanism to cause any of them: its entire new compiled surface is two
+  files containing zero references to Repo, Ecto, Postgrex, Sandbox, tenant or SQL, referenced by no
+  pre-existing test module, against a failure family that is exclusively database-mediated. The 13 new
+  invariant assertions pass 13/13 under full-suite concurrency in both branch runs, confirming the Step
+  4d/4e/4f amendment held. The pipeline is red on both sides for pre-existing reasons; this branch does
+  not make it redder, and Step Final is not blocked by this step. The report's own basis is narrower than
+  usual and is stated as such: no suite was run here, main2 was recovered rather than regenerated, and two
+  runs per side is a small sample for the singleton tail.
+
+next_action: >
+  ORCH to triage three forwarded observations: (1) B1, a NEW VARIANT of the tenant-provisioning family --
+  {:error, {:event_type_seed_failed, :tenant_not_provisioned}}, a registration-row-absent condition at the
+  same replay_migrations/1 assertion, which neither ISS-0109 nor ISS-0116 records and which may narrow
+  ISS-0116's search to the tenant_schemas registry row rather than the schema itself; (2) M1/M2, the
+  ISS-0109 3F000 signature reproducing in two further un-instrumented modules (Letflow.EngineTest:87 and
+  Letflow.Engine.ReconstructionTest:85), extending ISS-0116's scope and adding both to the ISS-0112
+  TenantFixture adoption list; (3) the briefing-vs-reality discrepancy on main2.log's completeness, worth
+  a line in the run record. Then proceed to WF-04 Step 1 (RELEASE-VALIDATOR), which re-runs the suite
+  independently -- and given this step ran nothing itself, that independent re-run carries more weight
+  than usual for this run.

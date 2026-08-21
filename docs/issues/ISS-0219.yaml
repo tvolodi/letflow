@@ -1,0 +1,36 @@
+id: ISS-0219
+title: >
+  scripts/test_parallel.sh auto-derived TEST_PARALLEL_N=16 exceeds this host's
+  Postgres/connection budget, crashing all partitions before any test result
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ071-20260821
+discovered_at: "2026-08-22T00:30:00Z"
+severity: MINOR
+
+description: >
+  Running scripts/test_parallel.sh with no TEST_PARALLEL_N override auto-derives N
+  from nproc/getconf, which picked 16 on this host. All 16 partitions crashed
+  outright during ecto.create/ecto.migrate with DBConnection.ConnectionError
+  ("connection not available ... dropped from queue") and mix build-directory
+  lock contention ("Waiting for lock on the build directory"), before producing
+  any Result: line -- not a code defect, an environment-sizing mismatch between
+  the auto-derived N and this host's real Postgres/CPU capacity. Re-running with
+  TEST_PARALLEL_N=4 (the value ISS-0217's own verification run used) completed
+  cleanly. Suggest either lowering the script's auto-derivation cap, or
+  documenting a recommended override for hosts with this capacity profile, so a
+  future run does not need one failed attempt to discover the right N.
+
+affected_files:
+  - scripts/test_parallel.sh
+
+related:
+  - ISS-0217  # different mechanism (TenantSchemaReaper deferral), same script
+
+queue_task_id: 219
+github_issue: 449
+github_issue_note: >
+  register_task created both the queue task (219) and its mirrored GitHub issue
+  (449) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
+  deliberately not called separately.
+
+status: open

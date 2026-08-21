@@ -1,0 +1,61 @@
+{
+  "handoff_id": "3f9c2b6a-1d4e-4a7b-9c3f-8e2a5d6b7c1f",
+  "run_id": "WF02-REQ071-20260821",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ071-20260821/step-02a-elixir-dev.json",
+  "created_at": "2026-08-21T18:49:30Z",
+  "started_at": "2026-08-21T18:49:30Z",
+  "completed_at": "2026-08-21T18:49:30Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-071"],
+    "artifacts_in": [
+      "lib/letflow/design/req071-mount-auth-tenant-status-plugs.md",
+      "handoffs/WF02-REQ071-20260821/step-01b-code-design-validator.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/plugs/tenant_status.ex",
+      "test/letflow/router_test.exs",
+      "test/letflow/plugs/api_pipeline_integration_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ071-20260821"
+  },
+  "task": {
+    "description": "WF-02 Step 2a -- implement lib/letflow/design/req071-mount-auth-tenant-status-plugs.md exactly, since PASSed by CODE-DESIGN-VALIDATOR (step-01b, commit ade859f). Two concrete deliverables only: (1) the design doc's Section 2 verbatim moduledoc replacement text in both lib/letflow/plugs/auth_pipeline.ex and lib/letflow/plugs/tenant_status.ex, replacing the stale 'Not mounted in front of any route today' paragraphs; (2) the design doc's Section 3 five end-to-end test specs (Test 1/AC1 and Test 3/AC3 in test/letflow/router_test.exs, Tests 2/4a/4b/5 covering AC2/AC4/AC5 in a new test/letflow/plugs/api_pipeline_integration_test.exs using Letflow.DataCase and the insert_tenant_for_realm!/1 + :auto sandbox pattern from test/letflow/plugs/auth_pipeline_test.exs), written out as complete runnable ExUnit code rather than the design doc's inline-comment sketches. Do NOT touch the plug mounting order in api_pipeline.ex (already correct, a REQ-070 side effect). Do NOT add try/rescue around TenantStatus's Repo.get/2 call (design Section 6 invariant, protects the OQ-14 fail-closed decision AC7 exists to have REVIEWER confirm). Do NOT invent a fake production route to force AC2/AC4-GET's literal wording -- implement the design's own substituted assertions (404-not-401/403/500/503, auth_context populated, no Retry-After, zero tenant-status-specific Repo query) instead. Explicitly mark the new api_pipeline_integration_test.exs module async: false with an inline explanation, per the MINOR issue step-01b flagged (ExUnit defaults to non-async when omitted, which is safe, but the design left it implicit).",
+    "acceptance_criteria": [
+      "Both plugs' moduledocs no longer contain 'Not mounted in front of any route today' and instead read the design doc's Section 2 replacement text verbatim (AC6)",
+      "Test 1 (AC1) and Test 3 (AC3) added to test/letflow/router_test.exs under new 'describe \"REQ-071 ...\"' blocks",
+      "Tests 2, 4a, 4b, 5 (AC2, AC4, AC5) added to a new test/letflow/plugs/api_pipeline_integration_test.exs, async: false, reusing the auth_pipeline_test.exs tenant-provisioning helper pattern",
+      "mix compile --warnings-as-errors succeeds",
+      "mix test test/letflow/router_test.exs test/letflow/plugs/api_pipeline_integration_test.exs test/letflow/plugs/auth_pipeline_test.exs test/letflow/plugs/tenant_status_test.exs passes with real reported pass/fail counts, no speculation"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read the design doc (lib/letflow/design/req071-mount-auth-tenant-status-plugs.md) in full, plus lib/letflow/plugs/auth_pipeline.ex, tenant_status.ex, api_pipeline.ex, router.ex, routers/identity.ex, application.ex, config/test.exs, and the three precedent test files (router_test.exs, auth_pipeline_test.exs, tenant_status_test.exs) directly before touching anything.\n\nApplied both Section 2 moduledoc replacements verbatim: auth_pipeline.ex lines 23-33 and tenant_status.ex lines 24-27 no longer contain 'Not mounted in front of any route today' (confirmed by re-reading the edited files) and now read the design doc's exact replacement prose. Checked the design's own note about the '## Deferred plugs' table in api_pipeline.ex -- confirmed (as the design doc itself already noted) that table already excludes both plugs, so no further edit was needed there.\n\nAdded Test 1 (AC1) and Test 3 (AC3) to test/letflow/router_test.exs. Test 1 attaches a named telemetry handler on [:letflow, :repo, :query] (self()-filtered, matching tenant_status_test.exs's own ISS-0031/GH#90 pattern) around a POST with no Authorization header, asserts 401 + zero query telemetry fired. Test 3 kills Letflow.Oidc.DefaultProvider (confirmed via config/test.exs:77 + application.ex:17-22 this is the name Oidcc.ProviderConfiguration.Worker is registered under, supervised :one_for_one so it auto-restarts) and asserts GET /health still returns 200. Left router_test.exs's existing async: true intact -- verified TokenVerifierDouble (test/support/token_verifier_double.ex) never touches the real Oidcc worker (it pattern-matches only on the raw token string, ignoring provider_name), so no other test in this async-true file depends on that singleton being alive, making Test 3 safe to co-locate here.\n\nCreated test/letflow/plugs/api_pipeline_integration_test.exs (use Letflow.DataCase, async: false, with an inline moduledoc paragraph explaining why: the insert_tenant!/1 helper switches Ecto.Adapters.SQL.Sandbox to global :auto mode, matching auth_pipeline_test.exs's own async: false rationale -- real concurrent Postgres connections with no per-test rollback are not safe to run alongside other async: true modules' :shared-mode checkouts). Implemented Test 2 (AC2: valid token reaches the stub's 404 with auth_context populated -- tenant_id/roles/user_id asserted, not a real business handler per the design's flagged stub-router gap), Test 4a (AC4 POST/:migrating -> 503 + Retry-After: 30 + tenant_migrating error body), Test 4b (AC4 GET/:migrating substituted assertion -- 404 not 503, no retry-after header, with a telemetry attach documenting AuthPipeline's own JIT queries fire but TenantStatus's method short-circuit for GET takes no Repo path at all, per tenant_status.ex's own call/2 second clause having zero Repo references), and Test 5 (AC5 concurrent isolation -- two Task.async calls direct against Letflow.Plugs.TenantStatus.call/2, one with a malformed tenant_id that raises Ecto.Query.CastError uncaught, one with a real :active tenant; asserted the bad task crashes with exactly that exception while the good task's conn passes through unhalted with status nil).\n\nFixed one test-naming defect found while running the suite: the original AC5 describe+test name combination was long enough that the compiler's generated closure-name atom hit Erlang's atom-length system limit (SystemLimitError from v3_core.erl), so the describe block name was shortened to 'REQ-071 AC5: concurrent tenant-status isolation' -- not a design deviation, a compiler constraint the design doc's own prose test name did not anticipate.\n\nRan mix compile --warnings-as-errors: 15 files compiled clean, no warnings. Ran mix test test/letflow/router_test.exs test/letflow/plugs/api_pipeline_integration_test.exs test/letflow/plugs/auth_pipeline_test.exs test/letflow/plugs/tenant_status_test.exs twice (once before, once after the atom-length fix and a formatting touch-up): both runs report 'Finished in ~35-39 seconds ... Result: 41 passed', 0 failures. Ran mix format --check-formatted scoped to only the files this step touched (test/letflow/plugs/api_pipeline_integration_test.exs, lib/letflow/plugs/auth_pipeline.ex, lib/letflow/plugs/tenant_status.ex) -- all three are already correctly formatted; router_test.exs carries pre-existing unformatted lines from before this run (confirmed via git stash + mix format --check-formatted against the pre-change version) which this step deliberately left untouched rather than reformatting code outside its own diff, except for the one new line this step itself added, which is correctly formatted.\n\nDid not touch api_pipeline.ex's mounting order, did not add try/rescue around tenant_status.ex's Repo.get/2 call, did not invent a fake production route -- all three constraints verified held by re-reading the final diff.",
+    "artifacts_out": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/plugs/tenant_status.ex",
+      "test/letflow/router_test.exs",
+      "test/letflow/plugs/api_pipeline_integration_test.exs"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ071-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ071-20260821",
+      "push_status": "pending -- set by this same turn's push",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (this diff touches lib/letflow/plugs/auth_pipeline.ex and tenant_status.ex, tenant-data paths per AC5/AC7's fail-closed guarantee) then REVIEWER (Step 2c/2d) -- REVIEWER's own AC7 sign-off entry still needs to be appended to docs/migration/stage-4-api-surface.md's REVIEWER sign-off section per the design doc Section 4; that append is REVIEWER's own action, not this step's, and remains outstanding."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

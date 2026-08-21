@@ -1,0 +1,40 @@
+id: ISS-0222
+title: >
+  scripts/test_parallel.sh transient connection-count spike on back-to-back
+  launches, distinct from ISS-0219/ISS-0220
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ071-20260821
+discovered_at: "2026-08-22T00:53:00Z"
+severity: MINOR
+
+description: >
+  Launching scripts/test_parallel.sh again immediately after a prior full-suite
+  run on this host (no settling gap between consecutive launches) produced a
+  transient too_many_connections/DBConnection.ConnectionError crash in one
+  partition. Confirmed via pg_stat_activity (6 connections, well under
+  max_connections=100) and a clean process list immediately afterward that the
+  DB was not actually saturated at rest -- the spike was transient, tied to
+  launch timing, not steady-state contention.
+
+  Distinct from ISS-0219 (auto-derived TEST_PARALLEL_N too high, crashes before
+  any Result: line) and ISS-0220 (steady-state SandboxPool claim-timeout
+  contention during a run) -- this is a connection-count spike specifically at
+  the moment of a second back-to-back launch. Worth a small follow-on note in
+  scripts/test_parallel.sh's docs recommending a brief settling gap between
+  consecutive full-suite launches on this host.
+
+affected_files:
+  - scripts/test_parallel.sh
+
+related:
+  - ISS-0219  # auto-derived N too high, crashes before any Result: line
+  - ISS-0220  # steady-state SandboxPool claim-timeout contention
+
+queue_task_id: 222
+github_issue: 454
+github_issue_note: >
+  register_task created both the queue task (222) and its mirrored GitHub issue
+  (454) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
+  deliberately not called separately.
+
+status: open

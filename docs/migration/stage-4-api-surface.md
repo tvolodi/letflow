@@ -327,3 +327,76 @@ Phoenix-shaped dependency. No gap found in that direction. Also checked whether
 "defer" quietly reopens OQ-2 later without a stated trigger: the Ownership section
 names S6 as the trigger point (stage-scoped, not left floating), consistent with how
 this file already handles other stage-deferred scope.
+
+**2026-08-21 (REQ-071) — PASS.** Mounted `Letflow.Plugs.AuthPipeline` then
+`Letflow.Plugs.TenantStatus` in `Letflow.Plugs.ApiPipeline` ahead of every `/api/v1/*`
+sub-router — reviewed against idiom/scope/supervision plus this run's own load-bearing
+deliverable, **OQ-14's fail-open-vs-fail-closed confirmation**
+(`lib/letflow/design/req021-auth-plug-pipeline.md` §6.4/§10).
+
+- **OQ-14 — independently confirmed, PASS on fail-closed.** Read
+  `lib/letflow/plugs/tenant_status.ex` in full: `check_write_pause/2`'s `Repo.get(Tenant,
+  tenant_id)` call (line 59) is wrapped in no `try`/`rescue`/`with {:ok, _} <-` anywhere in
+  the module — a genuine DB error during this lookup propagates as a crash of the handling
+  process, not a silent pass-through. This diverges deliberately from `tenant_status.zig`'s
+  own fail-open behavior (R-Co lets a pool-exhaustion or query failure through). Evidence
+  this is real, not aspirational: `test/letflow/plugs/api_pipeline_integration_test.exs`'s
+  AC5 test (`"a malformed tenant_id crashes only its own request process..."`) drives a
+  malformed `tenant_id` straight at `TenantStatus.call/2` and asserts the crash
+  (`{:crashed, %Ecto.Query.CastError{}}`) via `Task.await`, concurrently with a second,
+  valid-tenant request whose own conn passes through un-halted — both re-run directly this
+  session (`mix test test/letflow/plugs/api_pipeline_integration_test.exs`: 21 passed, 0
+  failures) rather than trusted from ELIXIR-DEV's own handoff claim alone.
+- **Judgment on the tradeoff, not a rubber stamp.** Agree fail-closed is the right choice
+  here, for the reason §6.4 itself gives and this review independently endorses: a
+  tenant-write-pause during migration is a data-integrity safeguard, and a DB-level fault
+  significant enough to break this single-row lookup is already a fault serious enough that
+  silently waving writes through (R-Co's choice) risks writing into a tenant mid-migration
+  precisely when the DB is least trustworthy — worse than the alternative (surfacing the
+  fault as a 500 via the existing Bandit/Plug per-request crash isolation, matching this
+  project's process-per-request fault model rather than adding bespoke swallowing logic).
+  Fail-open's real argument (an unrelated DB hiccup shouldn't block all writes
+  platform-wide) is weaker in this specific codebase than in R-Co's, because Letflow has no
+  existing fail-open precedent elsewhere in the plug chain to stay consistent with — this is
+  a fresh module, not a retrofit onto an established fail-open convention.
+- **Supervision integrity, unaffected by this decision.** A crash here terminates only the
+  one Bandit request-handling process for that request; `Letflow.Repo`,
+  `Letflow.InstanceSupervisor`, and every other supervised child in
+  `lib/letflow/application.ex`'s `:one_for_one` tree are untouched — consistent with
+  REQ-071's own Test 3 (see below).
+- **Test 3 / supervision open question, verified directly rather than trusted.** Read
+  `lib/letflow/application.ex`: `Oidcc.ProviderConfiguration.Worker` (registered as
+  `Letflow.Oidc.DefaultProvider`) is a plain child of `Letflow.Supervisor`, whose strategy
+  is `:one_for_one` (line 32) — the standard OTP restart guarantee applies with no custom
+  restart logic layered on top, so killing it does get it automatically restarted under the
+  same name. `test/letflow/router_test.exs`'s Test 3 (`"GET /health returns 200 while
+  Letflow.Oidc.DefaultProvider is dead"`) kills it with `Process.exit(pid, :kill)` and
+  asserts `/health` still returns 200 — re-run this session (`mix test
+  test/letflow/router_test.exs`: 17 passed, 0 failures) and confirmed it leaves no bad state
+  for later tests: `Letflow.Oidc.DefaultProvider` is only ever consumed by
+  `Letflow.Oidc.TokenVerifier` inside `AuthPipeline`, and this suite's own
+  `TokenVerifierDouble` (used by every other test needing a verified token) never touches
+  the real Oidcc worker at all, so no other test in this async-true file depends on that
+  singleton's liveness.
+- **Idiomatic/no crutch.** Both plugs remain simple `@behaviour Plug` modules with linear
+  `call/2` clauses — no hand-rolled state machine, no singleton process holding shared
+  mutable state standing in for supervision. `AuthPipeline`'s five-step orchestration and
+  `TenantStatus`'s method-allowlist short-circuit are both plain function pipelines, not a
+  crutch masquerading as a process.
+- **Scope.** `git diff main...HEAD --stat` against `main` touches exactly: the two plug
+  moduledocs, the two new/extended test files, the design doc, and run bookkeeping
+  (`docs/requirements.yaml`, `docs/status/*`, `handoffs/*`) — no unrelated file. No new
+  abstraction (behaviour, macro, generic plumbing) was introduced beyond what REQ-071's
+  mounting task actually needed.
+- **Decision-record consistency.** `Letflow.Plugs.ApiPipeline`'s declared order
+  (`plug(Letflow.Plugs.AuthPipeline)` then `plug(Letflow.Plugs.TenantStatus)`, both ahead of
+  `:match`/`:dispatch`) matches §6.3's calling convention and does not contradict
+  `docs/migration/decisions/0001-web-framework.md`. Diffed each moduledoc's actual new text
+  against the design doc's §2 replacement prose directly (not trusted from either handoff)
+  — both moduledocs read the design's exact replacement paragraphs, substantively
+  unchanged.
+
+No rework requested. `docs/issues/` has no new type-safety gap worth filing from this
+diff — both plugs' new transition logic (method allowlist, tenant-status match) is already
+closed-set over a `Ecto.Enum`-backed `status` field and a fixed `@write_methods` list, not
+a case a struct/type change would newly make unrepresentable.

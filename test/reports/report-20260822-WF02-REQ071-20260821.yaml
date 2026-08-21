@@ -1,0 +1,154 @@
+report_id: report-20260822-WF02-REQ071-20260821
+agent: TEST-RUNNER
+requirement: REQ-071
+workflow_step: WF-02 Step 4 (full-suite test run)
+handoff: handoffs/WF02-REQ071-20260821/step-04-test-runner.json
+branch: feature/WF02-REQ071-20260821
+date: 2026-08-22
+command: "scripts/test_parallel.sh"
+
+toolchain:
+  mix: "Elixir 1.20.3 (compiled with Erlang/OTP 29)"
+  erlang: "Erlang/OTP 29"
+  platform: "Windows 11"
+
+environment:
+  postgres: >
+    letflow-postgres-1, confirmed Running via `docker compose up -d` at the start of
+    this run (already up, not (re)started).
+  db_setup: >
+    Each test_parallel.sh partition's own `mix test` invocation performs
+    ecto.create/ecto.migrate --quiet automatically via the `test` alias -- no separate
+    DB-setup step taken here.
+
+# ---------------------------------------------------------------------------
+# Runs
+# ---------------------------------------------------------------------------
+
+runs:
+  - label: "first attempt, N auto-derived from nproc"
+    command: "scripts/test_parallel.sh"
+    result: "N=16 -- all 16 partitions crashed during ecto.create/ecto.migrate before any Result: line (DBConnection.ConnectionError timeouts + build-directory lock contention). 0/0 combined -- not a real suite result."
+    exit_code: 1
+    failures_found: null
+    note: >
+      Environment-sizing issue: this host's Postgres/CPU budget cannot sustain 16
+      concurrent mix compile+migrate processes. Not a code defect. Re-ran with an
+      explicit, lower TEST_PARALLEL_N.
+
+  - label: "second attempt, TEST_PARALLEL_N=4"
+    command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+    result: >
+      partition 1: 354 tests, 0 properties, 11 failures, exit 2
+      partition 2: 369 tests, 1 property, 0 failures, exit 0
+      partition 3: 428 tests, 2 properties, 0 failures, exit 0
+      partition 4: 288 tests, 2 properties, 5 failures, exit 2
+      combined: 1439 tests, 5 properties, 16 failures (1428/1444 passed)
+    exit_code: 0
+    failures_found: 16
+
+verdict: PASS
+
+summary_line: >
+  1428/1444 passed (1439 tests + 5 properties combined), 16 failures -- all 16
+  structurally attributed away from this branch (Route 1: failing files absent from
+  git diff --name-only main...HEAD). REQ-071's own 21 tests passed cleanly inside the
+  full run.
+
+# ---------------------------------------------------------------------------
+# REQ-071 own tests (21 total: 17 router_test.exs + 4 api_pipeline_integration_test.exs)
+# ---------------------------------------------------------------------------
+
+req071_tests:
+  total: 21
+  passed: 21
+  failed: 0
+  verification_method: >
+    Grepped all 4 partition logs for Letflow.RouterTest, Letflow.Plugs.ApiPipelineIntegrationTest,
+    and each test's literal description text (e.g. "no Authorization header returns 401",
+    "valid token passes auth+tenant-status", "survives the OIDC provider worker being down",
+    "migrating tenant", "concurrent tenant-status isolation"). Zero matches in the 16-item
+    numbered failure list across all 4 logs -- neither file contributed any failure.
+    Consistent with TEST-DESIGN-VALIDATOR's isolated 21/21 at step 3b (handoff step-03b).
+
+# ---------------------------------------------------------------------------
+# Failures -- attribution
+# ---------------------------------------------------------------------------
+
+failures_found_and_fixed: 0
+failures_caused_by_req071: 0
+failures_pre_existing_attributed_away: 16
+
+failures:
+  - id: F1-F7
+    file: test/letflow/sandbox_pool_test.exs
+    module: Letflow.SandboxPoolTest
+    count: 7
+    symptom: >
+      ** (exit) exited in: GenServer.call(<SandboxPool pid>, {:claim, N}, timeout) /
+      ** (EXIT) time out -- each immediately preceded in the log by
+      "Postgrex.Protocol ... disconnected: ** (DBConnection.ConnectionError) client ... exited"
+      on the same connection pool.
+    attribution_route: "Route 1 -- lib/letflow/sandbox_pool.ex and test/letflow/sandbox_pool_test.exs are absent from git diff --name-only main...HEAD"
+    mechanism: >
+      Resource contention (schema-creation + connection-pool pressure) under 4 concurrent
+      partitions all claiming from the shared sandbox pool against this host's single
+      Postgres instance -- not an assertion-logic bug.
+
+  - id: F8-F11
+    file: test/letflow/definitions/promotion_assertion_rerun_test.exs
+    module: Letflow.Definitions.PromotionAssertionRerunTest
+    count: 4
+    symptom: "Same GenServer.call claim timeout / Postgrex disconnect pattern as F1-F7 (this module also claims a SandboxPool schema)."
+    attribution_route: "Route 1 -- file absent from git diff --name-only main...HEAD"
+    mechanism: "Same resource-contention mechanism as F1-F7."
+
+  - id: F12-F16
+    file: test/letflow/sandbox_pool/fixture_loader_test.exs
+    module: Letflow.SandboxPool.FixtureLoaderTest
+    count: 5
+    symptom: "Same GenServer.call claim timeout / Postgrex disconnect pattern as F1-F7."
+    attribution_route: "Route 1 -- lib/letflow/sandbox_pool/fixture_loader.ex and this test file are absent from git diff --name-only main...HEAD"
+    mechanism: "Same resource-contention mechanism as F1-F7."
+
+not_count_matched_to_prior_issue: >
+  Explicitly checked ISS-0217 (test_parallel.sh / TenantSchemaReaper sibling-partition
+  interaction) before attributing: status=resolved, but its mechanism is a deferred-sweep
+  guard producing reclaimed=0/skipped=0, NOT GenServer.call claim timeouts -- does not
+  match this run's failures. No other open issue found covering SandboxPool claim
+  timeouts under TEST_PARALLEL_N=4. Attribution above rests on git-diff absence (Route 1)
+  and direct log inspection of the actual error text, not on the failure count matching
+  any prior report.
+
+# ---------------------------------------------------------------------------
+# Scope check
+# ---------------------------------------------------------------------------
+
+branch_diff:
+  command: "git diff --name-only main...HEAD"
+  files:
+    - docs/migration/stage-4-api-surface.md
+    - docs/requirements.yaml
+    - docs/status/requirement_status.index.yaml
+    - docs/status/requirement_status.v2.yaml
+    - handoffs/WF02-REQ071-20260821/*  # this run's own handoffs
+    - handoffs/orchestrator.log
+    - handoffs/registry.json
+    - lib/letflow/design/req071-mount-auth-tenant-status-plugs.md
+    - lib/letflow/plugs/auth_pipeline.ex
+    - lib/letflow/plugs/tenant_status.ex
+    - test/letflow/plugs/api_pipeline_integration_test.exs
+    - test/letflow/router_test.exs
+
+artifacts_out:
+  - test/reports/report-20260822-WF02-REQ071-20260821.yaml
+  - handoffs/WF02-REQ071-20260821/step-04-test-runner.json
+
+next_action: >
+  PASS -- REQ-071's own 21 tests pass, both inside and outside the full run. 16
+  pre-existing failures Route-1-attributed to environmental resource contention in
+  files this branch never touched. Route to RELEASE-VALIDATOR (Step 5), which will
+  re-run the suite independently. Two MINOR follow-on issues noted in the handoff's
+  result.issues for ORCH to register: (1) TEST_PARALLEL_N auto-derivation (N=16) is too
+  high for this host's Postgres/connection budget, (2) SandboxPool claim-timeout
+  resource contention under TEST_PARALLEL_N=4 concurrent partitions.

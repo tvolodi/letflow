@@ -1,0 +1,46 @@
+{
+  "handoff_id": "506afc6f-5ec2-4c5d-95f9-f7062ce07ee3",
+  "run_id": "WF02-REQ071-20260821",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ071-20260821/step-02d-reviewer.json",
+  "created_at": "2026-08-21T18:57:12Z",
+  "started_at": "2026-08-21T18:57:12Z",
+  "completed_at": "2026-08-21T18:57:12Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-071"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ071-20260821/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ071-20260821/step-02c-security-reviewer.json",
+      "lib/letflow/design/req071-mount-auth-tenant-status-plugs.md"
+    ],
+    "branch_name": "feature/WF02-REQ071-20260821"
+  },
+  "task": {
+    "description": "Hard gate on Step 2a, after SECURITY-REVIEWER's Step 2c PASS. Idiomatic OTP/Elixir usage, supervision integrity, scope creep, decision-record consistency for the two moduledoc edits and 6 new e2e tests. Load-bearing deliverable: independently confirm REQ-071 AC7 (the OQ-14 fail-open-vs-fail-closed divergence) and record the confirmation in docs/migration/stage-4-api-surface.md's REVIEWER sign-off section."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read the full diff (`git diff main...HEAD --stat` and `-- lib/letflow/plugs/`), lib/letflow/plugs/tenant_status.ex and auth_pipeline.ex in full, lib/letflow/application.ex in full, both new/extended test files (test/letflow/router_test.exs, test/letflow/plugs/api_pipeline_integration_test.exs), lib/letflow/plugs/api_pipeline.ex, and lib/letflow/design/req021-auth-plug-pipeline.md's SS6.4/SS10 (OQ-14) directly, rather than trusting either prior handoff's narrative alone.\n\nOQ-14 (AC7, the load-bearing item): confirmed independently that tenant_status.ex's check_write_pause/2 wraps Repo.get(Tenant, tenant_id) in no try/rescue/with anywhere in the module -- a DB error crashes the handling process (fail-closed), diverging deliberately from tenant_status.zig's fail-open behavior. Re-ran `mix test test/letflow/plugs/api_pipeline_integration_test.exs test/letflow/router_test.exs` myself: 21 passed / 0 failures and 17 passed / 0 failures respectively (real output, not inherited from step-02a's report). AC5's concurrent-isolation test drives a malformed tenant_id straight at TenantStatus.call/2 and asserts the crash (Ecto.Query.CastError) alongside a concurrently-succeeding valid-tenant request, proving fail-closed as implemented and that it doesn't take down an unrelated concurrent request. Judged fail-closed the right choice (not a rubber stamp) -- a tenant-write-pause during migration is a data-integrity safeguard, and this is a fresh module with no existing fail-open convention in Letflow's plug chain to stay consistent with, unlike R-Co. Appended a dated '2026-08-21 (REQ-071) -- PASS' entry to docs/migration/stage-4-api-surface.md's REVIEWER sign-off section stating this confirmation, the reasoning, and the passing-test evidence -- this IS AC7, not a courtesy note.\n\nSupervision integrity (Test 3's open question): read lib/letflow/application.ex directly -- Oidcc.ProviderConfiguration.Worker (registered as Letflow.Oidc.DefaultProvider) is a plain child of Letflow.Supervisor under strategy :one_for_one (line 32), so killing it is automatically restarted with no custom logic needed. Confirmed this does not leave the tree in a bad state for later tests: TokenVerifierDouble (used by every other auth test) never touches the real Oidcc worker, so no other test in router_test.exs's async:true module depends on that singleton's liveness.\n\nIdiomatic/no crutch: both plugs remain plain @behaviour Plug modules, linear call/2 clauses, no hand-rolled state machine or shared-mutable-state singleton standing in for supervision.\n\nScope: git diff main...HEAD --stat confirmed only the two plug moduledocs, the two test files, the design doc, and run bookkeeping (docs/requirements.yaml, docs/status/*, handoffs/*) -- no unrelated file, no new abstraction ahead of what REQ-071 needed.\n\nDecision-record consistency: api_pipeline.ex declares plug(Letflow.Plugs.AuthPipeline) then plug(Letflow.Plugs.TenantStatus), matching SS6.3's calling convention, no contradiction with decisions/0001-web-framework.md. Diffed each moduledoc's new prose directly against the design doc's SS2 replacement text -- both read the design's exact replacement paragraphs verbatim.\n\nNo type-safety gap worth filing -- both plugs' new logic is already closed-set over an Ecto.Enum-backed status field and a fixed @write_methods list. No rework requested.",
+    "artifacts_out": [
+      "docs/migration/stage-4-api-surface.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ071-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ071-20260821",
+      "push_status": "pending -- set by this same turn's push",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (Step 3) -- REVIEWER gate PASS, AC7 sign-off recorded in docs/migration/stage-4-api-surface.md."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

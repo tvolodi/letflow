@@ -121,6 +121,21 @@ This is a plain shell script, not a `mix` task, on purpose — see the
 comment at the top of `scripts/timed_test.sh` for why a `mix`-prefixed
 command structurally can't time this project's own compile step.
 
+To run the suite across parallel OS processes instead (Elixir's native
+`mix test --partitions N`, one `Repo` pool per process — much faster
+than the single-process `mix test` above on multi-core hosts):
+
+```
+sh scripts/test_parallel.sh
+```
+
+`N` defaults to `nproc` (override with `TEST_PARALLEL_N`). The script
+pre-compiles `MIX_ENV=test` exactly once before launching any
+partition, then aggregates each partition's own reported pass/fail
+counts into one combined total and exits non-zero if any partition
+failed. This is dev-tooling only — it is not yet wired into
+`TEST-RUNNER`/`RELEASE-VALIDATOR`'s own workflow steps (REQ-114).
+
 Postgres runs on port 5462 by default, not 5432 — R-Co's own
 docker-compose already uses 5432 (dev) and 5433 (test), so this can run
 alongside it without colliding.

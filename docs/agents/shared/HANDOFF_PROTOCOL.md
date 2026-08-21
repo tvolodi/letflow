@@ -86,8 +86,12 @@ state it at all. Do not copy any of it into another file.
 1. Take **one** clock read (§3's command) when you create the handoff file.
 2. Write **both** `created_at` and `started_at` from that single value, in the same write
    that creates the file. A dispatch that is written and then sat on is the exception, not
-   the rule: if you genuinely create a handoff you do not dispatch immediately, re-read the
-   clock and overwrite `started_at` (only) at the moment you spawn the agent.
+   the rule: if the agent spawn is not the same write/action as the handoff file's
+   creation — any other tool call or step happens in between, however briefly — re-read
+   the clock and overwrite `started_at` (only) at the moment you spawn the agent. Same
+   write/action → leave the values as written in step 2; anything else → re-read. There is
+   no judgement call about what counts as "immediate": the test is whether it was the same
+   write.
 3. **Do not ask the receiving agent to stamp it in the spawn prompt.** The prompt tells the
    agent to claim the handoff by setting `status` to `IN_PROGRESS`, and says nothing about
    `started_at`. A spawn prompt that asks for it is the defect ISS-0204 was filed against.
@@ -201,6 +205,14 @@ visible gap (same reasoning as §4.1(b)'s no-backfill rule, and the same reason 
 tells you to report it instead of filling it in). This very run's own handoff,
 `handoffs/WF03-ISS0204-20260821/step-03-settle-started-at.json`, is one of the ten: ORCH
 deliberately left it null so the run would not prejudge the question it was settling.
+
+**What "ORCH fixes the dispatch" (§1 step 3) means, concretely, so a MINOR report of this
+kind has a mechanical action behind it: not filling in the reported handoff's own
+`started_at`** — that is exactly what the no-backfill rule above forbids, so it stays null
+— **but making ORCH's *next* dispatch follow the two-step procedure at the top of this
+subsection.** A reported null is evidence that a specific past dispatch skipped the clock
+read, not a request to retroactively supply one. This applies going forward only; it does
+not reopen or reclassify any of the 10 existing null files.
 
 ---
 

@@ -50,11 +50,40 @@ github_issue_note: >
   issue (452) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
   deliberately not called separately.
 
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0221-20260821
+resolved_at: "2026-08-21T21:00:00Z"
+resolution_note: >
+  Added an explicit Step 3 ("Register in letflow-queue") to
+  `docs/agents/workflows/WF-01_requirement_development.md`, between the
+  existing Step 2 (REQ-VALIDATOR gate) and the Output section: names ORCH as
+  the caller, cites `TASK_QUEUE.md`'s `register_task` contract directly, and
+  states `impl_order` is written back into the requirement's
+  `docs/requirements.yaml` entry from the response, never guessed. The
+  Overview diagram gained a matching `STEP 3: REGISTER` box, and the Output
+  section now states registration explicitly as part of what "ready for WF-02"
+  means. All four of this issue's acceptance criteria satisfied by that single
+  edit.
 
-fix_sketch: >
-  A WF-01 documentation edit: add the `register_task` call as an explicit
-  post-Step-2 action (or amend the Output section), naming ORCH as the caller
-  and TASK_QUEUE.md as the contract, and stating that `impl_order` is written
-  back into the requirement's entry from the response rather than guessed.
-  Check WF-03 for the same gap on issue-type tasks while fixing.
+  AC4 (WF-03 checked for the same gap): confirmed WF-03 does NOT have the same
+  gap, structurally rather than by inspection alone -- `ISSUE_QUEUE.md`'s own
+  procedure (steps 1-3) makes `register_task` a PREREQUISITE of a
+  `docs/issues/ISS-NNNN.yaml` file existing at all: the issue's very id (its
+  filename) comes from `register_task`'s `issue_ref` response field, so an
+  issue simply cannot reach WF-03's trigger condition ("a queued
+  `docs/issues/ISS-NNNN.yaml` entry") without already being registered. This
+  is unlike WF-01, where a requirement is drafted and validated entirely
+  within `docs/requirements.yaml` with no queue interaction required at any
+  point -- the exact asymmetry this issue's own filing predicted might not
+  hold on the WF-03 side. No WF-03 edit needed.
+
+  Also checked whether the 35 unregistered `pending` requirements the original
+  filing observed live still exist: they do not -- every requirement in the
+  current `docs/requirements.yaml` (checked via a full-file scan, not a
+  sample) already carries `impl_order`, so the practical backfill this
+  filing's symptom described has since been completed by other work, separate
+  from this issue's own scope (a documentation fix, not a data-remediation
+  task). No further action taken on that front.
+
+  Docs-only change (one file), self-gated per `docs/agents/ORCHESTRATOR.md`
+  §10's direct-action allowance.

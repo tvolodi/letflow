@@ -198,6 +198,16 @@ curl -X POST https://queue-test.ai-dala.com/tasks \
   }'
 ```
 
+**Optional request field `github_issue_number`** (added 2026-08-21, `letflow-queue` PR #4,
+deployed and verified live): when supplied, the service **adopts** that existing GitHub
+issue instead of creating a second one. A number already linked to another task is
+rejected — `github_issue_number: has already been taken` — rather than re-pointed at the
+new task, so adoption can never silently steal another task's issue. Use it only for an
+issue that genuinely was filed on GitHub first (a human opened it, or the queue was
+unreachable when the finding was made); the default path remains "let `register_task`
+create the issue", and `ISSUE_QUEUE.md` step 2a's "do NOT also call `gh issue create`
+separately" is unchanged.
+
 `task_type` is **required** — `"requirement"` for planned WF-01 output, `"issue"` for
 an `ISSUE_QUEUE.md`-sourced incidental discovery. It drives `get_next_task`'s claim
 priority (below); there is no reliable way for the service to infer it after the fact,
@@ -205,15 +215,32 @@ so ORCH must state it explicitly on every `register_task` call.
 
 Returns the created task including its `impl_order` (the implementation sequence
 number — this is what get_next_task sorts by within a `task_type`, and doubles as the
-task `id` used by `set_lock`/`release_lock`). Record it back into the source record so a
+task `id` used by `set_lock`/`release_lock`).
+
+**Response field `issue_ref`** (added 2026-08-21, same PR #4): `"ISS-"` plus the
+zero-padded task id for `task_type: "issue"` — task 187 → `"ISS-0187"` — and `null` for
+`task_type: "requirement"`. **This is the issue's id**: `ISSUE_QUEUE.md` no longer derives
+issue numbers by scanning `docs/issues/`, because a scan cannot reserve a number and that
+convention collided eight times. The queue's `id` is an autoincrement primary key, so it
+is allocated atomically across every host. For issue-type tasks the service additionally
+rewrites the task title to carry `issue_ref` as a prefix, stripping and replacing any
+`ISS-NNNN:` token the caller supplied; only a **leading** token is replaced, so an `ISS-`
+reference appearing elsewhere in a title is a genuine cross-reference and survives
+verbatim. (Verified live 2026-08-21: a title deliberately prefixed `ISS-0120:` came back
+as id 187, `issue_ref` `"ISS-0187"`, title rewritten to `"ISS-0187: ..."`,
+`github_issue_number` 375.)
+
+Record it back into the source record so a
 human/agent reading the file can cross-reference which queue task it maps to:
 - `task_type: "requirement"` → the requirement's entry in `docs/requirements.yaml` (a
   new `impl_order:` field, or a comment — see the migration note below).
-- `task_type: "issue"` → the issue's entry in `docs/issues/ISS-NNNN.yaml`, a
-  `queue_task_id:` field (added 2026-08-20, `ISSUE_QUEUE.md`'s matching update) — this
-  is what makes a later WF-03 run able to `set_lock` the exact task directly instead of
-  gambling on `get_next_task`'s claim order (see "A human names a specific issue"
-  below).
+- `task_type: "issue"` → **the response's `issue_ref` is the record's filename**:
+  `docs/issues/<issue_ref>.yaml`, e.g. `docs/issues/ISS-0187.yaml`, with `id:` inside
+  matching it. Its `queue_task_id:` field (added 2026-08-20, `ISSUE_QUEUE.md`'s matching
+  update) carries the same integer — `ISS-0187` ↔ task `187`. That equality is what makes
+  a later WF-03 run able to `set_lock` the exact task directly, derivable from the
+  filename alone, instead of gambling on `get_next_task`'s claim order (see "A human names
+  a specific issue" below).
 
 **A new issue discovered mid-run still gets a number** — this is the literal
 requirement from the design brief. `register_task` is the only source of `impl_order`
@@ -232,6 +259,13 @@ file-max+1 values commented `# letflow-queue task id`, and acting on one of them
 closed the wrong GitHub issue (ISS-0092/GH#314). If a requirement has not yet been
 through `register_task`, leave `impl_order` absent (or note `# UNREGISTERED`) rather
 than filling it with a placeholder that reads as a real id.
+
+**As of the `issue_ref` change this warning has a second reason:** for
+`task_type: "issue"`, a guessed id is also a guessed *filename*. Inventing a number now
+produces a `docs/issues/ISS-NNNN.yaml` that can collide with another host's record on the
+exact path — the failure class documented twice in `docs/anti-patterns.md` — *and* a
+`/tasks/<id>/...` URL addressing an unrelated task. Only `register_task`'s response
+supplies either.
 
 ### 2. `get_next_task` — claim the next eligible task
 

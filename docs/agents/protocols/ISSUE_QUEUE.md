@@ -31,9 +31,20 @@ claiming the same open GitHub issue and duplicating the fix — see
 calls the queue — the discovering agent reports the finding, it does not call `gh` or
 the queue itself).
 
+**Updated 2026-08-21 (ad-hoc run ADHOC-20260821-001).** Step 1 previously said to assign
+the id by scanning `docs/issues/` for the highest existing `NNNN` and incrementing. **That
+instruction is removed.** It was a read-then-write race with no lock between the halves,
+and it collided eight times across concurrent sessions — see `docs/anti-patterns.md`'s two
+`ISS-NNNN` collision entries and the update appended to the second of them. The id is now
+allocated by `letflow-queue`, atomically, and returned as `issue_ref`. Do not scan, do not
+increment, do not guess.
+
 ```
-1. Assign the next available local ID: docs/issues/ISS-NNNN.yaml
-   (check the highest existing NNNN under docs/issues/, increment)
+1. Do NOT derive the id. The discovering agent does not pick a number, and neither does
+   ORCH. The id comes back from `register_task` in step 2a as the response field
+   `issue_ref` (e.g. task id 187 -> "ISS-0187"), and the local record is written to
+   docs/issues/<issue_ref>.yaml in step 3. Until step 2a has returned, this finding has
+   no id — refer to it by title.
 
 2. The discovering agent reports the finding to ORCH (title, description, severity,
    affected_files) — it does not call `gh` or letflow-queue itself. ORCH then:
@@ -46,27 +57,48 @@ the queue itself).
       register_task(title, description, acceptance_criteria: ["See linked GitHub
         issue for full description"], task_type: "issue")
 
+      The response carries `issue_ref` — "ISS-" plus the zero-padded task id (task 187
+      -> "ISS-0187"). THAT IS THE ID. For issue-type tasks the service also rewrites the
+      task title to carry that ref as a prefix, stripping and replacing any "ISS-NNNN:"
+      the caller happened to supply; only a LEADING token is replaced, so an ISS-
+      reference elsewhere in a title is treated as a genuine cross-reference and survives
+      verbatim. (Verified live 2026-08-21: a call whose title deliberately began
+      "ISS-0120:" came back as id 187, issue_ref "ISS-0187", title rewritten to
+      "ISS-0187: ...".)
+
       This best-effort creates the mirrored GitHub Issue itself (per TASK_QUEUE.md's
       "GitHub Issues visibility" section's `register_task` bullet) — do NOT also call
-      `gh issue create` separately, that would double-post. Record the response's `id`
-      (queue task id) and `github_issue_number` into ISS-NNNN.yaml's `queue_task_id`
-      and `github_issue` fields respectively.
+      `gh issue create` separately, that would double-post. **That instruction still
+      stands unchanged.** Record the response's `id` (queue task id) and
+      `github_issue_number` into the yaml's `queue_task_id` and `github_issue` fields
+      respectively; `id` and the number in `issue_ref` are the same integer.
 
-   b. If letflow-queue is unreachable (genuinely, both token locations checked): fall
-      back to `gh issue create --title "<title>" --body "<description>
+      **Adoption path — an issue that genuinely was filed on GitHub first** (e.g. by a
+      human, or by an agent under the pre-2026-08-21 order): pass the existing issue's
+      number as the optional `github_issue_number` request field. The service adopts that
+      issue instead of creating a second one. A number already linked to another task is
+      rejected ("github_issue_number: has already been taken") rather than re-pointed at
+      the new task — verified live 2026-08-21 against an already-linked number. This is
+      the only sanctioned way an issue's GitHub record precedes its `register_task` call;
+      it is not a licence to go back to calling `gh issue create` first.
+
+   b. If letflow-queue is unreachable (genuinely, both token locations checked): there is
+      no allocator, and therefore **no id** — a locally-derived number is exactly the
+      thing this protocol just removed. Do not scan-and-increment to fill the gap. File
+      the finding in your handoff's `result.issues` (severity as discovered) and report
+      it to ORCH, which registers it once the queue is reachable and writes the record
+      then; the finding is not lost, it is just not yet numbered. If ORCH judges the
+      finding must be visible on GitHub before then, per core-directives.md's "No Issue
+      Left Local-Only", `gh issue create --title "<title>" --body "<description>
 
       Discovered by <AGENT_ID> during <run-id>.
-      Local record: docs/issues/ISS-NNNN.yaml"` directly, per core-directives.md's "No
-      Issue Left Local-Only" — this is not a silent skip. Set `queue_task_id: null` with
-      a one-line note explaining why (queue unreachable at filing time — flagged for
-      reconciliation once it's back), so a later WF-03 run knows to attempt
-      registration before relying on `queue_task_id` being absent-by-design.
+      Local record: not yet allocated — letflow-queue unreachable at filing time."` is
+      the interim step, and the resulting issue number is later adopted via the
+      `github_issue_number` field in 2a so it never becomes a duplicate.
 
-      If `gh` is ALSO unavailable: set both fields null, note why in the yaml file's
-      description.
-
-3. Write docs/issues/ISS-NNNN.yaml:
-   id: ISS-NNNN
+3. Write docs/issues/<issue_ref>.yaml — the filename comes from step 2a's `issue_ref`,
+   not from anything on disk:
+   id: <issue_ref>          # e.g. ISS-0187, matching the filename exactly
    title: <one-line summary>
    discovered_by: <AGENT_ID>
    discovered_in_run: <run-id>
@@ -76,17 +108,74 @@ the queue itself).
      <what's wrong, where, and why it matters>
    affected_files:
      - <path>
-   queue_task_id: null   # filled from register_task's response per step 2a, or noted per 2b
-   github_issue: null    # filled from the same response (or gh issue create's output per 2b)
+   queue_task_id: <id>   # from register_task's response per step 2a — the same integer
+                         # as issue_ref's number (ISS-0187 <-> 187)
+   github_issue: <n>     # from the same response's github_issue_number
    status: open
 
-4. Commit docs/issues/ISS-NNNN.yaml as part of the current step's normal commit.
+4. Commit docs/issues/<issue_ref>.yaml as part of the current step's normal commit.
 
 5. Do NOT extend the current run to fix it. Do NOT launch a nested workflow. The
    current step's own PASS/FAIL verdict is unaffected by an incidentally-discovered
    issue — only issues that ARE the current step's own failure drive that step's
    rework.
 ```
+
+## Where the id comes from (2026-08-21) — and what this supersedes
+
+**The id is allocated, not chosen.** `letflow-queue`'s task `id` is an autoincrement
+primary key, so it is handed out atomically by the one service every host shares. No two
+hosts can receive the same one, which is precisely what a directory scan could never
+guarantee: a scan reads state, it does not reserve it. The eighth collision
+(`WF03-ISS0106-20260821`, records now at `docs/issues/ISS-0118.yaml` and
+`ISS-0119.yaml`) is the proof — that run scanned `docs/issues/` across *every remote
+branch* before choosing, which is exactly the mitigation `docs/anti-patterns.md`
+prescribed, and it collided anyway, because the numbers it collided with did not exist on
+any branch at the moment it looked.
+
+**Two consequences worth stating outright.**
+
+**1. The old "local record first, GitHub issue second" advice is superseded.**
+`docs/anti-patterns.md`'s first ISS-collision entry says: *"File the local record before
+opening the GitHub issue, and put the id in the GH title. A GH issue whose body cites a
+local file that has since been overwritten is the worst end state."* Under this protocol
+the order is inverted — `register_task` creates the GitHub issue as part of allocating the
+id, so the GitHub issue exists *before* `docs/issues/<issue_ref>.yaml` is written (step 2a
+then step 3, same agent turn). That is now the safer order, for three reasons, and the old
+advice is not merely overridden by fiat:
+
+- **The overwrite hazard it guarded against was a consequence of guessed numbering, not of
+  ordering.** The local file could be silently overwritten only because two agents could
+  pick the same filename. They can't any more — the filename comes from an allocated id.
+  Remove the collision and the "worst end state" it described cannot arise.
+- **The id can no longer be wrong.** Writing the local record first was a way of pinning a
+  number down before publishing it. The number is now pinned by the allocator, and the
+  local record is written *from* it rather than the other way around.
+- **The id lands in the GitHub title automatically.** The old advice depended on an agent
+  remembering to type the id into the GH title; the service now rewrites an issue-type
+  task's title to carry `issue_ref` as a prefix, so the two records agree by construction
+  rather than by diligence.
+
+The historical entries in `docs/anti-patterns.md` stay as written — they are the record of
+how this was learned. Only the *forward instruction* in them is superseded, and that is
+recorded in the update appended to the second entry.
+
+**2. `queue_task_id` and the issue id are the same integer.** `ISS-0187` is queue task
+`187`. A later WF-03 run can therefore derive the `set_lock` target straight from the
+filename, without needing the yaml open and without the `get_next_task`-and-hope fallback
+in "Picking up a queued issue later" below. Keep recording `queue_task_id` in the file
+anyway — it stays the explicit, machine-readable link, and it is what pre-2026-08-21
+records rely on.
+
+### Issue numbers are non-contiguous from here on — this is expected
+
+The hand-numbered range ends at **ISS-0119**. Queue-allocated ids start in the **ISS-0186
+and upward** range, so **there are no ISS-0120..ISS-0185 records and never were** — nothing
+is lost or missing. Ids will stay non-contiguous thereafter, because the queue's id
+sequence is shared with `task_type: "requirement"` tasks: every requirement registered
+between two issues consumes a number that no `ISS-` file will ever carry. A gap in
+`docs/issues/` is not evidence of a deleted or misplaced record. (Existing hand-numbered
+records keep their numbers — nothing is retro-renumbered.)
 
 ## Issue status vocabulary
 

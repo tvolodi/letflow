@@ -752,6 +752,67 @@ rebase time as *expected* rather than exceptional: scan `docs/issues/` across ev
 matter of routine. Do not read the absence of a collision in one run as evidence the
 convention is safe.
 
+**UPDATE 2026-08-21 — the structural fix has landed and is deployed. The scan-and-renumber
+routine above is superseded for NEW issues.** (Appended, not a rewrite: everything above
+this paragraph is the historical account and stands as written.)
+
+An eighth occurrence fired first, and it is the strongest evidence in this entry precisely
+*because* the run did everything this entry told it to. `WF03-ISS0106-20260821` scanned
+`docs/issues/` across **every remote branch** before choosing — the exact mitigation
+prescribed above — found the highest anywhere to be `ISS-0109`, and filed `ISS-0110` and
+`ISS-0111`. A concurrent session (`WF03-ISS0109-20260821`, PR #371) had meanwhile
+allocated `ISS-0110` through `ISS-0117` and merged first. Both records had to be renumbered
+at Step Final, to `ISS-0118` and `ISS-0119` (see their `renumbered_note` fields). The scan
+was not done carelessly; it was correct at the moment it ran. The colliding numbers simply
+did not exist on any branch yet. **A scan reads state; it cannot reserve it.** That is why
+no amount of scanning discipline was ever going to close this class.
+
+The fix is exactly the mechanism this entry named as "the obvious candidate": the id is now
+derived from `register_task`'s own atomically-allocated task id, not from a directory scan.
+`letflow-queue` PR #4 (merge `5b0e968`) shipped it and it is deployed on
+`queue-test.ai-dala.com` (CD run 32450296100, 2026-08-21T05:23Z), verified live by ORCH.
+Concretely:
+
+- `register_task` returns a new **`issue_ref`** field — `"ISS-"` plus the zero-padded task
+  id (task 187 → `"ISS-0187"`), `null` for requirement-type tasks. That value **is** the
+  issue id and the local record's filename. The queue's `id` is an autoincrement primary
+  key, so two hosts can never receive the same one.
+- For issue-type tasks the service also rewrites the title to carry that ref as a prefix,
+  replacing any `ISS-NNNN:` the caller supplied. A verification probe deliberately titled
+  `"ISS-0120: ..."` came back as id 187 / `issue_ref "ISS-0187"` with the title rewritten
+  accordingly. Only a *leading* token is replaced — an `ISS-` reference elsewhere in a
+  title is a real cross-reference and survives verbatim.
+- `register_task` also accepts an optional `github_issue_number` and adopts that issue
+  rather than opening a second one; a number already linked to another task is rejected
+  (`has already been taken`), not re-pointed.
+
+`docs/agents/protocols/ISSUE_QUEUE.md` has been updated accordingly: its Procedure no
+longer contains a "scan and increment" step at all, and its new "Where the id comes from"
+section carries the details.
+
+**What is superseded, and what is not.** Superseded for **new** issues: "scan every remote
+branch before picking a number," "treat a collision at rebase time as expected," and — from
+the entry immediately above this one — "file the local record before opening the GitHub
+issue, and put the id in the GH title." That last one inverts: `register_task` creates the
+GitHub issue *while* allocating the id, so the GH issue now precedes the local file by
+design. It is safe in a way it wasn't before, because the overwrite hazard that advice
+guarded against was a *consequence* of guessed numbering rather than of ordering, and
+because the id now reaches the GH title automatically instead of depending on an agent
+remembering to put it there. Continuing to follow the old advice would mean continuing to
+guess a number, which is now the harmful path.
+
+**Not** superseded: everything about handling a collision among the **existing**
+hand-numbered records (`ISS-0001`..`ISS-0119`), the renumber-your-own-side-and-leave-the-
+other-intact rule, `renumbered_from` provenance, the never-overwrite-an-existing-issue-file
+rule, and the content-diff-with-line-ending-normalisation verification finding above —
+those remain correct and are the only guidance for anything filed before 2026-08-21.
+
+One consequence to expect rather than investigate: issue ids **jump** from `ISS-0119` to
+the queue-allocated range (`ISS-0186` and upward) and are **non-contiguous** thereafter,
+because the id sequence is shared with requirement-type tasks. There are no `ISS-0120`
+through `ISS-0185` files and there never were. A future reader finding that gap should not
+go looking for lost records.
+
 ## Working a user-named GitHub issue without ever locking it in letflow-queue
 
 An ORCH session resolving ISS-0086/GH#303 (a user-named, directly-selected issue —

@@ -1191,3 +1191,32 @@ This is the same failure as **"Inheriting a claim from a record instead of re-de
 from the source"** above, with the record being a handoff and the author being the
 coordinator — filed separately because the artefact here is a *live* one, and the
 distinguishing test (does it grow?) is specific and cheap.
+
+## A grep-shaped acceptance criterion can be tripped by the module's own moduledoc describing the invariant
+
+**REQ-072, Step 2a (`lib/letflow/api/context.ex`).** AC1 required
+`grep -rnE "Process\.(put|get)|:ets\." lib/letflow/api/` to return zero hits, as a
+structural proof that `Letflow.Api.Context` never reaches into the raw process
+dictionary or an ETS table for per-request state. ELIXIR-DEV needed the moduledoc to
+*state* that same invariant in prose (readers need to know it was considered and
+rejected, not just infer it from absence) — and a moduledoc sentence like "this module
+never calls `Process.put/2`" contains the literal substring the AC's own grep pattern
+is hunting for. Written naively, the file documenting compliance would have been the
+one thing that failed the compliance check.
+
+ELIXIR-DEV caught this before it became a false failure, and reworded the moduledoc
+(`lib/letflow/api/context.ex`'s "No process dictionary, no ETS, anywhere in this
+module" section) to describe the property without using the flagged call shape as a
+literal substring — e.g. "no `Kernel` `put`/`get` pair on `self()`'s dictionary" and
+"an `:ets` table" phrased so the pattern `Process\.(put|get)|:ets\.` does not match the
+prose itself, while the sentence stays plain English rather than becoming garbled to
+dodge the grep. REVIEWER (WF-02 Step 2d) verified both properties independently: the
+grep genuinely returns zero hits, and the reworded prose reads as clear, ungarbled
+English, not a regex-dodging contortion.
+
+**Correct alternative:** when an acceptance criterion is phrased as a source-grep over
+a directory, that grep will also scan the very file whose moduledoc documents
+compliance with it — word the invariant's prose description so it doesn't reintroduce
+the flagged substring (paraphrase the call shape, don't quote it), and verify the grep
+against the final wording before treating the AC as satisfied, rather than assuming
+"documented" and "not present" are independent facts about the same file.

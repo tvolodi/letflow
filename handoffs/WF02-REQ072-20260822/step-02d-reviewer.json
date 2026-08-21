@@ -1,0 +1,41 @@
+{
+  "handoff_id": "3847f3cc-c57a-45dc-a5bc-be8b80d8576c",
+  "run_id": "WF02-REQ072-20260822",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ072-20260822/step-02d-reviewer.json",
+  "created_at": "2026-08-21T21:21:14Z",
+  "started_at": "2026-08-21T21:21:14Z",
+  "completed_at": "2026-08-21T21:21:14Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-072"],
+    "artifacts_in": [
+      "lib/letflow/api/context.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "test/support/req072_probe.ex",
+      "test/letflow/api/context_test.exs",
+      "handoffs/WF02-REQ072-20260822/step-02c-security-reviewer.json"
+    ],
+    "branch_name": "feature/WF02-REQ072-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 2d -- hard idiom/scope gate on ELIXIR-DEV's Step 2a implementation of Letflow.Api.Context (REQ-072), already passed SECURITY-REVIEWER at Step 2c (commit 7b7c55e). Check idiomatic OTP/Elixir usage, supervision integrity, type-safety gaps, scope creep, and decision-record consistency (0001/0003/0006) against the actual diff."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read lib/letflow/api/context.ex and lib/letflow/plugs/api_pipeline.ex in full; verified git diff main...HEAD --stat matches the expected file set exactly (context.ex new, api_pipeline.ex plug-mount edit, req072_probe.ex + context_test.exs new, design doc, this run's own bookkeeping) -- no lib/letflow/routers/*.ex touched, confirmed via diff, no fake production route invented.\n\n1. Idiom: scoped_repo_opts/1 and tenant_id_from_auth_context/1 use idiomatic tagged-tuple/case pattern matching with a `when not is_nil(tenant_id)` guard -- no bare pattern match that could raise, no default-arg fallback to an unscoped query. assign_trace_id/1's mount (a private 2-arity `defp assign_trace_id(conn, _opts)` wrapper in api_pipeline.ex delegating to Letflow.Api.Context.assign_trace_id/1) is a legitimate, common function-plug idiom, not a hack -- but it does diverge stylistically from this codebase's two existing real plugs (Letflow.Plugs.AuthPipeline, Letflow.Plugs.TenantStatus), both full `@behaviour Plug` modules under lib/letflow/plugs/ mounted directly by module name with no wrapper needed. Judged acceptable here rather than a rework item: unlike Auth/TenantStatus, assign_trace_id/1 is not a plug-only concern -- it is also called directly (by the test suite, and conceptually alongside scoped_repo_opts/1 as part of Context's public API), so folding it into a `@behaviour Plug` module would have forced a conn/opts-shaped signature onto a function with other callers. Worth watching: if a third function-shaped plug arrives folded into a non-plugs/ module, that would be the point to standardize (either always wrap, or promote a real Plug module) rather than let both idioms coexist indefinitely.\n\n2. Supervision: no process/supervision-tree change -- confirmed no gen_statem, GenServer, Supervisor, or spawn touched by this diff. N/A as expected.\n\n3. Scope creep: none found. No abstraction (behaviour, macro, generic plumbing) added ahead of what REQ-072 needs. The three-R-Co-files-fold-into-one-module choice (tenant_context.zig/trace_context.zig/pipeline_context.zig -> Letflow.Api.Context) is justified in the moduledoc by Elixir's conn replacing Zig's threadlocal for all three, not scope creep -- it's a reduction relative to R-Co's shape, not an addition.\n\n4. Decision-record consistency, re-confirmed at shipped-code level (not re-derived from scratch, per CODE-DESIGN-VALIDATOR's Step 1b pass): (a) 0003/0006 -- scoped_repo_opts/1's 'schema is the only tenant scoping' premise is correct for the tables it targets: 0006 D2 dropped tenant_id from every schema-isolated business table (and, via D1, from users/groups), which is exactly what this function relies on; 0006 D3's carve-out (tenant_id retained on 4 structurally-global public-schema tables: tenant_schemas, solution_pack_installs, solution_pack_artefact_bases, pack_update_resolutions) does not contradict this -- those tables are never schema-isolated and were never candidates for scoped_repo_opts/1's :prefix mechanism in the first place. No divergence. (b) 0001-web-framework.md Dimension B (not superseded by the Plug/Bandit addendum, per that file's own 'What this supersedes' section) names `Letflow.Plugs.Trace` as trace.zig's eventual mount point. The shipped code instead folds trace.zig's actual middleware behavior (extractOrGenerate/generateUuidV4/MAX_TRACE_ID_LEN, all named in context.ex's own doc comments) into Letflow.Api.Context.assign_trace_id/1, with no separate Letflow.Plugs.Trace module ever created. This is a real naming divergence from Dimension B's literal module list, but Dimension B's substantive requirements -- one plug entry per concern, correct ordering (trace-id assignment runs first, before auth) -- are both satisfied, and the divergence is documented at the point of change (api_pipeline.ex's moduledoc: 'This is trace.zig's own port; it no longer needs its own deferred-plug row below'). Not rework grounds, but flagged here explicitly per this gate's 'flag it either way' instruction rather than silently accepted. Noted in passing, not actioned: lib/letflow/design/req070-router-decomposition.md:184 still lists Letflow.Plugs.Trace as deferred to S6 -- a stale reference in a historical design-snapshot doc, not a live source of truth, no action needed.\n\n5. Trace deferred-plug row removal: verified correct. grep -rn \"Letflow.Plugs.Trace\\b\" across the repo (excluding .git) returns only the two decision/design-doc historical references above -- no code anywhere references a Letflow.Plugs.Trace module that doesn't exist. Removal from api_pipeline.ex's moduledoc table was accurate.\n\n6. AC1 grep-tension: read the moduledoc's 'No process dictionary, no ETS, anywhere in this module' section in full (context.ex:33-46). The prose is genuinely clear, ungarbled English -- it describes the invariant via paraphrase ('no Kernel put/get pair on self()'s dictionary', 'an :ets table') rather than contorting itself to dodge the pattern, and ran grep -rnE \"Process\\.(put|get)|:ets\\.\" lib/letflow/api/ myself: zero hits, confirmed. This is a genuine, recurring hazard class (any AC phrased as a source-grep will also scan the file documenting compliance with it) worth a permanent record, not a one-off -- added a short entry to docs/anti-patterns.md ('A grep-shaped acceptance criterion can be tripped by the module's own moduledoc describing the invariant') rather than filing a separate issue, per this gate's own instructions for a trivial, already-resolved finding.\n\nNo type-safety gap found worth filing under docs/issues/ -- scoped_repo_opts/1's return type ({:ok, prefix: String.t()} | {:error, :missing_auth_context | :invalid_tenant_id}) already makes the two failure modes explicit and machine-checkable; nothing here is a plain-map-instead-of-struct case.\n\nAll four standing checks plus both flagged mechanics (Trace row removal, grep-tension wording) verified directly against source, not accepted from ELIXIR-DEV's handoff summary. PASS.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ072-20260822/step-02d-reviewer.json",
+      "docs/anti-patterns.md"
+    ],
+    "issues": [],
+    "next_action": "Route to TEST-DESIGNER per WF-02 Step 3 (test specs and test code for the already-shipped implementation)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

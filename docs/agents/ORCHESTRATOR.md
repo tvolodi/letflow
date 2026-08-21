@@ -19,6 +19,9 @@
   `docs/agents/AGENT_SYSTEM.md` §3.1 now state explicitly too (2026-08-17,
   ISS-0021/GH#78 resolved a prior contradiction between the three documents; no other
   role writes `registry.json` directly)
+- **Commit each handoff file at DISPATCH time, before spawning the receiving agent** —
+  unconditional, no size threshold. `HANDOFF_PROTOCOL.md` §1.3 is the canonical statement
+  (ISS-0196) and this line does not restate it.
 - Spawn the correct agent for each workflow step
 - Route PASS results to the next step, FAIL results back for rework
 - Escalate when `rework_count >= max_rework`

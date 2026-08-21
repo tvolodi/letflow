@@ -77,4 +77,23 @@ queue_task_id: 196
 github_issue: https://github.com/tvolodi/letflow/issues/386
 github_issue_note: >
   Filed by ORCH on REVIEWER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (196) and its mirrored GitHub issue (#386) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0196-20260821
+resolved_at: "2026-08-21T11:49:17Z"
+resolution_note: >
+  Fixed by adding docs/agents/shared/HANDOFF_PROTOCOL.md §1.3, the canonical,
+  unconditional statement that ORCH commits every handoff file at dispatch time,
+  before spawning the receiving agent -- same discipline already applied to
+  handoffs/orchestrator.log and handoffs/registry.json. Cites this issue's own
+  WF03-ISS0117-20260821 incident (the 6,290->156 character task.description
+  replacement, recoverable only because the dispatching session was still alive)
+  as the rule's worked example, and states the interaction with §4.1's recovery
+  path: a dispatch-time commit is what lets a later recovering session decide
+  §4.1's membership-test clause 1 from git alone. docs/agents/ORCHESTRATOR.md's
+  top MUST list points at §1.3 rather than duplicating it. Instruction-precedence
+  grep (`grep -rniE 'commit.*handoff|handoff.*commit' .claude/agents/
+  docs/agents/workflows/`) found no role file or workflow doc instructing
+  commit-at-completion-only; the sole existing handoff-commit instruction is
+  HANDOFF_PROTOCOL.md §4 step 4 itself, which governs a different act (the
+  receiving agent's completion-time commit) at the same rank, so nothing
+  contradicts and nothing needed its own edit.

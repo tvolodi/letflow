@@ -216,6 +216,74 @@ not reopen or reclassify any of the 10 existing null files.
 
 ---
 
+## 1.3 The handoff file is committed at DISPATCH, before the receiving agent begins work
+
+**This subsection is the single canonical statement of this rule (ISS-0196).
+`ORCHESTRATOR.md`'s top MUST list points here and does not restate it.**
+
+**The rule, unconditional:** the moment ORCH writes a `PENDING` handoff file, it commits
+that file — `git add <handoff-path> && git commit` — before spawning the receiving agent.
+There is no size threshold and no agent-judgement gate on which dispatches qualify: every
+dispatch is committed, every time, exactly the same discipline ORCH already applies to
+`handoffs/orchestrator.log` and `handoffs/registry.json` at roughly the same point in a
+dispatch (§4's registry rule, §5's append-only rule). A handoff sat on in the working tree
+between dispatch and completion is the defect this rule closes, not a smaller version of
+the rule that is still acceptable at small sizes.
+
+**The incident this rule was written against.** In `WF03-ISS0117-20260821`, a receiving
+agent completing `step-03d-reviewer-regate.json` replaced ORCH's own **6,290-character**
+dispatched `task.description` with a **156-character** pointer reading "See the PENDING
+copy of this handoff" — a copy that does not exist, since it is the same file (§3's `task`
+row tells this incident in full; it is not restated a third time here). Because the file
+was untracked from the moment ORCH wrote it until that same completing agent's own commit,
+the dispatched text existed in no git object at any point between dispatch and that
+commit. It was recoverable only because the dispatching ORCH session happened to still be
+alive and still held the 6,290-character text in its own context, from which it was
+restored verbatim. Had that session been compacted, restarted, or died — the exact
+scenario `HANDOFF_PROTOCOL.md` §4.1 exists to handle — the record of what had actually been
+asked would have been gone permanently, with no way for anyone, ever, to tell that anything
+was missing. A dispatch-time commit removes the single point of failure that incident
+exposed: the dispatched `task` block becomes a git object at the moment it is written,
+independent of whether the dispatching session survives to be asked about it.
+
+**The interaction with §4.1's recovery path.** §4.1's membership test turns on whether *"a
+dispatch had been issued"* (clause 1) versus whether *"the dispatched agent had begun
+work"* (clause 2) — see §4.1's own membership test for the full two-clause test; it is not
+restated here. Before this rule, a session recovering a dead run could not settle clause 1
+from git alone for any step whose handoff file was still sitting untracked in the working
+tree: an untracked file and a step that was never dispatched at all look identical to a
+`git log`-only inspection, and the only other source — a live dispatching session's memory
+— is exactly what this rule stops depending on. **A dispatch-time commit is what makes
+clause 1 decidable from git alone, for every future run**: a tracked, committed handoff
+file with no corresponding commit from the receiving agent is now distinguishable from (i)
+a step never dispatched at all (no commit whatsoever, by anyone, for that step) and from
+(ii) a step the agent began and died on (a commit authored by the receiving agent, or
+content changes layered on top of ORCH's own dispatch commit). It does not change §4.1's
+(a-1)/(a-2) classification test itself, which still turns on the side-effect probe in
+§4.1(c) — it changes what evidence is available to run that test against, for the one
+clause a live session's memory was previously the only source of.
+
+**Instruction-precedence check (ISS-0196).** Grepped every role file
+(`.claude/agents/*.md`) and every workflow doc (`docs/agents/workflows/WF-*.md`) for any
+instruction that could be read as "commit handoffs only at completion" — a wording that
+would out-rank this new rule under `core-directives.md`'s Instruction Precedence chain if
+a role file (rank 2) or a workflow step (rank 3) stated it, since both out-rank this
+protocol file (rank 4):
+
+```bash
+grep -rniE 'commit.*handoff|handoff.*commit' .claude/agents/ docs/agents/workflows/
+grep -rlin 'handoff' .claude/agents/orchestrator.md
+```
+
+Both returned **no matches** of that shape. The only handoff-related commit instruction
+found anywhere in that scope is `HANDOFF_PROTOCOL.md` §4 step 4 itself ("Commit
+`handoffs/`, ... to git") — which is this file, not a role or workflow file, so it sits at
+rank 4 alongside this new subsection rather than above it, and it governs the *receiving*
+agent's completion-time commit, a different act from ORCH's dispatch-time commit this
+subsection adds. Nothing contradicts; nothing needed its own edit.
+
+---
+
 ## 2. Handoff file schema
 
 ```json

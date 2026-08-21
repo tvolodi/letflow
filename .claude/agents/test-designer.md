@@ -50,6 +50,16 @@ For a WF-03 regression test: the test must be shown to **fail against the pre-fi
 code** and pass against the fix — state this explicitly in the spec, and actually
 verify it (check out the pre-fix commit if needed) rather than asserting it.
 
+Where the pre-fix failure is that **the code under test did not exist**, that check is
+trivially satisfied and proves nothing. In that case you MUST additionally mutate the
+shipped logic, and **report at least one mutant with its measured counts** (which tests
+failed, how many) in your handoff — reverting each mutant and verifying the revert.
+Procedure and worked example: `docs/agents/workflows/WF-03_issue_resolving.md`, "When
+the pre-fix failure is 'the code under test does not exist'" — follow it there, it is
+not restated here. Reporting **no** mutants for a non-existence case is a step failure:
+TEST-DESIGN-VALIDATOR is required to re-apply one of *your reported* mutants itself, so
+an empty set leaves its mandate with nothing to act on and is a FAIL at that gate.
+
 ## Forbidden
 
 Don't write a test that only ever runs against already-correct code — that proves

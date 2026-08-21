@@ -175,14 +175,30 @@ previous run.** A failure you have structurally cleared is filed and forwarded p
 
 ## Validation
 - mix compile --warnings-as-errors: PASS
-- mix test: PASS
-- SECURITY-REVIEWER: PASS | out of scope
+- mix test: <passed> passed, <N> failed, 0 attributable to this branch
+  (attribution route <1|2|3>: <one clause naming the evidence>; recorded in
+  handoffs/<run-id>/)
+- SECURITY-REVIEWER: PASS | out of scope (<one clause: why no tenant-data path>)
 - RELEASE-VALIDATOR: PASS
 
 ## Handoffs
 handoffs/<run-id>/" \
      --base main \
      --head feature/<run-id>
+
+   ⚠️ The `mix test` line MUST NOT be written as a bare verdict. "Green" here means
+   no failure attributable to this branch (see the Precondition), NOT zero failures,
+   so a bare `PASS` next to a non-zero failure count is a red pipeline labelled OK
+   without its source — forbidden by `core-directives.md`'s "Never Call a Red
+   Pipeline OK Without a Source". Fill in the real counts and the attribution route
+   (`core-directives.md`, "Failure Attribution Is Structural, Never By
+   Count-Matching") — you already have both from step 5d; copy them. If `<N>` is 0,
+   write `0 failed` and drop the parenthetical. **The PR body is the one artefact a
+   human reads without following a pointer, so the attribution must appear IN it,
+   not only in the handoff it cites.** The `mix compile --warnings-as-errors` line
+   needs no such treatment: that gate genuinely is zero-tolerance. The
+   SECURITY-REVIEWER line carries a reason because "out of scope" is otherwise an
+   unsourced judgement in exactly the same way.
 
    For WF-03 branches use --title "fix: <one-line summary> [<run-id>]"
 

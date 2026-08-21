@@ -241,13 +241,15 @@ even if the problem is unrelated to the current task's original scope.
   `docs/agents/ORCHESTRATOR.md` §4.2).
 
 **Scope boundary.** This covers what stands in your way. A defect you merely *notice*
-while working — **for a test failure, which side of this line it falls on is decided by
-"Failure Attribution Is Structural, Never By Count-Matching" below, not by judgement** —
-unrelated, not blocking your acceptance criteria — is filed and
-forwarded, not fixed here: register it under `docs/issues/ISS-NNNN.yaml` and, if a
-`gh` remote is configured and reachable, file it as a real GitHub issue too (see "No
-Issue Left Local-Only" below). It becomes its own later run, not an unbounded scope
-creep on this one.
+while working — unrelated, not blocking your acceptance criteria — is filed and
+forwarded, not fixed here: report the finding to ORCH per
+`docs/agents/protocols/ISSUE_QUEUE.md`, which is what makes it visible work (see "No
+Issue Left Local-Only" below). You do **not** call the queue or `gh` yourself and you do
+**not** choose an issue id; only ORCH allocates ids, and a discovering agent filing
+directly is what reintroduces the id-collision class that rule exists to prevent. It
+becomes its own later run, not an unbounded scope creep on this one. **For a test
+failure, which side of this line it falls on is decided by "Failure Attribution Is
+Structural, Never By Count-Matching" below, not by judgement.**
 
 **Only exception:** a destructive or irreversible change to unrelated functionality.
 Flag those for ORCH escalation instead of touching them.

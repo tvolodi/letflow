@@ -126,4 +126,35 @@ queue_task_id: 191
 github_issue: https://github.com/tvolodi/letflow/issues/379
 github_issue_note: >
   Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (191) and its mirrored GitHub issue (#379) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0191-20260821
+resolved_at: "2026-08-21T12:37:00Z"
+resolution_note: >
+  Built `mix letflow.lint_handoffs` (lib/mix/tasks/letflow.lint_handoffs.ex), a plain
+  Mix task per the letflow.check_toolchain precedent -- not a shell script, since
+  decoding needs Jason inside the compiled app and this task carries none of
+  scripts/timed_test.sh's cold-compile-timing constraint. Hard checks (H1 status enum,
+  H2 timestamp monotonicity, H3 schema-key closure, H4 not_agent_attested well-formedness
+  read live from HANDOFF_PROTOCOL.md section 4.1(b)'s own table per ISS-0203's concern)
+  exit non-zero via Mix.raise on any un-grandfathered violation -- proved live by
+  injecting a real fixture violation, confirming exit 1, then deleting it and
+  reconfirming exit 0. Registry coverage (H5) is report-only per this issue's own
+  wording ("reports" vs "exits non-zero"), not gating. H-SIZE-1/2/3 (ISS-0198/ISS-0200)
+  and the artifacts_out self-reference WARN (ISS-0202, floored at commit 48a4a55) both
+  now run for real as advisory checks, per their existing specs in
+  HANDOFF_PROTOCOL.md's Enforcement note -- implemented against those specs, not
+  re-derived.
+
+  ISS-0190 was still open at landing time, so ISS-0191's own AC4 grandfathering path was
+  taken: the task's first real run against the 626-file corpus found exactly 30
+  pre-existing hard violations (15 H1 + 13 H3 + 2 H2), matching ISS-0190's originally
+  filed 15+13 counts precisely, plus one same-day H3 (WF02-REQ062, from ISS-0192's own
+  fix earlier today, not ISS-0190) -- each named individually by exact path in the
+  task's @grandfathered list, no wildcard suppression. HANDOFF_PROTOCOL.md's Enforcement
+  note updated to point at the tool instead of describing it as a gap; the two other
+  stale "does not run today" claims (the H-SIZE-3 result.summary paragraph, the
+  artifacts_out subsection) corrected alongside it.
+
+  Self-gating deviation: performed diagnosis/design/self-review directly, could not
+  spawn a nested subagent in this execution context -- same pattern as every other run
+  in this session.

@@ -435,8 +435,10 @@ intent, and the fix is to correct the data to conform. A self-referencing `artif
 is schema-VALID (a well-formed array of path strings); the defect is semantic, not
 structural, and its remedy is prospective clarification plus a future WARN-level check,
 not data correction. Folding a "leave history, fix forward" issue into a "correct the
-data" issue would blur two different DoDs into one, so this stays separate — a candidate
-mechanical check is added to `ISS-0191`'s scope instead; it does not run today.
+data" issue would blur two different DoDs into one, so this stays separate — the
+mechanical check runs today as `mix letflow.lint_handoffs`'s ARTIFACTS_OUT_SELF_REF
+WARN (ISS-0191), scoped to handoffs created at or after this subsection's own landing
+commit, per the floor rule stated above.
 
 ### `result.git_evidence.commit_sha_list` — what it covers, and what it structurally cannot
 
@@ -1306,26 +1308,46 @@ reporting — see `core-directives.md`'s fuller statement of this rule and its r
 
 ## Enforcement note
 
-R-Co enforces this protocol mechanically via `tools/lint_handoffs.py` (schema
-conformance, timestamp monotonicity, encoding, registry coverage) after a 2026-08-05
-pipeline audit found unenforced bookkeeping rules were followed at 0.4-8.6% compliance
-despite being written down. Letflow does not have an equivalent linter yet — this is a
-known gap, not an oversight. Until one exists, every validator role and ORCH itself must
-manually check handoff files for schema/timestamp violations as part of its own gate,
-per its role file. Building a `mix letflow.lint_handoffs` task (or a plain script, per
-the precedent in `docs/anti-patterns.md`'s Mix-task-discovery-cost finding) is worth
-raising as its own requirement once the pipeline has run enough cycles to show whether
-Letflow drifts the same way R-Co did.
+**Settled 2026-08-21 (ISS-0191). Letflow now enforces this protocol mechanically, the
+same way R-Co enforces its own via `tools/lint_handoffs.py`** (schema conformance,
+timestamp monotonicity, registry coverage), adopted there after a 2026-08-05 pipeline
+audit found unenforced bookkeeping rules were followed at 0.4-8.6% compliance despite
+being written down.
+
+**Run it:**
+
+```
+mix letflow.lint_handoffs
+```
+
+A plain `Mix.Task` (`lib/mix/tasks/letflow.lint_handoffs.ex`), following the existing
+precedent of `mix letflow.check_toolchain`. It validates every file under `handoffs/`
+against this document's §2 schema, §4.1(b)'s `not_agent_attested` member set (read live
+from that section's own table, not hardcoded — so an edit to §4.1(b) is what the task
+next measures, not something it silently drifts away from), and reports registry
+coverage against `handoffs/registry.json`. **Exits non-zero (`Mix.raise/1`) on any
+un-grandfathered hard violation** — the moduledoc in that file is the canonical
+statement of exactly which checks gate and which are advisory-only; this note does not
+duplicate it. Every validator role and ORCH may now run this task as part of its own
+gate instead of checking handoff files by hand.
+
+**Pre-existing violations are individually grandfathered, not suppressed.** As of this
+task's own first run against the corpus (626 files), 30 files carry a pre-existing hard
+violation traced to ISS-0190 (still open at the time this landed) — 15 illegal
+top-level `status` values, 13 non-schema top-level keys, 2 negative `started_at`/
+`completed_at` gaps. Each is named individually, by exact path, in the task's own
+`@grandfathered` list — no wildcard or pattern-based suppression exists in that file.
+A **new** file hitting the same rule is not covered by that list and fails the build.
+When ISS-0190 closes, its resolving run should re-run this task and remove any entries
+it cleared (an entry surviving a corpus fix is itself now a false-negative, worth
+flagging).
 
 ### Specified but NOT YET RUNNING — H-SIZE-1/2/3 (added 2026-08-21, ISS-0198)
 
-**None of these three checks runs today, and nothing in this file should be read as
-saying otherwise.** They are specified here, where the linter's spec lives, so that
-whoever builds it implements them without judgement. ISS-0191 (the linter) is open and
-unbuilt, and names ISS-0190's 15+13 existing schema violations as a likely prerequisite —
-a size check added to that scope will not run green until ISS-0190 is cleared. Until the
-linter exists these are a specification and a manual reading aid, not a gate, and no
-handoff passes or fails on them.
+**These three checks now run, as of ISS-0191, as advisory (WARN/INFO) output only —
+never affecting the exit code.** The "NOT YET RUNNING" heading below is retained
+verbatim as the historical spec (ISS-0191 implemented exactly what it says, without
+re-deriving it); read the Enforcement note above for current status.
 
 Per handoff file, using only `json.load`, `len`, substring search and `basename` — no
 repo state, no cross-file reads, no NLP, no judgement:
@@ -1371,11 +1393,11 @@ mechanism that would notice this drift recurring: the ISS-0198 measurement found
 45 corpus files over 4,000 chars belong to five runs dated within a single day, so it is
 recent drift rather than a standing property of the pipeline.
 
-**The `result.summary` figures H-SIZE-3 emits are reporting only, and H-SIZE-3 does not
-run today either** — the "None of these three checks runs today" framing at the head of
-this section covers the extension exactly as it covers the rest. They were added by
-ISS-0200, whose measured negative result is recorded in §2: no result-side restatement
-mechanism exists in the corpus today, so there is nothing for a check to gate on, and a
-WARN would be a length rule on `result.summary` by the back door. The figures exist so
+**The `result.summary` figures H-SIZE-3 emits are reporting only — INFO, never WARN,
+never a pass/fail, even now that `mix letflow.lint_handoffs` runs H-SIZE-3 for real
+(ISS-0191).** They were added by ISS-0200, whose measured negative result is recorded
+in §2: no result-side restatement mechanism exists in the corpus today, so there is
+nothing for a check to gate on, and a WARN would be a length rule on `result.summary`
+by the back door. The figures exist so
 that if the result side ever *does* acquire such a mechanism, the drift is visible without
 a fresh investigation.

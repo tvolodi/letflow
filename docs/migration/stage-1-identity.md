@@ -167,3 +167,40 @@ invocation, HEAD `1b1ab1f`, plus the untracked
 tests), 0 failures**, exit code 0, run three times with consistent results.
 `mix compile --warnings-as-errors` and `mix format --check-formatted` both
 exit 0.
+
+---
+
+## What S1 deferred, and where it is now tracked (added 2026-08-22)
+
+S1 delivered the identity **logic** and narrowed scope deliberately: token
+verification, claim mapping, JIT provisioning, tenant↔realm binding, and
+`Letflow.Plugs.AuthPipeline`, all against exactly one configured realm/issuer,
+with "no real Keycloak/realm-provisioning exists yet" recorded above as a scope
+narrowing rather than a deviation. That was correct and this section does not
+reopen the stage.
+
+It does close a dead end. The deferral had no forward pointer, and a gap
+analysis on 2026-08-22 found what that cost:
+
+- `docker-compose.yml` declares exactly one service, `postgres`. There is no
+  identity provider in this system.
+- `config/dev.exs` **and** `config/prod.exs` both carry
+  `issuer: "https://placeholder-keycloak.invalid/realms/bpm-default"`.
+- `application.ex` starts `Oidcc.ProviderConfiguration.Worker` against that
+  issuer unconditionally with `backoff_type: :random`, so a running node retries
+  a non-existent host indefinitely and `TokenVerifier.Oidcc` can never verify a
+  token.
+- `config/test.exs` uses `Letflow.Oidc.TokenVerifierDouble`, so the full suite
+  passes with no provider running. **No test in this repository has ever
+  exercised a real token** — which is why none of the above surfaced as a
+  failure for months.
+- Nothing creates a realm. `tenants.idp_realm_id` can point at a realm that has
+  never existed, and nothing notices until a login fails.
+
+Tracked as `REQ-128` (Keycloak in the dev stack, real issuer, five-role realm)
+through `REQ-135` (per-tenant realm provisioning design), filed under **S4** —
+S4's goal is an API surface that serves an authenticated, authorized request,
+and these are its preconditions. See also
+[`decisions/0013-authorization-role-set.md`](decisions/0013-authorization-role-set.md),
+which settles a role-set drift between the authorization matrix, R-Co's realm
+fixture, and the SPA's nav gating.

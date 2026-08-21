@@ -1,7 +1,7 @@
 # Design: ISS-0224 — `Letflow.SandboxPool` provisioning must not block the pool's mailbox
 
 **Run:** `WF03-ISS0224-20260822` (GH#457, queue task 224) · **Author:** CODE-DESIGNER ·
-**Status:** proposed — **REWORK ROUND 1** applied 2026-08-22, awaiting CODE-DESIGN-VALIDATOR
+**Status:** proposed — **REWORK ROUND 2** applied 2026-08-22, awaiting CODE-DESIGN-VALIDATOR
 
 > ## REWORK NOTICE — round 1 (2026-08-22)
 >
@@ -22,7 +22,27 @@
 > Also applied: §7 step 5's "every event that calls it frees exactly one slot" wording fix.
 > Nothing the validator cleared was re-litigated; §16 lists what was left untouched.
 
-**Verdict up front:** the fix is **NOT BLOCKED**, and after F1's correction it no longer
+> ## REWORK NOTICE — round 2 (2026-08-22)
+>
+> CODE-DESIGN-VALIDATOR returned FAIL with three findings. It **confirmed all three of round 1's
+> headline claims by independent measurement** — peak DB demand 2 at `pool_size=2` (5/5 pass
+> serialized vs 3/3 fail with round 0's shape), RT-2's surviving magnitude assertion and RT-7
+> both 0/20 and 15/15-impossible pre-fix and 20/20 post-fix with waiter overshoot 1–3 ms, and
+> decision 0009's floor of 2 adequate for the pool. **The F1 fix itself is therefore correct and
+> was not redesigned.** What round 2 fixes is a hazard that fix *created*, plus two
+> documentation-integrity defects.
+>
+> | # | Finding | Round-1 state | Round-2 outcome |
+> |---|---|---|---|
+> | **R2-F1** (MAJOR) | Fixing F1 created an unhandled death-path interleaving, and made INV-SP-A3 false | §7 step 2 copies `owner_ref` into the `{:drop, purpose: :release}` op **and** retains the `active` entry, so for 441–625 ms one ref is in both. An owner dying in that window missed clause B cases 1–4 and fell through to case 5, which deleted `active`, freed the slot and enqueued a **second** drop — contradicting §2.2/INV-SP-5, §7's `:release_failed` branch and §5's `db_queue` bound | **FIXED IN THE DESIGN, not disclosed.** New clause B **case 4b**, ordered before case 5 (§7 step 3): demonitor, delete the `active` entry in that same callback, and **rewrite the already-scheduled op in place** to `purpose: :release_orphaned` (`from: nil`, `owner_ref: nil`) — no second drop, no reply to a dead caller. INV-SP-A3 **restated** as ordered classification with the one enumerated overlap; the proof went from four points to five. INV-SP-5 restated with its live-owner precondition and **reconciled** with INV-SP-DOWN-3 (§8.2 — they are two halves of one rule, selected by whether the owner is alive; they never both apply). INV-SP-A4 gains fifth death path **(e)**. §5's bound corrected to an in-contract `2 × max_concurrent`. §4.4 **(I)** records the demonitor-at-enqueue alternative as **REJECTED** with its reason (permanent slot leak on the failed-DROP path — `sandbox_pool.ex:253-254`). New regression case **RT-8** |
+> | **R2-F2** (MODERATE) | RT-2's assertions were silently re-lettered and the document contradicted itself | Round 1 deleted (c) and promoted (d) into the (c) slot without re-lettering the summaries; §10.3's table had no row (d), while `:16` said "(c) is deleted" and `:1180` told TEST-DESIGNER to implement "RT-2(c)". The load-bearing row also mistyped its own reason as `2·t_w1 < t_w1` | **FIXED.** The survivor is **(d)** everywhere; (c) is kept as an explicit struck-through **deleted** row in the table so the audit trail lives in the table, not only in prose; the typo now reads `2·t_w2 < t_w1`. Every reference updated in one pass (§10.3, §10.4, §15, §16, this notice) |
+> | **R2-F3** (MINOR) | RT-7 was a mandatory fail-first with no vacuity guard while its sibling RT-2 had one | RT-7's ratio `4·t_probe < t_b` goes green pre-fix on any host provisioning under 80 ms, silently | **FIXED.** RT-7 gains premise **(a)** `t_b >= 200` else `flunk/1`, the same shape and the **same** 200 ms floor as RT-2(a) — **no new constant**; the count in §10.4 is still zero. RT-7's rows were re-lettered (a→b, b→**c**) and the re-lettering is stated in the block itself and applied everywhere, per R2-F2's lesson. §10.4 now names **both** guards |
+>
+> Also applied: the validator's round-2 150-sample window (min 423 ms) added to §10.4's table
+> (six windows now); §11 gains items 16–18 fencing the case-4b decision. §16's round-2 section
+> lists what the validator cleared and this round therefore did not touch.
+
+**Verdict up front (unchanged in round 2):** the fix is **NOT BLOCKED**, and after F1's correction it no longer
 regresses at `TEST_MIN_POOL_SIZE = 2` — the configuration whose reachability was used to
 reject the alternative in round 0. Peak DB-connection demand is **2, the same as today**,
 and that is measured (§3.7), not asserted. No new constant is introduced anywhere,
@@ -168,7 +188,7 @@ magnitude.
   round 0; F1 forced the reversal — §2.3.)
 - The slot-reservation bookkeeping an asynchronous completion requires.
 - Establishing the owner monitor **before** provisioning starts.
-- The three-way `:DOWN` dispatch.
+- The multi-way `:DOWN` dispatch (six live cases plus a no-op — §7 step 3 clause B).
 - One new child in `lib/letflow/application.ex`, ordered **before** the pool (F3).
 
 ### 2.2 Explicitly NOT in scope
@@ -179,8 +199,14 @@ magnitude.
 - `claim/2`'s and `release/2`'s public `@spec`s, arities and error taxonomy — unchanged
   (§6.1, V9).
 - **`release/2`'s return contract** — unchanged: it still replies only once the DROP has
-  resolved, still reports `:ok` vs `{:error, :release_failed}`, still retains the `active`
-  entry on failure. Only *where the DROP executes* changes (§2.3).
+  resolved, still reports `:ok` vs `{:error, :release_failed}`, and still retains the `active`
+  entry on failure **while the owner is alive**. Only *where the DROP executes* changes (§2.3).
+
+  *The "while the owner is alive" qualifier was added in round 2 (F1). It is not a change to
+  the contract — `sandbox_pool.ex:248` vs `:253-254` already behaves exactly this way, and a
+  dead owner has no contract left to observe. Round 1 stated the retention unconditionally,
+  which was simply inaccurate for the dead-owner path. Full reconciliation with
+  INV-SP-DOWN-3 in §8.2's INV-SP-5 entry.*
 - `FixtureLoader`, `Letflow.Definitions`, any migration, any config file, any HTTP route.
 
 ### 2.3 `drop_schema/1` — **IN** scope (round 1 reversal, forced by F1)
@@ -418,6 +444,18 @@ untouched and the three existing tests depending on it keep passing unchanged.
   transaction and a half-migrated schema.
 - **(H) Two workers — one for provisioning, one for drops.** Peak demand returns to 3, i.e.
   F1 again. Rejected for the same measurement (V12).
+- **(I) REJECTED (round 2, F1): demonitor `owner_ref` when the release-drop is enqueued, and
+  carry `owner_ref: nil` in the `{:drop, purpose: :release}` op.** This would make INV-SP-A3's
+  at-most-one-collection property true again with no new clause-B case, which is exactly what
+  makes it tempting. **It is wrong, and the shipped code says so.** `sandbox_pool.ex:248`
+  demonitors **only** on the DROP's `:ok` path; `:253-254` replies `{:error, :release_failed}`
+  and leaves the monitor deliberately live, so that a later death of that same owner still
+  reaches `find_active_by_owner_ref/2` and triggers a reclaim retry. Cancelling the monitor at
+  enqueue time removes the pool's only remaining handle on that owner: if the DROP then fails,
+  the `active` entry is retained (INV-SP-5) with **no live monitor**, and nothing — not owner
+  death, not anything else — can ever free that slot again. It converts a recoverable failure
+  into a permanent slot leak. Recorded here so a future reader does not re-propose it as a
+  simplification.
 
 ---
 
@@ -471,9 +509,9 @@ provision_op() :: %{
 drop_op() :: %{
   schema_name: String.t(),
   sandbox_id:  String.t(),
-  from:        GenServer.from() | nil,   # nil on reclaim/orphan paths
+  from:        GenServer.from() | nil,   # nil on reclaim/orphan/release_orphaned paths
   owner_ref:   reference() | nil,
-  purpose:     :release | :reclaim | :orphan
+  purpose:     :release | :reclaim | :orphan | :release_orphaned
 }
 
 in_flight() :: %{
@@ -490,8 +528,32 @@ Field-by-field rationale:
   plus a `pending_drops` queue) is what makes "at most one DB operation in flight" a
   structural property rather than an invariant to maintain across two structures, and FIFO
   ordering means a pending DROP always runs before a later provisioning, so the two never
-  contend. Bounded by `max_concurrent` provisions plus at most one drop per active claim,
-  i.e. ≤ `2 × max_concurrent`.
+  contend.
+
+  **Bound, corrected in round 2 (F1).** Counting `db_queue` plus the one `in_flight` op:
+  - `{:provision, _}` ops: **≤ `max_concurrent`**, because each one holds a slot and INV-SP-A1
+    caps `slots_in_use/1` at `max_concurrent`.
+  - `{:drop, _}` ops: **at most one per slot**, and therefore ≤ `max_concurrent`. Each of the
+    four purposes is enqueued at a point that consumes the only thing that could produce
+    another for the same slot: `:release` and `:reclaim` are the only two paths out of an
+    `active` entry and both are reached from `Map.fetch(active, id)` / `find_active_by_owner_ref/2`
+    on an entry that then stops being reachable as a *new* drop source (a released entry's
+    second `release/2` is out of contract — see below; a reclaimed entry is deleted, so a
+    later `release/2` returns `{:error, :not_found}` with no op); `:orphan` is enqueued only as
+    a provision op is discarded; `:release_orphaned` is a **rewrite in place** of an existing
+    `:release` op, never a new one.
+  - Total, **within the moduledoc's same-process claim/release contract: ≤ `2 × max_concurrent`.**
+
+  **Two things round 0/round 1 got wrong here, both fixed.** (i) Round 1's clause-B fall-through
+  to case 5 could produce a *second* drop for one slot (`:release` still queued plus a new
+  `:reclaim`), breaking this bound; §7 step 3's **case 4b** removes that path, which is what
+  restores `2 × max_concurrent`. (ii) §6.4's benign duplicate — a second, **out-of-contract**
+  process calling `release/2` for the same `sandbox_id` before the first DROP resolves — can
+  still add one extra `{:drop, _}` per such caller. Those are bounded by the number of
+  out-of-contract callers, **not** by `max_concurrent`, and the bound above is therefore stated
+  as an in-contract bound. Each duplicate is idempotent (`DROP … IF EXISTS`, `Map.delete/2`)
+  and self-clearing, so it is a bound question only, never a correctness one. No guard is
+  added; see §6.4.
 - **`in_flight`** — `nil` or exactly one record. `nil` is "idle"; there is nowhere to put a
   second operation, which is how the serialization is enforced.
 - **`owner_ref`** — established at **reservation** time via `Process.monitor(owner_pid)`,
@@ -506,6 +568,13 @@ Field-by-field rationale:
 - **`owner_down?`** — set when the owner's `:DOWN` arrives while its provisioning is still
   running. The worker is not killed (§4.4 (G)); its result is discarded and its schema
   enqueued for dropping.
+- **`purpose`** — decides two things at completion, and nothing else: whether a reply is owed
+  (`:release` only — the other three carry `from: nil`) and whether a **failed** DROP retains
+  the `active` entry (`:release` only — see INV-SP-5 as restated in §8.2). `:release_orphaned`
+  is the round-2 addition (F1): a `:release` op whose owner died while it was queued or in
+  flight. It is produced **only** by §7 step 3 clause B case 4b rewriting an existing op in
+  place — never enqueued fresh — and it is what makes case 4b resolve the death without a
+  redundant second drop.
 
 **Quota (hazard 1):**
 
@@ -598,6 +667,20 @@ queued waiters (`:325`, `:341`).
 
 @spec remove_pending_provision_by_owner_ref(db_queue :: :queue.queue(), owner_ref :: reference()) ::
         :queue.queue()
+
+# NEW IN ROUND 2 (F1). Searches BOTH state.db_queue AND state.in_flight.op for a
+# {:drop, d} with d.purpose == :release and d.owner_ref == owner_ref. Returns which
+# of the two holds it, so the caller (§7 step 3 clause B case 4b) knows whether to
+# rewrite in_flight or to replace in place inside db_queue. At most one such op can
+# exist (§5's bound).
+@spec find_release_drop_by_owner_ref(state :: map(), owner_ref :: reference()) ::
+        {:in_flight, drop_op()} | {:queued, drop_op()} | nil
+
+# Replaces one op inside db_queue while PRESERVING ITS FIFO POSITION (a rebuild of
+# the queue, not a remove-then-append -- reordering would let a later provisioning
+# overtake a pending DROP, which §5's FIFO argument relies on not happening).
+@spec replace_queued_op(db_queue :: :queue.queue(), old :: op(), new :: op()) ::
+        :queue.queue()
 ```
 
 Unchanged: `handle_queue_or_reject/3` (`:317-326`), `find_waiter/2`, `remove_waiter/2`,
@@ -633,6 +716,13 @@ sites:
 When `owner_down? == true`, **no reply is sent** — the caller is dead. (`GenServer.reply/2`
 to a dead pid is a harmless no-op, so this is a clarity choice; stated so an implementer does
 not add one and a reviewer does not flag its absence.)
+
+**The same rule on the release path (round 2, F1).** A `{:drop, purpose: :release}` op's `from`
+is the release caller itself. If that caller dies before the DROP resolves, §7 step 3 clause B
+case 4b sets `from: nil` (via `purpose: :release_orphaned`), so row 4 of the table above simply
+does not fire. The op is still completed; only the reply is dropped. INV-SP-A2's stated
+exception ("except when its owner has died") covers this without amendment — for a release,
+the owner *is* the caller.
 
 **A benign duplicate, named rather than guarded.** With the DROP deferred, a *second*
 process could call `release/2` for the same `sandbox_id` before the first DROP completes,
@@ -727,6 +817,20 @@ The `active` entry is **retained** until the DROP's result is known — unchange
 and what keeps INV-SP-5 and the quota correct (the slot is not reusable while a schema may
 still exist).
 
+**The `owner_ref` is deliberately copied, not moved (round 2, F1).** For the whole duration of
+the DROP (measured 441–625 ms, §4.2) the *same* `reference()` is present in **two** places: this
+op's `owner_ref` **and** the retained `active` entry's `owner_ref`. That is intentional, and it
+is the one enumerated exception to INV-SP-A3 (§8.4). The monitor is **not** cancelled at
+enqueue time, exactly as the shipped code does not cancel it on the `{:error, :release_failed}`
+path (`sandbox_pool.ex:253-254` replies with the error and leaves the monitor live), so that a
+later owner death still routes to a reclaim retry instead of stranding the slot.
+
+**Consequence, handled in §7 step 3 clause B case 4b:** an owner that dies inside this window
+would otherwise fall through to case 5 (the reclaim path), which would delete the `active`
+entry and enqueue a **second** drop for the same schema. Case 4b exists to catch it first. See
+§4.4 (I) for why the obvious alternative — demonitor at enqueue and set `owner_ref: nil` — is
+rejected.
+
 ### Step 3 — `handle_info/2`, one clause per message *shape* (F4)
 
 **F4 is a real compile-time hazard, not a style note.** V15: `mix letflow.check` runs
@@ -777,24 +881,38 @@ END
     in_flight: nil                            # nothing created; no reply
 
 {:drop, d}, :ok ->
-    IF d.from != nil THEN
+    IF d.from != nil THEN                     # d.purpose == :release only
       Process.demonitor(d.owner_ref, [:flush])
       GenServer.reply(d.from, :ok)
     END
     in_flight: nil, active: Map.delete(state.active, d.sandbox_id)
-    # Map.delete is idempotent -- on the :reclaim and :orphan paths the entry is
-    # already absent
+    # Map.delete is idempotent -- on the :reclaim, :orphan and :release_orphaned
+    # paths the entry is already absent
 
 {:drop, d}, {:error, :release_failed} ->
-    IF d.from != nil THEN GenServer.reply(d.from, {:error, :release_failed}) END
+    IF d.purpose == :release THEN             # implies d.from != nil, d.owner_ref != nil
+      GenServer.reply(d.from, {:error, :release_failed})
+      active entry RETAINED, monitor left LIVE
+      # INV-SP-5 (§8.2, as restated in round 2): retention is a LIVE-OWNER guarantee.
+      # The owner just received the error and may retry release/2; and if it dies
+      # instead, its still-live owner_ref reaches clause B case 5 and the slot is
+      # reclaimed. Matches sandbox_pool.ex:253-254 exactly.
+    ELSE                                       # :reclaim | :orphan | :release_orphaned
+      no reply (from == nil)
+      active entry already absent -- deleted at :DOWN time, unconditionally
+      # INV-SP-DOWN-3: with no live owner there is nobody to retry, so the slot is
+      # never held hostage by a DROP that failed. The schema may leak; that trade is
+      # ISS-0048's, made here identically (§8.2).
+    END
     in_flight: nil
-    # active entry RETAINED on the :release path (INV-SP-5); already removed on the
-    # :reclaim path (INV-SP-DOWN-3); never present on the :orphan path
 ```
 
-**Clause B — `{:DOWN, ref, :process, _pid, _reason}`**, five-way dispatch (hazard 3). The
-first two checks are exact equality against singly-stored references; the last three search
-disjoint collections.
+**Clause B — `{:DOWN, ref, :process, _pid, _reason}`**, **six-way** dispatch plus a no-op
+(hazard 3; case 4b added in round 2). The first two checks are exact equality against
+singly-stored references. The last three search collections that are disjoint **except for one
+enumerated pairing** — a `{:drop, purpose: :release}` op's `owner_ref` and the retained `active`
+entry it was copied from (§7 step 2) — which is why **the cases are ordered, not merely
+disjoint**, and why case 4b must precede case 5. See INV-SP-A3(iii)–(iv).
 
 ```
 CASE
@@ -811,8 +929,14 @@ CASE
           GenServer.reply(p.from, {:error, :provision_failed})
         END
       ELSE  # in_flight.op is {:drop, d} -- the DROP itself died
-        IF d.from != nil THEN GenServer.reply(d.from, {:error, :release_failed}) END
-        # entry retained on the :release path, exactly as a failed DROP would
+        IF d.purpose == :release THEN
+          GenServer.reply(d.from, {:error, :release_failed})
+          active entry RETAINED, monitor left LIVE
+        END
+        # Exactly the same live-owner/dead-owner split as clause A's
+        # {:error, :release_failed} branch, for the same reason (INV-SP-5 vs
+        # INV-SP-DOWN-3, §8.2). On :reclaim / :orphan / :release_orphaned there is
+        # no `from` to reply to and the entry is already absent.
       END
       in_flight: nil ; service_next_waiter ; pump
 
@@ -834,6 +958,40 @@ CASE
       #     No schema exists, so nothing to drop; just free the slot.
       db_queue: remove_pending_provision_by_owner_ref(...) ; service_next_waiter ; pump
 
+  find_release_drop_by_owner_ref(state, ref) != nil ->
+      # (4b) NEW IN ROUND 2 (F1): an owner died while ITS OWN {:drop, purpose: :release}
+      #      op was still QUEUED or IN FLIGHT. Reachable: Definitions.safe_release/2
+      #      calls release/2 from a `rescue` path (definitions.ex:1818-1826), and
+      #      ISS-0048's existing test kills an owner outright.
+      #
+      #      MUST be evaluated BEFORE case 5. In this window `ref` is present in TWO
+      #      places -- this op's owner_ref and the retained active entry's owner_ref
+      #      (§7 step 2, INV-SP-A3(iii)) -- so case 5 would also match. Case 5 would
+      #      delete the active entry AND enqueue a SECOND drop for the same schema.
+      #
+      #      Searches BOTH state.db_queue and state.in_flight.op for a {:drop, d} with
+      #      d.purpose == :release and d.owner_ref == ref. At most one can exist
+      #      (§5's bound), so no ambiguity.
+      Process.demonitor(ref, [:flush])
+
+      # (i) free the slot in THIS callback, exactly as case 5 does -- INV-SP-DOWN-2/3
+      active: Map.delete(state.active, d.sandbox_id)
+
+      # (ii) rewrite the op IN PLACE; do NOT enqueue a second drop
+      d' = %{d | from: nil, owner_ref: nil, purpose: :release_orphaned}
+      IF the op is in state.in_flight THEN
+        in_flight: %{in_flight | op: {:drop, d'}}
+        # Legal: in_flight.op is pool-local data. The worker holds only the
+        # schema_name STRING and is unaffected; the rewrite changes only what
+        # complete_op/3 does when the result arrives.
+      ELSE
+        db_queue: replace that op in place, PRESERVING ITS FIFO POSITION
+      END
+
+      # (iii) no reply: the owner is the blocked release/2 caller and it is dead
+      #       (§6.4's "no reply to a dead caller" rule; INV-SP-A2's stated exception)
+      service_next_waiter ; pump
+
   find_active_by_owner_ref(state.active, ref) != nil ->
       # (5) ISS-0048's dead-owner reclaim. Behaviour preserved, execution relocated:
       #     the active entry is removed IMMEDIATELY and unconditionally (INV-SP-DOWN-3
@@ -850,21 +1008,48 @@ CASE
 END
 ```
 
-**Why a worker ref can never be mistaken for a caller ref (INV-SP-A3):**
+**Why case 4b rewrites rather than reclaims (round 2, F1 — the decision, taken here).**
+
+Three candidate behaviours were considered for an owner dying on top of its own release-drop.
+
+| candidate | outcome |
+|---|---|
+| **do nothing new** (round 1 as written: fall through to case 5) | `active` deleted, slot freed, **a second drop enqueued for the same schema**. Safe only by luck — `DROP … IF EXISTS`, `Map.delete/2` and `GenServer.reply/2`-to-a-dead-pid are all idempotent — while contradicting §2.2/INV-SP-5, §7's `:release_failed` branch and §5's `db_queue` bound. **Rejected: correct by accident is not a design.** |
+| **rewrite the op, delete `active` only at completion** (the validator's suggested shape) | No duplicate drop, no contradiction. But the slot stays counted for the remaining drop duration (441–625 ms), which weakens INV-SP-DOWN-2's "the slot is freed in that same callback". |
+| **rewrite the op AND delete `active` in the `:DOWN` callback — CHOSEN** | No duplicate drop, and the slot is freed in the same callback, so case 4b becomes *exactly* case 5 with one difference: the drop it needs is already scheduled, so it retargets that one instead of enqueuing another. INV-SP-DOWN-2 and INV-SP-DOWN-3 both hold verbatim, unweakened. |
+
+The chosen shape is safe because deleting `active` frees only a **counter**, not a name: any
+claim admitted into the freed slot mints a fresh globally-unique schema (INV-SP-4), and FIFO
+ordering (§5) guarantees the pending DROP runs before that new provisioning. Nothing the freed
+slot admits can collide with the schema still being dropped.
+
+**Why a ref is always classified correctly (INV-SP-A3):**
 
 1. `task_ref` is written to exactly one place, `state.in_flight.task_ref`, and never to
-   `waiting`, `db_queue`, or `active`.
-2. `owner_ref` and `caller_ref` come from `Process.monitor/1` and live in exactly one
-   collection at a time. A reservation's `owner_ref` moves out of `db_queue` and into
-   `in_flight` atomically inside `pump/1`; a claim's moves out of `in_flight` and into
+   `waiting`, `db_queue`, or `active`. It is also produced by `async_nolink`, never by
+   `Process.monitor/1` on a caller, so it is disjoint from every owner/caller ref by origin.
+2. A **provision** op's `owner_ref` lives in exactly one collection at a time. It moves out of
+   `db_queue` and into `in_flight` atomically inside `pump/1`, and out of `in_flight` and into
    `active` atomically inside `complete_op/3`.
 3. A waiter's `caller_ref` is demonitored-and-flushed and its timer cancelled at promotion
    (step 5), *before* a distinct `owner_ref` is established — the two never coexist.
-4. Checks (1) and (2) are exact `==` against fields of one record, evaluated first, so no
-   search can shadow them.
+4. Checks (1) and (2) — clause B cases 1 and 2 — are exact `==` against fields of one record,
+   evaluated first, so no search can shadow them.
+5. **A `{:drop, purpose: :release}` op's `owner_ref` is the one exception, and it is why the
+   case ordering (not merely case disjointness) is load-bearing.** §7 step 2 **copies** the ref
+   out of the `active` entry instead of moving it, and retains the entry, precisely so the
+   monitor stays live across a failed DROP (§4.4 (I)). For that op's whole lifetime the same
+   ref is therefore in **both** the op and the `active` entry, and **both** case 4b and case 5
+   match it. Case 4b is ordered first, so the pairing always resolves to the op — the strictly
+   more informative of the two, since it alone knows a drop is already scheduled. When the op
+   resolves, `complete_op/3` sets `in_flight: nil` and (on the `:release` path) the entry and
+   its ref are removed together; the pairing is bounded by exactly one op's duration and
+   involves exactly one ref. Round 1 stated (2) unconditionally and therefore asserted
+   something false; this is the corrected statement, and INV-SP-A3 in §8.4 matches it.
 
-The validator independently checked this proof, including that Erlang orders `{ref, result}`
-before `{:DOWN, ref, …, :normal}` so clause A's flush is reliable, and found it sound.
+The validator independently checked points 1–4 of this proof, including that Erlang orders
+`{ref, result}` before `{:DOWN, ref, …, :normal}` so clause A's flush is reliable, and found
+them sound. Point 5 is new in round 2 and is the finding it raised as F1.
 
 ### Step 4 — `handle_info({:claim_timeout, caller_ref}, state)`
 
@@ -935,19 +1120,50 @@ targeting a disjoint database object by construction.*
   only `sandbox_[0-9a-f]{32}`, still never reading a caller value. The identifier-injection
   argument `tenant_provisioning.ex:111-122` documents (INV-7) is unaffected. **Stated for
   SECURITY-REVIEWER explicitly**, because minting changes location in this diff.
-- **INV-SP-5** — held: `release/2` still replies with the DROP's real outcome and still
-  retains the `active` entry on `{:error, :release_failed}` (§7 step 3, `{:drop, d}` cases).
-- **INV-SP-6** — held (step 3 clause B case 3), and case 4 extends the same guarantee to a
-  queued reservation.
+- **INV-SP-5** — held, with its **precondition made explicit in round 2 (F1)**. `release/2`
+  still replies with the DROP's real outcome, and still retains the `active` entry on
+  `{:error, :release_failed}` — **while the owner is alive** (§7 step 3, the `{:drop, d}`,
+  `{:error, :release_failed}` branch).
+
+  **The precondition is not a weakening; it is what the shipped code already does.** Retention
+  exists for exactly one purpose: the owner has just been told `{:error, :release_failed}` and
+  may retry `release/2`, and its monitor is deliberately left live
+  (`sandbox_pool.ex:253-254`) so that if it dies instead, the reclaim path frees the slot
+  anyway. Both halves of that rationale require a live owner.
+
+  **Reconciliation with INV-SP-DOWN-3 ("never hold a slot hostage"), which round 1 left in
+  genuine conflict on this path.** The two invariants are not competing rules over the same
+  state; they are the two halves of one rule, selected by whether the owner is alive:
+
+  | owner | governing invariant | behaviour on a failed DROP |
+  |---|---|---|
+  | **alive** | INV-SP-5 | `active` entry retained, monitor left live, error returned. There is a process that can retry, and a monitor that will catch it if it dies instead. Retention costs a slot only until one of those two happens. |
+  | **dead** | INV-SP-DOWN-3 | `active` entry already deleted (at `:DOWN` time, by case 4b or case 5), slot already free, no reply. Retention would be indefinite — nobody can retry and no further `:DOWN` can arrive — i.e. the exact "slot held hostage" INV-SP-DOWN-3 forbids. |
+
+  So the priority order is **INV-SP-DOWN-3 over INV-SP-5, and the two never both apply**: an
+  owner is alive or it is not, and the `:DOWN` that changes the answer is also what deletes the
+  entry. The residual is a **schema** leak on a dead-owner failed DROP, which is ISS-0048's
+  existing, accepted trade (INV-SP-DOWN-3 makes it deliberately: slot before schema), made here
+  identically rather than re-decided.
+
+  **§2.2's unconditional wording is corrected to match** — it now reads "retains the `active`
+  entry on failure **while the owner is alive**".
+- **INV-SP-6** — held (step 3 clause B case 3), and cases 4 and 4b extend the same guarantee to
+  a queued reservation and to a queued-or-in-flight release-drop.
 - **INV-SP-7** — held; `start_link/1` untouched.
 - **INV-SP-DOWN-1** — **strengthened**: every `active` claim, every queued reservation and
   every in-flight provisioning has a live `owner_ref`. No window remains in which a
   claim-in-progress has no owner monitor.
 - **INV-SP-DOWN-2** — held: reclaim still happens within one message round-trip of the
-  `:DOWN`; the slot is freed in that same callback. Only the DROP itself is enqueued.
-- **INV-SP-DOWN-3** — held **explicitly and deliberately**: the reclaim path removes the
-  `active` entry unconditionally at `:DOWN` time, before the DROP has run, so a DROP failure
-  can never strand a slot. §7 step 3 clause B case 5.
+  `:DOWN`; the slot is freed in that same callback. Only the DROP itself is enqueued. **Round 2
+  (F1): case 4b holds it verbatim too** — it deletes the `active` entry in the `:DOWN` callback
+  rather than deferring the deletion to the op's completion, which is why the chosen shape in
+  §7 step 3's candidate table beat the alternative that deferred it.
+- **INV-SP-DOWN-3** — held **explicitly and deliberately** on **both** dead-owner paths: the
+  `active` entry is removed unconditionally at `:DOWN` time, before the DROP has run, so a DROP
+  failure can never strand a slot. §7 step 3 clause B **case 5** (no drop scheduled yet — one
+  is enqueued) and **case 4b** (a drop is already scheduled — it is retargeted, not
+  duplicated). See the INV-SP-5 entry above for how the two invariants are ordered.
 - **INV-SP-DOWN-4, DOWN-5** — held unchanged.
 - **INV-SP-T1, T2, T3** — held; no timeout derivation is touched.
 - **INV-SP-T5** — held; §4.3 argues why the queue does not disturb it.
@@ -1016,16 +1232,46 @@ remains open. No number and no invariant in that document changes.
   exactly once, from exactly one of §6.4's five sites — except when its owner has died, in
   which case it is deliberately not replied to at all. Per-`from`; §6.4's benign-duplicate
   case does not violate it.
-- **INV-SP-A3 (ref disjointness).** At any point between callbacks a given `reference()`
-  appears in at most one of: `in_flight.task_ref`, an op's `owner_ref`, a `waiting` entry's
-  `caller_ref`, an `active` entry's `owner_ref`. §7 step 3's four-point argument is the proof.
+- **INV-SP-A3 (ref classification is unambiguous — RESTATED IN ROUND 2, F1).**
+  *Round 1 stated this as blanket disjointness — "a given `reference()` appears in at most one
+  of `in_flight.task_ref`, an op's `owner_ref`, a `waiting` entry's `caller_ref`, an `active`
+  entry's `owner_ref`". **That was false**, because §7 step 2 copies `owner_ref` into the
+  `{:drop, purpose: :release}` op while retaining the `active` entry it came from. The
+  invariant the design actually needs — and provably has — is not disjointness but
+  determinacy of classification.* At any point between callbacks:
+  - **(i)** `in_flight.task_ref` is disjoint from every owner/caller ref, by origin
+    (`async_nolink` vs `Process.monitor/1`) and by storage (written to exactly one field).
+  - **(ii)** A `waiting` entry's `caller_ref` never coexists with an `owner_ref` for the same
+    claim: promotion demonitors-and-flushes it before `reserve_slot/2` establishes a new one.
+  - **(iii)** An `owner_ref` appears in exactly one collection, **with one enumerated
+    exception**: from `handle_call({:release, _})` until the resulting `{:drop, purpose:
+    :release}` op completes, it is in **both** that op and the retained `active` entry. This
+    is deliberate (§4.4 (I)), bounded by one op's duration, and involves at most one ref per
+    slot (§5's bound).
+  - **(iv)** Clause B's cases are therefore **ordered, not merely disjoint**. Cases 1 and 2 are
+    exact `==` and run first; **case 4b runs before case 5**, so the one pairing in (iii)
+    always resolves to the op; every other pair of cases searches genuinely disjoint
+    collections. **Every `:DOWN` ref reaches exactly one case, and it is the intended one.**
+
+  §7 step 3's five-point argument is the proof; point 5 covers (iii)–(iv).
 - **INV-SP-A4 (no monitor gap; no leak on any death).** An owner is monitored from reservation
   time, strictly before any schema exists. Consequently: (a) an owner dying while parked leaks
   nothing; (b) an owner dying while its reservation is queued leaks nothing and frees its slot;
   (c) an owner dying **during** provisioning leaks nothing — the worker finishes, its schema is
   enqueued for dropping, the slot is freed; (d) a worker dying abnormally leaks nothing — the
   pool enqueues a drop of the pre-minted `schema_name`, replies to a live owner, frees the
-  slot. In all four the pool survives and the quota returns to its pre-claim value.
+  slot; **(e) (ADDED IN ROUND 2, F1) an owner dying while its own `{:drop, purpose: :release}`
+  op is queued or in flight** leaks nothing and frees its slot — clause B case 4b deletes the
+  `active` entry in that same callback and rewrites the already-scheduled op to
+  `:release_orphaned`, so exactly **one** drop runs for that schema, no reply is sent to the
+  dead caller, and no second op is enqueued. Reachable in practice:
+  `Definitions.safe_release/2` calls `release/2` from a `rescue` path
+  (`definitions.ex:1818-1826`), and ISS-0048's existing test kills an owner outright. Covered
+  by RT-8. In all **five** the pool survives and the quota returns to its pre-claim value.
+
+  *Round 1 enumerated only (a)–(d) and let (e) fall through to the reclaim path, which deleted
+  the `active` entry and enqueued a redundant second drop. That is F1; (e) is the fix, not a
+  disclosure.*
 - **INV-SP-A5 (peak DB demand — the F1 invariant).** At most one DB operation is in flight at
   any time, so peak concurrent DBConnection checkouts attributable to the pool is **2** (a
   provisioning: the worker plus `Ecto.Migrator`'s inner `Task.async`) or **1** (a DROP) —
@@ -1171,14 +1417,22 @@ claim latency (≈ one provisioning); `t_w2` = W2's.
 |---|---|---|---|
 | a | **Premise**, checked first: `t_w1 >= 200`, else `flunk/1` naming the measured value and this § — a host that provisions in under 200 ms cannot exhibit the defect and a green result there would be vacuous | 476–578 ms ✓ | 416–575 ms ✓ |
 | b | W2's result is `{:error, :sandbox_unavailable}`; W1's is `{:ok, %SandboxClaim{}}` | ✓ | 20/20 ✓ |
-| c | **`2 * t_w2 < t_w1`** — the load-bearing fail-first | **0/20 — FAILS**, because `t_w2 == t_w1` exactly in 20/20 runs, so `2·t_w1 < t_w1` is false | **20/20 ✓**, minimum observed ratio `t_w1/t_w2` = **7.91**, i.e. ~4× headroom over the 2× threshold |
+| ~~c~~ | ~~"the first completion message has `label == :w2`"~~ — **DELETED in round 1**, not renumbered. Kept as a struck row so the audit trail reads correctly and so no future reader re-adds it | held **3/20** in my run, **5/20** in the validator's (V13) — a biased coin flip, not a mechanism | — |
+| d | **`2 * t_w2 < t_w1`** — the load-bearing fail-first | **0/20 — FAILS**, because `t_w2 == t_w1` exactly in 20/20 runs, so `2·t_w2 < t_w1` is false | **20/20 ✓**, minimum observed ratio `t_w1/t_w2` = **7.91**, i.e. ~4× headroom over the 2× threshold |
+
+**Lettering, fixed in round 2 (F2).** Round 1 deleted (c) and silently promoted (d) into the
+(c) slot, leaving the document asserting both "(c) is deleted" and "implement RT-2(c)".
+**The surviving ratio assertion is (d), everywhere in this document**, and (c) is a deleted
+letter that is never reused. The struck row above exists so the table itself carries that fact
+rather than relying on the prose beneath it. *(Round 1 also mistyped the pre-fix reason as
+`2·t_w1 < t_w1`; the assertion is `2·t_w2 < t_w1`, and pre-fix it fails because `t_w2 == t_w1`.)*
 
 **Round 0's assertion (c) — "the first completion message has `label == :w2`" — is deleted.**
 It held 3/20 pre-fix (V13) and would have licensed a regression test that goes green against
 unfixed code roughly a quarter of the time.
 
-**Round 0's "either alone failing pre-fix is enough for fail-first" licence is removed.** RT-2(c)
-and RT-7 are **both required**; neither may be dropped, and RT-2(c) may not be replaced by a
+**Round 0's "either alone failing pre-fix is enough for fail-first" licence is removed.** RT-2(d)
+and RT-7 are **both required**; neither may be dropped, and RT-2(d) may not be replaced by a
 message-ordering assertion.
 
 #### RT-3 — death path (a): the caller dies while parked in `waiting`
@@ -1243,25 +1497,93 @@ flight. The test process then calls `claim(0, pool)` — a DB-free path that mus
 
 | # | Assertion | Pre-fix (measured, shipped pool, n=15) | Post-fix (measured, prototype, n=15) |
 |---|---|---|---|
-| a | result is `{:error, :sandbox_unavailable}` | 15/15 ✓ | 15/15 ✓ |
-| b | **`4 * t_probe < t_b`** | **0/15 — FAILS**: latency 369/375/376/379/389/421/432/465/472/503/510/521/525/1129 ms, i.e. the probe sat in the blocked mailbox for a full provisioning | **15/15 ✓** — latency **min 0, max 0 ms** |
+| a | **Premise**, checked first (**ADDED IN ROUND 2, F3**): `t_b >= 200`, else `flunk/1` naming the measured value and §10.4 — same shape, same threshold and same rationale as RT-2(a), reusing the **same** vacuity floor rather than introducing a second constant | ≥ 369 ms ✓ (the (c)-row latencies below are `t_probe ≈ t_b − 60`, so every `t_b` ≥ 429) | 416–575 ms ✓ (same host, same provisioning cost as RT-2(a)) |
+| b | result is `{:error, :sandbox_unavailable}` | 15/15 ✓ | 15/15 ✓ |
+| c | **`4 * t_probe < t_b`** | **0/15 — FAILS**: latency 369/375/376/379/389/421/432/465/472/503/510/521/525/1129 ms, i.e. the probe sat in the blocked mailbox for a full provisioning | **15/15 ✓** — latency **min 0, max 0 ms** |
 
-The same atom is returned in both, so the discriminator is purely latency, with a margin of
+**Why RT-7 needs (a), and why round 1's version was unsound without it (F3).** RT-7's ratio
+`4 * t_probe < t_b` goes green pre-fix on any host that provisions in under 80 ms — pre-fix
+`t_probe ≈ t_b − 60`, so the ratio holds whenever `t_b < 80`. That is exactly the vacuous-pass
+hazard RT-2(a) exists to prevent, and round 1 gave the guard to one of the two mandatory
+fail-firsts and not the other. The floor is **the same 200 ms**, applied to the same quantity
+class (one provisioning), so this adds **no** new constant — see §10.4.
+
+**Lettering note (round 2).** RT-7's rows were re-lettered when (a) was inserted: round 1's
+(a) → (b), round 1's (b) → **(c)**. This is stated rather than done silently, and every
+reference in this document was updated in the same pass (§10.4, §15) — F2's lesson applied to
+the change F3 required. RT-2 and RT-7 now share a shape: **(a) is the premise guard in both**;
+the load-bearing ratio is RT-2(**d**) and RT-7(**c**), the letters differing only because RT-2
+carries a deleted (c) that is never reused.
+
+The same atom is returned in both arms, so the discriminator is purely latency, with a margin of
 **≥ 369 ms against 0 ms**. Deterministic in a way round 0's deleted ordering assertion never
 was, and it needs no constant: `t_b` is measured in the same test. Pre-fix `t_probe ≈ t_b − 60`
 (the probe starts 60 ms after B), so `4·t_probe < t_b` requires `t_b < 80` — never true for a
-≥ 411 ms provisioning.
+≥ 411 ms provisioning, which is precisely what (a) now asserts instead of assuming.
+
+#### RT-8 — death path (e): the owner dies while its **release-drop** is queued or in flight
+
+**NEW IN ROUND 2 (F1).** **Post-fix-only** (pre-fix there is no `db_queue` and no deferred
+DROP at all, so the scenario has no pre-fix analogue). Exercises §7 step 3 clause B **case 4b**
+and INV-SP-A4(e). Its job is to prove that the case-4b path — not the case-5 fall-through
+round 1 would have taken — is what actually runs.
+
+**The scenario is built to make the window wide and the state stable**, so the anti-duplicate
+assertion is a direct read rather than a race:
+
+Pool `max_concurrent: 2`; `pool_size` requirement **2** (one provisioning in flight, INV-SP-A5),
+every verification query through `query_without_holding/1` (§10.2, §10.5).
+
+1. Snapshot `sandbox_schema_names/0`.
+2. `spawn_claimer(pool, :o1, 0)` claims and holds a slot; the test records its `sandbox_id`
+   from the reported `{:ok, %SandboxClaim{}}`.
+3. `spawn_claimer(pool, :a, 0)` claims the second slot. Poll `:sys.get_state(pool)` until
+   `in_flight` is a `{:provision, _}` for A — a ≥ 411 ms window.
+4. Tell O1 to release. O1 calls `release/2` **itself** (same-process contract, moduledoc
+   `:33-46`) and blocks in its `GenServer.call`. Poll until `db_queue` holds a
+   `{:drop, %{purpose: :release, sandbox_id: <O1's id>}}` op — it is **queued**, not in flight,
+   because A's provisioning owns the worker.
+5. `Process.exit(o1_pid, :kill)`.
+
+Assert — first **synchronously**, on the next `:sys.get_state(pool)` after the pool has
+processed the `:DOWN` (poll until `active` no longer holds O1's `sandbox_id`; A's provisioning
+is still running, so the pool state is quiescent and inspectable):
+
+- **no duplicate drop — the direct assertion against the case-5 fall-through:** `db_queue`
+  contains **exactly one** `{:drop, _}` op whose `sandbox_id` is O1's. Round 1's behaviour
+  would show **two** here (the original `:release` op plus a `:reclaim` op). This is the whole
+  point of the case, and it is deterministic, not timing-dependent;
+- that op has `purpose == :release_orphaned`, `from == nil`, `owner_ref == nil`;
+- **the slot was freed in the `:DOWN` callback** (INV-SP-DOWN-2/3): O1's `sandbox_id` is absent
+  from `active`.
+
+Then let the pool drain and assert, bounded by `SandboxPool.release_call_timeout/0` (the file's
+existing derived polling bound — **no new constant**):
+
+- **no schema leak:** once A completes and releases, the `sandbox_schema_names/0` snapshot is
+  restored — O1's schema was dropped exactly once and A's was dropped on release;
+- **no slot leak:** two fresh `claim(0, pool)` calls both succeed;
+- `in_flight == nil` and `db_queue` empty;
+- **the pool is alive** (`Process.alive?/1`), and it never received a reply-to-a-dead-caller
+  crash.
+
+*Not a fail-first, and not counted as one.* Like RT-3..RT-6 it is a death-path guard; the two
+mandatory fail-firsts remain RT-2(d) and RT-7(c).
 
 ### 10.4 No new constant — and the round-0 self-calibration claim, corrected
 
 The handoff requires any new constant to be derived from measurement and to survive a different
 but equally legitimate sample window. **This contract introduces none.**
 
-- RT-2(c) and RT-7(b) are **ratios of two quantities measured inside the same test on the same
+- RT-2(d) and RT-7(c) are **ratios of two quantities measured inside the same test on the same
   host**.
-- The premise guards (RT-2(a)) use `200` ms, which is not a tolerance but a **vacuity floor**:
-  below it the defect cannot exist and the test says so loudly instead of passing green.
-- RT-3..RT-6's polling bounds already exist in the file, derived from
+- The premise guards — **RT-2(a) and RT-7(a)** — use `200` ms, which is not a tolerance but a
+  **vacuity floor**: below it the defect cannot exist and the test says so loudly instead of
+  passing green. **They share one value, deliberately.** RT-7(a) was added in round 2 (F3)
+  because RT-7 was a mandatory fail-first with no guard while its sibling had one; it guards
+  the same quantity class (one provisioning latency) against the same floor, so it introduces
+  **no second constant** — the count of new constants in this contract is still **zero**.
+- RT-3..RT-6 and RT-8's polling bounds already exist in the file, derived from
   `SandboxPool.release_call_timeout/0` — reused, not re-derived.
 
 **The vacuity floor's derivation, corrected (F5).** Round 0 cited 446 ms as the project-wide
@@ -1274,10 +1596,14 @@ minimum provisioning and "2.2× below". Both figures were wrong.
 | Mine, RT-2 prototype `t_w1` | 20 | **416 ms** |
 | Mine, `scratch/iss0224_repro.exs` | 10 | 446 ms |
 | Validator's independent window | — | 464 ms (p50 524, p90 603, max 1035) |
+| Validator's round-2 re-check, a fresh window (**their measurement, attributed**) | 150 | **423 ms** |
 
 Governing figure: **411 ms** (the lowest, from much the largest sample). **200 ms sits 2.06×
-below it**, and 2.08× below my own first-hand lowest of 416 ms. Five windows agree; the
-conclusion is unchanged and the arithmetic is now right.
+below it**, and 2.08× below my own first-hand lowest of 416 ms. **Six** windows now agree —
+the validator's round-2 window of 150 samples put the minimum at 423 ms, above the governing
+figure, so the floor is unchanged and is not being re-derived here. The conclusion holds and
+the arithmetic is right. **The same floor now serves RT-7(a) as well as RT-2(a)** (F3), which
+is why no second figure had to be derived.
 
 **Round 0's self-calibration claim was wrong, and the fix is structural, not arithmetical.**
 Round 0 argued that ratio assertions "self-calibrate in the safe direction because a slower
@@ -1303,7 +1629,7 @@ F1's third consequence required every case to state its `pool_size` requirement.
 |---|---|---|---|
 | RT-1 | 0 (nothing provisions) | 1 | ✓ |
 | RT-2, RT-3, RT-4, RT-6 | 1 provisioning | 2 | ✓ |
-| RT-5, RT-7 | 1 provisioning (INV-SP-A5 — serialized) | 2 | ✓ |
+| RT-5, RT-7, **RT-8** | 1 provisioning (INV-SP-A5 — serialized; RT-8's queued DROP runs only *after* A's provisioning completes, never beside it) | 2 | ✓ |
 
 **Every case fits within `TEST_MIN_POOL_SIZE = 2`, on one condition: the test process must not
 hold an `:auto` checkout of its own** — hence `query_without_holding/1` (§10.2). This is a
@@ -1342,7 +1668,9 @@ pre-existing finding rather than something this contract may quietly change.
 10. **Do not change `release/2`'s observable contract.** It must still reply only once the
     DROP has resolved, still return `:ok` / `{:error, :not_found}` / `{:error,
     :release_failed}`, and still **retain** the `active` entry on `{:error, :release_failed}`
-    (INV-SP-5).
+    **while the owner is alive** (INV-SP-5 as restated in §8.2). On the dead-owner path the
+    entry is already gone and INV-SP-DOWN-3 governs — that is not a contract change, it is the
+    contract having no observer left.
 11. **Do not change how `schema_name` is constructed** (INV-SP-4 / INV-7).
 12. **Write one `handle_info/2` clause per message *shape*, branching in the body** — the
     worker-result handler and the unknown-ref no-op must be a single
@@ -1357,6 +1685,19 @@ pre-existing finding rather than something this contract may quietly change.
 14. **Do not weaken, widen, skip or delete any existing test.** The only permitted edits to
     existing test files are §9.1's comment corrections.
 15. **Do not add a `:task_supervisor` option, a `claim/3`, or any other new public surface.**
+16. **Do not demonitor `owner_ref` when the release-drop is enqueued, and do not set that op's
+    `owner_ref: nil`.** It looks like a simplification — it would make INV-SP-A3 hold as plain
+    disjointness and remove the need for clause B case 4b — and it is a permanent slot leak on
+    the failed-DROP path. §4.4 (I) states the full reason. The monitor must stay live exactly
+    as `sandbox_pool.ex:253-254` keeps it live today.
+17. **Order clause B's cases as written: case 4b BEFORE case 5.** They are ordered, not
+    disjoint (INV-SP-A3(iv)). Swapping them, or writing case 4b as a subcase of case 5,
+    reintroduces the duplicate `{:drop, _}` op and re-breaks §5's `db_queue` bound. RT-8 is
+    the test that catches it.
+18. **Case 4b must rewrite the existing op in place, preserving its FIFO position, and must
+    NOT enqueue a second drop** (§6.2's `replace_queued_op/3`). Removing-and-appending would
+    let a later provisioning overtake a pending DROP, which §5's FIFO argument relies on not
+    happening.
 
 ---
 
@@ -1367,7 +1708,7 @@ pre-existing finding rather than something this contract may quietly change.
 | `lib/letflow/sandbox_pool.ex` | §5 state shape, §6.2 private functions, §7 algorithms, moduledoc paragraph describing the serialized-worker shape and the "at most one DB operation in flight" property | ELIXIR-DEV |
 | `lib/letflow/application.ex` | one child added, **before** `{Letflow.SandboxPool, []}` (§6.6) | ELIXIR-DEV |
 | `lib/letflow/design/iss0220-sandbox-pool-provision-timeout.md` | prose-only addendum under §12 and §16 OQ-3 (§8.3) | ELIXIR-DEV |
-| `test/letflow/sandbox_pool_test.exs` | new `describe` block (RT-1..RT-7), three new helpers (§10.2), one comment correction | TEST-DESIGNER |
+| `test/letflow/sandbox_pool_test.exs` | new `describe` block (RT-1..RT-8), three new helpers (§10.2), one comment correction | TEST-DESIGNER |
 | `test/letflow/definitions/promotion_assertion_rerun_test.exs` | comment-only correction (§9.1) | TEST-DESIGNER |
 | `test/specs/ISS-0224.md` | case rationale + pre-fix/post-fix expectations | TEST-DESIGNER |
 | `docs/issues/ISS-0224.yaml` | status transitions | DOC-UPDATER |
@@ -1469,7 +1810,7 @@ floor should be re-examined in that run — with a measurement, not an argument.
 | **Re-verify the validator's own findings rather than accept them** | V12 (F1), V13 (F2), V14 (F3), V15 (F4), V16 (F1's fix), V17 — each reproduced before being acted on |
 | Hazard 1 — slot bookkeeping; reservation before provisioning; released on failure | §5, §7 steps 1/2/3, INV-SP-A1 |
 | Hazard 2 — owner dies during provisioning | §5, §7 step 3 clause B case 2 + clause A `owner_down?` branches, INV-SP-A4(c), RT-4 |
-| Hazard 3 — three ref classes dispatched unambiguously | §7 step 3 clause B + its four-point proof, INV-SP-A3 |
+| Hazard 3 — three ref classes dispatched unambiguously | §7 step 3 clause B + its **five**-point proof, INV-SP-A3 (restated in round 2) |
 | Hazard 4 — `from` held across callbacks | §6.1, §6.4, INV-SP-A2 |
 | Hazard 5 — monitor the caller, not the worker | §6.5, §11 item 5, INV-SP-A4 |
 | Hazard 6 — INV-SP-1 preserved or weakened | §8.1, INV-SP-1' |
@@ -1481,22 +1822,27 @@ floor should be re-examined in that run — with a measurement, not an argument.
 | **F2 — re-derive the ratios against real variance** | §10.4 — the objection is answered structurally, with post-fix `t_w2` ∈ [51,53] and min ratio 7.91 measured at `pool_size` 2 |
 | **F3 — supervisor ordering** | §6.6, §11 item 13, §12, V14 |
 | **F4 — one `handle_info` clause per message shape** | §7 step 3, §11 item 12, V15 |
-| **F5 — corrected minimum and multiple** | §10.4 — 411 ms, 2.06×, five windows tabulated |
+| **F5 — corrected minimum and multiple** | §10.4 — 411 ms, 2.06×, six windows tabulated |
 | **F6 — name decision 0009** | §0.2, §3.7, §14 OQ-6, §12's not-touched list |
+| **R2-F1 — the death-path interleaving F1's own fix created** | §7 step 2 (the copied `owner_ref`, stated), §7 step 3 clause B **case 4b** + the candidate table, §4.4 **(I)** (the rejected demonitor-at-enqueue, with its reason), §5 (`purpose`, corrected `db_queue` bound), §6.2 (two new helpers), §6.4 (no reply to a dead release caller), §8.2 (INV-SP-5 restated + reconciled with INV-SP-DOWN-3), §8.4 (INV-SP-A3 restated, INV-SP-A4(e) added), **RT-8** |
+| **R2-F2 — RT-2's lettering contradicted itself** | §10.3 — survivor is **(d)** everywhere, (c) kept as a struck deleted row, `2·t_w2 < t_w1` typo fixed; every reference updated (§10.4, §15, §16, REWORK NOTICE) |
+| **R2-F3 — RT-7 had no vacuity guard** | §10.3 RT-7(a) (`t_b >= 200`, same floor as RT-2(a), no new constant), rows re-lettered explicitly, §10.4 names both guards |
 | Hazard 9 — `:sys.get_state/1` technique | §9.1 — valid unchanged; comment-only correction |
 | Hazard 10 — `drop_schema/1` in or out | §2.3 — **IN**, reversed, with the round-0 error named |
 | No implementation code | Signatures, `@spec`s, state shapes, prose/pseudocode only |
 | No existing test weakened | §9.4, §11 item 14 |
-| Any new constant derived and window-stable | §10.4 — **zero**; the one figure used is a vacuity floor checked against five windows |
-| Regression test failing PRE-FIX behaviourally | RT-2(c) (0/20 pre-fix) **and** RT-7(b) (0/15 pre-fix), both required |
-| Explicit tests for the three death paths | RT-3, RT-4, RT-5, RT-6 |
+| Any new constant derived and window-stable | §10.4 — **zero**; the one figure used is a vacuity floor checked against six windows, and round 2's RT-7(a) reuses it rather than adding a second |
+| Regression test failing PRE-FIX behaviourally | RT-2(**d**) (0/20 pre-fix) **and** RT-7(**c**) (0/15 pre-fix), both required, both now premise-guarded |
+| Explicit tests for the death paths | RT-3, RT-4, RT-5, RT-6, **RT-8** (the fifth path, round 2) |
 | "Files the implementation must touch" | §12 |
 | "What ELIXIR-DEV must NOT change" | §11 |
 | Open questions stated, not guessed | §14 OQ-1..OQ-6 |
 
 ---
 
-## 16. What round 1 deliberately did NOT change
+## 16. What each round deliberately did NOT change
+
+### 16.0 Round 1
 
 The validator listed what it had checked and found sound. Per `core-directives.md`'s
 "Never resolve a conflict silently" and to keep this rework auditable, none of it was
@@ -1519,3 +1865,29 @@ One item the validator flagged as a word-fix was applied rather than defended: �
 "every event that calls it frees exactly one slot" was **removed**, not repaired — the
 `slots_in_use/1` guard is the real reason the promotion is correct, and the false claim added
 nothing.
+
+### 16.1 What round 2 deliberately did NOT change
+
+Round 2's verdict re-confirmed round 1's three headline claims **by independent measurement**,
+and explicitly named a set of items as not to be re-litigated. None of them was touched:
+
+- **§3's measurements, §4's decision, and the serialized-worker shape.** Peak DB demand 2 at
+  `pool_size = 2` was reproduced 5/5 by the validator against 3/3 failures with round 0's
+  shape. The F1 fix is correct; round 2 changes only a death path that fix created.
+- **INV-SP-A1 across all fourteen transitions**, re-checked under the new state shape.
+- **INV-SP-A2 per-`from`**, including the absorbed stale `{:claim_timeout, _}`. Case 4b needed
+  no amendment to it — INV-SP-A2's existing "except when its owner has died" exception already
+  covers a release whose caller died (§6.4).
+- **The `task_ref` half of INV-SP-A3** — clause A dispatches on `state.in_flight.op`'s kind and
+  only one op is ever in flight. Point 1 of the proof is unchanged; only points 2 and 5, about
+  `owner_ref`, moved.
+- **§10.4's vacuity floor of 200 ms and the 411 ms / 2.06× arithmetic.** The validator's fresh
+  150-sample window (min 423 ms) was *added* to the table as a sixth agreeing window, not used
+  to re-derive anything.
+- **F3 (supervisor ordering), F4 (single `handle_info` clause), §9.1's partial map match, and
+  §4.2's "relocated not created" latency argument** — all confirmed sound in round 2.
+- **§13 item 5's pre-existing finding** that `sandbox_pool_test.exs` is already marginal at
+  `TEST_POOL_SIZE = 2` on **shipped** code — independently verified by the validator (5/8 at 2,
+  8/8 at 3; all three failures `{:error, :provision_failed}` at `:257`/`:362`/`:410`). Still
+  reported, still not fixed here.
+- **The absence of implementation code**, re-checked before this round's edits and after.

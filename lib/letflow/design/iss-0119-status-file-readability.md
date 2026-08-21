@@ -102,8 +102,13 @@ line 5,766 may be touched** — not the header, not whitespace, not a comment. V
 # handoffs/ and test/reports/ cite this path, and
 # lib/letflow/design/iss-0078-pin-rebind-provenance.md:367 cites line 5158 of it
 # by number. Nothing here is rewritten, corrected, renumbered or moved. Reads of
-# this volume are TARGETED reads only (grep/awk/sed with a line range); it is
-# 361,376 bytes and a whole-file read is refused by the Read tool.
+# this volume are TARGETED reads only — a line range or a pattern match, never a
+# whole-file read; it is 361,376 bytes and a whole-file read is refused by the
+# Read tool. Use whichever your shell has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
 #
 # NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
 #   docs/status/requirement_status.index.yaml
@@ -183,6 +188,9 @@ volumes:
     lines: 5766
     bytes_working_tree: 361376
     # SHA-256 of lines 1..5766 with CRLF normalised to LF, i.e. the frozen prefix.
+    # The hashed stream terminates EVERY line with a single \n, including the
+    # last, so it ends in \n. Exact definition and reference implementations:
+    # lib/letflow/design/iss-0119-status-file-readability.md §8.
     # Asserted unchanged by test/docs/requirement_status_invariants_test.exs.
     frozen_prefix_lines: 5766
     frozen_prefix_sha256: "<computed at Step 3 — see design §8>"
@@ -237,8 +245,20 @@ known_anomalies:
 
 This text is copied verbatim into `docs/status/requirement_status.v2.yaml` and into every
 volume opened thereafter (only the `VOLUME n` line, the predecessor line, and the opening
-date change). Every command below is runnable today on this repo; none assumes a full read
-of a file that cannot be fully read.
+date change).
+
+**Shell coverage is part of the specification, not a formatting preference.** This repo runs
+on Windows with PowerShell as the primary shell *and* Bash; `grep`, `sed`, `awk`, `wc` and
+`date` do **not** exist in PowerShell (`grep --version` there returns
+`The term 'grep' is not recognized as the name of a cmdlet, function, script file, or
+operable program`). A procedure whose first step is a bare GNU-coreutils invocation is
+therefore unexecutable for roughly half the sessions that run it — which is ISS-0119's own
+defect reproduced inside ISS-0119's fix. **Every command in the header below is given as a
+labelled Bash/PowerShell pair, or is a `git` invocation that is identical in both**, and no
+step assumes a full read of a file that cannot be fully read. The both-shells precedent is
+already set by `core-directives.md:156-161`. This rule binds every future volume header too:
+a new volume is opened by copying this text verbatim, so a single-shell command introduced
+here would propagate forever.
 
 ```yaml
 # Letflow — Requirement run history — VOLUME 2 (CURRENT)
@@ -263,16 +283,29 @@ of a file that cannot be fully read.
 #
 # ── HOW TO APPEND (this is the procedure; it is executable, run it) ───────────
 #
-# 1. Confirm you are writing to the current volume. Never assume this file is it:
-#      grep -n 'status: current' -B 2 docs/status/requirement_status.index.yaml
+# 1. Confirm you are writing to the current volume. Never assume this file is it.
+#    Run the ONE LINE for YOUR shell — grep does not exist in PowerShell, and
+#    Select-String does not exist in bash. Each is a single line; do not wrap it:
+#      Bash:
+#        grep -n 'status: current' -B 2 docs/status/requirement_status.index.yaml
+#      PowerShell:
+#        Select-String -Path docs/status/requirement_status.index.yaml -Pattern 'status: current' -Context 2,0
+#    Both print the `- volume:` / `path:` lines above the `status: current`
+#    marker. The `path:` value they show is the file you append to.
 #
 # 2. Read THIS volume in full — one Read call on this path, no offset, no limit.
 #    That is possible by construction: the roll rule below keeps every current
 #    volume under 1,200 lines / 120,000 bytes, inside the Read tool's 256KB and
 #    2,000-line limits. If that read is refused or truncated, STOP: the roll rule
 #    has failed and that is itself a defect to file, not to work around.
-#      Bash:       wc -l docs/status/requirement_status.v2.yaml
-#      PowerShell: (Get-Item docs/status/requirement_status.v2.yaml).Length
+#    Confirm both bounds before you rely on the read (lines AND bytes — a
+#    line-truncated read is silent):
+#      Bash:
+#        wc -l < FILE ; wc -c < FILE
+#      PowerShell:
+#        (Get-Content FILE).Count ; (Get-Item FILE).Length
+#    (FILE = docs/status/requirement_status.v2.yaml. PowerShell has no `&&`;
+#    `;` chains unconditionally in both shells.)
 #
 # 3. Get the timestamp from the clock, never from memory:
 #      Bash:       date -u +"%Y-%m-%dT%H:%M:%SZ"
@@ -435,6 +468,26 @@ This is the part that makes the fix not merely a clock reset.
 line-oriented parsing with the standard library plus `:crypto` for the digest; the files are
 machine-regular: entries start with `  - req: ` and fields with four-space indent).
 
+**Plus one support module — this is a design decision, not a detail, because it is what makes
+the fail-first demonstration possible (see §7.1).**
+
+**`test/support/status_history.ex`**, module `Letflow.Test.StatusHistory`. `mix.exs:20`
+already compiles `test/support` in `:test`, so no build change is needed. Every check below
+is a **pure function taking an explicit path or explicit bounds**, never reading a hardcoded
+location:
+
+- `parse_index(index_path) :: %{roll_rule: %{max_lines: pos_integer, max_bytes: pos_integer}, volumes: [%{volume:, path:, status:, frozen_prefix_lines:, frozen_prefix_sha256:}], known_anomalies: [%{path:, line:, field:, value:}]}`
+- `measure(volume_path) :: %{lines: non_neg_integer, bytes: non_neg_integer}` — working tree,
+  `File.stat!/1` for bytes
+- `within_bounds?(volume_path, max_lines, max_bytes) :: :ok | {:error, %{lines:, bytes:, max_lines:, max_bytes:, over: [:lines | :bytes]}}`
+- `entries(volume_path) :: [%{req:, event:, agent:, at:, line:}]`
+- `anomalies(volume_path, legal_reqs, legal_events) :: [%{path:, line:, field:, value:}]`
+- `frozen_prefix_digest(volume_path, line_count) :: String.t()` — the §8 byte-stream
+  convention, lowercase hex
+
+The test file wires these to the real index; §7.1 wires `within_bounds?/3` to the pre-fix
+state. Nothing in the module knows that `docs/status/requirement_status.index.yaml` exists.
+
 Assertions, all derived from the index file so the test never hardcodes a volume list:
 
 - **A1 — Index/disk agreement.** Every `path:` in `volumes:` exists; every file matching
@@ -442,11 +495,9 @@ Assertions, all derived from the index file so the test never hardcodes a volume
   no dangling entry.
 - **A2 — Exactly one current volume.** Exactly one entry has `status: current`; all others
   `closed`.
-- **A3 — THE ISS-0119 REGRESSION ASSERTION.** The current volume's line count ≤
-  `roll_rule.max_lines` and its byte size (`File.stat!`, working tree) ≤
-  `roll_rule.max_bytes`. *This assertion would have failed on 2026-08-18 at commit
-  3d19e8c, 2.5 days before ISS-0119 was filed by hand.* It is the regression test for this
-  issue.
+- **A3 — THE ISS-0119 REGRESSION ASSERTION.**
+  `StatusHistory.within_bounds?(current_volume_path, roll_rule.max_lines, roll_rule.max_bytes)`
+  returns `:ok`. Paired with **A3b**, its fail-first counterpart, in §7.1.
 - **A4 — Vocabulary conformance.** Across every volume, every `req:` value matches
   `REQ-\d{3}` or `SCOPE-CHANGE`; every `event:` value is one of the six legal values; every
   entry carries all five fields in order with a parseable ISO-8601 `at:`. Exceptions only
@@ -462,13 +513,75 @@ Assertions, all derived from the index file so the test never hardcodes a volume
   sits beyond the prefix so it can be written once and the digest still pins every entry.
 - **A7 — Volume chain integrity.** Every closed volume's footer names its successor's path,
   and that path is the next volume in the index.
-- **A8 — Header completeness.** The current volume's header names all six legal `event`
-  values and both legal `req` values. A future volume opened by copy-paste error, or a
-  vocabulary extension that skips the header, is caught.
+- **A8 — Header completeness, including the ceilings.** The current volume's header names all
+  six legal `event` values and both legal `req` values. A future volume opened by copy-paste
+  error, or a vocabulary extension that skips the header, is caught. **A8 additionally
+  asserts that the two ceiling numbers quoted in the current volume's header text
+  (`under 1,200 lines / 120,000 bytes` in HOW-TO-APPEND step 2, and
+  `lines > 1200 OR bytes > 120000` in the roll rule) equal `roll_rule.max_lines` and
+  `roll_rule.max_bytes` from the index.** This is the answer to a restatement hazard the
+  design otherwise carries: the ceilings appear in five places — the index `roll_rule`, every
+  volume header, the `core-directives.md:328` replacement (§10.3), the `doc-updater.md:31`
+  replacement (§10.2) and the `anti-patterns.md` replacement (§10.5) — and the index is the
+  single source of truth. A8 pins the volume header, which is the copy an appending agent
+  actually reads. **The three prose copies in §10.2/10.3/10.5 are deliberately written to
+  point at the index rather than restate the numbers** (see those sections' text), so after
+  this design there are exactly two machine-checked copies and no unchecked prose copy.
 
-**Scope note for TEST-DESIGNER:** A3 and A6 are the two that matter most — A3 is the
-regression assertion for ISS-0119 itself; A6 is the enforcement of the append-only rule
-that has, until now, had no enforcement mechanism at all.
+**Scope note for TEST-DESIGNER:** A3/A3b and A6 are the three that matter most — A3b is the
+fail-first proof for ISS-0119, A3 its live guard; A6 is the enforcement of the append-only
+rule that has, until now, had no enforcement mechanism at all.
+
+### 7.1 The fail-first demonstration — how A3 is shown to fail pre-fix
+
+WF-03 Step 4 requires a test *shown* to fail against the pre-fix state and pass against the
+post-fix state. **A naive checkout of `3d19e8c` cannot demonstrate that here**, and TEST-DESIGNER
+must not have to discover this: every assertion is derived from
+`docs/status/requirement_status.index.yaml`, which does not exist at `3d19e8c` or at any
+pre-fix commit. Running the new test on the pre-fix tree therefore errors on a *missing index*
+— a failure any test of any new file produces, which proves nothing about coverage of this bug.
+
+**The design's answer: the pre-fix state is preserved in-tree by the fix itself, so no
+checkout, no fixture and no git extraction is needed.** Freeze-and-roll leaves
+`docs/status/requirement_status.yaml` on disk, byte-identical through line 5,766, forever.
+That file *is* the pre-fix current volume — it is precisely the object whose unreadability
+ISS-0119 reports. So:
+
+- **A3b — FAIL-FIRST PROOF, a permanent test case.**
+  `StatusHistory.within_bounds?("docs/status/requirement_status.yaml", roll_rule.max_lines, roll_rule.max_bytes)`
+  must return `{:error, %{over: [:lines, :bytes]}}` with `lines: 5766` and `bytes: 361376`
+  (working tree; 355,610 in the git blob — the assertion checks `> max_bytes`, not an exact
+  value, so it is checkout-independent). Volume 1 is frozen and covered by A6, so these
+  numbers cannot drift.
+
+  A3b is the *same function* A3 calls, with the *same bounds* A3 uses, applied to the file
+  that was the current volume before the fix. It therefore demonstrates the exact property
+  WF-03 Step 4 asks for — this check fails on the pre-fix state and passes on the post-fix
+  state — as a runnable assertion rather than as arithmetic in a document, and it keeps
+  demonstrating it on every future `mix test` run instead of only once at Step 4.
+
+- **The literal pre-fix-commit run, for the Step 4 record.** If TEST-DESIGNER or TEST-RUNNER
+  is additionally required to exercise the pre-fix *commit*, do it against the extracted file
+  rather than by checking the tree out — the helper is path-parameterised precisely so this
+  works:
+
+  ```bash
+  git show 3d19e8c:docs/status/requirement_status.yaml > /tmp/prefix.yaml
+  mix run -e 'IO.inspect Letflow.Test.StatusHistory.within_bounds?("/tmp/prefix.yaml", 1200, 120000)'
+  ```
+  ```powershell
+  git show 3d19e8c:docs/status/requirement_status.yaml | Set-Content $env:TEMP\prefix.yaml
+  mix run -e "IO.inspect Letflow.Test.StatusHistory.within_bounds?(\"$env:TEMP/prefix.yaml\", 1200, 120000)"
+  ```
+  Expected: `{:error, %{over: [:lines, :bytes], ...}}`. (`MIX_ENV=test` is required for
+  `test/support` to be on the load path.) This is **optional corroboration**; A3b is the
+  design's fail-first mechanism and is sufficient on its own.
+
+**Rejected alternatives, recorded so they are not re-proposed:** a checked-in oversized
+fixture under `test/fixtures/` — it would have to be ≥120,000 bytes to trip the ceiling, and a
+*synthetic* file that large proves the arithmetic, not the regression; and a setup-time
+`git show` into a temp file as the *primary* mechanism — it makes the suite fail on a shallow
+clone for a reason unrelated to the invariant.
 
 ---
 
@@ -479,22 +592,56 @@ in, at the line numbers they already occupy. The only write to volume 1 is an ap
 comment lines at EOF. This is the strongest available guarantee: nothing can be dropped by
 a partition rule that is never executed.
 
-**Verification, run by ELIXIR-DEV at Step 3 and quoted in its handoff (no speculation):**
+**Verification, run by ELIXIR-DEV at Step 3 and quoted in its handoff (no speculation).**
+Each check is given for both shells, for the same reason §4 is (`grep`/`sed`/`wc` do not
+exist in PowerShell). `SF` below is `docs/status/requirement_status.yaml`.
 
-1. `git diff --numstat docs/status/requirement_status.yaml` → deletions column must be **0**.
-   Any nonzero value means a line above EOF changed; revert.
-2. `grep -c '^  - req: ' docs/status/requirement_status.yaml` → must still be **182**.
-3. `sed -n '5158p' docs/status/requirement_status.yaml` → must return the same text it
-   returns before the change (currently: `      merge_effective_pins, returning a distinct UnknownPinRef and`),
-   proving `iss-0078-pin-rebind-provenance.md:367`'s citation still resolves.
-4. `sed -n '3490p;3577p;3744p'` → must still return three `    event: SCOPE-CHANGE` lines,
-   proving the anomalies were not normalized.
-5. Compute `frozen_prefix_sha256` over lines 1–5766 with CRLF normalized to LF, write it
-   into the index, and confirm `mix test test/docs/requirement_status_invariants_test.exs`
-   passes (A6 green).
+1. Deletions must be **0**. Any nonzero value means a line above EOF changed; revert.
+   Both shells: `git diff --numstat docs/status/requirement_status.yaml`
+2. Entry count must still be **182**.
+   - Bash: `grep -c '^  - req: ' $SF`
+   - PowerShell: `(Select-String -Path $SF -Pattern '^  - req: ').Count`
+3. Line 5158 must return the same text it returns before the change (currently:
+   `      merge_effective_pins, returning a distinct UnknownPinRef and`), proving
+   `iss-0078-pin-rebind-provenance.md:367`'s citation still resolves.
+   - Bash: `sed -n '5158p' $SF`
+   - PowerShell: `(Get-Content $SF)[5157]`
+4. The three anomalies must still be present and still wrong — three
+   `    event: SCOPE-CHANGE` lines, proving they were not normalized.
+   - Bash: `sed -n '3490p;3577p;3744p' $SF`
+   - PowerShell: `(Get-Content $SF)[3489,3576,3743]`
+5. Compute `frozen_prefix_sha256` (definition below), write it into the index, and confirm
+   `mix test test/docs/requirement_status_invariants_test.exs` passes (A6 green).
 6. `git diff --numstat` over the whole commit → the only files with a nonzero deletions
    count may be the instruction sites from §10; `docs/status/requirement_status.yaml` must
    show insertions only.
+
+**`frozen_prefix_sha256` — the exact byte stream that is hashed.** The digest's whole job is
+to be reproducible by a later agent on a different host, so the convention is fixed here and
+must be implemented exactly as stated in both `test/support/` and the Step 3 computation:
+
+> Take the first `frozen_prefix_lines` lines of the volume. Strip every line's terminator
+> (`\r\n` or `\n`) and re-join with a single `\n` **after every line, including the last** —
+> i.e. the hashed stream is `Enum.map_join(lines, "", &(&1 <> "\n"))`, which ends in `\n`,
+> **not** `Enum.join(lines, "\n")`, which does not. The two differ by one byte and yield
+> different digests. Encoding is the file's bytes as-is (UTF-8, no BOM handling, no
+> whitespace trimming beyond the line terminator).
+
+Reference implementations, all of which must agree:
+
+- Elixir (the test): `File.stream!(path) |> Enum.take(n) |> Enum.map_join("", &(String.trim_trailing(&1, "\r\n") <> "\n")) |> then(&:crypto.hash(:sha256, &1)) |> Base.encode16(case: :lower)`
+- Bash: `head -n 5766 $SF | tr -d '\r' | sha256sum`
+- PowerShell: build the stream, write it with no extra terminator, then hash the temp file —
+  `(Get-Content $SF -TotalCount 5766 | ForEach-Object { $_ + "`n" }) -join ''` written via
+  `[IO.File]::WriteAllText($tmp, $s, [Text.UTF8Encoding]::new($false))`, then
+  `Get-FileHash $tmp -Algorithm SHA256`. Note `Get-Content` already strips `\r\n`, so no
+  separate CRLF step is needed.
+
+**The Bash form is normative** — `head` emits a terminator after every line it prints,
+including the last, which is exactly the convention above, so it is the shortest correct
+expression of it. The Elixir and PowerShell forms must reproduce its digest; ELIXIR-DEV
+quotes both the `sha256sum` output and the value the test computes at Step 3, and they must
+match. (If they do not, the defect is in the implementation, not in this convention.)
 
 **Old-citation resolution:** none is needed, and that is the point of freeze-and-roll.
 `docs/status/requirement_status.yaml` still exists, still holds the same content, still has
@@ -538,6 +685,12 @@ path still exists and still means what it meant.
 
 ### 10.1 Summary table
 
+**Count, stated so Step 3 can check itself against it:** 23 numbered sites = **15 EDIT + 8 NO
+CHANGE**. The table has 24 rows: the 24th is the unnumbered `core-directives.md:173`
+back-reference, which this design *adds* on top of the diagnosis's enumeration, giving **16
+EDIT rows over 24 rows**. (An earlier summary of this design said "14 EDIT + 9 NO CHANGE";
+that figure was wrong and is corrected here — the table itself was and is complete.)
+
 | # | Site | Action |
 |---|---|---|
 | 1 | `CLAUDE.md:85` | **EDIT** — point at the index, not the file |
@@ -580,8 +733,10 @@ Line 17's bullet is replaced by:
 
 > - `docs/status/requirement_status.index.yaml`, then **the current volume it names, in
 >   full** — you append to that volume and must match its schema exactly, and the volume
->   is bounded (≤1,200 lines) specifically so a full read is possible. Closed volumes are
->   frozen: read them only with targeted `grep`/`sed`, never in full. See
+>   is bounded — see `roll_rule:` in the index for the current ceilings — specifically so a
+>   full read is possible. Closed volumes are
+>   frozen: read them only with a targeted read — the Read tool with `offset`/`limit`, or
+>   `grep`/`sed` on Bash, or `Select-String` on PowerShell — never in full. See
 >   `core-directives.md` §"Bookkeeping Is Not Optional" item 3 for why this file is the one
 >   exception to "Load Scoped Context, Not Whole Files".
 
@@ -592,8 +747,9 @@ Line 31's step 2 is replaced by:
 >    "HOW TO APPEND" procedure in that volume's own header: read the volume in full, take
 >    the timestamp from the clock, append (never rewrite), then confirm with
 >    `git diff --numstat` that the deletions count is 0. Then apply the header's roll rule:
->    if the volume is now over 1,200 lines or 120,000 bytes, close it and open the next one
->    in this same commit.
+>    if the volume is now over the `roll_rule:` ceilings recorded in the index, close it and
+>    open the next one in this same commit. Read the ceilings from the index; do not carry a
+>    remembered number.
 
 Line 47's Forbidden paragraph gains:
 
@@ -615,9 +771,13 @@ Item 3 of §"Bookkeeping Is Not Optional" (`:328`) is replaced by:
 >
 > **Precedence, so this is not ambiguous:** "Load Scoped Context, Not Whole Files" above is
 > the general rule and it governs *closed* volumes and every other large file — read those
-> with `grep`/`sed`/`awk` only. The **current** volume is the single exception, and it is an
-> exception only because the roll rule keeps it under 1,200 lines / 120,000 bytes so the
-> full read is actually executable. If a full read of the current volume is ever refused or
+> with a targeted read only: the Read tool with `offset`/`limit`, or `grep`/`sed`/`awk` under
+> Bash, or `Select-String`/`Get-Content -TotalCount` under PowerShell (this repo runs both
+> shells and `grep` does not exist in PowerShell — see the pairs at `:156-161` above). The
+> **current** volume is the single exception, and it is an
+> exception only because the roll rule (`roll_rule:` in the index — that file holds the
+> authoritative ceilings) keeps it small enough that the full read is actually executable.
+> If a full read of the current volume is ever refused or
 > truncated, that is a defect in the roll rule: stop and file it (ISS-0119 is the precedent),
 > do not substitute a partial read and append anyway.
 
@@ -650,8 +810,9 @@ The existing entry's narrative is **kept** (it is the record of what happened). 
 "Correct alternative" paragraph is replaced by:
 
 > **Correct alternative:** start at `docs/status/requirement_status.index.yaml`, read the
-> **current volume** it names in full — volumes are capped at 1,200 lines / 120,000 bytes
-> precisely so that read is possible — preserve its established schema even if a different
+> **current volume** it names in full — volumes are capped, at the ceilings the index's
+> `roll_rule:` records, precisely so that read is possible — preserve its established schema
+> even if a different
 > shape seems cleaner, and append (never replace). Confirm with `git diff --numstat` that
 > the deletions count for the file is 0. Never edit a closed volume. If the file is
 > genuinely missing, use the header/entry shape documented in the index and the current
@@ -698,12 +859,14 @@ A short new entry is appended to the same file:
 
 ## 11. Complete list of files ELIXIR-DEV changes at Step 3
 
-**Created (3):** `docs/status/requirement_status.v2.yaml`,
+**Created (4):** `docs/status/requirement_status.v2.yaml`,
 `docs/status/requirement_status.index.yaml`,
-`test/docs/requirement_status_invariants_test.exs` (Step 4 may own the test instead, at
-ORCH's routing discretion; the design specifies it either way).
+`test/support/status_history.ex` (the path-parameterised helper module, §7),
+`test/docs/requirement_status_invariants_test.exs` (Step 4 may own both test files instead, at
+ORCH's routing discretion; the design specifies them either way).
 
-**Modified (10):** `docs/status/requirement_status.yaml` (EOF footer append only),
+**Modified — 9 distinct files** (the per-site breakdown is §10.1's table; count files here,
+sites there): `docs/status/requirement_status.yaml` (EOF footer append only),
 `CLAUDE.md`, `docs/agents/instructions/core-directives.md` (3 sites: `:173`, `:290`, `:328`),
 `.claude/agents/doc-updater.md` (3 sites), `.claude/agents/release-validator.md` (1 site),
 `docs/agents/AGENT_SYSTEM.md` (3 sites), `docs/agents/workflows/WF-02_requirement_implementation.md` (2 sites),
@@ -728,6 +891,11 @@ None blocks Step 3. Recorded rather than silently decided:
    tool's 2,000-line and 262,144-byte limits, at ~40 entries per volume. Loosening them
    trades read cost for roll frequency; they must never be raised to the tool limits
    themselves, since the headroom is what prevents a single append from crossing the cliff.
+   The index's `roll_rule:` is the single source of truth for these numbers: A3/A3b read them
+   from it, A8 asserts the current volume's header quotes the same two values, and every
+   instruction-site replacement in §10.2/10.3/10.5 points at the index instead of restating
+   them — so changing a ceiling means editing the index and one volume header, with A8
+   failing if the header is missed.
 3. **Where the invariant test lives in the gate.** It runs under plain `mix test` (and
    therefore `mix letflow.check`'s test step) with no database. Whether it should *also* be
    a standalone `mix letflow.check` step, so a docs-only change is gated without the full

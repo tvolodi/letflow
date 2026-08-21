@@ -1,0 +1,46 @@
+id: ISS-0208
+title: >
+  The as-of marker ISS-0207 added to HANDOFF_PROTOCOL 1.2 embeds a running list of re-run
+  readings that is stale by construction and grows without bound
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0207-20260821
+discovered_at: "2026-08-21T10:42:09Z"
+severity: MINOR
+
+description: >
+  Filed by ORCH from MINOR finding 1 in
+  `handoffs/WF03-ISS0207-20260821/step-03b-reviewer-gate.json`'s `result.issues`. Read it
+  there.
+
+  ISS-0207 fixed §1.2's figures going stale by adding a dated as-of marker. The marker
+  itself contains a worked-example list of subsequent re-run readings -- 607/469 at the
+  ISS-0204 gate, then 608/470 on the ISS-0207 run -- offered to show the reconciliation
+  working. That list has the exact property ISS-0207 was filed to remove: the gate's own
+  re-run, minutes later, read 609/471, so the list was already one reading behind at the
+  moment it was committed. It also grows by one entry per run if anyone treats it as
+  needing maintenance -- an unbounded obligation nobody agreed to take on.
+
+  The durable half of the marker is the PROCEDURE (baseline at `ef62d4b`, difference must
+  equal the handoffs written since, enumerable by `created_at`), which needs no updating
+  ever. The worked examples were scaffolding for it.
+
+  Same staleness class as ISS-0207 itself and ISS-0022, arriving one level up: the fix for
+  a stale figure introduced a smaller stale figure. Worth fixing precisely because it
+  demonstrates the class is recursive, and that the answer is to state procedures rather
+  than readings.
+
+affected_files:
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+
+related:
+  - ISS-0207  # the fix that introduced it, one level up in the same class
+  - ISS-0022  # the same staleness class, on a different snapshot count
+  - ISS-0206  # the other open issue against the same section 1.2
+
+queue_task_id: 208
+github_issue: https://github.com/tvolodi/letflow/issues/399
+github_issue_note: >
+  `register_task` created both the queue task (208) and its mirrored GitHub issue (#399)
+  in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
+  separately. The id comes from `register_task`'s `issue_ref`, not a directory scan.
+status: open

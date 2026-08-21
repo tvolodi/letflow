@@ -129,6 +129,38 @@ creation lands on exactly zero, while an agent that must spawn and read its `art
 before claiming cannot get back inside the same second. So ~79% of the corpus is already
 ORCH-stamped and ~15% agent-stamped, a 5:1 majority for the rule that was already written.
 
+**AS OF 2026-08-21, at commit `ef62d4b` — and a later re-run will NOT reproduce every
+figure, by design.** Those are the counts at the commit that wrote this subsection
+(`ef62d4b13427d752aed4553eee1cbf9a479ddea0`, identified from
+`git log --oneline -- docs/agents/shared/HANDOFF_PROTOCOL.md`, whose diff is the one that
+adds this `## 1.2` heading and the figures paragraph above). Re-run the command — it is
+quoted verbatim so you can — but reconcile the result rather than reading a mismatch as a
+defect. **Two buckets grow with the corpus:** `files`, and `gap==0`. Every handoff the
+pipeline writes adds one file, and under the rule this subsection states it lands at gap
+zero. Growth in those two is **expected and exactly reconcilable**: the difference from the
+figures above must equal the handoffs written since `ef62d4b`, which you can enumerate by
+`created_at`. Twice already: the ISS-0204 gate re-ran it three minutes later and got
+607/469 (+1/+1 — its own `WF03-ISS0204-20260821/step-03b-reviewer-gate.json`), and ISS-0207
+re-ran it thirteen minutes after that and got 608/470 (+2/+2 — that file plus
+`WF03-ISS0207-20260821/step-03-date-scope-figures.json`). Both reconciled to the unit.
+
+**Every other bucket is a fixed historical set, and that asymmetry is what makes this
+marker useful rather than merely defensive.** The 25 negative-gap files, the 20 of them on
+a round `:00` minute, and the 10 null-`started_at` files are a closed record of defects
+already on disk — they are not backfilled (last paragraph of this subsection), and nothing
+written under this rule can join them. The 14 and 89 are likewise closed, since agent
+stamping is now forbidden outright. So a re-run returning **more** than 608 files and 470
+at gap zero is routine growth, while a re-run returning anything other than **10 / 14 / 89
+/ 25 / 20** is an **ALARM**, the opposite reading: either the negative-gap class has
+recurred — the precise failure this rule was adopted to make structurally impossible — or
+the historical corpus has been edited. Do not silently update the figure; find out which.
+
+**And the finding these numbers support is the SHAPE, not the absolute counts.** It is the
+roughly 5:1 majority of ORCH-stamped over agent-stamped handoffs, and the existence of a
+negative-gap class concentrated on round `:00` minutes. Both survive any amount of corpus
+growth, and neither depends on a single count being current. A later reader who reproduces
+the shape has reproduced the finding, whatever the totals have drifted to.
+
 **What the discriminator CANNOT distinguish, stated so nobody reads more into it:** (i) an
 agent that stamped `started_at` by *copying* `created_at` instead of reading the clock —
 indistinguishable from an ORCH stamp, and it would inflate the zero bucket; (ii) an ORCH

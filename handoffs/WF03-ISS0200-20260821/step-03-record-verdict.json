@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0200-20260821/step-03-record-verdict.json",
   "created_at": "2026-08-21T10:00:44Z",
   "started_at": "2026-08-21T10:18:29Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-21T10:21:32Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -57,19 +57,26 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "REWORK 1 -- narrow, as dispatched. Three edits, nothing else touched.\n\n(1) BLOCKER FIXED. HANDOFF_PROTOCOL.md, asymmetry paragraph: the clause \"`artifacts_out` is non-empty on 449 of 605 handoffs, and\" is struck. The sentence now begins \"Where `artifacts_out` points at a real produced artefact, the summary does not duplicate it.\" I took the gate's subtraction option rather than substituting the corrected figure, because the gate's second ground stands independent of the value: a raw presence count over all steps -- gate steps included, which correctly produce no artefact -- is the wrong counterpart to `requirement_text == {}` at any value. A parenthetical now states why no count is quoted and cites ISS-0202. The clause that followed and the attestation argument are untouched -- verified: the only lines changed in that paragraph are the three the struck clause occupied plus reflow of the immediately following line; `A duplicated copy is unmeasurable and drifts...`, the attestation sentence, and `So: no result-side entry...` are byte-identical.\n\n(3) MINOR FIXED, same paragraph block. The density figures (median 65.3% / minimum 36.7%) now carry an explicit **directional and metric-dependent, not exact** marker, naming the gate's independently written variant (segments >25 chars; digit, path-like token or ABC-123 identifier) and recording that it reproduces the direction but not the absolute values AND selects a different least-dense file. The hand-read is now described as of \"the least-evidence-dense large summary this metric selects\", not \"in the corpus\" -- the earlier wording asserted a fixed corpus fact the gate disproved. Closing clause forbids citing the numbers as exact without restating the metric.\n\n(2) MINOR FIXED, two files, both parts the gate named:\n  - ISSUE_QUEUE.md evidence-bar item 4 now names the key pair: `closed_in_run:` / `closed_at:`, explicitly NOT `resolved_in_run:` / `resolved_at:`, with the reason (they assert a resolution a no_defect record did not perform). Nothing else in the vocabulary section moved.\n  - WF-03_issue_resolving.md Step 5: the pseudocode block gains a line saying not every run ends in `resolved`, that `instrumented` and `no_defect` are legal too and each takes its own keys, and to check against ISSUE_QUEUE.md before writing the line; the prose after it names `no_defect` as the terminal value for a reasoned NO-CHANGE verdict and points at ISSUE_QUEUE.md. The file's deference is intact -- \"do not restate them here\" is preserved verbatim and I did not restate the evidence bar there.\n\nNOT TOUCHED, per dispatch: section 4/4.1, section 2's four worked examples, the NO-CHANGE verdict, ISS-0191.yaml, the Enforcement-note H-SIZE-3 extension, ISS-0200.yaml, and the sha-recording finding (filed as ISS-0205, not absorbed).\n\nAC4 RE-VERIFIED AFTER THE REWORK, by span sha256 against merge-base 7322185:\n  section 2 worked examples -- base lines 252-324, now 317-389:\n    ab6ccd4def262cac1052dac56631313184f86a7c11e6b1efcfcaf87d95c7fcfb  (both)\n  section 4 + 4.1 -- base lines 405-786, now 470-851:\n    cf3e25d6580c07c17057adb6b34696d19e319e530fd536e396e12e11fa1cf5ea  (both)\nBoth spans byte-identical. The four examples are present and named: validator-fail, validator-pass, security-reviewer-scoped, partial (grep -c '<example name=' == 4).\n\nSCOPE PROOF. `git diff --stat 69fc2a1` over my own files: ISSUE_QUEUE.md 5 lines, HANDOFF_PROTOCOL.md 21, WF-03_issue_resolving.md 12 -- and nothing else of mine. The other paths in that stat (ISS-0205.yaml, step-03b-reviewer-gate.json, orchestrator.log) are ORCH's, written before this rework and staged with it as dispatched.\n\n6,000 THRESHOLD, re-grepped after the edit: still declared in exactly one place -- HANDOFF_PROTOCOL.md's Enforcement note (912 in the H-SIZE-1 pseudocode, 927/929 as the stated threshold with its distribution). Remaining hits are descriptive references that predate this run (ISS-0198.yaml:105, ISS-0202.yaml:15, HANDOFF_PROTOCOL.md:230) plus unrelated numerals (migration filenames, a 60000ms timeout). I added none.\n\nJSON FENCE: section 2's schema fence parses -- json.loads over the extracted block succeeds, 2,279 chars.\n\nISS-0200.yaml UNMODIFIED: `git diff --numstat` returns empty against both 69fc2a1 and merge-base 7322185.\n\nTHE LESSON, recorded because it is this run's point. My input handoff carried a figure its own author had already contradicted in ISS-0202 two hours earlier, and I wrote it into a canonical document without checking it against the run's other outputs -- while editing the document whose section 1.1 says a re-measurement that contradicts a premise wins. A number inherited from a handoff is a premise, not a fact, and the cheapest check is against the same run's own artefacts.\n\nContent commit 291c48f; handoff commit follows.",
+    "artifacts_out": [
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "handoffs/WF03-ISS0200-20260821/step-03-record-verdict.json"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0200-20260821",
-      "commit_sha_list": [],
+      "commit_sha_list": [
+        "291c48f"
+      ],
       "remote_branch": null,
-      "push_status": null,
+      "push_status": "not attempted -- ORCH pushes and opens the PR at Step Final",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Re-gate at Step 3b (only the amended paragraph, the WF-03 Step 5 block and the ISSUE_QUEUE.md key-pair clause are new), then Step 5 -- which now has `no_defect` plus the closed_in_run/closed_at keys available and named in both the vocabulary and the workflow."
   },
   "rework_count": 1,
   "max_rework": 3

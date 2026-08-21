@@ -77,4 +77,78 @@ github_issue_note: >
   register_task created both the queue task (214) and its mirrored GitHub issue (424)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not
   called separately.
-status: open
+status: instrumented
+superseded_by: null  # not superseded -- this record itself now carries the family's
+  # first fully-attributed occurrence; kept open as the tracking point, same pattern
+  # as ISS-0116/ISS-0109 (`superseded_by` left null since no successor issue was
+  # needed this time -- see the finding below)
+instrumented_in_run: WF03-ISS0214-20260821
+instrumented_at: "2026-08-21T13:36:54Z"
+instrumentation_result: >
+  Full suite re-run once, output captured with a plain `mix test > scratch/full_suite_iss0214.log 2>&1`
+  (no tail/head truncation, 83110 lines, 445.1s, 1280/1294 passed / 14 failed -- 13 of
+  those 14 are the session's known pre-existing unrelated failures, matching prior
+  runs' counts).
+
+  THE FAMILY RECURRED EXACTLY ONCE, AND IS NOW FULLY ATTRIBUTED FOR THE FIRST TIME:
+
+    grep -c "schema_present_before_drop=false" scratch/full_suite_iss0214.log  ->  1
+    grep -c "schema_present_before_drop=true"  scratch/full_suite_iss0214.log  ->  101
+
+  The one hit, at log line 78882 (and its preceding replay_failed report at 78862):
+
+    test_module = Letflow.Engine.ReconstructionTest
+    test_name   = "test AC4 -- a log containing EXECUTION_ERROR reconstructs to status
+                   ERROR reconstructs status :error with the payload's variable snapshot"
+    location    = test/letflow/engine/reconstruction_test.exs:419 (via its local
+                  provisioned_tenant/0 wrapper at line 62, which itself calls
+                  Letflow.TenantFixture.provisioned_tenant!/1 -- confirmed by reading
+                  the module: this is the fixture ISS-0116 adopted here, working
+                  exactly as intended)
+
+    schema_name             = tenant_20700e9a0ae84f8ba51bd4519ab64a4e
+    tenant_id               = 20700e9a-0ae8-4f8b-a51b-d4519ab64a4e
+    registration_present?   = true
+    provisioned_at          = ~N[2026-08-21 13:36:07]
+    migrations_applied_at   = nil   (NEW: unlike ISS-0214's original capture, this one
+      shows migrations_applied_at was NEVER SET -- the failure happened DURING
+      replay_migrations/1 itself, phase=replay_failed, not merely observed later at
+      teardown)
+    schema_present?         = false
+    tables_present          = []
+    tables_missing          = 19 tables (the full expected set, same as the original capture)
+    applied_versions        = []
+    manifest_versions       = 31 versions (20260816120001..20260821000002)
+    versions_missing        = []
+    observed_at_utc         = ~N[2026-08-21 13:36:08.138000]
+    db_now                  = ~N[2026-08-21 13:36:08.970679]
+    pg_backend_pid          = 504012
+    underlying error: Postgrex 3F000 invalid_schema_name, "schema \"tenant_20700e9a0ae84f8ba51bd4519ab64a4e\" does not exist"
+
+  NEW EVIDENCE THIS ADDS beyond the original ISS-0214 capture: the schema was gone
+  BEFORE replay_migrations/1's own first query (`SELECT version FROM
+  "tenant_...".schema_migrations`) could even run -- roughly 1 second after
+  `provisioned_at`. This narrows the window: whatever removes the schema does so
+  between the provisioning transaction's commit and the very next query against that
+  schema, well under a second later, not at some later teardown/reaper moment. This is
+  consistent with (does not contradict) ISS-0109's refutation of TenantSchemaReaper for
+  the 1-second-old-row case, and does NOT by itself identify a new mechanism -- no
+  further root-cause theory is asserted here, per this issue's own scope boundary.
+
+  Root cause is STILL UNKNOWN. This record is being closed as `instrumented` rather than
+  `resolved` because: real diagnostic capability was demonstrated (first full attribution
+  of this family, ever, in this project's history) but the underlying mechanism that
+  removes the schema was NOT identified or fixed. It does not meet `no_defect`'s bar
+  either -- a defect clearly exists (a real request failed with a real Postgres error)
+  and this run does not claim otherwise.
+
+  WHAT A FUTURE RUN SHOULD DO: the next time this needs investigating, look specifically
+  at what runs between a tenant-provisioning commit and the immediately following query
+  against that tenant's schema -- the ~1 second window this capture narrows it to. Do
+  NOT re-derive the ISS-0109 refutations again.
+
+  Per this issue's own instruction ("treat this as the last bounded attempt... if this
+  attempt also comes up empty, don't file ISS-0215") -- this attempt did NOT come up
+  empty (a genuine attributed hit), so per the same instruction's spirit no further
+  successor issue is filed; this record itself remains the tracking point, updated in
+  place with the new evidence.

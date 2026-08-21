@@ -1387,6 +1387,31 @@
         "squash_commit": "0bd718fb9edac67eec76ee68ab74e0b890cf6531",
         "merged_at": "2026-08-21T03:26:15Z"
       }
+    },
+    {
+      "run_id": "WF03-ISS0106-20260821",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "stage": null,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        ".tool-versions",
+        "mix.exs",
+        "lib/mix/tasks/",
+        "lib/letflow/engine/variable_merge.ex",
+        "lib/letflow/engine/pin_resolver.ex",
+        "test/letflow/engine/pin_resolver_test.exs",
+        "test/letflow/engine/pin_rebind_test.exs",
+        "docs/migration/decisions/0005-pin-formatting-toolchain.md"
+      ],
+      "lock_acquired_at": "2026-08-21T00:57:05Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Steps 00 through 5b all PASS; letflow-queue tasks 176 AND 170 both released with status done (two tasks existed for the one issue -- 176 was an auto-import of GH#354, 170 was ISS-0106's own register_task registration carrying mirror GH#355; 170 was set_lock'd first so its identity could be inspected before release rather than assumed). Step Final (git merge) dispatched to ELIXIR-DEV.",
+      "backfilled": false,
+      "queue_task_id": 176,
+      "queue_agent_id": "tvolodi-orch",
+      "note": "Resolves ISS-0106 / GH#354 (toolchain drift: .tool-versions pins elixir 1.18.3-otp-27 / erlang 27.2, but this workstation's PATH toolchain is Elixir 1.20.3 / Erlang OTP 29, so main itself fails both halves of mix letflow.check -- 4 format-check files and 14 struct-update warnings, none of them caused by any in-flight branch). Claimed via get_next_task as task 176; note the issue yaml records queue_task_id 170 for its own earlier registration, so BOTH ids need reconciling at Step 5 (see the yaml's github_issue_note: #354 is canonical and must be closed by hand, #355 is the auto-mirror). The issue's proposed resolution (a) -- install the pinned 1.18.3-otp-27 toolchain on this host -- is NOT executable by an agent under this operator's standing rules (a system-wide toolchain install is reserved for the human owner) and asdf is not present on this host, so the run must establish whether a repo-level resolution exists and route the (a)-vs-(b) choice to REVIEWER, since (b) amends decision record 0005-pin-formatting-toolchain.md and core-directives.md's Instruction Precedence forbids an agent re-deciding a decision record without REVIEWER sign-off. owned_modules overlap risk is real for this run: concurrent branches on other hosts touch lib/letflow/engine/ (fix/ISS-0096, fix/ISS-0099, fix/ISS-0102, fix/ISS-0103), so any repo-wide reformat is a collision hazard to be weighed by the design step rather than assumed safe. Also corrected WF02-REQ066-20260820's registry status from IN_PROGRESS to COMPLETED in this same edit -- that run reached Step Final PASS and released its lock on 2026-08-20T21:30:27Z, so IN_PROGRESS was stale bookkeeping, not an active run."
     }
   ]
 }

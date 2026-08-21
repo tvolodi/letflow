@@ -67,4 +67,57 @@ queue_task_id: 190
 github_issue: https://github.com/tvolodi/letflow/issues/378
 github_issue_note: >
   Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (190) and its mirrored GitHub issue (#378) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan -- see docs/anti-patterns.md's 2026-08-21 update on why scanning cannot reserve a number.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0190-20260821
+resolved_at: "2026-08-21T12:44:28Z"
+resolution_note: >
+  Re-derived first-hand over the live 626-file corpus (up from 534 at filing time, growth
+  expected): exactly 15 H1 (illegal top-level status) and 13 H3 (non-schema top-level
+  keys) violations, matching the filing's counts exactly.
+
+  FIX 1 (13 "PASS" files): verified each one's own result.status=="PASS" and a real
+  completed_at before correcting top-level status to COMPLETED -- unambiguous in all 13,
+  no judgement call needed. One-line diff per file, confirmed by git diff.
+
+  FIX 2 (2 flat-schema files, WF02-REQ059/060-20260819 step-00-git-setup.json): migrated
+  to HANDOFF_PROTOCOL section 2's schema (not retained as an exception) -- every fact from
+  the flat schema (branch, owned_modules, queue_task_id, lock_recovery, timestamp)
+  preserved verbatim in the migrated file's task/result prose, cross-checked against the
+  same run's own step-01 handoff (created_at match confirms the single `timestamp` field
+  mapped correctly to created_at/started_at/completed_at). Nothing invented except a
+  handoff_id (never existed under the flat schema) and template prose matching the
+  established Step-00 precedent (WF02-REQ025-20260817/step-00-git-setup.json).
+
+  FIX 3a (6 duplicated next_action files): none of the 6 had an existing
+  result.next_action, so removal would have lost information -- relocated (not deleted)
+  into result.next_action instead. Verified semantically byte-identical to the pre-fix
+  file except for the relocated field (programmatic deep-equal check, not eyeballed).
+
+  FIX 3b (1 gate_history file, WF02-REQ043-20260818/step-01b-design-gate.json): this
+  key is NOT redundant and removing it would lose a real FAIL-iteration audit record (a
+  rework_count:1 run's own BLOCKER findings from iteration 0) with no other home in the
+  schema -- so per the acceptance criteria's explicit either/or, ADDED TO THE NAMED
+  ALLOW-LIST instead of edited out. HANDOFF_PROTOCOL.md section 2 now documents
+  `gate_history` as a third OPTIONAL top-level field (alongside `not_agent_attested` and
+  `context.source_text`), with its own member schema, and the file itself is unchanged.
+
+  NOT TOUCHED, as required: the three ISS-0117 recovery-marker keys
+  (orch_timestamp_correction x2, orch_restart_note). Also left untouched, by the same
+  reasoning as the recovery markers (a deliberate same-shaped ORCH correction-note key,
+  not a stray schema violation): orch_status_correction on
+  WF02-REQ062-20260819/step-03-test-designer.json, added by ISS-0192 after this issue was
+  filed -- noted here since it wasn't in the original 13-file count.
+
+  VERIFICATION: mix letflow.lint_handoffs (built by the companion ISS-0191, landed
+  minutes before this run) re-run after the fix, exit 0: "OK -- 0 new violations across
+  626 handoff files (6 pre-existing grandfathered, traced to ISS-0190)." Its own
+  grandfather list (lib/mix/tasks/letflow.lint_handoffs.ex) updated in the same commit --
+  24 entries removed (the files fixed here), 6 remain (the recovery-marker/timestamp
+  class explicitly out of this issue's scope, all named individually with reasons).
+  mix compile --warnings-as-errors and mix format --check-formatted both clean.
+
+  SELF-REVIEW: performed by the same agent that made the fix (no nested subagent possible
+  in this execution context) -- stated plainly, matching every other run in today's batch.
+  git diff reviewed file-by-file before commit; the 13 status fixes and 6 next_action
+  relocations were confirmed to touch only the intended field (one via git diff stat, six
+  via a programmatic deep-equal check against the pre-fix content).

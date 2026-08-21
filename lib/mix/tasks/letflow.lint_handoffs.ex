@@ -94,7 +94,7 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   @schema_top_keys ~w(
     handoff_id run_id workflow_id step from_agent to_agent file created_at
     started_at completed_at status priority context task result rework_count
-    max_rework not_agent_attested
+    max_rework not_agent_attested gate_history
   )
 
   # The commit that landed ISS-0202's rule (`result.artifacts_out` excludes
@@ -103,53 +103,34 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   @artifacts_out_rule_commit "48a4a55"
 
   # -- Individually-named pre-existing hard violations. Measured 2026-08-21
-  # by this task's own first run against the corpus (626 files) -- traced to
-  # ISS-0190 (the companion data-defect issue, still open as of this landing)
-  # except where noted. No wildcards, no path prefixes: every entry below is
-  # one exact file this task actually found violating, at build time, not a
-  # guess ahead of measurement. A NEW file hitting the same rule is NOT
-  # covered by this list and fails the build -- grandfathering is per-file,
-  # never per-rule.
+  # by this task's own first run against the corpus (626 files), then
+  # RE-MEASURED the same day once ISS-0190 landed and fixed the 24 entries
+  # that were in its scope (15 H1 status corrections, 6 H3 next_action
+  # relocations, 2 H3 flat-schema migrations, 1 H3 gate_history -- the last
+  # of these stopped being a violation at all once ISS-0190 formalised
+  # `gate_history` as a documented optional top-level field in
+  # HANDOFF_PROTOCOL.md §2 and `@schema_top_keys` above, rather than being
+  # fixed by editing the file). No wildcards, no path prefixes: every entry
+  # below is one exact file this task actually found violating. A NEW file
+  # hitting the same rule is NOT covered by this list and fails the build --
+  # grandfathering is per-file, never per-rule.
   #
-  # 30 entries: 15 H1 (13 "PASS" used as handoff status + 2 missing status)
-  # and 13 H3 (non-schema top-level keys) match ISS-0190's own filed counts
-  # exactly; 2 H2 (a negative started_at/completed_at gap) are the timestamp
-  # class ISS-0117/HANDOFF_PROTOCOL.md §1.2 already documents separately.
+  # 6 entries remain, all explicitly OUT OF ISS-0190's scope: 3 H3 (the
+  # ISS-0117 recovery-marker keys `orch_timestamp_correction` x2 and
+  # `orch_restart_note`, deliberately excluded by ISS-0190's own acceptance
+  # criteria) + 1 H3 (`orch_status_correction` on
+  # WF02-REQ062-20260819/step-03-test-designer.json, the same-shaped marker
+  # ISS-0192 added for a non-agent-death status-flip correction -- same
+  # class as the three ISS-0117 markers, not yet formalised into the schema
+  # either) + 2 H2 (a negative started_at/completed_at gap, the timestamp
+  # class ISS-0117/HANDOFF_PROTOCOL.md §1.2 already documents separately).
   @grandfathered [
     {"H3", "handoffs/WF02-REQ023-20260816/step-06-doc-updater.json"},
     {"H2", "handoffs/WF02-REQ025-20260817/step-01b-code-design-validator.json"},
     {"H3", "handoffs/WF02-REQ027-20260816/step-02d-reviewer.json"},
-    {"H3", "handoffs/WF02-REQ033-20260817/step-01-code-designer.json"},
     {"H3", "handoffs/WF02-REQ037-20260817/step-02c-rework1-security-reviewer.json"},
-    {"H3", "handoffs/WF02-REQ043-20260818/step-01b-design-gate.json"},
-    {"H3", "handoffs/WF02-REQ051-20260818/step-05-release-validator.json"},
-    {"H3", "handoffs/WF02-REQ051-20260818/step-06-doc-updater.json"},
-    {"H1", "handoffs/WF02-REQ059-20260819/step-00-git-setup.json"},
-    {"H3", "handoffs/WF02-REQ059-20260819/step-00-git-setup.json"},
-    {"H1", "handoffs/WF02-REQ060-20260819/step-00-git-setup.json"},
-    {"H3", "handoffs/WF02-REQ060-20260819/step-00-git-setup.json"},
-    # ISS-0192 (not ISS-0190): corrected this file's status to COMPLETED and
-    # added a same-shaped ad-hoc note key (orch_status_correction) alongside
-    # the two ad-hoc note keys below -- itself an H3 violation of the same
-    # undocumented-note-key class, not yet formalised into the schema.
     {"H3", "handoffs/WF02-REQ062-20260819/step-03-test-designer.json"},
-    {"H1", "handoffs/WF02-REQ063-20260818/step-01-code-designer.json"},
-    {"H1", "handoffs/WF02-REQ063-20260818/step-01b-design-gate.json"},
-    {"H1", "handoffs/WF02-REQ063-20260818/step-02a-elixir-dev.json"},
-    {"H1", "handoffs/WF02-REQ063-20260818/step-02c-security-review.json"},
-    {"H1", "handoffs/WF02-REQ063-20260818/step-02d-reviewer.json"},
-    {"H1", "handoffs/WF02-REQ063-20260818/step-03-test-designer.json"},
-    {"H1", "handoffs/WF02-REQ063-20260818/step-03b-test-design-gate.json"},
-    {"H1", "handoffs/WF02-REQ063-20260818/step-04-test-run.json"},
-    {"H1", "handoffs/WF02-REQ063-20260818/step-05-release-validation.json"},
-    {"H1", "handoffs/WF02-REQ063-20260818/step-06-doc-updater.json"},
-    {"H1", "handoffs/WF02-REQ063-20260818/step-final-git-merge.json"},
-    {"H1", "handoffs/WF02-REQ064-20260818/step-01-code-designer.json"},
-    {"H1", "handoffs/WF02-REQ064-20260818/step-02a-elixir-dev.json"},
-    {"H3", "handoffs/WF03-ISS0047-20260818/step-02-code-designer.json"},
-    {"H2", "handoffs/WF03-ISS0047-20260818/step-03-elixir-dev.json"},
-    {"H3", "handoffs/WF03-ISS0047-20260818/step-04-test-designer.json"},
-    {"H3", "handoffs/WF03-ISS0047-20260818/step-05-issue-fixer.json"}
+    {"H2", "handoffs/WF03-ISS0047-20260818/step-03-elixir-dev.json"}
   ]
 
   @spec grandfathered?(String.t(), String.t()) :: boolean()

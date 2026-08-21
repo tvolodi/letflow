@@ -1,0 +1,46 @@
+id: ISS-0216
+title: >
+  Letflow.Api.Pagination.decode_cursor/4 trusts its caller-supplied prefix with no
+  non-empty guard, a real bypass path once REQ-072-onward endpoints call it
+discovered_by: SECURITY-REVIEWER
+discovered_in_run: WF02-REQ067-20260821
+discovered_at: "2026-08-21T15:11:57Z"
+severity: MINOR
+
+description: >
+  Filed from a MINOR finding in
+  `handoffs/WF02-REQ067-20260821/step-02c-security-reviewer.json`'s `result.issues`.
+  Read it there.
+
+  `lib/letflow/api/pagination.ex` (REQ-067) implements `decode_cursor/4` with a
+  caller-supplied `prefix` argument used for cross-endpoint cursor-replay prevention
+  -- a cursor minted by one endpoint must be rejected if submitted to another.
+  SECURITY-REVIEWER traced the actual `check_prefix/2` implementation and found it
+  uses a size guard that trivially passes if a future caller supplies an empty
+  string prefix, since every decoded cursor starts with the empty string -- an
+  empty prefix defeats the cross-endpoint isolation this parameter exists to
+  provide.
+
+  Not a defect in REQ-067 itself: `prefix`, `expiry_ts_offset` and
+  `expiry_window_us` are meant to be per-endpoint hardcoded literals supplied by
+  future route-handler code, never by an external caller -- no such caller exists
+  yet, since REQ-072 (the request-context and routing layer) is still pending. The
+  risk is real but currently unreachable, which is why this run correctly PASSED
+  rather than FAILing. It becomes live the moment REQ-072-onward work adds the
+  first real route handler calling `decode_cursor/4`.
+
+affected_files:
+  - lib/letflow/api/pagination.ex
+
+related:
+  - REQ-067  # the run whose security gate raised it
+  - REQ-072  # the future work that will make this reachable
+
+queue_task_id: 216
+github_issue: https://github.com/tvolodi/letflow/issues/439
+github_issue_note: >
+  `register_task` created both the queue task (216) and its mirrored GitHub issue
+  (#439) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately
+  not called separately. The id comes from `register_task`'s `issue_ref`, not a
+  directory scan.
+status: open

@@ -1,0 +1,96 @@
+id: ISS-0171
+title: >
+  letflow_check_test_test.exs fake-mix fixture is POSIX-only: on Windows it runs
+  the REAL mix test, timing out and orphaning a BEAM that holds DB connections
+discovered_by: ELIXIR-DEV
+discovered_in_run: unknown (see queue task 171 description; local record never
+  materialized until this run)
+discovered_at: "2026-08-20T20:08:01Z"
+severity: MAJOR
+
+description: >
+  `test/mix/tasks/letflow_check_test_test.exs` fakes the `mix test` subprocess by
+  writing an extensionless `#!/bin/sh` file named `mix` into a temp dir and
+  prepending that dir onto PATH with a `:` separator. Both halves are POSIX-only:
+  on Windows the PATH separator is `;`, and `System.find_executable/1` will not
+  resolve an extensionless file (PATHEXT requires .bat/.exe/.cmd). So
+  `install_fake_mix/2` had no effect on Windows and
+  `Mix.Tasks.Letflow.Check.Test.run/1` shelled out to the REAL `mix`, recursing
+  into a full nested `mix test`.
+
+  Observed on this Windows 11 host (letflow-2 checkout): 3 tests in this module
+  failed, two by ExUnit timeout at 60s inside
+  `Mix.Tasks.Letflow.Check.Test.collect/2`, one with `Mix.Error: underlying mix
+  test run exited 1`. Each timed-out test left an orphaned `erl.exe` alive after
+  the run, holding open connections to `letflow_test` -- consistent with (though
+  not confirmed as the sole source of) the ~105-idle-connection exhaustion this
+  same orchestrating session hit and manually cleared earlier today before
+  WF03-ISS0199-20260821's tests could pass.
+
+filename_note: >
+  The queue task's own description said "Local record: docs/issues/ISS-0106.yaml"
+  -- stale/wrong, the same pre-2026-08-21 hand-numbering collision class found
+  multiple times this session (ISS-0110, ISS-0177). ISS-0106.yaml belongs to an
+  unrelated toolchain-drift issue. No local record for this issue existed under
+  any filename before this run; created here as ISS-0171.yaml, matching the
+  queue's own allocated issue_ref.
+
+affected_files:
+  - test/mix/tasks/letflow_check_test_test.exs
+
+related:
+  - ISS-0065  # same class: a Windows-wrapper subprocess-invocation defect in a test helper
+
+queue_task_id: 171
+github_issue: https://github.com/tvolodi/letflow/issues/357
+
+status: resolved
+resolved_in_run: WF03-ISS0171-20260821
+resolved_at: "2026-08-21T14:27:48Z"
+resolution_note: >
+  Root cause confirmed by direct reproduction on this Windows host, not inferred:
+  `Port.open({:spawn_executable, ...})` DOES run a `.bat` file natively on
+  Windows (verified with a standalone probe against the real `mix.bat` --
+  `--version` returned exit 0 with correct output; no `cmd.exe /c` indirection
+  needed) -- so the fake's extensionless filename, not `Port`/`spawn_executable`,
+  was the actual defect. `System.find_executable("mix")` on Windows searches
+  PATHEXT-style extensions and never matches a bare "mix" file, so PATH
+  resolution fell through to the real `mix` on PATH.
+
+  Fix: `install_fake_mix/2` branches on `:os.type/0`. On `{:win32, _}`, it writes
+  the canned output to a companion `output.txt` file and a `mix.bat` that `type`s
+  that file (rather than `echo`-ing content inline, which would need to survive
+  cmd.exe's fragile batch-escaping of quotes/parens/colons -- exactly what a real
+  compiler warning line contains), and prepends PATH with `;`. A second real bug
+  was found and fixed in the same pass: `type` failed with "The system cannot
+  find the file specified." against the mixed-separator path Elixir's
+  `Path.join/2` naturally produces on Windows (forward slash joined onto a
+  backslash-separated `System.tmp_dir!/0` base) -- reproduced directly via `cmd
+  /c type "<mixed-separator path>"`; fixed by normalizing to native `\`
+  separators before embedding the path in the batch script. POSIX behavior is
+  unchanged (same branch, same shell-script fake).
+
+  Added a fail-fast guard inside `install_fake_mix/2` (not per-test) that flunks
+  immediately, with a clear message, if `System.find_executable("mix")` doesn't
+  actually resolve inside the fake's own temp dir -- so a future regression of
+  this exact class fails in milliseconds instead of via a 60s subprocess timeout.
+
+  Verified for real on this Windows host:
+    - `mix test test/mix/tasks/letflow_check_test_test.exs`: 3/3 passed in 0.3s
+      (previously: 2 x 60s timeout + 1 x Mix.Error, ~2 minutes).
+    - `mix test test/mix/ test/letflow/identity_migration_test.exs`: 43/43 passed
+      (identity_migration_test.exs is the module the issue names as cascading
+      failures from the leaked connections).
+    - `mix format --check-formatted` and `mix compile --warnings-as-errors`: both
+      clean.
+    - `git status --porcelain` after the run: only
+      `test/mix/tasks/letflow_check_test_test.exs` touched.
+
+  Not independently verified: whether this was THE sole source of the ~105-
+  connection exhaustion this session hit earlier -- stated as "consistent with,
+  not confirmed as the sole source of" rather than claimed as proven causation.
+
+  Self-gated: diagnosis, design, implementation, and verification all performed
+  directly by the acting agent (no CODE-DESIGNER/REVIEWER role split available in
+  this execution context) -- flagged here rather than presented as a normal
+  multi-role run.

@@ -1,0 +1,118 @@
+id: ISS-0177
+title: >
+  Three runs merged unformatted code to main past a red mix format gate on 2026-08-20
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0106-20260821
+discovered_at: "2026-08-21T01:24:51Z"
+severity: MAJOR
+
+filename_note: >
+  This record's filename is ISS-0177.yaml, matching letflow-queue's own allocated
+  issue_ref for queue task 177 / GitHub issue #363. The queue task's own description
+  text says "Local record: docs/issues/ISS-0110.yaml" -- that is STALE and WRONG.
+  `docs/issues/ISS-0110.yaml` is a different, unrelated, already-resolved issue (the
+  TenantSchemaReaper liveness hazard, merged PR #431 earlier the same session) -- one of
+  the documented pre-2026-08-21 hand-numbering collisions this project's history
+  contains several of (see ISSUE_QUEUE.md's "Issue numbers are non-contiguous" section).
+  No content was ever written to ISS-0110.yaml for this issue; there is nothing to
+  reconcile, only this note so a future reader isn't misled by the stale internal text.
+
+description: >
+  ISS-0106 was filed on the premise that four files failing `mix format
+  --check-formatted` were a toolchain-drift artifact. Running both halves of the gate
+  inside a throwaway `elixir:1.18.3-otp-27` container (the exact pinned toolchain)
+  against the same tree refuted that: the pinned formatter rejects the same four files
+  with character-for-character identical diffs.
+
+  Line-level blame:
+    - lib/letflow/engine/variable_merge.ex:92 -> 91d7e25 (ISS-0080/GH#301)
+    - lib/letflow/engine/pin_resolver.ex:541 -> cb43cc2 (ISS-0078/GH#299, PR#347)
+    - test/letflow/engine/pin_rebind_test.exs:516 -> cb43cc2 (same commit)
+    - test/letflow/engine/pin_resolver_test.exs:239 -> a7fa87b (GH#298, PR#349)
+
+  All four exit 0 at the introducing commit's parent, exit 1 at the commit itself.
+
+determination: >
+  JOB 1 (per the issue's own framing): was this a gate-EXECUTION problem (the check
+  wasn't run) or a gate-ATTRIBUTION problem (run, seen red, merged anyway)? Evidence
+  gathered:
+
+  1. No `handoffs/` directory exists for any of the three originating runs (91d7e25,
+     cb43cc2/PR#347, a7fa87b/PR#349) -- confirmed by grepping handoffs/ for ISS-0078,
+     ISS-0079, ISS-0080, GH#298/299/301, and PR#347/#349: the only hits are later runs
+     (WF03-ISS0106-20260821) CITING these commits, not handoffs produced BY them. These
+     three runs predate this project's handoffs/ audit trail being consistently produced
+     for every run.
+
+  2. PR #347's and PR #349's own bodies (read directly via `gh pr view`) each carry a
+     "## Validation" section listing what was checked: `mix compile`, `mix test` (with
+     real pass counts), fail-first regression proof, CODE-DESIGN-VALIDATOR sign-off,
+     SECURITY-REVIEWER sign-off (PR #347 only). Neither PR body mentions `mix format
+     --check-formatted` at all -- not as passing, not as failing, not as skipped. Given
+     how thoroughly both bodies otherwise itemize verification (including catching and
+     fixing two real regressions in PR #349), the omission reads as the check never being
+     part of that run's own checklist, not as a result being suppressed.
+
+  VERDICT: GATE-EXECUTION problem, not gate-attribution. The check most likely was never
+  run as part of these three runs' own validation, rather than being run, seen red, and
+  knowingly merged past. This is a weaker, less alarming finding than the attribution
+  alternative (which would mean the gate is decorative even when run) -- but it is not
+  determined with certainty, since the absence of a record is evidence, not proof;
+  stated as the most-supported reading of the evidence actually available, not as
+  certain fact.
+
+root_cause_and_fix: >
+  Read the CURRENT GIT_MERGE.md (the protocol governing every WF-02/WF-03/WF-04 merge)
+  to check whether this gap already closed since 2026-08-20 -- it had NOT. Step 5.d
+  ("Verify the build still passes", the post-rebase hard gate that runs immediately
+  before push/PR/merge) already ran `mix compile --warnings-as-errors` and `mix test`
+  with a hard FAIL/BLOCKER/re-route-to-ISSUE-FIXER path, but never `mix format
+  --check-formatted`. This is the precise structural gap: even a run whose EARLIER
+  implementation step skipped or forgot the format check had no second chance to be
+  caught before merge, because the one step every run unconditionally passes through
+  (Step Final, post-rebase) didn't check it either.
+
+  FIX: added `mix format --check-formatted` to GIT_MERGE.md Step 5.d, ahead of the
+  existing compile/test checks, with the same FAIL-and-fix-inline handling (`mix
+  format`, `git add`, `git rebase --continue`) and the same BLOCKER escalation path on
+  the surrounding hard-fail branch (updated its description to "format/build/tests
+  failed after rebase"). This closes the gap structurally at the one point every run
+  passes through, regardless of what an earlier step did or didn't report -- so it fixes
+  the underlying process defect whether the historical cause was execution or
+  attribution, without needing to fully resolve which one it was.
+
+  Did NOT insert a new numbered step (5.5, 6, etc.) -- GIT_MERGE.md's step numbers 5, 6,
+  8 are referenced by number elsewhere (HANDOFF_PROTOCOL.md, ORCHESTRATOR.md, several
+  docs/issues/*.yaml records) and renumbering would silently break those references, per
+  the caution this session already learned the hard way on a different doc (ISS-0197).
+  The addition lands inside existing step 5.d's body instead.
+
+  Live corroborating evidence found while diagnosing: `mix format --check-formatted`
+  against CURRENT main (before this fix) found `test/docs/requirement_status_invariants_test.exs`
+  (introduced by an unrelated run today, PR #420/ISS-0193) also unformatted -- filed
+  separately as ISS-0215/GH#432 rather than fixed here (scope discipline; this run fixes
+  the process, not arbitrary files). This is not just historical evidence -- the gap
+  this issue investigates was still open and actively producing violations as of today,
+  which is part of why the fix above matters going forward, not just as a historical
+  correction.
+
+  Explicitly did NOT reformat lib/letflow/engine/variable_merge.ex,
+  lib/letflow/engine/pin_resolver.ex, pin_rebind_test.exs, or pin_resolver_test.exs --
+  per the issue's own instruction (ISS-0008 and ISS-0068 were both closed that way, and
+  decision 0005 already identifies that as treating the incident, not the cause). Those
+  four files' current formatting status is unknown/unchecked by this run and is not this
+  issue's job.
+
+affected_files:
+  - docs/agents/protocols/GIT_MERGE.md
+
+related:
+  - ISS-0106  # the run that discovered this finding and filed it
+  - ISS-0215  # live current-day evidence found while diagnosing this issue
+
+queue_task_id: 177
+github_issue: https://github.com/tvolodi/letflow/issues/363
+
+status: resolved
+resolved_in_run: WF03-ISS0177-20260821
+resolved_at: "2026-08-21T14:12:05Z"

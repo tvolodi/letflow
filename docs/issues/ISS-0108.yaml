@@ -72,6 +72,55 @@ affected_files:
 suggested_owner: ISSUE-FIXER
 blocks: []
 status: open
+investigation_note_20260821T141828Z: >
+  Run WF03-ISS0108-20260821. Diagnosed with real evidence, not fixed -- see reasoning
+  below for why a fix was not attempted this run.
+
+  test/letflow/identity_test.exs is `async: false` and calls `insert_default_tenant!/0`
+  (literal slug/realm "bpm-default") in exactly TWO tests
+  ("resolve_tenant_by_realm/1 resolves..." and "resolve_realm_by_tenant/1 resolves...",
+  lines ~520-530). Under correct sandbox isolation each test's insert lives inside its
+  own rolled-back transaction, so two tests each inserting the same idp_realm_id should
+  never collide. A collision therefore means one of the two inserts committed for real
+  instead of rolling back.
+
+  Candidate mechanism, confirmed plausible by code reading (not yet proven by
+  reproduction): test/support/data_case.ex's setup does
+  `Sandbox.checkout(Letflow.Repo)` FIRST, then `Sandbox.mode(Repo, {:shared, self()})`
+  SECOND, but only for non-async tags. If the GLOBAL sandbox mode is already `:auto`
+  at the moment `checkout/1` runs (this session's ISS-0113 investigation confirmed
+  `Letflow.TenantFixture.provisioned_tenant!/1` sets `Sandbox.mode(:auto)` and never
+  restores `:manual` -- a real, currently-unfixed leak, reverted this session after a
+  blanket fix broke 12/125 tests via three distinct mechanisms, one of which was
+  specifically a "double-checkout collision in identity_test.exs-style tests"), the
+  checkout may grab a real, non-transactional connection before the subsequent
+  `mode({:shared, self()})` call has any retroactive effect on it. Two such tests in
+  the same OS process, run back to back while the leak is active, would each commit a
+  real "bpm-default" row -- the second colliding with the first exactly as observed.
+  This is consistent with the failure's LOAD-DEPENDENT character: it only manifests
+  when a TenantFixture-using test's leaked `:auto` mode is still live in the same BEAM
+  process when identity_test.exs's two affected tests run, which depends on test
+  scheduling/partition assignment.
+
+  WHY NOT FIXED THIS RUN: ISS-0113 already demonstrated (this session) that this
+  sandbox-leak family resists a same-run blanket fix -- three distinct legitimate uses
+  of `:auto` mode exist elsewhere, and identity_test.exs was ITSELF one of the modules
+  that broke under that attempted fix. A narrower, DataCase-side defense (e.g. force
+  `Sandbox.mode(:manual)` unconditionally at the TOP of setup, before checkout, so a
+  leaked `:auto` can never survive into the next test's checkout) is a plausible
+  candidate that ISS-0113's investigation did NOT try (it modified TenantFixture, not
+  DataCase) -- but it is unverified here and touches every test module's setup path,
+  which is exactly the kind of blast radius that bit ISS-0113. Proposing it as the next
+  run's starting hypothesis rather than shipping it unverified.
+
+  NOT DONE: reproduction was not attempted this run (the failure is rare/load-dependent
+  and a full-suite chase was judged not worth the cost given a plausible mechanism was
+  already found by code reading alone; ISS-0214 already used this session's full-suite
+  budget for a different, already-attributed recurrence in the same broader family).
+
+  Left `open`, not `instrumented` -- no diagnostic capability was shipped, only a
+  written hypothesis; ISSUE_QUEUE.md's status vocabulary is explicit that a record with
+  a candidate mechanism but no verification is not yet terminal.
 related:
   - ISS-0048
   - ISS-0050
@@ -79,7 +128,10 @@ related:
   - ISS-0062
   - ISS-0064
   - ISS-0109
-queue_task_id: 173
+  - ISS-0113  # the sandbox-mode-leak investigation this issue's mechanism depends on
+queue_task_id: 174  # corrected from 173 -- get_next_task returned task 174 for this
+                     # issue (same github_issue #360); 173 in the original filing may
+                     # be a stale/duplicate registration, not re-derived here
 github_issue: https://github.com/tvolodi/letflow/issues/360
 github_issue_note: >
   Filed by ORCH on RELEASE-VALIDATOR's behalf. letflow-queue's register_task

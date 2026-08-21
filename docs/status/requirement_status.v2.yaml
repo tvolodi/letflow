@@ -492,3 +492,35 @@ history:
       (AC6), confirming TenantStatus's actual fail-closed behavior for OQ-14
       (AC7), and writing the five missing end-to-end tests (AC1-AC5) -- not
       building new mounting code from scratch.
+  - req: REQ-071
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-21T20:12:28Z"
+    note: >
+      All 7 gates passed (CODE-DESIGNER 59b52b1, CODE-DESIGN-VALIDATOR ade859f,
+      ELIXIR-DEV 6e2a1b6, SECURITY-REVIEWER 8927d7e, REVIEWER 1cec821,
+      TEST-DESIGN-VALIDATOR 5964add, TEST-RUNNER 1c5d620, RELEASE-VALIDATOR
+      fd0bed5 -- independent full-suite rerun clean at 1444/1444, all 7 ACs
+      independently confirmed PASS). The core plug-mounting work itself was NOT
+      new in this run -- Letflow.Plugs.AuthPipeline and Letflow.Plugs.TenantStatus
+      were already mounted, in the requirement's own required order, as an
+      unplanned side effect of REQ-070's router decomposition (cc1051b). This
+      requirement's real deliverable was verification + fix + coverage: both
+      plugs' moduledocs updated to remove the stale "Not mounted in front of any
+      route today" text and state where they're mounted (AC6); 5 new end-to-end
+      tests across test/letflow/router_test.exs and the new
+      test/letflow/plugs/api_pipeline_integration_test.exs covering AC1-AC5; and
+      REVIEWER's formal AC7 sign-off recorded in docs/migration/stage-4-api-surface.md
+      (2026-08-21 entry, line 302) confirming TenantStatus's fail-closed behavior
+      for OQ-14. Two apparent AC2/AC4-GET wording-vs-stub-router findings were
+      investigated and judged legitimate substituted test coverage, not defects,
+      independently by three gates (CODE-DESIGN-VALIDATOR, TEST-DESIGN-VALIDATOR,
+      RELEASE-VALIDATOR). Three follow-on issues were filed and forwarded, not
+      fixed here: ISS-0219 (test_parallel.sh N auto-derivation too high for this
+      host), ISS-0220 (SandboxPool claim-timeout contention, pre-existing,
+      unrelated files), ISS-0222 (transient connection spike on back-to-back
+      script launches). No docs/migration/decisions/*.md file was named by this
+      requirement's acceptance criteria beyond stage-4-api-surface.md, which is
+      already updated by REVIEWER's Step 2d; README.md checked directly (grep for
+      AuthPipeline/TenantStatus/REQ-071) -- no hit in either direction, so no
+      README update is needed.

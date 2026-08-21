@@ -70,12 +70,19 @@ defmodule Letflow.Test.StatusHistory do
   end
 
   @doc """
-  Parse the run-history index into `%{roll_rule:, volumes:, known_anomalies:}`.
+  Parse the run-history index into
+  `%{roll_rule:, volumes:, known_anomalies:, known_shape_anomalies:}`.
+
+  `known_shape_anomalies:` is design §13.4's key, added by the §13 post-gate
+  amendment. Its records are keyed `{path, entry_line, kind, field, found_as}`
+  and its literal YAML `null` values are normalised to `nil`, so a declared
+  record compares equal to what `shape_anomalies/1` finds on disk.
   """
   @spec parse_index(Path.t()) :: %{
           roll_rule: map(),
           volumes: [map()],
-          known_anomalies: [map()]
+          known_anomalies: [map()],
+          known_shape_anomalies: [map()]
         }
   def parse_index(index_path) do
     sections =
@@ -87,7 +94,12 @@ defmodule Letflow.Test.StatusHistory do
     %{
       roll_rule: parse_mapping(Map.get(sections, "roll_rule", [])),
       volumes: parse_list(Map.get(sections, "volumes", [])),
-      known_anomalies: parse_list(Map.get(sections, "known_anomalies", []))
+      known_anomalies: parse_list(Map.get(sections, "known_anomalies", [])),
+      known_shape_anomalies:
+        sections
+        |> Map.get("known_shape_anomalies", [])
+        |> parse_list()
+        |> Enum.map(&denull/1)
     }
   end
 
@@ -217,6 +229,40 @@ defmodule Letflow.Test.StatusHistory do
   end
 
   @doc """
+  Shape violations in a volume — the on-disk detector assertion **A4b** compares
+  against the index's `known_shape_anomalies:` (design §13.5, §13.7).
+
+  An entry **conforms** when it carries exactly the five fields `req`, `event`,
+  `agent`, `at`, `note`, in that order. Each violation is one of:
+
+    * `"missing_field"`   — a required field is absent, and nothing stands in its
+      place. `found_as`/`found_line` are `nil`.
+    * `"misnamed_field"`  — a required field is absent **and** an undocumented
+      field carrying its value sits in its position. `field` is the required
+      name, `found_as` the name actually written, `found_line` that line. This is
+      **one** violation, not two: no `missing_field` is also emitted for the same
+      field on the same entry.
+    * `"extra_field"`     — a field beyond the five, not accounted for as a
+      `misnamed_field`. `found_line` is its line.
+    * `"field_order"`     — all five present, wrong order. `field` is the first
+      field that is out of place.
+
+  Path-parameterised like everything else here: this function does not know the
+  index exists. It is deliberately **separate** from `anomalies/3`, which stays a
+  pure *vocabulary* detector (design §13.7) — the two sets are disjoint by
+  construction and are asserted separately (A5 vs A4b).
+
+  Keys are strings, matching the index's own text, so a parsed declaration and a
+  detected violation compare equal without either side being coerced.
+  """
+  @spec shape_anomalies(Path.t()) :: [map()]
+  def shape_anomalies(volume_path) do
+    volume_path
+    |> entries()
+    |> Enum.flat_map(&entry_shape_anomalies(volume_path, &1))
+  end
+
+  @doc """
   SHA-256 of a volume's frozen prefix, lowercase hex.
 
   The hashed byte stream is design §8's convention: the first `line_count`
@@ -276,6 +322,102 @@ defmodule Letflow.Test.StatusHistory do
   end
 
   # ── internals ───────────────────────────────────────────────────────────────
+
+  defp entry_shape_anomalies(volume_path, entry) do
+    present = entry.fields
+    missing = @entry_field_order -- present
+    extras = present -- @entry_field_order
+
+    {misnamed, unpaired_extras} = pair_misnamed(present, missing, extras)
+    misnamed_fields = Enum.map(misnamed, &elem(&1, 0))
+
+    missing_records =
+      for field <- missing -- misnamed_fields,
+          do: shape_record(volume_path, entry, "missing_field", field, nil, nil)
+
+    misnamed_records =
+      for {field, found_as} <- misnamed do
+        shape_record(
+          volume_path,
+          entry,
+          "misnamed_field",
+          field,
+          found_as,
+          field_line(entry, found_as)
+        )
+      end
+
+    extra_records =
+      for field <- unpaired_extras do
+        shape_record(volume_path, entry, "extra_field", field, nil, field_line(entry, field))
+      end
+
+    order_records =
+      if missing == [] and extras == [] and present != @entry_field_order do
+        first_wrong =
+          Enum.zip(present, @entry_field_order)
+          |> Enum.find_value(fn {actual, expected} -> if actual != expected, do: actual end)
+
+        [shape_record(volume_path, entry, "field_order", first_wrong, nil, nil)]
+      else
+        []
+      end
+
+    missing_records ++ misnamed_records ++ extra_records ++ order_records
+  end
+
+  # A required field counts as MISNAMED (rather than merely missing) when an
+  # undocumented field occupies its slot — i.e. sits immediately after the field
+  # that should precede it, or heads the entry when it is the first field. Each
+  # extra field can be consumed by at most one missing field.
+  defp pair_misnamed(present, missing, extras) do
+    Enum.reduce(missing, {[], extras}, fn field, {pairs, available} ->
+      index = Enum.find_index(@entry_field_order, &(&1 == field))
+      predecessor = if index > 0, do: Enum.at(@entry_field_order, index - 1), else: nil
+
+      candidate =
+        case predecessor do
+          nil ->
+            List.first(present)
+
+          previous ->
+            case Enum.find_index(present, &(&1 == previous)) do
+              nil -> nil
+              at -> Enum.at(present, at + 1)
+            end
+        end
+
+      if not is_nil(candidate) and candidate in available do
+        {pairs ++ [{field, candidate}], available -- [candidate]}
+      else
+        {pairs, available}
+      end
+    end)
+  end
+
+  defp shape_record(volume_path, entry, kind, field, found_as, found_line) do
+    %{
+      path: volume_path,
+      entry_line: entry.line,
+      req: entry.req,
+      event: entry.event,
+      kind: kind,
+      field: field && Atom.to_string(field),
+      found_as: found_as && Atom.to_string(found_as),
+      found_line: found_line
+    }
+  end
+
+  defp field_line(entry, field), do: Map.get(entry.field_lines, Atom.to_string(field))
+
+  # The index writes an absent value as the literal `null`; the line parser has
+  # no type information and hands it back as the string "null".
+  defp denull(record) do
+    Map.new(record, fn
+      {key, "null"} -> {key, nil}
+      pair -> pair
+    end)
+  end
 
   defp read_lines(path) do
     lines = path |> File.read!() |> String.split(~r/\r?\n/)

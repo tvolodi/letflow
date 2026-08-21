@@ -1430,9 +1430,28 @@ nothing itself, and it did not edit the index, the test files, or volume 1.
 
 **Do not hand-tune the declared list to make A4b green.** Run A4b, read the full set it
 reports, and compare it to the three records in §13.4. If it reports a **fourth** shape
-violation, that is a new finding of the same kind — declare it in `known_shape_anomalies:`
-with its cause, and say so in the handoff. Deleting a record, or narrowing the detector, to
-make the counts line up is the failure mode this whole run exists to stop.
+violation, that is a new finding of the same kind, and the lawful response depends on
+**which volume it is in** — say which, and what was done, in the handoff either way:
+
+- **In a CLOSED, digest-pinned volume** — declare it in `known_shape_anomalies:` with its
+  cause. The entry itself is never edited; that is what the exception list is for.
+- **In the CURRENT volume** — **do NOT declare it. Fix it in the working tree before the
+  commit lands.** The current volume is open and appendable, so the malformed entry is not
+  yet history and correcting it is not a rewrite of a past entry. Declaring it is not merely
+  discouraged here, it is impossible: A4b's closed-and-pinned rule (§13.5) fails any record
+  whose `path:` names a volume that is not `status: closed` with a `frozen_prefix_sha256:`,
+  so a record citing the current volume turns A4b red rather than green. That is deliberate —
+  it is what stops `known_shape_anomalies:` from becoming a declare-to-silence mechanism.
+
+> *(Corrected 2026-08-21 at Step 4 rework iteration 1, as MINOR-5, on the same narrow
+> authorization as §8's erratum and no wider. As first written this paragraph said
+> unconditionally to declare a fourth violation, which contradicts the closed-and-pinned rule
+> §13.5 gained on re-amendment iteration 1 and would have been wrong guidance for the current
+> volume — and §13.10 is the section an applying agent treats as authoritative. Nothing else
+> in this artefact was changed by that pass.)*
+
+Deleting a record, or narrowing the detector, to make the counts line up is the failure mode
+this whole run exists to stop, in either volume.
 
 ### 13.11 Open questions raised by this amendment
 

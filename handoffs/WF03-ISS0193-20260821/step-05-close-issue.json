@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0193-20260821/step-05-close-issue.json",
   "created_at": "2026-08-21T12:56:54Z",
   "started_at": "2026-08-21T12:56:54Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-21T12:59:13Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -36,9 +36,9 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Closed ISS-0193. Updated docs/issues/ISS-0193.yaml: status: resolved, resolved_in_run: WF03-ISS0193-20260821, resolved_at: 2026-08-21T12:58:23Z (real clock read). Verified GH#381 was OPEN via `gh issue view 381 --json state` before acting, then closed it with `gh issue close 381 --comment` naming this run, the design commit (c756b82), the implementation commit (f7814b9), and the test report path (test/reports/report-20260821-WF03-ISS0193-20260821.yaml); `gh` confirmed the close. This is a genuine `resolved` outcome per the task's framing: root cause (no friction on which volume a known_anomalies: record may cite) was actually removed (A4b's closed-and-pinned rule applied to A5), with A10 additionally closing the MINOR-4 follow-on laundering route. No file outside docs/issues/ISS-0193.yaml and this run's own handoff was modified in this commit -- handoffs/orchestrator.log and handoffs/registry.json had pre-existing unstaged modifications from other run activity and were deliberately left untouched/unstaged, and the untracked docs/issues/ISS-0212.yaml (unrelated sibling-run artifact) was left alone.",
+    "artifacts_out": ["docs/issues/ISS-0193.yaml"],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0193-20260821",
@@ -48,7 +48,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to ORCH to merge feature/WF03-ISS0193-20260821 -- WF-03 complete: all steps PASS, GH#381 closed, ISS-0193.yaml resolved."
   },
   "rework_count": 0,
   "max_rework": 3

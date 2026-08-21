@@ -124,4 +124,6 @@ github_issue_note: >
   register_task created both the queue task (193) and its mirrored GitHub issue
   (#381) in one call, so `gh issue create` was deliberately NOT called separately --
   doing so would double-post, the failure recorded in ISS-0109's #358/#359 pair.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0193-20260821
+resolved_at: "2026-08-21T12:58:23Z"

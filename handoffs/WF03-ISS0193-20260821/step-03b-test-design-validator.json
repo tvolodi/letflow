@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0193-20260821/step-03b-test-design-validator.json",
   "created_at": "2026-08-21T12:31:09Z",
   "started_at": "2026-08-21T12:31:09Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-21T12:36:14Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -42,8 +42,8 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
+    "status": "PASS",
+    "summary": "Re-derived, did not trust TEST-DESIGNER's report. All eight acceptance criteria met.\n\n1. RAN AS-IS FIRST: `MIX_ENV=test mix do test test/docs/requirement_status_invariants_test.exs` (bypassing the `test` alias's ecto.create/migrate, which failed with 'too many clients already' -- letflow-postgres-1's connection pool was saturated by concurrent sibling-session activity at the time; confirmed via `docker exec letflow-postgres-1 psql ...` also refusing new connections. This test file's own moduledoc states 'No database' -- `mix do test <file>` runs the bare ExUnit task without the alias's DB-setup steps, which this suite never needed). Result: 'Result: 20 passed' (0 failures) -- matches the reported 20/0 exactly.\n\n2. MUTANT APPLIED INDEPENDENTLY (not re-reading the report): edited test/support/status_history.ex's warranted_closure?/3 myself, changing the ceiling comparison's `or` to `and` (mutant 1 of the three reported). Re-ran the suite: 'Result: 18/20 passed, Failed: 2 tests' -- the exact two named in the report ('EITHER ceiling exceeded is sufficient -- not both' and 'raises rather than silently defaulting ... ') with identical failure reasons (Expected truthy got false; Expected exception KeyError but nothing was raised). Reverted via `git checkout -- test/support/status_history.ex`. Verified: `git status --porcelain test/ lib/` returned EMPTY, and a clean re-run gave 'Result: 20 passed' again. Both counts (18/20 mutated, 20/20 reverted) independently measured, not copied.\n\n3. NEGATIVE CONTROLS CONFIRMED GENUINE: read both directly (test/docs/requirement_status_invariants_test.exs:574-597 and :606-622). (a) The A10/MINOR-4 fixture (status: closed, frozen_prefix_sha256 present, lines:10/bytes:500, both under the 1200/120_000 ceilings) WOULD have passed the OLD closed_and_pinned?/2 rule (which checked only status==closed and frozen_prefix_sha256 present -- exactly the MINOR-4 gap CODE-DESIGN-VALIDATOR flagged) and is shown to FAIL the new warranted_closure?/3-backed rule. Not tautological. (b) The A5 open-volume fixture (status: current, no frozen_prefix_sha256) would have passed under pre-fix A5, which had NO closed-and-pinned rule at all (only set equality) -- so citing an open volume was previously unconstrained by A5 -- and is shown to correctly FAIL under the new shared rule. Both genuine.\n\n4. SHARING CONFIRMED BY READING THE FILE: A4b's findings function calls `closed_pinned_and_warranted?(volumes, index.roll_rule, &1)` at line 660; A5's test block calls `closed_pinned_and_warranted?(volumes, roll_rule, &1)` at line 294. Both call the SAME single private function (defined once, lines 686-688), which delegates to `disqualifying_reason/3` (line 694), which itself calls `SH.warranted_closure?/3` (line 707) -- one shared implementation, not two comparisons that could diverge.\n\n5. REGRESSION CLAIM CONFIRMED: docs/status/requirement_status.index.yaml has exactly 3 known_anomalies: records and 3 known_shape_anomalies: records (counted directly via awk). Both the as-is run and the post-revert re-run (20/20 each) include A4b and A5, which assert every one of these six records against the real index via closed_pinned_and_warranted?/3 -- all pass.\n\n6. SCOPE CONFIRMED: `git diff --stat main...HEAD -- lib/ priv/repo/migrations/` shows nothing but the design doc under lib/letflow/design/ (a markdown design artefact, not code) -- no lib/letflow/ code file or migration touched by this branch.\n\n7. DESIGN CONFORMANCE CONFIRMED: compared the shipped code against design §13.12.4/§13.12.5 line by line. warranted_closure?(volume, max_lines, max_bytes) -- name, arity, argument order, and the status==closed AND (lines>max_lines OR bytes_working_tree>max_bytes) logic with Map.fetch!-raises-on-missing-field, all match exactly. closed_and_pinned?/2 was renamed/extended to closed_pinned_and_warranted?(volumes, roll_rule, record), delegating to warranted_closure?/3 via disqualifying_reason/3, per spec. One cosmetic divergence, not a defect: the design's illustrative signature (13.12.4, prefixed 'e.g.') shows disqualifying_reason/3 returning `:ok` for the non-disqualified case; the shipped code returns `nil` instead -- but this exact `nil` value is what the TEST-DESIGNER handoff's OWN acceptance criteria (rank-1, most specific per core-directives.md's Instruction Precedence) explicitly specified ('or nil if none apply'), and closed_pinned_and_warranted?/3's own check (`disqualifying_reason(...) == nil`) is internally consistent throughout every call site. Not treated as a design-conformance defect.\n\nNo genuine defects found. result.issues is empty.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
@@ -54,7 +54,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to ORCH for Step 4 (TEST-RUNNER / merge decision) -- gate PASS."
   },
   "rework_count": 0,
   "max_rework": 3

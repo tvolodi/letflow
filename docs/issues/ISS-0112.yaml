@@ -25,3 +25,25 @@ github_issue: https://github.com/tvolodi/letflow/issues/366
 github_issue_note: >
   Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (180) and its mirrored GitHub issue (#366) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
 status: open
+
+carried_findings:
+  - from_run: WF03-ISS0109-20260821
+    from_agent: SECURITY-REVIEWER
+    at: "2026-08-21T02:22:55Z"
+    severity: MINOR
+    finding: >
+      The new shared helper's failure paths log raw Exception.message(exception)
+      (test/support/tenant_fixture.ex:274 and :382). SECURITY-REVIEWER PASSed the
+      helper with this recorded as non-blocking and explicitly recommended carrying
+      it here rather than expanding WF03-ISS0109-20260821's scope. Its reasoning:
+      the text is bounded in practice today, because every query that can raise
+      inside do_capture/2 is already tenant-scoped, so a Postgrex.Error names only
+      the tenant's own schema or relation and carries no credential -- it is not an
+      INV-4 violation and not an INV-F-8 leak. The narrow residual is that a
+      DBConnection.ConnectionError message can include host:port, i.e. connection
+      endpoint detail rather than a secret, in a test-environment log.
+      Why it belongs to THIS issue specifically: ISS-0112 is the run that migrates
+      the other 39 copy-paste fixture sites onto this helper. Whatever this helper
+      logs on failure will, at that point, be what 41 call sites log on failure --
+      so the decision about exception-text handling is cheapest to make once, here,
+      before the copy count goes back up.

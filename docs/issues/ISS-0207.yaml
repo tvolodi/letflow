@@ -41,4 +41,24 @@ github_issue_note: >
   `register_task` created both the queue task (207) and its mirrored GitHub issue (#398)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
   separately. The id comes from `register_task`'s `issue_ref`, not a directory scan.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0207-20260821
+resolved_at: "2026-08-21T10:34:43Z"
+resolution: >
+  `HANDOFF_PROTOCOL.md` §1.2 now carries a dated as-of marker (2026-08-21, commit
+  `ef62d4b`, identified from `git log -- docs/agents/shared/HANDOFF_PROTOCOL.md` rather
+  than from prose) immediately after the figures, plus two paragraphs stating (a) that
+  `files` and `gap==0` grow with the corpus and their growth is expected and exactly
+  reconcilable against the handoffs written since `ef62d4b`, with both re-runs so far
+  worked through (607/469 at the ISS-0204 gate, 608/470 on this run), (b) that every other
+  bucket -- 10 / 14 / 89 / 25 / 20 -- is a fixed historical set whose movement is an ALARM,
+  not drift, and (c) that the finding is the SHAPE (the ~5:1 ratio and the round-`:00`
+  negative-gap class), not the absolute counts. Additive only: no figure was deleted, the
+  command remains quoted verbatim, and the edit stays inside §1.2 -- nothing was copied
+  into `ORCHESTRATOR.md` or `core-directives.md`, so the one-canonical-statement property
+  ISS-0204 established is preserved. The measurement was re-run first-hand from the repo
+  root before writing: 608 files, 0 unparseable, 10 null `started_at`, 470 gap==0, 14
+  gap 1-30s, 89 gap>30s, 25 negative, 20 of those on a round `:00` minute -- +2 files and
+  +2 at gap zero versus ef62d4b, reconciling exactly to
+  `WF03-ISS0204-20260821/step-03b-reviewer-gate.json` and this run's own
+  `step-03-date-scope-figures.json`, with every other bucket unchanged.

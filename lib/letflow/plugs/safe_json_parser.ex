@@ -7,7 +7,7 @@ defmodule Letflow.Plugs.SafeJsonParser do
   behaviour to guard against) — see
   `lib/letflow/design/req068-validation.md` §0.3 for the full rationale.
 
-  Install this in place of a bare `plug(Plug.Parsers, ...)`, after
+  Install this in place of a bare `Plug.Parsers` plug declaration, after
   `Letflow.Plugs.ContentType` in the pipeline (that plug rejects a wrong
   Content-Type before this one would attempt to parse anything).
   """

@@ -64,6 +64,20 @@ description: >
   deliberately does not depend on their existing -- the structure rule stands on its own
   and these only measure it.
 
+  ADDED TO SCOPE 2026-08-21 (ISS-0200, run WF03-ISS0200-20260821): one extension to the
+  EXISTING H-SIZE-3 INFO reporter above -- alongside the len(task.description) figures it
+  already emits, it also emits median/max/total len(result.summary) and the per-step
+  summary/description ratio. Specified in full in HANDOFF_PROTOCOL.md's Enforcement note,
+  in the same "Specified but NOT YET RUNNING" block and the same code fence as H-SIZE-1/2/3;
+  do not re-derive it here. REPORT ONLY: no threshold, no WARN, no pass/fail on either
+  figure. ISS-0200 measured 605 handoff files and returned a NO-CHANGE verdict -- there is
+  no result-side restatement defect for a check to gate on -- so a WARN here would be a
+  length rule on result.summary by the back door. Like every other check in this issue, and
+  like H-SIZE-1/2/3, THIS DOES NOT RUN TODAY: H-SIZE-3 itself is unbuilt, this issue is open
+  and gated on ISS-0190, and nothing in HANDOFF_PROTOCOL.md or here claims otherwise. Its
+  sole purpose is that if the result side ever does acquire a restatement mechanism, the
+  drift shows up in a report instead of needing a fresh investigation.
+
   FRAMING NOTE: HANDOFF_PROTOCOL.md calls this "its own requirement". It is filed as an
   issue because that is the mechanism available to a discovering agent under
   ISSUE_QUEUE.md; whoever picks it up should judge whether it warrants promotion to a REQ
@@ -76,6 +90,7 @@ affected_files:
 related:
   - ISS-0190  # the data defects this linter would catch; likely a prerequisite
   - ISS-0198  # added H-SIZE-1/2/3 to this issue's scope; specs in HANDOFF_PROTOCOL.md's Enforcement note
+  - ISS-0200  # added the H-SIZE-3 result.summary reporting extension; same Enforcement-note block
   - ISS-0192  # the two stale PENDING handoffs
   - ISS-0117  # defines the recovery marker whose well-formedness the linter can check
 

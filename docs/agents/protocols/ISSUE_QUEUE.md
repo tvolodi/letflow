@@ -196,10 +196,62 @@ every other reader point here rather than restating it.
   remaining work, so it can never be a dead end; file that successor before transitioning
   the record. State plainly in the record what the shipped work does *not* close.
 
+- `no_defect` — **the issue was investigated and measured, and there was no root cause
+  there to remove.** Terminal, like `resolved`, but it asserts a different thing and must
+  never be used in place of it: `resolved` says a defect existed and was removed, with a
+  regression test proving it; `no_defect` says the investigation established that the
+  defect the record alleged does not exist. Nothing here relaxes `resolved`'s bar by a
+  hair — that definition stands exactly as written above, and this status exists so that a
+  no-defect outcome stops being tempted to borrow it. `no_defect` is not "we found
+  nothing"; it is a positive, falsifiable claim about reality — *checked, measured, not
+  there* — and a `no_defect` record claimed without the measurement to back it misinforms
+  every later run that cross-references this registry, exactly as a false `resolved` does.
+
+  **The evidence bar is the same discipline as the other two, not a lower one.** A
+  `no_defect` record MUST carry — in the issue file, citing the closing run's diagnosis
+  handoff by path — all four of:
+
+  1. the **first-hand measurement** that was run, with the producing code or command
+     quoted and real figures given. Figures inherited from the issue's own filing, or from
+     another run, do not count; `HANDOFF_PROTOCOL.md` §1.1 applies, and if the
+     re-measurement disagrees with the filing, the measurement wins and the record says
+     so.
+  2. the **specific candidate mechanisms tested**, named individually, each with its
+     result — *including* the ones the data did not support. A verdict that reports only
+     what was checked, and not what was looked for and not found, is not this status.
+  3. the **stated limitations of the method**, so a later reader can weigh the negative
+     result instead of inheriting it as settled. A negative result that hides the weakness
+     of the test that produced it is worth less than no record at all.
+  4. the **run-id and timestamp** of the run that reached the verdict.
+
+  This is deliberately the hardest of the three to earn cheaply, because it is the one an
+  uninvestigated issue would most like to take. An issue nobody investigated cannot reach
+  `no_defect`: with nothing to quote under (1)–(3) there is nothing to write, and a record
+  that says only "looked, seemed fine" has not reached a terminal status at all — it is
+  still `open`.
+
+  **WF-03 and this vocabulary now agree.** WF-03 Step 1 has always licensed a reasoned
+  NO-CHANGE verdict as a legitimate outcome, and WF-03 Step 5 already points at this
+  section as the canonical status list — but until now that list offered a NO-CHANGE run
+  no legal terminal value: `resolved` would assert a removal that never happened, and
+  `instrumented` would assert shipped work that does not exist. Both are false statements
+  about a NO-CHANGE outcome, and a run forced to pick one of them corrupts the registry in
+  order to close a ticket. That is the gap this closes.
+
 Worked example: **ISS-0109** (`superseded_by: ISS-0116`). Run WF03-ISS0109-20260821 built
 and verified real test instrumentation, but the design gate and REVIEWER independently
 concluded the failure was instrumented, not fixed — the root cause remains unknown — so it
 was transitioned to `instrumented` rather than `resolved`.
+
+Worked example: **ISS-0200** (`status: no_defect`, run WF03-ISS0200-20260821) — the
+precedent that forced this status into the vocabulary. The run asked whether
+`result.summary` carries a redundancy defect distinct from justified length; it measured
+605 handoff files across 60 runs first-hand, tested six candidate restatement mechanisms
+and found none supported, recorded its own shingle method's under-power against paraphrase
+as a stated limitation, and changed no rule. Nothing was removed, so `resolved` was false;
+nothing shipped, so `instrumented` was false. The gap was found by that run's own
+diagnosis and fixed in the same run rather than filed, because Step 5 could not legally
+close the issue without a terminal status that told the truth.
 
 ## Picking up a queued issue later
 

@@ -373,6 +373,60 @@ stated here or anywhere, and none is to be inferred from the WARN threshold in t
 Enforcement note; that threshold selects a tail for reporting, it is not a budget any
 dispatch must meet.
 
+**A MEASURED NEGATIVE RESULT — NOT A RULE, AND IT STATES NO THRESHOLD.** Everything in
+this block is a measurement of `result.summary`, recorded so the next agent who wonders
+whether the rule above should have a result-side counterpart reads the answer instead of
+re-running the investigation. **Nothing here constrains the length of any `result.summary`,
+no target or budget is stated or to be inferred, and this block must not be cited as a
+size rule.** It is the counterpart to the ISS-0198 dispatch-side finding immediately above
+because it is the *same question asked of the other half of the file and answered the
+other way*. Measured 2026-08-21 for ISS-0200, first-hand over `handoffs/` (full figures,
+code and method in `handoffs/WF03-ISS0200-20260821/step-005-01-diagnose.json`):
+
+- Corpus: 605 parseable handoff files, 0 unparseable, across 60 run directories.
+  `len(result.summary)`: median 2,986, p90 8,493, p95 12,323, max 47,036, total 2,599,136.
+  `len(task.description)` over the same files: median 704, p90 3,940, p95 5,737, max
+  19,040, total 889,118. Pooled ratio 2.92x; per-handoff `summary`/`description` ratio
+  (n=601) median 3.53x, p90 13.86x, max 43.5x. The result side is the larger half at every
+  quantile, and by more than the run that prompted the question had found.
+- **The dispatch-side threshold does not transfer, which is itself a reason not to write a
+  result-side rule.** The char count H-SIZE-1's WARN uses on the dispatch side — stated
+  once, in the Enforcement note, and deliberately not repeated here — selects 4.3% of
+  descriptions (26 of 605) but 19.8% of summaries (120 of 605). On this side the same
+  number selects the norm, not a tail.
+- **Six candidate restatement mechanisms were tested against those 120 large summaries.
+  None was supported;** not one summary exceeded 0.30 8-word-shingle overlap on any axis.
+  Restating a file named in its own `artifacts_out` (n=35, median 0.059, max 0.264);
+  restating its own `issues[]` entries in prose (n=130, median 0.009, max 0.162); a
+  validator's summary restating the producer's (n=248 pairs, median 0.002, max 0.200);
+  echoing back its own `task.description` (n=120, median 0.002, max 0.069); restating an
+  earlier summary in the same run (n=100, median 0.007, max 0.162); restating a file named
+  in its own `artifacts_in` (n=119, median 0.018, max 0.264). The structural screen that
+  made the dispatch case — naming an `artifacts_in` basename inside the text — fired 20 of
+  20 there and only 46 of 120 here, and did not select.
+- **METHOD LIMITATION, recorded so this negative result is not over-read.** The 8-word
+  shingle test detects verbatim restatement and is under-powered against paraphrase. Run
+  against the 26 large *dispatches* — the population ISS-0198 established as true
+  positives by reading them — it returns median 0.054, p90 0.200, max 0.347, so it does
+  not cleanly separate that side either. These figures are therefore load-bearing only
+  comparatively (the result side scores at or below the dispatch side on every axis), and
+  the verdict rests additionally on evidence density (large summaries: median 65.3% of
+  segments carry a digit, path or identifier; minimum 36.7%) and on a hand-read of the
+  least-evidence-dense large summary in the corpus, which restated its `artifacts_in`
+  nowhere.
+
+**The asymmetry is the finding.** The dispatch-side defect had two halves: a duplicated
+copy *and* an empty structured field the content should have travelled in
+(`requirement_text == {}` in 66 of 69). Neither half exists on the result side.
+`artifacts_out` is non-empty on 449 of 605 handoffs, and where it points at a real
+produced artefact the summary does not duplicate it. A duplicated copy is unmeasurable and
+drifts from the source it was copied from — that was the entire case for the rule above.
+A `result.summary` is an **attestation**: it has no source to drift from, it *is* the
+source, and §4 makes the acting agent the only party who can write it. Length bought by
+attestation is not the same object as length bought by duplication, and the corpus says
+this side is the former. So: no result-side entry in the inline-vs-`artifacts_in` table,
+no required shape, no length target.
+
 **Legal `result.status` values — no others:**
 
 | Value | Meaning |
@@ -985,6 +1039,12 @@ H-SIZE-2  WARN  "under-specified"
 
 H-SIZE-3  INFO  per run, never fails
           emit: n_steps, median/max/total len(desc), count of H-SIZE-1 hits
+          emit also (added 2026-08-21, ISS-0200):
+                median/max/total len(result.summary), and the per-step
+                summary/description ratio.
+                REPORT ONLY. No threshold, no WARN, no pass/fail, on either
+                figure -- a threshold here would be a length rule on
+                result.summary by the back door, and no such rule exists.
 ```
 
 **6,000 is a WARN threshold, not a length any dispatch is required to meet.** It is set
@@ -1006,3 +1066,12 @@ gate by editing what it measures," forbids. H-SIZE-3 is a per-run report and is 
 mechanism that would notice this drift recurring: the ISS-0198 measurement found 36 of the
 45 corpus files over 4,000 chars belong to five runs dated within a single day, so it is
 recent drift rather than a standing property of the pipeline.
+
+**The `result.summary` figures H-SIZE-3 emits are reporting only, and H-SIZE-3 does not
+run today either** — the "None of these three checks runs today" framing at the head of
+this section covers the extension exactly as it covers the rest. They were added by
+ISS-0200, whose measured negative result is recorded in §2: no result-side restatement
+mechanism exists in the corpus today, so there is nothing for a check to gate on, and a
+WARN would be a length rule on `result.summary` by the back door. The figures exist so
+that if the result side ever *does* acquire such a mechanism, the drift is visible without
+a fresh investigation.

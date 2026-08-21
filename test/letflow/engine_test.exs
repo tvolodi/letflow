@@ -24,8 +24,6 @@ defmodule Letflow.EngineTest do
 
   use Letflow.DataCase, async: false
 
-  import Ecto.Query
-
   alias Letflow.Definitions
   alias Letflow.Engine
   alias Letflow.EventStore.InstanceProjection
@@ -35,58 +33,31 @@ defmodule Letflow.EngineTest do
   alias Letflow.Engine.Reconstruction
   alias Letflow.Engine.Task
   alias Letflow.Engine.TokenRecord
-  alias Letflow.Identity.Tenant
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
 
   # ---------------------------------------------------------------------------------
   # Fixtures / helpers
   # ---------------------------------------------------------------------------------
 
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req045"),
-        display_name: "REQ-045 Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
-
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-  end
-
-  # Mirrors store_test.exs's/snapshot_store_test.exs's provisioned_tenant/1
-  # exactly -- see this file's moduledoc for the full reasoning. Also replays
-  # migrations via the real default manifest (not a caller-supplied one), which
-  # is load-bearing here: it is what triggers
-  # TenantProvisioning.maybe_seed_platform_event_types/2 to seed the
-  # "INSTANCE_STARTED" event_type_registry row create/2's own event-append step
-  # (M3) depends on (design doc §9 OQ-3a).
+  # Adopts the shared `Letflow.TenantFixture` (ISS-0109/GH#358, ISS-0116/GH#370) in
+  # place of this file's own hand-rolled `insert_tenant!/0` + `drop_schema!/1` +
+  # `provisioned_tenant/0` copies -- same rationale as promotion_test.exs's own
+  # adoption. Behaviour-preserving: `replay_migrations/1` is still called with the
+  # real default manifest (no caller-supplied one), which is load-bearing here --
+  # it is what triggers `TenantProvisioning.maybe_seed_platform_event_types/2` to
+  # seed the "INSTANCE_STARTED" `event_type_registry` row `create/2`'s own
+  # event-append step (M3) depends on (design doc §9 OQ-3a); `TenantFixture`'s own
+  # `replay!/1` calls `TenantProvisioning.replay_migrations/1` the same way. This
+  # module was named alongside rollback_test.exs (ISS-0116's carried finding,
+  # WF03-ISS0119-20260821/TEST-RUNNER) as a further un-instrumented site that
+  # reproduced the same 3F000 signature from its own copy-pasted fixture.
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+    %{tenant_id: tenant_id, schema_name: schema_name} =
+      Letflow.TenantFixture.provisioned_tenant!(
+        slug_prefix: "req045",
+        display_name: "REQ-045 Test Tenant"
+      )
 
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    %{tenant_id: tenant_id, schema_name: schema_name}
   end
 
   defp unique_name(prefix \\ "req045-def") do

@@ -25,29 +25,10 @@ defmodule Letflow.Engine.ReconstructionTest do
   alias Letflow.EventStore.Event
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.EventStore.Registry
-  alias Letflow.Identity.Tenant
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
 
   # ---------------------------------------------------------------------------------
   # Fixtures / helpers
   # ---------------------------------------------------------------------------------
-
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req053"),
-        display_name: "REQ-053 Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
-
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-  end
 
   defp register_event_type!(name, tenant_id) do
     assert {:ok, _event_type} =
@@ -64,39 +45,28 @@ defmodule Letflow.Engine.ReconstructionTest do
     :ok
   end
 
+  # Adopts the shared `Letflow.TenantFixture` (ISS-0109/GH#358, ISS-0116/GH#370) in
+  # place of this file's own hand-rolled `insert_tenant!/0` + `drop_schema!/1` +
+  # `provisioned_tenant/0` copies -- same rationale as promotion_test.exs's own
+  # adoption. Behaviour-preserving: `replay_migrations/1` still runs the real
+  # default manifest via `TenantFixture`'s own `replay!/1`, so the auto-seeded
+  # "INSTANCE_STARTED"/"TASK_COMPLETED"/"INSTANCE_CANCELLED"/"EXECUTION_ERROR"/
+  # "SUB_PROCESS_COMPLETED" event types (REQ-045 §9 OQ-3a, extended by
+  # ISS-0072/GH#257) are unaffected; only "BOGUS_EVENT_TYPE" (no production writer,
+  # not auto-seeded) still needs explicit registration below. This module was named
+  # alongside rollback_test.exs/engine_test.exs (ISS-0116's carried finding,
+  # WF03-ISS0119-20260821/TEST-RUNNER) as a further un-instrumented site that
+  # reproduced the same 3F000 signature from its own copy-pasted fixture.
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+    %{tenant_id: tenant_id, schema_name: schema_name} =
+      Letflow.TenantFixture.provisioned_tenant!(
+        slug_prefix: "req053",
+        display_name: "REQ-053 Test Tenant"
+      )
 
-    tenant = insert_tenant!()
+    :ok = register_event_type!("BOGUS_EVENT_TYPE", tenant_id)
 
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    # "INSTANCE_STARTED", "TASK_COMPLETED", "INSTANCE_CANCELLED", "EXECUTION_ERROR",
-    # and "SUB_PROCESS_COMPLETED" are all now auto-seeded by replay_migrations/2's
-    # default manifest (REQ-045 §9 OQ-3a, extended by ISS-0072/GH#257) -- this
-    # fixture used to self-register the latter four again against a permissive
-    # `%{"type" => "object"}` schema (ISS-0073/GH#267: that duplicate registration
-    # now collides with provisioning's own seed and hard-fails). Removed rather than
-    # reconciled: every payload this file replays for these 4 types is produced by
-    # the same real production writers provisioning's stricter schemas were written
-    # to validate. "BOGUS_EVENT_TYPE" has no production writer and is NOT auto-seeded
-    # -- still registered explicitly below, no collision.
-    :ok = register_event_type!("BOGUS_EVENT_TYPE", tenant.id)
-
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    %{tenant_id: tenant_id, schema_name: schema_name}
   end
 
   defp unique_name(prefix \\ "req053-def") do

@@ -66,60 +66,35 @@ defmodule Letflow.Definitions.RollbackTest do
 
   use Letflow.DataCase, async: false
 
-  import Ecto.Query
-
   alias Letflow.Definitions
   alias Letflow.Definitions.ProcessDefinition
   alias Letflow.Definitions.PromotionDigest
   alias Letflow.Definitions.PromotionReview
   alias Letflow.Definitions.PromotionReviewStore
-  alias Letflow.Identity.Tenant
   alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
 
   # ---------------------------------------------------------------------------------
   # Fixtures / helpers
   # ---------------------------------------------------------------------------------
 
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req038-rollback"),
-        display_name: "REQ-038 Rollback Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
-
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-  end
-
-  # Mirrors store_test.exs's/promotion_test.exs's provisioned_tenant/0 exactly
-  # -- see this file's moduledoc for the full reasoning.
+  # Adopts the shared `Letflow.TenantFixture` (ISS-0109/GH#358, ISS-0116/GH#370) in
+  # place of this file's own hand-rolled `insert_tenant!/0` + `drop_schema!/1` +
+  # `provisioned_tenant/0` copies -- same rationale as promotion_test.exs's own
+  # adoption (see that file's comment): behaviour-preserving by construction, adds a
+  # completeness assertion post-replay, and emits a greppable
+  # `LETFLOW_TENANT_FIXTURE` teardown marker. This file was the un-instrumented
+  # module ISS-0116 caught a live 3F000 :invalid_schema_name reproduction in
+  # (rollback_test.exs:642) -- adopting the fixture here is that issue's own
+  # prescribed step 1, so the *next* occurrence carries a full
+  # `capture_schema_state/1` report instead of a bare Postgrex error.
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+    %{tenant_id: tenant_id, schema_name: schema_name} =
+      Letflow.TenantFixture.provisioned_tenant!(
+        slug_prefix: "req038-rollback",
+        display_name: "REQ-038 Rollback Test Tenant"
+      )
 
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    %{tenant_id: tenant_id, schema_name: schema_name}
   end
 
   # A well-formed schema_name that DECODES to a real tenant_id (design §4.1's

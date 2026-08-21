@@ -5721,3 +5721,46 @@ history:
       being a uniform contract); docs/migration/stage-4-api-surface.md's stale header
       ("none started", "All 21 are pending") corrected -- REVIEWER sign-off section left
       untouched.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-08-21T03:39:49Z
+    note: >
+      ISS-0106 / GH#354 resolved by run WF03-ISS0106-20260821. The issue was filed as a
+      single toolchain-drift problem; Step 1's measurement split it into two defects with
+      different root causes, and its stated "ROOT CAUSE (confirmed, not inferred)" was
+      refuted for half of it. Under the pinned Elixir 1.18.3/OTP 27, run in a throwaway
+      elixir:1.18.3-otp-27 container against the same tree with the repo mounted
+      read-only, `mix format --check-formatted` fails on the SAME four files with
+      character-for-character identical diffs -- including the heredoc escape ISS-0106
+      attributed specifically to a 1.18-vs-1.20 formatter change. Three of the four diffs
+      are ordinary line wraps at 99-102 characters against the formatter's default
+      line_length of 98, which .formatter.exs never overrides; no Elixir version has ever
+      accepted them. Per-file verification (`git show <rev>:<path> | mix format
+      --check-formatted -`, so nothing was written to the working tree) shows all four
+      exit 0 at their introducing commit's parent and exit 1 at the commit itself: 91d7e25
+      (ISS-0080/GH#301), cb43cc2 (ISS-0078/GH#299, PR#347), a7fa87b (GH#298, PR#349), all
+      merged 2026-08-20. The second symptom WAS genuine drift and was confirmed cleanly:
+      14 struct-update warnings under 1.20.3/OTP 29, zero under 1.18.3/OTP 27, identical
+      tree -- which also settles the UNCONFIRMED version question ISS-0046 left open.
+      Fix shipped in three parts after REVIEWER sign-off amending decision record
+      0005-pin-formatting-toolchain.md: Part A moved the pin to elixir 1.20.3-otp-29 /
+      erlang 29.0.5 and added `mix letflow.check_toolchain` as the first step of the
+      `mix letflow.check` alias, so a host running something other than .tool-versions is
+      told so by name instead of reading an unattributable red format gate (the
+      enforcement point Step 1 measured as absent everywhere -- mix.exs, .tool-versions,
+      the check alias and CI all failed to compare the running toolchain to the pin).
+      Part B reformatted the four files. Part C annotated 16 struct-update bind sites
+      using ISS-0046's already-in-repo idiom, measured version-agnostic. Gate state, and
+      it is NOT green: `mix letflow.check` step 2 (format) and step 3 (compile
+      --warnings-as-errors) both now PASS, and the alias still exits 1 at step 4 for an
+      unrelated, already-tracked reason (ISS-0107 / GH#357, Windows fake-mix
+      self-recursion). Docs updated by the run: README.md and
+      docs/guides/backend_developer_guide.md (the latter was stale at "Elixir 1.17+ /
+      OTP 26+" since the original pin commit 68edfbc). Addenda written to ISS-0046 and
+      ISS-0109 rather than overwriting them. Separate finding NOT resolved here and
+      deliberately left open: how three runs came to merge past a red format gate on one
+      day -- filed as ISS-0110 / GH#363 / queue task 177. This run's own anti-patterns
+      entry ("Attributing a failure to toolchain drift without ever running the pinned
+      toolchain") records the transferable lesson: a line over the formatter's configured
+      line_length is unformatted under every version, measurable with no toolchain at all.

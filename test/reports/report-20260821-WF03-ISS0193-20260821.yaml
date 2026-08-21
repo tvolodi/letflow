@@ -1,0 +1,230 @@
+report_id: report-20260821-WF03-ISS0193-20260821
+agent: TEST-RUNNER
+requirement: ISS-0193
+workflow_step: WF-03 Step 4 (full-suite regression check before merge)
+handoff: handoffs/WF03-ISS0193-20260821/step-04-test-runner.json
+branch: feature/WF03-ISS0193-20260821
+commit: b5bbc0c
+merge_base: 61db104
+date: 2026-08-21
+command: "sh scripts/test_parallel.sh"
+
+toolchain:
+  mix: "Elixir 1.20.3 (compiled with Erlang/OTP 29)"
+  erlang: "Erlang/OTP 29"
+  platform: "Windows 11"
+
+environment:
+  postgres: >
+    letflow-postgres-1 (0.0.0.0:5462->5432), healthy per `docker ps` at the start
+    of this run. Not started/restarted by this step (already up).
+  pool_saturation_encountered: >
+    YES, twice, both TRANSIENT and both recovered from -- see runs below. The
+    default N=16 (from nproc on this 16-core host) launches 16 partitions, each
+    an independent BEAM with pool_size = System.schedulers_online()*2 = 32
+    (config/test.exs:25), so 16 simultaneous `ecto.create`/`ecto.migrate` bursts
+    against a 100-connection Postgres (`show max_connections` = 100) collided.
+    Confirmed via `docker exec letflow-postgres-1 psql -U letflow -d letflow_dev
+    -c 'select count(*) from pg_stat_activity'` (6, quiet, both before and after)
+    and by reading partition logs showing
+    "FATAL 53300 (too_many_connections) sorry, too many clients already" during
+    `mix ecto.create`, not during test execution -- i.e. a startup burst, not a
+    leak from this branch's code. Not this branch's defect: N=16 vs
+    max_connections=100 is a structural property of this host's core count and
+    the project's own pool_size formula, unrelated to anything in the diff.
+  recovery_action: >
+    Per the handoff's explicit guidance (retry once after a short wait,
+    never spin up a second Postgres container), retried at default N=16 once
+    (still saturated -- 6/16 partitions crashed with no Result: line both times),
+    then used the script's own documented TEST_PARALLEL_N override
+    (scripts/test_parallel.sh's own "Overridable knob") to drop to N=4, which
+    completed cleanly with zero crashed partitions. This is the standard
+    mechanism with a smaller partition count, not an equivalent invocation of
+    a different tool.
+
+runs:
+  - n: 16
+    source: nproc (default)
+    result: "6 of 16 partitions crashed at `mix ecto.create` with too_many_connections; combined 624 tests, 4 failures (622/626 passed) -- INVALID, partial run, not used for verdict"
+  - n: 16
+    source: nproc (default, retry)
+    result: "6 of 16 partitions again crashed at `mix ecto.create`; combined 761 tests, 10 failures (753/763) -- INVALID, partial run, not used for verdict"
+  - n: 4
+    source: "TEST_PARALLEL_N=4 override (script's documented knob)"
+    result: "all 4 partitions completed cleanly, no crashes -- USED FOR VERDICT"
+
+verdict: PASS
+
+summary_line: "combined: 1289 tests, 5 properties, 2 failures (1292/1294 passed)"
+duration_note: "partition 2 (the one with failures): Finished in 141.7 seconds (2.9s async, 138.7s sync)"
+exit_code: "1 (any_failed=1 per script's own contract, driven by the 2 parsed failures below)"
+
+per_partition:
+  - partition: 1
+    tests: 306
+    properties: 2
+    failures: 0
+    exit: 0
+  - partition: 2
+    tests: 313
+    properties: 1
+    failures: 2
+    exit: 2
+  - partition: 3
+    tests: 413
+    properties: 2
+    failures: 0
+    exit: 0
+  - partition: 4
+    tests: 257
+    properties: 0
+    failures: 0
+    exit: 0
+
+failure_count: 2
+failures_caused_by_this_branch: 0
+failures_pre_existing_already_filed: 2
+failures_not_covered_by_an_existing_issue: 0
+
+# ---------------------------------------------------------------------------
+# Scope check -- what this branch actually touched
+# ---------------------------------------------------------------------------
+
+branch_diff:
+  command: "git diff --name-only main...feature/WF03-ISS0193-20260821 -- lib/ test/"
+  files:
+    - lib/letflow/design/iss-0119-status-file-readability.md   # design doc, not code
+    - test/docs/requirement_status_invariants_test.exs
+    - test/support/status_history.ex
+  note: >
+    No lib/letflow/ application code and no priv/repo/migrations/ file touched --
+    confirms the step-03b validator's own scope finding still holds at this step.
+    test/docs/requirement_status_invariants_test.exs (A10 and its unit/negative-
+    control tests) is exercised inside partition 3 (413 tests, 0 failures) and
+    partition 1's 306 tests -- both clean.
+
+# ---------------------------------------------------------------------------
+# Per-failure attribution -- re-derived, not inherited
+# ---------------------------------------------------------------------------
+
+attribution_method: >
+  Per core-directives.md's "Failure Attribution Is Structural, Never By
+  Count-Matching". Both failures are ONE group (same file, same root cause),
+  attributed via Route 1 (structurally absent from this branch's diff) AND
+  Route 3 (a demonstrated mechanism outside this branch, measured directly on
+  this host during this same step, not merely cited from a prior report).
+
+failures:
+  - group: Mix.Tasks.Letflow.Check.TestTest
+    count: 2
+    file: test/mix/tasks/letflow_check_test_test.exs
+    failing_tests:
+      - line: 126
+        name: "detects a recurrence of ISS-0069's own warning class passes (no raise) when the subprocess exits 0 and the target substring is absent, even with unrelated warnings present"
+        symptom: "** (Mix.Error) mix letflow.check.test: FAILED -- underlying `mix test` run exited 1 (real test failure/error)."
+      - line: 105
+        name: "detects a recurrence of ISS-0069's own warning class raises and reports the offending line when the target substring is present, even though the underlying subprocess exited 0"
+        symptom: |
+          Wrong message for Mix.Error
+          expected: ~r/default\ values\ for\ the\ optional\ arguments/
+          actual:   "mix letflow.check.test: FAILED -- underlying `mix test` run exited 1 (real test failure/error)."
+    determination: "PRE-EXISTING, POSIX-only test fixture failing on Windows. NOT caused by this branch. Covered by ISS-0107 (open, MAJOR, filed 2026-08-20)."
+    evidence:
+      - method: "Route 1 -- structural, branch diff"
+        detail: >
+          Neither test/mix/tasks/letflow_check_test_test.exs nor
+          lib/mix/tasks/letflow.check.test.ex appears in
+          `git diff --name-only main...feature/WF03-ISS0193-20260821` (the
+          3-file list above). Both are byte-identical to main on this branch.
+      - method: "Route 3 -- demonstrated mechanism, measured live on this host in this step"
+        detail: >
+          Re-ran test/mix/tasks/letflow_check_test_test.exs in isolation
+          (`mix test test/mix/tasks/letflow_check_test_test.exs`) to check
+          reproducibility outside the parallel run: 1/3 passed, 2 failed --
+          same two tests, same symptoms. install_fake_mix/2 (that file's own
+          helper) writes an extensionless POSIX `#!/bin/sh` file named `mix`
+          and prepends its dir onto PATH with ":" -- both POSIX-only
+          mechanisms (Windows uses ";" as the PATH separator and won't
+          resolve an extensionless executable via PATHEXT), so
+          `Mix.Tasks.Letflow.Check.Test.run/1` shells out to the REAL mix
+          instead of the fixture's fake, recursing the suite. Measured
+          directly: `Get-CimInstance Win32_Process -Filter "Name='erl.exe'"`
+          during and after this isolated run showed real nested `erl.exe ...
+          mix test` children (PIDs 28296, 40396, 30324) that outlived the
+          parent test and kept running after it exited -- exactly ISS-0107's
+          documented mechanism, reproduced here rather than cited from its
+          record. `docker exec letflow-postgres-1 psql ... pg_stat_activity`
+          went from 6 to "too many clients already" while these orphans were
+          alive, and back to 6 immediately after `Stop-Process -Force` on
+          all three PIDs.
+      - method: "matches ISS-0107's own filed description exactly"
+        detail: >
+          docs/issues/ISS-0107.yaml's description names this exact file,
+          this exact PATH/extensionless mechanism, and this exact pair of
+          symptom shapes (timeout / "exited 1" message mismatch), discovered
+          2026-08-20 on a Windows host -- independent of and prior to this
+          branch's first commit (c756b82, 2026-08-21).
+    orphaned_processes_finding: >
+      MAJOR, already filed as ISS-0107, re-observed and cleaned up as
+      environment hygiene during this step (not this branch's product): the
+      three nested `mix test` children spawned by this step's own isolated
+      re-run of the fixture outlived it and held enough connections to push
+      pg_stat_activity into "too many clients already" again. Killed via
+      Stop-Process; confirmed pg_stat_activity back to 6 afterward. Host left
+      clean: `tasklist | grep erl` empty, `pg_stat_activity` = 6 at the end
+      of this step.
+    action: "FORWARDED (already open as ISS-0107). No test edited, no application code touched."
+
+# ---------------------------------------------------------------------------
+
+acceptance_criteria_check:
+  - criterion: "The full suite was actually run via scripts/test_parallel.sh (or an equivalent full invocation, stated if different) and real pass/fail counts are quoted"
+    met: true
+    detail: >
+      `sh scripts/test_parallel.sh` at default N=16 twice (both invalid --
+      partition crashes from connection-pool saturation at ecto.create, not
+      from test content), then `TEST_PARALLEL_N=4 sh scripts/test_parallel.sh`
+      (the script's own documented override, still the standard mechanism) --
+      clean run used for verdict: "combined: 1289 tests, 5 properties, 2
+      failures (1292/1294 passed)".
+  - criterion: "Every failure is attributed structurally (route 1/2/3 per core-directives.md), never by count-matching against a prior run"
+    met: true
+    detail: >
+      Both failures are one group, attributed via Route 1 (absent from
+      `git diff --name-only main...HEAD`) and Route 3 (the POSIX-only
+      fake-mix mechanism demonstrated live on this host during this step,
+      with process-table and pg_stat_activity measurements, not asserted).
+      No comparison to any prior report's failure count was used as evidence.
+  - criterion: "Any failure whose module appears in this branch's diff is checked for causal connection, not cleared by presence-in-diff alone"
+    met: true
+    detail: >
+      N/A here -- neither failing file appears in the diff at all, so no
+      module needed a causal check under this criterion. The one file this
+      branch DID touch that runs inside the suite (test/docs/
+      requirement_status_invariants_test.exs, exercised in partitions 1 and
+      3) has 0 failures in both partitions that ran it.
+  - criterion: "A test report is written to test/reports/ and listed in artifacts_out"
+    met: true
+    detail: "This file: test/reports/report-20260821-WF03-ISS0193-20260821.yaml"
+  - criterion: "If the DB was unreachable, the attempted recovery (docker ps/psql probe, one retry) is stated before concluding BLOCKED -- not asserted as down without checking"
+    met: true
+    detail: >
+      DB was never fully unreachable -- `docker ps` showed letflow-postgres-1
+      healthy throughout. Pool saturation (not downtime) was hit twice at
+      N=16 and confirmed via psql pg_stat_activity probes before and after;
+      recovered by using the script's own TEST_PARALLEL_N knob rather than by
+      declaring BLOCKED, and never by starting a second Postgres container.
+
+artifacts_out:
+  - test/reports/report-20260821-WF03-ISS0193-20260821.yaml
+
+next_action: >
+  PASS -- no failure attributable to this branch. Route to ORCH / WF-04 Step 1
+  (RELEASE-VALIDATOR), which re-runs the suite independently. Flag for whoever
+  runs it next: at this host's default nproc (16), scripts/test_parallel.sh
+  saturates the shared Postgres pool at ecto.create time and crashes several
+  partitions before any test even runs -- use TEST_PARALLEL_N=4 (or similarly
+  reduced) on this host, or expect to retry. This is a host-sizing observation,
+  not a branch defect, and is worth raising with ORCH/whoever owns
+  scripts/test_parallel.sh's design doc as a possible default-N cap suggestion,
+  not something this step's scope covers fixing.

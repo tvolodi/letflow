@@ -275,8 +275,10 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
 
   # ── A5 ──────────────────────────────────────────────────────────────────────
 
-  test "A5: the on-disk vocabulary-anomaly set equals the index's declared set exactly" do
+  test "A5: the on-disk vocabulary-anomaly set equals the index's declared set exactly, and every declared record cites a closed, pinned, warranted volume" do
     index = SH.parse_index(@index_path)
+    volumes = Map.new(index.volumes, &{&1.path, &1})
+    roll_rule = index.roll_rule
 
     on_disk =
       index.volumes
@@ -288,8 +290,26 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
       |> Enum.map(&Map.take(&1, [:path, :line, :field, :value]))
       |> MapSet.new()
 
-    assert on_disk == declared, """
-    A5 — the declared anomaly set does not match disk.
+    not_closed_pinned_warranted =
+      Enum.reject(index.known_anomalies, &closed_pinned_and_warranted?(volumes, roll_rule, &1))
+
+    closed_rule =
+      case not_closed_pinned_warranted do
+        [] ->
+          "      (none)"
+
+        records ->
+          Enum.map_join(records, "\n", fn record ->
+            "      path=#{record.path} line=#{inspect(Map.get(record, :line))} " <>
+              "req=#{inspect(Map.get(record, :req))} field=#{inspect(Map.get(record, :field))} " <>
+              "value=#{inspect(Map.get(record, :value))}  -> " <>
+              disqualification(volumes, roll_rule, record)
+          end)
+      end
+
+    assert on_disk == declared and not_closed_pinned_warranted == [], """
+    A5 — the declared anomaly set does not match disk, or cites a volume that
+    is not closed, pinned, and warranted.
 
       on disk but NOT declared (new drift):
     #{indent(MapSet.difference(on_disk, declared))}
@@ -297,6 +317,17 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
       declared but NOT on disk (a past entry was silently normalised or deleted
       — the exact act the append-only rule forbids):
     #{indent(MapSet.difference(declared, on_disk))}
+
+      records citing a volume that is not closed, pinned, and warranted (#{length(not_closed_pinned_warranted)}):
+    #{closed_rule}
+
+      A `known_anomalies:` record may cite ONLY a volume whose `volumes:` entry
+      is `status: closed`, carries a `frozen_prefix_sha256:`, AND actually
+      exceeded `roll_rule` at closure (design §13.6, §13.12.4). This fires on
+      its own, independently of the set-equality checks above, and even when
+      the violation it cites genuinely exists on disk. A vocabulary defect in
+      the CURRENT volume is FIXED in the working tree before it is committed --
+      it can never be declared away here.
     """
   end
 
@@ -452,6 +483,144 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
     """
   end
 
+  # ── A10 — a closed volume's closure was warranted (ISS-0193, design §13.12.4) ─
+
+  test "A10: every closed volume actually exceeded a ceiling at closure -- its closure was warranted" do
+    index = SH.parse_index(@index_path)
+    roll_rule = index.roll_rule
+    closed = Enum.filter(index.volumes, &(&1.status == "closed"))
+
+    assert closed != [], "A10 — the index declares no closed volume; expected at least volume 1."
+
+    unwarranted =
+      Enum.reject(closed, &SH.warranted_closure?(&1, roll_rule.max_lines, roll_rule.max_bytes))
+
+    assert unwarranted == [], """
+    A10 — A CLOSED VOLUME'S CLOSURE WAS NOT WARRANTED.
+
+    #{Enum.map_join(unwarranted, "\n", fn v ->
+      "  volume #{v.volume} (#{v.path}): lines=#{inspect(Map.get(v, :lines))} " <>
+        "bytes_working_tree=#{inspect(Map.get(v, :bytes_working_tree))}, ceilings: " <>
+        "#{roll_rule.max_lines} lines / #{roll_rule.max_bytes} bytes " <>
+        "— closed without exceeding either ceiling — closure was not warranted"
+    end)}
+
+    A volume may only be rolled to `closed` when it actually exceeded
+    `roll_rule`'s ceilings (design §13.12.4, ISS-0193). Without this check, a
+    volume could be closed early -- with `lines:`/`bytes_working_tree:` still
+    under both ceilings -- in the same commit that declares a defect against
+    it, satisfying "closed and pinned" (A4b/A5's own rule) without ever having
+    been a legitimate roll. That would let a fresh defect in what is really
+    still an appendable volume be declared away instead of fixed in the
+    working tree.
+    """
+  end
+
+  # ── warranted_closure?/3 — direct unit coverage of its three own traps ──────
+  #
+  # A10 above and the negative controls below exercise warranted_closure?/3
+  # only through fully-under-ceiling or fully-over-ceiling fixtures, which
+  # cannot discriminate an "either" ceiling check from a "both" one, nor an
+  # accidentally-dropped status gate, nor a silently-defaulted missing field.
+  # These three tests target exactly those traps directly.
+
+  test "warranted_closure?/3: EITHER ceiling exceeded is sufficient -- not both" do
+    # lines over, bytes under -- an "and" mutant on the ceiling comparison
+    # would wrongly report this volume as not warranted.
+    assert SH.warranted_closure?(
+             %{status: "closed", lines: 2000, bytes_working_tree: 10},
+             1200,
+             120_000
+           )
+
+    # bytes over, lines under -- same trap, the other operand.
+    assert SH.warranted_closure?(
+             %{status: "closed", lines: 10, bytes_working_tree: 200_000},
+             1200,
+             120_000
+           )
+  end
+
+  test "warranted_closure?/3: a non-closed volume is never warranted, even if grossly over ceiling" do
+    refute SH.warranted_closure?(
+             %{status: "current", lines: 999_999, bytes_working_tree: 999_999},
+             1200,
+             120_000
+           )
+  end
+
+  test "warranted_closure?/3: raises rather than silently defaulting when a closed volume has no recorded lines:/bytes_working_tree:" do
+    assert_raise KeyError, fn ->
+      SH.warranted_closure?(%{status: "closed"}, 1200, 120_000)
+    end
+
+    # lines: 10 is UNDER max_lines, so the `or` cannot short-circuit true
+    # before reaching bytes_working_tree: -- this is the case that forces
+    # Map.fetch! to actually look up the missing field.
+    assert_raise KeyError, fn ->
+      SH.warranted_closure?(%{status: "closed", lines: 10}, 1200, 120_000)
+    end
+  end
+
+  # ── A10 negative control — proof the assertion actually bites ──────────────
+  #
+  # This is the MINOR-4 laundering scenario CODE-DESIGN-VALIDATOR's own finding
+  # named: a volume closed with its recorded size still under BOTH ceilings.
+  # Exercised directly against `SH.warranted_closure?/3` and the shared
+  # `closed_pinned_and_warranted?/3` helper -- the exact functions A10, A4b, and
+  # A5 all call -- with synthetic volume/record maps, so nothing here touches
+  # the real index or a real volume file.
+
+  test "A10 (negative control): a closed volume that did NOT exceed either ceiling is correctly reported as unwarranted" do
+    roll_rule = %{max_lines: 1200, max_bytes: 120_000}
+
+    unwarranted_volume = %{
+      volume: 99,
+      path: "fixture/unwarranted.yaml",
+      status: "closed",
+      lines: 10,
+      bytes_working_tree: 500,
+      frozen_prefix_sha256: "deadbeef"
+    }
+
+    refute SH.warranted_closure?(unwarranted_volume, roll_rule.max_lines, roll_rule.max_bytes),
+           "A10's own instrument must report an under-ceiling closed volume as NOT warranted"
+
+    volumes = %{unwarranted_volume.path => unwarranted_volume}
+    record = %{path: unwarranted_volume.path}
+
+    refute closed_pinned_and_warranted?(volumes, roll_rule, record),
+           "closed_pinned_and_warranted?/3 must reject a record citing an unwarranted closure " <>
+             "even though the volume IS closed and IS pinned"
+
+    assert disqualifying_reason(volumes, roll_rule, record) == :not_warranted
+  end
+
+  # ── A5 negative control — an open-volume known_anomalies: record must fail ──
+  #
+  # Mirrors A4b's own negative control 2: a record whose `path:` names the
+  # CURRENT (open, unpinned) volume must fail the shared closed-and-pinned rule
+  # -- this is what stops `known_anomalies:` from becoming a declare-to-silence
+  # mechanism for a fresh vocabulary defect in the current volume.
+
+  test "A5 (negative control): a known_anomalies: record citing an open, unpinned volume fails the closed-and-pinned-and-warranted rule" do
+    roll_rule = %{max_lines: 1200, max_bytes: 120_000}
+
+    open_volume = %{
+      volume: 2,
+      path: "fixture/current.yaml",
+      status: "current"
+    }
+
+    volumes = %{open_volume.path => open_volume}
+    record = %{path: open_volume.path}
+
+    refute closed_pinned_and_warranted?(volumes, roll_rule, record),
+           "a record citing an open (status: current) volume must never pass the shared rule"
+
+    assert disqualifying_reason(volumes, roll_rule, record) == :not_closed
+  end
+
   # ── helpers ─────────────────────────────────────────────────────────────────
 
   # ── A4b: findings, verdict and the §13.5-specified failure output ───────────
@@ -487,7 +656,8 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
     %{
       undeclared: Enum.reject(on_disk, &MapSet.member?(declared_keys, a4b_key(&1))),
       unfound: Enum.reject(declared, &MapSet.member?(on_disk_keys, a4b_key(&1))),
-      not_closed_and_pinned: Enum.reject(declared, &closed_and_pinned?(volumes, &1)),
+      not_closed_and_pinned:
+        Enum.reject(declared, &closed_pinned_and_warranted?(volumes, index.roll_rule, &1)),
       misattributed: Enum.filter(declared, &misattributed?(entry_index, &1)),
       unparseable_at: unparseable_at(index.volumes, declared)
     }
@@ -505,29 +675,64 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
      Map.get(record, :found_as)}
   end
 
-  # A declared record may only cite a volume that is `status: closed` AND
-  # carries a `frozen_prefix_sha256:` (design §13.5, the gate's MAJOR-1 fix).
-  defp closed_and_pinned?(volumes, record) do
+  # A declared record may only cite a volume that is `status: closed`, carries
+  # a `frozen_prefix_sha256:`, AND actually exceeded `roll_rule` at closure
+  # (design §13.5, §13.6, §13.12.4 -- the ISS-0193 A10 amendment). This is the
+  # ONE shared implementation of that comparison: both A4b's
+  # `not_closed_and_pinned` finding (over `known_shape_anomalies:` records) and
+  # A5's equivalent finding (over `known_anomalies:` records) call this same
+  # function with their own record list -- the roll-rule comparison itself is
+  # written exactly once, in `SH.warranted_closure?/3`.
+  defp closed_pinned_and_warranted?(volumes, roll_rule, record) do
+    disqualifying_reason(volumes, roll_rule, record) == nil
+  end
+
+  # `nil` when the record is not disqualified. Otherwise one of `:not_closed`,
+  # `:not_pinned`, `:not_warranted` -- used only for message construction
+  # (design §13.12.4), never for the pass/fail verdict, which stays the single
+  # boolean `closed_pinned_and_warranted?/3` above returns.
+  defp disqualifying_reason(volumes, roll_rule, record) do
     case Map.get(volumes, record.path) do
-      %{status: "closed"} = volume -> is_binary(Map.get(volume, :frozen_prefix_sha256))
-      _ -> false
+      nil ->
+        :not_closed
+
+      volume ->
+        cond do
+          Map.get(volume, :status) != "closed" ->
+            :not_closed
+
+          not is_binary(Map.get(volume, :frozen_prefix_sha256)) ->
+            :not_pinned
+
+          not SH.warranted_closure?(volume, roll_rule.max_lines, roll_rule.max_bytes) ->
+            :not_warranted
+
+          true ->
+            nil
+        end
     end
   end
 
-  defp disqualification(volumes, record) do
+  defp disqualification(volumes, roll_rule, record) do
     case Map.get(volumes, record.path) do
       nil ->
         "path is not a volume in the index at all"
 
       volume ->
-        cond do
-          Map.get(volume, :status) != "closed" ->
+        case disqualifying_reason(volumes, roll_rule, record) do
+          :not_closed ->
             ~s(volume status: #{inspect(Map.get(volume, :status))} \(must be "closed"\))
 
-          not is_binary(Map.get(volume, :frozen_prefix_sha256)) ->
+          :not_pinned ->
             "volume has no frozen_prefix_sha256: (not digest-pinned)"
 
-          true ->
+          :not_warranted ->
+            "volume status: closed, lines: #{inspect(Map.get(volume, :lines))}, " <>
+              "bytes_working_tree: #{inspect(Map.get(volume, :bytes_working_tree))}, " <>
+              "ceilings: #{roll_rule.max_lines} lines / #{roll_rule.max_bytes} bytes " <>
+              "-- closed without exceeding either ceiling -- closure was not warranted"
+
+          nil ->
             "ok"
         end
     end
@@ -583,8 +788,9 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
   end
 
   defp a4b_message(index_path, findings) do
-    volumes =
-      index_path |> SH.parse_index() |> Map.fetch!(:volumes) |> Map.new(&{&1.path, &1})
+    index = SH.parse_index(index_path)
+    volumes = Map.new(index.volumes, &{&1.path, &1})
+    roll_rule = index.roll_rule
 
     closed_rule =
       case findings.not_closed_and_pinned do
@@ -593,7 +799,7 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
 
         records ->
           Enum.map_join(records, "\n", fn record ->
-            "      " <> a4b_line(record) <> "  -> " <> disqualification(volumes, record)
+            "      " <> a4b_line(record) <> "  -> " <> disqualification(volumes, roll_rule, record)
           end)
       end
 
@@ -722,6 +928,8 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
       - volume: 1
         path: #{Path.join(dir, "v1.yaml")}
         status: closed
+        lines: 5766
+        bytes_working_tree: 361376
         frozen_prefix_lines: 2
         frozen_prefix_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
       - volume: 2

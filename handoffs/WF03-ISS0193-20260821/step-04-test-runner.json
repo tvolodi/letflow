@@ -1,0 +1,58 @@
+{
+  "handoff_id": "be71a2b4-7f7e-4830-bf76-4d42065717c2",
+  "run_id": "WF03-ISS0193-20260821",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0193-20260821/step-04-test-runner.json",
+  "created_at": "2026-08-21T12:37:36Z",
+  "started_at": "2026-08-21T12:37:36Z",
+  "completed_at": "2026-08-21T12:53:33Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["5f6160bc-39b6-4d59-b920-bf6b2f9e7e56", "a8f9453e-aa4f-4827-94ae-5ec3cdbdc440"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0193-20260821/step-03b-test-design-validator.json",
+      "test/support/status_history.ex",
+      "test/docs/requirement_status_invariants_test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Run the FULL project test suite on `feature/WF03-ISS0193-20260821` (already checked out) before this branch merges. `test/docs/requirement_status_invariants_test.exs` alone (20/20) was already run and independently re-derived by the two prior steps, including real mutation testing -- do not re-run just that file, this step's job is the full-suite regression check the merge step will otherwise be trusting blind.\n\nUse `sh scripts/test_parallel.sh` per this project's standard full-suite mechanism (README's 'Running it' section) -- pre-compiles once, partitions across processes, aggregates pass/fail. If Postgres is unreachable or the connection pool is saturated (a prior step on this same run hit 'too many clients already' from concurrent sibling-session activity against the shared `letflow-postgres-1` container), check `docker ps`/`docker exec ... psql -c 'select count(*) from pg_stat_activity'` first rather than assuming the DB is down, and retry once after a short wait if it is transient -- do not spin up a second Postgres container.\n\nATTRIBUTE EVERY FAILURE STRUCTURALLY, per `core-directives.md`'s 'Failure Attribution Is Structural, Never By Count-Matching' -- this suite carries a standing set of pre-existing failures and 'green' here means no failure attributable to this branch, not zero failures. For each failure: is the failing module or its dependencies in `git diff --name-only main...feature/WF03-ISS0193-20260821`? If yes, a causal argument is required (not just presence in the diff) before attributing it to this branch. If no, it structurally cannot be this branch's fault.\n\nWrite the test report per this project's convention (`test/reports/`) and record it in `artifacts_out`.",
+    "acceptance_criteria": [
+      "The full suite was actually run via scripts/test_parallel.sh (or an equivalent full invocation, stated if different) and real pass/fail counts are quoted",
+      "Every failure is attributed structurally (route 1/2/3 per core-directives.md), never by count-matching against a prior run",
+      "Any failure whose module appears in this branch's diff is checked for causal connection, not cleared by presence-in-diff alone",
+      "A test report is written to test/reports/ and listed in artifacts_out",
+      "If the DB was unreachable, the attempted recovery (docker ps/psql probe, one retry) is stated before concluding BLOCKED -- not asserted as down without checking"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Full suite run via scripts/test_parallel.sh. At default N=16 (nproc on this 16-core host), 6/16 partitions crashed at `mix ecto.create` with 'too_many_connections' -- transient pool saturation (16 partitions x pool_size 32 vs max_connections 100), confirmed via docker exec psql pg_stat_activity probes (6, quiet, both before and after) and by reading partition logs (crash was at ecto.create, not during test execution). Retried once at default N per the handoff's guidance -- still saturated. Recovered using the script's own documented TEST_PARALLEL_N override (never a second Postgres container): TEST_PARALLEL_N=4 completed cleanly, 0 crashed partitions. Combined result: 1289 tests, 5 properties, 2 failures (1292/1294 passed).\n\nBoth failures are ONE group: test/mix/tasks/letflow_check_test_test.exs lines 105 and 126 (Mix.Tasks.Letflow.Check.TestTest). Attributed structurally: Route 1 -- neither that file nor lib/mix/tasks/letflow.check.test.ex appears in `git diff --name-only main...HEAD` (this branch's diff is exactly 3 files: lib/letflow/design/iss-0119-status-file-readability.md, test/docs/requirement_status_invariants_test.exs, test/support/status_history.ex -- no lib/letflow/ code, no migrations). Route 3 -- re-ran the failing file in isolation to check the mechanism directly rather than citing a prior report: 1/3 passed, 2/3 failed, same tests/symptoms. install_fake_mix/2's POSIX-only fake-mix mechanism (extensionless #!/sh file, ':'-joined PATH) does not work on Windows, so run/1 shells out to the REAL mix, recursing the suite -- measured live via Get-CimInstance (three real nested erl.exe mix-test children, PIDs 28296/40396/30324, that outlived the parent and held enough Postgres connections to push pg_stat_activity back into 'too many clients already'). This is exactly ISS-0107's filed mechanism (open, MAJOR, filed 2026-08-20, predates this branch's first commit c756b82). Killed the orphaned erl.exe processes as environment hygiene (Stop-Process -Force on all three) and confirmed pg_stat_activity back to 6 and `tasklist | grep erl` empty before finishing -- host left clean for RELEASE-VALIDATOR's own re-run.\n\ntest/docs/requirement_status_invariants_test.exs (this branch's own test file, A10 etc.) ran clean in both partitions that included it (partition 1: 306 tests/0 failures, partition 3: 413 tests/0 failures).\n\nAll five acceptance criteria met -- see test/reports/report-20260821-WF03-ISS0193-20260821.yaml for full detail including the acceptance_criteria_check section.",
+    "artifacts_out": ["test/reports/report-20260821-WF03-ISS0193-20260821.yaml"],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "finding": "At this host's default nproc (16), scripts/test_parallel.sh saturates the shared Postgres connection pool at `mix ecto.create` time (pool_size = schedulers_online*2 = 32 per partition x 16 partitions vs max_connections=100) and crashes several partitions before any test runs at all. Not a defect in this branch -- a host-sizing property of the script's own N-derivation vs this host's core count. Worked around here via TEST_PARALLEL_N=4 (the script's own documented override). Worth raising with whoever owns scripts/test_parallel.sh's design doc as a possible default-N cap suggestion; not this step's scope to fix."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0193-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0193-20260821",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "PASS -- no failure attributable to this branch. Route to ORCH / WF-04 Step 1 (RELEASE-VALIDATOR), which re-runs the suite independently. Flag the TEST_PARALLEL_N=4 host-sizing note above for whoever runs it next on this host."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

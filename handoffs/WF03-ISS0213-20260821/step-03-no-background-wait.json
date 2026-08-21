@@ -1,0 +1,58 @@
+{
+  "handoff_id": "4b9ec1b8-b236-4812-bb29-130e780abbcc",
+  "run_id": "WF03-ISS0213-20260821",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF03-ISS0213-20260821/step-03-no-background-wait.json",
+  "created_at": "2026-08-21T13:19:10Z",
+  "started_at": "2026-08-21T13:19:10Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0213.yaml",
+      "handoffs/WF03-ISS0193-20260821/step-final-git-merge.json",
+      "docs/agents/instructions/core-directives.md",
+      ".claude/agents/elixir-dev.md"
+    ],
+    "owned_modules": [
+      "docs/agents/instructions/core-directives.md"
+    ]
+  },
+  "task": {
+    "description": "Resolve ISS-0213. On WF03-ISS0193-20260821, a dispatched ELIXIR-DEV subagent doing Step Final (git-merge) completed a rebase, verified it clean, claimed the handoff -- then stopped, its own final text stating it was 'waiting for a background test monitor' to notify it once a long-running `mix test` finished. A spawned subagent has no cross-turn async wake: once its tool-call loop ends, nothing runs on its behalf again. Only the top-level orchestrating session receives that kind of background-task notification. The run stalled with a real side effect (orphaned processes re-saturating the shared Postgres pool), and ORCH had to detect the stall, verify the actual state, and complete the remaining work itself under `HANDOFF_PROTOCOL.md` section 4.1(a-2). Read `docs/issues/ISS-0213.yaml` in full for the complete incident account -- this dispatch summarizes only enough to size the work.\n\nTHE FIX IS PREVENTIVE, NOT A RECOVERY-PROCEDURE CHANGE. Section 4.1 already handles this failure shape correctly once it occurs (redispatch if incomplete, reconstruct if complete) -- do not touch it, weaken it, or restate it. This issue is about stopping the STALL from happening, not about how to recover from one that already did.\n\nWHAT TO DO:\n\n1. DECIDE THE CANONICAL HOME. The hazard is general -- any dispatched subagent (not just ELIXIR-DEV) could make the same mistake if it starts a long operation and then idles expecting to be woken later. Weigh: is this universal enough for `core-directives.md` (cross-cutting, applies to every role), or specific enough to `.claude/agents/elixir-dev.md` (the role that actually hit it, doing a step -- GIT_MERGE.md's mix test/compile checks -- that plausibly tempts exactly this mistake)? State your reasoning. If you decide it belongs in both places for different reasons, one must be the canonical statement and the other a pointer -- never two independent statements of the same rule.\n\n2. WRITE THE RULE. State plainly: a dispatched agent must complete its work within its own tool-call loop. Long-running operations (a full test suite, a build) must be run and waited on SYNCHRONOUSLY -- the agent's own tool call blocks until the operation finishes, and the agent reads the real result before its turn ends. An agent must never start a background/detached operation and then end its turn expecting a future notification to resume it -- that notification mechanism exists for the top-level orchestrating session only, never for a spawned subagent. Cite the WF03-ISS0193-20260821 incident (the ELIXIR-DEV agent's own words, 'waiting for a background test monitor') as the rule's worked example, per this doc set's established convention that every rule carries its incident.\n\n3. CHECK FOR AN EXISTING PARTIAL STATEMENT OF THIS RULE. Search for any existing guidance about how agents should run long commands (e.g. anything already said about `mix test`, background processes, or waiting). If something already exists but doesn't cover this specific failure mode, extend it rather than adding a disconnected new paragraph; if nothing exists, add fresh text.\n\n4. CLOSE THE ISSUE (WF-03 Step 5, taken within this step): `docs/issues/ISS-0213.yaml` gets `status: resolved`, `resolved_in_run: WF03-ISS0213-20260821`, `resolved_at:` from a real clock read. Close GH#421 naming this run and the issue file.\n\nCONSTRAINTS:\n- Docs-only. Do not touch `lib/`, `priv/repo/migrations/`, `test/` or `web/`.\n- Do not touch or restate `HANDOFF_PROTOCOL.md` section 4.1 -- it already correctly covers recovery; this fix is about prevention only.\n- `result.status` must be one of PASS/FAIL/PARTIAL/BLOCKED/SKIPPED.\n- Read the clock in its OWN command before each timestamp. Never batch `date -u` with the write that consumes it.\n- Claim by setting `status` to `IN_PROGRESS` only. `started_at` is already stamped.\n- Commit `docs/`/`.claude/` and this handoff. Do NOT write `handoffs/registry.json` or `handoffs/orchestrator.log`.",
+    "acceptance_criteria": [
+      "Role guidance (the relevant .claude/agents/*.md file, or a cross-cutting note in core-directives.md if the hazard is judged universal, with reasoning stated for the choice) states that a dispatched agent must complete its work within its own tool-call loop and must never assume a cross-turn notification will wake it",
+      "Long-running operations are stated to be run and waited on synchronously, never backgrounded with an expectation of being resumed later",
+      "The rule cites the WF03-ISS0193-20260821 incident (the agent's own 'waiting for a background test monitor' words) as its worked example",
+      "HANDOFF_PROTOCOL.md section 4.1 is left untouched -- no restatement, no weakening, no editing",
+      "If a partial existing statement about long-running commands is found, it is extended rather than duplicated; if none exists, this is stated explicitly",
+      "docs/issues/ISS-0213.yaml carries status: resolved, resolved_in_run and a clock-read resolved_at; GH#421 is closed",
+      "No file outside docs/, .claude/ and handoffs/WF03-ISS0213-20260821/ is modified"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

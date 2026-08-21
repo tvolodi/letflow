@@ -23,4 +23,71 @@ queue_task_id: 181
 github_issue: https://github.com/tvolodi/letflow/issues/367
 github_issue_note: >
   Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (181) and its mirrored GitHub issue (#367) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
+
+investigated_in_run: WF03-ISS0113-20260821
+investigated_at: "2026-08-21T13:49:05Z"
+investigation_note: >
+  Attempted a real fix (not just analysis) and reverted it after test evidence showed it
+  is unsafe as a narrow change to the shared `Letflow.TenantFixture.provisioned_tenant!/1`
+  helper. Recorded in detail so a future attempt does not repeat the same failed shape.
+
+  THE ATTEMPTED FIX: added `Sandbox.mode(Letflow.Repo, :manual)` + a fresh
+  `Sandbox.checkout(Letflow.Repo)` inside `provisioned_tenant!/1`, right after
+  `replay_migrations/1` and before returning to the caller -- mirroring the exact pattern
+  already proven correct, independently, in `test/letflow/identity/user_test.exs`,
+  `group_test.exs`, `tenant_role_test.exs`, and `role_registry_test.exs` (their own
+  hand-rolled provisioning helpers already do this restoration for themselves). Also added
+  a defensive `Sandbox.mode(Letflow.Repo, :auto)` at the top of `teardown/2`, since that
+  callback runs inside `ExUnit.OnExitHandler`'s own spawned process, which has no
+  checked-out connection once mode is `:manual` -- confirmed this is necessary
+  (`DBConnection.OwnershipError` without it).
+
+  RESULT, measured (`mix test` on all six modules currently using the fixture --
+  `promotion_test.exs`, `promotion_assertion_rerun_test.exs`, `rollback_test.exs`,
+  `engine_test.exs`, `engine/reconstruction_test.exs`, `identity_test.exs`): went from
+  125/125 (baseline) to 113/125 with the teardown fix included, 12 failures, three
+  DISTINCT failure mechanisms -- not one bug, three separate real dependencies on `:auto`
+  mode persisting through the whole test body:
+
+  1. `identity_test.exs:268` -- `Letflow.IdentityTest`'s own test already calls
+     `Sandbox.checkout(Letflow.Repo)` itself later in the same test, expecting `:ok`
+     because it currently starts from `:auto` mode (where a fresh checkout always
+     succeeds); with the fixture's own restore already holding a checkout for that
+     process, the test's own call returns `{:already, :owner}` and its `:ok = ...` match
+     fails. A double-checkout collision, not a leak.
+  2. `engine/reconstruction_test.exs` AC5/AC6 (`with_locked_projection/3`) --
+     `DBConnection.ConnectionError: could not checkout the connection owned by <pid>`.
+     These tests deliberately spawn a SEPARATE process to hold a real `FOR UPDATE` lock
+     concurrently with the test process, to prove lock-contention behavior. That requires
+     genuine concurrent access to the real connection pool (`:auto` mode) -- a single
+     sandboxed connection owned by one process cannot serve two processes wanting
+     independent transactions at once. Restoring `:manual` breaks the very thing these
+     tests are testing.
+  3. `promotion_assertion_rerun_test.exs`, 7 tests -- all failed with
+     `{:error, :provision_failed}` in place of their expected result. These tests call
+     `TenantProvisioning.provision_tenant_schema/1`/`replay_migrations/1` a SECOND time
+     within the same test body (provisioning an additional schema beyond the fixture's
+     own initial one), and `Ecto.Migrator` cannot run under a sandboxed single connection
+     -- exactly the reason `:auto` mode was needed in the first place, now needed again
+     mid-test, after the fixture already switched back to `:manual`.
+
+  CONCLUSION: `INV-F-6`'s original deferral ("the helper reproduces today's `:auto`
+  behaviour unchanged... that is ISS-0113, out of scope") was correct engineering
+  judgment when it was written, not a shortcut. A blanket restore inside the shared
+  fixture cannot be made safe without also threading per-caller knowledge of whether that
+  caller (a) does its own later checkout, (b) needs real concurrent multi-process access,
+  or (c) provisions more than one schema in the same test -- which is exactly the
+  per-call-site variation ISS-0112's full 41-site consolidation exists to reconcile, not
+  something a single narrow patch to the shared helper can absorb. The code change and
+  design-doc amendment attempted here were reverted in full (`git diff --stat` empty
+  against origin/main before this record's own commit); nothing shipped.
+
+  WHAT WOULD ACTUALLY FIX THIS: per-caller opt-in, not a global default -- e.g. an
+  `opts[:restore_sandbox]` flag on `provisioned_tenant!/1` that callers which genuinely
+  don't need `:auto` mode after provisioning (most of the 6 current adopters may qualify,
+  but each needs individual verification against this run's three failure mechanisms
+  above) can set explicitly, defaulting to `false` (today's behaviour, unchanged) so nothing
+  regresses silently. This is a real, scoped follow-on -- not filed as a new issue here
+  since it is squarely ISS-0112's territory (per-caller migration) rather than a new
+  defect; whoever picks up ISS-0112 should read this record first.
 status: open

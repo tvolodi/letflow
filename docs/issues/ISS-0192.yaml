@@ -78,4 +78,26 @@ queue_task_id: 192
 github_issue: https://github.com/tvolodi/letflow/issues/380
 github_issue_note: >
   Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (192) and its mirrored GitHub issue (#380) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0192-20260821
+resolved_at: "2026-08-21T12:20:00Z"
+resolution_note: >
+  Verified first-hand rather than trusting the filing: e25822a confirmed an ancestor of
+  origin/main (git merge-base --is-ancestor), PR #174 confirmed MERGED with that exact
+  mergeCommit (gh pr view), remote branch confirmed deleted (git ls-remote), no rebase
+  in progress (.git/rebase-merge and rebase-apply both absent). All side effects
+  complete -> case (a-2) per HANDOFF_PROTOCOL.md section 4.1(c)'s probe. Reconstructed
+  handoffs/WF02-REQ043-20260818/step-final-git-merge.json's status/completed_at/result
+  and marked it not_agent_attested per section 4.1(b)'s six-member closed schema (no
+  backfill_note added -- that exception is spent). Corrected
+  handoffs/WF02-REQ062-20260819/step-03-test-designer.json's status to COMPLETED only
+  (a plain section-4-step-1 omission, not agent death -- confirmed its result was
+  already agent-attested, so no not_agent_attested marker was applied there). Appended
+  (did not amend) a WF02-REQ043-20260818-resume entry to handoffs/registry.json with
+  recovered:true/recovery_note, per ORCHESTRATOR.md section 7.2's later-session-recovery
+  mechanism and ISS-0033's precedent -- the original entry is byte-identical to before.
+  Self-review: git diff --numstat shows only the intended fields changed in all three
+  files (registry.json 19/0, the two handoff files small net-positive diffs matching
+  exactly the fields listed above); no pre-existing value was altered. Self-gating
+  deviation: performed as a single agent (worktree execution cannot spawn subagents),
+  stated in the PR description rather than silently taken.

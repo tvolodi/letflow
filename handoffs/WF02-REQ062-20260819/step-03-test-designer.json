@@ -9,7 +9,7 @@
   "created_at": "2026-08-19T05:14:34Z",
   "started_at": "2026-08-19T05:14:34Z",
   "completed_at": "2026-08-19T05:25:43Z",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -49,5 +49,6 @@
     "next_action": "Route to TEST-DESIGN-VALIDATOR"
   },
   "rework_count": 1,
-  "max_rework": 3
+  "max_rework": 3,
+  "orch_status_correction": "This handoff's top-level status field read PENDING despite carrying a full, agent-attested result (status PASS, completed_at 2026-08-19T05:25:43Z) -- TEST-DESIGNER performed HANDOFF_PROTOCOL.md section 4's steps 2 and 3 (do the work, write the result) but skipped step 1 (flip status to COMPLETED). This is NOT an agent-death case: result and completed_at are the acting agent's own report, unaltered here, and this file does not carry (and must not carry) a not_agent_attested marker, which would falsely assert the result was reconstructed rather than attested. ORCH corrected only the status field on 2026-08-21 while investigating docs/issues/ISS-0192."
 }

@@ -5830,3 +5830,12 @@ history:
       main -- the earlier DOC-UPDATER `done` event above reflected only the feature
       branch. Queue task 188 released as done via letflow-queue, closing GH#376
       (confirmed via `gh issue view 376`: state CLOSED).
+  - req: REQ-114
+    event: started
+    agent: ORCH
+    at: 2026-08-21T08:00:20Z
+    note: >
+      Named directly by project owner (letflow-queue task 189, GH#377), locked under
+      agent_id ai-dala-orch. Dependency REQ-113 confirmed done on main (8570dc7).
+      Branch feature/WF02-REQ114-20260821 created and pushed from origin/main. Routing
+      through full WF-02 producer/validator pipeline per instruction.

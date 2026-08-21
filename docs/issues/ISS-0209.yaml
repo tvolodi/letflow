@@ -45,4 +45,28 @@ github_issue_note: >
   `register_task` created both the queue task (209) and its mirrored GitHub issue (#400)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
   separately. The id comes from `register_task`'s `issue_ref`, not a directory scan.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0209-20260821
+resolved_at: "2026-08-21T10:56:01Z"
+resolution: >
+  Resolved by DOC-UPDATER in `HANDOFF_PROTOCOL.md` §2, in a new subsection
+  "`result.git_evidence.commit_sha_list` — what it covers, and what it structurally
+  cannot". Direction chosen: the second candidate (declare what the field does and does
+  not cover), widened by two findings the issue did not have, and the write-back is left
+  OPTIONAL rather than promoted to a protocol step.
+
+  The corpus was measured first-hand over all 610 parseable files under `handoffs/`: 502
+  shas across 276 files, 261 empty lists, 73 files predating the field. Two findings
+  changed the answer. (1) 284 of the 502 recorded shas — 57% — no longer resolve to any
+  object in this repository, because `GIT_MERGE.md` step 5 rebases and step 8 merges with
+  `--squash --delete-branch`; the field's audit value for merged work is therefore already
+  largely spent, which argues against paying an extra commit per run to add one more sha
+  to it. (2) The issue's infinite-regress claim is REFUTED: all 21 write-back commits in
+  the history record exactly their immediate predecessor and stop, and not one is itself
+  recorded anywhere in the corpus. The regress never happened; the residue is exactly one
+  unrecorded commit per run, which the new subsection now states outright.
+
+  Existing handoffs are not backfilled. The ruling's reading applies to handoffs of any
+  age; its filling boundary is commit-scoped per §4.1(b) precedent. `GIT_MERGE.md` step 8
+  gets a pointer only. §1.2 was not touched, and ISS-0206's and ISS-0208's subject matter
+  was not taken.

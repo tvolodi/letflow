@@ -308,6 +308,83 @@ this field exists to remove. If a handoff reaches you with `requirement_ids` set
 `requirement_text` missing, that is a malformed handoff — read the named entries with a
 targeted `awk`/`Select-String` range (never a full read) and report it as a MINOR issue.
 
+### `result.git_evidence.commit_sha_list` — what it covers, and what it structurally cannot
+
+**Settled 2026-08-21 (ISS-0209). This subsection is the ONE canonical statement of this
+field's scope. `GIT_MERGE.md` carries a pointer to it and deliberately does not restate
+it; nothing in `ORCHESTRATOR.md` or `core-directives.md` states any part of it.**
+
+**What the field IS for.** It is a convenience pointer to the commits *this step
+produced*, so a reader who has the handoff in front of them can reach the diff without
+reconstructing the run's history first. That is its whole job. **It is not the audit
+trail.** Git is the audit trail, and `git log --oneline -- handoffs/<run_id>/` plus the
+run's content paths is authoritative wherever the two disagree.
+
+**Three things the list structurally CANNOT contain. None of the three is careless
+filling, and a reader must not read them as such:**
+
+1. **Its own landing commit.** A handoff is filled in and *then* committed, so the commit
+   that carries the file into git can never appear in the list inside it — and neither can
+   any later correction to that same file. **Every handoff is short by at least one commit,
+   by construction, always.**
+2. **Anything recorded before the run's rebase.** `GIT_MERGE.md` step 5 rebases the branch
+   onto `origin/main`, replaying every commit under a new sha. Shas recorded by earlier
+   steps are dead references from that moment.
+3. **Anything recorded before the run's merge.** `GIT_MERGE.md` step 8 merges with
+   `--squash --delete-branch`: the whole branch collapses into one new commit on `main`
+   and the branch is discarded, so every branch sha the run recorded stops resolving.
+
+**The measurement, not the argument** — taken 2026-08-21 over every JSON file under
+`handoffs/` other than `registry.json` (610 files, 0 unparseable). **502 shas are recorded
+across 276 files; 261 files carry an empty list and 73 predate the field.** Of the 502,
+**284 — 57% — no longer resolve to any object in this repository**, against 175
+squash-merge commits and only 15 true merge commits on `main`. Those 284 are not
+fabrications: they are items 2 and 3 doing exactly what this protocol instructs.
+**A reader who hits an unresolvable sha has found a rebased or squashed branch, not a
+careless agent.**
+
+**So, precisely what a reader may and may not conclude.** An **empty** list means *this
+step committed nothing beyond its own handoff file* — it never means the agent forgot. A
+**non-empty** list means *these were this step's own commits at the moment of writing* —
+it never means "these are all the commits of this run", and it never means "these still
+resolve." Nothing about completeness may be inferred from this field in either direction.
+
+**The write-back is OPTIONAL, and stays optional.** ORCH has sometimes made a follow-up
+commit writing a sha back into an already-committed handoff: **21 such commits exist,
+spanning 12 of the 63 run directories**, and 94 of the 209 still-resolvable recorded shas
+name a commit that touched the very file listing them — only possible because someone
+wrote it back afterwards. It is **not** promoted to a required step: it costs an extra
+commit per run, it depends on an agent remembering to make it, and by items 2 and 3 what
+it usually buys is a reference the next rebase or squash invalidates. Filling agents
+acquire no new obligation from this subsection.
+
+**And the infinite-regress claim is REFUTED, not inherited.** ISS-0209 argued the
+write-back opens an unterminating regress because the write-back commit cannot record
+itself either. Checked against how those 21 commits were actually made: **every one
+records exactly its immediate predecessor and stops, and not one of them is itself
+recorded anywhere in the corpus.** There is no regress — the residue is exactly one
+unrecorded commit per run, which is item 1, which this subsection now states outright
+instead of leaving a reader to discover it. **If you do make a write-back commit, record
+only the commit before it, and do not record the write-back.**
+
+**Scope — the reading is universal, the boundary is for filling, and nothing is
+backfilled.** Items 1-3 describe properties the field always had, so they govern the
+reading of *any* handoff, of any age. What is boundary-scoped is filling practice: on a
+handoff created **at or after commit `SHA-PENDING-WRITEBACK`** (the commit this subsection landed in),
+an agent fills the list as it always did and owes no write-back. **The 276 handoffs
+already carrying a `commit_sha_list` are NOT backfilled and no write-back is owed on any
+of them** — §4.1(b)'s no-backfill rule is the governing precedent. The boundary is
+commit-scoped rather than date-scoped for §4.1(b)'s own reason, which transfers directly:
+a day boundary was measurably false there, putting 42 of 46 same-day files on the wrong
+side of it.
+
+**One note on how that sha got into the paragraph above, because it is the exception that
+proves the rule.** That literal was written in by the commit immediately after it — an
+instance of the very write-back this subsection just declined to mandate. A boundary must
+name a literal sha to be mechanical for a weak agent, and a document cannot contain the
+sha of the commit that adds it, which is item 1 applying to this file rather than to a
+handoff. That is the one case where the write-back earns its extra commit.
+
 ### What goes in `task.description`, and what goes in `artifacts_in`
 
 **This subsection is the canonical definition of the handoff structure rule.** Other files

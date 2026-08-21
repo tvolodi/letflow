@@ -211,6 +211,12 @@ handoffs/<run-id>/" \
    "all gates" means before REQ-013 lands):
    gh pr merge --squash --delete-branch
 
+   ⚠️ The rebase in step 5 and the squash in step 8 both invalidate every commit sha
+   this run already recorded in `result.git_evidence.commit_sha_list`. That is
+   expected and is NOT a bookkeeping defect — do not go back and rewrite handoffs
+   after the merge. `HANDOFF_PROTOCOL.md` §2's `commit_sha_list` subsection is the
+   canonical statement of what that field covers; this line does not restate it.
+
 9. Local cleanup — return to main (MANDATORY):
    git checkout main
    git pull --ff-only origin main

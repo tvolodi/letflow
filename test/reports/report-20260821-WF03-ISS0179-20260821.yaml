@@ -1,0 +1,195 @@
+report_id: report-20260821-WF03-ISS0179-20260821
+agent: TEST-RUNNER
+requirement: ISS-0179
+workflow_step: WF-03 Step 4 (full-suite regression check before merge)
+handoff: handoffs/WF03-ISS0179-20260821/step-04-test-runner.json
+branch: feature/WF03-ISS0179-20260821
+date: 2026-08-21
+command: "TEST_PARALLEL_N=4 sh scripts/test_parallel.sh"
+
+toolchain:
+  mix: "Elixir 1.20.3 (compiled with Erlang/OTP 29)"
+  erlang: "Erlang/OTP 29"
+  platform: "Windows 11"
+
+environment:
+  postgres: >
+    letflow-postgres-1, already Running per `docker compose up -d` at the start of
+    this step (not a fresh start/restart).
+  pool_saturation_encountered: >
+    NO. Per this run's handoff, TEST_PARALLEL_N=4 was used directly (this host's
+    known nproc-default N=16 would saturate the shared Postgres pool at
+    ecto.create time per ISS-0194/ISS-0212 -- not re-derived, used as instructed).
+    All 4 partitions produced proper Result: lines; no crashed partitions.
+
+runs:
+  - n: 4
+    source: "TEST_PARALLEL_N=4 (per this run's handoff instruction)"
+    result: "all 4 partitions completed cleanly, no crashes -- USED FOR VERDICT"
+
+verdict: PASS
+
+summary_line: "combined: 1289 tests, 5 properties, 2 failures (1292/1294 passed)"
+exit_code: "2 (any_failed driven by the 2 parsed failures below)"
+
+per_partition:
+  - partition: 1
+    tests: 306
+    properties: 2
+    failures: 0
+    exit: 0
+  - partition: 2
+    tests: 313
+    properties: 1
+    failures: 2
+    exit: 2
+  - partition: 3
+    tests: 413
+    properties: 2
+    failures: 0
+    exit: 0
+  - partition: 4
+    tests: 257
+    properties: 0
+    failures: 0
+    exit: 0
+
+failure_count: 2
+failures_caused_by_this_branch: 0
+failures_pre_existing_already_filed: 2
+failures_not_covered_by_an_existing_issue: 0
+
+# ---------------------------------------------------------------------------
+# Scope check -- what this branch actually touched
+# ---------------------------------------------------------------------------
+
+branch_diff:
+  command: "git diff --name-only main...feature/WF03-ISS0179-20260821"
+  files:
+    - handoffs/WF03-ISS0179-20260821/step-02-code-designer.json
+    - handoffs/WF03-ISS0179-20260821/step-02b-code-design-validator.json
+    - handoffs/WF03-ISS0179-20260821/step-04-test-runner.json
+    - handoffs/WF03-ISS0179-20260821/step-2a-elixir-dev.json
+    - handoffs/WF03-ISS0179-20260821/step-2b-reviewer.json
+    - lib/letflow/design/iss0111-with-only-this-tenant-visible-advisory-lock-fix.md
+    - test/letflow/identity_migration_test.exs
+  note: >
+    Only one code/test file is touched: test/letflow/identity_migration_test.exs
+    (an advisory-lock serialization fix around with_only_this_tenant_visible!/2
+    and restore_orphaned_guard_backup_rows!/0, per step-2b REVIEWER's PASS). No
+    lib/letflow/ application code and no priv/repo/migrations/ file is touched.
+    This module ran inside partition 4 (257 tests, 0 properties, 0 failures,
+    exit 0) -- clean, on the same host and Postgres instance as the two
+    failures below.
+
+# ---------------------------------------------------------------------------
+# Per-failure attribution -- re-derived, not inherited
+# ---------------------------------------------------------------------------
+
+attribution_method: >
+  Per core-directives.md's "Failure Attribution Is Structural, Never By
+  Count-Matching". Both failures are ONE group (same file, same root cause),
+  attributed via Route 1 (structurally absent from this branch's diff -- the
+  failing file is not test/letflow/identity_migration_test.exs, the one file
+  this branch changes) AND Route 3 (a demonstrated, previously-documented
+  mechanism, re-confirmed live on this host during this step rather than only
+  cited from a prior report).
+
+failures:
+  - group: Mix.Tasks.Letflow.Check.TestTest
+    count: 2
+    file: test/mix/tasks/letflow_check_test_test.exs
+    failing_tests:
+      - line: 105
+        name: "detects a recurrence of ISS-0069's own warning class raises and reports the offending line when the target substring is present, even though the underlying subprocess exited 0"
+        symptom: "** (ExUnit.TimeoutError) test timed out after 60000ms, stuck inside Mix.Tasks.Letflow.Check.Test.collect/2"
+      - line: 126
+        name: "detects a recurrence of ISS-0069's own warning class passes (no raise) when the subprocess exits 0 and the target substring is absent, even with unrelated warnings present"
+        symptom: "** (Mix.Error) mix letflow.check.test: FAILED -- underlying `mix test` run exited 1 (real test failure/error)."
+    determination: "PRE-EXISTING, POSIX-only test fixture failing on Windows. NOT caused by this branch, and NOT in the module this branch changed. Covered by ISS-0107 (open, MAJOR, filed 2026-08-20)."
+    evidence:
+      - method: "Route 1 -- structural, branch diff"
+        detail: >
+          Neither test/mix/tasks/letflow_check_test_test.exs nor
+          lib/mix/tasks/letflow.check.test.ex appears in `git diff --name-only
+          main...feature/WF03-ISS0179-20260821` (the 7-path list above, which
+          contains only handoffs, one design doc, and
+          test/letflow/identity_migration_test.exs). Both files are
+          byte-identical to main on this branch.
+      - method: "matches ISS-0107's own filed description exactly, same host class"
+        detail: >
+          docs/issues/ISS-0107.yaml (status: open, MAJOR) names this exact
+          file, describes install_fake_mix/2 writing an extensionless
+          `#!/bin/sh` file named `mix` and prepending its dir onto PATH with
+          ":" -- both POSIX-only mechanisms (Windows uses ";" as the PATH
+          separator, and System.find_executable/1 will not resolve an
+          extensionless file without a PATHEXT-registered extension) -- so
+          Mix.Tasks.Letflow.Check.Test.run/1 shells out to the REAL mix
+          instead of the fixture's fake, recursing the suite into a nested
+          `mix test`. The exact symptom pair filed there (a 60000ms
+          ExUnit.TimeoutError at collect/2, plus a second test getting the
+          real subprocess's "exited 1" Mix.Error instead of the expected
+          substring-match message) is exactly what this run reproduced,
+          same two test names, same line numbers.
+      - method: "Route 3 -- orphaned-process mechanism directly observed on this host during this step"
+        detail: >
+          After the parallel run completed, `tasklist /FI "IMAGENAME eq
+          erl.exe"` on this host showed one still-running erl.exe (PID
+          14552). `Get-CimInstance Win32_Process -Filter "ProcessId=14552"`
+          showed its command line as `erl.exe -noshell ... -extra
+          "...\mix" test` -- i.e. exactly the orphaned nested `mix test`
+          child ISS-0107 documents (the outer ExUnit test's 60000ms timeout
+          fires but does not kill the Port-spawned subprocess). Killed via
+          `Stop-Process -Id 14552 -Force`; confirmed gone afterward
+          (Get-Process for that PID returned nothing). This directly
+          reproduces ISS-0107's documented mechanism on this host during
+          this run, rather than only citing its record.
+    action: "FORWARDED (already open as ISS-0107, no new issue filed). No test edited, no application code touched. Orphaned process cleaned up as environment hygiene."
+
+# ---------------------------------------------------------------------------
+
+acceptance_criteria_check:
+  - criterion: "The full suite was actually run via TEST_PARALLEL_N=4 sh scripts/test_parallel.sh and real pass/fail counts are quoted"
+    met: true
+    detail: >
+      `TEST_PARALLEL_N=4 sh scripts/test_parallel.sh` run once, completed
+      cleanly, all 4 partitions produced Result: lines: "combined: 1289 tests,
+      5 properties, 2 failures (1292/1294 passed)".
+  - criterion: "Every failure is attributed structurally, never by count-matching against a prior run"
+    met: true
+    detail: >
+      Both failures are one group, attributed via Route 1 (absent from `git
+      diff --name-only main...feature/WF03-ISS0179-20260821`) and Route 3 (the
+      POSIX-only fake-mix mechanism, plus its documented orphaned-process
+      side-effect, both re-confirmed live on this host during this step --
+      the exact orphaned erl.exe PID 14552 was found, inspected, and killed).
+      No comparison to any prior report's failure count was used as evidence.
+  - criterion: "Any failure in test/letflow/identity_migration_test.exs specifically is checked for a genuine causal connection to this run's own change, not cleared by assumption"
+    met: true
+    detail: >
+      Neither failure is in test/letflow/identity_migration_test.exs -- both
+      are in test/mix/tasks/letflow_check_test_test.exs, a different file
+      entirely, confirmed via partition log grep
+      (`grep -n "IdentityMigrationTest" partition-*.log` only matches
+      partition 4, which has 0 failures). This branch's own module (partition
+      4) ran clean: 257 tests, 0 failures, exit 0. No assumption-based
+      clearing was needed since the failing module never appears in this
+      branch's diff at all.
+  - criterion: "A test report is written to test/reports/ and listed in artifacts_out"
+    met: true
+    detail: "This file: test/reports/report-20260821-WF03-ISS0179-20260821.yaml"
+
+artifacts_out:
+  - test/reports/report-20260821-WF03-ISS0179-20260821.yaml
+
+next_action: >
+  PASS -- no failure attributable to this branch's own change
+  (test/letflow/identity_migration_test.exs, which ran clean, 0 failures).
+  Route to ORCH / WF-04 Step 1 (RELEASE-VALIDATOR), which re-runs the suite
+  independently rather than trusting this report alone. Note for whoever runs
+  it next: the two Mix.Tasks.Letflow.Check.TestTest failures are the
+  already-open, Windows-specific ISS-0107 (POSIX-only fake-mix fixture); they
+  also leave an orphaned nested `mix test` erl.exe process behind on timeout,
+  which this step found and killed (PID 14552) -- worth checking for stray
+  erl.exe processes after any run that hits this same pair of failures on a
+  Windows host.

@@ -1,0 +1,58 @@
+{
+  "handoff_id": "b050d18a-49e8-4bf9-9176-e254d36f0d99",
+  "run_id": "ADHOC-20260821-002",
+  "workflow_id": "ADHOC-20260821-002",
+  "step": "07",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/ADHOC-20260821-002/step-07-g12.json",
+  "created_at": "2026-08-21T06:21:08Z",
+  "started_at": "2026-08-21T06:21:48Z",
+  "completed_at": "2026-08-21T06:22:49Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["88718720-cdc4-4276-badc-c8e4dea6115b"],
+    "artifacts_in": [
+      "handoffs/ADHOC-20260821-002/step-06-reviewer-final.json",
+      "docs/agents/instructions/core-directives.md",
+      "docs/agents/protocols/ISSUE_QUEUE.md"
+    ],
+    "owned_modules": ["docs/agents/instructions/core-directives.md"],
+    "orch_note_not_rework": "This is NOT rework iteration 3. The step-06 gate PASSED and stated explicitly that no third rework iteration is needed and the budget stays at 2 of 3. G12 is new scope the final gate identified, not a failure of the prior passes, so it is carried as its own step and the rework counter is unchanged. Recorded because a later reader counting steps could otherwise infer an exhausted budget."
+  },
+  "task": {
+    "description": "ONE ITEM, three lines, in one file. The step-06 REVIEWER gate PASSED the run and separately recorded G12: your own G10 fix left `docs/agents/instructions/core-directives.md` contradicting itself one pointer apart.\n\nThe Unblock-Everything 'Scope boundary' paragraph now correctly says the discovering agent reports the finding and does NOT call the queue or `gh` and does NOT choose an issue id. It then points the reader at the 'No Issue Left Local-Only' section a few lines below — which still says the opposite: that a newly discovered issue 'gets registered in `docs/issues/`' and is 'filed via `gh issue create`' by the discovering agent, and that when `gh` is unavailable the agent should 'record that explicitly in the issue file's `github_issue: null # gh unavailable, see note` field'. ORCH has read both firsthand and confirms the contradiction.\n\n**Note precisely what changed and what did not.** That text is pre-existing and is not newly wrong on its own terms — it was written before this morning's queue change. What is NEW is the contradiction: before commit 39e8d27 the two paragraphs AGREED (both were wrong in the same direction), and now they disagree. This run created that, so this run fixes it. This is also the same reasoning ORCH used to fold in G10 against REVIEWER's non-gating ruling: a known-wrong instruction should not survive on the strength of another rule out-ranking it, and a file that contradicts itself is worse than one that is consistently out of date, because a reader cannot tell which half is current.\n\nFIX: amend the 'No Issue Left Local-Only' section so its MECHANISM matches ISSUE_QUEUE.md while its PRINCIPLE is preserved intact. The principle — a defect that lives only in a local file and never becomes visible work is invisible to the next run, and 'out of scope for the current fix' is a reason to file it rather than to leave it undocumented — is correct and load-bearing and must survive verbatim in substance. What changes is who does what: the discovering agent reports the finding to ORCH; ORCH registers it via `register_task`, which allocates the id as `issue_ref` and creates the GitHub issue itself; nobody calls `gh issue create` in the normal path and nobody chooses an id. Keep a correct account of the genuinely-unavailable case by pointing at ISSUE_QUEUE.md's own handling rather than restating a `github_issue: null` recipe that no longer matches it — check what that file actually says before writing this, do not assume.\n\nDo NOT weaken the principle to fit the mechanism. If you find that making them consistent requires dropping something the principle needs, stop and report that instead — that would mean the mechanism is wrong, not the principle.\n\nOnly this one file. Do NOT touch anything else, and do NOT write to ORCH's `handoffs/registry.json` or `handoffs/orchestrator.log`. Another session may be active in this checkout — re-read rather than overwrite if the file changes under you.",
+    "acceptance_criteria": [
+      "The 'No Issue Left Local-Only' section no longer instructs the discovering agent to register a file under docs/issues/ itself, to call `gh issue create`, or to choose or write an issue id",
+      "Its mechanism matches docs/agents/protocols/ISSUE_QUEUE.md as that file actually reads today -- quote the lines you checked it against rather than assuming",
+      "The principle survives in substance: a defect visible only locally is invisible to the next run, and 'out of scope for the current fix' is a reason to file rather than to leave undocumented",
+      "The genuinely-unavailable case is still covered, by pointing at ISSUE_QUEUE.md's handling rather than restating a recipe that contradicts it",
+      "The Scope boundary paragraph's pointer to this section still resolves correctly, and the two paragraphs now agree -- state how you checked",
+      "Only docs/agents/instructions/core-directives.md and your own handoff are modified, and every deletion is accounted for"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Rewrote the mechanism half of 'No Issue Left Local-Only' in docs/agents/instructions/core-directives.md (lines 259-277) so it matches ISSUE_QUEUE.md as that file actually reads today; the principle is unchanged. Checked against ISSUE_QUEUE.md firsthand, not assumed -- step 2: 'The discovering agent reports the finding to ORCH (title, description, severity, affected_files) -- it does not call `gh` or letflow-queue itself.'; step 2a: 'The response carries `issue_ref` ... THAT IS THE ID' and 'This best-effort creates the mirrored GitHub Issue itself ... do NOT also call `gh issue create` separately, that would double-post.'; step 1: 'Do NOT derive the id. The discovering agent does not pick a number, and neither does ORCH.'; step 3: 'Write docs/issues/<issue_ref>.yaml -- the filename comes from step 2a's `issue_ref`, not from anything on disk'; step 2b: 'If letflow-queue is unreachable (genuinely, both token locations checked): there is no allocator, and therefore no id ... File the finding in your handoff's `result.issues` (severity as discovered) and report it to ORCH', with the interim `gh issue create` and the `github_issue_number` adoption path both belonging to ORCH there. Deletion accounting, five deleted elements, each either relocated or deliberately dropped as contradicted: (1) 'gets registered in `docs/issues/`' by the discovering agent -> relocated, the local record is now written by ORCH from register_task's response, per ISSUE_QUEUE step 3; (2) 'filed via `gh issue create`' -> dropped as contradicted, register_task creates the mirrored GitHub issue, and ISSUE_QUEUE 2a explicitly forbids the separate call as double-posting; (3) 'so it is claimable the same way any other GitHub issue is' -> kept in substance as 'claimable the same way any other queued work is'; (4) the `gh`-authenticated/origin-reachable conditional -> replaced by the queue-reachability case, delegated to ISSUE_QUEUE 2b rather than restated; (5) the `github_issue: null # gh unavailable, see note` recipe -> dropped as contradicted (2b's answer is no id and no local record yet, not a record with a null field) and replaced by a pointer to 2b, which additionally carries the github_issue_number adoption path the old recipe had no equivalent of. Nothing else was removed. The principle survives intact: the opening sentence ('A defect that lives only in `docs/issues/*.yaml` and never becomes visible work is invisible to the next run') and the closing paragraph ('\"Out of scope for the current fix\" is a reason to file the finding as its own issue -- never a reason to leave it undocumented') are both byte-identical to before, and the 'couldn't file' clause is preserved in reworded form as 'couldn't file it right now is never didn't need filing'. No part of the principle had to be weakened to fit the mechanism, so the stop-and-report branch of the task did not trigger. Consistency check on the Scope boundary pointer: it says 'report the finding to ORCH per ISSUE_QUEUE.md ... You do not call the queue or `gh` yourself and you do not choose an issue id; only ORCH allocates ids' and points at 'No Issue Left Local-Only' below. Verified by reading both paragraphs in the edited file in one pass, in order: the pointer still resolves (the '## No Issue Left Local-Only' heading is unchanged and still below it) and the target now states the same three things -- report to ORCH, no `gh`, no self-chosen id -- rather than their opposites. Also re-checked the file's other inbound reference at line ~368 ('per ISSUE_QUEUE.md and \"No Issue Left Local-Only\" above'), which is about filing an uncovered test failure at all and is unaffected by a mechanism change.",
+    "artifacts_out": [
+      "docs/agents/instructions/core-directives.md",
+      "handoffs/ADHOC-20260821-002/step-07-g12.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "main",
+      "commit_sha_list": ["ee9e0f413e69d8ad66cf474a6510a39beba50165"],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "G12 closed. ORCH updates registry.json/orchestrator.log (not written by this step) and pushes when it judges the run ready -- push was explicitly withheld here."
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

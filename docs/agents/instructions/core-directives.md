@@ -260,13 +260,22 @@ Flag those for ORCH escalation instead of touching them.
 
 A defect that lives only in `docs/issues/*.yaml` and never becomes visible work is
 invisible to the next run. Any newly discovered issue — whether it's the task at hand
-or an incidental finding — gets registered in `docs/issues/` (see
-`docs/agents/protocols/ISSUE_QUEUE.md`) **and**, if `gh` is authenticated and the
-`origin` remote is reachable, filed via `gh issue create` so it is claimable the same
-way any other GitHub issue is. If `gh` is unavailable (no auth, no network), record that
-explicitly in the issue file's `github_issue: null # gh unavailable, see note` field
-rather than silently skipping it — do not treat "couldn't file on GitHub" as "didn't
-need filing."
+or an incidental finding — must end up registered in `letflow-queue` **and** mirrored as
+a GitHub issue, so it is claimable the same way any other queued work is.
+
+The mechanism is `docs/agents/protocols/ISSUE_QUEUE.md`, and it is not yours to
+shortcut. The discovering agent **reports the finding to ORCH** — title, description,
+severity, affected files — and stops there. ORCH calls `register_task`, which allocates
+the id atomically (returned as `issue_ref`) and best-effort creates the mirrored GitHub
+issue itself; `docs/issues/<issue_ref>.yaml` is written afterwards, *from* that response.
+So: you do not call `gh issue create`, you do not choose or write an id, and you do not
+create the local record ahead of the allocation.
+
+If the queue is genuinely unreachable, the finding is still not dropped — `ISSUE_QUEUE.md`
+step 2b covers exactly that case, and covering it there is deliberate: it also carries the
+adoption path that keeps an interim GitHub issue from becoming a duplicate. Follow that
+section rather than improvising a substitute here. What does **not** vary is the
+obligation: "couldn't file it right now" is never "didn't need filing."
 
 "Out of scope for the current fix" is a reason to file the finding as its own issue —
 never a reason to leave it undocumented.

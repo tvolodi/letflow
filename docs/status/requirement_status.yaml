@@ -5764,3 +5764,18 @@ history:
       entry ("Attributing a failure to toolchain drift without ever running the pinned
       toolchain") records the transferable lesson: a line over the formatter's configured
       line_length is unformatted under every version, measurable with no toolchain at all.
+  - req: REQ-113
+    event: started
+    agent: ORCH
+    at: 2026-08-21T05:52:25Z
+    note: >
+      Picking up queue task 188 (GH#376), named directly by the project owner. set_lock
+      claimed it under agent_id ai-dala-orch (200, locked; was open/unlocked). REQ-113
+      was already drafted and REQ-VALIDATOR-passed on origin/main via run
+      WF01-TESTPARALLEL-20260821 (handoffs/WF01-TESTPARALLEL-20260821/) before this
+      session started, along with its dependent follow-on REQ-114 (wiring the script
+      into TEST-RUNNER/RELEASE-VALIDATOR, out of scope for this run). Routing through
+      WF-02 (Requirement Implementation) per the project owner's explicit instruction to
+      use the full producer/validator pipeline. Branch feature/WF02-REQ113-20260821
+      created off origin/main and pushed (Step 00). Status flipped pending -> in_progress
+      here.

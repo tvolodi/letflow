@@ -5376,7 +5376,7 @@ requirements:
   - id: REQ-113
     title: Parallel test-runner script (scripts/test_parallel.sh) via Elixir's native --partitions
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S4
     impl_order: 188  # letflow-queue task id (registered 2026-08-21, mirrors GH#376)
     description: >

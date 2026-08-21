@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0109-20260821/step-06-doc-updater.json",
   "created_at": "2026-08-21T03:20:26Z",
   "started_at": "2026-08-21T03:20:26Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-21T03:22:30Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -48,19 +48,29 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "Documented the `instrumented` issue status, minimally and in one canonical home. (1) docs/agents/protocols/ISSUE_QUEUE.md gains an \"Issue status vocabulary\" section (inserted between the Procedure block and \"Picking up a queued issue later\") listing open / in_progress / resolved / instrumented. `resolved` is stated as asserting that a root cause was ACTUALLY REMOVED with a regression test proving it -- shipping useful verified work is explicitly not the same thing, because the registry is read by later runs as a factual record, not a progress report. `instrumented` is defined as: the run built and verified real improvements (typically diagnostic capability) and that run's own acceptance criteria were met, but the underlying defect's root cause is not removed and the issue is not fixed; it MUST carry `superseded_by: ISS-NNNN` naming the successor issue, filed before the transition, so such a record can never be a dead end, and must state plainly what the shipped work does not close. ISS-0109 (superseded_by ISS-0116) is cited as the worked example, noting that the design gate and REVIEWER independently concluded instrumented-not-fixed. The open/in_progress/resolved wordings only write down existing usage; no existing status value is redefined and no existing record's interpretation changes. (2) docs/agents/workflows/WF-03_issue_resolving.md Step 5 gains a five-line note directly after its procedure block saying `resolved` is the normal but not the only legal terminal state, and POINTING at ISSUE_QUEUE.md's vocabulary section rather than restating the definitions. (3) docs/status/requirement_status.yaml was read and DELIBERATELY LEFT UNTOUCHED -- see result.issues[0] for the evidence and reasoning. Documentation only: no code, no tests, no issue-record files touched (ISS-0109 stands as committed at 046fbd3).",
+    "artifacts_out": [
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "handoffs/WF03-ISS0109-20260821/step-06-doc-updater.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "docs/status/requirement_status.yaml was NOT appended to, deliberately. Its schema is requirement-scoped and does not cover issue-runs. Evidence from reading the file (5723 lines, 181 events): its header states 'one entry per time an agent picked up, finished, or got blocked on a REQUIREMENT' and fixes the entry shape as req/event/agent/at/note with `req: REQ-XXX`. Every one of the 181 entries uses the `req:` key -- 151 REQ-NNN and 30 SCOPE-CHANGE (the latter recording changes to the requirement SET itself, e.g. the S0-S8 staging expansion, still requirement-scoped). Zero entries name an ISS-NNNN. Past WF-03 issue runs (WF03-ISS0013, ISS-0030, ISS-0045, ISS-0086, ISS-0087) appear in this file only as prose inside other requirements' `note:` fields, never as entries of their own -- so 'issue runs do not get entries here' is established practice, not an omission. WF03-ISS0109-20260821 has no requirement in scope (handoff context.requirement_ids is empty), so an entry would have required inventing an `iss:` key or misfiling the run under a fabricated `req:` value. Per this step's own instruction and docs/anti-patterns.md's entry on this append-only file, nothing was appended and no shape was invented. The run's history lives in docs/issues/ISS-0109.yaml, ISS-0116.yaml, GH#358 and this run's handoffs. NOT a defect to fix -- recorded so ORCH can see the decision was made on evidence rather than skipped.",
+        "affected_requirement": null
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0109-20260821",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF03-ISS0109-20260821",
-      "push_status": null,
+      "push_status": "ok",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to WF-03 Step Final (git-merge). No further doc work outstanding for this run. Note for Step Final: ISS-0109's queue_task_id_note requires releasing BOTH letflow-queue tasks 172 and 175, and GH#358 is already closed by hand (2026-08-21T03:18:27Z)."
   },
   "rework_count": 0,
   "max_rework": 3

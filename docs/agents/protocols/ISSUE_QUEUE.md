@@ -88,6 +88,30 @@ the queue itself).
    rework.
 ```
 
+## Issue status vocabulary
+
+`docs/issues/ISS-NNNN.yaml`'s `status:` field. This is the canonical list — WF-03 and
+every other reader point here rather than restating it.
+
+- `open` — filed, not yet being worked.
+- `in_progress` — a run has locked it and is working it.
+- `resolved` — **a root cause was actually removed**, and a regression test proves it.
+  Shipping useful, verified work is *not* the same thing. This registry is read by later
+  runs as a factual record of what is and is not still broken, not as a progress report,
+  so `resolved` on an issue whose defect still exists silently misinforms every run that
+  cross-references it.
+- `instrumented` — the run built and verified real improvements (typically diagnostic
+  capability), and that run's own acceptance criteria were met, but the underlying
+  defect's **root cause is not removed and the issue is not fixed**. An `instrumented`
+  record MUST carry `superseded_by: ISS-NNNN` naming the successor issue that carries the
+  remaining work, so it can never be a dead end; file that successor before transitioning
+  the record. State plainly in the record what the shipped work does *not* close.
+
+Worked example: **ISS-0109** (`superseded_by: ISS-0116`). Run WF03-ISS0109-20260821 built
+and verified real test instrumentation, but the design gate and REVIEWER independently
+concluded the failure was instrumented, not fixed — the root cause remains unknown — so it
+was transitioned to `instrumented` rather than `resolved`.
+
 ## Picking up a queued issue later
 
 As of `letflow-queue` going live, task **selection** happens through `get_next_task`

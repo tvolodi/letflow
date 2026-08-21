@@ -68,7 +68,9 @@
     ],
     "git_evidence": {
       "branch_name": "main",
-      "commit_sha_list": [],
+      "commit_sha_list": [
+        "4040f605a8e29c8d0778da145f6511e20bc6a9a9"
+      ],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,

@@ -22,7 +22,16 @@ config :letflow, Letflow.Repo,
   hostname: "localhost",
   port: db_port,
   pool: Ecto.Adapters.SQL.Sandbox,
-  pool_size: System.schedulers_online() * 2
+  # ISS-0194: scripts/test_parallel.sh computes and exports TEST_POOL_SIZE so
+  # N concurrently-launched partitions don't jointly exceed Postgres
+  # max_connections (schedulers_online()*2 per partition, multiplied by N,
+  # regularly did). A plain `mix test` (no test_parallel.sh, TEST_POOL_SIZE
+  # unset) keeps the original sizing unchanged. See
+  # docs/migration/decisions/0009-test-parallel-pool-sizing.md.
+  pool_size: (case System.get_env("TEST_POOL_SIZE") do
+                nil -> System.schedulers_online() * 2
+                value -> String.to_integer(value)
+              end)
 
 # Placeholder — no real Keycloak instance exists yet. Replace with a real
 # per-environment issuer URL once realm provisioning (deferred past S1, see

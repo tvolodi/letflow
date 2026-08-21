@@ -17,6 +17,38 @@ description: >
 affected_files:
   - scripts/test_parallel.sh
   - config/test.exs
+  - docs/migration/decisions/0009-test-parallel-pool-sizing.md
 queue_task_id: 194
 github_issue: 382
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0194-20260821
+resolved_at: "2026-08-21T12:12:16Z"
+resolution_note: >
+  Measured first-hand: this host's nproc=16, config/test.exs's
+  schedulers_online()*2 pool_size=32, so N*pool_size=512 against Postgres
+  max_connections=100 (docker exec letflow-2-postgres-1 psql -U letflow -d
+  letflow_dev -tAc "show max_connections;"). Fix: scripts/test_parallel.sh
+  now computes and exports TEST_POOL_SIZE = (max_connections - headroom) / N,
+  clamped to a floor, unless the caller already set it; config/test.exs reads
+  it and falls back to the original schedulers_online()*2 when unset (so
+  plain `mix test` is unchanged). Decision record
+  docs/migration/decisions/0009-test-parallel-pool-sizing.md covers the
+  options considered (hard-fail / clamp pool_size / clamp N / raise
+  max_connections) and why clamping pool_size with a floor was chosen.
+  Self-reviewed -- no separate REVIEWER pass, since this execution context
+  cannot spawn subagents; stated explicitly in the decision record and PR.
+
+  VERIFIED: real run of scripts/test_parallel.sh at TEST_PARALLEL_N=8
+  (matching the issue's own reproduction host) computed TEST_POOL_SIZE=11,
+  all 8 partitions produced proper Result: lines, combined: 1283 tests, 5
+  properties, 4 failures (1284/1288 passed) -- zero too_many_connections
+  errors. The 4 failures (3 in Mix.Tasks.Letflow.Check.TestTest, 1 in
+  Letflow.EngineSubProcessTest) are pre-existing and unrelated to this
+  change: neither test file references TEST_POOL_SIZE or pool_size, and the
+  check-test failures are preceded by an unrelated
+  placeholder-keycloak.invalid DNS resolution failure (OIDC placeholder
+  issuer, a known environment gap per config/test.exs's own comments) --
+  noted honestly rather than silently claimed clean. Arithmetic
+  cross-checked in isolation for N=16 (pool=5, N*pool=80<=90), N=8 (pool=11,
+  88<=90), and N=60 (clamped to floor 2, correctly WARNs that N*floor=120
+  may still exceed budget).

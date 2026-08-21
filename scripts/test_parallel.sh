@@ -80,6 +80,47 @@ if [ "$compile_exit" -ne 0 ]; then
   exit "$compile_exit"
 fi
 
+# --- Step 1.5: clamp per-partition pool_size to fit Postgres's ceiling ----
+#
+# ISS-0194: config/test.exs sizes each partition's own Ecto pool as
+# schedulers_online()*2. N partitions launched concurrently (step 2 below)
+# each open that many connections at once, and N*pool_size regularly
+# exceeds Postgres max_connections (measured 2026-08-21: N=16, pool_size=32
+# on a 16-core host -- 512 wanted against a max_connections of 100). See
+# docs/migration/decisions/0009-test-parallel-pool-sizing.md for the
+# tradeoff this clamp encodes and why a floor (never silently disabling
+# parallelism entirely) was chosen over a hard failure.
+#
+# TEST_POOL_SIZE, if the caller already set it, is never overridden here --
+# an explicit choice always wins over this clamp.
+if [ -z "${TEST_POOL_SIZE:-}" ]; then
+  max_conn="${TEST_MAX_CONNECTIONS:-100}"
+  headroom="${TEST_CONNECTION_HEADROOM:-10}"
+  min_pool="${TEST_MIN_POOL_SIZE:-2}"
+
+  if ! printf '%s' "$max_conn" | grep -Eq '^[1-9][0-9]*$'; then
+    echo "test_parallel: ERROR TEST_MAX_CONNECTIONS='$max_conn' is not a positive integer" >&2
+    exit 1
+  fi
+
+  budget=$((max_conn - headroom))
+  if [ "$budget" -lt "$min_pool" ]; then
+    echo "test_parallel: ERROR TEST_MAX_CONNECTIONS=$max_conn minus TEST_CONNECTION_HEADROOM=$headroom leaves no room for even the TEST_MIN_POOL_SIZE=$min_pool floor" >&2
+    exit 1
+  fi
+
+  computed_pool=$((budget / N))
+  if [ "$computed_pool" -lt "$min_pool" ]; then
+    echo "test_parallel: WARN N=$N partitions would need pool_size=$computed_pool to fit within $budget connections (max_connections=$max_conn - headroom=$headroom); clamping to the TEST_MIN_POOL_SIZE floor of $min_pool instead. This means N*pool_size ($((N * min_pool))) may still exceed the connection budget -- reduce N (TEST_PARALLEL_N=<n>) if you hit too_many_connections." >&2
+    export TEST_POOL_SIZE="$min_pool"
+  else
+    export TEST_POOL_SIZE="$computed_pool"
+  fi
+  echo "test_parallel: TEST_POOL_SIZE=$TEST_POOL_SIZE (computed: N=$N, max_connections=$max_conn, headroom=$headroom)"
+else
+  echo "test_parallel: TEST_POOL_SIZE=$TEST_POOL_SIZE (caller override, not computed)"
+fi
+
 # --- Step 2: launch N background partitions -------------------------------
 
 tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/letflow_test_parallel.XXXXXX")

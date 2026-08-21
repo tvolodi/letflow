@@ -92,12 +92,13 @@ never race to write the same `_build/test` artifacts.
 
 A temporary working directory is created via `mktemp -d` (e.g.
 `/tmp/letflow_test_parallel.XXXXXX`) to hold per-partition log files — not under
-`scripts/` or `test/`, so no repo-tracked output is produced by a normal run. One
-line per partition `i` in `1..N` (shell `for i in $(seq 1 "$N")`):
-
-```
-MIX_TEST_PARTITION=<i> mix test --partitions <N> --no-color > "$tmp_dir/partition-<i>.log" 2>&1 &
-```
+`scripts/` or `test/`, so no repo-tracked output is produced by a normal run. For
+each partition `i` in `1..N` (shell `for i in $(seq 1 "$N")`), the script launches
+one `mix test` invocation as a background job: the `MIX_TEST_PARTITION` environment
+variable is set to that partition's 1-based index `i`, the command is invoked with
+the `--partitions N` and `--no-color` flags, and both its stdout and stderr are
+redirected to that partition's own log file under the temporary directory (named by
+partition index, e.g. `partition-<i>.log`).
 
 - `--no-color` is explicit and required — without it, ExUnit's `CLIFormatter`
   decides on ANSI color codes based on `IO.ANSI.enabled?/0`, which is not

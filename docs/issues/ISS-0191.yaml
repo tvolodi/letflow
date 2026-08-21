@@ -1,0 +1,73 @@
+id: ISS-0191
+title: >
+  Build the handoff linter HANDOFF_PROTOCOL.md's Enforcement note defers (`mix letflow.lint_handoffs`) -- it now has a measured backlog
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0117-20260821
+discovered_at: "2026-08-21T06:56:56Z"
+severity: MINOR
+
+description: >
+  HANDOFF_PROTOCOL.md's closing Enforcement note has recorded this as a known gap since the
+  protocol was written: R-Co enforces its handoff protocol mechanically via
+  tools/lint_handoffs.py (schema conformance, timestamp monotonicity, encoding, registry
+  coverage), adopted after a 2026-08-05 pipeline audit found unenforced bookkeeping rules
+  were followed at 0.4-8.6% compliance DESPITE BEING WRITTEN DOWN. Letflow has no
+  equivalent. The note says building one "is worth raising as its own requirement once the
+  pipeline has run enough cycles to show whether Letflow drifts the same way R-Co did."
+
+  IT HAS RUN ENOUGH CYCLES, AND IT DRIFTS THE SAME WAY. Measured during
+  WF03-ISS0117-20260821 Step 1 and independently re-derived by ORCH over all 534 handoff
+  files:
+    - 15 files carry a top-level `status` outside section 2's legal enum (13 of them the
+      value `"PASS"`, i.e. a result.status used as a handoff status).
+    - 13 files carry non-schema top-level keys, including 2 Step-00 files on an entirely
+      different flat schema with no context/task/result blocks.
+    - 2 handoffs sit at PENDING inside runs the registry records as COMPLETED -- one
+      (WF02-REQ043-20260818/step-final-git-merge.json) has misrepresented a run that merged
+      to main since 2026-08-18. See ISS-0192.
+    - 3 files carry three DIFFERENT ad-hoc key names for the same recovery situation, in
+      two different shapes. See ISS-0117.
+    - `grep -rn "handoffs/" test/ --include=*.exs` returns 6 hits, all source comments
+      citing a handoff as provenance: ZERO ExUnit tests assert anything over
+      handoffs/*.json today.
+
+  This is the same shape as R-Co's own finding, and every gate in this pipeline rests on
+  these files being trustworthy.
+
+  WHY SEPARATE FROM THE DATA DEFECTS (ISS-0190): that issue covers CORRECTING the 15+13
+  violations; this one covers building the CHECK so they stop recurring. Doing either alone
+  leaves the other half open -- cleaned data with no linter drifts again, and a linter with
+  dirty data is red from its first run.
+
+  WHAT A LINTER CANNOT DO, established by measurement rather than assumed: it cannot verify
+  that a `result` block was actually attested by its acting agent rather than reconstructed
+  after that agent died. Whether the agent was alive exists in no artefact, so a file
+  missing a recovery marker is indistinguishable from one that never needed one. The linter
+  can only assert the conditional -- WHEN the marker ISS-0117's amendment defines is
+  present, it is well-formed. This is exactly why WF03-ISS0117-20260821 marked its own Step
+  4 SKIPPED rather than writing a partial linter as a regression test.
+
+  IMPLEMENTATION NOTE: Jason is already a runtime dependency (mix.exs, `{:jason, "~> 1.4"}`),
+  so decoding needs no new dep. Whether this ships as a mix task or a plain script is open
+  -- see docs/anti-patterns.md's Mix-task-discovery-cost finding and the precedent of
+  scripts/timed_test.sh, which is deliberately not a mix task.
+
+  FRAMING NOTE: HANDOFF_PROTOCOL.md calls this "its own requirement". It is filed as an
+  issue because that is the mechanism available to a discovering agent under
+  ISSUE_QUEUE.md; whoever picks it up should judge whether it warrants promotion to a REQ
+  entry via WF-01 first, given its size.
+
+affected_files:
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+  - handoffs/
+
+related:
+  - ISS-0190  # the data defects this linter would catch; likely a prerequisite
+  - ISS-0192  # the two stale PENDING handoffs
+  - ISS-0117  # defines the recovery marker whose well-formedness the linter can check
+
+queue_task_id: 191
+github_issue: https://github.com/tvolodi/letflow/issues/379
+github_issue_note: >
+  Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (191) and its mirrored GitHub issue (#379) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan.
+status: open

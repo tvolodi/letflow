@@ -1,0 +1,74 @@
+id: ISS-0195
+title: >
+  docs/agents/ORCHESTRATOR.md appears nowhere in core-directives.md's Instruction Precedence chain, so a conflict involving it cannot be resolved
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0117-20260821
+discovered_at: "2026-08-21T07:22:13Z"
+severity: MINOR
+
+description: >
+  Found by REVIEWER during WF03-ISS0117-20260821's Step 3b gate, while independently
+  re-running that run's instruction-precedence check over a wider file set than the
+  producer had used. Pre-existing and out of scope for that run, so filed rather than
+  fixed there.
+
+  THE GAP. core-directives.md's Instruction Precedence chain is the single documented rule
+  for resolving any conflict between instruction sources on this project -- it declares
+  itself canonical for exactly that, and every other document defers to it. Its six ranks
+  are: (1) the handoff's `task` block, (2) `.claude/agents/<role>.md` role files,
+  (3) `docs/agents/workflows/WF-0N_*.md`, (4) protocol docs (`docs/agents/protocols/*.md`,
+  `docs/agents/shared/HANDOFF_PROTOCOL.md`), (5) core-directives.md itself, (6) CLAUDE.md.
+
+  `docs/agents/ORCHESTRATOR.md` is in none of them. It is not a role file under
+  `.claude/agents/`, not a workflow, and not under `docs/agents/protocols/` or
+  `docs/agents/shared/`. Yet it is load-bearing: it is the canonical home of the sizing
+  rule (section 10), the stage gates (section 8), the rework/escalation rules (section 5),
+  the owned_modules lock and the two-ORCH-sessions rules (sections 7 and 7.1), and -- as of
+  ISS-0117 -- the registry run-entry field definitions (section 7.2). Both `CLAUDE.md` and
+  `AGENT_SYSTEM.md` point at it as authoritative for orchestration decision logic.
+
+  WHY IT SURFACED NOW. WF03-ISS0117-20260821's amendment put two of its five changes into
+  ORCHESTRATOR.md -- the section 5 rework-counter scoping and the whole of the new section
+  7.2. The producing agent's own precedence check found an adjacent item in a rank-3
+  workflow doc (`WF-01_requirement_development.md:102`, "on FAIL, ORCH increments
+  rework_count") and closed the ambiguity "at the source in ORCHESTRATOR.md" -- a document
+  whose rank against that rank-3 workflow doc is undefined. It is harmless in that specific
+  case, because WF-01:102 explicitly defers to ORCHESTRATOR.md section 5 and is conditioned
+  on a FAIL verdict, so nothing actually conflicts. But the resolution procedure was applied
+  to a document the procedure does not cover, and if a real conflict ever arises between
+  ORCHESTRATOR.md and a role file or a workflow doc, the chain returns no answer.
+
+  This matters more than an ordinary doc gap because of who reads it. The chain exists
+  specifically so an agent with limited judgement reaches the same verdict as one with good
+  judgement (core-directives.md's weak-model-tolerance constraint). A weak model hitting a
+  genuine ORCHESTRATOR.md-vs-role-file conflict has no rule to apply and will improvise --
+  the exact failure mode the chain was written to remove.
+
+  WHAT A FIX MUST DECIDE (do not assume the obvious answer): where ORCHESTRATOR.md sits. It
+  is ORCH's role file in everything but location, which argues for rank 2 alongside
+  `.claude/agents/*.md` -- and note `.claude/agents/orchestrator.md` ALSO exists and is
+  listed in CLAUDE.md's roster table as ORCH's canonical instructions, so the relationship
+  between those two files needs stating as part of the same fix. Alternatively it is a
+  protocol-shaped document, arguing rank 4. Whichever is chosen, the fix should also check
+  whether any other load-bearing instruction surface is missing from the chain --
+  `docs/agents/AGENT_SYSTEM.md` is the obvious candidate, since it too is cited as canonical
+  for the roster and the capability matrix.
+
+  ALSO NOTED by the same sweep, no action needed: `docs/agents/protocols/GIT_MERGE.md:293`
+  ("rework_count applies; max_rework = 3 before ESCALATED") sits outside the producer's grep
+  set but is scoped in context to "When this step FAILs due to a complex conflict", so it is
+  conditioned on a FAIL verdict and does not reach HANDOFF_PROTOCOL.md section 4.1(a-1).
+
+affected_files:
+  - docs/agents/instructions/core-directives.md
+  - docs/agents/ORCHESTRATOR.md
+  - .claude/agents/orchestrator.md
+
+related:
+  - ISS-0117  # the run whose gate surfaced this
+
+queue_task_id: 195
+github_issue: https://github.com/tvolodi/letflow/issues/383
+github_issue_note: >
+  Filed by ORCH on REVIEWER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (195) and its mirrored GitHub issue (#383) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan.
+status: open

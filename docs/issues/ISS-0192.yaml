@@ -1,0 +1,66 @@
+id: ISS-0192
+title: >
+  WF02-REQ043-20260818's Step Final handoff has read PENDING with a null result since 2026-08-18 for a run that merged to main
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0117-20260821
+discovered_at: "2026-08-21T06:56:56Z"
+severity: MINOR
+
+description: >
+  Found while measuring the frequency of ISS-0117's agent-death class, and independently
+  re-derived by ORCH (534 handoff files joined against handoffs/registry.json).
+
+  THE FACTS. handoffs/WF02-REQ043-20260818/step-final-git-merge.json is on disk today with
+  `status: "PENDING"`, `result.status: null`, `completed_at: null`. handoffs/registry.json
+  records that run as COMPLETED, with a `last_known_step` of "Step Final (git merge)
+  COMPLETED -- PR #174 squash-merged into main as e25822a, queue task 87 released done",
+  and a `note` recording that the run was "Interrupted by a host power outage mid-rebase
+  (Step Final, reconciling against main after REQ-044 merged first); recovered in a later
+  session". docs/issues/ISS-0046.yaml independently corroborates it: its
+  `discovered_in_run` is literally "WF02-REQ043-20260818 (Step Final, resuming an
+  interrupted prior session)" and its description states the interruption "left the local
+  feature branch mid-rebase against main".
+
+  So the work really did land, and the handoff file has misrepresented that for three days.
+  The entire recovery narrative went into registry.json prose; the handoff itself was never
+  touched again.
+
+  WHY IT IS WORTH ITS OWN RECORD. This is the DIED-MID-ACTION variant of the class ISS-0117
+  describes -- ISS-0117's own incident died AFTER its side effects completed, this one died
+  DURING them -- and it is the live counter-example that refutes "just leave the handoff
+  IN_PROGRESS and file a separate incident record" as a recovery option. Leaving it
+  produced an audit trail that actively asserts something false, and the only place the
+  truth survives is a prose clause inside a ~1,000-character registry note, which is why a
+  scan of the handoff files found the stale record and not the interruption.
+
+  ORDERING AGAINST ISS-0117: that run defines the recovery rule -- who may write a dead
+  agent's result block, and the mandatory marking that keeps a reconstruction
+  distinguishable from an attestation. THIS issue is the first retroactive application of
+  that rule and should be worked AFTER it lands, not before, so the repair uses the defined
+  marker rather than inventing a fourth ad-hoc key (three already exist:
+  orch_timestamp_correction, orch_restart_note, orch_reconstruction). Read ISS-0117's
+  amendment first.
+
+  A SECOND, LESSER INSTANCE found by the same scan, in scope here:
+  handoffs/WF02-REQ062-20260819/step-03-test-designer.json carries `status: "PENDING"` but
+  a full `result` with status PASS and a real completed_at of 2026-08-19T05:25:43Z. That is
+  not agent death -- TEST-DESIGNER performed HANDOFF_PROTOCOL section 4's steps 2 and 3 and
+  skipped step 1. It needs only a status correction, but it is evidence that even the
+  ordinary completion sequence is executed unreliably, which is worth recording alongside.
+
+affected_files:
+  - handoffs/WF02-REQ043-20260818/step-final-git-merge.json
+  - handoffs/WF02-REQ062-20260819/step-03-test-designer.json
+  - handoffs/registry.json
+
+related:
+  - ISS-0117  # defines the recovery rule this issue is the first application of
+  - ISS-0046  # independent corroboration of the WF02-REQ043 interruption
+  - ISS-0033  # precedent: an interrupted run's registry entry is left untouched, resume appended
+  - ISS-0190  # the wider handoff schema-conformance backlog
+
+queue_task_id: 192
+github_issue: https://github.com/tvolodi/letflow/issues/380
+github_issue_note: >
+  Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (192) and its mirrored GitHub issue (#380) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan.
+status: open

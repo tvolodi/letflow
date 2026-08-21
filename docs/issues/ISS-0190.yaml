@@ -1,0 +1,70 @@
+id: ISS-0190
+title: >
+  15 handoff files carry a top-level `status` outside HANDOFF_PROTOCOL section 2's legal enum, and 13 carry non-schema top-level keys
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0117-20260821
+discovered_at: "2026-08-21T06:56:56Z"
+severity: MINOR
+
+description: >
+  Incidental finding, surfaced while ISSUE-FIXER was measuring how often the agent-death
+  class of ISS-0117 actually fires. Independently re-derived by ORCH before filing (534
+  handoff files json-loaded and joined against handoffs/registry.json's 63 run entries);
+  both counts below reproduced exactly rather than being carried over from the report.
+
+  FINDING 1 -- ILLEGAL `status` VALUES (15 files). HANDOFF_PROTOCOL.md section 2 defines the
+  legal top-level status enum as PENDING|IN_PROGRESS|COMPLETED|FAILED|ESCALATED|CANCELLED.
+  Fifteen files on main violate it:
+    - 13 carry `"PASS"` -- a `result.status` value used as a handoff status. All 11 files of
+      WF02-REQ063-20260818, plus WF02-REQ064-20260818/step-01-code-designer.json and
+      step-02a-elixir-dev.json.
+    - 2 carry `null` with `completed_at` null: WF02-REQ059-20260819/step-00-git-setup.json
+      and WF02-REQ060-20260819/step-00-git-setup.json. These two also use an entirely
+      DIFFERENT FLAT SCHEMA -- top-level `requirement_ids`, `branch`, `agent_id`,
+      `timestamp`, `stage`, `owned_modules`, `queue_task_id` (plus `lock_recovery` on
+      REQ-059) -- with no `context`/`task`/`result` blocks at all.
+
+  FINDING 2 -- NON-SCHEMA TOP-LEVEL KEYS (13 files). Against section 2's 17-key schema:
+  5 files carry a duplicated top-level `next_action` (WF02-REQ033-20260817/step-01,
+  WF02-REQ051-20260818/step-05 and step-06, WF03-ISS0047-20260818/step-02, step-04,
+  step-05); 1 carries `gate_history` (WF02-REQ043-20260818/step-01b-design-gate.json); the
+  2 flat-schema Step-00 files above; and 3 carry the recovery markers ISS-0117 is about
+  (`orch_timestamp_correction` x2, `orch_restart_note`, `orch_reconstruction`) -- those
+  three are IN SCOPE for WF03-ISS0117-20260821 and are explicitly NOT part of this fix.
+
+  WHY IT MATTERS: these files are the project's audit trail, and `"PASS"` on a handoff is
+  not merely cosmetic -- HANDOFF_PROTOCOL.md section 1's claim procedure selects work by
+  matching `"status": "PENDING"`, so a file outside the enum is invisible to that query and
+  to any future consistency check. The two flat-schema Step-00 files are worse: they carry
+  none of the fields a reader or a linter would look for.
+
+  NOT FIXED IN WF03-ISS0117-20260821, deliberately: per core-directives.md's
+  Unblock-Everything scope boundary this is a defect NOTICED alongside that run's work, not
+  one blocking it, so it is filed and forwarded rather than absorbed. It is also the
+  concrete reason that run marked its Step 4 SKIPPED -- a schema-conformance test written
+  there would have gone red on main immediately, making it a data-cleanup requirement
+  wearing a regression test's clothes rather than proof that ISS-0117's fix fixed anything.
+
+affected_files:
+  - handoffs/WF02-REQ063-20260818/
+  - handoffs/WF02-REQ064-20260818/step-01-code-designer.json
+  - handoffs/WF02-REQ064-20260818/step-02a-elixir-dev.json
+  - handoffs/WF02-REQ059-20260819/step-00-git-setup.json
+  - handoffs/WF02-REQ060-20260819/step-00-git-setup.json
+  - handoffs/WF02-REQ033-20260817/step-01-code-designer.json
+  - handoffs/WF02-REQ051-20260818/step-05-release-validator.json
+  - handoffs/WF02-REQ051-20260818/step-06-doc-updater.json
+  - handoffs/WF03-ISS0047-20260818/step-02-code-designer.json
+  - handoffs/WF03-ISS0047-20260818/step-04-test-designer.json
+  - handoffs/WF03-ISS0047-20260818/step-05-issue-fixer.json
+  - handoffs/WF02-REQ043-20260818/step-01b-design-gate.json
+
+related:
+  - ISS-0191  # the linter that would catch this class; this is its measured backlog
+  - ISS-0117  # the three recovery-marker keys, deliberately excluded from this fix
+
+queue_task_id: 190
+github_issue: https://github.com/tvolodi/letflow/issues/378
+github_issue_note: >
+  Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (190) and its mirrored GitHub issue (#378) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan -- see docs/anti-patterns.md's 2026-08-21 update on why scanning cannot reserve a number.
+status: open

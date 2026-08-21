@@ -44,6 +44,45 @@ defmodule Letflow.SandboxPool do
   e.g. `:ets.give_away/3`, when transfer is a genuine requirement; it is not one here).
   See `lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md` §13 for the full
   reasoning.
+
+  ## Two budgets: queue wait vs. provisioning
+
+  Until ISS-0220 `claim/2` conflated two unrelated waits into one number. They are now
+  separate, and separately derived:
+
+    * `max_wait_ms` -- passed per call -- bounds **queue parking only**: how long a
+      caller may sit in the pool's `waiting` queue for a slot to free. Its meaning, its
+      guard and its `Process.send_after/3` timer are unchanged.
+    * `provision_timeout_ms/0` bounds **one provisioning**: a `CREATE SCHEMA` plus a
+      replay of every `Letflow.TenantProvisioning.tenant_scoped_migrations/0` migration
+      into it -- 31 migrations, 32 transactions.
+
+  `claim/2`'s `GenServer.call/3` timeout is therefore the sum of the two
+  (`claim_call_timeout/1`): the queue wait the caller explicitly asked for, plus one
+  calibrated provisioning. Some such budget is a mechanical necessity -- without it
+  `GenServer.call`'s own default 5_000 ms would raise a caller-side `:timeout` exit
+  before the pool ever replied, whenever `max_wait_ms` approached or exceeded it.
+
+  `release/2` uses the provisioning budget alone (`release_call_timeout/0`). That is
+  **not** because a `DROP SCHEMA ... CASCADE` costs anything like that -- it is two
+  orders of magnitude cheaper -- and **not** because anything currently blocks the
+  pool's mailbox ahead of a release; nothing does, since every present caller holds at
+  most one claim in flight. It is so the release path has a *derived* bound instead of
+  `GenServer.call/2`'s implicit 5_000 ms default: `Letflow.Definitions.safe_release/2`
+  contains release failures with `rescue`, which structurally cannot catch the `exit` a
+  call timeout raises, so an over-budget release escapes the one wrapper built to
+  swallow it -- and does so on the path that is already handling an exception. It is
+  also already correctly sized for the day provisioning stops blocking the pool's
+  mailbox.
+
+  Both budgets are **caller-side allowances, not server-side aborts**: nothing aborts a
+  slow provisioning. `Ecto.Migrator` runs with `timeout: :infinity` at every level it
+  controls, so when the budget elapses the *caller* exits with
+  `{:timeout, {GenServer, :call, ...}}` while the pool keeps provisioning to completion.
+
+  The default budget is derived from measurement in
+  `lib/letflow/design/iss0220-sandbox-pool-provision-timeout.md` §4 -- do not change
+  that number without redoing the derivation.
   """
 
   use GenServer
@@ -64,17 +103,11 @@ defmodule Letflow.SandboxPool do
     @type t :: %__MODULE__{sandbox_id: String.t(), schema_name: String.t()}
   end
 
-  # Added to a claim's max_wait_ms to derive the GenServer.call/3 timeout for
-  # claim/2 below. max_wait_ms only bounds how long a caller waits *inside* the
-  # pool for a free slot (design doc §4.4 step 3's timer) -- it says nothing
-  # about GenServer.call's own default 5_000ms call-timeout, which would raise
-  # a caller-side :timeout exit before the pool ever gets to reply if
-  # max_wait_ms exceeds it (the requirement text's own PRM-06 AC5 example uses
-  # a 60s wait window). This buffer is a mechanical necessity the design doc
-  # itself doesn't spell out (it only reasons about the pool's *internal*
-  # timer) -- called out explicitly in this requirement's handoff rather than
-  # silently patched in.
-  @call_timeout_buffer_ms 5_000
+  # Default per-provisioning budget, in milliseconds -- see the moduledoc's "Two
+  # budgets" section. Supersedes the @call_timeout_buffer_ms 5_000 that stood here
+  # before ISS-0220, which was sized against GenServer.call/2's own default rather
+  # than against what one provisioning actually costs.
+  @default_provision_timeout_ms 44_000
 
   # Client API
 
@@ -95,6 +128,57 @@ defmodule Letflow.SandboxPool do
   end
 
   @doc """
+  The configured per-provisioning budget, in milliseconds: how long one sandbox
+  schema may take to `CREATE` + migrate before a caller gives up.
+
+  Defaults to #{@default_provision_timeout_ms} ms; override with
+  `config :letflow, :sandbox_pool, provision_timeout_ms: n` where `n` is a positive
+  integer. Derived from measurement in
+  `lib/letflow/design/iss0220-sandbox-pool-provision-timeout.md` §4 -- do not change
+  this number without redoing that derivation.
+  """
+  @spec provision_timeout_ms() :: pos_integer()
+  def provision_timeout_ms do
+    case Application.get_env(:letflow, :sandbox_pool)[:provision_timeout_ms] do
+      nil ->
+        @default_provision_timeout_ms
+
+      n when is_integer(n) and n > 0 ->
+        n
+
+      other ->
+        raise ArgumentError,
+              "config :letflow, :sandbox_pool, provision_timeout_ms: expects a " <>
+                "positive integer (milliseconds), got: #{inspect(other)} -- see " <>
+                "lib/letflow/design/iss0220-sandbox-pool-provision-timeout.md §6"
+    end
+  end
+
+  @doc """
+  The `GenServer.call/3` timeout `claim/2` uses for a given `max_wait_ms`:
+  `max_wait_ms + provision_timeout_ms()`.
+
+  Public so callers and tests derive their own bounds from this one source of truth,
+  rather than re-deriving a second constant that can drift (ISS-0220).
+  """
+  @spec claim_call_timeout(max_wait_ms :: non_neg_integer()) :: pos_integer()
+  def claim_call_timeout(max_wait_ms) when is_integer(max_wait_ms) and max_wait_ms >= 0 do
+    max_wait_ms + provision_timeout_ms()
+  end
+
+  @doc """
+  The `GenServer.call/3` timeout `release/2` uses: `provision_timeout_ms()` -- the same
+  calibrated number, so the release path has a derived bound rather than
+  `GenServer.call/2`'s implicit 5_000 ms default.
+
+  It is not sized from the `DROP SCHEMA` cost, and not because anything currently
+  blocks the pool's mailbox ahead of a release. See the moduledoc's "Two budgets"
+  section.
+  """
+  @spec release_call_timeout() :: pos_integer()
+  def release_call_timeout, do: provision_timeout_ms()
+
+  @doc """
   Claims a sandbox: provisions one immediately if a slot is free, otherwise blocks
   (without busy-polling) until either a slot frees or `max_wait_ms` elapses, in which
   case it returns `{:error, :sandbox_unavailable}`.
@@ -103,6 +187,11 @@ defmodule Letflow.SandboxPool do
   `release/2` for the returned `sandbox_id` — handing a claim to a different process
   and releasing from there is indistinguishable, by design, from that process leaking
   the claim (see moduledoc's owner-monitor section) and will be reclaimed automatically.
+
+  Two budgets are in play here and only one of them is `max_wait_ms`: `max_wait_ms`
+  bounds the queue parking described above, while this function's own
+  `GenServer.call/3` timeout is `claim_call_timeout(max_wait_ms)` -- that queue wait
+  plus one calibrated provisioning. See the moduledoc's "Two budgets" section.
   """
   @spec claim(max_wait_ms :: non_neg_integer(), pool :: GenServer.server()) ::
           {:ok, SandboxClaim.t()}
@@ -111,19 +200,25 @@ defmodule Letflow.SandboxPool do
           | {:error, term()}
   def claim(max_wait_ms, pool \\ __MODULE__)
       when is_integer(max_wait_ms) and max_wait_ms >= 0 do
-    GenServer.call(pool, {:claim, max_wait_ms}, max_wait_ms + @call_timeout_buffer_ms)
+    GenServer.call(pool, {:claim, max_wait_ms}, claim_call_timeout(max_wait_ms))
   end
 
   @doc """
   Releases a previously claimed sandbox: drops its schema and frees its quota slot.
   `schema_name` is looked up internally from `sandbox_id` — never caller-supplied.
+
+  Its `GenServer.call/3` timeout is `release_call_timeout/0`, not
+  `GenServer.call/2`'s implicit 5_000 ms default: `Letflow.Definitions.safe_release/2`
+  wraps this call in a `rescue`, which cannot catch the `exit` a call timeout raises,
+  so an unbudgeted release escapes the one wrapper built to contain release failures.
+  See the moduledoc's "Two budgets" section.
   """
   @spec release(sandbox_id :: String.t(), pool :: GenServer.server()) ::
           :ok
           | {:error, :not_found}
           | {:error, :release_failed}
   def release(sandbox_id, pool \\ __MODULE__) do
-    GenServer.call(pool, {:release, sandbox_id})
+    GenServer.call(pool, {:release, sandbox_id}, release_call_timeout())
   end
 
   # GenServer callbacks

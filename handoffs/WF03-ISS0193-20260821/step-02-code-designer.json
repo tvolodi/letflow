@@ -1,0 +1,58 @@
+{
+  "handoff_id": "034c6b67-b7e0-41c6-925a-d7f3e104e119",
+  "run_id": "WF03-ISS0193-20260821",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0193-20260821/step-02-code-designer.json",
+  "created_at": "2026-08-21T12:00:16Z",
+  "started_at": "2026-08-21T12:00:16Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0193.yaml",
+      "lib/letflow/design/iss-0119-status-file-readability.md",
+      "docs/status/requirement_status.index.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/iss-0119-status-file-readability.md"
+    ]
+  },
+  "task": {
+    "description": "Amend the design in `lib/letflow/design/iss-0119-status-file-readability.md` to close ISS-0193, a MAJOR incidental finding from that same design's own CODE-DESIGN-VALIDATOR gate (Step 4e, MINOR-3, on WF03-ISS0119-20260821). Read `docs/issues/ISS-0193.yaml` in full first -- it is long and detailed and this dispatch does not restate it; ORCH is confirming its diagnosis is sound and directing you to the worked precedent rather than re-deriving from scratch. Read the design doc's own §13 in full (already on disk) before editing -- it is where A4/A4a/A4b live and is the exact shape to mirror.\n\nTHE GAP, IN ONE SENTENCE. `known_anomalies:`/assertion A5 (vocabulary anomalies, the ORIGINAL mechanism) has NO restriction on which volume a declared record may cite -- unlike its sibling `known_shape_anomalies:`/A4b (shape anomalies, introduced by the SAME design and fixed at its own gate), which the design already restricts to closed, digest-pinned volumes only (§13.5's closed-volume-only rule). So today, an agent can make a brand-new illegal vocabulary value in the CURRENT (open) volume permanently invisible to the suite by simply appending a matching `known_anomalies:` record next to it in the same commit -- declaring away a defect instead of fixing it, exactly the failure `core-directives.md`'s 'Never Satisfy a Gate by Editing What It Measures' names, but with no gate enforcing it structurally.\n\nTHE FIX IS A PROVEN PATTERN, ALREADY IN THIS FILE -- MIRROR IT, DO NOT REINVENT IT. §13.5's A4b text is the worked precedent: 'A4b additionally asserts: every `known_shape_anomalies:` record's `path:` names a volume whose `volumes:` entry in the index has `status: closed` AND carries a `frozen_prefix_sha256:`.' Write the mirror-image sentence for A5 against `known_anomalies:`, in whichever section of §13 (or a new subsection immediately after A5's existing description) keeps the design's own organization intact -- follow the file's established section-numbering convention rather than improvising a new one.\n\nTHREE THINGS TO DO, IN ORDER (the issue's own suggested scope, not prescriptive -- you may find a better shape, but state why if you deviate):\n\n(a) APPLY A4b's closed-and-pinned rule to A5. Write the new assertion text. Then VERIFY -- do not assume -- that the three existing `known_anomalies:` records in `docs/status/requirement_status.index.yaml` still pass under the new rule: open the index file and confirm each record's `path:` cites volume 1, and confirm volume 1's own `volumes:` entry carries `status: closed` and a `frozen_prefix_sha256:`. State the exact lines you checked.\n\n(b) RECONCILE SECTION 13.3's PARITY WORDING. That section currently states parity between the two mechanisms ('the vocabulary mechanism works the same way') as part of ITS OWN justification for the shape-mechanism design. After (a), that sentence becomes true rather than aspirational -- but read it in context and confirm it does not need rewording now that the asymmetry it was flagging is closed, or reword it if it does (e.g. if it was phrased as a forward-looking caveat, it should now read as settled fact, with an incident citation to ISS-0193 the way this design set already cites incidents elsewhere).\n\n(c) DECIDE THE VOLUME-CLOSED-IN-SAME-COMMIT QUESTION -- FOR BOTH MECHANISMS AT ONCE, NOT SEPARATELY. This was already investigated and answered by CODE-DESIGN-VALIDATOR at ISS-0119's own Step 4e re-gate (its MINOR-4 finding, quoted in full in ISS-0193.yaml's description -- read it there, it is not repeated here). The route: closing a volume in the SAME commit that declares an anomaly against it still passes every existing assertion, because nothing asserts a roll was WARRANTED (A3 only bounds from above; `on_exceed` is prose, not a check). CODE-DESIGN-VALIDATOR's own proposed instrument: assert that every CLOSED volume actually exceeded `roll_rule` (max_lines/max_bytes) AT THE MOMENT of closure -- compatible with volume 1's existing 5,766 lines / 361,376 bytes, so it does not retroactively fail the existing closed volume. Design this assertion (call it whatever number continues the existing A1-A8 sequence in this doc -- check what the next free letter/number actually is rather than guessing), specify exactly what it reads and compares to determine 'actually exceeded at closure', and apply it as a shared check that BOTH A4b and the new A5 rule depend on, rather than writing it twice.\n\nDESIGN-ARTEFACT DISCIPLINE (this project's existing rule, not new): signatures, type shapes, and assertion prose only. No `.ex` implementation bodies. State exactly what changes for `test/docs/requirement_status_invariants_test.exs` and `test/support/status_history.ex` (both named in ISS-0193's `affected_files:`) in terms a TEST-DESIGNER/ELIXIR-DEV can implement from directly -- but do not write the Elixir yourself.\n\nDo NOT resolve this by removing bidirectional set equality (A5's existing 'declared set equals on-disk set, both directions' property) or by deleting the three existing legitimate `known_anomalies:` records -- the issue is explicit that the declare-don't-edit pattern is correct and only lacked friction on WHERE a declaration may point.",
+    "acceptance_criteria": [
+      "The design states A5's new closed-and-pinned rule, mirroring A4b's §13.5 wording, in the doc's own established section structure",
+      "The three existing known_anomalies: records were checked against docs/status/requirement_status.index.yaml directly and confirmed to still pass, with the specific lines cited",
+      "Section 13.3's parity sentence is reconciled with the new state -- reworded if it was forward-looking, left if it was already accurate, with the reasoning stated either way",
+      "A shared closure-warranted assertion is designed (continuing the doc's A1-A8 numbering correctly) that both A4b and the new A5 rule depend on, per CODE-DESIGN-VALIDATOR's own MINOR-4 finding quoted in ISS-0193.yaml, compatible with volume 1's existing recorded size",
+      "Bidirectional set equality and the three existing known_anomalies: records are preserved untouched -- no weakening of A5's existing property",
+      "Exact, implementable specification is given for test/docs/requirement_status_invariants_test.exs and test/support/status_history.ex changes, in signature/assertion-prose form only, no .ex bodies",
+      "No file outside lib/letflow/design/ is modified by this step"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0193-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0193-20260821",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

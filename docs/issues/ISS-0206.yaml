@@ -59,4 +59,16 @@ github_issue_note: >
   `register_task` created both the queue task (206) and its mirrored GitHub issue (#397)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
   separately. The id comes from `register_task`'s `issue_ref`, not a directory scan.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0206-20260821
+resolved_at: "2026-08-21T11:24:06Z"
+resolution_note: >
+  Both gaps closed inside HANDOFF_PROTOCOL.md §1.2, no new section elsewhere.
+  Finding 1: step 2's exception branch now turns on a mechanical test (same
+  write/action as the handoff creation, or not) rather than a judgement about
+  "immediate". Finding 2: added a paragraph stating what "ORCH fixes the dispatch"
+  obliges -- do not backfill the reported handoff's own started_at (the no-backfill
+  rule already forbids it), instead make ORCH's next dispatch follow the two-step
+  procedure; explicitly scoped to future dispatches so it does not reopen or
+  reclassify any of the 10 existing null-started_at files. Baseline figures,
+  reconciliation procedure, and the 10/14/89/25/20 ALARM buckets left untouched.

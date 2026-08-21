@@ -1,0 +1,76 @@
+{
+  "handoff_id": "c7127c98-ff48-4641-83c3-d649d6e97378",
+  "run_id": "WF03-ISS0109-20260821",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0109-20260821/step-02-code-designer.json",
+  "created_at": "2026-08-21T01:32:27Z",
+  "started_at": "2026-08-21T01:32:27Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "4de8efe9-138d-4b44-a8ae-0e542aa5441f",
+      "eafa46f5-0ecd-4727-baf6-20b65931084a",
+      "11808999-4d86-4d6c-a3b6-6498409297ce"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0109-20260821/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-ISS0109-20260821/step-005-issue-fixer-registry-lookup.json",
+      "docs/issues/ISS-0109.yaml",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/letflow/definitions/promotion_test.exs",
+      "test/letflow/definitions/promotion_assertion_rerun_test.exs",
+      "test/support/tenant_schema_reaper.ex",
+      "test/support/data_case.ex",
+      "lib/letflow/design/iss064-orphaned-tenant-schemas-fix.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/",
+      "test/support/",
+      "test/letflow/definitions/promotion_test.exs",
+      "test/letflow/definitions/promotion_assertion_rerun_test.exs",
+      "lib/letflow/tenant_provisioning.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0109-20260821",
+    "issue_ids": [
+      "ISS-0109"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 2 -- FIX DESIGN for ISS-0109 (GH#358). Produce a design artefact in lib/letflow/design/ (naming convention: iss0109-<slug>.md, matching lib/letflow/design/iss064-orphaned-tenant-schemas-fix.md). DESIGN ONLY -- no implementation code. ELIXIR-DEV implements it in Step 3.\n\nREAD FIRST, in this order: handoffs/WF03-ISS0109-20260821/step-01-issue-fixer-diagnose.json (the diagnosis -- read result.summary in full), then handoffs/WF03-ISS0109-20260821/step-005-issue-fixer-registry-lookup.json, then docs/issues/ISS-0109.yaml. Do not re-derive the diagnosis; it was reached with real evidence and it overturns the issue record's own stated mechanism.\n\nTHE DIAGNOSIS IN ONE PARAGRAPH (authoritative for this design; the full evidence is in the Step 1 handoff): ISS-0109's stated mechanism is REFUTED. The logged DROP SCHEMA / DELETE FROM tenant_schemas / DELETE FROM tenants triple is the failing test's OWN post-failure on_exit teardown -- a consequence of the failure, not its cause. schema_name_for_tenant/1 is a pure derivation from the tenant UUID, so the only closure that can name that schema is the one the failing test itself registered; ExUnit runs on_exit callbacks synchronously between tests and kills an over-running runner, so it cannot fire mid-test; and the DROP used IF EXISTS and succeeded, which is what tearing down an already-absent schema looks like. The only line in the original evidence carrying no timestamp is the one asserting causal order. Failure 14 is the more informative of the two and points the same way: promotion_assertion_runs was missing while its schema still existed AND an insert into promotion_reviews in that same schema had already succeeded -- a state DROP SCHEMA ... CASCADE cannot produce. THE FAULT CLASS IS PROVISIONING/REPLAY COMPLETENESS, NOT TEARDOWN TIMING. Candidate (a) (on_exit overlapping the next test) is refuted on ExUnit source; candidate (b) (a concurrent invocation) is a real channel but cannot name that UUID and so is dead as this cause; the reaper is confirmed excluded on fresh evidence (provisioned_at and the reaper cutoff share one clock basis -- measured, not read).\n\nTHE SPECIFIC LEAD THE DESIGN MUST RESOLVE: Step 1 identified that provisioned_tenant/0 checks that replay_migrations/1 returned {:ok, _} but never that the resulting schema is actually COMPLETE, and that insert_or_fetch_registration/2 -> re_select_registration/1 (lib/letflow/tenant_provisioning.ex:455-490) returns {:ok, registration} for a PRE-EXISTING tenant_schemas row without guaranteeing the schema it names still exists or that its tables were ever fully created. Both observed failures are consistent with exactly that: failure 3 is a registration accepted for a schema that is absent (3F000), failure 14 is a schema accepted with only some of its tables present (42P01).\n\nYOUR FIRST JOB is to establish, from the code, whether that is a REAL defect in lib/letflow/tenant_provisioning.ex or whether some caller already guarantees the invariant. Say which, with file:line evidence. This determines the shape of everything else:\n- If it IS a real defect: the design's primary deliverable is the production-side fix -- what invariant the registration/replay path must guarantee before returning {:ok, _}, and what it must return instead when the invariant does not hold. Note this makes the change a TENANT-DATA-PATH change, so SECURITY-REVIEWER gates it in Step 3; design accordingly (no cross-tenant leakage through a new error value, no new query that is not tenant-scoped).\n- If it is NOT a real defect: say so plainly and design only the test-side items below. A design that invents a production change to look substantial is worse than one that reports the production code is already correct.\n\nSCOPE -- IN:\n (C) The completeness invariant above, at whichever layer you establish is correct (production path and/or fixture). Include the post-provision completeness assertion so a partially-migrated tenant schema fails loudly AT the fixture with the state named, rather than 500 lines later as an opaque 42P01.\n (A) A shared test/support helper that provides the tenant fixture used by the two modules ISS-0109 names, and on a provisioning/replay failure captures -- in one shot -- the state that would settle the next occurrence: is the tenant_schemas row present, is the schema present in information_schema.schemata, provisioned_at, the BEAM's utc_now at failure time, and the table list actually present in the schema. This is the artefact that converts the next occurrence from unattributable to attributable.\n (B) Teardown logging distinguishable in the log from a mid-test drop -- the ambiguity that caused the original misdiagnosis. Keep it cheap; this is one identifiable log line, not a logging framework.\n\nSCOPE -- OUT (all already filed; do NOT design fixes for these, and do NOT let the design's rationale depend on them being fixed):\n - ISS-0110/GH#364 -- TenantSchemaReaper's 300s min_age vs a 564-609s suite.\n - ISS-0111/GH#365 -- identity_migration_test's bulk DELETE FROM public.tenant_schemas.\n - ISS-0112/GH#366 -- migrating the other 39 copy-pasted fixture sites onto the new shared helper. THIS RUN ADOPTS THE HELPER IN EXACTLY THE TWO MODULES ISS-0109 NAMES (test/letflow/definitions/promotion_test.exs and test/letflow/definitions/promotion_assertion_rerun_test.exs). Design the helper so the other 39 CAN migrate later, but do not migrate them here.\n - ISS-0113/GH#367 -- Sandbox.mode(:auto) never restored to :manual.\n - ISS-0107/GH#357 -- the nested mix test recursion. Real, and a genuine same-database sharing channel, but not the mechanism behind either ISS-0109 failure.\n\nMANDATORY DESIGN SECTION -- FAIL-FIRST PROVABILITY. WF-03 Step 4 requires a regression test that FAILS against pre-fix code and PASSES against post-fix code. An intermittent, unreproduced failure cannot be regression-tested by waiting for it to recur. So for EVERY behaviour change the design proposes, state concretely how a test can be made to fail against the pre-fix code deterministically -- e.g. by constructing the exact broken state (a tenant_schemas row whose schema was dropped; a schema missing one expected table) and asserting the pre-fix code returns {:ok, _} where the post-fix code must not. If any proposed change CANNOT be shown to fail first, say so explicitly and justify why it still belongs in the design -- do not quietly include it. TEST-DESIGNER will build from this section, so it must be specific enough to build from.\n\nMANDATORY DESIGN SECTION -- WHAT THIS DOES AND DOES NOT CLOSE. State plainly whether shipping this design would make ISS-0109 genuinely FIXED (a root cause removed) or INSTRUMENTED (the next occurrence becomes attributable, cause still unknown). ORCH decides the issue's final status at Step 5 from your answer, so an honest \"instrumented, not fixed\" is a correct and acceptable outcome -- an overstated one is not, and would put a false 'resolved' into a registry six other issues cross-reference.\n\nCONSTRAINTS:\n - Design artefact only. No implementation code. Interfaces, @specs, state/schema shapes, invariants, failure modes.\n - Do not contradict lib/letflow/design/iss064-orphaned-tenant-schemas-fix.md or any docs/migration/decisions/ record. If the design appears to need to, STOP and flag it for REVIEWER sign-off rather than diverging (core-directives.md).\n - Toolchain note: this host runs Elixir 1.20.3/OTP 29 against a .tool-versions pin of 1.18.3-otp-27 (ISS-0106, already filed, not yours). `mix format --check-formatted` and `mix compile --warnings-as-errors` fail on main itself for that reason. Use plain `mix compile` if you need to check anything.\n - Branch feature/WF03-ISS0109-20260821 is yours. Commit by explicit filename, never `git add -A`.\n",
+    "acceptance_criteria": [
+      "A design artefact exists at lib/letflow/design/iss0109-*.md and contains no implementation code (interfaces, @specs, invariants and failure modes only)",
+      "The design states, with file:line evidence, whether insert_or_fetch_registration/2 -> re_select_registration/1 returning {:ok, registration} without guaranteeing the named schema exists and is fully migrated is a REAL defect in lib/letflow/tenant_provisioning.ex or is already guaranteed by a caller",
+      "The design covers scope items (A) shared test/support fixture helper with one-shot failure-state capture, (B) teardown logging distinguishable from a mid-test drop, and (C) the post-provision completeness invariant -- or explicitly justifies dropping any of them",
+      "The design explicitly limits helper adoption to the two modules ISS-0109 names, and does not design a migration of the other 39 copy-paste sites (ISS-0112)",
+      "A FAIL-FIRST PROVABILITY section states, per proposed behaviour change, how a test can be made to fail deterministically against pre-fix code -- specific enough for TEST-DESIGNER to build from",
+      "A WHAT THIS DOES AND DOES NOT CLOSE section states plainly whether this makes ISS-0109 FIXED (root cause removed) or INSTRUMENTED (next occurrence attributable, cause still unknown)",
+      "The design does not propose fixes for ISS-0110, ISS-0111, ISS-0112, ISS-0113 or ISS-0107, and its rationale does not depend on any of them being fixed",
+      "No contradiction with lib/letflow/design/iss064-orphaned-tenant-schemas-fix.md or any docs/migration/decisions/ record (or the contradiction is flagged for REVIEWER rather than resolved unilaterally)"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0109-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0109-20260821",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

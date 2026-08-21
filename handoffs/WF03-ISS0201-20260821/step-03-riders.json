@@ -54,7 +54,9 @@
     "issues": [],
     "git_evidence": {
       "branch_name": "main",
-      "commit_sha_list": [],
+      "commit_sha_list": [
+        "2c5ce05"
+      ],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,

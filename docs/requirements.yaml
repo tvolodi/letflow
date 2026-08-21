@@ -3872,7 +3872,7 @@ requirements:
   - id: REQ-069
     title: Role/permission authorization matrix and 403 decision contract (authorization.zig)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 136  # letflow-queue task id
     description: >

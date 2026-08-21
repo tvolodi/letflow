@@ -1699,6 +1699,28 @@
       "queue_task_id": 211,
       "queue_agent_id": "tvolo-win-orch",
       "note": "ISS-0211 (GH#410, queue task 211), claimed by get_next_task -- ORCH's own follow-on from the ISS-0210 re-gate's MINOR, handed straight back per the LIFO issue-priority. Qualified for direct action: the fix is a single paragraph in ORCHESTRATOR.md section 5, entirely about ORCH's own rework-dispatch conduct, no code, no schema change. Ran all six sizing-rule checks explicitly before acting rather than judging by feel, per ORCHESTRATOR.md section 10's own instruction that this is a checklist, not a judgement call."
+    },
+    {
+      "run_id": "WF03-ISS0196-20260821",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "stage": null,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "docs/agents/shared/HANDOFF_PROTOCOL.md",
+        "docs/agents/ORCHESTRATOR.md",
+        "docs/issues/ISS-0196.yaml"
+      ],
+      "lock_acquired_at": "2026-08-21T11:44:00Z",
+      "lock_released_at": "2026-08-21T11:56:10Z",
+      "released_lock": true,
+      "last_known_step": "COMPLETE. Step 03 (DOC-UPDATER) PASS, commits f316bda (own dispatch, first live application)/0d2bbfe/9e242a4; Step 03b (REVIEWER) closing gate PASS first time, zero findings, commit bda321f -- REVIEWER sign-off was a named acceptance criterion on this issue, not a routine gate. Steps 00/Final, 0.5, 1, 2 and 4 SKIPPED with reasons in orchestrator.log. rework_count 0 of 3.",
+      "backfilled": false,
+      "queue_task_id": 196,
+      "queue_agent_id": "tvolo-win-orch",
+      "note": "WF-03 for ISS-0196 (GH#386, queue task 196), claimed by get_next_task -- not by ORCH reading a file. Raised by REVIEWER during WF03-ISS0117-20260821's own final gate: HANDOFF_PROTOCOL.md section 4 tells the receiving agent to commit a handoff at completion, but nothing tells ORCH to commit it at DISPATCH, so a dispatched task block survives only in the working tree and the dispatching session's context until then. Confirmed live and self-referentially true: this ORCH session has been creating every handoff this run via Write and leaving it uncommitted until the receiving agent's own completion commit, all session. Docs-only, so the git wrapper does not apply. Steps 0.5 and 1 SKIPPED: root cause already stated first-hand in the issue record by the REVIEWER who raised it during ISS-0117. Step 2 SKIPPED: prose in protocol docs. Step 4 SKIPPED: no code under test.",
+      "correction_note": "Two stray shell commands between claiming this task and starting the run accidentally called get_next_task a second and third time, each a real atomic claim -- not a read-only probe. Claimed tasks 195 and 194 by accident; both released back to open/unlocked within the same minute, confirmed via the release response. No work was started on either. See the CORRECTION log line for the full account.",
+      "outcome_note": "HANDOFF_PROTOCOL.md section 1.3 is the new canonical rule: ORCH commits every handoff file at dispatch time, before spawning the receiving agent, unconditionally -- no size threshold, no judgement gate. Cites the WF03-ISS0117-20260821 incident (a 6,290-character dispatched task.description replaced by a 156-character pointer to a copy that does not exist, recoverable only because the dispatching session was still alive) as its worked example, and states by pointer (not restatement) how a dispatch-time commit makes section 4.1's membership test decidable from git alone. ORCHESTRATOR.md's top MUST list gets one pointer bullet. Both of this run's own dispatches (Step 03, this closing gate) were committed and pushed immediately as live proof -- confirmed independently by the gate via git log --follow, showing the Step 03 commit f316bda preceded DOC-UPDATER's own content commit by ~5 minutes with a pure-PENDING diff at that point. Gate PASS first time, zero findings -- REVIEWER sign-off was one of this issue's own named acceptance criteria, not a routine gate."
     }
   ]
 }

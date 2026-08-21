@@ -1,0 +1,60 @@
+{
+  "handoff_id": "5f6160bc-39b6-4d59-b920-bf6b2f9e7e56",
+  "run_id": "WF03-ISS0193-20260821",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0193-20260821/step-03-test-designer.json",
+  "created_at": "2026-08-21T12:16:54Z",
+  "started_at": "2026-08-21T12:16:54Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["034c6b67-b7e0-41c6-925a-d7f3e104e119", "b5ea5a7b-b316-48f6-adaa-a30974ca5941"],
+    "artifacts_in": [
+      "lib/letflow/design/iss-0119-status-file-readability.md",
+      "test/support/status_history.ex",
+      "test/docs/requirement_status_invariants_test.exs",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "owned_modules": [
+      "test/support/status_history.ex",
+      "test/docs/requirement_status_invariants_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Implement the gated design in `lib/letflow/design/iss-0119-status-file-readability.md` §13.6/§13.12 (A5's closed-and-pinned rule, the new shared A10 closure-warranted assertion). Read the design's own §13.12.4/§13.12.5 in full for the exact specification -- signatures, exact function names, and the sharing requirement -- rather than re-deriving it; this dispatch summarizes only enough to size the work.\n\nWHAT TO IMPLEMENT, per the design's own spec:\n\n1. `test/support/status_history.ex`: add `warranted_closure?(volume, max_lines, max_bytes) :: boolean()` -- reads the volume's own recorded `lines:`/`bytes_working_tree:` fields (the index's closure-time snapshot, never a live re-measurement of the file) and returns true only when at least one exceeds its ceiling AND the volume's `status:` is `closed`. Rename/extend the existing `closed_and_pinned?/2` (used today only by A4b) to `closed_pinned_and_warranted?(volumes, roll_rule, record) :: boolean()`, delegating to `warranted_closure?/3` -- both A4b's and the new A5 finding must call this ONE shared function, never two separate implementations of the same comparison. Add a `disqualifying_reason/3` helper returning one of `:not_closed | :not_pinned | :not_warranted` (or `nil` if none apply) for use in assertion failure messages.\n\n2. `test/docs/requirement_status_invariants_test.exs`: add the new A10 test (continuing the file's own A1-A9 numbering) asserting `closed_pinned_and_warranted?/3` for every existing `known_anomalies:`/`known_shape_anomalies:` record. Update A4b's existing test call site to use the renamed/extended function. Add at least one NEGATIVE-CONTROL fixture: a volume that is closed and pinned but whose recorded size does NOT exceed `roll_rule` -- confirm the new assertion correctly FAILS for it (this is the MINOR-4 laundering scenario the design's A10 exists specifically to block; a test suite that only exercises the positive case would not actually prove the fix works). A second negative control for the un-warranted-A5 case (a `known_anomalies:` record citing an open/current volume) should ALSO fail under the new rule -- if such a fixture does not already exist from A4b's own prior test, add one.\n\n3. RUN THE SUITE YOURSELF before marking this step done. `mix test test/docs/requirement_status_invariants_test.exs` (or the project's standard test invocation) and quote the real output -- pass/fail counts, not a summary. If `mix` needs a working Postgres and one isn't available in this environment, say so explicitly per `docs/anti-patterns.md`'s documented fallback rather than reporting untested code as done.\n\n4. Confirm the three EXISTING legitimate `known_anomalies:` records (and A4b's existing `known_shape_anomalies:` records, if any) still pass under the new shared function -- this is a regression check on top of the new positive/negative-control tests.\n\nCONSTRAINTS:\n- This design is TEST-INFRASTRUCTURE ONLY. No `lib/letflow/` or `priv/repo/migrations/` file is touched by this step -- if you find yourself needing to, stop and report it as a BLOCKER rather than expanding scope.\n- Do not weaken A5's existing bidirectional set-equality assertion or touch the three existing `known_anomalies:` records in `docs/status/requirement_status.index.yaml`.\n- `result.status` must be one of PASS/FAIL/PARTIAL/BLOCKED/SKIPPED.\n- Read the clock in its OWN command before each timestamp.\n- Claim by setting `status` to `IN_PROGRESS` only, and set it to `COMPLETED`/`FAILED` yourself when you finish -- per `HANDOFF_PROTOCOL.md` §3's table, this is your field to flip both ways.\n- Commit to this branch (`feature/WF03-ISS0193-20260821`), not `main`. Commit `test/` and this handoff.",
+    "acceptance_criteria": [
+      "warranted_closure?/3 is implemented per the design's spec, comparing the index-recorded closure-time snapshot, never a live file re-measurement",
+      "closed_and_pinned?/2 is renamed/extended to closed_pinned_and_warranted?/3, delegating to warranted_closure?/3, and is the ONLY implementation both A4b's and A5's findings call -- no duplicated comparison logic",
+      "disqualifying_reason/3 is implemented returning one of :not_closed | :not_pinned | :not_warranted | nil",
+      "The new A10 test exists, continuing the file's existing A1-A9 numbering, asserting every known_anomalies:/known_shape_anomalies: record passes closed_pinned_and_warranted?/3",
+      "At least one negative-control fixture proves the MINOR-4 laundering scenario (closed, pinned, but NOT warranted) correctly fails the new assertion, and at least one proves an open-volume known_anomalies: record correctly fails A5's rule",
+      "mix test was actually run and its real output (pass/fail counts) is quoted in result.summary -- or the environment's inability to run it is stated explicitly per docs/anti-patterns.md, never asserted as passing without having run",
+      "The three existing known_anomalies: records (and any existing known_shape_anomalies: records) are confirmed to still pass under the new shared function",
+      "No file under lib/letflow/ or priv/repo/migrations/ is touched"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0193-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0193-20260821",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

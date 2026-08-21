@@ -1,0 +1,67 @@
+id: ISS-0212
+title: >
+  scripts/test_parallel.sh at nproc-default N hits Postgres too_many_connections on a
+  16-core host before any test runs
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0193-20260821
+discovered_at: "2026-08-21T12:55:20Z"
+severity: MINOR
+
+description: >
+  Filed from a MINOR finding in `handoffs/WF03-ISS0193-20260821/step-04-test-runner.json`
+  `result.issues`. On a 16-core host, `scripts/test_parallel.sh` defaulted
+  `TEST_PARALLEL_N` to `nproc` (16); each partition's Ecto pool defaulted to
+  `schedulers_online()*2` (32), so 16 partitions requested 16*32 = 512 connections
+  against Postgres `max_connections=100` -- most partitions crashed at `mix ecto.create`
+  before a single test ran. Not fixed in the filing run because it was adjacent to that
+  run's own unrelated scope (a status-history invariant suite fix).
+
+affected_files:
+  - scripts/test_parallel.sh
+  - config/test.exs
+
+related:
+  - ISS-0194  # the fix that already closes this -- filed and merged independently, same day
+
+queue_task_id: 212
+github_issue: https://github.com/tvolodi/letflow/issues/417
+github_issue_note: >
+  register_task created both the queue task (212) and its mirrored GitHub issue (417) in
+  one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
+  separately.
+
+status: resolved
+resolved_in_run: WF03-ISS0212-20260821
+resolved_at: "2026-08-21T13:04:33Z"
+resolution_note: >
+  Already fixed, independently, by ISS-0194 (PR #413, commit 1f72cbf), which merged
+  earlier in this same session (2026-08-21T12:13Z) -- before this issue's own finding
+  was even filed (12:55Z) from a run that must have branched off a pre-ISS-0194
+  checkout. No code change needed here; this record closes the loop with first-hand
+  verification against the CURRENT scripts/test_parallel.sh and config/test.exs.
+
+  Verified directly: `config/test.exs` (line ~31) still reads pool_size from
+  `TEST_POOL_SIZE` when set, falling back to the original `schedulers_online()*2` only
+  when unset -- confirming the unmodified-default failure mode this issue describes
+  (16 * 32 = 512 vs max_connections=100) is real and reproduces the exact numbers in
+  the filing when TEST_POOL_SIZE is absent, i.e. without test_parallel.sh's clamp.
+
+  With the clamp (scripts/test_parallel.sh, ISS-0194's change) in place: re-derived the
+  arithmetic directly for N=16 --
+    budget = max_connections(100) - headroom(10) = 90
+    computed_pool = budget / N = 90 / 16 = 5  (integer division)
+    N * computed_pool = 16 * 5 = 80  <=  90 (budget)  <=  100 (max_connections)
+  5 >= TEST_MIN_POOL_SIZE floor (2), so the WARN/floor-clamp branch never triggers for
+  this case -- the computed value alone keeps N=16 within budget, satisfying AC1
+  ("caps its default N against a connection-budget-aware ceiling") without needing the
+  documentation fallback.
+
+  AC3 (no change to per-partition isolation or aggregation logic) holds: ISS-0194's
+  change only touches pool_size computation in the setup step, confirmed against that
+  PR's own diff (scripts/test_parallel.sh, config/test.exs,
+  docs/migration/decisions/0009-test-parallel-pool-sizing.md only -- no change to the
+  partition-launch or result-aggregation sections of test_parallel.sh).
+
+  No new commit needed on this issue; docs/migration/decisions/0009-test-parallel-pool-sizing.md
+  already documents the tradeoff. GitHub issue 417 closed pointing at PR #413 and this
+  record.

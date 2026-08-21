@@ -1,0 +1,59 @@
+{
+  "handoff_id": "1ee0563f-ecc5-4b33-a671-9f7b616d4569",
+  "run_id": "WF03-ISS0179-20260821",
+  "workflow_id": "WF-03",
+  "step": "2b",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0179-20260821/step-2b-reviewer.json",
+  "created_at": "2026-08-21T14:16:26Z",
+  "started_at": "2026-08-21T14:16:26Z",
+  "completed_at": "2026-08-21T14:20:27Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["121f7f07-439b-493a-917a-b5c0df95c67d"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0179-20260821/step-2a-elixir-dev.json",
+      "lib/letflow/design/iss0111-with-only-this-tenant-visible-advisory-lock-fix.md",
+      "test/letflow/identity_migration_test.exs",
+      "docs/issues/ISS-0111.yaml"
+    ],
+    "owned_modules": [
+      "test/letflow/identity_migration_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Idiom/implementation gate on ELIXIR-DEV's advisory-lock fix (commit `227cd09` on `feature/WF03-ISS0179-20260821`). No SECURITY-REVIEWER step -- this is test-file-only code, no tenant-data API path, no production migration touched. Read ELIXIR-DEV's own report in `handoffs/WF03-ISS0179-20260821/step-2a-elixir-dev.json` `result`, then re-derive from the diff -- don't trust the summary.\n\nRE-DERIVE, each item names what to check yourself:\n\n1. IMPLEMENTATION MATCHES DESIGN. Open `lib/letflow/design/iss0111-with-only-this-tenant-visible-advisory-lock-fix.md` section 3 and `git show 227cd09 -- test/letflow/identity_migration_test.exs` side by side. Confirm the lock key, the acquire/release helper signatures, the `Repo.checkout/2` wrapping, and `restore_orphaned_guard_backup_rows!/0`'s change all match the specified shape exactly -- not merely 'close enough'.\n\n2. RE-RUN mix test test/letflow/identity_migration_test.exs YOURSELF. Confirm the reported 10 passed, 0 failures. If your own run differs, that is a FAIL, not a note.\n\n3. THE MICRO-BENCHMARK CLAIM. ELIXIR-DEV reports a scratch (uncommitted) script demonstrating cross-OS-process mutual exclusion -- process B blocked ~1.7s on `pg_advisory_lock` while process A held it. This is the load-bearing empirical claim for the whole fix. Either reproduce a similar targeted probe yourself (two `mix run` processes, one acquiring-sleeping-releasing the SAME `@guard_lock_key` via `Repo.checkout/2`, the other attempting to acquire and timing how long it blocks), or, if you judge the reported evidence sufficiently rigorous and reproducible in principle from the description alone, say explicitly why re-running it yourself would not add confidence beyond what is already demonstrated -- do not simply accept the number without this judgement.\n\n4. THE OUT-OF-SCOPE FINDING. ELIXIR-DEV flagged a real, pre-existing, unrelated defect (`unique_drop_migration_version/0`'s `System.unique_integer/1` collision across separate BEAM nodes/processes) and correctly did NOT fix it. Confirm this characterization is accurate (i.e. it genuinely predates this commit and genuinely is not caused by the advisory-lock change) and that it was reported rather than silently patched.\n\n5. CLEANUP OF PRE-EXISTING ORPHANED ROWS. ELIXIR-DEV reports cleaning 4 pre-existing orphaned rows from `public.iss060_tenant_schemas_guard_backup` before running tests, confirmed unrelated to this change. Spot-check this claim is plausible (e.g. that such orphaned rows are a known, previously-documented class -- ISS-0060's own self-heal comment in the file already anticipates this) rather than a sign something was masked.\n\n6. SCOPE. `git show --stat 227cd09`: only `test/letflow/identity_migration_test.exs` and this run's own handoff should appear.\n\n7. IDIOM. Standard OTP/Elixir review: proper `@spec` on new helpers, no dead code, the `try/after` nesting is correct (lock release must happen even if `fun.()` raises, AND even if the move-back CTE itself somehow fails -- check the exact nesting order in the diff).\n\nSCOPE OF `result.issues`: only genuine defects -- fails a criterion, contradicts the design, a real idiom problem, or a claim that doesn't hold up under re-derivation. Not style preference.\n\nVERDICT: PASS or FAIL against the six acceptance criteria on the Step 2a handoff plus the items above. A FAIL names each failed criterion and the specific gap. Commit your own handoff file to this branch. Do not write `registry.json` or `orchestrator.log`.",
+    "acceptance_criteria": [
+      "Implementation is confirmed to match design section 3 exactly (lock key, helper signatures, Repo.checkout/2 wrapping, restore_orphaned_guard_backup_rows!/0 change)",
+      "mix test test/letflow/identity_migration_test.exs was independently re-run and its result matches (or a discrepancy is reported as a FAIL)",
+      "The micro-benchmark's evidentiary weight is judged explicitly -- either reproduced, or a stated reason why reproduction would not add confidence",
+      "The out-of-scope System.unique_integer/1 finding is confirmed accurate and confirmed reported rather than silently patched",
+      "The pre-existing orphaned-rows cleanup claim is spot-checked for plausibility against ISS-0060's own documented self-heal class",
+      "git show --stat confirms scope is limited to the one test file plus this run's own handoff",
+      "Standard OTP/Elixir idiom review passed: @spec present, correct try/after nesting so the lock releases even if fun.() or the move-back CTE fails",
+      "A PASS/FAIL verdict is recorded with the evidence for each check named, and result.issues contains only genuine defects"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS on all seven re-derived checks and all eight acceptance criteria. (1) IMPLEMENTATION MATCHES DESIGN: `git show 227cd09 -- test/letflow/identity_migration_test.exs` diffed line-for-line against design section 3 -- @guard_lock_key is the exact literal `letflow:test:iss0060_tenant_schemas_guard` via hashtext/1 inlined (not bound), acquire_guard_lock!/0 and release_guard_lock!/0 match the specified @spec signatures and SQL text exactly, with_only_this_tenant_visible!/2's body is wrapped in exactly one outer Repo.checkout/2 with the nested try/after preserved verbatim per section 3.2, and restore_orphaned_guard_backup_rows!/0 now acquires/releases the same lock in its own Repo.checkout/2 around its unchanged CTE per section 3.3. Matches exactly, not merely close. (2) RE-RAN mix test test/letflow/identity_migration_test.exs myself: real output 'Result: 10 passed', 0 failures -- matches ELIXIR-DEV's reported count exactly. (3) MICRO-BENCHMARK: judged reproduction worthwhile since this is the load-bearing empirical claim, and reproduced it myself rather than accepting the number on the summary alone. First found ELIXIR-DEV's own uncommitted scratch-run logs still on disk in this run's shared scratchpad (probe_a.log/probe_b.log) showing B's pg_advisory_lock Postgrex debug line at db=1703.8ms, corroborating the reported ~1.7s figure as a real artifact, not just prose. Then independently wrote and ran my own two-process probe (lock_probe.exs, same @guard_lock_key, Repo.checkout/2, pg_advisory_lock/pg_advisory_unlock) as two separate `mix run` OS processes started ~150ms apart: my own run shows process A acquiring at +108ms and releasing at +2114ms (after a 2000ms hold), and process B's pg_advisory_lock call logged at db=1479.3ms with 'B: blocked for 1508ms before acquiring' -- consistent with A holding the lock and B waiting out most of A's hold window. This independently confirms cross-OS-process mutual exclusion via the advisory lock, beyond just trusting the report. (4) OUT-OF-SCOPE FINDING: confirmed accurate. `unique_drop_migration_version/0` (System.unique_integer([:positive, :monotonic]), lines 71-73) was introduced in commit 5941472 (feat: relocate identity tables, predates 227cd09 by multiple commits including the ISS-0060/ISS-0059/ISS-0050 fixes) and is untouched by 227cd09's diff -- genuinely pre-existing, genuinely unrelated to the advisory-lock change, and correctly reported in ELIXIR-DEV's result.issues rather than silently patched. (5) ORPHANED-ROWS CLEANUP: spot-checked plausible. The file's own comment at lines 261-266 ('ISS-0060 section 5 self-heal: if the backup table is non-empty when any test in this file starts, that non-emptiness IS the signal that a prior run crashed... mirroring ISS-0048's reaper pattern') documents exactly this class of orphaned row as an anticipated, self-healing condition. ELIXIR-DEV's specific edge case (a crashed invocation whose owning tenant row was ALSO since removed, so restoring the orphaned row hits an FK violation) is a real, narrower variant of that documented class, correctly flagged as a fragile assumption rather than masked. (6) SCOPE: `git show --stat 227cd09` shows only handoffs/WF03-ISS0179-20260821/step-2a-elixir-dev.json and test/letflow/identity_migration_test.exs -- no lib/ or migration file touched, matches expectation exactly. (7) IDIOM: both new helpers carry correct @spec (`acquire_guard_lock!() :: :ok`, `release_guard_lock!() :: :ok`); no dead code; try/after nesting verified correct by reading the diff directly -- acquire_guard_lock!/0 runs first, then an outer try wraps the move-out query plus a nested try/after around fun.()+move-back, and the outer after (release_guard_lock!/0) is positioned so it runs whether the move-out query, fun.(), or the move-back CTE raises. Supervision/process-isolation not applicable (test-file-only change, no InstanceSupervisor-managed process touched). No scope creep -- the change is confined exactly to what design section 3 specifies, no speculative abstraction introduced. docs/anti-patterns.md has no entries contradicted by this change.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0179-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0179-20260821",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER per WF-03 Step 2b->2c routing -- idiom/scope gate passed."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

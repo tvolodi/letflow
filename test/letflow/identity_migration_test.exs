@@ -78,6 +78,34 @@ defmodule Letflow.IdentityMigrationTest do
 
   defp unique_slug, do: Letflow.TenantSlugFixture.unique_slug("req063-idmig")
 
+  # ISS-0111: single fixed lock key shared by every caller in this module
+  # (with_only_this_tenant_visible!/2 and restore_orphaned_guard_backup_rows!/0
+  # alike) -- see lib/letflow/design/iss0111-with-only-this-tenant-visible-advisory-lock-fix.md
+  # section 3.1. Passed to Postgres via hashtext/1, the same idiom
+  # lib/letflow/tenant_provisioning.ex already uses for
+  # pg_advisory_xact_lock(hashtext($1)). A compile-time literal, not
+  # tenant/user input, so it is inlined into the SQL text directly rather than
+  # bound as a parameter.
+  @guard_lock_key "letflow:test:iss0060_tenant_schemas_guard"
+
+  # ISS-0111 section 3.1: session-scoped, blocking acquire. Must only ever be
+  # called from inside a Repo.checkout/2 (or Repo.transaction/2) callback so
+  # it lands on the same physical connection release_guard_lock!/0 will later
+  # use -- see design section 1's process-pinned-connection finding.
+  @spec acquire_guard_lock!() :: :ok
+  defp acquire_guard_lock! do
+    Repo.query!("SELECT pg_advisory_lock(hashtext($1))", [@guard_lock_key])
+    :ok
+  end
+
+  # ISS-0111 section 3.1: paired release, issued from the same
+  # Repo.checkout/2 callback as the matching acquire_guard_lock!/0 call.
+  @spec release_guard_lock!() :: :ok
+  defp release_guard_lock! do
+    Repo.query!("SELECT pg_advisory_unlock(hashtext($1))", [@guard_lock_key])
+    :ok
+  end
+
   # Provisions a real tenant (row + schema + full migration replay, including the
   # three per-tenant identity tables) -- the copy/guard target every test in this
   # file needs.
@@ -239,17 +267,35 @@ defmodule Letflow.IdentityMigrationTest do
   defp restore_orphaned_guard_backup_rows! do
     ensure_backup_table!()
 
-    Repo.query!("""
-    WITH restored AS (
-      DELETE FROM public.iss060_tenant_schemas_guard_backup
-      RETURNING *
-    )
-    INSERT INTO public.tenant_schemas
-    SELECT * FROM restored
-    ON CONFLICT (id) DO NOTHING
-    """)
+    # ISS-0111 section 3.3: this helper must acquire the same @guard_lock_key
+    # lock with_only_this_tenant_visible!/2 holds, in its own Repo.checkout/2
+    # wrapper, or a genuinely-mid-critical-section invocation's just-moved
+    # rows could be seen and restored here while that invocation still
+    # believes them safely hidden -- reintroducing the exact race ISS-0060
+    # fixed. If no other invocation holds the lock, this proceeds immediately
+    # exactly as before (healing any genuinely orphaned rows left by a past
+    # crash); if another invocation is genuinely mid-critical-section, this
+    # blocks until its release_guard_lock!/0 runs, at which point the backup
+    # table is legitimately empty and the restore below is a correct no-op.
+    Repo.checkout(fn ->
+      acquire_guard_lock!()
 
-    :ok
+      try do
+        Repo.query!("""
+        WITH restored AS (
+          DELETE FROM public.iss060_tenant_schemas_guard_backup
+          RETURNING *
+        )
+        INSERT INTO public.tenant_schemas
+        SELECT * FROM restored
+        ON CONFLICT (id) DO NOTHING
+        """)
+
+        :ok
+      after
+        release_guard_lock!()
+      end
+    end)
   end
 
   # ISS-0060: wraps `fun` (the guarded Ecto.Migrator.run/4 call plus its
@@ -261,34 +307,54 @@ defmodule Letflow.IdentityMigrationTest do
   # atomic CTE) in an `after` block so the restore runs whether `fun` succeeds
   # or raises. See design section 4 for the full sequence/rationale.
   defp with_only_this_tenant_visible!(tenant_id, fun) do
-    ensure_backup_table!()
+    # ISS-0111 section 3.2: the entire body executes inside one
+    # Repo.checkout/2 call -- this pins one physical connection to the
+    # calling process for the whole critical section (lock acquire ->
+    # move-out -> fun.() -> move-back -> lock release), which is what makes
+    # the guard lock's acquire and release land on the same Postgres
+    # session (design section 1's finding). Repo.checkout/2's callback is a
+    # zero-arity function returning its result directly (confirmed against
+    # deps/ecto/lib/ecto/repo.ex's generated checkout/2 -- no special
+    # return-value wrapping), so this preserves this function's existing
+    # contract unchanged: it returns whatever fun.() returns, and propagates
+    # any exception fun.() raises after running its cleanup, exactly as the
+    # previous bare try/after did (design section 5).
+    Repo.checkout(fn ->
+      ensure_backup_table!()
 
-    Repo.query!(
-      """
-      WITH moved AS (
-        DELETE FROM public.tenant_schemas
-        WHERE tenant_id <> $1
-        RETURNING *
-      )
-      INSERT INTO public.iss060_tenant_schemas_guard_backup
-      SELECT * FROM moved
-      """,
-      [Ecto.UUID.dump!(tenant_id)]
-    )
+      acquire_guard_lock!()
 
-    try do
-      fun.()
-    after
-      Repo.query!("""
-      WITH restored AS (
-        DELETE FROM public.iss060_tenant_schemas_guard_backup
-        RETURNING *
-      )
-      INSERT INTO public.tenant_schemas
-      SELECT * FROM restored
-      ON CONFLICT (id) DO NOTHING
-      """)
-    end
+      try do
+        Repo.query!(
+          """
+          WITH moved AS (
+            DELETE FROM public.tenant_schemas
+            WHERE tenant_id <> $1
+            RETURNING *
+          )
+          INSERT INTO public.iss060_tenant_schemas_guard_backup
+          SELECT * FROM moved
+          """,
+          [Ecto.UUID.dump!(tenant_id)]
+        )
+
+        try do
+          fun.()
+        after
+          Repo.query!("""
+          WITH restored AS (
+            DELETE FROM public.iss060_tenant_schemas_guard_backup
+            RETURNING *
+          )
+          INSERT INTO public.tenant_schemas
+          SELECT * FROM restored
+          ON CONFLICT (id) DO NOTHING
+          """)
+        end
+      after
+        release_guard_lock!()
+      end
+    end)
   end
 
   defp tenant_schema_has_row?(schema_name, table, id) do

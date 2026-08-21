@@ -1,0 +1,51 @@
+{
+  "handoff_id": "9f4f84e4-78f7-493f-889a-80221b66bfa7",
+  "run_id": "WF03-ISS0179-20260821",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0179-20260821/step-04-test-runner.json",
+  "created_at": "2026-08-21T14:21:34Z",
+  "started_at": "2026-08-21T14:21:34Z",
+  "completed_at": "2026-08-21T14:29:04Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["1ee0563f-ecc5-4b33-a671-9f7b616d4569"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0179-20260821/step-2b-reviewer.json",
+      "test/letflow/identity_migration_test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Run the FULL project test suite on `feature/WF03-ISS0179-20260821` (already checked out) before this branch merges. The change under test (`test/letflow/identity_migration_test.exs`'s advisory-lock serialization) already passed its own module's tests (10/10, independently re-run twice) and idiom review -- this step is the full-suite regression check the merge step will otherwise be trusting blind.\n\nUse `sh scripts/test_parallel.sh` per this project's standard full-suite mechanism, with `TEST_PARALLEL_N=4` on this host (the default nproc-based N is known to saturate the shared Postgres pool at `mix ecto.create` time on this specific 16-core host -- ISS-0212/ISS-0194 already cover this, no need to re-derive it, just use the override).\n\nATTRIBUTE EVERY FAILURE STRUCTURALLY, per `core-directives.md`'s 'Failure Attribution Is Structural, Never By Count-Matching' -- this suite carries a standing set of pre-existing failures and 'green' means no failure attributable to this branch, not zero failures. For each failure: is the failing module or its dependencies in `git diff --name-only main...feature/WF03-ISS0179-20260821`? The only file this branch changes is `test/letflow/identity_migration_test.exs` -- if a failure is in that module, it needs a genuine causal argument (not just presence), since it is exactly the module this run just changed.\n\nWrite the test report per this project's convention (`test/reports/`) and record it in `artifacts_out`.",
+    "acceptance_criteria": [
+      "The full suite was actually run via TEST_PARALLEL_N=4 sh scripts/test_parallel.sh and real pass/fail counts are quoted",
+      "Every failure is attributed structurally, never by count-matching against a prior run",
+      "Any failure in test/letflow/identity_migration_test.exs specifically is checked for a genuine causal connection to this run's own change, not cleared by assumption",
+      "A test report is written to test/reports/ and listed in artifacts_out"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Ran the full suite via TEST_PARALLEL_N=4 sh scripts/test_parallel.sh (per this run's handoff instruction, no re-derivation needed). All 4 partitions completed cleanly with no crashes: combined 1289 tests, 5 properties, 2 failures (1292/1294 passed). Both failures are one group (Mix.Tasks.Letflow.Check.TestTest, test/mix/tasks/letflow_check_test_test.exs, lines 105 and 126), attributed structurally: Route 1 -- neither that file nor lib/mix/tasks/letflow.check.test.ex appears in `git diff --name-only main...feature/WF03-ISS0179-20260821` (which contains only handoffs, one design doc, and test/letflow/identity_migration_test.exs, the one file this branch changes); Route 3 -- the symptom pair (a 60000ms ExUnit.TimeoutError at collect/2, and a real subprocess 'exited 1' Mix.Error where a substring-match message was expected) and root cause (install_fake_mix/2's fake-mix fixture is POSIX-only: an extensionless `#!/sh` file plus ':' PATH-prepend, neither of which Windows resolves, so run/1 shells out to the REAL mix and recurses) exactly match docs/issues/ISS-0107.yaml (open, MAJOR, filed 2026-08-20, same file, same mechanism, same two symptom shapes). Also directly reproduced ISS-0107's documented orphaned-process side effect on this host during this step: after the run, one erl.exe (PID 14552) was still running with command line `erl.exe ... -extra \"...\\mix\" test` -- the timed-out test's nested `mix test` child, never killed by the outer 60000ms timeout. Killed via Stop-Process; confirmed gone. test/letflow/identity_migration_test.exs (this branch's one changed file) ran inside partition 4 and is clean: 257 tests, 0 failures, exit 0 -- confirmed via `grep -n IdentityMigrationTest partition-*.log`, only matching partition 4. No failure is attributable to this branch's change. PASS.",
+    "artifacts_out": ["test/reports/report-20260821-WF03-ISS0179-20260821.yaml"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0179-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0179-20260821",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ORCH / WF-04 Step 1 (RELEASE-VALIDATOR) -- PASS, no failure attributable to this branch. RELEASE-VALIDATOR re-runs the suite independently. Flag: the two Mix.Tasks.Letflow.Check.TestTest failures are the already-open, Windows-specific ISS-0107, which also leaves an orphaned nested `mix test` erl.exe process on timeout -- check for stray erl.exe processes after any run hitting this same failure pair on a Windows host."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

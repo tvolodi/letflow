@@ -1,0 +1,54 @@
+{
+  "handoff_id": "409dc9d6-e57d-46cc-a772-50fb7fcb139d",
+  "run_id": "WF03-ISS0179-20260821",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0179-20260821/step-05-close-issue.json",
+  "created_at": "2026-08-21T14:29:49Z",
+  "started_at": "2026-08-21T14:29:49Z",
+  "completed_at": "2026-08-21T14:30:44Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["9f4f84e4-78f7-493f-889a-80221b66bfa7"],
+    "artifacts_in": [
+      "docs/issues/ISS-0111.yaml",
+      "handoffs/WF03-ISS0179-20260821/step-2b-reviewer.json",
+      "handoffs/WF03-ISS0179-20260821/step-04-test-runner.json",
+      "test/reports/report-20260821-WF03-ISS0179-20260821.yaml"
+    ],
+    "owned_modules": [
+      "docs/issues/ISS-0111.yaml"
+    ]
+  },
+  "task": {
+    "description": "Close ISS-0111 per WF-03 Step 5. Every prior step PASSED: design (CODE-DESIGN-VALIDATOR, commit 52bd397, both load-bearing Ecto facts independently re-derived from vendored source), implementation (ELIXIR-DEV, commit 227cd09, real mix test 10/10 plus a genuine cross-process micro-benchmark), idiom review (REVIEWER, commit 2353bbe, independently reproduced the micro-benchmark a second way), full-suite regression (TEST-RUNNER, commit c6cc966, 1292/1294 with both failures structurally attributed to the pre-existing, already-open ISS-0107). This is a genuine `resolved` outcome -- the root cause (an unsynchronized global mutation of a table shared across mix test invocations) was actually removed via a Postgres advisory lock making the destructive window mutually exclusive, and this run's own tests plus two independent cross-process reproductions prove it.\n\nSet `docs/issues/ISS-0111.yaml` `status: resolved`, `resolved_in_run: WF03-ISS0179-20260821`, `resolved_at:` from a real clock read. Close GH#365 with `gh issue close 365 --comment` naming this run, the design doc, the fix commit (227cd09), and the test report path.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0111.yaml carries status: resolved, resolved_in_run and a clock-read resolved_at",
+      "GH#365 is closed with a comment naming the run, the design doc, the fix commit, and the test report path",
+      "No file outside docs/issues/ISS-0111.yaml and this run's own handoff is modified"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Verified all three prior artifacts before closing: step-2b-reviewer.json (PASS on all 8 acceptance criteria, implementation matches design section 3 exactly, own re-run of mix test test/letflow/identity_migration_test.exs confirmed 10/10, independent second reproduction of the cross-process advisory-lock micro-benchmark), step-04-test-runner.json plus test/reports/report-20260821-WF03-ISS0179-20260821.yaml (full-suite regression 1292/1294 passed, both failures structurally attributed to the pre-existing, already-open ISS-0107 via Route 1 branch-diff absence and Route 3 live mechanism reproduction, and this branch's own changed module -- test/letflow/identity_migration_test.exs, partition 4 -- ran clean at 257/257). Root cause (with_only_this_tenant_visible!/2's bulk DELETE of every other tenant's tenant_schemas row was safe only under an assumption -- no concurrent mix test invocation shares the database -- that ISS-0107's nested mix test process breaks) was genuinely removed, not merely mitigated: a Postgres advisory lock (acquire_guard_lock!/0 / release_guard_lock!/0 on @guard_lock_key, wrapped via Repo.checkout/2) now makes the destructive move-out/move-back window mutually exclusive across OS processes, per lib/letflow/design/iss0111-with-only-this-tenant-visible-advisory-lock-fix.md and fix commit 227cd09. Set docs/issues/ISS-0111.yaml status: resolved, resolved_in_run: WF03-ISS0179-20260821, resolved_at: 2026-08-21T14:30:44Z (clock read via `date -u`). Closed GH#365 via `gh issue close 365 --comment` naming this run, the design doc, fix commit 227cd09, REVIEWER commit 2353bbe, TEST-RUNNER commit c6cc966, and the test report path -- gh confirmed 'Closed issue tvolodi/letflow#365'. No file outside docs/issues/ISS-0111.yaml and this run's own handoff was modified by me (handoffs/orchestrator.log and handoffs/registry.json show pre-existing working-tree modifications from ORCH's own tooling, not touched or staged by this step).",
+    "artifacts_out": ["docs/issues/ISS-0111.yaml"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0179-20260821",
+      "commit_sha_list": ["943358b"],
+      "remote_branch": "origin/feature/WF03-ISS0179-20260821",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ISS-0111 closed (GH#365) and marked resolved. Route to ORCH for run close-out / WF-04 as applicable."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

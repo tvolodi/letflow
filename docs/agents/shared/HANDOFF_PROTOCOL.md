@@ -408,6 +408,23 @@ commit-scoped rather than date-scoped for §4.1(b)'s own reason, which transfers
 a day boundary was measurably false there, putting 42 of 46 same-day files on the wrong
 side of it.
 
+**Against §5 (append-only) and §4.1(b) (`backfill_note`) — settled here so it stops being
+re-derived per run (ISS-0205).** A sha cannot be recorded inside the commit it names, so a
+write-back is necessarily a second, sha-recording-only commit — and two independent
+REVIEWER gates (`WF03-ISS0198-20260821`'s `3b845b3`, `WF03-ISS0200-20260821`'s `574c91d`)
+each had to rule on whether that is allowed before this paragraph existed to say so.
+**Against §5:** the append-only rule below binds `handoffs/orchestrator.log` and
+`handoffs/registry.json` **by name** and forbids only a commit that **reduces** either
+file's size. It does not name handoff files at all, and in any case a write-back that
+fills a previously-empty `commit_sha_list` array is additive, not reductive — no conflict,
+by name and by content. **Against §4.1(b):** `backfill_note` is NOT the applicable
+provision and must not be borrowed for this. §4.1(b)'s exception is declared SPENT — it
+authorised exactly one named file — and it belongs to the `not_agent_attested` marker;
+applying it to a live agent's own write-back would both misuse a spent exception and
+falsely assert `not_agent_attested` about a handoff its own agent did in fact attest. The
+write-back mechanism is authorised on its own terms, stated above, not by analogy to
+either of these.
+
 **One note on how that sha got into the paragraph above, because it is the exception that
 proves the rule.** That literal was written in by the commit immediately after it — an
 instance of the very write-back this subsection just declined to mandate. A boundary must

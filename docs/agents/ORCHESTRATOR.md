@@ -134,6 +134,17 @@ failure in the same batch is more expensive than splitting up front.
    retrying." Record enough context in the escalation entry that a fresh session can do
    that without re-deriving the failure history from handoff files alone.
 
+**What this counter is scoped to — it tracks REJECTED work, and only that.** Every rule
+above is conditioned on a **FAIL verdict**, i.e. a validator or gate examined the work and
+rejected it. A step whose agent **died** reached no verdict at all, so it is not rework:
+`rework_count` is **not** incremented when a handoff is re-stamped and redispatched under
+`HANDOFF_PROTOCOL.md` §4.1(a-1). This is spelled out because it was not, and an agent
+reading step 3 above ("re-route to the same originating agent, status back to `PENDING`")
+in isolation could reasonably read a §4.1 redispatch as falling under it. The ruling
+itself is older than the rule: `handoffs/WF02-REQ027-20260816/step-02d-reviewer.json`
+decided it on 2026-08-16, on the grounds that a `max_rework` budget exists to catch a
+producer repeating a mistake and an infrastructure death is not the producer's mistake.
+
 **On PARTIAL:** log which criteria passed/failed. If the unmet criteria don't block the
 next step, advance with a note. If they do, treat as FAIL.
 
@@ -178,6 +189,70 @@ from the race; it does not remove another ORCH-role session.** So:
   re-check before doing anything else** — it may simply mean the other session already
   pushed and your commit is already on the remote, which is exactly what happened in the
   incident above and needed no action at all. **Do not force.**
+
+### 7.2 Run-entry fields — `last_known_step`, and recording a recovered run
+
+#### `last_known_step` — what it is
+
+Used 64 times in `handoffs/registry.json` and, until 2026-08-21 (ISS-0117), **defined
+nowhere under `docs/`**. It is written here because ISS-0117 asked whether to extend it,
+and a field with no written specification cannot be extended — only guessed at, which is
+how it accumulated unbounded prose in the first place.
+
+**Definition.** `last_known_step` is ORCH's running answer to *"if this session died right
+now, where would the next session pick up?"* — the furthest step of the run whose outcome
+ORCH has actually observed, its verdict, and any steps recorded SKIPPED with why. ORCH
+updates it as the run advances. It is a **position marker**, not a run history.
+
+**What belongs in it:** the step id and its verdict (`Step 03 COMPLETED PASS`), steps
+recorded SKIPPED and the one-clause reason, and the commit sha the step landed on.
+**What does not:** narrative about what the run decided or why (that is `note`), and —
+from 2026-08-21 — anything about a run being interrupted or recovered, which now has its
+own fields below.
+
+#### `recovered` and `recovery_note`
+
+When a run required recovery under `HANDOFF_PROTOCOL.md` §4.1, its registry entry carries
+two **discrete** fields alongside the existing ones:
+
+- **`recovered`** — boolean, `true`. Absent or `false` on a clean run.
+- **`recovery_note`** — string, naming (i) the affected step **file path**, and (ii)
+  which §4.1(a) branch was applied: `(a-1) redispatch` or `(a-2) ORCH reconstruction`.
+
+**Why discrete fields rather than a clause folded into `last_known_step`, which is where
+this would naturally have gone.** `WF02-REQ043-20260818`'s interruption *is* already
+recorded — as a clause buried inside a ~1,000-character prose `note` — and that run's
+`last_known_step` reads as a normal completion. The consequence is measured, not
+hypothesised: a scan for this class found that run's **stale `PENDING` handoff** and did
+**not** find its interruption, because prose is greppable by nobody. Folding a recovery
+marker into a free-text field repeats exactly the failure `HANDOFF_PROTOCOL.md` §4.1(b)
+rejects at the handoff level. `grep -l '"recovered": true' handoffs/registry.json` must be
+sufficient.
+
+#### Which mechanism: amend the entry, or append a `-resume` entry
+
+Both apply; they are not alternatives, and ISS-0033 settled the second one already.
+
+- **Same-session recovery** (this ORCH session dispatched the step, observed the death,
+  and recovered it) — **amend the run's existing entry**, adding `recovered`/`recovery_note`.
+  The run never ended; nothing about the entry has been superseded.
+- **Later-session recovery** (a subsequent session picks up an interrupted run) —
+  **leave the original entry untouched and append a separate entry with a `-resume`
+  run_id suffix**, carrying `recovered`/`recovery_note`. This is ISS-0033's established
+  precedent, not a new rule: that issue was filed because `WF03-ISS0030-20260817` read
+  `BLOCKED` forever, and was resolved as a **false positive** — a second entry,
+  `WF03-ISS0030-20260817-resume`, `status: COMPLETED`, had been appended by commit
+  `0a34f79`, and the original staying `BLOCKED` was ruled "deliberate, correct
+  append-only history (the run really was blocked at that point in time, on that specific
+  attempt)."
+
+**Neither mechanism weakens the append-only rule, and this section does not license an
+exception to it.** `HANDOFF_PROTOCOL.md` §5 and `core-directives.md`'s "Bookkeeping Is
+Not Optional" still hold: adding a field to an entry is not rewriting history, but
+**re-serialising, reordering, or overwriting another session's entry still is**, and
+§7.1's re-read-`registry.json`-immediately-before-writing rule applies to this write
+exactly as to any other. If the entry to be amended is not the last one, or another
+session has written since your read, re-read and re-derive before touching it.
 
 ## 8. Stage gate enforcement
 

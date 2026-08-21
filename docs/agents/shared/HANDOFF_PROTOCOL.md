@@ -120,7 +120,19 @@ premise, and the receiving agent was right to check rather than comply:**
     "next_action": "<suggested next step for ORCH>"
   },
   "rework_count": 0,
-  "max_rework": 3
+  "max_rework": 3,
+
+  // OPTIONAL — present ONLY on a handoff recovered under §4.1, absent on every
+  // normally-completed handoff. Its ABSENCE is the assertion "this result is the
+  // acting agent's own attested report." See §4.1 for who may write it and when.
+  "not_agent_attested": {
+    "reconstructed_by": "<AGENT_ID, normally ORCH>",
+    "reconstructed_at": "<ISO8601-UTC, from the clock at reconstruction time>",
+    "reason": "<what happened to the acting agent, and why it could not report>",
+    "fields_written": ["status", "completed_at", "result"],
+    "evidence": ["<command run> -> <what it established>", "..."],
+    "not_verifiable_after_the_fact": ["<what the probes could not settle>", "..."]
+  }
 }
 ```
 
@@ -230,11 +242,35 @@ Dropping `.ToUniversalTime()` silently emits local time labelled `Z` — nothing
 output string reveals the mistake, so always call it explicitly. `completed_at` must
 never precede `started_at`.
 
-| Field | Who writes it | When |
-|---|---|---|
-| `created_at` | ORCH | at handoff creation |
-| `started_at` | **ORCH only** | immediately before dispatch |
-| `completed_at` | the receiving agent | when it completes the handoff |
+| Field | Who writes it | When | Exception |
+|---|---|---|---|
+| `created_at` | ORCH | at handoff creation | — |
+| `started_at` | **ORCH only** | immediately before dispatch | — |
+| `completed_at` | the receiving agent | when it completes the handoff | §4.1 |
+| `status` | the receiving agent, from `PENDING`→`IN_PROGRESS` (§1) →`COMPLETED`/`FAILED` (§4). ORCH sets the initial `PENDING`, and sets `ESCALATED`/`CANCELLED` per `ORCHESTRATOR.md` §5 | on claiming and on completing | §4.1 |
+| `result` | **the receiving agent, and only the receiving agent** — it is that agent's own attested first-hand report of what it did | when it completes the handoff | §4.1 |
+
+**Why the last two rows exist, given they look like they are stating the obvious.** They
+were added 2026-08-21 (ISS-0117) because they were *not* written down, and the omission
+cost more than the rule would have. Until then this table bound only the three timestamp
+fields, so "a handoff's `result` is the acting agent's own attested report" — the single
+assumption the entire producer/validator gate model rests on — existed nowhere as a rule.
+An unwritten rule has no exception clause, so when four separate runs hit the case the
+rule did not cover (the acting agent stopped existing before it could write its report),
+each improvised its own repair: five occurrences across four runs, under **three**
+different ad-hoc top-level key names (`orch_restart_note`, `orch_timestamp_correction`
+×2, `orch_reconstruction`), at two different key positions, in two different shapes
+(bare string, then object). §4.1 is the exception clause those runs were missing.
+
+**And the `completed_at` exception pointer is not decorative.** The best-executed repair
+so far still violated this table silently:
+`handoffs/WF03-ISS0109-20260821/step-final-git-merge.json` carries
+`completed_at: "2026-08-21T03:29:36Z"`, byte-identical to its own
+`orch_reconstruction.reconstructed_at` — i.e. ORCH's clock read, written into a field
+this table assigns to "the receiving agent" — and the marker object it added did not
+declare that it had done so. The rule was already in force; nothing flagged the breach,
+because the marker had no required field obliging the writer to enumerate what it wrote.
+That is why §4.1's `fields_written` is mandatory.
 
 ---
 
@@ -271,6 +307,175 @@ re-read-before-write, append-only, and single-SHA push rules for that case are i
 If your role is a validator (see the producer/validator table in `core-directives.md`),
 re-derive your verdict from the artefact itself. Reading the producer's own
 `result.summary` and echoing it back as PASS is not validation.
+
+---
+
+## 4.1 When the acting agent stopped existing
+
+**This section is the exception to §4 and to §3's `completed_at`/`status`/`result` rows,
+and it is the only one.** §4 assumes the agent that did the work is still alive to report
+it. Agents in this pipeline die: on an API error mid-response, on an infrastructure
+session limit, on a host power outage. Five such occurrences are on record across four
+runs between 2026-08-16 and 2026-08-21 — essentially the whole recorded life of the
+pipeline — so this is a recurring class, not a one-off, and it gets a rule rather than a
+convention.
+
+### (a) Who may complete it — and it is never "nobody"
+
+The answer splits on **whether the step's own side effects finished**, which §4.1(c)
+below decides by probe rather than by reading the handoff.
+
+**Case (a-1) — side effects INCOMPLETE: REDISPATCH.** ORCH re-stamps the handoff to
+`PENDING` with a fresh clock read and dispatches a **fresh instance of the same role**,
+which then does the remaining work and writes its own attested `result` normally. No
+`not_agent_attested` marker is written, because nothing was reconstructed — the
+replacement agent genuinely did the work it reports.
+
+> **`rework_count` is NOT incremented.** `ORCHESTRATOR.md` §5's counter tracks
+> **rejected** work, and nothing was rejected: no verdict was reached, let alone a
+> failing one. Spending a `max_rework` budget — which exists to catch a producer
+> repeating a mistake — on an infrastructure death would exhaust it against a fault the
+> producer had no part in.
+>
+> This is not a new ruling; it is one that has been sitting in a single handoff file
+> instead of in this protocol since 2026-08-16. `handoffs/WF02-REQ027-20260816/step-02d-reviewer.json`'s
+> `orch_restart_note` records the first REVIEWER dispatch terminating on a session limit
+> mid-work, states "rework_count deliberately NOT incremented" for exactly the reason
+> above, and notes that because the dead agent's handoff "was left IN_PROGRESS with a
+> null result and was never committed, no partial verdict entered the audit trail." That
+> last point is the reason redispatch is clean: a dead agent that reached no verdict
+> leaves nothing to contradict.
+
+**Case (a-2) — side effects COMPLETE and irreversible: ORCH reconstructs, under (b).**
+When the merge has landed and the branch is gone, redispatch is not merely wasteful, it
+is impossible — there is no work left for a fresh agent to do, and its report would be
+re-derivation from git exactly as ORCH's would be, but carrying the additional false
+implication that the acting agent reported it. So **ORCH, and only ORCH, writes the
+`result` block**, marked per (b). ORCH-only here follows the same ownership logic as §4's
+registry rule: the reconstruction is a run-level act of bookkeeping, and splitting it
+across roles is how ISS-0021's who-owns-what contradiction happened.
+
+**Why "leave it `IN_PROGRESS`/`PENDING` forever and file a separate incident record" is
+rejected — by measurement, not by preference.** That option has been executed, and its
+cost is on disk: `handoffs/WF02-REQ043-20260818/step-final-git-merge.json` has read
+`status: PENDING` with `completed_at: null` and a null `result` since 2026-08-18, for a
+run that squash-merged to `main` as `e25822a` via PR #174. The audit trail is not merely
+incomplete there — it actively asserts something false, and the truth survives only
+inside a prose note in `registry.json`. An audit trail that lies is worse than one that
+says "this was reconstructed, here is by whom and from what."
+
+*(That specific file, and `handoffs/WF02-REQ062-20260819/step-03-test-designer.json`, are
+filed as ISS-0192 and are deliberately not repaired by this amendment. This section is
+what governs their later repair.)*
+
+### (b) The mandatory marking: `not_agent_attested`
+
+A handoff completed under (a-2) **MUST** carry a top-level field named exactly
+`not_agent_attested`, an object with all six members below. Not a convention, not a
+sentence in `result.summary`, not a key name chosen at the time of writing.
+
+| Member | Contents |
+|---|---|
+| `reconstructed_by` | the `AGENT_ID` that wrote the block — normally `ORCH` |
+| `reconstructed_at` | clock-read UTC timestamp, per §3 |
+| `reason` | what happened to the acting agent and why it could not report |
+| `fields_written` | **the explicit list of fields this writer authored**, e.g. `["status","completed_at","result"]` |
+| `evidence` | the commands run and what each one established — one entry per command |
+| `not_verifiable_after_the_fact` | an explicit list of what the probes could not settle. Never an empty implication; if genuinely nothing, say `[]` deliberately |
+
+**It is OPTIONAL-BY-ABSENCE.** It appears only on a recovered handoff. All 534 handoff
+files currently in `handoffs/` remain valid unchanged, and **no backfill is required or
+wanted** — a marker retro-fitted to a file nobody can now attest to would itself be an
+unattested claim. Its absence carries meaning: absence asserts that the `result` is the
+acting agent's own report, which is precisely the assertion §3's new `result` row makes
+into a rule.
+
+**Why a required field rather than a convention — the measurement, not the argument.**
+The convention was tried, without anyone deciding to try it. It produced **three key
+names across five occurrences** (`orch_timestamp_correction` twice,
+`orch_restart_note`, `orch_reconstruction`), applied at **two different key positions**
+(18th/last in one file, 11th/mid-file in another), and **changed shape from a bare string
+to a structured object between its first and second use**. A convention that changed
+shape on its second application is not a convention; it is five agents each solving the
+same problem alone.
+
+**And a written rule is necessary but NOT sufficient — say so rather than pretend
+otherwise.** §2's `status` enum *is* written down, and 15 handoff files on `main` violate
+it today (13 carrying `"PASS"`, a `result.status` value, as a handoff `status`). Writing
+this down will not by itself produce compliance. What a *named field* buys over prose is
+that the violation is **greppable**: `grep -rl not_agent_attested handoffs/` enumerates
+every reconstructed handoff in one command, and a linter can assert over the field's
+shape. Prose in a summary is findable by nobody and checkable by nothing — and the
+proof is `handoffs/WF03-ISS0109-20260821/step-final-git-merge.json`, whose repair was
+otherwise exemplary: after it, **nothing in `status`, `completed_at`, `result.status` or
+`result.artifacts_out` distinguishes that file from a normal completion.** Only free-text
+prose and a non-schema key do. A weak model that omits the prose leaves a reconstruction
+indistinguishable from a measurement, which defeats the audit trail entirely.
+
+`fields_written` is the member not to drop. That same exemplary repair reconstructed
+`completed_at` without declaring it (see §3), so the one field whose ownership the
+protocol *had* already assigned was the one silently taken.
+
+### (c) Died MID-action vs died AFTER acting — decide by probe, never by judgement
+
+These need materially different paths — (a-1) and (a-2) above — and **the two are
+indistinguishable from the handoff file itself.** This is the hard part, and the evidence
+says so directly:
+
+- `WF02-REQ043-20260818` — host power outage **mid-rebase**, branch left mid-rebase
+  (corroborated by ISS-0046, whose `discovered_in_run` names this run and this step).
+- `WF03-ISS0109-20260821` — API error **after** the merge had already landed.
+
+**On disk these two presented identically: a handoff with a null `result`.** They needed
+opposite treatments. So the discrimination is a **MANDATORY PROBE OF THE STEP'S DECLARED
+SIDE EFFECTS**. It is never a judgement call, and it is never read off the handoff's own
+contents — the handoff records only what the agent *intended* to do, and an agent that
+died mid-action intended everything.
+
+**Worked example — the probe set for a git step**, lifted verbatim from
+`WF03-ISS0109-20260821`'s own `orch_reconstruction.commands_run`, which is where this
+was first done properly:
+
+```bash
+ls .git/rebase-merge .git/rebase-apply          # a mid-rebase leaves these behind;
+                                                # their ABSENCE is the most direct
+                                                # mid-action discriminator there is
+git status --short && git branch --show-current # clean tree? which branch?
+git fetch origin
+git rev-list --left-right --count origin/main...HEAD   # 0 0 => HEAD is exactly origin/main
+git ls-remote --heads origin <branch>           # empty => remote branch deleted (cleanup ran)
+gh pr view <n> --json state,mergedAt,mergeCommit # MERGED + a mergeCommit sha => it landed
+```
+
+**Generalised, for step types that are not git steps:** every step type declares an
+**idempotent completion predicate** over its own side effects — the files it was to
+write, the rows it was to insert, the artefacts it was to produce — and the
+mid-vs-after classification is the **output of evaluating that predicate**, not an input
+to it. All side effects satisfied ⇒ case (a-2). Any side effect unsatisfied ⇒ case (a-1).
+
+Two constraints, both stated because omitting either is how this goes wrong:
+
+1. **INDETERMINATE FALLS TO REDISPATCH (a-1).** Not to reconstruction, and not to a
+   judgement call about which is more likely. The asymmetry is what decides it:
+   redispatching an already-complete idempotent step costs one agent turn and changes
+   nothing, while attesting to an incomplete one puts a **false PASS into the audit
+   trail** — the one failure this whole section exists to prevent, and the one nothing
+   downstream can detect.
+2. **What the probes cannot settle goes into `not_verifiable_after_the_fact`, never
+   omitted.** `WF03-ISS0109-20260821` did this correctly — it listed the two questions
+   git cannot answer after the fact (whether the rebase hit any conflict, since a clean
+   rebase leaves no trace; and whether `git stash` was used) — and it is the single
+   practice from that incident most worth making mandatory, because **silence about an
+   unverifiable thing reads as verification.** A reader cannot tell an unasked question
+   from an answered one.
+
+### (d) Record it at the run level too
+
+A recovered handoff is also a fact about the *run*, and a reader scanning
+`handoffs/registry.json` must be able to tell a clean run from a recovered one without
+opening every step file. See `ORCHESTRATOR.md` §7.2 for the `recovered` /
+`recovery_note` fields and for which of the two registry mechanisms (amend in place vs.
+append a `-resume` entry) applies when.
 
 ---
 

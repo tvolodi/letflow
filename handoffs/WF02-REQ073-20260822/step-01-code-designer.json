@@ -1,0 +1,50 @@
+{
+  "handoff_id": "e2b6b1e4-9c3a-4b7a-8f1a-6a1d1f5c9a02",
+  "run_id": "WF02-REQ073-20260822",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ073-20260822/step-01-code-designer.json",
+  "created_at": "2026-08-21T22:25:59Z",
+  "started_at": "2026-08-21T22:20:00Z",
+  "completed_at": "2026-08-21T22:25:59Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-073"],
+    "related_handoff_ids": ["handoffs/WF02-REQ073-20260822/step-00-git-setup.json"],
+    "artifacts_in": ["lib/letflow/routers/identity.ex", "lib/letflow/identity.ex"],
+    "owned_modules": ["lib/letflow/routers/identity.ex"],
+    "branch_name": "feature/WF02-REQ073-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 1 — design lib/letflow/design/req073-identity-user-routes.md covering route wiring for the five handleCreateUser/handleListUsers/handleGetUser/handlePatchUser/handleUpdateUserStatus handlers into lib/letflow/routers/identity.ex, each handler's exact composition (Letflow.Identity function called, scoped_repo_opts/1 use, Authorization.evaluate_access/2 use against UsersGroupsRolesManage, Letflow.Api.Validation schema, Letflow.Api.Response/Letflow.Api.Pagination use), the explicit response-field allowlist (INV-2), the cross-tenant-404 test design (AC2/INV-5) reusing REQ-072's scoped_repo_opts/1 mechanism, the permission-denial test design (AC4, DB-unchanged assertion), the tenant-isolation list test design (AC3/INV-1), and any Letflow.Identity domain-function gaps found.",
+    "acceptance_criteria": [
+      "Every acceptance criterion maps to a concrete design element",
+      "All new types/schemas are defined with field-level detail",
+      "DB schema changes fully described (table, columns, indexes, constraints) -- none required beyond existing users table for this requirement",
+      "Open questions listed explicitly, not silently resolved",
+      "No implementation code (.ex/.exs bodies) present -- signatures and type shapes only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req073-identity-user-routes.md. Route wiring: POST/GET /users, GET/PATCH /users/:id, POST /users/:id/status under Letflow.Routers.Identity (mounted at /identity). Every handler composes scoped_repo_opts/1 (step 1) then Authorization.evaluate_access/2 against :UsersManage (step 2, before any Repo call -- structural AC4 guarantee) then Letflow.Api.Validation (create/patch/status bodies) then a named Letflow.Identity function, responses via an explicit 8-key user_map/1 allowlist (id/username/display_name/email/status/auth_source/inserted_at/updated_at -- password_hash/external_id/external_realm excluded per INV-2). Found Letflow.Identity has ZERO general user-CRUD functions today (only OIDC/realm plumbing) -- named 5 new thin functions to add (create_user/2, list_users/2, get_user/2, update_user_profile/3, update_user_status/3) plus one small addition to the already-shipped Letflow.Api.Authorization.endpoint_policy_key/2 (no existing clause for POST /users/:id/status). Cross-tenant-404 test design reuses REQ-072's exact scoped_repo_opts/1 mechanism and context_test.exs's byte-identical-body assertion pattern, now dispatched through the real Letflow.Routers.Identity.call/2 handler. Permission-denial test design asserts full-row-unchanged (not just count) for patch/status-update, and row-count-unchanged for create. Tenant-isolation list test seeds two tenants with an identical username to prove per-schema uniqueness AND per-schema list scoping simultaneously. Chose direct Letflow.Routers.Identity.call/2 dispatch (auth_context assigned directly on the conn, bypassing AuthPipeline) for every test in this design, since neither existing OIDC test double (TokenVerifierDouble/ConfigurableTokenVerifierDouble) can mint a token claiming PLATFORM_ADMIN -- both are hardcoded to a fixed 'VIEWER' roles claim, which Authorization.roles_from_strings/1 doesn't even recognize. This follows established precedent (router_test.exs's REQ-070 AC2, context_test.exs) rather than inventing a new mechanism; recorded as OQ-6, not blocking.",
+    "artifacts_out": ["lib/letflow/design/req073-identity-user-routes.md"],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "OQ-1..OQ-6 in the design doc: cursor tiebreak field choice (OQ-1), inserted_at/updated_at JSON shape convention (OQ-2), placeholder password_hash value for internally-created users (OQ-3), exact search-field scope for list_users/2 not checked against R-Co's identity_service.listUsers -- out of this requirement's named source-file scope (OQ-4), whether update_user_status/3 shares profile_changeset/2 (OQ-5), and whether TEST-DESIGNER should also extend ConfigurableTokenVerifierDouble for a fuller real-auth end-to-end path in addition to direct sub-router dispatch (OQ-6). None block implementation; all are explicit, not silently resolved."
+      },
+      {
+        "severity": "MINOR",
+        "description": "Letflow.Api.Authorization.endpoint_policy_key/2 (an already-'done', REQ-069-owned module) needs one additive new clause for (\"POST\", \"/users/:id/status\") -> :UsersManage. Flagged since it crosses into a different requirement's already-shipped module, even though the change is small and additive."
+      }
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,68 @@
+{
+  "handoff_id": "598c117c-d0f8-406c-9c8c-cfce30ed447a",
+  "run_id": "WF03-ISS0109-20260821",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0109-20260821/step-final-git-merge.json",
+  "created_at": "2026-08-21T03:24:18Z",
+  "started_at": "2026-08-21T03:24:18Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "4de8efe9-138d-4b44-a8ae-0e542aa5441f"
+    ],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_MERGE.md",
+      "docs/issues/ISS-0109.yaml",
+      "test/reports/report-20260821-WF03-ISS0109-20260821.yaml",
+      "handoffs/WF03-ISS0109-20260821/"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0109-20260821",
+    "issue_ids": [
+      "ISS-0109",
+      "ISS-0110",
+      "ISS-0111",
+      "ISS-0112",
+      "ISS-0113",
+      "ISS-0114",
+      "ISS-0115",
+      "ISS-0116"
+    ]
+  },
+  "task": {
+    "description": "WF-03 STEP FINAL -- GIT MERGE. Execute docs/agents/protocols/GIT_MERGE.md for run WF03-ISS0109-20260821.\nYou ran Step 00 for this run; you are the same agent closing it.\n\nEVERY GATE IS GREEN AND THE MERGE IS PRE-AUTHORIZED (decision record\n0004-humanless-pipeline). Do not pause to ask. Gate record: CODE-DESIGN-VALIDATOR PASS\n(re-gate), SECURITY-REVIEWER PASS, REVIEWER PASS, TEST-DESIGN-VALIDATOR PASS (four mutations),\nTEST-RUNNER PASS (full suite, 16 failures all attributed as pre-existing or unattributed, zero\ncaused by this branch), ISSUE-FIXER Step 5 PASS, DOC-UPDATER Step 6 PASS. Both letflow-queue\ntasks (172 and 175) are already released `done` by ORCH, and GH#358 is already closed.\n\nWHICH VARIANT: use the NORMAL procedure, NOT the worktree variant. `git worktree list` shows two\nentries, but THIS checkout is the one that holds local `main` (the sibling at\nC:/Users/tvolo/dev/ai-dala/letflow-wt2 is on an unrelated branch), so `git checkout main` works\nhere and step 9's local cleanup is the ordinary one. Do not touch the sibling worktree.\n\n\u26a0\ufe0f DO NOT USE `git stash`. This repo currently carries THREE stash entries belonging to other\nsessions (one holds another session's uncommitted lib/letflow/engine/variable_merge.ex work). A\nblind `git stash pop` in this checkout would target a foreign entry. Commit what needs\ncommitting instead; there should be nothing left uncommitted but ORCH's own\nhandoffs/orchestrator.log, which ORCH will handle.\n\nPRECONDITION ON STEP 5's REBASE -- READ THIS BEFORE YOU REBASE. This run's predecessor\n(WF02-REQ066-20260820) hit an add/add conflict on a docs/issues/ISS-NNNN.yaml file at exactly\nthis step, because a concurrent session had allocated the same ISS number and merged first. THIS\nRUN FILED SEVEN NEW ISSUE RECORDS -- ISS-0110 through ISS-0116 -- so it is exposed to the same\ncollision on seven files, and the queue allocated task ids 176/177 to another host mid-run, so\nanother session IS active. If you hit an add/add conflict on any docs/issues/*.yaml:\n  - main's version WINS and must be kept byte-identical. Do NOT overwrite the other side.\n  - THIS run's colliding record gets renumbered to the next genuinely free id, with\n    `renumbered_from:` and a `renumber_note:` recording what happened -- follow the shape\n    docs/issues/ISS-0109.yaml already uses for exactly this situation.\n  - A renumbered record's `queue_task_id` and `github_issue` DO NOT change; only the local id\n    does. Report every renumbering to ORCH explicitly so the queue/GitHub mapping can be checked.\n  - Remember GIT_MERGE.md's warning: `--ours`/`--theirs` are INVERTED during a rebase compared\n    to a merge. Do not use either from merge-trained habit; read the actual conflict content.\n\nPR TITLE: use the `fix:` prefix per GIT_MERGE.md's WF-03 rule:\n  fix: instrument the tenant-schema-disappears-mid-test failure class [WF03-ISS0109-20260821]\n\nPR BODY -- be accurate rather than flattering, because this run's central honest finding is that\nit did NOT fix ISS-0109. Cover:\n  - ISS-0109's originally-filed mechanism was REFUTED: the DROP/DELETE/DELETE triple in its\n    evidence is the failing test's own post-failure on_exit teardown, a consequence rather than\n    the cause. The real fault class is provisioning/replay completeness.\n  - No production code changed. The registration path was investigated and cleared: CREATE\n    SCHEMA IF NOT EXISTS runs unconditionally inside the same transaction before the\n    registration path is reached, so a registration can never name an absent schema.\n  - What shipped: test/support/tenant_fixture.ex (Letflow.TenantFixture -- a 14-field one-shot\n    failure capture, a completeness oracle that catches a table missing while its migration\n    version is still recorded, and a LETFLOW_TENANT_FIXTURE teardown marker with a closed phase\n    vocabulary so a teardown line can never again be mistaken for a mid-test drop), adopted in\n    the two modules ISS-0109 names, plus 14 regression tests and a spec.\n  - ISS-0109 is `instrumented`, NOT `resolved` -- root cause still unknown -- and is superseded\n    by ISS-0116/GH#370.\n  - The run's most significant observation: the full suite reproduced ISS-0109's failure-3\n    signature in Letflow.Definitions.RollbackTest, a module that had NOT adopted the\n    instrumentation, while both adopted modules passed. One observation, not a controlled\n    experiment.\n  - Seven issues filed: ISS-0110/GH#364, ISS-0111/GH#365, ISS-0112/GH#366, ISS-0113/GH#367,\n    ISS-0114/GH#368, ISS-0115/GH#369, ISS-0116/GH#370.\n\nCI: per GIT_MERGE.md's Precondition, no .github/workflows/ CI exists yet (REQ-013 pending), so\nthere is no check to wait on. The local evidence is TEST-RUNNER's full-suite run recorded in\ntest/reports/report-20260821-WF03-ISS0109-20260821.yaml. Do NOT run `mix letflow.check` as a\nmerge gate: it fails on main itself under this host's Elixir 1.20.3/OTP 29 against a\n1.18.3-otp-27 pin (ISS-0106/GH#354, filed, not this run's), and a red gate this branch did not\ncause is not a reason to block the merge -- say so plainly rather than silently skipping it.\n\nAFTER THE MERGE, verify per GIT_MERGE.md step 9 and report the evidence: on main, clean tree,\n`git log --oneline -1` showing the squash commit, and `git pull --ff-only` succeeding.\n\nCommit by explicit filename, never `git add -A`. handoffs/orchestrator.log is ORCH's -- if it is\nmodified in the working tree, LEAVE IT and tell ORCH; do not stage it.\n",
+    "acceptance_criteria": [
+      "git rebase onto origin/main completed; any add/add conflict on docs/issues/*.yaml resolved by KEEPING main's record byte-identical and renumbering this run's, with renumbered_from/renumber_note recorded and reported to ORCH",
+      "PR created with the fix: prefix and a body that states plainly that ISS-0109 is instrumented rather than fixed",
+      "gh pr merge --squash --delete-branch exited 0 (or the documented PARTIAL fallback was reported, not silently treated as success)",
+      "Post-merge verification per GIT_MERGE.md step 9: on main, clean working tree, git log --oneline -1 shows the squash commit, git pull --ff-only exits 0 -- with the actual output quoted",
+      "mix letflow.check was NOT used as a merge gate, and the reason (pre-existing ISS-0106 toolchain skew failing on main itself) is stated explicitly rather than silently skipped",
+      "No git stash was used, and handoffs/orchestrator.log was not staged"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0109-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0109-20260821",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

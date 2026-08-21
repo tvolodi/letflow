@@ -1,0 +1,26 @@
+id: ISS-0113
+title: >
+  provisioned_tenant/0 sets Sandbox.mode(:auto) and never restores :manual, so sandbox mode leaks globally and later tests can run unsandboxed
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0109-20260821
+discovered_at: "2026-08-21T01:30:54Z"
+severity: MINOR
+
+description: >
+  Discovered by ISSUE-FIXER during WF03-ISS0109-20260821's Step 1, while probing sandbox visibility for an unrelated hypothesis. Reported for filing rather than fixed; no observed failure has been attributed to it.
+
+  The `provisioned_tenant/0` fixture calls `Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)` and never restores `:manual`. `Letflow.DataCase`'s setup (test/support/data_case.ex) sets `{:shared, self()}` for non-async modules. Because `Sandbox.mode/2` is a global setting on the repo rather than a per-test one, `:auto` therefore leaks into every subsequent test in the invocation until something else resets it -- meaning tests that expect sandboxed, rolled-back writes can instead run entirely unsandboxed and commit for real.
+
+  Status of the evidence, stated honestly: this is a code-reading observation plus one probe (`test process has an open xact with an id? false`). No failure has been traced to it. It is filed because the consequence -- silent real writes from tests that believe they are sandboxed -- is exactly the kind of thing that shows up later as an unattributable intermittent, and this family of issues (ISS-0048/0050/0060/0062/0064/0109) already has several of those.
+
+  Note the interaction with ISS-0112: the `:auto` call is part of the 41-way copy-pasted template, so a fix here and the consolidation there want to land together or in a deliberate order.
+
+affected_files:
+  - test/support/data_case.ex
+  - test/letflow/definitions/promotion_test.exs
+
+queue_task_id: 181
+github_issue: https://github.com/tvolodi/letflow/issues/367
+github_issue_note: >
+  Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (181) and its mirrored GitHub issue (#367) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
+status: open

@@ -1,0 +1,83 @@
+id: ISS-0112
+title: >
+  The provisioned_tenant/0 + on_exit teardown fixture is copy-pasted verbatim into 41 test files, so any change to tenant-fixture provisioning or teardown needs 41 identical edits
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0109-20260821
+discovered_at: "2026-08-21T01:30:54Z"
+severity: MINOR
+
+description: >
+  Discovered by ISSUE-FIXER during WF03-ISS0109-20260821's Step 1 diagnosis. Filed per ISSUE_QUEUE.md rather than fixed, because a 41-file mechanical edit is its own run with its own blast radius -- and this repo routinely has concurrent sessions holding test files.
+
+  The fixture template -- `Sandbox.mode(Letflow.Repo, :auto)`; `insert_tenant!`; `on_exit` registering `drop_schema!` plus two `delete_all`s; `provision_tenant_schema/1`; `replay_migrations/1` -- appears verbatim in 41 test files (e.g. test/letflow/definitions/promotion_test.exs:81-96, test/letflow/definitions/promotion_assertion_rerun_test.exs:118-123).
+
+  Why it matters beyond style: it is the reason no single-point change can improve how these tests provision, verify, or tear down a tenant schema, and it is the direct obstacle to diagnosing the ISS-0109 class of intermittent failure. Every one of those 41 copies fails the same way, with the same missing diagnostic context, and a fix applied to one is invisible to the other 40.
+
+  Suggested direction: consolidate into one shared `test/support` helper, then migrate call sites in batches. WF03-ISS0109-20260821's own fix design is expected to introduce the shared helper (so the new behaviour has a home); this issue covers migrating the remaining copy-paste sites onto it, which that run deliberately leaves out of scope.
+
+affected_files:
+  - test/letflow/definitions/promotion_test.exs
+  - test/letflow/definitions/promotion_assertion_rerun_test.exs
+  - test/support/
+
+queue_task_id: 180
+github_issue: https://github.com/tvolodi/letflow/issues/366
+github_issue_note: >
+  Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (180) and its mirrored GitHub issue (#366) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
+status: open
+
+carried_findings:
+  - from_run: WF03-ISS0109-20260821
+    from_agent: SECURITY-REVIEWER
+    at: "2026-08-21T02:22:55Z"
+    severity: MINOR
+    finding: >
+      The new shared helper's failure paths log raw Exception.message(exception)
+      (test/support/tenant_fixture.ex:274 and :382). SECURITY-REVIEWER PASSed the
+      helper with this recorded as non-blocking and explicitly recommended carrying
+      it here rather than expanding WF03-ISS0109-20260821's scope. Its reasoning:
+      the text is bounded in practice today, because every query that can raise
+      inside do_capture/2 is already tenant-scoped, so a Postgrex.Error names only
+      the tenant's own schema or relation and carries no credential -- it is not an
+      INV-4 violation and not an INV-F-8 leak. The narrow residual is that a
+      DBConnection.ConnectionError message can include host:port, i.e. connection
+      endpoint detail rather than a secret, in a test-environment log.
+      Why it belongs to THIS issue specifically: ISS-0112 is the run that migrates
+      the other 39 copy-paste fixture sites onto this helper. Whatever this helper
+      logs on failure will, at that point, be what 41 call sites log on failure --
+      so the decision about exception-text handling is cheapest to make once, here,
+      before the copy count goes back up.
+  - from_run: WF03-ISS0109-20260821
+    from_agent: REVIEWER
+    at: "2026-08-21T02:31:28Z"
+    severity: MINOR
+    finding: >
+      Five non-blocking items from the step-03d idiom gate on
+      test/support/tenant_fixture.ex. REVIEWER PASSed the module; none of these
+      blocks anything, and all of them land on the file ISS-0112's own run will be
+      editing anyway.
+
+      (1) PAIRED WITH THE SECURITY FINDING ABOVE, AND THEY PULL IN OPPOSITE
+      DIRECTIONS -- decide them together, not separately. The failure paths at
+      tenant_fixture.ex:274 and :382 log raw Exception.message(exception).
+      SECURITY-REVIEWER wants LESS in that string (a DBConnection.ConnectionError
+      message can carry host:port). REVIEWER wants MORE: the reaper uses
+      Exception.format(:error, ex, __STACKTRACE__), and for a module whose entire
+      purpose is attributability, dropping the stacktrace loses the most attributable
+      part. Both are right about their own axis; the resolution is a single decision
+      about what that string should contain, made once.
+
+      (2) Dead map key: do_capture/2's observed.registration is never read.
+
+      (3) rescue does not catch exits, so a DBConnection owner-death exit would
+      escape capture_schema_state/1 -- INV-F-4's letter survives, its spirit does
+      not. NOT a new gap: test/support/tenant_schema_reaper.ex makes the same
+      rescue-only choice, so this is the established level for test/support/. If it
+      is ever tightened, tighten both together.
+
+      (4) Default args leave provisioned_tenant!/0 and assert_schema_complete!/1
+      unspecced -- cosmetic, and a repo-wide pattern rather than a defect here.
+
+      (5) Style nits: the magic depth 4 in parent_chain/2; TenantSlugFixture
+      fully-qualified despite the alias block; and the bare __struct__ match in
+      current_test_of/1 wanting its one-line justification comment.

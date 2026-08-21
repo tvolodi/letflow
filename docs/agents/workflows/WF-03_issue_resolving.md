@@ -115,6 +115,12 @@ against already-fixed code proves nothing about whether it actually covers the b
 3. Complete the handoff: PASS, next_action: "Route to Step Final".
 ```
 
+`resolved` is the normal terminal state, but not the only legal one: it asserts that a
+root cause was actually removed. A run that shipped verified work without removing the
+root cause uses `instrumented` (with a required `superseded_by:` pointer) instead — see
+`docs/agents/protocols/ISSUE_QUEUE.md`'s "Issue status vocabulary" for the definitions
+and the conditions; do not restate them here.
+
 **ORCH, immediately on this step's PASS** (same turn, before writing the `RUN_DONE` log
 line): if this issue has a real `letflow-queue` task (registered via `register_task`,
 `task_type: "issue"`), call `release_lock` with `status: "done"` against that task id —

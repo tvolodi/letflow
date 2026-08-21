@@ -1,0 +1,35 @@
+id: ISS-0110
+title: >
+  TenantSchemaReaper's 300s min_age can no longer outlive the suite (564-609s), so a nested/concurrent mix test's pre-suite sweep can DROP a live run's tenant schema
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0109-20260821
+discovered_at: "2026-08-21T01:30:54Z"
+severity: MAJOR
+
+description: >
+  Discovered by ISSUE-FIXER during WF03-ISS0109-20260821 (Step 0.5 registry lookup, re-confirmed and shown reachable in Step 1). Filed as a SEPARATE defect, not folded into ISS-0109: it is explicitly NOT the root cause of ISS-0109's failures and not a contributing factor to them (ISS-0109's schema died on a ~1-second-old row, far inside any min_age), but it is a real unguarded hazard in its own right.
+
+  `Letflow.TenantSchemaReaper.sweep_orphans/2` (test/support/tenant_schema_reaper.ex:43, 62, 105) is the shipped fix for ISS-0064. Its ONLY protection against reclaiming a concurrently-running `mix test` invocation's LIVE tenant schemas is the 300s `@default_min_age_seconds`; there is no liveness tracking of any kind (unlike `Letflow.SandboxPool`, which monitors its slot owners). The design doc lib/letflow/design/iss064-orphaned-tenant-schemas-fix.md 2 argues this is safe because the sweep runs only at the two suite boundaries, where "currently active" is the empty set FOR THIS INVOCATION.
+
+  Two things have changed since that argument was written:
+
+  1. The suite now takes 564-609s (measured: report-20260820-WF02-REQ066-20260820.yaml 608.7s; RELEASE-VALIDATOR's independent re-run 563.8s). The 300s min_age was chosen when a full run was shorter than that. A tenant schema provisioned early in a long run is >300s old while still in active use.
+
+  2. ISS-0107/GH#357 demonstrates that a second invocation really can share the same database: `Mix.Tasks.Letflow.Check.Test.stream_and_capture/2` uses `Port.open({:spawn_executable, ...})`, which inherits the environment, so a nested `mix test` inherits `LETFLOW_DB_PORT` and `MIX_TEST_PARTITION` and lands on the IDENTICAL database as its parent. The nested run's pre-`ExUnit.start()` sweep then reaps against its parent's live rows.
+
+  Combined: a nested (or otherwise concurrent same-database) invocation's pre-suite sweep can `DROP SCHEMA ... CASCADE` a schema the parent run is still using, once that schema is more than 300s old. The reaper's `reclaim_row/2` never raises to its caller and reports a reclaim identically to an empty sweep, so this would be silent apart from a log line.
+
+  What a fix needs to decide (do not assume): raising min_age is not obviously right -- it trades one failure mode for the orphan accumulation ISS-0064 exists to prevent. Real liveness tracking (e.g. a session/advertised-PID marker on the row, or scoping the sweep to rows this invocation could not possibly own) is the direction that removes the guess rather than retuning it.
+
+  Evidence and reasoning: handoffs/WF03-ISS0109-20260821/step-005-issue-fixer-registry-lookup.json and step-01-issue-fixer-diagnose.json.
+
+affected_files:
+  - test/support/tenant_schema_reaper.ex
+  - lib/letflow/design/iss064-orphaned-tenant-schemas-fix.md
+  - test/test_helper.exs
+
+queue_task_id: 178
+github_issue: https://github.com/tvolodi/letflow/issues/364
+github_issue_note: >
+  Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (178) and its mirrored GitHub issue (#364) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
+status: open

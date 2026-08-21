@@ -1,0 +1,85 @@
+{
+  "handoff_id": "51ac4aa9-2c4c-4481-a011-6a4d7292f07b",
+  "run_id": "WF03-ISS0109-20260821",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0109-20260821/step-05-issue-fixer-close.json",
+  "created_at": "2026-08-21T03:16:09Z",
+  "started_at": "2026-08-21T03:16:09Z",
+  "completed_at": "2026-08-21T03:19:10Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "11808999-4d86-4d6c-a3b6-6498409297ce",
+      "0a8f2116-32df-4787-9ccc-b6864553ca0a"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0109.yaml",
+      "docs/issues/ISS-0116.yaml",
+      "handoffs/WF03-ISS0109-20260821/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-ISS0109-20260821/step-04c-test-runner.json",
+      "test/reports/report-20260821-WF03-ISS0109-20260821.yaml",
+      "lib/letflow/design/iss0109-provisioning-completeness-and-fixture-instrumentation.md",
+      "test/specs/ISS-0109.md",
+      "docs/agents/protocols/ISSUE_QUEUE.md"
+    ],
+    "owned_modules": [
+      "docs/issues/ISS-0109.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0109-20260821",
+    "issue_ids": [
+      "ISS-0109"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 5 -- CLOSE OUT ISS-0109's RECORD. You diagnosed this issue at Step 1 of this same\nrun; this step makes the registry tell the truth about what was found and what shipped.\n\nORCH HAS ALREADY DECIDED THE STATUS, and it is deliberately NOT `resolved`. Both the\ngate-approved design (SS8.3) and REVIEWER independently concluded this run is INSTRUMENTED, NOT\nFIXED: no production defect exists to remove, the failure was never reproduced on demand, and\nthe root cause is still unknown. Marking it `resolved` would put a false entry into a registry\nthat six other issues cross-reference. Set:\n\n    status: instrumented\n    superseded_by: ISS-0116\n\nWHAT YOU MUST DO:\n\n1. CORRECT THE `mechanism:` SECTION. This is the MAJOR finding you yourself filed at Step 1 and\n   it is the single most important edit in this step -- the record currently asserts a causal\n   ordering its own evidence does not support, and any future run reading it would be misled\n   exactly as this one nearly was. Rewrite it to state: the DROP/DELETE/DELETE triple is the\n   failing test's OWN post-failure on_exit teardown (a consequence, not the cause), on the three\n   grounds you established (schema_name_for_tenant/1 is a pure derivation so only the failing\n   test's own closure can name that schema; ExUnit runs on_exit synchronously between tests and\n   kills an over-running runner; the DROP used IF EXISTS and SUCCEEDED); that the only\n   untimestamped line in the original excerpt was the one asserting causal order; and that\n   failure 14's state (a table missing while its schema survived AND a sibling table in that\n   schema was writable) is one DROP SCHEMA ... CASCADE physically cannot produce. PRESERVE the\n   original text rather than deleting it -- keep it under a clearly marked heading such as\n   `mechanism_as_originally_filed:` so the audit trail of what was believed, and when, survives.\n   That is this project's convention (see the record's own `renumbered_from`/`renumber_note`\n   handling) and it is what lets a later reader see the correction rather than a silent rewrite.\n\n2. EXTEND `related:` with ISS-0107 and ISS-0059 (Step 0.5's finding), plus this run's own\n   filings: ISS-0110, ISS-0111, ISS-0112, ISS-0113, ISS-0114, ISS-0115, ISS-0116.\n\n3. RECORD WHAT SHIPPED and what it does and does not close. Add a resolution/outcome section\n   naming: test/support/tenant_fixture.ex (Letflow.TenantFixture -- capture_schema_state/1's\n   14-field one-shot report, assert_schema_complete!/2's completeness oracle, and the\n   LETFLOW_TENANT_FIXTURE teardown marker with its closed phase vocabulary), its adoption in the\n   two modules this issue names, the 14 regression tests at\n   test/letflow/support/tenant_fixture_test.exs, the spec at test/specs/ISS-0109.md, and the\n   design at lib/letflow/design/iss0109-provisioning-completeness-and-fixture-instrumentation.md.\n   State plainly that this makes a recurrence ATTRIBUTABLE rather than making it stop happening.\n\n4. ADD THE NEW EVIDENCE FROM THIS RUN'S OWN FULL SUITE, which is the most important new fact in\n   the record and the reason ISS-0116 exists. TEST-RUNNER's run (612.1s, 1228/1244 passed, 16\n   failures, seed 993324) produced a SIGNATURE-IDENTICAL reproduction of this issue's failure 3\n   -- same 3F000, same {:error, {:migration_failed, %MatchError{...}}} wrapper, same failing\n   assertion -- in Letflow.Definitions.RollbackTest (test/letflow/definitions/rollback_test.exs:642,\n   raised from that module's own hand-rolled provisioned_tenant/0 at :120), a module that has NOT\n   adopted the new fixture. Meanwhile BOTH modules this issue names passed, in the full suite and\n   in isolation. Record it with the honesty TEST-RUNNER used: one observation, not a controlled\n   experiment -- but evidence the condition is real and not specific to the two modules this\n   issue happened to name. Full details: test/reports/report-20260821-WF03-ISS0109-20260821.yaml.\n\n5. GITHUB. Post a comment on issue #358 and then CLOSE it deliberately (`gh issue comment` then\n   `gh issue close`), rather than leaving it for the queue's release to close as a side effect.\n   The comment must say: what shipped; that the originally-filed mechanism was refuted and how;\n   that the root cause remains UNKNOWN so this is instrumented rather than fixed; that the\n   remaining hunt now lives in ISS-0116/GH#370 WITH the new RollbackTest evidence; and that\n   ISS-0112/GH#366 (adopting the fixture at the remaining sites) should be sequenced first\n   because it is what makes the next occurrence diagnosable. Link #370 explicitly. If `gh` is\n   unavailable, say so explicitly in your result rather than silently skipping -- do not fake it.\n\nDO NOT: change any code, test, or the design artefact. Do not re-run the suite. This step edits\nthe issue registry and GitHub only.\n\nCONSTRAINTS: timestamps from the clock (`date -u +\"%Y-%m-%dT%H:%M:%SZ\"`), never estimated. Never\ndelete an issue file. Branch feature/WF03-ISS0109-20260821; commit by explicit filename, never `git add -A`.\nhandoffs/orchestrator.log is ORCH's -- leave it alone, and `git fetch` rather than pulling if a\nrebase refuses.\n",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0109.yaml carries status: instrumented and superseded_by: ISS-0116 -- NOT status: resolved",
+      "The mechanism: section is corrected to the refutation established at Step 1, and the originally-filed text is PRESERVED under a clearly marked heading rather than deleted",
+      "related: is extended with ISS-0059, ISS-0107, ISS-0110, ISS-0111, ISS-0112, ISS-0113, ISS-0114, ISS-0115 and ISS-0116",
+      "A resolution/outcome section names every artefact that shipped and states plainly that this makes a recurrence attributable rather than making it stop happening",
+      "The RollbackTest reproduction from this run's full suite is recorded, with its file:line, the error signature, the fact that the two adopted modules passed, and the explicit caveat that it is one observation rather than a controlled experiment",
+      "GitHub issue #358 has a comment covering what shipped, the refuted mechanism, the unknown root cause, and the handoff to ISS-0116/GH#370 and ISS-0112/GH#366 -- and is then closed deliberately; or gh unavailability is stated explicitly",
+      "resolved_in_run / closed timestamps come from a real clock read",
+      "No code, test, spec or design file was modified by this step"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "WF-03 Step 5 close-out for ISS-0109. docs/issues/ISS-0109.yaml is the only file this step modified (git status confirms: no code, test, spec or design file touched; the suite was not re-run). Record now carries status: instrumented and superseded_by: ISS-0116 -- deliberately NOT resolved, with a resolution.status_rationale stating why in the record itself so a future reader does not have to reconstruct ORCH's decision. (1) MECHANISM CORRECTED: the originally-filed text is preserved verbatim under a new `mechanism_as_originally_filed:` key -- nothing was deleted -- and `mechanism:` now opens with an explicit 'CORRECTED 2026-08-21 by WF03-ISS0109-20260821' banner pointing at the preserved original, matching the record's existing renumber_note convention. The refutation states all three Step 1 grounds (schema_name_for_tenant/1 is a pure derivation so only the failing test's own closure could name that schema; ExUnit runs on_exit synchronously between tests and kills an over-running runner, quoting OnExitHandler.run/2's receive_runner_reply/4 block; the DROP used IF EXISTS and SUCCEEDED), notes that the only untimestamped line in the original excerpt was the one asserting causal order, and records failure 14 as the decisive counterexample -- a table missing while its schema survived and a sibling table in that schema was writable is a state one DROP SCHEMA ... CASCADE physically cannot produce. It closes by naming what remains unknown and routing it to ISS-0116/GH#370. (2) related: extended to 15 entries adding ISS-0059 and ISS-0107 (Step 0.5) plus ISS-0110..ISS-0116 (this run's filings), with a related_note disambiguating main's ISS-0107 from this record's own pre-rebase identity. (3) New `resolution:` block names every shipped artefact -- tenant_fixture.ex (capture_schema_state/1's 14-field report, assert_schema_complete!/2's oracle, the LETFLOW_TENANT_FIXTURE marker), the two adopting modules, the 14 regression tests, the spec and the design -- and states plainly under what_this_does_not_close that this makes a recurrence ATTRIBUTABLE, not that it makes it stop. (4) New `new_evidence_from_resolving_run:` block records the RollbackTest reproduction with file:line (rollback_test.exs:642, raised from provisioned_tenant/0 at :120), the full 3F000/{:error, {:migration_failed, %MatchError{...}}} signature, the fact that both adopted modules passed in the full suite and in isolation, and TEST-RUNNER's caveat carried forward verbatim in spirit -- one observation, not a controlled experiment, consistent with the fixture helping AND with this issue's long-standing intermittency. (5) GITHUB: gh is available (2.83.1). Commented on #358 (https://github.com/tvolodi/letflow/issues/358#issuecomment-5364776283) then closed it deliberately via `gh issue close 358 --reason completed`; verified CLOSED with closedAt 2026-08-21T03:18:27Z. The comment covers what shipped, the refutation, the unknown root cause, and links #370 (ISS-0116, where the hunt continues, now with the RollbackTest evidence) and #366 (ISS-0112, sequenced FIRST because it is what makes the next occurrence diagnosable). All timestamps from `date -u` clock reads; resolution.closed_at is GitHub's own reported close time rather than an estimate. File re-parsed with yaml.safe_load after every edit.",
+    "artifacts_out": [
+      "docs/issues/ISS-0109.yaml"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "`instrumented` is a new value in the issue-registry status vocabulary -- docs/agents/protocols/ISSUE_QUEUE.md and WF-03 Step 5 both describe Step 5 as setting `status: resolved` and do not define an instrumented-but-unfixed terminal state. ORCH's decision here is right and the record is honest, but the vocabulary should be written down at the source or the next Step 5 will face the same choice with no guidance. Worth a DOC-UPDATER pass on ISSUE_QUEUE.md and WF-03.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Queue task 172 still needs releasing alongside 175 -- ISS-0109's own queue_task_id_note records that BOTH tasks cover this one issue and that 172 stays claimable forever if only 175 is released. This step edited the registry and GitHub only; the queue release is ORCH's at Step FINAL. Flagging so it is not lost now that #358 is closed.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0109-20260821",
+      "commit_sha_list": [
+        "046fbd3"
+      ],
+      "remote_branch": "origin/feature/WF03-ISS0109-20260821",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step FINAL (git merge). Before merging, release BOTH queue tasks 172 and 175 per ISS-0109's queue_task_id_note. ISS-0116/GH#370 stays open and carries the remaining root-cause work; sequence ISS-0112/GH#366 (fixture adoption at the remaining sites, RollbackTest first) ahead of it."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -73,63 +73,41 @@ defmodule Letflow.Definitions.PromotionAssertionRerunTest do
 
   use Letflow.DataCase, async: false
 
-  import Ecto.Query
-
   alias Letflow.Definitions
   alias Letflow.Definitions.PromotionArtifact
   alias Letflow.Definitions.PromotionArtifact.Assertion
   alias Letflow.Definitions.PromotionAssertionRun
   alias Letflow.Definitions.PromotionDigest
   alias Letflow.Definitions.PromotionReviewStore
-  alias Letflow.Identity.Tenant
   alias Letflow.SandboxPool
   alias Letflow.SandboxPool.FixtureLoader.FixtureRow
   alias Letflow.SandboxPool.SandboxClaim
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
 
   # ---------------------------------------------------------------------------------
   # Fixtures / helpers -- tenant + schema provisioning
   # ---------------------------------------------------------------------------------
 
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req040-assertion-rerun"),
-        display_name: "REQ-040 Assertion Rerun Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
-
+  # Kept deliberately, even though `provisioned_tenant/0` below no longer calls it: the
+  # `SandboxPool`-held schema at the "held sandbox" test's `on_exit` is NOT a
+  # `TenantFixture` tenant and still needs its own drop (ISS-0109 design §5, §9 item 6).
   defp drop_schema!(schema_name) do
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
   end
 
-  # Mirrors rollback_test.exs's/store_test.exs's provisioned_tenant/0 exactly.
+  # Adopts the shared `Letflow.TenantFixture` (ISS-0109 / GH#358) in place of this
+  # file's own hand-rolled `insert_tenant!/0` + `provisioned_tenant/0` copies.
+  # Behaviour-preserving by construction (design §7.7): the same tenant row is inserted,
+  # the same sandbox `:auto` switch is made, the same schema is provisioned, the same
+  # replay is run, and the same three teardown statements are issued in the same order
+  # -- the fixture additionally asserts the resulting schema is COMPLETE (so a missing
+  # `promotion_assertion_runs` is named here rather than surfacing 500 lines later as an
+  # opaque 42P01) and emits one greppable `LETFLOW_TENANT_FIXTURE phase=teardown` line,
+  # so a post-test drop can never again be mistaken for a mid-test one.
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    Letflow.TenantFixture.provisioned_tenant!(
+      slug_prefix: "req040-assertion-rerun",
+      display_name: "REQ-040 Assertion Rerun Test Tenant"
+    )
   end
 
   # ---------------------------------------------------------------------------------

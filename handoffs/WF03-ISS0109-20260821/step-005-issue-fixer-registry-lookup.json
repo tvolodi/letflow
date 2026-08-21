@@ -1,0 +1,88 @@
+{
+  "handoff_id": "eafa46f5-0ecd-4727-baf6-20b65931084a",
+  "run_id": "WF03-ISS0109-20260821",
+  "workflow_id": "WF-03",
+  "step": "0.5",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0109-20260821/step-005-issue-fixer-registry-lookup.json",
+  "created_at": "2026-08-21T01:04:10Z",
+  "started_at": "2026-08-21T01:04:15Z",
+  "completed_at": "2026-08-21T01:05:41Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "4de8efe9-138d-4b44-a8ae-0e542aa5441f"
+    ],
+    "owned_modules": [
+      "test/support/",
+      "test/letflow/definitions/promotion_test.exs",
+      "test/letflow/definitions/promotion_assertion_rerun_test.exs",
+      "test/test_helper.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0109-20260821",
+    "issue_ids": [
+      "ISS-0109"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0109.yaml",
+      "docs/issues/ISS-0048.yaml",
+      "docs/issues/ISS-0050.yaml",
+      "docs/issues/ISS-0060.yaml",
+      "docs/issues/ISS-0062.yaml",
+      "docs/issues/ISS-0064.yaml",
+      "docs/issues/ISS-0106.yaml",
+      "docs/issues/ISS-0108.yaml",
+      "lib/letflow/design/iss064-orphaned-tenant-schemas-fix.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 -- REGISTRY LOOKUP for ISS-0109 (GH#358). Read docs/issues/ISS-0109.yaml in full first.\n\nISS-0109 explicitly declares itself 'same class as ISS-0048/0050/0060/0062/0064 but in modules those issues do not name', and ISS-0064 already produced a shipped fix (Letflow.TenantSchemaReaper, design doc lib/letflow/design/iss064-orphaned-tenant-schemas-fix.md). That makes the recurrence question in WF-03 Step 0.5 point 2 the CENTRAL question of this step, not a formality: determine whether ISS-0109 is (i) a genuinely new mechanism, or (ii) a recurrence of a root cause a prior issue was already marked resolved for -- i.e. a fix that did not actually fix the underlying problem.\n\nProcedure:\n1. Read every related issue record (ISS-0048, ISS-0050, ISS-0060, ISS-0062, ISS-0064, and also ISS-0108 which was filed by the same run for a DIFFERENT mechanism) plus the ISS-0064 design doc. Record, for each: its status, its stated root cause, and what its fix actually changed.\n2. Grep docs/issues/ for any OTHER entry with matching symptoms (invalid_schema_name / 3F000, undefined_table / 42P01, DROP SCHEMA during a live test, on_exit teardown, tenant_schemas orphan) that the ISS-0109 record does not already name. It was written by TEST-RUNNER under time pressure and its `related:` list may be incomplete.\n3. If a clear prior match exists AND the same root cause has recurred, say so explicitly and raise the effective severity to at least MAJOR per WF-03 Step 0.5 -- state that verdict in result.summary in those words so ORCH can act on it.\n4. Do NOT diagnose ISS-0109's own root cause in this step and do NOT change any code. This step is a literature review of the issue registry; the diagnosis is Step 1, which you will receive next.\n\nENVIRONMENT FACTS already established by ORCH -- do not re-derive, but DO verify anything you rely on:\n- Working directory is the letflow-2 workspace (C:/Users/tvolo/dev/ai-dala/letflow-2). It runs its OWN Postgres container letflow-2-postgres-1 on host port 5472 (LETFLOW_DB_PORT=5472 in the untracked ./.env). The sibling letflow workspace runs letflow-postgres-1 on 5462. ISS-0109 was observed in the SIBLING workspace's run, against 5462 -- not this one. That is directly relevant to candidate mechanism (b) in the issue record.\n- Toolchain on PATH is Elixir 1.20.3 / OTP 29, while .tool-versions pins 1.18.3-otp-27. This is a KNOWN, already-filed defect (ISS-0106/GH#354) and a sibling session holds it. Consequence for you: `mix compile --warnings-as-errors` and `mix format --check-formatted` FAIL on main itself for reasons unrelated to ISS-0109. Use plain `mix compile` and `mix test`. Do NOT reformat files and do NOT fix those warnings -- that is ISS-0106's run, not yours.\n- `mix` may not be on PATH as a bare command in every shell; invoke it as \"/c/Program Files/Elixir/bin/mix\" (quoted) if needed.\n- A full `mix test` run currently takes ~600s. Budget for that; prefer targeted runs where they can settle a question, but do not report a full-suite-only symptom as reproduced from a targeted run.\n- The current branch is feature/WF03-ISS0109-20260821 and it is yours to commit to. Commit by explicit filename, never `git add -A`.",
+    "acceptance_criteria": [
+      "Every issue record named in ISS-0109's `related:` list has been read, and its status + stated root cause + what its fix changed is summarised in result.summary",
+      "A grep of docs/issues/ for the symptom class was actually run and its result reported, including any matching entry NOT already named in ISS-0109's related: list (or an explicit statement that there were none)",
+      "An explicit RECURRENCE verdict is stated: either 'recurrence of <ISS-NNNN>, severity raised to MAJOR' or 'not a recurrence -- <named prior issues> have distinct root causes, because <reason>'",
+      "No file under lib/, test/, or priv/ was modified in this step"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "WF-03 Step 0.5 registry lookup for ISS-0109 (GH#358). No code, test, or migration file was touched. PER-ISSUE READ (all six named in ISS-0109's `related:` plus ISS-0108). ISS-0048 (resolved, WF03-ISS0048-20260818, GH#198): root cause = Letflow.SandboxPool documented an owner-crash reaper it never implemented, so a test process killed before its on_exit/1 left its pooled `sandbox_*` schema behind; fix = implemented the owner-monitor in lib/letflow/sandbox_pool.ex (monitor each slot's owner, drop the schema on unexpected DOWN) + regression test test/letflow/sandbox_pool_test.exs. Scope: `sandbox_*` schemas only. ISS-0050 (resolved, WF03-ISS0050-20260818, GH#185): root cause = the DropLegacyPublicIdentityTables guard migration crashed with 42P01 when a tenant schema lacked a per-tenant table; fix = a to_regclass IF/ELSE skip-guard in the migration so a missing table is skipped rather than fatal (design lib/letflow/design/iss-0050-drop-legacy-guard-missing-table.md). Scope: that one migration + identity_migration_test.exs. ISS-0060 (resolved, WF03-ISS0060-20260819, PR #217, GH#207): root cause = that same guard test's assertion racing against OTHER tenants concurrently provisioning/deprovisioning in the shared non-sandboxed test DB, because the migration's tenant_schemas scan is (correctly, for production) global; fix = test-side with_only_this_tenant_visible!/2 snapshot/restore of the test's view of tenant_schemas around the guarded migration call, plus a crash-safe self-heal in setup (design lib/letflow/design/iss060-migration-guard-test-race-fix.md). Scope: test-side visibility scoping of one test module. ISS-0062 (resolved as a duplicate of ISS-0060, same run/fix, no separate change): fourth filing of the guard-test class, closed without re-fixing. ISS-0064 (resolved, WF03-ISS0064-20260819, MAJOR, GH#207): root cause = ~30+ test files that provision a real `tenant_*` schema directly via TenantProvisioning.provision_tenant_schema/1 rely solely on a manual on_exit/1 for cleanup and, unlike SandboxPool's `sandbox_*` schemas, had NO reaper at all, so killed/timed-out tests permanently orphaned tenant_schemas rows; proven deterministic-per-DB-state (letflow_test2 with 2 orphans failed, clean letflow_test passed 8/8); fix = test-only Letflow.TenantSchemaReaper.sweep_orphans/2 (test/support/tenant_schema_reaper.ex, design lib/letflow/design/iss064-orphaned-tenant-schemas-fix.md) called once before ExUnit.start() and once from ExUnit.after_suite/1 in test/test_helper.exs, reclaiming only rows whose provisioned_at is older than a 300s min-age. Scope: cross-invocation STALE orphans at suite boundaries. ISS-0106 (open, MAJOR, GH#354): Elixir 1.20/OTP 29 vs the 1.18.3-otp-27 pin; unrelated to this symptom class, relevant only as a tooling constraint. ISS-0108 (open, MINOR, GH#360): partial-unique-index collision on the bpm-default seed tenant row -- same environmental family, different mechanism (seed-row contention, not a schema being dropped). GREP RESULT. `grep -rlE \"invalid_schema_name|3F000|undefined_table|42P01|DROP SCHEMA|on_exit|tenant_schemas|orphan\" docs/issues/` matched 12 files: ISS-0005, ISS-0028, ISS-0048, ISS-0050, ISS-0059, ISS-0060, ISS-0062, ISS-0064, ISS-0065, ISS-0073, ISS-0107, ISS-0109. Six of those are already in ISS-0109's related: list or are ISS-0109 itself. Of the remaining six, ISS-0005 (stale R-Co design docs), ISS-0028 (stray-table cleanup manifest), ISS-0065 (Windows System.cmd subprocess) and ISS-0073 (event-type seed fixture collision) are keyword-only matches with no bearing. TWO matter and are NOT named by ISS-0109: (1) ISS-0107 (OPEN, MAJOR, GH#357) -- letflow_check_test_test.exs's fake-mix fixture is POSIX-only, so on Windows Mix.Tasks.Letflow.Check.Test.run/1 shells out to the REAL mix and recurses the suite into a full NESTED `mix test`; the ExUnit 60s timeout then leaves that nested BEAM alive (three orphaned erl.exe holding 96 connections to letflow_test were observed) and it corrupts shared test-DB state for later runs. ISS-0109's own run reported 2 ExUnit.TimeoutError failures in exactly that module (Mix.Tasks.Letflow.Check.Test.collect/2), and ISS-0108 records a third tipping over in the Step 5 re-run. ISS-0107 is therefore a concrete, already-filed source for ISS-0109 candidate mechanism (b) 'a second, concurrently-running mix test invocation against the same shared Postgres' -- a lead for Step 1, NOT a diagnosis, and the numbering history makes the omission understandable (ISS-0109 was itself renumbered off 0107 during the rebase). (2) ISS-0059 (resolved, WF03-ISS0059-20260819) -- same structural pattern one level down: an :auto-sandbox test doing real commits with on_exit-only cleanup, where a prior invocation's skipped on_exit poisons the next; fixed narrowly by making that one module's on_exit also clean stale req027-* tenants at module boundary, i.e. another per-module patch of the on_exit-is-not-a-safety-net problem rather than a general fix. RECURRENCE VERDICT: NOT A RECURRENCE -- ISS-0048, ISS-0050, ISS-0060, ISS-0062 and ISS-0064 have distinct root causes, because every one of their shipped fixes addresses either a DIFFERENT resource or a DIFFERENT time window than ISS-0109's symptom. ISS-0048 covers `sandbox_*` pool slots, while ISS-0109's schemas are directly-provisioned `tenant_*` schemas. ISS-0050 and ISS-0060/0062 are both scoped to one test module (Letflow.IdentityMigrationTest) and one migration (DropLegacyPublicIdentityTables) -- neither the failing modules (Letflow.Definitions.PromotionTest, Letflow.Definitions.PromotionAssertionRerunTest) nor their code paths are touched by either fix, and that guard test failed independently and stably (10x) in the very same run. ISS-0064 is the closest match and is genuinely about directly-provisioned `tenant_*` schemas, but its fix acts only at the two suite boundaries on rows older than 300s, whereas ISS-0109's schema was dropped ~750ms after its own provisioning transaction committed on a row ~1s old; ISS-0064's mechanism cannot produce that, so ISS-0109 is not that root cause recurring. Severity therefore stays as filed (MINOR) on recurrence grounds; ORCH should NOT raise it to MAJOR under WF-03 Step 0.5 point 2. TWO CORRECTIONS/LEADS FOR STEP 1, recorded because they bear on the diagnosis and one of them contradicts a claim in the ISS-0109 record itself (verified against source, not inherited): (A) ISS-0109's mechanism section argues the observed DROP/DELETE/DELETE triple 'is the shape of an on_exit/1 teardown, not of Letflow.TenantSchemaReaper'. That specific reasoning is wrong on shape grounds: TenantSchemaReaper.reclaim_row/2 (test/support/tenant_schema_reaper.ex:105-109) emits exactly that triple -- DROP SCHEMA IF EXISTS \"...\" CASCADE, then DELETE FROM tenant_schemas, then DELETE FROM tenants. What actually distinguishes them in the quoted log is the PREDICATE: the reaper deletes the registry row by its own id (`DELETE FROM tenant_schemas WHERE id = $1`) whereas the log shows `WHERE tenant_id = 8111baf7-...`. The reaper is still excluded, but by the predicate and the age argument, not by the statement shape -- Step 1 should re-derive this rather than inherit either version. (B) ISS-0064's shipped safety argument has an eroded precondition. sweep_orphans/2's only protection against reaping a schema a CONCURRENT invocation is actively using is the 300s min-age (test/support/tenant_schema_reaper.ex:43,66,105) -- no liveness tracking of any kind -- and the design doc chose that value on the reasoning that a suite boundary is the only point where 'currently active' is guaranteed empty. The suite now runs 564-609s (this run: 608.7s), so a second invocation's PRE-SUITE sweep can legitimately reap a live run's schemas that are merely >300s old. That does not explain ISS-0109's 1-second-old row and so does not change the verdict above, but combined with ISS-0107's nested-real-mix-test finding it is a real, currently-unguarded hazard and I am recording it as a MAJOR issue against ISS-0064's fix for ORCH to route separately.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "ISS-0064's shipped fix (Letflow.TenantSchemaReaper.sweep_orphans/2) protects a concurrently-running mix test invocation's live tenant schemas ONLY via a 300s min-age threshold, with no liveness tracking (test/support/tenant_schema_reaper.ex:43,66,105). The full suite now takes 564-609s, so a second invocation's pre-suite sweep can DROP SCHEMA ... CASCADE a schema a live run is still using. The precondition that value was chosen under no longer holds. Not the cause of ISS-0109's 1-second-old-row failure, but an unguarded hazard on its own; route as its own issue/fix rather than folding it into ISS-0109.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "ISS-0109's related: list omits ISS-0107 (open, MAJOR, GH#357), which documents a nested REAL `mix test` recursion on Windows leaving orphaned BEAMs against the shared test DB -- a concrete, already-filed instance of ISS-0109's own candidate mechanism (b). ISS-0109's run reported the matching Mix.Tasks.Letflow.Check.TestTest ExUnit.TimeoutError failures. Recommend adding ISS-0107 (and ISS-0059) to ISS-0109's related: list when the record is next edited (Step 1), so the Step-1 diagnosis starts from it.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "ISS-0109's mechanism section excludes TenantSchemaReaper on the grounds that the observed DROP/DELETE/DELETE triple 'is the shape of an on_exit/1 teardown, not of the reaper'. Verified against test/support/tenant_schema_reaper.ex:105-109: the reaper emits that exact triple. The correct discriminator is the DELETE predicate (reaper uses `WHERE id = $1` on tenant_schemas; the log shows `WHERE tenant_id = ...`) plus the age argument. Conclusion unchanged, reasoning corrected -- Step 1 must not inherit the record's stated reasoning.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0109-20260821",
+      "commit_sha_list": [
+        "5755577"
+      ],
+      "remote_branch": "origin/feature/WF03-ISS0109-20260821",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": "not attempted -- diagnosis-only step, no PR at Step 0.5 per WF-03"
+    },
+    "next_action": "Dispatch WF-03 Step 1 (diagnosis) to ISSUE-FIXER as a fresh handoff. Verdict is 'not a recurrence', so no severity raise is warranted and ISS-0109 stays MINOR. Step 1 should start from ISS-0107 (nested real `mix test` on Windows -> orphaned BEAM against the shared DB) as the leading candidate for mechanism (b), re-derive the reaper-exclusion argument from source per issue (3) above rather than inheriting it, and treat the 300s-min-age erosion (issue 1) as a separate routable defect against ISS-0064's fix, not as part of ISS-0109."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

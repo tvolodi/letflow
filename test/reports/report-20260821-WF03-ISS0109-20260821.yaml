@@ -1,0 +1,555 @@
+report_id: report-20260821-WF03-ISS0109-20260821
+agent: TEST-RUNNER
+issue: ISS-0109
+workflow_step: WF-03 Step 4c
+handoff: handoffs/WF03-ISS0109-20260821/step-04c-test-runner.json
+branch: feature/WF03-ISS0109-20260821
+commit: 12286e8
+date: 2026-08-21
+command: "mix test"
+seed: 993324
+max_cases: 32
+
+toolchain:
+  mix: "Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  erlang: "Erlang/OTP 29 [erts-17.0.5] [64-bit] [smp:16:16] [jit:ns]"
+  mix_path: "/c/Program Files/Elixir/bin/mix (local toolchain)"
+  gates_deliberately_not_run: >
+    `mix format --check-formatted` and `mix compile --warnings-as-errors` were NOT run,
+    per the handoff: both fail on main itself under this host's Elixir 1.20.3/OTP 29
+    against the 1.18.3-otp-27 pin (ISS-0106 / GH#354). A red gate this step did not
+    cause is not this step's verdict. Plain `mix compile` ran as part of `mix test`
+    and produced no `^warning:` lines.
+
+environment:
+  postgres: >
+    letflow-2-postgres-1, "Up 8 hours (healthy)", 0.0.0.0:5472->5432/tcp. This
+    workspace's LETFLOW_DB_PORT is 5472 (from the untracked ./.env), read by both
+    docker-compose.yml and config/db_port.exs. `docker compose up` was NOT run --
+    the container was already healthy and a second one would collide with the
+    sibling letflow workspace's letflow-postgres-1 on 5462 (docs/anti-patterns.md).
+  contention: >
+    `grep -c too_many_connections` over the 9.4 MB full-run log = 0. No Postgrex
+    saturation during this run.
+
+verdict: PASS
+
+summary_line: "Result: 1228/1244 passed (5/5 properties, 1223/1239 tests)"
+duration: "Finished in 612.1 seconds (8.3s async, 603.8s sync)"
+wall_clock: "started 2026-08-21T02:54:34Z, ended 2026-08-21T03:04:48Z (614s wall)"
+exit_code: 2
+
+raw_output_tail: |
+  Finished in 612.1 seconds (8.3s async, 603.8s sync)
+
+  Result: 1228/1244 passed (5/5 properties, 1223/1239 tests)
+  Failed: 16 tests
+
+failure_count: 16
+failures_caused_by_this_branch: 0
+failures_attributed_to_a_recorded_baseline: 12
+failures_attributed_by_class_only: 1
+failures_unattributed: 3
+
+change_surface:
+  method: "git diff --stat main...HEAD"
+  files: 25
+  production_code_changed: >
+    NONE. `git diff --name-only main...HEAD -- lib/ priv/ config/ mix.exs` returns
+    exactly one path, and it is a markdown design document:
+    lib/letflow/design/iss0109-provisioning-completeness-and-fixture-instrumentation.md.
+    No .ex file under lib/, no migration under priv/repo/migrations/, no config, no
+    mix.exs change. Every other changed path is a handoff JSON, a docs/issues record,
+    docs/anti-patterns.md, test/specs/ISS-0109.md, or one of the four test files below.
+  test_files_changed:
+    - "test/support/tenant_fixture.ex (new, 630 lines -- Letflow.TenantFixture)"
+    - "test/letflow/support/tenant_fixture_test.exs (new, 490 lines, 14 tests)"
+    - "test/letflow/definitions/promotion_test.exs (adopts the fixture, 8 tests)"
+    - "test/letflow/definitions/promotion_assertion_rerun_test.exs (adopts the fixture, 12 tests)"
+  consequence_for_attribution: >
+    Because no production code changed and Letflow.TenantFixture is referenced by
+    exactly two test modules, a failure in any module that does not reference
+    Letflow.TenantFixture cannot be caused by this branch. Verified directly:
+    `grep -rn TenantFixture` over test/letflow/engine_concurrency_test.exs,
+    test/letflow/definitions/rollback_test.exs, test/letflow/identity_test.exs,
+    test/letflow/identity_migration_test.exs and
+    test/mix/tasks/letflow_check_test_test.exs returns NO matches (exit 1). All 16
+    failures are in those five modules.
+
+isolation_run:
+  command: >
+    mix test test/letflow/support/tenant_fixture_test.exs
+    test/letflow/definitions/promotion_test.exs
+    test/letflow/definitions/promotion_assertion_rerun_test.exs
+  seed: 137760
+  expected_by_handoff: 34
+  raw_output_tail: |
+    Finished in 27.1 seconds (0.00s async, 27.1s sync)
+
+    Result: 34 passed
+  exit_code: 0
+  result: PASS
+  detail: >
+    Exactly the 34 predicted (14 new regression tests + 8 + 12 in the two adopted
+    modules), 0 failed, 0 skipped, 0 excluded. Independently confirmed against the
+    source: a grep for test/property declarations returns 14 / 8 / 12 for the three
+    files respectively.
+
+promotion_modules_verdict:
+  modules:
+    - Letflow.Definitions.PromotionTest
+    - Letflow.Definitions.PromotionAssertionRerunTest
+  status: "PASS -- neither module appears anywhere in the full-suite failure list"
+  method: >
+    A grep for the two module names as failure-header suffixes over the full run log
+    returns 0. All 16 numbered failure headers were extracted and read individually;
+    none names either module or either file.
+  significance: >
+    The ISS-0109 symptom did NOT recur in the two modules ISS-0109 was filed about.
+    That is a non-recurrence, not proof of a fix -- ISS-0108's cross_run_variance
+    already records these same two modules going 2 -> 0 between two runs of the same
+    commit range, so a single clean run cannot by itself establish that the fixture
+    fixed anything. What this run DOES establish is stronger and is recorded under
+    unattributed failure 5 below: the identical error signature appeared in a module
+    that has NOT adopted the fixture, while both adopted modules stayed green.
+  adoption_regression_check: >
+    NEGATIVE. No adoption regression: the two adopted modules pass 8/8 and 12/12 both
+    inside the full suite and in isolation, and their 19 fixture call sites each
+    emitted a clean phase=teardown marker (see marker_audit).
+
+marker_audit:
+  grep: "LETFLOW_TENANT_FIXTURE"
+  total_lines_full_suite: 29
+  phases:
+    teardown: 25
+    incomplete_schema: 4
+    provision_failed: 0
+    replay_failed: 0
+  teardown_breakdown:
+    method: >
+      Each teardown line carries schema=, tenant_id=, test_module= and test_name=; each
+      tenant_id was additionally traced back to its own `INSERT INTO "tenants"` line in
+      the same log to recover the slug independently of the marker's own claim.
+    req037-promo (Letflow.Definitions.PromotionTest): 8
+    req040-assertion-rerun (Letflow.Definitions.PromotionAssertionRerunTest): 11
+    subtotal_adopted_modules: 19
+    Letflow.Support.TenantFixtureTest (iss0109-c4 x3, -c5, -c6, plus one C5 fixture): 6
+    finding: >
+      19 teardown lines from the two adopted modules -- EXACTLY the 19 fixture call
+      sites counted at implementation time (8 in promotion_test.exs at lines
+      147/148/217/218/353/354/438/439, 11 in promotion_assertion_rerun_test.exs).
+      Every adopted call site provisioned, ran, and tore down cleanly.
+  incomplete_schema_lines:
+    count: 4
+    verdict: "EXPECTED -- deliberately induced by the new regression tests, NOT a real finding"
+    evidence: >
+      All four tenant_ids trace to slugs iss0109-c1b, iss0109-c2a, iss0109-c2b and
+      iss0109-c3, which are the slug_prefix arguments passed to `broken_state_tenant!/1`
+      at test/letflow/support/tenant_fixture_test.exs lines 107, 134, 166 and 187.
+      That helper provisions with `teardown: false` and then deliberately breaks the
+      schema so the completeness assertion has something to catch. All four owning tests
+      PASSED (Letflow.Support.TenantFixtureTest is absent from the failure list and the
+      isolation run returned 34 passed). Each line was followed in the log by a normal
+      DROP SCHEMA ... CASCADE and the tenant/tenant_schemas deletes.
+    sample_line: |
+      08:02:13.362 [error] LETFLOW_TENANT_FIXTURE phase=incomplete_schema schema=tenant_d13efe007edc409b97db4916f8343a3f tenant_id=d13efe00-7edc-409b-97db-4916f8343a3f
+        - tables_missing=["promotion_assertion_runs"]
+
+      schema_state:
+        schema_name             = tenant_d13efe007edc409b97db4916f8343a3f
+        tenant_id               = d13efe00-7edc-409b-97db-4916f8343a3f
+        registration_present?   = true
+        provisioned_at          = ~N[2026-08-21 03:02:12]
+        migrations_applied_at   = ~N[2026-08-21 03:02:13]
+        schema_present?         = true
+        tables_present          = ["event_idempotency", "event_payload_store", "event_type_registry", "events", "events_archive", "groups", "instance_definition_snapshots", "instance_projections", "instance_sequence", "instance_state_snapshots", "lua_script_execution_audit", "process_definitions", "promotion_reviews", "tasks", "tenant_role", "tokens", "users", "variable_schemas"]
+        tables_missing          = ["promotion_assertion_runs"]
+        versions_missing        = []
+        observed_at_utc         = ~N[2026-08-21 03:02:13.359000]
+        db_now                  = ~N[2026-08-21 03:02:13.119045]
+        pg_backend_pid          = 107782
+  net_finding: >
+    CLEAN. Zero unexpected phase=incomplete_schema, zero phase=provision_failed, zero
+    phase=replay_failed anywhere in a 9.4 MB full-suite log. The instrumentation is
+    live and emitting -- and it emitted nothing alarming.
+
+attribution_method:
+  rule_applied: >
+    Per the handoff, NO failure is attributed to "the known environmental set" by module
+    name or by count. Each of the 16 was matched INDIVIDUALLY on four axes -- module,
+    test name, error class, and the specific assertion/frame -- against the two recorded
+    baselines named in the handoff: test/reports/report-20260820-WF02-REQ066-20260820.yaml
+    and test/reports/report-20260819-WF02-REQ109-20260819.yaml. Anything not matching on
+    all four is reported as UNATTRIBUTED rather than guessed at.
+  why_this_matters_here: >
+    ISS-0108 records that two runs of the same commit range twelve minutes apart produced
+    14 and 15 failures with genuinely different composition. This run produced 16, again
+    with different composition. Count-based or module-based attribution would have been
+    wrong three times over.
+
+failures:
+  - numbers: [1, 2]
+    module: Mix.Tasks.Letflow.Check.TestTest
+    file: test/mix/tasks/letflow_check_test_test.exs
+    failing_tests:
+      - "passes (no raise) when the subprocess exits 0 and the target substring is absent, even with unrelated warnings present (line 126)"
+      - "raises and reports the offending line when the target substring is present, even though the underlying subprocess exited 0 (line 105)"
+    error_class: ExUnit.TimeoutError
+    root_error: |
+      ** (ExUnit.TimeoutError) test timed out after 60000ms.
+      stacktrace:
+        (letflow 0.1.0) lib/mix/tasks/letflow.check.test.ex:110: Mix.Tasks.Letflow.Check.Test.collect/2
+        (letflow 0.1.0) lib/mix/tasks/letflow.check.test.ex:63: Mix.Tasks.Letflow.Check.Test.run/1
+        (ex_unit 1.20.3) lib/ex_unit/capture_io.ex:325: ExUnit.CaptureIO.do_capture_gl/2
+    attribution: ATTRIBUTED
+    matched_baseline: test/reports/report-20260820-WF02-REQ066-20260820.yaml
+    match_quality: >
+      FOUR-AXIS MATCH. Same module; same two test names verbatim; same error class
+      (ExUnit.TimeoutError at the 60000ms default); same innermost frame
+      (Mix.Tasks.Letflow.Check.Test.collect/2 at lib/mix/tasks/letflow.check.test.ex:110);
+      same source lines 126 and 105. Also present identically in
+      report-20260819-WF02-REQ109-20260819.yaml on a third, unrelated branch.
+    filed_issue: >
+      ISS-0107 (POSIX-only fake-mix fixture on Windows; the real `mix test` is recursed
+      into and never finishes inside the 60s budget). Aggravated by the logged Keycloak
+      metadata retries against placeholder-keycloak.invalid (:nxdomain) with 20-29s
+      backoffs observed in this run's log inside the same window.
+    caused_by_this_branch: "NO -- pre-existing"
+    branch_evidence: >
+      test/mix/tasks/letflow_check_test_test.exs and lib/mix/tasks/letflow.check.test.ex
+      are both absent from `git diff --name-only main...HEAD`, and the module does not
+      reference Letflow.TenantFixture.
+
+  - numbers: [3]
+    module: Mix.Tasks.Letflow.Check.TestTest
+    file: test/mix/tasks/letflow_check_test_test.exs
+    failing_tests:
+      - "raises when the subprocess itself exits nonzero, regardless of the substring (line 147)"
+    error_class: ExUnit.TimeoutError
+    root_error: |
+      ** (ExUnit.TimeoutError) test timed out after 60000ms.
+      code: assert_raise Mix.Error, ~r/exited 1/, fn ->
+      stacktrace:
+        (letflow 0.1.0) lib/mix/tasks/letflow.check.test.ex:110: Mix.Tasks.Letflow.Check.Test.collect/2
+        (letflow 0.1.0) lib/mix/tasks/letflow.check.test.ex:63: Mix.Tasks.Letflow.Check.Test.run/1
+        test/mix/tasks/letflow_check_test_test.exs:158: (test)
+    attribution: "ATTRIBUTED BY CLASS ONLY -- not present in either test/reports/ baseline"
+    match_quality: >
+      HONEST PARTIAL. This third test is NOT in report-20260820-WF02-REQ066-20260820.yaml
+      (which records exactly two failures in this module, at lines 105 and 126) and is NOT
+      in report-20260819-WF02-REQ109-20260819.yaml (same two). It therefore fails the
+      four-axis test against the recorded baselines and is deliberately NOT counted as
+      baseline-matched. It matches on three of four axes -- same module, same error class,
+      same innermost frame at collect/2 line 110 -- and only the test name is new.
+      Two independent records corroborate it without being test/reports/ baselines:
+      (a) ISS-0108's cross_run_variance table explicitly records this module going 2 -> 3
+      between the Step 4 and Step 5 runs of REQ-066, describing the delta as "the same
+      ExUnit.TimeoutError at the same frame -- one further test of that module crossing
+      the threshold under load, not a new defect"; (b) ISS-0107's own description names
+      three failing tests in this module on a Windows host. This run's third failure is
+      that third test.
+    caused_by_this_branch: "NO -- pre-existing"
+    branch_evidence: >
+      Same as failures 1-2: neither the test file nor the task under test is in the branch
+      diff, and the module does not reference Letflow.TenantFixture. The branch changes no
+      production code and cannot lengthen a 60s subprocess wait.
+
+  - numbers: [4]
+    module: Letflow.EngineConcurrencyTest
+    file: test/letflow/engine_concurrency_test.exs
+    failing_tests:
+      - "AC4 -- reconstruction matches projection for all instances after the concurrent run: each instance's reconstructed status/variables/token positions match its own projection (line 365)"
+    error_class: "Postgrex.Error 42P01 undefined_table"
+    root_error: |
+      ** (Postgrex.Error) ERROR 42P01 (undefined_table) relation "tenant_88c84b17640744f3a6ba1efa211e12e7.instance_projections" does not exist
+      code: {instances, results} = provision_and_complete_all!(schema_name, definition)
+      stacktrace:
+        (ecto_sql 3.14.0) lib/ecto/adapters/sql.ex:1121: Ecto.Adapters.SQL.raise_sql_call_error/1
+        (letflow 0.1.0) lib/letflow/engine.ex:1024: Letflow.Engine.insert_instance_projection/8
+        (letflow 0.1.0) lib/letflow/engine.ex:917: Letflow.Engine.persist/11
+        test/letflow/engine_concurrency_test.exs:212: anonymous fn/3 in Letflow.EngineConcurrencyTest.start_n_instances!/3
+        test/letflow/engine_concurrency_test.exs:254: Letflow.EngineConcurrencyTest.provision_and_complete_all!/2
+        test/letflow/engine_concurrency_test.exs:369: (test)
+    attribution: UNATTRIBUTED
+    match_quality: >
+      NO MATCH on the required four axes. Letflow.EngineConcurrencyTest appears in NEITHER
+      recorded baseline -- not in report-20260820-WF02-REQ066-20260820.yaml (whose 14
+      failures are 10 IdentityMigrationTest + 2 Check.TestTest + 2 Promotion*) nor in
+      report-20260819-WF02-REQ109-20260819.yaml (10 + 2). The test name is likewise absent
+      from both. Reporting it as UNATTRIBUTED is the correct answer here; it is NOT being
+      waved into "the known environmental set."
+    related_but_not_a_match: >
+      The ERROR CLASS alone is the same family ISS-0109 documents: a table inside a tenant
+      schema that the test itself just provisioned being absent at query time (ISS-0109's
+      failure 14 was 42P01 on "tenant_cb34d76b....promotion_assertion_runs"). Same shape,
+      different module and different test. Recorded as a resemblance, NOT as an attribution.
+    caused_by_this_branch: "NO"
+    branch_evidence: >
+      test/letflow/engine_concurrency_test.exs is absent from `git diff --name-only
+      main...HEAD`; it does not reference Letflow.TenantFixture (grep returns no match);
+      and the branch changes zero production code, so lib/letflow/engine.ex -- where the
+      failing insert originates -- is byte-identical to main.
+    action: >
+      Reported to ORCH in result.issues for ISSUE_QUEUE triage. Not fixed, not filed by
+      this step.
+
+  - numbers: [5]
+    module: Letflow.Definitions.RollbackTest
+    file: test/letflow/definitions/rollback_test.exs
+    failing_tests:
+      - "rollback_definition_version/4 -- AC4 + cardinality-branched promotion_reviews lookup (INV-RB-10): exactly one APPROVED promotion_reviews row -- the 7->8 edge REQ-038 widened on supersede_review/3 -- is superseded the same way (line 641)"
+    error_class: "Postgrex.Error 3F000 invalid_schema_name, wrapped in {:error, {:migration_failed, %MatchError{}}}"
+    root_error: |
+      match (=) failed
+      code:  assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+      left:  {:ok, _applied_versions}
+      right: {:error,
+              {:migration_failed,
+               %MatchError{
+                 term: {:error,
+                  %Postgrex.Error{
+                    message: nil,
+                    postgres: %{
+                      code: :invalid_schema_name,
+                      line: "3096",
+                      message: "schema \"tenant_72360c3d2a13493f84d11ac73b8d671f\" does not exist",
+                      file: "namespace.c",
+                      routine: "get_namespace_oid",
+                      unknown: "ERROR",
+                      severity: "ERROR",
+                      pg_code: "3F000"
+                    },
+                    connection_id: 107764,
+                    query: nil
+                  }}
+               }}}
+      stacktrace:
+        test/letflow/definitions/rollback_test.exs:120: Letflow.Definitions.RollbackTest.provisioned_tenant/0
+        test/letflow/definitions/rollback_test.exs:642: (test)
+    attribution: UNATTRIBUTED
+    match_quality: >
+      NO MATCH on the required four axes. Letflow.Definitions.RollbackTest appears in
+      NEITHER recorded baseline, and this test name appears in neither. UNATTRIBUTED.
+    highest_value_observation: >
+      THIS IS THE MOST IMPORTANT ENTRY IN THIS REPORT. The failure is a
+      SIGNATURE-IDENTICAL reproduction of ISS-0109's failure 3 -- same error code
+      (3F000 invalid_schema_name), same wrapper ({:error, {:migration_failed,
+      %MatchError{term: {:error, %Postgrex.Error{...}}}}}), same failing assertion
+      (assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)),
+      and raised from the module's OWN hand-rolled `provisioned_tenant/0` helper, exactly
+      as ISS-0109's failure 3 was raised from promotion_test.exs:96's
+      `provisioned_tenant/0`. The difference is the module: Letflow.Definitions.RollbackTest
+      has NOT adopted Letflow.TenantFixture (grep confirms no reference) and still carries
+      its own copy of the helper at rollback_test.exs:120.
+      So in one run: the two modules that DID adopt the fixture stayed green, and the
+      ISS-0109 signature surfaced instead in a third module carrying the same
+      un-instrumented hand-rolled helper. That is direct evidence the underlying condition
+      is real, is NOT specific to the two Promotion modules, and is NOT something the
+      fixture adoption introduced -- and it identifies rollback_test.exs as the next
+      adoption candidate. It is a single observation, not a controlled experiment; it is
+      recorded as evidence, not as proof.
+    caused_by_this_branch: "NO"
+    branch_evidence: >
+      test/letflow/definitions/rollback_test.exs is absent from `git diff --name-only
+      main...HEAD`; it does not reference Letflow.TenantFixture; the branch changes zero
+      production code, so lib/letflow/tenant_provisioning.ex is byte-identical to main.
+    action: >
+      Reported to ORCH in result.issues -- ORCH's call whether this extends ISS-0109's
+      scope (same signature, new module) or warrants its own record. Not fixed, not filed
+      here.
+
+  - numbers: [6]
+    module: Letflow.IdentityTest
+    file: test/letflow/identity_test.exs
+    failing_tests:
+      - "provision_oidc_user/4 -- idempotency (acceptance criterion 1): different (tenant_id, realm, external_id) triples in different tenant schemas create distinct rows (line 205)"
+    error_class: "Postgrex.Error 42P01 undefined_table"
+    root_error: |
+      ** (Postgrex.Error) ERROR 42P01 (undefined_table) relation "tenant_87dc26927af44a6f8b8a1907d6012166.users" does not exist
+
+          query: SELECT u0."id", u0."username", ... FROM "tenant_87dc26927af44a6f8b8a1907d6012166"."users" AS u0 WHERE ((u0."external_realm" = $1) AND (u0."external_id" = $2))
+      code: Identity.provision_oidc_user(ctx_a, tenant_a.id, config, prefix: schema_a)
+      stacktrace:
+        (ecto_sql 3.14.0) lib/ecto/adapters/sql.ex:1121: Ecto.Adapters.SQL.raise_sql_call_error/1
+        (letflow 0.1.0) lib/letflow/identity.ex:165: Letflow.Identity.upsert_by_external_identity/4
+        test/letflow/identity_test.exs:214: (test)
+    attribution: UNATTRIBUTED
+    match_quality: >
+      NO MATCH on the required four axes, and this is precisely the trap the handoff
+      warned about. Letflow.IdentityTest DOES appear in ISS-0108 -- but ISS-0108 is not
+      one of the test/reports/ baselines, and more importantly the ERROR CLASS IS
+      DIFFERENT: ISS-0108 records Ecto.InvalidChangesetError on the
+      tenants_idp_realm_id_partial_index partial-unique constraint while inserting the
+      bpm-default seed tenant. This failure is a Postgrex 42P01 undefined_table on a
+      per-tenant users table -- a different mechanism entirely. Matching this to ISS-0108
+      on module name alone would have been exactly the module-name shortcut the handoff
+      forbids. Letflow.IdentityTest appears in NEITHER test/reports/ baseline.
+      UNATTRIBUTED.
+    related_but_not_a_match: >
+      The error class is the same family as failure 4 and as ISS-0109's failure 14: a
+      table inside a live tenant schema absent at query time. Recorded as a resemblance,
+      not an attribution.
+    caused_by_this_branch: "NO"
+    branch_evidence: >
+      test/letflow/identity_test.exs is absent from `git diff --name-only main...HEAD`;
+      it does not reference Letflow.TenantFixture; lib/letflow/identity.ex is
+      byte-identical to main (zero production code changed).
+    action: >
+      Reported to ORCH in result.issues. Explicitly flagged as NOT the ISS-0108
+      mechanism, so ORCH does not fold it into that record by module name.
+
+  - numbers: [7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    module: Letflow.IdentityMigrationTest
+    file: test/letflow/identity_migration_test.exs
+    count: 10
+    failing_tests:
+      - "copy_tenant/2 is idempotent: re-running after a successful copy re-copies nothing (on_conflict: :nothing), same counts settle at zero on the second call"
+      - "DropLegacyPublicIdentityTables guard -- once the copy is completed for every registered tenant, the guard PROCEEDS and drops all three public tables"
+      - "DropLegacyPublicIdentityTables guard -- an uncopied row (present in public, absent from the tenant's schema copy) makes the guard SKIP the drop entirely -- all three public tables survive"
+      - "ISS-0060: with_only_this_tenant_visible!/2 guard fix hides the racer tenant, flips guard SKIP into PROCEED"
+      - "DropLegacyPublicIdentityTables guard -- ISS-0050 regression: a tenant schema missing one identity table makes the guard SKIP the drop, not raise 42P01"
+      - "an orphaned tenant_role (group_id matching no groups row) aborts that tenant's copy with {:error, {:orphaned_tenant_role, id}}, and no partial rows are committed for that tenant"
+      - "ISS-0060: self-heal of an interrupted guard run -- restore_orphaned_guard_backup_rows!/0 restores the stale row"
+      - "copies groups/users/tenant_role from public into the tenant's own schema, preserving id, ordering tenant_role after groups (FK dependency)"
+      - "DropLegacyPublicIdentityTables guard -- idempotency: re-running after it already succeeded is a no-op"
+      - "copy_all_tenants/0 processes every registered tenant and aggregates counts"
+    error_class: "Postgrex.Error 23503 foreign_key_violation"
+    root_error: |
+      ** (Postgrex.Error) ERROR 23503 (foreign_key_violation) insert or update on table "tenant_schemas" violates foreign key constraint "tenant_schemas_tenant_id_fkey"
+
+          table: tenant_schemas
+          constraint: tenant_schemas_tenant_id_fkey
+
+      Key (tenant_id)=(ba8fb4e0-34db-46d1-a5ef-616571e2a468) is not present in table "tenants".
+      stacktrace:
+        (ecto_sql 3.14.0) lib/ecto/adapters/sql.ex:1121: Ecto.Adapters.SQL.raise_sql_call_error/1
+        test/letflow/identity_migration_test.exs:242: Letflow.IdentityMigrationTest.restore_orphaned_guard_backup_rows!/0
+        test/letflow/identity_migration_test.exs:1: Letflow.IdentityMigrationTest.__ex_unit__/2
+    uniformity: >
+      Verified by extracting the error line and the stacktrace from all ten numbered
+      blocks: 10/10 carry the byte-identical 23503 error and 10/10 carry the identical
+      frame at identity_migration_test.exs:242. One root cause failing the module's
+      shared setup, not ten independent defects.
+    attribution: ATTRIBUTED
+    matched_baselines:
+      - test/reports/report-20260820-WF02-REQ066-20260820.yaml
+      - test/reports/report-20260819-WF02-REQ109-20260819.yaml
+    match_quality: >
+      FOUR-AXIS MATCH, and the strongest in this report. Same module; the same TEN test
+      names, individually cross-checked against the ten enumerated in
+      report-20260819-WF02-REQ109-20260819.yaml's failing_tests list -- all ten present,
+      none extra, none missing; same error class (23503 on
+      tenant_schemas_tenant_id_fkey); same failing frame
+      (restore_orphaned_guard_backup_rows!/0 at line 242).
+    one_deliberate_difference: >
+      The orphaned key differs: ba8fb4e0-34db-46d1-a5ef-616571e2a468 here versus
+      c3a201b9-04da-4b0d-bfb6-bba6a18800ea in both baselines. That is EXPECTED and does
+      not weaken the match -- the UUID is whatever stale row happens to sit in this
+      workspace's public.iss060_tenant_schemas_guard_backup, and this run used a
+      different database (letflow-2-postgres-1 on port 5472) from the one both baselines
+      ran against (letflow-postgres-1 on port 5462). A matching UUID would have been the
+      surprise. Recorded explicitly rather than glossed over.
+    filed_issue: >
+      ISS-0048 / ISS-0050 / ISS-0060 / ISS-0062 / ISS-0064 class; ISS-0107 documents the
+      orphaning mechanism (a timed-out nested `mix test` leaving stale guard-backup rows
+      behind).
+    caused_by_this_branch: "NO -- pre-existing"
+    branch_evidence: >
+      Neither test/letflow/identity_migration_test.exs nor lib/letflow/identity_migration.ex
+      is in `git diff --name-only main...HEAD`; the module does not reference
+      Letflow.TenantFixture; zero production code changed.
+
+cross_run_variance:
+  note: >
+    Extends ISS-0108's table with this run, on a DIFFERENT host database (port 5472).
+    Composition moved again, which is why per-failure matching was used throughout.
+  table: |
+    module                             REQ066 Step4   REQ066 Step5   THIS RUN
+    Letflow.IdentityMigrationTest      10             10             10
+    Mix.Tasks.Letflow.Check.TestTest    2              3              3
+    Letflow.Definitions.Promotion*      2              0              0
+    Letflow.IdentityTest                0              2 (InvalidChangeset)   1 (42P01 -- different mechanism)
+    Letflow.EngineConcurrencyTest       0              0              1  (new)
+    Letflow.Definitions.RollbackTest    0              0              1  (new)
+    TOTAL                              14             15             16
+  reading: >
+    Only IdentityMigrationTest is stable. Everything else moves run to run. The set is
+    load-dependent and the total is drifting upward across three runs (14 -> 15 -> 16);
+    the modules touched by the drift are all tenant-schema-provisioning consumers.
+
+acceptance_criteria_check:
+  - criterion: "The full `mix test` suite was run on this branch and real totals plus real duration are quoted"
+    met: true
+    detail: >
+      Full `mix test` (no file arguments), seed 993324, 612.1s reported / 614s wall,
+      exit 2. 1228/1244 passed, 16 failed. Every figure quoted from the captured
+      9.4 MB log.
+  - criterion: "The three run-relevant files were also run in isolation, with actual counts reported"
+    met: true
+    detail: >
+      Separate run, seed 137760: "Result: 34 passed", exit 0, 27.1s. Matches the
+      handoff's predicted 14 + 8 + 12 exactly.
+  - criterion: "Every failure is attributed INDIVIDUALLY against the recorded baselines; anything unmatchable is UNATTRIBUTED"
+    met: true
+    detail: >
+      All 16 matched on module + test name + error class + assertion/frame. 12 ATTRIBUTED
+      (10 IdentityMigrationTest, 2 Check.TestTest). 1 ATTRIBUTED BY CLASS ONLY with the
+      partial match stated (Check.TestTest #3). 3 UNATTRIBUTED and reported as such
+      (EngineConcurrencyTest, RollbackTest, IdentityTest). No failure was attributed by
+      module name or by count -- and failure 6 is the specific case where module-name
+      attribution to ISS-0108 would have been wrong.
+  - criterion: "Each failure carries an explicit caused-by-this-branch vs pre-existing verdict, from git diff --stat main...HEAD"
+    met: true
+    detail: >
+      16/16 verdicts: 0 caused by this branch. Change surface established by
+      `git diff --stat main...HEAD` (25 files) and narrowed by
+      `git diff --name-only main...HEAD -- lib/ priv/ config/ mix.exs`, which returns
+      only a markdown design doc. All 16 failures sit in five modules, none of which
+      references Letflow.TenantFixture (grep verified).
+  - criterion: "PromotionTest and PromotionAssertionRerunTest are specifically addressed"
+    met: true
+    detail: >
+      Both PASSED in the full suite (absent from all 16 failure headers) and both passed
+      in isolation. No ISS-0109 recurrence in them, and no adoption regression -- their
+      19 fixture call sites all emitted clean phase=teardown markers. The ISS-0109
+      signature instead surfaced in Letflow.Definitions.RollbackTest, which has not
+      adopted the fixture; see failure 5.
+  - criterion: "The full-suite output was grepped for LETFLOW_TENANT_FIXTURE and phases reported with counts"
+    met: true
+    detail: >
+      29 marker lines: 25 teardown (19 from the two adopted modules, 6 from the fixture's
+      own test file), 4 incomplete_schema (all four deliberately induced by
+      broken_state_tenant!/1 in the passing regression tests), 0 provision_failed,
+      0 replay_failed.
+  - criterion: "A structured report exists at test/reports/report-<YYYYMMDD>-WF03-ISS0109-20260821.yaml"
+    met: true
+    detail: >
+      This file, matching the schema used by report-20260820-WF02-REQ066-20260820.yaml.
+  - criterion: "Nothing was fixed; unrelated defects reported in result.issues"
+    met: true
+    detail: >
+      No file under test/ or lib/ was edited by this step. Three unattributed failures
+      forwarded to ORCH in the handoff's result.issues for ISSUE_QUEUE triage.
+
+artifacts_out:
+  - test/reports/report-20260821-WF03-ISS0109-20260821.yaml
+
+conclusion: >
+  PASS. 1228/1244 in 612.1s, 16 failures, ZERO caused by this branch -- which changes no
+  production code at all and whose new test-only module is referenced by exactly two test
+  modules, neither of which failed. 12 failures four-axis-match a recorded baseline, 1
+  matches its module's known class on three of four axes with the gap stated, and 3 are
+  reported UNATTRIBUTED rather than guessed at. The ISS-0109 instrumentation is live and
+  clean: 19 fixture call sites, 19 clean teardown markers, no provision_failed and no
+  replay_failed anywhere in a 9.4 MB log. The single most useful finding is failure 5 --
+  the ISS-0109 signature reproduced verbatim in Letflow.Definitions.RollbackTest, a module
+  still carrying its own un-instrumented hand-rolled provisioned_tenant/0, while both
+  adopted modules stayed green.
+
+next_action: >
+  ORCH to triage the three UNATTRIBUTED failures per ISSUE_QUEUE.md (EngineConcurrencyTest
+  42P01, RollbackTest 3F000 -- likely an ISS-0109 scope extension, IdentityTest 42P01 --
+  explicitly NOT the ISS-0108 mechanism), then proceed to WF-04 Step 1 (RELEASE-VALIDATOR),
+  which re-runs the suite independently. Candidate follow-up: extend the TenantFixture
+  adoption to rollback_test.exs, engine_concurrency_test.exs and identity_test.exs, since
+  all three are un-instrumented consumers of the same provisioning path.

@@ -50,52 +50,26 @@ defmodule Letflow.Definitions.PromotionTest do
   alias Letflow.Definitions.PromotionReview
   alias Letflow.Definitions.Promotion
   alias Letflow.Definitions.ProcessDefinition
-  alias Letflow.Identity.Tenant
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
 
   # ---------------------------------------------------------------------------------
   # Fixtures / helpers -- mirrors promotion_plan_test.exs's own copies exactly
   # (per this project's established per-test-file self-sufficiency convention).
   # ---------------------------------------------------------------------------------
 
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req037-promo"),
-        display_name: "REQ-037 Promotion Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
-
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-  end
-
+  # Adopts the shared `Letflow.TenantFixture` (ISS-0109 / GH#358) in place of this
+  # file's own hand-rolled `insert_tenant!/0` + `drop_schema!/1` + `provisioned_tenant/0`
+  # copies. Behaviour-preserving by construction (design §7.7): the same tenant row is
+  # inserted, the same sandbox `:auto` switch is made, the same schema is provisioned,
+  # the same replay is run, and the same three teardown statements are issued in the
+  # same order -- the fixture additionally asserts the resulting schema is COMPLETE (so
+  # a missing table is named here rather than surfacing 500 lines later as an opaque
+  # 42P01) and emits one greppable `LETFLOW_TENANT_FIXTURE phase=teardown` line, so a
+  # post-test drop can never again be mistaken for a mid-test one.
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    Letflow.TenantFixture.provisioned_tenant!(
+      slug_prefix: "req037-promo",
+      display_name: "REQ-037 Promotion Test Tenant"
+    )
   end
 
   defp unique_process_key(prefix \\ "req037-promo-proc") do

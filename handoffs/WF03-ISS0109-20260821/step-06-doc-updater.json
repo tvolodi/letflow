@@ -1,0 +1,79 @@
+{
+  "handoff_id": "802de9d8-820f-429e-8541-c88571b54c6c",
+  "run_id": "WF03-ISS0109-20260821",
+  "workflow_id": "WF-03",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF03-ISS0109-20260821/step-06-doc-updater.json",
+  "created_at": "2026-08-21T03:20:26Z",
+  "started_at": "2026-08-21T03:20:26Z",
+  "completed_at": "2026-08-21T03:22:30Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "51ac4aa9-2c4c-4481-a011-6a4d7292f07b"
+    ],
+    "artifacts_in": [
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "docs/issues/ISS-0109.yaml",
+      "docs/issues/ISS-0116.yaml",
+      "docs/status/requirement_status.yaml",
+      "docs/anti-patterns.md",
+      "handoffs/WF03-ISS0109-20260821/step-05-issue-fixer-close.json"
+    ],
+    "owned_modules": [
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ],
+    "branch_name": "feature/WF03-ISS0109-20260821",
+    "issue_ids": [
+      "ISS-0109"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 6 -- DOCUMENT A STATUS VALUE THIS RUN HAD TO INVENT. Small, single-purpose step.\n\nWHAT HAPPENED: WF03-ISS0109-20260821 resolved ISS-0109 into a state the issue vocabulary does\nnot have a word for. The run built real instrumentation and proved it works, but the root cause\nof the underlying failure remains UNKNOWN -- the gate-approved design (SS8.3) and REVIEWER\nindependently concluded INSTRUMENTED, NOT FIXED. Marking it `resolved` would have put a false\nentry into a registry that (now) fifteen cross-referenced issues read. So ORCH set\n`status: instrumented` with `superseded_by: ISS-0116`.\n\nTHE GAP ISSUE-FIXER FLAGGED, and it is a real one: `docs/agents/protocols/ISSUE_QUEUE.md` and\n`docs/agents/workflows/WF-03_issue_resolving.md` Step 5 both describe the terminal state as\n`status: resolved` and define no instrumented-but-unfixed value. The decision was right and the\nrecord is honest, but the vocabulary is nowhere written down -- so the NEXT run that lands in\nthis position faces the same choice with no guidance, and the likeliest outcome is that it\neither invents a different word or overstates `resolved`. That second outcome is the one that\nactually costs something.\n\nYOUR TASK -- document it, minimally and without redesigning anything:\n\n1. `docs/agents/protocols/ISSUE_QUEUE.md`: add `instrumented` to the issue-record status\n   vocabulary, defined as: the run built and verified real improvements (typically diagnostic\n   capability), the acceptance criteria of that run were met, but the underlying defect's ROOT\n   CAUSE is not removed and the issue is NOT fixed. Require a `superseded_by:` pointing at the\n   successor issue that carries the remaining work, so an `instrumented` record can never be a\n   dead end. State the rule that motivates it: an issue may only be `resolved` when a root cause\n   was actually removed -- shipping useful work is not the same thing, and the registry is read\n   by later runs as a factual record, not a progress report. Cite ISS-0109 (superseded by\n   ISS-0116) as the worked example.\n\n2. `docs/agents/workflows/WF-03_issue_resolving.md` Step 5: note that `resolved` is the normal\n   terminal state but not the only legal one, and point at ISSUE_QUEUE.md's vocabulary for the\n   `instrumented` case rather than restating the definition (one canonical home, per this\n   project's own convention against duplicated definitions).\n\n3. Append the WF03-ISS0109-20260821 events to `docs/status/requirement_status.yaml` if and only\n   if that file's established schema covers issue-runs as well as requirement-runs. READ THE\n   FILE IN FULL FIRST and preserve its schema exactly -- this file is APPEND-ONLY and has been\n   damaged before by an agent that rewrote it (see docs/anti-patterns.md). If its schema is\n   requirement-scoped and an issue-run has no place in it, say so and append NOTHING; do not\n   invent a shape to fill.\n\nCONSTRAINTS: documentation only -- no code, no tests, no issue-record edits (ISS-0109 is already\ncorrect as of commit 046fbd3). Do not redefine any existing status value or change how any\nexisting record is interpreted. Keep the additions short; this is a vocabulary entry, not an\nessay. Timestamps from the clock. Branch feature/WF03-ISS0109-20260821; commit by explicit filename, never\n`git add -A`. handoffs/orchestrator.log is ORCH's -- leave it alone, and `git fetch` rather than\npulling if a rebase refuses.\n",
+    "acceptance_criteria": [
+      "docs/agents/protocols/ISSUE_QUEUE.md documents `instrumented` in the issue status vocabulary, defined as verified work shipped with the root cause NOT removed, and requires a superseded_by: pointer so such a record can never be a dead end",
+      "The rule that `resolved` means a root cause was actually removed -- not merely that useful work shipped -- is stated explicitly, with ISS-0109 -> ISS-0116 cited as the worked example",
+      "docs/agents/workflows/WF-03_issue_resolving.md Step 5 notes that resolved is the normal but not the only legal terminal state, and POINTS AT ISSUE_QUEUE.md rather than restating the definition",
+      "No existing status value is redefined and no existing record's interpretation is changed",
+      "docs/status/requirement_status.yaml is either appended to in its exact established schema, or explicitly left untouched with the reason stated -- and it was read in full before either decision",
+      "No code, test, or issue-record file was modified"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Documented the `instrumented` issue status, minimally and in one canonical home. (1) docs/agents/protocols/ISSUE_QUEUE.md gains an \"Issue status vocabulary\" section (inserted between the Procedure block and \"Picking up a queued issue later\") listing open / in_progress / resolved / instrumented. `resolved` is stated as asserting that a root cause was ACTUALLY REMOVED with a regression test proving it -- shipping useful verified work is explicitly not the same thing, because the registry is read by later runs as a factual record, not a progress report. `instrumented` is defined as: the run built and verified real improvements (typically diagnostic capability) and that run's own acceptance criteria were met, but the underlying defect's root cause is not removed and the issue is not fixed; it MUST carry `superseded_by: ISS-NNNN` naming the successor issue, filed before the transition, so such a record can never be a dead end, and must state plainly what the shipped work does not close. ISS-0109 (superseded_by ISS-0116) is cited as the worked example, noting that the design gate and REVIEWER independently concluded instrumented-not-fixed. The open/in_progress/resolved wordings only write down existing usage; no existing status value is redefined and no existing record's interpretation changes. (2) docs/agents/workflows/WF-03_issue_resolving.md Step 5 gains a five-line note directly after its procedure block saying `resolved` is the normal but not the only legal terminal state, and POINTING at ISSUE_QUEUE.md's vocabulary section rather than restating the definitions. (3) docs/status/requirement_status.yaml was read and DELIBERATELY LEFT UNTOUCHED -- see result.issues[0] for the evidence and reasoning. Documentation only: no code, no tests, no issue-record files touched (ISS-0109 stands as committed at 046fbd3).",
+    "artifacts_out": [
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "handoffs/WF03-ISS0109-20260821/step-06-doc-updater.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "docs/status/requirement_status.yaml was NOT appended to, deliberately. Its schema is requirement-scoped and does not cover issue-runs. Evidence from reading the file (5723 lines, 181 events): its header states 'one entry per time an agent picked up, finished, or got blocked on a REQUIREMENT' and fixes the entry shape as req/event/agent/at/note with `req: REQ-XXX`. Every one of the 181 entries uses the `req:` key -- 151 REQ-NNN and 30 SCOPE-CHANGE (the latter recording changes to the requirement SET itself, e.g. the S0-S8 staging expansion, still requirement-scoped). Zero entries name an ISS-NNNN. Past WF-03 issue runs (WF03-ISS0013, ISS-0030, ISS-0045, ISS-0086, ISS-0087) appear in this file only as prose inside other requirements' `note:` fields, never as entries of their own -- so 'issue runs do not get entries here' is established practice, not an omission. WF03-ISS0109-20260821 has no requirement in scope (handoff context.requirement_ids is empty), so an entry would have required inventing an `iss:` key or misfiling the run under a fabricated `req:` value. Per this step's own instruction and docs/anti-patterns.md's entry on this append-only file, nothing was appended and no shape was invented. The run's history lives in docs/issues/ISS-0109.yaml, ISS-0116.yaml, GH#358 and this run's handoffs. NOT a defect to fix -- recorded so ORCH can see the decision was made on evidence rather than skipped.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0109-20260821",
+      "commit_sha_list": [
+        "ac8a2fec45bbc88ea0f2a7e39f564eb2f563685e"
+      ],
+      "remote_branch": "origin/feature/WF03-ISS0109-20260821",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to WF-03 Step Final (git-merge). No further doc work outstanding for this run. Note for Step Final: ISS-0109's queue_task_id_note requires releasing BOTH letflow-queue tasks 172 and 175, and GH#358 is already closed by hand (2026-08-21T03:18:27Z)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -787,3 +787,42 @@ mismatch rather than chasing further down the stack, and `release_lock(status: "
 whatever was actually locked once the fix is merged — full bounded procedure in
 `TASK_QUEUE.md`'s "A human names a specific issue" section. Test queue reachability with
 `GET /health`, never with a disposable `get_next_task` probe.
+
+## Validating a design's type table for well-formedness instead of against its own normative section
+
+During WF03-ISS0109-20260821, a design artefact declared §3.5 normative for
+`capture_schema_state/1`'s failure boundary (an invariant row, INV-F-4, said so in
+as many words), and §3.5 required a scalar whose query failed to degrade to `nil`.
+Meanwhile the `@type` table in §3.2 typed the same two fields `boolean()`. Both
+could not hold.
+
+CODE-DESIGN-VALIDATOR gated this design **twice** — a full first pass that
+independently re-derived six load-bearing claims from source (including one settled
+by running a real query against Postgres), then a narrow re-gate — and neither pass
+caught it. Not from carelessness: each section was checked, and the type table was
+internally well-formed. Nothing was checked *across* the two, in the one direction
+the design itself had declared authoritative.
+
+It was caught by ELIXIR-DEV, one step later, only because implementing the type
+forced the two readings into the same file. That is the expensive place to find it —
+and it was found there only because the implementer flagged the contradiction to
+REVIEWER instead of quietly picking whichever reading was easier to code.
+
+Why it mattered rather than being a cosmetic type widening: taking the literal
+`boolean()` would have broken INV-F-10. A capture whose `information_schema.schemata`
+query failed would report `schema_present?: false`, the reason-builder would emit
+"schema is absent", and the completeness assertion would raise against a perfectly
+healthy schema — a failing *diagnostic* turning a *passing* test red. For a helper
+whose entire purpose is making an intermittent failure attributable, reporting an
+unobserved thing as an observed absence is the exact defect it exists to prevent. It
+would have re-created ISS-0109's original misdiagnosis (see that record's
+`mechanism:` correction) inside the very tool built to stop it.
+
+**Correct alternative:** when a design names one section normative over another —
+"§X is authoritative", "see §Y for the contract" — that declaration is itself a
+checkable claim, and a validator must read the two sections **against each other**,
+not each on its own. Concretely: list every field, error value or return shape the
+normative section constrains, then look up each one in every other section that
+restates it, and diff the two by hand. Any restatement is a place the design can
+contradict itself, and a `@type` table is the most likely restatement to drift,
+because it is written once and then never re-read while the prose around it changes.

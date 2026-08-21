@@ -1,0 +1,50 @@
+id: ISS-0114
+title: >
+  Letflow.EngineConcurrencyTest:365 -- 42P01 undefined_table on tenant_<id>.instance_projections from Engine.insert_instance_projection/8 (full-suite only, unattributed)
+discovered_by: TEST-RUNNER
+discovered_in_run: WF03-ISS0109-20260821
+discovered_at: "2026-08-21T03:15:00Z"
+severity: MINOR
+
+description: >
+  Observed by TEST-RUNNER during WF03-ISS0109-20260821's full-suite run (612.1s, 1228/1244
+  passed, 16 failures, seed 993324, commit 12286e8, branch feature/WF03-ISS0109-20260821).
+
+  Filed because it is UNATTRIBUTED, which TEST-RUNNER reported as such rather than folding it
+  into the known environmental family -- the correct call, and the reason it needs its own record.
+
+  Failure: Letflow.EngineConcurrencyTest at test/letflow/engine_concurrency_test.exs:365 --
+  Postgrex 42P01 undefined_table on relation "tenant_88c84b17....instance_projections", raised
+  from Letflow.Engine.insert_instance_projection/8.
+
+  Why it is not attributable to the run that observed it: that branch changes NO production code
+  (`git diff --name-only main...HEAD -- lib/ priv/ config/ mix.exs` returns exactly one path, a
+  markdown design document), and `grep -rn TenantFixture` over the failing module returns no
+  match, so the new test fixture is not involved.
+
+  Why it is not attributable to an existing issue: it does not match either recorded baseline in
+  test/reports/ (report-20260820-WF02-REQ066-20260820.yaml, report-20260819-WF02-REQ109-20260819.yaml)
+  on module, test name, error class or frame.
+
+  Relationship to ISS-0109: same symptom FAMILY (a tenant-schema object absent during a live test
+  that provisioned it), and specifically the same shape as ISS-0109's failure 14 -- a table missing
+  from a schema rather than the schema itself being gone. Not folded into ISS-0109 because the
+  module, the frame and the missing relation all differ, and ISS-0109's own history shows that
+  folding distinct mechanisms together under a shared symptom is what made it hard to diagnose in
+  the first place.
+
+  What a diagnosis should use: WF03-ISS0109-20260821 shipped Letflow.TenantFixture
+  (test/support/tenant_fixture.ex), whose capture_schema_state/1 answers exactly the questions this
+  failure leaves open -- was the registry row present, was the schema present, which tables were
+  present and missing, which migration versions were applied. This module has not adopted it (see
+  ISS-0112). Adopting it here first would likely make the next occurrence attributable in one shot.
+
+affected_files:
+  - test/letflow/engine_concurrency_test.exs
+  - lib/letflow/engine.ex
+
+queue_task_id: 182
+github_issue: https://github.com/tvolodi/letflow/issues/368
+github_issue_note: >
+  Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (182) and its mirrored GitHub issue (#368) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
+status: open

@@ -63,7 +63,73 @@ description: >
                 code: :undefined_table, pg_code: "42P01",
                 message: "relation \"tenant_cb34d76b2b9c498a8b38f065c7682989.promotion_assertion_runs\" does not exist"}}}}
 
-mechanism: >
+mechanism: |
+  CORRECTED 2026-08-21 by run WF03-ISS0109-20260821 (WF-03 Step 1, ISSUE-FIXER).
+  The originally-filed text is preserved verbatim below under
+  `mechanism_as_originally_filed:` -- it is NOT deleted, so a later reader can see what
+  was believed at filing time and what the evidence actually supported. Read the
+  correction first; the original asserts a causal ordering its own evidence does not
+  carry, and a run reading it uncritically would be misled exactly as this one nearly was.
+
+  === THE ORIGINALLY-FILED MECHANISM IS REFUTED ===
+
+  The claim "a teardown path dropped the schema OUT FROM UNDER the live test, ~750ms
+  after it was provisioned" is not supported by the evidence quoted in support of it.
+  The logged DROP/DELETE/DELETE triple at 01:43:46.501-.507 is promotion_test.exs's OWN
+  post-failure `on_exit` teardown of tenant 8111baf7 -- the CONSEQUENCE of the failure,
+  not its cause. Three independent grounds, each established empirically at Step 1:
+
+  1. `TenantProvisioning.schema_name_for_tenant/1` (lib/letflow/tenant_provisioning.ex:101-106)
+     is a PURE derivation of the schema name from the tenant UUID, with no I/O. The only
+     closure in existence that can name `tenant_8111baf7cec4418592f94a3a68a71722` is
+     therefore the one registered at promotion_test.exs:81 by the very
+     `provisioned_tenant()` call that then failed at :96. No other test, no other module,
+     and no other OS process ever held that id. (The triple's SQL was matched
+     byte-for-byte against `Repo.to_sql/2` output for the `provisioned_tenant/0` on_exit
+     template -- `DELETE FROM "tenant_schemas" AS t0 WHERE (t0."tenant_id" = $1)` and
+     `DELETE FROM "tenants" AS t0 WHERE (t0."id" = $1)` -- and against a live teardown.)
+  2. ExUnit runs `on_exit` callbacks SYNCHRONOUSLY between tests. Read from source:
+     `ExUnit.OnExitHandler.run/2` is called by the runner after the test process exits
+     and drives `exec_on_exit_callbacks/3`, which sends each callback to a single runner
+     process and BLOCKS in `receive_runner_reply/4`, `Process.exit(runner_pid, :kill)`-ing
+     an over-running runner and waiting for the `:DOWN`. There is no path by which a
+     teardown outlives its own test into the next one. Both failing modules are
+     `async: false` besides, and ExUnit runs sync modules one at a time.
+  3. The DROP was `DROP SCHEMA IF EXISTS ... CASCADE` and it SUCCEEDED -- which is exactly
+     what tearing down an ALREADY-ABSENT schema looks like, and carries no evidence that
+     the schema was present when it ran.
+
+  Corroborating: in the five-line excerpt quoted below, the ONLY line carrying no
+  timestamp is `(then) replay_migrations/1 fails` -- i.e. the causal ordering was the
+  reporter's inference, not a logged fact. The actual removal of the schema, between the
+  45.755 commit and the replay, is NOT captured in the surviving evidence at all; the raw
+  log did not survive (that run was in the SIBLING letflow workspace against port 5462,
+  and test/reports/report-20260820-WF02-REQ066-20260820.yaml preserves only a paraphrase).
+
+  === FAILURE 14 IS THE DECISIVE COUNTEREXAMPLE ===
+
+  Failure 14's observed state is one a `DROP SCHEMA ... CASCADE` physically CANNOT
+  produce: the table `promotion_assertion_runs` was missing WHILE the schema itself still
+  existed AND while a sibling table in that same schema (`promotion_reviews`, written by
+  `review_pending!/2`) had already been inserted into successfully. CASCADE removes the
+  schema and every table in it at once, atomically -- it cannot leave a schema standing
+  with one table gone and another writable. So the fault class is PROVISIONING/REPLAY
+  COMPLETENESS, not teardown timing.
+
+  === WHAT REMAINS UNKNOWN ===
+
+  What actually removes the schema or the table is still not established. It was never
+  reproduced on demand (three iterations of concurrent invocations, 828 tests, zero hits).
+  TenantSchemaReaper is EXCLUDED for the 1-second-old-row case on fresh measurement:
+  `provisioned_at` is Ecto's BEAM-side `NaiveDateTime.utc_now()`, the reaper's cutoff is
+  the same call, one clock basis, no skew (the 5-hour gap between the log's local
+  "01:43:45" prefix and the stored `~N[2026-08-20 20:43:45]` is UTC-vs-local rendering,
+  not clock drift). There is also NO production defect in the provisioning path:
+  `provision_tenant_schema/1` runs `CREATE SCHEMA IF NOT EXISTS` unconditionally inside
+  its transaction before reaching registration, so a registration can never name an
+  absent schema. The continuing hunt lives in ISS-0116/GH#370.
+
+mechanism_as_originally_filed: >
   Direct evidence from the run log for failure 3 (timestamps are local, the log is
   the authoritative artefact quoted in
   test/reports/report-20260820-WF02-REQ066-20260820.yaml):
@@ -131,8 +197,20 @@ reproducibility: >
 
 suggested_owner: ISSUE-FIXER
 blocks: []
-status: open
+status: instrumented
+superseded_by: ISS-0116
 queue_task_id: 172
+queue_task_id_secondary: 175
+queue_task_id_note: >
+  TWO letflow-queue tasks address this one issue and BOTH must be released on
+  resolution. 172 is the register_task-side task filed by ISS-0109's own discovering
+  run (its auto-mirror GH#359 was closed as a duplicate of the canonical GH#358).
+  175 is a SEPARATE task letflow-queue created later by get_next_task's GitHub-import
+  step, which imports open issues it is not already tracking -- it did not recognise
+  #358 as already covered by 172. WF03-ISS0109-20260821 claimed 175 (that is what
+  get_next_task handed out) and must release 172 as well, or 172 stays open and
+  claimable forever. Recorded here 2026-08-21 so a later run does not have to
+  rediscover it.
 github_issue: https://github.com/tvolodi/letflow/issues/358
 github_issue_note: >
   Filed by ORCH on TEST-RUNNER's behalf (TEST-RUNNER wrote the local record but
@@ -145,7 +223,106 @@ github_issue_note: >
 related:
   - ISS-0048
   - ISS-0050
+  - ISS-0059
   - ISS-0060
   - ISS-0062
   - ISS-0064
   - ISS-0106
+  - ISS-0107
+  - ISS-0110
+  - ISS-0111
+  - ISS-0112
+  - ISS-0113
+  - ISS-0114
+  - ISS-0115
+  - ISS-0116
+related_note: >
+  ISS-0059 and ISS-0107 were surfaced by WF03-ISS0109-20260821's Step 0.5 registry lookup
+  (ISS-0107 is main's unrelated-numbering ISS-0107 -- nested `mix test` sharing one
+  database -- not this record's own pre-rebase identity; see renumber_note above).
+  ISS-0110 through ISS-0116 are all filings of this same run.
+
+resolution:
+  status_rationale: >
+    INSTRUMENTED, NOT RESOLVED -- deliberately. Both the gate-approved design and REVIEWER
+    independently concluded that this run instruments the failure rather than fixing it:
+    there is no production defect to remove (see the corrected `mechanism:` above), the
+    failure was never reproduced on demand, and the root cause is still unknown. Marking
+    this `resolved` would put a false entry into a registry that six other issues
+    cross-reference. The unresolved half continues in ISS-0116/GH#370.
+  resolved_in_run: WF03-ISS0109-20260821
+  closed_at: "2026-08-21T03:18:27Z"
+  github_closed: >
+    GH#358 was commented on and then closed DELIBERATELY (`gh issue comment` then
+    `gh issue close --reason completed`), not left to be closed as a side effect of a
+    queue release -- see github_issue_note above, which records that a release_lock on
+    task 172 would have targeted the already-closed duplicate #359 instead.
+    Comment: https://github.com/tvolodi/letflow/issues/358#issuecomment-5364776283
+    Closed at 2026-08-21T03:18:27Z (confirmed via `gh issue view 358 --json state,closedAt`
+    => state CLOSED). The comment states what shipped, the refuted mechanism, the unknown
+    root cause, and the handoff to ISS-0116/GH#370 with ISS-0112/GH#366 sequenced first.
+  what_shipped:
+    - path: test/support/tenant_fixture.ex
+      detail: >
+        New `Letflow.TenantFixture`. Three capabilities: `capture_schema_state/1`, a
+        one-shot 14-field forensic report of the tenant's actual database state (registry
+        row present? schema present? which tables present/missing? which migration
+        versions applied? db_now vs the BEAM clock? backend pid?);
+        `assert_schema_complete!/2`, a completeness oracle that checks the schema's tables
+        directly rather than trusting `replay_migrations/1`'s return value (measured: Ecto's
+        Migrator re-applies NOTHING for an already-recorded version -- after dropping a
+        table while leaving its version recorded, a second `replay_migrations/1` returned
+        `{:ok, []}` with the table still absent); and a `LETFLOW_TENANT_FIXTURE` teardown
+        marker emitting a closed phase vocabulary, so the next occurrence's log identifies
+        which phase was running rather than leaving it to inference -- the exact inference
+        that produced the refuted mechanism above.
+    - path: test/letflow/definitions/promotion_test.exs
+      detail: adopted Letflow.TenantFixture (one of the two modules this issue names).
+    - path: test/letflow/definitions/promotion_assertion_rerun_test.exs
+      detail: adopted Letflow.TenantFixture (the other module this issue names).
+    - path: test/letflow/support/tenant_fixture_test.exs
+      detail: 14 regression tests covering the fixture's capture, oracle and marker behaviour.
+    - path: test/specs/ISS-0109.md
+      detail: the test specification for the above.
+    - path: lib/letflow/design/iss0109-provisioning-completeness-and-fixture-instrumentation.md
+      detail: the gate-approved design artefact this run implemented.
+  what_this_does_not_close: >
+    Stated plainly, because the distinction is the whole reason this record is
+    `instrumented` and not `resolved`: the shipped work makes a RECURRENCE ATTRIBUTABLE.
+    It does not make the recurrence stop happening. Nothing in it removes a defect,
+    because no production defect was found. The next occurrence will carry a 14-field
+    capture and a phase marker instead of a bare Postgrex error -- that is the entire
+    claim being made here.
+
+new_evidence_from_resolving_run:
+  source: test/reports/report-20260821-WF03-ISS0109-20260821.yaml
+  run: >
+    WF03-ISS0109-20260821 full suite -- 612.1s, 1228 of 1244 passed, 16 failures, seed 993324.
+  observation: >
+    A SIGNATURE-IDENTICAL reproduction of THIS issue's failure 3 appeared in a THIRD module
+    that had NOT adopted the new fixture: Letflow.Definitions.RollbackTest, at
+    test/letflow/definitions/rollback_test.exs:642, raised from that module's own
+    hand-rolled `provisioned_tenant/0` at :120 --
+
+      assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+      right: {:error, {:migration_failed, %MatchError{term: {:error, %Postgrex.Error{
+               postgres: %{code: :invalid_schema_name, pg_code: "3F000",
+                 message: "schema \"tenant_72360c3d2a13493f84d11ac73b8d671f\" does not exist",
+                 routine: "get_namespace_oid"}, connection_id: 107764}}}}}
+
+    Same 3F000, same {:error, {:migration_failed, %MatchError{...}}} wrapper, same failing
+    assertion. Meanwhile BOTH modules this issue names -- PromotionTest and
+    PromotionAssertionRerunTest, the two that DID adopt the instrumentation -- passed, in
+    the full suite AND in isolation.
+  caveat: >
+    ONE OBSERVATION, NOT A CONTROLLED EXPERIMENT. Nothing here isolates adoption of the
+    fixture as the variable: the adopted modules passing and the un-adopted module failing
+    in the same run is consistent with the fixture helping, and equally consistent with the
+    ordinary intermittency this issue has always shown. It must not be read as evidence
+    that the instrumentation prevents the failure -- it does not claim to.
+  why_it_matters: >
+    It is evidence the condition is REAL and NOT specific to the two modules this issue
+    happened to name -- which is exactly what a module-scoped reading of this record would
+    have assumed. That is the reason ISS-0116 exists and why ISS-0112 (adopting the fixture
+    at the remaining sites) should be sequenced first: it is what makes the next occurrence
+    diagnosable at all.

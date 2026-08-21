@@ -461,3 +461,14 @@ history:
       WF-02 launched. Queue task 137 claimed by orch-letflow-3. Framework settled
       as Plug/Bandit (REQ-065 addendum 2026-08-20). Step 00 PASS — branch
       feature/WF02-REQ070-20260821 created and pushed.
+  - req: REQ-070
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-21T17:43:52Z"
+    run_id: WF02-REQ070-20260821
+    note: >
+      Router decomposed into 10 per-subsystem sub-router stubs (lib/letflow/routers/)
+      plus Letflow.Plugs.ApiPipeline as the single shared middleware chain. GET /health
+      preserved byte-compatibly outside the tenant-scoped pipeline. OQ-1 in
+      stage-4-api-surface.md resolved. All 6 ACs independently verified by
+      RELEASE-VALIDATOR: 1400/1400 tests passing.

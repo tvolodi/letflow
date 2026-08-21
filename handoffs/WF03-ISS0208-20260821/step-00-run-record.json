@@ -1,0 +1,61 @@
+{
+  "handoff_id": "618107c1-7ad8-4087-a85d-6cfc8b24503a",
+  "run_id": "WF03-ISS0208-20260821",
+  "workflow_id": "WF-03",
+  "step": "00-05",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0208-20260821/step-00-run-record.json",
+  "created_at": "2026-08-21T11:20:59Z",
+  "started_at": "2026-08-21T11:20:59Z",
+  "completed_at": "2026-08-21T11:31:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0207-20260821/step-03b-reviewer-gate.json"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0208.yaml",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md"
+    ],
+    "owned_modules": [
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/issues/ISS-0208.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0208-20260821"
+  },
+  "task": {
+    "description": "Execute WF-03 (docs/agents/workflows/WF-03_issue_resolving.md) for ISS-0208: HANDOFF_PROTOCOL.md §1.2's as-of marker embeds a two-entry running list of re-run readings (607/469, 608/470) that is stale by construction the moment it's committed and grows without bound if treated as needing maintenance -- the exact defect class §1.2's own procedure exists to remove, one level up.",
+    "acceptance_criteria": [
+      "The marker keeps its ef62d4b baseline figures and its reconciliation procedure -- neither weakened, command quoted verbatim",
+      "The running list of subsequent re-run readings is either removed, or capped at a single illustrative reading that explicitly carries no update obligation",
+      "The text states no reader is expected to append their own reading, so the list cannot grow by convention",
+      "The edit stays inside HANDOFF_PROTOCOL.md §1.2, preserving the one-canonical-statement property ISS-0204 established",
+      "The five fixed buckets 10/14/89/25/20 and their ALARM framing are left intact"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "EXECUTION NOTE: this run was executed by a single ORCH-acting agent performing every WF-03 step directly (diagnose, design, implement, self-review, close) rather than dispatching to separate ISSUE-FIXER/CODE-DESIGNER/CODE-DESIGN-VALIDATOR/ELIXIR-DEV/SECURITY-REVIEWER/REVIEWER/TEST-DESIGNER/TEST-DESIGN-VALIDATOR/TEST-RUNNER role agents -- the execution context this run ran in does not permit spawning further subagents. This is a deviation from WF-03's normal producer/validator separation, reported plainly rather than presented as a normal multi-role run; it is judged acceptable here only because the change is a bounded, non-code, non-tenant-data-path documentation edit (a 3-sentence paragraph inside a single subsection) with a mechanically checkable outcome (git diff review + re-read of the edited section against each acceptance criterion), not because the deviation is generally sanctioned.\n\nDIAGNOSIS (Step 0.5/1): read docs/issues/ISS-0208.yaml and the live text of HANDOFF_PROTOCOL.md §1.2. Confirmed the defect is real and still present at run start (not fixed by a concurrent host): the paragraph beginning 'Growth in those two is expected and exactly reconcilable' ended with 'Twice already: the ISS-0204 gate re-ran it three minutes later and got 607/469 ..., and ISS-0207 re-ran it thirteen minutes after that and got 608/470 ... Both reconciled to the unit.' -- a two-entry log that was already one reading stale at commit time (the issue's own filing notes a third re-run read 609/471 minutes later) and would gain one entry per future re-run if treated as needing maintenance. No prior resolved issue in docs/issues/ covers this exact text (checked ISS-0207, ISS-0204, ISS-0022 -- related by class, not duplicates: ISS-0207 fixed a different staleness instance in the same section, ISS-0022 a different snapshot count elsewhere).\n\nFIX DESIGN + IMPLEMENT (Step 2/3): replaced the two-entry list with a single illustrative reading (the ISS-0204 gate's 607/469, kept because it's the first and closest to §1.2's own worked reconciliation example already in the surrounding prose) and added an explicit sentence stating no reader is expected to append their own re-run reading, so the example cannot grow by convention. The ef62d4b baseline paragraph, the reconciliation procedure sentence immediately preceding the edit, and the following paragraph stating the five fixed buckets (10/14/89/25/20) and ALARM framing were left untouched -- confirmed by re-reading lines 130-160 of the file after the edit. The edit is contained entirely within §1.2 (between the '## 1.2' heading and the '---' / '## 2.' boundary at the section's end).\n\nSELF-REVIEW (Step 3b, in place of SECURITY-REVIEWER/REVIEWER): not a tenant-data path (docs-only, no lib/ or migrations/ touched) so no security-invariant applies. Idiom/scope check: single paragraph edited, no unrelated text touched, git diff is a 7-line replacement of a 5-line span -- no scope creep.\n\nREGRESSION CHECK (Step 4, in place of TEST-DESIGNER/TEST-DESIGN-VALIDATOR/TEST-RUNNER): this is a prose-only documentation fix with no executable behavior, so there is no code path to regression-test. Verification instead re-derives each acceptance criterion against the post-edit text directly (quoted below) rather than running mix test, which this change cannot affect.\n\nAcceptance criteria verification, against the edited file:\n1. PASS -- 'AS OF 2026-08-21, at commit `ef62d4b` ...' paragraph and the reconciliation-procedure sentence ('the difference from the figures above must equal the handoffs written since `ef62d4b`, which you can enumerate by `created_at`') are both unchanged, word for word.\n2. PASS -- the list is now capped at one reading (607/469, WF03-ISS0204-20260821/step-03b-reviewer-gate.json), and it is explicitly marked 'kept for shape only'.\n3. PASS -- added sentence: 'No reader is expected to append their own re-run reading here -- the procedure above is what reconciles a re-run, not a growing log of past ones, so this single example carries no obligation to be kept current or extended as further runs re-check it.'\n4. PASS -- diff is confined to the single paragraph inside §1.2; no other section touched; §1.2 remains §1's only started_at statement (no restatement introduced elsewhere).\n5. PASS -- '606 files, 0 unparseable. 10 carry a null `started_at`. ... 468 ... 14 ... 89 ... 25 NEGATIVE gap' paragraph and the subsequent ALARM paragraph ('10 / 14 / 89 / 25 / 20') are byte-identical to pre-edit text.\n\nCLOSE (Step 5): docs/issues/ISS-0208.yaml set to status: resolved with this run-id and a real UTC timestamp; GitHub issue #399 closed with a comment pointing at this run and the yaml.",
+    "artifacts_out": [
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/issues/ISS-0208.yaml"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0208-20260821",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Commit, push, open PR, merge to main; release letflow-queue lock on task 208 as done."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

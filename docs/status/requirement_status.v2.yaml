@@ -524,3 +524,41 @@ history:
       already updated by REVIEWER's Step 2d; README.md checked directly (grep for
       AuthPipeline/TenantStatus/REQ-071) -- no hit in either direction, so no
       README update is needed.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-08-21T21:46:14Z"
+    note: >
+      ISS-0220 (GH#450, queue task 220) resolved in run WF03-ISS0220-20260822.
+      Letflow.SandboxPool derived claim/2's GenServer.call timeout as
+      max_wait_ms plus a fixed 5_000 ms, but max_wait_ms bounds only queue wait, so
+      that constant was the entire budget for provision_sandbox/0 -- CREATE SCHEMA
+      plus Ecto.Migrator.run/4 over 31 tenant-scoped migrations. Measured
+      provisioning latency is 918-3621 ms on a completely idle host (1.38x margin)
+      and 1119-15373 ms under real concurrent sibling-workspace load, 20% of
+      samples over budget, with no test parallelism at all. release/2 had the same
+      defect implicitly via GenServer.call/2's 5_000 ms default. Fix splits the two
+      budgets behind a configurable :provision_timeout_ms, default 44_000 ms
+      derived rather than tuned: floor = worst legitimate provisioning observed
+      (15_373 ms), ceiling = ExUnit's 60_000 ms per-test default, separation from
+      the ceiling must itself be at least one worst-observed provisioning, so the
+      budget cannot exceed 44_627; take the largest admissible, trimmed to 44_000.
+      Five test-side rendezvous bounds re-derived from the same public functions;
+      no assertion weakened, skipped or tag-excluded. The filing's own hypothesis
+      (connection-pool contention) was refuted by measurement -- 10 of 11
+      DBConnection errors read "client exited", i.e. the connection died BECAUSE
+      the call timed out -- so decision 0009 is not the mechanism and needs no
+      amendment. Verified by a fail-first regression test that fails pre-fix
+      behaviourally (observed 5000/7000/5000 against expected 1234/3234/1234,
+      Result 0/4 passed; post-fix 4 passed), four green TEST_PARALLEL_N=4 runs
+      (1442/1442 each), and -- because those four runs never exercised an
+      over-budget provisioning and so prove only no-regression -- a controlled A/B
+      under induced load where only the budget varied: at 2_000 ms exactly the
+      ISS-0220 failure shape reappears with the timeout visibly tracking the budget
+      (a claim of 1000 timing out at 3000), while at 5_000 and at the shipped
+      44_000 it does not. CODE-DESIGN-VALIDATOR FAILed the design twice; both
+      rounds changed it materially, including replacing a derivation that yielded a
+      floor above its own ceiling. Successor ISS-0224/GH#457 filed for the
+      mailbox-blocking defect deliberately scoped out. Incidental:
+      test/letflow/router_test.exs reformatted (pre-existing on main, blocked the
+      repo-wide format merge gate).

@@ -1,0 +1,59 @@
+id: ISS-0224
+title: >
+  SandboxPool: provision_sandbox/0 inside handle_call/3 blocks the pool mailbox,
+  so max_wait_ms is not honoured under contention
+discovered_by: CODE-DESIGNER
+discovered_in_run: WF03-ISS0220-20260822
+discovered_at: "2026-08-21T21:29:42Z"
+severity: MEDIUM
+
+description: >
+  Found while designing ISS-0220's fix, and deliberately scoped OUT of it -- see
+  `lib/letflow/design/iss0220-sandbox-pool-provision-timeout.md` §12, which states the
+  reasoning in full rather than leaving the omission to look like an oversight.
+
+  `Letflow.SandboxPool.provision_sandbox/0` runs synchronously inside `handle_call/3`
+  (the `{:claim, _}` clause) and inside `service_next_waiter/1`. While it runs, the pool
+  processes NO messages -- including a queued waiter's own `{:claim_timeout, caller_ref}`
+  timer message. A waiter whose wait window elapses during ANOTHER caller's provisioning
+  is therefore replied to late, by up to one full provisioning: measured during ISS-0220
+  at up to 15373 ms, against `max_wait_ms` values that callers in this suite routinely
+  set to 1000-2000 ms.
+
+  `max_wait_ms` is documented as the bound on exactly that wait (`claim/2`'s own `@doc`,
+  and `req039-sandbox-pool-fixture-loader.md` §4.4 step 3), so this is a violation of a
+  documented contract, not a quality-of-service nicety.
+
+  NOT CURRENTLY OBSERVABLE as a test failure: every current caller uses a pool with at
+  most one claim in flight, which is what ISS-0220's INV-SP-T4 records as a stated LIMIT
+  rather than a guarantee. It becomes reachable the moment any caller drives a pool with
+  `max_concurrent > 1` concurrently.
+
+  Why it was not fixed in ISS-0220: the fix means moving provisioning into a monitored
+  `Task` and carrying slot bookkeeping across an asynchronous completion -- reserving the
+  slot before provisioning starts, releasing the reservation on `Task` failure, handling
+  an owner that dies DURING provisioning (whose monitor does not exist yet), and replying
+  to a `from` held across callbacks. That touches every invariant in `req039` §4.7 and
+  every one in `iss-0048-sandbox-pool-owner-crash-reclaim.md` §6 -- precisely the state
+  machine ISS-0220's design §7.5 forbade that fix from touching. ISS-0220 was a
+  false-failure-under-load defect fixable entirely in the CLIENT half of the module;
+  mixing the two would have made both harder to review and to revert independently.
+
+affected_files:
+  - lib/letflow/sandbox_pool.ex
+  - lib/letflow/design/req039-sandbox-pool-fixture-loader.md
+  - lib/letflow/design/iss-0048-sandbox-pool-owner-crash-reclaim.md
+  - lib/letflow/design/iss0220-sandbox-pool-provision-timeout.md
+
+related:
+  - ISS-0220  # the run that found this and scoped it out (§12); its INV-SP-T4 is the limit this issue lifts
+  - ISS-0048  # owner-crash reclaim -- its §6 invariants must all be re-verified against an async flow
+
+queue_task_id: 224
+github_issue: 457
+github_issue_note: >
+  register_task created both the queue task (224) and its mirrored GitHub issue (457)
+  in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not
+  called separately.
+
+status: open

@@ -57,14 +57,26 @@ resolution: >
 
   The corpus was measured first-hand over all 610 parseable files under `handoffs/`: 502
   shas across 276 files, 261 empty lists, 73 files predating the field. Two findings
-  changed the answer. (1) 284 of the 502 recorded shas — 57% — no longer resolve to any
+  changed the answer. (1) 293 of the 502 recorded shas — 58% — no longer resolve to any
   object in this repository, because `GIT_MERGE.md` step 5 rebases and step 8 merges with
   `--squash --delete-branch`; the field's audit value for merged work is therefore already
   largely spent, which argues against paying an extra commit per run to add one more sha
-  to it. (2) The issue's infinite-regress claim is REFUTED: all 21 write-back commits in
-  the history record exactly their immediate predecessor and stop, and not one is itself
-  recorded anywhere in the corpus. The regress never happened; the residue is exactly one
-  unrecorded commit per run, which the new subsection now states outright.
+  to it. (2) The issue's infinite-regress claim is REFUTED: of the 21 write-back commits in
+  the history, 17 record exactly their immediate predecessor and stop, and NOT ONE of the
+  21 is itself recorded anywhere in the corpus — which is the half the refutation rests on
+  and is absolute. The regress never happened; the residue is exactly one unrecorded commit
+  per run, which the new subsection now states outright.
+
+  Figures corrected in step 03c of the same run, after the gate re-derived them: the
+  unresolvable fraction was first written as 284/57%, which wrongly counted the 9
+  non-sha-shaped recorded strings as resolving although they resolve to nothing (the
+  resolving count of 209 was right; the complement was mis-split); the write-back run
+  directories are 11, not 12; and "every one records its immediate predecessor" is true of
+  17 of 21. Commit `12f8f4c`'s message still carries the superseded figures and is
+  deliberately not rewritten. The subsection also now records, as an option it does not
+  adopt, that `d4e80ed`, `09aaaef` and `f7dc7a2` already record a post-merge merge/squash
+  sha rather than a parent — prior art for fixing this field for writers rather than only
+  for readers, which would need its own run.
 
   Existing handoffs are not backfilled. The ruling's reading applies to handoffs of any
   age; its filling boundary is commit-scoped per §4.1(b) precedent. `GIT_MERGE.md` step 8

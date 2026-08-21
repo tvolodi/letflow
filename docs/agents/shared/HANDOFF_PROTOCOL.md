@@ -337,8 +337,10 @@ filling, and a reader must not read them as such:**
 **The measurement, not the argument** — taken 2026-08-21 over every JSON file under
 `handoffs/` other than `registry.json` (610 files, 0 unparseable). **502 shas are recorded
 across 276 files; 261 files carry an empty list and 73 predate the field.** Of the 502,
-**284 — 57% — no longer resolve to any object in this repository**, against 175
-squash-merge commits and only 15 true merge commits on `main`. Those 284 are not
+**293 — 58% — no longer resolve to any object in this repository**, against 175
+squash-merge commits and only 15 true merge commits on `main`. (284 are sha-shaped but
+dead; the other 9 are not sha-shaped strings at all, and resolve to nothing for that
+reason. 209 resolve.) Those 293 are almost all not
 fabrications: they are items 2 and 3 doing exactly what this protocol instructs.
 **A reader who hits an unresolvable sha has found a rebased or squashed branch, not a
 careless agent.**
@@ -351,7 +353,7 @@ resolve." Nothing about completeness may be inferred from this field in either d
 
 **The write-back is OPTIONAL, and stays optional.** ORCH has sometimes made a follow-up
 commit writing a sha back into an already-committed handoff: **21 such commits exist,
-spanning 12 of the 63 run directories**, and 94 of the 209 still-resolvable recorded shas
+spanning 11 of the 63 run directories**, and 94 of the 209 still-resolvable recorded shas
 name a commit that touched the very file listing them — only possible because someone
 wrote it back afterwards. It is **not** promoted to a required step: it costs an extra
 commit per run, it depends on an agent remembering to make it, and by items 2 and 3 what
@@ -360,12 +362,26 @@ acquire no new obligation from this subsection.
 
 **And the infinite-regress claim is REFUTED, not inherited.** ISS-0209 argued the
 write-back opens an unterminating regress because the write-back commit cannot record
-itself either. Checked against how those 21 commits were actually made: **every one
-records exactly its immediate predecessor and stops, and not one of them is itself
-recorded anywhere in the corpus.** There is no regress — the residue is exactly one
-unrecorded commit per run, which is item 1, which this subsection now states outright
-instead of leaving a reader to discover it. **If you do make a write-back commit, record
-only the commit before it, and do not record the write-back.**
+itself either. Checked against how those 21 commits were actually made: **17 of the 21
+record exactly their immediate predecessor and stop, and NOT ONE of the 21 is itself
+recorded anywhere in the corpus.** The second half is the half the refutation rests on,
+and it is absolute: there is no regress, because no write-back has ever been recorded by
+anything. The residue is exactly one unrecorded commit per run, which is item 1, which
+this subsection now states outright instead of leaving a reader to discover it. **If you
+do make a write-back commit, record only the commit before it, and do not record the
+write-back.**
+
+**The four that are not simple predecessor records, since the count above invites the
+question.** `426814c` records its parent *and* one earlier commit. The other three —
+`d4e80ed`, `09aaaef`, `f7dc7a2`, all Step Final handoffs — record a post-merge merge/squash
+sha instead of a parent. **That is prior art for an option this ruling does NOT adopt:**
+recording the sha the merge *produces* (which items 2 and 3 do not invalidate, since it is
+what they produce) rather than the branch shas they destroy, thereby fixing this field for
+the agent WRITING it rather than only for the reader. It is recorded here as an option and
+nothing more — it changes what agents write, so it needs its own run and its own gate, and
+that run would have to settle a question these three do not answer: **the shas those three
+recorded do not resolve in this clone either.** Nothing above is weakened by it, and the
+write-back stays OPTIONAL.
 
 **Scope — the reading is universal, the boundary is for filling, and nothing is
 backfilled.** Items 1-3 describe properties the field always had, so they govern the

@@ -1393,7 +1393,7 @@
       "workflow_id": "WF-03",
       "requirement_ids": [],
       "stage": null,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         ".tool-versions",
         "mix.exs",
@@ -1405,9 +1405,9 @@
         "docs/migration/decisions/0005-pin-formatting-toolchain.md"
       ],
       "lock_acquired_at": "2026-08-21T00:57:05Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Steps 00 through 5b all PASS; letflow-queue tasks 176 AND 170 both released with status done (two tasks existed for the one issue -- 176 was an auto-import of GH#354, 170 was ISS-0106's own register_task registration carrying mirror GH#355; 170 was set_lock'd first so its identity could be inspected before release rather than assumed). Step Final (git merge) dispatched to ELIXIR-DEV.",
+      "lock_released_at": "2026-08-21T04:03:45Z",
+      "released_lock": true,
+      "last_known_step": "Step Final PASS -- PR #374 squash-merged to main as c1f5e5c, branch deleted local and remote; letflow-queue tasks 176 and 170 both released with status done. Steps 00 through 5b all PASS; letflow-queue tasks 176 AND 170 both released with status done (two tasks existed for the one issue -- 176 was an auto-import of GH#354, 170 was ISS-0106's own register_task registration carrying mirror GH#355; 170 was set_lock'd first so its identity could be inspected before release rather than assumed). Step Final (git merge) dispatched to ELIXIR-DEV.",
       "backfilled": false,
       "queue_task_id": 176,
       "queue_agent_id": "tvolodi-orch",

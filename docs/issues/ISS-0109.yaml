@@ -223,8 +223,19 @@ github_issue_note: >
 observed_scope_addendum: >
   ADDENDUM 2026-08-21T03:37:07Z, run WF03-ISS0106-20260821 (TEST-RUNNER Step 4c
   observation, recorded here by ISSUE-FIXER Step 5). Appended, not an edit --
-  nothing above is changed, and this issue's status remains `open`; it is NOT
-  closed by this.
+  nothing above is changed, and this issue is NOT closed by this.
+
+  MERGE-TIME CORRECTION, 2026-08-21T04:05Z (ORCH, WF03-ISS0106-20260821 Step
+  Final): as written on its branch this addendum said "this issue's status
+  remains `open`", which was true when ISSUE-FIXER wrote it and false by the
+  time it merged -- a concurrent run (WF03-ISS0109-20260821, PR #371) had
+  meanwhile set `status: instrumented` and added `superseded_by: ISS-0116`.
+  The clause is corrected here rather than left to read as a claim about a
+  status this run never actually observed. The addendum's substance is
+  unaffected: it widens the observed module set and asserts nothing about
+  this issue's lifecycle state. Flagged by Step Final rather than silently
+  reconciled during the rebase, which is the right call -- resolving a
+  conflict is not licence to restate another run's fact.
 
   WHAT THIS ADDENDUM DOES AND DOES NOT CLAIM: it widens the OBSERVED module set
   only. It is not a claim that the root cause changed, and it does not narrow the

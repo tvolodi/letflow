@@ -1,0 +1,123 @@
+id: ISS-0118
+renumbered_from: ISS-0110
+renumbered_at: "2026-08-21T03:46:21Z"
+renumbered_note: >
+  Filed by WF03-ISS0106-20260821 as ISS-0110 after scanning docs/issues/
+  across every remote branch (highest found anywhere: ISS-0109). While this
+  run was in flight, a concurrent session (WF03-ISS0109-20260821, PR #371)
+  independently allocated ISS-0110 THROUGH ISS-0117 and merged to main
+  first. This record was renumbered to ISS-0118 at Step Final rather than
+  main's being disturbed — main's ISS-0110 (TenantSchemaReaper min_age vs
+  suite duration) is a different finding and was kept byte-identical.
+  Checked before renumbering, per the anti-pattern entry's own instruction
+  to confirm main does not already carry an equivalent record: none of
+  main's ISS-0110..0117 describes this finding.
+
+  GitHub issue #363 keeps its number; its title and body were updated to
+  cite ISS-0118. letflow-queue task 177 is unchanged — the queue id is
+  allocated atomically and is the stable identifier; only the local
+  filename moved.
+
+  This is the EIGHTH recorded instance of this collision class. Note what
+  it demonstrates about the mitigation currently on record: this run did
+  scan every remote branch before choosing, which is exactly what
+  docs/anti-patterns.md prescribes, and it still collided — because the
+  colliding numbers did not exist on any branch at the moment of the scan.
+  A scan cannot reserve a number, and eight occurrences now say the same
+  thing: the fix has to be allocation from the one atomically-unique
+  source that spans hosts, not a wider search before guessing.
+title: "Three runs merged unformatted code to main past a red `mix format` gate on 2026-08-20 (91d7e25, cb43cc2, a7fa87b)"
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0106-20260821
+discovered_at: "2026-08-21T01:23:35Z"
+severity: MAJOR
+description: >
+  Filed as an incidental finding of ISS-0106's diagnosis, per
+  docs/agents/protocols/ISSUE_QUEUE.md — NOT fixed by that run. ISS-0106's
+  four format-check failures are being repaired there as a symptom; this
+  record is the process defect underneath them, which a reformat does not
+  address and which will simply reproduce the same four-file failure the
+  next time it fires.
+
+  WHAT WAS MEASURED. ISS-0106 was filed on the premise that the four files
+  failing `mix format --check-formatted` were an artifact of toolchain
+  drift (this host running Elixir 1.20.3/OTP 29 against a .tool-versions
+  pin of 1.18.3-otp-27). WF03-ISS0106-20260821's Step 1 ran both halves of
+  the gate inside a throwaway `elixir:1.18.3-otp-27` container — the exact
+  pinned toolchain — against the same tree. The pinned formatter rejects
+  the same four files with character-for-character identical diffs. The
+  files are unformatted under every formatter version tested, so their
+  failure is not version-sensitive and never was.
+
+  Line-level blame on the exact failing lines (`git log -1 -L <line>,<line>:<file>`),
+  corroborated per file by check-formatting each introducing commit's blob
+  against its parent's (`git show <rev>:<path> | mix format --check-formatted -`,
+  the technique ISS-0008 established, so nothing had to be written to a
+  working tree):
+
+    lib/letflow/engine/variable_merge.ex:92        -> 91d7e25 (2026-08-20)
+      "fix(ISS-0080): make VariableMerge's purity self-check measure what it claims, close GH#301"
+    lib/letflow/engine/pin_resolver.ex:541         -> cb43cc2 (2026-08-20)
+      "fix(ISS-0078): restore rebind provenance in PinResolver, close GH#299 (#347)"
+    test/letflow/engine/pin_rebind_test.exs:516    -> cb43cc2 (same commit)
+    test/letflow/engine/pin_resolver_test.exs:239  -> a7fa87b (2026-08-20)
+      "fix: verify pin_overrides against the injected Lookup instead of trusting them verbatim, close GH#298 (#349)"
+
+  All four files exit 0 at their introducing commit's PARENT and exit 1 at
+  the commit itself. Each of these three runs made a format-clean file
+  unformatted and merged it to main.
+
+  WHY THIS IS NOT A FORMATTER-VERSION EXCUSE. Three of the four diffs are
+  ordinary line-length wraps at 101-102 characters. Elixir's formatter has
+  used a 98-character default line length for its entire existence; no
+  version of it has ever accepted those lines. The fourth is a heredoc
+  escape, which ISS-0106 attributed specifically to "a formatter behaviour
+  change between Elixir versions" — the container run refutes that too:
+  Elixir 1.18.3's formatter wants the same escape.
+
+  WHY IT MATTERS MORE THAN THE SYMPTOM. Every one of these three runs
+  passed through a WF-03/WF-02 Step Final gate that includes
+  `mix format --check-formatted`. Either the gate was not run, or it was
+  run, seen red, and merged past. This is the precise consequence ISS-0106
+  itself predicts in the abstract at its lines 41-44 — "every agent running
+  a full `mix letflow.check` on this host sees a red gate it did not cause,
+  which invites exactly the wrong responses — either reformatting unrelated
+  in-flight files ... or learning to treat a red gate as normal." A standing
+  background failure that an agent cannot attribute gives that agent no
+  basis for treating a red gate as blocking, and three merges in one day is
+  what that looks like in practice.
+
+  Which of the two happened is NOT determinable from the commits alone and
+  is deliberately not asserted here. Establishing it is this issue's first
+  job: read the Step Final handoffs of the three runs that produced these
+  commits and check what each recorded about the format gate. That
+  evidence decides whether the fix is a gate-execution problem or a
+  gate-attribution problem, and they need different remedies.
+
+  RELATION TO ISS-0106'S OWN FIX. WF03-ISS0106-20260821 reformats the four
+  files and (pending REVIEWER's sign-off on decision 0005) settles the pin
+  and its enforcement. That closes the current red gate. It does not close
+  this: nothing in that fix prevents a fourth run from hand-editing a file
+  past 98 characters and merging it. Note also that this is the third
+  distinct recurrence class in this area — ISS-0008 and ISS-0068 were both
+  resolved by "reformat the flagged files and move on," which decision 0005
+  already identifies as treating the incident rather than the cause.
+
+  SUGGESTED SCOPE, not prescribed: determine per-run what the Step Final
+  gate actually reported; then decide whether the remedy is mechanical
+  (a gate that cannot be misread or skipped — note this repo still has no
+  .github/workflows, confirmed 2026-08-21, so nothing enforces anything
+  outside a developer's shell) or procedural. Do not resolve this by
+  reformatting files; that is the fix that has already been applied twice
+  to this class without preventing recurrence.
+affected_files:
+  - lib/letflow/engine/variable_merge.ex
+  - lib/letflow/engine/pin_resolver.ex
+  - test/letflow/engine/pin_rebind_test.exs
+  - test/letflow/engine/pin_resolver_test.exs
+  - docs/agents/protocols/GIT_MERGE.md
+  - docs/agents/workflows/WF-02_requirement_implementation.md
+  - docs/agents/workflows/WF-03_issue_resolving.md
+queue_task_id: 177
+github_issue: https://github.com/tvolodi/letflow/issues/363
+status: open

@@ -1772,7 +1772,7 @@ defmodule Letflow.Engine do
   defp dispatch_task_completion_hop_chain(
          %{
            graph: graph,
-           seed_instance_state: seed_state,
+           seed_instance_state: %InstanceState{} = seed_state,
            own_token_id: own_token_id,
            original_active_tokens: original_active_tokens
          },

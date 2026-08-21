@@ -1,0 +1,99 @@
+{
+  "handoff_id": "295bd319-7fca-43b8-be91-a7894499db6f",
+  "run_id": "WF03-ISS0106-20260821",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0106-20260821/step-03-implement.json",
+  "created_at": "2026-08-21T01:50:49Z",
+  "started_at": "2026-08-21T01:51:47Z",
+  "completed_at": "2026-08-21T02:14:19Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "428b153a-98ed-4dcd-88c3-c7b04a2b2838",
+      "c4e4e592-3b71-4f9a-9a3b-38d5a0dd0853"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0106-toolchain-pin-and-format-fix.md",
+      "handoffs/WF03-ISS0106-20260821/step-02b-design-validation.json",
+      "docs/migration/decisions/0005-pin-formatting-toolchain.md"
+    ],
+    "owned_modules": [
+      ".tool-versions",
+      "mix.exs",
+      "lib/mix/tasks/letflow.check_toolchain.ex",
+      "lib/letflow/engine/pin_resolver.ex",
+      "lib/letflow/engine/variable_merge.ex",
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/engine/reconstruction.ex",
+      "lib/letflow/engine/sub_process.ex",
+      "lib/letflow/engine.ex",
+      "test/letflow/engine/pin_rebind_test.exs",
+      "test/letflow/engine/pin_resolver_test.exs",
+      "README.md",
+      "docs/guides/backend_developer_guide.md"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 3 -- implement the ISS-0106 fix exactly as designed. THE DESIGN IS THE SPECIFICATION: lib/letflow/design/iss0106-toolchain-pin-and-format-fix.md, 677 lines, PASSED its hard gate at Step 2b (handoffs/WF03-ISS0106-20260821/step-02b-design-validation.json). Build what it says. Do not redesign, do not add, do not improve on it -- if you believe some part of it is wrong or unbuildable, report that in result.issues and STOP rather than diverging silently.\n\nThe design's own scope traces to the decision record: the section 'REVIEWER sign-off -- amendment (supersedes the version target above)' at the END of docs/migration/decisions/0005-pin-formatting-toolchain.md, dated 2026-08-21T01:25:50Z. Note that file ALSO carries an earlier 2026-08-19 sign-off naming Elixir 1.18.3 / OTP 27 -- that target is SUPERSEDED. If you find yourself writing 1.18.3 into .tool-versions you are implementing the wrong section.\n\nTHREE PARTS. The design states their ordering and independence in its section 1 -- follow it. In particular A3 -> A1 -> A4 must land TOGETHER in one commit: A4 before A3 makes `mix letflow.check` fail with an unknown-task error, and A3 before A1 makes the new task warn falsely, because the file on disk still pins the old version.\n\n  PART A -- pin and enforcement, 7 items, A1..A7 in the design.\n  PART B -- reformat exactly four files (Symptom 1).\n  PART C -- fourteen struct-update sites (Symptom 2), applying the one in-repo idiom the design cites at lib/letflow/engine/transition.ex:591.\n\nTHREE THINGS THAT WILL BE CHECKED HARD AT THE NEXT GATES, so get them right the first time:\n\n  1. **mix.exs line 8 (`elixir: \"~> 1.18\"`) MUST NOT CHANGE.** The design states this as a deliberate, auditable no-op (item A2) and the decision record explains why: tightening it to `~> 1.18.0` would make THIS host -- the only host confirmed live -- unable to compile Letflow at all. Do not 'tidy' it into agreement with the new pin. You WILL be editing mix.exs for item A4 (the alias), so the temptation is right next to the change; leave line 8 exactly as it is.\n\n  2. **The new task may never alter another check's exit code, and its warning may never be suppressible.** These are properties (ii) and (iii) in the design's section A3.6 and they are the reason the whole option was acceptable to REVIEWER. Concretely, per the design: output goes to `IO.puts(:stderr, ...)` and specifically NOT through `Mix.shell()` (which is globally replaceable and honours --quiet/MIX_QUIET); the task reads no flag and no environment variable at all; and it uses only non-raising APIs plus an outer guard, so nothing on its path can raise and abort the alias.\n\n  3. **Part C is an annotation change, not a behaviour change.** For twelve of the fourteen sites the edit does NOT go where the compiler points -- it goes at the BIND site, as the design's Part C table records. Every existing test must still pass unchanged; if applying the idiom would change what any test asserts, that is a signal you have changed behaviour and must stop and report it.\n\nTHREE IMPLEMENTATION NOTES FROM THE DESIGN GATE (Step 2b's MINOR findings -- these are corrections to the design's wording, already adjudicated, apply them):\n\n  a. The design's section A3.6(i) says 'nothing else can print before it', which is FALSE on a cold build -- the same document states it correctly two sections later. When you write the module's @moduledoc (A3.1 requires it to state each property's mechanism), phrase this as 'first among the alias's own steps', not the overstated form.\n  b. The design specifies an outer guard catching 'any unforeseen exception'. An implementer naturally writes that as `try ... rescue`, and `rescue` alone catches NEITHER a `throw` NOR an `exit`. Use `try ... rescue ... catch ...` so the guard actually covers what the design intends. The practical risk is nil (nothing on the path throws) and the failure direction would be a false FAILURE never a false pass -- fix it anyway, it costs one clause.\n  c. Where the design's verification list V8 greps for forbidden raising constructs, include `throw` in the alternation -- it is prohibited by A3.6(iii)'s prose but missing from V8's pattern.\n\nVERIFY YOUR OWN WORK BEFORE COMPLETING, and quote real output (core-directives.md's No Speculation rule -- 'this should work' is a forbidden output pattern here). At minimum: `mix format --check-formatted` must exit 0; `mix compile --warnings-as-errors` must exit 0; `mix letflow.check_toolchain` must run and, on this host after A1 lands, report a MATCH rather than a mismatch (this host is Elixir 1.20.3 / OTP 29, which is what the new pin names -- a mismatch warning here would mean the comparison rule is wrong). Do NOT run `docker compose up` (a Postgres container is already running for this checkout, see docs/anti-patterns.md). Running `mix test` is not your gate -- TEST-RUNNER owns that at Step 4 -- but if you happen to break a test you must fix it, per Unblock-Everything.",
+    "acceptance_criteria": [
+      "AC1 -- .tool-versions contains exactly the content the design's A1 specifies, byte for byte (elixir 1.20.3-otp-29 / erlang 29.0.5), and NOT the superseded 1.18.3-otp-27 / 27.2",
+      "AC2 -- mix.exs line 8 is byte-identical to its pre-change state. Prove it with `git diff mix.exs` output showing the alias change and NO change to the elixir: requirement line",
+      "AC3 -- lib/mix/tasks/letflow.check_toolchain.ex exists and implements the design's A3.1-A3.7: the specified module name, Mix.Task behaviour, @shortdoc, @moduledoc stating each property's mechanism (with note (a) above applied), run/1 returning :ok always, the specified parse contract, both comparison rules, and both output shapes",
+      "AC4 -- The task writes to :stderr directly and never through Mix.shell(); reads no environment variable and no command-line switch; contains no raise/Mix.raise/exit/System.halt on any path; and its outer guard covers rescue AND catch per note (b). Demonstrate each with a grep or equivalent whose output you quote",
+      "AC5 -- mix.exs's letflow.check alias is exactly the four-element list the design's A4 specifies, with letflow.check_toolchain FIRST",
+      "AC6 -- `mix format --check-formatted` exits 0 on the whole tree. Quote the command and its exit code",
+      "AC7 -- `mix compile --warnings-as-errors` exits 0, and a grep for 'is expected on struct update' over its output returns zero. Quote both",
+      "AC8 -- All fourteen Part C sites are addressed, and the count is verified rather than asserted -- state how you confirmed none remain and that you did not silence a warning by any means other than the design's idiom (suppressing a warning rather than fixing it violates core-directives.md's 'Never Satisfy a Gate by Editing What It Measures')",
+      "AC9 -- `mix letflow.check_toolchain` runs on this host and reports a MATCH, not a mismatch. Quote the actual output. A mismatch here means the comparison rule is implemented wrongly, since this host runs exactly what the new pin names",
+      "AC10 -- README.md's Notes section states the new pin AND no longer contains the measurably-false claim that mix.exs's requirement 'accepts any 1.18.x patch'. Quote the removed and replacement text",
+      "AC11 -- docs/guides/backend_developer_guide.md line 17's stale 'Elixir 1.17+ / OTP 26+' text is replaced with the pin, per design item A6",
+      "AC12 -- No file outside this handoff's context.owned_modules is modified, and the A3/A1/A4 commit ordering constraint from the design's section 1 is respected. State your commits and what each contains"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented ISS-0106's fix exactly as designed, in three commits respecting the design's section-1 ordering constraint. PART A (9ca2071, single commit carrying A3+A1+A4 together): .tool-versions moved to elixir 1.20.3-otp-29 / erlang 29.0.5 (LF, byte-exact per A1, verified with od -c on the staged blob); mix.exs line 8 'elixir: \"~> 1.18\"' deliberately UNCHANGED per A2 (git diff mix.exs's only hunk starts at @@ -53,7 +53,16 @@, so line 8 is provably untouched); new lib/mix/tasks/letflow.check_toolchain.ex implementing A3.1-A3.7; letflow.check_toolchain added as the FIRST element of the letflow.check alias with the three existing steps unchanged, and the adjacent REQ-003 comment updated per A4; README Notes and backend_developer_guide.md line 17 updated per A5/A6. A7 correctly no-op. PART B (3307c22): the four files mix format rewrites, no hand-editing, no fifth file. PART C (7d7ad9f): the 14 inventoried struct-update bind sites, plus 2 further sites of the same class that fixing the first 14 unmasked -- reported honestly as 14+2=16 per design section 3.2 rather than treating the design as wrong. VERIFICATION, all real output: mix format --check-formatted exit 0; mix compile --force --warnings-as-errors exit 0 with 'is expected on struct update' grep count 0; mix letflow.check_toolchain on this host prints 'letflow.check_toolchain: OK -- Elixir 1.20.3 / OTP 29 matches .tool-versions.' (a MATCH, confirming the comparison rule); V8 grep (with 'throw' added per handoff note c) 0 matches; V9 grep 0 matches; the outer guard has both a rescue and a catch clause per handoff note b; the @moduledoc phrases property (i) as 'first among the alias's own steps' per handoff note a. F1/F2/F5, an off-pin mismatch block, and a CRLF .tool-versions were each exercised directly: all exit 0, mismatch blocks always carry BOTH rows, CRLF produces no false mismatch, and the warning was confirmed to survive stdout being piped away (it is on stderr). mix letflow.check exits 1, but ONLY at its letflow.check.test step; the toolchain, format and compile steps all passed and the toolchain OK line printed first among the alias's own steps (V5 partially satisfied -- see issues).",
+    "artifacts_out": [
+      "lib/mix/tasks/letflow.check_toolchain.ex",
+      ".tool-versions",
+      "mix.exs",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/engine/reconstruction.ex",
+      "lib/letflow/engine/sub_process.ex",
+      "lib/letflow/engine/pin_resolver.ex",
+      "lib/letflow/engine/variable_merge.ex",
+      "test/letflow/engine/pin_resolver_test.exs",
+      "test/letflow/engine/pin_rebind_test.exs",
+      "README.md",
+      "docs/guides/backend_developer_guide.md"
+    ],
+    "issues": [
+      "Part C count is 16, not 14, and this is a disclosure not a divergence. Fixing the 14 inventoried sites unmasked 2 further warnings of the identical class that the original 14 had hidden: `instance_state` in transition.ex's dispatch_parallel_gateway/4 (unmasked by C4's `token` annotation in the same head) and `state` in reconstruction.ex's apply_event/4 SUB_PROCESS_COMPLETED clause (unmasked by C11's `parked_token` annotation in the same scope). Both were fixed with the same bind-site idiom and no other change. The design's section 3.2 anticipates exactly this and instructs reporting it as 14+N.",
+      "V5 is only partially satisfied and this needs REVIEWER/TEST-RUNNER attention. `mix letflow.check` exits 1, but not on anything this run changed: its first three steps (letflow.check_toolchain, format --check-formatted, compile --warnings-as-errors) all pass, and it fails at letflow.check.test with 14 test failures. Those failures were shown to be PRE-EXISTING, not caused by this change, by direct measurement rather than assertion: the same tests were run in isolation on this tree (12/22 passed, 10 failed) and then again with this run's code changes git-stashed back to HEAD against the same database (12/22 passed, 10 failed) -- identical. The failures are database/test-isolation faults with no connection to struct annotations or formatting: FK violations on tenant_schemas, missing tenant-schema relations (42P01), and 60s ExUnit timeouts in Mix.Tasks.Letflow.Check.TestTest, whose tests spawn a nested full `mix test` subprocess that cannot finish inside the default timeout now that the suite takes 583s. TEST-RUNNER owns the test gate at Step 4; flagging rather than fixing, since fixing it is outside this handoff's owned_modules.",
+      "Note for whoever reads .tool-versions on a Windows host: this repo has core.autocrlf=true and no .gitattributes rule for .tool-versions, so the committed blob is LF (verified byte-for-byte via `git cat-file -p :.tool-versions | od -c`) while a fresh checkout will materialise it as CRLF. The new task handles this correctly -- it strips a trailing \\r from every line, and a CRLF .tool-versions was tested directly and produced the OK line, not a false mismatch. This is exactly the permanent-false-positive failure design section A3.3 point 1 called out."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0106-20260821",
+      "commit_sha_list": [
+        "3307c22",
+        "7d7ad9f",
+        "9ca2071"
+      ],
+      "remote_branch": null,
+      "push_status": "NOT_PUSHED",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER and REVIEWER (WF-02 Steps 2b-2d equivalent). ELIXIR-DEV does not self-approve past these hard gates. REVIEWER should specifically adjudicate: (1) the 14->16 Part C count disclosure above; (2) design open question OQ1, which the design explicitly flagged for REVIEWER -- because letflow.check_toolchain lives in lib/mix/tasks/, mix letflow.check now compiles before it format-checks, so if compilation fails outright the toolchain warning may never print, which weakens property (i) in exactly the case where knowing the running toolchain matters most; the design states moving the check is outside its authority since the decision-record amendment names the file path; (3) whether the 14 pre-existing test failures warrant their own issue record."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

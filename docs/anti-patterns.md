@@ -632,6 +632,12 @@ the one command it takes to check it before building on it. Specifically:
   keeps the wrong note as `superseded_scoping_note` marked do-not-act-on, so the audit
   trail survives without the error staying live.
 
+**A fourth instance landed 2026-08-21** (ISS-0106's `ROOT CAUSE (confirmed, not
+inferred)` line, inherited into its own proposed resolution and refuted by one container
+run) — filed separately below as "Attributing a failure to toolchain drift without ever
+running the pinned toolchain", because its refutation is specific enough to be worth its
+own procedure.
+
 ## Audit-shaped requirements: closed-set and outcome-independence must be checked at draft time
 
 **Twice in one session the gate had to repair the same property after the fact**
@@ -826,3 +832,76 @@ normative section constrains, then look up each one in every other section that
 restates it, and diff the two by hand. Any restatement is a place the design can
 contradict itself, and a `@type` table is the most likely restatement to drift,
 because it is written once and then never re-read while the prose around it changes.
+## Attributing a failure to toolchain drift without ever running the pinned toolchain
+
+**ISS-0106, filed 2026-08-20, resolved 2026-08-21.** The issue recorded its cause under
+the heading `ROOT CAUSE (confirmed, not inferred)`: this Windows host runs Elixir
+1.20.3/OTP 29 while `.tool-versions` pins 1.18.3-otp-27, so the four files failing
+`mix format --check-formatted` and the fourteen `struct for X is expected on struct
+update` warnings were both artefacts of the host being wrong. Nothing had been run under
+1.18.3 to establish that. The issue's own proposal (a) followed from the framing:
+"install the pinned toolchain and confirm both checks go green with **no file changes at
+all**, which would prove the files are correct and only the host was wrong."
+
+WF03-ISS0106-20260821 ran that check, and the premise failed for half the issue:
+
+* **Format — refuted.** Inside a throwaway `elixir:1.18.3-otp-27` container, against the
+  same tree with the repo mounted read-only, `mix format --check-formatted` exits 1 on
+  **the same four files with character-for-character identical diffs** —
+  `lib/letflow/engine/pin_resolver.ex:541`, `lib/letflow/engine/variable_merge.ex:92,98`,
+  `test/letflow/engine/pin_resolver_test.exs:239,322`,
+  `test/letflow/engine/pin_rebind_test.exs:516`. That includes the heredoc escape
+  ISS-0106 attributed *specifically* to a formatter behaviour change between versions —
+  the formatter wants an escaped `\"""` inside the `@moduledoc` heredoc where the file
+  has a bare `"""`. Elixir 1.18.3's formatter wants that escape too.
+* **Compile — confirmed.** 14 struct-update warnings under 1.20.3/OTP 29, **zero** under
+  1.18.3/OTP 27, identical tree. That symptom really was version drift, and it is now the
+  measured answer to the `UNCONFIRMED` note ISS-0046 left behind for the same warning
+  class.
+
+The four files were not made unformatted by a version change; they were made unformatted
+by three commits that merged on 2026-08-20 — `91d7e25` (ISS-0080/GH#301), `cb43cc2`
+(ISS-0078/GH#299, PR#347) and `a7fa87b` (GH#298, PR#349). Verified per file rather than
+inferred from blame alone, using ISS-0008's `git show <rev>:<path> | mix format
+--check-formatted -` technique so nothing had to be written to the working tree: all four
+files exit 0 at the introducing commit's **parent** and exit 1 at the commit itself.
+*Why* those runs' format gates did not stop them is a separate, still-open question —
+tracked as ISS-0110/GH#363, deliberately not answered here.
+
+**Why this is easy to miss:** the attribution was plausible, confidently worded, and
+**half right** — a genuine toolchain drift did exist alongside the real defect, and the
+correct half lent credibility to the incorrect half. A version mismatch is also a
+satisfying explanation for a formatting diff, because formatter output genuinely does
+change between Elixir releases sometimes. And the refuting measurement was available the
+entire time and cost one container run: Docker was on the host, and this very file
+already documents the throwaway-container recipe (`MSYS_NO_PATHCONV=1`, repo mounted
+`:ro`, tree copied to `/work`, separate build path). Nobody ran the pinned toolchain
+before asserting what it would do. The consequence was concrete rather than theoretical:
+a real defect sat deferred for a day as an environment problem — and ISS-0106 predicted
+that consequence in the abstract while being an instance of it.
+
+**Correct alternative — refute it cheaply first, and note that this one needed no
+toolchain at all.** Three of the four diffs are ordinary line wraps, measured at 99–102
+characters against the formatter's default `line_length` of **98**, which `.formatter.exs`
+never overrides. *A line over 98 characters is unformatted under every Elixir version
+that has ever had a formatter.* `awk '{ if (length($0) > 98) print FILENAME":"FNR": "
+length($0) }'` settles it in one command — no container, no install, no second host, no
+network. So:
+
+* **Before attributing a formatting failure to a version, measure the diff against the
+  configured `line_length`.** If the offending lines are simply too long, the version
+  question is moot and the files are wrong under every version.
+* **Never write `ROOT CAUSE (confirmed)` for a claim about a toolchain you have not
+  run.** "Suspected — not yet reproduced under the pin" is the honest wording and costs
+  nothing; the confident wording is what propagates.
+* **When one symptom's attribution is confirmed, re-derive the others separately.** Two
+  symptoms failing the same command is not evidence they share a cause. Here they did not:
+  one was drift, one was a defect, and bundling them made the defect inherit the drift's
+  excuse.
+* **Run the check the issue itself proposes before proposing anything downstream of it.**
+  ISS-0106 named the decisive experiment in its own proposal (a). It just was not run.
+
+This is a fourth instance of **"Inheriting a claim from a record instead of re-deriving it
+from the source"** above, and it is filed separately only because its transferable lesson
+is specific — version-attributed failures have a cheap, toolchain-free refutation that the
+general entry does not name.

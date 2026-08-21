@@ -558,7 +558,12 @@ defmodule Letflow.Engine.Reconstruction do
   # Design doc §5.3 -- per-event-type replay clauses.
   # ---------------------------------------------------------------------
 
-  defp apply_event(graph, state, %{event_type: "INSTANCE_STARTED"} = event, _prefix) do
+  defp apply_event(
+         graph,
+         %InstanceState{} = state,
+         %{event_type: "INSTANCE_STARTED"} = event,
+         _prefix
+       ) do
     with {:ok, initial_variables} <- fetch_map_field(event, "initial_variables") do
       reseeded_state = %InstanceState{state | variables: initial_variables}
       worklist = Enum.map(reseeded_state.tokens, & &1.token_id)
@@ -569,7 +574,12 @@ defmodule Letflow.Engine.Reconstruction do
     end
   end
 
-  defp apply_event(graph, state, %{event_type: "TASK_COMPLETED"} = event, _prefix) do
+  defp apply_event(
+         graph,
+         %InstanceState{} = state,
+         %{event_type: "TASK_COMPLETED"} = event,
+         _prefix
+       ) do
     with {:ok, node_id} <- fetch_string_field(event, "node_id"),
          {:ok, output_variables} <- fetch_map_field(event, "output_variables"),
          {:ok, token} <- find_task_completion_token(state.tokens, node_id) do
@@ -614,7 +624,7 @@ defmodule Letflow.Engine.Reconstruction do
     end
   end
 
-  defp apply_event(_graph, state, %{event_type: "INSTANCE_CANCELLED"}, _prefix) do
+  defp apply_event(_graph, %InstanceState{} = state, %{event_type: "INSTANCE_CANCELLED"}, _prefix) do
     {:ok,
      %InstanceState{
        state
@@ -625,7 +635,12 @@ defmodule Letflow.Engine.Reconstruction do
      }}
   end
 
-  defp apply_event(_graph, state, %{event_type: "EXECUTION_ERROR"} = event, _prefix) do
+  defp apply_event(
+         _graph,
+         %InstanceState{} = state,
+         %{event_type: "EXECUTION_ERROR"} = event,
+         _prefix
+       ) do
     with {:ok, variables} <- fetch_map_field(event, "variables") do
       {:ok, %InstanceState{state | status: :error, variables: variables}}
     end
@@ -641,11 +656,16 @@ defmodule Letflow.Engine.Reconstruction do
   # event type, so the completing token is found by matching the payload's
   # child_instance_id against each in-memory token's own
   # waiting_child_instance_id instead (find_sub_process_completion_token/2).
-  defp apply_event(graph, state, %{event_type: "SUB_PROCESS_COMPLETED"} = event, prefix) do
+  defp apply_event(
+         graph,
+         %InstanceState{} = state,
+         %{event_type: "SUB_PROCESS_COMPLETED"} = event,
+         prefix
+       ) do
     with {:ok, child_instance_id} <- fetch_string_field(event, "child_instance_id"),
          {:ok, output_variables} <- fetch_map_field(event, "output_variables"),
          {:ok, parent_node_id} <- fetch_child_parent_node_id(child_instance_id, prefix),
-         {:ok, parked_token} <-
+         {:ok, %Token{} = parked_token} <-
            find_sub_process_completion_token(state.tokens, parent_node_id, child_instance_id) do
       case VariableMerge.merge(state.variables, output_variables, nil) do
         {:ok, new_variables, _merge_events} ->
@@ -801,7 +821,7 @@ defmodule Letflow.Engine.Reconstruction do
   # already fully applies their token-set change to the returned
   # InstanceState before emitting them; only :sub_process_start leaves the
   # graph "unfinished" from replay's point of view.
-  defp resolve_pending_events({:ok, state, pending_events}) do
+  defp resolve_pending_events({:ok, %InstanceState{} = state, pending_events}) do
     new_tokens =
       Enum.reduce(pending_events, state.tokens, fn
         {:sub_process_start, token_id, _node_id}, tokens ->

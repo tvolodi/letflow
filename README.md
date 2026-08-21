@@ -146,16 +146,25 @@ local state of a checkout, not of the project.
 
 ## Notes
 
-- Elixir 1.18.3 / OTP 27 is the pinned toolchain for this repo (see
+- Elixir 1.20.3 / OTP 29 is the pinned toolchain for this repo (see
   `docs/migration/decisions/0005-pin-formatting-toolchain.md`) — install
   it via `asdf install` after `asdf plugin add elixir` /
   `asdf plugin add erlang` if you don't already have those plugins; the
   root `.tool-versions` file selects the exact version automatically on
   `cd` into this repo. `mix.exs`'s `elixir: "~> 1.18"` requirement is a
-  compile-time backstop only — it accepts any 1.18.x patch, so it will
-  not itself catch formatter drift; running `mix format` (and
-  `mix letflow.check`) under the `.tool-versions`-selected toolchain is
-  what actually keeps formatting deterministic across hosts.
+  compile-time backstop only, and it is deliberately **wider** than the
+  pin: `~> 1.18` means `>= 1.18.0 and < 2.0.0`, so it admits 1.19, 1.20
+  and 1.21. That width is the point — an off-pin host is *warned, never
+  blocked*: it still compiles, still runs the full gate, and still gets
+  an exit code that reflects the code rather than the toolchain.
+  Narrowing this line is not a consistency cleanup and needs REVIEWER
+  sign-off. Because the requirement can't catch formatter drift on its
+  own, `mix letflow.check` now runs `letflow.check_toolchain` as its
+  first step, which warns on stderr when the running Elixir/OTP differs
+  from `.tool-versions`. That warning is advisory: it never changes an
+  exit code. Running `mix format` (and `mix letflow.check`) under the
+  `.tool-versions`-selected toolchain is what actually keeps formatting
+  deterministic across hosts.
 - `mix deps.get` needs network access to hex.pm, which this sandbox
   doesn't have — dependencies are declared in `mix.exs` but not
   fetched. Run it locally.

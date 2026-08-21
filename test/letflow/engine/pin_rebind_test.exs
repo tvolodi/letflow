@@ -513,7 +513,9 @@ defmodule Letflow.Engine.PinRebindTest do
           instance_id: orphan_instance_id,
           event_type: "INSTANCE_PINS_REBOUND",
           payload: %{
-            "entries" => [%{"kind" => "variable_schema", "ref" => "orphan", "new_version" => "v2"}],
+            "entries" => [
+              %{"kind" => "variable_schema", "ref" => "orphan", "new_version" => "v2"}
+            ],
             "actor" => "tester",
             "reason" => nil
           },

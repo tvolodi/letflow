@@ -538,7 +538,11 @@ defmodule Letflow.Engine.PinResolver do
           pins_rebound_events :: [%{event_id: Ecto.UUID.t(), payload: map()}],
           started_event_id :: Ecto.UUID.t()
         ) :: [effective_pin()]
-  def merge_effective_pins(instance_started_pinned_versions, pins_rebound_events, started_event_id)
+  def merge_effective_pins(
+        instance_started_pinned_versions,
+        pins_rebound_events,
+        started_event_id
+      )
       when is_list(instance_started_pinned_versions) and is_list(pins_rebound_events) do
     base =
       Enum.map(instance_started_pinned_versions, fn pin ->

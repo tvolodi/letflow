@@ -1,0 +1,61 @@
+{
+  "handoff_id": "a0f15354-4a50-4353-901e-726b9d7c8bf2",
+  "run_id": "WF03-ISS0106-20260821",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0106-20260821/step-04c-test-run.json",
+  "created_at": "2026-08-21T03:07:47Z",
+  "started_at": "2026-08-21T03:08:32Z",
+  "completed_at": "2026-08-21T03:32:22Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "87b0ff51-c1d3-45c8-ad69-f9de9e309db8",
+      "2275b34b-e337-4928-9d32-045da28d67c0"
+    ],
+    "artifacts_in": [
+      "test/specs/ISS-0106.md",
+      "test/mix/tasks/letflow_check_toolchain_test.exs",
+      "handoffs/WF03-ISS0106-20260821/step-04b-test-design-validation.json",
+      "test/reports/report-20260820-WF02-REQ066-20260820.yaml"
+    ],
+    "owned_modules": [
+      "test/reports/report-20260821-WF03-ISS0106-20260821.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 4 test execution (WF-02 Step 4 equivalent) for the ISS-0106 fix. Run the full suite on this branch, diagnose every failure, and write a structured report to test/reports/report-20260821-WF03-ISS0106-20260821.yaml following the shape of the existing reports in that directory (read the most recent one first rather than inventing a schema).\n\nWHAT THIS BRANCH CHANGES, so your attribution has a basis: (A) .tool-versions repinned to Elixir 1.20.3 / OTP 29, a new mix task lib/mix/tasks/letflow.check_toolchain.ex, that task prepended as the first step of the letflow.check alias, and README/developer-guide text; (B) four files reformatted -- whitespace and wrapping only; (C) sixteen struct-update bind-site annotations in lib/letflow/engine/{transition,reconstruction,sub_process}.ex and lib/letflow/engine.ex; plus the new test file and spec from Step 4.\n\nEXPECT FAILURES AND ATTRIBUTE THEM PROPERLY -- this is the substance of your step, not the run itself. Three earlier agents in this run independently observed roughly 13-14 failures, reported as confined to Mix.Tasks.Letflow.Check.TestTest and Letflow.IdentityMigrationTest. ELIXIR-DEV reports attributing them as pre-existing by stashing its own changes back to HEAD and re-running against the same database, getting an identical result. **Do not inherit that attribution -- re-derive it.** docs/anti-patterns.md's 'Inheriting a claim from a record instead of re-deriving it from the source' entry is exactly about this shape of handover, and an attribution is precisely the kind of claim that looks settled and is cheap to check.\n\nTWO SPECIFIC CAUTIONS ON ATTRIBUTION, both learned from this project's own recent history:\n\n  1. **This suite's environmental failure set is LOAD-DEPENDENT, not a fixed list.** The immediately prior run (WF02-REQ066-20260820) recorded 14 failures from TEST-RUNNER and 15 from RELEASE-VALIDATOR on the same commit range twelve minutes apart, and identified that load-dependence as a cross-cutting finding that silently weakens exactly the attribution check you are performing. So do not treat 'matches the previously-reported set' as proof of pre-existence, and do not treat a count that differs by one or two as proof of regression. Attribute on structural evidence -- whether the failing code is even in this branch's diff -- and say plainly when a failure is not covered by an existing issue record.\n  2. **Mix.Tasks.Letflow.Check.TestTest spawns a nested full `mix test`**, which is why it times out: the suite now takes roughly 580-600 seconds, well past the default timeout that test allows for its child. Note that this branch adds a step to the letflow.check alias, so if you find that test's behaviour changed, determine whether that is the new alias step or the same timeout as before -- that is a real question this branch could plausibly have affected, and it is the one place where a 'pre-existing' verdict most deserves scrutiny.\n\nTHE NEW TESTS ARE THE OTHER HALF OF YOUR JOB. test/mix/tasks/letflow_check_toolchain_test.exs adds 30 tests. Confirm they pass within the full run, not only in isolation -- TEST-DESIGNER and TEST-DESIGN-VALIDATOR both ran the file alone. The file is async: false and moves the VM-wide working directory around each call to the task under test, holding the window to a single call. **That is a genuine interaction risk with a concurrently running async suite**, and a full run is the first time it is exercised alongside everything else. If you see a failure anywhere in the suite that could plausibly stem from another test observing a changed cwd, say so explicitly rather than attributing it to the environment -- that would be a real defect introduced by this branch, and it is exactly the kind that shows up only under a full parallel run.\n\nAlso run `mix letflow.check` once and record what it does end to end, including whether the new toolchain step prints first among the alias's own steps and what the alias's overall exit code is. This is the gate ISS-0106 was filed about, so the report should state its actual current condition.\n\nDo NOT run `docker compose up` -- a Postgres container is already running for this checkout (see docs/anti-patterns.md). If a failure blocks completion of your own step, Unblock-Everything applies; but a pre-existing failure you have correctly attributed is not yours to fix, and fixing unrelated tests would be scope creep on this run.",
+    "acceptance_criteria": [
+      "The full suite was run on this branch with the real command and its real output quoted -- total tests, passes, failures, duration, and the exit code",
+      "test/reports/report-20260821-WF03-ISS0106-20260821.yaml exists and follows the schema of the existing reports in that directory",
+      "Every failure is attributed individually, with the attribution RE-DERIVED rather than inherited from earlier steps in this run -- state the evidence for each, and state explicitly whether the failing code appears anywhere in this branch's diff",
+      "The load-dependence caution is honoured: attribution rests on structural evidence rather than on matching a previously-reported count, and any failure not covered by an existing issue record is called out as such rather than folded into the known set",
+      "All 30 tests in test/mix/tasks/letflow_check_toolchain_test.exs are confirmed passing WITHIN the full run, not only in isolation",
+      "The cwd-mutation interaction risk is addressed explicitly: either no failure is plausibly attributable to it (say how you checked) or one is, in which case it is reported as a defect introduced by this branch",
+      "Mix.Tasks.Letflow.Check.TestTest's behaviour is examined specifically for whether this branch's new alias step changed it, rather than assumed unchanged",
+      "`mix letflow.check` was run and its end-to-end behaviour recorded, including whether the toolchain step prints first among the alias's own steps and the alias's overall exit code",
+      "No source file under lib/ and no existing test is modified. If you believe a fix is required, report it -- do not implement it in this step"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Full suite run on ec32dcd: `mix test`, seed 928451, Finished in 495.1 seconds (6.8s async, 488.3s sync), \"Result: 1247/1260 passed (5/5 properties, 1242/1255 tests) / Failed: 13 tests\", exit code 2. ZERO of the 13 failures is attributable to this branch, and every attribution was re-derived rather than inherited. Group A (10) is Letflow.IdentityMigrationTest, all 10 sharing one byte-identical Postgrex 23503 foreign_key_violation through the module's setup helper restore_orphaned_guard_backup_rows!/0 at line 242 -- root-caused by querying the live database directly, which holds four stale rows in public.iss060_tenant_schemas_guard_backup whose parent tenants row is gone (tenant_id c3a201b9-04da-4b0d-bfb6-bba6a18800ea, `select count(*) from public.tenants where id=...` = 0); neither identity_migration_test.exs nor lib/letflow/identity_migration.ex is in this branch's 28-file diff. Group B (3) is Mix.Tasks.Letflow.Check.TestTest -- re-derived from its own source: install_fake_mix/2 joins PATH with a POSIX \":\" and writes an extensionless #!/bin/sh file, so on Windows the fake is never resolved and run/1 shells out to the REAL mix, recursing the suite; observed live via Get-CimInstance as three child erl.exe running `mix test` (PIDs 28220/9356/31352), which outlived the parent holding 65 letflow_test connections (dropping to 1 when killed). Both groups are ISS-0107, open. THE NEW ALIAS STEP DID NOT CHANGE GROUP B: the child command is `mix test`, resolving mix.exs's untouched `test` alias, never `letflow.check`; letflow.check.test.ex:63 passes [\"test\"] and is byte-identical to main; \"letflow.check_toolchain\" appears 0 times in the run log. All 30 tests in test/mix/tasks/letflow_check_toolchain_test.exs PASS within the full run (30 defined, 0 excluded/skipped/failed, \"CheckToolchain\" absent from the log), confirmed twice -- the gate's nested suite also totalled 1260 with none of the 30 failing. CWD RISK: not plausibly attributable to any failure -- ExUnit 1.20.3's runner.ex:108-137 (read on this host) runs sync modules strictly serially only after every async module has finished, the file is async: false, no other File.cd exists in lib/ or test/, and the most cwd-sensitive point in the suite (Port.open in Check.Test) demonstrably inherited a valid project directory. LOAD-DEPENDENCE WAS MEASURED, NOT QUOTED: two full runs on the same commit ten minutes apart gave 13 and 15 failures; the previously-reported set matches neither. `mix letflow.check` end to end: the toolchain step prints first among the alias's own steps (\"letflow.check_toolchain: OK -- Elixir 1.20.3 / OTP 29 matches .tool-versions.\" is the first byte of stdout, stderr empty), format --check-formatted PASSES and compile --warnings-as-errors PASSES (both of ISS-0106's symptoms now green), letflow.check.test FAILS on the same pre-existing failures, overall exit code 1.",
+    "artifacts_out": [
+      "test/reports/report-20260821-WF03-ISS0106-20260821.yaml"
+    ],
+    "issues": [
+      {"severity": "MINOR", "description": "ISS-0107 is self-reinforcing at the gate level, which its record does not yet say: `mix letflow.check` -> letflow.check.test -> nested `mix test` -> Check.TestTest -> another `mix test`. Until it is fixed, `mix letflow.check` cannot exit 0 on Windows regardless of code quality. Measured cost this session: two invocations left six orphaned BEAMs and ~160 leaked letflow_test connections. All six were killed; the host was left clean (0 erl.exe, 1 connection).", "affected_requirement": null},
+      {"severity": "MINOR", "description": "ISS-0109 covers the full-suite-only tenant-schema teardown race but names only Definitions.PromotionTest and Definitions.PromotionAssertionRerunTest. The same 3F000 invalid_schema_name race was observed here in two further modules -- Letflow.Definitions.MigrationsTest (migrations_test.exs:662) and Letflow.Engine.PinRebindTest (pin_rebind_test.exs:351) -- in the contended run only. Extend ISS-0109's module list rather than allocating a fourth ID. Not edited here to avoid a concurrent add/add on an issue file this step does not own.", "affected_requirement": null},
+      {"severity": "MINOR", "description": "Four stale rows in public.iss060_tenant_schemas_guard_backup were deliberately NOT deleted, so RELEASE-VALIDATOR can re-derive the IdentityMigrationTest attribution from the same evidence. Clearing statement for whoever fixes ISS-0107: `delete from public.iss060_tenant_schemas_guard_backup;`. Expect RELEASE-VALIDATOR's independent re-run to show those 10 failures again -- that confirms this attribution rather than contradicting it.", "affected_requirement": null}
+    ],
+    "next_action": "Proceed to WF-04 Step 1 (RELEASE-VALIDATOR) for an independent re-run. Expect a similar-but-not-identical failure set (this step's own two runs differed by two); the stable core is the 10 IdentityMigrationTest failures plus 1-3 Check.TestTest failures, none of them ISS-0106's. Kill any erl.exe orphans the re-run leaves before judging its results."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

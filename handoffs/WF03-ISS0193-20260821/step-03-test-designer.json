@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0193-20260821/step-03-test-designer.json",
   "created_at": "2026-08-21T12:16:54Z",
   "started_at": "2026-08-21T12:16:54Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-21T12:29:53Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -41,19 +41,22 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Implemented design SS13.6/SS13.12 exactly. test/support/status_history.ex gained warranted_closure?/3 (reads the index's own recorded lines:/bytes_working_tree: snapshot, never a live re-measurement; raises via Map.fetch!/2 rather than defaulting on a status:closed volume missing either field). test/docs/requirement_status_invariants_test.exs: renamed/extended the private closed_and_pinned?/2 to closed_pinned_and_warranted?/3 (delegates to SH.warranted_closure?/3), added disqualifying_reason/3 (:not_closed | :not_pinned | :not_warranted | nil), added the new A10 test after A9, updated A4b's call site to thread roll_rule through, and extended A5's own test block to assert closed_pinned_and_warranted?/3 over every known_anomalies: record with an extended failure message. Added: (1) an A10 negative control proving the MINOR-4 laundering scenario (closed+pinned but NOT warranted) fails; (2) an A5 negative control proving a record citing an open/current volume fails; (3) three DIRECT unit tests on SH.warranted_closure?/3 targeting its three individual traps (either- vs both-ceiling, dropped status gate, silently-defaulted vs raised missing field) -- the A10/negative-control fixtures alone (fully-under or fully-over ceiling) could not discriminate those traps.\n\nReal mix test output, test/docs/requirement_status_invariants_test.exs only (mix at '/c/Program Files/Elixir/bin/mix', Postgres reachable -- 'QUERY OK' lines confirm a live DB connection; the placeholder-keycloak metadata-load error is pre-existing and unrelated):\n  Clean run: 'Finished in 0.5 seconds ... Result: 20 passed' (0 failures). This is 14 pre-existing tests (A0,A1,A2,A3,A3b,A4a,A4b,A4b-neg1,A4b-neg2,A5,A6,A7,A8,A9) + 6 new (A10, A10-negative-control, A5-negative-control, and the 3 direct warranted_closure?/3 unit tests).\n\nMUTATION TESTING (WF-03's 'code under test did not exist' rule applies -- warranted_closure?/3 and closed_pinned_and_warranted?/3 are BOTH NEW): mutated test/support/status_history.ex's warranted_closure?/3 in place, ran the full file after each mutant, then reverted with `git checkout -- test/support/status_history.ex` and re-verified `git status --porcelain test/ lib/` empty plus a clean 20/20 re-run before moving to the next mutant.\n  Mutant 1 (ceiling 'or' -> 'and', i.e. require BOTH lines and bytes over instead of either): 18/20 passed, 2 failed (the direct 'EITHER ceiling exceeded is sufficient' test, and the direct missing-field raise test whose second case now short-circuits false on lines instead of reaching bytes_working_tree).\n  Mutant 2 (dropped the `status == \"closed\"` gate entirely): 19/20 passed, 1 failed (the direct 'a non-closed volume is never warranted' test).\n  Mutant 3 (Map.fetch! -> Map.get(_, 0), i.e. silently default a missing field instead of raising): 19/20 passed, 1 failed (the direct 'raises rather than silently defaulting' test).\n  All three reverted; `git status --porcelain test/ lib/` empty after each revert, and the suite was re-run green (20/20) after the final revert -- confirmed above.\n\nRegression check: the three existing known_anomalies: records (lines 74-94 of docs/status/requirement_status.index.yaml) and the three existing known_shape_anomalies: records all still pass under the new shared closed_pinned_and_warranted?/3 (A4b and A5 both green in the 20/20 run) -- volume 1's index-recorded lines:5766/bytes_working_tree:361376 exceed roll_rule's 1200/120000 ceilings, so it independently satisfies A10 too, per the design's own SS13.12.2 verification.\n\nNo file under lib/letflow/ or priv/repo/migrations/ was touched -- confirmed via `git diff --stat main...HEAD -- lib/ priv/repo/migrations/`, which shows only the design doc (from an earlier step) and no code file.",
+    "artifacts_out": [
+      "test/support/status_history.ex",
+      "test/docs/requirement_status_invariants_test.exs"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0193-20260821",
-      "commit_sha_list": [],
+      "commit_sha_list": ["f7814b9", "a185d42"],
       "remote_branch": "origin/feature/WF03-ISS0193-20260821",
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to TEST-DESIGN-VALIDATOR. Per WF-03's 'code under test did not exist' rule, it must independently apply at least one of the three reported mutants and reproduce the counts before gating."
   },
   "rework_count": 0,
   "max_rework": 3

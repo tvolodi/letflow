@@ -62,18 +62,33 @@ defmodule Letflow.Api.Error do
   @not_found_detail "the requested resource was not found"
 
   @derive {Jason.Encoder, only: [:type, :title, :status, :detail, :trace_id]}
-  defstruct [:type, :title, :status, :detail, trace_id: ""]
+  defstruct [:type, :title, :status, :detail, trace_id: "", errors: nil]
 
   @typedoc """
   An RFC 9457 Problem Details object. Mirrors `errors.zig`'s `ProblemDetails`
-  field set 1:1, including `trace_id`'s `""` default.
+  field set 1:1 (`type`/`title`/`status`/`detail`/`trace_id`), plus one
+  extension member this port adds: `errors`, a list of per-field validation
+  errors (REQ-068 `Letflow.Api.Validation.problem/1`), `nil` on every
+  constructor here and every non-validation error — see
+  `lib/letflow/design/req068-validation.md` §0.5.
+
+  **Deliberately excluded from the `@derive {Jason.Encoder, only: [...]}`
+  list above** — `Jason`'s derived struct encoder does NOT omit `nil` fields
+  (it emits `"errors":null`, verified against `deps/jason/lib/encoder.ex`),
+  which would add a sixth key to every existing non-validation problem
+  document and break the "serialise/1 emits all five RFC 9457 keys" contract
+  `error_test.exs` already pins. `serialise/1` below builds the JSON map
+  explicitly instead, including `errors` only when it is a non-empty list,
+  so every non-validation problem document stays byte-identical to before
+  this field was added.
   """
   @type t :: %__MODULE__{
           type: String.t(),
           title: String.t(),
           status: 400..599,
           detail: String.t(),
-          trace_id: String.t()
+          trace_id: String.t(),
+          errors: [struct()] | nil
         }
 
   @doc """
@@ -86,7 +101,18 @@ defmodule Letflow.Api.Error do
   `conn.assigns[:trace_id]` in before calling this.
   """
   @spec serialise(t()) :: String.t()
-  def serialise(%__MODULE__{} = problem), do: Jason.encode!(problem)
+  def serialise(%__MODULE__{errors: nil} = problem) do
+    problem
+    |> Map.take([:type, :title, :status, :detail, :trace_id])
+    |> Jason.encode!()
+  end
+
+  def serialise(%__MODULE__{errors: [_ | _] = errs} = problem) do
+    problem
+    |> Map.take([:type, :title, :status, :detail, :trace_id])
+    |> Map.put(:errors, errs)
+    |> Jason.encode!()
+  end
 
   @doc "HTTP 400 — Bad Request."
   @spec bad_request(String.t()) :: t()
@@ -161,6 +187,24 @@ defmodule Letflow.Api.Error do
       type: @problems_base <> "unsupported-media-type",
       title: "Unsupported Media Type",
       status: 415,
+      detail: detail
+    }
+  end
+
+  @doc """
+  HTTP 413 — Content Too Large.
+
+  Not present in `errors.zig` — R-Co's manual body-reading loop bounds reads
+  itself rather than raising a typed error for "too large". Added by REQ-068
+  for `Letflow.Plugs.SafeJsonParser`, the first Letflow caller that needs it
+  (see `lib/letflow/design/req068-validation.md` §0.4).
+  """
+  @spec payload_too_large(String.t()) :: t()
+  def payload_too_large(detail) do
+    %__MODULE__{
+      type: @problems_base <> "payload-too-large",
+      title: "Content Too Large",
+      status: 413,
       detail: detail
     }
   end

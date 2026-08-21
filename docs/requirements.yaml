@@ -3823,7 +3823,7 @@ requirements:
   - id: REQ-068
     title: Request-body validation and typed rejection contract (validation.zig + middleware/validate.zig + middleware/content_type.zig)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 135  # letflow-queue task id
     description: >

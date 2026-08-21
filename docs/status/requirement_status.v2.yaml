@@ -350,3 +350,16 @@ history:
       to avoid re-widening. No length rule and no target length was added: section 2's
       justification rests on redundancy, and none of the three riders was a reason to
       reopen that.
+  - req: REQ-068
+    event: done
+    agent: ELIXIR-DEV
+    at: "2026-08-21T15:34:10Z"
+    note: >
+      Ported validation.zig/content_type.zig/validate.zig as Letflow.Api.Validation,
+      Letflow.Plugs.ContentType, Letflow.Plugs.SafeJsonParser. Added a real :uuid type
+      check and enum-membership constraint (R-Co's own pattern-match validator was a
+      documented no-op, ported intent not the stub). 105 real tests, all passing;
+      adversarial nesting-depth check empirically verified at ~990KB near the 1MiB body
+      cap. No route wires these plugs in yet -- infrastructure for REQ-069 onward. Self-
+      gated (single agent performing every WF-02 role) since this execution context
+      cannot spawn subagents.

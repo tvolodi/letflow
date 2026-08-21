@@ -66,15 +66,13 @@ defmodule Letflow.IdentityTest do
 
   use Letflow.DataCase, async: false
 
-  import Ecto.Query
+  import Ecto.Query, only: [where: 2, where: 3]
 
   alias Letflow.Identity
   alias Letflow.Identity.Tenant
   alias Letflow.Identity.User
   alias Letflow.Oidc.IdentityContext
   alias Letflow.Oidc.JitProvisioningConfig
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
 
   # Every test builds its own unique identity triple — no shared hardcoded
   # tenant_id/realm/external_id, per test_developer_guide.md's "no test pollution"
@@ -135,36 +133,27 @@ defmodule Letflow.IdentityTest do
   end
 
   # ---------------------------------------------------------------------------------
-  # REQ-063 tenant-schema provisioning helper — mirrors
-  # test/letflow/tenant_provisioning_test.exs's and test/letflow/event_store_test.exs's
-  # established `provisioned_tenant/1` pattern (see this file's own moduledoc for why
-  # :auto mode + manual on_exit/1 cleanup is required here instead of the normal
-  # rolled-back sandbox transaction). Returns the tenant struct and its schema_name
-  # (the value `provision_oidc_user/4`'s `opts[:prefix]` needs).
+  # REQ-063 tenant-schema provisioning helper — adopts the shared `Letflow.TenantFixture`
+  # (ISS-0109/GH#358, ISS-0115/GH#369) in place of this file's own hand-rolled
+  # insert_tenant! + :auto-mode + on_exit/1 DROP SCHEMA copy. Behaviour-preserving by
+  # construction (same Tenant.create_changeset/3 call, same provision_tenant_schema/1 +
+  # replay_migrations/1 sequence, same :auto sandbox mode, same teardown), but adds a
+  # completeness assertion post-replay and emits a greppable `LETFLOW_TENANT_FIXTURE`
+  # marker automatically on teardown/capture failure. This module is the one ISS-0115
+  # caught a single, unreproduced 42P01 undefined_table failure in
+  # (identity_test.exs:205) — adopting the fixture here is that issue's own prescribed
+  # step, so the *next* occurrence carries a full `capture_schema_state/1` report
+  # instead of a bare Postgrex error. Still takes the same `oidc_mode` positional arg
+  # every call site here already passes; still returns `%{tenant: ..., schema_name:
+  # ...}` so no call site below needs to change.
   # ---------------------------------------------------------------------------------
   defp provisioned_tenant!(oidc_mode \\ :disabled) do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant =
-      insert_tenant!(
-        %{slug: unique_slug(), display_name: "REQ-063 Test Tenant"},
-        oidc_mode
+    %{tenant: tenant, schema_name: schema_name} =
+      Letflow.TenantFixture.provisioned_tenant!(
+        slug_prefix: "req063-identity",
+        display_name: "REQ-063 Test Tenant",
+        oidc_mode: oidc_mode
       )
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
     %{tenant: tenant, schema_name: schema_name}
   end

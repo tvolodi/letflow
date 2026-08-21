@@ -257,8 +257,9 @@ completeness check and the failure capture. Its steps, in order:
 
    Consequently `opts` carries **no `:status` key**. Omitting the field is what preserves
    today's behaviour: both adopted sites currently get the schema default `:active`
-   (INV-F-5). A future adopter (ISS-0112) that genuinely needs a non-default status may add
-   a `:status` key then, constrained to `:active | :migrating` — the only legal values —
+   (§7.7's behaviour-preservation standard — INV-F-5 governs teardown, not the tenant
+   row, and was cited here in error). A future adopter (ISS-0112) that genuinely needs
+   a non-default status may add a `:status` key then, constrained to `:active | :migrating` — the only legal values —
    but it MUST NOT be added speculatively here. `create_changeset/3` does cast `:status`
    and `:idp_realm_id`, so such an extension is possible later without changing production
    code; it is simply not part of this design.
@@ -422,7 +423,7 @@ Normative details:
 | **INV-F-1** | `Letflow.TenantFixture` is test-only. It never appears under `lib/`, is never referenced by shipped code, and is never added to `lib/letflow/application.ex`'s supervision tree. |
 | **INV-F-2** | `lib/letflow/tenant_provisioning.ex` and `lib/letflow/tenant_provisioning/registration.ex` are **not modified** by this design (§2.3). |
 | **INV-F-3** | The helper never calls `provision_tenant_schema/1` from inside `replay_migrations/2` or vice versa. It sequences the two primitives explicitly, as `req022` lines 288–294's No-implicit-chaining invariant requires of a caller. |
-| **INV-F-4** | `capture_schema_state/1` never raises to its caller; it returns `{:error, {:capture_failed, _}}`, and the caller's own failure remains the reported failure. |
+| **INV-F-4** | `capture_schema_state/1` never raises to its caller, and the caller's own failure remains the reported failure. §3.5 is normative for *which* non-raising result is returned and this row does not restate it: a single failing query is always a per-field degradation returning `{:ok, schema_state()}`, and `{:error, {:capture_failed, _}}` is the outer net for a failure outside the per-field guards — not reachable by any single field's query failing. |
 | **INV-F-5** | Teardown behaviour is today's three statements, unchanged in content and order, plus one log line. The helper does not add, reorder, or condition any teardown statement. |
 | **INV-F-6** | The helper reproduces today's `Sandbox.mode(Letflow.Repo, :auto)` call and does **not** restore `:manual` (ISS-0113, out of scope). Adopting the helper must not change sandbox-mode behaviour in either direction. |
 | **INV-F-7** | `expected_tenant_tables/0` is guarded by the §3.3 oracle-rot test. Removing that test invalidates the hard-coded list. |

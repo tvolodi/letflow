@@ -1,0 +1,51 @@
+{
+  "handoff_id": "req113-step01-rework2",
+  "run_id": "WF02-REQ113-20260821",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ113-20260821/step-01-code-designer-rework2.json",
+  "created_at": "2026-08-21T07:10:00Z",
+  "started_at": "2026-08-21T07:10:00Z",
+  "completed_at": "2026-08-21T07:32:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-113"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ113-20260821/step-05-release-validator.json",
+      "lib/letflow/design/req113-parallel-test-runner.md@99ff884"
+    ],
+    "owned_modules": ["lib/letflow/design/req113-parallel-test-runner.md"]
+  },
+  "task": {
+    "description": "Rework: fix design's §2/§4.5 ExUnit summary parsing rule (real installed cli_formatter.ex output is 'Result: <passed>[/<total>] passed (<breakdown>)' + separate 'Failed: <n> tests' line, not the '<N> tests, <M> failures' shape the design previously assumed) and address the exit-2-on-clean-partition anomaly RELEASE-VALIDATOR's real run hit, per step-05's root-cause findings.",
+    "acceptance_criteria": [
+      "AC1: same combined pass/fail/property totals as single-process mix test, demonstrated side by side",
+      "AC2: aggregation actually sums/cross-checks each partition's reported counts, not just process exit",
+      "AC3: exits non-zero on any partition failure (demonstrated by injecting one), exits zero when all pass",
+      "AC4: N derived from nproc/platform equivalent or explicit configured default, never hardcoded",
+      "AC5: pre-compiles MIX_ENV=test exactly once before launching any partition",
+      "AC6: script lives under scripts/, not lib/ or test/"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read the actually-installed Elixir 1.20.3-otp-29 ex_unit/lib/ex_unit/cli_formatter.ex (print_summary/2, format_passed_breakdown/3, format_type_counts/1) directly and rewrote §4.5's parsing rule against the real two-line shape: a 'Result: <passed>[/<total>] passed[ (<type breakdown>)]' line always present (parenthetical omitted when only one test type ran, no '/<total>' when everything passed), plus a separate 'Failed: <n> <type>[, ...]' line present only when failures > 0. Documented per-shape derivation of properties_i/tests_i/failures_i, added OQ-2b for the single-type-omitted-parenthetical attribution assumption. Also investigated the exit-2-on-a-genuinely-clean-partition anomaly by reading lib/mix/tasks/test.ex directly: exit_status_opts/1 defaults exit_status to 2 (this repo's test: alias never overrides it via --exit-status), and run/1's cond only routes to that exit_status via the failures > 0 branch -- meaning 2 is this toolchain's normal 'had ExUnit failures' code, not an unrelated error class as the original §4.6 assumed, and exit 1 is actually Mix's generic Mix.raise abort class (compile/config errors that never reach print_summary). This flips the entire premise of the original exit-1-vs-2 framing but does not fully explain a 0-failure partition legitimately exiting 2 from that file alone -- rather than declare it universally safe without justification, redefined §4.6's success signal to be the parsed failures_i count (authoritative, immune to the exit-code artifact) with exit_i retained only as a cross-check/diagnostic signal; the specific exit-2-with-zero-failures combination is logged as a visible WARNING but not counted as a failure, and the unresolved root cause is tracked as new OQ-5 with a concrete follow-up instrumentation recommendation for ELIXIR-DEV. Updated §2 (new §2.2 subsection with the exit-code source citations), §4.5, §4.6, the illustrative output example (partition exit changed from 1 to 2), §5's AC1/AC3 evidence-plan wording, §8's invariant, §9 (added OQ-2b, OQ-5), and §10's AC1/AC2/AC3 map entries. Did not touch scripts/test_parallel.sh (ELIXIR-DEV's job next). No implementation code added -- signatures/shapes/grammar only.",
+    "artifacts_out": ["lib/letflow/design/req113-parallel-test-runner.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ113-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ113-20260821",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (re-gate)"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

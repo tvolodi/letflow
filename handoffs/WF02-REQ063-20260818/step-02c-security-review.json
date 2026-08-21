@@ -9,7 +9,7 @@
   "created_at": "2026-08-18T09:29:56Z",
   "started_at": "2026-08-18T09:29:56Z",
   "completed_at": "2026-08-18T09:34:05Z",
-  "status": "PASS",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S3",

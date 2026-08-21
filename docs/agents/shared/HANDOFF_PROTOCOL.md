@@ -343,16 +343,36 @@ subsection adds. Nothing contradicts; nothing needed its own edit.
     "fields_written": ["status", "completed_at", "result"],
     "evidence": ["<command run> -> <what it established>", "..."],
     "not_verifiable_after_the_fact": ["<what the probes could not settle>", "..."]
-  }
+  },
+  "gate_history": [
+    {"iteration": 0, "gated_at": "<ISO8601-UTC>", "status": "FAIL", "summary": "<one paragraph>", "issues": ["..."], "next_action": "<what the rework must change>"}
+  ]
 }
 ```
 
-**Exactly two fields in the block above are OPTIONAL — top-level `not_agent_attested` and
-`context.source_text`. Every other field is always present.** The two are optional for
-unrelated reasons and neither licenses a third: `not_agent_attested` marks a
-reconstruction (§4.1), `context.source_text` carries copied source text when a dispatch
-has any (see below). Both are OPTIONAL-BY-ABSENCE, so every handoff file written before
-either existed stays valid unchanged and still parses against this schema.
+**Exactly three fields in the block above are OPTIONAL — top-level `not_agent_attested`,
+top-level `gate_history`, and `context.source_text`. Every other field is always
+present.** The three are optional for unrelated reasons and none licenses a fourth:
+`not_agent_attested` marks a reconstruction (§4.1), `gate_history` records prior FAIL
+iterations on a step that was reworked (see below), `context.source_text` carries copied
+source text when a dispatch has any (see below). All three are OPTIONAL-BY-ABSENCE, so
+every handoff file written before any of them existed stays valid unchanged and still
+parses against this schema.
+
+**`gate_history`** appears ONLY on a gate-step handoff (a CODE-DESIGN-VALIDATOR,
+TEST-DESIGN-VALIDATOR, REVIEWER, or SECURITY-REVIEWER step, or a close-gate re-run of one)
+that went through at least one FAIL-and-rework cycle before its current `result`. It is an
+array, one entry per prior iteration, each shaped `{"iteration": <int, 0-based>,
+"gated_at": "<ISO8601-UTC>", "status": "PASS|FAIL", "summary": "<string>", "issues":
+[...], "next_action": "<string>"}` — the same shape as this schema's own `result` block's
+`status`/`summary`/`issues`/`next_action` members, because a gate-history entry IS a past
+`result`, superseded by the file's current one. It exists because a rework cycle's FAIL
+verdict — what BLOCKER issues it raised, and what it told CODE-DESIGNER/ELIXIR-DEV/etc. to
+change — is real audit-trail content with no other home in this schema: `rework_count`
+records that reworks happened, but not what any of them found. Do not add a second field
+for this (`rework_history`, `iteration_log`, or similar) — `gate_history` is now the one
+name for it, first used on `handoffs/WF02-REQ043-20260818/step-01b-design-gate.json`
+(ISS-0190).
 
 **That count is over the FIELDS of this block — not over the MEMBERS of an object inside
 it. §4.1(b) is the authority on `not_agent_attested`'s own members, and it admits one
@@ -362,8 +382,9 @@ authorised exactly one named file (§4.1(b)), so showing the member in the gener
 block would read as an invitation for a second file to acquire it. A linter validating
 `not_agent_attested` therefore reads §4.1(b)'s table for that object's member set; one
 that derives the set from this fence alone and rejects the one authorised file carrying
-`backfill_note` has mis-read this paragraph, not found a defect. "Neither licenses a
-third" is a statement about the two OPTIONAL fields of this block and about nothing else.
+`backfill_note` has mis-read this paragraph, not found a defect. "None licenses a
+fourth" is a statement about the three OPTIONAL fields of this block and about nothing
+else.
 
 **`not_agent_attested`** appears ONLY on a handoff *reconstructed* under §4.1(a-2). A
 §4.1(a-1) **redispatch does NOT carry it** — the replacement agent did the work it

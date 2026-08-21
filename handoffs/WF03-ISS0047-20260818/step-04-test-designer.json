@@ -24,7 +24,9 @@
       "lib/letflow/identity.ex",
       "test/letflow/identity_test.exs"
     ],
-    "owned_modules": ["test/letflow/identity_test.exs"]
+    "owned_modules": [
+      "test/letflow/identity_test.exs"
+    ]
   },
   "task": {
     "description": "WF-03 Step 4: write the regression test for ISS-0047 per the validated design's §5 (lib/letflow/design/iss-0047-username-race-conflict-target.md) -- a NEW, additive test using :auto sandbox mode with two genuinely independent Postgres connections (not :manual + Sandbox.allow/3, which cannot exercise this path -- see the existing REQ-018 race test at test/letflow/identity_test.exs lines ~259-355 for what NOT to reuse for this new test's mechanism, though its barrier-sync pattern can be reused for coordinating the two tasks). The test must provision two identical (external_realm, external_id) + identical preferred_username identities concurrently from two real independent connections, and prove both resolve to {:ok, ...} for the SAME user id (i.e. the race resolves cleanly via ISS-0047's fix), not an {:error, %Ecto.Changeset{}}. ISSUE-FIXER's own repro only reproduced the bug 4/6 runs (nondeterministic) -- the design's §5 notes this; structure the test to loop multiple attempts within one test (see design doc for exact guidance) so it's a reliable proof, not a flaky one-shot.\n\nThis is a WF-03 regression test: per WF-03_issue_resolving.md's Step 2-4 addition, you must show the test FAILS against the pre-fix code and PASSES against the post-fix code. Pre-fix commit is the one immediately before 548c338 on this branch (check git log). State this fail-then-pass verification explicitly in your handoff result, with actual command output from both states.",
@@ -48,7 +50,7 @@
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0047-20260818",
       "commit_sha_list": []
-    }
-  },
-  "next_action": "Route to TEST-DESIGN-VALIDATOR"
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  }
 }

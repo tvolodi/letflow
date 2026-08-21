@@ -13,10 +13,17 @@
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
-    "requirement_ids": ["REQ-051"],
+    "requirement_ids": [
+      "REQ-051"
+    ],
     "requirement_text": {},
-    "related_handoff_ids": ["handoffs/WF02-REQ051-20260818/step-05-release-validator.json"],
-    "artifacts_in": ["docs/requirements.yaml", "docs/status/requirement_status.yaml"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ051-20260818/step-05-release-validator.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.yaml"
+    ],
     "owned_modules": []
   },
   "task": {
@@ -40,7 +47,7 @@
     "git_evidence": {
       "branch_name": "feature/WF02-REQ051-20260818",
       "commit_sha_list": []
-    }
-  },
-  "next_action": "Route to ELIXIR-DEV for Step Final"
+    },
+    "next_action": "Route to ELIXIR-DEV for Step Final"
+  }
 }

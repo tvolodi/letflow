@@ -15,14 +15,19 @@
     "stage": "S3",
     "requirement_ids": [],
     "requirement_text": {},
-    "related_handoff_ids": ["handoffs/WF03-ISS0047-20260818/step-01-issue-fixer.json"],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0047-20260818/step-01-issue-fixer.json"
+    ],
     "artifacts_in": [
       "handoffs/WF03-ISS0047-20260818/step-01-issue-fixer.json",
       "docs/issues/ISS-0047.yaml",
       "lib/letflow/identity.ex",
       "test/letflow/identity_test.exs"
     ],
-    "owned_modules": ["lib/letflow/identity.ex", "test/letflow/identity_test.exs"]
+    "owned_modules": [
+      "lib/letflow/identity.ex",
+      "test/letflow/identity_test.exs"
+    ]
   },
   "task": {
     "description": "Design a fix for ISS-0047 based on ISSUE-FIXER's diagnosis in handoffs/WF03-ISS0047-20260818/step-01-issue-fixer.json's result.summary (read it in full). Root cause: lib/letflow/identity.ex's insert_or_fetch/4 (lines 174-219) uses Repo.insert(changeset, on_conflict: :nothing, conflict_target: {:unsafe_fragment, \"(external_realm, external_id) WHERE external_id IS NOT NULL\"}, ...) which only arbitrates conflicts on the (external_realm, external_id) partial index, not the separate unique_index(:users, [:username]). A genuine two-independent-connection race on identical (external_realm, external_id) AND identical username can have the losing insert raise {:error, %Ecto.Changeset{}} with a username-taken error at line 216-217, instead of falling through to re_select_on_conflict/3 like the covered-index case does.\n\nDesign a fix that: distinguishes 'opponent raced us with the IDENTICAL identity+username' (must resolve via re_select_on_conflict/3 to {:ok, created: false}) from 'genuine unrelated username collision' (a different external identity picked a username already taken by someone else — must keep propagating {:error, %Ecto.Changeset{}}, per the existing passing test at test/letflow/identity_test.exs lines 379-394, which this fix must not break). ISSUE-FIXER's suggested fix shapes (evaluate and pick/adapt one, or propose a better one): (a) a second chained on_conflict/conflict_target covering username via a raw ON CONFLICT ON CONSTRAINT/expression, or (b) catching the specific username-constraint Ecto.Changeset error in insert_or_fetch/4 and checking whether the existing row-with-that-username also matches this identity_context's (external_realm, external_id) before falling through to re_select_on_conflict/3, else re-raising the original error for the genuine-collision case.\n\nDesign artifact goes in lib/letflow/design/ per this project's convention (see existing req018-jit-provisioning.md and req063-identity-tables-schema-per-tenant.md for the expected shape/depth). No implementation code — interfaces, @specs, and the exact conditional logic shape only.",
@@ -45,7 +50,7 @@
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0047-20260818",
       "commit_sha_list": []
-    }
-  },
-  "next_action": "Route to CODE-DESIGN-VALIDATOR"
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  }
 }

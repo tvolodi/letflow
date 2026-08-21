@@ -220,6 +220,55 @@ github_issue_note: >
   #358 is the canonical record. Note that a future release_lock(status: "done")
   on task 172 will attempt to close #359, not #358 -- a harmless no-op since
   #359 is already closed, but whoever resolves this must close #358 by hand.
+observed_scope_addendum: >
+  ADDENDUM 2026-08-21T03:37:07Z, run WF03-ISS0106-20260821 (TEST-RUNNER Step 4c
+  observation, recorded here by ISSUE-FIXER Step 5). Appended, not an edit --
+  nothing above is changed, and this issue's status remains `open`; it is NOT
+  closed by this.
+
+  WHAT THIS ADDENDUM DOES AND DOES NOT CLAIM: it widens the OBSERVED module set
+  only. It is not a claim that the root cause changed, and it does not narrow the
+  two candidate mechanisms in `mechanism:` above -- those are still both live and
+  still need a real diagnosis run to pick between them. Do not read this as
+  progress on root cause.
+
+  The title above enumerates only Letflow.Definitions.PromotionTest and
+  Letflow.Definitions.PromotionAssertionRerunTest. The same symptom class was
+  observed on 2026-08-21 in TWO FURTHER MODULES:
+
+    * Letflow.Definitions.MigrationsTest  (test/letflow/definitions/migrations_test.exs:662)
+    * Letflow.Engine.PinRebindTest        (test/letflow/engine/pin_rebind_test.exs:351)
+
+  Both are 3F000 `invalid_schema_name` raised inside
+  TenantProvisioning.replay_migrations/1, on a tenant schema the test itself had
+  just provisioned -- the same shape as failure 3 above.
+
+  Circumstances, which are themselves evidence for the full-suite-only,
+  load-dependent character already recorded under `reproducibility:`: that step
+  ran the FULL SUITE TWICE on the same commit (ec32dcd), ten minutes apart, same
+  database, same host, no code change between them, and got different failure
+  sets -- 13 failures in run 1 (plain `mix test`, seed 928451) and 15 in run 2
+  (the nested suite inside `mix letflow.check`, seed 613644). These two modules
+  are exactly the delta: they failed ONLY in the more contended run 2, which is a
+  child process of the gate and whose own Check.TestTest spawned three further
+  nested suites against the same Postgres.
+
+  The PinRebindTest failure was given extra scrutiny because that file IS in the
+  ISS-0106 branch's diff, so "not in the diff" was not available as an argument
+  and was not used. The branch's only hunk there re-wraps a single `"entries" =>
+  [...]` list literal across lines 513-517 -- whitespace only, token stream
+  unchanged -- while the failure is at line 351 in provisioned_tenant/0, several
+  hundred lines away, and re-wrapping a list literal cannot drop a Postgres
+  schema. Attributed to this issue's race, not to that edit.
+
+  Filed as an addendum here rather than as a new ISS id deliberately: the class
+  already has this open record, and allocating a further id for the same race
+  would repeat the ISS-numbering collision class docs/anti-patterns.md records
+  (and which this very file's own `renumber_note` above is an instance of).
+
+  Evidence: test/reports/report-20260821-WF03-ISS0106-20260821.yaml -- see
+  `load_dependence`, `the_pin_rebind_failure_deserved_extra_scrutiny_and_got_it`,
+  `newly_uncovered_failures`, and the MINOR entry under `findings_for_orch`.
 related:
   - ISS-0048
   - ISS-0050

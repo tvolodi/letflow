@@ -79,4 +79,87 @@ github_issue_note: >
   future release_lock(status: "done") on task 170 will attempt to close
   #355, not #354 — that will be a harmless no-op since #355 is already
   closed, but whoever resolves this must close #354 by hand.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0106-20260821
+resolved_at: "2026-08-21T03:37:07Z"
+superseded_root_cause_note: >
+  SUPERSEDED 2026-08-21T03:37:07Z by `corrected_root_cause` below. The
+  `description` field's "ROOT CAUSE (confirmed, not inferred)" block (lines
+  30-39 as filed) is WRONG for Symptom 1. It is retained verbatim, unedited,
+  for audit trail only -- a silently corrected record is indistinguishable
+  from one that was right all along, which destroys the very audit trail the
+  correction exists to preserve. Do NOT act on it. In particular do not act on
+  the `Proposed resolution` paragraph's option (a) ("install and actually use
+  the pinned 1.18.3-otp-27 toolchain on this host and confirm both checks go
+  green with no file changes at all, which would prove the files are correct
+  and only the host was wrong") -- that check was run, and it is refuted for
+  Symptom 1. This supersede-rather-than-overwrite treatment follows
+  docs/anti-patterns.md's guidance, with ISS-0063's `superseded_scoping_note`
+  as the precedent.
+corrected_root_cause: >
+  Measured during WF03-ISS0106-20260821 Step 1 (ISSUE-FIXER), inside a
+  throwaway `elixir:1.18.3-otp-27` container running the pinned toolchain
+  against this same tree -- not reasoned about, run.
+
+  SYMPTOM 1 (4 files fail `mix format --check-formatted`) -- ATTRIBUTION
+  REFUTED. This is NOT toolchain drift. Elixir 1.18.3 / OTP 27, i.e. exactly
+  the version `.tool-versions` pinned, rejects the SAME four files with diffs
+  identical character-for-character to the 1.20.3/OTP 29 run -- including the
+  `\"""` heredoc escape in lib/letflow/engine/variable_merge.ex that the
+  original text attributes specifically to "a formatter behaviour change
+  between Elixir versions". 1.18.3's formatter wants that escape too. Three
+  of the four diffs are ordinary line-length wraps measured at 99-102
+  characters against the formatter's default line length of 98, which
+  .formatter.exs never overrides -- so no Elixir version has ever accepted
+  them. These four files were unformatted when they were committed, not
+  reinterpreted later by a newer formatter. Installing the pinned toolchain
+  on this host would have left `mix format --check-formatted` failing on
+  exactly the same four files.
+
+  SYMPTOM 2 (14 "a struct for X is expected on struct update" warnings) --
+  ATTRIBUTION HOLDS. This IS genuine version-specific behaviour and the
+  original text is correct about it: the identical tree compiles with ZERO
+  such warnings under Elixir 1.18.3/OTP 27 and 14 under 1.20.3/OTP 29. This
+  is Elixir 1.20's set-theoretic type checker re-inferring a private
+  function's parameter types across an unspec'd boundary, exactly as filed.
+
+  CONSEQUENCE: ISS-0106 as filed bundles TWO defects with DIFFERENT root
+  causes under one failing command. Only Symptom 2 was toolchain drift.
+resolution: >
+  Both of ISS-0106's symptoms are FIXED, and this was verified by the gate
+  itself rather than by any agent's say-so. In `mix letflow.check` on branch
+  feature/WF03-ISS0106-20260821 (run 2026-08-21T03:19 UTC, commit ec32dcd,
+  recorded in test/reports/report-20260821-WF03-ISS0106-20260821.yaml under
+  `letflow_check:`):
+
+    * step 2, `format --check-formatted`  -> PASS (Symptom 1 green)
+    * step 3, `compile --warnings-as-errors` -> PASS (Symptom 2 green)
+
+  Shipped across three parts on this branch: Part A (9ca2071) moved the pin to
+  Elixir 1.20.3 / OTP 29 and added `mix letflow.check_toolchain`, a new first
+  step in the `letflow.check` alias that compares the running
+  System.version()/:erlang.system_info(:otp_release) against .tool-versions and
+  warns on drift -- closing the enforcement gap that let this issue exist at
+  all. Part B (3307c22) reformatted the four files failing the format gate.
+  Part C (7d7ad9f) annotated the struct-update bind sites. REVIEWER signed off
+  the amendment to docs/migration/decisions/0005-pin-formatting-toolchain.md
+  (1a505a1) before any of it landed.
+
+  Regression coverage: test/mix/tasks/letflow_check_toolchain_test.exs, 30
+  ExUnit tests (36b1be2), proven fail-then-pass in a throwaway worktree of main
+  -- 0/30 at pre-fix main, 30/30 with only the new task added, and 17/30, 24/30
+  and 11/30 against three mutants of the shipped logic. No fixture hardcodes a
+  version; every pin is generated at run time, so the file passes on any host
+  rather than on this one.
+
+  STATE THIS PRECISELY, do not round it off in either direction: `mix
+  letflow.check` still exits 1 on a Windows host. It does so at STEP 4
+  (`letflow.check.test`), for a completely different and separately tracked
+  reason -- ISS-0107 / GH#357, the Windows fake-mix self-recursion, where
+  install_fake_mix/2 joins PATH with a POSIX ':' and writes an extensionless
+  shell script, so on Windows the fake is never resolved and the test shells
+  out to the REAL mix, recursing the suite. TEST-RUNNER confirmed that live by
+  finding three child erl.exe processes running `mix test`. The gate is
+  therefore NOT green, and ISS-0106 is NOT the reason it is not green: the two
+  symptoms this issue was filed for are both fixed, and `mix letflow.check`
+  cannot exit 0 on a Windows host until ISS-0107 is fixed.

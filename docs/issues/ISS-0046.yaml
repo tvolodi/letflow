@@ -98,3 +98,47 @@ resolution: >
 github_issue: null # gh authenticated and reachable, but this issue was filed directly
   # as docs/issues/ISS-0046.yaml with no github_issue field set at filing time (unlike
   # its sibling ISS-0045) -- no GitHub issue exists to close for this one.
+version_attribution_addendum: >
+  ADDENDUM 2026-08-21T03:37:07Z, run WF03-ISS0106-20260821 (ISSUE-FIXER Step 1).
+  Appended, not an edit: the `description` field's UNCONFIRMED paragraph above
+  ("Whether this is new in Elixir 1.20 specifically ... is UNCONFIRMED -- this
+  environment only has 1.20.3 available to check against; no older Elixir install
+  was reachable to compare") is left standing verbatim as the record of what was
+  knowable on 2026-08-18. This addendum settles the open question it left; it does
+  not change this issue's status, which remains `resolved` -- ISS-0046 is NOT
+  reopened by this.
+
+  CONFIRMED: the struct-update warning class IS Elixir-1.20-only. An older Elixir
+  install became reachable during WF03-ISS0106-20260821 -- not on the host, but as
+  a throwaway `elixir:1.18.3-otp-27` container running the toolchain
+  `.tool-versions` pinned at the time. Measured on one identical tree:
+
+    * Elixir 1.18.3 / OTP 27 -- `mix compile --force --warnings-as-errors` exits 0.
+      `grep -c 'is expected on struct update'` = 0; `grep -n 'warning:'` returns no
+      output at all.
+    * Elixir 1.20.3 / OTP 29 -- the same command on the same tree exits 1 with 14
+      warnings, every one of them this class.
+
+  So the attribution is 1.20-only, as this issue suspected but could not verify.
+  Mechanism, per that run's diagnosis: Elixir 1.20's set-theoretic type checker
+  re-infers a private function's parameter types from scratch across an unspec'd
+  function boundary rather than inheriting the caller's already-narrowed type;
+  1.18.3's checker does not perform that analysis, so identical source emits
+  nothing. Corollary worth recording, because it is what makes the fix safe under
+  either toolchain: the fix idiom this issue shipped (an explicit `%Struct{} = var`
+  pattern match on the private function's own parameter list) is ordinary Elixir
+  available in both versions -- the patched file compiles with zero warnings AND is
+  format-clean under 1.18.3 as well. It is better-typed source, not a
+  version-specific workaround.
+
+  Note also that the discrepancy this issue flagged rather than explained away
+  (ISS-0044's own `--warnings-as-errors --force` exiting 0 on 2026-08-18, which it
+  called "inconsistent with this finding unless the toolchain changed between then
+  and now") is consistent with the toolchain-version explanation, which this
+  addendum now confirms is a real and measurable difference. Which of the two
+  candidate explanations applied to ISS-0044 specifically is not re-derived here
+  and is not claimed.
+
+  Evidence: handoffs/WF03-ISS0106-20260821/step-01-diagnose.json (AC2, AC3).
+  See also docs/issues/ISS-0106.yaml's `corrected_root_cause`, whose Symptom 2 is
+  this same warning class.

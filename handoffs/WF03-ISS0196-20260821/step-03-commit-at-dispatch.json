@@ -1,0 +1,60 @@
+{
+  "handoff_id": "50df55ac-1f78-422e-89ed-daf368cd2252",
+  "run_id": "WF03-ISS0196-20260821",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF03-ISS0196-20260821/step-03-commit-at-dispatch.json",
+  "created_at": "2026-08-21T11:44:34Z",
+  "started_at": "2026-08-21T11:44:34Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0196.yaml",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/agents/ORCHESTRATOR.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/agents/ORCHESTRATOR.md",
+      "docs/issues/ISS-0196.yaml"
+    ]
+  },
+  "task": {
+    "description": "Resolve ISS-0196. `HANDOFF_PROTOCOL.md` section 4 tells the RECEIVING agent to commit the handoff when it completes. Nothing tells ORCH to commit it when it DISPATCHES. So between dispatch and completion the handoff file is untracked -- the dispatched `task` block (acceptance criteria, scoped instructions, the record of what was actually asked) exists in no git object, only in the working tree and the dispatching session's own context. Read `docs/issues/ISS-0196.yaml` in full for the WF03-ISS0117-20260821 incident this was raised against: a receiving agent replaced ORCH's 6,290-character dispatched `task.description` with a 156-character pointer to a copy that does not exist, and it was recoverable only because the dispatching ORCH session happened to still be alive and holding the text in context -- had that session died, the record would be permanently gone with no way to tell anything was missing. **This is not a hypothetical for this project specifically: this exact run's OWN dispatching session has been creating every handoff this session via a Write call, then leaving it uncommitted until the receiving agent's own completion commit, the entire time it has been running WF-03 runs today.**\n\nWHAT TO DO:\n\n1. WRITE THE RULE: ORCH commits the handoff file at dispatch time, before the receiving agent begins work -- a `git add <handoff-path> && git commit` immediately after writing the PENDING handoff, same discipline ORCH already applies to `orchestrator.log`/`registry.json` at roughly the same points in a dispatch. State it as UNCONDITIONAL: no size threshold, no agent-judgement gate on which dispatches get committed -- every one does.\n\n2. DECIDE THE CANONICAL HOME. `HANDOFF_PROTOCOL.md` section 4 already owns 'complete the handoff' (receiving agent's commit obligation); the natural symmetric home for 'dispatch the handoff' is a new subsection near it, or `ORCHESTRATOR.md` (which already states ORCH's dispatch responsibilities in its top MUST list and in the sizing/rework sections) -- your call, but exactly one of the two states the rule and the other points at it. Do not duplicate.\n\n3. CITE THE INCIDENT. State the WF03-ISS0117-20260821 example (the 6,290->156 character replacement, recoverable only because the dispatching session was still alive) as the rule's own worked example, per this doc set's established convention that every rule carries its incident (see e.g. `HANDOFF_PROTOCOL.md` section 1.2's ISS-0204 citation, or section 4.1's own incident table).\n\n4. STATE THE RECOVERY-PATH INTERACTION. `HANDOFF_PROTOCOL.md` section 4.1 already distinguishes a dispatch that was 'issued and never taken up' from one where the agent began work and died (the membership test's clause 1 vs clause 2). A dispatch-time commit is what lets a LATER recovering session settle this from git alone rather than from a live session's memory: if the handoff file is a tracked, committed object with no corresponding commit from the receiving agent, that is now distinguishable from a dispatch that was never made at all (no commit whatsoever) OR one where the agent began and died (a commit from the agent, or content changes on top of ORCH's commit). State this interaction explicitly, pointing at section 4.1 rather than restating its membership test.\n\n5. CHECK INSTRUCTION PRECEDENCE. Grep every role file (`.claude/agents/*.md`) and workflow doc (`docs/agents/workflows/WF-*.md`) for any instruction that could be read as 'commit handoffs only at completion' in a way that would out-rank or contradict this new rule per `core-directives.md`'s Instruction Precedence chain. State what you found -- if nothing contradicts, say so with the grep that established it; if something does, name it and say whether it needs its own edit or is merely imprecise wording that the new rule now disambiguates.\n\n6. CLOSE THE ISSUE (WF-03 Step 5, taken within this step): `docs/issues/ISS-0196.yaml` gets `status: resolved`, `resolved_in_run: WF03-ISS0196-20260821`, `resolved_at:` from a real clock read. Close GH#386 naming this run and the issue file.\n\nCONSTRAINTS:\n- Docs-only. Do not touch `lib/`, `priv/repo/migrations/`, `test/` or `web/`.\n- `result.status` must be one of PASS/FAIL/PARTIAL/BLOCKED/SKIPPED.\n- Read the clock in its OWN command before each timestamp. Never batch `date -u` with the write that consumes it.\n- `started_at` was stamped by ORCH at dispatch -- and this run's own Step 03 handoff was itself committed at dispatch (see this run's git log for the commit), the first dispatch under the very rule this step is writing. Note that in your report if you notice it; it is not accidental.\n- Claim by setting `status` to `IN_PROGRESS` only. Do not repeat this instruction if you rework anything -- see the new paragraph in `ORCHESTRATOR.md` section 5 (ISS-0211) for why.\n- Commit `docs/` and this handoff. Do NOT write `handoffs/registry.json` or `handoffs/orchestrator.log`.",
+    "acceptance_criteria": [
+      "A rule requires the handoff file to be committed at dispatch time, before the receiving agent begins work, stated in whichever of HANDOFF_PROTOCOL.md / ORCHESTRATOR.md the fix decides is canonical, with the other pointing at it if both mention it",
+      "The rule cites the WF03-ISS0117-20260821 incident that produced it, per the doc set's convention that every rule carries its incident",
+      "The rule is unconditional -- no size threshold or agent-judgement gate on whether a given dispatch gets committed",
+      "The interaction with HANDOFF_PROTOCOL.md section 4.1's recovery path is stated: a dispatch-time commit is what lets a recovering agent distinguish a never-dispatched step from a dispatched step whose file was lost",
+      "The instruction-precedence question is checked -- confirm no role file or workflow doc instructs an agent to commit handoffs only at completion in a way that would out-rank the new rule, with the grep command quoted",
+      "docs/issues/ISS-0196.yaml carries status: resolved, resolved_in_run and a clock-read resolved_at; GH#386 is closed",
+      "No file outside docs/ and handoffs/WF03-ISS0196-20260821/ is modified"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

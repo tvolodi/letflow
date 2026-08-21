@@ -1,0 +1,51 @@
+{
+  "handoff_id": "req114-step05-rerun",
+  "run_id": "WF02-REQ114-20260821",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ114-20260821/step-05-release-validator-rerun.json",
+  "created_at": "2026-08-21T08:20:00Z",
+  "started_at": "2026-08-21T08:20:00Z",
+  "completed_at": "2026-08-21T08:23:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-114"],
+    "artifacts_in": [
+      "docs/migration/decisions/0008-cross-cutting-tooling-stage-and-doc-ownership.md@19f4253",
+      "handoffs/WF02-REQ114-20260821/step-02d-reviewer.json",
+      "handoffs/WF02-REQ114-20260821/step-05-release-validator.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Re-run of Step 5 after the blocker in step-05-release-validator.json was resolved: handoff records for steps 00-03 backfilled, decisions/0008 updated with Status line + dated REVIEWER sign-off section (commit 19f4253). Re-verify from scratch, including whether the sign-off's reasoning actually holds up, not just that it now exists.",
+    "acceptance_criteria": [
+      "AC1: every full-suite mix test invocation in WF-02/WF-04 replaced, prose updated",
+      "AC2: WF-03 non-edit genuinely confirmed",
+      "AC3: role files checked, outcome stated",
+      "AC4: fresh read shows no remaining plain full-suite mix test reference in scope",
+      "decisions/0008 sign-off reasoning is sound, not just asserted; Q1 correctly left out of Step 2d's scope"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "decisions/0008's Q2 sign-off reasoning independently judged sound (distinguishes mechanical prose substitution against a validator-approved plan from ELIXIR-DEV's code/migration remit; explains why Option B would wrongly imply doc edits need code judgment); Q1 correctly and explicitly left out of Step 2d's scope (REQ-VALIDATOR/schema territory, already passed at WF-01), not silently skipped. All four ACs re-verified against live file content: mix test literal invocations replaced with scripts/test_parallel.sh in WF-02 Steps 4/5 and WF-04 Step 1; test-runner.md/release-validator.md updated; WF-03_issue_resolving.md correctly left untouched (mirrors WF-02 by reference, confirmed via grep, zero hits); new prose's mechanism claims (N-derivation order, single pre-compile, per-partition MIX_TEST_PARTITION, Result:/Failed: parsing, exit-2-is-normal) cross-checked against scripts/test_parallel.sh's actual code -- accurate. docs/requirements.yaml REQ-114 still status: in_progress (correct, Step 6 not yet run). Handoff records for steps 00/01/01b/02a/02c/02d/03 checked for internal consistency: timestamps sequence monotonically, referenced commit SHAs (4a8713f, 83011e2, e0aab23) exist in branch history in order, 19f4253 (backfill commit) is HEAD -- no fabrication indicators.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ114-20260821",
+      "commit_sha_list": ["19f4253"],
+      "remote_branch": "origin/feature/WF02-REQ114-20260821",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER (Step 6)"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

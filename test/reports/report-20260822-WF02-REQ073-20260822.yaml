@@ -1,0 +1,112 @@
+report_id: report-20260822-WF02-REQ073-20260822
+agent: TEST-RUNNER
+requirement: REQ-073
+workflow_step: WF-02 Step 4 (full-suite test run)
+handoff: handoffs/WF02-REQ073-20260822/step-04-test-runner.json
+branch: feature/WF02-REQ073-20260822
+date: 2026-08-22
+command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+
+toolchain:
+  platform: "Windows 11"
+
+environment:
+  postgres: >
+    letflow-postgres-1, confirmed via `docker compose up -d` -- reported already
+    Running, not freshly started this run.
+  db_setup: >
+    Each test_parallel.sh partition's own `mix test` invocation performs
+    ecto.create/ecto.migrate --quiet automatically via the `test` alias -- no separate
+    DB-setup step taken here.
+  parallel_n: >
+    Set explicitly via TEST_PARALLEL_N=4 per dispatch instructions (ISS-0219: this
+    host's auto-derived nproc value crashes every partition outright). Not left to
+    auto-derivation.
+
+# ---------------------------------------------------------------------------
+# Run
+# ---------------------------------------------------------------------------
+
+run:
+  command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+  result: >
+    test_parallel: N=4 (source: env override)
+    partition 1: 329 tests, 0 properties, 0 failures, exit 0
+    partition 2: 344 tests, 0 properties, 0 failures, exit 0
+    partition 3: 374 tests, 3 properties, 0 failures, exit 0
+    partition 4: 430 tests, 2 properties, 0 failures, exit 0
+    combined: 1477 tests, 5 properties, 0 failures (1482/1482 passed)
+  exit_code: 0
+  failures_found: 0
+
+verdict: PASS
+
+summary_line: >
+  1482/1482 passed (1477 tests + 5 properties combined), 0 failures. No recurrence of
+  ISS-0220's SandboxPool claim-timeout class this run -- all partitions green.
+
+# ---------------------------------------------------------------------------
+# REQ-073 own tests (test/letflow/routers/identity_test.exs)
+# ---------------------------------------------------------------------------
+
+req073_tests:
+  verification_method: >
+    Grepped all 4 partition logs for "identity" test_module tags. Found
+    Letflow.Routers.IdentityTest activity entirely within partition-4.log: 23 distinct
+    LETFLOW_TENANT_FIXTURE teardown log lines naming test_module=Letflow.Routers.IdentityTest,
+    one per test, spanning all six describe blocks (AC1 end-to-end x5, AC2/INV-5
+    cross-tenant-404, AC3/INV-1 tenant isolation, AC4 permission-denial x6,
+    validation-failures x3, list filters/pagination x5, genuinely-absent-id 404s x2 --
+    counts approximate per describe grouping, 23 total test names counted). Zero
+    failures attributed to Letflow.Routers.IdentityTest anywhere in the 0-failure
+    combined total. Consistent with TEST-DESIGN-VALIDATOR's isolated 23/23 re-run at
+    step 3b (handoff step-03b-test-design-validator.json).
+  result: "PASS -- all 23 identity_test.exs assertions passed inside the full run, 0 failures."
+
+# ---------------------------------------------------------------------------
+# ISS-0220 check (SandboxPool claim-timeout contention)
+# ---------------------------------------------------------------------------
+
+iss_0220_check:
+  status: >
+    Not reproduced this run. All partitions returned exit 0 with 0 failures;
+    Letflow.SandboxPoolTest, Letflow.SandboxPool.FixtureLoaderTest, and
+    Letflow.Definitions.PromotionAssertionRerunTest all passed cleanly (no
+    GenServer.call claim-timeout / Postgrex disconnect pattern observed in any
+    partition log this run).
+  note: >
+    ISS-0220 is recorded status: resolved (PR merged, resolved_in_run
+    WF03-ISS0220-20260822) -- SandboxPool's claim/release timeouts were re-derived
+    from measured provisioning cost. Re-derived attribution fresh per
+    core-directives.md rather than assuming the fix holds: this run simply did not
+    hit any claim-timeout contention (0 failures overall across all four
+    partitions), so no attribution route was needed regardless.
+
+# ---------------------------------------------------------------------------
+# Scope check
+# ---------------------------------------------------------------------------
+
+branch_diff:
+  command: "git diff --name-only main...HEAD"
+  files:
+    - docs/requirements.yaml
+    - docs/status/requirement_status.index.yaml
+    - docs/status/requirement_status.v2.yaml
+    - handoffs/WF02-REQ073-20260822/*  # this run's own handoffs
+    - handoffs/orchestrator.log
+    - handoffs/registry.json
+    - lib/letflow/api/authorization.ex
+    - lib/letflow/design/req073-identity-user-routes.md
+    - lib/letflow/identity.ex
+    - lib/letflow/identity/user.ex
+    - lib/letflow/routers/identity.ex
+    - test/letflow/routers/identity_test.exs
+
+artifacts_out:
+  - test/reports/report-20260822-WF02-REQ073-20260822.yaml
+  - handoffs/WF02-REQ073-20260822/step-04-test-runner.json
+
+next_action: >
+  PASS -- full suite green, 0 failures, REQ-073's own test file (23 tests) verified
+  passing inside the run. Route to RELEASE-VALIDATOR (Step 5), which will re-run the
+  suite independently.

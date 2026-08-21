@@ -200,6 +200,12 @@ from the race; it does not remove another ORCH-role session.** So:
   pushed and your commit is already on the remote, which is exactly what happened in the
   incident above and needed no action at all. **Do not force.**
 
+  This "do not force" governs ONLY this case — ORCH pushing its own registry/log commits
+  to `main` from a checkout another ORCH-role session may also be writing. It is a
+  different rule from a run republishing its OWN rebased feature branch, which is
+  authorized, scoped, and stated in full at `GIT_MERGE.md` step 6 (added 2026-08-21,
+  ISS-0210/GH#402) — read it there rather than inferring either rule from the other.
+
 ### 7.2 Run-entry fields — `last_known_step`, and recording a recovered run
 
 #### `last_known_step` — what it is

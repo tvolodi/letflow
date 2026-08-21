@@ -103,6 +103,20 @@ previous run.** A failure you have structurally cleared is filed and forwarded p
       writing a log/status entry claiming what was kept — see
       `docs/anti-patterns.md`'s matching entry for the full incident.
 
+      ⚠️ IF THAT RE-READ INCLUDES A BYTE-IDENTITY CHECK (e.g. AC4-style span
+      hashing to prove a rebase didn't clip protected content — added 2026-08-21,
+      ISS-0210/GH#402): hash the git BLOB, never the checked-out working-tree file.
+      `git show <sha>:<path>` or `git cat-file blob <sha>` — not a plain file read.
+      This repo's `.gitattributes` forces LF only for `*.ex`/`*.exs`; `.md` and
+      `.json` files are NOT covered, so on a host with `core.autocrlf=true` (verified
+      present on this host: `git config --get core.autocrlf` → `true`) every
+      checkout/rebase re-materialising a tracked `.md` or `.json` file rewrites it to
+      CRLF — identical content then hashes differently before and after, by exactly
+      +1 byte per line, with nothing actually wrong. `WF03-ISS0200-20260821` hit this
+      live on this same host: all three AC4 spans hashed differently immediately
+      after a rebase, purely from the CRLF rewrite, and were correctly re-measured
+      against the committed blob instead.
+
       SEMANTIC conflicts (added 2026-08-17, ISS-0023/GH#81): a textual conflict
       marker means git couldn't merge two overlapping edits automatically. A
       semantic conflict is different in kind and easy to miss — both sides may
@@ -163,6 +177,37 @@ previous run.** A failure you have structurally cleared is filed and forwarded p
 
 6. Push branch to remote:
    git push origin feature/<run-id>
+
+   ⚠️ NON-FAST-FORWARD IS THE NORMAL CASE HERE, NOT AN ERROR (added 2026-08-21,
+   ISS-0210/GH#402). `GIT_SETUP.md` step 7 pushed this exact branch already, at Step 00,
+   as the coordination signal. Step 5's rebase just rewrote every commit this run made
+   since then. So whenever step 5 actually replayed at least one commit, the remote still
+   holds the pre-rebase tip and a plain `git push` here is REJECTED as non-fast-forward —
+   every time, not occasionally. (Confirmed live, not just from the protocol text:
+   `WF03-ISS0200-20260821`'s Step Final hit exactly this after its branch was rebased
+   twice — see that run's `step-final-git-merge.json`, `result.issues[0]`.)
+
+   If step 5's rebase was a NO-OP (origin/main had no new commits since this branch's
+   last push, so nothing was replayed): the plain `git push origin feature/<run-id>`
+   above still works, ordinary fast-forward. Don't force pre-emptively — try the plain
+   push first and only act on an actual rejection.
+
+   If the push above IS rejected as non-fast-forward: republish with
+   `git push --force-with-lease origin feature/<run-id>` — never bare `--force`.
+   `--force-with-lease` refuses if the remote moved since your last fetch of it, which is
+   exactly the check that matters if a concurrent session somehow pushed to this SAME
+   feature branch (rare — one branch belongs to one run — but the lease is what makes the
+   republish safe rather than merely convenient).
+
+   **Scope of this authorization, stated exactly so it cannot be read broader than
+   intended: this covers ONLY the run's own `feature/<run-id>` branch.** It never extends
+   to `main`, and never to a commit authored by a different session — `ORCHESTRATOR.md`
+   §7.1's prohibition on forcing those is UNCHANGED and unrelated; that section governs a
+   different actor (ORCH itself) pushing shared registry/log commits to `main` from a
+   checkout other sessions may also be writing, not a single run republishing its own
+   already-rewritten branch. If a `--force-with-lease` push is itself rejected, report it
+   in `result.issues` — do not escalate to bare `--force` and do not retry blindly; re-fetch
+   and re-derive what changed on the remote first.
 
 7. Create PR:
    gh pr create \

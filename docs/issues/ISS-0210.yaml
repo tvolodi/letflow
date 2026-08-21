@@ -63,4 +63,25 @@ github_issue_note: >
   per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called separately. The id comes
   from register_task's `issue_ref`, not from a directory scan. Ids between 205 and 210 were consumed
   by other sessions' registrations and carry no ISS- record here -- non-contiguity is expected.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0210-20260821
+resolved_at: "2026-08-21T11:23:04Z"
+resolution_note: >
+  (1) Re-derived the non-fast-forward claim first-hand from GIT_SETUP.md step 7 (pushes
+  feature/<run-id> at Step 00) and GIT_MERGE.md step 5 (rebase rewrites every commit made
+  since), plus WF03-ISS0200-20260821's step-final-git-merge.json result.issues[0], which hit
+  a live rejection this way. (2) GIT_MERGE.md step 6 now states --force-with-lease is
+  authorized ONLY on the run's own feature/<run-id> branch (never main, never another
+  session's commit), with the no-op-rebase case (plain push still works) stated explicitly.
+  (3) ORCHESTRATOR.md §7.1 gained one pointer sentence to GIT_MERGE.md step 6 rather than a
+  restatement; the rule lives in exactly one place. (4a) core.autocrlf=true verified on this
+  host directly (`git config --get core.autocrlf`); demonstrated live that the working-tree
+  copy of a tracked .md file already differs byte-for-byte from its committed blob (CRLF vs
+  LF) because .gitattributes only forces LF for *.ex/*.exs. Added a note in GIT_MERGE.md's
+  conflict-handling section naming the git blob (git show <sha>:<path>) as the required
+  hashing target. (4b) .gitattributes: adopted `merge=union` for handoffs/orchestrator.log
+  (flat append-only log, union matches existing hand-resolution outcome); explicitly NOT
+  adopted for handoffs/registry.json (JSON structure -- a naive line union can produce
+  invalid or duplicate-keyed JSON on anything but a clean append), with hand-resolution
+  remaining mandatory there per ORCHESTRATOR.md §7.1. Section 1.2 (ISS-0206/ISS-0208, still
+  open) was not touched.

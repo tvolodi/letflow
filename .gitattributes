@@ -4,3 +4,26 @@
 # regardless of local autocrlf settings. See docs/issues/ISS-0008.yaml.
 *.ex text eol=lf
 *.exs text eol=lf
+
+# ISS-0210/GH#402: handoffs/orchestrator.log and handoffs/registry.json are both
+# append-only by protocol (ORCHESTRATOR.md §7.1) and both conflict on nearly every
+# concurrent run. Decided per-file rather than as a pair:
+#
+# orchestrator.log: ADOPTED. It is a flat line-oriented log; git's built-in `union`
+# merge driver unions both sides' lines and drops exact duplicates, which is the same
+# outcome hand-resolution already produces for this file (see the WF03-ISS0200-20260821
+# git_evidence: line count only ever grew, origin/main's lines an exact prefix of the
+# resolved file). Still re-validate the line count before/after per ORCHESTRATOR.md
+# §7.1 even with this driver enabled — it changes who performs the union, not the
+# obligation to check it landed correctly.
+handoffs/orchestrator.log merge=union
+
+# registry.json: NOT ADOPTED, deliberately. `union` unions LINES with no knowledge of
+# JSON structure. Two concurrent sessions each appending one run-entry object commonly
+# edit the SAME closing lines (the enclosing array's trailing `]` and the preceding
+# entry's trailing `}`), which a naive line union can duplicate, drop, or interleave
+# into syntactically invalid or duplicate-keyed JSON — exactly the failure mode this
+# file cannot afford, since every run depends on it parsing. Hand-resolution (read both
+# `<<<<<<<`/`=======`/`>>>>>>>` sides, compose by appending the missing entries in
+# `created_at` order, re-validate with a JSON parser) stays mandatory for this file per
+# ORCHESTRATOR.md §7.1. No merge attribute is set for it here.

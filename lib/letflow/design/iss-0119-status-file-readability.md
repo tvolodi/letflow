@@ -1074,6 +1074,16 @@ This section is normative wherever it says so.
 **Dispatched as:** `handoffs/WF03-ISS0119-20260821/step-04d-code-designer-amendment.json`
 (CODE-DESIGNER, rework_count 0 — new evidence, not rework of the step-02 handoff).
 
+**Re-amendment iteration 1 — 2026-08-21.** CODE-DESIGN-VALIDATOR gated this section at
+Step 4e and passed nine of ten checks, failing one at MAJOR: §13.3's bounding claim for
+`known_shape_anomalies:` existed only as prose, so a future agent could have declared away a
+new shape defect in the *current* volume and left A4b green forever. Three things changed in
+response, and nothing else: A4b gained the closed-volume-only rule (§13.5, mirrored into
+§13.4's block comment), A4b's failure-message content is now specified (§13.5), and §13.3's
+bullet now cites the assertion instead of asserting the property. **The three declared
+records in §13.4 are unchanged** — all cite closed, digest-pinned volume 1. §13.11 Q1 is
+also now answered on the record. Sections 1–12 were not touched again.
+
 ### 13.1 The prompting finding
 
 Assertion **A4** (§7) was implemented and **run for the first time** at Step 4. It went red
@@ -1138,11 +1148,18 @@ the shape exceptions are declared in a new, separately-keyed index list that A4b
 - **It is the design's own established pattern, applied to a second defect class:** never
   edit, always declare (§5's four-point handling, and the `known_anomalies:` mechanism it
   produced). A reader who already understands one understands the other.
-- **The exception list is bounded and permanent, not a growing suppression list.** Volume 1
-  is frozen and digest-pinned, so its shape defects are a closed, finite set that can never
-  grow. Volume 2 onward are checked live from their first entry, so a defect there is caught
-  while the volume is still current and appendable — before it is ever frozen. Declaring
-  history is not the same as tolerating drift.
+- **The exception list is bounded and permanent, not a growing suppression list — and that
+  is asserted, not merely argued.** Volume 1 is frozen and digest-pinned, so its shape
+  defects are a closed, finite set that can never grow. Volumes 2 onward are checked live
+  from their first entry, so a defect there must be *fixed in the working tree while the
+  volume is still current and appendable* — it can never be declared away. **That second
+  half is enforced by A4b's closed-volume-only rule (§13.5): a `known_shape_anomalies:`
+  record may only cite a volume whose index entry is `status: closed` with a
+  `frozen_prefix_sha256:`, so declaring a defect in the *current* volume fails A4b outright.**
+  Without that rule this bullet would rest on an agent's judgement — a new defect could be
+  appended to the current volume and silenced by adding a matching record, with set equality
+  still green. The rule is what makes "bounded by construction" a machine-checked fact.
+  Declaring history is not the same as tolerating drift.
 - **It keeps the three entries in the file a reader actually opens first.** The index
   declares itself "THE ENTRY POINT"; every appending agent reads it (HOW-TO-APPEND step 1).
 
@@ -1198,6 +1215,14 @@ known_shape_anomalies:
   #
   # `entry_line` is the entry's own `- req:` line. It is a stable address because
   # volume 1 is frozen and pinned by `frozen_prefix_sha256` above.
+  #
+  # A RECORD MAY ONLY CITE A CLOSED, DIGEST-PINNED VOLUME. `path:` must name a
+  # volume whose `volumes:` entry above has `status: closed` AND a
+  # `frozen_prefix_sha256:`. A4b asserts this. A shape defect in the CURRENT
+  # volume must be FIXED in the working tree before it is committed -- it can
+  # never be declared here. This is what keeps the list bounded: a closed
+  # volume's defect set can never grow, so this list can never grow either
+  # except when a volume is closed with a defect already in it.
   #
   # `kind:` is one of: missing_field | misnamed_field | extra_field | field_order.
   # Only the first two occur today. A `misnamed_field` record accounts for BOTH
@@ -1284,6 +1309,19 @@ the index, closed and current — the scope is unchanged.
   the append-only rule forbids). This mirrors A5 and gives shape the same two-way protection
   vocabulary already has.
 
+  **A4b additionally asserts: every `known_shape_anomalies:` record's `path:` names a volume
+  whose `volumes:` entry in the index has `status: closed` AND carries a
+  `frozen_prefix_sha256:`.** A record citing the current (open, unpinned) volume, or a path
+  that is not a volume in the index at all, fails A4b — **independently of set equality, and
+  even when the on-disk violation it cites genuinely exists.** This is the rule that makes
+  §13.3's bounding claim mechanical rather than a matter of an agent's judgement: without it,
+  a future agent could append a malformed entry to the current volume, add a matching record
+  here, and leave A4b permanently green with no gate tripped — satisfying a gate by editing
+  what it measures. With it, the only route for a shape defect in the current volume is to
+  fix it in the working tree before committing, which is what §13.3 already says happens.
+  It changes none of the three records in §13.4: all three cite
+  `docs/status/requirement_status.yaml`, which is closed and digest-pinned.
+
   **Identity key for the comparison:** `{path, entry_line, kind, field, found_as}`. The
   remaining columns are documentation and are not part of the key — but **A4b additionally
   asserts that each declared record's `req:` and `event:` match what is actually on disk at
@@ -1293,6 +1331,16 @@ the index, closed and current — the scope is unchanged.
   **The ISO-8601 check is not lost for the misnamed entry.** For a `misnamed_field` record
   where `field: at`, A4b parses the value at `found_line:` and asserts it is valid ISO-8601.
   Declaring the field name wrong does not license an unparseable timestamp.
+
+  **A4b's failure output is specified, not left to the implementer.** On any failure — either
+  direction of set equality, or the closed-volume rule — the assertion message must name
+  **every** element of the symmetric difference, one per line, printing `path`, `entry_line`,
+  `req`, `kind` (and `field`/`found_as` where set) for each, labelled by which side it came
+  from (`on disk but not declared` / `declared but not on disk`), plus every record that
+  failed the closed-volume rule with the volume status that disqualified it. Reporting only a
+  count, or only that the sets differ, is not sufficient: §13.9 lists `mix test` as one of the
+  four landing points precisely because the three entries are named there, and that claim must
+  be guaranteed by this specification rather than by an implementer's choice of message.
 
   **A4b runs on every volume, permanently.** It is not narrowed to the current volume — see
   §13.3 for why that was rejected.
@@ -1394,6 +1442,14 @@ make the counts line up is the failure mode this whole run exists to stop.
    header has always documented five fields, 180 of 182 entries carry all five, and changing
    the rule is a vocabulary change, not a drift response. Recorded so a later run can decide
    it deliberately, in a header amendment, rather than by attrition.
+   **Answered at Step 4e (2026-08-21), and recorded here rather than left open:**
+   CODE-DESIGN-VALIDATOR checked the evidence directly and found `note:` **mandatory**, not
+   conventional — volume 1's own header documented the five-field shape with `note:` as the
+   fifth (lines 12–17) before these entries were written, volume 2's header states it in
+   mandatory words, and 180 of 182 entries carry it. The one fair concession is a wording
+   one: volume 1 phrased the shape as a template rather than using the word "required" —
+   which is exactly what §13.4's `cause:` records. So the exception list is the correct
+   instrument and a weakened A4b is not. No change to A4b follows from this.
 2. **Should `known_anomalies:` be renamed `known_vocabulary_anomalies:`** now that a second
    anomaly class exists? Cosmetic, and it would touch A5's parse path and three existing
    records. Not proposed here; noted so the naming asymmetry is on record rather than a

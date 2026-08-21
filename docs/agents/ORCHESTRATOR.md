@@ -194,8 +194,11 @@ from the race; it does not remove another ORCH-role session.** So:
 
 #### `last_known_step` — what it is
 
-Used 64 times in `handoffs/registry.json` and, until 2026-08-21 (ISS-0117), **defined
-nowhere under `docs/`**. It is written here because ISS-0117 asked whether to extend it,
+Carried on nearly every run entry in `handoffs/registry.json` and, until 2026-08-21
+(ISS-0117), **defined nowhere under `docs/`**. (An exact count was stated here and was
+wrong — re-derived 2026-08-21, `grep -c '"last_known_step"' handoffs/registry.json`
+returned 62 at the commit that wrote "64". The count grows with every run, so no fixed
+figure written into this file stays true; the point the sentence makes does not need one.) It is written here because ISS-0117 asked whether to extend it,
 and a field with no written specification cannot be extended — only guessed at, which is
 how it accumulated unbounded prose in the first place.
 

@@ -1,0 +1,56 @@
+{
+  "handoff_id": "121f7f07-439b-493a-917a-b5c0df95c67d",
+  "run_id": "WF03-ISS0179-20260821",
+  "workflow_id": "WF-03",
+  "step": "2a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0179-20260821/step-2a-elixir-dev.json",
+  "created_at": "2026-08-21T14:09:48Z",
+  "started_at": "2026-08-21T14:09:48Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["fbd211cf-6ee8-46e9-b6bd-2ecd32f4e281"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0111-with-only-this-tenant-visible-advisory-lock-fix.md",
+      "test/letflow/identity_migration_test.exs",
+      "docs/issues/ISS-0111.yaml"
+    ],
+    "owned_modules": [
+      "test/letflow/identity_migration_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Implement the gated design in `lib/letflow/design/iss0111-with-only-this-tenant-visible-advisory-lock-fix.md` section 3 in full -- read the whole document first, it is the exact specification (lock key, acquire/release helpers, the new `with_only_this_tenant_visible!/2` body shape wrapped in one `Repo.checkout/2`, and the required change to `restore_orphaned_guard_backup_rows!/0` to acquire the same lock). Section 3.4's table states the exact acquire/release points; section 5's open question about `Repo.checkout/2`'s return-value semantics is yours to resolve empirically (verify what `Repo.checkout/2` returns and confirm `with_only_this_tenant_visible!/2`'s existing contract -- whatever it returns today -- is preserved unchanged by the new wrapper).\n\nThis is test-file-only work (`test/letflow/identity_migration_test.exs`) -- no `lib/letflow/` or migration file changes. Implement exactly what the design specifies; do not improvise beyond it. If you find the design under-specifies something, report it rather than guessing.\n\nAfter implementing: run the affected tests directly (`mix test test/letflow/identity_migration_test.exs`) and quote real output. This fix cannot be proven correct by a single serial run alone, since the defect only manifests under CONCURRENT invocation -- construct a targeted verification: run two `mix test` invocations against `test/letflow/identity_migration_test.exs`'s ISS-0060 guard test SIMULTANEOUSLY (e.g. two background shell invocations started close together) and confirm neither corrupts the other's view of `tenant_schemas` -- report exactly what you did and what you observed. If constructing genuine concurrency is impractical in this environment, say so explicitly and explain what your single-invocation run does and does not prove, per this project's own no-speculation discipline.",
+    "acceptance_criteria": [
+      "test/letflow/identity_migration_test.exs implements section 3's exact specification: @guard_lock_key, acquire/release helpers, the new with_only_this_tenant_visible!/2 body wrapped in one Repo.checkout/2, and restore_orphaned_guard_backup_rows!/0 acquiring the same lock in its own Repo.checkout/2",
+      "The Repo.checkout/2 return-value question (design section 5) is resolved empirically and with_only_this_tenant_visible!/2's existing return contract is confirmed preserved",
+      "mix compile --warnings-as-errors passes",
+      "mix test test/letflow/identity_migration_test.exs is actually run and real output (pass/fail counts) is quoted",
+      "A genuine concurrent-invocation verification is attempted and its real result reported, or the environment's limitation is stated explicitly with what a single-invocation run does and does not establish",
+      "No file outside test/letflow/identity_migration_test.exs is modified"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0179-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0179-20260821",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

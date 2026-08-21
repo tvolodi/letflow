@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0109-20260821/step-04-test-designer.json",
   "created_at": "2026-08-21T02:32:27Z",
   "started_at": "2026-08-21T02:32:27Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-21T02:43:37Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -56,9 +56,12 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Regression tests for Letflow.TenantFixture written and run. Spec: test/specs/ISS-0109.md. Tests: test/letflow/support/tenant_fixture_test.exs -- 14 tests covering design SS7's C1..C6. FAIL-FIRST POSITION, stated honestly and not faked: the literal pre-fix-run form does not apply because the fix is a NEW MODULE (pre-fix the test file would not compile, which is evidence about nothing); no pre-fix run of this file is claimed anywhere, and the green post-fix run is not offered as fail-first evidence. The real property -- pre-fix detection absent on identical database state -- is cited from the two existing measurements (step-02b's second replay_migrations/1 returning {:ok, []} with promotion_assertion_runs still absent; step-03's tables_missing: [\"promotion_assertion_runs\"], versions_missing: [] through the new capture) AND re-derived mechanically in test C1.2, which runs the pre-fix fixture's entire oracle (assert {:ok, []} = replay_migrations/1) on the constructed state, confirms the table is still absent, then shows assert_schema_complete!/2 raising on that same state. SS7.7's adoption item is declared as having no fail-first proof; its evidence is behaviour preservation (20 passed = 8 + 12 for the two adopted modules, re-run here, matching ELIXIR-DEV's before/after). REVIEWER step-03d ruling 3 honoured: the C6 oracle-rot test reads its observed set from capture_schema_state/1's tables_present, never a raw information_schema.tables query, and fails in both directions (expected -- observed == [] AND observed -- expected == []). The boolean() | nil distinction is asserted AS a distinction: false (observed-absent) at tests 3 and 7, nil (not-observed) at test 9 with an explicit `refute == false` alongside `assert == nil`, and INV-F-10 at test 10 (a degraded capture returns :ok rather than reddening a healthy tenant). SS3.5's failure boundary is covered on both sides: a degraded tables_present yields tables_missing == [] rather than 'all 19 missing', a degraded applied_versions yields versions_missing == [] rather than all 31 manifest versions (constructed two ways -- a dropped schema, and an aborted transaction that makes every per-field query raise at once), and {:error, {:capture_failed, _}} is shown reachable only outside the field guards (malformed tenant_id). Teardown log line covered: exactly one line with the literal LETFLOW_TENANT_FIXTURE marker, phase=teardown from the closed vocabulary, schema=, tenant_id=, schema_present_before_drop=true; ExUnit.CaptureLog cannot wrap an on_exit/1-driven teardown (it installs/removes its handler around a call in the test body, and the teardown runs after the test process exits), so that one line is observed via a marker-filtered :logger handler installed and read from LIFO-ordered on_exit callbacks -- the spec states this explicitly -- while the failure-phase lines, which are emitted synchronously, ARE asserted under capture_log/1 (phase=incomplete_schema present, phase=teardown absent, both during a failure and during a successful fixture run). INV-F-4's negative case covered: a wholly absent tenant returns {:ok, state} with both present? flags false and does not raise. TEST NAME LENGTH measured mechanically over the full 'test <describe> <name>' string ExUnit builds: MAXIMUM 140 characters (141 bytes; one name contains a section sign), 115 characters of headroom under ExUnit's 255 limit. RUN OUTPUT: `MIX_ENV=test mix test test/letflow/support/tenant_fixture_test.exs --seed 7` -> 'Finished in 7.6 seconds (0.00s async, 7.6s sync) / Result: 14 passed'; also green at seed 0 (10.9s) and seed 424242 (8.9s), so no test depends on ExUnit's shuffled order. No compiler warning originates from the new file (two that initially did -- a redundant is_exception/1 and a `!= nil` on a non-nullable field -- were replaced with stronger assertions). test/support/tenant_fixture.ex and both adopted modules are byte-for-byte unmodified (`git diff HEAD` on all three is empty); no other fixture site touched.",
+    "artifacts_out": [
+      "test/specs/ISS-0109.md",
+      "test/letflow/support/tenant_fixture_test.exs"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0109-20260821",
@@ -68,7 +71,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (WF-03 Step 4a) to re-derive C1..C6 coverage independently, then TEST-RUNNER (Step 4b) for the full suite."
   },
   "rework_count": 0,
   "max_rework": 3

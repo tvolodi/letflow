@@ -1,0 +1,55 @@
+{
+  "handoff_id": "a6299dcf-a440-4d74-92e5-68f00f1aa863",
+  "run_id": "WF03-ISS0193-20260821",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0193-20260821/step-05-close-issue.json",
+  "created_at": "2026-08-21T12:56:54Z",
+  "started_at": "2026-08-21T12:56:54Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["be71a2b4-7f7e-4830-bf76-4d42065717c2"],
+    "artifacts_in": [
+      "docs/issues/ISS-0193.yaml",
+      "handoffs/WF03-ISS0193-20260821/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0193-20260821/step-03b-test-design-validator.json",
+      "handoffs/WF03-ISS0193-20260821/step-04-test-runner.json",
+      "test/reports/report-20260821-WF03-ISS0193-20260821.yaml"
+    ],
+    "owned_modules": [
+      "docs/issues/ISS-0193.yaml"
+    ]
+  },
+  "task": {
+    "description": "Close ISS-0193 per WF-03 Step 5. Every prior step on this run PASSED: the design gate (CODE-DESIGN-VALIDATOR, commit 37e17a7), the implementation and its test-design gate (TEST-DESIGN-VALIDATOR independently applied and reproduced a mutant itself, commit 4398dd4), and the full-suite regression run (TEST-RUNNER, 1292/1294 passed, both pre-existing failures structurally attributed to the already-open ISS-0107, commit feaa939). This is a genuine `resolved` outcome, not `instrumented` or `no_defect` -- the root cause (no friction on which volume a known_anomalies: record may cite) was actually removed, mirroring A4b's already-proven fix, with A10 additionally closing the follow-on laundering route (MINOR-4) the original design gate had flagged.\n\nSet `docs/issues/ISS-0193.yaml` `status: resolved`, `resolved_in_run: WF03-ISS0193-20260821`, `resolved_at:` from a real clock read. Close GH#381 with `gh issue close 381 --comment` naming this run, the design commit (c756b82), the implementation commit (f7814b9), and the test report path (test/reports/report-20260821-WF03-ISS0193-20260821.yaml).",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0193.yaml carries status: resolved, resolved_in_run and a clock-read resolved_at",
+      "GH#381 is closed with a comment naming the run, the design and implementation commits, and the test report path",
+      "No file outside docs/issues/ISS-0193.yaml and this run's own handoff is modified"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0193-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0193-20260821",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

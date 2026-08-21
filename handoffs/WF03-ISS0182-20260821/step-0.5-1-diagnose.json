@@ -1,0 +1,59 @@
+{
+  "handoff_id": "ac763bbc-5c55-4d2a-ac56-db42e690315a",
+  "run_id": "WF03-ISS0182-20260821",
+  "workflow_id": "WF-03",
+  "step": "0.5+1",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0182-20260821/step-0.5-1-diagnose.json",
+  "created_at": "2026-08-21T13:31:09Z",
+  "started_at": "2026-08-21T13:31:09Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0114.yaml",
+      "test/letflow/engine_concurrency_test.exs",
+      "test/support/tenant_fixture.ex",
+      "lib/letflow/engine.ex",
+      "docs/issues/ISS-0112.yaml"
+    ],
+    "owned_modules": [
+      "test/letflow/engine_concurrency_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Combined Step 0.5 (registry lookup) + Step 1 (diagnose) for `docs/issues/ISS-0114.yaml` (queue task 182, GH#368). Read it in full -- it is detailed and this dispatch does not restate it. The failure: `Letflow.EngineConcurrencyTest` at `test/letflow/engine_concurrency_test.exs:365` raised Postgrex `42P01 undefined_table` on `tenant_<id>.instance_projections` from `Letflow.Engine.insert_instance_projection/8`, observed once in a full-suite run and correctly filed as UNATTRIBUTED rather than folded into a known family.\n\nSTEP 0.5 -- REGISTRY LOOKUP. Search `docs/issues/*.yaml` for `status: resolved` entries whose description mentions similar symptoms (a tenant-schema table missing during a live test that provisioned it). ISS-0109 is already named as the same symptom FAMILY but explicitly NOT the same issue (different module, frame, missing relation) -- confirm that reasoning yourself rather than accepting it, and check whether the identical root cause has recurred since ISS-0114 was filed (a fix that didn't actually fix the underlying issue). If recurring, severity is at least MAJOR regardless of the original MINOR.\n\nSTEP 1 -- DIAGNOSE, DO NOT FIX. Reproduce if you can (this is a concurrency-timing-sensitive failure against a live Postgres, so a single run may not reproduce it -- if it doesn't reproduce in N attempts, say so and explain what that does and does not tell you, rather than treating non-reproduction as exoneration). Read `test/letflow/engine_concurrency_test.exs:365` and its surrounding test, and `Letflow.Engine.insert_instance_projection/8` in `lib/letflow/engine.ex`, to understand the actual code path: what provisions the tenant schema, what creates `instance_projections`, and what race window could let a concurrent test observe the schema present but the table not yet created (or already dropped).\n\nTHE ISSUE'S OWN SUGGESTED FIRST STEP: adopt `Letflow.TenantFixture` (`test/support/tenant_fixture.ex`) in this test module -- it is not adopted yet (confirm this yourself; ISS-0112, still open, tracks the general adoption gap). Its `capture_schema_state/1` (read its actual implementation, don't assume the shape from the name) answers exactly the open questions here: was the registry row present, was the schema present, which tables were present/missing, which migrations were applied. If you can get this test to fail again (or construct a targeted reproduction of the race under load/concurrency), capture the schema state at the moment of failure using this helper and report EXACTLY what it shows -- that is the diagnosis this issue is asking for, not a guess from reading the code alone.\n\nWrite the root cause (not just the symptom) into your handoff's `result.summary`: which function creates `instance_projections`, whether it is synchronous with schema provisioning or eventually-consistent, what the race window actually is, and what a fix needs to change (a missing await/synchronization point, a wrong assumption about migration completion, or something else). Do NOT implement the fix. If you conclude this needs `Letflow.TenantFixture` adopted first (to make future occurrences attributable) as a prerequisite, distinguish that from the actual root-cause fix -- they may be two different pieces of work, and CODE-DESIGNER needs to know which is which.",
+    "acceptance_criteria": [
+      "The registry lookup was actually performed -- named which resolved issues were checked and why ISS-0109 is confirmed (not merely accepted) to be a different mechanism",
+      "At least one real reproduction attempt was made (either reproducing the original failure or constructing a targeted concurrency scenario), and if it did not reproduce, what that does and does not establish is stated explicitly rather than treated as exoneration",
+      "The actual code path (schema/table provisioning timing vs. insert_instance_projection/8's own assumptions) is read and traced, not inferred from the error message alone",
+      "If a reproduction succeeded, Letflow.TenantFixture.capture_schema_state/1 (or equivalent) was used to capture real state at failure time, with the actual captured values reported",
+      "The root cause (not just symptom) is stated: what creates instance_projections, what race window exists, and what a fix needs to change",
+      "No fix is implemented -- this step produces a diagnosis only, routed to CODE-DESIGNER next",
+      "The relationship between a TenantFixture-adoption prerequisite (if concluded necessary) and the actual root-cause fix is stated as two distinguishable pieces of work, not conflated"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0182-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0182-20260821",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

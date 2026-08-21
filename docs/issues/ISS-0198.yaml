@@ -1,0 +1,57 @@
+id: ISS-0198
+title: >
+  Handoff task blocks have no size discipline, and the cost is real wall-clock latency per pipeline step
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0117-20260821
+discovered_at: "2026-08-21T08:42:30Z"
+severity: MINOR
+
+description: >
+  Raised by the project owner during WF03-ISS0117-20260821, observing that a single pipeline
+  step was taking ten minutes of wall-clock time. Filed as a process defect in the pipeline
+  itself, not in any artefact it produced.
+
+  MEASURED on that run: nine handoff files for one documentation fix, with
+  `task.description` lengths of 1,405 / 4,867 / 10,027 / 6,780 / 10,281 / 6,290 / 9,115
+  characters, producing handoff files of 21-29 KB each. Each dispatched agent then spent
+  90,000-157,000 tokens, and each step took roughly 8-11 minutes.
+
+  WHY IT HAPPENS, and why it is not simply an agent being verbose: core-directives.md makes
+  weak-model tolerance a design constraint and requires every role file and workflow doc to
+  be explicit and mechanical enough that a weak model still produces correct work.
+  HANDOFF_PROTOCOL.md section 2 mandates that ORCH copy full requirement text into the
+  handoff rather than pointing at a file. Both rules are right. Neither carries any
+  counterweight: nothing anywhere states a target length, a structure, or a test for when a
+  task block has stopped adding reliability and started adding cost. So the rules push
+  monotonically toward longer dispatches and nothing pushes back.
+
+  THE COST IS NOT ONLY TOKENS. The gates on that run did earn their keep -- they caught a
+  JSON schema block that had silently stopped parsing, an exception column whose pointers
+  did not land, and a membership test that would have excluded the very incident that
+  motivated it. The problem is that the same verdicts were reachable with materially less
+  prose, and latency is what a human actually experiences of this pipeline.
+
+  WHAT A FIX SHOULD DECIDE (deliberately not pre-decided here): whether the counterweight is
+  a stated target length, a required structure that keeps evidence in `artifacts_in` rather
+  than restated inline, a rule that a handoff cites a prior handoff by path instead of
+  re-summarising it, or a measurement reported per run. ISS-0191's handoff linter could
+  measure this mechanically once it exists.
+
+  DO NOT FIX BY WEAKENING THE WEAK-MODEL CONSTRAINT. That constraint is load-bearing and
+  predates this issue. The target is redundancy between a handoff and the artefacts it
+  already names, not the explicitness the constraint requires.
+
+affected_files:
+  - docs/agents/instructions/core-directives.md
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+  - docs/agents/ORCHESTRATOR.md
+
+related:
+  - ISS-0191  # a handoff linter could measure dispatch size mechanically
+  - ISS-0117  # the run whose cost surfaced this
+
+queue_task_id: 198
+github_issue: https://github.com/tvolodi/letflow/issues/388
+github_issue_note: >
+  Filed by ORCH per ISSUE_QUEUE.md step 2a: register_task created both the queue task (198) and its mirrored GitHub issue (#388) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan.
+status: open

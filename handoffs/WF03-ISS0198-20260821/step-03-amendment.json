@@ -1,0 +1,68 @@
+{
+  "handoff_id": "13e8e940-1a0f-4011-b92a-9735f39936aa",
+  "run_id": "WF03-ISS0198-20260821",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF03-ISS0198-20260821/step-03-amendment.json",
+  "created_at": "2026-08-21T09:15:10Z",
+  "started_at": "2026-08-21T09:15:10Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["ee5f4aaa-c8b5-4c73-b0a7-a30fd6bd4de0"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0198-20260821/step-005-01-diagnose.json",
+      "docs/issues/ISS-0198.yaml",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/agents/instructions/core-directives.md",
+      "docs/agents/ORCHESTRATOR.md",
+      "docs/issues/ISS-0191.yaml"
+    ],
+    "owned_modules": [
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/agents/instructions/core-directives.md",
+      "docs/agents/ORCHESTRATOR.md",
+      "docs/issues/ISS-0198.yaml",
+      "docs/issues/ISS-0191.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 3 for ISS-0198: write the amendment. Steps 2 and 4 are SKIPPED on ISSUE-FIXER's recommendation (recorded separately in orchestrator.log with reasons).\n\nAUTHORITATIVE INPUT: handoffs/WF03-ISS0198-20260821/step-005-01-diagnose.json, result.summary. Read it in full. It is deliberately NOT restated here -- this dispatch is written to the rule you are about to write.\n\nImplement the six changes listed under that diagnosis's 'WHAT A FIX MUST CHANGE' heading, plus a seventh below. Do not re-derive the diagnosis; do exercise judgement on wording.\n\nSEVENTH CHANGE (ORCH's, not the diagnosis's): docs/issues/ISS-0198.yaml carries figures the diagnosis measured as wrong -- ten handoff files not nine, 8,915 not 9,115, and a file-size range of 8,693-41,723 bytes not '21-29 KB'. Correct them in place and append a short note that the correction came from this run's Step 1 measurement. Do NOT delete the original claim silently; the issue record should show it was measured and corrected.\n\nFOUR CONSTRAINTS ON HOW YOU WRITE IT:\n\n1. JUSTIFY ON REDUNDANCY, NEVER ON LATENCY. The diagnosis measured r=0.281 between dispatch length and step duration and found the shortest-dispatch run had the HIGHEST rework and a longer total wall-clock than the run that prompted this issue. ORCH wrote the latency premise into ISS-0198 and accepts it is not supported. A rule justified as 'shorter is faster' would be correctly discarded by a future agent. Carry the measurement into the prose so the next reader inherits the evidence, not the assumption.\n\n2. STATE NO TARGET LENGTH AS A RULE. 6,000 is a linter WARN threshold with a stated percentile justification, not a budget any agent must meet. H-SIZE-2 exists so the fix cannot be satisfied by truncation -- keep it.\n\n3. THE SCHEMA BLOCK IN SECTION 2 MUST STAY VALID, PARSEABLE JSON. That block is machine-parseable on purpose and has silently stopped parsing before (ISS-0117). If you generalise context.requirement_text into a per-source-path slot, the change MUST be backward-compatible: 582 existing handoff files parse today and must continue to, and requirement_text's existing contract must not be broken. Verify by running json.loads over the fence's contents and state the result in your summary. If you conclude a new field is the wrong call, say so and justify -- that is a judgement the diagnosis left to you.\n\n4. DO NOT WRITE THE THRESHOLD OR THE RULE INTO MORE THAN ONE FILE. core-directives.md and ORCHESTRATOR.md get pointer sentences only. A fix for a redundancy defect that duplicates itself across three files is the defect, and ISS-0021 already cost this project two agents over exactly that in exactly these three files. Copy ORCHESTRATOR.md section 10's wording shape for the canonical marker.\n\nOUT OF SCOPE, deliberately: result.summary size. The diagnosis found it is 2.1x task.description and recommends a separate issue rather than silently extending a dispatch rule to results. Do not extend the rule to result.summary; ORCH will file the issue.\n\nCommit your files. Do not write handoffs/registry.json.",
+    "acceptance_criteria": [
+      "All six changes from the diagnosis's 'WHAT A FIX MUST CHANGE' list are made, plus the ISS-0198.yaml figure correction",
+      "HANDOFF_PROTOCOL.md section 2 carries the structure rule, marked canonical in the wording shape of ORCHESTRATOR.md section 10, adjacent to the context.requirement_text paragraph",
+      "The rule distinguishes content that must be inline (the task, its acceptance criteria, scoped constraints) from content that belongs as a path in artifacts_in (a prior handoff's findings, a diff, a file the agent opens anyway) -- ISS-0198 AC3",
+      "H-SIZE-1, H-SIZE-2 and H-SIZE-3 are specified in HANDOFF_PROTOCOL.md's Enforcement note, computable with no judgement, and added to docs/issues/ISS-0191.yaml's scope with the ISS-0190 sequencing noted -- ISS-0198 AC4",
+      "No wording anywhere implies the check runs today; ISS-0191 is open and unbuilt",
+      "core-directives.md and ORCHESTRATOR.md carry pointer sentences only, with no restated threshold and no restated rule",
+      "Weak-model tolerance and HANDOFF_PROTOCOL section 2's requirement-text-travels-inline guarantee are both explicitly preserved, and the prose says how -- ISS-0198 AC2",
+      "The section-2 JSON schema fence still parses under json.loads, verified and quoted in result.summary",
+      "The justification in the prose rests on the redundancy measurement, and no target length is stated as a rule",
+      "ISS-0198's incorrect figures are corrected in docs/issues/ISS-0198.yaml with the correction attributed to this run",
+      "AC5 (validate against a real run) is discharged: re-draft ONE oversized handoff task.description from handoffs/WF03-ISS0117-20260821/ or WF03-ISS0109-20260821/ to the new guidance, save it under handoffs/WF03-ISS0198-20260821/, and show its acceptance criteria are unchanged in substance -- quote before/after character counts"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

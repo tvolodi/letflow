@@ -1507,19 +1507,20 @@
       "stage": null,
       "status": "IN_PROGRESS",
       "owned_modules": [
-        "docs/agents/instructions/core-directives.md",
         "docs/agents/shared/HANDOFF_PROTOCOL.md",
+        "docs/agents/instructions/core-directives.md",
         "docs/agents/ORCHESTRATOR.md",
-        "docs/issues/ISS-0198.yaml"
+        "docs/issues/ISS-0198.yaml",
+        "docs/issues/ISS-0191.yaml"
       ],
       "lock_acquired_at": "2026-08-21T09:03:04Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 005+01 (ISSUE-FIXER) DISPATCHED",
+      "last_known_step": "Step 005+01 (ISSUE-FIXER) COMPLETED PASS, commit 0847a10. Steps 2 and 4 SKIPPED with reasons in orchestrator.log. Step 03 (DOC-UPDATER) DISPATCHED.",
       "backfilled": false,
       "queue_task_id": 198,
       "queue_agent_id": "TVOLODI-orch",
-      "note": "WF-03 for ISS-0198 (GH#388, queue task 198), selected by get_next_task at 2026-08-21T09:03:04Z, not by ORCH reading a file. No owned_modules overlap with any active run -- WF03-ISS0117-20260821 released its lock at 08:45:55Z despite sharing two of these paths. The deliverable is a prose amendment to the pipeline's own protocol docs, so Step 2 (CODE-DESIGNER: module interfaces and @specs, wrong role for a prose rule) and Step 4 (regression test: no code under test) are expected to be recorded SKIPPED with a stated reason, per the WF03-ISS0117-20260821 precedent; Step 1 is asked to confirm or reject that rather than ORCH pre-deciding it. Producer/validator pair is DOC-UPDATER/REVIEWER. The issue is about dispatch size, so this run's own dispatch lengths are being measured and will be reported at close as evidence for or against the fix."
+      "note": "WF-03 for ISS-0198 (GH#388, queue task 198), selected by get_next_task at 2026-08-21T09:03:04Z, not by ORCH reading a file. No owned_modules overlap with any active run -- WF03-ISS0117-20260821 released its lock at 08:45:55Z despite sharing two of these paths. The deliverable is a prose amendment to the pipeline's own protocol docs, so Step 2 (CODE-DESIGNER: module interfaces and @specs, wrong role for a prose rule) and Step 4 (regression test: no code under test) are expected to be recorded SKIPPED with a stated reason, per the WF03-ISS0117-20260821 precedent; Step 1 is asked to confirm or reject that rather than ORCH pre-deciding it. Producer/validator pair is DOC-UPDATER/REVIEWER. The issue is about dispatch size, so this run's own dispatch lengths are being measured and will be reported at close as evidence for or against the fix. STEP 1 OUTCOME, recorded here because it overturns the issue's own premise: the diagnosis measured r=0.281 between task.description length and step duration over 69 timed steps, and found WF02-REQ113 (dispatch median 220 chars) ran 104.5 min with 9 of 19 files rework/regate/rerun, against 73.2 min for the run that prompted the issue. So the latency justification ORCH wrote into ISS-0198 is not supported and the amendment is being justified on redundancy elimination instead. Root cause measured as cite-and-also-restate: all 20 corpus dispatches over 6,000 chars name an artifacts_in basename inside the description, and context.requirement_text -- the schema's only structured copied-source slot -- is the empty object in 66 of 69 handoffs while up to 12,187 chars of copied source rides in free prose. owned_modules extended at Step 03 to add docs/issues/ISS-0191.yaml (H-SIZE checks join its scope)."
     }
   ]
 }

@@ -524,6 +524,23 @@ history:
       already updated by REVIEWER's Step 2d; README.md checked directly (grep for
       AuthPipeline/TenantStatus/REQ-071) -- no hit in either direction, so no
       README update is needed.
+  - req: REQ-072
+    event: started
+    agent: ORCH
+    at: "2026-08-21T20:53:32Z"
+    note: >
+      Picking up queue task 139 (GH#279) via get_next_task, immediately following
+      REQ-071's close. Dependency REQ-071 (id 138) confirmed done on main. Ports
+      R-Co's src/api/tenant_context.zig (104 lines) and src/api/trace_context.zig
+      (55) as the per-request context every tenant-scoped handler reads, plus the
+      single shared scoping mechanism (Ecto :prefix derived only from
+      conn.assigns[:auth_context][:tenant_id]) that discharges INV-1/INV-5/INV-6
+      once, structurally, for every route requirement that follows. Idiom
+      translation required: Zig's threadlocal per-request trace id becomes an
+      explicit conn.assigns field (mirrored into Logger.metadata/1 for log
+      correlation only) -- not a process-dictionary or ETS global. Branch
+      feature/WF02-REQ072-20260822 created off origin/main and pushed (Step 00).
+      Status flipped pending -> in_progress here.
   - req: SCOPE-CHANGE
     event: done
     agent: ISSUE-FIXER

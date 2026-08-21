@@ -1,0 +1,83 @@
+{
+  "handoff_id": "7a3b4cc5-6dbd-46a2-b9ab-2a2eee77fcbc",
+  "run_id": "WF03-ISS0204-20260821",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF03-ISS0204-20260821/step-03-settle-started-at.json",
+  "created_at": "2026-08-21T10:11:20Z",
+  "started_at": null,
+  "completed_at": "2026-08-21T10:18:05Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/agents/shared/HANDOFF_PROTOCOL.md#1-step-3": "3. **Do NOT set `started_at` yourself.** ORCH stamps it immediately before dispatching\n   you. If you write it, it will read later than your own dispatch time — a corruption\n   R-Co's own history shows happens easily if agents \"helpfully\" fill in every field.",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md#3-table-row": "| `started_at` | **ORCH only** | immediately before dispatch | — |"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0204.yaml",
+      "handoffs/WF03-ISS0201-20260821/step-03b-reviewer-gate.json",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/agents/ORCHESTRATOR.md",
+      "docs/agents/instructions/core-directives.md"
+    ],
+    "owned_modules": [
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/agents/ORCHESTRATOR.md",
+      "docs/issues/ISS-0204.yaml"
+    ]
+  },
+  "task": {
+    "description": "Settle ISS-0204: HANDOFF_PROTOCOL.md says `started_at` is ORCH's to write and forbids the receiving agent writing it (section 1 step 3, and the `started_at` row of section 3's table). ORCH's actual spawn prompts routinely ask the receiving agent to claim the handoff and stamp `started_at` from a real clock read, and handoff files on disk show agents having done so. One of the two is dead text. The finding is stated first-hand by the REVIEWER that raised it, in `handoffs/WF03-ISS0201-20260821/step-03b-reviewer-gate.json` `result.issues` (third entry) -- read it there; the issue record `docs/issues/ISS-0204.yaml` carries ORCH's filing of the same. The two clauses whose exact wording is being amended are reproduced in `context.source_text` so you need not hunt for them.\n\nWHAT TO DO, IN ORDER:\n\n1. MEASURE FIRST, before deciding anything. Acceptance criterion 4 requires a real number, and it is also the evidence the decision rests on. Over every JSON file under `handoffs/` other than `registry.json`, determine for each file whether `started_at` was plausibly written by ORCH at dispatch or by the receiving agent on claiming. You choose the discriminator and you state it -- a defensible one is `started_at` strictly later than `created_at` by more than a dispatch-sized gap, cross-checked against a sample of files read by hand, since ORCH stamping at dispatch produces `started_at` at or within seconds of `created_at` while an agent stamping on claim produces a visible gap. Whatever discriminator you pick, say what it cannot distinguish. Report: total files scanned, unparseable count, how many carry a null `started_at`, how many are consistent with ORCH-stamped, how many with agent-stamped. Quote the command you ran. Do NOT assume the answer from the two files ISS-0204 already cites.\n\n2. DECIDE which side changes. This judgement is deliberately left to you -- ORCH is not prescribing the direction, and either direction is acceptable if it survives the criteria below. The two candidates are (a) ORCH becomes the stamper for real: `started_at` is written into the handoff file at dispatch time and the spawn prompt stops asking the agent for it, with the procedure written somewhere a weak model executing a dispatch will actually read it; or (b) section 1 and section 3's table are rewritten to describe what actually happens -- receiving agent stamps `started_at` on claiming -- in which case you must explain why the corruption case section 1 cites does not apply, rather than deleting the rationale silently. Weigh them on what the corpus measurement in step 1 shows, on which side is cheaper to make true every time, and on the weak-model-tolerance constraint in `core-directives.md`. State the reasoning in your `result.summary`, not only the outcome.\n\n3. APPLY the decision. Edit the losing side so that no document still states the rejected rule. That means section 1 step 3 AND the `started_at` row of section 3's table are both consistent with the outcome -- they are two statements of the same rule and leaving one behind is exactly the dead-text defect this issue is about. If direction (a) is chosen and a dispatch-time procedure has to be written down, put it in ONE place and point at it from the others; `HANDOFF_PROTOCOL.md`, `ORCHESTRATOR.md` and `core-directives.md` must not each carry their own copy of the rule (acceptance criterion 5).\n\n4. CLOSE the issue (WF-03 Step 5, taken within this step): set `status: resolved`, `resolved_in_run: WF03-ISS0204-20260821`, `resolved_at:` from a real clock read in `docs/issues/ISS-0204.yaml`, and close GH#395 with `gh issue close 395 --comment \"...\"` naming this run and the issue file.\n\n5. COMMIT `handoffs/`, `docs/` and everything else this step touched. Do NOT write `handoffs/registry.json` -- that is ORCH's, per HANDOFF_PROTOCOL section 4. Do NOT append to `handoffs/orchestrator.log` -- also ORCH's.\n\nCONSTRAINTS:\n- Append-only rules bind here: `handoffs/orchestrator.log` and `handoffs/registry.json` must never shrink, and you are not writing either.\n- This is a docs-only run. Do not touch `lib/`, `priv/repo/migrations/`, `test/` or `web/`.\n- Do not retroactively edit historical handoff files to match whichever rule wins. The corpus is evidence, not something to bring into compliance -- HANDOFF_PROTOCOL section 4.1(b)'s no-backfill rule is the governing precedent for why.\n- Timestamps come from the clock at the moment you write each one, never derived from another entry.\n- Note on this handoff specifically: ORCH left `started_at` null and did NOT ask you to stamp it, precisely so that this run does not itself take a side in the contradiction it is settling. If your decision is direction (a), ORCH will stamp it at the gate dispatch; if (b), stamp it yourself when you claim the next one. Either way, say in `result.summary` what you did with it.",
+    "acceptance_criteria": [
+      "The contradiction is settled in one direction, and the losing side is edited so no document still states the rule that was rejected -- specifically, HANDOFF_PROTOCOL.md section 1 step 3 and the `started_at` row of section 3's table are mutually consistent after the edit",
+      "If ORCH becomes the stamper, ORCHESTRATOR.md or the dispatch procedure says so concretely enough that a weak model does it every time",
+      "If section 1 is rewritten instead, it explains why the corruption case it cites does not apply, rather than dropping the rationale silently",
+      "How many existing handoff files have a `started_at` later than their agent's plausible claim time is measured over `handoffs/` and quoted with the command that produced it, not assumed",
+      "No rule is duplicated across HANDOFF_PROTOCOL.md, ORCHESTRATOR.md and core-directives.md -- one canonical statement, pointers elsewhere",
+      "docs/issues/ISS-0204.yaml carries status: resolved, resolved_in_run and a clock-read resolved_at; GH#395 is closed",
+      "Every JSON file this step writes parses under json.loads, and no file outside docs/ and handoffs/WF03-ISS0204-20260821/ is modified"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Settled ISS-0204 in DIRECTION (a): ORCH stamps `started_at` at dispatch and the spawn prompt stops asking the receiving agent for it. MEASUREMENT FIRST (step 1). Command quoted verbatim in HANDOFF_PROTOCOL.md S1.2 (a python heredoc over glob('handoffs/**/*.json') excluding registry.json, bucketing started_at minus created_at). Results: 606 files scanned, 0 unparseable, 10 with a null `started_at`; of the 596 carrying both timestamps, 468 have a gap of EXACTLY zero seconds (consistent with ORCH writing both from one clock read at file creation), 14 a gap of 1-30s (ambiguous), 89 a gap over 30s (consistent with the receiving agent stamping on claim), and 25 a NEGATIVE gap. DISCRIMINATOR AND ITS LIMITS, stated: an agent must spawn and read its artifacts_in before claiming, so it cannot get back inside the same second, while ORCH's single clock read lands on exactly zero. It CANNOT distinguish (i) an agent that copied `created_at` into `started_at` rather than reading the clock -- that would inflate the zero bucket and is invisible; (ii) a slow ORCH from a fast agent in the 1-30s band, which is why that band is reported as its own bucket and assigned to neither side (WF03-ISS0201-20260821/step-03-riders.json, agent-stamped per that run's own report, sits in it at 11s); (iii) anything about who OUGHT to write the field. Hand cross-check on four files confirmed the reading, and turned up the finding that drove the decision: the 25 negative-gap files are the corruption class S1's old rationale predicted, but with the culprit REVERSED -- 20 of the 25 have a `created_at` on a round :00 minute (e.g. WF02-REQ051-20260818/step-06-doc-updater.json: created_at 23:00:00Z, started_at 19:29:00Z), i.e. an ORCH-fabricated `created_at`, not an agent-written `started_at`. docs/anti-patterns.md's 'Extrapolating handoff timestamps instead of reading the clock (ORCH)' records the same mechanism caught first-hand on another run. DECISION (step 2), on three grounds and not on the headcount alone. (1) Structural: under (a) both timestamps have ONE writer and ONE clock read, so `started_at` < `created_at` becomes impossible rather than merely forbidden -- the 25-file class cannot recur. Direction (b) would have had to keep that ordering rule alive as prose across fourteen receiving roles and would have preserved the class. (2) Weak-model tolerance (core-directives.md): (a) binds the ONE role that already writes the file and already reads the clock for `created_at`, and REMOVES an instruction from every other role's spawn prompt; (b) adds one to each. (3) Corpus: 468 vs 89 is already ~5:1 for the rule that was written, so (a) makes the smaller change to what is on disk. Criterion 3 does not apply (S1 was not rewritten to bless agent-stamping), but the wrong rationale was not left standing: it is replaced by the measured one rather than silently dropped. APPLIED (step 3). New HANDOFF_PROTOCOL.md S1.2 is the SINGLE canonical statement -- three-step mechanical procedure, what the field means (dispatch time, not agent-begin time), the measurement, its limits, and the no-backfill ruling. S1 step 3 and S3's `started_at` table row now BOTH point at S1.2 and state no rule of their own, so the two halves of the contradiction can no longer drift apart. ORCHESTRATOR.md S6 gained a four-line pointer that explicitly does not restate. core-directives.md was deliberately NOT touched (it never stated this rule; its only `started_at` mention is the completed_at-monotonicity line, unchanged). No other file states the rejected rule -- verified by grepping `started_at` across the repo outside handoffs/. THIS HANDOFF'S OWN `started_at`: LEFT NULL, and not stamped by me. Under the rule just adopted the field is ORCH's and is written at dispatch; a value I invented now would be a fabricated dispatch time of exactly the kind the 25 negative-gap files are made of. It is one of the 10 nulls in the measurement above and S1.2 names it as such. Per S1 step 3 as amended I am reporting it as a MINOR issue rather than filling it in; per S4.1(b)'s no-backfill precedent no historical handoff was altered either, and the corpus was left as evidence. NOT DONE, deliberately: no docs/requirements.yaml flip and no requirement_status volume append -- this run carries no requirement_ids and settles a protocol document, so there is no requirement whose status could change. handoffs/registry.json and handoffs/orchestrator.log were NOT written and NOT committed: both had pre-existing uncommitted ORCH edits in the tree, checked append-only via `git diff --numstat` (6/0 and 21/0, zero deletions) and left for ORCH.",
+    "artifacts_out": [
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/agents/ORCHESTRATOR.md",
+      "docs/issues/ISS-0204.yaml",
+      "handoffs/WF03-ISS0204-20260821/step-03-settle-started-at.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "This handoff reached me with `started_at: null`, which under the rule adopted in this step (HANDOFF_PROTOCOL.md S1.2) is ORCH's field to write at dispatch. Reported rather than filled in, exactly as amended S1 step 3 now instructs. ORCH deliberately left it null so the run would not prejudge the question, so this is expected here -- flagged so the next dispatch stamps it.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "9 further handoff files besides this one carry a null `started_at`, and 25 carry a `started_at` earlier than their own `created_at` (20 of those with a round :00-minute created_at). Not repaired: the corpus is evidence and S4.1(b)'s no-backfill rule governs. Recorded so a future linter (ISS-0191) knows these predate the rule and are not new violations of it.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "main",
+      "commit_sha_list": [
+        "ef62d4b13427d752aed4553eee1cbf9a479ddea0"
+      ],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH: registry.json + orchestrator.log are yours and still uncommitted in the tree; close out the run and push. Note that S1.2 now binds your own next dispatch -- stamp `started_at` at handoff creation from the same clock read as `created_at`, and drop the 'stamp started_at' line from the spawn prompt. GH#395 is already closed."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

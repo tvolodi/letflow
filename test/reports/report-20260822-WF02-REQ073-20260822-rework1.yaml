@@ -1,0 +1,107 @@
+report_id: report-20260822-WF02-REQ073-20260822-rework1
+agent: TEST-RUNNER
+requirement: REQ-073
+workflow_step: WF-02 Step 4 (re-run after AC5 test-rework, rework_count 1)
+handoff: handoffs/WF02-REQ073-20260822/step-04-test-runner-rework1.json
+branch: feature/WF02-REQ073-20260822
+commit: 695d43a
+date: 2026-08-22
+command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+
+context: >
+  Re-run of the full suite after RELEASE-VALIDATOR's Step 5 FAIL on AC5 (missing
+  full-key-set assertion), ELIXIR-DEV's rework adding full-key-set assertions to
+  identity_test.exs (commits 9a7f95f/e6280fd), and TEST-DESIGN-VALIDATOR's re-review
+  PASS at step-03b-test-design-validator-rework1.json. This run re-confirms nothing
+  regressed at the full-suite level.
+
+toolchain:
+  platform: "Windows 11"
+
+environment:
+  postgres: >
+    letflow-postgres-1, confirmed via `docker compose up -d` -- reported already
+    Running, not freshly started this run.
+  db_setup: >
+    Each test_parallel.sh partition's own `mix test` invocation performs
+    ecto.create/ecto.migrate --quiet automatically via the `test` alias -- no separate
+    DB-setup step taken here.
+  parallel_n: >
+    Set explicitly via TEST_PARALLEL_N=4 per dispatch instructions (ISS-0219 known-good
+    value for this host). Not left to auto-derivation.
+
+# ---------------------------------------------------------------------------
+# Run
+# ---------------------------------------------------------------------------
+
+run:
+  command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+  result: >
+    test_parallel: N=4 (source: env override)
+    partition 1: 329 tests, 0 properties, 0 failures, exit 0
+    partition 2: 344 tests, 0 properties, 0 failures, exit 0
+    partition 3: 374 tests, 3 properties, 0 failures, exit 0
+    partition 4: 430 tests, 2 properties, 0 failures, exit 0
+    combined: 1477 tests, 5 properties, 0 failures (1482/1482 passed)
+  exit_code: 0
+  failures_found: 0
+
+verdict: PASS
+
+summary_line: >
+  1482/1482 passed (1477 tests + 5 properties combined), 0 failures. Identical combined
+  total to the pre-rework Step 4 run (738e809's report) -- no regression introduced by
+  the AC5 test-assertion rework.
+
+# ---------------------------------------------------------------------------
+# REQ-073 own tests (test/letflow/routers/identity_test.exs, now 23 tests,
+# strengthened AC5 full-key-set assertions)
+# ---------------------------------------------------------------------------
+
+req073_tests:
+  verification_method: >
+    Grepped partition-4.log (where Letflow.Routers.IdentityTest ran) for exact
+    `test_module=Letflow.Routers.IdentityTest test_name=:"..."` lines, deduplicated:
+    `grep -o 'test_module=Letflow.Routers.IdentityTest test_name=:"[^"]*"' | sort -u | wc -l`
+    -> 23 unique test names, all inside partition-4.log, 0 failures attributed to this
+    module anywhere in the combined 0-failure total. Matches TEST-DESIGN-VALIDATOR's
+    independent 23/23 re-run (step-03b-test-design-validator-rework1.json), which also
+    ran a mutation probe (stray 9th key) confirming the new full-key-set assertions
+    actually discriminate.
+  result: "PASS -- all 23 identity_test.exs tests (with strengthened AC5 assertions) passed inside the full run, 0 failures."
+
+# ---------------------------------------------------------------------------
+# Scope check
+# ---------------------------------------------------------------------------
+
+branch_diff:
+  command: "git diff --name-only main...HEAD"
+  files:
+    - docs/requirements.yaml
+    - docs/status/requirement_status.index.yaml
+    - docs/status/requirement_status.v2.yaml
+    - handoffs/WF02-REQ073-20260822/* # this run's own handoffs, including rework files
+    - handoffs/orchestrator.log
+    - handoffs/registry.json
+    - lib/letflow/api/authorization.ex
+    - lib/letflow/design/req073-identity-user-routes.md
+    - lib/letflow/identity.ex
+    - lib/letflow/identity/user.ex
+    - lib/letflow/routers/identity.ex
+    - test/letflow/routers/identity_test.exs
+    - test/reports/report-20260822-WF02-REQ073-20260822.yaml
+    - test/reports/report-20260822-WF02-REQ073-20260822-rework1.yaml
+  note: >
+    All-green run -- no failures occurred, so none of the three legal attribution
+    routes (absent from branch diff / reproduces at merge-base / demonstrated
+    mechanism with a measurement) needed to be invoked.
+
+artifacts_out:
+  - test/reports/report-20260822-WF02-REQ073-20260822-rework1.yaml
+  - handoffs/WF02-REQ073-20260822/step-04-test-runner-rework1.json
+
+next_action: >
+  PASS -- full suite green, 0 failures, no regression from the AC5 rework, REQ-073's
+  own 23-test file (with strengthened AC5 assertions) verified passing inside the run.
+  Route to RELEASE-VALIDATOR (Step 5 re-run), which independently re-runs the suite
+  rather than trusting this report.

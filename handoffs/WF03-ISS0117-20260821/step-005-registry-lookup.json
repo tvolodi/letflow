@@ -1,0 +1,46 @@
+{
+  "handoff_id": "7c5682ab-2842-4f83-8dd6-1cefea21e1b9",
+  "run_id": "WF03-ISS0117-20260821",
+  "workflow_id": "WF-03",
+  "step": "0.5",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0117-20260821/step-005-registry-lookup.json",
+  "created_at": "2026-08-21T06:49:00Z",
+  "started_at": "2026-08-21T06:49:50Z",
+  "completed_at": "2026-08-21T06:52:29Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0117.yaml",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 (registry lookup) for ISS-0117: 'HANDOFF_PROTOCOL.md defines no recovery path for a step whose agent dies AFTER acting but BEFORE writing its result block'. Queue task 185, GH#372, severity MINOR, status open.\n\nSearch docs/issues/*.yaml for any prior entry — resolved or open — describing (a) an agent terminating mid-step, (b) a handoff left IN_PROGRESS on disk while its work actually completed, (c) a result/status/timestamp block written by someone other than the acting agent, or (d) any reconstruction-vs-attestation distinction in the audit trail. The nearest known relative is the `orch_timestamp_correction` precedent in handoffs/WF02-REQ023-20260816/step-06-doc-updater.json and its docs/anti-patterns.md entry ('Extrapolating handoff timestamps instead of reading the clock') — establish whether that was ever filed as an ISS record, and whether any issue already covers this class.\n\nPrefer targeted grep over reading 100+ issue files in full (core-directives.md, 'Load Scoped Context, Not Whole Files').\n\nIf a clear match exists, cite it by id and state whether this is a RECURRENCE of a root cause a prior fix claimed to remove — if it is recurring, flag severity at MAJOR or above regardless of ISS-0117's filed MINOR (WF-03 Step 0.5 rule 2).\n\nDo NOT diagnose or design here — that is Step 1, a separate handoff you also hold. This step's only output is the prior-art finding.",
+    "acceptance_criteria": [
+      "docs/issues/ was searched with at least two distinct patterns (e.g. an agent-death/termination pattern and a handoff-completion/reconstruction pattern); the exact commands run are quoted in result.summary",
+      "A verdict is stated explicitly: either a matching prior issue is cited by id, or 'no prior match' is stated as a measured result rather than left implied (nil-result clause — 'looked and found none' must be distinguishable from 'never looked')",
+      "If a match is found, result.summary states whether the same root cause is recurring and adjusts severity accordingly",
+      "No file outside this handoff is modified by this step"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "VERDICT: NO PRIOR MATCH. Measured, not inferred: docs/issues/ holds 115 *.yaml files (`ls docs/issues/*.yaml | wc -l` -> 115) and none of them describes an agent terminating mid-step, a handoff left IN_PROGRESS on disk while its work completed, a result block authored by a non-acting agent, or a reconstruction-vs-attestation distinction. This is therefore NOT a recurrence, and severity stays as filed at MINOR (WF-03 Step 0.5 rule 2 not triggered).\n\nCOMMANDS RUN (all from repo root, Git Bash):\n  P1 (agent-death/termination): `grep -ril -E \"terminat|died|agent death|crash|API error|Connection lost|interrupt\" docs/issues/` -> 17 hits: ISS-0019, 0046, 0048, 0059, 0060, 0062, 0064, 0073, 0078, 0079, 0085, 0086, 0087, 0088, 0107, 0110, 0117.\n  P2 (reconstruction / non-attested result / stale handoff): `grep -ril -E \"reconstruct|orch_reconstruction|orch_timestamp_correction|attest|IN_PROGRESS|stale handoff|abandoned\" docs/issues/` -> 11 hits: ISS-0010, 0031, 0065, 0067, 0073, 0075, 0076, 0078, 0086, 0106, 0117.\n  P3 (protocol-doc scope): `grep -ril -E \"HANDOFF_PROTOCOL\" docs/issues/` -> 3 hits: ISS-0010, ISS-0021, ISS-0117.\n  P4 (timestamp class): `grep -ril -E \"timestamp\" docs/issues/` -> 6 hits: ISS-0016, 0058, 0061, 0086, 0109, 0117.\n  P5 (targeted phrases): `grep -rn -i -E \"result block|dies mid|mid-step|died|agent dies|never wrote|before writing|interrupted session|resum\" docs/issues/` (ISS-0117 excluded) -> hits in ISS-0012, 0014, 0024, 0033, 0046, 0048, 0058, 0067, 0087, 0110.\n  P6 (the named precedent, as an ISS record): `grep -rn -E \"orch_timestamp_correction|[Ee]xtrapolat\" docs/issues/` -> exactly ONE line, docs/issues/ISS-0117.yaml:38, which is ISS-0117 citing it.\n\nTRIAGE OF EVERY CANDIDATE (headers read for ISS-0010, 0016, 0021, 0031, 0046, 0058, 0059, 0061, 0065, 0067, 0073, 0075, 0076, 0078, 0086, 0106, 0107, 0110; ISS-0033 and ISS-0046 read in full). P1's hits are all code/test-domain matches on the words 'crash'/'died'/'interrupt' inside Elixir defects (ISS-0048 'a test process died abnormally', ISS-0086 'RAISES CaseClauseError', ISS-0107 orphaned BEAM, ISS-0110 reaper) -- none is about an AGENT terminating. P2's hits match 'reconstruct' in the R-Co-port sense (ISS-0075/0076) or 'IN_PROGRESS' incidentally; none concerns handoff-result authorship.\n\nSPECIFIC ANSWER TO THE HANDOFF'S NAMED QUESTION -- 'establish whether the orch_timestamp_correction precedent was ever filed as an ISS record': NO, measured via P6 above. It exists only as (a) the field itself in handoff files and (b) the docs/anti-patterns.md entry 'Extrapolating handoff timestamps instead of reading the clock' (anti-patterns.md:85-103). No ISS-NNNN was ever opened for it.\n\nNEAREST RELATIVES, none a match, each cited so Step 1 and CODE-DESIGNER need not re-search:\n  - ISS-0033 (resolved, MINOR) -- 'handoffs/registry.json entry for WF03-ISS0030-20260817 stuck at BLOCKED despite the run having merged and closed out'. Closest ADJACENT prior art: it is about how registry.json records an interrupted-then-resumed run. Its resolution is load-bearing for ISS-0117 question 4: the resume was recorded as a SEPARATE APPENDED entry with run_id 'WF03-ISS0030-20260817-resume', status COMPLETED, and the original BLOCKED entry was deliberately left untouched because registry.json is append-only. Different root cause (ISS-0033 turned out to be a false positive caused by a too-shallow grep), so not a recurrence -- but it means a convention for recording interrupted runs in registry.json ALREADY EXISTS in practice and is undocumented, exactly like the result-block convention ISS-0117 is about.\n  - ISS-0046 (resolved, MAJOR) -- discovered_in_run 'WF02-REQ043-20260818 (Step Final, resuming an interrupted prior session)', and its description states the interrupted session 'left the local feature branch mid-rebase against main'. This is a real, recorded instance of the DIED-MID-ACTION case ISS-0117 question 3 asks about, even though ISS-0046 itself is a compile-warning defect and not about the interruption.\n  - ISS-0021 (resolved, MINOR) and ISS-0010 (resolved, MINOR) -- the only two prior issues whose affected surface is HANDOFF_PROTOCOL.md itself. ISS-0021 is the who-owns-registry.json contradiction, ISS-0010 the never-created registry. Same document, different root cause; neither touches result-block authorship. Same FAMILY (HANDOFF_PROTOCOL.md under-specifies an ownership question and two agents then disagree in practice), which is context for how heavy a fix to write, but not the same defect.\n\nNo file outside this handoff was modified by this step.",
+    "artifacts_out": ["handoffs/WF03-ISS0117-20260821/step-005-registry-lookup.json"],
+    "issues": [
+      {"severity": "MINOR", "description": "Incidental finding for ORCH to file (ISSUE-FIXER does not allocate ids): the `orch_timestamp_correction` ad-hoc field has been used TWICE, not once as ISS-0117 states -- handoffs/WF02-REQ023-20260816/step-06-doc-updater.json:88 and handoffs/WF02-REQ037-20260817/step-02c-rework1-security-reviewer.json:12 (`grep -rn -E \"orch_timestamp_correction\" --include=*.md --include=*.json --include=*.yaml .`). Neither was ever filed as an ISS record (P6 above). An undocumented convention that has already recurred once without becoming a rule is direct evidence bearing on ISS-0117 question 2; carried into Step 1 as evidence rather than left here.", "affected_requirement": null}
+    ],
+    "next_action": "Proceed to WF-03 Step 1 (handoffs/WF03-ISS0117-20260821/step-01-diagnose.json), which ISSUE-FIXER also holds. No severity escalation: not a recurrence, ISS-0117 stays MINOR."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

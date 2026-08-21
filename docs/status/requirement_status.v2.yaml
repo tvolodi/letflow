@@ -617,3 +617,24 @@ history:
       for Context/tenant-scoping/trace-id): no hit needing an update -- no
       route calls this module directly yet, so there is no externally-visible
       surface to document until the first S4 route requirement lands.
+  - req: REQ-073
+    event: started
+    agent: ORCH
+    at: "2026-08-21T22:18:09Z"
+    note: >
+      Picking up queue task 140 (GH#280) via get_next_task, immediately following
+      REQ-072's close. Dependency REQ-072 (id 139) confirmed done on main. First of
+      four split requirements (REQ-073..076) porting identity.zig's 23-handler user-
+      management group (1,868 lines) -- this one takes 5 handlers:
+      handleCreateUser/List/Get/Patch/UpdateUserStatus. Domain logic already exists
+      (Letflow.Identity, REQ-015..021/063) and is NOT rebuilt; this requirement wires
+      thin route handlers through it. Every response goes through REQ-066's
+      builders, every list through REQ-067's pagination, every body through
+      REQ-068's validation, every action through REQ-069's permission check, every
+      query through REQ-072's scoped prefix -- this is the first requirement to
+      actually exercise that whole chain end-to-end. Security-critical: INV-1
+      (tenant isolation), INV-2 (no password/token/secret material in serialized
+      responses, explicit field allowlist not wholesale struct encoding), INV-5
+      (cross-tenant 404 via REQ-072's mechanism). Branch
+      feature/WF02-REQ073-20260822 created off origin/main and pushed (Step 00).
+      Status flipped pending -> in_progress here.

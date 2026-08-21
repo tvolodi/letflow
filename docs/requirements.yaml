@@ -4119,7 +4119,7 @@ requirements:
   - id: REQ-073
     title: Identity routes 1/4 -- user CRUD and status (identity.zig handleCreateUser/List/Get/Patch/UpdateUserStatus)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S4
     impl_order: 140  # letflow-queue task id
     description: >

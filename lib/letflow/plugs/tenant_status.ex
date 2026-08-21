@@ -21,10 +21,10 @@ defmodule Letflow.Plugs.TenantStatus do
   (OQ-14) — the design states this as a recommendation, not a mandate;
   REVIEWER should confirm.
 
-  **Not mounted in front of any route today** — see
-  `Letflow.Plugs.AuthPipeline`'s moduledoc for the full reasoning (none of
-  `Letflow.Router`'s 3 existing routes are tenant-scoped). Left available
-  for S4 to mount after `Letflow.Plugs.AuthPipeline` in the same pipeline.
+  **Mounted since REQ-071**, immediately after `Letflow.Plugs.AuthPipeline` in
+  `Letflow.Plugs.ApiPipeline`'s plug chain, matching this module's own calling
+  convention above — every `/api/v1/*` request has `conn.assigns[:auth_context]`
+  populated by `AuthPipeline` before this plug runs.
   """
 
   @behaviour Plug

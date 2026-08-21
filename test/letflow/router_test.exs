@@ -186,4 +186,70 @@ defmodule Letflow.RouterTest do
       assert String.contains?(source, "2026-08-20")
     end
   end
+
+  # ── REQ-071 tests ─────────────────────────────────────────────────────────
+  #
+  # Named (not anonymous) telemetry handler function, matching
+  # test/letflow/plugs/tenant_status_test.exs's own ISS-0031 (GH#90) precedent —
+  # [:letflow, :repo, :query] is a single node-global event name, so the handler
+  # must filter to only this test's own process (self() == test_pid) rather than
+  # trusting an unfiltered send/2, or a concurrently running async test's real
+  # query would flake the `refute_received` assertion below.
+  def handle_query_telemetry(_event, _measurements, _metadata, test_pid) do
+    if self() == test_pid do
+      send(test_pid, :query_fired)
+    end
+  end
+
+  describe "REQ-071 AC1: no Authorization header returns 401, zero Repo queries" do
+    test "POST /api/v1/identity/anything with no Authorization header returns 401" do
+      test_pid = self()
+      handler_id = {:router_test, :req071_ac1_telemetry, make_ref()}
+
+      :telemetry.attach(
+        handler_id,
+        [:letflow, :repo, :query],
+        &__MODULE__.handle_query_telemetry/4,
+        test_pid
+      )
+
+      conn =
+        try do
+          conn(:post, "/api/v1/identity/anything", Jason.encode!(%{}))
+          |> put_req_header("content-type", "application/json")
+          |> call()
+        after
+          :telemetry.detach(handler_id)
+        end
+
+      assert conn.status == 401
+      assert Jason.decode!(conn.resp_body)["error"] == "unauthorized"
+
+      refute_received :query_fired,
+                      "expected zero Repo queries for a request rejected at AuthPipeline"
+    end
+  end
+
+  describe "REQ-071 AC3: /health survives the OIDC provider worker being down" do
+    test "GET /health returns 200 while Letflow.Oidc.DefaultProvider is dead" do
+      pid = Process.whereis(Letflow.Oidc.DefaultProvider)
+      assert is_pid(pid)
+      ref = Process.monitor(pid)
+      Process.exit(pid, :kill)
+      assert_receive {:DOWN, ^ref, :process, ^pid, _reason}, 1_000
+      refute Process.alive?(pid)
+
+      conn = conn(:get, "/health") |> call()
+
+      assert conn.status == 200
+      assert Jason.decode!(conn.resp_body) == %{"status" => "ok"}
+
+      # Letflow.Supervisor's :one_for_one strategy (lib/letflow/application.ex:32)
+      # restarts the killed Oidcc.ProviderConfiguration.Worker automatically — a new
+      # process gets registered under the same Letflow.Oidc.DefaultProvider name, so a
+      # later test resolving this name again does not observe a permanently-dead
+      # provider. Confirmed by reading application.ex directly rather than asserted
+      # here (asserting on the exact restart timing would itself be flaky).
+    end
+  end
 end

@@ -20,17 +20,13 @@ defmodule Letflow.Plugs.AuthPipeline do
   A request with a missing/malformed bearer token is rejected with 401
   before any DB or claim-mapping work runs (step 1's short-circuit).
 
-  **Not mounted in front of any route today.** `Letflow.Router` currently
-  serves only `GET /health` (the earlier `POST /instances`,
-  `POST /instances/:id/actions`, `GET /instances/:id` pilot-slice routes
-  this note used to reference were removed as of REQ-046, alongside
-  `Letflow.ProcessInstance`'s own retirement — see
-  `lib/letflow/design/req046-process-instance-retirement.md` §6a); none of
-  today's routes are tenant-scoped or have tenant/user context to use even
-  if this plug ran ahead of them. This module is built, compiled, and
-  directly tested — left available for S4 (the first tenant-scoped route)
-  to add via `plug Letflow.Plugs.AuthPipeline` ahead of `:match` in
-  `router.ex`.
+  **Mounted since REQ-071.** `Letflow.Plugs.ApiPipeline` (the shared middleware chain for
+  every `/api/v1/*` sub-router, forwarded to from `Letflow.Router`) declares
+  `plug Letflow.Plugs.AuthPipeline` immediately after `Plug.Parsers` and immediately
+  before `Letflow.Plugs.TenantStatus`, ahead of its own `:match`/`:dispatch` — so every
+  request under `/api/v1` runs through this plug first, before reaching any of
+  REQ-070's sub-routers. `GET /health` is declared directly on `Letflow.Router`, before
+  the `/api/v1` forward, and never enters this chain.
 
   See `lib/letflow/design/req021-auth-plug-pipeline.md` for the full design.
   """

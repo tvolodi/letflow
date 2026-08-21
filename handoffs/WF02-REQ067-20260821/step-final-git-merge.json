@@ -1,0 +1,60 @@
+{
+  "handoff_id": "c4d6e8f0-2a4b-4c6d-8e0f-5a7b9c1d3e5f",
+  "run_id": "WF02-REQ067-20260821",
+  "workflow_id": "WF-02",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ067-20260821/step-final-git-merge.json",
+  "created_at": "2026-08-21T15:49:02Z",
+  "started_at": "2026-08-21T15:49:02Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-067"],
+    "requirement_text": {},
+    "related_handoff_ids": ["a2b4c6d8-e0f2-4a6b-8c1d-3e5f7a9b1c3d"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ067-20260821/step-06-doc-updater.json",
+      "test/reports/report-20260821-WF02-REQ067-20260821.yaml",
+      "docs/agents/protocols/GIT_MERGE.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/api/pagination.ex",
+      "lib/letflow/design/api-pagination.md",
+      "test/letflow/api/pagination_test.exs",
+      "test/specs/REQ-067.md",
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v2.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ]
+  },
+  "task": {
+    "description": "Step Final: merge `feature/WF02-REQ067-20260821` to `main` per `GIT_MERGE.md`. All gates PASSED: CODE-DESIGN-VALIDATOR (c11ff38), SECURITY-REVIEWER (d8046a4), REVIEWER (31c268d), TEST-DESIGN-VALIDATOR (d243905), TEST-RUNNER full suite PARTIAL with 3 pre-existing failures forwarded as ISS-0217 (not attributable to this branch, does not block per WF-02's own rule), RELEASE-VALIDATOR independently PASSED all six acceptance criteria (68f91b3), DOC-UPDATER flipped REQ-067 to done (6df6e8e). Follow GIT_MERGE.md's numbered procedure exactly, including the mandatory post-rebase re-check of conflict markers and step 6's force-with-lease rule if a plain push is rejected.\n\nThe PR body's `mix test` line must state the real full-suite counts (1330 passed, 3 failed, 0 attributable to this branch, attribution routes 1+3, forwarded as ISS-0217) per `core-directives.md`'s rule -- not a bare PASS. List ISS-0217 under a 'Forwarded, not fixed here' note per WF-02 Step Final's own convention.\n\nORCH (not you) calls release_lock against queue task 134 once this handoff returns PASS -- that is ORCH's own responsibility per TASK_QUEUE.md, not part of your task here.\n\nComplete your work synchronously within this turn per `core-directives.md`'s rule.",
+    "acceptance_criteria": [
+      "git diff --name-only --diff-filter=U | wc -l is 0 both immediately after any conflict resolution AND again as a final check before pushing",
+      "The PR body's mix test line states the real full-suite counts (1330/3/0 attributable) with attribution routes named, and lists ISS-0217 as forwarded not fixed here",
+      "gh pr merge --squash --delete-branch succeeds",
+      "Local cleanup completes and all five GIT_MERGE.md acceptance criteria are verified, and the merge commit sha is reported"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ067-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ067-20260821",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

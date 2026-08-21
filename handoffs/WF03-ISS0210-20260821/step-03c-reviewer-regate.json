@@ -1,0 +1,60 @@
+{
+  "handoff_id": "81837309-4de9-4ac7-821c-c9c90474fc3b",
+  "run_id": "WF03-ISS0210-20260821",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0210-20260821/step-03c-reviewer-regate.json",
+  "created_at": "2026-08-21T11:35:27Z",
+  "started_at": "2026-08-21T11:35:27Z",
+  "completed_at": "2026-08-21T11:36:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["6533a147-3c89-419d-a98c-2b3cae6b62f5"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0210-20260821/step-03-git-merge-push-gap.json",
+      "handoffs/WF03-ISS0210-20260821/step-03b-reviewer-gate.json",
+      "docs/agents/protocols/GIT_MERGE.md",
+      "docs/issues/ISS-0210.yaml",
+      "handoffs/WF03-ISS0200-20260821/step-final-git-merge.json"
+    ],
+    "owned_modules": [
+      "docs/agents/protocols/GIT_MERGE.md",
+      "docs/issues/ISS-0210.yaml"
+    ]
+  },
+  "task": {
+    "description": "Re-gate on WF03-ISS0210-20260821, scope deliberately narrow and set by your own prior 03b FAIL: everything you PASSED there (the force-with-lease rule text, the union-driver decision, the ORCHESTRATOR.md pointer) is settled and not to be re-litigated. The ONE thing to re-check is whether the rework actually fixed AC2 -- read your own FAIL reasoning in `handoffs/WF03-ISS0210-20260821/step-03b-reviewer-gate.json` result first, then check the rework commit `6954304`.\n\nDOC-UPDATER reworded the two sentences you flagged. Read them where they now stand: the parenthetical in `GIT_MERGE.md` step 6, and the `resolution_note` in `docs/issues/ISS-0210.yaml`. Confirm, against `handoffs/WF03-ISS0200-20260821/step-final-git-merge.json` (open it again, don't rely on your prior read from memory) that the new wording states the deadlock was ANTICIPATED and AVOIDED -- never observed or hit -- and that it correctly attributes the avoidance to the agent resetting to its published tip and merging origin/main rather than force-pushing. Also confirm via `git show 6954304 --stat` that ONLY these two sentences changed -- no re-opening of the rule text, the union-driver decision, or the ORCHESTRATOR.md pointer, per your own prior PASS on those.\n\nSeparately, and worth noting for the record: the handoff's own top-level `status` field was left `IN_PROGRESS` by the completing agent, because ORCH's rework dispatch text mistakenly repeated the original claim-step instruction (\"claim by setting status to IN_PROGRESS only\") into a rework note where it did not belong -- the agent's `result.status` was correctly `PASS` and everything else was correctly filled. ORCH corrected the top-level `status` to `COMPLETED` directly rather than reworking the agent again over ORCH's own dispatch-text error. Confirm this reasoning is sound (a mechanical bookkeeping field, not new attested content) rather than something that should have gone back to the agent -- if you disagree, say so as a MINOR against ORCH, not as a reason to FAIL this run.\n\nVERDICT: PASS or FAIL against the two acceptance criteria below. Commit your own handoff file. Do not write `handoffs/registry.json` or `handoffs/orchestrator.log`.",
+    "acceptance_criteria": [
+      "The reworded sentences in GIT_MERGE.md and ISS-0210.yaml are confirmed, against handoffs/WF03-ISS0200-20260821/step-final-git-merge.json re-read directly, to state the deadlock was anticipated-and-avoided rather than observed, with the avoidance mechanism (reset-and-merge, not force-push) correctly attributed",
+      "git show 6954304 --stat confirms only the two sentences changed and nothing else was re-opened"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REVIEWER narrow re-gate on WF03-ISS0210-20260821, rework commit 6954304. PASS on both acceptance criteria.\n\nAC1 -- Re-opened handoffs/WF03-ISS0200-20260821/step-final-git-merge.json directly (not from memory). It confirms: every push in that run was a plain fast-forward (git_evidence.push_status: 'pushed, fast-forward only ... no force-push and no --force-with-lease issued at any point'); the branch was rebased twice as origin/main moved twice; rather than push into a rejection, the agent reset to its published tip and merged origin/main in, then proved the resulting tree byte-identical to the discarded rebase's tree. No non-fast-forward rejection was ever observed in that run -- it was a real structural risk that was anticipated (ORCH's mid-step correction authorizing --force-with-lease) and then avoided by the reset+merge route, never hit.\n\nAgainst that source, git show 6954304 -- docs/agents/protocols/GIT_MERGE.md docs/issues/ISS-0210.yaml shows both flagged sentences reworded correctly:\n  - GIT_MERGE.md step 6's parenthetical now reads: '...anticipated exactly this deadlock after its branch was rebased twice, and its dispatch was corrected mid-step to authorize --force-with-lease on its own branch -- but the agent avoided ever needing the push by resetting to its published tip and merging origin/main in instead, so the rejection itself was never actually observed there.'\n  - ISS-0210.yaml's resolution_note now reads: '...whose dispatch was corrected mid-step to anticipate exactly this deadlock -- though the agent avoided ever needing the push by resetting to its published tip and merging origin/main in instead, so the rejection itself was never actually observed there.'\nBoth now correctly state anticipated-and-avoided (never observed), and both correctly attribute the avoidance to the reset-and-merge-origin/main route rather than to a force-push. Neither oversells the structural argument (which stands on git mechanics alone and needs no empirical proof) as something that was witnessed.\n\nAC2 -- git show 6954304 --stat: three files changed -- docs/agents/protocols/GIT_MERGE.md (+7/-3), docs/issues/ISS-0210.yaml (+6/-3), and this run's own handoffs/WF03-ISS0210-20260821/step-03-git-merge-push-gap.json (+9/-9, this run's bookkeeping, not new attested content). No re-opening of the force-with-lease rule text, the union-driver decision, or the ORCHESTRATOR.md pointer sentence -- ORCHESTRATOR.md does not appear in this commit at all, and the diff hunks in GIT_MERGE.md and ISS-0210.yaml touch only the two flagged sentences (plus the mechanical line-wrap of the following unchanged sentence in ISS-0210.yaml's YAML block-scalar, not a content change).\n\nSeparately, on the top-level status bookkeeping note: agree the reasoning is sound. ORCH's dispatch text mistakenly repeating the claim-step instruction into a rework note is ORCH's own dispatch-text error, and correcting a mechanical bookkeeping field (top-level status) after result.status was already correctly PASS is not new attested content requiring a rework round-trip. This is a MINOR against ORCH's dispatch-authoring, not a reason to FAIL this run.\n\nVERDICT: PASS on both AC1 and AC2. No outstanding issues from this narrow re-gate.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Against ORCH, not this artefact: the step-03c rework dispatch text repeated the original claim-step instruction ('claim by setting status to IN_PROGRESS only') into what was meant to be a rework note, causing the completing agent to leave the handoff's top-level status at IN_PROGRESS despite a correctly-filled result.status: PASS. ORCH's mechanical correction of the top-level status field afterward (without a rework round-trip) was the right call -- it is bookkeeping, not new attested content -- but the dispatch-text duplication itself is worth ORCH tightening so future rework dispatches don't recycle claim-step language."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": ["6954304"],
+      "remote_branch": null,
+      "push_status": "skipped -- docs-only gate, no feature branch under this run",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH may proceed: AC2 (the last open gap from step-03b) is fixed and confirmed. Queue task / issue closure already recorded in ISS-0210.yaml; no further rework needed on this run."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

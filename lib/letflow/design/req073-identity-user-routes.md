@@ -184,13 +184,28 @@ R-Co behavior.
    literally be a bare map — same pattern `Letflow.Api.Error`'s own
    `@derive {Jason.Encoder, ...}` struct establishes elsewhere in this codebase).
 
-Sort order: by `inserted_at` ascending, then `id` ascending as a tiebreaker (matches
-`build_raw_cursor_timestamp_key/4`'s `<prefix><ts>:<key>:<created_at>` shape, using
-`inserted_at` as both the sort timestamp and the tiebreaker source — no second
-distinct timestamp field exists on `users`, so cursor tiebreak logic for two rows
-sharing the same `inserted_at` microsecond value falls to `id` string comparison,
-not a created-at-of-the-cursor-itself field the way `build_raw_cursor_timestamp_key/4`
-is otherwise shaped for. **Open question OQ-1** — see §7.)
+Sort order: by `inserted_at` ascending, then `id` ascending as a tiebreaker.
+
+**Updated 2026-08-22 (REVIEWER, Step 2d) to match shipped behavior — this
+paragraph originally specified putting `inserted_at` itself into
+`build_raw_cursor_timestamp_key/4`'s `sort_timestamp_us` slot, i.e. the field
+`decode_cursor/4` reads (at the fixed offset right after the `"U:"` prefix) for
+its 24h mint-freshness check. ELIXIR-DEV correctly did not implement it that
+way: `decode_cursor/4`'s expiry check means "how long ago was this cursor
+minted," not "how long ago was this row inserted," and a user row older than
+24h would make every cursor built from it appear pre-expired the instant it's
+minted — a real bug, not a stylistic choice. The shipped
+`Letflow.Identity.list_users/2` (private `build_next_cursor/1` /
+`decode_users_cursor/1`) instead puts the actual mint time
+(`System.system_time(:microsecond)`) in the `sort_timestamp_us` slot, and
+carries `inserted_at`/`id` — this endpoint's real sort key and tiebreaker — in
+the payload's `key`/`cursor_created_at_us` slots purely for their textual
+position, not those parameters' literal names. SECURITY-REVIEWER confirmed
+this weakens no security property (`handoffs/WF02-REQ073-20260822/step-02c-security-reviewer.json`).
+This is the version to build against for any future endpoint copying this
+cursor shape — do not resurrect the original inserted_at-as-sort_timestamp_us
+reading. **Open question OQ-1** (tiebreak field choice, `id` vs. a distinct
+timestamp) is unaffected by this correction and still stands — see §7.)
 
 **Deliberate divergence from R-Co, stated explicitly (not silent):** R-Co's
 `ListUsersQueryParams` is `page`/`page_size` (offset pagination). Letflow's AC1

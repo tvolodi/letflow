@@ -1,0 +1,68 @@
+{
+  "handoff_id": "a91ba78a-0230-4a61-8f2d-0dfecf9ebdda",
+  "run_id": "WF03-ISS0200-20260821",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0200-20260821/step-05-close-issue.json",
+  "created_at": "2026-08-21T10:32:15Z",
+  "started_at": "2026-08-21T10:32:15Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0200-20260821/step-03c-reviewer-regate.json",
+      "handoffs/WF03-ISS0200-20260821/step-005-01-diagnose.json",
+      "handoffs/WF03-ISS0200-20260821/step-03b-reviewer-gate.json",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/issues/ISS-0200.yaml",
+      "docs/issues/ISS-0202.yaml",
+      "docs/issues/ISS-0109.yaml"
+    ],
+    "owned_modules": [
+      "docs/issues/ISS-0200.yaml",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 5 -- close ISS-0200. You produced this run's diagnosis at Step 1; the closing REVIEWER gate PASSED both your NO-CHANGE verdict and the edit recording it, after one rework. Read handoffs/WF03-ISS0200-20260821/step-03c-reviewer-regate.json before starting -- it PASSES the run and then names three MINORs, two of which it says must be acted on BEFORE this step writes anything. They are not restated here.\n\nISS-0200 BECOMES THE FIRST RECORD IN THIS PROJECT EVER TO CARRY `status: no_defect`. Everything you write is the precedent every later no-defect record copies. A first use that does not meet its own new bar would be the worst possible precedent for it -- DOC-UPDATER flagged exactly this at Step 3 and it is the main risk of this step.\n\n(1) WRITE docs/issues/ISS-0200.yaml TO THE BAR ITSELF. The four-item evidence bar is in docs/agents/protocols/ISSUE_QUEUE.md's \"Issue status vocabulary\" -- read it there and satisfy it item by item, in the record. Bar item 1 forbids inherited figures BY NAME, so the figures in the record must be the ones you measured, not the ones ISS-0200's own filing asserted; where your measurement and the filing differ, the record says so (your Step 1 result corrected the 2.1x generalisation UPWARD to 2.92x pooled -- that correction belongs in the record, not just in a handoff). Cite handoffs/WF03-ISS0200-20260821/step-005-01-diagnose.json by path for the full working. Item 2 wants the candidate mechanisms named individually INCLUDING the ones the data did not support -- that list is the part an uninvestigated issue could never fabricate, which is why the bar demands it. Item 3 wants the method's stated limitations: your own shingle-calibration caveat, and the re-gate's finding that the least-dense-file identity is metric-dependent. Do not soften either; a negative result that hides the weakness of the test that produced it is worth less than no record at all.\n\n(2) THREE ONE-LINE DOC CORRECTIONS THE RE-GATE NAMED. ORCH rules all three in scope for this step -- two because the gate says they must land before this record is written, the third because it is a factual inaccuracy this run introduced into a canonical document and it is two words.\n\n  (a) KEY-NAME COLLISION. ORCH RULES: rename the pair to `verdict_in_run:` / `verdict_at:` in ISSUE_QUEUE.md, rather than the gate's other option of keeping `closed_*` at top level with a stated meaning. Reasons, so you can overturn this if you find it wrong rather than merely comply: `closed_at` already means \"when GitHub closed the issue\" at ISS-0109.yaml:314, and a registry ISS-0191's linter is meant to read mechanically should not carry one key with two meanings distinguished only by nesting depth; `verdict_*` is self-describing and cannot collide with a GitHub close at any nesting level; and no record uses it yet, so the rename costs one line now and a sweep later. If you disagree, say so in result.issues and state what you did -- HANDOFF_PROTOCOL.md section 1.1 governs, and a verified disagreement outranks this dispatch. Whichever pair you land on, ISS-0200 must then USE it, and the record should make plain what the timestamp measures.\n\n  (b) WF-03 STEP 5's OWN PSEUDOCODE. Two parts in docs/agents/workflows/WF-03_issue_resolving.md, both in the block you are executing right now, which is why they are yours. Item 1's template still opens with a concrete copyable `status: resolved` line; make the template name the alternatives so a weak model copying line one cannot land on the wrong status. Item 2 hardcodes a GitHub close comment reading \"Fixed in <run-id>... and the regression test at <path>\" -- on a no-defect close that publishes a false resolution claim to an external audience and cites a regression test this run does not have. Make item 2 branch on the status.\n\n  (c) THE ISS-0202 GLOSS. HANDOFF_PROTOCOL.md's new parenthetical glosses ISS-0202 as measuring handoffs whose artifacts_out names ONLY their own file; ISS-0202 measured the broader \"lists their own handoff file as one of their outputs\". Correct the gloss to match what ISS-0202 actually says. Do not add a figure -- the re-gate specifically confirmed no number is smuggled back in under the citation, and that must stay true.\n\n(3) CLOSE THE GITHUB ISSUE, #391, per WF-03 Step 5 item 2 -- but write the comment yourself under (2)(b)'s corrected form. It must not claim a fix, must not cite a regression test, and must state plainly that the issue was investigated and measured to carry no defect, pointing at docs/issues/ISS-0200.yaml and the diagnosis handoff. This comment is the one artefact an outside reader sees without following a pointer, so it carries the same honesty burden the record does.\n\nDO NOT: reopen the NO-CHANGE verdict or anything else this run's gates certified; touch HANDOFF_PROTOCOL.md section 4 or section 2's four worked examples (ISS-0200 AC4 protects them and they have now been certified byte-identical twice); re-edit ISS-0191.yaml or the H-SIZE-3 Enforcement extension; or absorb the sha-recording finding, which is filed as ISS-0205.\n\nRe-verify AC4 byte-identity after your edits and quote it, exactly as Step 3 did -- you are touching the same file and this is the third time that span has needed protecting. Commit by explicit filename. ORCH runs a short closing gate on this step before Step Final, so state your evidence in a form a validator can re-derive.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0200.yaml carries the new terminal status and satisfies all four items of ISSUE_QUEUE.md's evidence bar IN THE RECORD, item by item, with figures you measured rather than inherited from the filing, citing the diagnosis handoff by path",
+      "The record states the correction to ISS-0200's own 2.1x generalisation (2.92x pooled) rather than leaving it only in a handoff",
+      "The record names the candidate mechanisms individually including those the data did not support, and states the method limitations unsoftened -- both the shingle calibration caveat and the metric-dependence of the least-dense-file identity",
+      "The key pair is settled and used consistently: ORCH's ruling applied, or overturned with the disagreement and reasoning stated in result.issues per HANDOFF_PROTOCOL section 1.1",
+      "WF-03 Step 5's item-1 template no longer leads with a concrete wrong status, and item 2's GitHub close comment branches on the status",
+      "The ISS-0202 gloss in HANDOFF_PROTOCOL.md matches what ISS-0202 actually measured, with no figure added",
+      "GH#391 closed with a comment that claims no fix, cites no regression test, and states the no-defect outcome plainly (quote the comment and the gh command output)",
+      "ISS-0200 AC4 re-verified post-edit and quoted: section 4 and section 2's four worked examples still byte-identical to merge-base 7322185",
+      "Edits committed by explicit filename; git status --porcelain quoted at completion"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0200-20260821",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

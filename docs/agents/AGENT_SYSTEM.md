@@ -35,7 +35,8 @@ producer/validator table — restated here as the roster's organizing shape.
 | `CODE-DESIGNER` | Code Designer | Produces module interfaces, `@spec`s, gen_statem/Ecto shape, and data-flow notes before any implementation code is written | `lib/letflow/design/`, `handoffs/` |
 | `CODE-DESIGN-VALIDATOR` | Code Design Validator | Reviews CODE-DESIGNER's artefact — every acceptance criterion covered, no implementation code present, design is unambiguous enough for ELIXIR-DEV/FRONTEND-DEV to proceed. **Hard gate.** | `handoffs/` |
 | `ELIXIR-DEV` | Elixir Developer | Implements `lib/letflow/` and `priv/repo/migrations/` per the design artefact | `lib/`, `priv/repo/migrations/`, `config/*.exs`, `handoffs/` |
-| `FRONTEND-DEV` | Frontend Developer | Integration/config wiring of `web/` (R-Co's existing React/TS SPA) against Letflow's API — not a rewrite of `web/`, per `docs/migration/stage-8-frontend-cutover.md`'s own scope framing | `web/` (config/integration only), `handoffs/` |
+| `FRONTEND-DEV` | Frontend Developer | Builds and changes `web/`, Letflow's own React/TS SPA, and wires it to Letflow's API. Full ownership as of 2026-08-21 — see `docs/migration/decisions/0011-frontend-ownership.md`; the earlier "config/integration only, not a rewrite" mandate is superseded | `web/`, `docs/frontend/`, `handoffs/` |
+| `MOBILE-DEV` | Mobile Developer | **Dormant.** Builds `apps/mobile/` (Flutter/Dart) per `docs/mobile/`. Activated when S9's three backend gaps close (REQ-124..126) — nothing routes here before then, and `apps/mobile/` does not exist yet | `apps/mobile/`, `docs/mobile/`, `handoffs/` |
 | `REVIEWER` | Idiom & Scope Reviewer | Checks changes for idiomatic OTP usage (crutch vs. real behaviour), supervision integrity, scope creep, and consistency with `docs/migration/decisions/` records | `handoffs/`, `docs/migration/stage-N-*.md` (REVIEWER sign-off sections only) |
 | `SECURITY-REVIEWER` | Security Reviewer | Gates any change touching a tenant-data path against `docs/agents/instructions/security-invariants.md`. **Hard gate for in-scope changes.** | `handoffs/` |
 | `TEST-DESIGNER` | Test Designer | Produces test specs and test code (ExUnit, StreamData properties) | `test/specs/`, `test/`, `handoffs/` |
@@ -63,7 +64,8 @@ before S7 starts would be scope creep against a stage that hasn't been reached.
 | `CODE-DESIGNER` | ✓ | ✓ | ✗ | ✗ |
 | `CODE-DESIGN-VALIDATOR` | ✓ | handoffs | ✗ | ✗ |
 | `ELIXIR-DEV` | ✓ | ✓ | ✓ (mix, git, gh) | ✗ |
-| `FRONTEND-DEV` | ✓ | ✓ (web/ config only) | ✓ (npm, git, gh) | ✗ |
+| `FRONTEND-DEV` | ✓ | ✓ | ✓ (npm, git, gh) | ✗ |
+| `MOBILE-DEV` *(dormant)* | ✓ | ✓ (`apps/mobile/`) | ✓ (flutter, dart, git, gh) | ✗ |
 | `REVIEWER` | ✓ | handoffs, stage sign-off | ✗ | ✗ |
 | `SECURITY-REVIEWER` | ✓ | handoffs | ✓ (grep-based checks, mix test) | ✗ |
 | `TEST-DESIGNER` | ✓ | ✓ | ✗ | ✗ |
@@ -126,7 +128,10 @@ requirement's file-level status stays exactly as terse as it's always been.
 |---|---|---|---|
 | Elixir source | `lib/` | `ELIXIR-DEV` | `.ex` |
 | Ecto migrations | `priv/repo/migrations/` | `ELIXIR-DEV` | `.exs` |
-| Frontend integration | `web/` (config/wiring only) | `FRONTEND-DEV` | `.ts`/`.tsx`/config |
+| Frontend source | `web/` | `FRONTEND-DEV` | `.ts`/`.tsx`/config |
+| Frontend specification | `docs/frontend/` | `FRONTEND-DEV` | `.md` |
+| Mobile source | `apps/mobile/` — does not exist yet | `MOBILE-DEV` | `.dart` |
+| Mobile specification | `docs/mobile/` | `MOBILE-DEV` | `.md` |
 | Design artefacts | `lib/letflow/design/` | `CODE-DESIGNER` | `.md` |
 | Test specs | `test/specs/` | `TEST-DESIGNER` | `.md` |
 | Test source | `test/` | `TEST-DESIGNER` | `.exs` |

@@ -204,25 +204,31 @@ themselves — see `core-directives.md`'s "Load Scoped Context, Not Whole Files.
 ```
 1. Verify branch (same check as 2a).
 2. Read lib/letflow/design/<module>.md for the API contract being integrated against.
-3. Read docs/guides/frontend_developer_guide.md.
-4. Make the integration/config change in web/ — per
-   docs/migration/stage-8-frontend-cutover.md's scope framing, this is pointing web/
-   at Letflow's API and closing contract gaps, not rewriting web/'s own components.
-   If a genuine web/ code change turns out to be unavoidable, name it explicitly in
-   result.summary with a one-line reason — do not silently expand scope.
-5. npm run build (or the project's actual build command) — if FAIL, fix and retry.
+3. Read docs/guides/frontend_developer_guide.md and web/README.md.
+4. Make the change in web/. Letflow OWNS web/ as of 2026-08-21 -- components, types,
+   and tests are in scope, not only config/CORS (decisions/0011-frontend-ownership.md;
+   the "not rewriting web/'s own components" framing this step used to carry is
+   superseded). Scope is still the requirement you were handed: implement that, not
+   whatever else you noticed while in the file.
+   A contract mismatch is closed on the LETFLOW side -- route it to CODE-DESIGNER/
+   ELIXIR-DEV. Never add a shim inside web/ that normalises it.
+5. Run the four gates from web/, quoting real output, not a claim:
+      npm run type-check && npm run lint && npm test && npm run guards
+   If any FAIL, fix and retry. Do NOT weaken a pattern in
+   web/tests/guards/forbidlist.ts to make a change pass -- report it to ORCH for
+   REVIEWER instead.
 6. Self-review: no hardcoded API base URL (use the existing env-var pattern), no
    token stored in localStorage/sessionStorage beyond what web/'s existing pattern
-   already does.
+   already does, no new state-management/routing/build tool introduced.
 7. Complete the handoff: artifacts_out: ["web/..."],
    next_action: "Route to SECURITY-REVIEWER (2c) once 2a also complete".
 ```
 
 ### Acceptance criteria
-- [ ] Build exits 0
-- [ ] Any change inside `web/`'s own component code (vs. pure config/CORS) is called
-      out explicitly with a reason
-- [ ] Token handling matches `web/`'s existing pattern
+- [ ] `type-check`, `lint`, `test`, and `guards` all pass, with real output quoted
+- [ ] No guard pattern weakened or `allowedPaths`-exempted to make the change pass
+- [ ] Token handling matches `web/`'s existing pattern; no new auth-storage mechanism
+- [ ] Any contract mismatch found was routed to the backend, not shimmed inside `web/`
 
 ## Step 2c — Security gate ⛔ HARD GATE (in-scope changes only)
 

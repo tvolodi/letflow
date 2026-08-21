@@ -36,3 +36,22 @@ letflow-*.tar
 # Scratch space for one-off scripts, debug dumps, logs — see
 # docs/agents/instructions/core-directives.md's file-placement rules
 /scratch/
+
+# ── Frontend (web/) — Node / Vite / Playwright ───────────────────────────────
+# web/ is Letflow's own React SPA as of the S8 re-scope (2026-08-21); see
+# docs/migration/decisions/0011-frontend-ownership.md.
+web/node_modules/
+web/dist/
+web/.vite/
+web/test-results/
+web/playwright-report/
+web/coverage/
+*.tsbuildinfo
+# Test *evidence* (screenshots written by page.screenshot, a11y run reports) is
+# run output, not a baseline — R-Co tracked these and they grew to 16 MB. Not
+# carried over, not tracked here.
+web/tests/screenshots/
+web/tests/reports/
+# The frontend env template is tracked on purpose (the blanket `.env.*` rule
+# above would otherwise swallow it).
+!web/.env.example

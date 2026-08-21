@@ -11,8 +11,16 @@ The staged Elixir/OTP rewrite of R-Co
 (`c:\Users\tvolo\dev\ai-dala\R-Co\`), a multi-tenant BPM platform. See
 `README.md` in full before doing anything, especially "Migration
 status." `docs/migration/README.md` has the full stage breakdown
-(S0–S8) and the R-Co source paths each stage ports — read the relevant
-stage file before starting work in that stage. A few findings from
+(S0–S9) and the R-Co source paths each stage ports — read the relevant
+stage file before starting work in that stage.
+
+Letflow is not backend-only. As of 2026-08-21 it also owns **`web/`**,
+the React/TypeScript SPA migrated out of R-Co (spec in
+`docs/frontend/`, stage S8), and the specification for a **Flutter
+mobile tier** that does not exist yet (spec in `docs/mobile/`, stage
+S9). See `docs/migration/decisions/0011-frontend-ownership.md` and
+`0012-mobile-tier-stack.md`. Any text still saying `web/` is out of
+scope to rewrite predates that and is stale. A few findings from
 early development (idiomatic OTP usage, process-per-instance design)
 are folded directly into the stage-2 and stage-3 migration docs where
 they're still relevant, rather than tracked separately.
@@ -40,7 +48,8 @@ Routing logic, gates, rework/escalation rules, stage-gate enforcement:
 | `CODE-DESIGNER` | Produces design artefacts in `lib/letflow/design/` before implementation | [`.claude/agents/code-designer.md`](.claude/agents/code-designer.md) |
 | `CODE-DESIGN-VALIDATOR` | Hard gate on CODE-DESIGNER's design | [`.claude/agents/code-design-validator.md`](.claude/agents/code-design-validator.md) |
 | `ELIXIR-DEV` | Implements/changes `lib/letflow/` and `priv/repo/migrations/` | [`.claude/agents/elixir-dev.md`](.claude/agents/elixir-dev.md) |
-| `FRONTEND-DEV` | Points `web/` at Letflow's API (integration/config only, not a `web/` rewrite) | [`.claude/agents/frontend-dev.md`](.claude/agents/frontend-dev.md) |
+| `FRONTEND-DEV` | Builds and changes `web/` — Letflow's own React/TS SPA — and wires it to Letflow's API | [`.claude/agents/frontend-dev.md`](.claude/agents/frontend-dev.md) |
+| `MOBILE-DEV` | **Dormant.** Builds `apps/mobile/` (Flutter) per `docs/mobile/`; activated once S9's backend gaps close | [`.claude/agents/mobile-dev.md`](.claude/agents/mobile-dev.md) |
 | `SECURITY-REVIEWER` | Hard gate on tenant-data-path changes — `docs/agents/instructions/security-invariants.md` | [`.claude/agents/security-reviewer.md`](.claude/agents/security-reviewer.md) |
 | `REVIEWER` | Hard gate — idiomatic OTP usage, supervision integrity, scope creep, decision-record consistency | [`.claude/agents/reviewer.md`](.claude/agents/reviewer.md) |
 | `TEST-DESIGNER` | Writes test specs and test code | [`.claude/agents/test-designer.md`](.claude/agents/test-designer.md) |

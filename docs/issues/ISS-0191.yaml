@@ -83,6 +83,17 @@ description: >
   ISSUE_QUEUE.md; whoever picks it up should judge whether it warrants promotion to a REQ
   entry via WF-01 first, given its size.
 
+  ADDED TO SCOPE 2026-08-21 (ISS-0203, run WF03-ISS0203-20260821): the `not_agent_attested`
+  member check needs two inputs that exist today only as prose inside HANDOFF_PROTOCOL.md
+  §4.1(b) -- the `backfill_note` allowlist path (the one file name §4.1(b) declares SPENT)
+  and the optional member's own name. A linter written against today's wording would
+  silently stop tracking either the moment §4.1(b) is next edited, with nothing to flag the
+  drift. Whoever builds this linter should read those two values out of §4.1(b) at build
+  time rather than copy them into this record, and the linter itself should be the thing
+  that goes stale-visibly if a future §4.1(b) edit changes either value without a matching
+  linter update -- not a silent pass. Ergonomic, not a blocker: filed here per REVIEWER's
+  own framing in `WF03-ISS0201-20260821`'s gate rather than as a HANDOFF_PROTOCOL.md change.
+
 affected_files:
   - docs/agents/shared/HANDOFF_PROTOCOL.md
   - handoffs/

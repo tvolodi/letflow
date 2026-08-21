@@ -1,45 +1,46 @@
 id: ISS-0220
 title: >
-  SandboxPool claim timeouts under TEST_PARALLEL_N=4 -- 16 pre-existing test
-  failures from connection-pool resource contention, distinct from ISS-0217
+  SandboxPool claim/release call timeouts are derived from max_wait_ms plus a fixed
+  5000 ms that was never sized against provisioning cost, so claims fail under load
 discovered_by: TEST-RUNNER
 discovered_in_run: WF02-REQ071-20260821
 discovered_at: "2026-08-22T00:30:00Z"
-severity: MINOR
+severity: MAJOR
+severity_note: >
+  Filed as MINOR; raised to MAJOR by this run's diagnosis. The filing read the
+  symptom as environmental resource contention, which would have been MINOR. It is
+  in fact a library defect that makes claim/2 fail on correct work whenever
+  provisioning exceeds a budget with 1.38x margin on a completely idle host --
+  reachable without any test parallelism at all.
 
 description: >
-  At TEST_PARALLEL_N=4, 16 pre-existing tests failed: Letflow.SandboxPoolTest
-  (7), Letflow.SandboxPool.FixtureLoaderTest (5),
-  Letflow.Definitions.PromotionAssertionRerunTest (4). Every failure is a
-  `GenServer.call(SandboxPool pid, {:claim, N}, timeout)` exit, each immediately
-  preceded in the log by a `Postgrex.Protocol ... disconnected:
-  DBConnection.ConnectionError` on the same connection pool -- resource
-  contention under concurrent partitions claiming sandbox schemas against this
-  host's Postgres instance, not an assertion-logic bug.
+  Filed by TEST-RUNNER during WF02-REQ071-20260821 Step 4. At TEST_PARALLEL_N=4, 16
+  pre-existing tests failed: Letflow.SandboxPoolTest (7), Letflow.SandboxPool.FixtureLoaderTest
+  (5), Letflow.Definitions.PromotionAssertionRerunTest (4). Every failure was a
+  `GenServer.call(SandboxPool pid, {:claim, N}, timeout)` exit.
 
-  Attribution: confirmed via `git diff --name-only main...HEAD` that none of
-  test/letflow/sandbox_pool_test.exs,
-  test/letflow/sandbox_pool/fixture_loader_test.exs,
-  test/letflow/definitions/promotion_assertion_rerun_test.exs,
-  lib/letflow/sandbox_pool.ex, or lib/letflow/sandbox_pool/fixture_loader.ex
-  were touched by the WF02-REQ071-20260821 branch (Route 1 attribution per
-  core-directives.md's three legal routes). Explicitly checked against ISS-0217
-  (test_parallel.sh sibling-partition TenantSchemaReaper deferral guard,
-  reclaimed=0/skipped=0) and confirmed this is a DIFFERENT mechanism (GenServer
-  claim timeouts, not reaper deferral) -- not the same issue, not a count-match.
-  Worth investigating SandboxPool claim capacity/timeout tuning under parallel
-  test load.
+  The filing attributed this to connection-pool resource contention, citing a
+  `Postgrex.Protocol disconnected: DBConnection.ConnectionError` immediately preceding
+  each failure. THAT ATTRIBUTION WAS WRONG, and the diagnosis below refutes it with
+  measurement -- see resolution_note. The filing's Route-1 work was sound and was
+  re-checked: the REQ-071 branch touched none of the failing test files, nor
+  lib/letflow/sandbox_pool.ex, nor lib/letflow/sandbox_pool/fixture_loader.ex; and it is
+  correctly distinguished from ISS-0217 (a TenantSchemaReaper sibling-partition deferral
+  guard), which is a different mechanism.
 
 affected_files:
-  - test/letflow/sandbox_pool_test.exs
-  - test/letflow/sandbox_pool/fixture_loader_test.exs
-  - test/letflow/definitions/promotion_assertion_rerun_test.exs
   - lib/letflow/sandbox_pool.ex
-  - lib/letflow/sandbox_pool/fixture_loader.ex
+  - test/letflow/sandbox_pool_test.exs
+  - test/letflow/sandbox_pool_call_timeout_test.exs
+  - test/specs/ISS-0220.md
+  - lib/letflow/design/iss0220-sandbox-pool-provision-timeout.md
 
 related:
-  - ISS-0217  # different mechanism (TenantSchemaReaper deferral), same script
-  - ISS-0219  # the TEST_PARALLEL_N sizing issue that led to running at N=4 here
+  - ISS-0217  # explicitly NOT this: reaper deferral, not claim timeouts
+  - ISS-0194  # connection-budget clamp (decision 0009); measured here to NOT be the mechanism
+  - ISS-0048  # the owner-monitor claim contract this fix leaves untouched
+  - ISS-0224  # successor: provisioning blocks the pool mailbox, scoped out of this fix
+  - ISS-0219  # the TEST_PARALLEL_N sizing issue that led to running at N=4 here (from the filing)
 
 queue_task_id: 220
 github_issue: 450
@@ -48,4 +49,132 @@ github_issue_note: >
   (450) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
   deliberately not called separately.
 
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0220-20260822
+resolved_at: "2026-08-21T21:45:05Z"
+resolution_note: >
+  ROOT CAUSE (measured, not inferred). `SandboxPool.claim/2` derived its GenServer.call/3
+  timeout as `max_wait_ms + @call_timeout_buffer_ms`, with the buffer a fixed 5_000.
+  `max_wait_ms` bounds only how long a caller is parked in the pool's `waiting` queue, so
+  that constant was the ENTIRE budget for `provision_sandbox/0` -- CREATE SCHEMA plus
+  `Ecto.Migrator.run/4` over 31 tenant-scoped migrations (32 transactions, ~150 round
+  trips). The constant's own code comment recorded its provenance: it existed only to be
+  not-smaller-than GenServer.call's own 5_000 ms default. It was never sized against
+  provisioning cost, and req039-sandbox-pool-fixture-loader.md SS11 OQ-4 had explicitly
+  left that cost unmeasured. `release/2` had the same defect implicitly, on
+  GenServer.call/2's 5_000 ms default.
+
+  MEASUREMENTS (scratch/claim_latency.exs, a direct probe using max_wait_ms 600_000 so a
+  slow provision is measured rather than converted into an exit):
+    - quiet host, single process, n=20: 918-3621 ms, 0/20 over 5000. Margin at the
+      observed max: 1.38x. That is the defect -- no engineering margin even at rest.
+    - under real concurrent sibling-workspace load (13 BEAM VMs across three Letflow
+      checkouts, letflow-postgres-1 at 197% CPU, "FATAL: sorry, too many clients
+      already"), single process, n=40: 1119-15373 ms, 8/40 (20%) over 5000.
+
+  REFUTATION OF THE FILING'S OWN HYPOTHESIS. Of the 11 `Postgrex.Protocol disconnected`
+  lines in the reproduction, 10 read `client #PID<...> exited` -- the connection dies
+  BECAUSE the caller's GenServer.call timed out and ExUnit killed the test process,
+  taking the migrator's Task with it. Only 1 was a genuine pool-queue drop. The causal
+  arrow runs claim-timeout -> connection death, not the reverse. Decision record
+  0009-test-parallel-pool-sizing.md is therefore NOT the mechanism and needs no
+  amendment: its clamp works correctly here (N=4 -> TEST_POOL_SIZE=22, 4x22=88 <= 90
+  budget, max_connections=100), and the defect reproduces with a pool of one in a single
+  BEAM with no partitions at all.
+
+  REPRODUCTION, 2/2 pre-fix N=4 runs red, all failures confined to the three named files
+  and zero elsewhere:
+    - siblings loaded: `combined: 1433 tests, 5 properties, 11 failures (1427/1438)`
+    - siblings verifiably idle (docker stats: letflow-postgres-1 5.84%,
+      letflow-3-postgres-1 6.32%): `combined: ... 5 failures (1433/1438)`
+  The per-file counts differ from the filing's 7/5/4 and between runs. That is expected
+  of an under-margin timing bound and is NOT evidence either way -- attribution here is
+  structural per core-directives.md, never by count-matching. Both runs decompose into
+  exactly two mechanisms: `GenServer.call({:claim, N}, max_wait_ms + 5000)` exits, and
+  two test-side `assert_receive` bounds (`:367` 2000 ms, `:216` 3000 ms) that sat BELOW
+  the quiet-host provisioning maximum, i.e. were miscalibrated on an idle machine.
+
+  FIX. Split the two budgets claim/2 conflated. `max_wait_ms` still bounds queue wait; a
+  new configurable `:provision_timeout_ms` bounds provisioning; `claim/2`'s call timeout
+  is `claim_call_timeout(max_wait_ms)` = `max_wait_ms + provision_timeout_ms`, and
+  `release/2` uses `release_call_timeout()`. Default 44_000 ms, DERIVED, not tuned to a
+  green run: floor = the worst legitimate provisioning observed (15_373 ms, below which a
+  correct provisioning becomes a false failure); ceiling = ExUnit's 60_000 ms per-test
+  default; separation from the ceiling must itself be at least one worst-observed
+  provisioning, so budget <= 60_000 - 15_373 = 44_627; take the largest admissible value,
+  trimmed to 44_000 (separation 16_000 ms; 2.86x the observed maximum; 0.73x the ceiling).
+  The five test-side rendezvous bounds are re-derived from the same public functions
+  rather than hardcoded, so they cannot drift from the budget. NO assertion was weakened,
+  skipped, tag-excluded or serialized away -- only how long an observer waits for a
+  correct answer, per design SS8.0.
+
+  VERIFICATION.
+  1. Regression test `test/letflow/sandbox_pool_call_timeout_test.exs` (4 cases). RT-2/RT-3
+     are the fail-first evidence and fail PRE-FIX BEHAVIOURALLY, not by
+     UndefinedFunctionError: run in a throwaway worktree of the pre-fix commit, they
+     observed `{:timeout, {GenServer, :call, [pid, {:claim, 0}, 5000]}}` against an
+     expected 1234, and `{:claim, 2000}, 7000` against an expected 3234, and
+     `{:release, ...}, 5000` against 1234 -- `Result: 0/4 passed`. Post-fix:
+     `Result: 4 passed`. RT-1/RT-4 fail pre-fix only by non-existence and are recorded as
+     drift guards carrying NO Step 4 weight, per WF-03's own clause on that trap.
+  2. Full suite at TEST_PARALLEL_N=4, FOUR post-fix runs, all green:
+     `combined: 1437 tests, 5 properties, 0 failures (1442/1442 passed)` each time.
+     STATED HONESTLY: across the first three runs all 78 completed provisions peaked at
+     2350 ms, well under even the OLD 5000 ms budget, so those runs demonstrate NO
+     REGRESSION rather than demonstrating the fix -- pre-fix code would very likely have
+     passed under the same conditions. They are corroboration, not proof.
+  3. The proof is a controlled A/B isolating the causal variable, run under induced load
+     with only the budget varying (config override applied as a TEMPORARY probe, reverted,
+     and the revert verified with `git status --porcelain config/` empty):
+       - budget 2_000 (below the 3270 ms provisioning latency measured under that load):
+         `Result: 24/26 passed, Failed: 2 tests` -- and the failures are exactly the
+         ISS-0220 shape, with the derived timeout visibly tracking the budget:
+         `GenServer.call(pid, {:claim, 1000}, 3000)` and `GenServer.call(pid, {:claim, 0}, 2000)`.
+       - budget 5_000 (exactly reproduces pre-fix arithmetic), same load: `Result: 26 passed`.
+       - shipped default 44_000, same load: `Result: 26 passed`.
+     This establishes the failure is governed by the budget-vs-latency relationship the
+     fix corrects, without depending on recreating any particular host load.
+
+  GATES. CODE-DESIGN-VALIDATOR FAILed the design twice and both rounds changed it
+  materially. Round 1 (F1-F4) caught that RT-4 would have failed pre-fix only by
+  UndefinedFunctionError while the document claimed it as fail-first evidence; that the
+  original 45_000 derivation multiplied the worst sample by the ratio between two
+  20-sample maxima, a construction that yields a floor ABOVE its own ceiling under an
+  equally legitimate re-pairing of the same data; that four tests, not two, perform two
+  provisionings; and that the stated reason for bringing release/2 into scope had no
+  evidentiary basis, replacing it with a real one (Definitions.safe_release/2 wraps the
+  release call in `rescue`, which structurally cannot catch the `exit` a GenServer.call
+  timeout raises -- the same shape as ISS-0048). Round 2 (B1-B4) caught that the
+  replacement separation basis was still arithmetically false (60_000-45_000 = 15_000 <
+  15_373, excluding 45_000 by its own rule) and produced 44_000; that a legibility cost
+  had been erased rather than weighed; a withdrawn claim surviving verbatim in a
+  normative table; and a count error of mine (below).
+
+  ERRORS OF MINE, CORRECTED IN THE RECORD RATHER THAN QUIETLY: (a) I diagnosed "28
+  migrations"; the manifest holds 31. (b) I wrote that partition 4 of the idle-siblings
+  run had "three provisions over 5000 ms"; within that partition it is 1 of 6 -- three is
+  the RUN-level count across all four partitions. That is this repo's own documented
+  anti-pattern, "Re-deriving the count while inheriting the unit being counted". (c) A
+  design revision asserted the loaded-host samples came from scratch/db_load.sh, a
+  synthetic generator; that script had never been executed at the time (it was written
+  after the samples, only syntax-checked) and the real condition was observed
+  sibling-workspace load. All three are recorded in the design doc at the point of use.
+
+  LIMITATION, STATED SO A LATER READER CAN WEIGH IT: scratch/provision_latency.awk
+  measures the gap from CREATE SCHEMA to the next query naming that schema, so a
+  provisioning KILLED by the caller's timeout never closes the gap and is invisible to it.
+  Every log-derived latency figure is therefore biased low, and the bias runs against the
+  chosen value -- the real tail is at least as heavy as the one 44_000 was sized against.
+  Floor 1 comes from the direct probe, not the awk instrument, so the derivation itself is
+  unaffected.
+
+  INCIDENTAL, fixed in the same branch: test/letflow/router_test.exs was unformatted on
+  main and blocked GIT_MERGE step 5.d's repo-wide `mix format --check-formatted` gate.
+  Attributed structurally both ways (not in this branch's diff; reproduces at merge-base
+  9feecda) and fixed as whitespace-only, following ISS-0215's and ISS-0218's precedent.
+
+  SCOPED OUT, filed as ISS-0224/GH#457: provision_sandbox/0 runs inside handle_call/3, so
+  the pool's mailbox is blocked for the whole replay and a queued waiter's own
+  {:claim_timeout, ref} is serviced late by up to one full provisioning -- meaning
+  max_wait_ms is not honoured under contention. Not reachable today (every current caller
+  keeps at most one claim in flight) but a real violation of a documented contract.

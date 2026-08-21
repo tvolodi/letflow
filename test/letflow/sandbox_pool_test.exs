@@ -63,6 +63,34 @@ defmodule Letflow.SandboxPoolTest do
   # Fixtures / helpers
   # ---------------------------------------------------------------------------------
 
+  # Covers only what happens *after* a pool call returns and before the waiting side
+  # observes it: one BEAM message hop, the spawned process's own assert, and (for the
+  # waiter rendezvous below) one schema_exists?/1 round trip. Real cost is
+  # sub-millisecond to low-milliseconds; 1000ms is three orders of magnitude of slack.
+  # It performs NO provisioning-cost work whatsoever -- that job belongs entirely to
+  # SandboxPool.provision_timeout_ms/0. Kept as a separate, visibly small constant
+  # rather than folded into the budget precisely so it can never quietly become a
+  # second un-derived provisioning allowance (ISS-0220 design doc §8.1).
+  @rendezvous_slack_ms 1_000
+
+  # How long an observer in this file waits for something that is gated on a
+  # SandboxPool.claim/2 (i.e. on a full cold-start provisioning). Derived from the
+  # pool's own public call-timeout derivation rather than hand-picked, so these bounds
+  # track a :provision_timeout_ms config override automatically and cannot drift away
+  # from the budget the code under test actually uses (ISS-0220 design doc §8.1).
+  #
+  # This is the patience of the observer, not an assertion about the system under
+  # test: nothing these bounds guard asserts anything different than it did before.
+  defp claim_rendezvous_timeout(max_wait_ms) do
+    SandboxPool.claim_call_timeout(max_wait_ms) + @rendezvous_slack_ms
+  end
+
+  # Same, for something gated on a SandboxPool.release/2 (or on the test process
+  # getting as far as one).
+  defp pool_op_rendezvous_timeout do
+    SandboxPool.release_call_timeout() + @rendezvous_slack_ms
+  end
+
   # Starts an isolated, uniquely-named SandboxPool instance so this test's quota
   # exercising never contends with another test in this file or with the
   # application's own singleton (design doc §4.7 INV-SP-7). Returns the pid --
@@ -125,23 +153,36 @@ defmodule Letflow.SandboxPoolTest do
   # owner-crash-reclaim test below (ISS-0048): polls information_schema.schemata
   # directly until a killed owner's schema has actually been dropped by
   # SandboxPool's :DOWN handler, rather than assuming a fixed sleep is long
-  # enough. 400 attempts * 5ms = up to 2s, well past a single message-passing
-  # round-trip (design doc INV-SP-DOWN-2's own stated bound).
-  defp wait_until_schema_dropped(schema_name, attempts \\ 400)
-
-  defp wait_until_schema_dropped(schema_name, 0) do
-    flunk(
-      "expected schema #{schema_name} to be dropped by SandboxPool's owner-crash " <>
-        "reclaim, but it still exists in information_schema.schemata"
-    )
+  # enough.
+  #
+  # Bounded by a monotonic-time deadline rather than by an attempt count (ISS-0220
+  # design doc §8.2): an attempt count is an implicit time bound that silently changes
+  # meaning if the 5ms poll interval ever changes. The default deadline is derived from
+  # SandboxPool.release_call_timeout/0 -- the same single source of truth every other
+  # bound in this file derives from -- rather than from a second, separately-derived
+  # polling constant. The assertion is unchanged: on expiry this still flunks with the
+  # same message, and a dropped schema still returns :ok.
+  defp wait_until_schema_dropped(
+         schema_name,
+         timeout_ms \\ SandboxPool.release_call_timeout()
+       ) do
+    poll_until_schema_dropped(schema_name, System.monotonic_time(:millisecond) + timeout_ms)
   end
 
-  defp wait_until_schema_dropped(schema_name, attempts) do
-    if schema_exists?(schema_name) do
-      Process.sleep(5)
-      wait_until_schema_dropped(schema_name, attempts - 1)
-    else
-      :ok
+  defp poll_until_schema_dropped(schema_name, deadline_ms) do
+    cond do
+      not schema_exists?(schema_name) ->
+        :ok
+
+      System.monotonic_time(:millisecond) >= deadline_ms ->
+        flunk(
+          "expected schema #{schema_name} to be dropped by SandboxPool's owner-crash " <>
+            "reclaim, but it still exists in information_schema.schemata"
+        )
+
+      true ->
+        Process.sleep(5)
+        poll_until_schema_dropped(schema_name, deadline_ms)
     end
   end
 
@@ -246,7 +287,8 @@ defmodule Letflow.SandboxPoolTest do
           receive do
             :release_waiter_claim -> :ok
           after
-            3_000 -> flunk("test process never signalled release for the waiter claim")
+            pool_op_rendezvous_timeout() ->
+              flunk("test process never signalled release for the waiter claim")
           end
 
           assert :ok = SandboxPool.release(waiter_claim.sandbox_id, pool)
@@ -261,7 +303,7 @@ defmodule Letflow.SandboxPoolTest do
 
       assert_receive {:waiter_claimed,
                       %SandboxClaim{sandbox_id: waiter_id, schema_name: waiter_schema}},
-                     3_000
+                     claim_rendezvous_timeout(2_000)
 
       on_exit(fn -> drop_schema!(waiter_schema) end)
 
@@ -270,7 +312,8 @@ defmodule Letflow.SandboxPoolTest do
 
       send(waiter.pid, :release_waiter_claim)
 
-      assert %SandboxClaim{sandbox_id: ^waiter_id} = Task.await(waiter, 3_000)
+      assert %SandboxClaim{sandbox_id: ^waiter_id} =
+               Task.await(waiter, pool_op_rendezvous_timeout())
     end
 
     test "when no slot frees within the wait window, returns {:error, :sandbox_unavailable} and the held claim is untouched" do
@@ -386,7 +429,7 @@ defmodule Letflow.SandboxPoolTest do
 
       assert_receive {:owner_claimed,
                       %SandboxClaim{sandbox_id: sandbox_id, schema_name: schema_name}},
-                     2_000
+                     claim_rendezvous_timeout(1_000)
 
       on_exit(fn -> drop_schema!(schema_name) end)
 

@@ -1,0 +1,62 @@
+{
+  "handoff_id": "18a524bc-4572-41d4-9a03-1c4fb37f2099",
+  "run_id": "WF03-ISS0196-20260821",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0196-20260821/step-03b-reviewer-gate.json",
+  "created_at": "2026-08-21T11:52:50Z",
+  "started_at": "2026-08-21T11:52:50Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["50df55ac-1f78-422e-89ed-daf368cd2252"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0196-20260821/step-03-commit-at-dispatch.json",
+      "docs/issues/ISS-0196.yaml",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/agents/ORCHESTRATOR.md"
+    ],
+    "owned_modules": [
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/agents/ORCHESTRATOR.md",
+      "docs/issues/ISS-0196.yaml"
+    ]
+  },
+  "task": {
+    "description": "Closing gate on WF03-ISS0196-20260821. ISS-0196's own acceptance criteria require REVIEWER sign-off explicitly (its sixth AC) -- this is not a routine gate, it is a named condition of the fix. DOC-UPDATER added `HANDOFF_PROTOCOL.md` section 1.3 (the canonical commit-at-dispatch rule, citing the WF03-ISS0117-20260821 incident and the section 4.1 recovery-path interaction) and one pointer bullet in `ORCHESTRATOR.md`'s top MUST list. Its report is `result` in `handoffs/WF03-ISS0196-20260821/step-03-commit-at-dispatch.json`; read it there and re-derive, don't read back. Commits: `f316bda` (this run's own Step 03 dispatch, committed at dispatch time -- the first live application), `0d2bbfe`/`9e242a4` (the content, rebased onto a concurrent ISS-0199 merge and pushed). All on `origin/main` already.\n\nRE-DERIVE. Each item names what you must open or check yourself:\n\n1. READ SECTION 1.3 IN FULL. Confirm it states the rule UNCONDITIONALLY -- no size threshold, no judgement gate on which dispatches get committed. A rule that reads as advisory or conditional fails this criterion outright.\n\n2. VERIFY THE ISS-0117 CITATION AGAINST THE ACTUAL INCIDENT. Open `docs/issues/ISS-0117.yaml` (or the relevant handoff it points to) and confirm section 1.3's account of the 6,290-character-replaced-by-156-character-pointer incident matches what actually happened, rather than trusting the paraphrase.\n\n3. CHECK THE SECTION 4.1 INTERACTION IS STATED, NOT RESTATED. Read section 4.1's membership test (clause 1: a dispatch was issued; clause 2: the agent began work) yourself, then confirm section 1.3 correctly explains how a dispatch-time commit lets a later session distinguish never-dispatched (no commit at all) from dispatched-but-lost (ORCH's commit, no agent commit on top) from dispatched-and-died-mid-work (an agent commit present) -- by POINTING at 4.1's test, not copying it.\n\n4. RE-RUN THE INSTRUCTION-PRECEDENCE GREP YOURSELF. The report states a grep across role files and workflow docs found nothing instructing 'commit at completion only' in a way that would out-rank this rule. Run it again, independently, and confirm the same null result -- or find something it missed.\n\n5. THE RULE'S OWN FIRST APPLICATION IS TESTABLE, NOT JUST ASSERTED. This run's own Step 03 handoff (`handoffs/WF03-ISS0196-20260821/step-03-commit-at-dispatch.json`) was supposedly committed BEFORE DOC-UPDATER began work. Confirm this from git history directly -- `git log --follow --oneline -- handoffs/WF03-ISS0196-20260821/step-03-commit-at-dispatch.json` should show a commit (`f316bda`) that precedes DOC-UPDATER's own content commit, with a diff at that point showing only the PENDING/undispatched shape (no `result` filled in). This is the rule proving itself against its own dispatch, and it is worth checking rather than assuming.\n\n6. ONE CANONICAL STATEMENT. Confirm `ORCHESTRATOR.md`'s new bullet is a genuine pointer (states the obligation in one line, cites section 1.3, does not restate the mechanism or the incident) and that the rule's full statement -- mechanism, incident, §4.1 interaction -- lives only in `HANDOFF_PROTOCOL.md` section 1.3.\n\n7. BOOKKEEPING AND SCOPE. `git show --stat` on the relevant commits: only `HANDOFF_PROTOCOL.md`, `ORCHESTRATOR.md`, `docs/issues/ISS-0196.yaml` and this run's own handoff directory should appear. `docs/issues/ISS-0196.yaml` carries `status: resolved`, `resolved_in_run`, a plausible `resolved_at`. Confirm GH#386 is closed with `gh issue view 386 --json state,closedAt` directly. `handoffs/orchestrator.log` and `handoffs/registry.json` are ORCH's, deliberately uncommitted -- confirm `git diff --numstat` shows 0 deletions on both and leave them alone.\n\nSCOPE OF `result.issues`: only genuine defects -- fails a criterion, contradicts another document, states a false checkable claim, or would mislead a later agent. Not style or wording preference.\n\nVERDICT: PASS or FAIL against the seven acceptance criteria on the Step 03 handoff plus the items above. A FAIL names each failed criterion and the specific gap. Commit your own handoff file. Do not write `registry.json` or `orchestrator.log`.",
+    "acceptance_criteria": [
+      "Section 1.3 is confirmed unconditional -- no size threshold, no judgement gate -- read from the text itself",
+      "The ISS-0117 incident citation is verified against the actual issue/handoff record, not accepted from the paraphrase",
+      "The section 4.1 recovery-path interaction is confirmed to be stated by pointer, matching 4.1's actual membership test as independently read",
+      "The instruction-precedence grep was independently re-run with the same null result, or a contradiction it missed is named",
+      "This run's OWN Step 03 handoff is confirmed via git history to have been committed (f316bda) before DOC-UPDATER's content commit, as the rule's own first live application",
+      "ORCHESTRATOR.md's new bullet is confirmed a genuine pointer, and the rule's full statement is confirmed to live only in HANDOFF_PROTOCOL.md section 1.3",
+      "git show --stat confirms scope (only the four expected paths), ISS-0196.yaml's resolved fields are read from the file, GH#386's closed state is confirmed with gh directly, and orchestrator.log/registry.json show 0 deletions and were not modified by this step",
+      "A PASS/FAIL verdict is recorded with the evidence for each check named, and this handoff file parses under json.loads",
+      "result.issues contains only defects in the artefact under review, not stylistic observations"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,63 @@
+{
+  "handoff_id": "3b4e6a1f-8d2c-4e7a-9f0b-1c2d3e4f5a6b",
+  "run_id": "WF02-REQ071-20260821",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ071-20260821/step-01-code-designer.json",
+  "created_at": "2026-08-21T18:29:56Z",
+  "started_at": "2026-08-21T18:29:56Z",
+  "completed_at": "2026-08-21T18:39:02Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-071"],
+    "artifacts_in": ["handoffs/WF02-REQ071-20260821/step-00-git-setup.json"],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/plugs/tenant_status.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "docs/migration/stage-4-api-surface.md"
+    ],
+    "branch_name": "feature/WF02-REQ071-20260821"
+  },
+  "task": {
+    "description": "WF-02 Step 1 — CODE-DESIGNER for REQ-071. Core mounting already done (side effect of REQ-070); this run's real scope is verification, moduledoc replacement text, end-to-end test specs, and REVIEWER-sign-off pointers only. Full detail in the design doc.",
+    "acceptance_criteria": [
+      "Every REQ-071 acceptance criterion maps to a concrete design element",
+      "No implementation code present in the design doc",
+      "Open questions listed explicitly, not silently resolved",
+      "Any genuine acceptance-criterion gap found is stated as a finding, not silently absorbed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req071-mount-auth-tenant-status-plugs.md. Confirmed via direct code reading (api_pipeline.ex:28-31, router.ex:42-50, auth_pipeline.ex, tenant_status.ex:58-59) that AuthPipeline/TenantStatus are already correctly mounted, ordered, and that TenantStatus's Repo.get/2 call has no rescue (OQ-14's fail-closed claim is real, not aspirational). Found this run's own Step 00 handoff had understated REQ-071's acceptance criteria (6 paraphrased items vs. the real 7 in docs/requirements.yaml, which splits the migrating-tenant 503/200 pair from the concurrent-isolation property into separate AC4/AC5) -- verified directly against docs/requirements.yaml and used the real 7-item list throughout the design (see design doc §1a). Designed 5 end-to-end test specs (through Letflow.Router / Letflow.Plugs.TenantStatus, not the plugs standalone) covering AC1-AC5, exact moduledoc replacement text for both plugs (AC6), and the exact code REVIEWER must check plus the exact stage-4-api-surface.md insertion point for AC7.",
+    "artifacts_out": [
+      "lib/letflow/design/req071-mount-auth-tenant-status-plugs.md"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "This run's Step 00 handoff (context.requirement_text) paraphrased REQ-071's acceptance criteria as 6 items, understating the real 7 in docs/requirements.yaml -- AC4 (migrating POST 503 + equivalent GET 200) and AC5 (concurrent lookup-failure isolation) are two separate criteria there, not one. Design doc §1a documents the correction; no functional impact since this design used the real text throughout."
+      },
+      {
+        "severity": "MINOR",
+        "description": "Genuine AC-wording gap, not a code defect: AC2 (\"reaches the handler\") and AC4's GET-200 half assume a real tenant-scoped business handler exists. REQ-070's ten sub-routers are all stub match-all-404 routers by design (owned by later REQ-073+ requirements), so no end-to-end test today can produce a literal 200/real-handler-reached result without inventing a fake production route (forbidden by this run's scope). Design doc §1 (AC2, AC4) documents substituted, honest assertions (404-not-401/503, no Retry-After, zero tenant-status Repo query) for TEST-DESIGNER to implement, and flags the wording mismatch itself as a candidate for ORCH to route via ISSUE_QUEUE.md if it judges the requirement text should be corrected."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ071-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ071-20260821",
+      "push_status": "pending -- set by this same turn's push",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

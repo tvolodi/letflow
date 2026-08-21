@@ -79,9 +79,16 @@ was confirmed.
 ## INV-2 — Server-side field authorisation
 
 **Rule.** Field-level visibility is enforced by the server (the Elixir API layer)
-before a response is serialised. `web/` (or whatever S8 settles on as the frontend
-integration surface) is never the authorisation boundary — it may hide fields for UX
-reasons, but an unauthorised field must never leave the server in the first place.
+before a response is serialised. **No client is ever the authorisation boundary** —
+not `web/`, and not the mobile tier specified in `docs/mobile/`. A client may hide
+fields for UX reasons, but an unauthorised field must never leave the server in the
+first place.
+
+This matters more now than when this invariant was written: as of 2026-08-21 Letflow
+owns `web/` outright and has a second client specified (S9). Two clients consuming one
+contract makes "the UI filters it" a doubly wrong answer — a field the server should
+not emit would have to be independently suppressed in TypeScript *and* in Dart, and one
+of them will eventually miss it.
 
 **Reference.** None yet — no multi-tenant API surface exists (S4 not started).
 

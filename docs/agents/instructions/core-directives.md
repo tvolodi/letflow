@@ -96,7 +96,8 @@ paired with a role that independently checks it before the pipeline advances:
 | REQ-ANALYST (requirement text) | REQ-VALIDATOR |
 | CODE-DESIGNER (design artefact) | CODE-DESIGN-VALIDATOR |
 | ELIXIR-DEV (backend code) | REVIEWER (idiom) + SECURITY-REVIEWER (tenant-data paths) |
-| FRONTEND-DEV (web/ integration) | REVIEWER + SECURITY-REVIEWER (if tenant-data touched) |
+| FRONTEND-DEV (web/ — components, types, tests, integration) | REVIEWER + SECURITY-REVIEWER (if tenant-data touched) |
+| MOBILE-DEV (apps/mobile/) — dormant until S9 | REVIEWER + SECURITY-REVIEWER (MOB-5 token storage is always in scope) |
 | TEST-DESIGNER (test specs + test code) | TEST-DESIGN-VALIDATOR |
 | TEST-RUNNER (test execution + report) | RELEASE-VALIDATOR re-runs the full suite, does not trust the report alone |
 | DOC-UPDATER (doc/status update) | ORCH verifies the specific files changed and specific fields flipped, per the DOC-UPDATER handoff's `artifacts_out`, before writing the DONE log line |

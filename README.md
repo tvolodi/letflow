@@ -14,7 +14,7 @@ drive each step.
 
 ## Migration status
 
-The migration is staged (S0–S8); see `docs/requirements.yaml`'s
+The migration is staged (S0–S9); see `docs/requirements.yaml`'s
 `stages:` list and `docs/migration/README.md` for the full breakdown
 and the R-Co source paths each stage ports. As of 2026-08-17: Stage 0
 (foundation-and-scaffolding) and Stage 1 (identity/multi-tenancy) are
@@ -28,6 +28,26 @@ intentionally doesn't restate a snapshot count here, since that's
 exactly the kind of number that goes stale (see `ISS-0022`). Check
 `docs/requirements.yaml` for the next `pending` requirement before
 starting unscoped work, same as always.
+
+## The frontend and the mobile tier
+
+As of 2026-08-21 this repository also holds **`web/`** — Letflow's React
+18 + TypeScript + Vite SPA, migrated out of R-Co along with its
+specification (`docs/frontend/`). Letflow owns it; it is no longer
+"R-Co's frontend that we point at our API." See
+[`web/README.md`](web/README.md) for how to run it, what was and wasn't
+carried over, and the drift it arrived with, and
+`docs/migration/decisions/0011-frontend-ownership.md` for why. It
+type-checks, lints, and passes 178 unit + 47 guard tests on its own; it
+does **not** yet work end-to-end against Letflow, because the API
+surface it needs (S4) is still being built. That integration is S8.
+
+The same migration brought over the **mobile tier specification**
+(`docs/mobile/`) as stage S9 — a Flutter app that is a generic
+interpreter of server-delivered definitions, on the same principle as
+the SPA. Nothing is built: the tier was specified in R-Co and never
+implemented, and all three of the backend endpoints it needs are
+verified gaps in Letflow today.
 
 ## What's here today
 

@@ -23,9 +23,31 @@ drift to reconcile, not a typo to silently work around.
 | S6 | Operational cross-cutting | S4 | [stage-6-operational-cross-cutting.md](stage-6-operational-cross-cutting.md) |
 | S7 | Simulation & UAT parity | S4, S5, S6 | [stage-7-simulation-uat-parity.md](stage-7-simulation-uat-parity.md) |
 | S8 | Frontend integration & cutover | S7 | [stage-8-frontend-cutover.md](stage-8-frontend-cutover.md) |
+| S9 | Mobile tier | S4 | [stage-9-mobile.md](stage-9-mobile.md) |
 
 S5 branches off S3 in parallel with S4 (both only need the instance
-engine, not each other) — everything else is a straight chain.
+engine, not each other). S9 branches off S4 in parallel with S6-S8 (the
+mobile tier needs API endpoints, not the SPA's cutover) — everything
+else is a straight chain.
+
+## The two clients
+
+Two stages cover user-facing clients, and they are independent of each
+other because they share a contract rather than code:
+
+- **S8** covers `web/`, the React SPA. As of 2026-08-21 that code lives
+  **in this repository** — it was migrated out of R-Co and Letflow owns
+  it. S8 was re-scoped from "integration boundary only" to cover the
+  frontend itself; see
+  [decisions/0011-frontend-ownership.md](decisions/0011-frontend-ownership.md).
+  Specification: [`../frontend/`](../frontend/).
+- **S9** covers the Flutter mobile tier, which **does not exist** — not
+  here and not in R-Co. What was migrated is its specification; see
+  [decisions/0012-mobile-tier-stack.md](decisions/0012-mobile-tier-stack.md).
+  Specification: [`../mobile/`](../mobile/).
+
+S9 is the one stage that ports no R-Co source, because there is none to
+port.
 
 ## Convention
 
@@ -78,6 +100,27 @@ requirements only once the stage(s) it `depends_on` are done — sizing a
 stage's requirements correctly generally requires the interfaces/decisions
 the prior stage produced. Follow the same schema and one-agent-turn sizing
 as the existing requirements.
+
+**S8 and S9 are a deliberate, user-directed exception to that rule
+(2026-08-21).** Both were expanded while S4 is still in progress and S5-S7
+have not started. The reason the rule exists — "you would be guessing at
+interfaces the prior stage hasn't decided yet" — does not bind here, because
+neither stage's requirements are guesses about Letflow's internals:
+
+- **S8's** subject is a codebase that now exists in this repository and
+  passes its own gates today. Its requirements are grounded in files, not
+  in anticipated interfaces.
+- **S9's** requirements are a *port of an existing specification*
+  (R-Co's `docs/addon-2/`), and its three backend dependencies were
+  verified against `lib/` rather than assumed — all three are gaps, which
+  is precisely why S9 `depends_on: [S4]`.
+
+What both stages' requirements deliberately avoid is pre-deciding anything
+S4-S7 will settle: no S8 requirement names a response shape, and no S9
+requirement specifies how the tenant-config route is implemented. Where a
+question genuinely needs a later stage's output — S8's cutover strategy
+needs S7's correctness signal — it is left recorded as open in the stage
+file rather than answered early.
 
 ## Two applications of the agent-pipeline principles (forward note, not built yet)
 

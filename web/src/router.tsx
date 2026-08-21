@@ -1,0 +1,77 @@
+import { createBrowserRouter } from 'react-router-dom'
+import { AuthProvider } from '@/auth/AuthProvider'
+import { ProtectedRoute } from '@/auth/ProtectedRoute'
+import OidcCallbackPage from '@/pages/OidcCallbackPage'
+import { AppShell } from '@/components/layout/AppShell'
+import { ErrorBoundary } from '@/components/layout/ErrorBoundary'
+import ProcessModulesPage from '@/pages/admin/modules/ProcessModulesPage'
+import TenantDashboardPage from '@/pages/dashboard/TenantDashboardPage'
+import DefinitionListPage from '@/pages/definitions/DefinitionListPage'
+import DefinitionEditorPage from '@/pages/definitions/DefinitionEditorPage'
+import InstanceBoardPage from '@/pages/instances/InstanceBoardPage'
+import InstanceDetailPage from '@/pages/instances/InstanceDetailPage'
+import TaskInboxPage from '@/pages/tasks/TaskInboxPage'
+import UsersPage from '@/pages/admin/UsersPage'
+import GroupsPage from '@/pages/admin/GroupsPage'
+import TokensPage from '@/pages/admin/TokensPage'
+import AuditLogPage from '@/pages/admin/AuditLogPage'
+import HealthDashboardPage from '@/pages/admin/HealthDashboardPage'
+import MetricsPage from '@/pages/admin/MetricsPage'
+import DlqPage from '@/pages/dlq/DlqPage'
+import WebhooksPage from '@/pages/dlq/WebhooksPage'
+import RegisterTenantPage from '@/pages/admin/onboarding/RegisterTenantPage'
+import OnboardingProgressPage from '@/pages/admin/onboarding/OnboardingProgressPage'
+import OnboardingResultPage from '@/pages/admin/onboarding/OnboardingResultPage'
+import TenantsPage from '@/pages/admin/tenants/TenantsPage'
+import EditTenantPage from '@/pages/admin/tenants/EditTenantPage'
+import ServicesPage from '@/pages/admin/services/ServicesPage'
+
+export const router = createBrowserRouter([
+  {
+    path: '/auth/callback',
+    element: (
+      <AuthProvider>
+        <OidcCallbackPage />
+      </AuthProvider>
+    ),
+  },
+  {
+    path: '/',
+    element: (
+      <AuthProvider>
+        <ProtectedRoute>
+          <ErrorBoundary>
+            <AppShell />
+          </ErrorBoundary>
+        </ProtectedRoute>
+      </AuthProvider>
+    ),
+    children: [
+      { index: true, element: <TenantDashboardPage /> },
+      { path: 'dashboard', element: <TenantDashboardPage /> },
+      { path: 'definitions', element: <DefinitionListPage /> },
+      { path: 'definitions/new', element: <DefinitionEditorPage /> },
+      { path: 'definitions/:id', element: <DefinitionEditorPage /> },
+      { path: 'instances', element: <InstanceBoardPage /> },
+      { path: 'instances/:id', element: <InstanceDetailPage /> },
+      { path: 'tasks', element: <TaskInboxPage /> },
+      { path: 'admin/users', element: <UsersPage /> },
+      { path: 'admin/users/:id', element: <UsersPage /> },
+      { path: 'admin/groups', element: <GroupsPage /> },
+      { path: 'admin/tokens', element: <TokensPage /> },
+      { path: 'admin/audit', element: <AuditLogPage /> },
+      { path: 'admin/health', element: <HealthDashboardPage /> },
+      { path: 'admin/metrics', element: <MetricsPage /> },
+      { path: 'admin/onboarding', element: <RegisterTenantPage /> },
+      { path: 'admin/onboarding/new', element: <RegisterTenantPage /> },
+      { path: 'admin/onboarding/:onboardingId/progress', element: <OnboardingProgressPage /> },
+      { path: 'admin/onboarding/:onboardingId/result', element: <OnboardingResultPage /> },
+      { path: 'admin/tenants', element: <TenantsPage /> },
+      { path: 'admin/tenants/:slug/edit', element: <EditTenantPage /> },
+      { path: 'admin/services', element: <ServicesPage /> },
+      { path: 'admin/modules', element: <ProcessModulesPage /> },
+      { path: 'dlq', element: <DlqPage /> },
+      { path: 'webhooks', element: <WebhooksPage /> },
+    ],
+  },
+])

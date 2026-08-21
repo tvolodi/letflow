@@ -27,3 +27,16 @@ handoffs/orchestrator.log merge=union
 # `<<<<<<<`/`=======`/`>>>>>>>` sides, compose by appending the missing entries in
 # `created_at` order, re-validate with a JSON parser) stays mandatory for this file per
 # ORCHESTRATOR.md §7.1. No merge attribute is set for it here.
+
+# The frontend (web/, migrated 2026-08-21) is the same problem ISS-0008 recorded for
+# Elixir sources, on a different toolchain: these files are authored and verified as
+# LF, and letting core.autocrlf convert them per-checkout makes diffs between hosts
+# noise rather than signal. ESLint, tsc, vitest and the guard scanners are all
+# line-oriented; pinning LF keeps what one host verified identical to what the next
+# one checks out. Kept as an explicit list rather than a blanket `* text=auto` so it
+# changes nothing outside web/'s file types.
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.html text eol=lf
+*.css text eol=lf

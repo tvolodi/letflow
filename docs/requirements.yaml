@@ -24,12 +24,16 @@
 # attempted in one pass. See docs/migration/README.md for the full
 # rationale and R-Co source-path grounding behind each stage.
 #
-# Only Stage 0 is broken into requirements today. Stages 1-8 stay as
-# scoped descriptions until the stage before them lands — writing their
-# requirements now would mean guessing at interfaces Stage 0 hasn't
-# decided yet. Expand each stage into REQ-xxx entries (same schema as
-# below, "one agent turn per requirement") when it becomes the active
-# stage.
+# Expand each stage into REQ-xxx entries (same schema as below, "one
+# agent turn per requirement") when it becomes the active stage —
+# writing a stage's requirements before the stage it depends on lands
+# generally means guessing at interfaces that stage hasn't decided yet.
+# See docs/migration/README.md's "Requirement expansion" section for the
+# current per-stage state, and for the one recorded, user-directed
+# exception: S8 and S9 were expanded early on 2026-08-21, because S8's
+# subject is a codebase that now exists here and S9's requirements are a
+# port of an existing specification with its dependencies verified
+# rather than assumed.
 # ---------------------------------------------------------------------
 
 stages:
@@ -119,11 +123,41 @@ stages:
   - id: S8
     name: frontend-integration-and-cutover
     description: >
-      Point web/ (or a compatible surface) at the Elixir backend,
-      close API gaps found in practice, decide on cutover/deprecation
-      of the Zig backend.
+      Make Letflow's own React SPA (web/) work against the Elixir
+      backend, close the API-contract gaps that surface in practice,
+      give the frontend a check/CI gate, reconcile the drift its
+      documentation arrived with, and decide on cutover/deprecation of
+      the Zig backend.
+      RE-SCOPED 2026-08-21 (user-directed): web/ was migrated out of
+      R-Co into this repository and Letflow owns it, so this stage
+      covers the frontend itself and not only the integration boundary
+      -- see docs/migration/decisions/0011-frontend-ownership.md. The
+      earlier "web/ is out of scope to rewrite" framing is stale
+      wherever it still appears.
     depends_on: [S7]
     detail_file: docs/migration/stage-8-frontend-cutover.md
+
+  - id: S9
+    name: mobile-tier
+    description: >
+      Build the Flutter mobile tier specified in docs/mobile/: a
+      generic interpreter of server-delivered definitions, on the same
+      principle as the SPA -- one tenant-agnostic build, no per-tenant
+      assets, no tenant logic on-device in v1. Eight requirements,
+      MOB-1..8, migrated from R-Co's docs/addon-2/ BRW-MOB-* family.
+      The one stage that ports no R-Co source: the tier was specified
+      there and never built (no apps/mobile, no Dart/Flutter/Swift/
+      Kotlin sources, confirmed 2026-08-21).
+      Depends on S4 rather than running as a parallel track, because
+      all three of the tier's backend touch-points -- an
+      unauthenticated tenant-config, a definition delta-sync endpoint,
+      and version-pinned form references on task payloads -- were
+      verified absent from lib/ on 2026-08-21. R-Co could treat mobile
+      as parallel-from-day-one because its backend was shipped;
+      Letflow's is not. See
+      docs/migration/decisions/0012-mobile-tier-stack.md.
+    depends_on: [S4]
+    detail_file: docs/migration/stage-9-mobile.md
 
 requirements:
   # ---------------------------------------------------------------
@@ -5505,3 +5539,505 @@ requirements:
       - ".claude/agents/test-runner.md and .claude/agents/release-validator.md are checked for their own literal `mix test` invocations independent of the workflow docs, and updated if any are found, with the check's outcome (found and fixed / checked, none found) stated explicitly in the result"
       - "a fresh read of the three updated/checked files after the edit shows no remaining plain `mix test` reference for a full-suite run in a step this requirement was scoped to change"
     depends_on: [REQ-113]
+
+  # ---------------------------------------------------------------
+  # S8 -- frontend-integration-and-cutover
+  #
+  # Re-scoped 2026-08-21 (user-directed): web/ was migrated out of R-Co
+  # into this repository and Letflow owns it. The stage is no longer
+  # "integration boundary only" -- see
+  # docs/migration/decisions/0011-frontend-ownership.md and
+  # docs/migration/stage-8-frontend-cutover.md.
+  #
+  # NOTE ON impl_order: none of REQ-115..127 carry one. Per
+  # docs/agents/protocols/TASK_QUEUE.md ("An unregistered requirement
+  # carries no impl_order at all -- never a guessed one"), they are
+  # UNREGISTERED in letflow-queue. They were drafted directly rather
+  # than through WF-01, so REQ-VALIDATOR has not passed them and the
+  # register_task trigger has not fired. ORCH registers them when their
+  # stage becomes active; registering them now would make S8/S9 work
+  # claimable by a sibling host ahead of the stages it depends on.
+  # ---------------------------------------------------------------
+
+  - id: REQ-115
+    title: Single fail-fast frontend check command (mix letflow.check equivalent for web/)
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      web/ has four separate quality commands (type-check, lint, test,
+      guards) and no single entry point that runs them fail-fast, so
+      there is nothing for a gate to invoke and nothing an agent can
+      quote one result from. The backend solved this with
+      `mix letflow.check`; the frontend needs its counterpart.
+      Add an `npm run check` script to web/package.json that runs
+      type-check, lint, test, and guards in that order, stopping at the
+      first failure, and document it in web/README.md's script table.
+      Order matters: type-check is the cheapest and catches the most,
+      guards is the most expensive because bundle-scan runs a full
+      `vite build`.
+      This requirement does NOT create .github/workflows/ -- that
+      directory does not exist in this repository at all, and the
+      backend's own CI is S0's REQ-013 (still pending). Wiring the
+      frontend check into CI is a follow-on to REQ-013, not this
+      requirement. Name that dependency explicitly in the result rather
+      than silently creating a workflow file whose backend counterpart
+      does not exist.
+    acceptance_criteria:
+      - "`npm run check` exists in web/package.json and runs type-check, lint, test, and guards in that order"
+      - "the command exits non-zero on the first failing step and does not run subsequent steps, demonstrated by temporarily introducing a type error and quoting the actual output showing lint/test/guards did not run"
+      - "a clean run of `npm run check` is quoted in full in the result -- real output, not a claim that it passes"
+      - "web/README.md's script table lists `check` with a one-line description"
+      - "the result states explicitly that CI wiring is deferred to REQ-013 and no .github/workflows/ file was created"
+    depends_on: []
+
+  - id: REQ-116
+    title: API-contract gap inventory -- drive the migrated SPA against Letflow and record what breaks
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      stage-8-frontend-cutover.md says the contract gaps are "where
+      undocumented behavior the earlier stages' route-by-route port
+      missed will actually surface." Nobody has looked yet. Before any
+      gap can be closed, the gaps have to be enumerated against a
+      running system rather than guessed at by reading route modules.
+      Start Letflow (LETFLOW_DEV_DB_CONFIRMED=1 mix run --no-halt) and
+      web/ (npm run dev -- the proxy already defaults to :4000), load
+      every route in web/src/router.tsx, and record for each one what
+      the SPA requested, what Letflow returned, and what the SPA
+      expected.
+      Produce docs/frontend/contract-gaps.md: one row per gap, with the
+      failing request, the expected shape (cited from
+      web/src/types/api.ts or the calling module in web/src/api/), the
+      actual response, and the S4 requirement that owns the route if one
+      exists.
+      This requirement produces an INVENTORY, not fixes. Do not change
+      lib/ and do not change web/src/ to work around anything found -- a
+      gap closed while cataloguing is a gap nobody sized. Many routes
+      will fail simply because S4 is incomplete (REQ-071..085 still
+      pending); "not implemented yet" is a valid and expected row, and
+      distinguishing it from "implemented but shaped wrong" is the
+      substance of this requirement.
+    acceptance_criteria:
+      - "docs/frontend/contract-gaps.md exists with one row per route in web/src/router.tsx, including the routes that worked"
+      - "each gap row cites the actual observed response (status code and body), not a predicted one"
+      - "each gap row is classified as either NOT-YET-IMPLEMENTED (the route is pending S4 work, with the owning REQ id named) or SHAPE-MISMATCH (the route exists but returns something the SPA cannot consume)"
+      - "the SHAPE-MISMATCH rows each cite the specific field/status/cursor the SPA expects and the file in web/src/ that expects it"
+      - "git diff shows no change to lib/ or web/src/ -- this requirement is read-only against both"
+      - "the result states which Letflow commit the inventory was taken against, since it goes stale as S4 lands"
+    depends_on: [REQ-071]
+
+  - id: REQ-117
+    title: Wire web/ to Letflow's API -- base URL, auth token, and the login path
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      The migration set web/vite.config.ts's dev-proxy default to
+      http://localhost:4000 and wrote web/.env.example, and that is all
+      that is wired. The SPA's auth path still assumes R-Co's Keycloak
+      realm (web/src/auth/OidcManager.ts and tenantConfig.ts both
+      default to http://localhost:8081/realms/bpm-default) and its token
+      handling was built against the Zig backend's contract.
+      Make the SPA authenticate against Letflow: confirm which OIDC
+      authority Letflow's own S1 identity work expects (read
+      docs/migration/stage-1-identity.md and
+      docs/migration/decisions/0002-oidc-integration.md -- do not assume
+      the R-Co realm carries over), set the defaults accordingly, and
+      verify a real login produces a token the API accepts.
+      Use web/'s EXISTING token storage and injection pattern. Do not
+      introduce a new one -- FNFR-06 in
+      docs/frontend/frontend-requirements.md forbids
+      localStorage/sessionStorage for tokens, and swapping the mechanism
+      silently is exactly the kind of change this project's review chain
+      exists to catch.
+      Verify by loading the running app in a browser and confirming real
+      data flows. A build that compiles is not evidence.
+      Supersedes REQ-106 ("Point web/ at the running Letflow API using
+      the dev bootstrap token"), which was cancelled with the MVP-1
+      milestone and assumed web/ still lived in R-Co. Read it for the
+      dev bootstrap-token pattern it described; do not treat its
+      narrower scope as this requirement's.
+    acceptance_criteria:
+      - "a real login against a running Letflow instance produces a token that an authenticated API call accepts, evidenced by a quoted request/response pair"
+      - "the OIDC authority and client-id defaults cite Letflow's own S1/decision-0002 position by name -- not carried over from R-Co unexamined"
+      - "web/'s existing token storage mechanism is unchanged, confirmed by git diff over web/src/auth/"
+      - "no token is written to localStorage or sessionStorage, confirmed by grep over web/src/ and by inspecting browser storage after a real login"
+      - "web/.env.example is updated if any default changed, and the frontend check command still passes"
+    depends_on: [REQ-116]
+
+  - id: REQ-118
+    title: CORS support on the Letflow side for the browser-origin SPA
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S8
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      In development the SPA runs on :5173 and Letflow on :4000. The
+      Vite dev proxy hides this for `npm run dev`, but it does not hide
+      it for a built SPA served from any origin other than Letflow's
+      own, and it does not hide it from the Playwright e2e suite
+      (web/playwright.config.ts serves the app on :4173).
+      Add CORS handling to Letflow's Plug pipeline -- allowed origins
+      configurable, not hardcoded, following the same config pattern as
+      :problems_base_uri (REQ-066). Decide and record whether
+      credentials and preflight are needed for the SPA's actual auth
+      mechanism rather than enabling everything by default.
+      Fix this on the Letflow side only.
+      docs/guides/frontend_developer_guide.md's rule stands: a CORS
+      problem is never worked around inside web/.
+      Scope note: this is a tenant-data path change -- it decides which
+      origins may call authenticated routes -- so it needs
+      SECURITY-REVIEWER per
+      docs/agents/instructions/security-invariants.md. A wildcard
+      allowed-origin is not acceptable as a default.
+    acceptance_criteria:
+      - "CORS headers are emitted for cross-origin requests to the API, with the allowed-origin list read from application config rather than hardcoded"
+      - "the default configuration does NOT include a wildcard origin, and a test asserts that an unlisted origin is rejected"
+      - "preflight (OPTIONS) handling is either implemented with a test, or explicitly documented as unnecessary with the reason stated -- not left ambiguous"
+      - "a test exercises a cross-origin request end-to-end through the router rather than unit-testing the plug in isolation"
+      - "no change is made under web/ -- confirmed by git diff"
+    depends_on: [REQ-071]
+
+  - id: REQ-119
+    title: Correct the factual drift in docs/frontend/ carried over from R-Co
+    owner: DOC-UPDATER
+    status: pending
+    stage: S8
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      docs/frontend/ was migrated verbatim on purpose, so that a later
+      reconciliation had an honest baseline to diff against. This is
+      that reconciliation. Two statements are known-false against the
+      code as migrated, both recorded in web/README.md's "Known drift"
+      section:
+      (a) docs/frontend/frontend-requirements.md's stack line says
+      "React 19 + TypeScript 5"; the installed and lock-pinned version
+      is React 18.3.1. docs/guides/frontend_developer_guide.md repeats
+      the same "React 19" claim and needs the same correction.
+      (b) docs/frontend/design-system.md section 2 says all colours are
+      defined as CSS custom properties in web/src/styles/tokens.css.
+      That file does not exist, there is no .css file under web/src/ at
+      all, and components use inline style objects with literal hex
+      values.
+      Correct (a) by editing the docs to match the code -- the code is
+      right and the doc is wrong. Do NOT correct (b) the same way: what
+      to do about the missing stylesheet is a design question with more
+      than one defensible answer, and it is REQ-120's subject. Here,
+      mark the claim as unimplemented with a pointer to REQ-120 rather
+      than deleting it (deleting it would erase the requirement) or
+      leaving it stated as fact.
+      Re-verify both claims against the tree at implementation time
+      rather than trusting this description -- REQ-120 may have landed
+      first and changed (b).
+    acceptance_criteria:
+      - "every 'React 19' claim in docs/frontend/ and docs/guides/frontend_developer_guide.md is corrected to the version actually in web/package-lock.json, quoted from the lockfile rather than from package.json's range"
+      - "a grep for 'React 19' across docs/ returns no remaining hit that asserts it as current fact"
+      - "design-system.md section 2's tokens.css claim is marked as not-yet-implemented with an explicit pointer to REQ-120, and is not deleted"
+      - "web/README.md's Known-drift entries for these two items are updated to reflect what this requirement changed"
+      - "no file under web/src/ is modified -- this is a documentation requirement"
+    depends_on: []
+
+  - id: REQ-120
+    title: Settle the design-token question -- one token source, or a recorded decision not to have one
+    owner: CODE-DESIGNER
+    status: pending
+    stage: S8
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      The frontend currently holds THREE unreconciled positions on
+      colour:
+      (1) docs/frontend/design-system.md defines a --color-neutral-*
+      scale and says it lives in web/src/styles/tokens.css;
+      (2) design-tokens/letflow.tokens.json (migrated from R-Co's
+      r-co.tokens.json) defines a different, smaller palette and is read
+      by no source file, test, or build step;
+      (3) the components themselves use inline style objects with
+      literal hex values, which the `literal-colour` guard pattern does
+      not catch because it only matches CSS-style declarations ending in
+      a semicolon.
+      Produce a design artefact under lib/letflow/design/ that picks ONE
+      and says why: build tokens.css and migrate components to it; adopt
+      the JSON token file as the source and generate from it; or record
+      that inline styles are the accepted approach and correct both
+      documents plus the guard's stated rationale to match.
+      This is a design requirement -- it produces the artefact and the
+      decision, not the component migration. If the chosen path implies
+      touching many components, that implementation is a follow-on
+      requirement this one names and sizes.
+      Whichever path is chosen must close the guard gap: today the
+      design system claims enforcement in exactly the place it has none.
+      Either the guard starts catching inline literals, or the doc stops
+      claiming it is enforced.
+    acceptance_criteria:
+      - "a design artefact exists under lib/letflow/design/ naming one chosen approach explicitly, not a pros/cons list"
+      - "the decision reasons about all three current positions by name, including why design-tokens/letflow.tokens.json is or is not adopted"
+      - "the decision states what happens to the `literal-colour` guard pattern in web/tests/guards/forbidlist.ts under the chosen approach"
+      - "if the chosen approach implies component changes, a follow-on requirement is drafted with its scope and a count of how many files it touches, from a real grep rather than an estimate"
+      - "no component under web/src/components/ is modified by this requirement"
+    depends_on: [REQ-119]
+
+  - id: REQ-121
+    title: Remove the dead duplicate admin UsersPage
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      Two admin user pages arrived from R-Co:
+      web/src/pages/admin/UsersPage.tsx (16,984 bytes -- the one
+      web/src/router.tsx imports, at both /admin/users and
+      /admin/users/:id) and web/src/pages/admin/users/UsersPage.tsx
+      (9,407 bytes -- imported by nothing).
+      Confirm the second is genuinely unreferenced (grep all of web/,
+      including tests, not just src/), then delete it. If it turns out
+      to be referenced by a unit test or an e2e spec, that changes the
+      answer: report the reference and stop rather than deleting and
+      fixing the caller, because "which of these two is the real one" is
+      then an open question rather than a cleanup.
+      Check web/src/components/admin/users/ (CreateUserDialog,
+      DeactivateUserDialog) in the same pass -- if those are imported
+      only by the dead page they are dead too and go with it; if the
+      live page imports them, they stay.
+      Small, but it is exactly the kind of ambiguity that makes a later
+      agent edit the wrong file.
+    acceptance_criteria:
+      - "a grep over all of web/ (src, tests, config) for the deleted module's path is quoted in the result, showing zero references before deletion"
+      - "web/src/pages/admin/users/UsersPage.tsx is deleted, or the requirement reports a discovered reference and makes no deletion"
+      - "the fate of web/src/components/admin/users/ is decided on evidence from the same grep and stated explicitly -- kept with the reason, or deleted with the reason"
+      - "the frontend check command passes after the deletion, with the actual output quoted"
+      - "no behavioural change to the live /admin/users route, confirmed by the existing tests still passing"
+    depends_on: [REQ-115]
+
+  - id: REQ-122
+    title: Establish which Playwright e2e specs can run against Letflow, and what each needs
+    owner: TEST-DESIGNER
+    status: pending
+    stage: S8
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      37 *.e2e.spec.ts files plus two shared helpers came over intact
+      and none has ever run against Letflow. They need a live backend
+      and a Keycloak realm, and several bootstrap tenants through
+      docker-compose (see the skip guards in
+      web/tests/e2e/onboarding/onb-ui-0*.e2e.spec.ts, which already
+      abort with "Ensure docker-compose services are running").
+      Produce an inventory: for each spec, which backend routes it
+      exercises, which of those Letflow serves today, and therefore
+      whether it is RUNNABLE-NOW, BLOCKED-ON-S4 (naming the pending REQ)
+      or BLOCKED-ON-INFRA (naming what has to be running).
+      Then actually run the RUNNABLE-NOW set and quote the result.
+      An inventory that predicts which specs pass without running them
+      is not this requirement's deliverable -- the whole point is to
+      replace a guess with a measurement. If the RUNNABLE-NOW set turns
+      out to be empty, that is a legitimate finding; say so with the
+      evidence rather than stretching a spec to make the number
+      non-zero.
+      Do not modify the specs to make them pass. A spec that fails
+      because Letflow's contract differs is REQ-116 inventory material,
+      not a spec bug.
+    acceptance_criteria:
+      - "an inventory covering all 37 e2e spec files exists, each classified RUNNABLE-NOW / BLOCKED-ON-S4 / BLOCKED-ON-INFRA with the specific reason"
+      - "every BLOCKED-ON-S4 entry names the pending REQ id that would unblock it"
+      - "the RUNNABLE-NOW set is actually executed and its real output is quoted, including the case where that set is empty"
+      - "git diff shows no modification to any file under web/tests/e2e/"
+      - "the result names what infrastructure (Letflow instance, Keycloak realm, seeded tenants) the run required, concretely enough to repeat"
+    depends_on: [REQ-117]
+
+  - id: REQ-123
+    title: Cutover strategy decision record -- big-bang vs. gradual dual-running
+    owner: REVIEWER
+    status: pending
+    stage: S8
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      docs/migration/stage-8-frontend-cutover.md records this as the
+      stage's one remaining open decision, and deliberately does not
+      pre-answer it: the choice needs a real correctness signal from S7
+      (simulation and UAT parity) to decide from, and recording a
+      preference before that signal exists would be guessing.
+      Write docs/migration/decisions/0013-cutover-strategy.md with an
+      explicit decision -- big-bang, or gradual/dual-running -- plus what
+      happens to the Zig backend and when it is deprecated.
+      Reason from S7's actual output. Cite the specific parity results
+      that support the choice; if S7's signal is weaker than the choice
+      requires, the honest decision is to say so and name what further
+      evidence would settle it, not to pick one and defend it.
+      This requirement is blocked until S7 completes. It is drafted now
+      so the open question has an owner and an id, not so it can be
+      started early.
+    acceptance_criteria:
+      - "docs/migration/decisions/0013-cutover-strategy.md exists with an explicit decision, not a pros/cons list"
+      - "the decision cites concrete S7 parity results by name, rather than reasoning from first principles about migration strategies in general"
+      - "the fate of the Zig backend is stated with a condition for deprecation, not a date"
+      - "docs/migration/stage-8-frontend-cutover.md's Decisions section is updated to link the record and no longer list the question as open"
+      - "if S7's signal is judged insufficient, that verdict is the recorded decision and it names the specific missing evidence"
+    depends_on: [REQ-122]
+
+  # ---------------------------------------------------------------
+  # S9 -- mobile-tier
+  #
+  # Added 2026-08-21 (user-directed). Specification migrated from
+  # R-Co's docs/addon-2/ into docs/mobile/; see
+  # docs/migration/decisions/0012-mobile-tier-stack.md and
+  # docs/migration/stage-9-mobile.md.
+  #
+  # These four requirements are the tier's BACKEND gaps, verified
+  # against lib/ on 2026-08-21 -- not the Flutter app itself. The app's
+  # own requirements (MOB-1..8 in docs/mobile/requirements.md) are
+  # expanded into REQ entries once these land, per the expansion rule in
+  # docs/migration/README.md: sizing them now would mean guessing at
+  # contracts these four requirements decide.
+  #
+  # The impl_order note in the S8 block above applies here too.
+  # ---------------------------------------------------------------
+
+  - id: REQ-124
+    title: Unauthenticated tenant-config endpoint for slug-based mobile bootstrap (MOB-2 gate)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S9
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      MOB-2 (docs/mobile/requirements.md) needs GET /tenant-config to
+      return { realm_url, locales, default_locale, branding,
+      environment_kind } WITHOUT a bearer token: the mobile app calls it
+      to discover which realm to authenticate against, so by definition
+      it has no token yet.
+      Verified against lib/ on 2026-08-21, this is two gaps, not one:
+      (a) Letflow.Routers.TenantConfig is a stub whose routes land in
+      REQ-078; and (b) Letflow.Plugs.ApiPipeline mounts it behind
+      Letflow.Plugs.AuthPipeline, so implementing the route is not
+      sufficient -- it would still demand the token the caller cannot
+      have.
+      Resolve (b) explicitly: either an unauthenticated variant mounted
+      ahead of AuthPipeline, or a documented exemption inside it. Pick
+      one and record why in the moduledoc.
+      This is the gate for the entire mobile tier -- without it the app
+      cannot reach a login screen -- which is why it is sequenced first
+      in docs/mobile/build-order.md phase M-0.
+      Security scope: an unauthenticated endpoint returning per-tenant
+      data is a tenant-data path by definition and needs
+      SECURITY-REVIEWER. The response must expose only what bootstrap
+      requires. Check the shape field-by-field against
+      docs/agents/instructions/security-invariants.md -- in particular
+      whether an unauthenticated caller enumerating slugs can learn
+      which tenants exist, and what the answer should be for a slug that
+      does not exist.
+    acceptance_criteria:
+      - "GET /tenant-config returns the five specified fields for a known tenant slug with no Authorization header, demonstrated by a test that sends no token"
+      - "the auth-pipeline placement question is resolved explicitly and the chosen mechanism is stated in the moduledoc with its reason"
+      - "a test asserts that the endpoint exposes no field beyond the five specified -- an exact-shape assertion, not a subset check"
+      - "the behaviour for an unknown tenant slug is decided, tested, and justified against tenant-enumeration risk in the moduledoc"
+      - "every other route under Letflow.Plugs.ApiPipeline still requires authentication, proven by a test that would fail if the exemption were pipeline-wide"
+    depends_on: [REQ-078]
+
+  - id: REQ-125
+    title: Definition delta-sync endpoint (MOB-3 offline cache)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S9
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      MOB-3 needs GET /definitions/delta?since=<cursor> returning only
+      the definitions changed since that point, so a device can warm an
+      offline cache on first run and refresh incrementally instead of
+      re-fetching everything on every launch.
+      Verified 2026-08-21: absent. There is no delta route under
+      Letflow.Routers.Definitions. R-Co flagged this one "may be new" in
+      its own spec -- it is genuinely new work, not a port, so there is
+      no Zig source to read for the intended semantics.
+      Decide the semantics deliberately, because a delta endpoint has
+      several answers that all look reasonable until a device is offline
+      across one of them: what `since` is compared against (event
+      timestamp vs. definition version vs. a monotonic cursor); whether
+      deletions and deprecations are represented (a cache that never
+      learns about a deleted definition serves it forever); and what
+      happens when `since` is older than any retained history.
+      Prefer a monotonic cursor over a wall-clock timestamp if the event
+      store supports it -- clock skew between a device and the server is
+      exactly the condition this endpoint runs under.
+      This is a tenant-scoped read path and needs SECURITY-REVIEWER: a
+      delta must never leak a definition from another tenant, and the
+      cursor must not be usable to probe another tenant's change volume.
+    acceptance_criteria:
+      - "the delta endpoint returns only definitions changed after the supplied cursor, tested with at least three definitions where exactly one changed"
+      - "the choice between timestamp and monotonic cursor is stated in the moduledoc with its reasoning, and clock skew is addressed explicitly"
+      - "deletion/deprecation representation is decided and tested -- a cache consuming the delta can learn that a definition is gone"
+      - "the behaviour when the cursor predates retained history is defined and tested, rather than silently returning an incomplete delta"
+      - "a test asserts that a delta request from tenant A never returns a definition belonging to tenant B"
+    depends_on: [REQ-081]
+
+  - id: REQ-126
+    title: Version-pinned form references on task payloads (MOB-3 pinning)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S9
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      MOB-3 requires that a task payload carry { form_id, form_version }
+      so a client renders the exact pinned form version and never
+      silently falls back to the active version. Silent substitution is
+      the specific failure the requirement exists to prevent: a worker
+      completing a task against a form that has changed since the task
+      was created is filling in a different document than the one the
+      process pinned.
+      Verified 2026-08-21: neither form_id nor form_version appears
+      anywhere in lib/. Note carefully what does exist and is NOT this:
+      Letflow.Engine.PinResolver pins DEFINITION versions, a different
+      contract. Read that module first -- its pinning machinery and
+      INSTANCE_PINS_REBOUND semantics are the prior art this should be
+      consistent with, not duplicate.
+      Emit the pinned form reference on the task read path so both
+      clients (the SPA and the mobile app) can consume it. The SPA does
+      not use it today; adding it must not change the SPA's current
+      behaviour, and a test should confirm that.
+    acceptance_criteria:
+      - "task payloads returned by the task read routes carry form_id and form_version, asserted by a test against the actual response body"
+      - "the relationship to Letflow.Engine.PinResolver's definition-level pinning is stated in the moduledoc -- reusing its mechanism where it applies, and saying why where it does not"
+      - "the pinned version reflects the version pinned when the task was created, proven by a test that changes the form after task creation and asserts the payload still names the original version"
+      - "the SPA's existing behaviour is unchanged -- web/'s test suite passes unmodified against the new payload shape"
+      - "a test asserts the field is present rather than null for a task whose definition pins a form, so an unimplemented path cannot pass as a satisfied one"
+    depends_on: [REQ-083]
+
+  - id: REQ-127
+    title: State the platform locale policy (MOB-7 prerequisite, frontend-owned)
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S9
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      MOB-7 says mobile i18n must match "the platform's web locale
+      policy", and R-Co's own text said to VERIFY the SPA's configured
+      locales and reuse them rather than assume a set.
+      That verification has not been done, and the reason is that there
+      may be nothing to verify: the migrated web/ declares no obvious
+      locale configuration, and docs/frontend/frontend-requirements.md
+      states only that dates and times render in the browser locale
+      while stored/transmitted values are UTC ISO 8601. There is no
+      stated locale set and no stated fallback chain.
+      Determine what the SPA actually does today -- read web/src/, do
+      not infer from the doc -- and then state the policy: the supported
+      locale set, the fallback chain, and how tenant-authored content
+      (the {locale: value} map MOB-7 refers to) resolves against a
+      session locale. Record it in docs/frontend/.
+      If the finding is that the SPA has no locale policy at all and is
+      effectively English-only with browser-locale date formatting, that
+      IS the answer -- record it as such, with what adopting one would
+      require. Do not invent a locale set to make the mobile requirement
+      satisfiable; a fabricated policy is worse than a recorded absence,
+      because the mobile tier would then be built against it.
+      Owned by FRONTEND-DEV, not a mobile role: this is a question about
+      web/, and it stays answerable whether or not the mobile tier is
+      ever built.
+    acceptance_criteria:
+      - "the current behaviour is established by reading web/src/ and quoting the specific files and lines that determine locale handling, not by citing the requirements doc"
+      - "docs/frontend/ gains a stated locale policy -- supported set, fallback chain, tenant-content resolution -- or an explicit recorded finding that none exists today"
+      - "if no policy exists, the record names what adopting one would require, concretely (which libraries, which files, roughly how many strings), counted rather than estimated"
+      - "docs/mobile/requirements.md's MOB-7 Letflow note is updated to point at the finding instead of describing the verification as outstanding"
+      - "no locale set is asserted as supported unless something in web/ actually supports it"
+    depends_on: []

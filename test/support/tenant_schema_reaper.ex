@@ -61,6 +61,31 @@ defmodule Letflow.TenantSchemaReaper do
   invocation's OS process has genuinely died closes every connection it held (TCP-level,
   unconditionally), so its `application_name` tag stops appearing in `pg_stat_activity`
   and the very next sweep (by any invocation) reclaims it exactly as before.
+
+  ## ISS-0217 — sibling `test_parallel.sh` partitions are not a hazard
+
+  The ISS-0110 guard above has a false-positive: `scripts/test_parallel.sh` launches
+  N `mix test` processes for ONE logical test run, each its own OS process and
+  therefore its own distinct `letflow_mixtest_<pid>` tag. From any one partition's
+  point of view, the other N-1 partitions look identical to a genuinely separate,
+  externally-nested invocation — the guard deferred every sweep unconditionally for
+  the whole run, making `reclaimed`/`skipped` always `{0, 0}` regardless of what a
+  test's own fixtures actually did.
+
+  `scripts/test_parallel.sh` now generates one `TEST_PARALLEL_GROUP` value
+  (`$$`, its own shell PID) before forking its N partitions, and exports it so every
+  partition inherits it. `config/test.exs` folds a present `TEST_PARALLEL_GROUP` into
+  the connection tag as a `_grp<id>` suffix. `concurrent_invocation_present?/2`
+  extracts that suffix from both its own tag and each other connection's tag found in
+  `pg_stat_activity`, and excludes a match from counting as a hazard — same group,
+  same test_parallel.sh invocation, expected sibling, not deferred.
+
+  This does not touch the original protection: a plain `mix test` (no
+  `TEST_PARALLEL_GROUP` set) still has no group to match against, so every other
+  `letflow_mixtest_*` tag it sees is still treated as external and still defers,
+  exactly as ISS-0110 specified. Likewise a genuinely nested invocation inside a
+  `test_parallel.sh` run (ISS-0107's scenario) carries no group tag of its own, so it
+  never matches the parent run's group and still correctly triggers deferral.
   """
 
   require Logger
@@ -163,15 +188,37 @@ defmodule Letflow.TenantSchemaReaper do
   # invocation than this one. Matches only the "letflow_mixtest_" tag prefix this
   # project's own config/test.exs writes -- a bare Postgres session with no such tag
   # (e.g. a human's psql shell) is not a mix test invocation and is correctly ignored.
+  #
+  # ISS-0217: a tag optionally carries a "_grp<id>" suffix (config/test.exs, when
+  # TEST_PARALLEL_GROUP is set) shared by every sibling partition one
+  # scripts/test_parallel.sh invocation launches. A connection whose group matches
+  # our own is an EXPECTED sibling, not a hazard -- excluded from this check. A
+  # connection with no group, or a different group, is a genuinely separate
+  # invocation and still counts as concurrent, exactly as ISS-0110 originally
+  # required (this preserves that protection for the plain-`mix test`,
+  # solo-invocation, and nested-invocation cases, none of which carry a matching
+  # group tag).
   defp concurrent_invocation_present?(repo, own_tag) do
+    own_group = group_tag_of(own_tag)
+
     %{rows: rows} =
       repo.query!(
-        "SELECT 1 FROM pg_stat_activity " <>
-          "WHERE application_name LIKE 'letflow_mixtest_%' AND application_name <> $1 LIMIT 1",
+        "SELECT application_name FROM pg_stat_activity " <>
+          "WHERE application_name LIKE 'letflow_mixtest_%' AND application_name <> $1",
         [own_tag]
       )
 
-    rows != []
+    Enum.any?(rows, fn [name] -> is_nil(own_group) or group_tag_of(name) != own_group end)
+  end
+
+  # Extracts the trailing "_grp<id>" suffix an application_name may carry (ISS-0217),
+  # or nil if it carries none (a plain "letflow_mixtest_<pid>" tag, ISS-0110's
+  # original shape).
+  defp group_tag_of(tag) do
+    case Regex.run(~r/_grp(.+)$/, tag) do
+      [_, group] -> group
+      nil -> nil
+    end
   end
 
   # Drops the row's real Postgres schema and deletes its tenant_schemas/tenants

@@ -652,3 +652,45 @@ hazard).
 **What this does NOT fix:** ISS-0110's own related finding (`docs/issues/ISS-0113.yaml`) — a
 separate `Sandbox.mode(:auto)`-leak hazard in the copy-pasted fixture template — is unrelated
 to this reaper and was investigated/reverted separately this session, not folded in here.
+
+## 12. Extension (ISS-0217, 2026-08-21) — sibling `test_parallel.sh` partitions vs. a genuine external invocation
+
+**Executed directly by ORCH (self-diagnosed/designed/reviewed — no role split available in this
+execution context; stated plainly per this session's convention).**
+
+§11's liveness check has a false-positive `scripts/test_parallel.sh` itself triggers: it forks
+N `mix test` OS processes for ONE logical run, each with its own `System.pid()` and therefore
+its own distinct `letflow_mixtest_<pid>` tag. Any one partition's `sweep_orphans/2` call sees
+the other N-1 partitions' tags in `pg_stat_activity` and — correctly, by §11's own logic, but
+wrongly for this case — treats each as a hazardous external invocation and defers every sweep
+for the entire run. `TenantSchemaReaperTest` passed 6/6 in isolation and failed identically
+under `TEST_PARALLEL_N=4`, reproducing on demand.
+
+**The distinguishing fact `pg_stat_activity` alone cannot supply, and the fix that supplies
+it:** two `letflow_mixtest_*` connections opened by sibling partitions of the SAME
+`test_parallel.sh` invocation share nothing in `pg_stat_activity` that marks them as siblings —
+different PIDs, same as a genuinely nested invocation would show. The fix adds exactly one
+shared value: `scripts/test_parallel.sh` generates `TEST_PARALLEL_GROUP="tp$$"` once (its own
+shell PID) before forking its N partitions, exports it, and every partition — a child process of
+that shell — inherits it. `config/test.exs` appends it to `application_name` as a `_grp<id>`
+suffix when present. `concurrent_invocation_present?/2` (§11) now extracts that suffix from its
+own tag and from each other connection's tag, and excludes any match from counting as a hazard.
+
+**Why this preserves §11's protection exactly, not merely "mostly":** the exclusion only fires
+when BOTH tags carry the SAME group value. A plain `mix test` (no `test_parallel.sh`, no
+`TEST_PARALLEL_GROUP`) has no group to match against — `is_nil(own_group)` short-circuits to
+"every other tag is still a hazard," §11's original behavior, unchanged. A genuinely nested
+invocation inside a `test_parallel.sh` run (ISS-0107's scenario — a nested `mix test` inheriting
+the parent's DB port) is spawned without `TEST_PARALLEL_GROUP` set on ITS OWN invocation of
+`config/test.exs`'s tag logic (nothing propagates the parent script's export into a
+independently-invoked nested `mix test` unless that nested invocation happens to inherit the
+whole environment, and even if it did, it would carry the SAME group as its parent — which is
+arguably correct: a nested invocation deliberately sharing its parent's `test_parallel.sh`
+group is, definitionally, not an unrelated third party). The scenario this section closes is
+narrower and more common: N independently-scheduled sibling partitions of ONE run, which now
+correctly recognize each other.
+
+**Verification:** two full `TEST_PARALLEL_N=4` runs, `TenantSchemaReaperTest` passing both
+times — see this issue's PR for the quoted output. Zero change to `reclaim_row/2`, the
+schema-name validation, the `try/rescue/after` contract, or `sweep_orphans/2`'s public
+signature/return shape.

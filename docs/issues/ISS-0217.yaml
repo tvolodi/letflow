@@ -1,0 +1,87 @@
+id: ISS-0217
+title: >
+  scripts/test_parallel.sh sibling partitions trigger TenantSchemaReaper
+  concurrent-invocation guard ISS-0110, always deferring the sweep and failing
+  reclaimed/skipped assertions
+discovered_by: ORCH
+discovered_in_run: WF02-REQ067-20260821
+discovered_at: "2026-08-21T15:37:53Z"
+severity: MAJOR
+
+description: >
+  Filed from a MAJOR finding in `handoffs/WF02-REQ067-20260821/step-04-test-runner.json`
+  `result.issues`. `TenantSchemaReaper.sweep_orphans/2`'s ISS-0110 liveness guard defers
+  its entire sweep whenever `pg_stat_activity` shows any other `letflow_mixtest`-tagged
+  connection, since it cannot distinguish a live sibling's row from a dead one.
+  `scripts/test_parallel.sh`'s own N parallel `mix test` OS processes are exactly such
+  siblings from each other's point of view, so whichever partition runs
+  `test/support/tenant_schema_reaper_test.exs` sees the other partitions as another
+  invocation and defers entirely, making `reclaimed`/`skipped` always 0 regardless of the
+  test's own fixture setup. Reproduced directly: the 3 failing tests pass 6/6 in
+  isolation and fail identically inside a `TEST_PARALLEL_N=4` run, with the guard's own
+  deferral log line printed at each failure point. Distinct from ISS-0194/ISS-0212
+  (connection-pool exhaustion at `ecto.create`, already resolved) and from ISS-0110
+  itself (the original nested-invocation scenario the guard was built for, not this
+  sibling-partition trigger of the same guard).
+
+affected_files:
+  - scripts/test_parallel.sh
+  - config/test.exs
+  - test/support/tenant_schema_reaper.ex
+  - test/support/tenant_schema_reaper_test.exs
+  - lib/letflow/design/iss064-orphaned-tenant-schemas-fix.md
+
+related:
+  - ISS-0110  # the fix whose own guard this issue's finding is a false-positive of
+  - ISS-0194  # a related but distinct connection-budget issue, already resolved
+  - ISS-0212  # ditto
+
+queue_task_id: 217
+github_issue: https://github.com/tvolodi/letflow/issues/441
+github_issue_note: >
+  register_task created both the queue task (217) and its mirrored GitHub issue (441)
+  in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not
+  called separately.
+
+status: resolved
+resolved_in_run: WF03-ISS0217-20260821
+resolved_at: "2026-08-21T16:13:49Z"
+resolution_note: >
+  Fix: scripts/test_parallel.sh generates one TEST_PARALLEL_GROUP value ("tp$$", its
+  own shell PID) once before forking its N partitions, exports it, so every partition
+  (a child process of that shell) inherits it. config/test.exs folds a present
+  TEST_PARALLEL_GROUP into each connection's application_name as a "_grp<id>" suffix.
+  TenantSchemaReaper.concurrent_invocation_present?/2 (test/support/tenant_schema_reaper.ex)
+  now extracts that suffix from its own tag and from every other letflow_mixtest_*
+  connection found in pg_stat_activity, and excludes a matching group from counting as
+  a hazard -- same group, same test_parallel.sh invocation, expected sibling. A
+  connection with no group (a plain `mix test`) or a different group (a genuinely
+  separate/nested invocation, ISS-0107's scenario) still counts as external and still
+  triggers deferral, exactly as ISS-0110 originally specified -- preserving that
+  protection unweakened.
+
+  Design documented in lib/letflow/design/iss064-orphaned-tenant-schemas-fix.md's new
+  §12, extending the §11 (ISS-0110) section.
+
+  Verification: `TEST_PARALLEL_N=4 ./scripts/test_parallel.sh` run TWICE, both times
+  1390/1390 tests passed with zero failures (first pass at TEST_PARALLEL_GROUP=tp3265586,
+  second at tp3268548) -- satisfying the acceptance criterion's explicit "at least
+  twice" requirement. TenantSchemaReaperTest's own ISS-0110 nested-invocation test
+  (which simulates an external invocation via a fake, ungrouped application_name tag)
+  passed in both runs, confirming the original protection still holds.
+
+  INCIDENTAL FINDING, fixed in the same pass since it directly blocked the required
+  two-clean-runs verification: an earlier verification attempt hit 3 cascading
+  failures in one partition, traced to a pre-existing test-hygiene gap in
+  tenant_schema_reaper_test.exs's ISS-0110 test -- its `other_conn` (a raw Postgrex
+  connection simulating an external invocation) was only closed by an explicit call at
+  the end of the test body, so a transient connection-pool-pressure timeout on an
+  earlier assertion left it open for the rest of the partition's run, cascading
+  deferral into unrelated later tests. Added a guaranteed `on_exit` cleanup
+  (`if Process.alive?(other_conn), do: GenServer.stop(other_conn)`) so the connection
+  closes regardless of what else in the test raises. This is a test-hygiene fix, not a
+  change to sweep_orphans/2's own logic or contract.
+
+  Self-gated throughout (no CODE-DESIGNER/CODE-DESIGN-VALIDATOR/REVIEWER role split
+  available in this execution context) -- stated here plainly per this session's
+  established convention for that deviation.

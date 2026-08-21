@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0193-20260821/step-04-test-runner.json",
   "created_at": "2026-08-21T12:37:36Z",
   "started_at": "2026-08-21T12:37:36Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-21T12:53:33Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -34,10 +34,15 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "Full suite run via scripts/test_parallel.sh. At default N=16 (nproc on this 16-core host), 6/16 partitions crashed at `mix ecto.create` with 'too_many_connections' -- transient pool saturation (16 partitions x pool_size 32 vs max_connections 100), confirmed via docker exec psql pg_stat_activity probes (6, quiet, both before and after) and by reading partition logs (crash was at ecto.create, not during test execution). Retried once at default N per the handoff's guidance -- still saturated. Recovered using the script's own documented TEST_PARALLEL_N override (never a second Postgres container): TEST_PARALLEL_N=4 completed cleanly, 0 crashed partitions. Combined result: 1289 tests, 5 properties, 2 failures (1292/1294 passed).\n\nBoth failures are ONE group: test/mix/tasks/letflow_check_test_test.exs lines 105 and 126 (Mix.Tasks.Letflow.Check.TestTest). Attributed structurally: Route 1 -- neither that file nor lib/mix/tasks/letflow.check.test.ex appears in `git diff --name-only main...HEAD` (this branch's diff is exactly 3 files: lib/letflow/design/iss-0119-status-file-readability.md, test/docs/requirement_status_invariants_test.exs, test/support/status_history.ex -- no lib/letflow/ code, no migrations). Route 3 -- re-ran the failing file in isolation to check the mechanism directly rather than citing a prior report: 1/3 passed, 2/3 failed, same tests/symptoms. install_fake_mix/2's POSIX-only fake-mix mechanism (extensionless #!/sh file, ':'-joined PATH) does not work on Windows, so run/1 shells out to the REAL mix, recursing the suite -- measured live via Get-CimInstance (three real nested erl.exe mix-test children, PIDs 28296/40396/30324, that outlived the parent and held enough Postgres connections to push pg_stat_activity back into 'too many clients already'). This is exactly ISS-0107's filed mechanism (open, MAJOR, filed 2026-08-20, predates this branch's first commit c756b82). Killed the orphaned erl.exe processes as environment hygiene (Stop-Process -Force on all three) and confirmed pg_stat_activity back to 6 and `tasklist | grep erl` empty before finishing -- host left clean for RELEASE-VALIDATOR's own re-run.\n\ntest/docs/requirement_status_invariants_test.exs (this branch's own test file, A10 etc.) ran clean in both partitions that included it (partition 1: 306 tests/0 failures, partition 3: 413 tests/0 failures).\n\nAll five acceptance criteria met -- see test/reports/report-20260821-WF03-ISS0193-20260821.yaml for full detail including the acceptance_criteria_check section.",
+    "artifacts_out": ["test/reports/report-20260821-WF03-ISS0193-20260821.yaml"],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "finding": "At this host's default nproc (16), scripts/test_parallel.sh saturates the shared Postgres connection pool at `mix ecto.create` time (pool_size = schedulers_online*2 = 32 per partition x 16 partitions vs max_connections=100) and crashes several partitions before any test runs at all. Not a defect in this branch -- a host-sizing property of the script's own N-derivation vs this host's core count. Worked around here via TEST_PARALLEL_N=4 (the script's own documented override). Worth raising with whoever owns scripts/test_parallel.sh's design doc as a possible default-N cap suggestion; not this step's scope to fix."
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0193-20260821",
       "commit_sha_list": [],
@@ -46,7 +51,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "PASS -- no failure attributable to this branch. Route to ORCH / WF-04 Step 1 (RELEASE-VALIDATOR), which re-runs the suite independently. Flag the TEST_PARALLEL_N=4 host-sizing note above for whoever runs it next on this host."
   },
   "rework_count": 0,
   "max_rework": 3

@@ -370,7 +370,7 @@ only the commit before it, and do not record the write-back.**
 **Scope — the reading is universal, the boundary is for filling, and nothing is
 backfilled.** Items 1-3 describe properties the field always had, so they govern the
 reading of *any* handoff, of any age. What is boundary-scoped is filling practice: on a
-handoff created **at or after commit `SHA-PENDING-WRITEBACK`** (the commit this subsection landed in),
+handoff created **at or after commit `12f8f4c`** (the commit this subsection landed in),
 an agent fills the list as it always did and owes no write-back. **The 276 handoffs
 already carrying a `commit_sha_list` are NOT backfilled and no write-back is owed on any
 of them** — §4.1(b)'s no-backfill rule is the governing precedent. The boundary is

@@ -1,0 +1,80 @@
+id: ISS-0214
+title: >
+  Live capture_schema_state reproduction during WF03-ISS0115-20260821 full-suite run:
+  schema/tables missing despite successful provisioning
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0115-20260821
+discovered_at: "2026-08-21T13:24:43Z"
+severity: MAJOR
+
+description: >
+  Discovered incidentally during WF03-ISS0115-20260821's own bounded full-suite
+  verification run (2026-08-21T13:23:13Z, near the very end of a 594.4s / 1288-test
+  run, 1275 passed / 13 pre-existing unrelated failures). Not diagnosed, not
+  attributed to a specific test module -- the run piped `mix test` through `tail -30`
+  / `tail -15` for output-size reasons, which discarded the surrounding log and the
+  ExUnit seed, so the originating test/module could not be identified after the fact.
+  This is a real methodological lesson for the ISS-0109/ISS-0115/ISS-0116 family: never
+  truncate a full-suite run's raw output when hunting this failure class -- always tee
+  to an untruncated file.
+
+  THE CAPTURE ITSELF (`Letflow.TenantFixture.capture_schema_state/1`, emitted
+  automatically by the fixture's teardown path when `schema_present_before_drop` is
+  false, per `test/support/tenant_fixture.ex`):
+
+    tenant_id               = d00570cc-8849-476a-b51f-0ec4e3cc6a18
+    schema_name             = tenant_d00570cc8849476ab51f0ec4e3cc6a18
+    registration_present?   = true
+    provisioned_at          = ~N[2026-08-21 13:23:12]
+    migrations_applied_at   = ~N[2026-08-21 13:23:13]
+    schema_present?         = false
+    tables_present          = []
+    tables_missing          = [event_idempotency, event_payload_store,
+      event_type_registry, events, events_archive, groups,
+      instance_definition_snapshots, instance_projections, instance_sequence,
+      instance_state_snapshots, lua_script_execution_audit, process_definitions,
+      promotion_assertion_runs, promotion_reviews, tasks, tenant_role, tokens, users,
+      variable_schemas]  (19 tables -- the full expected table set; the schema itself
+      appears empty, not just some tables)
+    applied_versions        = []
+    manifest_versions       = [31 versions, 20260816120001..20260821000002]
+    versions_missing        = []  (NOTE: inconsistent with applied_versions=[] against
+      a 31-entry manifest -- per the fixture design's degradation rule, a []
+      versions_missing alongside empty applied_versions suggests applied_versions
+      itself is a DEGRADED/failed-query read, not a genuine empty result;
+      tables_missing, by contrast, lists real table names, so that read did NOT
+      degrade -- the table-absence observation looks first-hand real, not a query
+      failure)
+    observed_at_utc         = ~N[2026-08-21 13:23:13.677000]
+    db_now                  = ~N[2026-08-21 13:23:13.662927]
+    pg_backend_pid          = 100137
+
+  This is provisioning that completed (both timestamps real, registration row
+  present) with a schema later found completely empty of tables at teardown -- the
+  same symptom class ISS-0109/ISS-0116 describe, caught live for the first time since
+  ISS-0116's own fixture-adoption work landed minutes earlier in this same session.
+
+  WHAT THE NEXT RUN SHOULD DO: re-run the full suite with output teed to an
+  UNTRUNCATED file (never piped through `tail`/`head`) so a recurrence can be traced
+  back to its originating test module and correlated with the other instrumented
+  modules (identity_test.exs, rollback_test.exs, engine_test.exs,
+  engine/reconstruction_test.exs, promotion_test.exs,
+  promotion_assertion_rerun_test.exs). Do not re-litigate ISS-0109's refuted
+  mechanisms.
+
+affected_files:
+  - test/support/tenant_fixture.ex
+
+related:
+  - ISS-0109  # predecessor, refuted mechanisms live here
+  - ISS-0115  # the run that incidentally caught this
+  - ISS-0116  # sibling successor issue, same family, same session
+  - ISS-0112  # broader fixture-adoption issue, still open
+
+queue_task_id: 214
+github_issue: https://github.com/tvolodi/letflow/issues/424
+github_issue_note: >
+  register_task created both the queue task (214) and its mirrored GitHub issue (424)
+  in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not
+  called separately.
+status: open

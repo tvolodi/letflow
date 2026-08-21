@@ -5860,9 +5860,13 @@ requirements:
       pre-answer it: the choice needs a real correctness signal from S7
       (simulation and UAT parity) to decide from, and recording a
       preference before that signal exists would be guessing.
-      Write docs/migration/decisions/0013-cutover-strategy.md with an
+      Write docs/migration/decisions/0014-cutover-strategy.md with an
       explicit decision -- big-bang, or gradual/dual-running -- plus what
       happens to the Zig backend and when it is deprecated.
+      (This requirement originally reserved 0013. That number went to
+      decisions/0013-authorization-role-set.md on 2026-08-22, which was
+      actually decided; records are numbered in decision order, not
+      reservation order. See that record's "Note on numbering".)
       Reason from S7's actual output. Cite the specific parity results
       that support the choice; if S7's signal is weaker than the choice
       requires, the honest decision is to say so and name what further
@@ -5871,7 +5875,7 @@ requirements:
       so the open question has an owner and an id, not so it can be
       started early.
     acceptance_criteria:
-      - "docs/migration/decisions/0013-cutover-strategy.md exists with an explicit decision, not a pros/cons list"
+      - "docs/migration/decisions/0014-cutover-strategy.md exists with an explicit decision, not a pros/cons list"
       - "the decision cites concrete S7 parity results by name, rather than reasoning from first principles about migration strategies in general"
       - "the fate of the Zig backend is stated with a condition for deprecation, not a date"
       - "docs/migration/stage-8-frontend-cutover.md's Decisions section is updated to link the record and no longer list the question as open"
@@ -6041,3 +6045,381 @@ requirements:
       - "docs/mobile/requirements.md's MOB-7 Letflow note is updated to point at the finding instead of describing the verification as outstanding"
       - "no locale set is asserted as supported unless something in web/ actually supports it"
     depends_on: []
+
+  # ---------------------------------------------------------------
+  # S4 (continued) -- identity infrastructure and authorization
+  #
+  # Added 2026-08-22 (user-directed), after a gap analysis of what S1
+  # actually delivered versus what a working login requires.
+  #
+  # WHY THESE ARE S4 AND NOT A REOPENED S1. S1 is done and stays done:
+  # it delivered the identity *logic* -- token verification, claim
+  # mapping, JIT provisioning, tenant<->realm binding, the auth plug --
+  # and stage-1-identity.md is explicit that no real Keycloak or realm
+  # provisioning existed yet, calling that a deliberate scope narrowing
+  # rather than a deviation. What is missing is the identity
+  # *infrastructure* that logic runs against. Every requirement below is
+  # a precondition for S4's own goal (an API surface that serves an
+  # authenticated, authorized request), so S4 owns them.
+  #
+  # THE STATE THAT MOTIVATES THEM, verified against the tree 2026-08-22:
+  #   - docker-compose.yml declares exactly one service: postgres. There
+  #     is no identity provider in this system.
+  #   - config/dev.exs AND config/prod.exs both set
+  #     issuer: "https://placeholder-keycloak.invalid/realms/bpm-default".
+  #   - application.ex starts Oidcc.ProviderConfiguration.Worker against
+  #     that issuer unconditionally with backoff_type: :random, so a
+  #     running Letflow retries a non-existent host forever and
+  #     TokenVerifier.Oidcc can never verify a token.
+  #   - config/test.exs points at Letflow.Oidc.TokenVerifierDouble, so
+  #     the whole suite passes without an IdP. No test in this repo has
+  #     ever exercised a real token. That is why none of the above has
+  #     surfaced as a failure.
+  #   - Letflow.Api.Authorization (REQ-069, done) is referenced by
+  #     nothing. The matrix is correct and unreachable.
+  #
+  # See the S8 note above for the impl_order convention -- REQ-128..135
+  # are UNREGISTERED for the same reason.
+  # ---------------------------------------------------------------
+
+  - id: REQ-128
+    title: Add Keycloak to the dev stack with a Letflow realm and a real issuer
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      Give Letflow an identity provider to run against. Add a Keycloak
+      service to docker-compose.yml with realm import from a tracked
+      realm file, and replace the placeholder issuer in config/dev.exs
+      and config/test.exs with the real local one.
+      R-Co's equivalent is infrastructure/keycloak/realms/bpm-default.json
+      (175 lines) plus a keycloak service on quay.io/keycloak/keycloak:26.2
+      running `start-dev --import-realm`. Read it as prior art, but do NOT
+      copy it unchanged -- two things in it are wrong for Letflow:
+      (a) its realm defines only four roles, omitting PROCESS_OPERATOR,
+      and seeds an operator account with PLATFORM_ADMIN instead. Per
+      decisions/0013-authorization-role-set.md the realm defines all FIVE
+      roles from Letflow.Api.Authorization and the operator account holds
+      PROCESS_OPERATOR. Do not carry the PLATFORM_ADMIN grant across; it
+      is a privilege escalation baked into a seed value.
+      (b) R-Co fronts Keycloak with an nginx gateway purely to raise
+      large_client_header_buffers to 32k, because service-account JWTs
+      carrying many roles exceed nginx's 8k default and 400. Letflow has
+      no reason to introduce nginx -- expose Keycloak directly, and only
+      revisit this if a real header-size failure appears.
+      The realm MUST carry a protocol mapper that projects realm roles
+      onto a flat top-level `roles` claim (R-Co's is named `realm-roles`,
+      claim.name `roles`). This is not optional polish: web/src/auth/
+      tokenUtils.ts reads payload.roles and nothing else, so without the
+      mapper the SPA gets an authenticated session with zero roles and an
+      empty nav, with no error anywhere. Letflow.Oidc.ClaimMapping
+      already accepts both "realm_access.roles" and "roles", so the
+      backend will not catch this for you.
+      Port selection: pick a host port that does not collide with R-Co's
+      own stack (it uses 8081 for its Keycloak gateway) and follow this
+      repo's existing per-workspace .env pattern (LETFLOW_DB_PORT in
+      docker-compose.yml + config/db_port.exs) rather than hardcoding
+      one -- the same multi-workspace constraint applies.
+      Leave config/prod.exs's placeholder alone and say so in the result.
+      A real production issuer is a deployment concern, and inventing one
+      here would put a fictional hostname in a file that reads as
+      authoritative.
+    acceptance_criteria:
+      - "docker compose up -d starts Keycloak and it reaches a healthy state, with the actual healthcheck output quoted"
+      - "the realm's discovery document is fetched successfully over HTTP from the configured issuer, quoted in the result -- proving the issuer is real and reachable, not merely written down"
+      - "the realm defines all five roles from Letflow.Api.Authorization (PLATFORM_ADMIN, PROCESS_DESIGNER, PROCESS_OPERATOR, TASK_WORKER, AGENT_RUNNER), verified by reading them back from the running Keycloak rather than from the JSON file"
+      - "the seeded operator account holds PROCESS_OPERATOR and NOT PLATFORM_ADMIN, asserted explicitly"
+      - "a token obtained from the running Keycloak carries a flat top-level `roles` claim, demonstrated by decoding a real token and quoting the payload"
+      - "Oidcc.ProviderConfiguration.Worker starts against the real issuer and reaches a ready state instead of retrying, evidenced from a running node"
+      - "the Keycloak host port follows the repo's per-workspace .env pattern rather than being hardcoded, and does not collide with R-Co's stack"
+      - "config/prod.exs is unchanged and the result states why"
+    depends_on: []
+
+  - id: REQ-129
+    title: Prove the role set agrees across the matrix, the realm, and the SPA
+    owner: TEST-DESIGNER
+    status: pending
+    stage: S4
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      decisions/0013-authorization-role-set.md settles WHAT the role set
+      is. This requirement makes a future divergence fail loudly.
+      Three sources name roles independently: Letflow.Api.Authorization's
+      role/0 type, the realm file REQ-128 creates, and
+      web/src/components/layout/AppShell.tsx's nav gating. Nothing
+      connects them. A role removed from one is invisible at compile time
+      in both Elixir and TypeScript and silent at runtime -- the role
+      simply never appears in a token, the user sees a short nav, and no
+      error is raised anywhere. That is exactly how R-Co ended up shipping
+      a realm missing a role its backend referenced 48 times.
+      Add a test that reads the realm file's role list and asserts it
+      equals Letflow.Api.Authorization.roles/0. Add the SPA-side
+      equivalent: a check that AppShell's Role union contains no role the
+      matrix does not define. AGENT_RUNNER is expected to be in the matrix
+      and the realm but NOT in the SPA's union -- it is a machine role for
+      the deferred runtime-agent subsystem -- so the SPA check is
+      one-directional (no unknown roles in the SPA) rather than an
+      equality check, and that asymmetry must be stated in the test's own
+      name or docstring so the next reader does not "fix" it into
+      equality.
+      Do not change the role set here. If the sources disagree when you
+      wire this up, that is a finding to report, not a discrepancy to
+      silently resolve in whichever direction makes the test green.
+    acceptance_criteria:
+      - "a test asserts the realm file's role list equals Letflow.Api.Authorization.roles/0 exactly, and fails if a role is added to either side alone -- demonstrated by temporarily removing one and quoting the failure"
+      - "a frontend-side check asserts AppShell's Role union contains no role absent from the matrix, deliberately one-directional to allow AGENT_RUNNER"
+      - "the AGENT_RUNNER asymmetry is explained in the test name or docstring, not left for a reader to infer"
+      - "no role is added to or removed from any of the three sources by this requirement"
+      - "both checks run as part of an existing gate (mix test / the frontend check command) rather than as a script someone has to remember"
+    depends_on: [REQ-128]
+
+  - id: REQ-130
+    title: Design the authorization plug -- policy-key derivation across forwarded sub-routers
+    owner: CODE-DESIGNER
+    status: pending
+    stage: S4
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      Letflow.Api.Authorization (REQ-069, done) is a pure matrix that
+      answers "is this action allowed" given an AccessContext and an
+      endpoint_policy_key. Nothing calls it. It is correct, tested, and
+      completely unreachable -- grep for the module name across lib/
+      returns only its own definition.
+      Design the plug that makes it load-bearing: read
+      conn.assigns[:auth_context] (populated by Letflow.Plugs.AuthPipeline),
+      convert its role strings via roles_from_strings/1, derive the
+      endpoint_policy_key, call evaluate_access/2, and turn a Deny403 into
+      REQ-066's RFC 9457 problem document.
+      The hard part, and the reason this is a design requirement rather
+      than a straight implementation: endpoint_policy_key/2 takes a PATH
+      TEMPLATE ("/definitions/:id"), not a concrete path. Letflow.Plugs.
+      ApiPipeline forwards to ten sub-routers, and Plug's forward/2
+      rewrites conn.path_info, so by the time a request reaches a
+      sub-router the plug can no longer see the full template. Decide
+      explicitly where the plug sits and how it recovers the template --
+      per-sub-router with a scoped key, a route table consulted before
+      forwarding, Plug.Router's private route metadata, or something else.
+      Say which and why. A wrong choice here produces a plug that
+      silently authorizes the wrong policy key, which is worse than no
+      plug at all.
+      Also design for the failure mode where no policy key matches the
+      request. endpoint_policy_key/2 is a function-head-per-route
+      dispatch; an unmatched (method, path) must fail CLOSED. Name the
+      mechanism that guarantees that, and be explicit that adding a route
+      without adding its policy key must not yield an unguarded route.
+      INV-5 boundary: this plug answers "is this action allowed", never
+      "does this resource exist". A cross-tenant lookup is REQ-072's 404,
+      not this plug's 403 -- Api.Authorization's own moduledoc is explicit
+      that routing a cross-tenant lookup through it would let a prober
+      distinguish "exists, not yours" from "never existed". The design
+      must state the ordering that keeps that true.
+      Design only. No implementation code.
+    acceptance_criteria:
+      - "a design artefact exists under lib/letflow/design/ naming one mechanism for recovering the path template across forward/2, with the reasoning, not a list of options"
+      - "the design states where the plug is mounted relative to AuthPipeline, TenantStatus, and the forward/2 calls in Letflow.Plugs.ApiPipeline"
+      - "the fail-closed behaviour for an unmatched (method, path) is specified, including what happens when a new route is added without a policy key"
+      - "the INV-5 ordering (cross-tenant resolves to 404 before this plug can return 403) is stated explicitly"
+      - "the design says how AllowWithRowFilter is surfaced to a route handler, without specifying any single route's implementation -- REQ-132 applies it"
+      - "no implementation code appears in the artefact"
+    depends_on: []
+
+  - id: REQ-131
+    title: Implement and mount the authorization plug
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      Build REQ-130's design. Mount it so that every tenant-scoped route
+      is authorized, and make Letflow.Api.Authorization reachable for the
+      first time.
+      Deny403 responses go through REQ-066's Letflow.Api.Error /
+      Letflow.Api.Response contract -- one error shape across the whole
+      surface, Content-Type application/problem+json. Do not invent a
+      403 body here.
+      Security scope: this is a tenant-data path and needs
+      SECURITY-REVIEWER. The specific things to gate on, beyond the
+      generic checklist: roles arrive as attacker-influenced strings from
+      token claims, so the conversion must stay
+      Api.Authorization.roles_from_strings/1 -- an unrecognized string is
+      dropped, never widened, and String.to_existing_atom/1 is NOT used
+      (an unbounded-atom-creation vector the module's own moduledoc calls
+      out). And an unmatched route must deny, not allow.
+      Do not modify Letflow.Api.Authorization. It is a done, ported,
+      tested module and this requirement consumes it. If the matrix turns
+      out to be wrong, that is a separate finding routed through ORCH --
+      not an edit made while wiring the caller.
+    acceptance_criteria:
+      - "a request with a valid token but insufficient role receives 403 as an RFC 9457 problem document via Letflow.Api.Response, asserted on both body shape and Content-Type"
+      - "a request with a sufficient role passes through to the route, proven against a real route rather than a test-only endpoint"
+      - "an unmatched (method, path) denies rather than allows, with a test that would fail if the fallback were permissive"
+      - "a token carrying an unrecognized role string is treated as holding no role, not as holding an unknown-but-accepted one"
+      - "git diff shows lib/letflow/api/authorization.ex unchanged"
+      - "the plug's position in the pipeline matches REQ-130's design, and a test demonstrates it runs after AuthPipeline has populated auth_context"
+    depends_on: [REQ-130]
+
+  - id: REQ-132
+    title: Apply AllowWithRowFilter row scoping on the task read path
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      Letflow.Api.Authorization returns three decision kinds, and REQ-131
+      only makes two of them real (allow, Deny403). The third,
+      AllowWithRowFilter, means "allowed, but restricted to the caller's
+      own rows" -- a TASK_WORKER may list tasks, but only their own.
+      Apply it on the task read path (REQ-083's handleList/handleInbox).
+      A decision that is returned and then ignored is worse than one that
+      was never computed: it reads as enforced.
+      The row scope MUST come from the AccessContext's own user_id and
+      from nothing else. Api.Authorization's moduledoc states this is
+      structural, not merely tested -- evaluate_access/2 takes no third
+      parameter through which a request-supplied assignee_id filter could
+      reach it. Preserve that: a caller passing ?assignee_id=<someone
+      else> must not widen their own scope. That is the single most
+      likely way to get this wrong, because the query parameter and the
+      row filter want to feed the same Ecto where clause.
+      Needs SECURITY-REVIEWER (INV-2).
+    acceptance_criteria:
+      - "a TASK_WORKER listing tasks receives only rows where they are the assignee, asserted against seeded data containing another user's tasks"
+      - "a caller supplying an assignee_id query parameter naming a different user does NOT receive that user's rows -- an explicit test, since this is the intended attack"
+      - "a role whose decision is a plain allow (not AllowWithRowFilter) still sees the unfiltered set, so the filter is not applied indiscriminately"
+      - "the row scope is derived from the AccessContext user_id in code, verifiable by reading the query construction, not from any request-supplied value"
+      - "the tenant scoping from REQ-072 still applies underneath the row filter, proven by a test where the other user's tasks belong to another tenant"
+    depends_on: [REQ-131, REQ-083]
+
+  - id: REQ-133
+    title: End-to-end login -- SPA through Keycloak to an authorized API call
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S4
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      Make a human able to log in. This is the requirement that proves
+      the whole chain: SPA redirect -> Keycloak -> callback -> token ->
+      authenticated request -> AuthPipeline -> authorization plug ->
+      route -> rendered data.
+      The SPA side already exists and is migrated: ProtectedRoute
+      redirects to OIDC, OidcCallbackPage handles the return,
+      web/src/api/client.ts holds the token in memory only (never
+      localStorage, per FNFR-06 -- keep it that way). What is missing is
+      pointing it at the realm REQ-128 creates, and the redirect
+      URI / webOrigins entries that let the browser complete the flow.
+      Note that web/src/auth/OidcManager.ts and tenantConfig.ts both
+      default to http://localhost:8081/realms/bpm-default. That is R-Co's
+      nginx gateway port, not Letflow's Keycloak. Update the defaults and
+      web/.env.example together.
+      Verify by actually logging in as each of the seeded users and
+      confirming the nav differs by role -- a PLATFORM_ADMIN sees admin
+      entries, a TASK_WORKER does not. A green build proves nothing here.
+      Describe the browser session: who you logged in as, what you
+      clicked, what you saw.
+      Expect routes to 404 or error where S4 is incomplete (REQ-073..085
+      are pending). That is fine and expected. What must work is login,
+      session, role-gated nav, and at least one real authenticated data
+      fetch. Say explicitly which routes worked and which did not rather
+      than reporting a blanket success.
+    acceptance_criteria:
+      - "a real browser login as the seeded PLATFORM_ADMIN completes the full OIDC redirect/callback flow and lands on an authenticated view, described as an actual session"
+      - "a real browser login as the seeded TASK_WORKER shows a demonstrably narrower nav than the admin, with both navs listed"
+      - "at least one authenticated API call returns real data from Letflow, with the request and response quoted"
+      - "an authenticated call to a route the caller's role does not permit returns REQ-131's 403 problem document, observed from the browser rather than from a unit test"
+      - "no token is written to localStorage or sessionStorage, confirmed by inspecting browser storage after login"
+      - "OidcManager.ts, tenantConfig.ts, and web/.env.example agree on the authority, and the frontend check command passes"
+      - "the result lists which routes worked and which 404'd due to pending S4 work, rather than claiming blanket success"
+    depends_on: [REQ-128, REQ-131, REQ-117]
+
+  - id: REQ-134
+    title: Exercise a real Keycloak-issued token in the test suite
+    owner: TEST-DESIGNER
+    status: pending
+    stage: S4
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      config/test.exs sets token_verifier: Letflow.Oidc.TokenVerifierDouble,
+      so the entire suite passes with no identity provider running. That
+      was correct while none existed. Its consequence is that no test in
+      this repository has ever exercised a real token, which is why a
+      placeholder issuer and an unmountable authorization matrix both
+      survived to 2026-08-22 without a single failure.
+      Add an integration path that obtains a real token from the running
+      Keycloak (direct-access grant against the seeded users) and drives
+      it through AuthPipeline for real: signature verification against
+      the live JWKS, issuer/realm resolution, claim mapping, JIT
+      provisioning, and the authorization plug.
+      Keep TokenVerifierDouble as the default for the unit suite. Do NOT
+      make the whole suite depend on a running Keycloak -- that would
+      trade a blind spot for a flaky, infrastructure-coupled suite, and
+      this project already runs partitioned parallel test processes
+      (scripts/test_parallel.sh) that a shared external service would
+      serialize. The real-token path should be a tagged/excluded-by-
+      default set that a human or CI can run deliberately, with a clear
+      skip message naming what has to be running -- follow the pattern
+      web/tests/e2e/onboarding/ already uses ("Ensure docker-compose
+      services are running").
+      State in the result how a developer runs it, and confirm that
+      mix test with Keycloak stopped still passes.
+    acceptance_criteria:
+      - "a test obtains a genuine token from the running Keycloak and drives it through Letflow.Plugs.AuthPipeline end to end, with the real assertion output quoted"
+      - "the token's signature is verified against the live JWKS via the real verifier, not TokenVerifierDouble -- demonstrated by the test failing if pointed at a tampered token"
+      - "JIT provisioning creates a real user row on first authentication and reuses it on the second, asserted across two calls"
+      - "the default mix test run still passes with Keycloak stopped, quoted as evidence"
+      - "the real-token tests skip with a message naming exactly what must be running, rather than failing obscurely"
+      - "the result states the exact command a developer runs to execute them"
+    depends_on: [REQ-128, REQ-131]
+
+  - id: REQ-135
+    title: Design per-tenant realm provisioning, and size the port
+    owner: CODE-DESIGNER
+    status: pending
+    stage: S4
+    # impl_order: UNREGISTERED -- see the S8 note above
+    description: >
+      Letflow is multi-tenant and binds each tenant to an identity realm:
+      tenants.idp_realm_id, with a real unique partial index, and
+      Letflow.Identity.resolve_tenant_by_realm/1 driving tenant resolution
+      from a token's issuer. Nothing creates a realm. Letflow.
+      TenantProvisioning provisions database SCHEMAS only, and its own
+      moduledoc is explicit that onboarding orchestration is not built
+      there.
+      So today a tenant can exist in the database with an idp_realm_id
+      pointing at a realm that has never been created, and no code path
+      would notice until a login failed.
+      Design the port of R-Co's Keycloak provider adapter
+      (src/identity/provider/, 4,193 lines across 14 files -- provider.zig
+      alone is 1,626, bootstrap.zig 573, manager.zig 169, plus a
+      jwks_cache, a standards_verifier, and a stub adapter used for
+      testing). Establish: which parts are genuinely needed for realm
+      creation versus which duplicate what the oidcc library already
+      gives Letflow; whether the interface/adapter split (keycloak +
+      stub) is worth preserving; how realm creation composes with
+      TenantProvisioning's schema provisioning and REQ-076's onboarding
+      routes without either implicitly chaining the other -- REQ-022's
+      "No implicit chaining invariant" is deliberate and must not be
+      quietly dropped; and what happens when realm creation succeeds and
+      schema provisioning then fails, or the reverse.
+      That last point is the substance. This is a distributed transaction
+      across Postgres and Keycloak, and R-Co handled it with compensating
+      deletes plus a realm-existence guard on replay
+      (onboarding.zig's realm_guard). Say what Letflow does. A design that
+      omits the partial-failure path has not designed the hard half.
+      Deliverable is a design plus a SIZED implementation plan -- how many
+      requirements, what each covers -- not the implementation. Expect the
+      implementation to be its own batch; folding it into REQ-076's
+      onboarding routes would hide a multi-thousand-line subsystem inside
+      a route requirement.
+      Do not assume the whole adapter must be ported. Letflow uses oidcc
+      for verification where R-Co hand-rolled; the honest answer may be
+      that a much smaller admin-API client suffices. Establish that by
+      reading both, and state the line count you expect rather than
+      leaving it open.
+    acceptance_criteria:
+      - "a design artefact exists under lib/letflow/design/ covering realm creation, and states which parts of R-Co's 4,193-line provider subsystem are ported, which are dropped, and why -- per file, not as a blanket judgement"
+      - "the partial-failure path is designed explicitly: realm created then schema provisioning fails, and the reverse, including what a retry does"
+      - "the design states how realm provisioning composes with TenantProvisioning without violating REQ-022's no-implicit-chaining invariant"
+      - "an implementation plan names how many follow-on requirements it takes and what each covers, with an expected size for each rather than an open-ended estimate"
+      - "the relationship to REQ-076 (onboarding routes) is stated -- what REQ-076 calls, and what it must not absorb"
+      - "no implementation code appears in the artefact"
+    depends_on: [REQ-128]

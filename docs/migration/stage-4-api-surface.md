@@ -174,6 +174,35 @@ Elixir/OTP shape — the equivalent is the process dictionary via
 thread-local global. This is an idiom translation REVIEWER should
 confirm, not a behavior change.
 
+## Identity infrastructure and authorization (added 2026-08-22)
+
+S4's goal is an API surface that serves an **authenticated, authorized** request.
+Two thirds of that are currently unreachable, for reasons that sit outside the
+route-by-route port this stage was originally scoped as:
+
+- **There is no identity provider.** `docker-compose.yml` has one service,
+  `postgres`; the issuer in `config/dev.exs` and `config/prod.exs` is literally
+  `https://placeholder-keycloak.invalid/...`; and `application.ex` starts
+  `Oidcc.ProviderConfiguration.Worker` against it unconditionally, so it retries
+  a dead host forever. `config/test.exs` uses `Letflow.Oidc.TokenVerifierDouble`,
+  so nothing in the suite has ever exercised a real token — which is exactly why
+  this survived unnoticed. S1 deferred this deliberately; see
+  [`stage-1-identity.md`](stage-1-identity.md)'s "What S1 deferred" section.
+- **`Letflow.Api.Authorization` is unreachable.** REQ-069 landed a correct,
+  tested, fully-ported authorization matrix that **nothing calls** — grep for
+  the module across `lib/` returns only its own definition. Every route this
+  stage adds is currently authenticated but not authorized.
+
+`REQ-128`..`REQ-135` cover this: Keycloak in the dev stack with a five-role realm
+(`REQ-128`), a drift check across the three places roles are named (`REQ-129`),
+the authorization plug — design then implementation then row scoping
+(`REQ-130`..`132`), end-to-end login (`REQ-133`), a real-token test path
+(`REQ-134`), and a design for per-tenant realm provisioning (`REQ-135`).
+
+`REQ-128`, `REQ-130`, and `REQ-135` have no dependency on the pending route
+requirements and can start immediately; `REQ-132` and `REQ-133` wait on specific
+routes.
+
 ## Decisions
 
 **OQ-0 — RESOLVED (2026-08-20) by REQ-065's addendum to 0001: Plug/Bandit stands.**

@@ -1,0 +1,33 @@
+id: ISS-0215
+title: >
+  test/docs/requirement_status_invariants_test.exs is unformatted on main (introduced by
+  PR #420, ISS-0193) -- live evidence for ISS-0177/ISS-0110's gate-execution gap
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0177-20260821
+discovered_at: "2026-08-21T14:12:03Z"
+severity: MINOR
+
+description: >
+  Discovered while diagnosing ISS-0177/GH#363 (three 2026-08-20 runs merged unformatted
+  code past the mix format gate). Running `mix format --check-formatted` against current
+  main (post PR #420, ISS-0193, commit c692b02) found
+  `test/docs/requirement_status_invariants_test.exs` fails format-check today -- two
+  multi-line string interpolations collapsed onto one line each, both readable diffs
+  `mix format` itself proposes cleanly. This is CURRENT, not historical: proof the same
+  gate-execution gap ISS-0177 investigates is still live as of today. Filed separately
+  per ISSUE_QUEUE.md rather than fixed inside the ISS-0177 run, since that run is scoped
+  to the process gap, not to reformatting any specific file.
+
+affected_files:
+  - test/docs/requirement_status_invariants_test.exs
+
+related:
+  - ISS-0177  # the process-gap investigation this evidence supports
+
+queue_task_id: 215
+github_issue: https://github.com/tvolodi/letflow/issues/432
+github_issue_note: >
+  register_task created both the queue task (215) and its mirrored GitHub issue (432) in
+  one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
+  separately.
+status: open

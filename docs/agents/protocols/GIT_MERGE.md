@@ -154,6 +154,15 @@ previous run.** A failure you have structurally cleared is filed and forwarded p
    c. git rebase --continue
 
    d. Verify the build still passes:
+      mix format --check-formatted
+      If FAIL: mix format, git add <file>, git rebase --continue (added 2026-08-21,
+      ISS-0177/GH#363 — three 2026-08-20 runs merged unformatted code to main; none of
+      their own validation records mention running this check at all, and this step is
+      the reason: until now, Step Final re-verified compile and tests after rebase but
+      never format, so a producing step's own unreported/skipped format check had no
+      second chance to be caught before merge. This closes that gap structurally, at
+      the one point every run passes through regardless of what an earlier step did or
+      didn't report.)
       mix compile --warnings-as-errors
       If FAIL: fix compile errors, git add <file>, git rebase --continue
       mix test
@@ -171,7 +180,7 @@ previous run.** A failure you have structurally cleared is filed and forwarded p
       If FAIL (i.e. at least one failure is attributable to this branch, or is
       unattributed):
         → complete-handoff(status: FAIL,
-            issues: [{severity: BLOCKER, description: "build/tests failed after rebase"}])
+            issues: [{severity: BLOCKER, description: "format/build/tests failed after rebase"}])
         ORCH routes to ISSUE-FIXER; after PASS, return to step 5
    ────────────────────────────────────────────────────────────────────
 

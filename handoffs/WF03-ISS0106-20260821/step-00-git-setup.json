@@ -1,0 +1,65 @@
+{
+  "handoff_id": "c59776be-5b9d-4a64-806b-8c06b8ee321c",
+  "run_id": "WF03-ISS0106-20260821",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0106-20260821/step-00-git-setup.json",
+  "created_at": "2026-08-21T00:57:05Z",
+  "started_at": "2026-08-21T00:57:26Z",
+  "completed_at": "2026-08-21T00:58:42Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_SETUP.md",
+      "docs/issues/ISS-0106.yaml"
+    ],
+    "owned_modules": [
+      ".tool-versions",
+      "mix.exs",
+      "lib/mix/tasks/",
+      "lib/letflow/engine/variable_merge.ex",
+      "lib/letflow/engine/pin_resolver.ex",
+      "test/letflow/engine/pin_resolver_test.exs",
+      "test/letflow/engine/pin_rebind_test.exs",
+      "docs/migration/decisions/0005-pin-formatting-toolchain.md"
+    ],
+    "branch_name": "feature/WF03-ISS0106-20260821"
+  },
+  "task": {
+    "description": "WF-03 Step 00 (git setup) for the ISS-0106 resolution run. Follow docs/agents/protocols/GIT_SETUP.md exactly. This checkout is C:/Users/tvolo/dev/ai-dala/letflow, which is the PRIMARY worktree (it holds local main) -- `git worktree list` shows a second entry, C:/Users/tvolo/dev/ai-dala/letflow-wt2, but that is the secondary one, not this one, so the standard steps 1-8 apply here and NOT the 'Worktree variant'. Create and push branch feature/WF03-ISS0106-20260821 from an up-to-date main. Make no other file changes in this step.",
+    "acceptance_criteria": [
+      "`git pull --ff-only origin main` exited 0 (quote the actual output)",
+      "`git branch --show-current` outputs exactly `feature/WF03-ISS0106-20260821`",
+      "`git push -u origin feature/WF03-ISS0106-20260821` exited 0",
+      "No file in the working tree was modified by this step (`git status --short` shows nothing beyond pre-existing untracked/ignored files, and no tracked file is modified)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "GIT_SETUP standard steps 1-8 executed in the PRIMARY worktree C:/Users/tvolo/dev/ai-dala/letflow. `git worktree list` confirmed two entries (this one at [main], plus the secondary C:/Users/tvolo/dev/ai-dala/letflow-wt2 at [fix/ISS-0096-GH324-pack-resolution-enum]); since local main is checked out HERE, the Worktree variant does not apply and steps 1-2 were run as written. Step 1 `git checkout main` exited 0 ('Already on main', 'Your branch is up to date with origin/main'). Step 2 `git pull --ff-only origin main` exited 0 ('From https://github.com/tvolodi/letflow * branch main -> FETCH_HEAD' / 'Already up to date.') -- no divergence, so the BLOCKER path in the protocol was not taken. Step 4 skipped: the branch existed neither locally (`git branch --list` empty) nor on the remote (`git ls-remote --heads origin` empty), so no prior aborted run to delete. Step 5 `git checkout -b feature/WF03-ISS0106-20260821` exited 0 ('Switched to a new branch'). Step 6 `git branch --show-current` output exactly `feature/WF03-ISS0106-20260821`. Step 7 `git push -u origin feature/WF03-ISS0106-20260821` exited 0 ('* [new branch] feature/WF03-ISS0106-20260821 -> feature/WF03-ISS0106-20260821', tracking set up). Branch head is 159fe9ec5510f89821172a6aa6c06ca1f9410651, identical to main -- this step added no commits to the branch beyond the handoff-completion commit. No source file was created, modified, or deleted: the only file this step wrote is this handoff JSON. `git status --short` before branching showed `M handoffs/registry.json` and `?? handoffs/WF03-ISS0106-20260821/`, both pre-existing ORCH artefacts of this same run (the registry diff is +26/-1, ORCH's run entry); per HANDOFF_PROTOCOL.md section 7 those are expected context, and per section 4 registry.json is ORCH's to write, so it was deliberately left uncommitted and untouched.",
+    "artifacts_out": [
+      "branch: feature/WF03-ISS0106-20260821"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0106-20260821",
+      "commit_sha_list": [
+        "159fe9ec5510f89821172a6aa6c06ca1f9410651"
+      ],
+      "remote_branch": "origin/feature/WF03-ISS0106-20260821",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH routes to next step per active workflow (WF-03 ISS-0106 resolution); registry.json entry for this run still needs ORCH to flip step 00 to COMPLETED"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,88 @@
+id: ISS-0119
+renumbered_from: ISS-0111
+renumbered_at: "2026-08-21T03:46:21Z"
+renumbered_note: >
+  Same collision as ISS-0118's — see that record's renumbered_note for the
+  full account. Filed by WF03-ISS0106-20260821 as ISS-0111; a concurrent
+  session (WF03-ISS0109-20260821, PR #371) had independently allocated
+  ISS-0110..0117 and merged first. Renumbered to ISS-0119; main's
+  ISS-0111 (identity_migration_test's globally destructive bulk DELETE on
+  tenant_schemas) is a different finding and was kept byte-identical.
+  Confirmed before renumbering that none of main's ISS-0110..0117
+  describes this finding.
+
+  GitHub issue #373 keeps its number; its title and body were updated to
+  cite ISS-0119. letflow-queue task 186 is unchanged.
+title: "docs/status/requirement_status.yaml has outgrown the read-tool limit, disarming the append-only safeguard its own anti-pattern entry prescribes"
+discovered_by: DOC-UPDATER
+discovered_in_run: WF03-ISS0106-20260821
+discovered_at: "2026-08-21T03:43:30Z"
+severity: MAJOR
+description: >
+  Filed as an incidental finding of WF03-ISS0106-20260821's Step 5b, per
+  docs/agents/protocols/ISSUE_QUEUE.md — NOT fixed by that run.
+
+  WHAT IS WRONG. docs/status/requirement_status.yaml is now 361,376 bytes
+  (measured 2026-08-21; ~5,723 lines, 182 entries). The Read tool refuses a
+  single call above 256KB. So the instruction every agent is given before
+  touching that file — "read the existing file in full before touching it,
+  preserve its established schema, append, never rewrite" — is no longer
+  literally executable by any agent in this pipeline.
+
+  WHY THAT MATTERS MORE THAN AN INCONVENIENCE. That instruction is not
+  incidental advice; it is the specific safeguard adopted after an agent
+  (ELIXIR-DEV, REQ-003) rewrote this exact file from scratch with different
+  field names and silently discarded every prior history entry. The incident
+  is recorded in docs/anti-patterns.md under "Overwriting
+  docs/status/requirement_status.yaml instead of appending", and the
+  file's own header comment says "Append one entry per event. Never
+  rewrite past entries." The safeguard's mechanism is: see the whole file,
+  therefore notice the established schema, therefore append rather than
+  invent. A file too large to read in one call breaks that mechanism while
+  leaving the instruction that depends on it still written down and still
+  apparently followed. That is the dangerous shape — an agent can honestly
+  believe it complied while having seen only a fragment.
+
+  Note the compounding risk specific to this project: core-directives.md's
+  "Load Scoped Context, Not Whole Files" section actively pushes agents
+  toward targeted reads of large files, using docs/requirements.yaml as its
+  worked example. An agent applying that (correct) guidance here would read
+  a fragment of the status file and then append — which is exactly the
+  behaviour the anti-pattern entry warns produces schema drift. The two
+  rules now point in opposite directions for this one file, and nothing
+  records which wins.
+
+  A SECOND, SMALLER GAP FOUND IN THE SAME PASS. The file's header
+  documents the entry schema but never states what belongs in the `req`
+  field for work that is not tied to a requirement. WF-03 issue
+  resolutions are recorded as `req: SCOPE-CHANGE` — a convention
+  established only by ~30 precedent entries, discoverable solely by
+  reading enough of the file to notice it. This run's DOC-UPDATER found
+  it by surveying all 30 SCOPE-CHANGE locations and reading three in
+  full; an agent that could not do that survey would have had to guess,
+  and `req: ISS-0106` is the obvious wrong guess (there is no precedent
+  for a `req: ISS-NNNN` entry anywhere in the file). Documenting the
+  convention in the header would make it discoverable without a survey,
+  and is worth doing regardless of how the size problem is resolved.
+
+  SUGGESTED SCOPE, not prescribed. Two independent remedies, and the
+  second is worth doing even if the first is deferred:
+  (a) Make the file readable again — split by period (e.g. one file per
+      stage or per month with an index), or otherwise bound its growth.
+      Any split must preserve the full history; this file is audit trail
+      and nothing in it may be dropped.
+  (b) Rewrite the header so it prescribes an EXECUTABLE safeguard rather
+      than one that assumes a full read — e.g. name the exact scoped-read
+      technique that reveals the schema (read the header block plus the
+      last N entries), and state the `req: SCOPE-CHANGE` convention
+      explicitly so it no longer has to be inferred from precedent.
+
+  Do not resolve this by relaxing the append-only rule. The rule is
+  correct; it is the mechanism that supports it that has degraded.
+affected_files:
+  - docs/status/requirement_status.yaml
+  - docs/anti-patterns.md
+  - docs/agents/instructions/core-directives.md
+queue_task_id: 186
+github_issue: https://github.com/tvolodi/letflow/issues/373
+status: open

@@ -688,3 +688,25 @@ history:
       made there. README.md checked directly (grep for identity/Identity):
       no hit needing an update -- no externally-visible behavior
       documented there changes.
+  - req: REQ-074
+    event: started
+    agent: ORCH
+    at: "2026-08-21T23:49:10Z"
+    note: >
+      Picking up queue task 141 (GH#281) via get_next_task, immediately following
+      REQ-073's close. Dependency REQ-073 (id 140) confirmed done on main. Second
+      of four split requirements (REQ-073..076) porting identity.zig's 23-handler
+      user-management group; this one takes the 7 group-management handlers
+      (create/add-member/list/delete/list-members-array/list-members/remove-
+      member). Domain logic already exists (Letflow.Identity, REQ-015..021/063)
+      and is NOT rebuilt. Explicit investigation required: R-Co has BOTH
+      handleListGroupMembers and handleListGroupMembersArray -- must read both and
+      determine (not assume) whether these are two distinct endpoints or one with
+      a legacy shape, and state the finding in the moduledoc rather than silently
+      collapsing or duplicating. Security-critical: INV-1 (group membership is a
+      cross-entity relation, the classic place a join silently escapes tenant
+      scoping -- adding a cross-tenant user to a group must fail, not succeed with
+      a cross-tenant member row), INV-5 (cross-tenant fails the same way as
+      nonexistent, via REQ-072's mechanism). Branch feature/WF02-REQ074-20260822
+      created off origin/main and pushed (Step 00). Status flipped pending ->
+      in_progress here.

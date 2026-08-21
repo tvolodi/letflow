@@ -125,12 +125,13 @@
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0119-20260821",
       "commit_sha_list": [
-        "8ad3bb4"
+        "8ad3bb4",
+        "764fce2"
       ],
-      "remote_branch": null,
-      "push_status": null,
+      "remote_branch": "origin/feature/WF03-ISS0119-20260821",
+      "push_status": "PUSHED -- c622e79..764fce2 feature/WF03-ISS0119-20260821 -> feature/WF03-ISS0119-20260821 (exit 0). 8ad3bb4 = the ISS-0119 fix (11 files); 764fce2 = this completed handoff. handoffs/orchestrator.log was NOT committed -- post-push `git status --porcelain` still shows ` M handoffs/orchestrator.log`.",
       "pr_url": null,
-      "pr_create_error": null
+      "pr_create_error": "N/A -- no PR attempted at this step by design. WF-03 Step 3 routes to SECURITY-REVIEWER/REVIEWER before Step 4; PR creation and the merge decision belong to ORCH, which also owns the call on the red gate reported in issue ISS-0119-STEP3-F3."
     },
     "next_action": "Route to SECURITY-REVIEWER (Step 3a) if ORCH judges this a tenant-data path -- it is docs/process plus two YAML bookkeeping files with no lib/ runtime code, no migration, no route and no tenant data, so a skip is defensible but is ORCH's call -- then REVIEWER (hard gate), then TEST-DESIGNER at Step 4 for test/support/status_history.ex and test/docs/requirement_status_invariants_test.exs. TEST-DESIGNER must read issues ISS-0119-STEP3-F1 (the §8 Elixir digest form is wrong; use the corrected trim) and ISS-0119-STEP3-F2 (one ExUnit test block per assertion) BEFORE writing those files."
   },

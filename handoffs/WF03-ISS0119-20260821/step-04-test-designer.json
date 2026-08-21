@@ -1,0 +1,96 @@
+{
+  "handoff_id": "72f8fa22-e1ac-4cf0-9726-172444a0481a",
+  "run_id": "WF03-ISS0119-20260821",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0119-20260821/step-04-test-designer.json",
+  "created_at": "2026-08-21T06:37:55Z",
+  "started_at": "2026-08-21T06:37:55Z",
+  "completed_at": "2026-08-21T06:50:15Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "63604ce8-61dc-42f4-af70-bac7252a1b6f",
+      "203d3c65-a72e-4036-98d4-a7c05b57ba8b"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss-0119-status-file-readability.md",
+      "handoffs/WF03-ISS0119-20260821/step-03d-reviewer.json",
+      "handoffs/WF03-ISS0119-20260821/step-03-elixir-dev.json",
+      "docs/issues/ISS-0119.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "owned_modules": [
+      "test/support/status_history.ex",
+      "test/docs/requirement_status_invariants_test.exs",
+      "test/specs/ISS-0119.md",
+      "lib/letflow/design/iss-0119-status-file-readability.md"
+    ],
+    "branch_name": "feature/WF03-ISS0119-20260821",
+    "issue_ids": ["ISS-0119"]
+  },
+  "task": {
+    "description": "WF-03 Step 4 (regression test) for ISS-0119. Build the two test files the design specifies and PERFORM the fail-first demonstration. §7 gives assertions A0-A8, §7.1 gives the required procedure and the four outputs you must quote, §8 gives the digest definition.\n\nCREATE: test/support/status_history.ex (module Letflow.Test.StatusHistory, six functions plus current_volume/2 and default_ceilings/0, signatures in §7), test/docs/requirement_status_invariants_test.exs (assertions A0-A8), test/specs/ISS-0119.md (the test spec, carrying the fail-first evidence). ELIXIR-DEV deliberately did NOT create the two test files -- they are yours. mix.exs:20 already puts test/support on the :test load path, verified independently by CODE-DESIGN-VALIDATOR and REVIEWER at both HEAD and the pre-fix commit, so no build-config change is needed.\n\n=== THREE CONDITIONS CARRIED FROM REVIEWER'S STEP 3D RULING, all binding ===\n\nC1 -- APPLY THE §8 ERRATUM AND USE THE CORRECTED FORM. ELIXIR-DEV found, and REVIEWER independently reproduced, that §8's THREE digest implementations do not agree as §8 claims. Bash normative and PowerShell both yield 5a1a64ab0b999da3fd86be90109ecee46b9d538d9e9945c0d39fddb10075a804 (355,610 bytes hashed). §8's ELIXIR form as written yields 5c9fda42d72b0d46e4bf60cfc5a0fc044d7c36eb0192bc4b5e599c2a559b657a (361,376 bytes) -- exactly +5,766, one byte per line. Cause: File.stream!/1 opens in TEXT MODE on a CRLF checkout and has already stripped the CR, so String.trim_trailing(&1, \"\\r\\n\") -- which trims only that exact two-byte suffix -- matches nothing, the surviving \\n stays, and <> \"\\n\" appends a second. REVIEWER confirmed the mechanism directly: File.stream! yields line 1 as \"# RoCo — Requirement run history\\n\", a bare \\n. USE THIS CORRECTED FORM, which REVIEWER verified reproduces the normative value:\n\n  File.stream!(path) |> Enum.take(n) |> Enum.map_join(\"\", &((&1 |> String.trim_trailing(\"\\n\") |> String.trim_trailing(\"\\r\")) <> \"\\n\")) |> then(&:crypto.hash(:sha256, &1)) |> Base.encode16(case: :lower)\n\nORDER IS LOAD-BEARING: trim \"\\n\" FIRST, then \"\\r\"; never the literal two-byte \"\\r\\n\". This is what makes it correct on both a CRLF text-mode read and an LF/binary read, i.e. portable to CI where the checkout is LF. Quote the digest your test ACTUALLY computes and state whether it equals 5a1a64ab...804 -- §8's CHECK 5 was never dischargeable at Step 3 because the test did not exist yet, and ELIXIR-DEV correctly said so rather than claiming it.\n\nC2 -- CORRECT §8 INLINE, in the same commit, marked as an erratum ruled at Step 3d. REVIEWER's reason is exactly this run's own subject matter: an erratum that lives only in a handoff is the 'recorded where nobody lands' failure ISS-0119 is about. You are explicitly authorized to edit lib/letflow/design/iss-0119-status-file-readability.md for THIS ONE CORRECTION ONLY -- §8's Elixir bullet and any sentence claiming the three forms agree. Change nothing else in the artefact; it passed a hard gate on its third pass and the rest of it is not yours to revise.\n\nC3 -- ONE ExUnit `test` BLOCK PER ASSERTION. A0 through A8 each get their own block. This is not style: ExUnit aborts a block at its first failed assertion, and A0 is EXPECTED to fail in the pre-fix run (no index exists there). If A0 and A3 shared a block with A0 first, A3 would never execute and the pre-fix run would short-circuit on the missing index -- resurrecting the precise failure §7.1 opens by rejecting, and destroying the fail-first proof. A3 must not be preceded by A0 in the same block. CODE-DESIGN-VALIDATOR raised this as MINOR M1, ELIXIR-DEV confirmed §7's flat-bullet wording permits the bad reading, and REVIEWER concurred.\n\n=== THE FAIL-FIRST DEMONSTRATION IS MANDATORY, NOT OPTIONAL ===\n\n§7.1 is explicit that this obligation must be PERFORMED, not declared satisfied. Run its procedure in a THROWAWAY GIT WORKTREE against pre-fix commit 3d19e8c -- never a `git checkout` in this checkout, which holds local main and has a live sibling worktree; CODE-DESIGN-VALIDATOR verified the worktree approach disturbs neither. Quote all four required outputs from §7.1 VERBATIM, no paraphrase, and state plainly that A0 is expected to fail in that same pre-fix run for the same reason so no reader is misled by two red assertions. Clean up the throwaway worktree when done.\n\nThe property that must be demonstrated: A3 fails pre-fix ON SIZE (over: [:lines, :bytes], ~4,217 lines / ~260,644 bytes) via the {:no_index_fallback, \"docs/status/requirement_status.yaml\"} resolution -- NOT on a missing file -- and passes post-fix because the current volume resolves through the index to v2. If what you actually observe differs from that table in any way, report it; do not adjust the test until it produces the expected story.\n\n=== SCOPE ===\n\nDo NOT run the full suite -- TEST-RUNNER owns that at Step 4c, and REVIEWER noted the project gate is currently RED for pre-existing reasons unrelated to this branch (ISS-0109/ISS-0116 class). Running your own new test file, and the pre-fix worktree run, is required and expected. Do not touch docs/status/requirement_status.yaml, its volumes, the index, or any file under handoffs/ or test/reports/. handoffs/orchestrator.log has uncommitted ORCH edits -- leave it, stage by explicit path, never `git add -A`.\n\nONE THING REVIEWER ASKED BE PASSED ON: the moment you add these .exs files, this branch stops being a zero-code change, so REVIEWER's proof that the branch adds no failure main lacks EXPIRES. Do not restate that proof as though it still holds; TEST-RUNNER re-establishes the baseline independently at Step 4c.",
+    "acceptance_criteria": [
+      "test/support/status_history.ex created per §7's signatures, with no function hardcoding the index location",
+      "test/docs/requirement_status_invariants_test.exs created with assertions A0 through A8, each in its own ExUnit test block (C3)",
+      "The §8 Elixir digest erratum is applied using REVIEWER's corrected form, trimming \\n before \\r (C1)",
+      "lib/letflow/design/iss-0119-status-file-readability.md §8 is corrected inline and marked as an erratum ruled at Step 3d, with nothing else in the artefact changed (C2)",
+      "The digest the test actually computes is quoted, and its equality or inequality with 5a1a64ab...804 is stated explicitly",
+      "The §7.1 fail-first procedure was PERFORMED in a throwaway worktree against 3d19e8c, and all four required outputs are quoted verbatim in test/specs/ISS-0119.md",
+      "The spec states A3 failed pre-fix on SIZE via the no_index_fallback resolution, not on a missing file, and notes A0 is expected to fail in the same run",
+      "The post-fix run of the same unmodified assertion passes, and its output is quoted",
+      "The throwaway worktree was removed",
+      "No file under docs/status/, handoffs/ or test/reports/ was modified, and handoffs/orchestrator.log was not committed"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "All three test artefacts are built and all ten acceptance criteria are met; the fail-first demonstration was PERFORMED, not declared. test/support/status_history.ex implements every §7 signature (parse_index/1, measure/1, within_bounds?/3, entries/1, anomalies/3, frozen_prefix_digest/2, default_ceilings/0, current_volume/2, plus closure_footer/1, header/1 and entry_field_order/0 for A7/A8/A4) with no function hardcoding the index location or a volume list. test/docs/requirement_status_invariants_test.exs carries A0-A8 plus A3b, ONE test block each per C3, formatted clean and compiling with zero warnings. C1: the corrected digest form (trim \"\\n\" then \"\\r\", never the two-byte \"\\r\\n\") computes 5a1a64ab0b999da3fd86be90109ecee46b9d538d9e9945c0d39fddb10075a804 on this CRLF working tree -- EQUAL to the normative Bash value and to the index's frozen_prefix_sha256; §8 CHECK 5 is now discharged (A6 green). C2: §8 corrected inline with a marked erratum ruled at Step 3d; nothing else in the artefact touched. FAIL-FIRST: throwaway worktree at 3d19e8c (never a git checkout; sibling worktree letflow-wt2 undisturbed), two files copied in unmodified, mix deps.get, mix test. A3 failed pre-fix ON SIZE -- resolution {:no_index_fallback, \"docs/status/requirement_status.yaml\"}, over: [:lines, :bytes], 4,217 lines / 264,861 working-tree bytes (260,644 in the blob) against 1,200/120,000 -- NOT on a missing file. A0 failed in the same run for exactly that reason and the spec says so plainly. Post-fix, the same unmodified file gives 9/10 passed with A3 and A0 both green. Worktree removed and verified gone. All four §7.1 outputs are quoted verbatim in test/specs/ISS-0119.md. Status is PARTIAL, not PASS, for two honest reasons reported rather than tuned away: (1) A4 is RED on the fix branch on a REAL finding -- three previously undeclared malformed entries in frozen volume 1 -- and cannot be closed by TEST-DESIGNER; (2) the pre-fix run produced ten red assertions, not the two §7.1's prose anticipates. Both are detailed below and in test/specs/ISS-0119.md §6 and §4.",
+    "artifacts_out": [
+      "test/support/status_history.ex",
+      "test/docs/requirement_status_invariants_test.exs",
+      "test/specs/ISS-0119.md",
+      "lib/letflow/design/iss-0119-status-file-readability.md"
+    ],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "A4 IS RED ON THE FIX BRANCH -- a real undeclared-drift finding, not a broken test, and TEST-DESIGNER cannot close it. Implemented exactly as §7 specifies ('every entry carries all five fields in order with a parseable ISO-8601 at:. Exceptions only as declared in A5'), A4 found three previously unknown malformed entries in volume 1 on its first ever run: line 4803 (REQ-053, started) has no note: field; line 4896 (REQ-056, started) names its timestamp field `timestamp:` instead of `at:`; line 5050 (REQ-054, started) has no note: field. Independently corroborated by grep -c over volume 1: 182 `- req:`, 182 `event:`, 182 `agent:`, but only 181 `at:` and 180 `note:` -- arithmetic matching those three exactly. Vocabulary is clean (A5 green, A4's vocabulary limb empty); these are SHAPE violations. Why not fixed here: (a) remediation lives in docs/status/, which this step is forbidden to touch, and the entries themselves must never be edited -- volume 1 is frozen and pinned by A6, so correcting them is the rewrite the append-only rule forbids; (b) the index has NO declaration mechanism for shape violations -- known_anomalies: is keyed {path,line,field,value} and A5 asserts it equals the on-disk VOCABULARY violation set exactly in both directions, so adding the three there would turn A5 red. Closing this needs a design amendment (e.g. a separate known_shape_anomalies: key that A4 subtracts and A5 ignores), which is CODE-DESIGNER/REVIEWER's call -- and this step was authorized to edit only §8 of an artefact that cleared a hard gate on its third pass. The test was deliberately NOT weakened: suppressing this would produce a test that only ever runs against already-correct code, and this is exactly the silent drift ISS-0119 exists to stop -- it accumulated for months with no mechanical check and the first mechanical check found it.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "OBSERVED DIVERGENCE FROM DESIGN §7.1's PROSE, reported per instruction rather than tuned away. §7.1 anticipates 'two red assertions' in the pre-fix run. In fact ALL TEN were red: 'Result: 0/10 passed / Failed: 10 tests'. A0 and A3 failed as designed and are quoted verbatim in the spec; the other eight (A1, A2, A3b, A4, A5, A6, A7, A8) each raised '** (File.Error) could not read file \"docs/status/requirement_status.index.yaml\": no such file or directory' -- because, exactly as §7.1's own opening paragraph states, every assertion except A3 is derived from an index that does not exist pre-fix, and only A3 was engineered to degrade. This is an oversight in §7.1's prose, not a defect in the test or the design's mechanism: the fail-first property §7.1 specifies holds precisely as written, with A3 failing on SIZE via the degraded resolution and not on a missing file. The test was NOT adjusted to produce a tidier story. No design edit was made for this, since C2 authorizes editing §8 only.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "A1's literal wording in §7 ('every file matching docs/status/requirement_status*.yaml on disk appears in volumes:') would be self-failing, because that glob also matches docs/status/requirement_status.index.yaml, which is the index and not a volume. The test excludes the index by its own exact path (never by a naming heuristic) with an inline comment saying why. Recorded so the deviation is visible rather than silent.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "REVIEWER's Step 3d proof that this branch adds no failure main lacks HAS EXPIRED, as REVIEWER asked be passed on. It held while the branch was a zero-code change; these .ex/.exs files end that. It is not restated anywhere in the spec as though it still holds. TEST-RUNNER must re-establish the baseline independently at Step 4c. The full suite was deliberately NOT run here (Step 4c owns it); what was run is this one test file on the fix branch and in the pre-fix worktree.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0119-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0119-20260821",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH: route to TEST-DESIGN-VALIDATOR (Step 4b) as normal, but rule first on the MAJOR above. A4 is red on the fix branch on a genuine finding that TEST-DESIGNER is not authorized to close -- three undeclared shape anomalies in frozen volume 1, and no index/design mechanism exists to declare them without breaking A5. This needs a design amendment from CODE-DESIGNER with REVIEWER sign-off (suggested: a known_shape_anomalies: key in the index that A4 subtracts and A5 ignores), plus the corresponding index edit by ELIXIR-DEV/DOC-UPDATER, before TEST-RUNNER's Step 4c gate can go green on this file. Everything else in Step 4 is complete: 9/10 assertions green post-fix, fail-first performed and quoted, §8 erratum applied and the digest confirmed equal to 5a1a64ab...804, worktree torn down."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

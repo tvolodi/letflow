@@ -721,7 +721,8 @@ must be implemented exactly as stated in both `test/support/` and the Step 3 com
 
 Reference implementations, all of which must agree:
 
-- Elixir (the test): `File.stream!(path) |> Enum.take(n) |> Enum.map_join("", &(String.trim_trailing(&1, "\r\n") <> "\n")) |> then(&:crypto.hash(:sha256, &1)) |> Base.encode16(case: :lower)`
+- Elixir (the test) — **corrected; see the §8 ERRATUM below**:
+  `File.stream!(path) |> Enum.take(n) |> Enum.map_join("", &((&1 |> String.trim_trailing("\n") |> String.trim_trailing("\r")) <> "\n")) |> then(&:crypto.hash(:sha256, &1)) |> Base.encode16(case: :lower)`
 - Bash: `head -n 5766 $SF | tr -d '\r' | sha256sum`
 - PowerShell: build the stream, write it with no extra terminator, then hash the temp file.
   Given as a fenced block, not inline, because the command contains PowerShell's backtick
@@ -741,6 +742,45 @@ including the last, which is exactly the convention above, so it is the shortest
 expression of it. The Elixir and PowerShell forms must reproduce its digest; ELIXIR-DEV
 quotes both the `sha256sum` output and the value the test computes at Step 3, and they must
 match. (If they do not, the defect is in the implementation, not in this convention.)
+
+> **§8 ERRATUM — ruled at Step 3d by REVIEWER, applied at Step 4 by TEST-DESIGNER.**
+>
+> As originally written, this section's three reference implementations did **not** agree,
+> and the sentence introducing them ("all of which must agree") asserted a property that
+> did not hold. ELIXIR-DEV found the disagreement at Step 3 and REVIEWER reproduced it
+> independently at Step 3d.
+>
+> - Bash (normative) and PowerShell both yield
+>   `5a1a64ab0b999da3fd86be90109ecee46b9d538d9e9945c0d39fddb10075a804` (355,610 bytes
+>   hashed).
+> - The **original** Elixir form — `String.trim_trailing(&1, "\r\n")` — yielded
+>   `5c9fda42d72b0d46e4bf60cfc5a0fc044d7c36eb0192bc4b5e599c2a559b657a` (361,376 bytes
+>   hashed): exactly +5,766, one extra byte per line.
+>
+> **Cause.** `File.stream!/1` opens the file in **text mode**. On a CRLF checkout it has
+> already stripped the CR by the time the line reaches the mapper, so a trim of the literal
+> two-byte suffix `"\r\n"` matches nothing; the surviving `\n` stays, and `<> "\n"` appends a
+> second. REVIEWER confirmed the mechanism directly: `File.stream!` yields line 1 as
+> `"# RoCo — Requirement run history\n"` — a bare `\n`.
+>
+> **The correction**, now in place in the Elixir bullet above and in
+> `test/support/status_history.ex`: trim `"\n"` **first**, then `"\r"`, and never the literal
+> two-byte `"\r\n"`. **That order is load-bearing.** It is what makes the form correct both
+> for a CRLF text-mode read and for an LF/binary read — i.e. portable to CI, where the
+> checkout is LF. The convention stated above this erratum is unchanged; only the Elixir
+> expression of it was wrong.
+>
+> **Discharged.** §8's CHECK 5 was not dischargeable at Step 3 because the test did not yet
+> exist, and ELIXIR-DEV correctly declined to claim it. At Step 4 the corrected Elixir form,
+> as implemented in `Letflow.Test.StatusHistory.frozen_prefix_digest/2` and exercised by
+> assertion A6, computes
+> `5a1a64ab0b999da3fd86be90109ecee46b9d538d9e9945c0d39fddb10075a804` — **equal** to the
+> normative Bash value and to the `frozen_prefix_sha256` recorded in the index. All three
+> forms now agree. Evidence: `test/specs/ISS-0119.md`.
+>
+> This erratum is recorded here, inline in the artefact, rather than only in a handoff —
+> because "a correction recorded where nobody lands" is the failure class ISS-0119 is
+> itself about.
 
 **Old-citation resolution:** none is needed, and that is the point of freeze-and-roll.
 `docs/status/requirement_status.yaml` still exists, still holds the same content, still has

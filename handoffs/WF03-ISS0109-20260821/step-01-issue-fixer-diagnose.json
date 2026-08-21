@@ -92,11 +92,13 @@
     ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0109-20260821",
-      "commit_sha_list": [],
+      "commit_sha_list": [
+        "b07d9b9"
+      ],
       "remote_branch": "origin/feature/WF03-ISS0109-20260821",
-      "push_status": "pending",
+      "push_status": "ok",
       "pr_url": null,
-      "pr_create_error": null
+      "pr_create_error": "not attempted -- diagnosis-only step, no PR at Step 1 per WF-03"
     },
     "next_action": "Dispatch WF-03 Step 2 (fix design) to CODE-DESIGNER with this diagnosis. The design must NOT implement a teardown-race fix -- that mechanism is refuted. It must deliver (A) a shared test/support helper that replaces the 41-way copy-pasted provisioned_tenant/0 fixture and, on a provisioning/replay failure, captures the state that would settle the next occurrence in one shot (tenant_schemas row present?, schema present in information_schema.schemata?, provisioned_at, utc_now, table list); (B) teardown logging that is distinguishable in the log from a mid-test drop; and (C) a post-provision schema-completeness assertion so a partially-migrated tenant schema fails loudly at the fixture rather than 500 lines later as a 42P01. Separately, ORCH should (1) file the reaper 300s-min_age hazard and the identity_migration_test bulk tenant_schemas snapshot hazard as their own issues per ISSUE_QUEUE.md, (2) have ISS-0109.yaml's `mechanism:` section corrected and its `related:` list extended with ISS-0107 and ISS-0059, and (3) leave ISS-0107/GH#357 where it is -- real, but not the cause of either ISS-0109 failure."
   },

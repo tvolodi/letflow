@@ -1,0 +1,60 @@
+{
+  "handoff_id": "fc0563cc-ac54-44eb-9726-7d4f7f01fab2",
+  "run_id": "WF03-ISS0213-20260821",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0213-20260821/step-03b-reviewer-gate.json",
+  "created_at": "2026-08-21T13:24:46Z",
+  "started_at": "2026-08-21T13:24:46Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["4b9ec1b8-b236-4812-bb29-130e780abbcc"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0213-20260821/step-03-no-background-wait.json",
+      "docs/issues/ISS-0213.yaml",
+      "docs/agents/instructions/core-directives.md",
+      ".claude/agents/elixir-dev.md",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md"
+    ],
+    "owned_modules": [
+      "docs/agents/instructions/core-directives.md"
+    ]
+  },
+  "task": {
+    "description": "Closing gate on WF03-ISS0213-20260821. DOC-UPDATER added a new cross-cutting section 'No Background Wait For A Cross-Turn Notification' to `core-directives.md`, plus a pointer in `.claude/agents/elixir-dev.md`. Commit `155ae7c` on `main` (this was a small docs run, no feature branch). Read the producer's own report in `handoffs/WF03-ISS0213-20260821/step-03-no-background-wait.json` `result`, then re-derive -- don't trust the summary.\n\nRE-DERIVE, each item names what to check yourself:\n\n1. READ THE NEW SECTION IN core-directives.md IN FULL. Confirm it states plainly: a dispatched agent completes its work within its own tool-call loop; long-running operations are run SYNCHRONOUSLY, waited on to completion in the same turn, with the real result read before the turn ends; an agent never ends its turn backgrounding an operation while expecting a future cross-turn notification -- that mechanism belongs to the top-level orchestrating session only.\n\n2. VERIFY THE INCIDENT CITATION. Open `handoffs/WF03-ISS0193-20260821/step-final-git-merge.json` (specifically its `not_agent_attested`/`result` fields recording the stalled agent's own words) and confirm the new section's citation matches what actually happened -- the agent's own 'waiting for a background test monitor' phrasing, the orphaned-process side effect, and that ORCH resolved it via HANDOFF_PROTOCOL section 4.1(a-2).\n\n3. CONFIRM HANDOFF_PROTOCOL.md SECTION 4.1 IS GENUINELY UNTOUCHED. `git show 155ae7c -- docs/agents/shared/HANDOFF_PROTOCOL.md` should show NOTHING -- that file must not appear in this commit at all. This is the load-bearing scope boundary: the issue is explicit that this is a prevention fix, not a recovery-procedure change, and section 4.1 already correctly handles the recovery shape.\n\n4. JUDGE THE CANONICAL-HOME DECISION. Read `.claude/agents/elixir-dev.md`'s addition: confirm it is a genuine pointer (references core-directives.md's new section, does not restate the rule) placed sensibly (the report says it landed in the 'Self-review before finishing' list next to the mix test/mix compile checks). Judge whether core-directives.md is in fact the right canonical home given the hazard is about how ANY dispatched subagent behaves, not specific to ELIXIR-DEV -- or state if you would have chosen differently and why that does not rise to a FAIL.\n\n5. CONFIRM THE EXISTING-STATEMENT SEARCH WAS REAL. The report claims a search across core-directives.md's own sections, ORCHESTRATOR.md, WF-02's workflow doc, test-runner.md, orchestrator.md and elixir-dev.md found no existing partial statement of this rule. Spot-check at least two of those files yourself for background/notification/async/polling language before accepting that this is fresh text rather than an undetected duplicate.\n\n6. ISSUE CLOSURE. `docs/issues/ISS-0213.yaml` carries `status: resolved`, `resolved_in_run`, a plausible `resolved_at`. Confirm GH#421 is closed with `gh issue view 421 --json state,closedAt` directly.\n\n7. BOOKKEEPING AND SCOPE. `git show --stat 155ae7c`: only `.claude/agents/elixir-dev.md`, `docs/agents/instructions/core-directives.md`, `docs/issues/ISS-0213.yaml` and this run's own handoff should appear. `handoffs/orchestrator.log`/`handoffs/registry.json` are ORCH's, deliberately uncommitted -- confirm 0 deletions on both and leave them alone. Confirm the step-03 handoff's own schema is clean: top-level `status` is `COMPLETED` (ORCH corrected a stale `IN_PROGRESS` mechanically after the report landed -- confirm the correction, not the original).\n\nSCOPE OF `result.issues`: only genuine defects -- fails a criterion, contradicts another document, states a false checkable claim, or would mislead a later agent. Not style or wording preference.\n\nVERDICT: PASS or FAIL against the seven acceptance criteria on the Step 03 handoff plus the items above. A FAIL names each failed criterion and the specific gap. Commit your own handoff file to `main` directly (docs-only, no feature branch). Do not write `registry.json` or `orchestrator.log`.",
+    "acceptance_criteria": [
+      "The new core-directives.md section is read in full and confirmed to state completion-within-loop, synchronous waiting, and the no-cross-turn-notification rule unambiguously",
+      "The incident citation is verified against handoffs/WF03-ISS0193-20260821/step-final-git-merge.json's actual recorded account, not accepted from the summary",
+      "git show 155ae7c -- docs/agents/shared/HANDOFF_PROTOCOL.md shows nothing -- section 4.1 is confirmed genuinely untouched",
+      "The elixir-dev.md addition is confirmed a genuine pointer, and the canonical-home choice is judged (agreed or a stated disagreement that does not rise to a FAIL)",
+      "At least two of the claimed-searched files were independently spot-checked for a pre-existing partial statement of this rule",
+      "GH#421's closed state was confirmed with gh directly, and ISS-0213.yaml's resolved fields were read from the file",
+      "git show --stat confirms scope is limited to the three docs files plus this run's own handoff; orchestrator.log/registry.json show 0 deletions; the step-03 handoff's top-level status is confirmed COMPLETED",
+      "result.issues contains only genuine defects, not stylistic observations"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

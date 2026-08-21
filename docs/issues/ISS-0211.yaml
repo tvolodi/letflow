@@ -1,0 +1,43 @@
+id: ISS-0211
+title: >
+  ORCH rework dispatch text can leak the original claim-step instruction into a rework
+  note, leaving a handoff top-level status stale despite a correct result.status
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0210-20260821
+discovered_at: "2026-08-21T11:36:40Z"
+severity: MINOR
+
+description: >
+  Filed by ORCH from a MINOR finding in
+  `handoffs/WF03-ISS0210-20260821/step-03c-reviewer-regate.json`'s `result.issues`,
+  against ORCH's own dispatch-authoring rather than any agent's work. Read it there.
+
+  On WF03-ISS0210-20260821 Step 03's rework note copy-pasted the original dispatch
+  text's claim-step instruction ("claim by setting status to IN_PROGRESS only") into
+  the rework note appended to the same handoff. That instruction is correct at the
+  FIRST claim of a fresh handoff but wrong once a handoff is being re-dispatched for
+  rework -- the completing agent should still flip `status` to `COMPLETED`/`FAILED`
+  per `HANDOFF_PROTOCOL.md` §3's table. The agent followed the literal instruction and
+  left top-level `status` at `IN_PROGRESS` despite a correctly attested
+  `result.status: PASS`. ORCH corrected the mechanical field directly rather than
+  reworking the agent a second time over ORCH's own error -- confirmed sound by the
+  re-gate -- but the underlying dispatch-authoring mistake is worth fixing at the
+  source so it does not recur on a future rework.
+
+  This is not a protocol gap -- `HANDOFF_PROTOCOL.md` §3's table already states
+  `status` is the receiving agent's field to flip on completing. It is ORCH's own
+  dispatch text reusing boilerplate without adapting it to a rework context.
+
+affected_files:
+  - docs/agents/ORCHESTRATOR.md
+
+related:
+  - ISS-0210  # the run whose re-gate raised it
+
+queue_task_id: 211
+github_issue: https://github.com/tvolodi/letflow/issues/410
+github_issue_note: >
+  `register_task` created both the queue task (211) and its mirrored GitHub issue (#410)
+  in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
+  separately. The id comes from `register_task`'s `issue_ref`, not a directory scan.
+status: open

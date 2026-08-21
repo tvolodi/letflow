@@ -5812,3 +5812,21 @@ history:
       scripts/test_parallel.sh alongside the existing scripts/timed_test.sh entry; no
       docs/migration/stage-N-*.md or docs/migration/decisions/*.md file was named by
       this requirement's acceptance criteria, so step 4 of WF-02 Step 6 is N/A here.
+  - req: REQ-113
+    event: done
+    agent: ORCH
+    at: 2026-08-21T07:56:20Z
+    note: >
+      Step Final (git merge) resumed and completed after the prior session's BLOCKED
+      log (2026-08-21T07:34:29Z, gh unauthenticated). gh CLI now authenticated
+      (user tvolodi, repo+workflow scopes). Branch had drifted since the BLOCKED log
+      (origin/main moved to b816a64), so re-fetched and re-rebased clean onto current
+      main (0 conflicts, 16 commits), force-with-lease pushed (tip ee352a5).
+      mix compile --warnings-as-errors: 0 warnings. mix test: 1274 passed, 0 failed.
+      Opened PR #384, merged via `gh pr merge --squash --delete-branch`
+      (main fast-forwarded b816a64 -> 8570dc7). Local cleanup verified: on main,
+      log shows the squash commit, clean tree, single worktree, remote branch
+      confirmed deleted. This is the event that makes REQ-113 actually present on
+      main -- the earlier DOC-UPDATER `done` event above reflected only the feature
+      branch. Queue task 188 released as done via letflow-queue, closing GH#376
+      (confirmed via `gh issue view 376`: state CLOSED).

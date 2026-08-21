@@ -91,7 +91,8 @@
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0119-20260821",
       "commit_sha_list": [
-        "6443eb2"
+        "6443eb2",
+        "bc9e0e8"
       ],
       "remote_branch": "origin/feature/WF03-ISS0119-20260821",
       "push_status": "ok",

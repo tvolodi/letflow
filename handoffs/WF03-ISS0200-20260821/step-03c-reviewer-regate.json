@@ -1,0 +1,59 @@
+{
+  "handoff_id": "3fe1f821-0530-4703-9a13-976d4a4e2b2a",
+  "run_id": "WF03-ISS0200-20260821",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0200-20260821/step-03c-reviewer-regate.json",
+  "created_at": "2026-08-21T10:23:04Z",
+  "started_at": "2026-08-21T10:23:04Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0200-20260821/step-03b-reviewer-gate.json",
+      "handoffs/WF03-ISS0200-20260821/step-03-record-verdict.json",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "docs/issues/ISS-0202.yaml",
+      "docs/issues/ISS-0200.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Re-gate of WF-03 / ISS-0200 Step 3 after rework iteration 1. You FAILED this edit at Step 03b on one BLOCKER; rework commit 291c48f is the response. Read your own prior gate at handoffs/WF03-ISS0200-20260821/step-03b-reviewer-gate.json and the reworked handoff at handoffs/WF03-ISS0200-20260821/step-03-record-verdict.json -- neither is restated here.\n\nTHIS RE-GATE IS DELIBERATELY NARROW, and the scope is the one YOU set: your own next_action said to re-gate only the amended line and the paragraph it sits in, and not to disturb what already passed. ORCH is holding you to that. Everything you certified at 03b -- the NO-CHANGE verdict on all three legs, ISS-0200 AC4 byte-identity, the NOT-A-RULE framing, the single-declaration of 6,000, (B)(ii)/(C) consistency, `no_defect`'s bar and name, the JSON fence, the sha-recording mechanism -- is settled. Do not re-litigate any of it. The one exception is AC4 byte-identity, which you MUST re-derive because a rework is exactly when a protected span gets clipped by accident, and because the rework shifted line numbers (your span was base 405-786; DOC-UPDATER reports it now at 470-851).\n\nWHAT TO GATE, and nothing else:\n\n(1) THE BLOCKER'S REMEDY. DOC-UPDATER took your subtraction option rather than the corrected-figure option, on the ground that your second argument -- wrong instrument at any value -- makes the number unusable regardless. Rule on whether the struck clause is fully gone, whether what replaced it carries the asymmetry claim on its own as you said it would, and whether the parenthetical it added (stating why no count is quoted, citing ISS-0202) is accurate rather than merely present. Confirm the clause you told it to KEEP and the attestation argument at what were lines 288-291 are genuinely untouched, not just reported as such.\n\n(2) THE DENSITY-METRIC QUALIFICATION, your MINOR-4. You found the least-dense large summary is metric-dependent -- yours was a different file from Step 1's. Rule on whether the new marker actually prevents the figures being read as exact, and specifically whether the reworded hand-read sentence is now TRUE: it was changed from asserting a corpus fact to asserting a property of the metric that selected it.\n\n(3) THE WF-03 STEP 5 CATCH-UP, your MINOR-2. Two parts. In ISSUE_QUEUE.md, the evidence bar now names `closed_in_run:` / `closed_at:` as the key pair. In WF-03_issue_resolving.md, Step 5's pseudocode block now warns that not every run ends in `resolved`. Gate both: that the key-pair choice is coherent with the rest of the vocabulary, that WF-03's deference to ISSUE_QUEUE.md as canonical survived (it must still not restate the vocabulary), and that an agent following the Step 5 pseudocode literally would now reach the right status. That last one is the whole point of the fix -- Step 5 of THIS run executes next and a weak model will follow that block literally.\n\n(4) AC4 BYTE-IDENTITY, re-derived by your own method against merge-base 7322185, post-rework. Report the hashes.\n\n(5) SCOPE: that the rework changed ONLY what it was asked to. `git diff 69fc2a1 291c48f` is the exact question.\n\nFAIL if any of the five is wrong; a second BLOCKER is a legitimate outcome and rework budget remains (this would be iteration 2 of 3). If you PASS, say so plainly -- ORCH takes a PASS here as clearing Step 3 outright and proceeds to Step 5, where ISS-0200 becomes the first record ever to carry `status: no_defect` and must therefore satisfy the bar you upheld.\n\nNon-gating findings go in result.issues at MINOR for filing, as before -- do not absorb them into a PASS and do not fix them yourself. Change no file except your own handoff.",
+    "acceptance_criteria": [
+      "A ruling on the BLOCKER remedy: the 449-of-605 clause fully struck, the replacement carrying the asymmetry claim on its own, the ISS-0202 parenthetical accurate, and the clause you told it to keep plus the attestation argument verified untouched by your own check",
+      "A ruling on whether the density-metric qualification prevents the figures being read as exact, and whether the reworded hand-read sentence is now true",
+      "A ruling on the WF-03 Step 5 catch-up: key-pair coherence, WF-03's deference to ISSUE_QUEUE.md intact, and whether an agent following the pseudocode literally now reaches the right status",
+      "ISS-0200 AC4 byte-identity re-derived post-rework against merge-base 7322185 by your own method, hashes reported",
+      "Scope confirmed from `git diff 69fc2a1 291c48f`: only the three intended edits",
+      "A plain PASS or FAIL on the edit as a whole, stated unambiguously",
+      "No file modified except this handoff (quote git status --porcelain)"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0200-20260821",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

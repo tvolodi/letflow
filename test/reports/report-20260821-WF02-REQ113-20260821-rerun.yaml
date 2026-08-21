@@ -1,0 +1,197 @@
+report_id: report-20260821-WF02-REQ113-20260821-rerun
+agent: RELEASE-VALIDATOR
+requirement: REQ-113
+workflow_step: WF-02 Step 5 (rerun, rework_count 1)
+handoff: handoffs/WF02-REQ113-20260821/step-05-release-validator-rerun.json
+branch: feature/WF02-REQ113-20260821
+commit: 6c55a33
+date: 2026-08-21
+
+toolchain:
+  mix: "Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  erlang: "Erlang/OTP 29 [erts-17.0.5] [64-bit] [smp:8:8] [jit:ns]"
+  mix_path: "/home/tvolodi/.asdf/shims/mix (asdf shim, exported manually onto PATH for this session)"
+  nproc: 8
+
+verdict: PASS
+
+summary: >
+  Reworked scripts/test_parallel.sh (dc93092/cf28a46) plus reworked design doc
+  §4.5/§4.6 (376bb81/df5b2a9) now correctly parses this toolchain's real
+  "Result: N[/M] passed (...)" / "Failed: N tests" output and uses parsed
+  failures_i as the authoritative exit signal. All six ACs independently
+  re-verified against the actual current code and real executions (not against
+  the prior report's narrative). One environment-capacity finding surfaced during
+  re-verification, not attributable to script logic: running at the host's real
+  nproc=8 (the default N derivation) triggers Postgres "too_many_connections"
+  under this repo's config/test.exs pool_size (schedulers_online()*2 = 16 per
+  partition, i.e. up to 128 concurrent connections requested across 8 partitions)
+  and, separately, Mix's own per-invocation build-directory lock serializes each
+  partition's startup even post-precompile -- both real, reproducible, and
+  independent of the parsing/aggregation logic under test. This is why the AC1/AC3
+  demonstrations below use TEST_PARALLEL_N=2 (a supported, documented override
+  per AC4/§3, not a special-cased workaround) for the side-by-side/exit-contract
+  evidence, while the N=8/nproc path is exercised separately to confirm AC4's
+  derivation and AC2's parsing/summing correctness under real (non-injected)
+  partition failures. See "environment_finding" below -- recommend a follow-up
+  requirement/decision record for the pool_size vs max-partition-count tension;
+  not a REQ-113 AC failure.
+
+ac1_evidence:
+  procedure: "design §5 AC1: plain `mix test` baseline vs scripts/test_parallel.sh's combined: line, same commit, TEST_PARALLEL_N=2 to avoid the connection-capacity confound documented below"
+  baseline_single_process:
+    command: "mix test"
+    exit_code: 0 (implicit -- suite finished normally, no explicit `echo $?` captured for this specific invocation but no error/abort printed)
+    duration: "Finished in 265.2 seconds (6.9s async, 258.3s sync)"
+    summary_line_verbatim: "Result: 1274 passed (5 properties, 1269 tests)"
+  parallel_script_run:
+    command: "TEST_PARALLEL_N=2 scripts/test_parallel.sh"
+    exit_code: 0
+    n: 2
+    n_source: "env override"
+    per_partition:
+      - "partition 1: 570 tests, 1 property, 0 failures, exit 0"
+      - "partition 2: 699 tests, 4 properties, 0 failures, exit 0"
+    combined_line_verbatim: "combined: 1269 tests, 5 properties, 0 failures (1274/1274 passed)"
+  verdict: >
+    PASS. Combined line's totals (1269 tests + 5 properties = 1274, 0 failures,
+    1274/1274 passed) match the baseline's "1274 passed (5 properties, 1269
+    tests)" exactly -- same commit, same suite, quoted verbatim side by side as
+    required.
+
+ac2_evidence:
+  procedure: "design §4.5: sum/cross-check each partition's own reported counts against real per-partition log content, not just process exit"
+  clean_n2_run: >
+    Both partitions in the AC1 run above parsed 0 failures with exit 0, no
+    WARNING lines -- consistent, non-mismatched cross-check per §4.5.
+  real_failure_content_cross_check_n8_run: >
+    A separate real N=8 (nproc-derived) run independently exercised the parser
+    against genuine non-injected ExUnit failures (Postgres connection exhaustion
+    under 8-way full-pool concurrency produced real test failures in two
+    partitions, not a parsing artifact -- see environment_finding). Partition 6's
+    raw log showed "Result: 207/208 passed" / "Failed: 1 test"; the script
+    reported "partition 6: 208 tests, 0 properties, 1 failures, exit 2" --
+    matches exactly. Partition 7's raw log showed "Failed: 16 tests" (16 distinct
+    numbered failures individually grepped from the log and hand-counted);
+    the script reported "partition 7: 142 tests, 0 properties, 16 failures, exit
+    2" -- matches exactly. This confirms the parser correctly extracts and sums
+    real (not just clean-path) per-partition counts, which the prior FAILed run
+    could not demonstrate at all (it always parsed 0/0/0 regardless of content).
+  injected_failure_n2_run: >
+    See ac3_evidence -- the deliberately-injected single failure parsed to
+    exactly 1 in the modified partition and 0 in the other, combined total 1,
+    also confirming real summing (1269 tests / 5 properties / 1 failure,
+    1273/1274 passed).
+  verdict: "PASS. Aggregation sums and cross-checks real per-partition parsed counts, verified against three independent real executions (2 clean, 1 with real non-injected failures, 1 with a deliberately-injected failure)."
+
+ac3_evidence:
+  procedure: "design §5 AC3: clean run (expect exit 0) vs deliberately-injected single failure (expect exit 1), TEST_PARALLEL_N=2"
+  clean_run:
+    command: "TEST_PARALLEL_N=2 scripts/test_parallel.sh"
+    exit_code: 0
+    combined_line_verbatim: "combined: 1269 tests, 5 properties, 0 failures (1274/1274 passed)"
+  injected_failure_run:
+    method: >
+      Added `assert 1 == 2` as an extra statement inside the existing
+      test "bad_request/1 builds the 400 document" in
+      test/letflow/api/error_test.exs (one line added, nothing else changed),
+      then ran the script, then reverted immediately via
+      `git checkout -- test/letflow/api/error_test.exs` -- confirmed clean via
+      `git status --short` afterward (no output) and never committed.
+    command: "TEST_PARALLEL_N=2 scripts/test_parallel.sh"
+    exit_code: 1
+    per_partition:
+      - "partition 1: 570 tests, 1 property, 1 failures, exit 2"
+      - "partition 2: 699 tests, 4 properties, 0 failures, exit 0"
+    combined_line_verbatim: "combined: 1269 tests, 5 properties, 1 failures (1273/1274 passed)"
+  verdict: >
+    PASS. Script's own exit code is 0 on the clean run and 1 on the
+    deliberately-failing run, per §4.6's collapsed contract. The modified
+    partition's raw exit_i is 2 (this toolchain's real ExUnit-failure exit code
+    per design §2.2), not 1 -- correctly not conflated with the script's own
+    collapsed exit 1 -- and its parsed failures count is exactly 1, tying this
+    evidence to AC2's aggregation rather than treating exit-code and
+    parsed-count as independent claims, as the design's §5 procedure requires.
+
+ac4_evidence:
+  procedure: "direct source read of scripts/test_parallel.sh's N-derivation block, plus both derivation paths actually exercised in live runs above"
+  source_check: >
+    Lines 51-69: order is (1) $TEST_PARALLEL_N env var if set and matches
+    '^[1-9][0-9]*$', (2) `nproc` if present, (3) `getconf _NPROCESSORS_ONLN` if
+    present, (4) hard-fail with a stderr message and exit 1 -- no silent
+    hardcoded numeric fallback anywhere in the block or elsewhere in the file
+    (grep for bare integer literals used as a partition count found none outside
+    this derivation block).
+  live_evidence:
+    - "TEST_PARALLEL_N=2 run: 'test_parallel: N=2 (source: env override)'"
+    - "unset-env run: 'test_parallel: N=8 (source: nproc)', matching this host's real nproc=8"
+  verdict: "PASS. Both derivation paths (env override, nproc) exercised live and match source; no hardcoded N anywhere in the script."
+
+ac5_evidence:
+  procedure: "direct source read of scripts/test_parallel.sh's compile step plus live run ordering"
+  source_check: >
+    Lines 73-81: exactly one `MIX_ENV=test mix compile` call, its exit code
+    captured and checked, script aborts before any partition launch if nonzero.
+    No other `mix compile` invocation anywhere else in the file (grep confirms
+    a single occurrence of the string "mix compile").
+  live_evidence: >
+    Every run above printed exactly one
+    "test_parallel: pre-compiling MIX_ENV=test (single compile, before any
+    partition launches)" line, before any "partition N:" line, confirming
+    ordering matches source.
+  verdict: "PASS. Pre-compile happens exactly once, strictly before any partition is launched, both by source and by live run ordering."
+
+ac6_evidence:
+  procedure: "path check"
+  observation: "File lives at scripts/test_parallel.sh (confirmed via `ls scripts/` and every invocation above using that literal path). Not under lib/ or test/."
+  verdict: "PASS."
+
+environment_finding:
+  title: "Postgres connection exhaustion + Mix build-lock serialization at N=8 (nproc default) on this host -- not a REQ-113 AC failure, flagged for follow-up"
+  detail: >
+    Two independent real N=8 (nproc-derived, no env override) runs of
+    scripts/test_parallel.sh on this host each produced real, non-injected
+    ExUnit failures/aborts that do NOT reproduce the baseline's clean 1274-pass
+    result: run A had 17 real failures (partitions 6 and 7, matching their raw
+    logs exactly -- confirms AC2's parser is correct, not broken, on real
+    content); run B had partition 8 abort entirely with no Result: line at all,
+    root-caused via its raw log to
+    "FATAL 53300 (too_many_connections) sorry, too many clients already" during
+    `ecto.create`/`ecto.migrate`, plus repeated
+    "Waiting for lock on the build directory (held by process ...)" lines
+    showing Mix's own build-directory lock still serializes each partition's
+    process startup post-precompile (a no-op read under the lock, per design
+    §4.2, but still lock-contended, which bunches the 8 partitions' DB-pool
+    acquisition into a burst rather than spreading it out). config/test.exs
+    line 25 sets `pool_size: System.schedulers_online() * 2` (16 per partition
+    on this 8-core host), so 8 concurrent partitions can request up to 128
+    connections against a Postgres instance whose configured max_connections
+    this session could not directly confirm (no docker exec access in this
+    sandbox) but is very plausibly at or near the traditional default of 100,
+    consistent with the observed FATAL 53300. This is a real host-capacity
+    constraint, independent of and not fixable by scripts/test_parallel.sh's
+    parsing/exit logic (which handled both anomalies correctly per its own
+    contract: run A's real failures were summed and reported non-zero exit;
+    run B's no-Result-line partition was correctly treated as a failure per
+    §4.5's cross-check). AC1/AC2/AC3's demonstrations above therefore use
+    TEST_PARALLEL_N=2 (an explicitly supported override, not a workaround
+    outside the design) to produce clean, reproducible evidence, while N=8's
+    real behavior is reported here rather than silently discarded.
+  recommendation: >
+    Not a blocker for REQ-113 (none of AC1-AC6 require N=nproc to be
+    collision-free on every host's Postgres config). Recommend a follow-up
+    requirement or decision record considering either a lower pool_size for
+    partitioned test runs or a documented recommended max TEST_PARALLEL_N per
+    host's Postgres max_connections -- surfaced here so it is not lost, per this
+    role's mandate to report real outcomes rather than silently smoothing over
+    an anomaly the demonstration procedure had to route around.
+
+acceptance_criteria_summary:
+  AC1: PASS
+  AC2: PASS
+  AC3: PASS
+  AC4: PASS
+  AC5: PASS
+  AC6: PASS
+
+next_action: "Route to DOC-UPDATER (Step 6)"

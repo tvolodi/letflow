@@ -52,4 +52,20 @@ github_issue_note: >
   call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called separately. The
   id comes from register_task's `issue_ref`, not from a directory scan. Ids 203-204 were consumed
   by other registrations and carry no ISS- record here -- non-contiguity is expected.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0205-20260821
+resolved_at: "2026-08-21T11:26:17Z"
+resolution_note: >
+  Verified first-hand by reading both gates' step-03b-reviewer-gate.json AC8/relevant
+  ACs directly (WF03-ISS0198-20260821: precedent 3b845b3, ruled via aa6c116's gate;
+  WF03-ISS0200-20260821: AC8 "THE TWO-COMMIT SHA-RECORDING MECHANISM ... RULED
+  AUTHORISED", ruling section 5 does not conflict (additive, not reductive, and
+  doesn't name handoff files) and section 4.1(b) backfill_note does not apply (spent,
+  belongs to not_agent_attested, would misapply it to a live agent's own attested
+  work) -- both gates reached the same conclusion independently). Added one paragraph
+  to the existing `result.git_evidence.commit_sha_list` subsection (settled 2026-08-21
+  by ISS-0209, which already made the write-back mechanism itself optional/authorised
+  but did not state the section 5 / section 4.1(b) boundary) stating both the section 5
+  non-conflict and the section 4.1(b) non-applicability explicitly, citing both prior
+  gate rulings by run-id and sha. No existing text weakened -- pure addition, verified
+  by `git diff --stat` (17 insertions, 0 deletions).

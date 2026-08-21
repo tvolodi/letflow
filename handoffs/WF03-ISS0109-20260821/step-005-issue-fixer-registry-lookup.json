@@ -73,11 +73,13 @@
     ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0109-20260821",
-      "commit_sha_list": [],
+      "commit_sha_list": [
+        "5755577"
+      ],
       "remote_branch": "origin/feature/WF03-ISS0109-20260821",
-      "push_status": null,
+      "push_status": "ok",
       "pr_url": null,
-      "pr_create_error": null
+      "pr_create_error": "not attempted -- diagnosis-only step, no PR at Step 0.5 per WF-03"
     },
     "next_action": "Dispatch WF-03 Step 1 (diagnosis) to ISSUE-FIXER as a fresh handoff. Verdict is 'not a recurrence', so no severity raise is warranted and ISS-0109 stays MINOR. Step 1 should start from ISS-0107 (nested real `mix test` on Windows -> orphaned BEAM against the shared DB) as the leading candidate for mechanism (b), re-derive the reaper-exclusion argument from source per issue (3) above rather than inheriting it, and treat the 300s-min-age erosion (issue 1) as a separate routable defect against ISS-0064's fix, not as part of ISS-0109."
   },

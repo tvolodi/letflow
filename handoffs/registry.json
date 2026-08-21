@@ -1588,6 +1588,29 @@
       "queue_agent_id_case_note": "Claimed with agent_id tvolo-win-orch; locked_by came back byte-identical. Release with that exact string, per the prior run's finding.",
       "outcome_note": "Settled in direction (a): ORCH stamps started_at at dispatch, from the SAME clock read as created_at. New HANDOFF_PROTOCOL.md section 1.2 is the single canonical statement; section 1 step 3 and section 3's table row now point at it, ORCHESTRATOR.md section 6 carries a four-line pointer, core-directives.md untouched (it never stated the rule). The direction was chosen on a corpus measurement, not on the prior text: 606 files, 468 gap-zero (ORCH-stamped), 89 gap>30s (agent-stamped), 25 NEGATIVE gap of which 20 have a created_at on a round :00 minute. That last class REVERSES the culprit the old rationale named -- the corruption on disk is a fabricated ORCH created_at, not an agent-written started_at, so the agents' second-resolution reads were the honest half of each pair. The gate re-ran the command and got 607/469, reconciling exactly to this run's own step-03b handoff created at 10:20:01Z. The argument for (a) is structural rather than the 5:1 count: one writer and one clock read makes started_at < created_at impossible rather than merely forbidden. Applied to its own next dispatch immediately -- step-03b's created_at and started_at are identical to the second and the spawn prompt did not ask for it. Three MINOR findings filed as ISS-0206 (task 206, GH#397) and ISS-0207 (task 207, GH#398).",
       "gate_process_note": "The REVIEWER disclosed that its first two commit attempts picked up stray @ characters from PowerShell here-string syntax used inside the Bash tool, and recovered via git reset --soft HEAD~2 plus a stash/pop cycle, re-committing from message files. ORCH verified the recovery independently: git log -p over this run's handoff directory shows no stray @ on any added line, the discarded shas 1865c81/e07b1b2 exist nowhere in the log, and the two ORCH-owned files came back intact at 8/0 and 21/0 deletions. Recorded because the disclosure was volunteered rather than discovered, and because Bash-tool-versus-PowerShell heredoc syntax is a live hazard on this host worth a future agent knowing about."
+    },
+    {
+      "run_id": "WF03-ISS0200-20260821",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "issue_ids": [
+        "ISS-0200"
+      ],
+      "stage": null,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "docs/agents/shared/HANDOFF_PROTOCOL.md",
+        "docs/issues/ISS-0200.yaml",
+        "docs/issues/ISS-0191.yaml"
+      ],
+      "lock_acquired_at": "2026-08-21T09:48:05Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (git setup) dispatched to ELIXIR-DEV, PENDING.",
+      "backfilled": false,
+      "queue_task_id": 200,
+      "queue_agent_id": "letflow2-orch",
+      "note": "WF-03 for ISS-0200 (GH#391, queue task 200), selected by get_next_task at 2026-08-21T09:48:05Z, agent_id letflow2-orch -- not by ORCH reading a file. ISS-0200 is the deliberately deferred other half of ISS-0198: that run fixed task.description only, and measured result.summary at 2.1x the dispatch side. Deliverable is a prose amendment (or a reasoned NO-CHANGE verdict, which the issue's own AC2 declares a legitimate resolution) to docs/agents/shared/HANDOFF_PROTOCOL.md section 2. Registry scanned before dispatch: the only entry with released_lock false is WF03-ISS0030-20260817, BLOCKED, whose owned_modules (test/letflow/tenant_provisioning_test.exs) do not overlap; ISS-0033 records that run as a resolved false positive superseded by its -resume entry. No overlap with the sibling worktree branch fix/ISS-0096-GH324-pack-resolution-enum either. Local main fast-forwarded cecda9a..7322185 before dispatch, picking up the sibling session's merged ISS-0198 run -- ISS-0200.yaml did not exist locally until that pull. Expected shape, per the WF03-ISS0198-20260821 precedent for a prose-amendment WF-03: Step 2 (CODE-DESIGNER) and Step 4 (regression test) recorded SKIPPED with stated reasons rather than as stub handoffs; producer/validator pair DOC-UPDATER/REVIEWER. Step 1 is asked to confirm or reject that shape rather than ORCH pre-deciding it. This run's own result.summary lengths are the subject matter, so they are being measured and will be reported at close as evidence for or against whatever the fix concludes."
     }
   ]
 }

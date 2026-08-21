@@ -1,0 +1,64 @@
+{
+  "handoff_id": "d28d01ee-b940-495a-a3ab-02b8228add3e",
+  "run_id": "WF03-ISS0200-20260821",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0200-20260821/step-00-git-setup.json",
+  "created_at": "2026-08-21T09:49:55Z",
+  "started_at": null,
+  "completed_at": "2026-08-21T09:51:10Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_SETUP.md",
+      "docs/issues/ISS-0200.yaml"
+    ],
+    "owned_modules": [
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/issues/ISS-0200.yaml",
+      "docs/issues/ISS-0191.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0200-20260821"
+  },
+  "task": {
+    "description": "Execute fn:git-setup per docs/agents/protocols/GIT_SETUP.md, steps 1-8, branch name feature/WF03-ISS0200-20260821. Use the NON-worktree procedure: ORCH ran `git worktree list` at 2026-08-21T09:49:37Z and this checkout (C:/Users/tvolo/dev/ai-dala/letflow-2) is the PRIMARY entry holding main -- re-verify that yourself rather than taking it on trust, and switch to the Worktree variant if your own check disagrees. Local main was fast-forwarded to origin/main (7322185) by ORCH at 2026-08-21T09:47Z, so step 2's pull should be a no-op; if it is NOT, stop and report FAIL per step 2. Change no file other than creating and pushing the branch.",
+    "acceptance_criteria": [
+      "git pull --ff-only origin main exited 0 (quote the output)",
+      "git branch --show-current outputs feature/WF03-ISS0200-20260821",
+      "git push -u origin feature/WF03-ISS0200-20260821 exited 0",
+      "git status --porcelain is empty -- this step creates a branch, it does not edit files"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "fn:git-setup executed per GIT_SETUP.md steps 1-8, NON-worktree procedure. Re-verified ORCH premise independently: git worktree list shows two entries (C:/Users/tvolo/dev/ai-dala/letflow-2 [main] and C:/Users/tvolo/dev/ai-dala/letflow-wt2 [fix/ISS-0096-GH324-pack-resolution-enum]); this checkout is the PRIMARY entry holding main, so the Worktree variant does not apply and the non-worktree procedure is correct -- ORCH premise confirmed. Step 1 git checkout main -> \"Already on main\" (exit 0). Step 2 git pull --ff-only origin main -> \"Already up to date.\" (exit 0), a no-op as ORCH stated; no divergence, so no step-2 FAIL. Step 4: no pre-existing local or remote branch of this name, so no -D was needed. Step 5 git checkout -b feature/WF03-ISS0200-20260821 -> \"Switched to a new branch\" (exit 0), HEAD 7322185. Step 6 git branch --show-current -> feature/WF03-ISS0200-20260821. Step 7 git push -u origin feature/WF03-ISS0200-20260821 -> \"* [new branch]\" (exit 0), tracking origin/feature/WF03-ISS0200-20260821. No file was changed and nothing was committed; the only write this agent made is the status/result fields of this handoff file itself.",
+    "artifacts_out": [
+      "branch: feature/WF03-ISS0200-20260821"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Acceptance criterion 4 (git status --porcelain is empty) is NOT literally met, and was already un-meetable when this step was dispatched. Working tree carries three pre-existing entries owned by ORCH, not by this step: \" M handoffs/orchestrator.log\", \" M handoffs/registry.json\", and \"?? handoffs/WF03-ISS0200-20260821/\" (the untracked dispatch directory containing this very handoff file). They were present before step 00 ran -- confirmed by git status on main prior to branching -- and this step created and pushed a branch without editing any file, which is what the criterion was written to assert. Reported rather than silently treated as satisfied; also worth ORCH noting that a criterion requiring an empty porcelain can never pass in step 00 while ORCH dispatch files are themselves uncommitted.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0200-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0200-20260821",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH routes to next step per active workflow (WF-03 for ISS-0200)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,67 @@
+{
+  "handoff_id": "195f40d6-427d-4dcd-92b0-98116435e35b",
+  "run_id": "WF03-ISS0200-20260821",
+  "workflow_id": "WF-03",
+  "step": "005-01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0200-20260821/step-005-01-diagnose.json",
+  "created_at": "2026-08-21T09:51:06Z",
+  "started_at": "2026-08-21T09:51:49Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0200.yaml",
+      "docs/issues/ISS-0198.yaml",
+      "docs/issues/ISS-0191.yaml",
+      "docs/issues/ISS-0201.yaml",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "handoffs/WF03-ISS0198-20260821/step-005-01-diagnose.json",
+      "handoffs/WF03-ISS0198-20260821/step-03-amendment.json",
+      "handoffs/WF03-ISS0198-20260821/step-03b-reviewer-gate.json",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "docs/agents/instructions/core-directives.md",
+      "handoffs/"
+    ],
+    "owned_modules": [
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/issues/ISS-0200.yaml",
+      "docs/issues/ISS-0191.yaml"
+    ]
+  },
+  "task": {
+    "description": "Combined WF-03 Step 0.5 (registry lookup) and Step 1 (diagnose), as ISS-0198's own run combined them. Read docs/issues/ISS-0200.yaml in full first -- it is the task, and its `description` states explicitly what it does and does NOT pre-decide.\n\nDo these, in order:\n\n(1) REGISTRY LOOKUP (Step 0.5). Search docs/issues/*.yaml for prior entries about handoff size, verbosity, redundancy or pipeline latency. State whether this is a first occurrence or a recurrence of a root cause a prior fix failed to remove. Per WF-03 Step 0.5 rule 2, a genuine recurrence forces severity to at least MAJOR regardless of the record's current MINOR.\n\n(2) VERIFY THE PREMISE BEFORE BUILDING ON IT. HANDOFF_PROTOCOL.md section 1.1 binds you here: ISS-0200's numbers were measured by ORCH on another run and are a checkable factual claim. ISS-0198's own diagnosis (handoffs/WF03-ISS0198-20260821/step-005-01-diagnose.json) overturned that issue's stated premise by measuring it, and the issue record was corrected rather than the measurement discarded. Do the same here: if your numbers disagree with ISS-0200's, your measurement wins and you say so.\n\n(3) MEASURE FIRST-HAND, over at least three runs (AC1). Do NOT inherit ISS-0200's figures. handoffs/ holds ~585 JSON files across ~65 run directories; parse them with python and Jason-free json.load. At minimum derive, per handoff and pooled: len(result.summary); its ratio to len(task.description); the distribution (median/p90/p95/max) across the whole corpus; and how those compare to the dispatch-side figures in the Enforcement note's H-SIZE section of docs/agents/shared/HANDOFF_PROTOCOL.md. Quote real numbers and the code that produced them. Put any script in scratch/ per core-directives.md's File Placement Rules.\n\n(4) ANSWER AC2 -- THE ACTUAL QUESTION. Is there a redundancy defect in result.summary that is DISTINCT from a summary being genuinely, justifiably long? This is the crux and it is not pre-decided. ISS-0200's record argues both sides itself: a dispatch restating a file it already names in artifacts_in is pure redundancy, whereas a result.summary is an ATTESTATION the acting agent owes first-hand. To answer it you need a mechanism, measured -- the dispatch-side answer was `cite-and-also-restate`, evidenced by all 20 corpus dispatches over 6,000 chars naming an artifacts_in basename inside the description. Find the equivalent mechanism for the result side, or establish by measurement that there is none. Candidate mechanisms worth testing rather than assuming: a summary restating content that already exists in a file named in its own artifacts_out; a summary restating its own issues[] entries in prose; a validator's summary restating the producer's summary; evidence (command output, counts, tables) inlined in prose where artifacts_out could carry it. Test the ones the corpus supports; report which you tested and which the data did not support.\n\n(5) A REASONED NO-CHANGE VERDICT IS A LEGITIMATE OUTCOME and AC2 says so in terms. Do not manufacture a rule to look productive. If the measurement shows result.summary length is bought by genuine attestation, say that, with the evidence, and recommend NO-CHANGE.\n\n(6) IF you conclude a fix is warranted, state WHAT it must change without writing it -- you are diagnosis, not implementation (WF-03 Step 1 rule 4). Say specifically: what the structured outlet should be (artifacts_out pointing at a written report, a required shape, or nothing), and why it does not weaken section 4's validator-re-derivation requirement or section 2's worked examples (AC4, and ISS-0200's closing DO-NOT). Say also whether a mechanical check should exist; if yes, note that AC5 requires it be added to ISS-0191's scope worded so nothing implies it runs today.\n\n(7) CONFIRM OR REJECT THIS RUN'S SHAPE. ORCH's working assumption, from the WF03-ISS0198-20260821 precedent, is that Step 2 (CODE-DESIGNER) and Step 4 (regression test) are recorded SKIPPED with stated reasons -- the deliverable is prose in a protocol doc, so there are no module interfaces to design and no code under test. Confirm that, or reject it and say what should run instead. ORCH is deliberately not pre-deciding it.\n\nDo NOT implement any fix, do not edit HANDOFF_PROTOCOL.md, and do not edit docs/issues/ISS-0200.yaml. Commit only your completed handoff file and any scratch script, per core-directives.md's File Placement Rules (scratch/ is git-ignored -- so in practice, only the handoff).",
+    "acceptance_criteria": [
+      "Step 0.5 answered: prior-match search over docs/issues/*.yaml reported, with a first-occurrence-or-recurrence verdict and severity consequence stated",
+      "ISS-0200's own measured figures independently re-derived or contradicted, with the disagreement stated plainly if there is one (HANDOFF_PROTOCOL section 1.1)",
+      "A first-hand measurement of len(result.summary) spanning at least three runs, with the producing code quoted and real distribution figures given -- not inherited from ISS-0200",
+      "An explicit verdict on whether result.summary carries a redundancy defect DISTINCT from justified length, naming the candidate mechanisms tested and which the corpus did or did not support",
+      "If a fix is recommended: what it must change, stated without writing it, plus why it does not weaken HANDOFF_PROTOCOL section 4's validator-re-derivation requirement or section 2's worked examples. If NO-CHANGE: the evidence for that, stated as a verdict and not as an absence of findings",
+      "An explicit confirm-or-reject of ORCH's assumption that Step 2 and Step 4 are SKIPPED on this run",
+      "No fix implemented; HANDOFF_PROTOCOL.md and docs/issues/ISS-0200.yaml are unmodified (quote git status --porcelain to show it)"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0200-20260821",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

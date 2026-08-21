@@ -76,7 +76,59 @@ queue_task_id: 184
 github_issue: https://github.com/tvolodi/letflow/issues/370
 github_issue_note: >
   Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (184) and its mirrored GitHub issue (#370) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
-status: open
+status: instrumented
+instrumented_in_run: WF03-ISS0116-20260821
+instrumented_at: "2026-08-21T13:02:15Z"
+instrumentation_note: >
+  Performed this issue's own prescribed step 1: adopted Letflow.TenantFixture in
+  test/letflow/definitions/rollback_test.exs (the module that produced this issue's own
+  reproduction, at :642), test/letflow/engine_test.exs, and
+  test/letflow/engine/reconstruction_test.exs (the latter two named by
+  WF03-ISS0119-20260821/TEST-RUNNER's carried finding as further sites reproducing the
+  identical 3F000 signature from their own hand-rolled fixtures). Each swap verified
+  behaviour-preserving: same Sandbox.mode(:auto), same provision_tenant_schema/1 +
+  replay_migrations/1 sequence (including engine_test.exs's/reconstruction_test.exs's
+  load-bearing default-manifest auto-seeding of platform event types), same teardown
+  (schema_name_for_tenant -> DROP SCHEMA IF EXISTS ... CASCADE -> delete_all Registration
+  -> delete_all Tenant). 74/74 tests pass in the three touched files
+  (`mix test test/letflow/definitions/rollback_test.exs test/letflow/engine_test.exs
+  test/letflow/engine/reconstruction_test.exs`). Full suite re-run: 1275/1288 passed;
+  the 13 failures are pre-existing and unrelated -- 10 in
+  test/letflow/identity_migration_test.exs (a public-schema FK-violation race,
+  `tenant_schemas_tenant_id_fkey`, not touching TenantFixture or any file this run
+  edited) and 3 in test/mix/tasks/letflow_check_test_test.exs (60s ExUnit timeouts
+  spawning a nested `mix test` subprocess, plus unrelated placeholder-Keycloak
+  connection-retry noise in the log) -- none carry the ISS-0109/ISS-0116 3F000/42P01
+  signature and none are in a file this run touched.
+
+  NO RECURRENCE WAS CAUGHT in this run's single full-suite pass, so root cause remains
+  genuinely UNKNOWN -- this run adds diagnostic capability, it does not fix anything,
+  and does not re-litigate any of the mechanisms this issue already lists as refuted.
+  `status: instrumented` per docs/agents/protocols/ISSUE_QUEUE.md's vocabulary: real,
+  verified capability shipped (3 more modules now emit a full
+  capture_schema_state/1 report on the next occurrence instead of a bare Postgrex
+  error), root cause not removed. This record has no successor and needs none --
+  it remains its own tracking point, per its own framing as ISS-0109's successor.
+
+  ISS-0112 (docs/issues/ISS-0112.yaml, queue task 180) is explicitly NOT resolved by
+  this run -- its own filing states a full 41-file migration is its own run with its
+  own blast radius, and this run deliberately bounded itself to the three
+  highest-priority sites this issue's carried findings named. ISS-0112 stays open and
+  untouched; a note was NOT added to it since the three files it would have listed as
+  "adopted" are exactly the ones this record already lists, and ISS-0112's own file
+  already names promotion_test.exs/promotion_assertion_rerun_test.exs as adopted --
+  duplicating that list here would drift from ISS-0112 being the authority on its own
+  adoption count.
+
+  role_registry_test.exs (carried_findings' sub-signature, :event_type_seed_failed /
+  :tenant_not_provisioned -- a DIFFERENT locus, registry row rather than schema, per
+  that finding's own reasoning) was deliberately NOT migrated in this run: its fixture
+  is structurally custom (inline in a `setup` block with an explicit, carefully
+  reasoned Sandbox :auto/:manual distinction tied to a specific cross-test-leakage
+  concern documented in its own moduledoc), not a copy-paste
+  insert_tenant!/drop_schema!/provisioned_tenant! trio like the three files this run
+  did adopt -- migrating it safely needs its own focused look, not a mechanical swap
+  applied here under this run's time budget.
 
 carried_findings:
   - from_run: WF03-ISS0119-20260821

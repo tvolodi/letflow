@@ -412,15 +412,26 @@ code and method in `handoffs/WF03-ISS0200-20260821/step-005-01-diagnose.json`):
   comparatively (the result side scores at or below the dispatch side on every axis), and
   the verdict rests additionally on evidence density (large summaries: median 65.3% of
   segments carry a digit, path or identifier; minimum 36.7%) and on a hand-read of the
-  least-evidence-dense large summary in the corpus, which restated its `artifacts_in`
-  nowhere.
+  least-evidence-dense large summary this metric selects, which restated its
+  `artifacts_in` nowhere. **Those density figures are directional and metric-dependent,
+  not exact.** An independently written variant of the same metric (segments over 25
+  chars, counted if they carry a digit, a path-like token or an `ABC-123` identifier)
+  reproduces the direction — large summaries above large descriptions — with different
+  absolute values *and* a different least-dense file. Which summary is the hardest case is
+  therefore a property of the metric, not a fixed fact about the corpus; do not cite these
+  numbers as exact without restating the metric that produced them.
 
 **The asymmetry is the finding.** The dispatch-side defect had two halves: a duplicated
 copy *and* an empty structured field the content should have travelled in
 (`requirement_text == {}` in 66 of 69). Neither half exists on the result side.
-`artifacts_out` is non-empty on 449 of 605 handoffs, and where it points at a real
-produced artefact the summary does not duplicate it. A duplicated copy is unmeasurable and
-drifts from the source it was copied from — that was the entire case for the rule above.
+Where `artifacts_out` points at a real produced artefact, the summary does not duplicate
+it. (No raw presence count for `artifacts_out` is quoted here, on purpose: ISS-0202
+measured that population to be heavily self-referential — handoffs whose `artifacts_out`
+names only their own file — so a bare count is contaminated; and being a presence count
+over all steps, including gate steps that correctly produce no artefact, it is the wrong
+counterpart to the dispatch side's `requirement_text == {}` either way.) A duplicated copy
+is unmeasurable and drifts from the source it was copied from — that was the entire case
+for the rule above.
 A `result.summary` is an **attestation**: it has no source to drift from, it *is* the
 source, and §4 makes the acting agent the only party who can write it. Length bought by
 attestation is not the same object as length bought by duplication, and the corpus says

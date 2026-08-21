@@ -222,7 +222,10 @@ every other reader point here rather than restating it.
   3. the **stated limitations of the method**, so a later reader can weigh the negative
      result instead of inheriting it as settled. A negative result that hides the weakness
      of the test that produced it is worth less than no record at all.
-  4. the **run-id and timestamp** of the run that reached the verdict.
+  4. the **run-id and timestamp** of the run that reached the verdict, recorded under the
+     key pair `closed_in_run:` / `closed_at:` — **not** `resolved_in_run:` /
+     `resolved_at:`, which assert a resolution that a `no_defect` record explicitly did
+     not perform and would re-introduce the false claim this status exists to prevent.
 
   This is deliberately the hardest of the three to earn cheaply, because it is the one an
   uninvestigated issue would most like to take. An issue nobody investigated cannot reach

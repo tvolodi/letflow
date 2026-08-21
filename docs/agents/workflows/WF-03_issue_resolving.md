@@ -158,6 +158,10 @@ acceptance criterion to revert-and-verify; its TEST-DESIGN-VALIDATOR reverted vi
 ```
 1. docs/issues/ISS-NNNN.yaml: status: resolved, resolved_in_run: <run-id>,
    resolved_at: <real UTC timestamp>.
+   NOT every run ends in `resolved` -- `instrumented` and `no_defect` are legal
+   terminal values too, and each takes its own keys (a `no_defect` record uses
+   closed_in_run:/closed_at:, never resolved_*). Check which one this run's outcome
+   actually supports against ISSUE_QUEUE.md before writing this line.
 2. If github_issue is set and gh is reachable: gh issue close <n> --comment
    "Fixed in <run-id>. See docs/issues/ISS-NNNN.yaml and the regression test at
    <test file path>."
@@ -166,9 +170,11 @@ acceptance criterion to revert-and-verify; its TEST-DESIGN-VALIDATOR reverted vi
 
 `resolved` is the normal terminal state, but not the only legal one: it asserts that a
 root cause was actually removed. A run that shipped verified work without removing the
-root cause uses `instrumented` (with a required `superseded_by:` pointer) instead — see
-`docs/agents/protocols/ISSUE_QUEUE.md`'s "Issue status vocabulary" for the definitions
-and the conditions; do not restate them here.
+root cause uses `instrumented` (with a required `superseded_by:` pointer) instead, and a
+run whose Step 1 reached a reasoned NO-CHANGE verdict — investigated and measured, no root
+cause there to remove — uses `no_defect`, which carries its own evidence bar and its own
+`closed_in_run:`/`closed_at:` keys. See `docs/agents/protocols/ISSUE_QUEUE.md`'s "Issue
+status vocabulary" for the definitions and the conditions; do not restate them here.
 
 **ORCH, immediately on this step's PASS** (same turn, before writing the `RUN_DONE` log
 line): if this issue has a real `letflow-queue` task (registered via `register_task`,

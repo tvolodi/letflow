@@ -1,0 +1,71 @@
+{
+  "handoff_id": "736e6322-a586-4bc1-845a-a9bd392c3501",
+  "run_id": "WF03-ISS0109-20260821",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0109-20260821/step-02b-code-design-validator.json",
+  "created_at": "2026-08-21T01:45:01Z",
+  "started_at": "2026-08-21T01:45:01Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "11808999-4d86-4d6c-a3b6-6498409297ce",
+      "c7127c98-ff48-4641-83c3-d649d6e97378"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0109-provisioning-completeness-and-fixture-instrumentation.md",
+      "handoffs/WF03-ISS0109-20260821/step-02-code-designer.json",
+      "handoffs/WF03-ISS0109-20260821/step-01-issue-fixer-diagnose.json",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/design/req022-tenant-schema-provisioning.md",
+      "test/letflow/definitions/promotion_test.exs",
+      "test/letflow/definitions/promotion_assertion_rerun_test.exs",
+      "test/support/tenant_schema_reaper.ex",
+      "docs/issues/ISS-0109.yaml"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0109-20260821",
+    "issue_ids": [
+      "ISS-0109"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 2b -- HARD GATE on CODE-DESIGNER's fix design for ISS-0109. The design artefact is lib/letflow/design/iss0109-provisioning-completeness-and-fixture-instrumentation.md. You are the only check on it before implementation begins; there is no human reviewer (core-directives.md, Humanless Operation). A validator that reads the producer's result.summary and agrees has validated nothing -- RE-DERIVE every verdict below from the code and the documents themselves.\n\nRead: lib/letflow/design/iss0109-provisioning-completeness-and-fixture-instrumentation.md in full, then handoffs/WF03-ISS0109-20260821/step-02-code-designer.json, then handoffs/WF03-ISS0109-20260821/step-01-issue-fixer-diagnose.json (the diagnosis the design is built on).\n\nYour standard checks apply (covers every acceptance criterion, contains no implementation code, unambiguous enough to build from). Beyond those, this design makes SIX specific claims that are load-bearing and individually checkable. Check each one AT THE SOURCE, and state per claim: CONFIRMED or REFUTED, with the evidence you used.\n\nCLAIM 1 -- \"Not a production defect.\" The design refutes the Step 1 lead that insert_or_fetch_registration/2 -> re_select_registration/1 can return {:ok, registration} for a schema that does not exist, on the grounds that provision_tenant_schema/1 (lib/letflow/tenant_provisioning.ex:164) runs CREATE SCHEMA IF NOT EXISTS UNCONDITIONALLY at :188 inside the same transaction, BEFORE reaching insert_or_fetch_registration/2 at :190, so the pre-existing-row branch at :483-:488 can never return naming an absent schema. Read those lines yourself. Verify specifically: (i) that :188 is genuinely unconditional and not inside a branch skipped on the pre-existing path; (ii) that :188 and :190 are inside ONE transaction opened at :170; (iii) that no other caller reaches the registration path without going through :188. If any of the three fails, the design's central structural claim fails and this is a FAIL.\n\nCLAIM 2 -- \"Completeness is a decided invariant, not a defect.\" The design declines to guarantee table completeness inside provision_tenant_schema/1 because lib/letflow/design/req022-tenant-schema-provisioning.md:288-294's \"No implicit chaining invariant\" decides it, and core-directives.md forbids silently re-deciding a decided record. Read req022's lines 288-294 yourself and confirm they actually say what the design says they say. This is the highest-risk claim in the design: if it is a misreading, the design has declined a real production fix on a false authority. If the record genuinely decides it, the design is RIGHT to decline and you must say so.\n\nCLAIM 3 -- \"C1 fails first, deterministically.\" The design's headline regression case drops the promotion_assertion_runs table while leaving the schema AND schema_migrations intact, and asserts that PRE-FIX the fixture still passes -- because Ecto's Migrator sees the version already recorded and re-applies nothing, so replay_migrations/1 returns {:ok, _} against an incomplete schema. This is the claim that makes the whole regression suite meaningful; if replay actually recreates the table, C1 passes pre-fix and proves nothing. Settle it: read the replay path (tenant_provisioning.ex:238-264) and Migrator's semantics, and if you can settle it by RUNNING something cheap against the test database rather than by reasoning, do that -- constructing the state and observing replay's return value is worth far more than an argument about it.\n\nCLAIM 4 -- \"The 19-table oracle is legal because of a both-directions rot guard.\" A hard-coded table list is exactly the kind of duplicated constant that goes stale silently. Verify: (i) the count and names actually match what the tenant migration manifest produces today -- derive the real list yourself rather than trusting the design's; (ii) the specified guard test genuinely fails in BOTH directions (a table added to the manifest but not the oracle, AND a table removed from the manifest but left in the oracle). A one-direction guard is a FAIL on this item.\n\nCLAIM 5 -- \"C2 is a characterization test, not the regression.\" The design flags that C2 (drop the schema, leave the registry row) proves FIXTURE detection rather than any production behaviour change. Confirm the design does not anywhere present C2 as evidence of a production fix, and that the distinction is stated where TEST-DESIGNER will actually see it.\n\nCLAIM 6 -- SCOPE DISCIPLINE. Confirm the design proposes no fix for ISS-0110/GH#364 (reaper min_age), ISS-0111/GH#365 (identity_migration_test bulk delete), ISS-0112/GH#366 (the other 39 copy-paste sites), ISS-0113/GH#367 (Sandbox.mode(:auto) leak) or ISS-0107/GH#357 (nested mix test), AND that no part of its rationale DEPENDS on any of them being fixed. Also confirm helper adoption is limited to the two modules ISS-0109 names.\n\nALSO CHECK, and this one is about honesty rather than correctness: the design's FIXED-vs-INSTRUMENTED verdict says INSTRUMENTED, not FIXED, and recommends NOT closing ISS-0109. Confirm that verdict is consistent with what the design actually delivers -- i.e. that the design does not elsewhere claim or imply a root cause has been removed. ORCH sets ISS-0109's final status from this verdict, so an overstated one would put a false 'resolved' into a registry six other issues cross-reference. If you believe the verdict is WRONG IN EITHER DIRECTION -- overstated, or understated because the design does remove a real root cause -- say so.\n\nVERDICT RULES: PASS only if every acceptance criterion is met AND all six claims are CONFIRMED. FAIL if any claim is REFUTED, naming the specific gap per acceptance criterion (not a general impression) so CODE-DESIGNER's rework is narrowly scoped. A design that is merely thinner than you would have written it is not a FAIL; a design resting on a misread source is.\n\nCONSTRAINTS: do not edit the design yourself -- you gate it, CODE-DESIGNER reworks it. Toolchain here is Elixir 1.20.3/OTP 29 against a 1.18.3-otp-27 pin (ISS-0106, filed, not yours), so `mix format --check-formatted` and `mix compile --warnings-as-errors` fail on main for unrelated reasons; use plain `mix compile`/`mix test`. Postgres for this workspace is on LETFLOW_DB_PORT from ./.env. Branch feature/WF03-ISS0109-20260821; commit by explicit filename, never `git add -A`.\n",
+    "acceptance_criteria": [
+      "Every acceptance criterion of step-02-code-designer.json is checked against the design artefact itself and a per-criterion met/not-met verdict is given",
+      "The design contains no implementation code (function bodies) -- verified by reading, not assumed",
+      "CLAIM 1 (CREATE SCHEMA at tenant_provisioning.ex:188 is unconditional, inside the transaction opened at :170, and unavoidable on the pre-existing-registration path) is CONFIRMED or REFUTED against the actual source lines",
+      "CLAIM 2 (req022-tenant-schema-provisioning.md:288-294 genuinely decides the no-implicit-chaining invariant) is CONFIRMED or REFUTED by reading that record directly",
+      "CLAIM 3 (C1 fails first: replay_migrations/1 returns {:ok, _} against a schema with a dropped table whose version is still recorded) is settled -- preferably by constructing the state and observing replay's actual return value rather than by argument alone",
+      "CLAIM 4 (the hard-coded table oracle matches the manifest today, and its rot guard fails in BOTH directions) is CONFIRMED or REFUTED, with the real table list derived independently",
+      "CLAIM 5 (C2 is presented as a characterization test, not as evidence of a production fix) is CONFIRMED or REFUTED",
+      "CLAIM 6 (no fix designed for ISS-0110/0111/0112/0113/0107, no rationale depending on them, helper adoption limited to the two named modules) is CONFIRMED or REFUTED",
+      "An explicit judgement is given on whether the INSTRUMENTED-not-FIXED verdict is consistent with what the design delivers, including whether it is understated",
+      "A single overall verdict (PASS or FAIL) is stated, and on FAIL each gap is named per acceptance criterion so rework is narrowly scoped"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0109-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0109-20260821",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

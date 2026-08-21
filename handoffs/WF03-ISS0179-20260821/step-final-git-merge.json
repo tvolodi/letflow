@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0179-20260821/step-final-git-merge.json",
   "created_at": "2026-08-21T14:32:27Z",
   "started_at": "2026-08-21T14:32:27Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-21T14:49:24Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": null,
@@ -38,19 +38,25 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "Rebased feature/WF03-ISS0179-20260821 onto origin/main (14 upstream commits, 0 conflicts). Post-rebase mix compile --warnings-as-errors, mix format --check-formatted, and mix test all ran clean: mix test now reports 1295 passed, 0 failed (up from the pre-rebase 1292 passed/2 failed cited in the dispatch -- the rebase pulled in upstream fixes, including fix: ISS-0177's GIT_MERGE format-gate fix and ISS-0171/ISS-0215 fixes, that resolved the two previously-attributed ISS-0107 failures; 0 failed is the real current count and is reported as such rather than the stale dispatch figure). Force-with-lease push required (non-fast-forward after rebase, as GIT_MERGE.md step 6 anticipates). Opened PR #438, which merged via gh pr merge --squash --delete-branch -- the GitHub-side merge succeeded (confirmed via gh pr view: state MERGED, mergeCommit e0179f733fde4c054ab1c4c49367f9ab03f89292) but the local side-effect (checkout to main, delete local/remote branch) errored because this checkout had unrelated uncommitted local edits (this handoff file's own IN_PROGRESS status stamp, plus ORCH's untouched orchestrator.log/registry.json) -- same failure shape GIT_MERGE.md's worktree variant documents, just triggered by local diff instead of a worktree lock. Resolved by stashing the three uncommitted files, completing local cleanup (checkout main, pull --ff-only -- fast-forward b17cd91..e0179f7, branch -d), explicitly deleting the now-orphaned remote branch via gh api, then popping the stash back cleanly (no conflicts) so orchestrator.log/registry.json remain uncommitted for ORCH exactly as before.",
+    "artifacts_out": ["branch: feature/WF03-ISS0179-20260821 (squash-merged into main via PR #438, branch deleted locally and on origin)"],
+    "issues": [
+      {
+        "severity": "INFO",
+        "description": "gh pr merge's local checkout side-effect failed with 'Your local changes ... would be overwritten by checkout' (not the worktree-lock error GIT_MERGE.md's worktree variant documents, but the same partial-failure shape) because this checkout held uncommitted edits to this handoff file and to ORCH's orchestrator.log/registry.json at merge time. Verified via `gh pr view 438 --json state,mergedAt,mergeCommit` that the GitHub-side merge had already succeeded before treating it as anything other than a local-cleanup step; --delete-branch also never ran as a result, so the remote branch was deleted explicitly via `gh api -X DELETE repos/tvolodi/letflow/git/refs/heads/feature/WF03-ISS0179-20260821`. No data lost; all three uncommitted files were stashed and popped back without conflict."
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0179-20260821",
-      "commit_sha_list": [],
-      "remote_branch": "origin/feature/WF03-ISS0179-20260821",
-      "push_status": "skipped",
-      "pr_url": null,
-      "pr_create_error": null
+      "commit_sha_list": ["690d249"],
+      "remote_branch": "deleted (origin/feature/WF03-ISS0179-20260821, post-merge)",
+      "push_status": "force-with-lease (non-fast-forward after rebase, per GIT_MERGE.md step 6)",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/438",
+      "pr_create_error": null,
+      "merge_commit_sha": "e0179f733fde4c054ab1c4c49367f9ab03f89292"
     },
-    "next_action": null
+    "next_action": "ORCH marks run WF03-ISS0179-20260821 COMPLETED and releases owned_modules lock"
   },
   "rework_count": 0,
   "max_rework": 3

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0109-20260821/step-03-elixir-dev.json",
   "created_at": "2026-08-21T01:59:56Z",
   "started_at": "2026-08-21T01:59:56Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-21T02:12:45Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -55,10 +55,30 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "Implemented the gate-approved ISS-0109 design, test-side only. NEW test/support/tenant_fixture.ex (Letflow.TenantFixture): a plain test-only module (no GenServer, no supervision tree, no lib/ reference) with the four specified public functions and full @specs -- provisioned_tenant!/1, capture_schema_state/1, assert_schema_complete!/2, expected_tenant_tables/0. SS3.5 nested failure boundary implemented as specified: every field is gathered inside its own guard, so a single failing query degrades that field alone and the call still returns {:ok, schema_state()}; derived fields follow their inputs, so a degraded tables_present yields tables_missing == [] and never 'all 19 missing', and the same holds for applied_versions/versions_missing; {:error, {:capture_failed, _}} is reachable only outside the per-field guards. Measured, not assumed (throwaway probe, not committed): healthy tenant -> %{registration_present?: true, schema_present?: true, tables_missing: [], versions_missing: []}; after DROP TABLE promotion_assertion_runs with its version still recorded -> tables_missing == [\"promotion_assertion_runs\"], versions_missing == [], which is failure 14 exactly and the proof the table oracle is load-bearing; unknown tenant -> {:ok, state} with both present? flags false and no raise; malformed tenant_id -> {:error, {:capture_failed, %ArgumentError{}}}. The oracle was verified in BOTH directions against a freshly provisioned schema: ORACLE_EQUAL=true COUNT=19, OBSERVED_NOT_EXPECTED=[], EXPECTED_NOT_OBSERVED=[]. OQ-4 SETTLED BY MEASUREMENT: this repo has no `config :logger` in any config file, so under MIX_ENV=test Logger.level() is :debug, the :logger primary level is :debug, and the default handler level is :all; a probe emitted '[info] PROBE_INFO_LINE_VISIBLE', and Ecto [debug] SQL lines are visible in mix test output. :info is therefore NOT filtered -- the teardown line stays at :info exactly as the design specifies, with no raise to :warning and no logger reconfiguration. Teardown emits exactly ONE line before the DROP carrying the literal marker, a closed-vocabulary phase, and schema_present_before_drop; INV-F-5 three statements unchanged in content and order. Observed in the after-run: '[info] LETFLOW_TENANT_FIXTURE phase=teardown schema=tenant_51e746fffc2b46588ab278a528487bfa tenant_id=51e746ff-fc2b-4658-8ab2-78a528487bfa schema_present_before_drop=true test_module=Letflow.Definitions.PromotionTest test_name=...'. Across both modules: 19 marker lines for 19 fixture call sites, all phase=teardown, no other phase. SS7.7 BEHAVIOUR-PRESERVATION EVIDENCE, both runs real and quoted. BEFORE (modules unmodified): promotion_test.exs 'Finished in 9.4 seconds (0.00s async, 9.4s sync)' / 'Result: 8 passed'; promotion_assertion_rerun_test.exs 'Finished in 19.0 seconds (0.00s async, 19.0s sync)' / 'Result: 12 passed'. AFTER (helper adopted): promotion_test.exs 'Result: 8 passed'; promotion_assertion_rerun_test.exs 'Result: 12 passed'; combined final run 'Finished in 23.6 seconds (0.00s async, 23.6s sync)' / 'Result: 20 passed'. Identical counts, zero failures on either side. COMPILE: plain `MIX_ENV=test mix compile --force` -> 'Generated letflow app' with 14 warnings, all of them pre-existing struct-update type warnings from lib/letflow/engine.ex, lib/letflow/engine/transition.ex, lib/letflow/engine/reconstruction.ex and lib/letflow/engine/sub_process.ex (the Elixir 1.20.3-vs-1.18.3 skew of ISS-0106/GH#354). Grepping the full forced-compile output for tenant_fixture|promotion_test|promotion_assertion_rerun returns nothing, so the new code adds ZERO warnings of its own. `mix format` was deliberately NOT run (ISS-0106 host skew would inject 1.20-formatter drift into a repo pinned to 1.18.3); the new file was hand-matched to the surrounding style and every line kept within the 98-char default. SCOPE: no production file was touched. git status shows only test/support/tenant_fixture.ex (new) plus the two adopted test modules; lib/letflow/tenant_provisioning.ex and lib/letflow/tenant_provisioning/registration.ex are byte-identical (INV-F-2) and the diff contains no lib/ change at all. drop_schema!/1 was KEPT in promotion_assertion_rerun_test.exs for its unrelated SandboxPool caller. No regression tests were written -- TEST-DESIGNER owns Step 4 and the FAIL-FIRST section, including the SS3.3 oracle-rot test that INV-F-7 makes mandatory.",
+    "artifacts_out": [
+      "test/support/tenant_fixture.ex",
+      "test/letflow/definitions/promotion_test.exs",
+      "test/letflow/definitions/promotion_assertion_rerun_test.exs"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Internal inconsistency in the gate-approved design, resolved in favour of the section the design itself marks normative, and recorded rather than absorbed silently. SS3.2 types registration_present? and schema_present? as boolean(), while SS3.5 -- which INV-F-4 explicitly defers to as normative for the failure boundary -- requires a scalar field whose own query failed to degrade to nil, so an unobserved value is never reported as an observed absence. Both cannot hold. Implemented per SS3.5: those two fields are typed boolean() | nil (false = observed absent, nil = not observed), and the moduledoc states the deviation explicitly. Every other @spec matches SS3.2 verbatim. The alternative, keeping the literal SS3.2 type, would mean reporting an unobserved registration or schema as absent, which the design elsewhere forbids. Wants an explicit REVIEWER call.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Design SS3.6 asks the teardown line to carry the owning test module and name, but the normative five-key opts type carries no ExUnit context and ExUnit exposes no public API for the currently running test. ExUnit keeps it under the ExUnit.Runner key in the dictionary of the process that RUNS the module, not of the spawned test process, so owning_test/0 walks the OTP-25+ :parent chain (then $ancestors) to find it -- the same shape ExUnit own ExUnit.Runner.safe_pdict_current/1 uses. That is private API, so it is read defensively and degrades to \"unknown\" rather than ever failing a teardown (INV-F-10). Verified working in the after-runs (test_module=Letflow.Definitions.PromotionTest). Flagged so that a future ExUnit upgrade silently degrading it to \"unknown\" is expected rather than surprising; the marker, the phase and schema_present_before_drop -- the three fields the acceptance criteria require -- do not depend on it.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "tables_present deliberately EXCLUDES schema_migrations (the migrator own bookkeeping; its contents are captured separately as applied_versions), matching expected_tenant_tables/0 own exclusion. This makes the SS3.3 oracle-rot test a plain both-direction set equality with no filtering needed on the TEST-DESIGNER side. Recorded so Step 4 builds against the actual shape rather than discovering it.",
+        "affected_requirement": null
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0109-20260821",
       "commit_sha_list": [],
@@ -67,7 +87,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to SECURITY-REVIEWER (WF-02 Step 2b). Note for that gate: SS2.3 argues the tenant-data-path trigger is not armed -- everything lands under test/support/ (elixirc_paths(:test) only) and two test modules, with no lib/ change and no route, migration, response shape or secret touched; every new query is either $1-parameterized and scoped to the single tenant/schema under test or a catalog read filtered by table_schema = $1 (INV-F-8), and the only identifier interpolation is schema_name_for_tenant/1 own output (INV-F-9). Then REVIEWER (Step 2d) -- the three MINOR issues above, especially the SS3.2-vs-SS3.5 type resolution, want an explicit sign-off. TEST-DESIGNER (Step 4) then builds C1-C6 from the FAIL-FIRST section; the SS3.3 oracle-rot test is mandatory (INV-F-7) because expected_tenant_tables/0 is hard-coded."
   },
   "rework_count": 0,
   "max_rework": 3

@@ -38,7 +38,7 @@
     },
     "git_evidence": {
       "branch_name": "feature/WF02-REQ073-20260822",
-      "commit_sha": "PENDING_FILL_AFTER_COMMIT"
+      "commit_sha": "9a7f95f"
     },
     "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b re-review) to confirm the strengthened assertions satisfy AC5, then TEST-RUNNER (Step 4) and RELEASE-VALIDATOR (Step 5) again before DOC-UPDATER."
   },

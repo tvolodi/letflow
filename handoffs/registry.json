@@ -1906,6 +1906,24 @@
       "queue_task_id": 139,
       "queue_agent_id": "tvolo-win-orch",
       "note": "WF-02 for REQ-072 (GH#279, queue task 139, stage S4), claimed via get_next_task immediately after REQ-071's close. Dep REQ-071 confirmed done on main (381848b). Ports R-Co's tenant_context.zig + trace_context.zig as the per-request context every tenant-scoped handler reads, plus the single shared Ecto :prefix-scoping function (scoped_repo_opts/1) that discharges INV-1/INV-5/INV-6 once, structurally, for the whole S4 stage. Full pipeline: Step 1 design (c9d6297) -> 1b gate (f134f08) -> 2a implement (c434e2c) -> 2c security gate PASS, line-by-line verified (7b7c55e) -> 2d REVIEWER PASS + anti-patterns entry (e5964d1) -> 3b test-design-validator gate PASS, mutation-tested the cross-tenant-404 test itself (8d76d21) -> 4 TEST-RUNNER full suite PASS 1455/1455 (6c07f31) -> 5 RELEASE-VALIDATOR independently re-verified all 7 ACs with its own second mutation test, suite re-run clean (5efd325) -> 6 DOC-UPDATER flipped to done (a3b5ca9) -> ORCH added missing REVIEWER sign-off entry to stage-4-api-surface.md (716d4cb) -> Step Final merged (3feeb3d, PR #459, 1459/1459 post-rebase). rework_count 0 of 3 throughout -- every gate PASS first attempt. Cross-tenant-404 mechanism (AC4/AC5) deliberately tested one level below full HTTP dispatch (a test-only probe table) rather than inventing a fake production route, since REQ-070's sub-routers remain stubs -- validated as sound by two independent mutation tests (Step 3b and Step 5), each separately breaking the scoping function and confirming the suite caught it."
+    },
+    {
+      "run_id": "WF02-REQ073-20260822",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-073"],
+      "stage": "S4",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/routers/identity.ex"
+      ],
+      "lock_acquired_at": "2026-08-21T22:17:50Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 PASS — branch feature/WF02-REQ073-20260822 created and pushed, commit 1ef1c25. Next: Step 1 (CODE-DESIGNER).",
+      "backfilled": false,
+      "queue_task_id": 140,
+      "queue_agent_id": "tvolo-win-orch",
+      "note": "WF-02 for REQ-073 (GH#280, queue task 140, stage S4), claimed via get_next_task immediately after REQ-072's close. Dep REQ-072 confirmed done on main (3feeb3d). First of four split requirements (REQ-073..076) porting identity.zig's 23-handler user-management group; this one takes 5 handlers (create/list/get/patch/status-update). First requirement to exercise the whole S4 chain end-to-end (REQ-066 response builders, REQ-067 pagination, REQ-068 validation, REQ-069 authorization, REQ-072 tenant scoping) against a real route in lib/letflow/routers/identity.ex (currently a REQ-070 stub). Security-critical: INV-1 (tenant isolation), INV-2 (explicit response field allowlist, no password/token/secret leakage), INV-5 (cross-tenant 404 via REQ-072's mechanism)."
     }
   ]
 }

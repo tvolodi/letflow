@@ -1,0 +1,44 @@
+{
+  "handoff_id": "9a1c4f7d-2e5b-4a6c-8d3f-7b2e0c9d4a15",
+  "run_id": "WF02-REQ073-20260822",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ073-20260822/step-01-code-designer-rework1.json",
+  "created_at": "2026-08-22T00:20:00Z",
+  "started_at": "2026-08-22T00:10:00Z",
+  "completed_at": "2026-08-22T00:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-073"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ073-20260822/step-01-code-designer.json",
+      "handoffs/WF02-REQ073-20260822/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": ["lib/letflow/design/req073-identity-user-routes.md"],
+    "owned_modules": ["lib/letflow/routers/identity.ex"],
+    "branch_name": "feature/WF02-REQ073-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 1 rework 1/3 -- fix the BLOCKING AC6 gap CODE-DESIGN-VALIDATOR found in req073-identity-user-routes.md (no design element requires ELIXIR-DEV to actually write the handler-to-Letflow.Identity-function mapping into Letflow.Routers.Identity's real @moduledoc -- it existed only as this design doc's own Sec 0 narrative table), and correct the MINOR context_test.exs misattribution in OQ-6/Sec 6b (it is not a 'direct sub-router dispatch' precedent -- it bypasses the router entirely; the real precedent is router_test.exs:104-113).",
+    "acceptance_criteria": [
+      "Every acceptance criterion maps to a concrete design element",
+      "No implementation code present",
+      "Function signatures fully specified including error shape",
+      "Cross-module dependencies listed",
+      "No TBD/deferral language on load-bearing decisions"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Two targeted edits to lib/letflow/design/req073-identity-user-routes.md, nothing else touched. (1) Added new Sec 1a, 'Required @moduledoc content for Letflow.Routers.Identity (AC6)', directly after Sec 1's route-wiring table -- states as a concrete build requirement (not narrative) that ELIXIR-DEV must write a @moduledoc on Letflow.Routers.Identity naming, for each of the five routes, exactly which Letflow.Identity function(s) it calls, gives the required minimum content (a 5-line list mirroring Sec 0's table), and states explicitly what CODE-DESIGN-VALIDATOR/REVIEWER check on re-review: the real @moduledoc string in the committed file, not this design doc. (2) In OQ-6 (Sec 'Open questions'), corrected the citation that previously listed 'REQ-072's context_test.exs throughout' alongside router_test.exs as direct-sub-router-dispatch precedent -- now states router_test.exs:104-113 is the actual precedent and explicitly notes context_test.exs's tests bypass the router entirely (call Letflow.Api.Context functions directly), so it is not evidence for this specific mechanism. No other section modified; the AC4 ordering guarantee, the 5 new Letflow.Identity domain-function proposals (Sec 7), the new Authorization.endpoint_policy_key/2 clause, the INV-2 response allowlist (Sec 3), and OQ-6's underlying test-dispatch decision (direct Letflow.Routers.Identity.call/2, bypassing AuthPipeline) all stand as previously validated.",
+    "artifacts_out": ["lib/letflow/design/req073-identity-user-routes.md"],
+    "issues": [],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for re-review (Step 1b, rework cycle)."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

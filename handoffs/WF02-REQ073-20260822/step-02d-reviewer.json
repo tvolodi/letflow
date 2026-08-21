@@ -1,0 +1,54 @@
+{
+  "handoff_id": "b6e2a9f1-7c4d-4a8e-9f1b-3d6e0c8a2f59",
+  "run_id": "WF02-REQ073-20260822",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ073-20260822/step-02d-reviewer.json",
+  "created_at": "2026-08-21T22:59:08Z",
+  "started_at": "2026-08-21T22:59:08Z",
+  "completed_at": "2026-08-21T22:59:08Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "max_rework": 3,
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-073"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ073-20260822/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ073-20260822/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/identity/user.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/routers/identity.ex",
+      "test/letflow/routers/identity_test.exs",
+      "lib/letflow/design/req073-identity-user-routes.md"
+    ],
+    "branch_name": "feature/WF02-REQ073-20260822"
+  },
+  "task": {
+    "description": "Hard gate REQ-073's Step 2a implementation on idiomatic OTP/Elixir usage, supervision integrity, type-safety observations, scope creep, and decision-record consistency, per .claude/agents/reviewer.md.",
+    "acceptance_criteria": [
+      "with_authorized_scope/4 preamble pattern checked against any existing established shared-preamble idiom in this codebase",
+      "The three new changesets (create_changeset/2, profile_changeset/2, status_changeset/2) checked against jit_changeset/2's conventions",
+      "AC6 moduledoc requirement verified by reading the shipped @moduledoc text directly, not by trusting CODE-DESIGN-VALIDATOR's design-level sign-off",
+      "Cursor-pagination mint-time deviation judged as legitimate engineering judgment vs. a design-doc-update-worthy divergence",
+      "git diff main...HEAD --stat scope confirmed to only touch the expected file set",
+      "No contradiction with docs/migration/decisions/0003 or 0006",
+      "OQ-3 (password sentinel) and OQ-5 (dedicated status_changeset/2) choices checked for reasonableness and consistent application"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "1. Idiomatic OTP/Elixir usage -- PASS. with_authorized_scope/4 (identity.ex:93-119) is a private higher-order function wrapping a common preamble (scoped-prefix resolution then Deny403 short-circuit) around a per-route continuation fun -- a plain, idiomatic 'extract the repeated head, thread a fun for the tail' composition, not a behaviour/macro. Checked every other router file (audit.ex, definitions.ex, instances.ex, metrics.ex, onboarding.ex, promotion.ex, tasks.ex, tenant_config.ex, validation.ex): all nine are still 12-line REQ-070 stubs (plug :match/:dispatch only) -- lib/letflow/routers/identity.ex is the FIRST fully-implemented route module in this codebase, so there is no established precedent this deviates from; nothing to flag. The three new changesets (user.ex:105-142) match jit_changeset/2's established shape exactly: cast the caller-supplied fields, put_change/3 for changeset-internal fixed values never accepted from attrs (password_hash/auth_source in create_changeset/2, mirroring jit_changeset/2's own password_hash/auth_source lines), unique_constraint(:username) carried through. profile_changeset/2 omitting validate_required/2 (every field optional on a PATCH) and status_changeset/2 keeping it (status is always supplied by its one caller) are both consistent, deliberate choices, not oversights.\n\n2. AC6 moduledoc -- PASS, verified against shipped text, not design-level sign-off alone. Read lib/letflow/routers/identity.ex:1-35 directly: the @moduledoc contains all five required lines verbatim, each naming the correct Letflow.Identity function(s): POST /users -> Identity.create_user/2; GET /users -> Identity.list_users/2; GET /users/:id -> Identity.get_user/2; PATCH /users/:id -> Identity.get_user/2, then Identity.update_user_profile/3; POST /users/:id/status -> Identity.get_user/2, then Identity.update_user_status/3. Matches design doc lib/letflow/design/req073-identity-user-routes.md section 1a's required shape exactly.\n\n3. Cursor-pagination mint-time deviation -- judged as legitimate engineering judgment, KEPT, and the design doc updated to match reality (not a gate failure). Read the design's original literal walkthrough (section 2.2's sort-order paragraph): it specified inserted_at in both the sort-timestamp and tiebreaker roles of build_raw_cursor_timestamp_key/4, which is exactly what Pagination.decode_cursor/4 checks for 24h mint-freshness at a fixed byte offset -- a user row older than 24h would make any cursor built from it appear pre-expired the instant it's minted. This is a real bug the design's literal text would have shipped, not a stylistic choice; ELIXIR-DEV's mint-time substitution (identity.ex:329-370, decode_users_cursor/1 comment) fixes it while carrying the real sort key/tiebreaker (inserted_at/id) in the payload's other slots, already flagged non-silently in code comments and the Step 2a handoff, and SECURITY-REVIEWER independently confirmed no security property is weakened. Since a future endpoint copying this cursor shape would be misled by the design doc's original literal text, I updated lib/letflow/design/req073-identity-user-routes.md's section 2.2 sort-order paragraph in place (dated, attributed to this step) to describe the shipped mint-time behavior instead of the original inserted-at-as-sort-timestamp reading, leaving OQ-1 (tiebreak field choice) untouched since it's unaffected by this correction.\n\n4. Scope creep -- PASS. git diff main...HEAD --stat shows exactly: docs/requirements.yaml, docs/status/*, this run's handoffs/ bookkeeping, lib/letflow/api/authorization.ex (1 additive line), lib/letflow/design/req073-identity-user-routes.md, lib/letflow/identity.ex, lib/letflow/identity/user.ex, lib/letflow/routers/identity.ex, test/letflow/routers/identity_test.exs. Nothing outside the expected file set. No new behaviours/macros/generic plumbing introduced ahead of what REQ-073 needs.\n\n5. Decision-record consistency -- PASS. lib/letflow/identity/user.ex's own moduledoc correctly documents the Decision 0006 D2 tenant_id-drop history; no tenant_id column exists on the schema; every new Letflow.Identity function threads opts[:prefix] into its Repo call, consistent with Decision 0003 (schema-per-tenant) and Decision 0006 (users moved behind :prefix, tenant_id retired). No framework-choice or other decision-record contradiction found.\n\n6. OQ-3/OQ-5 -- both reasonable, consistently applied. OQ-3 (\"__NO_PASSWORD_SET__\" sentinel): deliberately mirrors jit_changeset/2's \"__OIDC_ONLY__\" pattern, cannot collide with a real hash, gives a future password-set endpoint an unambiguous detect-and-overwrite target -- reasonable, not the only valid choice but well-reasoned and consistent with existing convention. OQ-5 (dedicated status_changeset/2 instead of reusing profile_changeset/2): reasonable -- status_changeset/2 validates required (its one caller always supplies a status), profile_changeset/2 deliberately does not (PATCH fields all optional); reusing one function for both semantics would have required an awkward conditional validate_required, so a dedicated function is the cleaner of the two equally-valid options the design left open.\n\nNo FAIL findings. No new type-safety gap distinct from what Letflow.Api.Pagination's existing stringly-typed cursor-payload design already carries elsewhere in the codebase -- nothing novel introduced by this diff worth filing under docs/issues/.\n\nDesign doc lib/letflow/design/req073-identity-user-routes.md updated in this step (section 2.2) to match shipped cursor behavior -- see this file's own diff for the exact wording.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ073-20260822/step-02d-reviewer.json",
+      "lib/letflow/design/req073-identity-user-routes.md"
+    ],
+    "issues": [],
+    "next_action": "Route to TEST-DESIGNER for test-spec/coverage design, per docs/agents/workflows/WF-02_requirement_implementation.md."
+  }
+}

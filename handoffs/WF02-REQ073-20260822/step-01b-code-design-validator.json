@@ -1,0 +1,49 @@
+{
+  "handoff_id": "b3f0a6d1-7e2c-4c9a-9f4b-1d8e6a2c5f31",
+  "run_id": "WF02-REQ073-20260822",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ073-20260822/step-01b-code-design-validator.json",
+  "created_at": "2026-08-22T00:00:00Z",
+  "started_at": "2026-08-22T00:00:00Z",
+  "completed_at": "2026-08-22T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-073"],
+    "related_handoff_ids": ["handoffs/WF02-REQ073-20260822/step-01-code-designer.json"],
+    "artifacts_in": ["lib/letflow/design/req073-identity-user-routes.md"],
+    "branch_name": "feature/WF02-REQ073-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 1b -- hard gate on CODE-DESIGNER's req073-identity-user-routes.md design against REQ-073's 6 acceptance criteria, with extra scrutiny on the AC4 authorization-ordering structural guarantee, the 5 new Letflow.Identity domain-function proposals, the new Authorization.endpoint_policy_key/2 clause, and the OQ-6 test-dispatch decision.",
+    "acceptance_criteria": [
+      "Every acceptance criterion maps to a concrete design element",
+      "No implementation code present",
+      "Function signatures fully specified including error shape",
+      "Cross-module dependencies listed",
+      "No TBD/deferral language on load-bearing decisions"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "FAIL. AC6 ('the moduledoc names which lib/letflow/identity.ex functions each handler calls, so the route layer is demonstrably thin') has no corresponding design section anywhere in req073-identity-user-routes.md. Every other AC (1/4 in Sec 2's per-handler composition + ordering guarantee, 2 in Sec 4, 3 in Sec 6, 4 in Sec 2's ordering + Sec 5's tests, 5 in Sec 3) has a dedicated design element; AC6 does not. The Sec 0 summary table lists which Letflow.Identity function each handler calls, but that table is this design document's own narrative aid -- nothing in the design instructs ELIXIR-DEV to actually write that mapping into Letflow.Routers.Identity's @moduledoc as a required implementation artifact, which is what AC6 literally requires and what a reviewer/RELEASE-VALIDATOR would need to check against. This is a silent drop of an acceptance criterion, not a partial-credit case -- per WF-02's no-partial-credit rule, FAIL in full.\n\nAll other checks performed and passed: (1) AC4 ordering -- the shared Step-1/Step-2 preamble (Sec 2, lines ~79-81) explicitly states authorization happens 'before any read OR write; get/list included', and Sec 2.4/2.5's per-handler 'Identity.get_user/2 first' pre-fetch step comes strictly after '(steps 1-2 as above)' in their own numbered lists -- so the pre-fetch read for patch/status-update is unambiguously placed after the authorization check, not before it. No gap found. (2) INV-2 allowlist -- verified against lib/letflow/identity/user.ex:36-45's actual schema fields (id, username, display_name, email, password_hash, status, auth_source, external_id, external_realm + timestamps); the design's 8-key user_map/1 correctly excludes password_hash/external_id/external_realm. (3) The 5 new Letflow.Identity domain-function proposals (Sec 7) -- confirmed lib/letflow/identity.ex today has exactly 4 public functions, all OIDC/realm plumbing, zero user-CRUD, matching the design's claim. Confirmed username_unique_conflict?/1 (identity.ex:255-261) checks {:username, {_msg, kw}} with kw[:constraint]==:unique -- generic on the :username field's constraint type, not a hardcoded constraint name, so it is genuinely reusable against create_changeset/2's unique_constraint(:username) as claimed; migration 20260819000003 confirms unique_index(:users, [:username]) exists per-schema. (4) The new Authorization.endpoint_policy_key/2 clause (Sec 7 gap 6) -- verified against authorization.ex:211-213; existing clauses match exactly as described (POST /users, GET in [/users, /users/:id], PATCH /users/:id, all -> :UsersManage) and none of their patterns match ('POST', '/users/:id/status'), so the proposed additive clause cannot be shadowed by or shadow any existing clause regardless of insertion order. (5) OQ-6 test-dispatch -- verified TokenVerifierDouble and ConfigurableTokenVerifierDouble both only ever produce a fixed 'VIEWER' roles claim with no roles-parameterized token format, confirming the design's stated reason for bypassing the full pipeline. The recommendation is judged a legitimate, explicitly-flagged trade-off, not silently resolved -- not grounds for FAIL on its own. Minor accuracy note (non-blocking, should be tightened in the same rework pass since CODE-DESIGNER is already going back in): OQ-6/Sec 6b cite 'context_test.exs throughout' as precedent for 'direct sub-router dispatch' -- but context_test.exs's cross-tenant-404 test never calls Letflow.Routers.Identity.call/2 at all; it calls Context.scoped_repo_opts/1 and Response.not_found/1 directly, one level below any router (Sec 4 of this same design doc actually says this correctly elsewhere -- 'REQ-072's own test ... exercised Repo.get/3 + Response.not_found/1 one level below HTTP dispatch'). The only real sub-router-dispatch precedent in this codebase is router_test.exs:104-113, a single 404-catch-all isolation test with no auth_context/roles involved at all -- a much thinner precedent than 'context_test.exs throughout' implies. (6) Cross-tenant-404 test (Sec 4) and permission-denial tests (Sec 5) reuse REQ-072's actual scoped-prefix mechanism and use sufficient DB-unchanged assertions (row-count for create, full-row snapshot for patch/status) -- both confirmed adequate.\n\nCorrection required for rework: add an explicit design section (or a clear addition to Sec 1's route-wiring section) directing ELIXIR-DEV to write a @moduledoc on Letflow.Routers.Identity that names, for each of the five handlers, exactly which Letflow.Identity function(s) it calls -- mirroring Sec 0's table but as a required, checkable artifact of the actual module, not just this design document's own narrative table. While in this file, also correct the OQ-6/Sec 6b citation of context_test.exs described above so ELIXIR-DEV/TEST-DESIGNER aren't misled about what precedent actually exists for direct sub-router dispatch with an assigned auth_context.",
+    "artifacts_out": ["handoffs/WF02-REQ073-20260822/step-01b-code-design-validator.json"],
+    "issues": [
+      {
+        "severity": "BLOCKING",
+        "description": "AC6 ('the moduledoc names which lib/letflow/identity.ex functions each handler calls') has no design element anywhere in req073-identity-user-routes.md. Add a section directing ELIXIR-DEV to encode the Sec 0 table's handler-to-Identity-function mapping into Letflow.Routers.Identity's actual @moduledoc."
+      },
+      {
+        "severity": "MINOR",
+        "description": "OQ-6/Sec 6b's citation of context_test.exs as 'direct sub-router dispatch' precedent is inaccurate -- that test dispatches nothing through any router, calling Context.scoped_repo_opts/1 and Response.not_found/1 directly (one level below router_test.exs's own Letflow.Routers.Identity.call/2 precedent). Correct the citation in the same rework pass; does not by itself require a rework cycle."
+      }
+    ],
+    "next_action": "Route back to CODE-DESIGNER for rework: add the missing AC6 design element, then resubmit to CODE-DESIGN-VALIDATOR."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

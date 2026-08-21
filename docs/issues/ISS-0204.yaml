@@ -1,0 +1,42 @@
+id: ISS-0204
+title: >
+  HANDOFF_PROTOCOL section 1 forbids a receiving agent writing started_at, but ORCH
+  dispatch prompts routinely instruct it -- one of the two is dead text
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0201-20260821
+discovered_at: "2026-08-21T10:02:56Z"
+severity: MINOR
+
+description: >
+  Filed by ORCH from finding 3 in
+  `handoffs/WF03-ISS0201-20260821/step-03b-reviewer-gate.json`'s `result.issues`, which
+  the REVIEWER raised against its own dispatch under section 1.1. Read it there.
+
+  Section 1 step 3 says "Do NOT set `started_at` yourself. ORCH stamps it immediately
+  before dispatching you", with a stated corruption rationale. ORCH's actual dispatch
+  pattern does the opposite: the spawn prompt tells the agent to claim the handoff and
+  stamp `started_at` from a real clock reading, and handoff files on disk show agents
+  doing so. On WF03-ISS0201-20260821 both steps' `started_at` values were written by the
+  receiving agent (09:50:11Z and 09:57:14Z), each later than its own `created_at`, so no
+  monotonicity corruption occurred -- but section 1's rule is contradicted by every
+  dispatch, which makes it dead text with a live-sounding rationale.
+
+  Decide which side changes: either ORCH stamps `started_at` at dispatch time and the
+  spawn prompt stops asking for it, or section 1 is rewritten to describe what actually
+  happens and why it is safe. Whichever is chosen must address the corruption case
+  section 1 cites, since that is the reason the rule exists.
+
+affected_files:
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+  - docs/agents/ORCHESTRATOR.md
+
+related:
+  - ISS-0201  # the run whose REVIEWER raised it, against its own dispatch
+
+queue_task_id: 204
+github_issue: https://github.com/tvolodi/letflow/issues/395
+github_issue_note: >
+  `register_task` created both the queue task (204) and its mirrored GitHub issue (#395)
+  in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
+  separately. The id comes from `register_task`'s `issue_ref`, not a directory scan.
+status: open

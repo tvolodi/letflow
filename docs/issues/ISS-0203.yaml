@@ -1,0 +1,47 @@
+id: ISS-0203
+title: >
+  Two prose seams left by the ISS-0201 riders: rider 3's second branch has no
+  destination, and ISS-0191's linter inputs are prose-only
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0201-20260821
+discovered_at: "2026-08-21T10:02:56Z"
+severity: MINOR
+
+description: >
+  Filed by ORCH from findings 1 and 2 in
+  `handoffs/WF03-ISS0201-20260821/step-03b-reviewer-gate.json`'s `result.issues`.
+  Neither gated that run. Read them there as the REVIEWER stated them -- they are not
+  restated in full here, per HANDOFF_PROTOCOL.md section 2. Summarised only enough to
+  size the work:
+
+  (1) Inside that run's own diff. Rider 3's check ends "add the path, or put the text
+  back. There is no third option" and names no destination for the second branch, so a
+  weak model taking it literally can revert to prose restatement -- which section 2's
+  table calls the defect. Adjacency mitigates it (`context.source_text` is named four
+  lines below). One clause fixes it.
+
+  (2) Outside the diff. The `backfill_note` allowlist path and the optional member's
+  name exist only in section 4.1(b) prose, so two of the four inputs ISS-0191's linter
+  needs for the `not_agent_attested` member check will not track a later 4.1(b) edit.
+  Ergonomic, not a blocker -- likely belongs appended to ISS-0191's scope rather than
+  fixed in HANDOFF_PROTOCOL.md.
+
+  Both are one-clause edits to documents the ISS-0198/ISS-0201 pair just amended, which
+  is why they are one work package.
+
+affected_files:
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+  - docs/issues/ISS-0191.yaml
+
+related:
+  - ISS-0201  # the riders these two seams were left by
+  - ISS-0198  # the amendment ISS-0201 refined
+  - ISS-0191  # the linter finding 2 concerns
+
+queue_task_id: 203
+github_issue: https://github.com/tvolodi/letflow/issues/394
+github_issue_note: >
+  `register_task` created both the queue task (203) and its mirrored GitHub issue (#394)
+  in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
+  separately. The id comes from `register_task`'s `issue_ref`, not a directory scan.
+status: open

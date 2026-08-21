@@ -1,0 +1,207 @@
+report_id: report-20260821-WF02-REQ067-20260821
+agent: TEST-RUNNER
+requirement: REQ-067
+workflow_step: WF-02 Step 4 (full-suite regression check before merge)
+handoff: handoffs/WF02-REQ067-20260821/step-04-test-runner.json
+branch: feature/WF02-REQ067-20260821
+commit: e073beb
+merge_base: a8d3ad3
+date: 2026-08-21
+command: "TEST_PARALLEL_N=4 sh scripts/test_parallel.sh"
+
+toolchain:
+  mix: "/c/Program Files/Elixir/bin/mix"
+  platform: "Windows 11"
+
+environment:
+  postgres: >
+    letflow-postgres-1 already Running per `docker compose up -d` at the start of
+    this step (no untracked .env overriding LETFLOW_DB_PORT found -- confirmed by
+    `git status` before starting, only handoffs/orchestrator.log and
+    handoffs/registry.json were dirty, neither touched by this step).
+  pool_saturation_encountered: "no"
+
+runs:
+  - n: 4
+    source: "TEST_PARALLEL_N=4 (per this step's dispatch instruction)"
+    result: "all 4 partitions completed cleanly, no crashes -- USED FOR VERDICT"
+
+verdict: PARTIAL
+
+summary_line: "combined: 1328 tests, 5 properties, 3 failures (1330/1333 passed)"
+exit_code: "1 (any_failed=1, driven by the 3 parsed failures below, all in partition 1)"
+
+per_partition:
+  - partition: 1
+    tests: 278
+    properties: 0
+    failures: 3
+    exit: 2
+  - partition: 2
+    tests: 300
+    properties: 2
+    failures: 0
+    exit: 0
+  - partition: 3
+    tests: 337
+    properties: 1
+    failures: 0
+    exit: 0
+  - partition: 4
+    tests: 413
+    properties: 2
+    failures: 0
+    exit: 0
+
+failure_count: 3
+failures_caused_by_this_branch: 0
+failures_pre_existing_already_filed: 0
+failures_not_covered_by_an_existing_issue: 3
+
+# ---------------------------------------------------------------------------
+# Scope check -- what this branch actually touched
+# ---------------------------------------------------------------------------
+
+branch_diff:
+  command: "git diff --name-only main...HEAD"
+  files:
+    - docs/requirements.yaml
+    - docs/status/requirement_status.index.yaml
+    - docs/status/requirement_status.v2.yaml
+    - "handoffs/WF02-REQ067-20260821/* (this run's own handoffs)"
+    - lib/letflow/api/pagination.ex
+    - lib/letflow/design/api-pagination.md
+    - test/letflow/api/pagination_test.exs
+    - test/specs/REQ-067.md
+  note: >
+    No migration, no other lib/letflow/ module. test/letflow/api/pagination_test.exs
+    (38 tests) ran inside partition 4 (413 tests, 0 failures) -- clean. None of the
+    3 failing tests below are in test/letflow/api/, and Pagination is not imported,
+    aliased, or referenced anywhere in the failing test file or its module under test.
+
+# ---------------------------------------------------------------------------
+# Per-failure attribution -- re-derived, not inherited
+# ---------------------------------------------------------------------------
+
+attribution_method: >
+  Per core-directives.md's "Failure Attribution Is Structural, Never By
+  Count-Matching". All three failures are ONE group (same file, same root cause),
+  attributed via Route 1 (structurally absent from `git diff --name-only main...HEAD`,
+  listed above) AND Route 3 (a demonstrated mechanism, measured directly on this host
+  during this same step -- not cited from a prior report, and not assumed from the
+  ISS-0110 log line alone).
+
+failures:
+  - group: Letflow.TenantSchemaReaperTest
+    count: 3
+    file: test/support/tenant_schema_reaper_test.exs
+    failing_tests:
+      - line: 273
+        name: "sweep_orphans/2 concurrent-invocation liveness guard (ISS-0110) spares an old row while another invocation's connection is open, reclaims it once that connection closes"
+        symptom: "Assertion with >= failed -- code: assert reclaimed >= 1, left: 0, right: 1"
+      - line: 124
+        name: "sweep_orphans/2 reclaims an old, well-formed orphaned row drops the real schema and deletes both rows"
+        symptom: "Assertion with >= failed -- code: assert reclaimed >= 1, left: 0, right: 1"
+      - line: 212
+        name: "sweep_orphans/2 schema_name format guard skips an old row with a malformed schema_name instead of attempting a drop"
+        symptom: "Assertion with >= failed -- code: assert skipped >= 1, left: 0, right: 1"
+    determination: >
+      PRE-EXISTING / ENVIRONMENTAL, an emergent interaction between
+      scripts/test_parallel.sh's own concurrency model (N independent `mix test`
+      OS processes against one shared Postgres) and ISS-0110's own shipped fix
+      (TenantSchemaReaper.sweep_orphans/2 defers its ENTIRE sweep whenever
+      pg_stat_activity shows any OTHER `letflow_mixtest_%`-tagged connection, since
+      it cannot distinguish a live sibling invocation's row from a genuinely dead
+      one without per-row ownership tracking -- see docs/issues/ISS-0110.yaml's
+      resolution_note). NOT caused by this branch.
+    evidence:
+      - method: "Route 1 -- structural, branch diff"
+        detail: >
+          Neither test/support/tenant_schema_reaper_test.exs nor
+          test/support/tenant_schema_reaper.ex appears in
+          `git diff --name-only main...HEAD` (the 8-item list above). Both are
+          byte-identical to main on this branch.
+      - method: "Route 3 -- demonstrated mechanism, measured live on this host in this step"
+        detail: >
+          Every one of the 3 failures' surrounding log lines (partition-1.log,
+          lines immediately preceding each failing assertion) show
+          `TenantSchemaReaper.sweep_orphans/2: deferring this sweep entirely --
+          another mix test invocation (application_name != "letflow_mixtest_31028")
+          is currently connected to this database` logged right at the point the
+          test's own reclaimed/skipped counter would otherwise have incremented --
+          i.e. partition 1's reaper test sees partitions 2/3/4's own real,
+          concurrently-running `mix test` OS processes as "another invocation" and
+          the ISS-0110 guard (correctly, per its own design) defers the sweep
+          entirely rather than reclaiming anything, so `reclaimed`/`skipped` stay 0.
+          Reproduced directly to confirm causation rather than assert it: ran
+          `mix test test/support/tenant_schema_reaper_test.exs` alone (no other
+          concurrent mix test invocation) -- Result: 6 passed, 0 failed. The same
+          3 tests that failed inside the 4-way parallel run pass cleanly in
+          isolation, isolating the variable to "another mix test invocation is
+          connected" exactly as the guard's own log line states, not to anything in
+          this branch's diff.
+      - method: "cross-check against ISS-0110's own resolution note"
+        detail: >
+          docs/issues/ISS-0110.yaml (status: resolved) states its fix's own tradeoff
+          explicitly: "if one is present, the sweep defers entirely (not just that
+          invocation's own rows... ) and retries on the next boundary call" -- this
+          is that exact deferral firing, just triggered by test_parallel.sh's own
+          sibling partitions rather than a nested nested-nested nested Mix.Tasks
+          invocation as ISS-0110's own filing scenario described. Same mechanism,
+          new triggering context (parallel test runner siblings, not a nested
+          `mix letflow.check.test`).
+    searched_existing_issues: >
+      Grepped docs/issues/*.yaml and docs/anti-patterns.md for
+      "test_parallel"/"TenantSchemaReaperTest"/"reaper.*partition" -- no existing
+      record covers this specific interaction (test_parallel.sh's own sibling
+      partitions vs the ISS-0110 guard). ISS-0194/ISS-0212 cover a different
+      test_parallel.sh defect (connection-pool exhaustion at ecto.create, already
+      resolved). ISS-0064/ISS-0068/ISS-0110 reference this same test file for
+      unrelated reasons (formatter drift, the original orphan-reap fix). Not
+      covered by count-matching against any prior run either -- this is the first
+      time this exact 3-failure set has been observed and reported, per this
+      run's own measurement above.
+    action: >
+      NOT fixed in this run (Unblock-Everything does not apply -- this failure does
+      not block REQ-067's own acceptance criteria, and it is not this branch's own
+      defect to fix). Reported to ORCH in result.issues, MAJOR severity, for
+      register_task filing per ISSUE_QUEUE.md (TEST-RUNNER does not call
+      letflow-queue or `gh` itself).
+
+# ---------------------------------------------------------------------------
+
+acceptance_criteria_check:
+  - criterion: "The full suite was actually run via TEST_PARALLEL_N=4 sh scripts/test_parallel.sh and real pass/fail counts are quoted"
+    met: true
+    detail: "combined: 1328 tests, 5 properties, 3 failures (1330/1333 passed)"
+  - criterion: "Every failure is attributed structurally, never by count-matching against a prior run"
+    met: true
+    detail: >
+      All 3 failures are one group, attributed via Route 1 (absent from
+      `git diff --name-only main...HEAD`) and Route 3 (isolated re-run
+      confirming 6/6 pass with no sibling mix test invocation present, plus the
+      guard's own log lines at the failure point). No comparison to any prior
+      report's failure count/set was used as evidence either way.
+  - criterion: "Any failure whose module appears in this branch's diff is checked for genuine causal connection, not cleared by presence alone"
+    met: true
+    detail: >
+      N/A by absence, not by presence -- neither failing file appears in the diff
+      at all (checked directly against `git diff --name-only main...HEAD`, not
+      assumed). The one file this branch DID touch that runs inside the suite
+      (test/letflow/api/pagination_test.exs, 38 tests) ran inside partition 4 with
+      0 failures.
+  - criterion: "A test report is written to test/reports/ and listed in artifacts_out"
+    met: true
+    detail: "This file: test/reports/report-20260821-WF02-REQ067-20260821.yaml"
+
+artifacts_out:
+  - test/reports/report-20260821-WF02-REQ067-20260821.yaml
+
+next_action: >
+  PARTIAL -- REQ-067's own module (Letflow.Api.Pagination, 38/38 tests) is clean and
+  fully unrelated to the 3 failures observed. No failure is attributable to this
+  branch by either Route 1 or Route 3. Route to ORCH / WF-04 Step 1
+  (RELEASE-VALIDATOR), which re-runs the suite independently. Flag for ORCH: file
+  the TenantSchemaReaperTest-vs-test_parallel.sh sibling-partition interaction as a
+  new issue via register_task (MAJOR) -- not previously filed, found first-hand in
+  this step, not blocking REQ-067's own acceptance criteria.

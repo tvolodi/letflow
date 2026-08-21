@@ -8,6 +8,13 @@ This is a design artefact. It contains no implementation. The one place finished
 appears verbatim is the required new header/footer/index text — the handoff sanctions
 that explicitly, because the defect *is* the current header's wording.
 
+> **AMENDED 2026-08-21, AFTER THIS ARTEFACT PASSED ITS GATE — see §13.** Assertion A4 was
+> implemented and run for the first time at Step 4 and found three previously undeclared
+> malformed entries in frozen volume 1 (lines 4803, 4896, 5050). §13 is the amendment: a new
+> `known_shape_anomalies:` index key, A4 split into A4a/A4b, A5 unchanged, volume 1 not
+> edited, `frozen_prefix_sha256` unchanged. §§1–12 are the gated design and carry only
+> cross-reference markers to §13.
+
 ---
 
 ## 1. Decision: BOTH (a) and (b), executed as one change
@@ -404,6 +411,13 @@ is something an agent runs, not something it aspires to.
 
 ## 5. Vocabulary and the three malformed entries
 
+> **AMENDED 2026-08-21 (post-gate) — see §13.** This section covers the three
+> *vocabulary* anomalies (`event: SCOPE-CHANGE`). A4's first ever run found three
+> *further*, separate volume-1 entries with a **shape** defect — two missing `note:`
+> and one using `timestamp:` instead of `at:`. They are different entries, a different
+> defect class, and a different declaration mechanism. §13 is normative for them; this
+> section is unchanged and still normative for the vocabulary three.
+
 Full vocabulary is quoted in §4 and is the normative statement. Summary of coverage against
 the diagnosis's measured distribution — all 7 in-use `event` values accounted for:
 
@@ -518,11 +532,16 @@ Assertions, all derived from the index file so the test never hardcodes a volume
   fail-first demonstration** — see §7.1 for why, and for the exact procedure that shows it
   failing on the pre-fix commit. A3b (§7.1) is a separate detector-calibration guard, not
   the fail-first proof.
-- **A4 — Vocabulary conformance.** Across every volume, every `req:` value matches
+- **A4 — Vocabulary conformance. ⚠ AMENDED 2026-08-21 (post-gate) — §13 is normative;
+  read it before implementing A4.** Across every volume, every `req:` value matches
   `REQ-\d{3}` or `SCOPE-CHANGE`; every `event:` value is one of the six legal values; every
   entry carries all five fields in order with a parseable ISO-8601 `at:`. Exceptions only
-  as declared in A5.
-- **A5 — Anomaly set is exact (protects C2 in both directions).** The set of
+  as declared in A5. **§13 splits this into A4a (vocabulary, exceptions declared in the
+  index's `known_anomalies:` — unchanged) and A4b (shape, exceptions declared in the
+  index's new `known_shape_anomalies:`), and states the exact behaviour of each.**
+- **A5 — Anomaly set is exact (protects C2 in both directions).** *(§13 confirms A5 is
+  substantively UNCHANGED: it stays scoped to vocabulary violations only, its three
+  declared entries are untouched, and it ignores `known_shape_anomalies:` entirely.)* The set of
   vocabulary violations found on disk, keyed by `{path, line, field, value}`, equals the
   index's `known_anomalies:` set exactly. A new violation fails (drift detected); a missing
   one fails (a past entry was silently normalized or deleted — the very act the append-only
@@ -1042,3 +1061,340 @@ None blocks Step 3. Recorded rather than silently decided:
 4. **The 3 anomalies are permanent.** This design deliberately leaves them wrong forever.
    If the project ever wants them annotated, the only append-only-compatible route is a new
    entry in the current volume that references them — never an edit. Not proposed here.
+
+---
+
+## 13. POST-GATE AMENDMENT — 2026-08-21 — three shape anomalies in frozen volume 1
+
+**Status:** amendment. Written 2026-08-21, **after** this artefact passed
+CODE-DESIGN-VALIDATOR (re-gate pass 3). Sections 1–12 above are the gated design and are
+unchanged except for three cross-reference markers pointing here (§5 preamble, A4, A5).
+This section is normative wherever it says so.
+
+**Dispatched as:** `handoffs/WF03-ISS0119-20260821/step-04d-code-designer-amendment.json`
+(CODE-DESIGNER, rework_count 0 — new evidence, not rework of the step-02 handoff).
+
+### 13.1 The prompting finding
+
+Assertion **A4** (§7) was implemented and **run for the first time** at Step 4. It went red
+on **three volume-1 entries that nobody knew were malformed** — a different defect class from
+the three `event: SCOPE-CHANGE` entries §5 already declares, and a different set of entries:
+
+| entry (`- req:` line) | req | event | defect |
+|---|---|---|---|
+| 4803 | REQ-053 | started | **no `note:` field** (four fields, not five) |
+| 4896 | REQ-056 | started | **`timestamp:` written where `at:` belongs** (value at line 4899) |
+| 5050 | REQ-054 | started | **no `note:` field** (four fields, not five) |
+
+Corroborated independently by field-count arithmetic over volume 1 before this amendment was
+written (Bash, on the fix branch working tree; anchored patterns, entry-body indentation):
+
+```
+grep -c '^  - req: '       docs/status/requirement_status.yaml  ->  182
+grep -c '^    event: '     docs/status/requirement_status.yaml  ->  182
+grep -c '^    agent: '     docs/status/requirement_status.yaml  ->  182
+grep -c '^    at: '        docs/status/requirement_status.yaml  ->  181
+grep -c '^    note: '      docs/status/requirement_status.yaml  ->  180
+grep -n '^    timestamp: ' docs/status/requirement_status.yaml  ->  4899:    timestamp: "2026-08-19T02:40:35Z"
+```
+
+182 entries, 181 `at:`, 180 `note:` — one missing `at:` and two missing `note:`, matching the
+three named entries exactly and nothing else. (ORCH's dispatch quoted 183/182/181 from
+unanchored patterns; the delta is one extra match per pattern outside an entry body. The
+*differences* — 1 and 2 — are identical, and the three named entries are the same three.)
+
+**This is real drift, not a broken test.** It is also the strongest evidence this run has
+produced: these entries accumulated invisibly for months precisely because no mechanical
+check existed, and the very first mechanical check found them immediately. Nothing in this
+amendment may reduce that detection.
+
+### 13.2 The two constraints that make this non-trivial
+
+1. **Volume 1 must not be edited.** It is frozen and pinned by A6. "Correcting" a past entry
+   is exactly the rewrite the append-only rule exists to forbid (C1/C2). Not now, not ever.
+2. **`known_anomalies:` cannot hold these.** It is keyed `{path, line, field, value}` for
+   **vocabulary** violations — an entry whose field *value* is not in the documented list —
+   and **A5 asserts set equality in both directions**. A missing field has no line and no
+   value to cite; a misnamed field's value is perfectly legal. Adding these three to
+   `known_anomalies:` would turn **A5 red**, trading one red for another.
+
+TEST-DESIGNER declined to weaken A4 to clear the red, and was right to: a test that only ever
+runs against already-correct code proves nothing, and suppressing this would be the silent
+drift ISS-0119 exists to stop. That refusal is why this amendment exists.
+
+### 13.3 DECISION: candidate (i) — a separate `known_shape_anomalies:` index key
+
+**Chosen: (i).** A4 is split into **A4a** (vocabulary, unchanged) and **A4b** (shape), and
+the shape exceptions are declared in a new, separately-keyed index list that A4b asserts
+**exact set equality against, in both directions**, and that A5 ignores entirely.
+
+**Why (i), on the merits:**
+
+- **It does not weaken what A4 detects — it strengthens it.** A4's shape rule keeps applying
+  to every volume, closed and current. The three known entries stop producing a red because
+  they are *declared*, and any fourth shape defect — new or historical — still fails
+  immediately. Bidirectional equality additionally makes a silent "cleanup" of one of the
+  three fail, which is protection A4 did not have before this amendment.
+- **It is the design's own established pattern, applied to a second defect class:** never
+  edit, always declare (§5's four-point handling, and the `known_anomalies:` mechanism it
+  produced). A reader who already understands one understands the other.
+- **The exception list is bounded and permanent, not a growing suppression list.** Volume 1
+  is frozen and digest-pinned, so its shape defects are a closed, finite set that can never
+  grow. Volume 2 onward are checked live from their first entry, so a defect there is caught
+  while the volume is still current and appendable — before it is ever frozen. Declaring
+  history is not the same as tolerating drift.
+- **It keeps the three entries in the file a reader actually opens first.** The index
+  declares itself "THE ENTRY POINT"; every appending agent reads it (HOW-TO-APPEND step 1).
+
+**Why (ii) — scope A4's shape check to the current volume only — was rejected:**
+
+- It removes detection rather than declaring exceptions. Every historical shape defect,
+  including any *not yet found*, becomes permanently invisible. A4b's set-equality run is
+  the only thing that has ever enumerated these; narrowing it to the current volume retires
+  that enumeration after a single use.
+- It defeats itself at roll time. A volume is checked while current and then frozen. Under
+  (ii) a defect appended into volume 2 late in its life is checked only until the roll, after
+  which it silently leaves the checked set — permanently. Under (i) it stays checked forever
+  and must be either fixed while current or explicitly declared at closure.
+- Its premise — "a frozen volume's shape is history and cannot be fixed, so asserting over it
+  yields a permanent red or a permanent exception list" — is correct on the facts and wrong
+  on the conclusion. **A permanent, declared, machine-checked exception list is the desired
+  outcome**, not a cost to be avoided. That is precisely what `known_anomalies:` already is
+  for vocabulary, and it has been uncontroversial.
+- It fails the run's binding constraint most directly: with the shape check off the frozen
+  volume, the three entries have no mechanical reason to be mentioned anywhere, and
+  "don't check the frozen thing" becomes "don't check" by attrition.
+
+**No third option was needed.** One sub-option *was* considered and rejected: also appending
+these three to **volume 1's closure footer**, mirroring §5's "declared three times over". It
+is technically legal — the footer sits beyond `frozen_prefix_lines: 5766`, so the digest
+would still hold — but it requires writing bytes into the frozen volume file a second time,
+after this run has already closed it, for redundancy the index and the volume-2 header
+already provide. Rejected on the conservative reading of "not one byte of volume 1".
+**Volume 1 is not modified by this amendment in any way.**
+
+### 13.4 Exact index content to add — verbatim
+
+Append the following block to `docs/status/requirement_status.index.yaml`, **after** the
+existing `known_anomalies:` block, at top level (column 0 for the key). Nothing above it in
+that file changes — not `roll_rule:`, not `volumes:`, not `known_anomalies:`.
+
+```yaml
+known_shape_anomalies:
+  # Entries whose FIELD SET or FIELD NAMES do not conform to the five-field entry
+  # shape documented in the current volume's header, and which are LEFT AS
+  # WRITTEN for the same reason as `known_anomalies:` above: correcting a past
+  # entry is precisely what the append-only rule forbids.
+  #
+  # This is a SEPARATE key from `known_anomalies:` deliberately. That key declares
+  # VOCABULARY violations -- an entry that HAS a field whose VALUE is not in the
+  # documented list -- and is keyed {path, line, field, value}. It cannot express
+  # these: a MISSING field has no line and no value to cite, and a MISNAMED
+  # field's value is perfectly legal. Assertion A5 asserts set equality over
+  # vocabulary violations in BOTH directions, so filing a shape defect under
+  # `known_anomalies:` would turn A5 red. The two sets are disjoint by
+  # construction and are asserted separately: A5 over `known_anomalies:`,
+  # A4b over `known_shape_anomalies:`.
+  #
+  # `entry_line` is the entry's own `- req:` line. It is a stable address because
+  # volume 1 is frozen and pinned by `frozen_prefix_sha256` above.
+  #
+  # `kind:` is one of: missing_field | misnamed_field | extra_field | field_order.
+  # Only the first two occur today. A `misnamed_field` record accounts for BOTH
+  # the absence of `field:` AND the presence of `found_as:` -- it is ONE
+  # violation, not two.
+  #
+  # Assertion A4b asserts this list equals the shape violations actually on disk
+  # EXACTLY, in both directions: a new shape defect fails (drift detected), and a
+  # silent "correction" of one of these fails too (a past entry was rewritten).
+  # These three were found by A4 on its first ever run, 2026-08-21, under
+  # ISS-0119. They had been on disk, undetected, since 2026-08-19.
+  - path: docs/status/requirement_status.yaml
+    entry_line: 4803
+    req: REQ-053
+    event: started
+    kind: missing_field
+    field: note
+    found_as: null
+    found_line: null
+    should_have_been: "note: <short free-text>, as the fifth and last field"
+    cause: >
+      Appended with four fields instead of five. No mechanical check on entry
+      shape existed at the time -- ISS-0119's assertion A4 is the first one, and
+      it found this on its first run.
+  - path: docs/status/requirement_status.yaml
+    entry_line: 4896
+    req: REQ-056
+    event: started
+    kind: misnamed_field
+    field: at
+    found_as: timestamp
+    found_line: 4899
+    should_have_been: 'at: "2026-08-19T02:40:35Z"'
+    cause: >
+      The timestamp field was written as `timestamp:` instead of `at:`. The VALUE
+      is correct and is valid ISO-8601; only the field NAME is wrong. `at:` is
+      the documented name and is used by the other 181 entries in this volume.
+  - path: docs/status/requirement_status.yaml
+    entry_line: 5050
+    req: REQ-054
+    event: started
+    kind: missing_field
+    field: note
+    found_as: null
+    found_line: null
+    should_have_been: "note: <short free-text>, as the fifth and last field"
+    cause: >
+      Same as line 4803: appended with four fields instead of five, in the same
+      period and by the same appending pattern.
+```
+
+**Nothing else in the index changes.** Explicitly: `frozen_prefix_lines: 5766`,
+`frozen_prefix_sha256: "5a1a64ab0b999da3fd86be90109ecee46b9d538d9e9945c0d39fddb10075a804"`,
+`entries: 182`, `lines: 5766`, `bytes_working_tree: 361376`, `roll_rule:` and all three
+existing `known_anomalies:` records are **untouched**.
+
+### 13.5 Exact change to A4 — it splits into A4a and A4b
+
+A4's §7 text is replaced by the following two assertions. Both run across **every** volume in
+the index, closed and current — the scope is unchanged.
+
+- **A4a — Vocabulary conformance (unchanged in substance).** Across every volume, every
+  `req:` value matches `REQ-\d{3}` or `SCOPE-CHANGE`, and every `event:` value is one of the
+  six legal values. Exceptions only as declared in the index's `known_anomalies:`, asserted
+  exactly by A5.
+
+- **A4b — Shape conformance, with exceptions declared in `known_shape_anomalies:`.** An entry
+  **conforms** when it carries exactly the five fields `req`, `event`, `agent`, `at`, `note`,
+  in that order, with a parseable ISO-8601 `at:`. A **shape violation** is one of:
+  - `missing_field` — a required field is absent. `field:` = the absent field name;
+    `found_as:`/`found_line:` are `null`.
+  - `misnamed_field` — a required field is absent **and** an undocumented field carrying its
+    value is present in its position. `field:` = the required name, `found_as:` = the name
+    actually written, `found_line:` = that line. **One violation, not two** — the detector
+    must not also emit a `missing_field` for the same `field:` on the same entry.
+  - `extra_field` — a field beyond the five is present. `field:` = its name, `found_line:` =
+    its line. (None occur today.)
+  - `field_order` — all five present, wrong order. `field:` = the first out-of-order field.
+    (None occur today.)
+
+  **A4b asserts: the set of shape violations found on disk equals the index's
+  `known_shape_anomalies:` set EXACTLY, in both directions.** A new violation fails (drift
+  detected). A missing one fails (a past entry was silently normalized or deleted — the act
+  the append-only rule forbids). This mirrors A5 and gives shape the same two-way protection
+  vocabulary already has.
+
+  **Identity key for the comparison:** `{path, entry_line, kind, field, found_as}`. The
+  remaining columns are documentation and are not part of the key — but **A4b additionally
+  asserts that each declared record's `req:` and `event:` match what is actually on disk at
+  `entry_line`**, so a declaration that drifts off its entry fails rather than silently
+  matching the wrong row.
+
+  **The ISO-8601 check is not lost for the misnamed entry.** For a `misnamed_field` record
+  where `field: at`, A4b parses the value at `found_line:` and asserts it is valid ISO-8601.
+  Declaring the field name wrong does not license an unparseable timestamp.
+
+  **A4b runs on every volume, permanently.** It is not narrowed to the current volume — see
+  §13.3 for why that was rejected.
+
+### 13.6 A5 is UNCHANGED — stated explicitly
+
+A5 keeps its exact current text and behaviour: set equality, in both directions, over
+**vocabulary** violations keyed `{path, line, field, value}`, against the index's
+`known_anomalies:`.
+
+- **A5's three declared vocabulary anomalies are unchanged**: lines 3490 (REQ-031), 3577
+  (REQ-042), 3744 (REQ-038), all `field: event`, `value: SCOPE-CHANGE`. This amendment adds
+  nothing to that list and removes nothing from it.
+- **A5 ignores `known_shape_anomalies:` entirely.** It must not read that key.
+- **The two sets are disjoint on the actual data, verified:** the three shape-anomalous
+  entries carry `req: REQ-053` / `REQ-056` / `REQ-054` and `event: started` — all legal
+  vocabulary. They do not appear in A5's on-disk set, so A5's verdict is arithmetically
+  unaffected by this amendment.
+
+### 13.7 What else does and does not change
+
+- **`frozen_prefix_sha256` DOES NOT CHANGE — stated explicitly, with the reason.** The digest
+  covers volume 1's lines 1–5766 (CRLF normalised to LF, per §8). This amendment writes
+  **zero bytes** into `docs/status/requirement_status.yaml` — not into the frozen prefix, and
+  not into the closure footer beyond it (§13.3 rejected that sub-option). The byte stream the
+  digest is taken over is byte-for-byte identical, so the digest is unchanged and **A6 stays
+  green with no index edit**. The digest covers volume 1 only; it does not and never did
+  cover the index, so adding a key to the index cannot affect it.
+- **A0, A1, A2, A3, A3b, A6, A7 — unchanged.** No behaviour, no bounds, no digests.
+- **A8 gains one clause (c):** the current volume's header must contain the literal token
+  `known_shape_anomalies:`. Clauses (a) the six `event` values and two `req` values, and (b)
+  the two ceiling numbers, are unchanged. Rationale: the §13.8 header addendum is one of the
+  two places a reader lands, and volume headers are propagated to future volumes by copy —
+  clause (c) makes a copy that drops it fail, rather than quietly shrinking the declaration
+  surface at the next roll.
+- **§8's erratum, the freeze-and-roll shape, the header's existing text, the 23 instruction
+  sites, §10, §11 — all untouched.** Out of scope for this amendment by instruction.
+- **`test/support/status_history.ex` (§7) gains two things, signatures only:**
+  - `parse_index/1`'s return map gains
+    `known_shape_anomalies: [%{path:, entry_line:, req:, event:, kind:, field:, found_as:, found_line:}]`
+  - `shape_anomalies(volume_path) :: [%{path:, entry_line:, req:, event:, kind:, field:, found_as:, found_line:}]`
+    — the on-disk detector A4b compares against. Path-parameterised like every other function
+    in the module; it must not know the index exists.
+  - `anomalies/3` (the vocabulary detector A5 uses) is **unchanged** and must not start
+    reporting shape violations.
+
+### 13.8 Required addendum to the volume header (§4) — verbatim
+
+Insert the following immediately after the `── ENTRY SHAPE — all five fields, in this order,
+every time ──` block in `docs/status/requirement_status.v2.yaml`'s header, and carry it into
+every future volume's header verbatim (the line numbers cite frozen volume 1, so they stay
+valid forever):
+
+```
+#   ALL FIVE FIELDS ARE REQUIRED, INCLUDING `note:`. The timestamp field is named
+#   `at:` — never `timestamp:`. Three volume-1 entries break this: line 4803
+#   (REQ-053) and line 5050 (REQ-054) have no `note:` at all, and line 4896
+#   (REQ-056) writes `timestamp:` where `at:` belongs. They are declared in
+#   docs/status/requirement_status.index.yaml under `known_shape_anomalies:` and
+#   are LEFT AS WRITTEN, for the same reason the `event: SCOPE-CHANGE` entries
+#   are — correcting a past entry is what this file forbids. Do not copy them,
+#   and do not "clean them up": assertion A4b in
+#   test/docs/requirement_status_invariants_test.exs fails either way.
+```
+
+This is an **addition**, not a rewrite: no existing header line is changed, so A8 clauses (a)
+and (b) are unaffected.
+
+### 13.9 The three entries remain visible — where a reader lands
+
+| Landing point | Declaration |
+|---|---|
+| `docs/status/requirement_status.index.yaml` — "THE ENTRY POINT", read by every appending agent at HOW-TO-APPEND step 1 | `known_shape_anomalies:`, all three, with cause (§13.4) |
+| The current volume's header — read **in full** before every append | The §13.8 addendum, all three cited by line and req id |
+| `mix test` | A4b names all three whenever it fails in either direction |
+| This design artefact | §13.1's table, and the §5 cross-reference marker |
+
+Volume 1's closure footer intentionally does **not** carry them (§13.3) — it is the only
+landing point that would require writing to the frozen volume again.
+
+### 13.10 Who applies this, and one instruction that is not optional
+
+ELIXIR-DEV or DOC-UPDATER applies §13.4 (index) and §13.8 (volume-2 header); TEST-DESIGNER
+applies §13.5–§13.7 to `test/support/status_history.ex` and
+`test/docs/requirement_status_invariants_test.exs`. This artefact specifies; it applies
+nothing itself, and it did not edit the index, the test files, or volume 1.
+
+**Do not hand-tune the declared list to make A4b green.** Run A4b, read the full set it
+reports, and compare it to the three records in §13.4. If it reports a **fourth** shape
+violation, that is a new finding of the same kind — declare it in `known_shape_anomalies:`
+with its cause, and say so in the handoff. Deleting a record, or narrowing the detector, to
+make the counts line up is the failure mode this whole run exists to stop.
+
+### 13.11 Open questions raised by this amendment
+
+1. **Should `note:` be optional rather than required?** Two of the three defects are a
+   missing `note:`, which raises the fair question of whether the field is genuinely
+   mandatory or was only ever conventional. This amendment does **not** re-decide it: the
+   header has always documented five fields, 180 of 182 entries carry all five, and changing
+   the rule is a vocabulary change, not a drift response. Recorded so a later run can decide
+   it deliberately, in a header amendment, rather than by attrition.
+2. **Should `known_anomalies:` be renamed `known_vocabulary_anomalies:`** now that a second
+   anomaly class exists? Cosmetic, and it would touch A5's parse path and three existing
+   records. Not proposed here; noted so the naming asymmetry is on record rather than a
+   surprise.

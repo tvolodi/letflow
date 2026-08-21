@@ -54,4 +54,46 @@ github_issue_note: >
   (455) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
   deliberately not called separately.
 
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0223-20260821
+resolved_at: "2026-08-21T20:53:00Z"
+resolution_note: >
+  Root cause (option (a) from this issue's own investigation list): the rule
+  existed in core-directives.md at the conceptual level ("run synchronously")
+  but never named the concrete tool affordances that recreate the exact hazard
+  -- an agent can agree with the abstract rule and still call `Monitor`,
+  `Bash`/`PowerShell` with `run_in_background: true`, or `ScheduleWakeup`
+  because none of those calls obviously read as "the illegal cross-turn wait"
+  in the moment. Confirmed via option (b): `test-runner.md` and
+  `release-validator.md` had ZERO mention of the rule at all (only a generic
+  pointer to core-directives.md as mandatory reading) -- exactly the two roles
+  (plus ELIXIR-DEV, which DID have a pointer and still stalled) that hit this
+  live in WF02-REQ071-20260821.
+
+  Fix applied, both (a) and (b) together since the investigation showed the gap
+  was in both layers:
+  - `docs/agents/instructions/core-directives.md`'s existing "No Background
+    Wait" section gained a new paragraph naming the exact forbidden tool calls
+    (`run_in_background: true`, `Monitor`, `ScheduleWakeup`) instead of only
+    the abstract concept, citing this issue as the evidence the abstract
+    version wasn't enough.
+  - `.claude/agents/test-runner.md` and `.claude/agents/release-validator.md`
+    each gained an inline paragraph (previously absent) stating the same
+    concrete rule at the exact point where the temptation occurs (right after
+    instructing them to run the full suite), matching the pattern
+    `.claude/agents/elixir-dev.md` already had.
+  - `.claude/agents/elixir-dev.md`'s existing pointer was itself strengthened
+    with the same concrete tool names, since this exact role stalled in
+    WF02-REQ071-20260821 despite already having a pointer -- a pointer alone
+    was insufficient evidence-in-hand, not just for the two roles that lacked
+    one.
+
+  Docs-only change (core-directives.md + 3 `.claude/agents/*.md` files, no
+  application code, no migration, no tenant-data path) -- self-gated directly
+  by ORCH per `docs/agents/ORCHESTRATOR.md` §10's direct-action allowance,
+  consistent with this session's prior handling of ISS-0210/ISS-0211/ISS-0213
+  (all documentation/process fixes of the same shape). Verification is
+  necessarily process-level, not test-level: there is no automated check that
+  can prove a future subagent won't reach for `Monitor` again, so this fix's
+  real verification is future runs not repeating the pattern -- noted here
+  plainly rather than claiming false certainty.

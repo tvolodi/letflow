@@ -33,6 +33,15 @@ Elixir toolchain in this environment, or `mix deps.get` has no network
 access (a known limitation, see `README.md`'s Notes section) — say
 that explicitly instead of guessing at the result.
 
+**Run it as a normal, blocking, foreground call — never background it, never watch it
+via `Monitor`, never end your turn expecting a cross-turn notification to resume you.**
+You are a dispatched subagent; that notification only reaches the top-level
+orchestrating session and will never wake you. If the full suite is slow, that's
+expected — let the call simply take as long as it takes. See
+`docs/agents/instructions/core-directives.md`'s "No Background Wait For A Cross-Turn
+Notification" (ISS-0213, reinforced under ISS-0223 after this exact role hit the stall
+live).
+
 ## Procedure
 
 1. `docker compose up -d` (Postgres on port 5462 by default —

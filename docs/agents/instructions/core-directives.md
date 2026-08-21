@@ -428,6 +428,25 @@ restatement of that recovery procedure — §4.1 already handles the recovery co
 once a stall has happened; this rule exists so the stall does not happen in the first
 place.
 
+**Name the concrete temptation, not just the abstract rule (ISS-0223).** Three
+separate subagents in one later run (WF02-REQ071-20260821 — TEST-RUNNER, Step 4;
+RELEASE-VALIDATOR, Step 5; ELIXIR-DEV, Step Final) each independently reached for a
+background/monitor mechanism to run a slow full-suite `mix test`/`scripts/test_parallel.sh`
+and then ended their turn waiting on it, despite this section already existing and being
+mandatory reading. The rule as originally written stated the *concept* ("run
+synchronously") but never named the specific tool affordances that recreate the exact
+hazard — an agent can agree with the concept in the abstract and still reach for one of
+these because they don't obviously map to "cross-turn notification" in the moment. Stated
+plainly: **do not call `Bash`/`PowerShell` with `run_in_background: true` for this
+purpose, do not call `Monitor` to watch it, do not call `ScheduleWakeup` expecting to be
+resumed — none of these deliver their result back to a subagent's own turn.** If a test
+run is slow, that is expected and fine; call it as a normal, blocking, foreground tool
+call and let the turn simply take as long as the run takes. Every role whose job
+routinely involves a slow full-suite run (`TEST-RUNNER`, `RELEASE-VALIDATOR`,
+`ELIXIR-DEV` at Step Final) carries an inline pointer to this exact section in its own
+role file for this reason — a pointer buried only in this shared file was not enough on
+its own to stop the pattern from recurring three times in one run.
+
 **Checked for an existing partial statement of this rule before adding it (ISS-0213):**
 grepped `docs/agents/` and `.claude/agents/` for background/notification/async/polling
 language and for existing `mix test` guidance (`core-directives.md`'s own "No

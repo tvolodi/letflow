@@ -30,6 +30,15 @@ double-checks that "done" actually means done. Do not read TEST-RUNNER's
 `test/reports/*.yaml` and echo its verdict — **re-run `scripts/test_parallel.sh`
 yourself** and compare (same aggregated-partition mechanism TEST-RUNNER used — see
 `scripts/test_parallel.sh`'s header comment if unfamiliar).
+
+**Run it as a normal, blocking, foreground call — never background it, never watch it
+via `Monitor`, never end your turn expecting a cross-turn notification to resume you.**
+You are a dispatched subagent; that notification only reaches the top-level
+orchestrating session and will never wake you. If the full suite is slow, that's
+expected — let the call simply take as long as it takes. See
+`docs/agents/instructions/core-directives.md`'s "No Background Wait For A Cross-Turn
+Notification" (ISS-0213, reinforced under ISS-0223 after this exact role hit the stall
+live).
 For each requirement claimed `done` (WF-02) or every `done` requirement in the stage
 (WF-04), re-check its `acceptance_criteria` one by one against the actual current code
 and tests, not against what `docs/status/requirement_status.yaml`'s history narrates

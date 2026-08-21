@@ -39,4 +39,31 @@ github_issue_note: >
   `register_task` created both the queue task (204) and its mirrored GitHub issue (#395)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
   separately. The id comes from `register_task`'s `issue_ref`, not a directory scan.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0204-20260821
+resolved_at: "2026-08-21T10:16:41Z"
+resolution: >
+  Settled in direction (a): ORCH stamps `started_at` at dispatch, and the spawn prompt
+  stops asking the receiving agent for it. The rule now has ONE canonical home,
+  `HANDOFF_PROTOCOL.md` §1.2 ("`started_at` is stamped at dispatch, by ORCH — the
+  procedure"), carrying the three-step mechanical procedure, what the field means, the
+  corpus measurement and its stated limits. §1 step 3 and §3's ownership-table row were
+  both rewritten to point at §1.2 and state nothing themselves, so the two halves of the
+  contradiction can no longer drift apart; `ORCHESTRATOR.md` §6 gained a pointer, and
+  `core-directives.md` was deliberately left alone.
+
+  Decided on measurement over `handoffs/`, not on preference (command and full figures in
+  §1.2): 606 files, 0 unparseable, 10 with a null `started_at`; of the 596 with both
+  timestamps, 468 have a zero-second gap to `created_at` (ORCH-stamped), 89 a gap over 30s
+  (agent-stamped), 14 in an ambiguous 1-30s band, and 25 a NEGATIVE gap. The 25 are the
+  corruption class §1's old rationale predicted, but with the culprit reversed: 20 of them
+  have a `created_at` on a round `:00` minute, i.e. an ORCH-fabricated `created_at`, not an
+  agent-written `started_at` (same mechanism as `docs/anti-patterns.md`'s "Extrapolating
+  handoff timestamps instead of reading the clock"). The old rationale was replaced rather
+  than deleted. Direction (a) wins because one writer taking one clock read makes
+  `started_at < created_at` structurally impossible instead of merely forbidden, and
+  because it binds the one role that already writes the file rather than fourteen
+  receiving roles.
+
+  No handoff file was backfilled: the corpus is evidence, and §4.1(b)'s no-backfill rule
+  governs. This run's own handoff keeps its null `started_at` for the same reason.

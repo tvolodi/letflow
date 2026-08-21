@@ -159,6 +159,12 @@ Ad-hoc is never a way to bypass a standard workflow that already matches the tri
 `HANDOFF_PROTOCOL.md` §2's structure rule ("What goes in `task.description`, and what goes
 in `artifacts_in`"). That section is canonical and this line does not restate it.
 
+**Stamping `started_at` — yours, at dispatch, and never delegated to the spawn prompt.**
+`HANDOFF_PROTOCOL.md` §1.2 is the canonical procedure (three mechanical steps, plus what
+the field means and the ISS-0204 measurement behind it). It is canonical and this line does
+not restate it — read it before writing your next dispatch, because the defect it was
+written against is a spawn prompt that asks the receiving agent for this field.
+
 ## 7. Parallel-run coordination — `owned_modules` lock
 
 At Step 00 dispatch, record `owned_modules` (the `lib/`/`priv/`/`web/` paths this run

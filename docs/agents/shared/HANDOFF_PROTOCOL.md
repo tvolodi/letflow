@@ -28,9 +28,12 @@ grep -rl '"to_agent": "<YOUR_AGENT_ID>"' handoffs/ | xargs grep -l '"status": "P
 Then:
 1. Read the file, plus every artefact listed in `context.artifacts_in`.
 2. Set `status` to `IN_PROGRESS`.
-3. **Do NOT set `started_at` yourself.** ORCH stamps it immediately before dispatching
-   you. If you write it, it will read later than your own dispatch time — a corruption
-   R-Co's own history shows happens easily if agents "helpfully" fill in every field.
+3. **Do NOT set `started_at` yourself — it is ORCH's, and §1.2 is the whole rule.** §3's
+   table assigns the field to ORCH; §1.2 states the procedure, what the field means, and
+   the measurement that settled it (ISS-0204). Nothing about it is restated here.
+   If the handoff reaches you with `started_at` still null, **leave it null**, do the
+   work, and report it in `result.issues` at MINOR so ORCH fixes the dispatch — see
+   §1.2's last paragraph for why filling it in is worse than leaving the gap visible.
 
 If no PENDING handoff exists for you and none was named directly by the caller: report
 that and stop. Do not invent work — check `docs/requirements.yaml` for the next
@@ -69,6 +72,101 @@ premise, and the receiving agent was right to check rather than comply:**
    false: a rebase replays commits individually, so the intermediate commit that
    *created* those files collides regardless of a later commit renumbering them. It
    confirmed provenance on both sides before proceeding.
+
+---
+
+## 1.2 `started_at` is stamped at dispatch, by ORCH — the procedure
+
+**This subsection is the single canonical statement of the `started_at` rule.** §1 step 3
+and §3's table point here; `ORCHESTRATOR.md` §6 points here; `core-directives.md` does not
+state it at all. Do not copy any of it into another file.
+
+**ORCH's procedure, mechanically (all three steps, every dispatch):**
+
+1. Take **one** clock read (§3's command) when you create the handoff file.
+2. Write **both** `created_at` and `started_at` from that single value, in the same write
+   that creates the file. A dispatch that is written and then sat on is the exception, not
+   the rule: if you genuinely create a handoff you do not dispatch immediately, re-read the
+   clock and overwrite `started_at` (only) at the moment you spawn the agent.
+3. **Do not ask the receiving agent to stamp it in the spawn prompt.** The prompt tells the
+   agent to claim the handoff by setting `status` to `IN_PROGRESS`, and says nothing about
+   `started_at`. A spawn prompt that asks for it is the defect ISS-0204 was filed against.
+
+**What the field therefore means: the moment the work was DISPATCHED, not the moment the
+agent began.** It is a property of ORCH's act, which is why ORCH owns it. Do not read a
+`created_at == started_at` pair as a suspiciously eager agent; that is the rule working.
+Dispatch-to-first-token latency is not recorded by this schema at all, and nothing here
+should be read as an estimate of it.
+
+**Why this direction and not the other — measured 2026-08-21 over the whole corpus for
+ISS-0204, not argued.** Both practices were live: §1 said ORCH stamps, while ORCH's spawn
+prompts routinely asked the agent to. The corpus was scanned to see which one the files on
+disk actually follow:
+
+```bash
+python - <<'EOF'
+import json,glob,os,collections
+from datetime import datetime
+g=lambda s: datetime.strptime(s,"%Y-%m-%dT%H:%M:%SZ")
+b=collections.Counter()
+for f in glob.glob('handoffs/**/*.json',recursive=True):
+    if os.path.basename(f)=='registry.json': continue
+    d=json.load(open(f,encoding='utf-8')); b['files']+=1
+    s,c=d.get('started_at'),d.get('created_at')
+    if s is None: b['null started_at']+=1; continue
+    v=(g(s)-g(c)).total_seconds()
+    b['gap<0 (started_at BEFORE created_at)' if v<0 else 'gap==0 (ORCH, one clock read)'
+      if v==0 else 'gap 1-30s (ambiguous)' if v<=30 else 'gap>30s (agent-stamped on claim)']+=1
+    if v<0 and g(c).second==0: b['  of gap<0: created_at on a round :00 minute']+=1
+for k,v in b.items(): print(f"{v:4d}  {k}")
+EOF
+```
+
+**606 files, 0 unparseable. 10 carry a null `started_at`. Of the 596 with both timestamps:
+468 have a gap of exactly zero seconds, 14 a gap of 1-30s, 89 a gap over 30s, and 25 a
+NEGATIVE gap.** The discriminator is the gap: ORCH stamping from one clock read at file
+creation lands on exactly zero, while an agent that must spawn and read its `artifacts_in`
+before claiming cannot get back inside the same second. So ~79% of the corpus is already
+ORCH-stamped and ~15% agent-stamped, a 5:1 majority for the rule that was already written.
+
+**What the discriminator CANNOT distinguish, stated so nobody reads more into it:** (i) an
+agent that stamped `started_at` by *copying* `created_at` instead of reading the clock —
+indistinguishable from an ORCH stamp, and it would inflate the zero bucket; (ii) an ORCH
+that created the file and dispatched some seconds later, versus a very fast agent — the
+1-30s band is genuinely ambiguous and is reported as its own bucket rather than assigned
+(`WF03-ISS0201-20260821/step-03-riders.json`, agent-stamped per that run's own report, sits
+in it at 11s); (iii) it says nothing about *who ought to* write the field, only about who
+did.
+
+**The 25 negative-gap files are the corruption case, and they exonerate the receiving
+agents.** §1 step 3 used to predict that an agent writing this field would push it *later*
+than dispatch. The real defect on disk runs the other way — `started_at` *earlier* than
+`created_at`, which is monotonically impossible — and **20 of the 25 have a `created_at`
+falling on a round `:00` minute** (e.g. `WF02-REQ051-20260818/step-06-doc-updater.json`:
+`created_at 2026-08-18T23:00:00Z`, `started_at 2026-08-18T19:29:00Z`). Round minutes are
+what a *fabricated* timestamp looks like; the agents' reads were the honest half of the
+pair. The old rationale therefore named the wrong culprit, which is why it has been
+replaced rather than kept. This is not a new theory either: `docs/anti-patterns.md`'s
+"Extrapolating handoff timestamps instead of reading the clock (ORCH)" records the same
+mechanism caught first-hand on a different run, and is not restated here.
+
+**And that is the argument for this direction, not the 5:1 count.** Under this rule the two
+timestamps have **one writer and one clock read**, so `started_at < created_at` becomes
+structurally impossible rather than merely forbidden — the 25-file class cannot recur. The
+weak-model constraint in `core-directives.md` points the same way: the rule now binds the
+**one** role that already writes the file and already reads the clock for `created_at`, and
+costs the other fourteen roles an instruction each *removed* from their spawn prompts. The
+alternative — rewriting §1 and §3 to bless agent-stamping — would have had to keep the
+ordering rule alive as prose across fourteen roles and would have preserved the exact
+failure class the corpus already contains.
+
+**A null `started_at` on a handoff already in your hands is ORCH's to fix, not yours, and
+the historical corpus is not to be backfilled.** The 10 null-`started_at` files stay as they
+are: a value invented now for a dispatch nobody can attest to is a worse record than a
+visible gap (same reasoning as §4.1(b)'s no-backfill rule, and the same reason §1 step 3
+tells you to report it instead of filling it in). This very run's own handoff,
+`handoffs/WF03-ISS0204-20260821/step-03-settle-started-at.json`, is one of the ten: ORCH
+deliberately left it null so the run would not prejudge the question it was settling.
 
 ---
 
@@ -374,7 +472,7 @@ never precede `started_at`.
 | Field | Who writes it | When | Exception |
 |---|---|---|---|
 | `created_at` | ORCH | at handoff creation | — |
-| `started_at` | **ORCH only** | immediately before dispatch | — |
+| `started_at` | **ORCH only** | at dispatch — same write and same clock read as `created_at`, per §1.2 | — |
 | `completed_at` | the receiving agent | when it completes the handoff | §4.1 |
 | `status` | the receiving agent, from `PENDING`→`IN_PROGRESS` (§1) →`COMPLETED`/`FAILED` (§4). ORCH sets the initial `PENDING`, and sets `ESCALATED`/`CANCELLED` per `ORCHESTRATOR.md` §5 | on claiming and on completing | §4.1 |
 | `result` | **the receiving agent, and only the receiving agent** — it is that agent's own attested first-hand report of what it did | when it completes the handoff | §4.1 |

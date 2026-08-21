@@ -966,3 +966,105 @@ This is a fourth instance of **"Inheriting a claim from a record instead of re-d
 from the source"** above, and it is filed separately only because its transferable lesson
 is specific — version-attributed failures have a cheap, toolchain-free refutation that the
 general entry does not name.
+
+## Re-deriving the count while inheriting the unit being counted
+
+**A re-derivation that recounts *how many* but inherits *what is being counted* is not a
+re-derivation.** It is a passing run of a different measurement — the same shape as
+`core-directives.md`'s **"Re-derive under the conditions the property is actually about"**,
+and a variant of **"Inheriting a claim from a record instead of re-deriving it from the
+source"** above. This entry exists separately because of who carried it: in every instance
+of that entry, the carrier is a *producer* trusting a record, and the correction mechanism
+assumed throughout is that a validator re-derives. **Here the validator did re-derive, and
+propagated the error anyway** — a gate handoff was itself the carrier, which had not been
+recorded before.
+
+**The incident (WF03-ISS0117-20260821), traced by reading each handoff rather than the run
+narrative.** One wrong figure — "five occurrences" of an ad-hoc `orch_*` bookkeeping key —
+travelled through four steps, and each step re-derived something:
+
+1. **Step 1 (ISSUE-FIXER), `step-01-diagnose.json`** — "Five occurrences across four runs",
+   then enumerates **five** run ids, one of which (`WF02-REQ043`) wrote no key at all. The
+   unit was already conflated at origin: *occurrences of an improvised key* had been mixed
+   with *incidents of an agent dying*.
+2. **Step 3 (DOC-UPDATER), `step-03-amendment.json`** — copied it into the protocol as
+   "THREE key names across FIVE occurrences", with a parenthetical enumerating **four**.
+   The figure and its own evidence list disagreed inside one sentence.
+3. **Step 3b (REVIEWER), `step-03b-reviewer-gate.json`** — a gate, correcting *that exact
+   paragraph*. It recounted and **refuted** "five occurrences" → four. Then it proposed as
+   the fix: "five DEATH incidents across FIVE runs, four of which improvised a key." It had
+   re-derived the count and inherited the unit: it matched on **key names and run ids** and
+   never opened the keys.
+4. **Step 3c (DOC-UPDATER)** — read the four keys' **values**. Two (`WF02-REQ023`,
+   `WF02-REQ037`) are ORCH correcting a timestamp, in runs where **no agent died**. Three
+   deaths, not five. The correction came from reading content, not from counting harder.
+
+**And it fired a fifth time, in this same run, inside the gate that had just named it.**
+Step 3d's re-gate re-derived the death count independently and got **three** — while
+inheriting the class boundary from the table it was checking. Re-swept here at Step 3e:
+`WF02-REQ038-20260817` is a **fourth** death in the same class (a dispatched
+CODE-DESIGN-VALIDATOR killed by a connection error mid-work, redispatched). It was missed
+because its dispatch committed nothing, so it left no handoff file and no
+`orchestrator.log` line — it survives only in a `registry.json` run note, and a sweep whose
+unit is "handoff files carrying a death marker" structurally cannot see it. Same mechanism,
+one level up.
+
+**Why it is easy to miss.** Re-deriving *feels* like the diligent path, and it is — the
+count really is recomputed, from the real files, by a real command. What is never
+recomputed is the category the command selects on, because it arrives inside the question.
+A gate is *more* exposed to this than a producer, not less: a gate is handed the claim as a
+proposition to check, and checking a proposition tends to mean testing its predicate, not
+its subject.
+
+**Correct alternative — re-derive the unit, not only the number:**
+
+* **Before recounting, write down in one sentence what a single member of the set *is*,**
+  and check that sentence against the source rather than against the claim. "Four keys" and
+  "four deaths" are different sets that were the same size for a week.
+* **The cheap test: open a sample of the underlying records and read their CONTENT** — the
+  key's *value*, the run note's *text* — rather than matching on the field name, key name,
+  or id that defines the category. Four `orch_*` keys took two minutes to read in full, and
+  reading them is what broke a figure three agents had passed along.
+* **Ask what a member of the class would look like if it left no artefact of the kind you
+  are grepping for.** `WF02-REQ038` left no handoff file; `WF02-REQ043` left no key. A sweep
+  over one artefact type silently defines the class as "members that produced that
+  artefact."
+* **When a figure and its own parenthetical disagree, stop and re-derive the unit** — not
+  the arithmetic. That mismatch was visible in writing at step 2 and was read past twice.
+* **A validator correcting a figure must re-derive the corrected figure too.** A replacement
+  number offered inside a BLOCKER carries the gate's authority and is exactly as likely to
+  be inherited downstream as the one it replaces.
+
+## Overwriting a handoff's dispatched `task` block with a pointer to a copy that does not exist
+
+**During `WF03-ISS0117-20260821`, a completing agent replaced ORCH's 6,290-character
+dispatched `task.description` with a 156-character pointer** reading "See the PENDING copy
+of this handoff for the full seven-check scope (A)-(G) as dispatched." There is no PENDING
+copy: it is the same file, in the same path, and `status` had just been moved to
+`COMPLETED` in it. The file was untracked until that same commit, so the dispatched text
+existed in **no git object** and survived only in ORCH's live context, from which ORCH
+restored it verbatim. Measured on the commit and the working tree: 156 characters committed,
+6,290 restored.
+
+**Nothing about the step's verdict or evidence was affected** — this is a record-integrity
+fault, not a wrong result, and it should not be reported as more than that. Its value is
+that it is a live instance of the gap the same run's amendment was written to close, one
+field further along: `§3`'s ownership table then bound `created_at`, `started_at`,
+`completed_at`, `status` and `result`, and not `task`.
+
+**Why it happens:** the handoff is the agent's own working file and it edits that file at
+completion, so shortening a long block it has already read feels like tidying rather than
+deleting. The dispatched text reads as *input already consumed* rather than as *the record
+of what was asked*.
+
+**Correct alternative:**
+
+* **Never modify your handoff's `task` block** — it is ORCH's field and the only record of
+  what was dispatched. `HANDOFF_PROTOCOL.md` §3's table now says so with no exception.
+* If the block is wrong, stale or impossible, **say so in `result.issues`** (per §1.1) and
+  leave it intact. ORCH is the only role that can re-dispatch.
+* **Never point a record at "the other copy" of itself.** If the pointer names no distinct
+  path, it names nothing.
+* **Commit the handoff at dispatch, not only at completion.** An untracked file has no
+  prior version to restore from; here the text survived by luck — the dispatching session
+  happened to still be alive.

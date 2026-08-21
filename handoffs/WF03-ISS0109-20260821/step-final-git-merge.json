@@ -75,11 +75,16 @@
   },
   "rework_count": 0,
   "max_rework": 3,
-  "orch_reconstruction": {
+  "not_agent_attested": {
     "reconstructed_by": "ORCH",
     "reconstructed_at": "2026-08-21T03:29:36Z",
     "reason": "ELIXIR-DEV terminated on an API error after the merge landed and before writing result. This block is ORCH's independent verification, not a transcription of an agent's claim.",
-    "commands_run": [
+    "fields_written": [
+      "status",
+      "completed_at",
+      "result"
+    ],
+    "evidence": [
       "git status --short / git branch --show-current -> on main, clean tree",
       "ls .git/rebase-merge .git/rebase-apply -> no rebase in progress (no interrupted rebase left behind)",
       "git log --oneline -5 -> 0bd718f squash commit is HEAD, directly atop 159fe9e",
@@ -93,6 +98,7 @@
     "not_verifiable_after_the_fact": [
       "whether the rebase encountered and resolved any conflict (a clean rebase leaves no trace)",
       "whether git stash was used during the step (the three foreign stash entries were confirmed intact afterwards)"
-    ]
+    ],
+    "backfill_note": "2026-08-21, run WF03-ISS0117-20260821 step 3e (DOC-UPDATER): the top-level key of this block was renamed from `orch_reconstruction` to `not_agent_attested` and the member `commands_run` to `evidence`, under the single named exception in HANDOFF_PROTOCOL.md section 4.1(b), which otherwise forbids backfilling this marker. `fields_written` was added, listing the three fields section 4.1(a-2) assigns to ORCH and which section 3 establishes ORCH did write here. This is a RENAME OVER EVIDENCE ALREADY PRESENT IN THIS FILE AND ALREADY ORCH'S OWN, not a claim retro-fitted after the fact: no factual assertion in this file was added, removed or reworded, verified by diffing the parsed structure before and after the edit."
   }
 }

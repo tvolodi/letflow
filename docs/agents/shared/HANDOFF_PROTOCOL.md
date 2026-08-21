@@ -261,16 +261,24 @@ never precede `started_at`.
 | `completed_at` | the receiving agent | when it completes the handoff | §4.1 |
 | `status` | the receiving agent, from `PENDING`→`IN_PROGRESS` (§1) →`COMPLETED`/`FAILED` (§4). ORCH sets the initial `PENDING`, and sets `ESCALATED`/`CANCELLED` per `ORCHESTRATOR.md` §5 | on claiming and on completing | §4.1 |
 | `result` | **the receiving agent, and only the receiving agent** — it is that agent's own attested first-hand report of what it did | when it completes the handoff | §4.1 |
+| `task` (including `description` and `acceptance_criteria`) | **ORCH only** — it is the dispatch itself, and the receiving agent **never** modifies it | at handoff creation | — |
 
-**Why the last two rows exist, given they look like they are stating the obvious.** They
+**Why the `status` and `result` rows exist, given they look like they are stating the obvious.** They
 were added 2026-08-21 (ISS-0117) because they were *not* written down, and the omission
 cost more than the rule would have. Until then this table bound only the three timestamp
 fields, so "a handoff's `result` is the acting agent's own attested report" — the single
 assumption the entire producer/validator gate model rests on — existed nowhere as a rule.
 An unwritten rule has no exception clause, so each run that hit a bookkeeping case the
 table did not cover improvised its own repair, in a non-schema top-level key invented on
-the spot. **Re-derived 2026-08-21** by `json.load`-ing every file under `handoffs/` and
-subtracting §2's own 17 schema keys (0 unparseable):
+the spot. **Re-derived 2026-08-21** by `json.load`-ing every file under `handoffs/` other
+than `registry.json` (550 files, 0 unparseable), subtracting §2's own 17 schema keys, **and
+then keeping only the keys that record an out-of-band repair or correction — in practice
+the `orch_*`-prefixed ones.** That last filter is not optional: the subtraction alone
+returns **26** occurrences in **13** files, because it also catches a `next_action`
+misplaced at top level in six files, one stray `gate_history`, and 15 keys across the two
+`step-00-git-setup` files that sit on a foreign flat schema. Those are separate faults, not
+ad-hoc repair markers, and an agent who re-derives without the filter gets 26 and concludes
+this table is wrong.
 
 | Key name | Run | `completed_at` | Shape | Position |
 |---|---|---|---|---|
@@ -285,15 +293,31 @@ agent stopped existing (`WF02-REQ027`, an infrastructure session limit; `WF03-IS
 an API error); the other two correct a timestamp, which is an adjacent case this table
 also failed to cover. §4.1 is the exception clause those runs were missing.
 
+*The table records the key names **as improvised**. The last row's `orch_reconstruction`
+has since been renamed to `not_agent_attested` under §4.1(b)'s single authorised backfill
+(2026-08-21, `WF03-ISS0117-20260821`); the other three files are untouched and stay that
+way, per §4.1(b)'s no-backfill rule.*
+
 **And the `completed_at` exception pointer is not decorative.** The best-executed repair
 so far still violated this table silently:
 `handoffs/WF03-ISS0109-20260821/step-final-git-merge.json` carries
 `completed_at: "2026-08-21T03:29:36Z"`, byte-identical to its own
-`orch_reconstruction.reconstructed_at` — i.e. ORCH's clock read, written into a field
+`reconstructed_at` (in the key then named `orch_reconstruction`) — i.e. ORCH's clock read, written into a field
 this table assigns to "the receiving agent" — and the marker object it added did not
 declare that it had done so. The rule was already in force; nothing flagged the breach,
 because the marker had no required field obliging the writer to enumerate what it wrote.
 That is why §4.1's `fields_written` is mandatory.
+
+**And the `task` row has no exception, because that field was damaged the same way — one
+row further along.** A receiving agent that believes its `task` block is wrong, stale or
+impossible says so in `result.issues` (per §1.1) and leaves the block alone; ORCH is the
+only role that can re-dispatch. During `WF03-ISS0117-20260821` a completing agent replaced
+ORCH's **6,290**-character dispatched `task.description` with a **156**-character pointer to
+"the PENDING copy of this handoff" — a copy that does not exist, since it is the same file.
+Because the file was untracked until that same commit, the dispatched text existed in no git
+object and survived only in ORCH's own context, from which it was restored verbatim. The
+step's verdict and evidence were unaffected; what was nearly lost was the record of what had
+been asked.
 
 ---
 
@@ -338,22 +362,36 @@ re-derive your verdict from the artefact itself. Reading the producer's own
 **This section is the exception to §4 and to §3's `completed_at`/`status`/`result` rows,
 and it is the only one.** §4 assumes the agent that did the work is still alive to report
 it. Agents in this pipeline die: on an API error mid-response, on an infrastructure
-session limit, on a host power outage. **Three such deaths are on record, in three runs**,
-between 2026-08-16 and 2026-08-21 — essentially the whole recorded life of the pipeline —
-and each was treated differently:
+session limit, on a host power outage. **Four such deaths — each of a *dispatched agent
+holding an open handoff*, which is this section's class — are on record, in four runs**,
+between 2026-08-16 and 2026-08-21, essentially the whole recorded life of the pipeline, and
+they drew only **three** different treatments:
 
 | Run | How it died | What was done |
 |---|---|---|
 | `WF02-REQ027-20260816` | infrastructure session limit, mid-work | redispatched to a fresh REVIEWER |
+| `WF02-REQ038-20260817` | connection error, mid-work, zero commits | redispatched to a fresh CODE-DESIGN-VALIDATOR |
 | `WF02-REQ043-20260818` | host power outage, mid-rebase | nothing — still `PENDING` on disk today (ISS-0192) |
 | `WF03-ISS0109-20260821` | API error, after the merge had landed | ORCH reconstructed the `result` |
 
-Three incidents, three different treatments, one of which was no treatment at all. That
+Four incidents, three different treatments, one of which was no treatment at all. That
 is a recurring class handled ad hoc, so it gets a rule rather than a convention.
 Re-derived 2026-08-21 from `handoffs/registry.json`, `handoffs/orchestrator.log` and the
-three handoff files themselves. **This is deliberately a smaller set than §3's four
-ad-hoc keys, and the two must not be conflated:** two of those four keys correct a
-timestamp rather than record a death, and `WF02-REQ043` is a death that wrote no key at
+handoff files themselves.
+
+**Two boundary facts about this table, both of which a re-derivation will hit.** First,
+`WF02-REQ038`'s death is recorded *only* in `registry.json`'s run note: the dispatch
+committed nothing, so it left no handoff file and no `orchestrator.log` line of its own, and
+a sweep of the handoff files alone cannot see it. Second, a **fifth** abnormal termination
+in the same window is deliberately **not** in this table — `WF02-REQ025-20260817`
+(`orchestrator.log:297`), where the session that died was ORCH's own, *between* dispatches,
+holding no agent handoff. ORCH resumed the same run and finished the work in place, so no
+`result` was ever left for a second party to complete. That is the edge of the class, not an
+omission from it.
+
+**This set and §3's four ad-hoc keys are two different sets that happen to be the same
+size, and must not be conflated:** two of those four keys correct a timestamp rather than
+record a death, and two of these four deaths (`WF02-REQ038`, `WF02-REQ043`) wrote no key at
 all.
 
 ### (a) Who may complete it — and it is never "nobody"
@@ -449,30 +487,47 @@ retro-fitted to a file nobody can now attest to would itself be an unattested cl
 (Stated without a headcount deliberately: that number grows every run, so any figure
 written here is wrong by the next one.)
 
-**What absence asserts, and from when.** On a handoff created **on or after 2026-08-21**,
-the date this rule landed, absence of `not_agent_attested` asserts that the `result` is
-the acting agent's own report — precisely the assertion §3's `result` row makes into a
-rule. On a handoff created **before** that date, absence asserts **nothing**: those files
-were never audited against a rule that did not exist, so absence there means only "the
-rule did not exist yet." Saying so costs one sentence and is the difference between the
-field claiming something true about new files and something false about every old one.
+**What absence asserts, and from when — scoped to the landing COMMIT, not to its day.** On
+a handoff created **at or after commit `131aba9`** (committed 2026-08-21T12:13:08+05:00 =
+`07:13:08Z`), the commit this rule landed in, absence of `not_agent_attested` asserts that
+the `result` is the acting agent's own report — precisely the assertion §3's `result` row
+makes into a rule. On a handoff created **before** that commit, absence asserts **nothing**:
+those files were never audited against a rule that did not exist, so absence there means
+only "the rule did not exist yet."
 
-**One backfill is authorised — exactly one, and this amendment does not perform it.**
+**Day granularity would be false, and measurably so, which is why the boundary is a
+commit.** Measured 2026-08-21: 46 handoff files carry a `created_at` on 2026-08-21, and **42
+of them predate `131aba9`** — including
+`handoffs/WF03-ISS0109-20260821/step-final-git-merge.json` (`created_at`
+`2026-08-21T03:24:18Z`), the repository's single genuine (a-2) reconstruction and the one
+file this subsection singles out below. A same-day boundary would therefore have asserted,
+of that exact file, that its `result` was the acting agent's own report: the precise
+falsehood this field exists to prevent. The backfill below closes that one file; the other
+41 are closed only by scoping the boundary correctly.
+
+**One backfill was authorised — exactly one, and it has now been performed.**
 `handoffs/WF03-ISS0109-20260821/step-final-git-merge.json` is the single genuine (a-2)
-reconstruction in the repository, and it carries `orch_reconstruction`. Measured
-2026-08-21: `grep -rl not_agent_attested handoffs/` returns only files that *discuss* the
-field and not that one — so without this exception, the command offered below as the
-field's whole justification enumerates **zero** of the one reconstruction that exists, and
-does so permanently. ORCH may therefore rename that file's `orch_reconstruction` key to
-`not_agent_attested` and add `fields_written: ["status","completed_at","result"]`, which
-§3 establishes it did write and did not declare. That is a **key rename over evidence
-already present in the file and already ORCH's own** — not a claim retro-fitted to a file
-nobody can attest to, which is what the no-backfill rule rightly forbids in general. The
-file belongs to another run; ORCH routes the change as its own step.
+reconstruction in the repository, and it carried `orch_reconstruction`. Before the rename,
+`grep -rl not_agent_attested handoffs/` returned only files that *discuss* the field and not
+that one — so without this exception, the command offered below as the field's whole
+justification would have enumerated **zero** of the one reconstruction that exists, and done
+so permanently. The rename to `not_agent_attested` (with `commands_run` → `evidence`, and
+`fields_written: ["status","completed_at","result"]` added, which §3 establishes ORCH did
+write and did not declare) landed 2026-08-21 in run `WF03-ISS0117-20260821`, and the file
+records it in a `backfill_note` member. It was a **key rename over evidence already present
+in the file and already ORCH's own** — verified by diffing the file's parsed structure before
+and after, which shows zero changed values on common paths and nothing lost — and **not** a
+claim retro-fitted to a file nobody can attest to, which is what the no-backfill rule rightly
+forbids in general. **No further backfill is authorised by this exception**; it named one
+file and is spent.
 
 **Why a required field rather than a convention — the measurement, not the argument.**
-The convention was tried, without anyone deciding to try it. §3's table above is the
-measurement, re-derived 2026-08-21 over every file under `handoffs/`: **four** occurrences,
+The convention — *annotating an out-of-band bookkeeping repair in a top-level key invented
+on the spot, for a case §3's table did not cover, of which reconstruction is one member* —
+was tried, without anyone deciding to try it. **Not all four instances below are deaths**
+(§3's table splits them: two are deaths, two are timestamp corrections); what makes them one
+family is the improvised naming, and that is what this measurement is about. §3's table above
+is the measurement, re-derived 2026-08-21 over every file under `handoffs/`: **four** occurrences,
 in **four** files, in **four** runs, under **three** key names, at **two** key positions
 (18th/last in three files, 11th/mid-file in one), in **two** shapes.
 
@@ -532,7 +587,8 @@ contents — the handoff records only what the agent *intended* to do, and an ag
 died mid-action intended everything.
 
 **Worked example — the probe set for a git step**, lifted verbatim from
-`WF03-ISS0109-20260821`'s own `orch_reconstruction.commands_run`, which is where this
+`WF03-ISS0109-20260821`'s own `not_agent_attested.evidence` (written as
+`orch_reconstruction.commands_run`, renamed by the backfill above), which is where this
 was first done properly:
 
 ```bash

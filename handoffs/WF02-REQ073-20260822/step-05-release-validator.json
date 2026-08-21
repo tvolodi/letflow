@@ -1,0 +1,68 @@
+{
+  "handoff_id": "req073-step05",
+  "run_id": "WF02-REQ073-20260822",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ073-20260822/step-05-release-validator.json",
+  "created_at": "2026-08-21T23:16:29Z",
+  "started_at": "2026-08-21T23:16:29Z",
+  "completed_at": "2026-08-21T23:20:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-073"],
+    "artifacts_in": [
+      "docs/requirements.yaml (REQ-073 entry, lines 4119-4155)",
+      "lib/letflow/routers/identity.ex@738e809",
+      "lib/letflow/identity.ex@738e809",
+      "test/letflow/routers/identity_test.exs@738e809",
+      "handoffs/WF02-REQ073-20260822/step-04-test-runner.json"
+    ],
+    "owned_modules": ["lib/letflow/routers/identity.ex", "test/letflow/routers/identity_test.exs"]
+  },
+  "task": {
+    "description": "Independently re-verify all six of REQ-073's acceptance criteria against the actual shipped code and tests on feature/WF02-REQ073-20260822 (commit 738e809), re-running the test suite myself rather than trusting TEST-RUNNER's report.",
+    "acceptance_criteria": [
+      "AC1: five end-to-end tests through the real router (create/list/get/patch/status)",
+      "AC2: cross-tenant-404 byte-identical via REQ-072's mechanism (INV-5)",
+      "AC3: tenant-isolation on list, seeded with similarly-named users in both tenants (INV-1)",
+      "AC4: permission-denial x3 write handlers, DB-unchanged asserted (not just status code)",
+      "AC5: response allowlist -- exactly 8 keys, full key-set assertion in the test, not just presence checks (INV-2)",
+      "AC6: moduledoc names the handler-to-Letflow.Identity-function mapping"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Confirmed branch feature/WF02-REQ073-20260822 at commit 738e809 (git branch --show-current, git log). Read docs/requirements.yaml's REQ-073 entry verbatim (lines 4119-4155), lib/letflow/routers/identity.ex in full, and test/letflow/routers/identity_test.exs in full -- did not read any prior step's result.summary as a substitute for checking code/tests directly.\n\nINDEPENDENT TEST RE-RUN: ran `mix test test/letflow/routers/identity_test.exs` standalone (23 passed, 0 failures) and then `bash scripts/test_parallel.sh` for the full suite (N=16 via nproc): 'combined: 1477 tests, 5 properties, 0 failures (1482/1482 passed)' -- matches TEST-RUNNER's step-04 result exactly, independently reproduced.\n\nINDEPENDENT MUTATION on AC2 (deliberately different link in the chain than TEST-DESIGN-VALIDATOR's step-03b probe, which broke Identity.get_user/2's own scoping): temporarily changed handle_get/3 in lib/letflow/routers/identity.ex to ignore its opts argument and call `Identity.get_user(id, [])` instead (breaking the router's own opts-threading rather than the context function). Re-ran the router test file: the AC2 cross-tenant test failed immediately (KeyError: key :prefix not found), i.e. it fails loudly rather than silently returning the wrong tenant's data. Reverted via Edit back to the original two-line form and confirmed `git diff` is empty (clean revert, nothing left mutated). AC2 confirmed independently, via a second, different mutation point.\n\nPER-AC VERDICT:\nAC1 -- MET. All five handlers each have a dedicated 'AC1' describe-block test (lines 79-173) that dispatches through the real router (Letflow.Routers.Identity.call/2), asserting the documented status/body/persistence for each of create/list/get/patch/status-update. Re-ran individually, all pass.\nAC2 -- MET. Test at lines 186-201 asserts byte-identical status AND resp_body between a tenant-B-only id and a never-existed id. Confirmed the underlying mechanism (Context.scoped_repo_opts/1, lib/letflow/api/context.ex:213-224) derives tenant scope solely from conn.assigns.auth_context.tenant_id with no parameter slot for a caller-supplied override. Independently mutation-tested a second link in the chain (see above) -- caught immediately.\nAC3 -- MET. Test at lines 269-285 seeds tenant A and tenant B each with a user named 'alice' (tenant B additionally has 'alice2'), asserts tenant A's list returns exactly one item, username 'alice'.\nAC4 -- MET. Lines 211-263 parametrize over {no roles, a role without UsersGroupsRolesManage} x {create, patch, status-update}. Create asserts Repo.aggregate count unchanged; patch and status-update capture the full row via Repo.get! before the call and assert `Repo.get!(...) == before` afterward -- a real full-row-equality snapshot, not merely a field spot-check.\nAC5 -- NOT MET AS WRITTEN. AC5's literal text requires 'a test asserting the full key set of the response body.' The only relevant test (lines 79-109) asserts eight expected keys are present with correct values and separately `refute Map.has_key?` for password_hash/external_id/external_realm specifically -- it never asserts the response's key set as a whole (e.g. `Map.keys(body) |> Enum.sort() == [...]` or equivalent). Grepped the whole test suite for `Map.keys`/`MapSet.new(Map.keys` near identity -- zero hits. This means a hypothetical ninth key added to user_map/1 under some OTHER name (not one of the three explicitly named exclusions) would not be caught by this test, which is exactly the drift AC5 is written to guard against. Read lib/letflow/identity/user.ex's schema (lines 36-47): 11 real fields (8 kept + password_hash/external_id/external_realm) plus timestamps -- user_map/1 itself (identity.ex lines 322-333) is correctly hand-built with exactly 8 literal keys today, so the SHIPPED CODE is safe by inspection, but the AC's specific test-level requirement (a full key-set assertion, so a future regression is caught by CI rather than by inspection) is not satisfied by what's actually in the test file. This is the same class of gap this role exists to catch: functionally fine today, but the acceptance criterion as written is not genuinely met by the shipped test.\nAC6 -- MET. Read the actual shipped @moduledoc (identity.ex lines 1-35) directly: explicit bullet list mapping all five routes to their lib/letflow/identity.ex function(s), including the two-call get_user-then-write chain for patch/status-update.\n\nOverall: 5 of 6 acceptance criteria independently confirmed met; AC5 is not met as literally written -- the shipped test demonstrates named-exclusion + expected-presence but not the full-key-set assertion the criterion specifically calls for. Not a security defect (the shipped response shape is correct today) but a real, literal AC gap, not a nitpick to wave through.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "id": "req073-ac5-missing-full-keyset-assertion",
+        "severity": "blocking",
+        "summary": "AC5 requires 'a test asserting the full key set of the response body.' test/letflow/routers/identity_test.exs's AC1 create test (lines 79-109) only asserts presence of 8 expected keys plus refutation of 3 specifically-named excluded keys -- it never asserts the complete key set as a whole (e.g. Map.keys(body) |> Enum.sort() == [...]). A future accidental 9th key under any other name would pass this test undetected.",
+        "recommendation": "Route back to TEST-DESIGNER to add a full key-set equality assertion (e.g. `assert Map.keys(body) |> Enum.sort() == [\"auth_source\", \"display_name\", \"email\", \"id\", \"inserted_at\", \"status\", \"updated_at\", \"username\"]`) to the AC1 create test (and ideally the get/patch/status-update response bodies too, since they go through the same user_map/1). Then re-run Steps 3b (TEST-DESIGN-VALIDATOR), 4 (TEST-RUNNER), and 5 (this step) before routing to DOC-UPDATER."
+      }
+    ],
+    "test_run_evidence": {
+      "isolated_command": "mix test test/letflow/routers/identity_test.exs",
+      "isolated_result": "23 tests, 0 failures",
+      "full_suite_command": "bash scripts/test_parallel.sh",
+      "full_suite_result": "combined: 1477 tests, 5 properties, 0 failures (1482/1482 passed)",
+      "mutation_probe": "handle_get/3 opts-threading broken (Identity.get_user(id, []) instead of opts) -- AC2 test failed immediately (KeyError: key :prefix not found), reverted, git diff confirmed clean"
+    },
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ073-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ073-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER to add a full key-set equality assertion satisfying AC5's literal text, then re-run Steps 3b/4/5. Do NOT route to DOC-UPDATER -- REQ-073 is not done."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,59 @@
+{
+  "handoff_id": "1d2a6bd3-99b1-431f-94ea-70967aa14add",
+  "run_id": "WF03-ISS0179-20260821",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0179-20260821/step-02-code-designer.json",
+  "created_at": "2026-08-21T13:55:55Z",
+  "started_at": "2026-08-21T13:55:55Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0111.yaml",
+      "docs/issues/ISS-0107.yaml",
+      "docs/issues/ISS-0110.yaml",
+      "test/letflow/identity_migration_test.exs",
+      "priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs"
+    ],
+    "owned_modules": [
+      "test/letflow/identity_migration_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Design a fix for ISS-0111. Read `docs/issues/ISS-0111.yaml` in full -- it is thorough and this dispatch does not restate it. `with_only_this_tenant_visible!/2` in `test/letflow/identity_migration_test.exs` (lines 263-292) bulk-DELETEs every OTHER tenant's row from `public.tenant_schemas` into a backup table, runs a guarded migration, then restores the rows -- sound within one serialized `mix test` invocation, unsafe the moment a second invocation touches the same database (which `ISS-0107`, still open, demonstrably allows via a nested `mix test` spawned by `Mix.Tasks.Letflow.Check.Test`).\n\nWHY THIS ISN'T A SIMPLE ONE-LINE FIX. `priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs` (read it in full) is a REAL, ALREADY-SHIPPED Ecto migration whose `up/0` does `FOR v_tenant IN SELECT tenant_id, schema_name FROM public.tenant_schemas LOOP` -- an unscoped, whole-table scan, BY DESIGN: in a real deployment it must see every tenant to decide whether it's safe to drop the shared legacy tables. The test wraps it in a global mutation (`with_only_this_tenant_visible!/2`) specifically because there is no way to hand the migration's dynamic SQL a WHERE-clause scope without changing the migration's own production semantics -- and this project does not casually edit an already-shipped migration.\n\nTHE OPTIONS, WEIGH THEM RATHER THAN PICKING THE FIRST PLAUSIBLE ONE:\n\n(a) **Mutual exclusion via a Postgres advisory lock**, held by `with_only_this_tenant_visible!/2` for the duration of the snapshot/restore window, acquired with `pg_advisory_lock` (session-level, blocking) before the DELETE and released after the restore. This does NOT require ISS-0107 to be fixed first: it makes the destructive window mutually exclusive across ANY concurrent Postgres session touching the same database, including a nested `mix test` invocation, because the lock lives in Postgres itself, not in this process. Consider: does the SQL Sandbox's connection-per-test model interact badly with holding a session-level advisory lock across `Repo.query!/2` calls that may use different pooled connections? (The file's own `Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)` comment says `:auto` mode is used specifically to escape the sandbox's single shared connection -- read why, and confirm whether an advisory lock acquired on one connection and released on another would silently no-op, which would be worse than no lock at all.)\n\n(b) **Do not touch shared state at all** -- give the guarded migration a genuinely isolated view, e.g. running the ENTIRE guarded scenario (fixture setup, migration, assertions) inside a database transaction that is rolled back rather than committed, so no other session ever observes the intermediate state regardless of what else touches the database. Consider: does `Ecto.Migrator.run/4` work correctly inside an already-open transaction, and does the DDL involved (dropping tables) behave transactionally in Postgres (it does, DDL is transactional here) versus requiring a fresh connection outside any transaction?\n\n(c) **Defer this entirely to ISS-0107** on the reasoning that fixing the actual enabler (stop a nested mix test from silently sharing its parent's database) removes the precondition for every hazard in this family (ISS-0110, ISS-0111) at once, making a local fix here redundant work. Weigh this seriously -- it may be the more efficient path -- but note ISS-0107 has been open since before this session started and nothing indicates it will be picked up soon; a local, self-contained mitigation may be worth shipping regardless as defense in depth, per ISS-0110's own analogous reasoning (\"real liveness tracking... is the direction that removes the guess rather than retuning it\").\n\nDECIDE, with reasoning stated in the design doc, then specify the fix precisely: exact SQL/Ecto calls, exact synchronization primitive and its acquire/release points, and what changes (if anything) about the restore-on-crash self-heal logic (`restore_orphaned_guard_backup_rows!/0`) given the new mechanism. If you choose (c), the design's deliverable is a clear written justification plus a specific, actionable recommendation for ORCH (defer, mark instrumented pointing at ISS-0107, or file a dependency) -- not an implementation.\n\nDESIGN-ARTEFACT DISCIPLINE: signatures, type shapes, and prose only if you choose (a) or (b) and it's a genuine design decision needing CODE-DESIGN-VALIDATOR's gate; if you conclude (c) is correct, write the recommendation directly into a design note and say so, since there is nothing to implement.",
+    "acceptance_criteria": [
+      "All three options (advisory lock, transactional isolation, defer to ISS-0107) are weighed on their actual merits against this specific code -- the migration's real SQL, the sandbox's :auto-mode comment, and ISS-0107's status -- not assumed",
+      "If (a) is chosen: the advisory-lock acquire/release points are exact, and the sandbox connection-pooling question (same session for acquire and release) is explicitly resolved with evidence, not assumed safe",
+      "If (b) is chosen: whether Ecto.Migrator.run/4's DDL behaves correctly inside an open transaction is verified against this specific migration, not assumed",
+      "If (c) is chosen: a specific, actionable recommendation is given (defer/instrumented/dependency-file), not a vague punt",
+      "Whichever is chosen, the interaction with restore_orphaned_guard_backup_rows!/0's crash self-heal logic is addressed explicitly",
+      "No .ex implementation body is written if the design goes to a further implementation step -- signatures and prose only in that case",
+      "No file outside test/letflow/identity_migration_test.exs (or a new design doc under lib/letflow/design/, if warranted) is modified"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0179-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0179-20260821",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

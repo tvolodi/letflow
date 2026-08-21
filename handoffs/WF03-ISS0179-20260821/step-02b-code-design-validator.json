@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0179-20260821/step-02b-code-design-validator.json",
   "created_at": "2026-08-21T14:05:47Z",
   "started_at": "2026-08-21T14:05:47Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-21T14:08:44Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -40,10 +40,15 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
+    "status": "PASS",
+    "summary": "PASS -- all 8 acceptance criteria met, re-derived from source rather than accepted from the design report. (1) Ecto.Migrator.run/4 transaction-isolation claim VERIFIED against actual vendored deps/ecto_sql (3.14.0, matches mix.lock): migrator.ex:332-344 async_migrate_maybe_in_transaction/7 dispatches via `Task.async()`/`Task.await(:infinity)` to a fresh process running run_maybe_in_transaction/5, which (line 353) calls `repo.transaction(fun, ...)` -- a transaction opened by THAT Task process, not the caller. adapters/sql.ex:1490-1508 confirms connection pinning is Process-dictionary-keyed (`Process.get/put(key(pool))`) per calling PROCESS, so the spawned Task has no entry and must check out its own connection independently of whatever the caller holds. Design's claim is accurate. (2) Repo.checkout/2 pinning VERIFIED: deps/ecto/lib/ecto/repo.ex:298-301 generated `checkout/2` calls `adapter.checkout(meta, opts, fun)`; adapters/sql.ex:948-949 routes to checkout_or_transaction(:run, ...) (line 1471-1488), which does `apply(DBConnection, :run, [get_conn_or_pool(...), callback, opts])` -- DBConnection.run/3 checks out ONE connection for the callback's full duration, and the callback wrapper (line 1477-1485) does `put_conn(pool, conn)` before invoking the user callback and `reset_conn` after, so any nested Repo.query!/2 call made by the SAME process during that callback resolves via get_conn_or_pool's Process.get to the SAME conn. Confirms the design's core safety claim exactly. Both load-bearing checks verified against real vendored source, not the design doc's own citations. (3) Lock key: grepped lib/ and test/ for pg_advisory_lock/pg_try_advisory_lock/pg_advisory_xact_lock -- all four other usages (tenant_provisioning.ex, and 4 design docs) use pg_advisory_xact_lock(hashtext(schema_name)) (transaction-scoped, dynamic per-schema key); the new design's pg_advisory_lock(hashtext(<fixed literal>)) (session-scoped, single fixed key) is a distinct literal string so a hashtext collision is only the same low-probability, already-accepted risk this codebase's existing hashtext-keyed idiom carries (session- and transaction-level advisory locks share one 64-bit key space in Postgres, so this is a real but astronomically-unlikely interaction, not a novel one -- noted as MINOR below). Constant location (@guard_lock_key in test/letflow/identity_migration_test.exs, design section 3.1) is stated explicitly. (4) restore_orphaned_guard_backup_rows!/0: design section 3.3 explicitly requires it to acquire/release the SAME @guard_lock_key in its own Repo.checkout/2, with reasoning (prevents restoring another invocation's legitimately-hidden rows mid-critical-section) and correctly analyzes both the contended and crashed-holder cases. Auto-release-on-connection-death is standard, stable, version-independent PostgreSQL behavior (session-level advisory locks are released automatically when the owning backend/session terminates, documented behavior not tied to any Ecto version) -- confirmed as accurate against standard Postgres semantics, not merely assumed. (5) docs/issues/ISS-0107.yaml read directly: status is 'open' (line 61), matching the design's claim; the design's reasoning for shipping the local fix now rather than waiting (small, self-contained, doesn't block on an unscheduled prerequisite, remains correct defense-in-depth afterward, consistent with ISS-0110's recorded precedent) is sound. (6) No .ex implementation body present -- lib/letflow/design/iss0111-with-only-this-tenant-visible-advisory-lock-fix.md contains only prose, @spec-style signatures, and a control-flow narrative; no function bodies. (7) `git show --stat 01b9fc4` shows exactly two files: the new design .md and this run's own step-02-code-designer.json handoff -- no .ex file, no migration, scope confirmed. (8) This verdict recorded with evidence per check above.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "The new session-level lock's key (hashtext of a fixed literal string) and the codebase's existing transaction-level pg_advisory_xact_lock(hashtext(schema_name)) usage (lib/letflow/tenant_provisioning.ex:174 and others) both use Postgres's single-bigint advisory-lock keyspace, which session-level and transaction-level lock requests share -- so a hashtext collision between the literal guard key and some real tenant schema_name string would (in principle) make an unrelated tenant-provisioning pg_advisory_xact_lock contend with this test guard lock. Probability is negligible (32-bit hashtext space, handful of concurrent distinct keys) and is the same pre-existing risk class the codebase's hashtext-keyed idiom already carries among different schema names -- not a new hazard introduced by this design, and not blocking. Worth a one-line design-doc note (or switching to the two-int4-key advisory lock form to guarantee zero overlap with the schema_name class) if ELIXIR-DEV wants to close it, but does not affect this gate's PASS verdict."
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0179-20260821",
       "commit_sha_list": [],
@@ -52,7 +57,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to ELIXIR-DEV (Step 2a) to implement section 3's fix in test/letflow/identity_migration_test.exs per the design."
   },
   "rework_count": 0,
   "max_rework": 3

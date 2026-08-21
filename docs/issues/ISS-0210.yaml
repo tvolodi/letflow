@@ -69,8 +69,11 @@ resolved_at: "2026-08-21T11:23:04Z"
 resolution_note: >
   (1) Re-derived the non-fast-forward claim first-hand from GIT_SETUP.md step 7 (pushes
   feature/<run-id> at Step 00) and GIT_MERGE.md step 5 (rebase rewrites every commit made
-  since), plus WF03-ISS0200-20260821's step-final-git-merge.json result.issues[0], which hit
-  a live rejection this way. (2) GIT_MERGE.md step 6 now states --force-with-lease is
+  since), plus WF03-ISS0200-20260821's step-final-git-merge.json result.issues[0], whose
+  dispatch was corrected mid-step to anticipate exactly this deadlock -- though the agent
+  avoided ever needing the push by resetting to its published tip and merging origin/main
+  in instead, so the rejection itself was never actually observed there. (2) GIT_MERGE.md
+  step 6 now states --force-with-lease is
   authorized ONLY on the run's own feature/<run-id> branch (never main, never another
   session's commit), with the no-op-rebase case (plain push still works) stated explicitly.
   (3) ORCHESTRATOR.md §7.1 gained one pointer sentence to GIT_MERGE.md step 6 rather than a

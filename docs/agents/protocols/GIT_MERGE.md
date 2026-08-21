@@ -183,9 +183,13 @@ previous run.** A failure you have structurally cleared is filed and forwarded p
    as the coordination signal. Step 5's rebase just rewrote every commit this run made
    since then. So whenever step 5 actually replayed at least one commit, the remote still
    holds the pre-rebase tip and a plain `git push` here is REJECTED as non-fast-forward —
-   every time, not occasionally. (Confirmed live, not just from the protocol text:
-   `WF03-ISS0200-20260821`'s Step Final hit exactly this after its branch was rebased
-   twice — see that run's `step-final-git-merge.json`, `result.issues[0]`.)
+   every time, not occasionally. (This is a structural consequence of the protocol text,
+   not merely a hypothetical: `WF03-ISS0200-20260821`'s Step Final anticipated exactly
+   this deadlock after its branch was rebased twice, and its dispatch was corrected
+   mid-step to authorize `--force-with-lease` on its own branch — but the agent avoided
+   ever needing the push by resetting to its published tip and merging `origin/main` in
+   instead, so the rejection itself was never actually observed there. See that run's
+   `step-final-git-merge.json`, `result.issues[0]`.)
 
    If step 5's rebase was a NO-OP (origin/main had no new commits since this branch's
    last push, so nothing was replayed): the plain `git push origin feature/<run-id>`

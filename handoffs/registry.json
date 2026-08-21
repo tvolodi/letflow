@@ -1924,6 +1924,25 @@
       "queue_task_id": 140,
       "queue_agent_id": "tvolo-win-orch",
       "note": "WF-02 for REQ-073 (GH#280, queue task 140, stage S4), claimed via get_next_task immediately after REQ-072's close. Dep REQ-072 confirmed done on main (3feeb3d). First of four split requirements (REQ-073..076) porting identity.zig's 23-handler user-management group; this one takes 5 handlers (create/list/get/patch/status-update). First requirement to exercise the whole S4 chain end-to-end (REQ-066/067/068/069/072) against a real route in lib/letflow/routers/identity.ex (was a REQ-070 stub). Security-critical: INV-1/INV-2/INV-5. Two legitimate rework cycles caught by the pipeline itself: Step 1b initially FAILed (design missing AC6's moduledoc requirement, fixed and re-PASSed); Step 5/RELEASE-VALIDATOR initially FAILed (AC5's response test only checked specific keys, not the full key set -- a stray leaked field would have slipped past -- fixed and re-verified through 3b/4/5 again, each independently mutation-testing the fix). Across the run, AC2's cross-tenant-404 property was independently mutation-tested at three distinct points and AC5's allowlist at two, all confirming genuine (non-vacuous) coverage. ELIXIR-DEV also caught and fixed a real pre-expiry bug in the design's own cursor-pagination walkthrough during implementation (mint-time vs row-time). Full pipeline: Step 1 design (af67ee5) -> 1b FAIL (00cbc95) -> rework (0e8e0a4) -> 1b PASS (391529f) -> 2a implement (32c1f4f) -> 2c security PASS (a4f2233) -> 2d REVIEWER PASS (9f2165a) -> 3b PASS (7dc37d3) -> 4 TEST-RUNNER PASS 1482/1482 (738e809) -> 5 RELEASE-VALIDATOR FAIL on AC5 (06fb22e) -> rework (9a7f95f/e6280fd) -> 3b re-PASS (695d43a) -> 4 re-PASS (106beb9) -> 5 re-PASS (4962fb2) -> 6 DOC-UPDATER flipped to done (fe8730c) -> Step Final merged (329c6f0, PR #460, 1482/1482 post-rebase, no conflicts)."
+    },
+    {
+      "run_id": "WF02-REQ074-20260822",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-074"],
+      "stage": "S4",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/routers/identity.ex",
+        "lib/letflow/identity.ex"
+      ],
+      "lock_acquired_at": "2026-08-21T23:48:48Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 PASS — branch feature/WF02-REQ074-20260822 created and pushed, commit 7bf8163. Next: Step 1 (CODE-DESIGNER).",
+      "backfilled": false,
+      "queue_task_id": 141,
+      "queue_agent_id": "tvolo-win-orch",
+      "note": "WF-02 for REQ-074 (GH#281, queue task 141, stage S4), claimed via get_next_task immediately after REQ-073's close. Dep REQ-073 confirmed done on main (329c6f0). Second of four split requirements (REQ-073..076) porting identity.zig's user-management group; this one takes the 7 group-management handlers (create/add-member/list/delete/list-members-array/list-members/remove-member), extending lib/letflow/routers/identity.ex per REQ-073's established architecture. Explicit investigation required: R-Co has both handleListGroupMembers and handleListGroupMembersArray -- must determine and document whether these are two distinct endpoints or a legacy duplicate, not assume. Security-critical: INV-1 (cross-tenant group-membership join must fail, not silently succeed), INV-5 (cross-tenant via REQ-072's mechanism)."
     }
   ]
 }

@@ -1,0 +1,53 @@
+{
+  "handoff_id": "5a1b5e21-3865-4c2b-8f00-43de064adb86",
+  "run_id": "WF02-REQ074-20260822",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ074-20260822/step-00-git-setup.json",
+  "created_at": "2026-08-21T23:49:10Z",
+  "started_at": "2026-08-21T23:49:10Z",
+  "completed_at": "2026-08-21T23:51:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-074"],
+    "requirement_text": {
+      "REQ-074": "Port the group-management handler group of src/api/routes/identity.zig: handleCreateGroup (L343), handleAddGroupMember (L399), handleListGroups (L447), handleDeleteGroup (L478), handleListGroupMembersArray (L495), handleListGroupMembers (L526), handleRemoveGroupMember (L551). Note that R-Co has BOTH handleListGroupMembers and handleListGroupMembersArray -- read both and determine whether they are two endpoints (paginated object response vs. bare array) or one with a legacy shape. Port whichever R-Co actually serves and state the finding in the moduledoc; do not silently collapse them, and do not port a duplicate endpoint that R-Co no longer routes. Backing domain logic is REQ-015..021's Letflow.Identity and REQ-063's per-schema groups table -- not rebuilt here. Same shared-contract obligations as REQ-073 (REQ-066 responses, REQ-067 pagination, REQ-068 validation, REQ-069's UsersGroupsRolesManage, REQ-072 scoping). SECURITY (INV-1): group membership is a cross-entity relation and is the classic place a join silently escapes tenant scoping -- adding a user from another tenant to a group must fail, not succeed with a cross-tenant member row."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/routers/identity.ex",
+      "lib/letflow/identity.ex"
+    ],
+    "branch_name": "feature/WF02-REQ074-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 00 — Git setup for REQ-074 (Identity routes 2/4 -- groups and group membership).\n\nProcedure per docs/agents/protocols/GIT_SETUP.md:\n1. git checkout main\n2. git pull --ff-only origin main — STOP and FAIL if non-fast-forward\n3. git checkout -b feature/WF02-REQ074-20260822\n4. git branch --show-current — must equal feature/WF02-REQ074-20260822\n5. git push -u origin feature/WF02-REQ074-20260822\n\nThis is REQ-073's sibling requirement, extending lib/letflow/routers/identity.ex (now containing 5 user-CRUD routes from REQ-073) with 7 more routes for group management, following the exact same architecture (Context.scoped_repo_opts/1 -> Authorization.evaluate_access/2 -> Repo call -> explicit response allowlist) REQ-073 established. Full WF-02 pipeline warranted given the security-critical acceptance criteria (INV-1's cross-tenant-membership-join risk is explicitly named).\n\nKey investigation required before design: R-Co's identity.zig has BOTH handleListGroupMembers (L526) and handleListGroupMembersArray (L495) -- CODE-DESIGNER must read both handler implementations directly (not assume from names) and determine whether these are two genuinely distinct endpoints (e.g. a paginated object-shaped response vs. a bare array response) or one with a legacy/duplicate shape, then state that finding explicitly in the moduledoc per this requirement's own acceptance criteria -- do not silently collapse or duplicate.\n\nKey constraints to carry into Step 1: domain logic already exists in Letflow.Identity (REQ-015..021, REQ-063) and must not be rebuilt -- extend it with thin functions only, matching REQ-073's established pattern (create_group/2-shaped functions, not inlined Repo queries). Every write must go through REQ-069's UsersGroupsRolesManage permission check with the database verified unchanged on a 403. Every query must use REQ-072's scoped_repo_opts/1. Adding a cross-tenant user to a group (INV-1's specific risk) must fail with no membership row created -- verified by querying the membership table after the attempt, not just checking the response status.\n\nComplete the handoff: set status COMPLETED, fill result.git_evidence with branch_name and push_status, set next_action to 'Route to CODE-DESIGNER (Step 1)'.",
+    "acceptance_criteria": [
+      "git branch --show-current == 'feature/WF02-REQ074-20260822'",
+      "git push -u origin feature/WF02-REQ074-20260822 succeeds (exit 0 or * [new branch] in output)",
+      "local main was fast-forward with origin/main before branching"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Feature branch created from fast-forward main and pushed to origin successfully. docs/requirements.yaml REQ-074 status flipped pending -> in_progress; started event appended to docs/status/requirement_status.v2.yaml (verified via git diff --numstat: 22 insertions, 0 deletions, plus a tail re-read confirming exact text); index's volume-2 entries count incremented 21 -> 22 in the same commit (7bf8163).",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ074-20260822",
+      "commit_sha_list": ["7bf8163"],
+      "remote_branch": "origin/feature/WF02-REQ074-20260822",
+      "push_status": "* [new branch] feature/WF02-REQ074-20260822 -> feature/WF02-REQ074-20260822",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER (Step 1)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

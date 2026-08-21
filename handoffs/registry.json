@@ -1721,6 +1721,25 @@
       "note": "WF-03 for ISS-0196 (GH#386, queue task 196), claimed by get_next_task -- not by ORCH reading a file. Raised by REVIEWER during WF03-ISS0117-20260821's own final gate: HANDOFF_PROTOCOL.md section 4 tells the receiving agent to commit a handoff at completion, but nothing tells ORCH to commit it at DISPATCH, so a dispatched task block survives only in the working tree and the dispatching session's context until then. Confirmed live and self-referentially true: this ORCH session has been creating every handoff this run via Write and leaving it uncommitted until the receiving agent's own completion commit, all session. Docs-only, so the git wrapper does not apply. Steps 0.5 and 1 SKIPPED: root cause already stated first-hand in the issue record by the REVIEWER who raised it during ISS-0117. Step 2 SKIPPED: prose in protocol docs. Step 4 SKIPPED: no code under test.",
       "correction_note": "Two stray shell commands between claiming this task and starting the run accidentally called get_next_task a second and third time, each a real atomic claim -- not a read-only probe. Claimed tasks 195 and 194 by accident; both released back to open/unlocked within the same minute, confirmed via the release response. No work was started on either. See the CORRECTION log line for the full account.",
       "outcome_note": "HANDOFF_PROTOCOL.md section 1.3 is the new canonical rule: ORCH commits every handoff file at dispatch time, before spawning the receiving agent, unconditionally -- no size threshold, no judgement gate. Cites the WF03-ISS0117-20260821 incident (a 6,290-character dispatched task.description replaced by a 156-character pointer to a copy that does not exist, recoverable only because the dispatching session was still alive) as its worked example, and states by pointer (not restatement) how a dispatch-time commit makes section 4.1's membership test decidable from git alone. ORCHESTRATOR.md's top MUST list gets one pointer bullet. Both of this run's own dispatches (Step 03, this closing gate) were committed and pushed immediately as live proof -- confirmed independently by the gate via git log --follow, showing the Step 03 commit f316bda preceded DOC-UPDATER's own content commit by ~5 minutes with a pure-PENDING diff at that point. Gate PASS first time, zero findings -- REVIEWER sign-off was one of this issue's own named acceptance criteria, not a routine gate."
+    },
+    {
+      "run_id": "WF02-REQ043-20260818-resume",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-043"],
+      "stage": "S3",
+      "status": "COMPLETED",
+      "owned_modules": [],
+      "lock_acquired_at": "2026-08-21T11:49:09Z",
+      "lock_released_at": "2026-08-21T12:20:00Z",
+      "released_lock": true,
+      "last_known_step": "Handoff bookkeeping repair only, per docs/issues/ISS-0192.yaml (run WF03-ISS0192-20260821) -- not a re-execution of WF02-REQ043's own work, which completed and merged on 2026-08-18 (see the original WF02-REQ043-20260818 entry above, left untouched per ISS-0033's precedent). handoffs/WF02-REQ043-20260818/step-final-git-merge.json had remained status: PENDING with a null result since 2026-08-18 despite the run's completion (PR #174, e25822a, queue task 87 released done). Reconstructed under HANDOFF_PROTOCOL.md section 4.1(a-2)/(b): all side effects independently reverified complete on 2026-08-21 (e25822a confirmed an ancestor of origin/main, PR #174 confirmed MERGED, remote branch confirmed deleted), so ORCH wrote status/completed_at/result marked not_agent_attested. See that file for the full evidence list.",
+      "backfilled": false,
+      "queue_task_id": 87,
+      "queue_agent_id": "orch-main",
+      "worktree": "isolated worktree (WF03-ISS0192-20260821 repair run)",
+      "recovered": true,
+      "recovery_note": "Affected step file: handoffs/WF02-REQ043-20260818/step-final-git-merge.json. Branch applied: (a-2) ORCH reconstruction (all side effects confirmed complete at repair time, per HANDOFF_PROTOCOL.md section 4.1(c)'s died-mid-action-vs-died-after-acting probe). This is a repair of the run's own audit-trail record, performed in a later session (2026-08-21) than the run itself (2026-08-18) -- per ORCHESTRATOR.md section 7.2's later-session-recovery mechanism, the original entry above is left untouched and this discrete entry is appended instead.",
+      "note": "Filed under docs/issues/ISS-0192.yaml. This entry exists solely to make WF02-REQ043-20260818's handoff-file recovery greppable at the registry level (grep -l \"\\\"recovered\\\": true\" handoffs/registry.json), per ORCHESTRATOR.md section 7.2's rationale -- the original entry's own note already documented the run's actual 2026-08-18 interruption/recovery narrative in free-text prose, which is exactly why a scan for stale handoffs found this run's PENDING handoff and not its interruption. No run-level work was performed today; only the handoff file and this registry entry were written."
     }
   ]
 }

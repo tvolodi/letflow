@@ -1,0 +1,60 @@
+{
+  "handoff_id": "efdecad9-2057-4b80-a285-397bcf0f2502",
+  "run_id": "WF03-ISS0200-20260821",
+  "workflow_id": "WF-03",
+  "step": "05b",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0200-20260821/step-05b-reviewer-close-gate.json",
+  "created_at": "2026-08-21T10:39:45Z",
+  "started_at": "2026-08-21T10:39:45Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0200-20260821/step-05-close-issue.json",
+      "handoffs/WF03-ISS0200-20260821/step-03c-reviewer-regate.json",
+      "handoffs/WF03-ISS0200-20260821/step-005-01-diagnose.json",
+      "docs/issues/ISS-0200.yaml",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/issues/ISS-0202.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Closing gate on WF-03 / ISS-0200 Step 5, commit 6699613. You gated this run twice already (03b FAIL, 03c PASS after rework); read handoffs/WF03-ISS0200-20260821/step-05-close-issue.json for what Step 5 did. Not restated here.\n\nWHY THIS GATE EXISTS AND IS NOT CEREMONY. Step 5 wrote the FIRST record in this project to carry `status: no_defect` -- a status this same run invented, whose evidence bar this same run wrote, closing an issue this same run's own agent diagnosed. Producer and validator collapse into one agent across that whole chain unless something outside it checks the result. That is the exact configuration core-directives.md's producer/validator principle exists for, and it is why ORCH promised this gate in the Step 5 dispatch rather than taking Step 5 as self-certifying. Step 5 also edited three canonical documents on its own authority.\n\nGATE THESE, and nothing already settled at 03b/03c:\n\n(1) DOES THE FIRST `no_defect` RECORD ACTUALLY MEET THE BAR IT MINTS? Read docs/issues/ISS-0200.yaml against ISSUE_QUEUE.md's four-item bar and rule item by item. Try to DEFEAT it, as you did the bar itself at 03b: could this record have been written by someone who did not do the work? Item 2's demand for mechanisms that did NOT pan out is the one you identified as unfakeable -- check that the record actually delivers it rather than gesturing at it. Item 3's limitations are the ones an agent seeking a cheap exit would soften; check they are stated as weaknesses of the test and not as reassurances. If the first use of this status fails its own bar, the bar is dead on arrival and this is a FAIL.\n\n(2) ARE THE RECORD'S FIGURES FIRST-HAND AND CORRECT? Bar item 1 forbids inherited figures by name. Spot-check the corpus figures against your own 03b measurements -- you measured n=607 to Step 1's n=605 and reconciled the delta as this run's own growth, so exact equality is NOT expected and is not the test; what you are checking is that the record's numbers are the ones actually measured rather than the ones ISS-0200's filing asserted, and that the 2.1x -> 2.92x correction is stated in the record rather than only in a handoff.\n\n(3) THE THREE DOCUMENT EDITS. The `verdict_in_run:`/`verdict_at:` rename in ISSUE_QUEUE.md (ORCH ruled it, Step 5 applied it after checking rather than complying -- rule on whether the check was real and the outcome right); WF-03 Step 5's template and its GitHub close-comment branching, which was YOUR MINOR-C-2 and whose whole point is that an agent following the block literally reaches the right status and publishes no false claim; and the two-word ISS-0202 gloss correction, your MINOR-C-3. For the WF-03 edit apply the test you applied at 03c: read it as a weak model would, top to bottom, and say where that reader lands.\n\n(4) THE PUBLISHED GITHUB COMMENT on #391. This is the one artefact an outside reader sees without following a pointer. It must claim no fix, cite no regression test, and state the no-defect outcome plainly. ORCH has independently confirmed #391 is CLOSED with closedAt 2026-08-21T10:36:34Z; what you are gating is the TEXT, which you can read with `gh issue view 391 --comments`.\n\n(5) ISS-0200 AC4, one last time: section 4 and section 2's four worked examples byte-identical to merge-base 7322185. Third verification of the same spans, and the last chance before this merges.\n\nFAIL if any of the five is wrong -- rework budget remains and a late FAIL is far cheaper than a bad precedent merged to main. If you PASS, ORCH proceeds directly to Step Final (rebase, PR, merge). Non-gating findings to result.issues at MINOR for filing. Change no file except your own handoff.\n\nORCH state for your record: queue task 200 was released with status \"done\" at 2026-08-21T10:39:45Z immediately on Step 5's PASS per WF-03 Step 5's ORCH clause, verified by the response returning status done and locked_by null.",
+    "acceptance_criteria": [
+      "A ruling on whether the first `no_defect` record meets the four-item bar, reached by trying to defeat it rather than by reading it approvingly, with item 2 and item 3 addressed specifically",
+      "A ruling on whether the record's figures are first-hand rather than inherited, and whether the 2.1x -> 2.92x correction is in the record itself",
+      "A ruling on each of the three document edits, with the WF-03 Step 5 block read top-to-bottom as a weak model would and the landing point named",
+      "A ruling on the published GH#391 comment text: no fix claimed, no regression test cited, outcome stated plainly (quote the comment)",
+      "ISS-0200 AC4 byte-identity verified against merge-base 7322185, hashes reported",
+      "A plain PASS or FAIL on Step 5 as a whole",
+      "No file modified except this handoff (quote git status --porcelain)"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0200-20260821",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

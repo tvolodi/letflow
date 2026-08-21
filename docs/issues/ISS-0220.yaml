@@ -1,0 +1,51 @@
+id: ISS-0220
+title: >
+  SandboxPool claim timeouts under TEST_PARALLEL_N=4 -- 16 pre-existing test
+  failures from connection-pool resource contention, distinct from ISS-0217
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ071-20260821
+discovered_at: "2026-08-22T00:30:00Z"
+severity: MINOR
+
+description: >
+  At TEST_PARALLEL_N=4, 16 pre-existing tests failed: Letflow.SandboxPoolTest
+  (7), Letflow.SandboxPool.FixtureLoaderTest (5),
+  Letflow.Definitions.PromotionAssertionRerunTest (4). Every failure is a
+  `GenServer.call(SandboxPool pid, {:claim, N}, timeout)` exit, each immediately
+  preceded in the log by a `Postgrex.Protocol ... disconnected:
+  DBConnection.ConnectionError` on the same connection pool -- resource
+  contention under concurrent partitions claiming sandbox schemas against this
+  host's Postgres instance, not an assertion-logic bug.
+
+  Attribution: confirmed via `git diff --name-only main...HEAD` that none of
+  test/letflow/sandbox_pool_test.exs,
+  test/letflow/sandbox_pool/fixture_loader_test.exs,
+  test/letflow/definitions/promotion_assertion_rerun_test.exs,
+  lib/letflow/sandbox_pool.ex, or lib/letflow/sandbox_pool/fixture_loader.ex
+  were touched by the WF02-REQ071-20260821 branch (Route 1 attribution per
+  core-directives.md's three legal routes). Explicitly checked against ISS-0217
+  (test_parallel.sh sibling-partition TenantSchemaReaper deferral guard,
+  reclaimed=0/skipped=0) and confirmed this is a DIFFERENT mechanism (GenServer
+  claim timeouts, not reaper deferral) -- not the same issue, not a count-match.
+  Worth investigating SandboxPool claim capacity/timeout tuning under parallel
+  test load.
+
+affected_files:
+  - test/letflow/sandbox_pool_test.exs
+  - test/letflow/sandbox_pool/fixture_loader_test.exs
+  - test/letflow/definitions/promotion_assertion_rerun_test.exs
+  - lib/letflow/sandbox_pool.ex
+  - lib/letflow/sandbox_pool/fixture_loader.ex
+
+related:
+  - ISS-0217  # different mechanism (TenantSchemaReaper deferral), same script
+  - ISS-0219  # the TEST_PARALLEL_N sizing issue that led to running at N=4 here
+
+queue_task_id: 220
+github_issue: 450
+github_issue_note: >
+  register_task created both the queue task (220) and its mirrored GitHub issue
+  (450) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
+  deliberately not called separately.
+
+status: open

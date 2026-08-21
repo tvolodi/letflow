@@ -1,0 +1,51 @@
+{
+  "handoff_id": "9f4f84e4-78f7-493f-889a-80221b66bfa7",
+  "run_id": "WF03-ISS0179-20260821",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0179-20260821/step-04-test-runner.json",
+  "created_at": "2026-08-21T14:21:34Z",
+  "started_at": "2026-08-21T14:21:34Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["1ee0563f-ecc5-4b33-a671-9f7b616d4569"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0179-20260821/step-2b-reviewer.json",
+      "test/letflow/identity_migration_test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Run the FULL project test suite on `feature/WF03-ISS0179-20260821` (already checked out) before this branch merges. The change under test (`test/letflow/identity_migration_test.exs`'s advisory-lock serialization) already passed its own module's tests (10/10, independently re-run twice) and idiom review -- this step is the full-suite regression check the merge step will otherwise be trusting blind.\n\nUse `sh scripts/test_parallel.sh` per this project's standard full-suite mechanism, with `TEST_PARALLEL_N=4` on this host (the default nproc-based N is known to saturate the shared Postgres pool at `mix ecto.create` time on this specific 16-core host -- ISS-0212/ISS-0194 already cover this, no need to re-derive it, just use the override).\n\nATTRIBUTE EVERY FAILURE STRUCTURALLY, per `core-directives.md`'s 'Failure Attribution Is Structural, Never By Count-Matching' -- this suite carries a standing set of pre-existing failures and 'green' means no failure attributable to this branch, not zero failures. For each failure: is the failing module or its dependencies in `git diff --name-only main...feature/WF03-ISS0179-20260821`? The only file this branch changes is `test/letflow/identity_migration_test.exs` -- if a failure is in that module, it needs a genuine causal argument (not just presence), since it is exactly the module this run just changed.\n\nWrite the test report per this project's convention (`test/reports/`) and record it in `artifacts_out`.",
+    "acceptance_criteria": [
+      "The full suite was actually run via TEST_PARALLEL_N=4 sh scripts/test_parallel.sh and real pass/fail counts are quoted",
+      "Every failure is attributed structurally, never by count-matching against a prior run",
+      "Any failure in test/letflow/identity_migration_test.exs specifically is checked for a genuine causal connection to this run's own change, not cleared by assumption",
+      "A test report is written to test/reports/ and listed in artifacts_out"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0179-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0179-20260821",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

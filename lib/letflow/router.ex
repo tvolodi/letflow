@@ -1,36 +1,55 @@
 defmodule Letflow.Router do
   @moduledoc """
-  Deliberately minimal — Plug + Bandit, no Phoenix. `/health` only as of REQ-046; the
-  `POST/GET /instances...` pilot-slice routes this module carried through S1-S3 were
-  removed alongside `Letflow.ProcessInstance`'s own retirement (see
-  `lib/letflow/design/req046-process-instance-retirement.md` §6a) — S4 (api-surface)
-  is expected to add the real `/api/v1/instances` routes against
-  `Letflow.Engine.create/2`, not a revival of this pilot contract.
+  Top-level Plug router. Executes docs/migration/decisions/0001-web-framework.md
+  addendum (2026-08-20) — Plug/Bandit stands.
+
+  ## Route table
+
+  | Method | Path        | Handler                            | Auth      | DB        |
+  |--------|-------------|------------------------------------|-----------|-----------|
+  | GET    | /health     | inline 200 `{"status":"ok"}`       | none      | none      |
+  | *      | /api/v1/… | `Letflow.Plugs.ApiPipeline`        | delegated | delegated |
+  | *      | _           | `Letflow.Api.Response.not_found/1` | none      | none      |
+
+  `GET /health` is handled before the `/api/v1` forward so it never enters the
+  tenant-scoped middleware pipeline. Contract preserved exactly for
+  `deploy/redeploy-test.sh`'s post-deploy health check.
+
+  Readiness endpoint (R-Co routes/health.zig handleReady, backed by
+  src/api/health/readiness.zig + subsystems.zig) is deliberately not ported — it
+  requires S6 observability subsystem probes that do not yet exist. Only the liveness
+  endpoint (GET /health) is preserved here.
+
+  ## Deferred routes (not yet mounted — added by owning stage)
+
+  | Letflow module (pending)            | R-Co source               | Owning stage                          |
+  |-------------------------------------|---------------------------|---------------------------------------|
+  | `Letflow.Routers.Dlq`               | `dlq.zig`                 | S6 (dead-letter queue subsystem)      |
+  | `Letflow.Routers.Services`          | `services.zig`            | S6 (service catalog)                  |
+  | `Letflow.Routers.PlatformMigrations`| `platform_migrations.zig` | S6 (platform migration runner)        |
+  | `Letflow.Routers.Webhooks`          | `webhooks.zig`            | S6 (webhook dispatch subsystem)       |
+  | `Letflow.Routers.SimulationTest`    | `simulation_test.zig`     | S7 (simulation harness)               |
+  | `Letflow.Routers.ProcessModules`    | `process_modules.zig`     | S5 (process-module packaging)         |
+  | `Letflow.Routers.Entities`          | `entities.zig`            | S5/S6 (entity/data-model subsystem)   |
+  | `Letflow.Routers.EntityQuery`       | `entity_query.zig`        | S5/S6 (same, plus query compiler)     |
+  | `Letflow.Routers.AgentRequests`     | `agent_task_specs.zig`    | post-S6 (runtime-agent subsystem)     |
+  | `Letflow.Routers.AgentResponses`    | `agent_sandboxes.zig`     | post-S6 (runtime-agent subsystem)     |
+  | `Letflow.Routers.AgentEvents`       | `agent_artifacts.zig`     | post-S6 (runtime-agent subsystem)     |
   """
 
   use Plug.Router
 
-  plug(Plug.Parsers, parsers: [:json], json_decoder: Jason)
   plug(:match)
   plug(:dispatch)
 
-  # GET /health -> {"status": "ok"} — used by deploy/redeploy-test.sh's
-  # post-deploy health check, no auth/DB dependency by design so it stays
-  # reliable as a liveness signal.
+  # No auth, no DB — liveness signal for deploy/redeploy-test.sh.
   get "/health" do
-    send_json(conn, 200, %{status: "ok"})
+    Letflow.Api.Response.send_json(conn, 200, %{status: "ok"})
   end
 
-  # Every 404 this application emits — catch-all included — goes through the one
-  # `Letflow.Api.Error.not_found/0` constructor (REQ-066), so no route renders an
-  # error body by hand and all 404 bodies are byte-identical by construction.
+  forward("/api/v1", to: Letflow.Plugs.ApiPipeline)
+
   match _ do
     Letflow.Api.Response.not_found(conn)
   end
-
-  # Delegates to the shared response contract (REQ-066) rather than keeping a
-  # second copy of the same encode-and-send logic. Behaviour is identical:
-  # `Letflow.Api.Response.send_json/3` is the same
-  # put_resp_content_type("application/json") + Jason.encode! + send_resp.
-  defp send_json(conn, status, body), do: Letflow.Api.Response.send_json(conn, status, body)
 end

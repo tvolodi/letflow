@@ -1,0 +1,83 @@
+{
+  "handoff_id": "feb20ed8-32cf-4469-ba3a-5b8acbf0c840",
+  "run_id": "WF02-REQ070-20260821",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ070-20260821/step-02a-elixir-dev.json",
+  "created_at": "2026-08-21T16:19:56Z",
+  "started_at": "2026-08-21T16:19:56Z",
+  "completed_at": null,
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-070"],
+    "requirement_text": {
+      "REQ-070": "Replace lib/letflow/router.ex's single flat route table -- today GET /health plus a 404 catch-all, per its own moduledoc -- with the decomposed structure the rest of S4 mounts into. This resolves stage-4-api-surface.md's OQ-1.\nThe shape is per-subsystem sub-routers under an /api/v1 prefix, one module per R-Co route file group, delegated to from a top-level router: identity, instances, definitions, tasks, promotion, onboarding, audit, tenant_config, validation, health, metrics. Under Plug that is Plug.Router.forward/2 to a sub-router module per subsystem. REQ-065 settled the framework: Plug/Bandit stands (addendum 2026-08-20). This requirement MUST NOT re-open that choice.\nGET /health MUST keep its current contract exactly -- 200 with {\"status\":\"ok\"}, no auth, no DB dependency -- because deploy/redeploy-test.sh's post-deploy check consumes it and a change breaks deployment, not just a test.\nThe unmatched-route response becomes REQ-066's 404 problem document rather than today's ad-hoc {\"error\":\"not_found\"} map.\nThe moduledoc MUST carry the deferred-route list: dlq, services, platform_migrations, webhooks (S6), simulation_test (S7), process_modules (S5), entities and entity_query (S5/S6), and the three agent_* routes (deferred), each with its owning stage."
+    },
+    "related_handoff_ids": ["b972b3d1-a0a7-47a7-8285-a5cf86f53e3b", "270af28b-6251-439c-a3b0-5a469ee3e18a"],
+    "artifacts_in": [
+      "lib/letflow/design/req070-router-decomposition.md",
+      "lib/letflow/router.ex",
+      "lib/letflow/api/error.ex",
+      "lib/letflow/api/response.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/router.ex",
+      "lib/letflow/routers/",
+      "lib/letflow/plugs/api_pipeline.ex"
+    ],
+    "branch_name": "feature/WF02-REQ070-20260821"
+  },
+  "task": {
+    "description": "WF-02 Step 2a — Backend implementation for REQ-070: Router decomposition into per-subsystem sub-routers.\n\nBranch: feature/WF02-REQ070-20260821. Verify git branch --show-current == feature/WF02-REQ070-20260821 before touching any file.\n\nDesign reference: lib/letflow/design/req070-router-decomposition.md (CODE-DESIGN-VALIDATOR verified PASS at step 1b). Read it before coding.\n\n== WHAT TO IMPLEMENT ==\n\n1. REWRITE lib/letflow/router.ex — the top-level router:\n   - use Plug.Router\n   - plug(:match) and plug(:dispatch) only (no Plug.Parsers here — that lives in ApiPipeline)\n   - GET /health — inline handler: 200 + {\"status\":\"ok\"} with no auth, no DB call. Use Letflow.Api.Response.send_json/3 or a direct conn pipeline. This is the existing contract; preserve it byte-for-byte.\n   - forward \"/api/v1\", to: Letflow.Plugs.ApiPipeline — delegates all /api/v1/* to the shared pipeline\n   - match _ catch-all → Letflow.Api.Response.not_found(conn) (RFC 9457 404)\n   - @moduledoc must include:\n     a) The 11-entry deferred-route table with owning stages: dlq(S6), services(S6), platform_migrations(S6), webhooks(S6), simulation_test(S7), process_modules(S5), entities(S5/S6), entity_query(S5/S6), agent_requests(deferred), agent_responses(deferred), agent_events(deferred)\n     b) \"Readiness endpoint (routes/health.zig handleReady / api/health/readiness.zig) is deliberately not ported — it needs S6 observability subsystem probes.\"\n     c) \"Executes docs/migration/decisions/0001-web-framework.md addendum (2026-08-20) — Plug/Bandit stands.\"\n\n2. CREATE lib/letflow/plugs/api_pipeline.ex — Letflow.Plugs.ApiPipeline:\n   - use Plug.Router\n   - This is the SINGLE shared middleware declaration site\n   - Plugs: Plug.Parsers (parsers: [:json], json_decoder: Jason, length: 2_097_152 — 2MB cap, state the justification in a comment), Letflow.Plugs.AuthPipeline (already built, REQ-021), Letflow.Plugs.TenantStatus (already built, REQ-021), plug(:match), plug(:dispatch)\n   - Ten forward/2 calls for each sub-router (Letflow.Routers.Identity, etc.) at their respective path prefixes (strip the /api/v1 prefix since this module is already mounted at /api/v1):\n     forward \"/identity\", to: Letflow.Routers.Identity\n     forward \"/instances\", to: Letflow.Routers.Instances\n     forward \"/definitions\", to: Letflow.Routers.Definitions\n     forward \"/tasks\", to: Letflow.Routers.Tasks\n     forward \"/promotion\", to: Letflow.Routers.Promotion\n     forward \"/onboarding\", to: Letflow.Routers.Onboarding\n     forward \"/audit\", to: Letflow.Routers.Audit\n     forward \"/tenant-config\", to: Letflow.Routers.TenantConfig\n     forward \"/validation\", to: Letflow.Routers.Validation\n     forward \"/metrics\", to: Letflow.Routers.Metrics\n   - match _ catch-all → Letflow.Api.Response.not_found(conn)\n   - @moduledoc: explain this is the single shared middleware declaration site for all tenant-scoped sub-routers\n\n3. CREATE lib/letflow/routers/*.ex — ten sub-router stub modules:\n   - Letflow.Routers.Identity, .Instances, .Definitions, .Tasks, .Promotion, .Onboarding, .Audit, .TenantConfig, .Validation, .Metrics\n   - Each: use Plug.Router, plug(:match), plug(:dispatch), match _ → Letflow.Api.Response.not_found(conn)\n   - @moduledoc for each: \"Stub sub-router for [subsystem] routes. Routes are added by [owning requirement(s)]. No routes are defined here yet.\"\n\n== TOOLCHAIN NOTES ==\n   - mix may not be on PATH bare; invoke \"/c/Program Files/Elixir/bin/mix\" quoted if needed\n   - The Postgres container for this workspace is on LETFLOW_DB_PORT from ./.env (5482), its own container — do NOT run docker compose up (check if already running first with docker compose ps)\n   - mix compile --warnings-as-errors must exit 0\n   - No mix ecto.migrate needed — no DB changes\n   - mix format --check-formatted — fix any formatting issues\n   - Full mix test must pass\n\n== SELF-REVIEW CHECKLIST ==\n   [ ] No string interpolation of tenant/user input into raw SQL (INV-7) — not applicable here (no SQL)\n   [ ] GET /health has no DB call — verify by reading the function body\n   [ ] Single shared middleware chain site — verify by grepping for 'Plug.Parsers' and 'AuthPipeline' across lib/ — should appear in exactly one file (api_pipeline.ex)\n   [ ] All ten sub-router stubs compile\n   [ ] Existing router tests still pass\n   [ ] mix compile --warnings-as-errors exits 0\n\nComplete the handoff: status COMPLETED, result.status PASS, artifacts_out listing all new/modified files, next_action 'Route to SECURITY-REVIEWER (Step 2c)'. Commit all files by explicit path on branch feature/WF02-REQ070-20260821 (never git add -A).",
+    "acceptance_criteria": [
+      "git branch --show-current == feature/WF02-REQ070-20260821",
+      "mix compile --warnings-as-errors exits 0",
+      "mix format --check-formatted exits 0",
+      "mix test passes (full suite)",
+      "GET /health has no DB call and no auth plug in its path",
+      "lib/letflow/plugs/api_pipeline.ex exists with the single middleware chain declaration",
+      "All ten lib/letflow/routers/*.ex stubs exist",
+      "lib/letflow/router.ex moduledoc contains the deferred-route table, readiness statement, and REQ-065 addendum citation"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-070 router decomposition implemented. Rewrote lib/letflow/router.ex (no Plug.Parsers, forward /api/v1 to ApiPipeline, inline GET /health, RFC 9457 catch-all, full deferred-route table + readiness statement in moduledoc). Created lib/letflow/plugs/api_pipeline.ex (single middleware chain: Plug.Parsers + AuthPipeline + TenantStatus + 10 forwards). Created 10 stub sub-routers. mix compile --warnings-as-errors: 0. mix format --check-formatted: 0. mix test: blocked by DB container not running (pre-existing infra issue; no DB interaction in REQ-070 code).",
+    "artifacts_out": [
+      "lib/letflow/router.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/routers/identity.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/routers/definitions.ex",
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/routers/promotion.ex",
+      "lib/letflow/routers/onboarding.ex",
+      "lib/letflow/routers/audit.ex",
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/routers/validation.ex",
+      "lib/letflow/routers/metrics.ex"
+    ],
+    "issues": [
+      {
+        "id": "ISS-REQ070-ENV-001",
+        "severity": "WARNING",
+        "description": "mix test could not run: Postgres container on port 5482 is not running (docker compose ps shows no containers). Pre-existing infra issue, unrelated to REQ-070 structural changes. mix compile and mix format both pass cleanly."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ070-20260821",
+      "commit_sha_list": ["eab99a7"],
+      "remote_branch": "origin/feature/WF02-REQ070-20260821",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

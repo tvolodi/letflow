@@ -1,0 +1,76 @@
+{
+  "handoff_id": "ca0cf9d1-5b33-46ad-bcb9-75ce1d218fcd",
+  "run_id": "WF02-REQ070-20260821",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ070-20260821/step-03-test-designer.json",
+  "created_at": "2026-08-21T16:34:14Z",
+  "started_at": "2026-08-21T16:34:14Z",
+  "completed_at": "2026-08-21T16:50:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-070"],
+    "requirement_text": {
+      "REQ-070": "Replace lib/letflow/router.ex's single flat route table -- today GET /health plus a 404 catch-all, per its own moduledoc -- with the decomposed structure the rest of S4 mounts into. This resolves stage-4-api-surface.md's OQ-1. Framework: Plug/Bandit (REQ-065 addendum 2026-08-20). GET /health preserved byte-compatibly (200+{\"status\":\"ok\"}, no auth, no DB). Unmatched routes return REQ-066 RFC 9457 404. Shared middleware chain declared in exactly one place."
+    },
+    "related_handoff_ids": ["472e6732-828d-4660-9cf5-240336abc9ec"],
+    "artifacts_in": [
+      "lib/letflow/router.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/routers/identity.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/routers/definitions.ex",
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/routers/promotion.ex",
+      "lib/letflow/routers/onboarding.ex",
+      "lib/letflow/routers/audit.ex",
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/routers/validation.ex",
+      "lib/letflow/routers/metrics.ex",
+      "lib/letflow/design/req070-router-decomposition.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/router.ex",
+      "lib/letflow/routers/",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "test/letflow/router_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ070-20260821"
+  },
+  "task": {
+    "description": "WF-02 Step 3 — Test design for REQ-070: Router decomposition.\n\nRead lib/letflow/design/req070-router-decomposition.md (the CODE-DESIGNER's test-surface section) and all 12 implementation files.\n\nThe existing test file is test/letflow/router_test.exs — read it before writing. Add tests to it (or replace it if the existing tests are now stale post-rewrite); do not create a new test file unless the existing one is structurally incompatible.\n\nWrite tests for all 6 acceptance criteria:\n\nAC1 — GET /health with Repo unavailable:\n  - Stop/sandbox the Repo so DB calls would fail\n  - Call GET /health via Plug.Test\n  - Assert status == 200 and body == Jason.encode!(%{status: \"ok\"})\n  - Assert the response is returned even when Ecto.Repo is unavailable\n  Approach: In ExUnit, you can assert /health works without calling `Ecto.Sandbox.checkout/1` at all (ExUnit async tests that don't start the DB sandbox). If the existing router tests already use the sandbox, add a new separate test module that does NOT start the sandbox, and in that test confirm /health still returns 200.\n\nAC2 — Sub-router isolation:\n  - Mount Letflow.Routers.Identity directly using Plug.Test (call/2 — no top-level router)\n  - Issue a GET request to any path under it (e.g. \"/some-path\")\n  - Assert it returns the sub-router's catch-all 404 (RFC 9457 format + Content-Type: application/problem+json)\n  - This proves the sub-router compiles and handles calls independently of the top-level router\n\nAC3 — Unrouted path returns RFC 9457 404:\n  - Via the top-level router (Letflow.Router): GET /this-path-does-not-exist\n  - Assert status == 404\n  - Assert Content-Type header includes \"application/problem+json\"\n  - Assert body contains \"type\", \"title\", \"status\", \"detail\" keys (RFC 9457 shape)\n  - Assert body does NOT contain {\"error\":\"not_found\"} (the old format)\n\nAC4 — Single middleware declaration site (grep-based):\n  - Use File.read!/1 or ExUnit's assertions on file content to verify:\n    grep for \"Plug.Parsers\" across lib/ — must appear in exactly one file (api_pipeline.ex)\n    grep for \"AuthPipeline\" plug call across lib/ — must appear in exactly one file (api_pipeline.ex)\n  - Use Path.wildcard or File.ls!/1 to enumerate lib/ recursively and assert match counts\n  - This is a code-structure assertion, not a runtime test\n\nAC5 — Moduledoc deferred-route list:\n  - Read lib/letflow/router.ex as text (File.read!)\n  - Assert all 11 deferred-route names appear in the file content: \"dlq\", \"services\", \"platform_migrations\", \"webhooks\", \"simulation_test\", \"process_modules\", \"entities\", \"entity_query\", \"agent_requests\", \"agent_responses\", \"agent_events\"\n  - Assert the word \"readiness\" appears in the file content (for the 'not ported' statement)\n\nAC6 — Moduledoc cites REQ-065 addendum:\n  - Read lib/letflow/router.ex as text\n  - Assert the string \"0001-web-framework.md\" appears in the moduledoc\n  - Assert the string \"2026-08-20\" appears in the file (the addendum date)\n\nIMPORTANT NOTES:\n- Use Plug.Test (`import Plug.Test`) for runtime tests. Call the router with `call(conn, [])` or `Letflow.Router.call(conn, Letflow.Router.init([]))`.\n- For AC1: the key is that the test does NOT start Ecto.Sandbox before calling /health. One way: use a test module with `async: true` and no `setup do: Ecto.Adapters.SQL.Sandbox.checkout(Letflow.Repo)` — if /health doesn't touch the Repo, it passes.\n- For AC3: the 404 body must be the RFC 9457 shape from REQ-066. Verify against the actual Letflow.Api.Error.not_found/0 output by reading lib/letflow/api/error.ex.\n- Test file location: test/letflow/router_test.exs (existing file — read it first and extend it, or replace stale tests)\n- No DB-dependent tests in this test file — all router tests use Plug.Test (in-memory, no Ecto sandbox needed)\n\nRun mix compile --warnings-as-errors after writing tests to confirm no compilation errors. Compile from the feature branch: feature/WF02-REQ070-20260821.\n\nToolchain: mix may not be bare on PATH — try bare mix first, then \"/c/Program Files/Elixir/bin/mix\" if needed.\nDo NOT run docker compose up — the Postgres container (letflow-3-postgres-1) is already running on port 5482.\n\nComplete the handoff: status COMPLETED, result.status PASS, artifacts_out listing the test file, next_action 'Route to TEST-DESIGN-VALIDATOR (Step 3b)'. Commit the test file and completed handoff on branch feature/WF02-REQ070-20260821 by explicit path.",
+    "acceptance_criteria": [
+      "A test exists for each of the 6 REQ-070 acceptance criteria",
+      "AC1 test runs without starting Ecto.Sandbox",
+      "AC2 test mounts a sub-router directly via Plug.Test without the top-level router",
+      "AC3 test asserts both body shape (RFC 9457) and Content-Type: application/problem+json header",
+      "AC4 test verifies single Plug.Parsers declaration site by file inspection",
+      "AC5/AC6 tests are source-assertion tests (read the file as text)",
+      "mix compile --warnings-as-errors exits 0 with the test file present"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Tests written for all 6 REQ-070 acceptance criteria. Added to existing test/letflow/router_test.exs (plain ExUnit.Case — no sandbox). AC4 uses invocation-form grep to avoid false positives from safe_json_parser.ex/content_type.ex. mix compile --warnings-as-errors exits 0.",
+    "artifacts_out": [
+      "test/letflow/router_test.exs",
+      "test/specs/REQ-070.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ070-20260821",
+      "commit_sha_list": ["ac5f988"],
+      "remote_branch": "origin/feature/WF02-REQ070-20260821",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

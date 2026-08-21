@@ -3934,7 +3934,7 @@ requirements:
   - id: REQ-070
     title: Router decomposition into per-subsystem sub-routers (OQ-1), replacing the single flat route table
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 137  # letflow-queue task id
     description: >

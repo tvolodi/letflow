@@ -1,0 +1,60 @@
+{
+  "handoff_id": "270af28b-6251-439c-a3b0-5a469ee3e18a",
+  "run_id": "WF02-REQ070-20260821",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ070-20260821/step-01b-code-design-validator.json",
+  "created_at": "2026-08-21T16:15:10Z",
+  "started_at": "2026-08-21T16:15:10Z",
+  "completed_at": "2026-08-21T16:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-070"],
+    "requirement_text": {
+      "REQ-070": "Replace lib/letflow/router.ex's single flat route table -- today GET /health plus a 404 catch-all, per its own moduledoc -- with the decomposed structure the rest of S4 mounts into. This resolves stage-4-api-surface.md's OQ-1.\nThe shape is per-subsystem sub-routers under an /api/v1 prefix, one module per R-Co route file group, delegated to from a top-level router: identity, instances, definitions, tasks, promotion, onboarding, audit, tenant_config, validation, health, metrics. Under Plug that is Plug.Router.forward/2 to a sub-router module per subsystem. REQ-065 settles which -- this requirement executes whichever survives and MUST NOT re-open it. What is framework-independent, and is what this requirement is actually accountable for, is: one module per subsystem, no subsystem declaring another's paths, a single place where the shared middleware chain is declared (not repeated per sub-router), and the existing GET /health preserved byte-compatibly.\nGET /health MUST keep its current contract exactly -- 200 with {\"status\":\"ok\"}, no auth, no DB dependency -- because deploy/redeploy-test.sh's post-deploy check consumes it and a change breaks deployment, not just a test.\nThe unmatched-route response becomes REQ-066's 404 problem document rather than today's ad-hoc {\"error\":\"not_found\"} map.\nThe moduledoc MUST carry the deferred-route list: dlq, services, platform_migrations, webhooks (S6), simulation_test (S7), process_modules (S5), entities and entity_query (S5/S6), and the three agent_* routes (deferred), each with its owning stage."
+    },
+    "related_handoff_ids": ["b972b3d1-a0a7-47a7-8285-a5cf86f53e3b"],
+    "artifacts_in": [
+      "lib/letflow/design/req070-router-decomposition.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/router.ex",
+      "lib/letflow/routers/"
+    ],
+    "branch_name": "feature/WF02-REQ070-20260821"
+  },
+  "task": {
+    "description": "WF-02 Step 1b — HARD GATE: Validate CODE-DESIGNER's design for REQ-070.\n\nRead lib/letflow/design/req070-router-decomposition.md directly — do not rely on CODE-DESIGNER's result.summary alone.\n\nFor each acceptance criterion, verify a concrete design element exists:\n\nAC1 (GET /health — no auth, no DB, 200+{\"status\":\"ok\"}): Does the design show /health handled directly by the top-level router, outside the tenant-scoped middleware pipeline? Is it clear that Repo is NOT called in the health handler?\n\nAC2 (sub-router isolation): Are all ten sub-router module names specified? Are their Plug.Router path prefixes defined? Is there a test design for mounting one in isolation?\n\nAC3 (RFC 9457 404 for unrouted paths): Does the design show the catch-all delegating to Letflow.Api.Response.not_found/1 (REQ-066)? Is the test asserting Content-Type: application/problem+json included?\n\nAC4 (single shared middleware chain site): Is there exactly one place where the middleware chain is declared? Does the design name it clearly? Would grep on the implementation find exactly one declaration site?\n\nAC5 (moduledoc deferred-route list): Does the design list all eleven deferred modules with owning stages? Does it say readiness is not ported?\n\nAC6 (no new framework choice): Does the moduledoc cite REQ-065's 2026-08-20 addendum by name?\n\nAdditionally check:\n- No implementation code (function bodies, actual .ex/.exs code blocks) present — signatures/shapes only\n- No DB migration designed\n- No new mix.exs dependencies designed\n- All open questions stated explicitly rather than silently resolved\n- Cross-module dependencies on lib/letflow/api/error.ex and lib/letflow/api/response.ex are listed\n\nFAIL immediately on any missed acceptance criterion. No partial credit.\n\nComplete the handoff: status COMPLETED, result.status PASS or FAIL. On FAIL: list every failed check by AC number in result.issues at BLOCKER severity and set next_action to 'Rework CODE-DESIGNER'. On PASS: next_action 'Route to ELIXIR-DEV (Step 2a)'.",
+    "acceptance_criteria": [
+      "Every REQ-070 acceptance criterion has a concrete design element — no 'TBD' or implicit deferrals",
+      "All ten sub-router module names and path prefixes are specified",
+      "Single shared middleware chain declaration site is identified precisely",
+      "No implementation code present",
+      "No DB migration",
+      "Open questions stated explicitly"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "All six acceptance criteria have concrete design elements. AC1: /health is in the top-level router above the forward \"/api/v1\" delegation, marked Auth:none/DB:none; test design uses bare Plug.Test.conn with no Ecto.Sandbox. AC2: All ten sub-router module names and path prefixes listed in §(b); isolation test calls Letflow.Routers.Identity.call/2 directly. AC3: Catch-all delegates to Letflow.Api.Response.not_found/1 in both top-level router and ApiPipeline; test asserts status 404, Content-Type application/problem+json, and 5-key RFC 9457 body. AC4: Letflow.Plugs.ApiPipeline is the single declaration site for shared middleware; grep command provided to verify zero matches in sub-router and top-level router files. AC5: Eleven deferred modules listed in §(a) moduledoc table with owning stages; readiness-not-ported statement present verbatim. AC6: docs/migration/decisions/0001-web-framework.md addendum (2026-08-20) cited — this is REQ-065's deliverable; cross-reference table in design confirms the citation satisfies the AC. No implementation code (only route macro declarations as design spec), no DB migration, no new mix.exs dependencies. Cross-module dependencies on Letflow.Api.Response and Letflow.Api.Error both named with arity. Two open questions (OQ-1: Plug.Parsers length cap; OQ-2: path-stripping verification) explicitly stated and both marked non-blocking for this gate.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ070-20260821/step-01b-code-design-validator.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ070-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ070-20260821",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (Step 2a)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

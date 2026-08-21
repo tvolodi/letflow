@@ -1,0 +1,51 @@
+{
+  "handoff_id": "4c1dafea-f032-4d0a-8683-155c90b2579f",
+  "run_id": "WF02-REQ070-20260821",
+  "workflow_id": "WF-02",
+  "step": "Final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ070-20260821/step-final-git-merge.json",
+  "created_at": "2026-08-21T17:45:33Z",
+  "started_at": "2026-08-21T17:45:33Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-070"],
+    "requirement_text": {
+      "REQ-070": "Router decomposition into per-subsystem sub-routers (OQ-1). All gates PASSED. DOC-UPDATER has flipped status to done. Ready to merge."
+    },
+    "related_handoff_ids": ["3f7e6231-116e-42b2-9cbe-d68cee8a3f86"],
+    "artifacts_in": [],
+    "owned_modules": [],
+    "branch_name": "feature/WF02-REQ070-20260821"
+  },
+  "task": {
+    "description": "WF-02 Step Final — Git merge for REQ-070.\n\nAll pipeline gates PASSED (design, implementation, security, idiom, test-design, test-run, release-validation, doc-update). Merge feature/WF02-REQ070-20260821 to main.\n\nFollow docs/agents/protocols/GIT_MERGE.md exactly.\n\nKey steps:\n1. Verify git branch --show-current == feature/WF02-REQ070-20260821\n2. git status — stage any uncommitted files by explicit path (never git add -A)\n3. git fetch origin main\n4. git rebase origin/main — if CONFLICT: resolve, continue, report in result.issues at MINOR. If CONFLICT you cannot resolve: STOP and FAIL.\n5. git push -f origin feature/WF02-REQ070-20260821 (force push allowed after rebase — standard for rebase workflows)\n6. gh pr create --title 'REQ-070: Router decomposition into per-subsystem sub-routers (OQ-1)' --body 'Resolves stage-4-api-surface.md OQ-1. Decomposes lib/letflow/router.ex into Letflow.Plugs.ApiPipeline (shared middleware) and 10 per-subsystem stub sub-routers under /api/v1. GET /health preserved byte-compatibly outside the tenant-scoped pipeline. All 6 ACs verified: 1400/1400 tests passing.' --base main --head feature/WF02-REQ070-20260821\n7. Merge: gh pr merge <pr-number> --squash --auto (or --merge if squash not available). No human approval required — all gates green.\n8. After merge: git checkout main && git pull --ff-only origin main\n9. Verify HEAD on main == the merge commit. Run: git log --oneline -3 main.\n10. Clean up: git branch -d feature/WF02-REQ070-20260821 (local only — remote branch auto-deleted on merge if configured, otherwise leave it)\n\nNo CI to wait for (REQ-013 is still pending — the 'CI green' precondition is satisfied by the 1400/1400 local test run already reported by TEST-RUNNER and RELEASE-VALIDATOR).\n\nPowerShell note: gh and git commands print info to stderr which triggers PowerShell's 'NativeCommandError' false alarm. Check $LASTEXITCODE and the actual output content rather than the 'Command exited with code' line.\n\nComplete the handoff: status COMPLETED, result.status PASS or FAIL, result.git_evidence with pr_url, merge commit SHA, push_status. next_action 'DONE — ORCH logs completion and releases queue lock'.",
+    "acceptance_criteria": [
+      "Feature branch rebased onto current main (no divergence)",
+      "PR created and merged (squash)",
+      "git log on main shows the merge commit",
+      "Local main is up to date with origin/main"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ070-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ070-20260821",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

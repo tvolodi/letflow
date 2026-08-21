@@ -1,0 +1,75 @@
+{
+  "handoff_id": "472e6732-828d-4660-9cf5-240336abc9ec",
+  "run_id": "WF02-REQ070-20260821",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ070-20260821/step-02d-reviewer.json",
+  "created_at": "2026-08-21T16:29:58Z",
+  "started_at": "2026-08-21T16:29:58Z",
+  "completed_at": "2026-08-21T17:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-070"],
+    "requirement_text": {
+      "REQ-070": "Replace lib/letflow/router.ex's single flat route table -- today GET /health plus a 404 catch-all, per its own moduledoc -- with the decomposed structure the rest of S4 mounts into. This resolves stage-4-api-surface.md's OQ-1. Framework: Plug/Bandit (REQ-065 addendum 2026-08-20). GET /health preserved byte-compatibly. Unmatched routes return REQ-066 RFC 9457 404. Shared middleware chain declared in exactly one place."
+    },
+    "related_handoff_ids": ["16ab52d9-039f-420f-b908-dde8376d5895"],
+    "artifacts_in": [
+      "lib/letflow/router.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/routers/identity.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/routers/definitions.ex",
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/routers/promotion.ex",
+      "lib/letflow/routers/onboarding.ex",
+      "lib/letflow/routers/audit.ex",
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/routers/validation.ex",
+      "lib/letflow/routers/metrics.ex",
+      "lib/letflow/design/req070-router-decomposition.md",
+      "docs/migration/decisions/0001-web-framework.md",
+      "docs/migration/stage-4-api-surface.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/router.ex",
+      "lib/letflow/routers/",
+      "lib/letflow/plugs/api_pipeline.ex"
+    ],
+    "branch_name": "feature/WF02-REQ070-20260821"
+  },
+  "task": {
+    "description": "WF-02 Step 2d — HARD GATE: Idiom review for REQ-070 (router decomposition).\n\nRead all changed files directly. SECURITY-REVIEWER has already PASSED.\n\nCheck the following:\n\n1. OTP IDIOM / PLUG IDIOM:\n   - Is `use Plug.Router` used correctly in each module (router.ex, api_pipeline.ex, all 10 sub-router stubs)?\n   - Are `plug :match` and `plug :dispatch` present in every Plug.Router module?\n   - Does `forward/2` follow Plug.Router's documented convention (path string, `to:` module)?\n   - Are catch-all `match _` clauses properly structured (must call send_resp or equivalent — verify they call Letflow.Api.Response.not_found/1 which does send the response)?\n   - Is there any use of `Process.send_after`, `GenServer`, or supervision primitives that shouldn't be here? (This is a router, not a process.)\n\n2. SCOPE CREEP:\n   - Does any file introduce behaviour beyond what REQ-070 requires? (REQ-070 is wiring only — no real routes, no business logic.)\n   - Did any file make changes to lib/letflow/plugs/auth_pipeline.ex or lib/letflow/plugs/tenant_status.ex? (It should not — those are REQ-021 built, and REQ-071 mounts them. Read those files if you are uncertain.)\n   - Are the sub-router stubs truly minimal stubs? (use Plug.Router + plugs + match _ + nothing else)\n\n3. DECISION-RECORD CONSISTENCY:\n   - Does lib/letflow/router.ex's @moduledoc cite docs/migration/decisions/0001-web-framework.md addendum (2026-08-20) as required by AC6?\n   - Does the implementation use Plug.Router.forward/2 (not Phoenix.Router), consistent with the Plug/Bandit decision?\n   - Does the implementation reopen the Phoenix-vs-Plug question in any way? (It must not — REQ-065 settled it.)\n\n4. ELIXIR CODE QUALITY:\n   - Are all new public functions documented with @doc? (In Plug.Router modules the routes are macros, not functions — the @moduledoc for the module is sufficient. Sub-router stubs with no public API beyond the Plug.Router callbacks need only a @moduledoc.)\n   - Is there any dead code, unused aliases, or unused imports?\n   - Is the Plug.Parsers :length value consistent with what SECURITY-REVIEWER approved (2_097_152)? Is it stated as a literal with a justifying comment rather than a named constant? (A named constant would be better practice, but verify what was actually implemented — if it's a literal, note it as MINOR rather than blocking, since the requirement doesn't mandate a named constant.)\n\n5. STAGE-4-API-SURFACE.MD OQ-1:\n   - Does this implementation resolve OQ-1 in docs/migration/stage-4-api-surface.md? Read that section. OQ-1 is the outstanding question about router decomposition — verify the implementation satisfies it. If stage-4-api-surface.md still has OQ-1 marked as open, note it as MINOR (it may need to be updated by DOC-UPDATER, not by ELIXIR-DEV now).\n\nFAIL immediately on any OTP idiom violation, scope creep, or decision-record inconsistency. MINOR notes do not block PASS.\n\nComplete the handoff: status COMPLETED, result.status PASS or FAIL. On FAIL: list violations in result.issues at BLOCKER severity, next_action 'Rework ELIXIR-DEV (Step 2a rework)'. On PASS: next_action 'Route to TEST-DESIGNER (Step 3)'. Commit the completed handoff on branch feature/WF02-REQ070-20260821 by explicit path.",
+    "acceptance_criteria": [
+      "Plug.Router idiom correct in all 12 modules (use Plug.Router + plug :match + plug :dispatch + match _ catch-all)",
+      "No scope creep — no real routes, no business logic, no changes to auth_pipeline.ex or tenant_status.ex",
+      "Implementation uses Plug.Router.forward/2 (not Phoenix), consistent with REQ-065 addendum",
+      "moduledoc cites the 2026-08-20 addendum by name (AC6)",
+      "No dead code or unused imports",
+      "All acceptance criteria remain achievable from this implementation"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. All 12 modules (router.ex, api_pipeline.ex, 10 sub-router stubs) are idiomatically correct. No blockers found.\n\n1. PLUG IDIOM — PASS across all 12 modules.\n   - router.ex: `use Plug.Router`, `plug(:match)` + `plug(:dispatch)` in correct order, `forward(\"/api/v1\", to: Letflow.Plugs.ApiPipeline)`, `match _` catch-all calls `Letflow.Api.Response.not_found(conn)`. Inline GET /health preserved exactly per contract.\n   - api_pipeline.ex: `use Plug.Router`, middleware chain (Plug.Parsers → AuthPipeline → TenantStatus) placed before `:match`/`:dispatch` — idiomatic, runs on all tenant-scoped requests including unmatched ones. Ten `forward` calls, `match _` catch-all. Plug.Parsers length 2_097_152 with a comment explaining the 2 MB cap.\n   - All 10 sub-routers (identity, instances, definitions, tasks, promotion, onboarding, audit, tenant_config, validation, metrics): identical minimal stubs — `use Plug.Router`, `plug(:match)` + `plug(:dispatch)`, `match _` catch-all only. No extra machinery.\n   - No GenServer, supervision primitives, or process constructs anywhere.\n\n2. SCOPE CREEP — NONE.\n   - lib/letflow/plugs/auth_pipeline.ex and lib/letflow/plugs/tenant_status.ex are NOT in the diff (confirmed via `git diff acba481..feature/WF02-REQ070-20260821 --name-only`). REQ-021 modules untouched.\n   - Sub-routers are pure stubs with no route handlers or business logic.\n   - Implementation commit (eab99a7) touches exactly the 12 expected files and nothing else.\n\n3. DECISION-RECORD CONSISTENCY — PASS.\n   - router.ex @moduledoc opens: \"Executes docs/migration/decisions/0001-web-framework.md addendum (2026-08-20) — Plug/Bandit stands.\" AC6 satisfied.\n   - All routing uses `Plug.Router.forward/2`; no Phoenix imports, no Phoenix.Router.\n   - The Phoenix-vs-Plug question is not reopened anywhere.\n\n4. CODE QUALITY — PASS.\n   - No dead code, no unused aliases or imports in any module.\n   - 2_097_152 has an inline comment (idiomatic Elixir readable literal + explanation).\n\n5. MINOR — OQ-1 in docs/migration/stage-4-api-surface.md still marked open. DOC-UPDATER closes it when REQ-070 status flips to done; not a REVIEWER gate item.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ070-20260821/step-02d-reviewer.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ070-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ070-20260821",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (Step 3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

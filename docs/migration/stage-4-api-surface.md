@@ -205,6 +205,7 @@ Two open questions this stage may need to escalate into a
   needs no new dependency, so this likely resolves inside CODE-DESIGNER
   without a decision record. It becomes one if the resolution pulls in
   a routing library (which would contradict 0001's no-Phoenix framing).
+  **Resolved by REQ-070 (2026-08-21):** Decomposed via `Plug.Router.forward/2` to 10 per-subsystem sub-router stubs; no decision record needed.
 - **OQ-2 — OpenAPI spec generation.** R-Co hand-builds its spec
   (`openapi/builder.zig` + `schema_registry.zig`, 1,286 lines). Whether
   Letflow hand-builds, adopts `open_api_spex`, or defers the spec to S6

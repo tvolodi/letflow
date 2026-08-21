@@ -352,10 +352,16 @@ defmodule Letflow.Api.ResponseTest do
     # through the real router must produce bodies byte-identical to each other and to
     # the direct call. Without this, AC4 would be proven only for direct calls and a
     # future route hand-rendering its own 404 would go undetected.
+    #
+    # NOTE (REQ-070): After REQ-070 decomposed the router, /api/v1/* paths now forward
+    # to Letflow.Plugs.ApiPipeline which runs AuthPipeline before routing. Unauthenticated
+    # requests to /api/v1/* therefore receive 401 (auth-gated), not 404 (catch-all).
+    # The top-level router's `match _` catch-all only fires for paths outside /api/v1/
+    # and /health. Both `a` and `b` below use non-API paths to test the catch-all.
     test "the router catch-all emits the same body" do
       opts = Letflow.Router.init([])
 
-      a = Letflow.Router.call(conn(:get, "/api/v1/instances/#{@missing_id}"), opts)
+      a = Letflow.Router.call(conn(:get, "/api/v2/instances/#{@missing_id}"), opts)
       b = Letflow.Router.call(conn(:get, "/definitely/not/a/route"), opts)
       direct = Response.not_found(req())
 

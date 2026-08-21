@@ -1,0 +1,66 @@
+{
+  "handoff_id": "b972b3d1-a0a7-47a7-8285-a5cf86f53e3b",
+  "run_id": "WF02-REQ070-20260821",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ070-20260821/step-01-code-designer.json",
+  "created_at": "2026-08-21T16:06:21Z",
+  "started_at": "2026-08-21T16:06:21Z",
+  "completed_at": null,
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-070"],
+    "requirement_text": {
+      "REQ-070": "Replace lib/letflow/router.ex's single flat route table -- today GET /health plus a 404 catch-all, per its own moduledoc -- with the decomposed structure the rest of S4 mounts into. This resolves stage-4-api-surface.md's OQ-1.\nThe shape is per-subsystem sub-routers under an /api/v1 prefix, one module per R-Co route file group, delegated to from a top-level router: identity, instances, definitions, tasks, promotion, onboarding, audit, tenant_config, validation, health, metrics. Under Plug that is Plug.Router.forward/2 to a sub-router module per subsystem; under Phoenix it is scope plus a controller per subsystem. REQ-065 settles which -- this requirement executes whichever survives and MUST NOT re-open it. What is framework-independent, and is what this requirement is actually accountable for, is: one module per subsystem, no subsystem declaring another's paths, a single place where the shared middleware chain is declared (not repeated per sub-router), and the existing GET /health preserved byte-compatibly.\nGET /health MUST keep its current contract exactly -- 200 with {\"status\":\"ok\"}, no auth, no DB dependency -- because deploy/redeploy-test.sh's post-deploy check consumes it and a change breaks deployment, not just a test. R-Co's routes/health.zig (221 lines, handleLive/handleReady) adds a readiness endpoint backed by src/api/health/readiness.zig (245) and subsystems.zig (112); porting readiness is NOT this requirement (it needs subsystem health probes that pair with S6 observability) -- keep liveness, name readiness as deferred.\nThe unmatched-route response becomes REQ-066's 404 problem document rather than today's ad-hoc {\"error\":\"not_found\"} map, so a caller sees one error shape across the whole surface.\nThe moduledoc MUST carry the deferred-route list so the gap is visible in code and not only in docs: dlq, services, platform_migrations, webhooks (S6), simulation_test (S7), process_modules (S5), entities and entity_query (S5/S6), and the three agent_* routes (runtime-agent orchestration, deferred per docs/migration/README.md), each with its owning stage."
+    },
+    "source_text": {
+      "docs/migration/decisions/0001-web-framework.md (addendum 2026-08-20 conclusion)": "Plug/Bandit stands. The surviving position is Plug + Bandit, no Phoenix. Sub-routers are implemented via Plug.Router.forward/2 to per-subsystem modules. Shared middleware is a Plug.Builder module mounted once in the top-level router."
+    },
+    "related_handoff_ids": ["00aac8d8-d854-4e22-a329-d749e99d44bb"],
+    "artifacts_in": [
+      "lib/letflow/router.ex",
+      "docs/migration/decisions/0001-web-framework.md",
+      "docs/migration/stage-4-api-surface.md",
+      "lib/letflow/api/error.ex",
+      "lib/letflow/api/response.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/router.ex",
+      "lib/letflow/routers/"
+    ],
+    "branch_name": "feature/WF02-REQ070-20260821"
+  },
+  "task": {
+    "description": "WF-02 Step 1 — Design for REQ-070: Router decomposition into per-subsystem sub-routers (OQ-1).\n\nProcedure:\n1. Read context.requirement_text['REQ-070'] (your authoritative requirement — do NOT open docs/requirements.yaml).\n2. Read docs/guides/backend_developer_guide.md and docs/migration/stage-4-api-surface.md.\n3. Read docs/migration/decisions/0001-web-framework.md — specifically its 2026-08-20 addendum. The surviving position is Plug/Bandit. This requirement MUST NOT re-open this choice.\n4. Read lib/letflow/router.ex (the current router — 37 lines, GET /health + 404 catch-all).\n5. Read lib/letflow/api/error.ex and lib/letflow/api/response.ex (REQ-066's error/response contract that 404s must now use).\n\nWrite lib/letflow/design/req070-router-decomposition.md covering:\n\n(a) TOP-LEVEL ROUTER (lib/letflow/router.ex rewrite)\n  - How it delegates to sub-routers via Plug.Router.forward/2\n  - Where and how the shared middleware chain is declared (exactly one Plug.Builder module or one plug(:match)/plug(:dispatch) site — the requirement says 'declared in exactly one place')\n  - GET /health: preserved exactly -- no auth plug, no DB dependency, 200 + {\"status\":\"ok\"}\n  - Unrouted paths: delegates to Letflow.Api.Error.not_found → Letflow.Api.Response.not_found(conn) path\n  - The moduledoc deferred-route list (dlq/S6, services/S6, platform_migrations/S6, webhooks/S6, simulation_test/S7, process_modules/S5, entities/S5-S6, entity_query/S5-S6, agent_requests/deferred, agent_responses/deferred, agent_events/deferred)\n  - The moduledoc statement that readiness (routes/health.zig handleReady) is deliberately not ported (needs S6 observability subsystem probes)\n  - Citation: 'Executes docs/migration/decisions/0001-web-framework.md addendum (2026-08-20) — Plug/Bandit stands.'\n\n(b) PER-SUBSYSTEM SUB-ROUTER MODULES (lib/letflow/routers/*.ex)\n  Eleven modules to stub — they hold routes for future requirements (REQ-071+), not implemented here. Design their module names, the forward/2 path prefix each owns, and their module structure:\n  - Letflow.Routers.Health — path: /health (top-level, outside /api/v1, handled by top-level router directly, NOT a sub-router forward -- design note: health lives at top-level, not under /api/v1)\n  - Letflow.Routers.Identity — path prefix: /api/v1/identity\n  - Letflow.Routers.Instances — path prefix: /api/v1/instances\n  - Letflow.Routers.Definitions — path prefix: /api/v1/definitions\n  - Letflow.Routers.Tasks — path prefix: /api/v1/tasks\n  - Letflow.Routers.Promotion — path prefix: /api/v1/promotion\n  - Letflow.Routers.Onboarding — path prefix: /api/v1/onboarding\n  - Letflow.Routers.Audit — path prefix: /api/v1/audit\n  - Letflow.Routers.TenantConfig — path prefix: /api/v1/tenant-config\n  - Letflow.Routers.Validation — path prefix: /api/v1/validation\n  - Letflow.Routers.Metrics — path prefix: /api/v1/metrics\n  Each stub sub-router: `use Plug.Router`, a moduledoc naming it as a stub pending its owning requirement, a match _ catch-all that returns 404 via Letflow.Api.Response.not_found/1. No real routes yet — future requirements add them.\n\n(c) SHARED MIDDLEWARE CHAIN\n  Design: which plugs form the shared chain (at minimum: Plug.Parsers + :match + :dispatch). Which sub-routers it applies to (all tenant-scoped ones: identity, instances, definitions, tasks, promotion, onboarding, audit, tenant_config, validation, metrics — NOT health, which is auth-free). State the exact declaration site (e.g., a Letflow.Plugs.TenantPipeline module that forward/2 delegates through, or inline plug declarations in the top-level router before the forward/2 calls). THIS IS THE KEY DESIGN DECISION: the acceptance criterion says 'declared in exactly one place, verified by grep showing a single declaration site rather than a repetition per sub-router'.\n\n(d) TEST SURFACE\n  Design the test structure for all 6 acceptance criteria:\n  - AC1: GET /health with Repo unavailable — how to stop the Repo in the test\n  - AC2: sub-router isolation test (mount one sub-router directly without top-level router)\n  - AC3: unrouted path returns RFC 9457 404 with Content-Type: application/problem+json\n  - AC4: grep-based assertion that the shared middleware chain has exactly one declaration site\n  - AC5: moduledoc content assertions (all 11 deferred modules named, readiness stated as deferred)\n  - AC6: moduledoc cites REQ-065 addendum by name\n\nConstraints:\n- NO implementation code in this design file — signatures, type shapes, and invariants only\n- NO DB migrations needed (this is router structure only)\n- NO new external dependencies (Plug.Router, Plug.Builder are already in deps)\n- The design must name the exact module names and path prefixes so ELIXIR-DEV can implement without ambiguity\n- Open questions: if any design point cannot be resolved without checking a specific Plug behaviour — state it as an open question rather than guessing\n\nComplete the handoff: set status COMPLETED, result.status PASS or FAIL, artifacts_out pointing to the design file, next_action 'Route to CODE-DESIGN-VALIDATOR (Step 1b)'.",
+    "acceptance_criteria": [
+      "Every acceptance criterion in REQ-070 maps to a concrete design element in the .md file",
+      "All new module names are specified with their Plug.Router path prefix",
+      "The single shared middleware chain declaration site is identified precisely",
+      "GET /health preservation mechanism is described (no auth, no DB, exact contract)",
+      "The deferred-route moduledoc list is enumerated with owning stages",
+      "No implementation code (.ex/.exs code bodies) present — signatures and shapes only",
+      "No DB schema changes designed (this requirement has no migration)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design written to lib/letflow/design/req070-router-decomposition.md. Chose Option A (Letflow.Plugs.ApiPipeline as a use Plug.Router module, mounted once via forward \"/api/v1\" in the top-level router). All six acceptance criteria mapped to concrete design elements. Two open questions (Parsers length cap, forward/2 path-stripping verification) stated explicitly and flagged non-blocking for CODE-DESIGN-VALIDATOR.",
+    "artifacts_out": ["lib/letflow/design/req070-router-decomposition.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ070-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ070-20260821",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

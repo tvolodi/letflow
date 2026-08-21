@@ -1740,6 +1740,30 @@
       "recovered": true,
       "recovery_note": "Affected step file: handoffs/WF02-REQ043-20260818/step-final-git-merge.json. Branch applied: (a-2) ORCH reconstruction (all side effects confirmed complete at repair time, per HANDOFF_PROTOCOL.md section 4.1(c)'s died-mid-action-vs-died-after-acting probe). This is a repair of the run's own audit-trail record, performed in a later session (2026-08-21) than the run itself (2026-08-18) -- per ORCHESTRATOR.md section 7.2's later-session-recovery mechanism, the original entry above is left untouched and this discrete entry is appended instead.",
       "note": "Filed under docs/issues/ISS-0192.yaml. This entry exists solely to make WF02-REQ043-20260818's handoff-file recovery greppable at the registry level (grep -l \"\\\"recovered\\\": true\" handoffs/registry.json), per ORCHESTRATOR.md section 7.2's rationale -- the original entry's own note already documented the run's actual 2026-08-18 interruption/recovery narrative in free-text prose, which is exactly why a scan for stale handoffs found this run's PENDING handoff and not its interruption. No run-level work was performed today; only the handoff file and this registry entry were written."
+    },
+    {
+      "run_id": "WF03-ISS0193-20260821",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "stage": null,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/design/iss-0119-status-file-readability.md",
+        "docs/status/requirement_status.index.yaml",
+        "test/docs/requirement_status_invariants_test.exs",
+        "test/support/status_history.ex",
+        "docs/issues/ISS-0193.yaml"
+      ],
+      "lock_acquired_at": "2026-08-21T11:59:00Z",
+      "lock_released_at": "2026-08-21T13:16:00Z",
+      "released_lock": true,
+      "recovered": true,
+      "recovery_note": "step-final-git-merge.json, §4.1(a-2) -- the dispatched ELIXIR-DEV agent rebased and claimed the handoff, then stopped, its own final text stating it was waiting for a background test-monitor notification (a capability spawned subagents do not have). By the time ORCH investigated, ORCH had already completed the merge's remaining side effects, so ORCH reconstructed the result rather than redispatching a fresh agent to redo already-done work. not_agent_attested carries the full evidence.",
+      "last_known_step": "COMPLETE. Step 00 (git-setup) PASS; Step 02 (CODE-DESIGNER) PASS commit c756b82; Step 02b (CODE-DESIGN-VALIDATOR) PASS commit 37e17a7, MINOR-4 laundering scenario walkthrough confirmed blocked; Step 03 (TEST-DESIGNER) PASS, real mix test 20/20 plus 3 independently-caught mutants; Step 03b (TEST-DESIGN-VALIDATOR) PASS, mutant independently reproduced by the gate itself; Step 04 (TEST-RUNNER) PASS, full suite 1292/1294, both pre-existing failures attributed to open ISS-0107; Step 05 (ISSUE-FIXER) PASS, ISS-0193 resolved GH#381 closed; Step Final reconstructed by ORCH under section 4.1(a-2) after the dispatched agent stalled -- merged as c692b02 via PR #420. rework_count 0 of 3 throughout -- every gate passed on its first attempt.",
+      "backfilled": false,
+      "queue_task_id": 193,
+      "queue_agent_id": "tvolo-win-orch",
+      "note": "WF-03 for ISS-0193 (GH#381, queue task 193, MAJOR), claimed by get_next_task. This is NOT docs-only -- a design amendment plus real test/support code changes, the git wrapper applies in full. Incidental finding from WF03-ISS0119-20260821's own CODE-DESIGN-VALIDATOR gate (Step 4e, MINOR-3): known_anomalies:/A5 has no restriction on which volume a declared record may cite, unlike its sibling known_shape_anomalies:/A4b (same design, same gate) which already restricts to closed+digest-pinned volumes. The remedy is a proven, worked precedent already in the same design file -- mirror A4b's rule onto A5. Steps 0.5/1 (ISSUE-FIXER) SKIPPED: CODE-DESIGN-VALIDATOR's own finding already IS the diagnosis with a fully worked remedy and a follow-on MINOR-4 (the volume-closed-in-same-commit laundering route) quoted in full in the issue record -- a diagnosis step would re-derive, not establish. Toolchain confirmed present (/c/Program Files/Elixir/bin/mix) before committing to the full pipeline."
     }
   ]
 }

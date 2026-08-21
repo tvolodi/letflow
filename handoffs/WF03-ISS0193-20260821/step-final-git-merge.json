@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0193-20260821/step-final-git-merge.json",
   "created_at": "2026-08-21T13:00:29Z",
   "started_at": "2026-08-21T13:00:29Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-21T13:14:26Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": null,
@@ -39,19 +39,40 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "ELIXIR-DEV rebased this branch onto origin/main (which had moved to include ISS-0190/0191/0192/0194 concurrently), verified zero conflict markers, and committed a claim -- then stopped, its own final message stating it was 'waiting for a background test monitor' to notify it, a runtime capability a spawned subagent does not have. It never returned. ORCH completed the remaining mechanical steps directly, per the same authority already exercised for this run's own Step 00 (git-setup, logged ORCH -> - at run start) -- git-merge procedure is not source/test/doc content. Before acting, ORCH verified the rebase's actual state rather than trusting the stalled agent's own claim: zero conflict markers (git diff --name-only --diff-filter=U), a clean mix compile --warnings-as-errors, and a clean 20/20 re-run of this branch's own test/docs/requirement_status_invariants_test.exs. That last check surfaced a real side effect of the dead run: 6 orphaned erl.exe 'mix test' processes (the ISS-0107 Windows fake-mix recursion bug TEST-RUNNER had already diagnosed and cleaned once on this same run) had re-accumulated and saturated the shared Postgres pool (pg_stat_activity unreachable, then 38 connections once psql itself connected). Killed all 6 (Stop-Process -Force) and confirmed the pool recovered (letflow/letflow_dev reachable, test passing 20/20) before proceeding. Pushed the rebased branch with --force-with-lease -- scoped to this run's own feature branch only, per GIT_MERGE.md step 6 (ISS-0210, merged earlier today); this is that rule's first live exercise on an actual code branch. Opened PR #420 with the real mix test counts (1292 passed, 2 failed, 0 attributable, routes 1+3 named) in the body per core-directives.md's Never-Call-a-Red-Pipeline-OK rule. gh pr merge --squash --delete-branch: the GitHub-side merge succeeded (confirmed via gh pr view --json state,mergedAt,mergeCommit: MERGED, c692b02) but the local side-effect (checkout main) failed on ORCH's own uncommitted handoffs/registry.json and orchestrator.log -- the same shape GIT_MERGE.md's worktree-variant section describes (read the actual gh pr view state before treating a local-side error as FAIL). Stashed those two files, completed local cleanup (checkout main, pull --ff-only, branch -D, remote ref delete), verified all five GIT_MERGE.md acceptance criteria, then restored the stash. One stash conflict: the untracked docs/issues/ISS-0212.yaml (a follow-on ORCH had filed but deferred committing) could not be restored because a DIFFERENT, properly-resolved version of that same path had already been merged to main by another concurrent session (ISS-0212 closed as a duplicate of the already-fixed ISS-0194) -- verified by diff that main's version is the real, independently-verified closure, and dropped the stale stashed copy rather than restoring over it.",
+    "artifacts_out": ["docs/status/requirement_status.index.yaml is unaffected; no new artefact beyond the merge itself"],
+    "issues": [
+      {"severity": "MINOR", "description": "The dispatched ELIXIR-DEV agent stopped after claiming the handoff, stating it was 'waiting for a background test monitor' -- a subagent has no such async wake mechanism, so this dispatch pattern (spawn a long-running background test, then idle expecting a notification) will always stall a subagent this way. Worth a note in the relevant role file or dispatch guidance that subagents must poll/complete within their own tool-call loop, never assume a cross-turn notification.", "affected_requirement": null}
+    ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0193-20260821",
-      "commit_sha_list": [],
-      "remote_branch": "origin/feature/WF03-ISS0193-20260821",
-      "push_status": "skipped",
-      "pr_url": null,
+      "commit_sha_list": ["c692b02"],
+      "remote_branch": "origin/feature/WF03-ISS0193-20260821 (deleted post-merge)",
+      "push_status": "ok",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/420",
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "ORCH marks run COMPLETED and releases queue task 193"
+  },
+  "not_agent_attested": {
+    "reconstructed_by": "ORCH",
+    "reconstructed_at": "2026-08-21T13:14:26Z",
+    "reason": "The dispatched ELIXIR-DEV agent completed the rebase and claimed the handoff (commit 5c4e3dd, 'claim Step Final git-merge handoff') but never returned -- its final reported text stated it was pausing to wait for a background test-monitor notification, a capability spawned subagents do not have, so the tool-call loop ended with no result ever written. Case (a-2) applies: by the time ORCH investigated, ORCH had ALREADY completed the merge's remaining side effects (PR #420 opened and merged as c692b02, branch deleted, local cleanup done) before writing this record, so there is no work left for a fresh agent to redo, and completing this record is bookkeeping about what already happened, not a first-hand report from the agent that did the earlier half of the work.",
+    "fields_written": ["status", "completed_at", "result"],
+    "evidence": [
+      "git status --short --branch on the stalled branch -> ahead 22, behind 17, established the agent had rebased locally but not pushed",
+      "git diff --name-only --diff-filter=U | wc -l -> 0, no lingering conflict markers",
+      "MIX_ENV=test mix compile --warnings-as-errors -> clean, no output, exit 0",
+      "MIX_ENV=test mix test test/docs/requirement_status_invariants_test.exs -> 20 passed, 0 failed (first attempt hit too_many_connections; Get-CimInstance Win32_Process identified 6 orphaned erl.exe mix-test processes dated 18:03-18:09 as the cause, matching ISS-0107's recursion mechanism; killed and re-ran clean)",
+      "git push --force-with-lease origin feature/WF03-ISS0193-20260821 -> forced update 5def81a..5c4e3dd accepted (lease held, no concurrent write on this branch)",
+      "gh pr create / gh pr merge --squash --delete-branch / gh pr view --json state,mergedAt,mergeCommit -> MERGED, c692b02, 2026-08-21T13:12:37Z",
+      "git checkout main && git pull --ff-only && git log --oneline -1 && git status -> all five GIT_MERGE.md acceptance criteria confirmed clean"
+    ],
+    "not_verifiable_after_the_fact": [
+      "Exactly what the stalled agent's own background test invocation was (full suite vs scoped) and how long it had been running before ORCH intervened -- its process tree was gone by the time ORCH investigated (the erl.exe processes found were dated 18:03-18:09, consistent with, but not conclusively identified as, that agent's own run)",
+      "Whether the agent would have eventually completed on its own given more wall-clock time, versus being genuinely stuck -- ORCH judged it stalled from the 'waiting for a notification that cannot arrive' self-report, not from a timeout"
+    ]
   },
   "rework_count": 0,
   "max_rework": 3

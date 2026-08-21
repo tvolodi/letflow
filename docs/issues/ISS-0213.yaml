@@ -1,0 +1,50 @@
+id: ISS-0213
+title: >
+  A dispatched subagent that starts a long-running background test and then idles
+  expecting a cross-turn notification will stall permanently -- worth a note in
+  role/dispatch guidance
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0193-20260821
+discovered_at: "2026-08-21T13:14:26Z"
+severity: MINOR
+
+description: >
+  Filed from a MINOR finding recorded in the reconstructed
+  `handoffs/WF03-ISS0193-20260821/step-final-git-merge.json` `result.issues`. Read it
+  there for full context.
+
+  An ELIXIR-DEV subagent dispatched for Step Final (git-merge) on
+  WF03-ISS0193-20260821 completed the rebase, verified zero conflicts, committed a
+  claim on the handoff -- then stopped. Its own final reported text stated it was
+  waiting for a background test monitor to notify it once a long-running `mix test`
+  finished. A spawned subagent has no such cross-turn async wake mechanism (only the
+  top-level orchestrating session can receive that kind of background-task
+  notification); once a subagent's own tool-call loop ends, nothing further happens on
+  its behalf. The run stalled with a real side effect left behind (orphaned `erl.exe`
+  `mix test` processes from the known ISS-0107 Windows fake-mix recursion bug, which
+  had re-saturated the shared Postgres pool by the time ORCH investigated).
+
+  ORCH treated this as a `HANDOFF_PROTOCOL` §4.1(a-2) recovery -- by the time it
+  investigated, it had already completed the merge's remaining side effects, so it
+  reconstructed the handoff's `result` rather than redispatching a fresh agent to redo
+  already-finished work. No process or protocol change is strictly required (§4.1
+  already covers this recovery shape correctly), but nothing currently tells a
+  producing role NOT to start a long-running background operation and then idle
+  waiting for a notification that will never arrive -- and this is now a documented
+  real occurrence, not a hypothetical.
+
+affected_files:
+  - .claude/agents/elixir-dev.md
+  - docs/agents/instructions/core-directives.md
+
+related:
+  - ISS-0193  # the run whose reconstructed Step Final raised it
+  - ISS-0107  # the recursion bug whose orphaned processes were the visible side effect
+
+queue_task_id: 213
+github_issue: https://github.com/tvolodi/letflow/issues/421
+github_issue_note: >
+  `register_task` created both the queue task (213) and its mirrored GitHub issue (#421)
+  in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
+  separately. The id comes from `register_task`'s `issue_ref`, not a directory scan.
+status: open

@@ -902,7 +902,7 @@ second party to complete, which is the whole subject of §4.1. ORCH's own sessio
 Clause 2 admits an explicit `registry.json` mid-work statement (2a above) because
 `WF02-REQ038-20260817` survives only on that evidence: its dispatch committed nothing, so it
 left no handoff file and no `orchestrator.log` line of its own (the boundary fact stated
-above). Clause 1 carries no matching admission because every row in the table below already
+above). Clause 1 carries no matching admission because every row in the table above already
 satisfies it via a handoff file or an `orchestrator.log` `DISPATCH` line — nothing currently
 on record needs clause 1 to accept registry prose too. The asymmetry is a consequence of what
 the four rows actually require to decide correctly, not a gap between the two clauses.

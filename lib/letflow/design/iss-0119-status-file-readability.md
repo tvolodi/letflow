@@ -320,12 +320,39 @@ here would propagate forever.
 #
 # 4. Append your entry at the end of the file. Append — do not open the file for
 #    rewriting, do not regenerate it, do not reflow existing entries.
+#    If you append via a Bash heredoc, the delimiter MUST be quoted (`<<'EOF'`,
+#    never `<<EOF`): your note text will routinely contain backticks and colons
+#    because it is prose ABOUT this file's own field names, and an unquoted
+#    delimiter lets Bash execute a backtick span as a command substitution,
+#    silently deleting it from what lands on disk (ISS-0199, hit live). In
+#    PowerShell, use a literal here-string (`@'...'@`), never an interpolating
+#    one (`@"..."@`), for the matching reason with `$`.
 #
-# 5. Verify you appended and did not replace. The line count must GROW:
-#      git diff --numstat docs/status/requirement_status.v2.yaml
-#    Any nonzero deletion count on this file is a defect. Revert and redo.
+# 5. Verify you appended and did not replace, AND that what landed is what you
+#    wrote — two checks, neither optional:
+#      a. The line count must GROW:
+#           git diff --numstat docs/status/requirement_status.v2.yaml
+#         Any nonzero deletion count on this file is a defect. Revert and redo.
+#         This proves you appended; it proves nothing about WHAT you appended —
+#         a shell that silently ate a backtick span still line-balances.
+#      b. Re-read what you just wrote:
+#           Bash:       tail -n 8 docs/status/requirement_status.v2.yaml
+#           PowerShell: Get-Content docs/status/requirement_status.v2.yaml -Tail 8
+#         Confirm the note text reads exactly as you intended — no missing
+#         words, no blank span where a backtick-quoted field name belonged.
+#         This is the check (a) structurally cannot make: ISS-0199 was a real
+#         append that passed (a) at `43\t0` while its note text had already
+#         been silently gutted by an unquoted-heredoc command substitution.
 #
-# 6. Apply the roll rule below.
+# 6. Update this volume's `entries:` count in
+#      docs/status/requirement_status.index.yaml
+#    to match — increment it by one, in the SAME commit as your append. A
+#    declared count nobody updates is a number nobody can trust; ISS-0199
+#    finding 2 found this volume's `entries:` at 0 after real entries had
+#    already landed. test/docs/requirement_status_invariants_test.exs's A9
+#    asserts this count against what is actually on disk.
+#
+# 7. Apply the roll rule below.
 #
 # ── ENTRY SHAPE — all five fields, in this order, every time ──────────────────
 #
@@ -569,6 +596,12 @@ Assertions, all derived from the index file so the test never hardcodes a volume
   this design there are exactly three machine-checked copies — the index `roll_rule`, the
   current volume's header, and `StatusHistory.default_ceilings()` — and no unchecked prose
   copy.
+- **A9 — `entries:` is checked against disk, not merely declared (added 2026-08-21,
+  ISS-0199).** For every volume in `volumes:`, its declared `entries:` count equals
+  `length(StatusHistory.entries(path))` — the real count on disk. HOW-TO-APPEND step 6
+  and the roll rule's step 3 are what keep the declared count current; A9 is what catches
+  it going stale if either is skipped. Found live: volume 2 sat at declared `entries: 0`
+  with 7 real entries already appended, because nothing before A9 compared the two.
 
 **Scope note for TEST-DESIGNER:** A0, A3 and A6 are the three that matter most — **A3 is
 both the live guard and the fail-first proof for ISS-0119** (§7.1), A0 is what stops A3's

@@ -1,0 +1,52 @@
+{
+  "handoff_id": "125c0a87-66a6-43c7-adca-ea64755067dc",
+  "run_id": "WF02-REQ073-20260822",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ073-20260822/step-00-git-setup.json",
+  "created_at": "2026-08-21T22:18:09Z",
+  "started_at": "2026-08-21T22:18:09Z",
+  "completed_at": "2026-08-21T22:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-073"],
+    "requirement_text": {
+      "REQ-073": "Port the user-management handler group of src/api/routes/identity.zig (1,868 lines / 23 handlers total -- too large for one agent turn, split four ways across REQ-073..076 along R-Co's own handler boundaries). This requirement takes five handlers: handleCreateUser (L21), handleListUsers (L101), handleGetUser (L130), handlePatchUser (L149), handleUpdateUserStatus (L303). Backing domain logic already exists and is NOT rebuilt here: REQ-015..021 built Letflow.Identity, and REQ-063 made users a per-schema table. Read lib/letflow/identity.ex's actual public functions and route to them; if a handler needs a domain function that does not exist, add the thin function there rather than inlining a Repo query in the handler, and say so in the completion report. Every response goes through REQ-066's builders, every list through REQ-067's cursor pagination, every body through REQ-068's validation, every action through REQ-069's UsersGroupsRolesManage permission check, and every query through REQ-072's scoped prefix. SECURITY (INV-2): a user representation must never serialise password material, a token secret, or an OIDC refresh token, and field selection happens server-side before serialisation -- not by the client omitting fields. Build the response map explicitly (or derive Jason.Encoder with an explicit :only list); do not encode the Ecto struct wholesale, which is how an added column silently becomes an exposed field later."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/routers/identity.ex"
+    ],
+    "branch_name": "feature/WF02-REQ073-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 00 — Git setup for REQ-073 (Identity routes 1/4 -- user CRUD and status).\n\nProcedure per docs/agents/protocols/GIT_SETUP.md:\n1. git checkout main\n2. git pull --ff-only origin main — STOP and FAIL if non-fast-forward\n3. git checkout -b feature/WF02-REQ073-20260822\n4. git branch --show-current — must equal feature/WF02-REQ073-20260822\n5. git push -u origin feature/WF02-REQ073-20260822\n\nThis is the first requirement to actually exercise the whole S4 chain end-to-end (REQ-066 response builders, REQ-067 pagination, REQ-068 validation, REQ-069 authorization, REQ-072 tenant scoping) against a real route, mounted into lib/letflow/routers/identity.ex (currently a stub per REQ-070). Full WF-02 pipeline warranted given the security-critical acceptance criteria (INV-1/INV-2/INV-5 all named explicitly).\n\nKey constraints to carry into Step 1: domain logic already exists in Letflow.Identity (REQ-015..021, REQ-063) and must not be rebuilt -- handlers route to existing functions, only adding a thin new domain function if a genuine gap is found (and reporting that explicitly, not silently). The response serialization must use an explicit field allowlist (INV-2) -- never Jason.Encoder deriving from the whole Ecto struct, since an added column would then silently become an exposed field. Every write must go through REQ-069's UsersGroupsRolesManage permission check with the database verified unchanged on a 403 (not just the status code). Every query must use REQ-072's scoped_repo_opts/1, and the cross-tenant-404 test must demonstrate REQ-072's actual mechanism, not a new one.\n\nComplete the handoff: set status COMPLETED, fill result.git_evidence with branch_name and push_status, set next_action to 'Route to CODE-DESIGNER (Step 1)'.",
+    "acceptance_criteria": [
+      "git branch --show-current == 'feature/WF02-REQ073-20260822'",
+      "git push -u origin feature/WF02-REQ073-20260822 succeeds (exit 0 or * [new branch] in output)",
+      "local main was fast-forward with origin/main before branching"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Feature branch created from fast-forward main and pushed to origin successfully. docs/requirements.yaml REQ-073 status flipped pending -> in_progress; started event appended to docs/status/requirement_status.v2.yaml (verified via git diff --numstat: 21 insertions, 0 deletions, plus a tail re-read confirming exact text); index's volume-2 entries count incremented 19 -> 20 in the same commit (1ef1c25).",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ073-20260822",
+      "commit_sha_list": ["1ef1c25"],
+      "remote_branch": "origin/feature/WF02-REQ073-20260822",
+      "push_status": "* [new branch] feature/WF02-REQ073-20260822 -> feature/WF02-REQ073-20260822",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER (Step 1)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

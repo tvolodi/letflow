@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0179-20260821/step-02-code-designer.json",
   "created_at": "2026-08-21T13:55:55Z",
   "started_at": "2026-08-21T13:55:55Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-21T14:04:41Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -40,9 +40,11 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Chose option (a): mutual exclusion via a Postgres session-level pg_advisory_lock/pg_advisory_unlock pair, keyed on a fixed literal ('letflow:test:iss0060_tenant_schemas_guard' via hashtext/1, same idiom lib/letflow/tenant_provisioning.ex already uses), held for the full move-out/guarded-migration/move-back window in with_only_this_tenant_visible!/2, wrapped in one Repo.checkout/2 call so acquire and release land on the identical Postgres session (traced Ecto's checkout_or_transaction/get_conn/put_conn process-keyed pinning in deps/ecto_sql/lib/ecto/adapters/sql.ex to confirm a bare Repo.query!/2 in :auto mode is NOT guaranteed same-session across calls -- the risk the task flagged is real without this wrapper). restore_orphaned_guard_backup_rows!/0 must acquire/release the SAME lock (also via its own Repo.checkout/2) or it can wrongly restore another invocation's legitimately-hidden rows mid-critical-section -- addressed explicitly in the design (section 3.3). Option (b) (wrap the whole scenario in one rolled-back transaction) is REJECTED on hard evidence, not preference: deps/ecto_sql/lib/ecto/migrator.ex's own documented execution model shows Ecto.Migrator.run/4 dispatches the actual migration work via Task.async onto a SEPARATELY-checked-out connection/transaction (async_migrate_maybe_in_transaction/run_maybe_in_transaction), which commits independently of whatever transaction the calling test process holds -- an outer rollback could not undo it. This is exactly why test/specs/REQ-022.md documents replay_migrations/2 hitting a DBConnection queue_timeout under sandbox mode and fixing it by switching to :auto mode rather than trying to keep everything on one connection. Option (c) (defer to ISS-0107) was weighed and rejected as the sole action: re-checked docs/issues/ISS-0107.yaml directly, status is still 'open' with no sign of imminent work, so a known reproducible corruption path (ISS-0111's own cited evidence: 10/14 failures in the run that discovered ISS-0109 traced to this mechanism) would stay open indefinitely; the option-(a) fix is small, self-contained to one test file, doesn't depend on ISS-0107 landing, and remains correct defense-in-depth afterward -- consistent with ISS-0110's own recorded reasoning. Full evidence, exact fix specification (signatures, acquire/release points, control-flow nesting in prose, acceptance-criteria-2 table), and design written to lib/letflow/design/iss0111-with-only-this-tenant-visible-advisory-lock-fix.md -- no .ex implementation written, only that new design doc plus this handoff/status change.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0111-with-only-this-tenant-visible-advisory-lock-fix.md"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0179-20260821",
@@ -52,7 +54,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to CODE-DESIGN-VALIDATOR to gate this design before ELIXIR-DEV implements section 3's fix in test/letflow/identity_migration_test.exs."
   },
   "rework_count": 0,
   "max_rework": 3

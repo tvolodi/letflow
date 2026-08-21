@@ -1,0 +1,54 @@
+{
+  "handoff_id": "req113-step01b-regate2",
+  "run_id": "WF02-REQ113-20260821",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ113-20260821/step-01b-code-design-validator-regate2.json",
+  "created_at": "2026-08-21T07:40:00Z",
+  "started_at": "2026-08-21T07:40:00Z",
+  "completed_at": "2026-08-21T07:55:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-113"],
+    "artifacts_in": [
+      "lib/letflow/design/req113-parallel-test-runner.md@376bb81",
+      "handoffs/WF02-REQ113-20260821/step-05-release-validator.json",
+      "handoffs/WF02-REQ113-20260821/step-01-code-designer-rework2.json",
+      "test/reports/report-20260821-WF02-REQ113-20260821.yaml"
+    ],
+    "owned_modules": ["lib/letflow/design/req113-parallel-test-runner.md"]
+  },
+  "task": {
+    "description": "Re-gate WF-02 Step 1b after REWORK ITERATION 1 (rework2 commit 376bb81), which replaces the §2/§4.5 ExUnit parsing rule (previously matched against a non-existent output shape per RELEASE-VALIDATOR's real-execution FAIL) and rewrites §4.6's exit contract to use parsed failures_i as the authoritative signal instead of raw exit_i.",
+    "acceptance_criteria": [
+      "same combined totals as baseline, demonstrated",
+      "aggregation actually sums/cross-checks",
+      "non-zero exit on any partition failure, zero on all-pass, both demonstrated",
+      "N derived from nproc/platform/configured default, never hardcoded",
+      "pre-compiles MIX_ENV=test exactly once before any partition",
+      "lives under scripts/",
+      "no implementation code present (signatures/shapes/grammar only)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Diffed 99ff884->376bb81 in full (`git diff 99ff884 376bb81 -- lib/letflow/design/req113-parallel-test-runner.md`) and read the current file directly, not CODE-DESIGNER's summary. New §2.2 correctly re-derives Mix's real exit-code contract from lib/mix/tasks/test.ex (exit_status defaults to 2, this repo's test: alias never overrides it, exit 1 is the unrelated Mix.raise abort class). §4.5's parsing rule was hand-traced against three real captured lines from test/reports/report-20260821-WF02-REQ113-20260821.yaml, not just read for structural plausibility: (1) 'Result: 207 passed (2 properties, 205 tests)' -> passed_i=total_i=207, parenthetical present -> properties_i=2, tests_i=205 (2+205=207, correct). (2) 'Result: 115 passed' (partition 3, no parenthetical) -> passed_i=total_i=115, no breakdown -> single-type rule (OQ-2b) attributes tests_i=115, properties_i=0, failures_i=0 -- correct, this partition genuinely ran only plain tests. (3) 'Result: 163/171 passed' + 'Failed: 8 tests' (partition 8) -> passed_i=163, total_i=171, no parenthetical -> tests_i=171, failures_i parsed from Failed line = 8; sanity check passed_i+failures_i=171=total_i holds. Summing all 8 real partitions from the report under this rule gives total_properties=5, total_tests=1269, total_failures=8, total_passed=1266 -- exactly reconciling to the baseline 'Result: 1274 passed (5 properties, 1269 tests)' (5+1269=1274 total; manual_sum in the report independently confirms 1266+8=1274). AC1/AC2 verified as actually correct against real data, not just plausible-looking prose. §4.6's new exit contract (success = every partition's failures_i==0 and a Result: line was found, regardless of raw exit_i) was traced against RELEASE-VALIDATOR's actual clean-run anomaly (partition 8: real 0 ExUnit failures, raw exit 2): under the new rule this partition contributes failures_i=0 and a WARNING (not a failure), so the script's own aggregate exit would be 0 -- this is the exact case that broke the old design and it is now fixed by construction, not just asserted. AC4/AC5/AC6 unchanged from the prior PASS (99ff884) and re-verified: TEST_PARALLEL_N/nproc/getconf chain with no hardcoded literal (§4.1), single MIX_ENV=test compile before the partition loop (§4.4), scripts/test_parallel.sh path (§1/throughout). No TBD/deferral language found (grep clean). Only one fenced block in the whole file (lines 292-299), an illustrative combined:/partition output-shape example (data being produced, not executable code) -- same carve-out as the prior two passes, still not a real .sh/.ex body anywhere in the document. All function/flow signatures (N-resolution order, parsing sub-rules, aggregation formula, exit contract, cross-check WARNING conditions) are fully specified with explicit fallback/edge-case handling (0 tests degenerate case, single-type omission, no-Result:-line abort case) -- no ambiguity left for ELIXIR-DEV to silently resolve.",
+    "artifacts_out": ["handoffs/WF02-REQ113-20260821/step-01b-code-design-validator-regate2.json"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ113-20260821",
+      "commit_sha_list": ["376bb81"],
+      "remote_branch": "origin/feature/WF02-REQ113-20260821",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV to fix scripts/test_parallel.sh's parsing regex and exit-contract logic to match the reworked §4.5/§4.6, then re-run Steps 2c/2d/3/5 (RELEASE-VALIDATOR must re-execute against real mix test output again before REQ-113 can be marked done)."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

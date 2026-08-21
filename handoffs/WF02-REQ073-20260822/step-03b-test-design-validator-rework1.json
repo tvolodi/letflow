@@ -1,0 +1,54 @@
+{
+  "handoff_id": "req073-step03b-rework1",
+  "run_id": "WF02-REQ073-20260822",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ073-20260822/step-03b-test-design-validator-rework1.json",
+  "created_at": "2026-08-22T04:23:00Z",
+  "started_at": "2026-08-22T04:18:00Z",
+  "completed_at": "2026-08-22T04:23:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "max_rework": 3,
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-073"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ073-20260822/step-05-release-validator.json",
+      "handoffs/WF02-REQ073-20260822/step-02a-elixir-dev-rework1.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/routers/identity.ex@e6280fd",
+      "test/letflow/routers/identity_test.exs@e6280fd"
+    ],
+    "branch_name": "feature/WF02-REQ073-20260822"
+  },
+  "task": {
+    "description": "Re-review test coverage after ELIXIR-DEV's rework (commits 9a7f95f/e6280fd) addressing RELEASE-VALIDATOR's Step 5 FAIL on AC5: the shipped test previously only asserted 8 expected keys' presence plus 3 named exclusions, never the full key set. Confirm the added full-key-set assertions genuinely close the gap and nothing else regressed.",
+    "acceptance_criteria": [
+      "AC5: response allowlist -- full key-set assertion (Map.keys sorted equality), not just presence/exclusion checks, at every response site built from user_map/1"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Confirmed branch feature/WF02-REQ073-20260822 at commit e6280fd (git branch --show-current, git log -5).\n\n1. Read lib/letflow/routers/identity.ex's user_map/1 (lines 322-333) directly: exactly 8 hand-built keys -- id, username, display_name, email, status, auth_source, inserted_at, updated_at. Confirmed myself, not trusted from any prior claim.\n\n2. Read test/letflow/routers/identity_test.exs in full (510 lines). Confirmed all 5 places carry a genuine full-key-set assertion (`Map.keys(...) |> Enum.sort() == [8 literal keys, alphabetically sorted]`), each matching user_map/1's actual key set exactly -- not a subset check disguised as one:\n   - create response, lines 110-119\n   - list-per-item response (looped over every item), lines 142-151\n   - get response, lines 168-177\n   - patch response, lines 195-204\n   - status-update response, lines 224-233\n   All five lists are identical and alphabetically sorted: [\"auth_source\", \"display_name\", \"email\", \"id\", \"inserted_at\", \"status\", \"updated_at\", \"username\"] -- matches user_map/1's key set with no omission or addition.\n\n3. Re-ran myself: `mix test test/letflow/routers/identity_test.exs` -> Result: 23 passed, 0 failures. Matches the rework's claimed 23/23 exactly, independently reproduced.\n\n4. Re-mapped all 6 ACs against the now-fixed file (AC1-AC4, AC6 unchanged from my prior PASS at step-03b; re-confirmed no incidental changes crept in elsewhere in the diff -- `git show 9a7f95f --stat` and `git show e6280fd --stat` touch only the test file and a handoff-record file respectively, no production code changed by the rework). AC5 now genuinely closed: full key-set equality is asserted at every response site derived from user_map/1, so a stray 9th key under any other name would be caught at all five sites, not just the one RELEASE-VALIDATOR flagged.\n\n5. Independent mutation check (not skipped, given this exact property was the one missed before): temporarily added a 9th key (`\"stray_mutant_field\" => \"should be caught\"`) to user_map/1 in lib/letflow/routers/identity.ex. Re-ran `mix test test/letflow/routers/identity_test.exs` -> Result: 18/23 passed, 5 failed -- exactly the 5 tests carrying the new full-key-set assertion (create, list-item, get, patch, status-update), each failing on the Map.keys equality as expected. Confirms the fix actually discriminates a stray field, not merely asserts something cosmetic. Reverted with `git checkout -- lib/letflow/routers/identity.ex` immediately after. Verified revert: `git status --porcelain lib/ test/` -> empty (no output), and grep for the mutant string in the file returns no match. Re-ran the suite post-revert: `mix test test/letflow/routers/identity_test.exs` -> Result: 23 passed, confirming clean revert to green.\n\nNo other gaps found: no `@tag :skip`, no 'TODO: implement test' anywhere in the file. Fixtures remain self-sufficient (unique tenant slug_prefix/UUID-based schema and username/email per test, no shared hardcoded state, no test depends on another having run first). No hardcoded secrets/connection strings.\n\nAC5 is genuinely closed by this rework. All checks pass -- PASS.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ073-20260822/step-03b-test-design-validator-rework1.json"
+    ],
+    "issues": [],
+    "test_run_evidence": {
+      "clean_command": "mix test test/letflow/routers/identity_test.exs",
+      "clean_result": "23 tests, 0 failures",
+      "mutation_probe": "added a 9th key (stray_mutant_field) to user_map/1 in lib/letflow/routers/identity.ex -- 5 of 23 tests failed (exactly the 5 full-key-set assertion sites), reverted via git checkout, git status --porcelain confirmed empty, re-run confirmed 23 passed again"
+    },
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ073-20260822",
+      "reviewed_commit": "e6280fd"
+    },
+    "next_action": "Route to TEST-RUNNER (Step 4) and RELEASE-VALIDATOR (Step 5) to re-confirm the full suite and re-derive all 6 ACs, then to DOC-UPDATER once green."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

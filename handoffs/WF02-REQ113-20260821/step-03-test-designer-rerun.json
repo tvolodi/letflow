@@ -1,0 +1,52 @@
+{
+  "handoff_id": "req113-step03-rerun",
+  "run_id": "WF02-REQ113-20260821",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ113-20260821/step-03-test-designer-rerun.json",
+  "created_at": "2026-08-21T07:13:39Z",
+  "started_at": "2026-08-21T07:13:39Z",
+  "completed_at": "2026-08-21T07:13:39Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-113"],
+    "artifacts_in": [
+      "scripts/test_parallel.sh@5360f7f",
+      "lib/letflow/design/req113-parallel-test-runner.md@df5b2a9"
+    ],
+    "owned_modules": [],
+    "supersedes": "handoffs/WF02-REQ113-20260821/step-03-test-designer.json"
+  },
+  "task": {
+    "description": "Re-apply WF-02 Step 3 scope test for REQ-113 against the current, reworked scripts/test_parallel.sh (post design rework 376bb81/df5b2a9 and script rework dc93092/cf28a46, re-gated by SECURITY-REVIEWER at af8b6c4 and REVIEWER at 5360f7f), to confirm the prior NO verdict still holds after RELEASE-VALIDATOR's found-and-fixed defect (aggregation regex never matched real mix test output).",
+    "acceptance_criteria": [
+      "AC1: same combined pass/fail/property totals as single-process mix test, demonstrated side by side",
+      "AC2: aggregation actually sums/cross-checks each partition's reported counts, not just process exit",
+      "AC3: exits non-zero on any partition failure (demonstrated by injecting one), exits zero when all pass",
+      "AC4: N derived from nproc/platform equivalent or explicit configured default, never hardcoded",
+      "AC5: pre-compiles MIX_ENV=test exactly once before launching any partition",
+      "AC6: script lives under scripts/, not lib/ or test/"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-ran the Step 3 scope test against the current scripts/test_parallel.sh@5360f7f. Verdict unchanged: NO application-executable Elixir/frontend surface. The rework (dc93092/cf28a46) touched only the parsing regex (properties/tests/failures extraction from the ExUnit `Result:`/`Failed:` summary lines) and the exit-2-vs-failure-count cross-check logic (Step 4 of the script) -- both changes remain entirely within the same bash script; no Elixir module, StreamData property, or frontend code was introduced or is now exercisable. Re-inspected the full current script top to bottom (header/derivation of N, single MIX_ENV=test compile, N background `mix test --partitions` launches, per-partition log parsing with grep -E against ExUnit summary lines, cross-check of exit code vs parsed failure count with exit-2-is-normal handling, final `exit \"$any_failed\"`): still pure bash control flow and text parsing, nothing an ExUnit/StreamData harness (this repo's only test frameworks per test/letflow/process_instance_test.exs convention and docs/guides/test_developer_guide.md) can invoke as a first-class unit. The reasoning that produced the original NO verdict (handoffs/WF02-REQ113-20260821/step-03-test-designer.json) is structural, not tied to the specific bug that was fixed, so the fix does not flip it. Confirming precedent still holds: scripts/timed_test.sh has no test/specs or test/letflow entry in this repo's history either. No test/specs/REQ-113.md or test code was written for the same reasons as the original pass -- writing one would mean shelling out to the script and re-implementing ExUnit-output parsing just to assert on it (manufactured busywork), which this step is not authorized to invent. The gap the original NO verdict flagged (AC1/AC3 needing real-execution demonstration, not source-reading) has since been closed: RELEASE-VALIDATOR's Step 5 run (6fb72f1) actually executed the script, found the aggregation regex never matched real mix test output, and that defect was fixed and re-gated through CODE-DESIGN-VALIDATOR (df5b2a9), SECURITY-REVIEWER (af8b6c4), and REVIEWER (5360f7f).",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ113-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ113-20260821",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route directly to RELEASE-VALIDATOR (Step 5) again -- Steps 3b/4 (TEST-DESIGN-VALIDATOR/TEST-RUNNER) skipped, same as the prior pass. RELEASE-VALIDATOR should re-verify AC1/AC2/AC3/AC5 by actually re-executing scripts/test_parallel.sh (baseline mix test vs the script, plus an injected-failure run) against the current, fixed script rather than trusting the prior report alone, and confirm AC4/AC6 by direct reading."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

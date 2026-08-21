@@ -1831,19 +1831,19 @@
       "workflow_id": "WF-02",
       "requirement_ids": ["REQ-070"],
       "stage": "S4",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/router.ex",
         "lib/letflow/routers/"
       ],
       "lock_acquired_at": "2026-08-21T16:02:53Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 PENDING",
+      "lock_released_at": "2026-08-21T18:14:43Z",
+      "released_lock": true,
+      "last_known_step": "Step Final PASS — merged to main as cc1051b (PR #446), handoff ecece0d. Queue task 137 released done.",
       "backfilled": false,
       "queue_task_id": 137,
       "queue_agent_id": "orch-letflow-3",
-      "note": "WF-02 for REQ-070 (Router decomposition into per-subsystem sub-routers, OQ-1). Claimed from letflow-queue task 137. Framework settled as Plug/Bandit by REQ-065 addendum 2026-08-20. Depends on REQ-065 (done) and REQ-066 (done)."
+      "note": "WF-02 for REQ-070 (Router decomposition into per-subsystem sub-routers, OQ-1). Framework: Plug/Bandit (REQ-065 addendum 2026-08-20). No rework across any gate. 1400/1400 tests passing, independently verified by TEST-RUNNER and RELEASE-VALIDATOR. Two test fixes during Step 4: AC4 grep specificity (safe_json_parser.ex false positive) and response_test.exs path that was now intercepted by ApiPipeline auth. Queue task 137 released done at 2026-08-21T18:14:43Z."
     },
     {
       "run_id": "WF02-REQ067-20260821",

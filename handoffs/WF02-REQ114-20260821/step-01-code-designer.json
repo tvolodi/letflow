@@ -1,0 +1,46 @@
+{
+  "handoff_id": "req114-step01",
+  "run_id": "WF02-REQ114-20260821",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ114-20260821/step-01-code-designer.json",
+  "created_at": "2026-08-21T08:01:30Z",
+  "started_at": "2026-08-21T08:01:30Z",
+  "completed_at": "2026-08-21T08:04:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-114"],
+    "artifacts_in": ["scripts/test_parallel.sh@8570dc7"],
+    "owned_modules": ["lib/letflow/design/req114-wire-test-parallel.md"]
+  },
+  "task": {
+    "description": "Docs-only requirement, no lib/letflow module/schema involved. Adapted Step 1: produce an edit-plan artifact (lib/letflow/design/req114-wire-test-parallel.md) giving exact old-text/new-text for every site in WF-02_requirement_implementation.md, WF-04_full_test_run.md, .claude/agents/test-runner.md, .claude/agents/release-validator.md that currently invokes plain full-suite `mix test`, replacing it with scripts/test_parallel.sh and describing its mechanism (N-derivation, aggregation, exit contract). Also resolve two named open questions: WF-03_issue_resolving.md edit-or-not (with evidence), and WF-04 Step 2 RELEASE-VALIDATOR prose edit-or-not (with reasoning).",
+    "acceptance_criteria": [
+      "AC1: every literal full-suite mix test invocation in WF-02/WF-04 replaced, surrounding prose updated to describe the new mechanism",
+      "AC2: WF-03_issue_resolving.md explicitly confirmed (not assumed) to need no edit, or edited if wrong",
+      "AC3: test-runner.md and release-validator.md checked for their own literal invocations, outcome stated explicitly",
+      "AC4: fresh read post-edit shows no remaining plain full-suite mix test reference in scope"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "lib/letflow/design/req114-wire-test-parallel.md written and committed (83011e2): 7 edit sites across 4 files (WF-02 Step 4 line 351, Step 5 line 402; WF-04 overview line 21, Step 1 line 49; test-runner.md lines 30, 43; release-validator.md line 29), each with exact old-text/new-text. WF-03 confirmed via grep (zero mix test hits) to need no edit -- mirrors WF-02 Step 4 by reference. WF-04 Step 2 RELEASE-VALIDATOR prose decision: leave unedited, since it never named a specific command (\"re-check... against the actual current code/tests\") so there is no stale reference for AC1 to trigger on; naming the script there would be scope expansion beyond this requirement's acceptance criteria. Re-grepped .claude/agents/*.md for other literal full-suite invocations: only orchestrator.md:77 besides the two in scope, and that is a generic no-speculation capability note, not a full-suite step invocation -- correctly left out of scope. No implementation code present (pure prose edit specs).",
+    "artifacts_out": ["lib/letflow/design/req114-wire-test-parallel.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ114-20260821",
+      "commit_sha_list": ["83011e2"],
+      "remote_branch": "origin/feature/WF02-REQ114-20260821",
+      "push_status": "success",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

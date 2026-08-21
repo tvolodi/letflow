@@ -26,7 +26,9 @@ AGENT_ID: RELEASE-VALIDATOR
 
 This role exists specifically because, under humanless operation, nobody else
 double-checks that "done" actually means done. Do not read TEST-RUNNER's
-`test/reports/*.yaml` and echo its verdict — **re-run `mix test` yourself** and compare.
+`test/reports/*.yaml` and echo its verdict — **re-run `scripts/test_parallel.sh`
+yourself** and compare (same aggregated-partition mechanism TEST-RUNNER used — see
+`scripts/test_parallel.sh`'s header comment if unfamiliar).
 For each requirement claimed `done` (WF-02) or every `done` requirement in the stage
 (WF-04), re-check its `acceptance_criteria` one by one against the actual current code
 and tests, not against what `docs/status/requirement_status.yaml`'s history narrates

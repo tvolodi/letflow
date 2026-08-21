@@ -133,8 +133,10 @@ sh scripts/test_parallel.sh
 pre-compiles `MIX_ENV=test` exactly once before launching any
 partition, then aggregates each partition's own reported pass/fail
 counts into one combined total and exits non-zero if any partition
-failed. This is dev-tooling only — it is not yet wired into
-`TEST-RUNNER`/`RELEASE-VALIDATOR`'s own workflow steps (REQ-114).
+failed. This is now the full-suite mechanism `TEST-RUNNER` and
+`RELEASE-VALIDATOR` invoke in their own workflow steps (REQ-114),
+replacing the plain `mix test` full-suite invocations they used
+before.
 
 Postgres runs on port 5462 by default, not 5432 — R-Co's own
 docker-compose already uses 5432 (dev) and 5433 (test), so this can run

@@ -1,6 +1,7 @@
 # 0008 — Stage tag for non-porting tooling requirements, and ownership of workflow/role docs
 
-Status: proposed, pending REVIEWER confirmation at REQ-114's WF-02 Step 2d gate.
+Status: confirmed (both picks, Option A) — REVIEWER sign-off 2026-08-21, REQ-114's
+WF-02 Step 2d gate. See "REVIEWER sign-off" section at the end of this file.
 Owner: ORCH → REVIEWER.
 
 ## Question
@@ -78,3 +79,34 @@ WF-02 Step 2d gate (idiom/process-consistency review), per this file's Status li
 If REVIEWER overrides either pick, it appends a dated sign-off section here (same
 append-only convention as a stage file's REVIEWER sign-off section) rather than a
 new decision file, since the question doesn't change — only the answer might.
+
+## REVIEWER sign-off — 2026-08-21 (REQ-114, WF-02 Step 2d, run WF02-REQ114-20260821)
+
+Both provisional picks **confirmed as Option A**, not overridden.
+
+**Question 1 (stage tag)** — not evaluated by this gate; REVIEWER's Step 2d scope is
+idiom/supervision/scope-creep/decision-record consistency, not requirement-schema
+stage-fit, which is REQ-VALIDATOR's remit and was already passed at WF-01. Nothing in
+REQ-114's shipped diff depends on which stage-tag option was picked, so this question
+is left as REQ-VALIDATOR/schema territory, unaddressed here rather than silently
+assumed resolved.
+
+**Question 2 (DOC-UPDATER remit widening)** — confirmed. The work DOC-UPDATER actually
+performed for REQ-114 was mechanical prose substitution against a CODE-DESIGNER design
+doc (`lib/letflow/design/req114-wire-test-parallel.md`) that supplied exact old-text/
+new-text per edit site — no design judgment, no `lib/` code, no architectural decision
+was left for the executing agent to make. That is squarely within "flip status / update
+docs a requirement names," just with the file set widened from
+`docs/requirements.yaml`/`docs/status/*.yaml` to also include `docs/agents/workflows/
+*.md` and `.claude/agents/*.md` when a requirement's acceptance criteria explicitly name
+them. This does not collapse the ELIXIR-DEV/DOC-UPDATER distinction — ELIXIR-DEV's
+remit is `lib/` + migrations + config, none of which this requirement touched — and
+Option B (widening the depended-on role instead) would have wrongly implied doc edits
+require code-implementation judgment they don't have here. `docs/agents/AGENT_SYSTEM.md`
+§3/§6 should still be updated to state this widened remit explicitly, per this file's
+original Option A note — that update remains a follow-on, not done by this sign-off.
+
+Also verified as part of this gate: the new prose accurately describes
+`scripts/test_parallel.sh`'s actual mechanism (read the script directly and cross-checked
+every claim), and no scope creep beyond the four files REQ-114's acceptance criteria
+named. Full review record: `handoffs/WF02-REQ114-20260821/step-02d-reviewer.json`.

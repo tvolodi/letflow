@@ -5372,3 +5372,136 @@ requirements:
       - "lib/letflow/engine/execution_error.ex:5 -- the shipped moduledoc ISS-0076's own file list omits -- is classified, actioned per its class, and named explicitly in the handoff result, so the gap in ISS-0076's list is demonstrably closed rather than inherited"
       - "git diff shows zero changes to any function body, guard, @spec or return value anywhere under lib/letflow/ -- moduledoc and design-doc prose only, verified by inspecting the diff"
     depends_on: [REQ-110, REQ-111]
+
+  - id: REQ-113
+    title: Parallel test-runner script (scripts/test_parallel.sh) via Elixir's native --partitions
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    impl_order: 188  # letflow-queue task id (registered 2026-08-21, mirrors GH#376)
+    description: >
+      Not a port of any R-Co source path -- this is dev-pipeline tooling for
+      Letflow's own build/test loop, sized and gated the same way REQ-013's
+      single-command check gate was (see that entry's rationale for why a
+      non-porting tooling item still belongs in this schema).
+      Tagged stage: S4 per
+      docs/migration/decisions/0008-cross-cutting-tooling-stage-and-doc-ownership.md's
+      Option A (the currently active stage at draft time, since this doesn't
+      port an R-Co source path the way S0-S8 are otherwise defined -- not a
+      claim of S4 subsystem lineage).
+      Measured on hetzner-prod 2026-08-21 (~/workspace/letflow-1, 8 vCPU,
+      single shared postgres:16 container): 43 of 44 `async: false` test
+      files under `Letflow.DataCase` are sync because they provision real
+      tenant Postgres schemas via `Ecto.Migrator`, which cannot run inside a
+      single sandboxed connection -- so they flip `Letflow.Repo` to
+      `Sandbox.mode(:auto)` for the duration, forcibly checking in every
+      other currently-checked-out sandboxed connection in the pool.
+      `async: false` is what makes this safe (ExUnit guarantees no other test
+      is running when the switch happens), not schema-name uniqueness -- the
+      constraint is a single process-global Repo/pool/mode switch, not a
+      Postgres-level conflict between differently-named schemas.
+      `config/test.exs` (line 21) already supports per-partition databases:
+      `database: "letflow_test#{System.get_env("MIX_TEST_PARTITION")}"` --
+      exactly the mechanism Elixir's native `mix test --partitions N` flag
+      uses. Each partition runs as a SEPARATE OS process with its own Repo
+      pool and independent sandbox-mode state, so the global-switch
+      constraint above does not apply across partitions, only within one.
+      Confirmed empirically: `MIX_TEST_PARTITION=N mix test --partitions 4`
+      (4 parallel background processes, one `mix compile` run first to avoid
+      a concurrent-compile race across the 4 processes) completed in 80s
+      wall-clock vs. the known single-process baseline of 608.7s
+      (test/reports/report-20260820-WF02-REQ066-20260820.yaml) -- 7.6x
+      speedup, combined partition test counts (315+381+262+267 tests +
+      1+4 properties = 1230) matching the baseline's total exactly, zero
+      failures in any partition that run. NOTE: the baseline's 14
+      pre-existing environmental failures (ISS-0048/0050/0060/0062/0064
+      class) did not reproduce in that run, but this is NOT evidence that
+      class is fixed -- it is known-flaky under contention and this
+      requirement's acceptance criteria must not assert those failures are
+      gone.
+      BUILD: a script (scripts/test_parallel.sh, or equivalent -- exact
+      structure is this requirement's own implementation detail, not
+      prescribed here) that: (1) pre-compiles MIX_ENV=test once before
+      launching any partition, to avoid the concurrent-compile race the
+      measurement above worked around by hand; (2) launches N
+      `MIX_TEST_PARTITION=<i> mix test --partitions N` background processes
+      against the shared Postgres instance, where N is derived from
+      `nproc` (or the platform equivalent) or a configured default -- never
+      hardcoded to 4; (3) waits for all N processes to finish; (4)
+      aggregates each partition's own reported pass/fail/failure counts into
+      one combined total (not merely "the script exited"); (5) exits
+      non-zero if any partition failed, zero only if all partitions passed.
+      This does NOT include wiring the script into TEST-RUNNER/RELEASE-
+      VALIDATOR's workflow steps or editing any docs/agents/workflows/*.md
+      file -- that is REQ-114, which depends on this one.
+      FILE PLACEMENT NOTE (flag for REQ-VALIDATOR, not resolved here):
+      `docs/agents/instructions/core-directives.md`'s "File Placement
+      Rules" table and `docs/agents/AGENT_SYSTEM.md`'s "Artifact locations"
+      table do not currently list `scripts/` as a row, even though
+      `scripts/` already exists in the repo (currently empty) and
+      `docs/migration/decisions/timed_test.sh` is an existing precedent for
+      shell tooling living outside `lib/`/`test/`. This requirement does not
+      add that row itself (not this role's file to hand-maintain per
+      AGENT_SYSTEM.md section 9) -- REQ-VALIDATOR or ORCH should decide
+      whether it's worth a follow-up doc fix.
+    acceptance_criteria:
+      - "the script produces the same combined pass/fail/property totals as a single-process `mix test` run against the same commit, demonstrated by running both and quoting both actual outputs side by side -- not asserted from the 2026-08-21 measurement above, which is background, not a substitute for this run's own verification"
+      - "the aggregation step actually sums/cross-checks each partition's own reported counts (parsed from each partition's real output) rather than only checking that the script process exited -- demonstrated by showing the per-partition counts and the combined total together"
+      - "the script exits non-zero when at least one partition fails, demonstrated by deliberately introducing one failing test, running the script, and quoting its actual exit code and output; the script exits zero when all partitions pass, demonstrated the same way on a clean run"
+      - "N (partition count) is derived from `nproc`/platform equivalent or an explicit configured default, verified by reading the script -- not hardcoded to a fixed number anywhere in the script body"
+      - "the script pre-compiles MIX_ENV=test exactly once before launching any partition process, verified by reading the script and by the demonstrated run showing no concurrent-compile race"
+      - "the script lives under scripts/ (per this repo's existing convention for tooling outside lib/letflow/, e.g. docs/migration/decisions/timed_test.sh), not under lib/ or test/"
+    depends_on: []
+
+  - id: REQ-114
+    title: Wire the parallel test-runner script into TEST-RUNNER Step 4 and RELEASE-VALIDATOR Step 5
+    owner: DOC-UPDATER
+    status: pending
+    stage: S4
+    impl_order: 189  # letflow-queue task id (registered 2026-08-21, mirrors GH#377)
+    description: >
+      Tagged stage: S4 and owned by DOC-UPDATER per
+      docs/migration/decisions/0008-cross-cutting-tooling-stage-and-doc-ownership.md's
+      Option A picks for both open questions (the currently active stage at
+      draft time, since this is dev-pipeline tooling rather than an R-Co
+      source-path port; and DOC-UPDATER's remit widened to cover
+      docs/agents/workflows/*.md edits named in a requirement's acceptance
+      criteria, provisional pending REVIEWER confirmation at this
+      requirement's WF-02 Step 2d gate).
+      Depends on REQ-113 (the script must exist and be independently
+      validated first). Once scripts/test_parallel.sh -- or whatever path
+      REQ-113 actually produced -- is built and validated, replace the
+      plain `mix test` invocations in the workflow steps that currently run
+      the full suite with it, and update the workflow docs to describe the
+      new mechanism. As measured against docs/agents/workflows/ on
+      2026-08-21, the literal `mix test` full-suite invocations that this
+      applies to are: WF-02_requirement_implementation.md's Step 4
+      (TEST-RUNNER, line ~351: "mix test — full suite, not just the new
+      tests") and Step 5 (RELEASE-VALIDATOR, line ~372: "Independently
+      re-run: mix test"); and WF-04_full_test_run.md's overview diagram
+      (line ~21: "mix test, whole repo") and Step 1 (TEST-RUNNER, line ~49:
+      "mix test — the entire suite, not scoped to any one requirement").
+      WF-03_issue_resolving.md does not need its own edit: its "Steps 2-4"
+      section explicitly mirrors WF-02's Step 1/1b/2a-2d/3/3b/4 by
+      reference rather than restating a `mix test` invocation of its own, so
+      updating WF-02's Step 4 covers it. Re-check this claim against the
+      files' actual current content at implementation time rather than
+      trusting this line-number snapshot, since these docs may have moved
+      by then (line numbers noted here are from this drafting pass, not a
+      contract). WF-04's RELEASE-VALIDATOR Step 2 does not literally invoke
+      `mix test` today (it says "independently re-check... against the
+      actual current code/tests" without naming a command) -- confirm
+      whether it should gain an explicit reference too, or whether its
+      current phrasing already covers the replacement implicitly; state
+      the decision either way rather than silently picking one.
+      Do not change any TEST-RUNNER/RELEASE-VALIDATOR role-file text
+      (.claude/agents/*.md) unless one of them also hardcodes a literal
+      `mix test` invocation -- check both files as part of this
+      requirement's own audit before scoping edits to only the workflow
+      docs.
+    acceptance_criteria:
+      - "every literal `mix test` full-suite invocation identified above in WF-02_requirement_implementation.md and WF-04_full_test_run.md is replaced with an invocation of REQ-113's validated script, with the surrounding step text updated to describe the new mechanism (partition count source, aggregated pass/fail reporting) rather than leaving stale prose describing plain `mix test` behavior"
+      - "docs/agents/workflows/WF-03_issue_resolving.md is explicitly confirmed (not assumed) to need no direct edit of its own because it mirrors WF-02's steps by reference, or is edited if that confirmation turns out to be wrong"
+      - ".claude/agents/test-runner.md and .claude/agents/release-validator.md are checked for their own literal `mix test` invocations independent of the workflow docs, and updated if any are found, with the check's outcome (found and fixed / checked, none found) stated explicitly in the result"
+      - "a fresh read of the three updated/checked files after the edit shows no remaining plain `mix test` reference for a full-suite run in a step this requirement was scoped to change"
+    depends_on: [REQ-113]

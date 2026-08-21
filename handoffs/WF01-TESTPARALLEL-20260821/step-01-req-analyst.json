@@ -1,0 +1,67 @@
+{
+  "handoff_id": "3a279aa9-76cd-4933-89a6-aeae32a8a439",
+  "run_id": "WF01-TESTPARALLEL-20260821",
+  "workflow_id": "WF-01",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "REQ-ANALYST",
+  "file": "handoffs/WF01-TESTPARALLEL-20260821/step-01-req-analyst.json",
+  "created_at": "2026-08-21T05:07:41Z",
+  "started_at": "2026-08-21T05:24:05Z",
+  "completed_at": "2026-08-21T05:25:20Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/migration/README.md",
+      "docs/anti-patterns.md",
+      "config/test.exs",
+      "docs/agents/workflows/WF-02_requirement_implementation.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "docs/agents/workflows/WF-04_full_test_run.md",
+      "test/reports/report-20260820-WF02-REQ066-20260820.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "REWORK ITERATION 1: REQ-VALIDATOR FAILed the first draft (handoffs/WF01-TESTPARALLEL-20260821/step-02-req-validator.json) on: REQ-113 check (d) stage fit -- S0 is a closed, already-fully-done itemized list (Phoenix/OIDC/Ecto-schema/check-gate/wrap-up-review) that this doesn't match; REQ-114 check (d) same stage issue, plus check (b) consistency -- DOC-UPDATER's enumerated remit in AGENT_SYSTEM.md §3 doesn't cover docs/agents/workflows/*.md or .claude/agents/*.md, and neither ELIXIR-DEV's remit nor ORCH-direct (fails ORCHESTRATOR.md §10 check 1, multi-file) fit either. ORCH has now filed docs/migration/decisions/0008-cross-cutting-tooling-stage-and-doc-ownership.md naming both gaps as options, with a provisional pick for each so this run isn't stalled (REVIEWER confirms or overrides at REQ-114's WF-02 Step 2d gate, per that file's Status line) -- read it in full before editing. Apply its provisional picks exactly: change REQ-113's stage: S0 to stage: S4 (cite the decision file inline in the requirement's description, one sentence, so a later reader isn't left guessing why a non-porting requirement carries an S4 tag). Change REQ-114's stage: S0 to stage: S4 and its owner: DOC-UPDATER to owner: DOC-UPDATER (Option A picked DOC-UPDATER, so REQ-114's owner field text itself doesn't change -- but add the same one-sentence decision-file citation to its description, since the FAIL was that this owner assignment was previously unjustified, not that it was the wrong role). Do not re-litigate either pick yourself -- REQ-VALIDATOR's job on this rework pass is to confirm the decision file was actually applied (citation present, stage/owner fields match), not to re-run the full a-e checklist from scratch on unrelated ground. Everything else about REQ-113/REQ-114 (testability, depends_on, size) already PASSED and does not need to change.\n\nORIGINAL TASK (for context, already executed once -- do not re-derive from scratch, just fix the two fields above and re-verify nothing else regressed): Draft a new requirement (or, if it genuinely doesn't fit one agent turn, a small depends_on-chained set) for a new test-running capability: parallelize `mix test` via Elixir's native `--partitions` flag. This is NOT yet a requirement -- it is a human-provided proposal backed by real measurement, handed to ORCH today (2026-08-21) with instructions to route it through WF-01 rather than being drafted ad hoc. Treat the FINDINGS below as already independently measured and verify-before-trust, not something to re-derive from scratch -- but you must still perform your own normal Step 1 checks (schema completeness, no orphaned depends_on, stage fit, no contradiction with a `done` requirement or a decisions/ record) exactly as you would for any other requirement.\n\nFINDINGS (measured on hetzner-prod, ~/workspace/letflow-1, 8 vCPU, single shared postgres:16 container, 2026-08-21):\n- 43 of 44 `async: false` test files under `Letflow.DataCase` are sync because they provision real tenant Postgres schemas via `Ecto.Migrator`, which cannot run inside a single sandboxed connection -- so they flip `Letflow.Repo` to `Sandbox.mode(:auto)` for the duration, which forcibly checks in every other currently-checked-out sandboxed connection in the pool. `async: false` is what makes this safe (ExUnit guarantees no other test is running when the switch happens), not schema-name uniqueness -- the constraint is a single process-global Repo/pool/mode switch, not a Postgres-level conflict between differently-named schemas.\n- `config/test.exs` already supports per-partition databases: `database: \"letflow_test#{System.get_env(\"MIX_TEST_PARTITION\")}\"` -- this is exactly the mechanism Elixir's native `--partitions` flag uses. Each partition is a SEPARATE OS process with its own Repo pool and its own independent sandbox-mode state, so the global-switch problem above does not apply across partitions -- only within one.\n- Ran `MIX_TEST_PARTITION=N mix test --partitions 4` (4 parallel background processes) after one `mix compile` to avoid a concurrent-compile race across the 4 processes. Result: wall-clock 80 seconds (measured via `date -u +%s` before/after), vs the known single-process baseline of 608.7 seconds (`test/reports/report-20260820-WF02-REQ066-20260820.yaml`) -- 7.6x speedup. Combined test count across the 4 partitions: 315+381+262+267 = 1225 tests + 1+4 = 5 properties = 1230 total, matching the baseline's total exactly. Zero failures in any partition this run (the baseline's 14 pre-existing environmental failures -- ISS-0048/0050/0060/0062/0064 class -- did not reproduce, but this does NOT mean that class is fixed -- it is known-flaky under contention and may not always reproduce; do not write an acceptance criterion that asserts those failures are gone).\n\nPROPOSED WORK (not yet designed -- CODE-DESIGNER's job in WF-02, not yours; describe the *what*, not the *how*, in the requirement's description and acceptance criteria):\nA script (e.g. `scripts/test_parallel.sh`) that: pre-compiles `MIX_ENV=test` once (to avoid the concurrent-compile race the measurement above worked around by hand), launches N `MIX_TEST_PARTITION=<i> mix test --partitions N` background processes against the shared Postgres instance, waits for all of them, aggregates each partition's pass/fail/failure counts into one combined report, and exits non-zero if any partition failed. N should be derived from `nproc` (or equivalent) or a configured default -- not hardcoded to 4. Once built and validated, this needs to be wired into `TEST-RUNNER`'s Step 4 (used by WF-02/WF-03/WF-04, per `docs/agents/workflows/WF-02_requirement_implementation.md`, `WF-03_issue_resolving.md`, `WF-04_full_test_run.md`) and `RELEASE-VALIDATOR`'s Step 5 (WF-04), replacing plain `mix test` -- with those workflow docs updated to reflect the new mechanism.\n\nSizing guidance: this plausibly splits into (a) build+validate the script itself (script correctness, aggregation correctness -- can be checked by ELIXIR-DEV/TEST-RUNNER without touching any workflow doc) and (b) wire it into TEST-RUNNER Step 4 and RELEASE-VALIDATOR Step 5 across the three workflow docs, with (b) depends_on (a). Split if (a) alone doesn't comfortably fit one agent turn once you account for a real test-designer pass on the aggregation logic (partition failure detection, non-zero exit, correct combined counts) -- do not force it into one oversized entry. Owner is most likely ELIXIR-DEV (the script lives under `scripts/`, this repo's convention for tooling, not `lib/letflow/` -- confirm against `core-directives.md`'s File Placement Rules and note if `scripts/` needs adding to that table). Stage tag: this doesn't port an R-Co source path the way most S0-S8 requirements do -- it's dev-pipeline tooling, closest in kind to REQ-013 (\"a single-command check gate\", tagged S0, foundation/scaffolding). Decide the stage tag yourself against `docs/migration/README.md`'s actual stage-fit criteria; do not assume S0 just because REQ-013 is the nearest precedent -- if S0 no longer accepts new work at this point in the project's timeline, say so and pick accordingly, or flag the ambiguity in your PASS/result notes for REQ-VALIDATOR to weigh in on.\n\nAcceptance criteria must cover (at minimum, per the user's own framing of this capability): script correctness (produces the same combined pass/fail totals as a single-process `mix test` run, exits non-zero on any partition failure, exits zero when all partitions pass), aggregation correctness (combined counts are actually summed/verified against each partition's own reported counts, not just 'the script ran'), and the workflow docs are updated (TEST-RUNNER Step 4 and RELEASE-VALIDATOR Step 5 references reflect the new mechanism, in whichever of WF-02/WF-03/WF-04 currently reference plain `mix test` for those steps).",
+    "acceptance_criteria": [
+      "Every new requirement in docs/requirements.yaml has id, title, owner, status: pending, stage, description, at least 2 concrete/verifiable acceptance_criteria, and depends_on (chaining correctly if split into more than one requirement)",
+      "No orphaned depends_on references",
+      "Stage assignment is justified against docs/migration/README.md's actual stage-fit criteria (not just copied from REQ-013 by default)",
+      "No contradiction with an existing done requirement or a docs/migration/decisions/*.md record",
+      "The requirement's description does not prescribe an implementation design (aggregation algorithm, exact bash structure) beyond what's already given in this task's PROPOSED WORK section -- CODE-DESIGNER owns the how"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REWORK ITERATION 1. Applied docs/migration/decisions/0008-cross-cutting-tooling-stage-and-doc-ownership.md's provisional picks exactly, per ORCH's rework instructions -- no other field touched. REQ-113: stage changed S0 -> S4; added one sentence to description citing decision 0008's Option A (S4 = currently active stage at draft time, not a subsystem-lineage claim, since this is dev-pipeline tooling rather than an R-Co source-path port). REQ-114: stage changed S0 -> S4; owner left as DOC-UPDATER (Option A confirmed that pick, so the field value itself doesn't change); added one sentence to description citing decision 0008's Option A for both the stage tag and the DOC-UPDATER ownership (widened remit for docs/agents/workflows/*.md edits named in a requirement's acceptance criteria, provisional pending REVIEWER confirmation at this requirement's own WF-02 Step 2d gate, per the decision file's Status line). Verified via PyYAML parse after edit: 90 total requirements (unchanged), no duplicate ids, REQ-113.stage=S4/owner=ELIXIR-DEV, REQ-114.stage=S4/owner=DOC-UPDATER, decision-file path string present in both descriptions. Everything else on both entries (acceptance_criteria, depends_on, title, status, impl_order comment, all other description content) left byte-for-byte as REQ-VALIDATOR already passed it on the first pass.",
+    "artifacts_out": ["docs/requirements.yaml"],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "S0 stage-fit ambiguity for REQ-113/REQ-114 (non-porting dev-pipeline tooling vs. migration/README.md's 'S0 fully expanded' framing) -- needs REQ-VALIDATOR's explicit stage-fit check (WF-01 Step 2 check d), not silently resolved here."
+      },
+      {
+        "severity": "MINOR",
+        "description": "scripts/ is not listed as a row in core-directives.md's File Placement Rules table or AGENT_SYSTEM.md's Artifact locations table, though it already exists in the repo and REQ-113 places a new file there. Flagged for ORCH/a doc-maintenance pass, not fixed by REQ-ANALYST (not this role's file to hand-maintain)."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REQ-VALIDATOR (rework re-check)"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

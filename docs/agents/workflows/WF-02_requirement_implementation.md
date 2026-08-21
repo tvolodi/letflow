@@ -371,15 +371,24 @@ method is unsound. Rule and evidence: `core-directives.md`'s "Failure Attributio
 Structural, Never By Count-Matching" — read it; the operative test here is:
 
 ```
-1. To call a failure pre-existing, name the evidence: either the failing module and its
-   dependencies do not appear in  git diff --name-only main...HEAD , or you reproduced
-   it at the merge-base and quoted the output. "Known failure" is not an attribution.
+1. To call a failure pre-existing, name the evidence, in one of THREE forms: (a) the
+   failing module and its dependencies do not appear in  git diff --name-only
+   main...HEAD ; (b) you reproduced it at the merge-base and quoted the output; or
+   (c) you demonstrated a mechanism outside this branch, evidenced by a MEASUREMENT of
+   that mechanism, not by assertion (orphaned erl.exe processes holding leaked
+   connections, and stale rows whose parent tenant no longer exists, are the worked
+   examples in core-directives.md). "Known failure" is not an attribution. If you can
+   show none of the three, the failure is UNATTRIBUTED — report it as such, don't
+   stretch (a) to fit.
 2. Matching a previously-reported count/set is NOT evidence of pre-existence, and a
    count differing by one or two is NOT evidence of regression. Both directions.
    (Same commit, ten minutes apart, gave 13 then 15 in WF03-ISS0106-20260821 against a
    prior run's 14 — three runs, three sets. See core-directives.md for the measurement.)
-3. A failure with no existing issue record is called out AS SUCH and filed — never
-   folded into "the known set".
+3. A failure with no existing issue record is called out AS SUCH and REPORTED FOR
+   FILING per ISSUE_QUEUE.md — never folded into "the known set". You report the
+   finding; you do NOT call the queue or  gh  yourself. Only ORCH allocates issue ids
+   (ISSUE_QUEUE.md, amended 2026-08-21) — a discovering agent filing directly is what
+   reintroduces the id-collision class that amendment exists to prevent.
 4. A failing file that IS in the diff gets extra scrutiny, and is cleared only by a
    causal argument about mechanism, not by proximity (see the PinRebindTest worked
    example in core-directives.md).

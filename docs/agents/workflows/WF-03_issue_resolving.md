@@ -131,6 +131,26 @@ counts exactly.
 plus **only the new module** — nothing else from the branch. That proves the tests track
 *that module* rather than anything else the branch happens to change.
 
+**A mutant is a TEMPORARY PROBE. Leaving one in the tree is a step failure.** Both
+TEST-DESIGNER and TEST-DESIGN-VALIDATOR are mutating `lib/` here, and a gate step is
+otherwise bound by "no file outside `handoffs/` is modified by this step" — so the
+mutation is licensed only for the duration of the run that measures it, and only if it
+is reverted and the revert is *verified*. Use one of these two techniques:
+
+- **Preferred — apply mutants in a throwaway `git worktree` of the branch**, so the
+  working checkout is never mutated at all. Remove the worktree when done.
+- **Or, if applied in place — revert with `git checkout -- <path>`, then VERIFY the
+  revert before completing your handoff** by confirming both of the following and
+  quoting both in `result.summary`:
+  - `git status --porcelain lib/ test/` is **empty**; and
+  - the test file **re-runs green** against the restored, unmutated code.
+
+WF03-ISS0106-20260821 avoided this hazard only because its handoff carried an explicit
+acceptance criterion to revert-and-verify; its TEST-DESIGN-VALIDATOR reverted via
+`git checkout --`, re-checked the module's SHA1 against pristine, confirmed
+`git status --porcelain lib/ test/` empty, and re-ran to 30 passed. That is the standard
+— it is stated here so it no longer depends on a per-run handoff remembering to ask.
+
 ## Step 5 — Close the issue
 
 **Agent:** `ISSUE-FIXER`

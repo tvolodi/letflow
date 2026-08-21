@@ -27,6 +27,15 @@ lands and a CI workflow exists:
   handoffs. Once REQ-013 lands, insert "wait for GitHub Actions check to report success
   on the PR" between steps 7 and 8, mirroring R-Co's pattern.
 
+**What "reported green" means here.** This suite carries a standing set of pre-existing
+failures (13-15 at the time of writing) and has for days, so "green" read as "zero
+failures" would make this precondition unsatisfiable and is *not* what it means. **Green
+means: no failure attributable to this branch.** Attribution is made structurally, per
+`core-directives.md`'s "Failure Attribution Is Structural, Never By Count-Matching" —
+read it there; it is not restated here. **Do not attribute by comparing counts with a
+previous run.** A failure you have structurally cleared is filed and forwarded per
+`ISSUE_QUEUE.md` and does not block this precondition; a failure you cannot clear does.
+
 ## Procedure
 
 ```
@@ -42,6 +51,11 @@ lands and a CI workflow exists:
    git status   # see what changed
    git add <file1> <file2> ...
    If `git status` shows a clean tree, skip to step 4.
+
+   Same shared-checkout reason, second case: if another ORCH-role session is live in
+   this same checkout, `git status` here may show ITS files and `git log` its commits —
+   stage by explicit filename only (already required above) and push only your own
+   commits; see `ORCHESTRATOR.md` §7.1.
 
 3. Commit remaining artifacts:
    git commit -m "feat(<run-id>): finalize artifacts — test specs, reports, status
@@ -129,7 +143,19 @@ lands and a CI workflow exists:
       mix compile --warnings-as-errors
       If FAIL: fix compile errors, git add <file>, git rebase --continue
       mix test
-      If FAIL:
+
+      ⚠️ This suite carries a standing set of pre-existing failures — a non-zero
+      failure count here is NOT by itself a FAIL. Before reporting FAIL, ATTRIBUTE
+      EACH failure structurally, per `core-directives.md`'s "Failure Attribution Is
+      Structural, Never By Count-Matching" (canonical home; not restated here).
+      "Green" at this step means NO FAILURE ATTRIBUTABLE TO THIS BRANCH, not zero
+      failures. Do NOT attribute by comparing counts with a previous run — that
+      method is what this rule forbids. A failure you have structurally cleared is
+      filed and forwarded per `ISSUE_QUEUE.md` and does NOT block this step; a
+      failure you cannot clear is unattributed, and unattributed blocks.
+
+      If FAIL (i.e. at least one failure is attributable to this branch, or is
+      unattributed):
         → complete-handoff(status: FAIL,
             issues: [{severity: BLOCKER, description: "build/tests failed after rebase"}])
         ORCH routes to ISSUE-FIXER; after PASS, return to step 5

@@ -24,9 +24,25 @@ self-sufficient (don't require another test to have run first); no hardcoded
 secrets/connection strings. FAIL immediately and completely on any single check
 failing.
 
-For a WF-03 regression test specifically: confirm the spec states (and, if you can
-verify it yourself cheaply, confirms) that the test actually failed against the
-pre-fix code.
+For a WF-03 regression test specifically: confirm the spec states, and verify yourself,
+that the test actually failed against the pre-fix code.
+
+**Where the pre-fix failure is "the code under test did not exist"** (the fix *adds* a
+module, so the pre-fix run is `UndefinedFunctionError` for every test in the file), that
+confirmation proves nothing about whether the tests discriminate a correct
+implementation from a wrong one. In that case you **MUST additionally apply at least one
+of TEST-DESIGNER's reported mutants to the shipped logic yourself, run the suite, and
+quote your own measured counts.** This is mandatory — it is **not** subject to a
+cheapness test, and it is **not** satisfied by reading TEST-DESIGNER's reported counts
+(that is copying a claim, not validating one). See
+`docs/agents/workflows/WF-03_issue_resolving.md`, "When the pre-fix failure is 'the code
+under test does not exist'", for the rule, its evidence, and the mutant-isolation and
+revert-and-verify technique you must follow.
+
+**A mutant is a temporary probe. Leaving one in the tree is a step failure** — apply it
+in a throwaway `git worktree`, or revert with `git checkout -- <path>` and, before
+completing your handoff, verify the revert by confirming `git status --porcelain lib/
+test/` is empty AND the test file re-runs green, quoting both.
 
 ## Forbidden
 

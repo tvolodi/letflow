@@ -59,12 +59,29 @@ scheduled/requested full-suite validation.
 by observing that the failure set matches a previous run's. Full rule and its evidence
 (the same-commit 13-then-15 vs. a prior run's 14 measurement, and the `PinRebindTest`
 in-the-diff-but-not-the-cause case): `core-directives.md`'s "Failure Attribution Is
-Structural, Never By Count-Matching". In short: name the evidence — the failing module
-and its dependencies absent from `git diff --name-only main...HEAD`, or a reproduction
-at the merge-base. A matching count is not evidence of pre-existence and a count off by
-one or two is not evidence of regression; a failure with no issue record is called out
-and filed, not folded into "the known set"; and a failing file that *is* in the diff is
-cleared only by a causal argument, not by proximity.
+Structural, Never By Count-Matching" — read it; the operative test here is:
+
+```
+1. To call a failure pre-existing, name the evidence, in one of THREE forms: (a) the
+   failing module and its dependencies do not appear in  git diff --name-only
+   main...HEAD ; (b) you reproduced it at the merge-base and quoted the output; or
+   (c) you demonstrated a mechanism outside this branch, evidenced by a MEASUREMENT of
+   that mechanism, not by assertion (orphaned erl.exe processes holding leaked
+   connections, and stale rows whose parent tenant no longer exists, are the worked
+   examples in core-directives.md). "Known failure" is not an attribution. If you can
+   show none of the three, the failure is UNATTRIBUTED — report it as such, don't
+   stretch (a) to fit.
+2. Matching a previously-reported count/set is NOT evidence of pre-existence, and a
+   count differing by one or two is NOT evidence of regression. Both directions.
+   (Same commit, ten minutes apart, gave 13 then 15 in WF03-ISS0106-20260821 against a
+   prior run's 14 — three runs, three sets. See core-directives.md for the measurement.)
+3. A failure with no existing issue record is called out AS SUCH and REPORTED FOR
+   FILING per ISSUE_QUEUE.md — never folded into "the known set". You report the
+   finding; you do NOT call the queue or  gh  yourself. Only ORCH allocates issue ids.
+4. A failing file that IS in the diff gets extra scrutiny, and is cleared only by a
+   causal argument about mechanism, not by proximity (see the PinRebindTest worked
+   example in core-directives.md).
+```
 
 ## Step 2 — Release validation
 

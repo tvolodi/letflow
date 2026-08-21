@@ -241,7 +241,9 @@ even if the problem is unrelated to the current task's original scope.
   `docs/agents/ORCHESTRATOR.md` §4.2).
 
 **Scope boundary.** This covers what stands in your way. A defect you merely *notice*
-while working — unrelated, not blocking your acceptance criteria — is filed and
+while working — **for a test failure, which side of this line it falls on is decided by
+"Failure Attribution Is Structural, Never By Count-Matching" below, not by judgement** —
+unrelated, not blocking your acceptance criteria — is filed and
 forwarded, not fixed here: register it under `docs/issues/ISS-NNNN.yaml` and, if a
 `gh` remote is configured and reachable, file it as a real GitHub issue too (see "No
 Issue Left Local-Only" below). It becomes its own later run, not an unbounded scope
@@ -309,15 +311,41 @@ never excused by an unrelated outage.
 here; they do not restate the evidence.
 
 Calling a test failure "pre-existing" (and therefore filed-and-forwarded rather than
-this run's problem) is an **attribution**, and it has to be earned. To call a failure
-pre-existing you must show one of these two things, and name the specific evidence:
+this run's problem) is an **attribution**, and it has to be earned. **This is also what
+decides which side of "Unblock-Everything"'s Scope boundary a test failure falls on** —
+a failure attributable to this run blocks and is fixed here; a failure structurally
+cleared is filed and forwarded. That decision is made by this procedure, not by
+judgement.
+
+To call a failure pre-existing you must show one of these three things, and name the
+specific evidence:
 
 1. **Structurally, this branch cannot have caused it** — the failing module and its
    dependencies do not appear in `git diff --name-only main...HEAD`; or
 2. **It reproduces at the merge-base** — check out the merge-base, run it, quote the
-   output.
+   output; or
+3. **A demonstrated mechanism outside this branch**, stated causally, and **evidenced by
+   a measurement of the actual mechanism, never by assertion that one probably exists.**
 
 `"known failure"` is not an attribution. Neither is "the previous run reported this."
+
+**Route 3 exists because it is this suite's DOMINANT failure class, and it satisfies
+neither of the first two.** Route 1 cannot express it (there is no failing file to check
+against the diff) and route 2 is *least* reliable there, because an environmental
+failure is often intermittent and may simply not reproduce in one merge-base run. Two
+worked examples, both from WF03-ISS0106-20260821, both cleared this way:
+
+- **Orphaned processes.** Stray `erl.exe` processes left by an earlier nested suite were
+  found holding ~160 leaked connections to `letflow_test`, exhausting the pool and
+  making the failure set vary run to run. The evidence was the enumerated processes and
+  the measured connection count — not "it's probably the environment."
+- **Stale rows.** Rows in a guard-backup table whose parent tenant no longer existed.
+  The evidence was the queried rows and the demonstrated absent parent.
+
+Route 3 is the one most easily faked, so hold it to its evidence: **if you find yourself
+about to assert route 1 loosely because neither test quite fits, that is route 3 without
+its measurement, and it is not an attribution.** If you can show none of the three, you
+may not call the failure pre-existing — **report it as unattributed and file it.**
 
 **Matching a previously-reported failure count or failure set is NOT evidence of
 pre-existence — and a count differing by one or two is NOT evidence of regression.**

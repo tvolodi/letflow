@@ -49,4 +49,38 @@ github_issue_note: >
   register_task created both the queue task (201) and its mirrored GitHub issue (#392)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
   separately. The id comes from register_task's `issue_ref`, not from a directory scan.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0201-20260821
+resolved_at: "2026-08-21T09:52:36Z"
+resolution: >
+  All three riders APPLIED, additively, in `docs/agents/shared/HANDOFF_PROTOCOL.md`
+  section 2 only. No file outside that one and this record was touched; the JSON schema
+  fence is unchanged, so nothing about the handoff schema moved and no existing handoff
+  file is affected (604 files under `handoffs/` re-parsed: 604 parseable, 0 unparseable).
+
+  (1) A scoping paragraph after the "Exactly two fields ... are OPTIONAL" sentence: the
+  count is over the FIELDS of the block, not the MEMBERS of an object inside it, and
+  section 4.1(b) -- not the fence -- is the authority on `not_agent_attested`'s members
+  and its optional seventh, `backfill_note`. `backfill_note` was deliberately NOT added
+  to the fence: the exception admitting it is SPENT and named one file, so showing it in
+  the general schema block would invite a second file to acquire it. The paragraph says
+  in terms that a linter deriving that object's member set from the fence alone, and
+  rejecting the one authorised file, has mis-read the sentence rather than found a
+  defect.
+
+  (2) The `requirement_text` bullet now states the split is by FIELD, not by file: a
+  value under a `REQ-ID` key is that requirement's `description` and nothing else, and
+  any other text from `docs/requirements.yaml` (`acceptance_criteria`, `depends_on`,
+  `owner`, raw entry YAML) travels in `source_text` keyed `"docs/requirements.yaml"`.
+
+  (3) A check-shaped clause after the inline-versus-`artifacts_in` table, written to be
+  executed rather than agreed with: dropping a restatement is half the edit, the other
+  half is mandatory, and the reader is given a named per-source check to run before
+  completing a shortened dispatch -- for every source whose text was removed, shortened
+  or replaced with a mention (including one now named only by an ID), is that source's
+  relative path present verbatim in `artifacts_in`? Add the path or restore the text;
+  there is no third option. It closes with the exact failure the AC5 re-draft produced:
+  "dropping four restatements and adding one path -- count the sources, not the edits."
+
+  No length rule and no target length was added, and section 2's structure, table and
+  rationale prose are otherwise untouched.

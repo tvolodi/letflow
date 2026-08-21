@@ -287,3 +287,39 @@ history:
       downstream citations. Anti-patterns entries added by the run: "An instruction
       whose mechanism has silently become unexecutable" and "Presuming an in-progress
       artefact dead and writing that presumption into a handoff as fact".
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-21T09:52:36Z"
+    note: >
+      ISS-0201 / GH#392 resolved by run WF03-ISS0201-20260821: the three MINOR wording
+      riders the REVIEWER gate raised against HANDOFF_PROTOCOL.md section 2 on the
+      ISS-0198 run, all three APPLIED (none declined), all in that one file. (1) The
+      "exactly two OPTIONAL fields" sentence is now scoped to the FIELDS of the schema
+      block rather than the MEMBERS of an object inside it, pointing at section 4.1(b) as
+      the authority on not_agent_attested's members and its optional seventh,
+      backfill_note; backfill_note was deliberately NOT added to the fence, since the
+      exception admitting it is spent and named one file, so putting it in the general
+      schema block would invite a second file to acquire it -- the paragraph instead says
+      that a linter deriving that member set from the fence alone and rejecting the one
+      authorised file has mis-read the sentence. (2) The requirement_text/source_text seam
+      is settled by FIELD, not by file: a value under a REQ-ID key is that requirement's
+      description and nothing else, and any other text out of docs/requirements.yaml
+      (acceptance_criteria, depends_on, owner, raw entry YAML) goes in source_text keyed
+      "docs/requirements.yaml". (3) The rider that mattered -- a check-shaped clause after
+      the inline-versus-artifacts_in table making it mandatory, not advisory, that
+      dropping a restatement obliges adding the dropped source's path to artifacts_in,
+      written as a per-source check a weak model executes ("for every source whose text I
+      removed, shortened, or replaced with a mention -- including one now named only by an
+      ID -- is that source's relative path present, verbatim, in context.artifacts_in?
+      Add the path, or put the text back. There is no third option") and closing on the
+      exact failure the ISS-0198 AC5 re-draft produced: count the sources, not the edits.
+      The JSON schema fence was NOT changed, so no handoff file's validity moved; verified
+      rather than asserted -- json.loads over the fence returns OK with 18 top-level keys,
+      and a re-parse of every *.json under handoffs/ except registry.json gives 604
+      parseable, 0 unparseable. core-directives.md and ORCHESTRATOR.md were left untouched
+      (git status clean on both); their pre-existing pointer lines still carry neither the
+      rule nor any threshold, which is the property ISS-0198 established and this run had
+      to avoid re-widening. No length rule and no target length was added: section 2's
+      justification rests on redundancy, and none of the three riders was a reason to
+      reopen that.

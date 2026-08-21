@@ -142,6 +142,17 @@ reconstruction (§4.1), `context.source_text` carries copied source text when a 
 has any (see below). Both are OPTIONAL-BY-ABSENCE, so every handoff file written before
 either existed stays valid unchanged and still parses against this schema.
 
+**That count is over the FIELDS of this block — not over the MEMBERS of an object inside
+it. §4.1(b) is the authority on `not_agent_attested`'s own members, and it admits one
+OPTIONAL seventh, `backfill_note`.** The fence above shows that object's six REQUIRED
+members only, deliberately: the exception admitting `backfill_note` is SPENT and
+authorised exactly one named file (§4.1(b)), so showing the member in the general schema
+block would read as an invitation for a second file to acquire it. A linter validating
+`not_agent_attested` therefore reads §4.1(b)'s table for that object's member set; one
+that derives the set from this fence alone and rejects the one authorised file carrying
+`backfill_note` has mis-read this paragraph, not found a defect. "Neither licenses a
+third" is a statement about the two OPTIONAL fields of this block and about nothing else.
+
 **`not_agent_attested`** appears ONLY on a handoff *reconstructed* under §4.1(a-2). A
 §4.1(a-1) **redispatch does NOT carry it** — the replacement agent did the work it
 reports, so its `result` is a genuine first-hand attestation and nothing was
@@ -188,6 +199,24 @@ defect. Cite the path and state what the agent must do with it — that is the w
 dispatch. A dispatch may say "read `result.summary` in full and implement the six changes
 under its 'WHAT A FIX MUST CHANGE' heading"; it may not then also restate the six changes.
 
+**DROPPING A RESTATEMENT IS HALF THE EDIT. THE OTHER HALF IS MANDATORY: the source you
+stopped restating MUST appear as a path in `context.artifacts_in`.** This is not a
+recommendation and it is not optional — a restatement removed without its path added is
+not a shorter dispatch, it is a dispatch missing context, and it is the same defect as
+the restatement, pointing the other way. Run this check by name before you complete a
+dispatch you have shortened:
+
+> For every source whose text I removed, shortened, or replaced with a mention — including
+> one now named only by an ID (`ISS-0113`, `REQ-042`, "the design doc") — is that source's
+> relative path present, verbatim, in `context.artifacts_in`?
+>
+> If any answer is no: add the path, or put the text back. There is no third option, and
+> "the agent can find it from the ID" is not one of them.
+
+Naming an ID inline while its record's path is absent from `artifacts_in` fails this
+check. So does dropping four restatements and adding one path — count the sources, not
+the edits.
+
 **Where copied source text genuinely must travel inside the handoff, it travels in a
 structured field keyed by its source — never in `task.description` prose.** That is the
 guarantee the `requirement_text` paragraph above makes, and it is unchanged and
@@ -197,7 +226,14 @@ was asked to build. Two fields carry it, and they do not overlap:
 - **`context.requirement_text`**, keyed by `REQ-ID`, for `docs/requirements.yaml` entries.
   Its contract is exactly as stated above — ORCH writes it, everyone reads it, a handoff
   with `requirement_ids` set and `requirement_text` missing is malformed. Nothing here
-  changes that.
+  changes that. **A value under a `REQ-ID` key is that requirement's `description` and
+  nothing else.** The split between these two fields is by FIELD, not by file: any other
+  text copied out of `docs/requirements.yaml` — a requirement's `acceptance_criteria`,
+  its `depends_on`, its `owner`, or an entry's raw YAML — is not a `description`, does
+  NOT get appended under the `REQ-ID` key, and travels in `source_text` keyed
+  `"docs/requirements.yaml"`. Concatenating criteria onto a description here breaks the
+  one thing this field guarantees: that its value is quotable verbatim as the
+  requirement.
 - **`context.source_text`**, keyed by source path, for any other cited source whose exact
   wording the dispatch depends on. OPTIONAL, and absent from most handoffs: a dispatch
   that only needs the agent to *act on* a file names it in `artifacts_in` and stops there.

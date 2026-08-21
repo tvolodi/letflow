@@ -1,0 +1,67 @@
+{
+  "handoff_id": "1ebb1911-f5ff-41a1-b45b-af1088b002fe",
+  "run_id": "WF03-ISS0201-20260821",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF03-ISS0201-20260821/step-03-riders.json",
+  "created_at": "2026-08-21T09:50:00Z",
+  "started_at": "2026-08-21T09:50:11Z",
+  "completed_at": "2026-08-21T09:54:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0198-20260821/step-03b-reviewer-gate.json",
+      "handoffs/WF03-ISS0198-20260821/step-03-amendment.json",
+      "handoffs/WF03-ISS0198-20260821/redraft-ISS0109-step-02-code-designer.md",
+      "docs/issues/ISS-0201.yaml",
+      "docs/issues/ISS-0191.yaml",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md"
+    ],
+    "owned_modules": [
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/issues/ISS-0201.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 3 for ISS-0201: apply (or explicitly decline, with a stated reason) the three MINOR wording riders on HANDOFF_PROTOCOL.md section 2 raised by the REVIEWER gate on the ISS-0198 run.\n\nAUTHORITATIVE INPUT: handoffs/WF03-ISS0198-20260821/step-03b-reviewer-gate.json, result.issues -- all three riders as the REVIEWER stated them. Read them there. They are deliberately NOT restated in this dispatch, per the very rule in HANDOFF_PROTOCOL.md section 2's 'What goes in task.description, and what goes in artifacts_in' subsection that these riders amend. docs/issues/ISS-0201.yaml carries ORCH's sizing summary if you want the shape before opening the handoff.\n\nSteps 00, 0.5, 1, 2 and 4 are SKIPPED for this run with reasons recorded in handoffs/orchestrator.log (docs-only change: no git wrapper, no code under test, no module design, and the root cause of each rider is already stated first-hand by the REVIEWER who found it). Your producing step is gated by REVIEWER at Step 03b, so write for that gate.\n\nCONSTRAINTS ON HOW YOU WRITE IT:\n\n1. ONE FILE. Every edit lands in docs/agents/shared/HANDOFF_PROTOCOL.md section 2 (plus the status/record edits to docs/issues/ISS-0201.yaml if you choose to note anything there). Do NOT touch core-directives.md or ORCHESTRATOR.md -- ISS-0198 deliberately left them pointer-only, and re-widening them is the defect that issue removed. Do NOT restate any rule or threshold into a second file.\n\n2. THE SECTION 2 JSON FENCE MUST STAY VALID, PARSEABLE JSON, and must stay loadable as the schema by ISS-0191's linter. If rider 1's resolution changes the fence, extract the fence contents and run json.loads over it, and quote the verbatim result in result.summary. If you resolve rider 1 in prose or by cross-reference instead of by changing the fence, still run and quote the check.\n\n3. RIDER 3 IS THE ONE THAT MATTERS. Its resolution must be checkable by a weak model, not merely stated: a reader dropping a restatement must be left with no way to think adding the source path to artifacts_in was optional. Judge for yourself whether that is a sentence in the prose, a row/footnote on the two-column table, or a check-shaped clause -- that judgement is deliberately left to you.\n\n4. NO NEW LENGTH RULE, NO TARGET LENGTH. Section 2's justification rests on redundancy, not brevity, and none of these three riders is a reason to reopen that.\n\n5. Additive, minimal edits. You are amending three seams in a section that just passed a gate -- do not re-draft the section, do not restructure the table, do not delete existing prose that is not one of the three seams.\n\nIf you decline a rider, say which, and why, in result.summary -- a declined rider with a stated reason satisfies ISS-0201's AC1 exactly as an applied one does.\n\nCommit your files. Do NOT write handoffs/registry.json.",
+    "acceptance_criteria": [
+      "Each of the three riders is either applied to HANDOFF_PROTOCOL.md section 2 or explicitly declined with a stated reason in result.summary",
+      "Rider 1 is resolved so the fence stays loadable by ISS-0191's linter without that linter rejecting the one file section 4.1(b) authorises to carry backfill_note",
+      "Rider 2's seam -- text copied from docs/requirements.yaml that is not a requirement description -- is settled in section 2 as to which of requirement_text / source_text takes it",
+      "Rider 3 states that dropping a restatement obliges adding the dropped source path to artifacts_in, checkably enough that a weak model does not skip it",
+      "No threshold or rule is duplicated into core-directives.md or ORCHESTRATOR.md; both files are left untouched by this step",
+      "The section 2 JSON fence still parses under json.loads, verified and the result quoted verbatim in result.summary",
+      "Existing handoff files stay valid: any schema-affecting change is OPTIONAL-BY-ABSENCE, and that is verified over handoffs/ rather than asserted",
+      "The three riders' own edits are additive and scoped -- section 2's structure, table and rationale prose are otherwise unchanged"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "All THREE riders APPLIED; none declined. Every edit lands in docs/agents/shared/HANDOFF_PROTOCOL.md section 2 (37 insertions, 1 deletion -- the one deletion is the line the rider-2 bullet was extended from, not removed prose), plus the status/resolution block on docs/issues/ISS-0201.yaml and one appended run-history event. core-directives.md and ORCHESTRATOR.md were NOT touched (git status clean on both; their pre-existing pointer lines still carry neither the rule nor any threshold). No length rule and no target length was added.\n\nRIDER 1 -- resolved in PROSE, fence deliberately UNCHANGED. A new paragraph after the 'Exactly two fields ... are OPTIONAL' sentence scopes that count to the FIELDS of the block, not the MEMBERS of an object inside it, and names section 4.1(b) -- not the fence -- as the authority on not_agent_attested's members and its optional seventh, backfill_note. I did NOT add backfill_note to the fence, on purpose: 4.1(b) says the exception admitting it is SPENT and authorised exactly one named file, so showing the member in the general schema block would read as an invitation for a second file to acquire it -- trading a mis-read for a real widening. The paragraph instead states in terms that a linter deriving that object's member set from the fence alone and rejecting the one authorised file 'has mis-read this paragraph, not found a defect', and that 'neither licenses a third' is about the two OPTIONAL fields of the block and nothing else. AC2 is met by the section-2 text a linter author reads, with the fence untouched so no existing file's validity moves.\n\nRIDER 2 -- APPLIED. The requirement_text bullet now settles the seam by FIELD, not by file: 'A value under a REQ-ID key is that requirement's description and nothing else', and any other text out of docs/requirements.yaml -- acceptance_criteria, depends_on, owner, or an entry's raw YAML -- does NOT get appended under the REQ-ID key and travels in source_text keyed \"docs/requirements.yaml\". The reason is stated so the rule survives re-derivation: concatenating criteria onto a description breaks the one thing the field guarantees, that its value is quotable verbatim as the requirement.\n\nRIDER 3 -- APPLIED as a CHECK, not a sentence. Placed immediately after the 'the reproduction is the defect' paragraph, so it sits with the table it qualifies rather than restructuring it. Opening line is imperative and absolute -- 'DROPPING A RESTATEMENT IS HALF THE EDIT. THE OTHER HALF IS MANDATORY: the source you stopped restating MUST appear as a path in context.artifacts_in' -- followed by the explicit denial a weak model needs ('not a recommendation and it is not optional ... it is the same defect as the restatement, pointing the other way'), then a blockquoted per-source check to run by name before completing a shortened dispatch: 'For every source whose text I removed, shortened, or replaced with a mention -- including one now named only by an ID (ISS-0113, REQ-042, \"the design doc\") -- is that source's relative path present, verbatim, in context.artifacts_in? If any answer is no: add the path, or put the text back. There is no third option, and \"the agent can find it from the ID\" is not one of them.' It closes on the exact failure the ISS-0198 AC5 re-draft produced: 'Naming an ID inline while its record's path is absent from artifacts_in fails this check. So does dropping four restatements and adding one path -- count the sources, not the edits.' The check is per-SOURCE and answerable yes/no by string search, so a reader dropping a restatement is left with no route to treating the path as optional.\n\nMECHANICAL VERIFICATION, run first-hand, quoted verbatim.\n(1) Section 2 JSON fence, extracted and json.loads'd after the edits: 'json.loads OK; top-level keys: 18' / \"context keys: ['stage', 'requirement_ids', 'requirement_text', 'source_text', 'related_handoff_ids', 'artifacts_in', 'owned_modules']\" / \"not_agent_attested members: ['reconstructed_by', 'reconstructed_at', 'reason', 'fields_written', 'evidence', 'not_verifiable_after_the_fact']\". Identical to the pre-edit state: this run changed no byte inside the fence.\n(2) Corpus, verified rather than asserted -- json.load over every *.json under handoffs/ except registry.json: 'parseable: 604 unparseable: 0'. Schema-affecting change this run: NONE, which is the strongest form of the OPTIONAL-BY-ABSENCE requirement -- there is no new field to be absent from anything.\n(3) Pointer files: git status shows docs/agents/instructions/core-directives.md and docs/agents/ORCHESTRATOR.md unmodified; a grep for 'H-SIZE|6,?000' over both returns only the pre-existing artifacts_in pointer lines ('deliberately not restated here' / 'That section is canonical and this line does not restate it') and no threshold.\n(4) Run-history append: git diff --numstat docs/status/requirement_status.v2.yaml -> '36 0', zero deletions. Post-append size 325 lines / 21,141 bytes working-tree CRLF, under the index's 1,200-line / 120,000-byte roll ceilings, so no roll was due. The 36 appended lines were normalised to CRLF to match the rest of the working-tree file; no existing byte was touched. mix test test/docs/requirement_status_invariants_test.exs -> 'Result: 13 passed'.\n\nNot touched and stated so explicitly: README.md (this change alters no documented runtime behaviour), docs/requirements.yaml (this is an issue run with no requirement_ids -- nothing to flip), and handoffs/registry.json, which this dispatch reserved to ORCH.",
+    "artifacts_out": [
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/issues/ISS-0201.yaml",
+      "docs/status/requirement_status.v2.yaml",
+      "handoffs/WF03-ISS0201-20260821/step-03-riders.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "main",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER at Step 03b as planned. Two judgement calls to gate specifically: (a) rider 1 was resolved in prose with the fence left unchanged, on the reasoning that adding backfill_note to the general schema block would widen a SPENT one-file exception -- judge whether that reasoning holds or whether ISS-0191's linter needs the member set machine-readable; (b) rider 3's check is per-SOURCE, so gate it by applying it to a real shortened dispatch rather than by reading it. Then ORCH: registry.json for step 03, push, and release queue task 201 / close GH#392."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

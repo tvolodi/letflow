@@ -322,6 +322,54 @@ this field exists to remove. If a handoff reaches you with `requirement_ids` set
 `requirement_text` missing, that is a malformed handoff — read the named entries with a
 targeted `awk`/`Select-String` range (never a full read) and report it as a MINOR issue.
 
+### `result.artifacts_out` does not include the handoff's own file
+
+**Settled 2026-08-21 (ISS-0202).** The schema fence above shows `artifacts_out` as a bare
+list of `<relative/path>` strings, with no prose stating what belongs in it beyond "the
+artefacts the step produced" — and step 4's own completion procedure says "Commit
+`handoffs/`, and any other files this step produced, to git" in the same breath, which
+reads naturally as license to list the handoff file among what was produced, since it is
+genuinely one of the files that commit includes.
+
+**Measured, not assumed:** of 463 handoffs with a non-empty `artifacts_out` (over the full
+621-file corpus, 0 unparseable), 201 list their own filename or path as one of the
+outputs — 43%. Among the 131 handoffs whose `result.summary` exceeds 6,000 characters, 91
+do it — 69%. (The filing issue measured 190/449 and 85/120; the corpus has grown since,
+per §1.2's own "growth is expected and exactly reconcilable" convention — the ratios agree
+to within a point either way, so this is the same finding, not a discrepancy.) The
+practice is not confined to one role or workflow: it appears in GIT_SETUP handoffs (whose
+own worked example in `GIT_SETUP.md` does NOT self-reference), REVIEWER gate/regate steps,
+and rework steps alike, across `WF02`, `WF03`, and `ADHOC` run prefixes — evidence this is
+a generic reading of step 4's wording rather than one role's specific instruction
+(`.claude/agents/doc-updater.md`'s "list every file you actually touched" is the one role
+file that states anything this explicit, and it accounts for only a fraction of the
+occurrences — REVIEWER and GIT_SETUP have no such instruction and self-reference anyway).
+
+**The rule, stated so it stops being ambiguous: `artifacts_out` lists artefacts the step's
+WORK produced — never the handoff file recording that work.** The handoff file is the
+container the result is written into, not an output of the result; listing it is exactly
+as wrong as a lab notebook citing itself as one of the day's samples. An empty
+`artifacts_out` on a step whose only output was administrative (a gate verdict, a status
+flip with no other file touched) is correct and should stay empty, not be filled with the
+handoff's own path to avoid looking empty.
+
+**Historical files are NOT corrected.** The 201 self-referencing files stay as they are:
+each is that step's own attested report at the time it was written, and rewriting it now —
+even to fix a semantic error rather than a schema violation — would misrepresent what that
+agent actually reported, the same authenticity concern §4.1(b)'s no-backfill rule
+protects (though §5's literal append-only binding names only `orchestrator.log` and
+`registry.json`, not handoff files generally, so this is its own reasoning, not a
+restatement of §5). This governs new handoffs only, from this commit forward.
+
+**Not folded into ISS-0190.** ISS-0190 covers handoffs that violate the schema outright
+(an illegal top-level `status` value, a non-schema key) — those are wrong regardless of
+intent, and the fix is to correct the data to conform. A self-referencing `artifacts_out`
+is schema-VALID (a well-formed array of path strings); the defect is semantic, not
+structural, and its remedy is prospective clarification plus a future WARN-level check,
+not data correction. Folding a "leave history, fix forward" issue into a "correct the
+data" issue would blur two different DoDs into one, so this stays separate — a candidate
+mechanical check is added to `ISS-0191`'s scope instead; it does not run today.
+
 ### `result.git_evidence.commit_sha_list` — what it covers, and what it structurally cannot
 
 **Settled 2026-08-21 (ISS-0209). This subsection is the ONE canonical statement of this

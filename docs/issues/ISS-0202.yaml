@@ -48,4 +48,27 @@ github_issue_note: >
   register_task created both the queue task (202) and its mirrored GitHub issue (#393) in one
   call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called separately. The
   id comes from register_task's `issue_ref`, not from a directory scan.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0202-20260821
+resolved_at: "2026-08-21T11:31:56Z"
+resolution_note: >
+  Re-derived first-hand over the full 621-file corpus (node script, 0 unparseable):
+  201/463 non-empty artifacts_out self-reference (43%, filing measured 190/449 at an
+  earlier corpus size -- ratios agree within a point, consistent with expected corpus
+  growth per HANDOFF_PROTOCOL.md section 1.2's convention), 91/131 large-summary
+  handoffs do it (69%, filing measured 85/120). Root cause established: no prose
+  anywhere states artifacts_out excludes the handoff's own file, and step 4's "commit
+  handoffs/, and any other files this step produced" reads naturally as including it;
+  confirmed generic (not one role's instruction) by checking GIT_SETUP/REVIEWER/rework
+  steps across WF02/WF03/ADHOC runs, all of which self-reference despite GIT_SETUP.md's
+  own worked example not doing so. Scope decision: NOT folded into ISS-0190 -- that
+  issue corrects schema-invalid data, this is schema-valid-but-semantically-wrong data,
+  different DoD (fix forward vs correct existing), stated explicitly in the fix.
+  Historical files NOT corrected (analogous to section 4.1(b)'s no-backfill authenticity
+  reasoning; section 5 itself only names orchestrator.log/registry.json, so this is
+  separate reasoning, not a restatement). Fix: new
+  `result.artifacts_out does not include the handoff's own file` subsection added to
+  HANDOFF_PROTOCOL.md (section 2, immediately before the commit_sha_list subsection);
+  candidate WARN-level check with an explicit commit-floor boundary (mirroring the
+  commit_sha_list precedent) added to docs/issues/ISS-0191.yaml scope, not implemented.
+  Section 2's JSON fence re-verified to still parse.

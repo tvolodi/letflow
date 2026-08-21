@@ -94,6 +94,23 @@ description: >
   linter update -- not a silent pass. Ergonomic, not a blocker: filed here per REVIEWER's
   own framing in `WF03-ISS0201-20260821`'s gate rather than as a HANDOFF_PROTOCOL.md change.
 
+  ADDED TO SCOPE 2026-08-21 (ISS-0202, run WF03-ISS0202-20260821): a candidate WARN-level
+  check for `result.artifacts_out` self-reference -- a handoff listing its own filename or
+  path (basename match, or either path being a suffix of the other) as one of its own
+  outputs. Measured 2026-08-21: 201 of 463 handoffs with non-empty `artifacts_out`
+  self-reference (43%), 91 of 131 large-summary (>6,000 char) handoffs do it (69%), across
+  GIT_SETUP/REVIEWER/rework steps and WF02/WF03/ADHOC runs alike -- not one role's defect.
+  Root cause and full reasoning are in HANDOFF_PROTOCOL.md's new
+  `result.artifacts_out does not include the handoff's own file` subsection; do not
+  re-derive it here. SCOPE BOUNDARY, explicit because it differs from this issue's other
+  checks: this is a WARN against NEW handoffs only -- the 201 existing self-referencing
+  files are NOT to be corrected (see that subsection for why) and must not be flagged by
+  this check when it eventually runs, so the check needs a floor (a commit or date after
+  which it applies), the same shape as the `commit_sha_list` write-back boundary already
+  uses (commit `12f8f4c`), not a repo-wide scan. THIS DOES NOT RUN TODAY: like every other
+  check in this issue, it is gated on ISS-0190's prerequisite cleanup and this issue being
+  built at all.
+
 affected_files:
   - docs/agents/shared/HANDOFF_PROTOCOL.md
   - handoffs/

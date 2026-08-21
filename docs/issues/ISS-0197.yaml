@@ -60,4 +60,26 @@ queue_task_id: 197
 github_issue: https://github.com/tvolodi/letflow/issues/387
 github_issue_note: >
   Filed by ORCH on REVIEWER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (197) and its mirrored GitHub issue (#387) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0197-20260821
+resolved_at: "2026-08-21T11:34:20Z"
+resolution_note: >
+  Read handoffs/WF03-ISS0117-20260821/step-03h-reviewer-close.json in full for N1/N2/N4
+  as REVIEWER stated them (not the summary alone). N1: promoted clause 2's two
+  qualifications into numbered sub-clauses 2a ("about that agent") and 2b ("not ORCH's
+  own dispatch record"). N2: added a paragraph stating the clause-1/clause-2 evidence
+  asymmetry is deliberate, naming WF02-REQ038-20260817 as the reason clause 2 admits
+  registry.json prose (chose this remedy, matching this issue's own acceptance
+  criteria, over the raw handoff's alternative suggestion of symmetrizing clause 1 --
+  that would be a substantive rule change, not the wording polish this issue scopes).
+  N4: disambiguated "Trace the four steps" (anti-patterns.md ~1018) to "Trace the four
+  numbered steps above", since the same sentence's "(four keys, three deaths)" is a
+  different "four" -- no substance altered. N3 left untouched per the issue's own
+  ruling. Re-verified all four incident-table rows (WF02-REQ027/038/043,
+  WF03-ISS0109) and both exclusions (WF02-REQ025, WF02-REQ019) against the reworded
+  test -- all decide identically to before the edit; WF02-REQ019 still fails via
+  sub-clause 2a specifically (the RESUME line and commit 2682e06 are about ORCH's own
+  bookkeeping action, not about TEST-RUNNER). Touches two files (HANDOFF_PROTOCOL.md,
+  anti-patterns.md), so like ISS-0203 this doesn't strictly qualify for ORCH's
+  single-file sizing-rule exception -- executed directly anyway (docs-only,
+  non-tenant-data, non-test-asserted), flagged rather than silently taken.

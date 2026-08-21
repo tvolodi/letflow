@@ -833,11 +833,15 @@ fails:
 
 1. **A dispatch had been issued** — evidenced by a handoff file addressed to the agent, or by
    an `orchestrator.log` `DISPATCH` line naming it.
-2. **The dispatched agent had begun work** — evidenced by an artefact or record *about that
-   agent*: a handoff file it wrote or stamped, a commit it authored, an `orchestrator.log`
-   line reporting its own progress or verdict, or an explicit statement in `registry.json`
-   that it died **mid-work** (or after completing its side effects). ORCH's own `DISPATCH`
-   line is evidence of clause 1 and **never** of clause 2.
+2. **The dispatched agent had begun work** — evidenced by an artefact or record satisfying
+   both of the following sub-clauses:
+   a. **It is about that agent** — a handoff file it wrote or stamped, a commit it authored,
+      an `orchestrator.log` line reporting its own progress or verdict, or an explicit
+      statement in `registry.json` that it died **mid-work** (or after completing its side
+      effects).
+   b. **It is not ORCH's own dispatch record.** ORCH's `DISPATCH` line is evidence of clause 1
+      and **never** of clause 2, however it is worded — dispatching is not the same act as
+      beginning work, and only the second satisfies 2.
 
 Clause 2 is the one that does the work, and it is deliberately satisfiable by prose: as
 `WF02-REQ038` proves, an agent can die mid-work having produced no file and no commit, so a
@@ -845,6 +849,15 @@ test that demanded a file-shaped artefact would exclude a row already in the tab
 clause 2 rejects is a dispatch that was *issued and never taken up* — nothing was left for a
 second party to complete, which is the whole subject of §4.1. ORCH's own session dying
 *between* dispatches fails both clauses.
+
+**Clause 1 and clause 2 accept different evidence sets, deliberately — not by oversight.**
+Clause 2 admits an explicit `registry.json` mid-work statement (2a above) because
+`WF02-REQ038-20260817` survives only on that evidence: its dispatch committed nothing, so it
+left no handoff file and no `orchestrator.log` line of its own (the boundary fact stated
+above). Clause 1 carries no matching admission because every row in the table above already
+satisfies it via a handoff file or an `orchestrator.log` `DISPATCH` line — nothing currently
+on record needs clause 1 to accept registry prose too. The asymmetry is a consequence of what
+the four rows actually require to decide correctly, not a gap between the two clauses.
 
 **Decide by the test, never by the treatment.** Two incidents can draw the identical
 redispatch response and still fall on opposite sides, because redispatch is also what an

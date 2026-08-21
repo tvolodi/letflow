@@ -1805,6 +1805,26 @@
       "queue_task_id": 182,
       "queue_agent_id": "tvolo-win-orch",
       "note": "WF-03 for the legacy hand-numbered ISS-0114.yaml (queue task 182, GH#368), claimed by get_next_task -- not by ORCH reading a file. Real, unattributed intermittent test failure: Postgrex 42P01 undefined_table on tenant_<id>.instance_projections from Engine.insert_instance_projection/8, observed once in a full-suite run and correctly filed rather than folded into the similar-but-distinct ISS-0109 family. NOT docs-only -- git wrapper applies in full. Full diagnosis pipeline: Steps 0.5+1 combined to ISSUE-FIXER (registry lookup + root-cause diagnosis, reproduction attempt using Letflow.TenantFixture.capture_schema_state/1 if reproducible), then Step 2 (CODE-DESIGNER) if a design change is warranted, implementation, tests, full-suite regression, close, merge."
+    },
+    {
+      "run_id": "WF03-ISS0179-20260821",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "stage": null,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "test/letflow/identity_migration_test.exs",
+        "lib/letflow/design/iss0111-with-only-this-tenant-visible-advisory-lock-fix.md",
+        "docs/issues/ISS-0111.yaml"
+      ],
+      "lock_acquired_at": "2026-08-21T13:55:20Z",
+      "lock_released_at": "2026-08-21T14:51:23Z",
+      "released_lock": true,
+      "last_known_step": "COMPLETE. Step 00 PASS; Step 02 (CODE-DESIGNER) PASS commit 01b9fc4 (advisory-lock chosen over transactional isolation, verified against real Ecto source, and over deferring to still-open ISS-0107); Step 02b (CODE-DESIGN-VALIDATOR) PASS commit 52bd397, both load-bearing Ecto facts independently re-derived from vendored deps/ecto_sql; Step 2a (ELIXIR-DEV) PASS commit 227cd09, real mix test 10/10 plus a genuine cross-process micro-benchmark (1.7s real Postgres block observed); Step 2b (REVIEWER) PASS commit 2353bbe, independently reproduced the micro-benchmark a second way (1.5s block); Step 04 (TEST-RUNNER) PASS commit c6cc966, full suite 1292/1294 with both failures attributed to the pre-existing ISS-0107; Step 05 (ISSUE-FIXER) PASS commits 943358b/e66f1e1, ISS-0111 resolved GH#365 closed; Step Final (ELIXIR-DEV) PASS, merged as e0179f733fde4c054ab1c4c49367f9ab03f89292 via PR #438 -- rebase pulled in ISS-0171's own fix for the ISS-0107 mechanism, so post-rebase mix test read 1295/0 rather than the stale 1292/2, correctly reported as the real current count. rework_count 0 of 3 throughout -- every gate PASS first attempt, a genuine root-cause fix verified end-to-end with two independent cross-process reproductions.",
+      "backfilled": false,
+      "queue_task_id": 179,
+      "queue_agent_id": "tvolo-win-orch",
+      "note": "WF-03 for the legacy hand-numbered ISS-0111.yaml (queue task 179, GH#365), claimed by get_next_task. Same hazard family as ISS-0110/ISS-0182 (a nested mix test sharing the parent's database, ISS-0107, still open), different code: with_only_this_tenant_visible!/2 bulk-DELETEs every other tenant's tenant_schemas row for the duration of a guarded migration run, which is unsafe under concurrent invocation. Root cause already well-diagnosed in the issue filing itself (from ISS-0109's original investigation) -- Steps 0.5/1 SKIPPED, straight to Step 2 (CODE-DESIGNER) to weigh three real options (Postgres advisory lock, transactional isolation, defer to ISS-0107) against the actual migration/sandbox code, since the underlying production migration (priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs) does an intentionally unscoped whole-table scan and cannot simply be given a WHERE clause without changing real deployment semantics."
     }
   ]
 }

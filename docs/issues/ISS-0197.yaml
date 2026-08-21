@@ -1,0 +1,63 @@
+id: ISS-0197
+title: >
+  HANDOFF_PROTOCOL.md section 4.1 wording polish -- clause-2 scoping, clause-1/clause-2 evidence asymmetry, and an advisory wording collision
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0117-20260821
+discovered_at: "2026-08-21T08:39:09Z"
+severity: MINOR
+
+description: >
+  Three non-blocking findings raised by REVIEWER at WF03-ISS0117-20260821's closing gate
+  (Step 3h, verdict PASS). Each was explicitly classified as NOT making any rule wrong and
+  NOT misclassifying any incident on record -- they are legibility improvements to text that
+  is correct as it stands, deliberately not converted into a blocking verdict when the
+  rework budget stood at 2 of 3.
+
+  N1 -- CLAUSE-2 SCOPING SHOULD BE ITS OWN NUMBERED SUB-CLAUSE. Section 4.1's membership
+  test has two clauses, and clause 2 carries two qualifications that are load-bearing for
+  decidability: the record must be *about that agent*, and ORCH's own DISPATCH line is never
+  evidence of it. Those are what make the hardest case (WF02-REQ019-20260816) decide cleanly
+  -- its registry note contains the words "mid-pipeline" but is about the HOST PROCESS, not
+  about the dispatched agent, so the subject of the statement decides rather than the
+  presence of a keyword. They currently sit inside clause 2's prose. Promoting them to a
+  numbered sub-clause makes the test mechanically applicable by a weak model, which is the
+  standard this doc set holds itself to.
+
+  N2 -- CLAUSE-1/CLAUSE-2 EVIDENCE-LIST ASYMMETRY. The two clauses accept different evidence
+  sets, deliberately and correctly -- but it is not stated as deliberate, so a reader
+  comparing them can reasonably wonder whether it is an oversight. One clause noting that
+  clause 2 admits an explicit registry.json mid-work statement precisely BECAUSE
+  WF02-REQ038-20260817 survives only that way would close it.
+
+  N4 -- ADVISORY WORDING COLLISION at docs/anti-patterns.md around line 1018. Minor; flagged
+  as a wording clash rather than a substantive error in the entry.
+
+  A FOURTH FINDING, N3, IS DELIBERATELY EXCLUDED and recorded here so it is not re-filed.
+  handoffs/registry.json's /runs/57/note still reads "see that handoff's orch_reconstruction
+  field", pointing at a key renamed to `not_agent_attested` during this run. ORCH ruled to
+  LEAVE IT: registry.json is append-only, the note was accurate when written, and the
+  pointer still resolves -- a reader follows it, opens
+  handoffs/WF03-ISS0109-20260821/step-final-git-merge.json, and finds `not_agent_attested`
+  carrying a `backfill_note` that records the rename and its authority. Editing append-only
+  history to fix a cross-reference that is not broken sets a worse precedent than the
+  tidiness is worth, and it matches ADHOC-20260821-002's own ruling to leave historical
+  handoffs citing a superseded ISS number as written. If a future run disagrees, the correct
+  move is an APPENDED clarification, never an in-place edit of the note.
+
+  CONTEXT: section 4.1 was gated three times and failed twice before passing, so its text is
+  unusually well-checked. These items are the residue after that, not a sign it is shaky.
+  Read handoffs/WF03-ISS0117-20260821/step-03h-reviewer-close.json for the full findings text
+  before editing.
+
+affected_files:
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+  - docs/anti-patterns.md
+
+related:
+  - ISS-0117  # the run that produced section 4.1 and these residual findings
+
+queue_task_id: 197
+github_issue: https://github.com/tvolodi/letflow/issues/387
+github_issue_note: >
+  Filed by ORCH on REVIEWER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (197) and its mirrored GitHub issue (#387) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan.
+status: open

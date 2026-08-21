@@ -41,6 +41,21 @@ description: >
   orch_timestamp_correction, orch_restart_note, orch_reconstruction). Read ISS-0117's
   amendment first.
 
+  UPDATE 2026-08-21, WF03-ISS0117-20260821 (appended, not a rewrite -- the paragraph above
+  stands as filed): ISS-0117's amendment has LANDED, so the marker is no longer open. The
+  required field is `not_agent_attested`, defined in HANDOFF_PROTOCOL.md section 4.1(b)
+  with six required members plus one optional `backfill_note`. Two consequences for this
+  issue specifically. (1) `orch_reconstruction` no longer exists as a live key: the single
+  file that carried it, handoffs/WF03-ISS0109-20260821/step-final-git-merge.json, was
+  renamed to `not_agent_attested` under section 4.1(b)'s single named exception, and that
+  exception is now SPENT -- so this repair uses `not_agent_attested` and may NOT add a
+  `backfill_note`. (2) Section 4.1(c) supplies the decidable membership test and the
+  side-effect probe set that decides whether WF02-REQ043 takes the (a-1) redispatch path or
+  the (a-2) reconstruction path; evaluate it at REPAIR time, not at death time, per that
+  subsection. WF02-REQ062 is confirmed OUTSIDE section 4.1's class -- it is a plain section
+  4 step-1 omission and needs only a status flip, so do NOT stamp `not_agent_attested` on
+  it; doing so would assert the precise falsehood the field exists to prevent.
+
   A SECOND, LESSER INSTANCE found by the same scan, in scope here:
   handoffs/WF02-REQ062-20260819/step-03-test-designer.json carries `status: "PENDING"` but
   a full `result` with status PASS and a real completed_at of 2026-08-19T05:25:43Z. That is

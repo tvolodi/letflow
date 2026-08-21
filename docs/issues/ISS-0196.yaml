@@ -1,0 +1,64 @@
+id: ISS-0196
+title: >
+  Commit the handoff at DISPATCH, not only at completion -- the dispatched task text currently survives only while the dispatching session is alive
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0117-20260821
+discovered_at: "2026-08-21T08:15:39Z"
+severity: MINOR
+
+description: >
+  Raised by REVIEWER during WF03-ISS0117-20260821's Step 3f final gate, as the one
+  corrective that would have prevented that run's own data loss outright. Filed rather than
+  fixed there because it is a new protocol rule and that run's rework budget was at 2 of 3.
+
+  THE GAP. HANDOFF_PROTOCOL.md section 4 tells the RECEIVING agent to commit the handoff
+  when it completes. Nothing tells ORCH to commit it when it DISPATCHES. So between
+  dispatch and completion the handoff file is untracked, and the `task` block -- the
+  acceptance criteria, the scoped instructions, the whole record of what was actually asked
+  -- exists in no git object. It survives only in the working tree and in the dispatching
+  session's own context.
+
+  THE INCIDENT THAT SHOWED IT. In WF03-ISS0117-20260821, a receiving agent replaced ORCH's
+  6,290-character dispatched `task.description` in `step-03d-reviewer-regate.json` with a
+  156-character pointer reading "See the PENDING copy of this handoff" -- a copy which does
+  not exist, since it is the same file. Because the file was untracked before that agent's
+  own commit, the dispatched text was in no git object at any point. It was recovered ONLY
+  because the dispatching ORCH session happened to still be alive and still held the text in
+  context. Had that session been compacted, restarted, or itself died -- the exact scenario
+  ISS-0117's whole amendment is about -- the record of what was asked would have been gone
+  permanently, with no way to tell that anything was missing.
+
+  WHY A RULE RATHER THAN ADVICE. It currently lives only as one corrective inside a
+  docs/anti-patterns.md entry, and this project has direct evidence that documenting a
+  hazard does not prevent it: the ISS-NNNN collision class was documented repeatedly and
+  recurred eight times until id allocation was made structural. A dispatch-time commit is
+  the structural version of this one -- it makes the loss impossible rather than
+  discouraged, and it costs one `git add`/`git commit` per dispatch, which ORCH is already
+  doing for `orchestrator.log` and `registry.json` at roughly the same points.
+
+  A SECOND BENEFIT worth weighing in the fix: it also makes the handoff's PENDING state
+  visible to any concurrent session and to a later recovery, which bears directly on
+  HANDOFF_PROTOCOL.md section 4.1's recovery path -- an agent recovering a dead run
+  currently cannot distinguish "this step was never dispatched" from "it was dispatched and
+  the file was lost", and a dispatch-time commit settles that.
+
+  WHAT A FIX MUST DECIDE: whether the rule belongs in HANDOFF_PROTOCOL.md section 1 (the
+  claim procedure, alongside the `started_at` rule ORCH already owns) or in ORCHESTRATOR.md
+  as an explicit dispatch step, or both with one pointing at the other; and whether it
+  applies to every dispatch or only above some size -- which the fix should probably reject,
+  since a size threshold is a judgement call and this doc set's weak-model constraint
+  prefers an unconditional mechanical step.
+
+affected_files:
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+  - docs/agents/ORCHESTRATOR.md
+
+related:
+  - ISS-0117  # the run that produced the incident; its section 3 `task` row is the other half
+  - ISS-0191  # a handoff linter could also detect an uncommitted-at-dispatch handoff
+
+queue_task_id: 196
+github_issue: https://github.com/tvolodi/letflow/issues/386
+github_issue_note: >
+  Filed by ORCH on REVIEWER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (196) and its mirrored GitHub issue (#386) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan.
+status: open

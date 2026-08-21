@@ -64,4 +64,58 @@ queue_task_id: 185
 github_issue: https://github.com/tvolodi/letflow/issues/372
 github_issue_note: >
   Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (185) and its mirrored GitHub issue (#372) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
-status: open
+resolution: >
+  RESOLVED by WF03-ISS0117-20260821. HANDOFF_PROTOCOL.md section 3's ownership table -- the
+  actual root cause, which bound only the three timestamp fields -- now carries `status`,
+  `result` and `task` rows, each pointing at the new section 4.1 where an exception applies.
+  Section 4.1 decides all four questions this issue posed:
+
+  Q1 (who may complete it) -- a split answer keyed to whether the step's side effects
+  finished, and never "nobody". Side effects INCOMPLETE: ORCH re-stamps to PENDING and
+  redispatches a FRESH INSTANCE OF THE SAME ROLE, which writes its own attested result;
+  `rework_count` is NOT incremented, since ORCHESTRATOR.md section 5's counter tracks
+  rejected work and nothing was rejected (lifting WF02-REQ027-20260816's ruling out of one
+  handoff file and into the protocol). Side effects COMPLETE AND IRREVERSIBLE: ORCH and only
+  ORCH writes the result block, under Q2's marking. The "leave it IN_PROGRESS" option was
+  rejected by measurement, not preference -- WF02-REQ043-20260818 is that option executed
+  and its Step Final handoff has misrepresented a merged run since 2026-08-18.
+
+  Q2 (the marking) -- a REQUIRED top-level field `not_agent_attested`, six required members
+  plus one optional `backfill_note`, optional-by-absence so no backfill is forced. The
+  required-field-over-convention choice was settled by measurement: the ad-hoc convention
+  produced THREE key names across FOUR uses, at two key positions, changing from string to
+  object on the fourth. `fields_written` is mandatory because the best prior repair
+  reconstructed `completed_at` without declaring it.
+
+  Q3 (mid-action vs after-acting) -- materially different paths, discriminated by a MANDATORY
+  PROBE of the step's declared side effects, never by judgement and never from the handoff's
+  own contents; the two cases present identically on disk. The git probe set is given
+  concretely, INDETERMINATE falls to redispatch, and whatever the probes cannot settle is
+  listed rather than omitted. Section 4.1 also carries a decidable MEMBERSHIP TEST for the
+  class itself, with WF02-REQ019-20260816 and WF02-REQ025-20260817 explicitly placed outside
+  it so a later re-derivation need not re-litigate them.
+
+  Q4 (registry) -- decided AGAINST this issue's own framing: not `last_known_step`, which
+  holds unbounded prose and is why a scan found WF02-REQ043's stale handoff but not its
+  interruption. Discrete `recovered`/`recovery_note` fields instead, reconciled with
+  ISS-0033's `-resume` precedent (same-session recovery amends the entry, later-session
+  appends). `last_known_step` itself is now DEFINED in ORCHESTRATOR.md section 7.2 -- it was
+  used 60+ times in registry.json and specified nowhere.
+
+  The candidate convention this issue offered was NOT adopted as written, per its own
+  instruction not to assume it was right. `orch_reconstruction` was renamed to
+  `not_agent_attested` on the single file that carried it, under section 4.1(b)'s named
+  exception, which is now spent.
+
+  GATED THREE TIMES, FAILED TWICE. The first gate returned 1 BLOCKER + 4 MAJOR, including a
+  schema block that had silently stopped being valid JSON and an exception column whose
+  pointers landed on text that did not license them. The second returned 1 BLOCKER + 1 MAJOR,
+  including a membership test that -- as the gate itself had proposed it -- would have
+  excluded the very incident that motivated it. Rework budget ended at 2 of 3.
+
+  Findings filed rather than absorbed: ISS-0190/GH#378, ISS-0191/GH#379, ISS-0192/GH#380,
+  ISS-0195/GH#383, ISS-0196/GH#386, plus one for section 4.1 wording polish.
+
+resolved_in_run: WF03-ISS0117-20260821
+resolved_at: "2026-08-21T08:43:52Z"
+status: resolved

@@ -171,8 +171,10 @@ Note `pipeline_context.zig` and `trace_context.zig` use Zig
 Elixir/OTP shape — the equivalent is the process dictionary via
 `Logger.metadata/1`, or an explicit field on `conn.assigns`. Prefer
 `conn.assigns` (explicit, testable, no ambient state); do not port a
-thread-local global. This is an idiom translation REVIEWER should
-confirm, not a behavior change.
+thread-local global. **Resolved by REQ-072 (2026-08-22):** `Letflow.Api.Context`
+carries the trace id as an explicit `conn.assigns[:trace_id]` field, mirrored into
+`Logger.metadata/1` for log correlation only (never `Process.put/2`/an ETS table
+directly) — REVIEWER's confirmation is recorded below.
 
 ## Identity infrastructure and authorization (added 2026-08-22)
 
@@ -400,3 +402,42 @@ No rework requested. `docs/issues/` has no new type-safety gap worth filing from
 diff — both plugs' new transition logic (method allowlist, tenant-status match) is already
 closed-set over a `Ecto.Enum`-backed `status` field and a fixed `@write_methods` list, not
 a case a struct/type change would newly make unrepresentable.
+
+**2026-08-21 (REQ-072) — PASS.** Reviewed `lib/letflow/api/context.ex`
+(`Letflow.Api.Context`) against REQ-072's seven acceptance criteria and this
+file's own threadlocal-translation note above.
+
+- **Idiom translation confirmed.** `tenant_context.zig`/`trace_context.zig`/
+  `pipeline_context.zig`'s Zig `threadlocal` per-request storage becomes an
+  explicit `conn.assigns` field (`:trace_id`), mirrored into `Logger.metadata/1`
+  strictly for log-correlation — read the module directly and confirmed the one
+  `Logger.metadata/1` call is the public logging API, not this module reaching
+  into the process dictionary itself; `grep -rn "Process\.\(put\|get\)\|:ets\."
+  lib/letflow/api/` returns zero hits.
+- **The load-bearing security property** — `scoped_repo_opts/1` derives its Ecto
+  `:prefix` solely from `conn.assigns[:auth_context][:tenant_id]`, is 1-arity (no
+  caller-supplied tenant/schema/prefix parameter slot exists), and returns an
+  error tuple rather than falling through to an unscoped query — confirmed by
+  reading the function body directly, not by trusting SECURITY-REVIEWER's prior
+  pass alone (`handoffs/WF02-REQ072-20260822/step-02c-security-reviewer.json`).
+- **Cross-tenant-404 test soundness (AC4/AC5)** — this is the property every
+  future S4 route inherits, so it warranted more than a read-through: both
+  TEST-DESIGN-VALIDATOR (Step 3b) and RELEASE-VALIDATOR (Step 5) independently
+  mutated `scoped_repo_opts/1` to leak a cross-tenant row and confirmed the test
+  suite caught the regression each time, then cleanly reverted — real,
+  demonstrated evidence the test discriminates a broken implementation rather
+  than an assertion it "should."
+- **Scope.** `git diff main...HEAD --stat` touches exactly: the new module, one
+  plug-mount edit in `lib/letflow/plugs/api_pipeline.ex` (first in the chain,
+  ahead of `AuthPipeline`, per this file's own note above), the new test
+  fixture/test file, the design doc, a `docs/anti-patterns.md` addition, and run
+  bookkeeping — no `lib/letflow/routers/*.ex` sub-router touched (the design
+  deliberately tests one level below full HTTP dispatch rather than inventing a
+  fake production route, since those sub-routers remain REQ-070 stubs).
+- **Decision-record consistency.** The "Postgres schema is the only tenant
+  scoping" premise this module is built on matches
+  `docs/migration/decisions/0003-ecto-schema-strategy.md` Dimension B and
+  `0006-*.md` (which removed `tenant_id` from schema-isolated tables entirely) —
+  re-confirmed directly against both records, not re-derived from scratch.
+
+No rework requested.

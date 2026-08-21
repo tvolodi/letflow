@@ -579,3 +579,41 @@ history:
       mailbox-blocking defect deliberately scoped out. Incidental:
       test/letflow/router_test.exs reformatted (pre-existing on main, blocked the
       repo-wide format merge gate).
+  - req: REQ-072
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-21T22:01:03Z"
+    note: >
+      Shipped Letflow.Api.Context (lib/letflow/api/context.ex): the single
+      tenant-scoping mechanism (scoped_repo_opts/1) every future S4 route
+      requirement will call, deriving its Ecto :prefix solely from
+      conn.assigns[:auth_context][:tenant_id], plus the trace-id
+      request-correlation mechanism (assign_trace_id/1), mounted first in
+      Letflow.Plugs.ApiPipeline's chain. This discharges INV-1/INV-5/INV-6
+      structurally for the whole S4 stage rather than each route requirement
+      re-implementing it. All 7 gates passed (CODE-DESIGNER c9d6297,
+      CODE-DESIGN-VALIDATOR f134f08, ELIXIR-DEV c434e2c, SECURITY-REVIEWER
+      7b7c55e, REVIEWER e5964d1 -- also added a docs/anti-patterns.md entry on
+      grep-shaped ACs vs. moduledoc prose, TEST-DESIGN-VALIDATOR 8d76d21,
+      TEST-RUNNER 6c07f31 -- full suite 1455/1455, RELEASE-VALIDATOR 5efd325
+      -- independently re-verified all 7 ACs, full suite re-run clean at
+      1455/1455). Two independent mutation tests -- Step 3b's
+      TEST-DESIGN-VALIDATOR and Step 5's RELEASE-VALIDATOR, each separately --
+      each broke scoped_repo_opts/1 and confirmed the test suite caught the
+      regression: real, demonstrated evidence the cross-tenant-404 test is a
+      genuine discriminator, not a vacuous assertion. Design decision: the
+      cross-tenant-404 property is tested one level below full HTTP dispatch
+      (a test-only probe table) rather than inventing a fake production
+      route, since REQ-070's sub-routers remain stubs. Doc gap found, not
+      fixed here: docs/migration/stage-4-api-surface.md's "Shared
+      conventions" section (line 174) still reads "an idiom translation
+      REVIEWER should confirm" in future tense even though REVIEWER did
+      confirm it (e5964d1) -- unlike REQ-065/070/071/084, this run's
+      REVIEWER pass recorded its sign-off in anti-patterns.md and the
+      handoff file, not as a dated entry in this doc's "REVIEWER sign-off"
+      section, so that section has no REQ-072 entry. Not required by any of
+      REQ-072's acceptance_criteria (none name this file), so left as a gap
+      to flag rather than authored here. README.md checked directly (grep
+      for Context/tenant-scoping/trace-id): no hit needing an update -- no
+      route calls this module directly yet, so there is no externally-visible
+      surface to document until the first S4 route requirement lands.

@@ -4066,7 +4066,7 @@ requirements:
   - id: REQ-072
     title: Tenant-scoped request context and the cross-tenant 404 mechanism (tenant_context.zig + trace_context.zig)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S4
     impl_order: 139  # letflow-queue task id
     description: >

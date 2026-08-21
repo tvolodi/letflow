@@ -39,4 +39,30 @@ queue_task_id: 183
 github_issue: https://github.com/tvolodi/letflow/issues/369
 github_issue_note: >
   Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (183) and its mirrored GitHub issue (#369) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
-status: open
+status: instrumented
+instrumented_in_run: WF03-ISS0115-20260821
+instrumented_at: "2026-08-21T13:22:39Z"
+resolution_note: >
+  Adopted Letflow.TenantFixture (ISS-0109/GH#358) in test/letflow/identity_test.exs,
+  replacing this module's hand-rolled provisioned_tenant!/1 -- same pattern as
+  ISS-0116's adoption in rollback_test.exs/engine_test.exs/engine/reconstruction_test.exs.
+  Behaviour-preserving by construction (same Tenant.create_changeset/3 call, same
+  provision_tenant_schema/1 + replay_migrations/1 sequence, same :auto sandbox mode,
+  same teardown), but now emits a LETFLOW_TENANT_FIXTURE marker and a
+  capture_schema_state/1 report automatically on any future recurrence of this issue's
+  42P01 undefined_table failure, instead of a bare Postgrex error.
+
+  Verified: test/letflow/identity_test.exs 31/31 passed in isolation
+  (PR #422, commit e550c24), marker confirmed firing on teardown. A broader full-suite
+  run was attempted for additional confirmation but did not complete within a
+  reasonable bounded-effort window (ran past 8 minutes, likely compounded by an
+  unrelated placeholder-OIDC-issuer retry backoff visible in the log) -- not chased
+  further per this issue's own instruction against forcing a reproduction indefinitely.
+
+  ROOT CAUSE STILL UNKNOWN. This failure has been observed exactly once, in a
+  full-suite run, and is not reproducible on demand. This run adds diagnostic
+  capability only; it does not fix or explain the underlying defect. Status is
+  `instrumented`, not `resolved`, for exactly that reason. Cross-references:
+  ISS-0109 (predecessor, instrumented), ISS-0116 (sibling successor issue in the same
+  family, also instrumented this session), ISS-0112 (broader 41-file fixture
+  migration, still open, out of scope here).

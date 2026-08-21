@@ -123,6 +123,19 @@ failure in the same batch is more expensive than splitting up front.
    root cause), the agent receiving rework must change its approach, not repeat the
    identical strategy. On the third attempt, switch strategy before writing any code.
 
+**Do not copy the original claim-step instruction into a rework note.** Every first
+dispatch tells the receiving agent to claim by setting `status` to `IN_PROGRESS` only,
+because `HANDOFF_PROTOCOL.md` §3's table makes `started_at` and `created_at` ORCH's own
+fields at that point. A rework note is not a first dispatch — the handoff is already
+claimed and has a real `result` on it from the prior attempt. The rework text must say
+plainly that the receiving agent flips `status` to `COMPLETED`/`FAILED` as normal on
+finishing, exactly as §3's table already requires; it must never repeat "claim by setting
+status to IN_PROGRESS only" verbatim, which reads as suspending that normal completion
+step. (ISS-0211, `WF03-ISS0210-20260821`: reusing that boilerplate in a rework note left a
+handoff's top-level `status` stuck at `IN_PROGRESS` under a correctly attested
+`result.status: PASS`, caught only at the next gate and corrected by ORCH directly as a
+mechanical field, not by reworking the agent again.)
+
 **On `rework_count >= max_rework`:**
 1. Set handoff status to `ESCALATED`.
 2. Write an escalation record to `handoffs/escalations.yaml` (append-only, same

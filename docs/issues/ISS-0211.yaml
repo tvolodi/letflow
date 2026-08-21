@@ -40,4 +40,17 @@ github_issue_note: >
   `register_task` created both the queue task (211) and its mirrored GitHub issue (#410)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
   separately. The id comes from `register_task`'s `issue_ref`, not a directory scan.
-status: open
+status: resolved
+resolved_in_run: ADHOC-20260821-003
+resolved_at: "2026-08-21T11:42:15Z"
+resolution: >
+  Added a paragraph to `ORCHESTRATOR.md` §5, right after the rework steps: a rework note
+  must never repeat the first-dispatch "claim by setting status to IN_PROGRESS only"
+  instruction verbatim, and must instead say the receiving agent flips `status` to
+  `COMPLETED`/`FAILED` as normal on finishing, per `HANDOFF_PROTOCOL.md` §3's existing
+  table. Cites this issue's own incident as the worked example. No new field, no change
+  to §3's table -- ORCH's own dispatch-authoring only. Handled as an ORCH direct action
+  under `ORCHESTRATOR.md` §10 (one file, no new function/module/spec, no migration, no
+  supervision-tree file, no tenant-data path, no test-asserted behaviour) rather than
+  through the full producer/validator pipeline: the change is entirely about ORCH's own
+  conduct, one paragraph, one file.

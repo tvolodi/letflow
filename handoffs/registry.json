@@ -1680,6 +1680,25 @@
       "queue_agent_id": "tvolo-win-orch",
       "note": "WF-03 for ISS-0210 (GH#402, queue task 210), claimed by get_next_task -- not by ORCH reading a file. Filed by a DIFFERENT host (letflow2-orch, WF03-ISS0200-20260821's Step Final) from live findings during that run's own rebase-then-push sequence, which this ORCH session then rebased onto and merged past two runs ago. Task is the structural gap where GIT_MERGE.md step 5 rebases the feature branch (already pushed at Step 00 per GIT_SETUP.md step 7) and step 6 pushes it again with no non-fast-forward handling, plus two smaller items (autocrlf byte-identity hazard, .gitattributes union-driver question). Docs-only, so the git wrapper does not apply to THIS run's own steps -- ironic given the subject matter, but this run edits protocol prose, not a feature branch under GIT_MERGE.md's own procedure. Steps 0.5 and 1 SKIPPED: findings stated first-hand in handoffs/WF03-ISS0200-20260821/step-final-git-merge.json by the agent that lived them. Step 2 SKIPPED: prose in protocol docs. Step 4 SKIPPED: no code under test; first-hand re-derivation of the non-fast-forward claim and the autocrlf hazard are acceptance criteria on Step 03/03b instead.",
       "outcome_note": "GIT_MERGE.md step 6 now states the actual rule: try a plain push first (a no-op rebase needs no force); on rejection, --force-with-lease republishes ONLY the run's own feature/<run-id> branch, never main, never another session's commit. ORCHESTRATOR.md section 7.1 gets a one-sentence pointer rather than a duplicate. A .gitattributes union merge driver was adopted for handoffs/orchestrator.log (flat, append-only, safe fit) and explicitly declined for handoffs/registry.json (JSON structure risks invalid/duplicate-keyed output on a naive line union) -- both reasoned per-file, not a blanket call. autocrlf confirmed live on this host (true) with a blob-vs-working-tree hash mismatch demonstrated directly; byte-identity guidance now names the git blob. The gate's first pass (03b) correctly FAILed on one genuine defect -- two sentences overclaimed the WF03-ISS0200 non-fast-forward as OBSERVED live, when that run's own record shows every push was a plain fast-forward and the agent avoided the rejection by resetting-and-merging rather than force-pushing. Narrow rework (iteration 1 of 3) reworded exactly those two sentences to anticipated-and-avoided; the 03c re-gate confirmed the fix and confirmed nothing else was re-opened. One MINOR filed as ISS-0211 (task 211, GH#410), against ORCH's own dispatch-authoring rather than any agent's work."
+    },
+    {
+      "run_id": "ADHOC-20260821-003",
+      "workflow_id": "ADHOC-20260821-003",
+      "requirement_ids": [],
+      "stage": null,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "docs/agents/ORCHESTRATOR.md",
+        "docs/issues/ISS-0211.yaml"
+      ],
+      "lock_acquired_at": "2026-08-21T11:41:34Z",
+      "lock_released_at": "2026-08-21T11:42:15Z",
+      "released_lock": true,
+      "last_known_step": "COMPLETE. ORCH direct action under ORCHESTRATOR.md section 10's sizing rule -- one file, no new function/module/spec, no migration, no supervision-tree file, no tenant-data path, no test-asserted behaviour. No producer/validator pipeline; no gate, per the sizing rule's own exception.",
+      "backfilled": false,
+      "queue_task_id": 211,
+      "queue_agent_id": "tvolo-win-orch",
+      "note": "ISS-0211 (GH#410, queue task 211), claimed by get_next_task -- ORCH's own follow-on from the ISS-0210 re-gate's MINOR, handed straight back per the LIFO issue-priority. Qualified for direct action: the fix is a single paragraph in ORCHESTRATOR.md section 5, entirely about ORCH's own rework-dispatch conduct, no code, no schema change. Ran all six sizing-rule checks explicitly before acting rather than judging by feel, per ORCHESTRATOR.md section 10's own instruction that this is a checklist, not a judgement call."
     }
   ]
 }

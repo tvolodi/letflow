@@ -78,6 +78,29 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
   # `output` to stdout and exits with `exit_code`, then prepends that dir
   # onto PATH so `System.find_executable("mix")` -- exactly what `run/1`
   # calls internally -- resolves to this fake instead of the real `mix`.
+  #
+  # ISS-0171: this branches on `:os.type/0` because a single POSIX-shaped
+  # fake cannot work on Windows, in two independent ways that both had to
+  # be fixed together:
+  #
+  #   1. `System.find_executable/1` resolves a bare name like "mix" against
+  #      Windows PATHEXT-style extensions (.exe/.bat/.cmd/...) -- an
+  #      extensionless file is never matched, so the POSIX fake was
+  #      silently invisible to `run/1` and the REAL `mix` got picked off
+  #      PATH instead, recursing into a full nested `mix test`.
+  #   2. `PATH` itself uses `;` as the entry separator on Windows, not `:`
+  #      -- prepending with `:` produced one PATH entry containing a
+  #      literal colon rather than two entries, so even a correctly-named
+  #      fake would not have been found either.
+  #
+  # Verified directly (see docs/issues/ISS-0171.yaml): `Port.open({:spawn_executable,
+  # ...})` DOES run a `.bat` file natively on Windows (no `cmd.exe /c`
+  # indirection needed) -- the missing piece was purely getting
+  # `System.find_executable/1` to resolve to it. The Windows fake writes its
+  # canned output to a companion file and has `mix.bat` `type` that file
+  # instead of `echo`-ing it inline, so arbitrary content (quotes, parens,
+  # colons -- exactly what a real compiler warning line contains) never has
+  # to survive batch's own escaping rules.
   defp install_fake_mix(output, exit_code) do
     dir =
       Path.join(
@@ -86,19 +109,65 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
       )
 
     File.mkdir_p!(dir)
-    fake_mix_path = Path.join(dir, "mix")
 
-    File.write!(fake_mix_path, """
-    #!/bin/sh
-    cat <<'FAKE_MIX_OUTPUT'
-    #{output}
-    FAKE_MIX_OUTPUT
-    exit #{exit_code}
-    """)
+    case :os.type() do
+      {:win32, _} ->
+        output_path = Path.join(dir, "output.txt")
+        File.write!(output_path, output)
 
-    File.chmod!(fake_mix_path, 0o755)
+        fake_mix_path = Path.join(dir, "mix.bat")
+        # cmd.exe's `type` does not reliably resolve a mixed-separator path
+        # (Elixir's Path.join always uses "/", but System.tmp_dir!/0 on
+        # Windows returns a "\"-separated base) -- reproduced directly:
+        # `cmd /c type "C:\...\Temp/dir/output.txt"` fails with "The system
+        # cannot find the file specified." Normalize to native "\" first.
+        windows_output_path = String.replace(output_path, "/", "\\")
 
-    System.put_env("PATH", dir <> ":" <> System.get_env("PATH", ""))
+        File.write!(fake_mix_path, """
+        @echo off
+        type "#{windows_output_path}"
+        exit /b #{exit_code}
+        """)
+
+        System.put_env("PATH", dir <> ";" <> System.get_env("PATH", ""))
+
+      _ ->
+        fake_mix_path = Path.join(dir, "mix")
+
+        File.write!(fake_mix_path, """
+        #!/bin/sh
+        cat <<'FAKE_MIX_OUTPUT'
+        #{output}
+        FAKE_MIX_OUTPUT
+        exit #{exit_code}
+        """)
+
+        File.chmod!(fake_mix_path, 0o755)
+
+        System.put_env("PATH", dir <> ":" <> System.get_env("PATH", ""))
+    end
+
+    # Fail fast and legibly (not via a 60s subprocess timeout) if PATH
+    # resolution ever again picks the real `mix` instead of this fake --
+    # exactly the ISS-0171 regression class this file exists to prevent.
+    # Both sides are normalized through Path.expand/1 (and downcased --
+    # Windows drive letters/paths are case-insensitive) before comparing,
+    # since `dir` and the OS's own resolved path can differ in separator
+    # style and drive-letter case despite naming the same location.
+    resolved = System.find_executable("mix")
+    expected_dir = dir |> Path.expand() |> String.downcase()
+    resolved_dir = resolved && resolved |> Path.dirname() |> Path.expand() |> String.downcase()
+
+    unless resolved_dir == expected_dir do
+      flunk("""
+      install_fake_mix/2 did not take effect: System.find_executable("mix") \
+      resolved to #{inspect(resolved)}, expected a file inside #{inspect(dir)}. \
+      This would recurse into the REAL `mix test` (ISS-0171) instead of testing \
+      against the fake.
+      """)
+    end
+
+    dir
   end
 
   describe "mix letflow.check.test detects a recurrence of ISS-0069's own warning class" do

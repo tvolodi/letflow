@@ -97,4 +97,81 @@ github_issue_note: >
   register_task created both the queue task (199) and the mirrored GitHub issue
   (#389) in one call; `gh issue create` was deliberately NOT called separately,
   which would double-post (the #358/#359 failure recorded in ISS-0109).
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0199-20260821
+resolved_at: "2026-08-21T11:47:21Z"
+resolution_note: >
+  DEVIATION FROM WF-03: executed by a single ORCH-acting agent performing every
+  step directly (diagnose, self-gated design, implement, verify, close) because
+  this execution context cannot spawn further subagents -- same deviation as
+  WF03-ISS0208-20260821 and WF03-ISS0203-20260821, judged here against the design
+  gate this issue itself said would need reopening: performed CODE-DESIGNER and
+  CODE-DESIGN-VALIDATOR as two explicit, separately-reasoned passes (design
+  written, then adversarially checked against the acceptance criteria before
+  implementing) rather than skipping the gate.
+
+  DIAGNOSIS: re-verified finding 1's corruption claim first-hand against
+  handoffs/WF03-ISS0119-20260821/step-06-doc-updater.json's own account: an
+  unquoted Bash heredoc let backtick-quoted field names in note prose execute as
+  command substitutions, evaluating to empty string (bash writes the
+  `command not found` to stderr, substitution captures stdout only), so the
+  corruption is localised to prose content with the entry's five-field
+  structure left intact. Confirmed against test/support/status_history.ex's
+  actual parser (line-oriented regex on `^    key: value$`): A4a checks
+  req/event ENUM membership, A4b checks field-name PRESENCE and order -- neither
+  examines a field's prose VALUE. A structurally-intact-but-gutted note is
+  therefore invisible to both by construction, not by omission -- confirming
+  remedy (c)'s suspicion: the A4a/A4b backstop does NOT catch this class, so
+  step 5 needed hardening rather than pointing at `mix test`. Finding 2
+  re-verified directly: `grep -c '^  - req: ' docs/status/requirement_status.v2.yaml`
+  returns 7 real entries against the index's declared `entries: 0` -- the drift
+  was live on disk, not hypothetical.
+
+  IMPLEMENTED (remedies a + b for finding 1, entries-tracking + new assertion for
+  finding 2), landed identically in both docs/status/requirement_status.v2.yaml's
+  live header and lib/letflow/design/iss-0119-status-file-readability.md section
+  4's verbatim template (diffed byte-identical over the touched span):
+    - Step 4: quoted-heredoc (`<<'EOF'`) / literal-here-string (`@'...'@`)
+      requirement, naming the backtick/colon hazard explicitly.
+    - Step 5: split into (a) the existing numstat check, kept, not weakened, and
+      (b) a new content re-read (`tail -n 8`) confirming the note text matches
+      intent -- the check (a) structurally cannot make.
+    - New step 6: update the index's `entries:` count in the same commit as the
+      append.
+  docs/status/requirement_status.index.yaml: volume 2's `entries:` corrected
+  0 -> 7 to match the real on-disk count (bookkeeping correction, not a rewrite
+  of any history entry -- the append-only rule binds entries, not this count).
+  test/docs/requirement_status_invariants_test.exs: new assertion A9 (every
+  indexed volume's declared `entries:` equals `length(SH.entries(path))` on
+  disk) plus the moduledoc's "A0-A8" reference updated to "A0-A9". Design doc
+  section 7's assertion list gained a matching A9 entry.
+
+  VERIFICATION: ran `MIX_ENV=test mix test test/docs/requirement_status_invariants_test.exs`
+  once cleanly BEFORE rebasing this branch onto fresh origin/main (a sibling
+  concurrent run's commit landed underneath mine on the same branch name and had
+  to be cleaned up by resetting to origin/main and reapplying this uncommitted
+  diff) -- real, quoted output: "Running ExUnit with seed: 415337, max_cases: 32
+  / .............. / Finished in 0.9 seconds (0.9s async, 0.00s sync) / Result:
+  14 passed" (13 pre-existing + new A9). AFTER the rebase, `git status --porcelain`
+  and `git diff --stat` confirm the same 4 files with the same diff content
+  (rebase touched no line of this change), and the on-disk entries count was
+  re-measured post-rebase at 7, matching the pre-rebase measurement exactly --
+  so the rebase changed no fact this verification depends on. A fresh post-rebase
+  test re-run was ATTEMPTED 14+ times over ~9 minutes and could not complete:
+  every attempt failed identically at `mix test`'s aliased `ecto.create --quiet`
+  step with Postgres `FATAL 53300 (too_many_connections)`, confirmed via
+  `tasklist` to be genuine contention from 4 concurrent sibling `erl.exe`
+  processes on this shared dev machine, not a defect in this change or a leaked
+  connection from this run's own (stopped) retry loop. Stated plainly rather than
+  silently claimed: the terminal PASS status rests on the one clean pre-rebase
+  run plus the content-equivalence argument above, not on a fresh post-rebase
+  green run.
+
+  SCOPE DECISION ON ISS-0193: NOT folded in, despite the filing's suggestion that
+  one run could close both. ISS-0193 is a distinct, substantially larger design
+  question -- applying A4b's closed-and-pinned rule to A5's known_anomalies:
+  mechanism, reconciling design section 13.3's parity wording, and deciding
+  whether a same-commit volume-roll can launder a fresh violation into a
+  permanently-declared one for BOTH mechanisms at once -- and folding it in here
+  would risk under-designing that decision to close out this run quickly. Left
+  open for its own dedicated run.

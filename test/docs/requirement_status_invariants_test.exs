@@ -4,7 +4,7 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
   append-only, and schema-conformant.
 
   Specified by `lib/letflow/design/iss-0119-status-file-readability.md` §7
-  (assertions A0–A8) and §7.1 (the fail-first demonstration). No database, no
+  (assertions A0–A9) and §7.1 (the fail-first demonstration). No database, no
   new dependencies; all helpers live in `Letflow.Test.StatusHistory`
   (`test/support/status_history.ex`) and take explicit paths.
 
@@ -425,6 +425,30 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
     changed in the index but not in the header, or a roll that drops the
     `known_shape_anomalies:` declaration (clause (c), design §13.7), all land
     here.
+    """
+  end
+
+  # ── A9 — entries: is derived, not merely declared (ISS-0199 finding 2) ──────
+
+  test "A9: every indexed volume's declared entries: count equals what is actually on disk" do
+    index = SH.parse_index(@index_path)
+
+    mismatches =
+      index.volumes
+      |> Enum.map(fn v -> {v.path, v.entries, length(SH.entries(v.path))} end)
+      |> Enum.reject(fn {_path, declared, actual} -> declared == actual end)
+
+    assert mismatches == [], """
+    A9 — a volume's declared entries: count has drifted from what is on disk.
+
+      (path, declared entries:, actual entries on disk) for each mismatch:
+      #{inspect(mismatches)}
+
+    The declared count is a convenience for a reader who has not opened the
+    volume; it must never silently go stale. Update it in the same commit that
+    appends (HOW-TO-APPEND step 6) or that rolls a volume (roll rule step 3).
+    ISS-0199 found volume 2 declared at 0 with 7 real entries already on disk —
+    this assertion is what would have caught that.
     """
   end
 

@@ -23,6 +23,26 @@ description: >
 
   Evidence and reasoning: handoffs/WF03-ISS0109-20260821/step-005-issue-fixer-registry-lookup.json and step-01-issue-fixer-diagnose.json.
 
+corroborating_evidence:
+  - source: ISS-0114 / ISS-0182 (WF03-ISS0182-20260821, Step 0.5+1 diagnosis)
+    summary: >
+      A second, independent live occurrence of this exact mechanism, on a different
+      symptom (Postgrex 42P01 undefined_table on tenant_<id>.instance_projections from
+      Letflow.Engine.insert_instance_projection/8, test/letflow/engine_concurrency_test.exs:365,
+      observed once in a full-suite run and filed unattributed). ISSUE-FIXER traced
+      Engine.insert_instance_projection/8 and TenantProvisioning.provision_tenant_schema/1
+      and found both correct and synchronous -- no defect in application code. Constructed
+      a targeted reproduction (a throwaway probe, deliberately not committed) calling
+      TenantSchemaReaper.sweep_orphans(Repo, 0) mid-test to simulate a second invocation's
+      boundary sweep reclaiming a >300s-old live row, then ran the exact insert
+      insert_instance_projection/8 makes. Reproduced byte-for-byte:
+      Postgrex.Error 42P01 undefined_table on the tenant's instance_projections.
+      Letflow.TenantFixture.capture_schema_state/1 on that tenant showed
+      registration_present?: false, schema_present?: false, all 19 expected tables
+      missing -- the signature of a full reclaim_row/2 sweep, not a partial/independent
+      drop. Confirms this is the SAME reaper-heuristic mechanism, not a second distinct
+      defect. See handoffs/WF03-ISS0182-20260821/step-0.5-1-diagnose.json for full detail.
+
 affected_files:
   - test/support/tenant_schema_reaper.ex
   - lib/letflow/design/iss064-orphaned-tenant-schemas-fix.md

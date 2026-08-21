@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ070-20260821/step-02c-security-reviewer.json",
   "created_at": "2026-08-21T16:25:58Z",
   "started_at": "2026-08-21T16:25:58Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-21T16:45:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -53,9 +53,56 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "All applicable invariants PASS. This change is router wiring only — no Ecto queries, no migrations, no secret resolution, no new token-inspection code. Scope test: change touches the middleware pipeline that gates all tenant-scoped routes, so INV-1, INV-3, INV-4, INV-5, INV-6, and INV-8 apply and were checked against the actual diff. INV-2 (row-level authorisation) and INV-7 (SQL interpolation) are NOT-APPLICABLE (no Ecto queries or SQL in any changed file).",
+    "invariant_assessments": [
+      {
+        "invariant": "INV-1",
+        "verdict": "APPLIES — PASS",
+        "evidence": "lib/letflow/plugs/api_pipeline.ex plug order: Plug.Parsers → Letflow.Plugs.AuthPipeline → Letflow.Plugs.TenantStatus → :match → :dispatch → forward/2 calls. AuthPipeline and TenantStatus execute before any sub-router forward by construction. GET /health is handled in Letflow.Router before the forward(\"/api/v1\", ...) line, so it never reaches ApiPipeline — confirmed by route ordering in router.ex. All 10 sub-router stubs declare only plug(:match) + plug(:dispatch); they carry no plug chains of their own and cannot bypass the ApiPipeline middleware already applied."
+      },
+      {
+        "invariant": "INV-2",
+        "verdict": "NOT-APPLICABLE",
+        "evidence": "No Ecto queries, schema modules, or response-shaping code in any of the 12 changed files."
+      },
+      {
+        "invariant": "INV-3",
+        "verdict": "APPLIES (Plug.Parsers body-size cap) — PASS",
+        "evidence": "api_pipeline.ex line: plug(Plug.Parsers, parsers: [:json], json_decoder: Jason, length: 2_097_152). Cap is 2,097,152 bytes (2 MB). Inline integer literal with a comment: '2 MB cap — matches R-Co's max_body_size default'. Not a named module constant (@attribute), but the value is documented and justified in the comment."
+      },
+      {
+        "invariant": "INV-4",
+        "verdict": "APPLIES — PASS",
+        "evidence": "Health endpoint emits exactly Letflow.Api.Response.send_json(conn, 200, %{status: \"ok\"}) — no DB, no config, no internal state, no stack traces. All catch-all 404 paths (both in Letflow.Router and Letflow.Plugs.ApiPipeline and all 10 stubs) call Letflow.Api.Response.not_found(conn) which takes only the conn — no detail argument, so no exception message, Ecto error, or stacktrace can reach the response body (confirmed by reading response.ex: not_found/1 calls Error.not_found() with no args). Secret grep (grep -rniE '(password|secret|client_secret|token)\\s*(=|:)\\s*\"[^\"]{8,}' across all 12 files) returned no matches."
+      },
+      {
+        "invariant": "INV-5",
+        "verdict": "APPLIES at routing layer — PASS",
+        "evidence": "No HTTP 403 is emitted at the routing layer. All unrouted paths go through Letflow.Api.Response.not_found/1 (uniform 404). A caller cannot distinguish an unrecognised path from a forbidden path at this layer. Full INV-5 (cross-tenant lookup-by-ID indistinguishability) remains deferred until S4 lookup handlers are added."
+      },
+      {
+        "invariant": "INV-6",
+        "verdict": "APPLIES (meta-invariant: proof of scoping for new data-access path setup) — PASS",
+        "evidence": "No new token-inspection or credential-reading code in any of the 12 files. Letflow.Plugs.AuthPipeline remains the sole auth handler. The sub-router stubs introduce no data-access paths — they are empty catch-all stubs. This SECURITY-REVIEWER handoff constitutes the required proof record for the new routing structure."
+      },
+      {
+        "invariant": "INV-7",
+        "verdict": "NOT-APPLICABLE",
+        "evidence": "No SQL in any changed file."
+      },
+      {
+        "invariant": "INV-8",
+        "verdict": "APPLIES — PASS",
+        "evidence": "Plug.Parsers length: 2_097_152 cap means a request body exceeding 2 MB raises Plug.Parsers.RequestTooLargeError, which implements the Plug.Exception protocol (status 413) and is caught by Bandit before any application code processes the body — large bodies are never buffered. Malformed JSON raises Plug.Parsers.ParseError (implements Plug.Exception, status 400) — default behaviour preserved; no custom error handler or :pass option is specified in api_pipeline.ex that would override this. Neither error propagates as an unhandled crash."
+      }
+    ],
+    "additional_checks": {
+      "health_outside_middleware": "PASS — GET /health matched in Letflow.Router before forward(\"/api/v1\", ...), never reaches ApiPipeline.",
+      "no_hardcoded_secrets": "PASS — secret grep returned no matches across all 12 files.",
+      "stubs_no_bypass": "PASS — all 10 stubs contain only plug(:match) + plug(:dispatch) + catch-all 404; no plug chains of their own."
+    },
+    "artifacts_out": ["handoffs/WF02-REQ070-20260821/step-02c-security-reviewer.json"],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ070-20260821",
@@ -65,7 +112,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to REVIEWER (Step 2d)"
   },
   "rework_count": 0,
   "max_rework": 3

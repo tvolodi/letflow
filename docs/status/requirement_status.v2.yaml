@@ -365,7 +365,6 @@ history:
       tenant scoping comes exclusively from REQ-072's resolved request context. Branch
       feature/WF02-REQ067-20260821 created off origin/main and pushed (Step 00). Status
       flipped pending -> in_progress here.
-<<<<<<< HEAD
   - req: REQ-068
     event: done
     agent: ELIXIR-DEV

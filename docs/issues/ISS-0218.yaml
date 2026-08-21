@@ -1,0 +1,64 @@
+id: ISS-0218
+title: >
+  Stray unresolved conflict marker line committed to
+  docs/status/requirement_status.v2.yaml
+discovered_by: ORCH
+discovered_in_run: WF02-REQ071-20260821
+discovered_at: "2026-08-21T18:27:52Z"
+severity: MINOR
+
+description: >
+  Commit 51ac8ce0 (WF02-REQ067-20260821's Step Final merge, which resolved a real
+  conflict on docs/status/requirement_status.v2.yaml across two rebase-replayed
+  commits per that run's own step-final-git-merge.json) left a literal
+  `<<<<<<< HEAD` line committed at line 368, with no matching `=======` /
+  `>>>>>>>` companions anywhere in the file -- confirmed via
+  `grep -n '^<<<<<<<\|^=======\|^>>>>>>>'` across the whole file, only that one
+  marker string exists. `git blame` on the surrounding lines shows the marker
+  itself was introduced by 51ac8ce0 while the REQ-068/REQ-069 entries immediately
+  following it were introduced by an earlier commit (108a64c2) already on the
+  branch being merged in -- i.e. the entries on both sides of the historical
+  conflict were preserved correctly in the right order, only the marker line
+  itself was debris left behind by an incomplete conflict-resolution edit.
+
+  Discovered incidentally while reading this file in full ahead of appending a
+  `started` event for WF02-REQ071-20260821's own Step 00, per this file's own
+  mandatory HOW-TO-APPEND "read the current volume in full before appending"
+  procedure. `mix test test/docs/requirement_status_invariants_test.exs` passed
+  20/20 even with the marker present, since that suite does not parse this file
+  as strict YAML -- so the corruption was not mechanically caught, only found by
+  the human-in-the-loop read this procedure mandates.
+
+  Fixed directly, in the same commit as this filing, rather than filed and left
+  for a separate WF-03 run: it blocked safely appending to this load-bearing
+  append-only file for the current run's own Step 00, the fix was a trivial
+  one-line mechanical removal of debris (not an edit to any real entry's
+  content, so it does not conflict with the append-only rule), and no content
+  was lost -- git blame confirmed no orphaned counterpart marker exists anywhere
+  else in the file.
+
+affected_files:
+  - docs/status/requirement_status.v2.yaml
+
+related:
+  - REQ-067  # the run whose Step Final merge introduced the stray marker
+
+queue_task_id: 218
+github_issue: 447
+github_issue_note: >
+  register_task created both the queue task (218) and its mirrored GitHub issue
+  (447) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
+  deliberately not called separately.
+
+status: resolved
+resolved_in_run: WF02-REQ071-20260821
+resolved_at: "2026-08-21T18:28:01Z"
+resolution_note: >
+  Removed the orphaned `<<<<<<< HEAD` line (docs/status/requirement_status.v2.yaml
+  line 368). No other file change. Re-ran
+  test/docs/requirement_status_invariants_test.exs after the fix: 20/20 passed,
+  matching the pre-fix run (the suite does not assert against this specific
+  marker text, so its pass/fail count is unchanged by design -- verification here
+  rests on the direct grep re-check below, not the test count). Post-fix
+  `grep -n '^<<<<<<<\|^=======\|^>>>>>>>' docs/status/requirement_status.v2.yaml`
+  returns no matches.

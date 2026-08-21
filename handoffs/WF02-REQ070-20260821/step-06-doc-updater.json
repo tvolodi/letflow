@@ -1,0 +1,56 @@
+{
+  "handoff_id": "3f7e6231-116e-42b2-9cbe-d68cee8a3f86",
+  "run_id": "WF02-REQ070-20260821",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ070-20260821/step-06-doc-updater.json",
+  "created_at": "2026-08-21T17:40:51Z",
+  "started_at": "2026-08-21T17:40:51Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-070"],
+    "requirement_text": {
+      "REQ-070": "Router decomposition into per-subsystem sub-routers (OQ-1). RELEASE-VALIDATOR confirmed PASS: 1400/1400 tests, all 6 ACs verified."
+    },
+    "related_handoff_ids": ["26da173d-3c27-442f-9d52-0b2957f78a66"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "docs/status/requirement_status.v2.yaml",
+      "docs/migration/stage-4-api-surface.md"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF02-REQ070-20260821"
+  },
+  "task": {
+    "description": "WF-02 Step 6 — Doc update for REQ-070.\n\nRELEASE-VALIDATOR confirmed PASS. Make exactly these three changes:\n\n1. FLIP status in docs/requirements.yaml:\n   Find `id: REQ-070` and change `status: in_progress` to `status: done`.\n   Only the status field — do not touch any other field.\n\n2. APPEND a `done` event to docs/status/requirement_status.v2.yaml (the CURRENT volume — verify via docs/status/requirement_status.index.yaml first):\n   Check current line count before appending (must not exceed the roll_rule). Append:\n   ```\n   - req: REQ-070\n     event: done\n     at: \"<current UTC time from the clock>\"\n     run_id: WF02-REQ070-20260821\n     agent: DOC-UPDATER\n     note: >\n       Router decomposed into 10 per-subsystem sub-router stubs under /api/v1 plus\n       Letflow.Plugs.ApiPipeline as the single shared middleware chain. GET /health\n       preserved byte-compatibly. OQ-1 resolved. All 6 ACs verified by\n       RELEASE-VALIDATOR: 1400/1400 tests passing.\n   ```\n   Use a REAL timestamp from the clock — not copied from any prior handoff or entry.\n   After appending, check: (current_lines + new_lines) < max_lines (1200). If exceeded, close the volume and open v3 per the roll rule in the file's own header.\n\n3. UPDATE docs/migration/stage-4-api-surface.md:\n   Find the OQ-1 open question entry. Mark it as resolved by REQ-070. If it has a status field, flip it to resolved/done. If it does not, add a note that REQ-070 resolved it. Read the file first to see the exact format before editing.\n\nDo NOT change any other docs. Do NOT modify the implementation files. Do NOT add comments to requirements.yaml fields you are not changing.\n\nComplete the handoff: status COMPLETED, result.status PASS, artifacts_out listing the files you changed, next_action 'Route to ELIXIR-DEV (Step Final git merge)'. Commit the doc changes by explicit path on branch feature/WF02-REQ070-20260821.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml: REQ-070 status == done",
+      "docs/status/requirement_status.v2.yaml: a 'done' event appended for REQ-070 with real UTC timestamp",
+      "docs/migration/stage-4-api-surface.md: OQ-1 marked resolved by REQ-070",
+      "No other files changed"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ070-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ070-20260821",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

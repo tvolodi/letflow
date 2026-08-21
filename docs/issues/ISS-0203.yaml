@@ -44,4 +44,17 @@ github_issue_note: >
   `register_task` created both the queue task (203) and its mirrored GitHub issue (#394)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
   separately. The id comes from `register_task`'s `issue_ref`, not a directory scan.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0203-20260821
+resolved_at: "2026-08-21T11:28:03Z"
+resolution_note: >
+  Finding 1: added a clause immediately after the "add the path, or put the text back"
+  check naming the destination explicitly -- restore the text at the same site in
+  task.description, not into context.source_text (which is for text that was never
+  inline to begin with). Section 2's JSON fence (lines 222-279) verified unaffected
+  and still parses (`JSON.parse` via node, OK). Finding 2: appended an "ADDED TO SCOPE"
+  note to docs/issues/ISS-0191.yaml (matching that file's existing pattern from
+  ISS-0198/ISS-0200) describing the linter-input drift risk and recommending the
+  linter read §4.1(b) at build time rather than hardcode the two values -- declined
+  as a HANDOFF_PROTOCOL.md change per the issue's own framing (ergonomic, belongs to
+  ISS-0191's scope). Both edits additive; no existing section 2 text removed.

@@ -467,6 +467,14 @@ dispatch you have shortened:
 > If any answer is no: add the path, or put the text back. There is no third option, and
 > "the agent can find it from the ID" is not one of them.
 
+**"Put the text back" names its own destination: the same site in `task.description` the
+text was shortened from, restored to what it read before.** It does NOT mean moving the
+text into `context.source_text` — that field, described two paragraphs below, is for
+text that was never inline in `task.description` to begin with, not a parking spot for
+text you are choosing not to add a path for. The two branches stay genuinely two: either
+the source's path goes into `artifacts_in` and the prose stays short, or the prose goes
+back to exactly what it said before you touched it.
+
 Naming an ID inline while its record's path is absent from `artifacts_in` fails this
 check. So does dropping four restatements and adding one path — count the sources, not
 the edits.

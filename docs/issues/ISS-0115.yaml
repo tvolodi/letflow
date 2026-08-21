@@ -1,0 +1,42 @@
+id: ISS-0115
+title: >
+  Letflow.IdentityTest:205 -- 42P01 undefined_table on tenant_<id>.users (full-suite only, unattributed; NOT ISS-0108's mechanism despite the shared module)
+discovered_by: TEST-RUNNER
+discovered_in_run: WF03-ISS0109-20260821
+discovered_at: "2026-08-21T03:15:00Z"
+severity: MINOR
+
+description: >
+  Observed by TEST-RUNNER during WF03-ISS0109-20260821's full-suite run (612.1s, 1228/1244
+  passed, 16 failures, seed 993324, commit 12286e8).
+
+  **This entry exists mainly to prevent a wrong attribution.** Letflow.IdentityTest is the module
+  named in ISS-0108/GH#360, so the obvious move is to fold this into it. That would be wrong:
+  ISS-0108 is an `Ecto.InvalidChangesetError` on the `tenants_idp_realm_id_partial_index` partial
+  unique index -- a seed-row collision. This failure is a Postgrex 42P01 undefined_table on
+  relation "tenant_87dc2692....users" at test/letflow/identity_test.exs:205. Same module, entirely
+  different mechanism. TEST-RUNNER flagged it explicitly as the trap in its own attribution pass.
+
+  Why it is not attributable to the run that observed it: that branch changes no production code
+  (one markdown design doc is the only lib/ path in the diff), and the failing module does not
+  reference the new test fixture.
+
+  Why it is not attributable to an existing baseline: no match on module + test name + error class
+  + frame in either recorded report under test/reports/.
+
+  Relationship to ISS-0109/ISS-0114: same symptom family -- a table absent from a tenant schema
+  during a test that provisioned that schema. Kept separate for the reason ISS-0109's own history
+  demonstrates: this family has repeatedly been mis-merged on shared symptoms, and each mis-merge
+  has cost a later run a re-derivation.
+
+  What a diagnosis should use: the same capture_schema_state/1 instrumentation shipped by
+  WF03-ISS0109-20260821 (test/support/tenant_fixture.ex). This module has not adopted it (ISS-0112).
+
+affected_files:
+  - test/letflow/identity_test.exs
+
+queue_task_id: 183
+github_issue: https://github.com/tvolodi/letflow/issues/369
+github_issue_note: >
+  Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (183) and its mirrored GitHub issue (#369) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
+status: open

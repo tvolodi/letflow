@@ -1,0 +1,79 @@
+id: ISS-0116
+title: >
+  Root cause of the tenant-schema-disappears-mid-test family is STILL UNKNOWN -- successor to ISS-0109, now with a reproduction observed in an un-instrumented third module (RollbackTest)
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0109-20260821
+discovered_at: "2026-08-21T03:15:00Z"
+severity: MAJOR
+
+description: >
+  Successor to ISS-0109/GH#358. Filed by ORCH at the close of WF03-ISS0109-20260821 so the
+  UNRESOLVED half of that issue stays claimable and visible after ISS-0109 itself is transitioned
+  to `instrumented`. Read ISS-0109.yaml first -- its corrected `mechanism:` section and this run's
+  handoffs are the starting point, not a rediscovery exercise.
+
+  WHAT WF03-ISS0109-20260821 SETTLED (do not re-derive):
+    - ISS-0109's originally stated mechanism is REFUTED. The DROP/DELETE/DELETE triple in its
+      evidence is the failing test's OWN post-failure on_exit teardown -- a consequence, not the
+      cause. Three independent grounds: schema_name_for_tenant/1 is a pure derivation so only the
+      failing test's own closure could name that schema; ExUnit runs on_exit synchronously between
+      tests and kills an over-running runner; and the DROP used IF EXISTS and SUCCEEDED.
+    - There is NO production defect in the provisioning path. provision_tenant_schema/1 runs
+      CREATE SCHEMA IF NOT EXISTS unconditionally inside its transaction before reaching the
+      registration path, so a registration can never name an absent schema. Table completeness is
+      a separately decided invariant (req022-tenant-schema-provisioning.md:288-294).
+    - TenantSchemaReaper is excluded for the 1-second-old-row case: provisioned_at and the
+      reaper's cutoff share one clock basis, measured live.
+    - Ecto's Migrator re-applies NOTHING for an already-recorded version -- measured: after
+      dropping a table while leaving its version recorded, a second replay_migrations/1 returned
+      {:ok, []} with the table still absent. This is why replay's return value cannot be used as a
+      completeness oracle.
+
+  WHAT IS STILL UNKNOWN: what actually removes the schema or the table. The failure was never
+  reproduced on demand across three iterations of concurrent invocations (828 tests, zero hits).
+
+  THE NEW EVIDENCE, and the reason this successor is worth more than ISS-0109 was: during
+  WF03-ISS0109-20260821's own full-suite run, a SIGNATURE-IDENTICAL reproduction of ISS-0109's
+  failure 3 appeared in a THIRD module that had not adopted the new fixture --
+  Letflow.Definitions.RollbackTest at test/letflow/definitions/rollback_test.exs:642, raised from
+  that module's own hand-rolled provisioned_tenant/0 at :120:
+
+      assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+      right: {:error, {:migration_failed, %MatchError{term: {:error, %Postgrex.Error{
+               postgres: %{code: :invalid_schema_name, pg_code: "3F000",
+                 message: "schema \"tenant_72360c3d2a13493f84d11ac73b8d671f\" does not exist",
+                 routine: "get_namespace_oid"}, connection_id: 107764}}}}}
+
+  Meanwhile the two modules ISS-0109 named -- PromotionTest and PromotionAssertionRerunTest, the
+  two that DID adopt the instrumentation -- both passed, in the full suite and in isolation.
+
+  That is one observation, not a controlled experiment, and it must be treated as such. But it is
+  strong evidence the condition is real and NOT specific to the modules ISS-0109 happened to name,
+  which is exactly what a module-scoped reading of ISS-0109 would have assumed.
+
+  WHAT THE NEXT RUN SHOULD DO, in order:
+    1. Adopt Letflow.TenantFixture in rollback_test.exs (and the other high-frequency offenders)
+       so the next occurrence carries capture_schema_state/1's 14-field report and its
+       LETFLOW_TENANT_FIXTURE marker lines instead of a bare Postgrex error. This is ISS-0112's
+       work; sequence it FIRST, because it is what makes this issue diagnosable at all.
+    2. Then wait for -- or drive -- a recurrence and read the capture. The report answers the
+       questions the original evidence could not: registry row present? schema present? which
+       tables present/missing? which versions applied? what was db_now vs the BEAM's clock? which
+       backend pid?
+    3. Do NOT re-litigate the refuted mechanisms above.
+
+  Related: ISS-0109 (predecessor), ISS-0112 (adoption, sequence first), ISS-0110 (reaper min_age
+  hazard, a live and still-unfixed channel), ISS-0111 (globally destructive tenant_schemas
+  snapshot), ISS-0107 (nested mix test sharing one database), ISS-0114 and ISS-0115 (two further
+  unattributed members of the same family observed in the same run).
+
+affected_files:
+  - test/letflow/definitions/rollback_test.exs
+  - test/support/tenant_fixture.ex
+  - lib/letflow/tenant_provisioning.ex
+
+queue_task_id: 184
+github_issue: https://github.com/tvolodi/letflow/issues/370
+github_issue_note: >
+  Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (184) and its mirrored GitHub issue (#370) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
+status: open

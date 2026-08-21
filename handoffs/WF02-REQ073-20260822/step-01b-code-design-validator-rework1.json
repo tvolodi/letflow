@@ -1,0 +1,43 @@
+{
+  "handoff_id": "c4a1e9f2-3b6d-4e8a-9c5f-2d7b1a6e4f38",
+  "run_id": "WF02-REQ073-20260822",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ073-20260822/step-01b-code-design-validator-rework1.json",
+  "created_at": "2026-08-22T00:30:00Z",
+  "started_at": "2026-08-22T00:30:00Z",
+  "completed_at": "2026-08-22T00:30:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-073"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ073-20260822/step-01-code-designer-rework1.json",
+      "handoffs/WF02-REQ073-20260822/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": ["lib/letflow/design/req073-identity-user-routes.md"],
+    "branch_name": "feature/WF02-REQ073-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 1b re-review (rework 1/3) -- confirm CODE-DESIGNER's rework at commit 0e8e0a4 closes the sole BLOCKING gap from the prior FAIL (AC6 moduledoc requirement) and correctly fixes the MINOR OQ-6 citation, without silently altering any previously-validated section.",
+    "acceptance_criteria": [
+      "Every acceptance criterion maps to a concrete design element",
+      "No implementation code present",
+      "Function signatures fully specified including error shape",
+      "Cross-module dependencies listed",
+      "No TBD/deferral language on load-bearing decisions"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. Diffed af67ee5..0e8e0a4 on lib/letflow/design/req073-identity-user-routes.md directly: exactly two changes, nothing else touched. (1) New Sec 1a, 'Required @moduledoc content for Letflow.Routers.Identity (AC6)', inserted after Sec 1's route wiring. It states as a concrete build requirement -- not a narrative aid -- that ELIXIR-DEV must write/extend a @moduledoc on Letflow.Routers.Identity naming, per route, exactly which Letflow.Identity function(s) the handler calls; gives the required minimum content verbatim (a 5-line list, one per route, mirroring Sec 0's table); and states explicitly that CODE-DESIGN-VALIDATOR (re-review) and REVIEWER (Step 2d) check this against the real committed @moduledoc string, with an explicit non-satisfying example ('handles user CRUD routes' alone fails). This is precise enough to check the shipped moduledoc text against unambiguously -- AC6 now has a concrete, checkable design element. (2) OQ-6/Sec 6b citation fixed: 'context_test.exs throughout' removed from the sub-router-dispatch precedent list; router_test.exs:104-113 is now cited as the sole precedent, with an explicit note that context_test.exs bypasses the router entirely (calls Letflow.Api.Context functions directly). Verified this against the actual test file: test/letflow/router_test.exs:104-113 ('REQ-070 AC2: sub-router isolation') dispatches conn |> Letflow.Routers.Identity.call(@identity_opts) directly, with no auth_context/roles involved -- citation is accurate.\n\nRe-confirmed byte-for-byte unchanged (per the diff, not re-derived): AC4 ordering guarantee (Sec 2 steps 1-2, 'before any read OR write; get/list included'), the 5 new Letflow.Identity function proposals (Sec 7 gaps 1-5), the Authorization.endpoint_policy_key/2 new clause (Sec 7 gap 6), and the Sec 3 INV-2 8-key user_map/1 allowlist -- all identical to my first-pass validation.\n\nRe-mapped all 6 ACs against the complete design: AC1 (Sec 2.2 list + explicit cursor-pagination divergence note), AC2 (Sec 4 cross-tenant-404 test), AC3 (Sec 6 tenant-isolation test), AC4 (Sec 2 step-2 structural ordering + Sec 5 permission-denial tests with row-unchanged assertions), AC5 (Sec 3 allowlist), AC6 (new Sec 1a). No implementation code present -- signatures/shapes/test skeletons only. No TBD/deferral language on load-bearing decisions; the six OQs (OQ-1..OQ-6) are all explicitly flagged, non-blocking, and judgement calls correctly left to later roles, not silent gaps. Gate clears.",
+    "artifacts_out": ["handoffs/WF02-REQ073-20260822/step-01b-code-design-validator-rework1.json"],
+    "issues": [],
+    "next_action": "Route to ELIXIR-DEV for implementation per docs/agents/workflows/WF-02_requirement_implementation.md Step 2."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

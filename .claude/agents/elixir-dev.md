@@ -77,6 +77,13 @@ Hold every change to that bar:
 - Ran `mix compile` (or `mix format --check-formatted`) if a toolchain
   is available in this environment; if not, say so explicitly rather
   than claiming it compiles.
+- Doing Step Final's post-rebase `mix test`/`mix compile` checks (see `GIT_MERGE.md`)?
+  Run them synchronously, to completion, in this same turn, and read the real result
+  before ending it. Never start a long-running check and end your turn expecting a
+  background-task notification to resume you later — a spawned subagent has no such
+  cross-turn wake mechanism. This is `core-directives.md`'s "No Background Wait For A
+  Cross-Turn Notification" rule (added after ISS-0213, WF03-ISS0193-20260821's stalled
+  git-merge run) — read it there; it is not restated here.
 
 ## Forbidden
 

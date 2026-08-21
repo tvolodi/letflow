@@ -47,4 +47,25 @@ github_issue_note: >
   `register_task` created both the queue task (213) and its mirrored GitHub issue (#421)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
   separately. The id comes from `register_task`'s `issue_ref`, not a directory scan.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0213-20260821
+resolved_at: "2026-08-21T13:22:24Z"
+resolution: >
+  Added a new cross-cutting rule to `docs/agents/instructions/core-directives.md`
+  ("No Background Wait For A Cross-Turn Notification"): a dispatched agent must
+  complete its work within its own tool-call loop, long-running operations (a full
+  test suite, a build) must be run and waited on synchronously to completion in the
+  same turn, and an agent must never end its turn backgrounding an operation while
+  expecting a future cross-turn notification to resume it -- that mechanism exists
+  only for the top-level orchestrating session. The rule cites this incident (the
+  ELIXIR-DEV agent's own "waiting for a background test monitor" words) as its worked
+  example. `.claude/agents/elixir-dev.md` carries a pointer to this section (in its
+  "Self-review before finishing" list, next to the mix test/mix compile checks
+  GIT_MERGE.md's Step Final asks it to run) rather than a second independent
+  statement, since the concrete temptation is real work that role does but the hazard
+  is universal to any dispatched role. Searched existing docs for a partial statement
+  of this rule first (core-directives.md's own "No Speculation" section, ORCHESTRATOR.md,
+  WF-02_requirement_implementation.md, test-runner.md, orchestrator.md, elixir-dev.md) --
+  none existed, so this is fresh text, not an extension. `HANDOFF_PROTOCOL.md` section
+  4.1 was left untouched -- it already correctly covers recovery from a stall like this
+  one; this fix is prevention only.

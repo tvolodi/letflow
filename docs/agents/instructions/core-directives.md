@@ -396,6 +396,54 @@ reports real output.
 
 ---
 
+## ⛔ No Background Wait For A Cross-Turn Notification
+
+**A dispatched agent must complete its work within its own tool-call loop.** Once a
+spawned subagent's own tool-call loop ends, nothing further ever runs on its behalf —
+there is no mechanism that resumes it later. The cross-turn "notification when a
+background task finishes" capability exists **only for the top-level orchestrating
+session**; a subagent that starts a long-running or backgrounded operation and then
+ends its turn expecting to be woken up by such a notification will never be woken up.
+Its handoff stays claimed but unfinished, forever, until something else (typically ORCH)
+notices the stall.
+
+**Long-running operations — a full test suite, a build, anything that could tempt a
+"start it and check back later" pattern — must be run and waited on synchronously.**
+The agent's own tool call blocks until the operation actually finishes, and the agent
+reads the real result before its turn ends. Do not background/detach a long operation
+and end the turn early; do not report a step as claimed/in-progress and stop mid-way
+assuming something will resume you.
+
+**Worked example (WF03-ISS0193-20260821, filed as ISS-0213).** An ELIXIR-DEV subagent
+dispatched for Step Final (git-merge) completed a rebase, verified it clean, and
+committed a claim on the handoff — then stopped. Its own final reported text stated it
+was "waiting for a background test monitor" to notify it once a long-running `mix test`
+finished. That notification never came, because subagents don't get one. The run
+stalled with a real side effect left behind (orphaned `mix test`/`erl.exe` processes
+re-saturating the shared Postgres pool — the known ISS-0107 Windows recursion bug)
+until ORCH detected the stall, verified the actual state, and completed the remaining
+work itself under `HANDOFF_PROTOCOL.md` §4.1(a-2). This is a prevention rule, not a
+restatement of that recovery procedure — §4.1 already handles the recovery correctly
+once a stall has happened; this rule exists so the stall does not happen in the first
+place.
+
+**Checked for an existing partial statement of this rule before adding it (ISS-0213):**
+grepped `docs/agents/` and `.claude/agents/` for background/notification/async/polling
+language and for existing `mix test` guidance (`core-directives.md`'s own "No
+Speculation" section, `ORCHESTRATOR.md`, `WF-02_requirement_implementation.md`,
+`.claude/agents/test-runner.md`, `.claude/agents/orchestrator.md`,
+`.claude/agents/elixir-dev.md`). None of the existing text addresses a subagent
+expecting a cross-turn wake — the closest is "No Speculation"'s instruction to actually
+run `mix test`/`mix compile` yourself, which this rule extends (run it **synchronously,
+to completion, in the same turn** — not merely "run it eventually"). Nothing found to
+extend in place of a fresh statement, so this is new text, added here rather than as a
+second independent statement elsewhere. `.claude/agents/elixir-dev.md` points back to
+this section rather than restating it, since the concrete temptation (GIT_MERGE.md's
+post-rebase `mix test`/`mix compile` checks) is real work ELIXIR-DEV actually does, but
+the hazard itself is universal to any dispatched role, not specific to that one.
+
+---
+
 ## ⛔ Never Call a Red Pipeline OK Without a Source
 
 If CI is red or a `gh pr checks` call reports failure, you may not report it as

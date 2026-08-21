@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0213-20260821/step-03-no-background-wait.json",
   "created_at": "2026-08-21T13:19:10Z",
   "started_at": "2026-08-21T13:19:10Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-21T13:22:57Z",
+  "status": "IN_PROGRESS",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -39,9 +39,14 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Canonical home chosen: docs/agents/instructions/core-directives.md, as a new section 'No Background Wait For A Cross-Turn Notification', placed between 'No Speculation' and 'Never Call a Red Pipeline OK Without a Source'. Reasoning: the hazard (a dispatched subagent starting a long-running/backgrounded operation, then ending its turn expecting a future cross-turn notification that only the top-level orchestrating session can receive) is not specific to ELIXIR-DEV or to mix test -- it is a structural property of how any spawned subagent's tool-call loop works, so it belongs in the cross-cutting file whose stated audience is 'every agent in the pipeline' rather than in one role file. .claude/agents/elixir-dev.md gets a pointer only (in its 'Self-review before finishing' list, next to the mix test/mix compile checks GIT_MERGE.md's Step Final actually tempts), since that role is the one that concretely hit this and the file already discusses that exact check -- the pointer avoids a second independent statement of the same rule. The rule text states plainly: complete work within your own tool-call loop; run long operations synchronously to completion in the same turn and read the real result before ending it; never background an operation and end the turn expecting to be woken later, since that mechanism does not exist for subagents. It cites WF03-ISS0193-20260821 by run id and quotes the agent's own words ('waiting for a background test monitor') as the worked example, and explicitly states HANDOFF_PROTOCOL.md section 4.1 is left untouched since it already handles recovery correctly -- this fix is prevention only. Searched for an existing partial statement first (core-directives.md's own No Speculation section, ORCHESTRATOR.md, WF-02_requirement_implementation.md, .claude/agents/test-runner.md, .claude/agents/orchestrator.md, .claude/agents/elixir-dev.md, all grepped for background/notification/async/polling/mix-test language) -- none addressed this specific failure mode, so this is new text rather than an extension, and the doc says so explicitly. docs/issues/ISS-0213.yaml was updated to status: resolved with resolved_in_run and a clock-read resolved_at, and GH#421 was closed via gh issue close with a comment naming this run and the issue file.",
+    "artifacts_out": [
+      "docs/agents/instructions/core-directives.md",
+      ".claude/agents/elixir-dev.md",
+      "docs/issues/ISS-0213.yaml",
+      "handoffs/WF03-ISS0213-20260821/step-03-no-background-wait.json"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": null,
@@ -51,7 +56,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "ORCH reviews and marks this handoff COMPLETED; GH#421 is already closed and ISS-0213.yaml already carries status: resolved"
   },
   "rework_count": 0,
   "max_rework": 3

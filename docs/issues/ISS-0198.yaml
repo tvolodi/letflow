@@ -79,11 +79,60 @@ affected_files:
   - docs/agents/ORCHESTRATOR.md
 
 related:
-  - ISS-0191  # a handoff linter could measure dispatch size mechanically
+  - ISS-0191  # a handoff linter could measure dispatch size mechanically; H-SIZE-1/2/3 added to its scope
   - ISS-0117  # the run whose cost surfaced this
+  - ISS-0200  # the deferred other half: result.summary, measured at 2.1x task.description
+  - ISS-0201  # three wording riders on the amended section, from this run's REVIEWER gate
+  - ISS-0196  # reproduced live during this run's Step 1; evidence recorded there
 
 queue_task_id: 198
 github_issue: https://github.com/tvolodi/letflow/issues/388
 github_issue_note: >
   Filed by ORCH per ISSUE_QUEUE.md step 2a: register_task created both the queue task (198) and its mirrored GitHub issue (#388) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0198-20260821
+resolved_at: "2026-08-21T09:33:20Z"
+resolution: >
+  A counterweight now exists, canonically in `docs/agents/shared/HANDOFF_PROTOCOL.md`
+  section 2 (commit df7f4ad), with `core-directives.md` and `ORCHESTRATOR.md` carrying
+  pointer sentences only -- grep-verified to contain neither the rule nor the threshold,
+  because a fix for a redundancy defect that duplicates itself across three files would
+  be the defect, and ISS-0021 already cost this project exactly that in exactly these
+  three files.
+
+  The rule is JUSTIFIED ON REDUNDANCY ELIMINATION, NOT ON LATENCY -- see correction (4)
+  above. The measured mechanism is cite-and-also-restate: of 582 corpus handoffs, all 20
+  with a description over 6,000 characters name an `artifacts_in` basename inside that
+  description, and `context.requirement_text` -- the schema's only structured
+  copied-source slot -- was the empty object in 66 of 69 handoffs while up to 12,187
+  characters of copied source rode in free prose. A new OPTIONAL `context.source_text`,
+  keyed by source path, is that missing outlet; `requirement_text` was deliberately NOT
+  re-keyed, because its REQ-ID keying is what makes the "`requirement_ids` set +
+  `requirement_text` missing = malformed" test work. Corpus re-verified by REVIEWER at
+  586 files parseable, 0 unparseable, 0 carrying the new field -- optional-by-absence,
+  nothing invalidated.
+
+  NO TARGET LENGTH IS STATED AS A RULE anywhere. H-SIZE-1/2/3 are specified in the
+  Enforcement note and added to ISS-0191's scope; both WARN checks are advisory by
+  design, and H-SIZE-2 exists specifically so the fix cannot be satisfied by truncation.
+  Nothing claims the checks run today -- ISS-0191 is open, unbuilt, and itself gated on
+  ISS-0190.
+
+  AC5 RETURNED A NEGATIVE RESULT AND IT WAS REPORTED AS ONE. Re-drafting the corpus
+  maximum (`WF03-ISS0109-20260821/step-02-code-designer.json`) to the new guidance took
+  it 12,187 -> 7,333 characters with acceptance criteria byte-identical at 1,589 across
+  8 items, every removed character being restatement of a file already in `artifacts_in`
+  -- and it STILL flags H-SIZE-1. REVIEWER measured the re-draft independently and could
+  not find a further 1,333 characters to cut that is not instruction. That is the
+  evidence H-SIZE-1 must stay a WARN, and it is recorded rather than tuned away.
+
+  Steps 2 and 4 were SKIPPED with reasons in `handoffs/orchestrator.log`: no design
+  artefact applies to a prose amendment (precedent WF03-ISS0117-20260821), and a
+  regression test would have to assert over `handoffs/*.json`, which zero ExUnit tests
+  do today -- deferred to ISS-0191 rather than shipping a partial linter as this run's
+  own regression test. REVIEWER gate PASS first time, rework 0 of 3.
+
+  SELF-MEASUREMENT, since this issue is about dispatch size: this run's three dispatches
+  measured 1,999 / 3,074 / 2,451 characters of `task.description` and flagged neither
+  H-SIZE check, against the 1,405-10,281 range measured on the run that prompted the
+  issue. Their `result.summary` values were 20,095 / 9,021 / 12,104 -- which is ISS-0200.

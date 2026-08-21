@@ -1,0 +1,52 @@
+id: ISS-0201
+title: >
+  Three wording riders on HANDOFF_PROTOCOL section 2, found by the REVIEWER gate on ISS-0198
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0198-20260821
+discovered_at: "2026-08-21T09:29:24Z"
+severity: MINOR
+
+description: >
+  Filed by ORCH from the three MINOR findings in
+  `handoffs/WF03-ISS0198-20260821/step-03b-reviewer-gate.json`'s `result.issues`. None
+  gated that run. All three are one-clause edits to the same section, which is why this
+  is one work package rather than three.
+
+  Read that handoff's `result.issues` for the findings as the REVIEWER stated them --
+  they are not restated in full here, per the rule ISS-0198 added to the very section
+  these riders amend. Summarised only enough to size the work:
+
+  (1) Section 2's JSON schema fence is declared machine-loadable so ISS-0191's linter can
+  load it instead of re-implementing it -- but the fence omits the `backfill_note` member
+  that section 4.1(b) authorises on exactly one named file. A linter author reading
+  section 2's new "neither licenses a third" sentence could over-read it into rejecting
+  that one authorised file. Predates ISS-0198 (arrived with commit c6ec3c1); not widened
+  by it.
+
+  (2) `requirement_text` is keyed by REQ-ID, `source_text` by path. The seam is text
+  copied from `docs/requirements.yaml` that is NOT a requirement `description` --
+  acceptance criteria, `depends_on`. Section 2 does not say which field takes it.
+
+  (3) The new inline-versus-`artifacts_in` table says what not to restate, but does not
+  say that DROPPING a restatement obliges ADDING the source path to `artifacts_in`. The
+  AC5 re-draft on that run did exactly this: it dropped four ISS-011x restatements and
+  added only one of the paths. That omission is the step a weak model skips, and it
+  converts a redundancy fix into a context loss.
+
+  Rider 3 is the one that matters most -- it is the failure mode ISS-0198's fix could
+  produce if followed carelessly.
+
+affected_files:
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+
+related:
+  - ISS-0198  # the amendment these riders refine
+  - ISS-0191  # the linter that loads the schema fence rider 1 concerns
+
+queue_task_id: 201
+github_issue: https://github.com/tvolodi/letflow/issues/392
+github_issue_note: >
+  register_task created both the queue task (201) and its mirrored GitHub issue (#392)
+  in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
+  separately. The id comes from register_task's `issue_ref`, not from a directory scan.
+status: open

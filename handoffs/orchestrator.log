@@ -999,3 +999,6 @@
 2026-08-21T09:15:10Z | DISPATCH | WF-03 | WF03-ISS0198-20260821 | ORCH -> DOC-UPDATER | Step 03 amendment, justified on redundancy not latency
 2026-08-21T09:25:04Z | STEP_COMPLETE | WF-03 | WF03-ISS0198-20260821 | DOC-UPDATER -> ORCH | Step 03 PASS (df7f4ad, 83da516); added OPTIONAL context.source_text rather than re-keying requirement_text; AC5 redraft 12187 -> 7333 chars, still flags H-SIZE-1, reported as measured
 2026-08-21T09:25:04Z | DISPATCH | WF-03 | WF03-ISS0198-20260821 | ORCH -> REVIEWER | Step 03b closing gate on diff 5a8089e..HEAD
+2026-08-21T09:33:20Z | STEP_COMPLETE | WF-03 | WF03-ISS0198-20260821 | REVIEWER -> ORCH | Step 03b closing gate PASS first time (aa6c116, 3b845b3); 3 MINOR non-gating findings forwarded, not absorbed
+2026-08-21T09:33:20Z | STEP_COMPLETE | WF-03 | WF03-ISS0198-20260821 | ORCH | Step 5 taken directly under ORCHESTRATOR section 10: (1) one file docs/issues/ISS-0198.yaml (2) no public function/module/spec (3) no migration (4) no supervision-tree file (5) no tenant-data path (6) no behaviour a test asserts. ISS-0198 status resolved.
+2026-08-21T09:33:20Z | ISSUE_FILED | WF-03 | WF03-ISS0198-20260821 | ORCH | ISS-0200 (queue 200, GH#391) result.summary size, the deferred larger half; ISS-0201 (queue 201, GH#392) REVIEWER three wording riders; recurrence evidence appended to ISS-0196

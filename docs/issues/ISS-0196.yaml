@@ -56,6 +56,22 @@ affected_files:
 related:
   - ISS-0117  # the run that produced the incident; its section 3 `task` row is the other half
   - ISS-0191  # a handoff linter could also detect an uncommitted-at-dispatch handoff
+  - ISS-0198  # this symptom reproduced live on that run -- see recurrence below
+
+recurrence:
+  - run: WF03-ISS0198-20260821
+    observed_at: "2026-08-21T09:09:41Z"
+    observed_by: ISSUE-FIXER
+    note: >
+      Reproduced live and independently, while that agent was measuring a different
+      issue. At the moment it claimed its Step 0.5+01 handoff, `git status --porcelain`
+      showed `handoffs/WF03-ISS0198-20260821/` UNTRACKED -- so the dispatched task text
+      existed in no git object and survived only in the dispatching ORCH session's
+      context, which is exactly this issue's stated failure mode. Recorded here as fresh
+      evidence rather than absorbed into that run. ORCH's mitigation for the remainder of
+      WF03-ISS0198-20260821 was to commit each handoff AT dispatch (commits 5a8089e,
+      499cee7) rather than after completion; that is a per-run workaround by one session,
+      not a rule, and does not resolve this issue.
 
 queue_task_id: 196
 github_issue: https://github.com/tvolodi/letflow/issues/386

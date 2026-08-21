@@ -1,0 +1,54 @@
+id: ISS-0200
+title: >
+  result.summary has no size discipline, and it is the larger half of the artefact
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0198-20260821
+discovered_at: "2026-08-21T09:33:20Z"
+severity: MINOR
+
+description: >
+  Deferred deliberately from ISS-0198, which fixed `task.description` only.
+
+  MEASURED during WF03-ISS0198-20260821: across WF03-ISS0117-20260821, `result.summary`
+  totals 143,465 characters against `task.description`'s 68,348 -- 2.1x. The single
+  largest handoff file on that run (41,723 bytes, `step-03d-reviewer-regate`) has a
+  6,290-char description and a 24,369-char `result.summary`, so file size is driven by
+  the result, not the dispatch. Reproduced live on ISS-0198's own run: its three
+  dispatches measured 1,999 / 3,074 / 2,451 chars and flagged neither H-SIZE check,
+  while their `result.summary` values were 20,095 / 9,021 / 12,104. Both the
+  DOC-UPDATER and the REVIEWER on that run noted the pattern in their own summaries,
+  unprompted.
+
+  WHY IT WAS DEFERRED RATHER THAN FOLDED INTO ISS-0198: on ISSUE-FIXER's explicit
+  recommendation. Silently extending a dispatch rule to results would have exceeded
+  ISS-0198's scope, and the two cases are not obviously symmetric. A dispatch restating
+  a file it already names in `artifacts_in` is pure redundancy. A `result.summary` is an
+  ATTESTATION -- HANDOFF_PROTOCOL.md section 3 assigns it to the acting agent as its own
+  first-hand report, section 4 requires a validator to state what it re-derived and how,
+  and section 2's four worked examples are deliberately detailed. Evidence recorded in a
+  result is not obviously redundant with anything.
+
+  WHAT A FIX MUST DECIDE, deliberately not pre-decided here: whether `result.summary`
+  has a redundancy defect at all, distinct from being genuinely long; and if so what the
+  structured outlet is -- `artifacts_out` pointing at a written report, a required shape,
+  or nothing. A NO-CHANGE outcome is a legitimate resolution and must not be treated as
+  a failure to fix it.
+
+  DO NOT weaken section 4's requirement that a validator state what it independently
+  re-derived, or section 2's worked-example detail. Both are load-bearing for the
+  producer/validator model.
+
+affected_files:
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+
+related:
+  - ISS-0198  # fixed the dispatch side; this is the deferred other half
+  - ISS-0191  # the linter that would host any mechanical check
+
+queue_task_id: 200
+github_issue: https://github.com/tvolodi/letflow/issues/391
+github_issue_note: >
+  register_task created both the queue task (200) and its mirrored GitHub issue (#391)
+  in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
+  separately. The id comes from register_task's `issue_ref`, not from a directory scan.
+status: open

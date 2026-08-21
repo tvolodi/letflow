@@ -61,7 +61,33 @@ post   "/users/:id/status", do: <status handler>
 The existing catch-all `match _ -> Letflow.Api.Response.not_found(conn)` stays,
 unchanged, below these five.
 
-## 2. Each handler's exact composition
+### 1a. Required `@moduledoc` content for `Letflow.Routers.Identity` (AC6)
+
+This is a concrete build requirement, not merely a design-doc narrative aid: as
+part of this change, ELIXIR-DEV must write (or extend, if REQ-070's stub already
+has one) a `@moduledoc` on `Letflow.Routers.Identity` whose text names, for each
+of the five routes below, exactly which `Letflow.Identity` function(s) the
+handler calls — so a reader of the shipped module (not this design doc) can see
+route-layer thinness for themselves. The moduledoc must contain, at minimum,
+one line or table row per route in this shape:
+
+```
+* POST   /users              -> Identity.create_user/2
+* GET    /users              -> Identity.list_users/2
+* GET    /users/:id          -> Identity.get_user/2
+* PATCH  /users/:id          -> Identity.get_user/2, then Identity.update_user_profile/3
+* POST   /users/:id/status   -> Identity.get_user/2, then Identity.update_user_status/3
+```
+
+(content mirrors §0's summary table's "Handler"/"`Letflow.Identity` fn called"
+columns exactly — §0's table is this same mapping restated for this design
+doc's own readers; the moduledoc text above is what must actually ship in
+`lib/letflow/routers/identity.ex`). CODE-DESIGN-VALIDATOR (on re-review) and
+REVIEWER (at Step 2d) check this by reading the real `@moduledoc` string in the
+committed file and confirming each of the five lines is present and names the
+correct function(s) — a moduledoc that only describes the module in general
+terms ("handles user CRUD routes") without naming the five function-per-route
+mappings does not satisfy AC6.
 
 Every handler follows the same five-step shape; only the step-3/4/5 specifics
 differ per handler. Steps 1-2 are common to all five and are not repeated per
@@ -531,11 +557,15 @@ Additionally, one gap outside `Letflow.Identity` itself:
   added by extending `ConfigurableTokenVerifierDouble` with a roles-parameterized
   token format is left to TEST-DESIGNER/CODE-DESIGN-VALIDATOR's judgement — not
   blocking, since direct sub-router dispatch is an established precedent in this
-  codebase (REQ-070 AC2's `router_test.exs:104-113`, REQ-072's
-  `context_test.exs` throughout) and "through the real router" (AC1's wording) is
-  satisfied by calling `Letflow.Routers.Identity.call/2` directly — that module
-  *is* "the real router" the acceptance criterion names, distinct from "the real
-  full HTTP+JWT pipeline," which AC1's text does not require.
+  codebase (REQ-070 AC2's `router_test.exs:104-113`, which dispatches directly
+  through a real sub-router the same way this design's tests do — note
+  REQ-072's `context_test.exs` is **not** a precedent for this specific
+  mechanism: its tests bypass the router entirely, calling `Letflow.Api.Context`
+  functions directly, rather than dispatching through a sub-router) and "through
+  the real router" (AC1's wording) is satisfied by calling
+  `Letflow.Routers.Identity.call/2` directly — that module *is* "the real
+  router" the acceptance criterion names, distinct from "the real full
+  HTTP+JWT pipeline," which AC1's text does not require.
 
 ## 6b. Dispatch mechanism for all five handlers' tests (referenced above)
 

@@ -379,15 +379,66 @@ is a recurring class handled ad hoc, so it gets a rule rather than a convention.
 Re-derived 2026-08-21 from `handoffs/registry.json`, `handoffs/orchestrator.log` and the
 handoff files themselves.
 
-**Two boundary facts about this table, both of which a re-derivation will hit.** First,
-`WF02-REQ038`'s death is recorded *only* in `registry.json`'s run note: the dispatch
-committed nothing, so it left no handoff file and no `orchestrator.log` line of its own, and
-a sweep of the handoff files alone cannot see it. Second, a **fifth** abnormal termination
-in the same window is deliberately **not** in this table — `WF02-REQ025-20260817`
-(`orchestrator.log:297`), where the session that died was ORCH's own, *between* dispatches,
-holding no agent handoff. ORCH resumed the same run and finished the work in place, so no
-`result` was ever left for a second party to complete. That is the edge of the class, not an
-omission from it.
+**A boundary fact about this table that a re-derivation will hit.** `WF02-REQ038`'s death is
+recorded *only* in `registry.json`'s run note: the dispatch committed nothing, so it left no
+handoff file and no `orchestrator.log` line of its own, and a sweep of the handoff files
+alone cannot see it.
+
+**The membership test — apply this, not the class name.** An incident is in this section's class when **both** clauses hold, and out when **either**
+fails:
+
+1. **A dispatch had been issued** — evidenced by a handoff file addressed to the agent, or by
+   an `orchestrator.log` `DISPATCH` line naming it.
+2. **The dispatched agent had begun work** — evidenced by an artefact or record *about that
+   agent*: a handoff file it wrote or stamped, a commit it authored, an `orchestrator.log`
+   line reporting its own progress or verdict, or an explicit statement in `registry.json`
+   that it died **mid-work** (or after completing its side effects). ORCH's own `DISPATCH`
+   line is evidence of clause 1 and **never** of clause 2.
+
+Clause 2 is the one that does the work, and it is deliberately satisfiable by prose: as
+`WF02-REQ038` proves, an agent can die mid-work having produced no file and no commit, so a
+test that demanded a file-shaped artefact would exclude a row already in the table. What
+clause 2 rejects is a dispatch that was *issued and never taken up* — nothing was left for a
+second party to complete, which is the whole subject of §4.1. ORCH's own session dying
+*between* dispatches fails both clauses.
+
+**Decide by the test, never by the treatment.** Two incidents can draw the identical
+redispatch response and still fall on opposite sides, because redispatch is also what an
+unstarted dispatch gets. Re-verified 2026-08-21, all four rows above satisfy clause 2:
+`WF02-REQ027` (`registry.json` `/runs/9/step_2d_infra_restart`: "terminated mid-work by an
+infrastructure session limit"), `WF02-REQ038` (`/runs/29/note`: "connection error mid-work"),
+`WF02-REQ043` (`/runs/34/note`: "Interrupted by a host power outage mid-rebase"),
+`WF03-ISS0109` (`/runs/57/note`: "died on an API error AFTER the merge landed").
+
+**Known exclusions — a record of what has been checked, NOT an exhaustive set.** Sweeping
+`registry.json`'s prose fields and `orchestrator.log` on their own terms (2026-08-21) placed
+two abnormal terminations from the same window outside the class. They are recorded so the
+next re-derivation need not re-litigate them. **This is not a claim that no third exists**;
+anything newly surfaced is to be tested against the two clauses above rather than checked
+against this list.
+
+- **`WF02-REQ025-20260817`** (`orchestrator.log:297`) — the session that died was ORCH's own,
+  *between* dispatches, holding no agent handoff. **Fails clause 1.** ORCH resumed the same
+  run and finished the work in place, so no `result` was ever left for a second party to
+  complete.
+- **`WF02-REQ019-20260816`** — **out of class**, and the reasoning is recorded in full because
+  this is the case that reads in-class on treatment and out-of-class on the test. Clause 1
+  **holds**: `orchestrator.log:49` carries `ORCH -> TEST-RUNNER | Step 4 test run dispatched`,
+  and `registry.json` `/runs/2/note` reads "This run was interrupted mid-pipeline when the
+  host process exited after Step 4 dispatch, then resumed in a later session from Step 4
+  onward". Clause 2 **fails**: nothing records that TEST-RUNNER began. The only artefact is
+  ORCH's own — `orchestrator.log:50` (the `RESUME` line) reads "Committed and pushed the
+  orphaned Step 4 dispatch log line (commit `2682e06`)", and `2682e06`'s subject is "commit
+  orchestrator.log Step 4 dispatch entry from interrupted run", i.e. ORCH committing its own
+  dispatch line, not the agent working. `handoffs/WF02-REQ019-20260816/` holds exactly one
+  `step04-test-run.json` and it is the **re**-dispatch (`created_at 2026-08-16T05:10:19Z`,
+  after the interruption), whose task text states the prior session "was interrupted before
+  Step 4 could run". What died was the host process holding ORCH's session — the same shape
+  as `WF02-REQ025`. It was then redispatched to a fresh TEST-RUNNER, the identical treatment
+  two rows of the table record, which is exactly why treatment cannot decide membership.
+
+Both exclusions fail the test, so **neither is a fifth row and the four-row table above stands
+unchanged.**
 
 **This set and §3's four ad-hoc keys are two different sets that happen to be the same
 size, and must not be conflated:** two of those four keys correct a timestamp rather than
@@ -468,8 +519,9 @@ null `result` is what puts a handoff in this section's class; a bare `PENDING` i
 ### (b) The mandatory marking: `not_agent_attested`
 
 A handoff completed under (a-2) **MUST** carry a top-level field named exactly
-`not_agent_attested`, an object with all six members below. Not a convention, not a
-sentence in `result.summary`, not a key name chosen at the time of writing.
+`not_agent_attested`, an object with **the six REQUIRED members below, and at most the one
+OPTIONAL member `backfill_note`**. Not a convention, not a sentence in `result.summary`, not
+a key name chosen at the time of writing.
 
 | Member | Contents |
 |---|---|
@@ -479,6 +531,23 @@ sentence in `result.summary`, not a key name chosen at the time of writing.
 | `fields_written` | **the explicit list of fields this writer authored**, e.g. `["status","completed_at","result"]` |
 | `evidence` | the commands run and what each one established — one entry per command |
 | `not_verifiable_after_the_fact` | an explicit list of what the probes could not settle. Never an empty implication; if genuinely nothing, say `[]` deliberately |
+| `backfill_note` **(OPTIONAL — the only one)** | present **only** on a file amended under this subsection's single named exception below: what was renamed or added, by which run, and the attestation that no factual assertion changed. Admissible on no other file |
+
+**The member set is CLOSED at those seven, and `backfill_note` is the only optional one.** A
+member that is neither required nor `backfill_note` is a defect, not an extension — that is
+the point of enumerating them, and it is what lets ISS-0191's linter reject a misspelled or
+junk key. Two alternatives were considered and rejected when the ISS-0109 backfill first
+exposed the gap: reading "six" as a required *minimum* was rejected because it converts a
+closed enumeration into an open one and costs the linter exactly that ability; folding the
+content into `reason` was rejected because `reason` states why the **result** is unattested
+while `backfill_note` states why the **marker** was applied retroactively, and merging them
+collapses the reconstruction-versus-measurement distinction inside the one file whose whole
+purpose is preserving it.
+
+**And the exception that admits `backfill_note` is SPENT.** It authorised one named file
+(below) and no other, so **no further handoff can acquire this member** — a second file
+carrying it would be a marker retro-fitted under an authorisation that no longer exists,
+which is precisely what the no-backfill rule forbids.
 
 **It is OPTIONAL-BY-ABSENCE — and the absence is date-scoped, because it has to be.** It
 appears only on a handoff reconstructed under (a-2). **Every handoff file predating this

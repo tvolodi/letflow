@@ -1009,6 +1009,24 @@ because its dispatch committed nothing, so it left no handoff file and no
 unit is "handoff files carrying a death marker" structurally cannot see it. Same mechanism,
 one level up.
 
+**Then a sixth time, one level up again — and the escalation is the transferable part.** The
+Step 3f gate re-derived the class *boundary* as dispatched, and found that the section's
+**exclusion set** had been enumerated by the same handoff-file-shaped sweep that missed
+`WF02-REQ038`: it named one excluded incident and read as though that were all of them, while
+`WF02-REQ019-20260816` sat outside it, in-class on treatment and out-of-class on the test, and
+undecidable either way because the section stated a class *name* and no membership *test*.
+Trace the four steps and the shape is unmistakable: the error moved from the **count** (four
+keys, three deaths), to the **class** (which deaths count), to the **exclusion set** (which
+non-members have been checked for) — and each move survived a re-derivation that was genuinely
+diligent *within the frame it inherited*. Re-deriving one level down from where the defect
+lives always confirms the defect. So the corrective is not "re-derive harder" but **name the
+level you are re-deriving at, and check the level above it once**: if you are recounting
+members, re-derive the membership test; if you are checking the test, re-derive whether the
+set of things it was applied to was itself assembled by a sweep with the same blind spot. The
+fix that finally held was to write down a test a reader can apply to a candidate and get the
+same answer as anyone else, and to state the exclusion list as *what has been checked* rather
+than as *what exists*.
+
 **Why it is easy to miss.** Re-deriving *feels* like the diligent path, and it is — the
 count really is recomputed, from the real files, by a real command. What is never
 recomputed is the category the command selects on, because it arrives inside the question.

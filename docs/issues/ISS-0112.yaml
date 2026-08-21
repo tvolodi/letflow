@@ -119,3 +119,66 @@ carried_findings:
       (:event_type_seed_failed / :tenant_not_provisioned in RoleRegistryTest), pointing at
       the registry row rather than the schema -- test/letflow/role_registry_test.exs also
       still carries a hand-rolled fixture and is worth the same adoption treatment.
+
+progress_note_2026-08-21T13:53:50Z: >
+  Run WF03-ISS0112-20260821. Deliberately made NO code changes this run -- read
+  docs/issues/ISS-0113.yaml first (its blanket-fix attempt broke 12/125 tests across 6
+  modules via three distinct sandbox-mode hazard classes, then was fully reverted) and
+  concluded that migrating the remaining call sites onto Letflow.TenantFixture without
+  the per-caller sandbox-behaviour mechanism ISS-0113 identified as necessary would risk
+  repeating that exact failure, this time across up to 13 files instead of 6. Building
+  that mechanism itself is gated: tenant_fixture.ex's own moduledoc states "Implements
+  [the ISS-0109 design doc] exactly -- do not add behavior beyond it without a design
+  update," and INV-F-6 (lib/letflow/design/iss0109-provisioning-completeness-and-fixture-instrumentation.md:446)
+  explicitly requires adoption to change sandbox-mode behaviour in NEITHER direction --
+  so even an opt-in flag is a real design-doc amendment, not a same-run drop-in, and
+  doing that properly needs its own CODE-DESIGNER/CODE-DESIGN-VALIDATOR pass rather than
+  a rushed addition here.
+
+  What this run DID do -- real, verified (no file changes, so nothing to regress),
+  triage of the current true remaining scope, so the next run does not have to
+  re-derive it:
+
+  Re-measured first-hand (this session already migrated several modules via ISS-0116/
+  ISS-0115/ISS-0113's investigation: engine_test.exs, engine/reconstruction_test.exs,
+  identity_test.exs, rollback_test.exs all now use Letflow.TenantFixture). Searched the
+  full test/ tree for the actual triple-pattern signature (`provision_tenant_schema` +
+  `replay_migrations` + `Sandbox.mode`, not just any one of the three, which
+  overcounts on doc-comment mentions -- identity_test.exs false-positived this way and
+  is excluded below since it's already migrated). **13 files remain on the raw
+  copy-pasted template:**
+
+  - **6 confirmed HIGH-RISK (Task.async/Task.start present -- likely need `:auto`
+    preserved for real cross-process connections, per ISS-0113's mechanism #2):**
+    test/letflow/role_registry_test.exs, test/letflow/event_store_test.exs,
+    test/letflow/engine_complete_task_test.exs, test/letflow/engine_cancel_instance_test.exs,
+    test/letflow/engine_execution_error_test.exs, test/letflow/engine_concurrency_test.exs
+    (7 Task call sites alone, the most of any file).
+  - **1 confirmed HIGH-RISK (multi-provision-call within one test, ISS-0113's mechanism
+    #3):** test/letflow/tenant_provisioning_event_seed_test.exs -- its own
+    "OQ-1: replay_migrations/2 re-run against an already-seeded tenant stays idempotent"
+    test calls `replay_migrations/2` a SECOND time against the same tenant inside one
+    test, the exact shape that broke promotion_assertion_rerun_test.exs under ISS-0113's
+    attempted fix.
+  - **1 NEEDS INDIVIDUAL READ (not a template copy at all):**
+    test/letflow/tenant_provisioning_test.exs -- already carries its own hand-written
+    comments about deliberate sandbox-mode choices per test (e.g. line ~281, ~385); this
+    is the module directly under test for `TenantProvisioning` itself, not a consumer of
+    the fixture pattern, and migrating it may not even be the right move -- read it in
+    full before deciding, don't just port it like the others.
+  - **5 UNVERIFIED CANDIDATES (no Task spawn detected, single replay call detected --
+    the best-looking migration targets, but "no red flags found" is not the same as
+    "verified safe"; each still needs the same per-file read ISS-0113 demonstrated is
+    necessary before touching):** test/letflow/engine_plugin_error_routing_test.exs,
+    test/letflow/engine_sub_process_test.exs, test/letflow/engine_variable_schema_merge_test.exs,
+    test/letflow/identity_migration_test.exs, test/letflow/req064_tenant_id_removal_test.exs.
+
+  NEXT RUN SHOULD: (1) do the design-doc amendment for a per-caller sandbox-restore
+  option first, gated properly; (2) start with the 5 UNVERIFIED CANDIDATES, migrating
+  and verifying one at a time; (3) treat the 7 HIGH-RISK files as needing the new
+  opt-in mechanism specifically, not the default; (4) read
+  tenant_provisioning_test.exs fresh rather than assuming it fits the same pattern.
+
+  Status left `open` -- real progress recorded, nothing resolved. Queue task 180
+  released as done (this run's own work is complete) without closing the underlying
+  issue.

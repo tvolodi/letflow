@@ -1,0 +1,72 @@
+{
+  "handoff_id": "11808999-4d86-4d6c-a3b6-6498409297ce",
+  "run_id": "WF03-ISS0109-20260821",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0109-20260821/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-08-21T01:04:10Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "4de8efe9-138d-4b44-a8ae-0e542aa5441f",
+      "eafa46f5-0ecd-4727-baf6-20b65931084a"
+    ],
+    "owned_modules": [
+      "test/support/",
+      "test/letflow/definitions/promotion_test.exs",
+      "test/letflow/definitions/promotion_assertion_rerun_test.exs",
+      "test/test_helper.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0109-20260821",
+    "issue_ids": [
+      "ISS-0109"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0109.yaml",
+      "handoffs/WF03-ISS0109-20260821/step-005-issue-fixer-registry-lookup.json",
+      "test/support/tenant_schema_reaper.ex",
+      "test/test_helper.exs",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/letflow/definitions/promotion_test.exs",
+      "test/letflow/definitions/promotion_assertion_rerun_test.exs",
+      "test/reports/report-20260820-WF02-REQ066-20260820.yaml",
+      "lib/letflow/design/iss064-orphaned-tenant-schemas-fix.md"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 1 -- DIAGNOSE the root cause of ISS-0109 (GH#358). Produce a diagnosis ONLY. You do not implement the fix; CODE-DESIGNER designs it and ELIXIR-DEV implements it in later steps.\n\nThe symptom, from docs/issues/ISS-0109.yaml (read it in full): during a full-suite `mix test`, a tenant schema that the test itself provisioned ~750ms earlier is DROPPED out from under the live test, so replay_migrations/1 fails with invalid_schema_name (3F000) in Letflow.Definitions.PromotionTest, and in PromotionAssertionRerunTest a table inside a still-existing tenant schema is gone (undefined_table, 42P01).\n\nTEST-RUNNER deliberately stopped short of attributing it and recorded TWO candidate mechanisms, neither excluded:\n  (a) an on_exit/1 teardown from an earlier test running concurrently with the next test's setup, tearing down a reused/colliding tenant id under a live test;\n  (b) a second, concurrently-running `mix test` invocation against the same shared Postgres, whose reaper sweep or teardown reclaims this run's live schemas -- noting TenantSchemaReaper's 300s min_age was chosen when the suite was shorter than 300s, and the suite now takes ~608s.\nTEST-RUNNER also excluded TenantSchemaReaper as the dropper for failure 3 on the evidence that the row was ~1 second old vs the reaper's 300s min_age -- CHECK THAT EXCLUSION RATHER THAN INHERITING IT. Specifically: verify how `provisioned_at` is actually written and in what clock/zone, and how the reaper's cutoff is computed (NaiveDateTime.utc_now() minus min_age). A row whose provisioned_at is written from a different clock basis than the cutoff would make a 1-second-old row look arbitrarily old, which would put the reaper straight back on the suspect list. Confirm or refute this concretely against the code and, if you can, against real rows in a database -- do not settle it by reading alone if a query can settle it.\n\nNote also candidate (c), which the issue record does not list: MIX_TEST_PARTITION-based test-database isolation. Establish whether two concurrent `mix test` invocations in this multi-workspace setup actually land on DIFFERENT databases (and different Postgres instances -- see the environment facts below) or can share one. If they cannot share one, mechanism (b) is dead and must be reported as dead; if they can, show how.\n\nProcedure (WF-03 Step 1):\n1. REPRODUCE. Do not diagnose from the bug report's prose alone (No Speculation). The symptom is documented as full-suite-only and intermittent, so a green targeted run proves nothing -- design a reproduction that actually stresses the suspected mechanism (e.g. running the two named modules concurrently with whatever else provisions tenant schemas, or driving the suspected teardown path directly). Quote real output. If after honest effort you cannot reproduce it, say exactly that and rest the diagnosis on code+log evidence instead -- an unreproduced-but-code-proven root cause is an acceptable outcome; a guessed one is not.\n2. TRACE TO ROOT CAUSE: which function, which invariant broke, and why no existing test catches it. Identify every writer of a DROP SCHEMA / DELETE FROM tenant_schemas in the tree (grep for it -- lib/ and test/ both) and account for each one as either the culprit or excluded on evidence.\n3. State what a fix must change, precisely enough for CODE-DESIGNER to design from, including which of the candidate mechanisms is real. If more than one is real, say so.\n4. Write the diagnosis into result.summary. Do NOT implement a fix. Do not edit lib/ or test/ code beyond throwaway scratch work (put any throwaway script in scratch/, which is git-ignored, per core-directives.md's File Placement Rules).\n5. If you discover an unrelated defect while doing this, do NOT fix it -- report it in result.issues and let ORCH file it via ISSUE_QUEUE.md.\n\nENVIRONMENT FACTS already established by ORCH -- do not re-derive, but DO verify anything you rely on:\n- Working directory is the letflow-2 workspace (C:/Users/tvolo/dev/ai-dala/letflow-2). It runs its OWN Postgres container letflow-2-postgres-1 on host port 5472 (LETFLOW_DB_PORT=5472 in the untracked ./.env). The sibling letflow workspace runs letflow-postgres-1 on 5462. ISS-0109 was observed in the SIBLING workspace's run, against 5462 -- not this one. That is directly relevant to candidate mechanism (b) in the issue record.\n- Toolchain on PATH is Elixir 1.20.3 / OTP 29, while .tool-versions pins 1.18.3-otp-27. This is a KNOWN, already-filed defect (ISS-0106/GH#354) and a sibling session holds it. Consequence for you: `mix compile --warnings-as-errors` and `mix format --check-formatted` FAIL on main itself for reasons unrelated to ISS-0109. Use plain `mix compile` and `mix test`. Do NOT reformat files and do NOT fix those warnings -- that is ISS-0106's run, not yours.\n- `mix` may not be on PATH as a bare command in every shell; invoke it as \"/c/Program Files/Elixir/bin/mix\" (quoted) if needed.\n- A full `mix test` run currently takes ~600s. Budget for that; prefer targeted runs where they can settle a question, but do not report a full-suite-only symptom as reproduced from a targeted run.\n- The current branch is feature/WF03-ISS0109-20260821 and it is yours to commit to. Commit by explicit filename, never `git add -A`.",
+    "acceptance_criteria": [
+      "A reproduction was ATTEMPTED with real commands and real quoted output; either the failure was reproduced (quote it) or the attempt is described concretely along with why it did not reproduce",
+      "TEST-RUNNER's exclusion of TenantSchemaReaper is either CONFIRMED or REFUTED on fresh evidence, including an explicit check of how provisioned_at is written vs how the reaper's cutoff is computed",
+      "Candidate (c) -- whether two concurrent mix test invocations in this multi-workspace setup can share one test database/Postgres instance -- is settled with evidence, and mechanism (b) is thereby confirmed or declared dead",
+      "Every code path in the repo that issues DROP SCHEMA or DELETE FROM tenant_schemas is enumerated and each is either named as the culprit or excluded with a stated reason",
+      "result.summary states a ROOT CAUSE (not a symptom restatement), the affected files, and what a fix must change -- specific enough for CODE-DESIGNER to design from",
+      "No fix was implemented: git diff on the branch shows no changes under lib/ or test/ attributable to this step (scratch/ is exempt and is git-ignored)"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0109-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0109-20260821",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

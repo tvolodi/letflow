@@ -1,0 +1,70 @@
+{
+  "handoff_id": "eafa46f5-0ecd-4727-baf6-20b65931084a",
+  "run_id": "WF03-ISS0109-20260821",
+  "workflow_id": "WF-03",
+  "step": "0.5",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0109-20260821/step-005-issue-fixer-registry-lookup.json",
+  "created_at": "2026-08-21T01:04:10Z",
+  "started_at": "2026-08-21T01:04:15Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "4de8efe9-138d-4b44-a8ae-0e542aa5441f"
+    ],
+    "owned_modules": [
+      "test/support/",
+      "test/letflow/definitions/promotion_test.exs",
+      "test/letflow/definitions/promotion_assertion_rerun_test.exs",
+      "test/test_helper.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0109-20260821",
+    "issue_ids": [
+      "ISS-0109"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0109.yaml",
+      "docs/issues/ISS-0048.yaml",
+      "docs/issues/ISS-0050.yaml",
+      "docs/issues/ISS-0060.yaml",
+      "docs/issues/ISS-0062.yaml",
+      "docs/issues/ISS-0064.yaml",
+      "docs/issues/ISS-0106.yaml",
+      "docs/issues/ISS-0108.yaml",
+      "lib/letflow/design/iss064-orphaned-tenant-schemas-fix.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 -- REGISTRY LOOKUP for ISS-0109 (GH#358). Read docs/issues/ISS-0109.yaml in full first.\n\nISS-0109 explicitly declares itself 'same class as ISS-0048/0050/0060/0062/0064 but in modules those issues do not name', and ISS-0064 already produced a shipped fix (Letflow.TenantSchemaReaper, design doc lib/letflow/design/iss064-orphaned-tenant-schemas-fix.md). That makes the recurrence question in WF-03 Step 0.5 point 2 the CENTRAL question of this step, not a formality: determine whether ISS-0109 is (i) a genuinely new mechanism, or (ii) a recurrence of a root cause a prior issue was already marked resolved for -- i.e. a fix that did not actually fix the underlying problem.\n\nProcedure:\n1. Read every related issue record (ISS-0048, ISS-0050, ISS-0060, ISS-0062, ISS-0064, and also ISS-0108 which was filed by the same run for a DIFFERENT mechanism) plus the ISS-0064 design doc. Record, for each: its status, its stated root cause, and what its fix actually changed.\n2. Grep docs/issues/ for any OTHER entry with matching symptoms (invalid_schema_name / 3F000, undefined_table / 42P01, DROP SCHEMA during a live test, on_exit teardown, tenant_schemas orphan) that the ISS-0109 record does not already name. It was written by TEST-RUNNER under time pressure and its `related:` list may be incomplete.\n3. If a clear prior match exists AND the same root cause has recurred, say so explicitly and raise the effective severity to at least MAJOR per WF-03 Step 0.5 -- state that verdict in result.summary in those words so ORCH can act on it.\n4. Do NOT diagnose ISS-0109's own root cause in this step and do NOT change any code. This step is a literature review of the issue registry; the diagnosis is Step 1, which you will receive next.\n\nENVIRONMENT FACTS already established by ORCH -- do not re-derive, but DO verify anything you rely on:\n- Working directory is the letflow-2 workspace (C:/Users/tvolo/dev/ai-dala/letflow-2). It runs its OWN Postgres container letflow-2-postgres-1 on host port 5472 (LETFLOW_DB_PORT=5472 in the untracked ./.env). The sibling letflow workspace runs letflow-postgres-1 on 5462. ISS-0109 was observed in the SIBLING workspace's run, against 5462 -- not this one. That is directly relevant to candidate mechanism (b) in the issue record.\n- Toolchain on PATH is Elixir 1.20.3 / OTP 29, while .tool-versions pins 1.18.3-otp-27. This is a KNOWN, already-filed defect (ISS-0106/GH#354) and a sibling session holds it. Consequence for you: `mix compile --warnings-as-errors` and `mix format --check-formatted` FAIL on main itself for reasons unrelated to ISS-0109. Use plain `mix compile` and `mix test`. Do NOT reformat files and do NOT fix those warnings -- that is ISS-0106's run, not yours.\n- `mix` may not be on PATH as a bare command in every shell; invoke it as \"/c/Program Files/Elixir/bin/mix\" (quoted) if needed.\n- A full `mix test` run currently takes ~600s. Budget for that; prefer targeted runs where they can settle a question, but do not report a full-suite-only symptom as reproduced from a targeted run.\n- The current branch is feature/WF03-ISS0109-20260821 and it is yours to commit to. Commit by explicit filename, never `git add -A`.",
+    "acceptance_criteria": [
+      "Every issue record named in ISS-0109's `related:` list has been read, and its status + stated root cause + what its fix changed is summarised in result.summary",
+      "A grep of docs/issues/ for the symptom class was actually run and its result reported, including any matching entry NOT already named in ISS-0109's related: list (or an explicit statement that there were none)",
+      "An explicit RECURRENCE verdict is stated: either 'recurrence of <ISS-NNNN>, severity raised to MAJOR' or 'not a recurrence -- <named prior issues> have distinct root causes, because <reason>'",
+      "No file under lib/, test/, or priv/ was modified in this step"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0109-20260821",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0109-20260821",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

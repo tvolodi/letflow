@@ -52,6 +52,18 @@ description: >
   -- see docs/anti-patterns.md's Mix-task-discovery-cost finding and the precedent of
   scripts/timed_test.sh, which is deliberately not a mix task.
 
+  ADDED TO SCOPE 2026-08-21 (ISS-0198, run WF03-ISS0198-20260821): three size/structure
+  checks -- H-SIZE-1 (WARN, cite-and-restate), H-SIZE-2 (WARN, under-specified) and
+  H-SIZE-3 (INFO, per-run report). They are specified in full, mechanically, in
+  HANDOFF_PROTOCOL.md's Enforcement note under "Specified but NOT YET RUNNING"; do not
+  re-derive them here. Each is computable from a single handoff file with json.load, len,
+  substring search and basename -- no repo state, no cross-file reads, no judgement.
+  SEQUENCING: like every other check in this issue, these will not run green until
+  ISS-0190's 15+13 existing violations are cleared, so ISS-0190 is a prerequisite for them
+  too. Nothing in HANDOFF_PROTOCOL.md claims these checks run today, and ISS-0198's fix
+  deliberately does not depend on their existing -- the structure rule stands on its own
+  and these only measure it.
+
   FRAMING NOTE: HANDOFF_PROTOCOL.md calls this "its own requirement". It is filed as an
   issue because that is the mechanism available to a discovering agent under
   ISSUE_QUEUE.md; whoever picks it up should judge whether it warrants promotion to a REQ
@@ -63,6 +75,7 @@ affected_files:
 
 related:
   - ISS-0190  # the data defects this linter would catch; likely a prerequisite
+  - ISS-0198  # added H-SIZE-1/2/3 to this issue's scope; specs in HANDOFF_PROTOCOL.md's Enforcement note
   - ISS-0192  # the two stale PENDING handoffs
   - ISS-0117  # defines the recovery marker whose well-formedness the linter can check
 

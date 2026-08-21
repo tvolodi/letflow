@@ -11,10 +11,13 @@ description: >
   step was taking ten minutes of wall-clock time. Filed as a process defect in the pipeline
   itself, not in any artefact it produced.
 
-  MEASURED on that run: nine handoff files for one documentation fix, with
-  `task.description` lengths of 1,405 / 4,867 / 10,027 / 6,780 / 10,281 / 6,290 / 9,115
-  characters, producing handoff files of 21-29 KB each. Each dispatched agent then spent
-  90,000-157,000 tokens, and each step took roughly 8-11 minutes.
+  MEASURED on that run -- CORRECTED 2026-08-21, see the `corrections` block below; the
+  figures as originally filed are preserved there rather than deleted. The run produced
+  TEN handoff files for one documentation fix (not nine), with `task.description` lengths
+  of 1,405 / 4,867 / 10,027 / 6,780 / 10,281 / 6,290 / 8,915 / 7,300 / 6,046 / 6,437
+  characters, producing handoff files of 8,693-41,723 bytes (not "21-29 KB each"). Each
+  dispatched agent then spent 90,000-157,000 tokens, and each step took roughly 8-11
+  minutes.
 
   WHY IT HAPPENS, and why it is not simply an agent being verbose: core-directives.md makes
   weak-model tolerance a design constraint and requires every role file and workflow doc to
@@ -40,6 +43,35 @@ description: >
   DO NOT FIX BY WEAKENING THE WEAK-MODEL CONSTRAINT. That constraint is load-bearing and
   predates this issue. The target is redundancy between a handoff and the artefacts it
   already names, not the explicitness the constraint requires.
+
+corrections:
+  - at: "2026-08-21T09:15:10Z"
+    by: DOC-UPDATER
+    run: WF03-ISS0198-20260821
+    source: handoffs/WF03-ISS0198-20260821/step-005-01-diagnose.json
+    note: >
+      This issue's own figures were re-derived first-hand from handoffs/*.json during this
+      run's Step 1 and three were wrong. Recorded here rather than silently overwritten, so
+      a later reader can see they were measured and corrected.
+      (1) FILE COUNT: the run has TEN handoff files, not nine -- the seven-number list above
+      stopped at step-03e and omitted step-03f-reviewer-final, step-03g-rework2 and
+      step-03h-reviewer-close.
+      (2) SEVENTH FIGURE: step-03e-ridealong's task.description is 8,915 characters, not
+      9,115. A digit transposition; immaterial to the argument.
+      (3) FILE-SIZE RANGE: actually 8,693-41,723 bytes, not "21-29 KB". Material -- it
+      understated the top of the range by ~44% and pointed at the wrong target. The largest
+      FILES are not the ones with the largest DESCRIPTIONS: across that run result.summary
+      totals 143,465 chars against task.description's 68,348, i.e. result prose is 2.1x
+      dispatch prose. The fix committed under this issue deliberately addresses
+      task.description only; result.summary is out of its scope and ORCH is filing it
+      separately.
+      (4) PREMISE: this issue's title and framing imply long dispatches cause long steps.
+      Measured, they do not -- pooled r(desc chars, step minutes) = 0.281 over 69 timed
+      steps, and the shortest-dispatch run measured ran LONGER in wall-clock (104.5 min vs
+      73.2) with far more rework. The fix is therefore justified on redundancy elimination,
+      which is what this issue's own binding constraint already named, and NOT on latency.
+      The title is left as filed because it is this issue's identity; this note is what
+      corrects it.
 
 affected_files:
   - docs/agents/instructions/core-directives.md

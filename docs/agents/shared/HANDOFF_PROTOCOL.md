@@ -94,6 +94,9 @@ premise, and the receiving agent was right to check rather than comply:**
     "requirement_text": {
       "<REQ-ID>": "<the requirement's full `description` text, copied verbatim from docs/requirements.yaml>"
     },
+    "source_text": {
+      "<relative/path/to/source>": "<text copied verbatim from that file, when this dispatch depends on the exact wording>"
+    },
     "related_handoff_ids": ["<uuid>", "..."],
     "artifacts_in": ["<relative/path>", "..."],
     "owned_modules": ["lib/letflow/...", "..."]
@@ -132,8 +135,14 @@ premise, and the receiving agent was right to check rather than comply:**
 }
 ```
 
-**`not_agent_attested` is the one OPTIONAL field in the block above; every other field is
-always present.** It appears ONLY on a handoff *reconstructed* under §4.1(a-2). A
+**Exactly two fields in the block above are OPTIONAL — top-level `not_agent_attested` and
+`context.source_text`. Every other field is always present.** The two are optional for
+unrelated reasons and neither licenses a third: `not_agent_attested` marks a
+reconstruction (§4.1), `context.source_text` carries copied source text when a dispatch
+has any (see below). Both are OPTIONAL-BY-ABSENCE, so every handoff file written before
+either existed stays valid unchanged and still parses against this schema.
+
+**`not_agent_attested`** appears ONLY on a handoff *reconstructed* under §4.1(a-2). A
 §4.1(a-1) **redispatch does NOT carry it** — the replacement agent did the work it
 reports, so its `result` is a genuine first-hand attestation and nothing was
 reconstructed. Read "recovered under §4.1" as (a-2) only; stamping this field onto a
@@ -157,6 +166,78 @@ substitute: it tells the receiving agent to read the whole file, which is the ex
 this field exists to remove. If a handoff reaches you with `requirement_ids` set but
 `requirement_text` missing, that is a malformed handoff — read the named entries with a
 targeted `awk`/`Select-String` range (never a full read) and report it as a MINOR issue.
+
+### What goes in `task.description`, and what goes in `artifacts_in`
+
+**This subsection is the canonical definition of the handoff structure rule.** Other files
+point here; none of them restates it. Do not re-derive it from "is this dispatch too
+long?"
+
+**`task.description` carries the instruction. It does not carry a second copy of a file it
+already names.** Concretely:
+
+| Belongs INLINE, in `task.description` / `task.acceptance_criteria` | Belongs as a PATH in `context.artifacts_in` |
+|---|---|
+| What the receiving agent must do, in the order it must do it | A prior handoff's diagnosis, verdict or evidence |
+| The acceptance criteria this step is judged against | A diff, a test report, a log |
+| Constraints scoped to *this* step — what is out of scope, what must not be weakened, what a prior step got wrong | An issue record, a decision record, a role or protocol file |
+| Which judgements the dispatcher is deliberately leaving to the agent | Any file the agent is going to open anyway |
+
+When content on the right is *also* reproduced on the left, the reproduction is the
+defect. Cite the path and state what the agent must do with it — that is the whole
+dispatch. A dispatch may say "read `result.summary` in full and implement the six changes
+under its 'WHAT A FIX MUST CHANGE' heading"; it may not then also restate the six changes.
+
+**Where copied source text genuinely must travel inside the handoff, it travels in a
+structured field keyed by its source — never in `task.description` prose.** That is the
+guarantee the `requirement_text` paragraph above makes, and it is unchanged and
+undiminished: a receiving agent must never have to open a 61k-token file to learn what it
+was asked to build. Two fields carry it, and they do not overlap:
+
+- **`context.requirement_text`**, keyed by `REQ-ID`, for `docs/requirements.yaml` entries.
+  Its contract is exactly as stated above — ORCH writes it, everyone reads it, a handoff
+  with `requirement_ids` set and `requirement_text` missing is malformed. Nothing here
+  changes that.
+- **`context.source_text`**, keyed by source path, for any other cited source whose exact
+  wording the dispatch depends on. OPTIONAL, and absent from most handoffs: a dispatch
+  that only needs the agent to *act on* a file names it in `artifacts_in` and stops there.
+  Use it only when the exact text must be in front of the agent — a clause being amended,
+  a line being quoted back — and prefer the smallest excerpt that carries the meaning.
+
+**Weak-model tolerance is preserved in full, and here is how.** `core-directives.md`
+requires every dispatch to be explicit and mechanical enough that a weak model still
+produces correct work. Nothing above makes any instruction less explicit. No instruction
+text is removed, shortened, or made to be inferred: the task, the criteria and the
+constraints all stay inline, and the copied source text that used to sit unlabelled in
+prose is still present, in a labelled field, in the same file, reachable without opening
+anything. The only thing removed is the *second* copy of something the handoff already
+names. An agent unsure which side of the table a passage falls on writes it inline — this
+rule is never a reason to drop instruction.
+
+**Why this rests on redundancy and not on brevity — read this before restating it as a
+length rule, because it is not one.** Measured 2026-08-21 for ISS-0198, first-hand over
+`handoffs/` (full figures and method in
+`handoffs/WF03-ISS0198-20260821/step-005-01-diagnose.json`):
+
+- Pooled over 69 timed steps in five runs, r(`task.description` chars, step minutes) =
+  **0.281** — dispatch length explains under 8% of step-latency variance. "Long dispatches
+  make steps slow" is not supported.
+- The **shortest**-dispatch run measured (`WF02-REQ113-20260821`, description median 220
+  chars) needed 9 rework/regate/rerun steps out of 19 and ran **104.5 minutes**
+  wall-clock — *longer* than the 73.2-minute run that prompted the issue, whose median was
+  6,608. Rework is the dominant latency term, and under-specification buys it. This is
+  what the weak-model constraint predicts, so it is corroboration, not a surprise.
+- Of 582 parseable handoff files, **20 have a description over 6,000 chars, and all 20 of
+  them name one of their own `artifacts_in` files inside that description.** Not one long
+  dispatch is long for any other reason. Cite-and-also-restate is the entire mechanism.
+
+So the case for this rule is that the duplicated copy is unmeasurable, drifts from the
+source it was copied from, and buys nothing the citation does not already buy. **The case
+is not that shorter is faster — the measurement does not show that, and a rule justified
+on it would be correctly discarded by the next agent who checked.** No target length is
+stated here or anywhere, and none is to be inferred from the WARN threshold in the
+Enforcement note; that threshold selects a tail for reporting, it is not a budget any
+dispatch must meet.
 
 **Legal `result.status` values — no others:**
 
@@ -743,3 +824,51 @@ per its role file. Building a `mix letflow.lint_handoffs` task (or a plain scrip
 the precedent in `docs/anti-patterns.md`'s Mix-task-discovery-cost finding) is worth
 raising as its own requirement once the pipeline has run enough cycles to show whether
 Letflow drifts the same way R-Co did.
+
+### Specified but NOT YET RUNNING — H-SIZE-1/2/3 (added 2026-08-21, ISS-0198)
+
+**None of these three checks runs today, and nothing in this file should be read as
+saying otherwise.** They are specified here, where the linter's spec lives, so that
+whoever builds it implements them without judgement. ISS-0191 (the linter) is open and
+unbuilt, and names ISS-0190's 15+13 existing schema violations as a likely prerequisite —
+a size check added to that scope will not run green until ISS-0190 is cleared. Until the
+linter exists these are a specification and a manual reading aid, not a gate, and no
+handoff passes or fails on them.
+
+Per handoff file, using only `json.load`, `len`, substring search and `basename` — no
+repo state, no cross-file reads, no NLP, no judgement:
+
+```
+desc  = task.description or ""
+acs   = task.acceptance_criteria or []
+names = { basename(p) for p in (context.artifacts_in or []) }
+
+H-SIZE-1  WARN  "cite-and-restate"
+          len(desc) > 6000  AND  any(n in desc for n in names)
+
+H-SIZE-2  WARN  "under-specified"
+          len(desc) + sum(len(ac) for ac in acs) < 400
+
+H-SIZE-3  INFO  per run, never fails
+          emit: n_steps, median/max/total len(desc), count of H-SIZE-1 hits
+```
+
+**6,000 is a WARN threshold, not a length any dispatch is required to meet.** It is set
+from the corpus, measured 2026-08-21 over 582 parseable files: p90 = 3,191, p95 = 5,138,
+max = 12,187, median = 682. 6,000 sits above p95 and selects 20 files (3.4%) — the tail,
+not the norm — and every one of those 20 is a true positive under the structure rule in
+§2. Moving the threshold changes how much tail is reported; it does not change the rule,
+because the rule states no length.
+
+**H-SIZE-2 is why the structure rule cannot be satisfied by truncation.** It fires on a
+dispatch that is short because it under-specifies, which the ISS-0198 measurement found is
+the failure mode that actually costs wall-clock (9 rework/regate/rerun steps out of 19 in
+the shortest-dispatch run measured). A fix that deleted instruction text to quiet H-SIZE-1
+would light up H-SIZE-2.
+
+**Both WARN checks are advisory by design.** Neither condition proves a defect on its own,
+and a hard failure on either could be bought by deleting text — which §6, "Never satisfy a
+gate by editing what it measures," forbids. H-SIZE-3 is a per-run report and is the
+mechanism that would notice this drift recurring: the ISS-0198 measurement found 36 of the
+45 corpus files over 4,000 chars belong to five runs dated within a single day, so it is
+recent drift rather than a standing property of the pipeline.

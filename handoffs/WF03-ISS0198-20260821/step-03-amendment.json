@@ -8,14 +8,16 @@
   "file": "handoffs/WF03-ISS0198-20260821/step-03-amendment.json",
   "created_at": "2026-08-21T09:15:10Z",
   "started_at": "2026-08-21T09:15:10Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-21T09:21:31Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
     "requirement_ids": [],
     "requirement_text": {},
-    "related_handoff_ids": ["ee5f4aaa-c8b5-4c73-b0a7-a30fd6bd4de0"],
+    "related_handoff_ids": [
+      "ee5f4aaa-c8b5-4c73-b0a7-a30fd6bd4de0"
+    ],
     "artifacts_in": [
       "handoffs/WF03-ISS0198-20260821/step-005-01-diagnose.json",
       "docs/issues/ISS-0198.yaml",
@@ -49,19 +51,45 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "AMENDMENT WRITTEN. All six changes from the diagnosis's 'WHAT A FIX MUST CHANGE' list are made, plus ORCH's seventh (ISS-0198 figure correction), plus AC5's validation against a real run.\n\nCANONICAL LOCATION -- HANDOFF_PROTOCOL.md section 2, new subsection 'What goes in task.description, and what goes in artifacts_in', placed immediately after the context.requirement_text paragraph and opening in ORCHESTRATOR.md section 10's wording shape: 'This subsection is the canonical definition of the handoff structure rule. Other files point here; none of them restates it. Do not re-derive it from \"is this dispatch too long?\"' It carries a two-column table splitting inline content (what to do and in what order, the acceptance criteria, constraints scoped to this step, judgements left to the agent) from artifacts_in content (a prior handoff's diagnosis/verdict/evidence, a diff, a test report, a log, an issue or decision record, any file the agent opens anyway), and states that when content on the right is also reproduced on the left, the reproduction is the defect -- ISS-0198 AC3.\n\nSCHEMA CHANGE AND ITS BACKWARD COMPATIBILITY -- I did add a field, and here is the judgement the diagnosis left open. context.requirement_text is NOT generalised: its keys are REQ-IDs, its contract (ORCH writes it; missing-with-requirement_ids-set is malformed) is relied on by every role, and re-keying it by path would break that contract for a benefit a sibling field gets for free. Instead a new OPTIONAL context.source_text, keyed by source path, carries copied source text from any other cited file. requirement_text's paragraph is untouched and the new prose says so explicitly.\nVERIFIED, as required: the section-2 JSON fence still parses. Extracted the fence's contents and ran json.loads -- result quoted verbatim: 'json.loads OK; top-level keys: 18' with context keys ['stage', 'requirement_ids', 'requirement_text', 'source_text', 'related_handoff_ids', 'artifacts_in', 'owned_modules']. Backward compatibility verified over the corpus, not asserted: json.load over every file under handoffs/ except registry.json returns 'parseable: 585 unparseable: 0 carrying source_text: 0' -- so no existing file is invalidated, because the field is OPTIONAL-BY-ABSENCE. The prose amending section 2's 'one OPTIONAL field' sentence now names exactly two (not_agent_attested, context.source_text), says they are optional for unrelated reasons, says neither licenses a third, and states that files predating either stay valid unchanged. Both YAML files re-parsed under yaml.safe_load after editing.\n\nJUSTIFICATION RESTS ON REDUNDANCY, NOT LATENCY -- constraint 1. The rule's rationale paragraph carries the measurement into the prose so the next reader inherits the evidence: r(task.description chars, step minutes) = 0.281 over 69 timed steps, under 8% of variance; the shortest-dispatch run measured (WF02-REQ113, median 220 chars) needed 9 rework/regate/rerun steps of 19 and ran 104.5 min against the prompting run's 73.2 at median 6,608; and 20 of 582 files exceed 6,000 chars with ALL 20 naming an artifacts_in file inside the description. It then says in terms: 'The case is not that shorter is faster -- the measurement does not show that, and a rule justified on it would be correctly discarded by the next agent who checked.'\n\nNO TARGET LENGTH AS A RULE -- constraint 2. Stated nowhere. The rule text says 'No target length is stated here or anywhere, and none is to be inferred from the WARN threshold in the Enforcement note; that threshold selects a tail for reporting, it is not a budget any dispatch must meet.' H-SIZE-2 is kept, and the Enforcement note says explicitly that it is why the rule cannot be satisfied by truncation.\n\nNO DUPLICATION OF THE RULE OR THE THRESHOLD -- constraint 4. core-directives.md gets one pointer sentence appended to 'Load Scoped Context, Not Whole Files' ('That rule is stated once, in HANDOFF_PROTOCOL.md section 2 ... and deliberately not restated here'). ORCHESTRATOR.md gets one pointer line at section 6 ('That section is canonical and this line does not restate it'). Neither file names 6,000, H-SIZE-1/2/3, or any part of the table. grep confirms the number 6,000 and the string H-SIZE appear in HANDOFF_PROTOCOL.md and ISS-0191.yaml only.\n\nENFORCEMENT NOTE -- H-SIZE-1/2/3 specified under a heading that reads 'Specified but NOT YET RUNNING', opening 'None of these three checks runs today, and nothing in this file should be read as saying otherwise.' Each is given as an expression over json.load/len/substring/basename with no repo state and no judgement. The 6,000 threshold is justified by percentile (p90 3,191, p95 5,138, selects 3.4% of the corpus) and explicitly framed as a WARN threshold rather than a length any dispatch must meet. Both WARNs are stated advisory, with section 6 (never satisfy a gate by editing what it measures) cited as the reason neither is a hard failure. ISS-0191.yaml gains an ADDED TO SCOPE block that points at the Enforcement note rather than re-deriving the checks, records ISS-0190 as their prerequisite too, and adds ISS-0198 to its related list -- ISS-0198 AC4.\n\nWEAK-MODEL TOLERANCE AND THE REQUIREMENT-TEXT GUARANTEE -- ISS-0198 AC2, both preserved with the mechanism stated in the prose rather than asserted. On explicitness: no instruction text is removed, shortened or made to be inferred; task, criteria and constraints all stay inline; the copied source text that used to sit unlabelled in prose is still present in the same file, in a labelled field, reachable without opening anything; only the second copy goes. It closes with a tie-breaker for a weak model -- 'An agent unsure which side of the table a passage falls on writes it inline -- this rule is never a reason to drop instruction.' On the section 2 guarantee: it is restated as still in force ('a receiving agent must never have to open a 61k-token file to learn what it was asked to build') and generalised rather than narrowed, since source_text extends the same copy-it-inline guarantee to any cited source.\n\nAC5 -- VALIDATED AGAINST A REAL RUN, and it did not go to plan, which is the useful part. Re-drafted handoffs/WF03-ISS0109-20260821/step-02-code-designer.json's task.description, the corpus maximum and the diagnosis's own cite-and-restate exemplar. Saved at handoffs/WF03-ISS0198-20260821/redraft-ISS0109-step-02-code-designer.md (deliberately .md, not .json: a handoff-shaped file under handoffs/ would be counted as a real dispatch by ISS-0191's linter and by any future corpus measurement). BEFORE: task.description 12,187 chars, acceptance_criteria 1,589. AFTER: task.description 7,333 chars, acceptance_criteria 1,589 -- byte-identical, all 8 items carried through unchanged. 4,854 chars removed, every one of them a restatement of a file already in artifacts_in (Step 1's diagnosis paragraph, Step 1's specific lead, Step 2b's what-the-gate-confirmed block, Step 2b's blocking-defect narrative including its quoted tenant.ex:56 line, and one-line summaries of five out-of-scope issues). Nothing on the instruction side was cut: every scope item, mandatory design section, constraint and rework directive survives. step-02b-code-design-validator.json was ADDED to artifacts_in -- the original restated it at length while not listing it at all.\nTHE HONEST RESULT: I expected the re-draft to fall under 6,000 and it does not -- at 7,333 it STILL flags H-SIZE-1. It is reported as measured and left alone, because getting under 6,000 would mean cutting scope items or mandatory sections, i.e. the truncation failure mode H-SIZE-2 exists to catch and section 6 forbids. That is the rule behaving correctly: H-SIZE-1 is a WARN selecting a tail worth a glance, and on inspection here the glance establishes that the remaining 7,333 chars are instruction and the 4,854 that went were duplication. Recorded in the artefact as the finding rather than smoothed over.\n\nISS-0198 FIGURE CORRECTION -- the MEASURED paragraph is corrected in place (TEN files not nine, the seventh figure 8,915 not 9,115, the range 8,693-41,723 bytes not '21-29 KB'), and a new corrections: block records what was originally filed, that it was re-derived first-hand during this run's Step 1, and why item 3 is material (result.summary is 2.1x task.description across that run, 143,465 vs 68,348). Nothing was silently deleted. The block also records item 4: the issue's implied latency premise is unsupported and the fix rests on redundancy instead. The title is left as filed, because it is the issue's identity, and the note says that is what corrects it.\n\nOUT OF SCOPE, HELD: result.summary size is not touched and the rule is not extended to it; ORCH files that separately. handoffs/registry.json not written. No requirement status was flipped and no docs/status/requirement_status.yaml event was appended -- this handoff carries requirement_ids: [] and is a WF-03 issue run with no requirement in scope. README.md unchanged: nothing here alters documented application behaviour.",
+    "artifacts_out": [
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/agents/instructions/core-directives.md",
+      "docs/agents/ORCHESTRATOR.md",
+      "docs/issues/ISS-0191.yaml",
+      "docs/issues/ISS-0198.yaml",
+      "handoffs/WF03-ISS0198-20260821/redraft-ISS0109-step-02-code-designer.md",
+      "handoffs/WF03-ISS0198-20260821/step-03-amendment.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "The AC5 re-draft still trips H-SIZE-1 after the amendment: 7,333 chars, above the 6,000 WARN threshold, and it names its artifacts_in files by design. Reported rather than fixed -- reaching 6,000 would require cutting scope items or mandatory design sections, which is the truncation failure mode H-SIZE-2 exists to catch. It is evidence that H-SIZE-1 must stay advisory and that 6,000 must never be read as a budget, both of which the amendment states. Flagged so a later reader does not mistake the flag for an incomplete fix.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "HANDOFF_PROTOCOL.md section 2 gained an OPTIONAL field (context.source_text), so the file's own 'not_agent_attested is the one OPTIONAL field' sentence was amended to name two. Any agent or future linter that memorised the single-optional-field wording should re-read section 2 rather than rely on it. Corpus impact verified as nil: 585 of 585 handoff files parse and 0 carry source_text, so the field is optional-by-absence and invalidates nothing.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "The diagnosis's finding that result.summary is 2.1x task.description (143,465 vs 68,348 chars across WF03-ISS0117-20260821) is recorded in ISS-0198's corrections block but is deliberately NOT addressed by this amendment, per the dispatch's out-of-scope instruction. This step's own result.summary is itself long, which is the same pattern. ORCH is filing it separately.",
+        "affected_requirement": null
+      }
+    ],
     "git_evidence": {
-      "branch_name": null,
-      "commit_sha_list": [],
+      "branch_name": "main",
+      "commit_sha_list": [
+        "5bbcf62"
+      ],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to REVIEWER as the gate on this amendment (WF-03 Steps 2 and 4 are SKIPPED per ISSUE-FIXER's recommendation, recorded in orchestrator.log). REVIEWER should re-derive independently, not from this summary: (a) re-extract HANDOFF_PROTOCOL.md section 2's JSON fence and run json.loads on it; (b) grep core-directives.md and ORCHESTRATOR.md for '6000'/'6,000'/'H-SIZE' to confirm neither restates the threshold or the rule; (c) confirm no wording implies the linter runs today; (d) check the AC5 re-draft's before/after counts against the source file. ORCH then updates registry.json and files the result.summary-size issue this step was told to leave alone."
   },
   "rework_count": 0,
   "max_rework": 3

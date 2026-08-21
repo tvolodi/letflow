@@ -155,6 +155,10 @@ capabilities reach it (per `AGENT_SYSTEM.md`'s roster), order by dependency, ass
 `ADHOC-<YYYYMMDD>-<NNN>`, document inline in the first handoff's `context` field.
 Ad-hoc is never a way to bypass a standard workflow that already matches the trigger.
 
+**Authoring the `task` block — ad-hoc or standard.** ORCH writes every dispatch under
+`HANDOFF_PROTOCOL.md` §2's structure rule ("What goes in `task.description`, and what goes
+in `artifacts_in`"). That section is canonical and this line does not restate it.
+
 ## 7. Parallel-run coordination — `owned_modules` lock
 
 At Step 00 dispatch, record `owned_modules` (the `lib/`/`priv/`/`web/` paths this run

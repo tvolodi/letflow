@@ -199,6 +199,11 @@ The same rule generalizes: prefer a targeted read over a whole-file read for any
 above a few hundred lines. `git diff main...HEAD` beats reading every changed file;
 `grep -n` beats reading a 3,000-line YAML to find one key.
 
+**The same anti-duplication principle governs the writing side — what a handoff restates
+from files it already lists in its own `context.artifacts_in`.** That rule is stated once,
+in `HANDOFF_PROTOCOL.md` §2 ("What goes in `task.description`, and what goes in
+`artifacts_in`"), and deliberately not restated here.
+
 ---
 
 ## ⛔ No Agent Discretion Over Task Selection or Locking (multi-host)

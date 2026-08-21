@@ -41,7 +41,24 @@ config :letflow, Letflow.Repo,
   # own distinct OS pid (Port.open spawns a new OS process), so this tag reliably
   # distinguishes invocations even when they share one database. See
   # test/support/tenant_schema_reaper.ex's moduledoc for how the tag is used.
-  parameters: [application_name: "letflow_mixtest_#{System.pid()}"]
+  #
+  # ISS-0217: scripts/test_parallel.sh's own N sibling partitions are each a
+  # distinct OS pid too, so ISS-0110's tag alone made every partition look like an
+  # unrelated external invocation to every OTHER partition, deferring the reaper's
+  # sweep unconditionally for the whole run. TEST_PARALLEL_GROUP, when set, is one
+  # value shared by every partition a single test_parallel.sh invocation launches
+  # (exported once before forking them) -- folding it into the tag lets the reaper
+  # recognise same-group connections as expected siblings rather than external
+  # hazards, while a connection with no matching group (a genuinely separate
+  # invocation, nested or otherwise) still reads as external exactly as before.
+  parameters: [
+    application_name:
+      "letflow_mixtest_#{System.pid()}" <>
+        case System.get_env("TEST_PARALLEL_GROUP") do
+          nil -> ""
+          group -> "_grp#{group}"
+        end
+  ]
 
 # Placeholder — no real Keycloak instance exists yet. Replace with a real
 # per-environment issuer URL once realm provisioning (deferred past S1, see

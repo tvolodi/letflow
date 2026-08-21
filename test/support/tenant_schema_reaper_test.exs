@@ -293,8 +293,21 @@ defmodule Letflow.TenantSchemaReaperTest do
           username: Keyword.fetch!(repo_config, :username),
           password: Keyword.fetch!(repo_config, :password),
           database: Keyword.fetch!(repo_config, :database),
+          # ISS-0217 (test-hygiene fix, incidental): guarantee this connection
+          # closes even if a later assertion in this test raises -- otherwise, under
+          # TEST_PARALLEL_N>1 connection-pool pressure, an early failure here (a
+          # transient DBConnection timeout on the very next query, observed live)
+          # left this fake-tagged connection open for the rest of the partition's
+          # test run, cascading into every later sweep_orphans/2 call in this
+          # process incorrectly seeing a genuinely-external (no group tag) hazard
+          # and deferring. The explicit GenServer.stop/1 later in this test (once
+          # its own assertions are satisfied) still runs first and is a no-op here.
           parameters: [application_name: fake_tag]
         )
+
+      on_exit(fn ->
+        if Process.alive?(other_conn), do: GenServer.stop(other_conn)
+      end)
 
       # Sanity: the fake connection really is visible to Postgres under its tag --
       # otherwise this test would pass for the wrong reason (a no-op guard).

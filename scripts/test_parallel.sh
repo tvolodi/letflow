@@ -126,6 +126,17 @@ fi
 tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/letflow_test_parallel.XXXXXX")
 echo "test_parallel: partition logs in $tmp_dir"
 
+# ISS-0217: a single tag shared by every partition THIS invocation launches, so
+# config/test.exs can fold it into each partition's application_name and
+# TenantSchemaReaper's ISS-0110 liveness guard can recognise these N partitions
+# as expected siblings of each other rather than as N separate external
+# invocations (which made the guard defer every sweep unconditionally under any
+# N>1 run -- see docs/issues/ISS-0217.yaml). $$ is this script's own shell PID:
+# unique per test_parallel.sh invocation, no external dependency, and every
+# partition process it forks below inherits it as an exported env var.
+export TEST_PARALLEL_GROUP="tp$$"
+echo "test_parallel: TEST_PARALLEL_GROUP=$TEST_PARALLEL_GROUP (shared by all $N partitions)"
+
 declare -a pids
 declare -a exits
 declare -a properties

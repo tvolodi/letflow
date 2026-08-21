@@ -18,7 +18,7 @@ scheduled/requested full-suite validation.
            ▼
 ┌───────────────────────┐
 │  STEP 1: FULL SUITE   │ ← TEST-RUNNER
-│  mix test, whole repo │
+│ test_parallel.sh, all │
 └──────────┬─────────────┘
            ▼
 ┌───────────────────────┐
@@ -46,7 +46,11 @@ scheduled/requested full-suite validation.
 **Agent:** `TEST-RUNNER`
 
 ```
-1. mix test — the entire suite, not scoped to any one requirement.
+1. scripts/test_parallel.sh — the entire suite, not scoped to any one requirement, run
+   as N parallel `mix test --partitions N` processes (N from $TEST_PARALLEL_N env
+   override, else nproc/getconf _NPROCESSORS_ONLN) with each partition's real
+   Result:/Failed: counts aggregated into one combined pass/fail total
+   (parsed-count-authoritative, not raw per-partition exit code).
 2. If a Docker fallback is needed (no local toolchain), use the documented procedure
    in docs/anti-patterns.md.
 3. Write test/reports/report-<date>-WF04.yaml with full actual output — pass/fail

@@ -348,13 +348,21 @@ invariant checklist.
 **Agent:** `TEST-RUNNER`
 
 ```
-1. mix test — full suite, not just the new tests (Unblock-Everything: a pre-existing
-   failure masking your results must be fixed too, unless it's unrelated and gets
-   forwarded per ISSUE_QUEUE.md).
+1. scripts/test_parallel.sh — full suite, not just the new tests (Unblock-Everything: a
+   pre-existing failure masking your results must be fixed too, unless it's unrelated
+   and gets forwarded per ISSUE_QUEUE.md). This runs the suite as N parallel
+   `mix test --partitions N` processes (N from $TEST_PARALLEL_N if set, else
+   nproc/getconf _NPROCESSORS_ONLN) and aggregates every partition's real ExUnit
+   Result:/Failed: counts into one combined pass/fail total — exit 0 only if every
+   partition's *parsed* count shows 0 failures (the parsed count is authoritative, not
+   each partition's raw process exit code; exit 2 per partition is normal for "had
+   failures" on this toolchain, not a crash).
 2. If no local toolchain: use the Docker fallback documented in docs/anti-patterns.md.
    Report explicitly if neither is available — do not report PASS without having run
    it (No Speculation).
-3. Write test/reports/report-<date>-<run-id>.yaml with the actual output.
+3. Write test/reports/report-<date>-<run-id>.yaml with the actual output, including the
+   derived partition count N, its source (env override/nproc/getconf), and the combined
+   pass/fail totals scripts/test_parallel.sh printed.
 4. Complete the handoff: PASS/FAIL/PARTIAL, artifacts_out: ["test/reports/..."],
    next_action: PASS → "Route to RELEASE-VALIDATOR" |
                 FAIL → "Rework responsible agent (ELIXIR-DEV/FRONTEND-DEV/TEST-DESIGNER)".
@@ -399,8 +407,11 @@ Structural, Never By Count-Matching" — read it; the operative test here is:
 **Agent:** `RELEASE-VALIDATOR`
 
 ```
-1. Independently re-run: mix test (do not trust TEST-RUNNER's report alone — see
-   core-directives.md's "Every producing step has a validating step").
+1. Independently re-run: scripts/test_parallel.sh (do not trust TEST-RUNNER's report
+   alone — see core-directives.md's "Every producing step has a validating step"). Same
+   mechanism as Step 4: N parallel `mix test --partitions N` processes, aggregated
+   Result:/Failed: counts, parsed-count-authoritative exit code — see
+   scripts/test_parallel.sh's header comment for the full contract.
 2. Confirm every requirement_id in scope has all its acceptance_criteria satisfied —
    check each one explicitly against the actual code/test, not against TEST-RUNNER's
    summary.

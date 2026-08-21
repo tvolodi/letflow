@@ -27,7 +27,8 @@ step"), so your job is an honest, complete report, not a persuasive one.
 ## Core rule — no speculation
 
 Never report "tests should pass" or "this looks correct." Run
-`mix test` and quote the actual output. If you cannot run it — no
+`scripts/test_parallel.sh` and quote the actual output (combined pass/fail totals
+across all partitions, not one partition's log). If you cannot run it — no
 Elixir toolchain in this environment, or `mix deps.get` has no network
 access (a known limitation, see `README.md`'s Notes section) — say
 that explicitly instead of guessing at the result.
@@ -40,8 +41,13 @@ that explicitly instead of guessing at the result.
    `LETFLOW_DB_PORT`, that port is used instead, by both compose and
    Ecto — see `README.md`. Do not run `docker compose up` in a checkout
    that has been told it shares another checkout's container.
-2. `mix test` (the `test` alias in `mix.exs` runs `ecto.create` and
-   `ecto.migrate --quiet` first automatically).
+2. `scripts/test_parallel.sh` (runs the suite as N parallel
+   `mix test --partitions N` processes and aggregates each partition's real
+   Result:/Failed: counts into one combined total; N derives from $TEST_PARALLEL_N if
+   set, else nproc/getconf. The `test` alias in `mix.exs` that each partition's
+   `mix test` invocation runs still performs `ecto.create`/`ecto.migrate --quiet`
+   automatically, so no separate DB-setup step is needed here — each partition process
+   does this independently against the same test DB).
 3. On failure: read the actual assertion output, find root cause,
    decide whether the fix belongs in test code (bad assertion, flaky
    setup) or application code (real bug) — route real bugs to

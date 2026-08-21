@@ -1894,18 +1894,18 @@
       "workflow_id": "WF-02",
       "requirement_ids": ["REQ-072"],
       "stage": "S4",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/api/context.ex"
       ],
       "lock_acquired_at": "2026-08-21T20:53:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 PASS — branch feature/WF02-REQ072-20260822 created and pushed, commit ae4a65b. Next: Step 1 (CODE-DESIGNER).",
+      "lock_released_at": "2026-08-21T22:16:52Z",
+      "released_lock": true,
+      "last_known_step": "Step Final PASS — merged to main as 3feeb3d (PR #459), handoff c713dba. Queue task 139 released done, GH#279 closed.",
       "backfilled": false,
       "queue_task_id": 139,
       "queue_agent_id": "tvolo-win-orch",
-      "note": "WF-02 for REQ-072 (GH#279, queue task 139, stage S4), claimed via get_next_task immediately after REQ-071's close. Dep REQ-071 confirmed done on main (381848b). Ports R-Co's tenant_context.zig + trace_context.zig as the per-request context every tenant-scoped handler reads, plus the single shared Ecto :prefix-scoping function that discharges INV-1/INV-5/INV-6 once, structurally, for the whole S4 stage -- security-load-bearing, full WF-02 pipeline warranted. Idiom translation required: Zig threadlocal trace id becomes an explicit conn.assigns field (mirrored into Logger.metadata/1), not a process-dictionary/ETS global."
+      "note": "WF-02 for REQ-072 (GH#279, queue task 139, stage S4), claimed via get_next_task immediately after REQ-071's close. Dep REQ-071 confirmed done on main (381848b). Ports R-Co's tenant_context.zig + trace_context.zig as the per-request context every tenant-scoped handler reads, plus the single shared Ecto :prefix-scoping function (scoped_repo_opts/1) that discharges INV-1/INV-5/INV-6 once, structurally, for the whole S4 stage. Full pipeline: Step 1 design (c9d6297) -> 1b gate (f134f08) -> 2a implement (c434e2c) -> 2c security gate PASS, line-by-line verified (7b7c55e) -> 2d REVIEWER PASS + anti-patterns entry (e5964d1) -> 3b test-design-validator gate PASS, mutation-tested the cross-tenant-404 test itself (8d76d21) -> 4 TEST-RUNNER full suite PASS 1455/1455 (6c07f31) -> 5 RELEASE-VALIDATOR independently re-verified all 7 ACs with its own second mutation test, suite re-run clean (5efd325) -> 6 DOC-UPDATER flipped to done (a3b5ca9) -> ORCH added missing REVIEWER sign-off entry to stage-4-api-surface.md (716d4cb) -> Step Final merged (3feeb3d, PR #459, 1459/1459 post-rebase). rework_count 0 of 3 throughout -- every gate PASS first attempt. Cross-tenant-404 mechanism (AC4/AC5) deliberately tested one level below full HTTP dispatch (a test-only probe table) rather than inventing a fake production route, since REQ-070's sub-routers remain stubs -- validated as sound by two independent mutation tests (Step 3b and Step 5), each separately breaking the scoping function and confirming the suite caught it."
     }
   ]
 }

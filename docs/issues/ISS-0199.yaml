@@ -1,0 +1,100 @@
+id: ISS-0199
+title: >
+  The run-history append procedure verifies that you appended, not what you appended -- its first live user corrupted the file behind a GREEN step-5 check
+discovered_by: DOC-UPDATER
+discovered_in_run: WF03-ISS0119-20260821
+discovered_at: "2026-08-21T09:05:49Z"
+severity: MAJOR
+
+numbering_note: >
+  Numbered from letflow-queue task id 199 (GH#389), not from a directory scan --
+  the service now rewrites submitted titles to ISS-<task_id>, which is the
+  structural fix docs/anti-patterns.md's collision entry called for. Same
+  convention as [[ISS-0193]].
+
+description: >
+  Two findings from WF03-ISS0119-20260821's Step 6, whose DOC-UPDATER was the
+  FIRST live user of the append procedure that same run had just built. Filed
+  rather than fixed there: the procedure text lives in a gated design artefact
+  (§4 of lib/letflow/design/iss-0119-status-file-readability.md) and in the
+  volume header, so changing it means reopening a design gate at Step Final --
+  the same widening ORCH already declined for ISS-0193.
+
+  FINDING 1 -- STEP 5 PASSES ON A CORRUPTED APPEND.
+
+  The HOW-TO-APPEND procedure's step 5 prescribes `git diff --numstat` with a
+  deletions-must-be-zero success condition. DOC-UPDATER ran it, got `43  0` --
+  exactly the stated success condition -- while the file it had just written
+  was corrupted.
+
+  What happened, live: it used an unquoted heredoc, and backticks in its own
+  note prose (entirely natural when the note is *about* a YAML schema) were
+  executed by the shell as command substitutions. Seven mangled fragments
+  landed in the run history. Numstat still reported 43 insertions, 0 deletions,
+  because it counts LINES ADDED and cannot see WHAT was added.
+
+  It was caught only because bash wrote the substitution errors to stderr and
+  the agent read them. An agent whose tooling swallows or truncates stderr
+  would have committed corruption of the audit trail behind a green step 5,
+  with an honest belief it had complied.
+
+  This is ISS-0119 reproduced inside ISS-0119's own fix. That issue was about
+  an instruction that stayed written down while quietly ceasing to verify what
+  it appeared to verify. Step 5 confirms the SHAPE of the diff, never its
+  CONTENT.
+
+  FINDING 2 -- THE INDEX `entries:` COUNT IS UNOWNED AND UNVERIFIED.
+
+  docs/status/requirement_status.index.yaml records `entries: 0` for volume 2.
+  After Step 6's append it is wrong, and nothing covers it: the append
+  procedure never mentions updating it, and no assertion A1-A6 compares a
+  declared `entries:` to `length(entries(path))` on disk.
+
+  TEST-DESIGN-VALIDATOR independently flagged the same gap at Step 4b as a
+  MINOR, noting it is harmless for volume 1 only because A6 digest-pins those
+  bytes, and that it becomes load-bearing if a future closed volume's declared
+  count drifts. It bites at CLOSURE, where those counts are what a reader
+  trusts. DOC-UPDATER left it alone correctly -- the written procedure does not
+  ask for it.
+
+  A recorded number with no owner and no check is the ISS-0119 failure mode in
+  miniature.
+
+suggested_scope: >
+  Fix together -- same class, and one run touching the header and the
+  assertions closes both.
+
+  For finding 1, three routes, none prescribed: (a) require a quoted-heredoc or
+  literal-write idiom explicitly, naming the backtick hazard, since prose about
+  YAML naturally contains them; (b) add a CONTENT check beside numstat -- re-read
+  the appended entry, confirm it parses and matches what was intended;
+  (c) VERIFY RATHER THAN ASSUME that A4a/A4b's shape and vocabulary assertions
+  would have caught these mangled fragments on the current volume. Nobody has
+  tested that backstop against an actually-corrupted file. If it holds, severity
+  drops and the right fix may simply be to point step 5 at
+  `mix test test/docs/requirement_status_invariants_test.exs`.
+
+  For finding 2, consider whether `entries:` should be DERIVED rather than
+  declared. A number that is computed cannot drift.
+
+  Do NOT fix finding 1 by deleting step 5. The check is not wrong, it is
+  incomplete -- it does catch a deletion, which is the append-only violation it
+  was designed for.
+
+affected_files:
+  - docs/status/requirement_status.v2.yaml
+  - docs/status/requirement_status.index.yaml
+  - lib/letflow/design/iss-0119-status-file-readability.md
+  - test/docs/requirement_status_invariants_test.exs
+
+see_also:
+  - ISS-0193   # the other residual hardening on this same mechanism -- declare-to-silence in known_anomalies:/A5, plus the roll-boundary route. One run could reasonably close both.
+  - ISS-0119   # the run that built the mechanism and resolved the original defect
+
+queue_task_id: 199
+github_issue: https://github.com/tvolodi/letflow/issues/389
+github_issue_note: >
+  register_task created both the queue task (199) and the mirrored GitHub issue
+  (#389) in one call; `gh issue create` was deliberately NOT called separately,
+  which would double-post (the #358/#359 failure recorded in ISS-0109).
+status: open

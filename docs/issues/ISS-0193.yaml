@@ -1,0 +1,127 @@
+id: ISS-0193
+title: >
+  known_anomalies:/A5 is a declare-to-silence mechanism with no friction -- a future agent can make a new vocabulary violation permanently green by adding a record
+discovered_by: CODE-DESIGN-VALIDATOR
+discovered_in_run: WF03-ISS0119-20260821
+discovered_at: "2026-08-21T07:06:40Z"
+severity: MAJOR
+
+numbering_note: >
+  Numbered ISS-0193 to match letflow-queue task id 193 and GitHub issue #381, NOT
+  the next free local number (which was ISS-0120). This is deliberate and is the
+  structural fix docs/anti-patterns.md's "ISS-NNNN collisions keep recurring because
+  documenting the hazard doesn't reserve the number" entry recommends: derive the id
+  from register_task's atomically-allocated, globally-unique id rather than from a
+  directory scan, which is a read-then-write race with no lock between the halves.
+
+  Observed rather than assumed: register_task REWROTE the title this run submitted
+  ("ISS-0120: ...") to "ISS-0193: ...", so the service itself now enforces
+  ISS-<task_id> naming. Concurrent sibling sessions are already filing under the same
+  convention (GH#379 as ISS-0191, GH#380 as ISS-0192, both filed within minutes of
+  this one), so adopting it here keeps the local record, the queue task and the
+  GitHub issue in agreement instead of three-way divergent. The resulting gap in
+  local numbering (ISS-0120..0192 unused in this checkout) is expected and is the
+  point -- ids are globally allocated now, not densely sequential per checkout.
+
+description: >
+  Incidental finding of WF03-ISS0119-20260821's Step 4e, raised by
+  CODE-DESIGN-VALIDATOR as MINOR-3 while gating that run's design amendment.
+  Deliberately NOT fixed there -- see "Why filed separately" below.
+
+  WHAT IS WRONG. ISS-0119 introduced docs/status/requirement_status.index.yaml with
+  a `known_anomalies:` key declaring the three entries whose `event:` field carries
+  the illegal value SCOPE-CHANGE (lines 3490/3577/3744 of volume 1), and assertion
+  A5 asserts that the declared set equals the on-disk vocabulary-violation set
+  exactly, in both directions. The bidirectionality is genuinely strong: it detects
+  a NEW undeclared violation, and it also detects a past entry being silently
+  normalized or deleted -- which nothing detected before.
+
+  What it does NOT constrain is WHICH VOLUME a declared record may cite. So the
+  mechanism can be satisfied by declaring rather than by fixing: append an entry
+  carrying a new illegal vocabulary value to the CURRENT volume, add a matching
+  record to `known_anomalies:`, and A5 is green permanently with no gate tripped.
+  The only remaining barriers are prose instructions and core-directives.md's
+  general "Never Satisfy a Gate by Editing What It Measures" -- both addressed to an
+  agent's judgement, which is precisely what that file's Humanless-operation section
+  says a gate must not rest on.
+
+  THE REMEDY IS ALREADY PROVEN, WHICH IS WHY THIS IS WORTH RUNNING. The identical
+  hole existed in the SHAPE mechanism (`known_shape_anomalies:`/A4b) introduced by
+  the same run. CODE-DESIGN-VALIDATOR caught it at Step 4e and it WAS fixed there:
+  A4b now additionally asserts that every record's `path:` names a volume whose
+  index entry has `status: closed` AND carries a `frozen_prefix_sha256:`, so no
+  record may cite the open, unpinned current volume. That closes the laundering
+  route because a violation in the current volume must be fixed in the working tree
+  before it can ever be declared. Applying the same rule to A5 is a small, known
+  change with a worked precedent.
+
+  WHY FILED SEPARATELY RATHER THAN ABSORBED. `known_anomalies:` and A5 shipped in
+  the part of the ISS-0119 design that had already cleared its hard gate; widening a
+  WF-03 issue fix into a redesign of already-gated work is scope creep, and
+  ISSUE_QUEUE.md's own framing is that "out of scope for the current fix" is a
+  reason to file the finding as its own issue. ORCH dispositioned it accordingly and
+  told CODE-DESIGNER explicitly not to fix A5 in that pass.
+
+  TIME-SENSITIVE CONSEQUENCE, already on record. After ISS-0119 the two mechanisms
+  are ASYMMETRIC: shape anomalies are constrained to closed, digest-pinned volumes;
+  vocabulary anomalies are not. Section 13.3 of
+  lib/letflow/design/iss-0119-status-file-readability.md still cites parity between
+  them ("the vocabulary mechanism works the same way") as part of its justification.
+  CODE-DESIGNER recorded that asymmetry as deliberate and temporary, pending this
+  issue's own run. If this is not run reasonably soon, that parity citation quietly
+  becomes misleading to a later reader -- so closing this also means re-checking
+  that sentence.
+
+  SUGGESTED SCOPE, not prescribed:
+  (a) Apply A4b's closed-and-pinned rule to A5, and confirm the three existing
+      `known_anomalies:` records still pass (all cite volume 1, which is closed and
+      digest-pinned, so they should -- verify against the index on disk rather than
+      assuming).
+  (b) Reconcile section 13.3's parity wording with whatever (a) settles.
+  (c) Decide once, for BOTH mechanisms rather than twice: may a volume be rolled to
+      `closed` in the SAME commit that declares a record against it? If so, a fresh
+      violation can still be laundered into a permanently-declared one by rolling
+      first. This question was put to CODE-DESIGN-VALIDATOR at Step 4e re-gate and
+      IT ANSWERED -- carry the answer across rather than re-deriving it. Its finding,
+      recorded there as MINOR-4:
+
+      The route is open. Closing v2 in the same commit that declares against it does
+      pass: at suite time v2 is closed and pinned, set equality holds, and A1/A2/A6/
+      A7/A8 all pass on a correctly-performed roll, because NOTHING asserts a roll
+      was WARRANTED (A3 bounds from above only; `on_exceed` is prose).
+
+      It was judged MINOR rather than MAJOR for two reasons worth preserving,
+      because they shape the right fix. First, unlike the MAJOR-1 hole it cannot be
+      done SILENTLY: it demands a fabricated volume closure that survives A6's
+      CRLF-normalised SHA-256, A7's footer chain and A8's header tokens -- strictly
+      more work than simply fixing the uncommitted field would have been. Second,
+      and more importantly, THE SAME WINDOW IS THE LEGITIMATE CASE: a defect noticed
+      only after a genuine roll MUST be declarable, since append-only forbids
+      editing a closed volume, so a blanket ban on closure-time records would create
+      a permanent red with no lawful way out.
+
+      The instrument that kills only the abusive half, per the gate: assert that
+      every closed volume ACTUALLY EXCEEDED `roll_rule` at closure. Volume 1's
+      5,766 lines / 361,376 bytes pass that comfortably, so it is compatible with
+      the existing record. That is different design work, which is why it was filed
+      rather than patched in.
+
+  Do NOT resolve this by removing bidirectional set equality or by deleting the
+  three legitimate declared records. The declaration mechanism is correct -- the
+  design's honest pattern is "never edit, always declare" -- and what it lacks is
+  friction on WHERE a declaration may point.
+
+affected_files:
+  - docs/status/requirement_status.index.yaml
+  - lib/letflow/design/iss-0119-status-file-readability.md
+  - test/docs/requirement_status_invariants_test.exs
+  - test/support/status_history.ex
+
+queue_task_id: 193
+github_issue: https://github.com/tvolodi/letflow/issues/381
+github_issue_note: >
+  Filed by ORCH on CODE-DESIGN-VALIDATOR's behalf per ISSUE_QUEUE.md step 2a:
+  register_task created both the queue task (193) and its mirrored GitHub issue
+  (#381) in one call, so `gh issue create` was deliberately NOT called separately --
+  doing so would double-post, the failure recorded in ISS-0109's #358/#359 pair.
+status: open

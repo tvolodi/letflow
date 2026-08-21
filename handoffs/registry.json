@@ -290,8 +290,8 @@
         "test/letflow/tenant_provisioning_test.exs"
       ],
       "lock_acquired_at": "2026-08-17T06:57:41Z",
-      "lock_released_at": null,
-      "released_lock": false,
+      "lock_released_at": "2026-08-21T09:10:00Z",
+      "released_lock": true,
       "last_known_step": "Fix committed locally (e48942b) on feature/WF03-ISS0030-fix-20260817, REVIEWER-verified PASS. Step Final (git-merge) BLOCKED at push: this host (ubuntu-16gb-nbg1-1) has no GitHub credentials of any kind -- no gh CLI installed, no git credential helper, no ~/.git-credentials, no GH_TOKEN/GITHUB_TOKEN in env or .bashrc/.profile, no SSH private key for git@github.com (only authorized_keys present, for inbound SSH). `git push -u origin feature/WF03-ISS0030-fix-20260817` fails with 'could not read Username for https://github.com'. Did NOT attempt to install gh or configure credentials -- both are outside ~/letflow per this session's own hard boundary #1 (operate only within the letflow checkout), and no actual token/credential exists anywhere on this host to configure even if that boundary didn't apply.",
       "backfilled": false,
       "queue_task_id": 76,
@@ -1502,7 +1502,7 @@
         "ISS-0119"
       ],
       "stage": null,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "docs/status/requirement_status.yaml",
         "docs/status/",
@@ -1511,9 +1511,9 @@
         "docs/issues/ISS-0119.yaml"
       ],
       "lock_acquired_at": "2026-08-21T04:41:48Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 (git setup) dispatched to ELIXIR-DEV",
+      "lock_released_at": "2026-08-21T09:10:00Z",
+      "released_lock": true,
+      "last_known_step": "Steps 00 through 6 all PASS; letflow-queue task 186 released status done (verified: response returned status done); Step Final (git merge) dispatched to ELIXIR-DEV. ISS-0119 resolved. Design gate took 2 FAILs + 2 rework iterations; the post-gate amendment took a further FAIL + 1 re-amendment. Three issues filed rather than absorbed: ISS-0193 (declare-to-silence hole surviving in known_anomalies:/A5, plus the roll-boundary laundering route), ISS-0199 (append procedure step 5 verifies that you appended, not what you appended -- its first live user corrupted the file behind a green check; plus the unowned index entries: count), and evidence appended to the existing ISS-0116 and ISS-0112 rather than fragmenting them.",
       "backfilled": false,
       "queue_task_id": 186,
       "queue_agent_id": "letflow-2-orch",

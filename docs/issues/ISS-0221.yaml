@@ -1,0 +1,60 @@
+id: ISS-0221
+title: >
+  WF-01 never tells ORCH to register the requirement in letflow-queue, so a
+  correctly-produced requirement is unclaimable
+discovered_by: ORCH
+discovered_in_run: ORCH-20260822-queue-loop
+discovered_at: "2026-08-22T00:52:00Z"
+severity: MAJOR
+
+description: >
+  `docs/agents/workflows/WF-01_requirement_development.md` contains zero
+  occurrences of `register`, `queue`, or `impl_order` (verified by
+  `grep -in "register\|queue\|impl_order"` over the whole file). Its Overview
+  diagram ends at `[OUTPUT: requirement(s) ready for WF-02]` and its Output
+  section repeats the same, with no registration step anywhere.
+
+  But `docs/agents/protocols/TASK_QUEUE.md` makes registration the thing that
+  turns a requirement into claimable work. It states that `register_task` fires
+  on "WF-01 (Requirement Development) reaching its end: once REQ-VALIDATOR
+  passes a new requirement"; that "task selection happens through
+  `get_next_task` only"; and that "`register_task` is the only source of
+  `impl_order`" with "an unregistered requirement carries no `impl_order` at
+  all -- never a guessed one".
+
+  Net effect: an ORCH that follows WF-01 to the letter produces a well-formed,
+  validated, `pending` requirement that no agent can ever claim. It fails
+  silently -- no error is raised, the requirement simply never appears in
+  `get_next_task`, and the only symptom is an idle pipeline.
+
+  Observed live on 2026-08-22: `docs/requirements.yaml` held 35 `pending`
+  requirements while `get_next_task` returned `no_eligible_task`.
+
+  The obligation exists only in TASK_QUEUE.md, describing a trigger inside a
+  workflow that does not itself mention it. Neither document is wrong on its
+  own; they are only correct when read together, and WF-01 gives no signal that
+  a second document must be read.
+
+affected_files:
+  - docs/agents/workflows/WF-01_requirement_development.md
+  - docs/agents/workflows/WF-03_issue_resolving.md  # check for the same gap
+
+related:
+  - REQ-128  # ..REQ-135: drafted 2026-08-22, deliberately left UNREGISTERED
+             # pending validation -- the case that surfaced this gap
+
+queue_task_id: 221
+github_issue: 452
+github_issue_note: >
+  `register_task` created both the queue task (221) and its mirrored GitHub
+  issue (452) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
+  deliberately not called separately.
+
+status: open
+
+fix_sketch: >
+  A WF-01 documentation edit: add the `register_task` call as an explicit
+  post-Step-2 action (or amend the Output section), naming ORCH as the caller
+  and TASK_QUEUE.md as the contract, and stating that `impl_order` is written
+  back into the requirement's entry from the response rather than guessed.
+  Check WF-03 for the same gap on issue-type tasks while fixing.

@@ -77,3 +77,51 @@ github_issue: https://github.com/tvolodi/letflow/issues/370
 github_issue_note: >
   Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (184) and its mirrored GitHub issue (#370) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
 status: open
+
+carried_findings:
+  - from_run: WF03-ISS0119-20260821
+    from_agent: TEST-RUNNER
+    at: "2026-08-21T09:04:35Z"
+    severity: MAJOR
+    finding: >
+      A SUB-SIGNATURE THAT NEITHER ISS-0109 NOR ISS-0116 RECORDS, observed once and
+      deliberately NOT attributed to this family. Recorded here, on the issue that owns
+      the search, because it may narrow that search -- not because it is established.
+
+      In branch run 1 of WF03-ISS0119-20260821's four full-suite runs,
+      Letflow.Identity.RoleRegistryTest "list_roles/0 (acceptance criterion 1) returns []
+      (not an error) against an empty tenant_role table"
+      (test/letflow/role_registry_test.exs:174) failed at the SAME assertion this whole
+      family fails at -- assert {:ok, _applied_versions} =
+      TenantProvisioning.replay_migrations(tenant.id), from __ex_unit_setup_1 at :133 --
+      but with right: {:error, {:event_type_seed_failed, :tenant_not_provisioned}} and NO
+      Postgrex error at all.
+
+      WHY THAT SHAPE MATTERS. Every ISS-0109/ISS-0116 signature on record is a raw
+      Postgrex error: 3F000 :invalid_schema_name via get_namespace_oid, or 42P01
+      :undefined_table. This one carries neither. Per
+      lib/letflow/design/req022-tenant-schema-provisioning.md:266, replay_migrations
+      returns {:error, :tenant_not_provisioned} immediately when no `Registration` row
+      exists in tenant_schemas -- it never provisions on the fly -- so this failure
+      short-circuited BEFORE any SQL touched the tenant schema. That points at the
+      REGISTRY ROW being absent rather than the SCHEMA being absent: a materially
+      different locus from the one this issue has been searching.
+
+      WHY IT IS NOT CALLED A MEMBER OF THE FAMILY. TEST-RUNNER declined to attribute it,
+      and that restraint is preserved here verbatim: the sub-signature is recorded
+      NOWHERE in ISS-0109 or ISS-0116, so calling it the same condition would be an
+      inference dressed as an observation. It is equally consistent with a distinct
+      defect that happens to share an assertion site. Deciding which requires evidence
+      this run could not generate.
+
+      STATUS OF THE OBSERVATION: seen ONCE in four runs; did NOT reproduce in that side's
+      own second run. An observation, not a stable finding, and not a flake verdict
+      either -- four runs cannot support either word. NOT caused by the ISS-0119 branch:
+      role_registry_test.exs is absent from that branch's diff and does not reference the
+      branch's new StatusHistory module.
+
+      WHAT WOULD SETTLE IT: the same step 1 this issue already prescribes. Once
+      role_registry_test.exs adopts Letflow.TenantFixture (ISS-0112's work), the next
+      occurrence carries capture_schema_state/1's 14-field report, which answers the
+      exact question this sub-signature raises -- registry row present or not -- instead
+      of leaving it to be inferred from an error tuple.

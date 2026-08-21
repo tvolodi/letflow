@@ -244,3 +244,46 @@ history:
       acceptance criteria. test/reports/ not applicable: this is a docs-only
       requirement and TEST-RUNNER/TEST-DESIGN-VALIDATOR were skipped by
       Step 3's scope test.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-21T09:03:51Z"
+    note: >
+      ISS-0119 / GH#373 resolved by run WF03-ISS0119-20260821, and this is the first
+      entry in volume 2. The defect was that this history's own append-only safeguard
+      had become unexecutable: docs/status/requirement_status.yaml crossed the Read
+      tool's 262,144-byte limit on 2026-08-18, so for ~2.5 days every agent was told to
+      "read the file in full before appending" while that read was refused, and each
+      improvised a different partial read instead. The fix bounds the file rather than
+      restating the rule. Volume 1 was CLOSED IN PLACE at 5,766 lines / 182 entries /
+      361,376 bytes and digest-pinned by frozen_prefix_sha256 -- not split and not
+      renamed, because ~103 historical run records under handoffs/ and test/reports/
+      cite that path and iss-0078-pin-rebind-provenance.md:367 cites line 5158 by
+      number, so freezing in place keeps every citation valid. Volume 2
+      (docs/status/requirement_status.v2.yaml) was opened as the current volume, and
+      docs/status/requirement_status.index.yaml was created as THE entry point: agents
+      now resolve the current volume through the index instead of assuming a filename.
+      A roll rule caps every current volume at 1,200 lines / 120,000 bytes so a full
+      read stays possible by construction, which is the whole point -- a safeguard that
+      requires seeing the schema cannot survive a file too large to show it. The
+      append-only rule itself gained its FIRST mechanical enforcement:
+      test/docs/requirement_status_invariants_test.exs, 13 tests, whose assertion A6
+      fails if closed volume 1's frozen prefix changes by a single byte. Previously the
+      rule was enforced only by agents' eyes, and had already been broken once by a
+      from-scratch rewrite. Two further findings came out of the work rather than being
+      designed in. Assertion A4 found THREE previously-unknown malformed entries in
+      volume 1 on its first ever run -- lines 4803 (REQ-053) and 5050 (REQ-054) missing
+      a note field entirely, and 4896 (REQ-056) writing "timestamp:" where "at:"
+      belongs -- on disk undetected since 2026-08-19; they are declared under the
+      index's new known_shape_anomalies key and LEFT AS WRITTEN, since correcting a past
+      entry is exactly what this file forbids. And the new header now STATES the
+      conventions that were previously discoverable only by surveying 182 entries: both
+      legal req values (with "req: ISS-NNNN" called out as illegal and zero-precedent),
+      all six event values (volume 1's header listed three while six were in use), and
+      the five-field entry shape. Verification: full suite run on branch and main, two
+      runs each -- the branch adds no failure main does not already have, and the 13 new
+      invariant tests pass in full-suite context on both branch runs. Residual work is
+      carried by ISS-0193, not lost: this run fixed the readability defect, not the
+      downstream citations. Anti-patterns entries added by the run: "An instruction
+      whose mechanism has silently become unexecutable" and "Presuming an in-progress
+      artefact dead and writing that presumption into a handoff as fact".

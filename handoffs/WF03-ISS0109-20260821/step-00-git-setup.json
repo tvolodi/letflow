@@ -1,0 +1,59 @@
+{
+  "handoff_id": "4de8efe9-138d-4b44-a8ae-0e542aa5441f",
+  "run_id": "WF03-ISS0109-20260821",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0109-20260821/step-00-git-setup.json",
+  "created_at": "2026-08-21T01:00:21Z",
+  "started_at": "2026-08-21T01:00:44Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0109.yaml",
+      "docs/agents/protocols/GIT_SETUP.md"
+    ],
+    "owned_modules": [
+      "test/support/",
+      "test/letflow/definitions/promotion_test.exs",
+      "test/letflow/definitions/promotion_assertion_rerun_test.exs",
+      "test/test_helper.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0109-20260821",
+    "issue_ids": [
+      "ISS-0109"
+    ]
+  },
+  "task": {
+    "description": "Execute docs/agents/protocols/GIT_SETUP.md for run WF03-ISS0109-20260821. Create and push branch feature/WF03-ISS0109-20260821 from an up-to-date main. NOTE: `git worktree list` shows two entries for this repo (C:/Users/tvolo/dev/ai-dala/letflow-2 = THIS checkout, holds main; C:/Users/tvolo/dev/ai-dala/letflow-wt2 = a sibling worktree on another branch). The GIT_SETUP worktree variant applies only to a SECONDARY worktree that does not hold main -- this checkout DOES hold main, so use the normal steps 1-8, not the worktree variant. Do not touch the sibling worktree. Make no other file changes in this step.",
+    "acceptance_criteria": [
+      "git pull --ff-only exited 0",
+      "git branch --show-current outputs feature/WF03-ISS0109-20260821",
+      "git push -u origin feature/WF03-ISS0109-20260821 exited 0"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

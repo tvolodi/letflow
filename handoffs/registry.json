@@ -1332,20 +1332,45 @@
         "REQ-066"
       ],
       "stage": "S4",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/api/",
         "test/letflow/api/",
         "lib/letflow/design/req066-api-error-response.md"
       ],
       "lock_acquired_at": "2026-08-20T19:28:59Z",
-      "lock_released_at": "2026-08-20T21:30:27Z",
+      "lock_released_at": "2026-08-21T01:00:37Z",
       "released_lock": true,
-      "last_known_step": "Step Final PASS -- PR #362 squash-merged to main as 962d833, branch deleted; letflow-queue task 133 released with status done",
+      "last_known_step": "Step Final",
       "backfilled": false,
       "queue_task_id": 133,
       "queue_agent_id": "tvolodi-orch",
-      "note": "Ports src/api/errors.zig + src/api/response.zig (R-Co) as Letflow.Api.Error/Letflow.Api.Response, RFC 9457 problem-details contract for S4. depends_on REQ-065 (done). Two rework iterations, both from validator FAILs that caught real defects rather than style: REVIEWER FAILed Step 2d because router.ex's catch-all still hand-built a 404 body (which would have shipped two structurally different 404 documents and left INV-5's guarantee conventional rather than structural), and TEST-DESIGN-VALIDATOR FAILed Step 3b because AC3's leak half was vacuous -- the seeded values never reached any input the arity-1 conn-only function observed, so every refute was trivially true against every possible implementation. RELEASE-VALIDATOR then mutation-tested both security criteria (patching internal_error/1 to reflect an assign, and not_found/1 to vary on one) and confirmed each mutation failed exactly the intended test, proving the coverage is genuinely falsifiable. Three issues filed rather than fixed: ISS-0106/GH#354 (toolchain drift -- .tool-versions pins 1.18.3-otp-27, host runs 1.20.3/OTP 29), ISS-0107/GH#358 and ISS-0108/GH#360 (test-isolation flakes; the notable finding is that the suite's environmental failure set is load-dependent rather than a fixed list). Step Final hit the exact collision its own handoff had warned about: a concurrent session (letflow-2 workspace, PR #356) had independently allocated ISS-0107 for an unrelated Windows fake-mix issue and merged first, producing an add/add plus a follow-on content conflict on that path. Resolved correctly and without --ours/--theirs (both stages read via git show :2:/:3:): main's record kept byte-identical, THIS run's renumbered to ISS-0109 with a renumbered_from field, ISS-0108's cross-references repointed, and GH#358's body updated to cite the new filename. Post-rebase checks were done by content diff rather than exit code, which is what caught that ISS-0106's apparently-total diff was purely LF->CRLF checkout conversion."
+      "note": "Ports src/api/errors.zig + src/api/response.zig (R-Co) as Letflow.Api.Error/Letflow.Api.Response, RFC 9457 problem-details contract for S4. depends_on REQ-065 (done). Two rework iterations, both from validator FAILs that caught real defects rather than style: REVIEWER FAILed Step 2d because router.ex's catch-all still hand-built a 404 body (which would have shipped two structurally different 404 documents and left INV-5's guarantee conventional rather than structural), and TEST-DESIGN-VALIDATOR FAILed Step 3b because AC3's leak half was vacuous -- the seeded values never reached any input the arity-1 conn-only function observed, so every refute was trivially true against every possible implementation. RELEASE-VALIDATOR then mutation-tested both security criteria (patching internal_error/1 to reflect an assign, and not_found/1 to vary on one) and confirmed each mutation failed exactly the intended test, proving the coverage is genuinely falsifiable. Three issues filed rather than fixed: ISS-0106/GH#354 (toolchain drift -- .tool-versions pins 1.18.3-otp-27, host runs 1.20.3/OTP 29), ISS-0107/GH#358 and ISS-0108/GH#360 (test-isolation flakes; the notable finding is that the suite's environmental failure set is load-dependent rather than a fixed list). Step Final hit the exact collision its own handoff had warned about: a concurrent session (letflow-2 workspace, PR #356) had independently allocated ISS-0107 for an unrelated Windows fake-mix issue and merged first, producing an add/add plus a follow-on content conflict on that path. Resolved correctly and without --ours/--theirs (both stages read via git show :2:/:3:): main's record kept byte-identical, THIS run's renumbered to ISS-0109 with a renumbered_from field, ISS-0108's cross-references repointed, and GH#358's body updated to cite the new filename. Post-rebase checks were done by content diff rather than exit code, which is what caught that ISS-0106's apparently-total diff was purely LF->CRLF checkout conversion. | Status corrected to COMPLETED by ORCH of WF03-ISS0109-20260821 on 2026-08-21T01:00:37Z: the run reached RUN_DONE (PR #362 squash-merged as 962d833, handoffs/orchestrator.log 2026-08-20T21:30:27Z) but its registry entry was never flipped off IN_PROGRESS, leaving a stale owned_modules lock on lib/letflow/api/."
+    },
+    {
+      "run_id": "WF03-ISS0109-20260821",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "issue_ids": [
+        "ISS-0109"
+      ],
+      "stage": null,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "test/support/",
+        "test/letflow/definitions/promotion_test.exs",
+        "test/letflow/definitions/promotion_assertion_rerun_test.exs",
+        "test/test_helper.exs"
+      ],
+      "lock_acquired_at": "2026-08-21T01:00:37Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00",
+      "queue_task_ids": [
+        175,
+        172
+      ],
+      "note": "WF-03 resolving ISS-0109/GH#358 (full-suite-only tenant-schema teardown race hitting PromotionTest and PromotionAssertionRerunTest). Claimed from letflow-queue as task 175 (the GitHub-import mirror of #358) by agent_id letflow-2-orch; the register_task-side task for the same issue is 172 per docs/issues/ISS-0109.yaml. owned_modules is provisional pending ISSUE-FIXER's diagnosis and will be widened if the root cause lands outside test/. Concurrent state observed at claim time: origin/feature/WF03-ISS0106-20260821 exists with zero commits ahead of main (sibling session, ISS-0106 toolchain drift); WF03-ISS0030-20260817 remains BLOCKED holding test/letflow/tenant_provisioning_test.exs -- no overlap with this run's provisional set."
     }
   ]
 }

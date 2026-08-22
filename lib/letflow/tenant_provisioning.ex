@@ -428,7 +428,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_822_000_101, Letflow.Repo.Migrations.AlterGroupsAddDisplayNameDescription,
      "20260822000101_alter_groups_add_display_name_description.exs"},
     {20_260_822_000_102, Letflow.Repo.Migrations.CreateGroupMembersTenantScoped,
-     "20260822000102_create_group_members_tenant_scoped.exs"}
+     "20260822000102_create_group_members_tenant_scoped.exs"},
+    {20_260_823_000_001, Letflow.Repo.Migrations.CreateApiTokensTenantScoped,
+     "20260823000001_create_api_tokens_tenant_scoped.exs"}
   ]
 
   @doc """

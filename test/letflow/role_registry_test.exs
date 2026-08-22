@@ -321,6 +321,31 @@ defmodule Letflow.Identity.RoleRegistryTest do
     end
   end
 
+  describe "REQ-076 AC6 — role name outside the five auth.Role enum values is accepted (format-only constraint)" do
+    # See lib/letflow/design/req076-identity-tokens-roles-onboarding.md §5.1: R-Co's
+    # role_registry.zig upsertRole/3 validates ONLY name format (non-empty, <=128
+    # codepoints, no control characters) -- never enum membership against
+    # auth.Role's five-value RBAC set. Letflow.Identity.RoleRegistry.upsert_role/2
+    # (REQ-020, unchanged by REQ-076) already matches that behavior exactly. This
+    # test is the load-bearing new case AC6 asks for: a name that is NOT one of
+    # PLATFORM_ADMIN/PROCESS_DESIGNER/PROCESS_OPERATOR/TASK_WORKER/AGENT_RUNNER,
+    # accepted anyway. The pre-existing "name validation rejection modes" describe
+    # block above (empty, too-long, control-char) already supplies AC6's required
+    # rejected-name case -- reused, not duplicated.
+    test "a role name outside the five auth.Role enum values (e.g. CUSTOM_APPROVER) is accepted",
+         ctx do
+      group = insert_group!(ctx)
+
+      assert {:ok, %TenantRole{name: "CUSTOM_APPROVER"}} =
+               RoleRegistry.upsert_role("CUSTOM_APPROVER", group.id)
+
+      # Not one of the five recognized Letflow.Api.Authorization.roles/0 values --
+      # confirms this genuinely exercises the "outside the enum" case, not an
+      # accident of overlap.
+      refute "CUSTOM_APPROVER" in Enum.map(Letflow.Api.Authorization.roles(), &Atom.to_string/1)
+    end
+  end
+
   describe "upsert_role/2 — group_id invalid-UUID-format rejection (beyond the bare acceptance criteria)" do
     test "rejects a group_id that is not a syntactically valid UUID, distinct from the not-found case",
          _ctx do

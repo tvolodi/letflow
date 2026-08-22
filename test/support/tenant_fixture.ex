@@ -114,12 +114,13 @@ defmodule Letflow.TenantFixture do
   @phase_replay_failed "replay_failed"
   @phase_incomplete_schema "incomplete_schema"
 
-  # The 20 tables the @tenant_scoped_migration_manifest's `create table(..., prefix:
+  # The 21 tables the @tenant_scoped_migration_manifest's `create table(..., prefix:
   # prefix())` migrations produce. `schema_migrations` is deliberately NOT here: it is
   # the migrator's own bookkeeping, and its CONTENTS are captured separately as
   # `applied_versions`. Guarded against rot by this module's own oracle test (design
   # §3.3, INV-F-7) — removing that test invalidates this hard-coded list.
   @expected_tenant_tables [
+    "api_tokens",
     "event_idempotency",
     "event_payload_store",
     "event_type_registry",

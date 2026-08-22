@@ -4239,7 +4239,7 @@ requirements:
   - id: REQ-076
     title: Identity routes 4/4 -- API tokens, role registry, and tenant onboarding (identity.zig tokens/roles + onboarding.zig)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 143  # letflow-queue task id
     description: >

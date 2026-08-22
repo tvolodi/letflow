@@ -41,15 +41,29 @@ defmodule Letflow.Identity do
   `lib/letflow/design/req074-identity-group-routes.md` §8 for the full
   design. Same `opts :: [prefix: String.t()]` convention as REQ-073's
   functions.
+
+  `create_token/3`, `list_tokens/1`, `revoke_token/2`, and `verify_api_token/2`
+  (below) are REQ-076's API-token additions, backing the token routes on
+  `Letflow.Routers.Identity` and the API-token branch of
+  `Letflow.Plugs.AuthPipeline`. `create_onboarding/1`, `get_onboarding/1`, and
+  `get_onboarding_by_hostname/1` are REQ-076's onboarding additions, backing
+  `Letflow.Routers.Onboarding`. See
+  `lib/letflow/design/req076-identity-tokens-roles-onboarding.md` §3/§8 for the
+  full design. Same `opts :: [prefix: String.t()]` convention as REQ-073's
+  functions for the token group; the onboarding functions take no `opts` —
+  `onboarding_registry` is structurally global, like `tenants` (§8.1).
   """
 
   import Ecto.Query
 
   require Logger
 
+  alias Letflow.Api.Authorization
   alias Letflow.Api.Pagination
+  alias Letflow.Identity.ApiToken
   alias Letflow.Identity.Group
   alias Letflow.Identity.GroupMember
+  alias Letflow.Identity.OnboardingRecord
   alias Letflow.Identity.Tenant
   alias Letflow.Identity.User
   alias Letflow.Oidc.IdentityContext
@@ -771,6 +785,313 @@ defmodule Letflow.Identity do
     @tenants_cursor_prefix
     |> Pagination.build_raw_cursor_timestamp_key(mint_time_us, inserted_at_us, id)
     |> Pagination.encode_cursor()
+  end
+
+  # ── API tokens (REQ-076) ─────────────────────────────────────────────────
+  #
+  # Same opts :: [prefix: String.t()] convention as every REQ-073/074 function
+  # above -- api_tokens is tenant-scoped (design §2). See
+  # lib/letflow/design/req076-identity-tokens-roles-onboarding.md §3 for the
+  # full design.
+
+  @issuable_token_roles Enum.map(Authorization.roles(), &Atom.to_string/1)
+
+  @typedoc "Attrs accepted by `create_token/3` — see its own @doc."
+  @type create_token_attrs :: %{roles: [String.t()], expires_at: DateTime.t() | nil}
+
+  @doc """
+  Issues a new API token for `user_id`. Design §3.1 — behavior, in order:
+
+    1. `user_id` must reference an existing user in `opts[:prefix]`'s schema, or
+       this returns `{:error, :user_not_found}`.
+    2. `attrs.roles` must be non-empty and every entry must be one of the five
+       literal role-name strings `Letflow.Api.Authorization.roles/0` returns as
+       strings — exact match, case-sensitive. **This function does NOT call
+       `Authorization.roles_from_strings/1`** (that function's contract is
+       "silently drop an unrecognized string," correct for untrusted bearer-token
+       claims, wrong here — an explicit request for an unrecognized role must be
+       rejected loudly, not silently narrowed). Any entry outside that set
+       (including an empty/missing list) → `{:error, :invalid_role_set}`.
+    3. `attrs.expires_at`, if given, must be strictly after `DateTime.utc_now/0`
+       at the moment of the check, or this returns `{:error, :expires_at_in_past}`.
+    4. The plaintext token value is generated:
+       `"lf_tok_" <> (32 random bytes, lowercase hex)` — a deliberate,
+       cosmetic-only prefix divergence from R-Co's `"bpm_tok_"`.
+    5. `token_hash` is the SHA-256 hex digest of the plaintext (same algorithm as
+       R-Co's own `hashToken/1`).
+    6. `name` is `"token-" <> String.slice(token_hash, 0, 8)` — matches R-Co's
+       own generated-name scheme exactly.
+    7. The row is inserted via `Repo.insert/2`, `prefix: opts[:prefix]`.
+
+  **Roles are snapshotted, not live-referenced** — matches R-Co's own documented
+  behavior: a later role-registry change does not affect an already-issued
+  token's effective roles.
+
+  Returns `{:ok, %{token: token, plaintext: plaintext}}` on success —
+  `plaintext` is a bare local value that exists only in this return tuple,
+  never assigned to any struct field, never persisted, never logged (INV-4).
+  This is the single call site in the whole codebase that ever holds the
+  plaintext after generation.
+  """
+  @spec create_token(user_id :: Ecto.UUID.t(), attrs :: create_token_attrs(), opts :: opts()) ::
+          {:ok, %{token: ApiToken.t(), plaintext: String.t()}}
+          | {:error, :user_not_found}
+          | {:error, :invalid_role_set}
+          | {:error, :expires_at_in_past}
+          | {:error, Ecto.Changeset.t()}
+  def create_token(user_id, attrs, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    case Repo.get(User, user_id, prefix: prefix) do
+      nil ->
+        {:error, :user_not_found}
+
+      %User{} ->
+        with :ok <- validate_issuable_roles(Map.get(attrs, :roles)),
+             :ok <- validate_expires_at(Map.get(attrs, :expires_at)) do
+          insert_token(user_id, attrs, prefix)
+        end
+    end
+  end
+
+  defp validate_issuable_roles(roles) when is_list(roles) and roles != [] do
+    if Enum.all?(roles, &(&1 in @issuable_token_roles)) do
+      :ok
+    else
+      {:error, :invalid_role_set}
+    end
+  end
+
+  defp validate_issuable_roles(_roles), do: {:error, :invalid_role_set}
+
+  defp validate_expires_at(nil), do: :ok
+
+  defp validate_expires_at(%DateTime{} = expires_at) do
+    if DateTime.compare(expires_at, DateTime.utc_now()) == :gt do
+      :ok
+    else
+      {:error, :expires_at_in_past}
+    end
+  end
+
+  defp insert_token(user_id, attrs, prefix) do
+    plaintext = generate_token_plaintext()
+    token_hash = hash_token_value(plaintext)
+    name = "token-" <> String.slice(token_hash, 0, 8)
+
+    changeset =
+      ApiToken.insert_changeset(%ApiToken{}, %{
+        user_id: user_id,
+        name: name,
+        token_hash: token_hash,
+        roles: attrs.roles,
+        expires_at: Map.get(attrs, :expires_at)
+      })
+
+    case Repo.insert(changeset, prefix: prefix) do
+      {:ok, token} -> {:ok, %{token: token, plaintext: plaintext}}
+      {:error, %Ecto.Changeset{}} = error -> error
+    end
+  end
+
+  defp generate_token_plaintext do
+    "lf_tok_" <> (:crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower))
+  end
+
+  defp hash_token_value(plaintext) do
+    :crypto.hash(:sha256, plaintext) |> Base.encode16(case: :lower)
+  end
+
+  @doc """
+  Lists every API token in `opts[:prefix]`'s schema, ordered by `inserted_at`
+  descending — matches R-Co's own `ORDER BY created_at DESC`. Unpaginated
+  (design §3.2 — no acceptance criterion here calls for cursor pagination on
+  this endpoint). Always `{:ok, _}` — an empty result is `{:ok, []}`.
+  """
+  @spec list_tokens(opts :: opts()) :: {:ok, [ApiToken.t()]}
+  def list_tokens(opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    tokens = Repo.all(from(t in ApiToken, order_by: [desc: t.inserted_at]), prefix: prefix)
+
+    {:ok, tokens}
+  end
+
+  @doc """
+  Revokes a token by id, idempotently — re-revoking an already-revoked token
+  returns `{:ok, token}` unchanged rather than overwriting `revoked_at` with a
+  later timestamp (matches R-Co's own `SET revoked_at = COALESCE(revoked_at,
+  NOW())`). Returns `{:error, :not_found}` if no token with that id exists in
+  `opts[:prefix]`'s schema.
+  """
+  @spec revoke_token(token_id :: Ecto.UUID.t() | String.t(), opts :: opts()) ::
+          {:ok, ApiToken.t()} | {:error, :not_found}
+  def revoke_token(token_id, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    case Repo.get(ApiToken, token_id, prefix: prefix) do
+      nil ->
+        {:error, :not_found}
+
+      %ApiToken{revoked_at: revoked_at} = token when not is_nil(revoked_at) ->
+        {:ok, token}
+
+      %ApiToken{} = token ->
+        now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+        token
+        |> ApiToken.revoke_changeset(%{revoked_at: now})
+        |> Repo.update(prefix: prefix)
+    end
+  end
+
+  @doc """
+  Verifies a bearer-token plaintext against `opts[:prefix]`'s schema — the
+  propagation-guarantee mechanism behind AC4 (design §3.4). This is a **live,
+  uncached, per-call database read**, every single invocation: there is no ETS
+  table, no process-dictionary cache, no periodic-refresh worker anywhere in
+  this call path — exactly one `Repo` round trip per call, always against
+  current data. This is what makes revocation take effect on the very next
+  call: nothing between the revoking `UPDATE` and the next `verify_api_token/2`
+  call's `Repo.get_by/3` can observe a pre-revocation value, because there is
+  no cache layer between them to be stale.
+
+  On a successful verification, best-effort updates `last_used_at` — a failure
+  on that one non-essential write does not fail the verification itself (logged
+  and swallowed).
+
+  Returns `{:ok, %{user_id: user_id, roles: roles}}`, or `{:error, :invalid}`
+  (no matching row), `{:error, :revoked}`, or `{:error, :expired}`.
+  """
+  @spec verify_api_token(plaintext :: String.t(), opts :: opts()) ::
+          {:ok, %{user_id: Ecto.UUID.t(), roles: [String.t()]}}
+          | {:error, :invalid}
+          | {:error, :revoked}
+          | {:error, :expired}
+  def verify_api_token(plaintext, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+    token_hash = hash_token_value(plaintext)
+
+    case Repo.get_by(ApiToken, [token_hash: token_hash], prefix: prefix) do
+      nil ->
+        {:error, :invalid}
+
+      %ApiToken{revoked_at: revoked_at} when not is_nil(revoked_at) ->
+        {:error, :revoked}
+
+      %ApiToken{expires_at: expires_at} = token when not is_nil(expires_at) ->
+        if DateTime.compare(expires_at, DateTime.utc_now()) != :gt do
+          {:error, :expired}
+        else
+          touch_last_used_and_verify(token, prefix)
+        end
+
+      %ApiToken{} = token ->
+        touch_last_used_and_verify(token, prefix)
+    end
+  end
+
+  defp touch_last_used_and_verify(%ApiToken{} = token, prefix) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    case token
+         |> ApiToken.touch_last_used_changeset(%{last_used_at: now})
+         |> Repo.update(prefix: prefix) do
+      {:ok, _updated} ->
+        :ok
+
+      {:error, _changeset} ->
+        Logger.warning(
+          "verify_api_token/2: best-effort last_used_at update failed (token_id=#{token.id})"
+        )
+    end
+
+    {:ok, %{user_id: token.user_id, roles: token.roles}}
+  end
+
+  # ── Onboarding (REQ-076) ──────────────────────────────────────────────────
+  #
+  # No opts/:prefix parameter on any of these three -- onboarding_registry is
+  # structurally global, like tenants/tenant_schemas (design §8.1). The
+  # tenant-creation orchestration itself (Identity.create_tenant/1 ->
+  # TenantProvisioning.provision_tenant_schema/1 ->
+  # TenantProvisioning.replay_migrations/2 -> create_onboarding/1) lives in
+  # Letflow.Routers.Onboarding's own handler, not in this module -- matching
+  # REQ-075's own precedent (Letflow.Routers.Tenants keeps that orchestration
+  # at the handler layer) and REQ-022 §6's "no coupling" rule (Letflow.Identity
+  # does not call into Letflow.TenantProvisioning).
+
+  @doc """
+  Inserts an `OnboardingRecord` row recording a completed tenant-onboarding
+  binding — the final step of the router-orchestrated onboarding flow (design
+  §8.2 step 3), called only after `Letflow.TenantProvisioning.provision_tenant_schema/1`
+  and `Letflow.TenantProvisioning.replay_migrations/2` have both already
+  succeeded for `attrs.tenant_id`. `attrs` carries `tenant_id`/`slug`/`hostname`.
+
+  Returns `{:error, :duplicate_hostname}` on a `hostname` unique-constraint
+  violation.
+  """
+  @spec create_onboarding(
+          attrs :: %{
+            tenant_id: Ecto.UUID.t(),
+            slug: String.t(),
+            hostname: String.t()
+          }
+        ) ::
+          {:ok, OnboardingRecord.t()}
+          | {:error, :duplicate_hostname}
+          | {:error, Ecto.Changeset.t()}
+  def create_onboarding(attrs) do
+    changeset = OnboardingRecord.insert_changeset(%OnboardingRecord{}, attrs)
+
+    case Repo.insert(changeset) do
+      {:ok, record} ->
+        {:ok, record}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        if hostname_unique_conflict?(changeset) do
+          {:error, :duplicate_hostname}
+        else
+          {:error, changeset}
+        end
+    end
+  end
+
+  @doc "Fetches a single onboarding record by id. Design §8.2."
+  @spec get_onboarding(id :: Ecto.UUID.t() | String.t()) ::
+          {:ok, OnboardingRecord.t()} | {:error, :not_found}
+  def get_onboarding(id) do
+    case Repo.get(OnboardingRecord, id) do
+      %OnboardingRecord{} = record -> {:ok, record}
+      nil -> {:error, :not_found}
+    end
+  end
+
+  @doc """
+  Fetches a single onboarding record by `hostname`. Design §8.2/§8.4 —
+  callers of this function must already have run
+  `Letflow.Api.Authorization.evaluate_access/2` against `:TenantsManage`
+  **before** calling it (`Letflow.Routers.Onboarding`'s own "no `Repo` call
+  before authorization" discipline); this function itself performs no
+  authorization check and is not, on its own, INV-5-safe — see the design
+  doc §8.4 for the full argument for why the route-level ordering is what
+  actually satisfies AC7/INV-5, not this function.
+  """
+  @spec get_onboarding_by_hostname(hostname :: String.t()) ::
+          {:ok, OnboardingRecord.t()} | {:error, :not_found}
+  def get_onboarding_by_hostname(hostname) do
+    case Repo.get_by(OnboardingRecord, hostname: hostname) do
+      %OnboardingRecord{} = record -> {:ok, record}
+      nil -> {:error, :not_found}
+    end
+  end
+
+  @spec hostname_unique_conflict?(changeset :: Ecto.Changeset.t()) :: boolean()
+  defp hostname_unique_conflict?(%Ecto.Changeset{errors: errors}) do
+    Enum.any?(errors, fn
+      {:hostname, {_message, keyword}} -> Keyword.get(keyword, :constraint) == :unique
+      _other -> false
+    end)
   end
 
   # ── create_group/2 / add_group_member/3 private helpers ─────────────────

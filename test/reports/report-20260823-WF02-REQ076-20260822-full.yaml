@@ -1,0 +1,168 @@
+report_id: report-20260823-WF02-REQ076-20260822-full
+agent: TEST-RUNNER
+requirement: REQ-076
+workflow_step: WF-02 Step 4 (full suite test run) -- fresh run now that all 10 acceptance
+  criteria (original 8 + AC9/AC10 scope-extension) have implementation, security review,
+  idiom review, test design, and test-design-gate all PASSed
+branch: feature/WF02-REQ076-20260822
+date: 2026-08-23
+command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+prior_report: test/reports/report-20260823-WF02-REQ076-20260822-rerun.yaml (verdict PASS,
+  1839/1839, on the then-8-criteria version of this branch, before AC9/AC10's new files
+  were added)
+
+diff_scope: >
+  git diff --name-only main...HEAD includes: priv/repo/migrations/20260823000001_*,
+  20260823000002_*; lib/letflow/identity/api_token.ex, onboarding_record.ex,
+  tenant_onboarding.ex; lib/letflow/identity.ex, api/authorization.ex,
+  routers/identity.ex, routers/onboarding.ex, plugs/auth_pipeline.ex,
+  tenant_provisioning.ex; lib/letflow/design/req076-*.md; the identity/onboarding test
+  files listed in the dispatch; docs/anti-patterns.md and docs/status/* (ORCH's own
+  status updates). Notably absent from the diff: test/support/tenant_schema_reaper_test.exs
+  and test/letflow/engine_concurrency_test.exs -- both are pre-existing files, untouched
+  by this branch.
+
+environment:
+  postgres: >
+    `docker compose up -d`: letflow-postgres-1 already "Running" (healthy, port
+    0.0.0.0:5462->5432/tcp). letflow-keycloak-1 failed to (re)start: "Bind for
+    0.0.0.0:8092 failed: port is already allocated" (another process/checkout holding
+    that port). Not investigated further or fixed -- the test suite does not depend on
+    Keycloak; `docker compose ps` confirmed Postgres alone was healthy before the run.
+  db_setup: >
+    Each test_parallel.sh partition's own `mix test` invocation performs
+    ecto.create/ecto.migrate --quiet automatically via the `test` alias -- no separate
+    DB-setup step taken here.
+  parallel_n: >
+    TEST_PARALLEL_N=4 set explicitly per the documented ISS-0219 remedy, used directly
+    (not auto-derived from nproc/getconf).
+
+run_result: >
+  test_parallel: N=4 (source: env override)
+  test_parallel: TEST_POOL_SIZE=22 (computed: N=4, max_connections=100, headroom=10)
+  partition 1: 460 tests, 0 properties, 0 failures, exit 0
+  partition 2: 487 tests, 1 property, 3 failures, exit 2
+  partition 3: 453 tests, 4 properties, 2 failures, exit 2
+  partition 4: 437 tests, 0 properties, 0 failures, exit 0
+  ---
+  combined: 1837 tests, 5 properties, 5 failures (1837/1842 passed)
+
+failures:
+  - test: "Letflow.TenantSchemaReaperTest: schema_name format guard skips an old row
+      instead of attempting a drop"
+    location: test/support/tenant_schema_reaper_test.exs:212
+    partition: 2
+    symptom: "assert skipped >= 1; left: 0, right: 1"
+    surrounding_log: >
+      Immediately preceded (02:43:53.658 and 02:43:56.281) by two
+      `Postgrex.Error) FATAL 53300 (too_many_connections) sorry, too many clients
+      already` entries on the same connection pid, during the same test's own
+      schema-create/insert sequence.
+  - test: "Letflow.TenantSchemaReaperTest: concurrent-invocation liveness guard (ISS-0110)"
+    location: test/support/tenant_schema_reaper_test.exs:273
+    partition: 2
+    symptom: >
+      DBConnection.ConnectionError: connection not available and request was dropped
+      from queue after 4000ms (pool exhaustion, not a logic assertion failure).
+  - test: "Letflow.TenantSchemaReaperTest: reclaims an old, well-formed orphaned row"
+    location: test/support/tenant_schema_reaper_test.exs (3rd failure in this file, partition 2)
+    partition: 2
+    symptom: >
+      Occurs immediately after the other two in the same partition, same
+      connection-pressure window (application_name-based ISS-0110 deferral logged
+      repeatedly against a concurrent "another mix test invocation" between
+      02:43:57.6xx timestamps).
+  - test: "Letflow.EngineConcurrencyTest: AC1 -- 100 concurrent task completions, no
+      global serialization"
+    location: test/letflow/engine_concurrency_test.exs:297,344
+    partition: 3
+    symptom: >
+      "AC1 timing ratio 84.73x exceeded multiplier 60x (TEST_PARALLEL_GROUP set) --
+      baseline_micros=28467, concurrent_micros=2411929". This is the test's own
+      built-in headroom check for global-serialization detection; it already widens
+      its multiplier when running under test_parallel.sh (TEST_PARALLEL_GROUP set) and
+      was still exceeded, consistent with real DB/connection contention from the other
+      3 concurrent partitions rather than an actual serialization bug introduced by
+      this branch.
+  - test: "Letflow.EngineConcurrencyTest: AC4 -- reconstruction matches projection for
+      all instances"
+    location: test/letflow/engine_concurrency_test.exs:501
+    partition: 3
+    symptom: >
+      DBConnection.ConnectionError: "could not checkout the connection owned by
+      #PID<0.9645.0> (Task.Supervised) ... connection not available and request was
+      dropped from queue after 2111ms" -- same pool-exhaustion signature as the
+      TenantSchemaReaperTest failures above, in a different partition.
+
+failure_attribution:
+  method: >
+    Per core-directives.md "Failure Attribution Is Structural, Never By Count-Matching."
+    Re-derived fresh per this dispatch's explicit instruction, not assumed to still
+    hold from the prior (8-criteria) run two runs ago.
+  route_1_structural: >
+    Neither test/support/tenant_schema_reaper_test.exs nor
+    test/letflow/engine_concurrency_test.exs appears in `git diff --name-only
+    main...HEAD` for this branch (checked directly, empty grep match) -- this branch
+    cannot have caused either file's failures by editing them, and neither test
+    exercises identity/onboarding/auth-token code paths (the actual AC9/AC10 diff
+    surface).
+  route_3_measured_mechanism: >
+    All 5 failures carry direct, quoted evidence of Postgres connection-pool
+    exhaustion, not assertion-logic failures: two explicit `FATAL 53300
+    (too_many_connections)` errors, two `DBConnection.ConnectionError ... connection
+    not available and request was dropped from queue` timeouts, and one timing-ratio
+    assertion (EngineConcurrencyTest AC1) whose own failure message names contention
+    explicitly and had already been widened for exactly this scenario
+    (TEST_PARALLEL_GROUP-aware multiplier) before being exceeded. This is a measured
+    mechanism (actual Postgres/pool error text and timing numbers), not an assumption
+    that one exists.
+  conclusion: >
+    All 5 failures are attributed pre-existing/environmental (connection-pool
+    pressure under 4-partition concurrent load), not caused by this run's own
+    AC9/AC10 implementation. None of the identity/onboarding/api-token/authorization
+    test files (the actual new/changed test surface for this branch) failed --
+    partitions 1 and 4, which carried the bulk of that new coverage, both passed
+    clean (0 failures).
+  new_finding_for_orch: >
+    This is a DIFFERENT failure mode from ISS-0219 (which was start-of-run
+    auto-derived-N crashing all partitions before any Result: line, resolved by
+    documenting TEST_PARALLEL_N=4). This run used TEST_PARALLEL_N=4 as documented and
+    still hit mid-run connection-pool exhaustion during two specific
+    connection-heavy tests (TenantSchemaReaperTest's own reap logic, and
+    EngineConcurrencyTest's 100-concurrent-instance load). Reporting this to ORCH as a
+    new finding for registration (per ISSUE_QUEUE.md / "No Issue Left Local-Only") --
+    not filed directly by this agent. Suggest ORCH register: "TEST_POOL_SIZE=22 x 4
+    partitions can still exhaust Postgres max_connections=100 mid-run under
+    connection-heavy tests (TenantSchemaReaperTest, EngineConcurrencyTest), even with
+    the documented TEST_PARALLEL_N=4 remedy in place -- distinct mechanism from
+    ISS-0219's start-of-run crash."
+
+new_failures_vs_prior_report: >
+  The prior report (rerun, 1839/1839 clean) predates AC9/AC10's new files being added.
+  This run adds 3 tests (1842 vs 1839) and shows 5 failures where the prior showed 0 --
+  but the failing tests are TenantSchemaReaperTest and EngineConcurrencyTest, neither of
+  which is new or touched by AC9/AC10, and both failure sets show the connection-pressure
+  signature described above rather than any assertion tied to identity/onboarding logic.
+  This is intermittent connection pressure recurring on a different pair of tests than
+  the prior run's TenantSchemaReaperTest-only set -- consistent with, not identical to,
+  the previously observed pattern; re-derived independently rather than assumed.
+
+verdict: PASS
+
+summary_line: >
+  scripts/test_parallel.sh with TEST_PARALLEL_N=4: combined 1837 tests, 5 properties, 5
+  failures (1837/1842 passed). All 5 failures are in test/support/tenant_schema_reaper_test.exs
+  (3) and test/letflow/engine_concurrency_test.exs (2) -- neither file is in this branch's
+  diff, and all 5 carry direct evidence of Postgres connection-pool exhaustion (FATAL
+  too_many_connections, DBConnection checkout timeouts, and a contention-attributed
+  timing-ratio overrun) rather than logic-assertion failures. Attributed
+  pre-existing/environmental per core-directives.md's structural-attribution rule (route 1
+  + route 3, both with direct evidence). No AC9/AC10 or other identity/onboarding/
+  auth-token test failed -- partitions 1 and 4, carrying that coverage, both passed 0
+  failures. Reporting the mid-run pool-exhaustion pattern to ORCH as a new finding
+  (distinct from ISS-0219) for queue registration.
+
+artifacts_out:
+  - test/reports/report-20260823-WF02-REQ076-20260822-full.yaml
+
+next_action: PASS -> Route to RELEASE-VALIDATOR

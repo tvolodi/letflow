@@ -210,8 +210,38 @@ volumes:
     path: docs/status/requirement_status.v3.yaml
     status: current
     opened: 2026-08-22
-    entries: 39
+    entries: 41
     note: >
+      Recounted to 41 by WF02-REQ076-20260822's Step Final rebase, which
+      conflicted at requirement_status.v3.yaml's tail against
+      WF02-REQ079-20260822's, WF02-REQ080-20260823's, and
+      WF02-REQ081-20260823's own entries (all landed on main after this
+      run's Step 00 commit). Composed in chronological `at:` order --
+      REQ-076 started (18:40:59Z), REQ-079 started (19:00:00Z), REQ-079 done
+      (19:05:59Z), REQ-076 done (21:58:43Z), REQ-080 started
+      (2026-08-23T00:32:00Z), REQ-081 started (00:35:00Z), REQ-080 done
+      (01:45:00Z), REQ-081 done (02:58:00Z) -- REQ-076's own two entries
+      were reordered around REQ-079's pair rather than appended after it;
+      REQ-080's and REQ-081's entries needed no reordering relative to each
+      other or to REQ-076/REQ-079. Recounted directly from
+      `grep -c "^  - req:" docs/status/requirement_status.v3.yaml` = 41,
+      rather than carrying forward either side's independently-computed
+      count (39 from the REQ-081 side, 35 from this run's own pre-rebase
+      commit), per this note's own recount-every-time rule.
+      Incremented to 35 by DOC-UPDATER's own REQ-076 done-event append
+      (WF02-REQ076-20260822, Step 6) -- 35 on-disk `- req:` entries in
+      requirement_status.v3.yaml, no rebase conflict on this file,
+      recounted via `grep -c "^  - req:"
+      docs/status/requirement_status.v3.yaml` per this note's own
+      recount-every-time rule.
+      Incremented to 34 by ORCH's own REQ-076 started-event append
+      (WF02-REQ076-20260822, Step 00) -- 34 on-disk `- req:` entries in
+      requirement_status.v3.yaml, no rebase conflict on this file, recounted
+      via `grep -c "^  - req:" docs/status/requirement_status.v3.yaml` per
+      this note's own recount-every-time rule (this file's own declared
+      count had drifted one behind the true on-disk count, caught by
+      test/docs/requirement_status_invariants_test.exs's assertion A9 during
+      WF02-REQ076-20260822's Step 4 run).
       Recounted to 33 during LOOP-20260822-orch (ORCH)'s Step Final rebase for
       ISS-0119: this run's own done-event (18:39:00Z) conflicted at
       requirement_status.v3.yaml's tail against a concurrently-landed sibling

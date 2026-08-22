@@ -1017,6 +1017,17 @@ history:
       written, GH#564 closed noting watch-item status, queue task 286 released
       done. 32 on-disk `- req:` entries in requirement_status.v3.yaml after this
       append.
+  - req: REQ-076
+    event: started
+    agent: ORCH
+    at: "2026-08-22T18:40:59Z"
+    note: >
+      Claimed from letflow-queue (task 143, GH#283). WF-02 Step 00 (git setup)
+      PASS: branch feature/WF02-REQ076-20260822 created from main and pushed.
+      Status flipped pending -> in_progress in docs/requirements.yaml. 34
+      on-disk `- req:` entries in requirement_status.v3.yaml after this append
+      (recounted via grep -c "^  - req:", not carried forward from the prior
+      entry's own stale 32 count).
   - req: REQ-079
     event: started
     agent: ELIXIR-DEV
@@ -1044,6 +1055,43 @@ history:
       grep and pinned by an explicit test. 35 on-disk `- req:` entries in
       requirement_status.v3.yaml after this append (33 pre-existing + this
       run's own started+done pair).
+  - req: REQ-076
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-22T21:58:43Z"
+    note: >
+      WF02-REQ076-20260822 (queue task 143, GH#283) done. RELEASE-VALIDATOR
+      independently PASSed all 10 acceptance criteria for Identity routes
+      4/4 -- API tokens (handleCreateToken/handleListTokens/handleRevokeToken,
+      INV-4 plaintext-once/hash-only/never-logged rules confirmed), role
+      registry (handleListRoles/handleUpsertRole), and tenant onboarding
+      (handleOnboarding/handleGetOnboarding/handleGetOnboardingByHostname,
+      routed through Letflow.TenantProvisioning, INV-5 unknown-hostname
+      indistinguishability), plus the AC9/AC10 partial-provisioning-recovery
+      and tenant-status-lifecycle scope extension anchored here by
+      ISS-0230/GH#468 (idempotent recovery entry point in this
+      requirement's own orchestration layer, never inside
+      Letflow.TenantProvisioning, per req022 section 3.2's No implicit
+      chaining invariant; explicit half-provisioned tenant status decided
+      and tested against both write and read requests). Full suite:
+      1842/1842 passed on RELEASE-VALIDATOR's own independent re-run.
+      Status flipped in_progress -> done in docs/requirements.yaml here.
+      README.md checked ("Running it" / no ASCII state diagram present) --
+      no documented current-behaviour update applies, none of the 10
+      acceptance criteria name a docs/migration/stage-N-*.md or
+      docs/migration/decisions/*.md file. 40 on-disk `- req:` entries in
+      requirement_status.v3.yaml after this append (composed during
+      WF02-REQ076-20260822's own Step Final rebase, which found main advanced
+      by WF02-REQ079-20260822's started+done pair since this run's Step 00
+      commit -- REQ-076 started (18:40:59Z) sorted before REQ-079 started
+      (19:00:00Z) and REQ-076 done (21:58:43Z) sorted after REQ-079 done
+      (19:05:59Z), so REQ-076's own two entries were reordered around
+      REQ-079's pair rather than appended after it. Recounted directly from
+      `grep -c "^  - req:" docs/status/requirement_status.v3.yaml` = 40
+      (32 pre-existing + REQ-076's own started+done + REQ-079's own
+      started+done), not carried forward from either side's
+      independently-computed count, per this note's own recount-every-time
+      rule).
   - req: REQ-080
     event: started
     agent: ORCH
@@ -1126,5 +1174,10 @@ history:
       its own test run (23/23, full suite 1857/1857 clean), spot-checked
       INV-1/INV-5 directly rather than trusting SECURITY-REVIEWER's verdict,
       and found one remaining defect: mix format --check-formatted failing
-      on the test file (commit 086ca52, fixed by ORCH). 39 on-disk `- req:`
-      entries in requirement_status.v3.yaml after this append.
+      on the test file (commit 086ca52, fixed by ORCH). 41 on-disk `- req:`
+      entries in requirement_status.v3.yaml after this append (composed
+      during WF02-REQ076-20260822's own Step Final rebase -- this entry's
+      declared 39 was computed against a pre-REQ-076 base; recounted
+      directly from `grep -c "^  - req:" docs/status/requirement_status.v3.yaml`
+      = 41 after REQ-076's own started+done pair was composed in above,
+      per this note's own recount-every-time rule).

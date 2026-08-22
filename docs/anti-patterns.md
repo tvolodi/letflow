@@ -1415,3 +1415,44 @@ citation), so finding every pre-2026-08-20 stale task without a live claim in ha
 would require exactly the kind of task-id guessing the "do not chase further" rule
 exists to prevent. Letting the existing queue loop's `get_next_task` polling drain
 them naturally is the correct, already-in-place remediation.
+
+## ORCH truncating a long, amended `acceptance_criteria` list when building the run's first handoff
+
+WF02-REQ076-20260822: ORCH copied REQ-076's `acceptance_criteria` into CODE-DESIGNER's
+Step 1 handoff by hand-transcribing them into the prompt text rather than reading and
+pasting the actual YAML list, and stopped at 8 items — the requirement's original
+scope. It didn't notice `docs/requirements.yaml`'s entry actually has 10:
+ISS-0230/GH#468 had appended two more (an idempotent partial-provisioning recovery
+entry point, and an explicit tenant-status-lifecycle decision) directly into this same
+requirement as its designated anchor, months before this run started. Every downstream
+role in the chain — CODE-DESIGNER, CODE-DESIGN-VALIDATOR (twice, across a rework
+round), ELIXIR-DEV, SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER, TEST-DESIGN-VALIDATOR
+(twice), TEST-RUNNER (twice) — inherited the stale 8-item list from ORCH's handoff
+text rather than independently reading `docs/requirements.yaml`'s entry, so nobody in
+eleven agent-turns caught that two mandatory, non-optional criteria (explicitly marked
+"not optional" in the requirement's own description) had zero design, zero
+implementation, and zero test coverage. It was only caught at Step 5 because
+RELEASE-VALIDATOR's own procedure requires reading the acceptance criteria from the
+source file, not from its task handoff, specifically to catch exactly this class of
+inherited error (see "Inheriting a claim from a record instead of re-deriving it from
+the source" above, applied here one level up — to ORCH's own transcription, not a
+downstream agent's).
+
+**Root cause:** `docs/requirements.yaml`'s per-requirement acceptance-criteria lists
+are not static once a requirement is drafted — a later issue resolution can append to
+one, as `ISSUE_QUEUE.md`'s convention of anchoring a finding into an existing
+requirement rather than always spawning a new one explicitly allows. Copying by
+memory/hand-transcription instead of a direct read-then-paste of the current YAML list
+does not defend against a requirement having grown since ORCH last read it in full at
+selection time, or simply against transcription slipping mid-count when a
+`description:` field runs to 60+ lines.
+
+**Fix going forward:** when building the *first* handoff of a run (Step 00/Step 1),
+copy `requirement_text` and `acceptance_criteria` by direct quotation from a just-run
+read of the specific requirement's YAML block — never retype/summarize the count from
+memory of an earlier read, and never trust a `depends_on` or `impl_order` comment as a
+proxy for "this requirement hasn't changed since I last looked." Every subsequent
+handoff in the same run may then copy forward from the first handoff's own text
+verbatim (that part is fine — the defect here was the first transcription, not the
+propagation), but if a run spans multiple sessions or resumes after a gap, re-read the
+source YAML fresh rather than trusting a carried-forward handoff text.

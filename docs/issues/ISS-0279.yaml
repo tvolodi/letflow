@@ -48,7 +48,41 @@ recommendation: >
   found these two by hand.
 queue_task_id: 279
 github_issue: 551
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0279-20260822
+resolved_at: "2026-08-22T17:40:07Z"
+resolution_note: >
+  Root cause (WF03-ISS0279-20260822 Step 1 diagnosis, handoffs/
+  WF03-ISS0279-20260822/step-01-issue-fixer.json): two missing mechanical
+  enforcement points -- (a) WF-03 Step 5's evidence-on-close requirement was
+  prose-only, agent-discretion-enforced, and (b) nothing audited
+  already-closed issues after the fact for compliance.
+
+  Fixed on both surfaces:
+  1. `docs/agents/workflows/WF-03_issue_resolving.md` Step 5 hardened to a
+     stated HARD requirement -- a GitHub issue close is only valid with
+     EITHER a `--comment` citing resolving evidence OR a genuinely
+     linked/merged PR (`closedByPullRequestsReferences` non-empty); closing
+     without either is now stated explicitly as "this step not done", not a
+     smaller version of done. `docs/agents/protocols/ISSUE_QUEUE.md` gained
+     its own "Closing an issue's GitHub mirror -- evidence is mandatory"
+     section stating the same rule for a reader who lands there first.
+  2. New backstop audit tool `lib/mix/tasks/letflow.audit_issue_closures.ex`
+     (`mix letflow.audit_issue_closures`), structurally modeled on
+     `lib/mix/tasks/letflow.lint_handoffs.ex`: shells to `gh issue view` for
+     every closed, `github_issue`-linked `docs/issues/*.yaml` entry and flags
+     any closure with zero comments AND no linked/merged PR reference.
+     Deliberately kept a standalone, on-demand tool (not wired into
+     `mix letflow.check`) -- see its own `@moduledoc` for the reasoning
+     (live GitHub network access, not available as a CI-equivalent gate
+     dependency in this repo). Regression coverage, including mutation-
+     verified sensitivity to the specific traps (zero-comment-no-PR vs.
+     comment-present vs. PR-linked-no-comment), at
+     `test/mix/tasks/letflow.audit_issue_closures_test.exs`.
+
+  This closes ISS-0279 itself with a comment citing this evidence, honoring
+  the very rule the fix hardens -- the gap this issue exists to describe
+  (GH#324/#326 closed with no comment at all) is not repeated here.
 related:
   - ISS-0096
   - ISS-0098

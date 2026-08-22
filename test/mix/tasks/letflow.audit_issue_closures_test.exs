@@ -252,7 +252,10 @@ defmodule Mix.Tasks.Letflow.AuditIssueClosuresTest do
   describe "grandfathered?/1 membership -- integration via run/1 with a faked gh" do
     setup do
       original_path = System.get_env("PATH")
-      fixture_dir = Path.join(System.tmp_dir!(), "letflow-fake-gh-#{System.unique_integer([:positive])}")
+
+      fixture_dir =
+        Path.join(System.tmp_dir!(), "letflow-fake-gh-#{System.unique_integer([:positive])}")
+
       File.mkdir_p!(fixture_dir)
 
       gh_script = Path.join(fixture_dir, "gh.bat")
@@ -296,8 +299,12 @@ defmodule Mix.Tasks.Letflow.AuditIssueClosuresTest do
         end)
 
       assert output =~ "NEW HARD VIOLATIONS"
-      assert output =~ "  [ZERO_EVIDENCE] GH#15 (docs/issues/ISS-0009.yaml): closed with 0 comments"
-      refute output =~ "  [ZERO_EVIDENCE] GH#68 (docs/issues/ISS-0012.yaml): closed with 0 comments"
+
+      assert output =~
+               "  [ZERO_EVIDENCE] GH#15 (docs/issues/ISS-0009.yaml): closed with 0 comments"
+
+      refute output =~
+               "  [ZERO_EVIDENCE] GH#68 (docs/issues/ISS-0012.yaml): closed with 0 comments"
 
       assert output =~ "GRANDFATHERED"
       assert output =~ "  [ZERO_EVIDENCE] GH#68 (docs/issues/ISS-0012.yaml, grandfathered"

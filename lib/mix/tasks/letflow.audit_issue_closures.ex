@@ -125,40 +125,71 @@ defmodule Mix.Tasks.Letflow.AuditIssueClosures do
     # record it was found on. See that run's step-03-elixir-dev.json
     # result.summary for the raw `mix letflow.audit_issue_closures` output this
     # list was derived from.
-    {68, "2026-08-22", "docs/issues/ISS-0012.yaml -- closed with 0 comments, no linked/merged PR"},
-    {69, "2026-08-22", "docs/issues/ISS-0013.yaml -- closed with 0 comments, no linked/merged PR"},
-    {72, "2026-08-22", "docs/issues/ISS-0016.yaml -- closed with 0 comments, no linked/merged PR"},
-    {75, "2026-08-22", "docs/issues/ISS-0019.yaml -- closed with 0 comments, no linked/merged PR"},
-    {76, "2026-08-22", "docs/issues/ISS-0020.yaml -- closed with 0 comments, no linked/merged PR"},
-    {78, "2026-08-22", "docs/issues/ISS-0021.yaml -- closed with 0 comments, no linked/merged PR"},
-    {79, "2026-08-22", "docs/issues/ISS-0022.yaml -- closed with 0 comments, no linked/merged PR"},
-    {81, "2026-08-22", "docs/issues/ISS-0023.yaml -- closed with 0 comments, no linked/merged PR"},
-    {82, "2026-08-22", "docs/issues/ISS-0024.yaml -- closed with 0 comments, no linked/merged PR"},
-    {84, "2026-08-22", "docs/issues/ISS-0026.yaml -- closed with 0 comments, no linked/merged PR"},
-    {85, "2026-08-22", "docs/issues/ISS-0027.yaml -- closed with 0 comments, no linked/merged PR"},
-    {86, "2026-08-22", "docs/issues/ISS-0028.yaml -- closed with 0 comments, no linked/merged PR"},
-    {89, "2026-08-22", "docs/issues/ISS-0030.yaml -- closed with 0 comments, no linked/merged PR"},
-    {90, "2026-08-22", "docs/issues/ISS-0031.yaml -- closed with 0 comments, no linked/merged PR"},
-    {108, "2026-08-22", "docs/issues/ISS-0035.yaml -- closed with 0 comments, no linked/merged PR"},
-    {113, "2026-08-22", "docs/issues/ISS-0036.yaml -- closed with 0 comments, no linked/merged PR"},
-    {120, "2026-08-22", "docs/issues/ISS-0038.yaml -- closed with 0 comments, no linked/merged PR"},
-    {127, "2026-08-22", "docs/issues/ISS-0041.yaml -- closed with 0 comments, no linked/merged PR"},
-    {372, "2026-08-22", "docs/issues/ISS-0117.yaml -- closed with 0 comments, no linked/merged PR"},
-    {388, "2026-08-22", "docs/issues/ISS-0198.yaml -- closed with 0 comments, no linked/merged PR"},
-    {392, "2026-08-22", "docs/issues/ISS-0201.yaml -- closed with 0 comments, no linked/merged PR"},
-    {447, "2026-08-22", "docs/issues/ISS-0218.yaml -- closed with 0 comments, no linked/merged PR"},
-    {449, "2026-08-22", "docs/issues/ISS-0219.yaml -- closed with 0 comments, no linked/merged PR"},
-    {452, "2026-08-22", "docs/issues/ISS-0221.yaml -- closed with 0 comments, no linked/merged PR"},
-    {454, "2026-08-22", "docs/issues/ISS-0222.yaml -- closed with 0 comments, no linked/merged PR"},
-    {455, "2026-08-22", "docs/issues/ISS-0223.yaml -- closed with 0 comments, no linked/merged PR"},
-    {461, "2026-08-22", "docs/issues/ISS-0225.yaml -- closed with 0 comments, no linked/merged PR"},
-    {466, "2026-08-22", "docs/issues/ISS-0228.yaml -- closed with 0 comments, no linked/merged PR"},
-    {499, "2026-08-22", "docs/issues/ISS-0257.yaml -- closed with 0 comments, no linked/merged PR"},
-    {524, "2026-08-22", "docs/issues/ISS-0266.yaml -- closed with 0 comments, no linked/merged PR"}
+    {68, "2026-08-22",
+     "docs/issues/ISS-0012.yaml -- closed with 0 comments, no linked/merged PR"},
+    {69, "2026-08-22",
+     "docs/issues/ISS-0013.yaml -- closed with 0 comments, no linked/merged PR"},
+    {72, "2026-08-22",
+     "docs/issues/ISS-0016.yaml -- closed with 0 comments, no linked/merged PR"},
+    {75, "2026-08-22",
+     "docs/issues/ISS-0019.yaml -- closed with 0 comments, no linked/merged PR"},
+    {76, "2026-08-22",
+     "docs/issues/ISS-0020.yaml -- closed with 0 comments, no linked/merged PR"},
+    {78, "2026-08-22",
+     "docs/issues/ISS-0021.yaml -- closed with 0 comments, no linked/merged PR"},
+    {79, "2026-08-22",
+     "docs/issues/ISS-0022.yaml -- closed with 0 comments, no linked/merged PR"},
+    {81, "2026-08-22",
+     "docs/issues/ISS-0023.yaml -- closed with 0 comments, no linked/merged PR"},
+    {82, "2026-08-22",
+     "docs/issues/ISS-0024.yaml -- closed with 0 comments, no linked/merged PR"},
+    {84, "2026-08-22",
+     "docs/issues/ISS-0026.yaml -- closed with 0 comments, no linked/merged PR"},
+    {85, "2026-08-22",
+     "docs/issues/ISS-0027.yaml -- closed with 0 comments, no linked/merged PR"},
+    {86, "2026-08-22",
+     "docs/issues/ISS-0028.yaml -- closed with 0 comments, no linked/merged PR"},
+    {89, "2026-08-22",
+     "docs/issues/ISS-0030.yaml -- closed with 0 comments, no linked/merged PR"},
+    {90, "2026-08-22",
+     "docs/issues/ISS-0031.yaml -- closed with 0 comments, no linked/merged PR"},
+    {108, "2026-08-22",
+     "docs/issues/ISS-0035.yaml -- closed with 0 comments, no linked/merged PR"},
+    {113, "2026-08-22",
+     "docs/issues/ISS-0036.yaml -- closed with 0 comments, no linked/merged PR"},
+    {120, "2026-08-22",
+     "docs/issues/ISS-0038.yaml -- closed with 0 comments, no linked/merged PR"},
+    {127, "2026-08-22",
+     "docs/issues/ISS-0041.yaml -- closed with 0 comments, no linked/merged PR"},
+    {372, "2026-08-22",
+     "docs/issues/ISS-0117.yaml -- closed with 0 comments, no linked/merged PR"},
+    {388, "2026-08-22",
+     "docs/issues/ISS-0198.yaml -- closed with 0 comments, no linked/merged PR"},
+    {392, "2026-08-22",
+     "docs/issues/ISS-0201.yaml -- closed with 0 comments, no linked/merged PR"},
+    {447, "2026-08-22",
+     "docs/issues/ISS-0218.yaml -- closed with 0 comments, no linked/merged PR"},
+    {449, "2026-08-22",
+     "docs/issues/ISS-0219.yaml -- closed with 0 comments, no linked/merged PR"},
+    {452, "2026-08-22",
+     "docs/issues/ISS-0221.yaml -- closed with 0 comments, no linked/merged PR"},
+    {454, "2026-08-22",
+     "docs/issues/ISS-0222.yaml -- closed with 0 comments, no linked/merged PR"},
+    {455, "2026-08-22",
+     "docs/issues/ISS-0223.yaml -- closed with 0 comments, no linked/merged PR"},
+    {461, "2026-08-22",
+     "docs/issues/ISS-0225.yaml -- closed with 0 comments, no linked/merged PR"},
+    {466, "2026-08-22",
+     "docs/issues/ISS-0228.yaml -- closed with 0 comments, no linked/merged PR"},
+    {499, "2026-08-22",
+     "docs/issues/ISS-0257.yaml -- closed with 0 comments, no linked/merged PR"},
+    {524, "2026-08-22",
+     "docs/issues/ISS-0266.yaml -- closed with 0 comments, no linked/merged PR"}
   ]
 
   @spec grandfathered?(pos_integer()) :: boolean()
-  defp grandfathered?(number), do: Enum.any?(@grandfathered, fn {n, _date, _note} -> n == number end)
+  defp grandfathered?(number),
+    do: Enum.any?(@grandfathered, fn {n, _date, _note} -> n == number end)
 
   @impl Mix.Task
   @spec run([String.t()]) :: :ok
@@ -206,7 +237,9 @@ defmodule Mix.Tasks.Letflow.AuditIssueClosures do
 
   # -- discovery ------------------------------------------------------------
 
-  @spec tracked_issues(dir :: String.t()) :: [%{ref: String.t(), number: integer(), path: String.t()}]
+  @spec tracked_issues(dir :: String.t()) :: [
+          %{ref: String.t(), number: integer(), path: String.t()}
+        ]
   def tracked_issues(dir \\ @issues_dir) do
     Path.wildcard(Path.join(dir, "*.yaml"))
     |> Enum.sort()

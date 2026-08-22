@@ -97,26 +97,30 @@ Exit code `0` → `first_add_sha` is `floor` itself or an ancestor of it (git's
 
 ### 1.3 Where this replaces the old call — `lint_file/2`'s `:non_json` branch
 
-The existing `:non_json` branch (original design §4.2) called
-`grandfathered?("H6", path)` to decide the violation's `grandfathered:` field. That call
-is **replaced**, not supplemented, by `pre_floor_file?(path, @h6_floor_commit)`:
+The existing `:non_json` branch (original design §4.2, "OUTCOME 3") called
+`grandfathered?("H6", path)` as the single input to the branch's `grandfathered:`
+decision. **That one call site is replaced, and nothing else about the branch's shape
+changes:** everywhere OUTCOME 3 previously evaluated `grandfathered?("H6", path)`, it now
+evaluates `pre_floor_file?(path, @h6_floor_commit)` instead, and uses that boolean in
+exactly the same role — same `violation` map fields, same `hard_new`/`hard_grandfathered`
+split logic, same `advisory`/`parse_error` values — that the original design's §4.2 OUTCOME
+3 body already specifies. Concretely, three effects follow from this one substitution,
+stated as prose rather than restating OUTCOME 3's body verbatim:
 
-```
-:non_json ->
-  pre_floor = pre_floor_file?(path, @h6_floor_commit)
-
-  violation_msg =
-    "non-JSON handoff-shaped file: #{path} has extension #{inspect(Path.extname(path))}, " <>
-    "expected .json (pre-floor: #{pre_floor}, floor commit: #{@h6_floor_commit})"
-
-  v = violation(path, "H6", violation_msg, pre_floor)
-
-  %{path: path,
-    hard_new:          (if pre_floor, do: [], else: [v]),
-    hard_grandfathered: (if pre_floor, do: [v], else: []),
-    advisory: %{path: path, warnings: [], size_info: %{desc_len: 0, summary_len: 0}},
-    parse_error: nil}
-```
+1. The violation's `grandfathered:` field is populated from
+   `pre_floor_file?(path, @h6_floor_commit)`'s return value instead of
+   `grandfathered?("H6", path)`'s — a `boolean()` in both cases, so no field's type
+   changes.
+2. The violation's `message:` field gains two additional pieces of information beyond
+   what OUTCOME 3 already interpolates (the path and its extension): the resolved
+   pre-floor boolean and the `@h6_floor_commit` value in effect, so a reader of the
+   failure output can see which floor the decision was made against without consulting
+   source. The message stays a single interpolated string, built the same way OUTCOME 3
+   already builds one — no new string-building mechanism is introduced.
+3. The `hard_new` / `hard_grandfathered` split that OUTCOME 3 already computes from its
+   `grandfathered:` boolean is unchanged in structure — the boolean's *source* moved from
+   a list lookup to `pre_floor_file?/2`'s git-history check; the split logic that
+   consumes it is not touched by this addendum.
 
 `grandfathered?/2` (the `{rule, path} in @grandfathered` list lookup, `:167-168`) is
 **untouched as a function** and keeps governing H1/H2/H3 exactly as before (§4, task's

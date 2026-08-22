@@ -63,6 +63,7 @@ defmodule Letflow.MixProject do
       # from that step, with the warnings re-emitted from the compile manifest.
       "letflow.check": [
         "letflow.check_toolchain",
+        "letflow.check_requirements_registration",
         "format --check-formatted",
         "compile --warnings-as-errors",
         "letflow.check.test"

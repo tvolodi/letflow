@@ -30,8 +30,39 @@ queue_task_id: 285
 github_issue: 562
 status: open
 follow_up: >
-  File the equivalent issue against tvolodi/letflow-queue (its own repo,
-  not this one) once that repo/tracker is reachable from this environment,
-  and cross-link back to this task (ISS-0285 / GH#562). Do not attempt a
-  code fix in this repo -- the defect, if real, lives in letflow-queue's
-  own get_next_task / GitHub-import logic.
+  Filed as tvolodi/letflow-queue#5 (2026-08-22, ORCH LOOP-20260822-orch),
+  cross-linked back to this record. Do not attempt a code fix in this repo
+  -- the defect, if real, lives in letflow-queue's own get_next_task /
+  GitHub-import logic, which is out of scope for this repo to change.
+diagnosis:
+  diagnosed_by: ORCH (LOOP-20260822-orch)
+  diagnosed_at: 2026-08-22T18:30:00Z
+  method: >
+    Cloned tvolodi/letflow-queue and read lib/letflow_queue/tasks.ex
+    (register_task/1, get_next_task/1, import_open_github_issues/0,
+    import_github_issue/1, release_lock/2 and its
+    tap_maybe_close_github_issue/2 helper).
+  finding: >
+    No mechanism in the read code reproduces the observed behavior on its
+    own: get_next_task/1's claim query filters status = 'open', so a task
+    genuinely committed to status "done" cannot be re-claimed;
+    import_github_issue/1 guards re-import via an exists? check on
+    github_issue_number regardless of the existing row's status, so the
+    same GitHub issue number shouldn't produce two task rows; and
+    release_lock/2 commits the local status transition to "done" before
+    attempting the best-effort GitHub-close, so a GitHub-side close
+    failure does not revert the local status. Two unverified hypotheses
+    remain (full detail in tvolodi/letflow-queue#5): (H1) a distinct new
+    GitHub issue number filed for the same already-fixed underlying
+    defect -- import has no content/title dedup, only exact
+    github_issue_number dedup; (H2) a prior Letflow-side release_lock call
+    omitted status: "done", leaving the task status "open" and indefinitely
+    re-claimable -- a Letflow/ORCH-side bug, not a letflow-queue bug.
+    Distinguishing H1/H2/a real third mechanism requires production
+    DB/audit history for the specific task rows behind ISS-0164/GH#310 and
+    ISS-0129/GH#269, which is not accessible from source review alone.
+  action_taken: >
+    No code change (root cause not conclusively localized to this repo or
+    to letflow-queue). Filed tvolodi/letflow-queue#5 with the full
+    diagnosis and an explicit ask to check production history for the two
+    affected task rows, cross-linked back to this record.

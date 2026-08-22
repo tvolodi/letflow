@@ -1076,6 +1076,71 @@ history:
       handoffs -- restrict the path, do not reword the prose), and a new entry
       recording that `elixirc --warnings-as-errors` exits 0 where `mix compile
       --warnings-as-errors` exits 1 on the same unused private function.
+
+  - req: REQ-083
+    event: started
+    agent: ELIXIR-DEV
+    at: "2026-08-22T05:23:40Z"
+    note: >
+      ORCH dispatched WF-02 Step 00 (queue task 150, GH#290) for run
+      WF02-REQ083-20260822. Ports the read half of src/api/routes/tasks.zig
+      (handleList/handleGetById/handleInbox), split from REQ-085's write half.
+      Dependency REQ-072 confirmed done on main. This checkout is a secondary
+      git worktree (letflow-wt2 holds local main), so the Worktree variant of
+      GIT_SETUP.md applied: git fetch origin main, then
+      git checkout -b feature/WF02-REQ083-20260822 origin/main -- never
+      touched local main. Branch created and pushed (Step 00). Status flipped
+      pending -> in_progress here. handleInbox is per-principal (assignee_type
+      USER|GROUP|ROLE per REQ-047), resolved through Letflow.Identity, on top
+      of REQ-072's tenant-prefix scoping -- a second scoping dimension this
+      requirement's own text calls out as a real authorisation risk distinct
+      from cross-tenant leakage (INV-1, INV-2, INV-5).
+
+  - req: REQ-083
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-22T06:33:39Z"
+    note: >
+      Shipped the read half of the S4 task-routes surface: Letflow.Tasks
+      (lib/letflow/tasks.ex, list_tasks/2, get_task/2,
+      resolve_principal_scope/2) and Letflow.Routers.Tasks
+      (lib/letflow/routers/tasks.ex, GET /tasks, GET /tasks/inbox,
+      GET /tasks/:id), replacing the REQ-070 stub, plus one additive
+      Letflow.Api.Authorization.endpoint_policy_key/2 clause for
+      GET /tasks/inbox -> :TasksList. handleInbox resolves a second
+      scoping dimension on top of REQ-072's tenant prefix -- USER/GROUP/ROLE
+      assignee_type per REQ-047, via Letflow.Identity, not reimplemented.
+      Gate chain, two rework cycles: Step 1/1b design reworked once,
+      Step 2a/2c (SECURITY-REVIEWER) reworked once, Step 2d REVIEWER PASS
+      (idiom, no supervision touch, no scope creep on the additive
+      Authorization clause, confirmed the design doc's InstanceProjection
+      module-name divergence is naming-only and AC6's moduledoc boundary
+      claim is accurate against the real file), Step 3/3b TEST-DESIGN-VALIDATOR
+      PASS, Step 4 TEST-RUNNER PASS. Step 5 RELEASE-VALIDATOR PASS
+      (handoffs/WF02-REQ083-20260822/step-05-release-validator.json):
+      independent scripts/test_parallel.sh re-run 1606/1606 clean (N=16),
+      all 7 acceptance criteria independently confirmed directly against
+      lib/letflow/tasks.ex, lib/letflow/routers/tasks.ex and
+      test/letflow/routers/tasks_test.exs. A Letflow.EngineConcurrencyTest
+      timing flake TEST-RUNNER saw was re-derived structurally (route 1,
+      git diff --name-only origin/main...HEAD contains no engine/
+      InstanceProjection file, and lib/letflow/tasks.ex itself has no
+      Engine/process/GenServer reference) as unrelated to this branch and
+      is already filed as ISS-0260/GH#507 -- not fixed here, not this
+      run's regression. docs/migration/stage-4-api-surface.md checked
+      directly: REQ-083 appears only in the requirements list (line 24),
+      no acceptance criterion names this file or any
+      docs/migration/decisions/*.md file, the doc's own header states it
+      deliberately keeps no per-requirement status snapshot
+      (docs/requirements.yaml is the authority, per ISS-0022), and unlike
+      REQ-074/075's REVIEWER sign-off entries, Step 2d's REVIEWER pass here
+      recorded its finding only in the handoff file -- consistent with
+      REQ-073's identical precedent (no AC requires it), so no gap to flag
+      and no edit made there. README.md checked directly (grep -i "task"):
+      the sole hit is an unrelated line about scripts/test_parallel.sh not
+      being a mix task -- no task-routes API surface is documented there,
+      so no README update needed.
+
   - req: SCOPE-CHANGE
     event: done
     agent: ORCH

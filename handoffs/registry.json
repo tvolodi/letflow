@@ -1963,6 +1963,26 @@
       "queue_task_id": 142,
       "queue_agent_id": "tvolo-win-orch",
       "note": "WF-02 for REQ-075 (GH#282, queue task 142, stage S4), claimed via get_next_task immediately after REQ-074's close. Third of four split requirements (REQ-073..076) porting identity.zig's user-management group; the requirement's OWN TEXT flags it as categorically higher-risk than every other route requirement in the batch -- tenant-administration handlers operate on the global tenant_schemas table, outside REQ-072's per-tenant prefix scoping entirely, so PLATFORM_ADMIN role-gating is the ONLY protection. Every gate received extra scrutiny. Two R-Co findings independently verified TWICE against real source (own-tenant access has no carve-out; R-Co's route table hardcodes PLATFORM_ADMIN as dead code, correctly not ported). An out-of-sequence Step 1c REVIEWER pre-implementation sign-off was obtained BEFORE any code was written, approving a behavior-contract extension to the already-shipped Letflow.Plugs.TenantStatus (REQ-021): new :inactive check, all HTTP methods, 403, PLATFORM_ADMIN-exempt. The authorization-ordering guarantee (the single load-bearing security property in this run) was independently mutation-tested THREE separate times by three different agents breaking three different parts of the mechanism (TEST-DESIGN-VALIDATOR: branch inversion; RELEASE-VALIDATOR: role-matching injection), all three catching the regression. Step 2d decided OQ-5 (no compensating rollback for partial tenant-provisioning failure -- the provisioning primitives are genuinely idempotent, and rollback would risk orphaning a real schema), filed as ISS-0230. Full pipeline: Step 1 design (65f6c9c) -> 1b PASS (4d88e18) -> 1c out-of-sequence REVIEWER pre-approval (680bc09) -> 2a implement (dc5a7ac) -> 2c security PASS, line-by-line authorization trace (8ff0872) -> 2d REVIEWER PASS + OQ-5 decision (d060f86) -> 3b PASS, mutation test #1 (e610c51) -> 4 TEST-RUNNER PASS 1542/1542 (17f21d9) -> 5 RELEASE-VALIDATOR PASS, all 7 ACs independently re-verified, mutation test #2 (424ef4a) -> 6 DOC-UPDATER flipped to done (e41f8bd) -> ORCH added missing Step 2d sign-off entry to stage-4-api-surface.md (2b718df) -> Step Final merged (e1f93be, PR #496, 1550/1550 post-rebase after a transient connection-pool re-run, mutation test #3 implicit in the run history). rework_count 0 of 3 throughout -- every gate PASS first attempt despite the elevated scrutiny."
+    },
+    {
+      "run_id": "WF02-REQ083-20260822",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-083"],
+      "stage": "S4",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/routers/tasks.ex",
+        "lib/letflow/engine/task.ex",
+        "lib/letflow/tasks.ex"
+      ],
+      "lock_acquired_at": "2026-08-22T05:21:42Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 COMPLETED PASS — branch feature/WF02-REQ083-20260822 pushed (commit 6ffae15). Handoff handoffs/WF02-REQ083-20260822/step-00-git-setup.json. next: Step 1 CODE-DESIGNER.",
+      "backfilled": false,
+      "queue_task_id": 150,
+      "queue_agent_id": "tvolodi-orch",
+      "note": "WF-02 for REQ-083 (GH#290, queue task 150, stage S4), claimed via get_next_task. Ports tasks.zig's read path (handleList/handleGetById/handleInbox) plus the store.zig query/filter operations those three handlers invoke -- REQ-043 explicitly deferred this boundary to this requirement. handleInbox has a second scoping dimension beyond REQ-072's tenant prefix: per-principal (direct USER assignment, GROUP membership, ROLE membership), resolved through Letflow.Identity per REQ-047's assignee_type/assignee_ref model, not reimplemented. depends_on REQ-072 (done, GH#-, merged prior run). SECURITY (INV-1, INV-2, INV-5) -- Step 2c will be in-scope, not skippable."
     }
   ]
 }

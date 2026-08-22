@@ -1,0 +1,54 @@
+{
+  "handoff_id": "e1a4a4a0-6a3f-4e1a-9b8e-2f6c1a0d7b21",
+  "run_id": "WF02-REQ083-20260822",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ083-20260822/step-00-git-setup.json",
+  "created_at": "2026-08-22T05:23:40Z",
+  "started_at": "2026-08-22T05:23:40Z",
+  "completed_at": "2026-08-22T05:23:40Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-083"],
+    "requirement_text": {
+      "REQ-083": "Port the read half of src/api/routes/tasks.zig (1,085 lines / 7 handlers -- split two ways with REQ-085): handleList (L89, EE-03/API-04, cursor paginated), handleGetById (L290) and handleInbox (L960). REQ-043's description named this surface as deferred: its tasks-table boundary note states \"the standalone task query/list surface (src/tasks/store.zig's own list/filter operations) is NOT ported here and belongs with S4's tasks routes or its own later requirement.\" This is that requirement. R-Co's task query logic lives in src/tasks/store.zig (1,202 lines) outside src/api/ -- port only the query/filter operations these three handlers actually invoke, and state in the moduledoc which parts of store.zig were and were not ported, so the boundary is explicit rather than approximate. handleInbox is per-principal, not merely per-tenant: it returns the tasks assigned to the calling user (directly, or via a group or role they hold). That is a second scoping dimension on top of REQ-072's tenant prefix, and both must hold -- an inbox that returns another user's tasks within the same tenant is a real authorisation defect even though it is not a cross-tenant leak. Read REQ-047's assignee_type/assignee_ref model (USER|GROUP|ROLE) and resolve group and role membership through Letflow.Identity rather than reimplementing the resolution. SECURITY (INV-1, INV-2, INV-5)."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/engine/task.ex",
+      "lib/letflow/tasks.ex"
+    ],
+    "branch_name": "feature/WF02-REQ083-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 00 — Git setup for REQ-083 (Task routes 1/2 -- read path: tasks.zig handleList/handleGetById/handleInbox).\n\nThis checkout (c:\\Users\\tvolo\\dev\\ai-dala\\letflow) is a secondary git worktree sharing one .git with a primary checkout (letflow-wt2) that holds local main checked out — confirmed via `git worktree list` (two entries) before starting. Followed the Worktree variant of docs/agents/protocols/GIT_SETUP.md (steps 1w/2w replace steps 1-2; steps 3-8 unchanged), since `git checkout main` is structurally impossible from a secondary worktree:\n1w. git fetch origin main\n2w. git checkout -b feature/WF02-REQ083-20260822 origin/main\n3. (branch name already set by step 2w)\n4. N/A — no prior aborted run; branch did not already exist\n5. (covered by step 2w)\n6. git branch --show-current — must equal feature/WF02-REQ083-20260822\n7. git push -u origin feature/WF02-REQ083-20260822\n8. Write this handoff, status PASS, next_action 'Route to CODE-DESIGNER (Step 1)'\n\nowned_modules is scoped to what this requirement's read-path handlers (handleList/handleGetById/handleInbox) and the query/filter logic they invoke are expected to touch: the tasks sub-router (lib/letflow/routers/tasks.ex, currently a stub per REQ-083/085), the tasks Ecto schema (lib/letflow/engine/task.ex, schema-only per its own moduledoc scope note), and a new lib/letflow/tasks.ex context module for the ported query/filter/list operations and the inbox group/role resolution. Does NOT include lib/letflow/identity.ex or its submodules — this requirement calls into Letflow.Identity for group/role membership resolution (per its own text) but does not modify it, so it is a read-only dependency, not an owned module.",
+    "acceptance_criteria": [
+      "git branch --show-current == 'feature/WF02-REQ083-20260822'",
+      "git push -u origin feature/WF02-REQ083-20260822 succeeds (exit 0 or * [new branch] in output)",
+      "branch was created from a freshly fetched origin/main (worktree variant), since local main could not be checked out or fast-forwarded from this secondary worktree"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Detected two git worktree entries via `git worktree list` (this checkout at detached HEAD 82a20c4; letflow-wt2 holding local main) confirming the Worktree variant of GIT_SETUP.md applies. Ran `git fetch origin main` (fetched 82a20c4..b373d08), then `git checkout -b feature/WF02-REQ083-20260822 origin/main` — never touched local main, nothing to conflict with the primary checkout. `git branch --show-current` confirmed feature/WF02-REQ083-20260822. Pushed with `git push -u origin feature/WF02-REQ083-20260822`, which succeeded (new branch, upstream tracking set). Read REQ-083's full entry from docs/requirements.yaml directly (line ~4722, via awk range REQ-083..REQ-084) and copied its description verbatim into context.requirement_text above, per HANDOFF_PROTOCOL.md's rule that receiving agents must not have to open the 61k-token requirements file. No file changes made in this step beyond the handoff itself; no application code touched.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ083-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ083-20260822",
+      "push_status": "* [new branch] feature/WF02-REQ083-20260822 -> feature/WF02-REQ083-20260822",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER (Step 1)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

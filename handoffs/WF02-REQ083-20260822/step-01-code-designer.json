@@ -1,0 +1,59 @@
+{
+  "handoff_id": "f3b6d1e2-9c4a-4e7b-8a2f-1d6c9e0b4a17",
+  "run_id": "WF02-REQ083-20260822",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ083-20260822/step-01-code-designer.json",
+  "created_at": "2026-08-22T05:37:33Z",
+  "started_at": "2026-08-22T05:37:33Z",
+  "completed_at": "2026-08-22T05:37:33Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-083"],
+    "requirement_text": {
+      "REQ-083": "Port the read half of src/api/routes/tasks.zig (1,085 lines / 7 handlers -- split two ways with REQ-085): handleList (L89, EE-03/API-04, cursor paginated), handleGetById (L290) and handleInbox (L960). REQ-043's description named this surface as deferred: its tasks-table boundary note states \"the standalone task query/list surface (src/tasks/store.zig's own list/filter operations) is NOT ported here and belongs with S4's tasks routes or its own later requirement.\" This is that requirement. R-Co's task query logic lives in src/tasks/store.zig (1,202 lines) outside src/api/ -- port only the query/filter operations these three handlers actually invoke, and state in the moduledoc which parts of store.zig were and were not ported, so the boundary is explicit rather than approximate. handleInbox is per-principal, not merely per-tenant: it returns the tasks assigned to the calling user (directly, or via a group or role they hold). That is a second scoping dimension on top of REQ-072's tenant prefix, and both must hold -- an inbox that returns another user's tasks within the same tenant is a real authorisation defect even though it is not a cross-tenant leak. Read REQ-047's assignee_type/assignee_ref model (USER|GROUP|ROLE) and resolve group and role membership through Letflow.Identity rather than reimplementing the resolution. SECURITY (INV-1, INV-2, INV-5)."
+    },
+    "related_handoff_ids": ["handoffs/WF02-REQ083-20260822/step-00-git-setup.json"],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/engine/task.ex",
+      "lib/letflow/tasks.ex"
+    ],
+    "branch_name": "feature/WF02-REQ083-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 1 — Code design for REQ-083. Produce lib/letflow/design/<module>.md covering Letflow.Tasks (new context module, lib/letflow/tasks.ex) and Letflow.Routers.Tasks (replacing the current 12-line stub, lib/letflow/routers/tasks.ex) — the read-path port of tasks.zig's handleList/handleGetById/handleInbox plus only the src/tasks/store.zig query operations those three handlers invoke. Signatures/@spec/type-shapes only, no implementation code.",
+    "acceptance_criteria": [
+      "each of the three handlers has an end-to-end test through the real router asserting status and response shape, with list and inbox cursor-paginated via REQ-067 across at least two pages",
+      "the inbox for user X returns tasks assigned directly to X, tasks assigned to a group X belongs to, and tasks assigned to a role X holds, and returns no task assigned only to a different user Y in the same tenant -- four assertions in explicit tests",
+      "a task id belonging to another tenant returns the same response as a nonexistent id, demonstrated by a test (INV-5)",
+      "listing tasks as a tenant A caller returns no tenant B task when both tenants have tasks on identically-named nodes, demonstrated by a test seeding both (INV-1)",
+      "the serialised task response contains an explicit field allowlist and does not encode the Ecto struct wholesale, demonstrated by a test asserting the full key set (INV-2)",
+      "the moduledoc states which src/tasks/store.zig query operations were ported and which were not, rather than describing the boundary approximately",
+      "a caller without TasksRead receives 403 on all three endpoints"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req083-task-routes-read.md covering both owned modules: Letflow.Tasks (new context module, lib/letflow/tasks.ex — list_tasks/2 backing both GET /tasks and GET /tasks/inbox via a caller-supplied assignee_scope, get_task/2 backing GET /tasks/:id with an instance_projections join for correlation_key, resolve_principal_scope/2 for group/role-held-task resolution) and Letflow.Routers.Tasks (three routes, a with_authorized_scope/4 helper mirroring REQ-073/074's identity router precedent exactly, hand-built response allowlist maps per INV-2). Read R-Co's tasks.zig (handleList L89-290, handleGetById L290-322, handleInbox L960-981) and store.zig (all 20 pub fn/error-set declarations) directly and produced the full ported/not-ported enumeration REQ-083's own AC6 requires (§1 of the design doc) — confirmed R-Co's own shipped listCursor only resolves USER/GROUP row-scoping, never ROLE, despite the requirement text explicitly demanding all three; flagged this explicitly in §3.4 as a deliberate extension beyond R-Co's actual (incomplete) SQL rather than a silent gap. Verified group/role resolution is buildable with zero new Letflow.Identity functions (a direct read of the existing Letflow.Identity.GroupMember schema plus the already-shipped Letflow.Identity.RoleRegistry.list_roles/0, per REQ-020's design) since Letflow.Identity is a read-only, non-owned dependency of this run per the Step 00 handoff. Reused REQ-072's scoped_repo_opts/1 (tenant scope), REQ-067's Pagination module (cursor mechanics, verbatim), REQ-066's Error/Response (all responses), and REQ-069's Authorization (TasksList/TasksGetById -> TasksRead, already shipped) without modifying any of them, except one explicitly flagged, narrow addition: a single new endpoint_policy_key(\"GET\", \"/tasks/inbox\") clause on Letflow.Api.Authorization (outside this run's owned_modules), justified as a direct port of R-Co's own handleInbox-delegates-entirely-to-handleList's :TasksList policy key — flagged as OQ-8 for REVIEWER rather than silently included. Two schema-shape gaps found and flagged rather than guessed: Letflow's tasks table has no claimed_by column (OQ-1, deferred to REQ-085) and task_detail_map deliberately omits form_schema (OQ-7, always nil per REQ-047's own OQ-3). All 7 acceptance criteria mapped to concrete design elements in §9's traceability table. No .ex/.exs code blocks anywhere in the document — every code block is a @spec, @type, field table, or algorithm-shape description.",
+    "artifacts_out": ["lib/letflow/design/req083-task-routes-read.md"],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Design specifies one new endpoint_policy_key clause on Letflow.Api.Authorization (outside this run's owned_modules list) to route GET /tasks/inbox through the same :TasksList permission check R-Co's own handleInbox delegates to. Additive-only, no existing clause changed. Flagged as OQ-8 in the design doc for REVIEWER to confirm scope."
+      },
+      {
+        "severity": "MINOR",
+        "description": "R-Co's own shipped src/tasks/store.zig listCursor implements USER/GROUP row-scoping only, never ROLE, despite REQ-047's assignee_type model naming all three and REQ-083's own requirement text/AC2 explicitly requiring ROLE-held-task inbox resolution. This design implements the requirement text (all three), which is a real behavioral addition beyond R-Co's actual shipped behavior, not a straight port. Flagged prominently in design doc section 3.4 for REVIEWER/TEST-DESIGNER awareness."
+      }
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

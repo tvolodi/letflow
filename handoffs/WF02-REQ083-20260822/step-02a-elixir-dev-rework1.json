@@ -1,0 +1,68 @@
+{
+  "handoff_id": "d1e5f8a7-3b2c-4a9d-8e17-6c4f2a9b0d51",
+  "run_id": "WF02-REQ083-20260822",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ083-20260822/step-02a-elixir-dev-rework1.json",
+  "created_at": "2026-08-22T06:05:00Z",
+  "started_at": "2026-08-22T06:00:00Z",
+  "completed_at": "2026-08-22T06:05:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-083"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ083-20260822/step-00-git-setup.json",
+      "handoffs/WF02-REQ083-20260822/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ083-20260822/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ083-20260822/step-01-code-designer-rework1.json",
+      "handoffs/WF02-REQ083-20260822/step-01b-design-validator-rework1.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req083-task-routes-read.md",
+      "handoffs/WF02-REQ083-20260822/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ083-20260822/step-01b-design-validator-rework1.json",
+      "lib/letflow/tasks.ex",
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/identity/tenant_role.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/engine/task.ex",
+      "lib/letflow/tasks.ex"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 2a REWORK (attempt 1 of 3) -- apply CODE-DESIGN-VALIDATOR-approved rework of lib/letflow/design/req083-task-routes-read.md section 3.4 point 2 to lib/letflow/tasks.ex's resolve_principal_scope/2, replacing the unscoped Letflow.Identity.RoleRegistry.list_roles/0 call (SECURITY-REVIEWER Step 2c FAIL, INV-1) with a direct, :prefix-scoped Repo.all(query, prefix: prefix) read of Letflow.Identity.TenantRole.",
+    "acceptance_criteria": [
+      "resolve_principal_scope/2's ROLE-name resolution no longer calls Letflow.Identity.RoleRegistry.list_roles/0",
+      "replacement query reads Letflow.Identity.TenantRole directly, filtered by group_id in ^group_ids, with Repo.all(query, prefix: prefix)",
+      "prefix value is the same Keyword.fetch!(opts, :prefix) binding already used by the function's GroupMember query -- no second/different derivation mechanism introduced",
+      "USER/GROUP resolution clauses (GroupMember query, filter_by_assignee_scope/2's :principal clause) left byte-for-byte unchanged",
+      "no lib/letflow/identity.ex or lib/letflow/identity/role_registry.ex file modified -- fix stays inside owned_modules",
+      "mix compile --warnings-as-errors and mix format --check-formatted both clean"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read the SECURITY-REVIEWER Step 2c FAIL (INV-1: resolve_principal_scope/2's ROLE-resolution called Letflow.Identity.RoleRegistry.list_roles/0, an unprefixed Repo.all(from(t in TenantRole, ...)) with no per-request search_path mechanism -- unscoped cross-tenant read or undefined_table crash depending on legacy-table drop state), the CODE-DESIGNER rework's revised design (section 3.4 point 2: `from(t in Letflow.Identity.TenantRole, where: t.group_id in ^group_ids_from_step_1, select: %{name: t.name, group_id: t.group_id}) |> Repo.all(prefix: prefix)`), and CODE-DESIGN-VALIDATOR's rework-1 PASS confirming that spec.\n\nApplied to lib/letflow/tasks.ex:\n1. Swapped `alias Letflow.Identity.RoleRegistry` for `alias Letflow.Identity.TenantRole` (only alias changed; GroupMember alias untouched).\n2. In resolve_principal_scope/2, replaced `RoleRegistry.list_roles() |> Enum.filter(&(&1.group_id in group_ids))` with `Repo.all(from(t in TenantRole, where: t.group_id in ^group_ids, select: %{name: t.name, group_id: t.group_id}), prefix: prefix)`, matching the design's exact query shape, then kept the existing `|> Enum.map(& &1.name)` unchanged.\n3. The `prefix` binding used is the exact same `prefix = Keyword.fetch!(opts, :prefix)` value at the top of the function already used by the unchanged GroupMember query immediately above it -- confirmed by reading the function body post-edit (lib/letflow/tasks.ex:220-238): both `Repo.all` calls in the function pass the identical `prefix` variable, no second derivation path.\n4. Updated the function's moduledoc paragraph describing role-name resolution to reference the new TenantRole read instead of RoleRegistry.list_roles/0, citing the design doc section and this rework's originating handoffs.\n\nUSER/GROUP paths untouched: the GroupMember query (tasks.ex:223-227), filter_by_assignee_scope/2's :principal clause (tasks.ex ~260s), and list_tasks/2 were not touched by this edit -- git diff confirms only the alias line, the moduledoc paragraph, and the role_names assignment changed.\n\nNo lib/letflow/identity.ex, lib/letflow/identity/role_registry.ex, or lib/letflow/identity/tenant_role.ex file was modified (all read-only inputs) -- confirmed via `git status`/`git diff --name-only`, only lib/letflow/tasks.ex changed.\n\nVerification:\n- `mix compile --warnings-as-errors` -- clean, no warnings/errors (only recompiled the 3 files touched transitively).\n- `mix format --check-formatted` -- clean, no output (already formatted).\n- Checked lib/letflow/routers/tasks.ex for other call sites: it calls `Tasks.resolve_principal_scope(user_id, opts)` at two call sites (router lines 191, 238) plus one moduledoc reference (line 43) -- the function's public signature and return shape (`principal_scope()` map with `role_names: [String.t()]`) are unchanged, so no router update is needed. Grepped lib/ for any other `RoleRegistry` reference outside lib/letflow/identity/role_registry.ex itself and unrelated design docs (promotion_plan.ex, req020/req021 design docs) -- none reference this code path.",
+    "artifacts_out": [
+      "lib/letflow/tasks.ex"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ083-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ083-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c re-verification) -- INV-1 fix applied per approved rework design; re-derive the diff (git diff origin/main...HEAD) rather than trusting this self-report."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

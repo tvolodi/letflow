@@ -206,6 +206,16 @@ defmodule Letflow.Api.Authorization do
       do: :InstancesRead
 
   def endpoint_policy_key("GET", "/tasks"), do: :TasksList
+
+  # REQ-083 (OQ-8) -- GET /tasks/inbox maps to the same :TasksList policy key
+  # as GET /tasks. Direct, narrow port of R-Co's own delegation:
+  # handleInbox (tasks.zig L960-982) builds a ListTasksParams and calls
+  # handleList itself, which is where the ONLY evaluateAccess call for this
+  # whole flow happens -- handleInbox performs no authorization call of its
+  # own. Additive-only: changes no existing clause's behavior, since every
+  # endpoint_policy_key/2 call site is matched by exact string.
+  def endpoint_policy_key("GET", "/tasks/inbox"), do: :TasksList
+
   def endpoint_policy_key("GET", "/tasks/:id"), do: :TasksGetById
   def endpoint_policy_key("POST", "/tasks/:id/complete"), do: :TasksComplete
   def endpoint_policy_key("POST", "/tasks/:id/assign"), do: :TasksAssign

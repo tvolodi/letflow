@@ -1,0 +1,50 @@
+{
+  "handoff_id": "a7c2e9d4-3f1b-4c6e-8a9d-5e0b1f7c3d62",
+  "run_id": "WF02-REQ083-20260822",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ083-20260822/step-01b-design-validator.json",
+  "created_at": "2026-08-22T05:39:34Z",
+  "started_at": "2026-08-22T05:39:34Z",
+  "completed_at": "2026-08-22T05:39:34Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-083"],
+    "requirement_text": {
+      "REQ-083": "Port the read half of src/api/routes/tasks.zig (1,085 lines / 7 handlers -- split two ways with REQ-085): handleList (L89, EE-03/API-04, cursor paginated), handleGetById (L290) and handleInbox (L960). REQ-043's description named this surface as deferred: its tasks-table boundary note states \"the standalone task query/list surface (src/tasks/store.zig's own list/filter operations) is NOT ported here and belongs with S4's tasks routes or its own later requirement.\" This is that requirement. R-Co's task query logic lives in src/tasks/store.zig (1,202 lines) outside src/api/ -- port only the query/filter operations these three handlers actually invoke, and state in the moduledoc which parts of store.zig were and were not ported, so the boundary is explicit rather than approximate. handleInbox is per-principal, not merely per-tenant: it returns the tasks assigned to the calling user (directly, or via a group or role they hold). That is a second scoping dimension on top of REQ-072's tenant prefix, and both must hold -- an inbox that returns another user's tasks within the same tenant is a real authorisation defect even though it is not a cross-tenant leak. Read REQ-047's assignee_type/assignee_ref model (USER|GROUP|ROLE) and resolve group and role membership through Letflow.Identity rather than reimplementing the resolution. SECURITY (INV-1, INV-2, INV-5)."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ083-20260822/step-00-git-setup.json",
+      "handoffs/WF02-REQ083-20260822/step-01-code-designer.json"
+    ],
+    "artifacts_in": ["lib/letflow/design/req083-task-routes-read.md"],
+    "owned_modules": [
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/engine/task.ex",
+      "lib/letflow/tasks.ex"
+    ],
+    "branch_name": "feature/WF02-REQ083-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 1b — Design gate for REQ-083. Independently read lib/letflow/design/req083-task-routes-read.md (not CODE-DESIGNER's handoff summary) and verify the 5-point checklist from WF-02_requirement_implementation.md Step 1b: (a) every acceptance criterion has a design element with no TBD deferrals, (b) function signatures fully specified with error cases, (c) error-handling shape stated, (d) cross-module dependencies listed, (e) no implementation code present. Additionally scrutinize two flagged items from CODE-DESIGNER's handoff rather than trusting them: (1) the claim that R-Co's store.zig listCursor implements USER/GROUP row-scoping only, never ROLE, verified against R-Co source directly; (2) the one file outside owned_modules (Letflow.Api.Authorization endpoint_policy_key/2 clause for GET /tasks/inbox) is stated as an explicit open question (OQ-8) routed to REVIEWER, not silently resolved.",
+    "acceptance_criteria": [
+      "5-point Step 1b checklist applied to the actual design artefact, read directly",
+      "R-Co store.zig ROLE-arm claim independently verified against C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\tasks\\store.zig",
+      "OQ-8 (Authorization module touch outside owned_modules) confirmed to be an explicitly stated open question in the design doc, not a silent inclusion",
+      "FAIL immediately and completely on any single failed check, no partial credit"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read lib/letflow/design/req083-task-routes-read.md directly and in full (679 lines) — not CODE-DESIGNER's step-01 summary — against the Step 1b 5-point checklist:\n\n(a) Acceptance-criteria coverage / no TBD deferrals: all 7 of REQ-083's acceptance criteria are mapped to a concrete design element in §9's traceability table (list_tasks/2 + resolve_principal_scope/2 for the four-assertion inbox scoping test, §3.2's single get_task/2 code path for the cross-tenant/nonexistent-id equivalence, §4's schema-per-tenant scoping for INV-1, §5.5's exact 9/10-key allowlist enumeration for INV-2, §1's ported/not-ported store.zig table required verbatim in the moduledoc for AC6, §5.1's shared with_authorized_scope/4 helper for the 403 criterion). Grepped the file for 'TBD'/'to be implemented'/'to be determined'/'TODO' — zero matches. Every open question (§10, OQ-1 through OQ-8) is a stated, scoped, non-blocking question with an explicit interim resolution (e.g. OQ-1: claimed_by omitted entirely rather than guessed, deferred to REQ-085's own design; OQ-7: form_schema excluded with a stated reason) — none is a disguised gap in this requirement's own acceptance criteria.\n\n(b) Function signatures fully specified: list_tasks/2, get_task/2, and resolve_principal_scope/2 (§3.1, §3.2, §3.4) each carry a full @spec with input types, a tagged {:ok,_}|{:error,_} return shape, and an enumerated error-atom set (:invalid_cursor | :wrong_endpoint | :expired for list_tasks/2; :not_found | :invalid_id for get_task/2). Router-level helpers (with_authorized_scope/4, task_list_item_map/1, task_detail_map/2, §5.1/§5.5) are similarly typed. No signature left with a bare 'TBD' return type.\n\n(c) Error-handling shape stated: every function returns a tagged tuple, never a bare value or an implicit exception path presented as success. §3.5 explicitly states the one place errors are NOT converted (DB/connection-level failures propagate as an unhandled crash) and gives the precedent (req019/req020) rather than leaving it implicit — an explicitly stated design decision, not an omission.\n\n(d) Cross-module dependencies listed: §6 is a complete table (Letflow.Engine.Task, Letflow.Engine.InstanceProjection, Letflow.Identity.GroupMember, Letflow.Identity.RoleRegistry.list_roles/0, Letflow.Api.Context.scoped_repo_opts/1, Letflow.Api.Pagination.*, Letflow.Api.Authorization.*, Letflow.Api.Response/Error), each with direction and nature (read-only vs. the one additive clause).\n\n(e) No implementation code: grepped the file for 'defmodule', '^  def ', and a bare 'do$' line — zero matches. Every code block is an @spec, @type, field/key-set enumeration, or numbered algorithm-shape description (e.g. §3.1's ten-step list_tasks/2 description is prose describing what an implementer must build, not a def...end body). Consistent with every prior S4 design doc's convention this file itself cites (req072/req067/req066/req074).\n\nBoth flagged items independently verified, not trusted:\n\n1. R-Co ROLE-arm claim: read C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\tasks\\store.zig in full. listCursor's assignee_id branch (L622-668) has exactly two shapes: include_group_membership_for_user=true produces an OR of a USER-exact-match and a GROUP-EXISTS-subquery against group_members (L643-648); the else branch (L650-667) is a plain assignee_ref=$N match with an optional 'AND assignee_type = 'USER'' clause. Neither branch, nor any other function in the 1,202-line file, references a ROLE arm or a role-membership table. This confirms the design's §0/§3.4 characterization is accurate, not an inflated or convenient claim — R-Co's shipped read path genuinely has no ROLE resolution, and REQ-083's own requirement text and AC2 do require it. The design's decision to implement all three per the requirement text, flagged prominently in §3.4 and required to be stated in the moduledoc, is the correct handling of a real requirement-vs-R-Co-source divergence, not a silent behavioral risk.\n\n2. OQ-8 / Authorization clause: read C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\api\\routes\\tasks.zig L960-982 directly. handleInbox literally builds a ListTasksParams and returns handleList(store, allocator, actor, params) — it performs no authorization call of its own; handleList's own internal evaluateAccess(..., .TasksList) call (L97-103) is the only evaluateAccess site in this flow. This confirms the design's claim (§5.3) that a single :TasksList-mapped clause is a direct, narrow port of R-Co's own delegation, not a new policy invented by this requirement. The design states this explicitly and prominently as OQ-8 in §5.3 and again in §10's open-questions list, naming the exact new clause, its justification, and explicitly routing confirmation to REVIEWER/SECURITY-REVIEWER — this is the correct 'don't silently touch a file outside scope' handling the gate's checklist requires, not a deferral of an unaddressed gap.\n\nNo check failed. Design is unambiguous enough to build from: every scoping branch, error atom, response key set, and cross-module call site is concretely specified, and every place a decision was deferred (OQ-1 through OQ-8) is deferred to a named, appropriate downstream reviewer with a stated interim behavior, not left for ELIXIR-DEV to guess.",
+    "artifacts_out": ["handoffs/WF02-REQ083-20260822/step-01b-design-validator.json"],
+    "issues": [],
+    "next_action": "Route to ELIXIR-DEV (Step 2a)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

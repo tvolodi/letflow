@@ -1,0 +1,64 @@
+{
+  "handoff_id": "c4a8e2f1-7b3d-4e9a-9c1f-2d6b8a0e5f43",
+  "run_id": "WF02-REQ083-20260822",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ083-20260822/step-02d-reviewer.json",
+  "created_at": "2026-08-22T06:35:00Z",
+  "started_at": "2026-08-22T06:28:00Z",
+  "completed_at": "2026-08-22T06:35:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-083"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ083-20260822/step-00-git-setup.json",
+      "handoffs/WF02-REQ083-20260822/step-01-code-designer-rework1.json",
+      "handoffs/WF02-REQ083-20260822/step-02a-elixir-dev-rework1.json",
+      "handoffs/WF02-REQ083-20260822/step-02c-security-reviewer-rework1.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/tasks.ex",
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/design/req083-task-routes-read.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 2d -- idiom/scope gate for REQ-083's read path, per .claude/agents/reviewer.md's four questions and docs/anti-patterns.md, following SECURITY-REVIEWER's Step 2c PASS (rework1). Three specific judgment calls requested by ORCH: (1) ELIXIR-DEV's design-vs-implementation InstanceProjection module-name divergence, (2) OQ-8's additive endpoint_policy_key clause on Letflow.Api.Authorization, (3) AC6's moduledoc boundary-explicitness claim against the actual code.",
+    "acceptance_criteria": [
+      "Idiomatic vs. crutch check against Letflow.Tasks/Letflow.Routers.Tasks",
+      "Supervision-integrity check (does this diff touch instance-per-process isolation)",
+      "Type-safety-gap check (file to docs/issues/ if found; non-blocking)",
+      "Scope-creep check, explicitly on OQ-8's Authorization clause",
+      "Confirm InstanceProjection divergence is a naming fix, not a deeper mismatch",
+      "Confirm AC6 moduledoc boundary statement is accurate against the real moduledoc text"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read git diff origin/main...HEAD in full (lib/letflow/tasks.ex new, lib/letflow/routers/tasks.ex replacing the 12-line stub, one additive clause on lib/letflow/api/authorization.ex), the full design doc (lib/letflow/design/req083-task-routes-read.md, post-rework1), and all prior-step handoffs including both rework cycles.\n\n1. IDIOMATIC VS. CRUTCH -- PASS. Letflow.Tasks is a plain Ecto context module (list_tasks/2, get_task/2, resolve_principal_scope/2), correctly matching backend_developer_guide.md's 'no real state machine here' branch -- this is a pure read/query surface, not a state machine, so gen_statem does not apply and its absence is not a violation. assignee_scope is a proper tagged-tuple discriminated union (:unfiltered | {:explicit_user, id} | {:principal, scope}) dispatched via multiple function heads/pattern matching in filter_by_assignee_scope/2 -- not a `case` on a raw string or a hand-rolled dispatch table. Cursor decode/build reuses Letflow.Api.Pagination verbatim (REQ-067), no local reimplementation. Router-side with_authorized_scope/4 in lib/letflow/routers/tasks.ex genuinely mirrors lib/letflow/routers/identity.ex:187's own private helper of the same name and shape (confirmed by direct read of both files) -- this is a real, precedented pattern being repeated, not invented ad hoc.\n\n2. SUPERVISION -- PASS, N/A. This diff adds no process, no spawn, no GenServer/gen_statem, touches no supervision tree. It is a stateless read path over Ecto/Repo calls inside the existing Plug request-handling process. Letflow.InstanceSupervisor's per-instance isolation is untouched and irrelevant to this diff -- correctly so, since REQ-083 is a query surface, not instance/token lifecycle logic.\n\n3. TYPE-SAFETY GAPS -- checked, none new. assignee_type/assignee_ref remain plain unvalidated strings matched against literal \"USER\"/\"GROUP\"/\"ROLE\" in filter_by_assignee_scope/2 -- a row with any other value (or nil) simply matches no branch and is correctly excluded. This is a pre-existing gap from REQ-047 (already flagged there, §4.3, as deliberate: write-time values come from unvalidated BPMN node.attributes), not something this diff introduces or worsens. No new class of representable-but-invalid state was found in this diff worth an issue filing -- the union types added here (assignee_scope, principal_scope) are themselves a type-safety improvement over the alternative (raw maps/strings), not a regression. No docs/issues/ entry filed; none warranted.\n\n4. SCOPE CREEP -- checked specifically against OQ-8. PASS, not scope creep. Read lib/letflow/api/authorization.ex directly: the new clause (`def endpoint_policy_key(\"GET\", \"/tasks/inbox\"), do: :TasksList`, inserted at line 217, between the existing \"/tasks\" and \"/tasks/:id\" clauses) is textually and structurally identical in shape to every other endpoint_policy_key/2 clause in the module -- a single exact-string-matched one-liner, additive only, in the same file section as the other /tasks-prefixed clauses it sits beside. It maps a real new route (GET /tasks/inbox, which this same requirement adds) to an already-existing policy key (:TasksList) rather than inventing a new permission/policy concept -- this is the minimum necessary wiring for the route to be reachable at all, not framework-ahead-of-need. SECURITY-REVIEWER already confirmed it doesn't widen access; from the idiom/architecture lens, this is the right place (Authorization is where every other route's policy key lives, not a new file/module) and the right form (matches the existing one-clause-per-route convention exactly). No other abstraction, behaviour, or macro was introduced anywhere in this diff -- with_authorized_scope/4 is deliberately NOT extracted into a shared cross-router helper despite being a near-duplicate of Identity's own, and the design doc states this explicitly as intentional (avoiding a premature shared abstraction until a third router needs it) -- endorsed as the correct call, not flagged as an issue: two instances of a pattern is exactly the point at which premature extraction is still worth resisting.\n\n5. INSTANCEPROJECTION DIVERGENCE -- confirmed a naming-only fix, not a deeper mismatch. Verified directly: `git ls-files | grep -i instance_projection` shows exactly one schema file, lib/letflow/event_store/instance_projection.ex, defining Letflow.EventStore.InstanceProjection (@primary_key {:instance_id, :binary_id, autogenerate: false}). No lib/letflow/engine/instance_projection.ex file exists and no Letflow.Engine.InstanceProjection module exists anywhere in lib/. The design doc's own §0 (sources read) even cites the file at the wrong path ('lib/letflow/engine/instance_projection.ex') while every other section (§2, §3.2, §6) names the wrong module (Letflow.Engine.InstanceProjection) -- the design's error is confined entirely to this one naming reference; the table name (instance_projections), the correlation_key field, the join semantics (left_join on instance_id), and the on_delete:restrict expectation the design describes all match the real module exactly. ELIXIR-DEV implemented against the real module and flagged the discrepancy rather than silently fixing it -- correct call, no rework needed, no evidence of a broader design/implementation gap elsewhere (spot-checked list_tasks/2 and resolve_principal_scope/2 against their design sections too -- both match).\n\n6. AC6 MODULEDOC BOUNDARY CHECK -- read lib/letflow/tasks.ex's actual moduledoc directly (not the Step 2a handoff's summary of it). Confirmed lines 11-40 contain the full ported/not-ported src/tasks/store.zig boundary as two real markdown tables inside the moduledoc text itself: Ported lists TaskStore.getById -> get_task/2, TaskStore.listCursor -> list_tasks/2 (explicitly flagged as extended beyond R-Co's own shipped SQL to add a ROLE arm R-Co's own listCursor never had), taskStatusToString/parseTaskStatus -> Ecto.Enum (no new function), parseUuid/uuidToHex -> Ecto.UUID.cast/1. Not-ported lists TaskStore.list (offset, superseded), createInTx (REQ-047's), completeInTx/cancelInTx (REQ-085's), claimTask/assign/reassign (REQ-085's), the write-path TaskError variants, and insertTaskWaitDescriptorInTx (S6). This is a verbatim-in-substance match to design doc §1's table, genuinely present in the shipped moduledoc (not merely asserted in a handoff summary), and it states the boundary explicitly with line-number citations rather than approximately. AC6 satisfied by the actual artifact.\n\nOverall: idiomatic, no supervision-integrity risk (none applicable), no new type-safety gap worth filing, no scope creep (OQ-8's addition is narrow, correctly placed, and necessary), the ELIXIR-DEV/design divergence is a confirmed isolated naming correction, and AC6's moduledoc claim is verified accurate against the real file. No anti-patterns.md entries apply to this diff (checked the full file; nothing on point). No new anti-patterns.md entry warranted -- nothing here was a mistake worth logging.",
+    "artifacts_out": ["handoffs/WF02-REQ083-20260822/step-02d-reviewer.json"],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Non-blocking, informational only. The design doc lib/letflow/design/req083-task-routes-read.md itself (not the implementation) still names the wrong module/path (Letflow.Engine.InstanceProjection / lib/letflow/engine/instance_projection.ex) throughout §2/§3.2/§6 -- the implementation correctly diverged from this and REVIEWER confirms that was the right call, but the design doc's own text was never corrected to match. No rework requested since the doc is historical record of what was decided, not a live spec being re-consulted; flagged only so a future reader of the design doc alone (rather than the code) isn't misled."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ083-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ083-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (Step 3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

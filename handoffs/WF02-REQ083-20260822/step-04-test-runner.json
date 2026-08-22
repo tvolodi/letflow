@@ -1,0 +1,60 @@
+{
+  "handoff_id": "07fdd94c-ee0a-41b9-a68e-fecbd2fa2d4f",
+  "run_id": "WF02-REQ083-20260822",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ083-20260822/step-04-test-runner.json",
+  "created_at": "2026-08-22T06:26:00Z",
+  "started_at": "2026-08-22T06:20:00Z",
+  "completed_at": "2026-08-22T06:26:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-083"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ083-20260822/step-03b-test-design-validator.json"
+    ],
+    "artifacts_in": [
+      "test/letflow/routers/tasks_test.exs",
+      "test/specs/REQ-083.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 4 -- run the full test suite via scripts/test_parallel.sh (not just the new REQ-083 tests), write test/reports/report-<date>-<run-id>.yaml with real combined pass/fail totals, and attribute any failure structurally per core-directives.md's 'Failure Attribution Is Structural, Never By Count-Matching'.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh run to completion, synchronously, foreground (no background/Monitor wait)",
+      "test/reports/report-20260822-WF02-REQ083-20260822.yaml written with real output, partition count + source, combined totals",
+      "any failure attributed via one of the three structural routes, never by count-matching or 'known failure'",
+      "any failure with no existing issue record reported for filing (not filed directly)",
+      "any failure caused by this run's own implementation reported as FAIL, not forwarded"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Ran `docker compose up -d` (letflow-postgres-1 already Running) then `scripts/test_parallel.sh` as a normal, blocking, foreground call (no run_in_background, no Monitor) to completion. N=16 (source: nproc, no $TEST_PARALLEL_N set). Combined result: 1601 tests, 5 properties, 1 failure (1605/1606 passed) -- 16 partitions, script exit 1 (parsed-failure-count-authoritative, not raw per-partition exit codes; only partition 4 exited 2, all others exited 0).\n\nThe single failure is Letflow.EngineConcurrencyTest's AC1 test (test/letflow/engine_concurrency_test.exs:266/:306, partition 4): `assert concurrent_micros < baseline_micros * 30` failed (left: 1103564, right: 973800) -- a wall-clock timing assertion, not a correctness assertion (all preceding {:ok, %{instance_status: :completed}} assertions in the same test passed).\n\nAttribution -- ROUTE 1 (structural): `git diff --name-only origin/main...HEAD` (full list in the report) does not include test/letflow/engine_concurrency_test.exs, lib/letflow/engine.ex, or Letflow.InstanceProjection. This branch's one lib/ file with adjacent naming, lib/letflow/tasks.ex, was checked directly -- `grep -rn \"Letflow.Tasks\" lib/letflow/engine.ex` returns no match, so Engine.complete_task/3 (what the failing test calls) does not call through anything this branch changed. No causal path exists from this branch's diff to this failure.\n\nExisting-issue-record check: searched docs/issues/*.yaml for EngineConcurrencyTest/engine_concurrency_test/concurrent_micros/baseline_micros. Five records reference Letflow.EngineConcurrencyTest (ISS-0073, ISS-0078, ISS-0110, ISS-0112, ISS-0114) but all describe a different failure signature (42P01 undefined_table tenant-schema-provisioning race, or the fixture-consolidation tracked by ISS-0112) -- none mention a timing/concurrent_micros assertion failure. NO EXISTING RECORD COVERS THIS FAILURE.\n\nPer core-directives.md's 'Unblock-Everything' scope boundary: a failure structurally cleared as unrelated is filed and forwarded, not fixed here, and does not block this step's PASS verdict. REQ-083's own 23 tests in test/letflow/routers/tasks_test.exs all passed (0 failures in that file, confirmed by grepping partition logs).\n\nFull detail, evidence, and the reproduced diff-file list are in the test report.",
+    "artifacts_out": [
+      "test/reports/report-20260822-WF02-REQ083-20260822.yaml"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "UNATTRIBUTED-TO-EXISTING-RECORD test failure found during this run's full-suite pass, reported for filing (TEST-RUNNER does not call the queue/gh itself -- only ORCH allocates issue ids). Title suggestion: 'Letflow.EngineConcurrencyTest AC1 timing assertion (concurrent_micros < baseline_micros * 30) fails under full 16-way parallel suite load'. Structurally cleared as unrelated to feature/WF02-REQ083-20260822 (route 1 -- see result.summary and the test report's failure_1 section for full evidence). affected_files: test/letflow/engine_concurrency_test.exs, lib/letflow/engine.ex. Observed: left=1103564us, right=973800us (baseline ~32460us), partition 4 of 16, N=16 (nproc-derived), 2026-08-22T06:2x UTC, this run's commit range."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ083-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ083-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to RELEASE-VALIDATOR (Step 5)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

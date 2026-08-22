@@ -1,0 +1,55 @@
+{
+  "handoff_id": "b2f7e5a4-3c9d-4e1f-8a6b-7d0c9e2f4a15",
+  "run_id": "WF02-REQ083-20260822",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ083-20260822/step-03b-test-design-validator.json",
+  "created_at": "2026-08-22T06:18:38Z",
+  "started_at": "2026-08-22T06:16:20Z",
+  "completed_at": "2026-08-22T06:18:38Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-083"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ083-20260822/step-00-git-setup.json",
+      "handoffs/WF02-REQ083-20260822/step-02d-reviewer.json",
+      "handoffs/WF02-REQ083-20260822/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "test/specs/REQ-083.md",
+      "test/letflow/routers/tasks_test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 3b -- test design gate for REQ-083's read path. Independently verify TEST-DESIGNER's claimed 23/23 passing suite, per-AC coverage, and the security-sensitive tests specifically called out by ORCH given this run's INV-1 rework cycle (AC2 four-assertion discipline, the cross-tenant role-leak test's real :prefix-scoped TenantRole query, AC3/INV-5 status+body identity, AC5/INV-2 full sorted key-set discipline).",
+    "acceptance_criteria": [
+      "a. every AC has >=1 runnable test, no @tag :skip without a passing counterpart",
+      "b. no 'TODO: implement test' left in the spec",
+      "c. fixtures use per-test unique data, not shared hardcoded IDs (tenancy-aware)",
+      "d. tests are self-sufficient, no cross-test ordering dependency",
+      "e. no hardcoded secrets/connection strings"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read test/specs/REQ-083.md and test/letflow/routers/tasks_test.exs in full (not TEST-DESIGNER's handoff summary as a substitute), plus step-00's requirement text and step-03's own claims for cross-reference only. Independently re-ran `mix test test/letflow/routers/tasks_test.exs` myself: real output ends `Finished in 18.4 seconds (0.00s async, 18.4s sync)` / `Result: 23 passed` -- 0 failed, matching TEST-DESIGNER's claim with my own measured run, not a copied claim.\n\nPer-check results:\n\n(a) Every AC1/AC2/AC3/AC4/AC5/AC7 has at least one runnable test; AC6 is correctly a documented no-test-needed (pure moduledoc criterion, REVIEWER already confirmed the text against the shipped file per step-02d finding 6 -- re-checked lib/letflow/tasks.ex's moduledoc lines 11-40 myself, contains the ported/not-ported table). No `@tag :skip` anywhere in the file (grepped, zero matches) -- PASS.\n\n(b) Grepped test/specs/REQ-083.md for 'TODO'/'implement test' -- zero matches. Every AC section states a concrete 'why this test exists' rationale distinct from restating the criterion (verified by reading each section, not just checking non-emptiness) -- PASS.\n\n(c) Every describe block either has its own `setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: \"req083-<unique>\")}` or inlines a fresh `provisioned_tenant!/1` call with a distinct slug_prefix per test (grepped all occurrences: req083-getbyid, req083-list-page, req083-inbox-page, req083-inbox-scope, req083-role-iso-a/-b, req083-cross-a/-b, req083-iso-a/-b, req083-allowlist, req083-403, req083-route-order, req083-validation, req083-status-filter, req083-assignee-id, req083-inv2, req083-notfound, req083-unmatched -- all distinct strings, each provisioning a real distinct tenant schema). All task/user/group/role ids are `Ecto.UUID.generate/0` or DB-assigned on insert -- no shared hardcoded UUID or username literal reused across tests -- PASS.\n\n(d) `async: false` module-wide but each test provisions its own tenant fixture from scratch inside its own setup/body and asserts only on state it itself created; no test reads state left by a sibling test, no shared module-level mutable fixture. Self-sufficient -- PASS.\n\n(e) Grepped for password/secret/token/connection-string patterns: only hit is `password_hash: \"__NO_PASSWORD_SET__\"`, an obvious placeholder sentinel, not a real credential; no connection strings, API keys, or real secrets anywhere in the file -- PASS.\n\nSecurity-sensitive scrutiny (per ORCH's specific dispatch, given this run's INV-1 rework cycle):\n\n1. AC2 inbox test (lines 253-289 of tasks_test.exs): confirmed the four assertions are four genuinely separate `assert`/`refute` lines (`assert task_direct.id in returned_ids`, `assert task_via_group.id in returned_ids`, `assert task_via_role.id in returned_ids`, `refute task_other_user.id in returned_ids`) -- not collapsed into a single set-equality or `Enum.all?` check. Each targets a distinct assignee_type arm (USER-direct, GROUP, ROLE, USER-other). Genuinely 4 separate checks -- PASS.\n\n2. Cross-tenant role-leak test (lines 292-325, 'AC2 extra assurance'): read lib/letflow/tasks.ex's `resolve_principal_scope/2` (lines 219-235) directly -- it issues `from(t in TenantRole, ...)` with `prefix: prefix` passed through to `Repo.all/Repo.one`, a real `:prefix`-scoped Ecto query against the tenant schema, not a mock or stub. The test itself provisions two REAL distinct tenant schemas (tenant_a, tenant_b via `TenantFixture.provisioned_tenant!/1`), inserts a real TenantRole row named \"approver\" bound to a real group in tenant_b via `insert_role!/3` (which itself writes directly to the prefix-scoped TenantRole table, matching the design's rework-1 fix), and asserts the tenant-A caller's inbox contains their own task and never the tenant-B role task. This exercises the real reworked query path against real per-tenant fixture data, not a stubbed prefix -- PASS.\n\n3. AC3/INV-5 cross-tenant-vs-nonexistent test (lines 331-350): confirmed it asserts BOTH `resp_cross_tenant.status == resp_never_existed.status` AND `resp_cross_tenant.resp_body == resp_never_existed.resp_body` -- byte-identical body comparison, not merely status-code parity -- PASS.\n\n4. AC5/INV-2 field-allowlist test (lines 381-415): confirmed both assertions use `Map.keys(item) |> Enum.sort() == @task_list_item_keys` / `Map.keys(body) |> Enum.sort() == @task_detail_keys` -- full sorted key-set equality, not `Map.has_key?/2` presence checks on a subset -- plus six explicit individual `refute Map.has_key?/2` calls for the named exclusions (claimed_by, form_schema, output_variables, completed_by, completed_at, cancelled_at). Note: @task_detail_keys is itself built via `Enum.sort(@task_list_item_keys ++ [...])` at compile time (a fixed literal list, not derived from runtime data), so the sort call there is normalizing a hardcoded expected list, not laundering the actual/expected comparison -- the actual side (`Map.keys(body) |> Enum.sort()`) is still a real runtime sort of the live response. Correct and matches the documented fix for TEST-DESIGNER's own found bug (unsorted comparison) -- PASS.\n\nAlso independently spot-verified two implementation claims underpinning the test design rather than trusting them: (i) `Letflow.Routers.Tasks.handle_list_result/2` maps `{:error, :invalid_cursor}` to `Response.unprocessable/2` (422), confirmed at lib/letflow/routers/tasks.ex lines 254-259 -- matches the spec's stated deliberate divergence from identity_test.exs's 400-for-cursor precedent; (ii) other validation paths (status/instance_id/malformed id) do use `Response.bad_request/2` (400), confirmed at lines 169/172/290 -- matches the spec's stated R-Co-422-vs-this-router-400 divergence note.\n\nNo check failed. No partial-credit override applied.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ083-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ083-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (Step 4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

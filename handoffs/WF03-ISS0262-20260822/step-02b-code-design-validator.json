@@ -1,0 +1,54 @@
+{
+  "handoff_id": "ca8132bc-d6b7-4b81-90ae-26aaea2958cc",
+  "run_id": "WF03-ISS0262-20260822",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0262-20260822/step-02b-code-design-validator.json",
+  "created_at": "2026-08-22T07:45:00Z",
+  "started_at": "2026-08-22T07:45:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0262-lint-handoffs-non-json-discovery.md",
+      "handoffs/WF03-ISS0262-20260822/step-02-code-designer.json",
+      "handoffs/WF03-ISS0262-20260822/step-01-issue-fixer.json",
+      "lib/mix/tasks/letflow.lint_handoffs.ex"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.lint_handoffs.ex"]
+  },
+  "task": {
+    "description": "Hard-gate lib/letflow/design/iss0262-lint-handoffs-non-json-discovery.md against step-02-code-designer.json's task.acceptance_criteria and ISSUE-FIXER's diagnosis. In particular independently re-derive (do not trust CODE-DESIGNER's report): (1) run `ls handoffs/WF03-ISS0258-20260822/` yourself and confirm the grandfather list names exactly the real files, no more, no fewer; (2) check whether the chosen discovery glob (step*.* per CODE-DESIGNER's summary, chosen instead of ISSUE-FIXER's literal step-*.* suggestion because of 14 existing hyphen-less step NN .json files) is actually correct against the real handoffs/ tree -- run the equivalent of the old glob and the new glob yourself and diff the file sets, confirming no existing valid .json handoff is newly excluded and no non-handoff file (registry.json, orchestrator.log, escalations.yaml, any *-verdict.md, redraft-*.md) is newly swept in as a false H6 violation; (3) confirm no .ex implementation bodies are present in the design, only signatures/pseudocode/data.",
+    "acceptance_criteria": [
+      "Grandfather list of 10 file paths independently verified against a real `ls`/`find` of handoffs/WF03-ISS0258-20260822/, exact match confirmed or discrepancy reported as BLOCKER",
+      "Old-glob vs new-glob file-set diff run for real (e.g. via a quick script or manual comparison) and its result quoted, confirming no regression on existing valid handoffs and no false-positive sweep-in of registry.json/orchestrator.log/escalations.yaml/verdict or redraft files",
+      "No implementation code present in the design doc",
+      "PASS/FAIL verdict with next_action naming ELIXIR-DEV on PASS, or rework on FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

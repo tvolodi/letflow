@@ -1,0 +1,55 @@
+{
+  "handoff_id": "a301e961-e632-4adb-9517-e020f3ebe6d8",
+  "run_id": "WF03-ISS0262-20260822",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0262-20260822/step-01-issue-fixer.json",
+  "created_at": "2026-08-22T07:24:00Z",
+  "started_at": "2026-08-22T07:24:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "handoffs/WF03-ISS0258-20260822/step-01-issue-fixer.md"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.lint_handoffs.ex", "test/mix/tasks/letflow.lint_handoffs_test.exs"]
+  },
+  "task": {
+    "description": "You are on branch feature/WF03-ISS0262-20260822 (already checked out). Diagnose queue task 262 / ISS-0262 (GH#510): mix letflow.lint_handoffs' file discovery globs `handoffs/**/*.json` exclusively (see lib/mix/tasks/letflow.lint_handoffs.ex's private handoff_files/0), so any handoff-shaped file under handoffs/ that is NOT a .json file (e.g. the 9 Markdown files under handoffs/WF03-ISS0258-20260822/, listed in artifacts_in as one example fixture) is structurally invisible to every check the task runs (H1-H5, advisory). Step 0.5: check docs/issues/*.yaml for a prior resolved entry with matching symptoms (globbing/coverage gaps in lint_handoffs) before diagnosing fresh -- ISS-0191/ISS-0190/ISS-0202/ISS-0209 are the linter's own history and worth checking, but none of them address non-JSON files specifically as far as this dispatch's author could tell; verify that yourself rather than trusting this claim. Step 1: reproduce directly -- run `mix letflow.lint_handoffs` on this branch and confirm its output says nothing about the 9 .md files (quote the actual output). Then trace root cause precisely: which function fails to see non-JSON files, and what a fix needs to change (do NOT implement it -- CODE-DESIGNER designs the fix from your diagnosis). Consider: should the fix (a) detect any handoff-shaped file under handoffs/<run_id>/step-*.* that isn't valid JSON and report it as a violation, or list files by a broader glob and flag any that fail Jason.decode/aren't .json, distinguishing 'not JSON at all' from 'valid JSON with wrong extension'? State a recommendation but leave the exact mechanism to CODE-DESIGNER. Also determine: the WF03-ISS0258-20260822 run's own 9 Markdown handoff files -- what should happen to them (convert to JSON now, or explicitly grandfather with a stated reason, mirroring @grandfathered's per-file pattern in the linter)? State a clear recommendation, since acceptance criterion 3 requires their disposition be settled, not left ambiguous.",
+    "acceptance_criteria": [
+      "Actual mix letflow.lint_handoffs output quoted, confirming today's behavior does not detect the 9 Markdown files",
+      "Root cause traced to the specific function/glob pattern in lib/mix/tasks/letflow.lint_handoffs.ex",
+      "A stated, reasoned recommendation for what a fix must detect and how it should classify a non-JSON handoff-shaped file",
+      "A stated, reasoned recommendation for the disposition of WF03-ISS0258-20260822's 9 .md files (convert vs. grandfather, with justification)",
+      "Diagnosis written into result.summary; do NOT implement the fix; next_action names CODE-DESIGNER"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

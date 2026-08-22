@@ -1,0 +1,32 @@
+id: ISS-0260
+title: Letflow.EngineConcurrencyTest AC1 timing assertion fails under full 16-way parallel suite load
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ083-20260822
+discovered_at: "2026-08-22T06:26:37Z"
+severity: MINOR
+description: >
+  test/letflow/engine_concurrency_test.exs:266/306 ("AC1 -- 100 concurrent task
+  completions...") asserts concurrent_micros < baseline_micros * 30, a deliberately
+  loose (30x) wall-clock timing comparison, not a correctness assertion -- every
+  {:ok, %{instance_status: :completed}} check in the same test passed. Failed once
+  under scripts/test_parallel.sh (16-way parallel, N=nproc) during WF02-REQ083-20260822
+  Step 4: assertion `concurrent_micros < baseline_micros * 30` failed with
+  left=1103564, right=973800.
+  Structurally cleared as unrelated to that branch: `git diff --name-only
+  origin/main...HEAD` for that run touched lib/letflow/api/authorization.ex,
+  lib/letflow/routers/tasks.ex, lib/letflow/tasks.ex -- none touch
+  test/letflow/engine_concurrency_test.exs, lib/letflow/engine.ex, or
+  InstanceProjection, and `grep -rn "Letflow.Tasks" lib/letflow/engine.ex` returns no
+  match.
+  Five existing issue records (ISS-0073, ISS-0078, ISS-0110, ISS-0112, ISS-0114)
+  reference this same test module but describe a different failure signature (42P01
+  undefined_table tenant-provisioning race, or fixture-consolidation work) -- none
+  cover this timing-assertion flake specifically.
+  Likely a resource-contention flake under heavy parallel load (16 partitions) rather
+  than a real regression; worth either loosening the multiplier further, making the
+  assertion load-aware, or converting it to a non-blocking benchmark.
+affected_files:
+  - test/letflow/engine_concurrency_test.exs
+queue_task_id: 260
+github_issue: 507
+status: open

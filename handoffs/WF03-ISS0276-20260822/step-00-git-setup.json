@@ -7,7 +7,7 @@
   "to_agent": "ELIXIR-DEV",
   "file": "handoffs/WF03-ISS0276-20260822/step-00-git-setup.json",
   "created_at": "2026-08-22T14:42:38Z",
-  "started_at": "2026-08-22T14:42:38Z",
+  "started_at": "2026-08-22T14:43:09Z",
   "completed_at": null,
   "status": "PENDING",
   "priority": "NORMAL",

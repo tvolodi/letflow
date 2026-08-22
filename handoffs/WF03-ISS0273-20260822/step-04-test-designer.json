@@ -1,0 +1,56 @@
+{
+  "handoff_id": "82c3daf7-708f-0213-f4c5-3a4b5c6d7e08",
+  "run_id": "WF03-ISS0273-20260822",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0273-20260822/step-04-test-designer.json",
+  "created_at": "2026-08-22T12:47:55Z",
+  "started_at": "2026-08-22T12:47:55Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "handoffs/WF03-ISS0273-20260822/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0273-20260822/step-03-elixir-dev.json",
+      "test/mix/tasks/letflow.lint_handoffs_test.exs",
+      "lib/mix/tasks/letflow.lint_handoffs.ex"
+    ],
+    "owned_modules": ["test/mix/tasks/letflow.lint_handoffs_test.exs"]
+  },
+  "task": {
+    "description": "This fix's regression coverage is the 3 pre-existing tests T-NEW-AFTER-FLOOR-HARD-FAILS, F-H6-CONTENT-NEVER-READ, F-H6-FIRES-NEW in test/mix/tasks/letflow.lint_handoffs_test.exs, which ISSUE-FIXER (Step 01) confirmed FAIL on pre-fix code (17/20 passed, those 3 failing) and ELIXIR-DEV (Step 03) confirmed PASS on post-fix code (20/20). Per WF-03_issue_resolving.md's Step 4 rule, this fail-then-pass proof must be independently demonstrated, not merely inherited from two different prior agents' separate claims. Your job: independently reproduce BOTH halves yourself, in a way that isolates the regression from anything else that changed. Preferred technique (per WF-03_issue_resolving.md's isolation note): use a throwaway git worktree checked out at the pre-fix commit (feature/WF03-ISS0273-20260822~<N before the ELIXIR-DEV implementation commit>, or simplest: main, since main does not yet have this fix) plus ONLY the current test file copied in, run mix test against it, quote failing output; then run the same test file against the current branch (post-fix), quote passing output. If the existing 3 tests are not adequate as a fail-then-pass proof for some reason you find during this exercise, add whatever minimal additional test coverage is needed and explain why. Clean up any worktree/throwaway artifacts when done and verify git status --porcelain is empty of anything unintended.",
+    "acceptance_criteria": [
+      "Independently reproduced pre-fix FAIL (quoted real output) for the 3 assertions, isolated via worktree-at-main plus only the test file, not inherited from Step 01's report",
+      "Independently reproduced post-fix PASS (quoted real output) on the feature branch",
+      "Stated whether existing coverage is sufficient or additional tests were needed, with reasoning",
+      "Any worktree/throwaway artifact created for this verification is removed, git status --porcelain confirmed clean",
+      "next_action names TEST-DESIGN-VALIDATOR"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

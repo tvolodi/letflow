@@ -349,6 +349,85 @@ defmodule Letflow.EngineConcurrencyTest do
   end
 
   # ---------------------------------------------------------------------------------
+  # ISS-0260 regression -- unit coverage of `ac1_timing_multiplier/0` itself
+  # (lib/letflow/design/iss0260-ac1-timing-flake.md §3.1-§3.3). These are pure-
+  # function unit tests per test_developer_guide.md §1 "Pure functions first" -- no
+  # Postgres, no real concurrency, deterministic. They exist to catch a REGRESSION
+  # of this helper's own logic (wrong default, dropped load-awareness, broken
+  # override validation/precedence), which the AC1 timing test itself cannot catch
+  # because a flaky wall-clock proxy is exactly what this fix was written to stop
+  # depending on for correctness signal.
+  #
+  # async: false at the file level (Letflow.DataCase, async: false above) already
+  # rules out cross-test env-var races within this file; each test still clears the
+  # vars it sets via on_exit so no state leaks to other test files either.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0260 -- ac1_timing_multiplier/0" do
+    setup do
+      on_exit(fn ->
+        System.delete_env("TEST_PARALLEL_GROUP")
+        System.delete_env("TEST_AC1_TIMING_MULTIPLIER")
+      end)
+
+      :ok
+    end
+
+    test "defaults to 30 when neither env var is set" do
+      System.delete_env("TEST_PARALLEL_GROUP")
+      System.delete_env("TEST_AC1_TIMING_MULTIPLIER")
+
+      assert ac1_timing_multiplier() == 30
+    end
+
+    test "returns 60 when TEST_PARALLEL_GROUP is set (real test_parallel.sh partition)" do
+      System.delete_env("TEST_AC1_TIMING_MULTIPLIER")
+      System.put_env("TEST_PARALLEL_GROUP", "tp12345")
+
+      assert ac1_timing_multiplier() == 60
+    end
+
+    test "TEST_AC1_TIMING_MULTIPLIER overrides the default (TEST_PARALLEL_GROUP unset)" do
+      System.delete_env("TEST_PARALLEL_GROUP")
+      System.put_env("TEST_AC1_TIMING_MULTIPLIER", "45")
+
+      assert ac1_timing_multiplier() == 45
+    end
+
+    test "TEST_AC1_TIMING_MULTIPLIER takes precedence over TEST_PARALLEL_GROUP, not the other way round" do
+      System.put_env("TEST_PARALLEL_GROUP", "tp12345")
+      System.put_env("TEST_AC1_TIMING_MULTIPLIER", "45")
+
+      assert ac1_timing_multiplier() == 45
+    end
+
+    test "rejects a non-numeric override value with flunk, naming the bad value" do
+      System.delete_env("TEST_PARALLEL_GROUP")
+      System.put_env("TEST_AC1_TIMING_MULTIPLIER", "abc")
+
+      assert_raise ExUnit.AssertionError, ~r/TEST_AC1_TIMING_MULTIPLIER='abc'/, fn ->
+        ac1_timing_multiplier()
+      end
+    end
+
+    test "rejects a negative override value with flunk" do
+      System.put_env("TEST_AC1_TIMING_MULTIPLIER", "-1")
+
+      assert_raise ExUnit.AssertionError, ~r/TEST_AC1_TIMING_MULTIPLIER='-1'/, fn ->
+        ac1_timing_multiplier()
+      end
+    end
+
+    test "rejects a zero override value with flunk (must be positive)" do
+      System.put_env("TEST_AC1_TIMING_MULTIPLIER", "0")
+
+      assert_raise ExUnit.AssertionError, ~r/TEST_AC1_TIMING_MULTIPLIER='0'/, fn ->
+        ac1_timing_multiplier()
+      end
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
   # AC2 -- two concurrent task completions on the SAME instance: exactly one
   # success, one conflict, launched concurrently not sequentially.
   # ---------------------------------------------------------------------------------

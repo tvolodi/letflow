@@ -55,7 +55,7 @@ volumes:
     path: docs/status/requirement_status.v2.yaml
     status: current
     opened: 2026-08-21
-    entries: 30
+    entries: 31
     note: >
       Opened by ISS-0119's fix. Successor to volume 1. `entries:` corrected
       2026-08-21 (ISS-0199, run WF03-ISS0199-20260821) from a stale declared 0
@@ -95,6 +95,19 @@ volumes:
       30 when that same Step Final rebased a second time onto a further-advanced
       main; the count is taken from the composed file each time, never carried
       over from the previous attempt.
+      Then to 31 by WF03-ISS0227-20260822's Step Final, which rebased TWICE.
+      That run appended its own done-event against a base declaring 26 and
+      computed 27; its first rebase found main at 28 (ISS-0230, ISS-0231) and
+      re-derived 29 from the composed file; main advanced again before the PR
+      could merge (REQ-077, ISS-0229) and the second rebase re-derived 31 from
+      the newly composed file. Its done-event (05:10:23Z) sorts after every
+      entry it composed with on both attempts, so no reordering was needed
+      either time. The point this run illustrates, and the reason the count is
+      never carried forward: a rebase can happen more than once against a
+      moving main, and each attempt's correct count is a fact about the file
+      that attempt produced -- 29 was right when it was written and wrong an
+      hour later. Recount from the composed file every time; never increment
+      the previous attempt's number.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

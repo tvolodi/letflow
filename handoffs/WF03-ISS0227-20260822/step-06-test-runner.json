@@ -1,0 +1,63 @@
+{
+  "handoff_id": "b7a1f0d2-2c64-4a35-9f21-6b3f0d4e8a10",
+  "run_id": "WF03-ISS0227-20260822",
+  "workflow_id": "WF-03",
+  "step": "06",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0227-20260822/step-06-test-runner.json",
+  "created_at": "2026-08-22T04:45:00Z",
+  "started_at": "2026-08-22T04:45:00Z",
+  "completed_at": "2026-08-22T05:12:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0227.yaml",
+      "test/letflow/sandbox_pool_test.exs",
+      "test/letflow/sandbox_pool_call_timeout_test.exs",
+      "lib/letflow/sandbox_pool.ex",
+      "scripts/test_parallel.sh"
+    ],
+    "owned_modules": ["test/"]
+  },
+  "task": {
+    "description": "Final verification for ISS-0227 (removal of write-only derivable fields owner_pid and schema_name from Letflow.SandboxPool in-memory state, removal of the now-callerless op_schema_name/1, plus new regression test RT-9 at test/letflow/sandbox_pool_test.exs:1194). Branch fix/WF03-ISS0227-20260822, HEAD 491363b. Run: (1) full suite via sh scripts/test_parallel.sh, (2) scoped pair mix test test/letflow/sandbox_pool_test.exs test/letflow/sandbox_pool_call_timeout_test.exs (baseline 20 passed, expected 21 with RT-9), (3) mix compile --warnings-as-errors exit 0, (4) mix format --check-formatted. Diagnose any failure and attribute it to ISS-0227 or not.",
+    "acceptance_criteria": [
+      "LETFLOW_DB_PORT confirmed 5472 before any run",
+      "Full suite run via scripts/test_parallel.sh with verbatim combined result quoted",
+      "Scoped pair run directly, verbatim result quoted, compared to the 20-passed baseline",
+      "mix compile --warnings-as-errors exit code quoted and equal to 0",
+      "mix format --check-formatted exit code quoted",
+      "Any failure attributed to ISS-0227 or to a named non-ISS-0227 cause, checked not assumed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS on all six acceptance criteria. Every figure below is real quoted output, not inferred.\n\nENVIRONMENT. `grep LETFLOW_DB_PORT .env` -> `LETFLOW_DB_PORT=5472`, confirmed before anything ran. `docker ps` shows container `letflow-2-postgres-1` up 22h (healthy) mapping `0.0.0.0:5472->5432/tcp`; the sibling workspace's DB is the separate `letflow-postgres-1` on 5462 and was never touched. No `docker compose up` was issued in this worktree deliberately: compose would derive a NEW project name from this worktree's directory (`agent-ae4ed266bc89ede16`) and start a second container rather than reuse the correct, already-healthy one. `git rev-parse HEAD` -> 491363b14ab9f481584ce0efdc2067458aabc606. Working tree clean apart from the pre-existing untracked `docs/issues/ISS-0227.yaml`. Nothing in lib/, test/ or docs was modified, no commit, push, branch, checkout, stash or reset was performed.\n\n(1) FULL SUITE -- PASS. Command `TEST_PARALLEL_N=4 sh scripts/test_parallel.sh`. N was set explicitly rather than left to nproc: the script's own header records ISS-0219 (an nproc-derived N -- 16 on this host -- crashes every partition during ecto.create/ecto.migrate before any Result: line), and this project's prior full-suite reports (e.g. test/reports/report-20260822-WF02-REQ075-20260822.yaml) use TEST_PARALLEL_N=4 as the established value for this host. Verbatim output:\n  test_parallel: N=4 (source: env override)\n  test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)\n  test_parallel: TEST_POOL_SIZE=22 (computed: N=4, max_connections=100, headroom=10)\n  test_parallel: partition logs in /tmp/letflow_test_parallel.izrIzA\n  test_parallel: TEST_PARALLEL_GROUP=tp3785307 (shared by all 4 partitions)\n  partition 1: 320 tests, 0 properties, 0 failures, exit 0\n  partition 2: 373 tests, 0 properties, 0 failures, exit 0\n  partition 3: 377 tests, 1 property, 0 failures, exit 0\n  partition 4: 476 tests, 4 properties, 0 failures, exit 0\n  ---\n  combined: 1546 tests, 5 properties, 0 failures (1551/1551 passed)\nAll four partitions produced a Result: line and each exited 0, so the script's authoritative signal (parsed failure count) is 0. NOT AGENT ATTESTED CAVEAT: this invocation was piped to `tail`, so the script's own process exit code was consumed by the pipeline and is reported here as derived from its documented exit contract (exit 0 iff every partition has a Result: line and 0 parsed failures -- both hold), not as a directly measured number. The per-partition exit codes above ARE directly measured and are all 0.\n\n(2) SCOPED PAIR -- PASS at 21 passed, exactly the expected figure. This needed two runs and the first one FAILED; the full diagnosis is below because it matters.\n  First run, verbatim: `Finished in 37.4 seconds (0.00s async, 37.4s sync)` / `Result: 19/21 passed` / `Failed: 2 tests`, process exit 2.\n  Second run, alone, verbatim: `Finished in 26.9 seconds (0.00s async, 26.9s sync)` / `Result: 21 passed`, process exit 0.\n  The denominator is 21 in BOTH runs, which independently confirms RT-9 is collected: pre-change baseline for these two files was 20.\n\nATTRIBUTION OF THE FIRST RUN'S 2 FAILURES -- NOT ISS-0227. Established by evidence, not assumed:\n  a. Both failures were in sandbox_pool_test.exs: `RT-7: a DB-free claim(0) is answered immediately while a provisioning is running` (:1035, asserting at :892 in its helper) and `RT-3 (death path a): a caller that dies while parked in waiting leaks no slot and no schema`. Both are the same assertion shape, `assert sandbox_schema_names() == baseline` -- a GLOBAL query over every `sandbox_%` schema in the database, not a query scoped to the pool under test.\n  b. Before that run I checked `pg_stat_activity` and found a concurrent foreign `mix test` invocation connected to the same 5472 database (application_name `letflow_mixtest_27924`, 32 connections, backend_start 04:57:06Z; OS process erl.exe pid 27924 started 09:57 local and actively burning CPU). This is a shared host -- other agents run against the same database.\n  c. The test output itself carries the smoking gun, verbatim from the run: `TenantSchemaReaper.sweep_orphans/2: deferring this sweep entirely -- another mix test invocation (application_name != \"letflow_mixtest_20168\") is currently connected to this database, and this module tracks no per-row ownership, so an age-based reap right now could reclaim that invocation's still-live tenant schema (ISS-0110). Retrying on the next boundary sweep.` The reaper explicitly declined to clean up because of the sibling. That is the documented ISS-0110 guard behaving exactly as designed.\n  d. I diffed the two MapSets in each failure rather than eyeballing them. RT-7: baseline 33 schemas, after-state 34 -- exactly one schema APPEARED (`sandbox_4d824c6d...`) that the test never provisioned. RT-3: baseline 35, after-state 34 -- exactly one schema VANISHED (`sandbox_36557117...`) that the test never released. Drift of +1 and -1 in OPPOSITE directions across two tests is the signature of a concurrent third party creating and dropping schemas in the shared database mid-assertion. It is not the signature of a leak. Note also that the baselines are 33-35 schemas rather than near-zero: the database was already carrying a large backlog of un-reaped orphans precisely because the reaper had been deferring.\n  e. A real ISS-0227 regression would look categorically different. That change removed only write-only in-memory bookkeeping (owner_pid from the provision op, schema_name from the in_flight record) and a callerless helper; a genuine leak from it would show the pool's OWN schemas persisting after release -- appearing and never vanishing -- and would be deterministic, not +/-1 noise.\n  f. DECISIVE: I waited for pg_stat_activity to report 0 `letflow_mixtest%` connections (polled to `conns=0`), then re-ran the identical command alone -> `Result: 21 passed`, exit 0. Reproducibly clean with the interference removed. This matches TEST-DESIGN-VALIDATOR's prior finding on the same class of noise.\n  g. Corroborating and arguably stronger: the full-suite run in item (1) already exercised the entire sandbox_pool_test.exs file, RT-7 and RT-3 included, and reported 0 failures across all four partitions -- and it ran during a window when no foreign mix test was connected (I polled and waited for that window before launching it).\n\nNo pre-existing non-SandboxPool failure was found anywhere, so no comparison run at 233af04 was necessary; the full suite is at 0 failures.\n\n(3) mix compile --warnings-as-errors -- EXIT 0, measured directly (`echo $?` on an unpiped invocation, not inferred from absent output). Because a plain invocation on an already-built tree can be a silent no-op, I did not stop there: I re-ran as `mix compile --force --warnings-as-errors`, which reported `Compiling 104 files (.ex)` / `Generated letflow app` and also exited 0. So the whole lib/ tree genuinely recompiled with zero warnings, not just an up-to-date short-circuit. This is step 3 of mix.exs's letflow.check alias and the merge gate at docs/agents/protocols/GIT_MERGE.md:166.\n\n(4) mix format --check-formatted -- EXIT 0, measured directly, no output.\n\nHOUSEKEEPING. The temporary log files I redirected output into inside the worktree were deleted afterwards; final `git status --short` shows only `?? docs/issues/ISS-0227.yaml` (pre-existing) and `?? handoffs/WF03-ISS0227-20260822/step-06-test-runner.json` (this file). A `test/reports/` entry was initially withheld because this dispatch forbade modifying `test/`, which conflicted with TEST-RUNNER's role instruction to always write one; I flagged the conflict rather than silently resolving it. ISSUE-FIXER then confirmed the prohibition was a drafting error meaning test CODE only, and asked for the report. It is now written at `test/reports/report-20260822-WF03-ISS0227-20260822.yaml`, following the shape and filename convention of `test/reports/report-20260822-WF02-REQ075-20260822.yaml`, and it carries the full record including the failed-then-clean scoped run rather than only the clean figures. Nothing under `test/letflow/**` or `lib/` was touched. Final `git status --short` shows exactly three untracked paths: `docs/issues/ISS-0227.yaml` (pre-existing), this handoff, and that report.",
+    "artifacts_out": ["handoffs/WF03-ISS0227-20260822/step-06-test-runner.json"],
+    "issues": [
+      {
+        "severity": "INFO",
+        "type": "environmental",
+        "summary": "First scoped-pair run returned 19/21 with 2 failures (RT-7, RT-3) caused by a concurrent foreign `mix test` invocation on the shared 5472 database, which made TenantSchemaReaper defer every sweep (ISS-0110 guard, logged verbatim in the run). Diffing showed +1 schema appeared in one test and -1 vanished in the other -- third-party drift, not a leak. Re-running alone after pg_stat_activity reported 0 mixtest connections gave a clean `Result: 21 passed`, exit 0. Not attributable to ISS-0227. No code change warranted.",
+        "attributed_to_iss_0227": false
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "fix/WF03-ISS0227-20260822",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH may proceed to merge WF03-ISS0227-20260822. All four verification items green at HEAD 491363b: full suite 1551/1551 passed with 0 failures, scoped pair 21 passed (baseline 20 + RT-9), compile --warnings-as-errors exit 0 including a --force full rebuild of 104 files, format check exit 0. Nothing failed that is attributable to ISS-0227."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

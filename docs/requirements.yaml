@@ -4573,7 +4573,7 @@ requirements:
   - id: REQ-081
     title: Definition routes 1/2 -- read path (definitions.zig handleGetById/List/GetActiveByName/Search/Export)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 148  # letflow-queue task id
     description: >

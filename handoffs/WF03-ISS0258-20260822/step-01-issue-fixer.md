@@ -175,3 +175,50 @@ CODE-DESIGNER to confirm this framing and name it in the design.
 
 `docs/anti-patterns.md` line 1195: the new module's own moduledoc will contain the
 marker forms it recognises, so it must scan `docs/requirements.yaml` only, never `lib/`.
+
+---
+
+## CORRECTION — appended 2026-08-22, after CODE-DESIGN-VALIDATOR (Step 2b)
+
+**This handoff's claim that all 21 historical deferrals were S8-scoped is FALSE, and it
+was false when written.** Following ISS-0231's own `correction:` precedent, the wrong
+sentence is left in place above rather than rewritten, and corrected here.
+
+CODE-DESIGN-VALIDATOR re-derived the stage assignments instead of inheriting my claim,
+and refuted it. I then re-derived it myself rather than accepting the refutation:
+
+    $ git show 75f553d:docs/requirements.yaml > /tmp/old_reqs.yaml
+    $ awk '...per-entry stage of each `# impl_order: UNREGISTERED` entry...' /tmp/old_reqs.yaml \
+        | sort | uniq -c
+          8 S4
+          9 S8
+          4 S9
+
+**MY ERROR, named exactly.** I ran `grep -n '# impl_order: UNREGISTERED'`, saw 21
+identical rationale strings (`-- see the S8 note above`), and read the *rationale text*
+as if it were the *stage assignment*. It is not. The rationale was copy-pasted uniformly
+across three different stages; only the entries' own `stage:` fields carry the truth,
+and I never read them. That is precisely the anti-pattern at `docs/anti-patterns.md`
+line 1006, "Re-deriving the count while inheriting the unit being counted" — I re-derived
+21 correctly and inherited the wrong unit.
+
+**WHAT IT CHANGES.** S4 held 10 `done` requirements at `75f553d`, so under the design's
+own §3.3 rule those 8 S4 deferrals were **STALE**, not legitimate. The corpus splits
+**13 legitimate / 8 stale**, not 21/0. My "every real deferral this project has ever had
+was stage-scoped [to a not-yet-active stage]" is therefore wrong, and the §1.2 bar it
+was used to satisfy was unmet as stated.
+
+**WHAT IT DOES NOT CHANGE — and this is the important part.** The rule is not weakened
+by this; it is *vindicated*. Those 8 S4 entries were real, un-actioned debt sitting in an
+active stage behind a green gate, later registered by hand under PR #495. **A detector
+built to this design would have caught them at the time.** That is exactly the failure
+mode ISS-0258 was filed about, found in the historical record rather than hypothesised.
+
+The correction improved the fix: the 8 became the design's only real-world regression
+signal (fixture `F-HISTORICAL-S4-STALE`, asserted against `F-S8-SHAPE-LEGIT`), where
+before this the entire suite rested on synthetic fixtures because the live corpus has
+zero deferred entries.
+
+No other claim in this handoff is affected. The live-state measurements (`0 deferred of
+115`), the no-stage-`status`-field finding, and the derivation proposal were each
+re-verified independently by the design gate.

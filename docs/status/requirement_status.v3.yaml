@@ -570,3 +570,15 @@ history:
       per WF-03 Step 0.5's severity-escalation rule) and status set to
       resolved. GH#537 closed. Queue task 273 released with status done.
       No FAIL-then-fix cycles -- every gate passed on first attempt.
+
+  - req: REQ-115
+    event: started
+    agent: ORCH
+    at: "2026-08-22T13:18:08Z"
+    note: >
+      WF02-REQ115-20260822 (queue task 241, GH#479) started. Step 00 git
+      setup PASS (FRONTEND-DEV) -- branch feature/WF02-REQ115-20260822
+      pushed and tracking origin. Adds `npm run check` to web/package.json
+      chaining type-check -> lint -> test -> guards fail-fast, and
+      documents it in web/README.md's script table. No .github/workflows/
+      file created by this requirement -- REQ-138 owns wiring it into CI.

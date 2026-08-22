@@ -167,6 +167,19 @@ classification in isolation, not the full `run/1` pipeline against a fixture roo
 
 ## 3. The disposition of WF03-ISS0258-20260822's 10 `.md` files (**RULING: grandfather, not convert**)
 
+> **SUPERSEDED 2026-08-22 (ISS-0262 Step 8 change-approach rework, rework_count 2).**
+> The per-file `@grandfathered` ruling below (and its extension to 2 more
+> `WF03-ISS0261-20260822` files by the retry-1 rework) proved unable to keep pace with
+> `main`: two Step Final attempts each found new, unrelated runs had landed further
+> non-JSON handoff files on `main` faster than this list could be updated
+> (`handoffs/WF03-ISS0262-20260822/step-final-git-merge.json`,
+> `.../step-final-git-merge-retry1.json`). **§3 and §3.1 below are the historical record
+> of the original ruling only and no longer govern H6.** The live mechanism is a
+> commit-boundary rule — see
+> `lib/letflow/design/iss0262-h6-floor-commit-addendum.md`. H1-H4's per-file
+> `@grandfathered` mechanism (§4 and the rest of this document) is unaffected and still
+> governs those rules.
+
 **Verified count, this session, against the real directory (not inherited from any
 prior claim):**
 

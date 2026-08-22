@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0262-20260822/step-08-code-designer-rework.json",
   "created_at": "2026-08-22T09:01:58Z",
   "started_at": "2026-08-22T09:01:58Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-22T09:08:58Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": null,
@@ -38,18 +38,21 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "CHANGE-APPROACH rework per ORCHESTRATOR.md Sec.5: redesigned H6's grandfathering as a commit-boundary rule instead of a per-file list, per task.description. New file lib/letflow/design/iss0262-h6-floor-commit-addendum.md (supersedes only Sec.3/Sec.3.1 of the original design; Sec.1,2,4.1-4.3,4.5,5,6,7 of the original still govern). Mechanism: new module attribute @h6_floor_commit (a git sha, resolved the same way @artifacts_out_rule_commit already is); new pre_floor_file?/2 that (a) finds a path's first-ever git appearance via `git log --follow --diff-filter=A --format=%H --reverse -- <path>` (empty output = not yet in history = fails safe to not-pre-floor), then (b) checks `git merge-base --is-ancestor <first_add_sha> <floor>` -- exit 0 means the file's content already existed at/before the floor (grandfathered, hard_grandfathered not hard_new), non-0/error means it postdates the floor or git failed (fails safe to hard_new, opposite fail-safe direction from the existing advisory ARTIFACTS_OUT_SELF_REF check, justified in addendum Sec.1.4 because H6 is a hard gate). lint_file/2's :non_json branch now calls pre_floor_file?/2 instead of grandfathered?(\"H6\", path); grandfathered?/2 itself and the 6 H1/H2/H3 @grandfathered entries are untouched. Floor-commit choice (addendum Sec.2): the pre-merge tip of origin/main, captured at GIT_MERGE.md step 4's fetch and written into @h6_floor_commit as an ordinary content commit before step 5's checks, refreshed on every Step Final retry -- NOT this fix's own squash-merge commit sha, which structurally cannot be known at write time (same class of problem HANDOFF_PROTOCOL.md's commit_sha_list section documents at :464-572, 'a commit cannot record its own sha'). Read that section in full: its resolution for a value that must live INSIDE the very artifact it references is an optional write-back second commit that records only the predecessor, never itself (:524). H6's floor does NOT have that self-containment property (it lives in lib/mix/tasks/letflow.lint_handoffs.ex, a file disjoint from the handoffs/ files H6 classifies -- addendum Sec.2.2), so no write-back commit is needed at all: using the already-existing pre-merge origin/main tip (the commit immediately before the not-yet-existing squash commit) sidesteps the self-reference problem structurally rather than solving it via extra commits. Sec.2.3 states the exact operational fetch-then-set-attribute step for whoever runs the next Step Final attempt, and Sec.2.4/Sec.6 item 3 explicitly re-verify (with a worked example and a concrete test construction using real repo commits, not asserted) that a file introduced on main AFTER the floor still lands in hard_new. Disposition of the 12 existing {\"H6\", path} @grandfathered entries (10 original + 2 from the retry-1 rework): REMOVED, not kept -- addendum Sec.3/Sec.3.1 gives the exact deletion and the replacement dated comment; grandfathered?/2 is never called with \"H6\" again post-fix, so no overlap between the old list and the new rule is left in place. Also added a short superseded-pointer note at the top of the original design doc's Sec.3 so the two documents cannot be read as silently disagreeing. Original design's Sec.4.5 moduledoc bullet for H6 is restated in addendum Sec.4 to describe the commit-boundary mechanism instead of per-file grandfathering. No implementation code in either document -- module-attribute declaration, @spec lines, two git command literals, and case/pseudocode control-flow shapes only.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0262-h6-floor-commit-addendum.md",
+      "lib/letflow/design/iss0262-lint-handoffs-non-json-discovery.md"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0262-20260822",
       "commit_sha_list": [],
       "remote_branch": null,
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "ORCH routes to CODE-DESIGN-VALIDATOR to gate this addendum before ELIXIR-DEV implements Sec.1/Sec.2/Sec.3/Sec.4 of lib/letflow/design/iss0262-h6-floor-commit-addendum.md in lib/mix/tasks/letflow.lint_handoffs.ex, then a further Step Final retry resumes from GIT_MERGE.md step 4 on this same branch, performing addendum Sec.2.3's fetch-then-set-@h6_floor_commit operational step before running post-rebase checks."
   },
   "rework_count": 2,
   "max_rework": 3

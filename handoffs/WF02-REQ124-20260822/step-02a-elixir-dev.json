@@ -7,9 +7,9 @@
   "to_agent": "ELIXIR-DEV",
   "file": "handoffs/WF02-REQ124-20260822/step-02a-elixir-dev.json",
   "created_at": "2026-08-22T10:47:55Z",
-  "started_at": "2026-08-22T10:47:55Z",
-  "completed_at": "2026-08-22T10:50:47Z",
-  "status": "COMPLETED",
+  "started_at": "2026-08-22T10:58:41Z",
+  "completed_at": null,
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -33,7 +33,7 @@
     ]
   },
   "task": {
-    "description": "Implement lib/letflow/design/req124-mobile-tenant-config.md exactly: a new module Letflow.Routers.MobileTenantConfig (new file, e.g. lib/letflow/routers/mobile_tenant_config.ex) mounted at GET /api/mobile/tenant-config, forwarded from Letflow.Router immediately after the existing /api/tenant-config forward and before /api/v1 -- ahead of and outside Letflow.Plugs.ApiPipeline (so it never passes through Letflow.Plugs.AuthPipeline), mirroring exactly how Letflow.Routers.TenantConfig is already mounted. Do NOT modify Letflow.Plugs.ApiPipeline or Letflow.Plugs.AuthPipeline's plug chains, and do NOT modify Letflow.Routers.TenantConfig's existing 2-field response -- both stay untouched per the design's §10. Write the module's moduledoc per the design's §7 outline (must restate locally: why mounted ahead of ApiPipeline/AuthPipeline, the never-error rule, the exact 5-key allowlist statement with the 'adding a 6th key is a security change' framing, the unknown-slug/anti-enumeration justification, and OQ-1's explicit 'these four fields are global, not per-tenant' framing). Implement mobile_config_map/1 as a hand-built 5-key map literal (never derived from %Letflow.Identity.Tenant{} or Map.from_struct/1), resolve_realm_id/1 keyed only on ?slug= (no ?host= branch, per design OQ-2), and safe_get_tenant_by_slug/1 with the same exception-swallowing/no-exception-logging pattern as the existing module's safe_get_tenant_by_slug/1 (log only the caller-supplied slug, never the exception -- INV-4). Use the design's proposed literal defaults for locales/default_locale/branding/environment_kind (OQ-1/OQ-3, both design-validator-accepted as adjustable placeholders, not load-bearing) -- read from env at point of use where the design specifies (LETFLOW_ENVIRONMENT_KIND), hardcoded defaults otherwise. One MINOR fix from the design gate: use required(String.t()) not required(String) in any @spec/@type you write for the response map, per CODE-DESIGN-VALIDATOR's note. After implementing: mix compile --warnings-as-errors (fix and retry on FAIL), mix ecto.migrate is a no-op here since no migration is added -- confirm no migration file was created, mix format --check-formatted (fix formatting if it fails), then run the Step 2a self-review checklist below.",
+    "description": "Implement lib/letflow/design/req124-mobile-tenant-config.md exactly: a new module Letflow.Routers.MobileTenantConfig (new file, e.g. lib/letflow/routers/mobile_tenant_config.ex) mounted at GET /api/mobile/tenant-config, forwarded from Letflow.Router immediately after the existing /api/tenant-config forward and before /api/v1 -- ahead of and outside Letflow.Plugs.ApiPipeline (so it never passes through Letflow.Plugs.AuthPipeline), mirroring exactly how Letflow.Routers.TenantConfig is already mounted. Do NOT modify Letflow.Plugs.ApiPipeline or Letflow.Plugs.AuthPipeline's plug chains, and do NOT modify Letflow.Routers.TenantConfig's existing 2-field response -- both stay untouched per the design's §10. Write the module's moduledoc per the design's §7 outline (must restate locally: why mounted ahead of ApiPipeline/AuthPipeline, the never-error rule, the exact 5-key allowlist statement with the 'adding a 6th key is a security change' framing, the unknown-slug/anti-enumeration justification, and OQ-1's explicit 'these four fields are global, not per-tenant' framing). Implement mobile_config_map/1 as a hand-built 5-key map literal (never derived from %Letflow.Identity.Tenant{} or Map.from_struct/1), resolve_realm_id/1 keyed only on ?slug= (no ?host= branch, per design OQ-2), and safe_get_tenant_by_slug/1 with the same exception-swallowing/no-exception-logging pattern as the existing module's safe_get_tenant_by_slug/1 (log only the caller-supplied slug, never the exception -- INV-4). Use the design's proposed literal defaults for locales/default_locale/branding/environment_kind (OQ-1/OQ-3, both design-validator-accepted as adjustable placeholders, not load-bearing) -- read from env at point of use where the design specifies (LETFLOW_ENVIRONMENT_KIND), hardcoded defaults otherwise. One MINOR fix from the design gate: use required(String.t()) not required(String) in any @spec/@type you write for the response map, per CODE-DESIGN-VALIDATOR's note. After implementing: mix compile --warnings-as-errors (fix and retry on FAIL), mix ecto.migrate is a no-op here since no migration is added -- confirm no migration file was created, mix format --check-formatted (fix formatting if it fails), then run the Step 2a self-review checklist below.\n\nREWORK ITERATION 1: REVIEWER (Step 2d, handoffs/WF02-REQ124-20260822/step-02d-reviewer.json) FAILed this work on one narrow ground -- everything else in the diff (two-module split, response-map allowlists, mount placement, moduledocs) is approved as-is and must NOT be touched in this rework. The one issue: safe_get_tenant_by_slug/1 in lib/letflow/routers/mobile_tenant_config.ex is duplicated verbatim from lib/letflow/routers/tenant_config.ex's function of the same name (identical rescue clause, identical INV-4 log-the-slug-not-the-exception behavior, identical {:error, :lookup_failed} fallback), differing only in a log-message prefix string. Hoist this rescue-and-log wrapper into one shared implementation both router modules call -- e.g. fold it into Letflow.Identity.get_tenant_by_slug/1 itself so it never raises past the context boundary, or a small shared helper (e.g. Letflow.Identity.safe_get_tenant_by_slug/2 taking a caller-label for the log line). After the hoist: re-run mix compile --warnings-as-errors and mix format --check-formatted, confirm both existing router modules still call the shared function correctly, and complete this handoff as normal (status COMPLETED/FAILED, result filled in) exactly as any other step -- this is not a first dispatch, so there is no separate claim step beyond the usual IN_PROGRESS->COMPLETED flow.",
     "acceptance_criteria": [
       "mix compile --warnings-as-errors exits 0",
       "No migration file created under priv/repo/migrations/ (design adds none -- OQ-1 explicitly rejects one)",
@@ -42,7 +42,8 @@
       "mobile_config_map/1 returns exactly 5 keys (realm_url, locales, default_locale, branding, environment_kind), hand-built, never derived from the Tenant struct",
       "Letflow.Plugs.ApiPipeline and Letflow.Plugs.AuthPipeline are unchanged -- diff must show zero lines touched in either file",
       "Letflow.Routers.TenantConfig's existing 2-field response and behavior are unchanged -- diff must show zero lines touched in that file",
-      "Every code path (resolvable slug, unknown slug, missing slug, DB error) returns 200 with the full 5-field body -- no 404, no partial body"
+      "Every code path (resolvable slug, unknown slug, missing slug, DB error) returns 200 with the full 5-field body -- no 404, no partial body",
+      "REWORK ITERATION 1: safe_get_tenant_by_slug/1's rescue-and-log wrapper is hoisted into one shared implementation both lib/letflow/routers/mobile_tenant_config.ex and lib/letflow/routers/tenant_config.ex call, rather than duplicated verbatim in both modules"
     ]
   },
   "result": {
@@ -63,6 +64,6 @@
     },
     "next_action": "Route to SECURITY-REVIEWER (2c)"
   },
-  "rework_count": 0,
+  "rework_count": 1,
   "max_rework": 3
 }

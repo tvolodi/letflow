@@ -42,6 +42,18 @@
             "claim.name": "roles",
             "jsonType.label": "String"
           }
+        },
+        {
+          "name": "letflow-web-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "letflow-web",
+            "included.custom.audience": "",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
         }
       ]
     }

@@ -1290,3 +1290,5 @@
 2026-08-22T16:48:21Z | DISPATCH | WF-03 | WF03-ISS0279-20260822 | ORCH -> CODE-DESIGN-VALIDATOR | step-02b-code-design-validator.json PENDING committed at dispatch time
 2026-08-22T16:50:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0279-20260822 | CODE-DESIGN-VALIDATOR -> ORCH | step-02b-code-design-validator.json FAIL. AC6 violated: section 2.5 of the design contained a full function body instead of a bare @spec. 5/6 criteria passed; both open questions resolved with real rationale.
 2026-08-22T16:50:53Z | REWORK | WF-03 | WF03-ISS0279-20260822 | ORCH -> CODE-DESIGNER | step-02-code-designer.json REWORK ITERATION 1 -- strip defp grandfathered?/1 body to @spec-only, keep everything else
+2026-08-22T16:52:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0279-20260822 | CODE-DESIGNER -> ORCH | step-02-code-designer.json rework 1 PASS. Stripped grandfathered?/1 body to bare @spec, nothing else changed.
+2026-08-22T16:52:33Z | DISPATCH | WF-03 | WF03-ISS0279-20260822 | ORCH -> CODE-DESIGN-VALIDATOR | step-02b-code-design-validator.json re-validation PENDING committed at dispatch time

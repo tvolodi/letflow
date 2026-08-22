@@ -58,4 +58,34 @@ defmodule Letflow.ApplicationTest do
     # child spec rather than a coincidentally-matching literal.
     assert Process.whereis(provider_name)
   end
+
+  # REQ-128: lib/letflow/application.ex's start/2 reads
+  # `Keyword.get(oidc_config, :allow_unsafe_http, false)` and feeds it into
+  # Oidcc.ProviderConfiguration.Worker's `quirks: %{allow_unsafe_http: ...}`
+  # opt, which relaxes oidcc's default HTTPS-only discovery-document
+  # validation. config/dev.exs and config/test.exs deliberately set
+  # `allow_unsafe_http: true` (the local Keycloak container serves discovery
+  # over plain HTTP, no TLS termination in front of it) — config/prod.exs
+  # deliberately does NOT set the key at all, so `Keyword.get/3`'s `false`
+  # default is what holds a real deployed issuer to oidcc's safe
+  # HTTPS-only validation.
+  #
+  # Nothing else in this suite exercises config/prod.exs specifically — every
+  # other test in this file inspects the *currently loaded* env
+  # (`Application.fetch_env!/2`), which under `mix test` is always
+  # config/test.exs's, never prod's. This test reads config/prod.exs's own
+  # source directly via Config.Reader, independent of MIX_ENV, so a future
+  # accidental `allow_unsafe_http: true` added to config/prod.exs fails this
+  # test instead of silently shipping a relaxed-validation production issuer.
+  test "config/prod.exs's :oidc config does not set :allow_unsafe_http, so application.ex's Keyword.get default (false) holds a real production issuer to safe HTTPS-only discovery validation" do
+    prod_config_path = Path.expand("../../config/prod.exs", __DIR__)
+
+    config = Config.Reader.read!(prod_config_path)
+    oidc_config = Keyword.fetch!(config[:letflow], :oidc)
+
+    refute Keyword.has_key?(oidc_config, :allow_unsafe_http),
+           "config/prod.exs must not set :allow_unsafe_http -- doing so would relax " <>
+             "oidcc's HTTPS-only discovery validation for a real production issuer " <>
+             "(see lib/letflow/application.ex's provider_configuration_opts comment)"
+  end
 end

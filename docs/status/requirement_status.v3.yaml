@@ -267,6 +267,15 @@ history:
       re-derived all nine criteria and the test attribution from scratch
       (not trusting this run's own reports) -- PASS. Status flipped
       pending -> done here.
+  - req: REQ-118
+    event: started
+    agent: ELIXIR-DEV
+    at: "2026-08-22T10:09:04Z"
+    note: >
+      WF02-REQ118-20260822 (queue task 235) started. CORS support for the
+      browser-origin SPA -- allowed-origin list from config (mirroring
+      :problems_base_uri's Application.compile_env pattern), no wildcard
+      default, tenant-data-path change so SECURITY-REVIEWER is a hard gate.
   - req: SCOPE-CHANGE
     event: done
     agent: ISSUE-FIXER
@@ -297,3 +306,37 @@ history:
       the two files above changed, and a standalone re-run of one heavily
       affected file (registry_test.exs, 93 of the 358 failures) passed
       28/28 clean.
+  - req: REQ-118
+    event: done
+    agent: ELIXIR-DEV
+    at: "2026-08-22T10:29:11Z"
+    note: >
+      WF02-REQ118-20260822 (queue task 235) done. Added Letflow.Plugs.Cors,
+      mounted in Letflow.Router ahead of both the /api/tenant-config and
+      /api/v1 forwards. Allowed origins from config
+      (:letflow, :cors_allowed_origins), read via Application.get_env/3 at
+      request time (deliberately not compile_env, unlike :problems_base_uri
+      -- origins differ per deploy env, no rebuild needed to change them),
+      default ["http://localhost:5173", "http://127.0.0.1:4173"] (no
+      wildcard); prod (config/runtime.exs) sources CORS_ALLOWED_ORIGINS,
+      fails closed to [] when unset. No Access-Control-Allow-Credentials
+      ever emitted (SPA's bearer token is held in-memory, sent via
+      Authorization header, never cookies -- confirmed by grep of
+      web/src/api/client.ts, independently re-checked by
+      SECURITY-REVIEWER and RELEASE-VALIDATOR). Preflight (OPTIONS)
+      implemented (Authorization is not CORS-safelisted, so the browser
+      preflights every authenticated call) -- 204 short-circuit with the
+      full preflight header set. Unlisted origin gets no CORS headers
+      (rejection is header-omission, browser-enforced, not a server 403).
+      Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS) ->
+      implementation -> SECURITY-REVIEWER (PASS, all INV-1..INV-8 assessed)
+      -> REVIEWER (PASS) -> TEST-DESIGNER (18 tests, all router-dispatched
+      via Letflow.Router.call/2) -> TEST-DESIGN-VALIDATOR (PASS) ->
+      TEST-RUNNER (1733/1734 full suite; lone failure is pre-existing
+      unrelated S8/S9 stage-activation drift,
+      Mix.Tasks.Letflow.CheckDeferralStalenessTest, tracked earlier in this
+      volume) -> RELEASE-VALIDATOR (PASS, independently re-derived). No
+      wildcard default anywhere; unlisted-origin rejection covered by a
+      test asserting header absence (not a status code). No changes under
+      web/ (git diff --stat -- web/ empty throughout). No FAIL-then-fix
+      cycles this run -- every gate passed on first attempt.

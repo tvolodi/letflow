@@ -210,7 +210,7 @@ volumes:
     path: docs/status/requirement_status.v3.yaml
     status: current
     opened: 2026-08-22
-    entries: 4
+    entries: 6
     note: >
       Opened by ISS-0263's roll (WF03-ISS0263-20260822), successor to volume 2.
       Created with volume 2's header text verbatim (volume number, opening date
@@ -240,6 +240,23 @@ volumes:
       recount-every-time rule: 4 on-disk `- req:` entries in
       requirement_status.v3.yaml (up from 3 declared pre-rebase and 2
       computed by this run's own pre-rebase commit against its stale base).
+      Incremented to 5 by WF02-REQ118-20260822 (ELIXIR-DEV)'s Step Final
+      rebase, which conflicted at requirement_status.v3.yaml's tail against
+      both WF02-REQ128-20260822's and WF03-ISS0264-20260822's entries (all
+      landed on main after this run's Step 00 commit). Composed in
+      chronological `at:` order -- REQ-128 started (09:26:00Z), REQ-128 done
+      (10:04:09Z), REQ-118 started (10:09:04Z), ISS-0264 done (10:13:48Z) --
+      this run's own started-event sorted between REQ-128 done and ISS-0264
+      done, so it was reordered into that position rather than appended
+      after ISS-0264's entry. Recounted from the composed file: 5 on-disk
+      `- req:` entries in requirement_status.v3.yaml. This run's own
+      done-event (appended after Step 00, ahead of this rebase) sorts after
+      all of the above by `at:` and needs no reordering when it replays.
+      Incremented to 6 when this run's own done-event (10:29:11Z) replayed
+      during the same Step Final rebase's second conflict: it lands after
+      ISS-0264's done-event (10:13:48Z) with no reordering needed, exactly
+      as predicted immediately above. 6 is the recounted on-disk `- req:`
+      total in requirement_status.v3.yaml.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

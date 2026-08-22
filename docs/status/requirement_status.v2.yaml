@@ -1296,3 +1296,29 @@ history:
       cross-references consistent across the three touched docs, confirmed
       REQ-120 not silently settled, confirmed web/src/ and
       docs/requirements.yaml scope boundaries held.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-08-22T08:36:06Z"
+    note: >
+      WF03-ISS0260-20260822 -- resolved ISS-0260/GH#507 (EngineConcurrencyTest AC1
+      timing-assertion flake under full 16-way scripts/test_parallel.sh load).
+      Reproduced the flake directly (two real 16-way runs, ratios approx 34.0x/29.42x,
+      both far below the approx 100x a genuine global-lock regression would produce).
+      Made the assertion load-aware (30x default / 60x under TEST_PARALLEL_GROUP,
+      validated TEST_AC1_TIMING_MULTIPLIER override) rather than uniformly loosening
+      or dropping the check, per lib/letflow/design/iss0260-ac1-timing-flake.md (4
+      design-gate rounds). Full WF-03 chain ran: CODE-DESIGNER/CODE-DESIGN-VALIDATOR
+      (3 rounds, 2 citation corrections), ELIXIR-DEV (commit 3c08067),
+      SECURITY-REVIEWER (not applicable, no tenant-data path), REVIEWER (PASS),
+      TEST-DESIGNER (mutation-tested new ac1_timing_multiplier/0 helper, commit
+      7475fdb), TEST-DESIGN-VALIDATOR (independently re-ran a reported mutant), and
+      TEST-RUNNER -- whose first full-suite run caught a real regression the earlier
+      gates missed (the new tests' on_exit unconditionally deleted the OS-process-
+      global TEST_PARALLEL_GROUP env var, silently defeating the fix under real
+      seed-randomized ordering); TEST-DESIGNER fixed it (commit 1fbd86b,
+      capture-and-restore), TEST-DESIGN-VALIDATOR and TEST-RUNNER both re-verified
+      with two fresh full scripts/test_parallel.sh runs (1694/1695 passed both times,
+      remaining failure is ISS-0119's own pre-existing unrelated roll-rule-ceiling
+      failure on this very file). Merged to main, GH#507 closed, queue task 260
+      released.

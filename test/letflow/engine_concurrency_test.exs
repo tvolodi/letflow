@@ -62,6 +62,37 @@ defmodule Letflow.EngineConcurrencyTest do
 
   @instance_count 100
 
+  # ISS-0260 -- AC1's "no global lock" wall-clock proxy multiplier, split by load
+  # regime (design doc lib/letflow/design/iss0260-ac1-timing-flake.md §3.1-§3.3).
+  # `@ac1_timing_multiplier_default` (30x, unchanged) applies to a plain `mix test`
+  # run; `@ac1_timing_multiplier_parallel` (60x) applies only when
+  # `TEST_PARALLEL_GROUP` is set (a real `scripts/test_parallel.sh` N-way
+  # partition), where real cross-partition Postgres/scheduler contention pushes the
+  # ratio higher than in an uncontended run. `TEST_AC1_TIMING_MULTIPLIER`, when set,
+  # overrides both unconditionally, mirroring decision 0009's env-knob pattern and
+  # `test_parallel.sh`'s own `TEST_MAX_CONNECTIONS` validation style (lines 124-127
+  # there): it must be a positive integer or the test fails loudly, naming the bad
+  # value, rather than silently falling back to a default.
+  @ac1_timing_multiplier_default 30
+  @ac1_timing_multiplier_parallel 60
+
+  defp ac1_timing_multiplier do
+    case System.get_env("TEST_AC1_TIMING_MULTIPLIER") do
+      nil ->
+        case System.get_env("TEST_PARALLEL_GROUP") do
+          nil -> @ac1_timing_multiplier_default
+          _group -> @ac1_timing_multiplier_parallel
+        end
+
+      value ->
+        if Regex.match?(~r/^[1-9][0-9]*$/, value) do
+          String.to_integer(value)
+        else
+          flunk("TEST_AC1_TIMING_MULTIPLIER='#{value}' is not a positive integer")
+        end
+    end
+  end
+
   # ---------------------------------------------------------------------------------
   # Fixtures / helpers -- copied (same signatures/bodies) from
   # engine_complete_task_test.exs per design §3.2, this file provisions its own
@@ -302,8 +333,18 @@ defmodule Letflow.EngineConcurrencyTest do
       # Loose proxy, not a tight bound (design §3.4/§6 OQ2): genuine per-row locking
       # lets @instance_count completions overlap, so total time stays within a small
       # multiple of one call's own time; a global mutex/table-lock design would push
-      # this toward ~@instance_count x instead.
-      assert concurrent_micros < baseline_micros * 30
+      # this toward ~@instance_count x instead. The multiplier is load-regime-aware
+      # (ISS-0260, lib/letflow/design/iss0260-ac1-timing-flake.md §3) -- 30x under
+      # plain `mix test`, 60x under a real `scripts/test_parallel.sh` N-way
+      # partition (`TEST_PARALLEL_GROUP` set), or an explicit
+      # `TEST_AC1_TIMING_MULTIPLIER` override.
+      multiplier = ac1_timing_multiplier()
+      ratio = concurrent_micros / baseline_micros
+
+      assert concurrent_micros < baseline_micros * multiplier,
+             "AC1 timing ratio #{Float.round(ratio, 2)}x exceeded multiplier #{multiplier}x " <>
+               "(TEST_PARALLEL_GROUP #{if System.get_env("TEST_PARALLEL_GROUP"), do: "set", else: "unset"}) " <>
+               "-- baseline_micros=#{baseline_micros}, concurrent_micros=#{concurrent_micros}"
     end
   end
 

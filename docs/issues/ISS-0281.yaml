@@ -1,0 +1,26 @@
+id: ISS-0281
+title: "test/docs/requirement_status_invariants_test.exs A9 fails on main -- declared-vs-actual entry-count drift on docs/status/requirement_status.v3.yaml"
+discovered_by: ELIXIR-DEV (WF03-ISS0276-20260822, Step Final)
+discovered_in_run: WF03-ISS0276-20260822
+discovered_at: 2026-08-22T16:22:13Z
+severity: MINOR
+description: >
+  Surfaced post-rebase during WF03-ISS0276-20260822's Step Final on main:
+  test/docs/requirement_status_invariants_test.exs's A9 assertion (declared
+  entry count vs actual entry count for docs/status/requirement_status.v3.yaml)
+  fails on main, unrelated to that run's own diff. Traced structurally to
+  commit 2687547 (WF03-ISS0278-20260822, PR #552, "reconcile four
+  zero-comment closed GH issues"), which was already on main before
+  ISS-0276's branch rebased onto it -- that run appears to have appended
+  run-history entries to requirement_status.v3.yaml without updating its own
+  declared entry-count header (or vice versa), the same class of
+  self-reported-vs-actual drift A9 exists to catch (see ISS-0263's prior
+  instance of this class on requirement_status.v2.yaml). Not fixed by
+  WF03-ISS0276-20260822 (no queue-write authorization was in scope for that
+  run beyond releasing its own task 276).
+affected_files:
+  - docs/status/requirement_status.v3.yaml
+  - test/docs/requirement_status_invariants_test.exs
+queue_task_id: 281
+github_issue: 554
+status: open

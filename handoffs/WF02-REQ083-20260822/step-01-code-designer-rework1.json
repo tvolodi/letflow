@@ -1,0 +1,66 @@
+{
+  "handoff_id": "b2f7e6c1-9d3a-4f2e-8b6d-1a5c7e9f0d38",
+  "run_id": "WF02-REQ083-20260822",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ083-20260822/step-01-code-designer-rework1.json",
+  "created_at": "2026-08-22T05:56:26Z",
+  "started_at": "2026-08-22T05:56:26Z",
+  "completed_at": "2026-08-22T05:56:26Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-083"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ083-20260822/step-00-git-setup.json",
+      "handoffs/WF02-REQ083-20260822/step-01-code-designer.json",
+      "handoffs/WF02-REQ083-20260822/step-01b-design-validator.json",
+      "handoffs/WF02-REQ083-20260822/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ083-20260822/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req083-task-routes-read.md",
+      "handoffs/WF02-REQ083-20260822/step-02c-security-reviewer.json",
+      "lib/letflow/identity/role_registry.ex",
+      "lib/letflow/identity/tenant_role.ex",
+      "lib/letflow/identity/group_member.ex",
+      "lib/letflow/identity.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/engine/task.ex",
+      "lib/letflow/tasks.ex"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 1 REWORK (attempt 1 of 3) -- revise lib/letflow/design/req083-task-routes-read.md's resolve_principal_scope/2 spec (section 3.4) to fix SECURITY-REVIEWER's Step 2c INV-1 FAIL: the original design's ROLE-resolution step called Letflow.Identity.RoleRegistry.list_roles/0, which queries TenantRole with no :prefix option -- a real cross-tenant/crash gap once the legacy public.tenant_role table is dropped per Decision 0006, since no per-request search_path mechanism exists in production. SECURITY-REVIEWER's own recommended fix (the lower-friction, in-scope option) was to query TenantRole directly with an explicit :prefix, staying inside this run's owned_modules rather than adding a prefix-accepting variant to Letflow.Identity.RoleRegistry (which would cross the owned_modules boundary excluding Letflow.Identity).",
+    "acceptance_criteria": [
+      "resolve_principal_scope/2's ROLE-name resolution step no longer routes through Letflow.Identity.RoleRegistry.list_roles/0",
+      "the replacement query against Letflow.Identity.TenantRole is explicitly :prefix-scoped, using the same prefix already threaded through this function's own opts, matching this codebase's established Repo.all(query, prefix: prefix) convention",
+      "no function added to Letflow.Identity or Letflow.Identity.RoleRegistry -- fix stays inside lib/letflow/tasks.ex, this run's own owned_modules",
+      "USER/GROUP resolution paths (list_tasks/2 point 4, GroupMember read in resolve_principal_scope/2 step 1) left untouched, matching SECURITY-REVIEWER's PASS on those",
+      "design's cross-module-dependencies table (section 6) and INV-TR83-5 updated to reflect the new TenantRole dependency and the tenant-scoping guarantee",
+      "REQ-083's AC2 (inbox scoping via USER/GROUP/ROLE, four explicit assertions) still fully supported by the revised design -- no behavioral change to which tasks are included, only how role names are resolved"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read SECURITY-REVIEWER's Step 2c finding (step-02c-security-reviewer.json) in full: RoleRegistry.list_roles/0 (lib/letflow/identity/role_registry.ex:38-40) issues Repo.all(from(t in TenantRole, ...)) with zero :prefix option and zero per-request search_path mechanism exists in production code, and this design's original call to it (via resolve_principal_scope/2) was the first production caller ever to reach that gap from a live tenant-scoped API surface -- an INV-1 violation (either an undefined_table crash post-drop of legacy public.tenant_role, or an unscoped cross-tenant read pre-drop). Read lib/letflow/identity/role_registry.ex and the TenantRole schema (lib/letflow/identity/tenant_role.ex -- a plain public Ecto.Schema struct with :name and :group_id fields, no encapsulation to violate by reading it directly) and confirmed the established :prefix convention by grepping lib/letflow/identity.ex (Repo.all(query, prefix: prefix) at lines 247, 412, 500; Repo.get(Schema, id, prefix: prefix) at 261, 278, 299, 384, 389, 482, 527, 969).\n\nRevised lib/letflow/design/req083-task-routes-read.md section 3.4 point 2: resolve_principal_scope/2's role-name resolution now specifies a direct query -- `from(t in Letflow.Identity.TenantRole, where: t.group_id in ^group_ids_from_step_1, select: %{name: t.name, group_id: t.group_id}) |> Repo.all(prefix: prefix)` -- using the same `prefix` value already threaded into this function's own `opts` (sourced transitively from Context.scoped_repo_opts/1's tenant-schema name, per section 4, never a path/query/header value). This mirrors the GroupMember query already specified for step 1 of the same function, and the same Repo.all(query, prefix: prefix) mechanism used throughout the codebase and elsewhere in this same design (list_tasks/2 section 3.1 point 7, get_task/2 section 3.2). No function was added to Letflow.Identity or Letflow.Identity.RoleRegistry -- the fix stays entirely inside lib/letflow/tasks.ex (this run's owned_modules), reading the TenantRole schema module directly rather than through RoleRegistry's unscoped list_roles/0. Considered SECURITY-REVIEWER's alternative (a prefix-accepting variant added to RoleRegistry itself) and rejected it as the higher-friction, out-of-scope option per SECURITY-REVIEWER's own framing -- the direct-query approach is workable and was applied.\n\nAlso updated: the USER/GROUP resolution paths (list_tasks/2 point 4's scoping where-clauses, and resolve_principal_scope/2 step 1's GroupMember read) were left completely untouched, matching SECURITY-REVIEWER's PASS on those; section 6 (cross-module dependencies) now lists Letflow.Identity.TenantRole as a direct :prefix-scoped read dependency in place of RoleRegistry.list_roles/0, with an inline rework note; INV-TR83-5 now states both of resolve_principal_scope/2's queries are explicitly :prefix-scoped; section 0 (sources read) gained two new entries (the Step 2c handoff and the re-read role_registry.ex); a rework banner was added directly under the doc's title block for visibility. No other section (list_tasks/2, get_task/2, the router, response allowlists, invariants table, AC-traceability table) was changed -- this is a narrow, scoped revision of exactly the flagged mechanism, not a redesign.\n\nThe new query is genuinely tenant-scoped: it uses Ecto's `prefix:` option on Repo.all/2, which sets the Postgres schema search path for that single query to the tenant's own provisioned schema (the identical mechanism REQ-072's scoped_repo_opts/1 already establishes and every other passing query in this design and in lib/letflow/identity.ex already uses) -- not a session-level SET search_path, not a filter applied after an unscoped read, but the query itself executing against `<tenant_schema>.tenant_role` rather than `public.tenant_role` or any other tenant's schema.",
+    "artifacts_out": [
+      "lib/letflow/design/req083-task-routes-read.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ083-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ083-20260822",
+      "push_status": "pending"
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b) for rework re-validation"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

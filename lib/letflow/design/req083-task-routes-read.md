@@ -16,6 +16,17 @@ own acceptance criterion demands.
 tables only, matching every prior S4 design doc's convention (`req072`, `req067`,
 `req066`, `req074`).
 
+**Rework note (rework_count 1, `WF02-REQ083-20260822`, 2026-08-22).**
+SECURITY-REVIEWER's Step 2c gate FAILed this design's original §3.4 on INV-1: it had
+`resolve_principal_scope/2` resolve ROLE-held tasks via `Letflow.Identity.RoleRegistry.
+list_roles/0`, which queries `TenantRole` with no `:prefix` — a real tenant-isolation gap
+once the legacy `public.tenant_role` table is dropped per Decision 0006. §3.4 point 2 now
+specifies a direct, explicitly `:prefix`-scoped `Ecto.Query` against
+`Letflow.Identity.TenantRole` instead, staying inside this run's `owned_modules`
+(`lib/letflow/tasks.ex`) with no change to `Letflow.Identity`/`RoleRegistry`. See §3.4,
+§6, and INV-TR83-5 for the full revision; §0 lists the security finding read for this
+rework.
+
 ---
 
 ## 0. Sources read for this design
@@ -68,10 +79,17 @@ tables only, matching every prior S4 design doc's convention (`req072`, `req067`
   bearing for §3.4's design (a direct `Ecto.Query` against `Letflow.Identity.GroupMember`,
   not a new `Letflow.Identity` function, since `Letflow.Identity`/its submodules are
   explicitly **not** an owned module of this run per the Step 00 handoff).
-- `lib/letflow/design/req020-role-registry.md` (full) — `Letflow.Identity.RoleRegistry.
-  list_roles/0`'s exact contract (`[TenantRole.t()]`, each `%{name:, group_id:}` — a role
-  *name* maps to exactly one *group*), the mechanism §3.4 uses to resolve "roles a user
-  holds" without any new schema or any new `Letflow.Identity` function.
+- `lib/letflow/design/req020-role-registry.md` (full) — `Letflow.Identity.TenantRole`'s
+  exact shape (`%{name:, group_id:}` — a role *name* maps to exactly one *group*), the
+  schema §3.4 reads directly (rather than through `RoleRegistry.list_roles/0`, per the
+  rework note in §3.4 point 2) to resolve "roles a user holds" without any new schema or
+  any new `Letflow.Identity` function.
+- `handoffs/WF02-REQ083-20260822/step-02c-security-reviewer.json` (SECURITY-REVIEWER's
+  Step 2c FAIL, INV-1) and `lib/letflow/identity/role_registry.ex` (re-read for this
+  rework) — confirmed `RoleRegistry.list_roles/0` (lines 38-40) has no `:prefix` option
+  and no per-request `search_path` mechanism exists in production code; this rework
+  replaces this design's original call to it with a direct `:prefix`-scoped query
+  against `Letflow.Identity.TenantRole` (§3.4 point 2).
 - `lib/letflow/engine/instance_projection.ex` — confirmed `correlation_key` (`:string`,
   nullable) exists on `instance_projections`, the join `get_task/2`'s detail response
   needs to match R-Co's `serializeTaskDetail` shape (§6.2).
@@ -314,8 +332,9 @@ not left for a reader to discover by diffing against R-Co.**
 **`Letflow.Identity`/its submodules are a read-only dependency of this run (Step 00
 handoff's `owned_modules` explicitly excludes them) — no new function is added to
 `Letflow.Identity` or `Letflow.Identity.RoleRegistry`.** Group and role resolution is
-built from the two mechanisms `Letflow.Identity` already exposes for exactly this data,
-composed here rather than reimplemented:
+built from two direct, `:prefix`-scoped reads against `Identity`-owned schemas —
+composed here rather than reimplemented, and (per the rework note in point 2 below) never
+routed through an `Identity`-owned function whose own query is not itself tenant-scoped:
 
 1. **Group ids the user belongs to** — a plain `Ecto.Query` against
    `Letflow.Identity.GroupMember` (the existing schema, §0): `from(m in
@@ -328,17 +347,50 @@ composed here rather than reimplemented:
    (`add_group_member/3`/`remove_group_member/3` still own all writes to this table; this
    function only ever reads).
 2. **Role names the user holds** — derived, not stored directly: a user "holds" a role
-   iff the role's bound group (`Letflow.Identity.RoleRegistry.list_roles/0`, already
-   shipped, §0 — each `TenantRole.t()` is `%{name:, group_id:}`) is one of the group ids
-   from step 1. Concretely: `Letflow.Identity.RoleRegistry.list_roles/0` filtered to
-   `role.group_id in group_ids_from_step_1`, mapped to `role.name`. **This is the entire
-   role-resolution mechanism — no new role-assignment table, no per-user role column
-   anywhere in this schema; a role is, by REQ-020's own design, exactly "a name bound to
-   a group," so "roles a user holds" is structurally "roles whose bound group the user
-   belongs to."** Calling `RoleRegistry.list_roles/0` (an existing, already-tested,
-   already-shipped function) is the "through `Letflow.Identity`" the requirement text
-   requires — this design adds no new query against `tenant_role` beyond that one
-   existing call.
+   iff the role's bound group (`Letflow.Identity.TenantRole`, the schema `RoleRegistry`
+   itself is built on, §0 — each row is `%{name:, group_id:}`) is one of the group ids
+   from step 1. **REWORK (rework_count 1, run `WF02-REQ083-20260822`): this design no
+   longer calls `Letflow.Identity.RoleRegistry.list_roles/0` for this step.**
+   SECURITY-REVIEWER's Step 2c gate (`handoffs/WF02-REQ083-20260822/step-02c-security-reviewer.json`,
+   INV-1 FAIL) found that `RoleRegistry.list_roles/0`
+   (`lib/letflow/identity/role_registry.ex:38-40`) issues `Repo.all(from(t in TenantRole,
+   ...))` with **no `:prefix` option** and no per-request `search_path` mechanism exists
+   anywhere in production code — `tenant_role` is a per-tenant-schema table since
+   migration `20260819000002_create_tenant_role_tenant_scoped.exs` (Decision 0006), and
+   this design's original call to `list_roles/0` would have been the first production
+   caller to reach that gap from a live tenant-scoped API surface (either an unhandled
+   `undefined_table` crash post-drop of the legacy `public.tenant_role`, or an unscoped
+   cross-tenant read pre-drop — both INV-1 violations). This design now specifies a
+   **direct, explicitly `:prefix`-scoped query against `Letflow.Identity.TenantRole`**
+   instead, composed here exactly the way step 1's `GroupMember` query already is —
+   mirroring, not inventing, the codebase's established `Repo.all(query, prefix: prefix)`
+   convention (confirmed at e.g. `lib/letflow/identity.ex:247,412,500` and this same
+   design's own §3.1 point 7/§3.2): `from(t in Letflow.Identity.TenantRole, where:
+   t.group_id in ^group_ids_from_step_1, select: %{name: t.name, group_id: t.group_id})
+   |> Repo.all(prefix: prefix)`, mapped to `role.name`. The `prefix` here is the **same**
+   `prefix` value already threaded into this function's own `opts` (§4's `[prefix:
+   String.t()]` — sourced, transitively, from `Context.scoped_repo_opts/1`'s tenant-schema
+   name, never a path/query/header value), so this query is scoped to the calling
+   tenant's own schema by construction, identically to `GroupMember`'s own read in
+   step 1 and to `list_tasks/2`/`get_task/2`'s own `Repo.all/Repo.one` calls (§3.1 point
+   7, §3.2). **This is still a read of an `Identity`-owned table, not a reimplementation
+   of `Letflow.Identity.RoleRegistry`'s own role-assignment *write* logic**
+   (`upsert_role/2` still owns every write to `tenant_role`; this function only ever
+   reads, exactly as originally specified for `GroupMember`) — only the *read mechanism*
+   changed, from an unscoped call through `RoleRegistry.list_roles/0` to a directly
+   `:prefix`-scoped `Ecto.Query` against the same underlying schema module
+   (`Letflow.Identity.TenantRole`), which `Letflow.Identity.RoleRegistry` already depends
+   on and re-exports no encapsulation over (it is a plain, public, `use Ecto.Schema`
+   struct with ordinary fields, §0 — reading it directly does not reach into
+   `RoleRegistry`'s private implementation). **`Letflow.Identity`/its submodules remain a
+   read-only dependency of this run** (Step 00's `owned_modules` boundary, unchanged) —
+   this fix stays inside `lib/letflow/tasks.ex`, this run's own owned module, and adds no
+   function to `Letflow.Identity.RoleRegistry` or `Letflow.Identity` (the alternative
+   SECURITY-REVIEWER flagged — a prefix-accepting variant of `list_roles/0` added to
+   `RoleRegistry` itself — was considered and rejected here as the higher-friction option
+   that crosses this run's `owned_modules` boundary for no benefit the direct-query
+   approach doesn't already provide; SECURITY-REVIEWER's own finding named the direct
+   query as the lower-friction, in-scope fix).
 3. Returns `%{user_id: user_id, group_ids: group_ids, role_names: role_names}`.
 
 **No caching, no memoization across requests.** Both queries run fresh on every call —
@@ -596,8 +648,8 @@ now.
 |---|---|---|
 | `Letflow.Engine.Task` (REQ-043, shipped, unmodified) | `Letflow.Tasks` → that | Schema reads only |
 | `Letflow.Engine.InstanceProjection` (shipped, unmodified) | `Letflow.Tasks` → that | `correlation_key` join, `get_task/2` only |
-| `Letflow.Identity.GroupMember` (REQ-074, shipped, unmodified) | `Letflow.Tasks` → that | Direct read query, `resolve_principal_scope/2` only (§3.4) |
-| `Letflow.Identity.RoleRegistry.list_roles/0` (REQ-020, shipped, unmodified) | `Letflow.Tasks` → that | `resolve_principal_scope/2` only (§3.4) |
+| `Letflow.Identity.GroupMember` (REQ-074, shipped, unmodified) | `Letflow.Tasks` → that | Direct `:prefix`-scoped read query, `resolve_principal_scope/2` only (§3.4) |
+| `Letflow.Identity.TenantRole` (REQ-020, shipped, unmodified) | `Letflow.Tasks` → that | Direct `:prefix`-scoped read query, `resolve_principal_scope/2` only (§3.4) — **rework (rework_count 1): no longer via `Letflow.Identity.RoleRegistry.list_roles/0`, which lacks `:prefix` scoping (SECURITY-REVIEWER Step 2c INV-1 FAIL); this design now reads the `TenantRole` schema directly with the caller's `prefix`, same mechanism as the `GroupMember` row above** |
 | `Letflow.Api.Context.scoped_repo_opts/1` (REQ-072, shipped, unmodified) | `Letflow.Routers.Tasks` → that | Every handler's first call (§4) |
 | `Letflow.Api.Pagination.*` (REQ-067, shipped, unmodified) | `Letflow.Tasks`/`Letflow.Routers.Tasks` → that | Cursor decode/encode, page-size parse/validate |
 | `Letflow.Api.Authorization.*` (REQ-069, shipped) | `Letflow.Routers.Tasks` → that | **One new clause added** (`endpoint_policy_key("GET", "/tasks/inbox")`, §5.3) — the only non-`Letflow.Tasks`/non-router file this design touches |
@@ -621,7 +673,7 @@ not-mandated performance question (supporting indexes).
 | INV-TR83-2 | `AllowWithRowFilter`'s task-worker row scope can never be widened by a caller-supplied `assignee_id`/`instance_id`/`status` param | §5.2 point 3, §5.3 point 2 |
 | INV-TR83-3 | Cross-tenant and never-existed `get_task/2` lookups are the same code path, same `{:error, :not_found}`, same `Response.not_found/1` call | §3.2, §5.4 |
 | INV-TR83-4 | Every serialized response is a hand-built allowlist map; no `Jason.Encoder` derive, no struct-wholesale encoding | §5.5 |
-| INV-TR83-5 | `resolve_principal_scope/2` performs only reads against `Identity`-owned schemas/functions — zero writes, zero reimplementation of `Letflow.Identity`'s own membership-management logic | §3.4 |
+| INV-TR83-5 | `resolve_principal_scope/2` performs only reads against `Identity`-owned schemas — zero writes, zero reimplementation of `Letflow.Identity`'s own membership-management logic — and both of its two queries (`GroupMember`, `TenantRole`) are themselves explicitly `:prefix`-scoped to the caller's tenant, not routed through any unscoped `Letflow.Identity` function | §3.4 |
 | INV-TR83-6 | All three routes require `:TasksRead` (via `evaluate_access/2`'s existing `:TasksList`/`:TasksGetById` → `required_permission` chain, unchanged); `Deny403` → 403 on every one | §5.1 |
 
 ---

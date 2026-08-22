@@ -108,3 +108,87 @@ handoff/PR for the quoted output.
   raised here; `TEST_MAX_CONNECTIONS` lets an operator tell this script
   about a raised ceiling if one is made later, but making that change is
   out of this issue's scope.
+
+## Addendum (2026-08-23, ISS-0287) — superuser-reserved and non-pooled-connection
+   headroom
+
+ISS-0287 (queue task 287, GH#569): even with N=4 (ISS-0219's documented remedy for
+this project's own dev hosts), a same-day full-suite run hit a mid-run,
+timing-dependent `too_many_connections`/`DBConnection.ConnectionError` failure —
+distinct from ISS-0194 (the original quadratic-scaling defect this decision fixes)
+and from ISS-0222 (the launch-time spike noted in the script's own comments).
+
+Root cause: the Decision above's `budget = TEST_MAX_CONNECTIONS -
+TEST_CONNECTION_HEADROOM` formula treats TEST_MAX_CONNECTIONS as the full usable
+ceiling. It is not: Postgres reserves `superuser_reserved_connections` (measured
+live = 3 on this project's dev/test Postgres) off the top, unusable by the test
+role's regular connections regardless of headroom — silently shrinking the
+formula's effective margin by that amount. Separately, exactly one test in this
+suite (`test/support/tenant_schema_reaper_test.exs`'s ISS-0110 liveness-guard test)
+opens a real Postgrex connection outside `Letflow.Repo`'s Ecto pool entirely, so it
+is invisible to the `N × TEST_POOL_SIZE` arithmetic — at most 1 concurrently,
+confirmed by grep across `test/` for `Postgrex.start_link` finding no other
+occurrence. Neither gap is a defect in the connections themselves: both are
+deliberate and load-bearing for their own test's acceptance criteria (see
+`lib/letflow/design/iss0287-connection-pool-headroom-fix.md` §1). The gap is that
+the clamp formula never accounted for either quantity.
+
+**This addendum does not reopen Option B vs. A/C/D above** — the clamp-not-hard-fail
+shape stands; this only corrects two under-counted terms feeding its `budget`
+computation.
+
+Formula, extended (full derivation and per-knob rationale:
+`lib/letflow/design/iss0287-connection-pool-headroom-fix.md` §2):
+
+    usable_ceiling = TEST_MAX_CONNECTIONS − TEST_SUPERUSER_RESERVED   (default 3)
+    budget         = usable_ceiling − TEST_CONNECTION_HEADROOM − TEST_NONPOOL_CONNECTION_RESERVE   (default 2)
+    computed       = budget / N
+    TEST_POOL_SIZE = computed, or TEST_MIN_POOL_SIZE if computed is smaller, with a WARN
+
+Two new knobs, each answering a question distinct from the three this decision
+already separates (deliberately not folded into `TEST_CONNECTION_HEADROOM`, whose
+meaning — ad-hoc human/tooling connections — is unchanged):
+
+- `TEST_SUPERUSER_RESERVED` (default 3): what Postgres itself reserves
+  (`superuser_reserved_connections`), a server-config fact, not a test-suite fact.
+- `TEST_NONPOOL_CONNECTION_RESERVE` (default 2): connections the test suite opens
+  outside the Ecto pool, a test-suite-shape fact, not a server-config fact.
+
+**Verification, at this decision's own documented remedy value (N=4).**
+`usable_ceiling` = 100 − 3 = 97. `budget` = 97 − 10 − 2 = 85. `computed` = 85 / 4 =
+21 (integer division). `TEST_POOL_SIZE` = 21 (no floor clamp: 21 > TEST_MIN_POOL_SIZE
+default 2). `N × TEST_POOL_SIZE` = 84. Worst-case accounted demand — every
+partition's pool simultaneously saturated (the AC1/AC4 scenario) plus the one
+non-pooled connection actually observed — is 84 + 1 = 85, against a real usable
+ceiling of 97: **12 connections of genuine slack**, not merely a looser-looking
+number. Even under the pessimistic case of the *full* `TEST_NONPOOL_CONNECTION_RESERVE`
+budget consumed (2, not just the 1 ever measured) plus the *full*
+`TEST_CONNECTION_HEADROOM` ad-hoc budget consumed (10, an interactive `psql`/
+LiveDashboard session concurrently open) at the same moment as full N×pool_size
+saturation: 84 + 2 + 10 = 96 ≤ 97 — still inside the true ceiling by 1 connection,
+which is the case this decision's own floor-and-WARN escape hatch (reduce
+`TEST_PARALLEL_N`) exists for if a host needs more margin than that.
+
+Compare to the pre-addendum formula at the same N=4: `budget` = 100 − 10 = 90,
+`computed` = 90 / 4 = 22, `N × TEST_POOL_SIZE` = 88. Nominally 88 + 1 = 89 ≤ 100,
+which looks safe under the (wrong) assumption that all 100 connections are usable
+— but only 97 actually are, so the *effective* margin the operator believed was 10
+(headroom) was actually 7 (headroom minus the unaccounted superuser reservation),
+and shrinks further once the one non-pooled connection is drawn against it. That
+narrowed, uncounted-for margin is what a timing coincidence between AC1/AC4's
+saturation and the ISS-0110 test's connection could exhaust intermittently — this
+addendum's fix is not a larger safety margin chosen because it "feels safer," it is
+the same nominal margin now computed against the real ceiling.
+
+Confirmed for N=16 (this decision's own original verification host) that the
+addendum does not regress the general case: `usable_ceiling` = 97, `budget` = 97 −
+10 − 2 = 85, `computed` = 85 / 16 = 5 (integer division) — identical to the
+pre-addendum `computed` = 5 this decision already verified, so no behavior change
+for that host's own documented case.
+
+**What this addendum does not change.** `TEST_MIN_POOL_SIZE`'s meaning and default;
+`TEST_CONNECTION_HEADROOM`'s meaning (still ad-hoc human/tooling connections only);
+`N`-derivation; anything in `test/support/tenant_schema_reaper_test.exs` or
+`test/letflow/engine_concurrency_test.exs` (both explicitly out of scope — see
+`lib/letflow/design/iss0287-connection-pool-headroom-fix.md`'s own scope
+statement).

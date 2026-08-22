@@ -114,7 +114,23 @@ defmodule Letflow.TenantProvisioning do
       decide this together with the secondary open question above: creating the
       tenant `:migrating` and flipping to `:active` only after replay succeeds
       would make the partial state self-describing and would let
-      `Letflow.Plugs.TenantStatus` gate it, at no new cost.
+      `Letflow.Plugs.TenantStatus` reject *writes* against it with 503.
+      **But `:migrating` is not a complete answer, and it is not free.** That
+      plug gates write methods only (`@write_methods ~w(POST PUT PATCH
+      DELETE)`; its other `call/2` clause returns the conn untouched), so
+      `GET`/`HEAD` pass through with no status check and no DB query at all —
+      a `:migrating` half-provisioned tenant would still serve *reads* straight
+      onto the empty schema, hitting a relation that does not exist. Closing or
+      explicitly accepting that read gap is part of the decision, not something
+      `:migrating` hands you for free.
+
+  What is owed here is an **invocable** recovery entry point — a function an
+  operator or a test calls with a `tenant_id`. An automatic reconciliation
+  sweep is deliberately *not* in scope: it needs a scheduler, there is no
+  scheduler subsystem to hang one on, and adding a supervision-tree child for
+  it is scope creep. The `migrations_applied_at IS NULL` predicate is recorded
+  above so a future sweep requirement need not re-derive it — not as licence to
+  build the sweep now.
 
   This is left unbuilt here on purpose. Adding a function to this module that
   calls both primitives would be exactly the coupling

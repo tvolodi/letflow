@@ -69,7 +69,16 @@ diagnosis: >
      so `Letflow.Plugs.TenantStatus` (REQ-021) does not gate it. This is the
      same question `Letflow.TenantProvisioning`'s moduledoc already flags under
      "Secondary open question", now shown to be load-bearing for this issue
-     rather than theoretical.
+     rather than theoretical. REQ-VALIDATOR's gate on this run's REQ-076 delta
+     then corrected a first-draft overstatement of this finding, and the
+     correction is recorded here because it changes what REQ-076 owes: setting
+     such a tenant `:migrating` does NOT by itself make it safe. That plug
+     gates write methods only (`@write_methods ~w(POST PUT PATCH DELETE)`,
+     with its other `call/2` clause returning the conn untouched -- verified
+     directly in `lib/letflow/plugs/tenant_status.ex`), so `GET`/`HEAD` pass
+     through with no status check and no DB query, and a `:migrating`
+     half-provisioned tenant would still serve reads against the empty schema.
+     The read path is the uncovered half.
   5. Scope datum, and its expiry. At DIAGNOSIS time
      `lib/letflow/routers/tenants.ex` did not exist on `main` at all -- it
      lived only on the unmerged `feature/WF02-REQ075-20260822` branch, and
@@ -106,7 +115,7 @@ affected_files:
   - lib/letflow/tenant_provisioning.ex
   - lib/letflow/design/req022-tenant-schema-provisioning.md
   - docs/requirements.yaml           # REQ-076, the anchor this resolves into
-  - lib/letflow/routers/tenants.ex   # not on main; feature/WF02-REQ075-20260822 only
+  - lib/letflow/routers/tenants.ex   # the call site; reached main via REQ-075 mid-run
 
 related:
   - REQ-075  # the run whose REVIEWER gate raised it
@@ -152,6 +161,29 @@ resolution_note: >
   criteria, so onboarding cannot pass its own release gate without an
   idempotent recovery entry point and an explicit decision on the tenant
   status lifecycle across onboarding.
+
+  GATED, NOT SELF-CERTIFIED. The REQ-076 modification went through
+  REQ-VALIDATOR rather than being registered on this run's own say-so, and it
+  came back FAIL on the first pass with three material findings, all accepted
+  and all fixed before merge: (F1) the recovery criterion said "idempotent"
+  but its demonstration invoked the recovery path only once, which cannot
+  demonstrate idempotence -- a second invocation against the now-healthy
+  tenant, asserting unchanged state, is now required explicitly; (F2) the
+  first draft claimed `:migrating` would let `Letflow.Plugs.TenantStatus` gate
+  a half-provisioned tenant "at no new cost", which is false for reads (see
+  `diagnosis` finding 4) -- the criterion now requires BOTH a write and a read
+  test, and the same overstatement was corrected in the moduledoc, which is
+  the copy a future implementer actually reads; (F3) nothing in the text
+  stopped an implementer reading `migrations_applied_at IS NULL` as licence to
+  build a full reconciliation sweep, which would need a scheduler and a new
+  supervision-tree child -- the exact scope creep this resolution declined --
+  so an explicit RECOVERY SCOPE BOUNDARY now scopes REQ-076 to an invocable
+  recovery entry point and forbids the sweep. REQ-VALIDATOR's sizing verdict
+  on the enlarged REQ-076 was PASS, conditional on that boundary being written
+  in: `tenants.status` already ships as an `Ecto.Enum` of
+  `[:active, :migrating]` so no migration is needed, and the recovery
+  capability itself is already proven convergent, leaving roughly one function,
+  one status flip and three tests on top of the ported handlers.
 
   WHY NOT IMPLEMENT NOW. Three independent reasons, any one sufficient. First,
   the shape of a minimal inline fix collides head-on with the invariant: a

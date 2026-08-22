@@ -4303,13 +4303,27 @@ requirements:
       is therefore already a sufficient detection predicate for "provisioned
       but not migrated" and no new column is needed; and re-invoking BOTH
       primitives with the same tenant_id fully converges the state with no
-      duplicate registration row. This requirement must also settle the tenant
+      duplicate registration row.
+      RECOVERY SCOPE BOUNDARY: what this requirement owes is an INVOCABLE
+      recovery entry point -- a function a test or an operator calls with a
+      tenant_id -- and NOT an automatic reconciliation sweep. Do not add a
+      scheduler, a periodic task, or a new supervision-tree child to invoke it:
+      ISS-0230 named that as scope creep explicitly, and no scheduler subsystem
+      exists to hang it on. The `migrations_applied_at IS NULL` predicate is
+      recorded here so that a future sweep requirement need not re-derive it,
+      NOT as licence to build the sweep now.
+      This requirement must also settle the tenant
       status lifecycle across onboarding, which ISS-0230 found is currently
       unhandled: the half-provisioned tenant's status was :active throughout,
       i.e. an unmigrated tenant is advertised as fully live. Creating the
       tenant :migrating and flipping to :active only after replay succeeds
-      would make the partial state self-describing and let REQ-021's
-      Letflow.Plugs.TenantStatus gate it; this is the same open question
+      would make the partial state self-describing and would let REQ-021's
+      Letflow.Plugs.TenantStatus reject WRITES against it with 503 -- but note
+      that plug gates write methods only and passes GET/HEAD through with no DB
+      query, so :migrating alone does NOT stop a read reaching the tenant's
+      still-empty schema; closing or accepting that read gap is part of the
+      decision this requirement owes, not something :migrating gives for free.
+      This is the same open question
       Letflow.TenantProvisioning's moduledoc already flags under "Secondary
       open question", and it is to be decided explicitly here rather than left
       silent again.
@@ -4322,8 +4336,8 @@ requirements:
       - "handleUpsertRole's constraint on role names matches R-Co's actual behaviour, with the observed constraint named in the moduledoc and a test covering both an accepted and a rejected role name"
       - "GET onboarding by an unknown hostname returns a response indistinguishable from one for a hostname whose tenant exists but is not the caller's, demonstrated by comparing the two responses (INV-5)"
       - "onboarding creates a tenant via Letflow.TenantProvisioning rather than a second provisioning path, confirmed by inspection and stated in the moduledoc"
-      - "a tenant left half-provisioned by a replay failure is recoverable by an idempotent recovery entry point this requirement adds in its own orchestration layer (never inside Letflow.TenantProvisioning, per req022 section 3.2), demonstrated by a test that forces replay_migrations/2 to fail, asserts the tenants row survived with migrations_applied_at NULL and no rollback occurred, then invokes the recovery path and asserts the schema is fully migrated with exactly one tenant_schemas row (ISS-0230)"
-      - "the tenant status a half-provisioned tenant carries between creation and successful replay is decided explicitly, stated in the moduledoc, and asserted by a test covering what a request for that tenant receives while it is in that state, consistent with Letflow.Plugs.TenantStatus rather than a second conflicting status rule (ISS-0230)"
+      - "a tenant left half-provisioned by a replay failure is recoverable by an idempotent recovery entry point this requirement adds in its own orchestration layer -- never as a function inside Letflow.TenantProvisioning that calls both primitives, per req022 section 3.2's No implicit chaining invariant -- demonstrated by a test that forces replay_migrations/2 to fail, asserts the tenants row survived with migrations_applied_at NULL and no rollback occurred, then invokes the recovery entry point and asserts the schema is fully migrated with migrations_applied_at set and exactly one tenant_schemas row, then invokes the SAME entry point a second time against the now-healthy tenant and asserts it returns success and leaves the state unchanged (still exactly one tenant_schemas row, no error, no duplicate schema) -- the second invocation is what demonstrates idempotence and is not optional (ISS-0230)"
+      - "the tenant status a half-provisioned tenant carries between creation and successful replay is decided explicitly and stated in the moduledoc, and BOTH request directions against a tenant in that state are asserted by tests -- a write (POST) and a read (GET) -- because Letflow.Plugs.TenantStatus gates write methods only and passes GET/HEAD through with no DB query at all (tenant_status.ex @write_methods; REQ-071 AC4 tests), so a :migrating half-provisioned tenant would still serve reads against an empty schema; the moduledoc must state what a read receives and why that is acceptable, and the resulting rule must not be a second status rule conflicting with TenantStatus (ISS-0230)"
     depends_on: [REQ-075]
 
   - id: REQ-077

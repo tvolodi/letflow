@@ -6080,7 +6080,7 @@ requirements:
   - id: REQ-126
     title: Version-pinned form references on task payloads (MOB-3 pinning)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S9
     impl_order: 238  # letflow-queue task id; depends_on translated to queue task id [150]
     description: >

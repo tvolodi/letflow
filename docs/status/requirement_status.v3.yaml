@@ -360,6 +360,16 @@ history:
       passed both before and after (confirmed via git stash), same 3
       pre-existing H6 floor-commit failures unrelated to this change (diff
       touches only the one handoffs/ JSON file, never lib/ or test/).
+  - req: REQ-126
+    event: started
+    agent: ELIXIR-DEV
+    at: "2026-08-22T11:15:00Z"
+    note: >
+      WF02-REQ126-20260822 (queue task 238) started. Add form_id/form_version
+      to task read-route payloads (MOB-3 pinning). Investigated first: no
+      forms catalog exists anywhere in lib/; Letflow.Engine.PinResolver pins
+      DEFINITION versions only, a distinct contract. Full WF-02 pipeline
+      dispatched (CODE-DESIGNER through RELEASE-VALIDATOR).
   - req: REQ-120
     event: started
     agent: CODE-DESIGNER
@@ -397,3 +407,47 @@ history:
       TEST-DESIGN-VALIDATOR/TEST-RUNNER skipped per WF-02's scope test,
       verified instead by `git diff --stat` confirming zero changes under
       web/src/components/.
+  - req: REQ-126
+    event: done
+    agent: ELIXIR-DEV
+    at: "2026-08-22T11:30:40Z"
+    note: >
+      Implemented per the CODE-DESIGN-VALIDATOR-approved design
+      (lib/letflow/design/req126-form-version-pinning.md). Core decision:
+      form_id == task.node_id (every tasks row is activated only from a
+      :HUMAN_TASK node, no graph walk needed); form_version ==
+      instance_definition_snapshots.definition_ver, looked up by
+      task.instance_id via a new left_join in Letflow.Tasks.get_task/2 and
+      list_tasks/2, plus a new narrow get_form_version/2 for the
+      claim/assign/reassign write-path handlers (which only get a bare
+      Task.t() back). No migration -- both source columns already existed.
+      task_list_item_map/1->2 and task_detail_map/2->3 in
+      lib/letflow/routers/tasks.ex widened with form_id/form_version (11/13
+      keys). Letflow.Tasks moduledoc gained a "Form version pinning"
+      section stating the PinResolver relationship explicitly: PinResolver
+      pins external mutable-catalog references needing active resolution;
+      a form reference is already inside the definition's own write-once
+      instance_definition_snapshots row (REQ-027/033, predates PinResolver),
+      so this is a new read, not new pin machinery. SECURITY-REVIEWER PASS
+      (INV-1/4/7/8 assessed; join is prefix-scoped like every other query in
+      the module, tenant isolation confirmed structurally). REVIEWER PASS
+      (exact fidelity to design, no scope creep, opts-threading refactor
+      verified arity-consistent across all handle_*_result clauses).
+      TEST-DESIGNER added three describe blocks to
+      test/letflow/routers/tasks_test.exs (AC1 list+detail key presence,
+      AC3 promote-v2-after-task-creation with a positive equality check
+      against v1's own version string, AC5 non-nil) plus
+      test/specs/REQ-126.md; widened @task_list_item_keys/@task_detail_keys
+      to the correct new 11/13-key shape (REQ-083's own pre-existing
+      exact-key-set tests required this, not a weakening). TEST-DESIGN-VALIDATOR
+      PASS (independently re-read AC3's test end-to-end, reproduced 50/50).
+      TEST-RUNNER: full suite via scripts/test_parallel.sh 1754/1759 passed,
+      the 5 failures (3 lint-handoffs commit-boundary, 1 unique-constraint
+      race, 1 sandbox-pool timing) all reproduced as pre-existing/environmental
+      and unrelated to lib/letflow/tasks.ex or lib/letflow/routers/tasks.ex;
+      mix compile --warnings-as-errors clean; web/ suite 178/178 passed
+      unmodified (git diff --stat web/ empty). RELEASE-VALIDATOR
+      independently re-read and re-ran AC1/AC3/AC5's tests, re-ran
+      mix compile and the router test file itself, confirmed web/ untouched
+      and no migration added -- PASS. Status flipped pending -> done here.
+      No FAIL-then-fix cycles -- every gate passed on first attempt.

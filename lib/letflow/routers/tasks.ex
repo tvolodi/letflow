@@ -78,7 +78,7 @@ defmodule Letflow.Routers.Tasks do
 
   ## Response allowlists (INV-2, AC5)
 
-  `task_list_item_map/1` (9 keys) / `task_detail_map/2` (10 keys, adds
+  `task_list_item_map/2` (11 keys) / `task_detail_map/3` (13 keys, adds
   `correlation_key`/`updated_at`) are hand-built maps, never a
   `Jason.Encoder`/struct-wholesale encoding — matching
   `Letflow.Routers.Identity`'s `user_map/1` discipline exactly. `claimed_by`
@@ -86,7 +86,16 @@ defmodule Letflow.Routers.Tasks do
   concern). `form_schema`/`output_variables`/`completed_by`/`completed_at`/
   `cancelled_at` are also excluded — none is named by any REQ-083 acceptance
   criterion, and `form_schema` is unpopulated (always `nil`) in this codebase
-  today (REQ-047 §4.4's own open question).
+  today (REQ-047 §4.4's own open question) — a distinct concern from
+  `form_id`/`form_version` below (identity/version, not rendering payload).
+
+  `form_id`/`form_version` (REQ-126, `lib/letflow/design/req126-form-version-pinning.md`)
+  are the two new keys as of this requirement — `form_id` is the task's own
+  `node_id`, `form_version` is the pinned `instance_definition_snapshots.definition_ver`
+  `Letflow.Tasks.get_task/2`/`list_tasks/2`/`get_form_version/2` now surface.
+  See `Letflow.Tasks`'s own moduledoc ("Form version pinning") for why this
+  is a new read rather than a new instance of `Letflow.Engine.PinResolver`'s
+  machinery.
   """
 
   use Plug.Router
@@ -298,7 +307,8 @@ defmodule Letflow.Routers.Tasks do
 
   defp handle_list_result({:ok, %{items: items, next_cursor: next_cursor}}, conn) do
     Response.ok(conn, %{
-      "items" => Enum.map(items, &task_list_item_map/1),
+      "items" =>
+        Enum.map(items, fn {task, form_version} -> task_list_item_map(task, form_version) end),
       "next_cursor" => next_cursor,
       "count" => length(items)
     })
@@ -333,8 +343,8 @@ defmodule Letflow.Routers.Tasks do
 
   defp handle_get_by_id(conn, id, opts) do
     case Tasks.get_task(id, opts) do
-      {:ok, {task, correlation_key}} ->
-        Response.ok(conn, task_detail_map(task, correlation_key))
+      {:ok, {task, correlation_key, form_version}} ->
+        Response.ok(conn, task_detail_map(task, correlation_key, form_version))
 
       {:error, :not_found} ->
         Response.not_found(conn)
@@ -417,42 +427,42 @@ defmodule Letflow.Routers.Tasks do
 
     id
     |> Tasks.claim_task(attrs, opts)
-    |> handle_claim_result(conn)
+    |> handle_claim_result(conn, opts)
   end
 
-  defp handle_claim_result({:ok, task}, conn) do
-    Response.ok(conn, task_detail_map(task, nil))
+  defp handle_claim_result({:ok, task}, conn, opts) do
+    Response.ok(conn, task_detail_map(task, nil, Tasks.get_form_version(task.instance_id, opts)))
   end
 
-  defp handle_claim_result({:error, :invalid_task_id}, conn) do
+  defp handle_claim_result({:error, :invalid_task_id}, conn, _opts) do
     Response.bad_request(conn, "task_id is not a valid UUID")
   end
 
-  defp handle_claim_result({:error, :task_not_found}, conn) do
+  defp handle_claim_result({:error, :task_not_found}, conn, _opts) do
     Response.not_found(conn)
   end
 
-  defp handle_claim_result({:error, {:task_not_pending, _status}}, conn) do
+  defp handle_claim_result({:error, {:task_not_pending, _status}}, conn, _opts) do
     Response.conflict(conn, "task is not pending")
   end
 
-  defp handle_claim_result({:error, :assigned_to_other_user}, conn) do
+  defp handle_claim_result({:error, :assigned_to_other_user}, conn, _opts) do
     Response.conflict(conn, "task is assigned to a different user")
   end
 
-  defp handle_claim_result({:error, :assignee_group_not_member}, conn) do
+  defp handle_claim_result({:error, :assignee_group_not_member}, conn, _opts) do
     Response.conflict(conn, "caller is not a member of the assigned group")
   end
 
-  defp handle_claim_result({:error, :assignee_role_not_held}, conn) do
+  defp handle_claim_result({:error, :assignee_role_not_held}, conn, _opts) do
     Response.conflict(conn, "caller does not hold the assigned role")
   end
 
-  defp handle_claim_result({:error, :not_claimable}, conn) do
+  defp handle_claim_result({:error, :not_claimable}, conn, _opts) do
     Response.conflict(conn, "task cannot be claimed")
   end
 
-  defp handle_claim_result({:error, _reason}, conn) do
+  defp handle_claim_result({:error, _reason}, conn, _opts) do
     Response.internal_error(conn)
   end
 
@@ -470,7 +480,7 @@ defmodule Letflow.Routers.Tasks do
       {:ok, %{"user_id" => user_id}} ->
         id
         |> Tasks.assign_task(%{user_id: user_id}, opts)
-        |> handle_assign_result(conn)
+        |> handle_assign_result(conn, opts)
     end
   end
 
@@ -482,66 +492,66 @@ defmodule Letflow.Routers.Tasks do
       {:ok, %{"user_id" => user_id}} ->
         id
         |> Tasks.reassign_task(%{user_id: user_id}, opts)
-        |> handle_reassign_result(conn)
+        |> handle_reassign_result(conn, opts)
     end
   end
 
-  defp handle_assign_result({:ok, task}, conn) do
-    Response.ok(conn, task_detail_map(task, nil))
+  defp handle_assign_result({:ok, task}, conn, opts) do
+    Response.ok(conn, task_detail_map(task, nil, Tasks.get_form_version(task.instance_id, opts)))
   end
 
-  defp handle_assign_result({:error, :invalid_task_id}, conn) do
+  defp handle_assign_result({:error, :invalid_task_id}, conn, _opts) do
     Response.bad_request(conn, "task_id is not a valid UUID")
   end
 
   # Belt-and-suspenders -- Validation.validate/2 above is expected to
   # already have rejected a missing/empty user_id before assign_task/4 is
   # ever reached.
-  defp handle_assign_result({:error, :missing_user_id}, conn) do
+  defp handle_assign_result({:error, :missing_user_id}, conn, _opts) do
     Response.unprocessable(conn, "user_id is required")
   end
 
-  defp handle_assign_result({:error, :task_not_found}, conn) do
+  defp handle_assign_result({:error, :task_not_found}, conn, _opts) do
     Response.not_found(conn)
   end
 
-  defp handle_assign_result({:error, {:task_not_pending, _status}}, conn) do
+  defp handle_assign_result({:error, {:task_not_pending, _status}}, conn, _opts) do
     Response.conflict(conn, "task is not pending")
   end
 
-  defp handle_assign_result({:error, :already_assigned}, conn) do
+  defp handle_assign_result({:error, :already_assigned}, conn, _opts) do
     Response.conflict(conn, "task is already assigned")
   end
 
-  defp handle_assign_result({:error, _reason}, conn) do
+  defp handle_assign_result({:error, _reason}, conn, _opts) do
     Response.internal_error(conn)
   end
 
-  defp handle_reassign_result({:ok, task}, conn) do
-    Response.ok(conn, task_detail_map(task, nil))
+  defp handle_reassign_result({:ok, task}, conn, opts) do
+    Response.ok(conn, task_detail_map(task, nil, Tasks.get_form_version(task.instance_id, opts)))
   end
 
-  defp handle_reassign_result({:error, :invalid_task_id}, conn) do
+  defp handle_reassign_result({:error, :invalid_task_id}, conn, _opts) do
     Response.bad_request(conn, "task_id is not a valid UUID")
   end
 
-  defp handle_reassign_result({:error, :missing_user_id}, conn) do
+  defp handle_reassign_result({:error, :missing_user_id}, conn, _opts) do
     Response.unprocessable(conn, "user_id is required")
   end
 
-  defp handle_reassign_result({:error, :task_not_found}, conn) do
+  defp handle_reassign_result({:error, :task_not_found}, conn, _opts) do
     Response.not_found(conn)
   end
 
-  defp handle_reassign_result({:error, {:task_not_pending, _status}}, conn) do
+  defp handle_reassign_result({:error, {:task_not_pending, _status}}, conn, _opts) do
     Response.conflict(conn, "task is not pending")
   end
 
-  defp handle_reassign_result({:error, :not_currently_assigned}, conn) do
+  defp handle_reassign_result({:error, :not_currently_assigned}, conn, _opts) do
     Response.conflict(conn, "task is not currently assigned")
   end
 
-  defp handle_reassign_result({:error, _reason}, conn) do
+  defp handle_reassign_result({:error, _reason}, conn, _opts) do
     Response.internal_error(conn)
   end
 
@@ -569,12 +579,19 @@ defmodule Letflow.Routers.Tasks do
   # ── Response allowlists (design §5.5, INV-2, AC5) ───────────────────────
 
   @doc false
-  # Exactly nine keys, hand-built -- never a Jason.Encoder derivation over
-  # %Letflow.Engine.Task{}. form_schema/output_variables/completed_by/
-  # completed_at/cancelled_at/inserted_at/updated_at are deliberately
-  # excluded (see moduledoc, design §5.5).
-  @spec task_list_item_map(Letflow.Engine.Task.t()) :: map()
-  defp task_list_item_map(%Letflow.Engine.Task{} = task) do
+  # Nine base keys, hand-built -- never a Jason.Encoder derivation over
+  # %Letflow.Engine.Task{} -- plus form_id/form_version (REQ-126), eleven
+  # keys total. output_variables/completed_by/completed_at/cancelled_at/
+  # inserted_at/updated_at are deliberately excluded (see moduledoc, design
+  # §5.5); tasks.form_schema (the unrelated, still-unpopulated rendering
+  # payload) is also excluded -- see moduledoc.
+  #
+  # form_id is task.node_id itself (no join needed -- REQ-126 design §4.3);
+  # form_version is threaded in by the caller, sourced from the
+  # instance_definition_snapshots left_join Letflow.Tasks.get_task/2 /
+  # list_tasks/2 / get_form_version/2 already performed.
+  @spec task_list_item_map(Letflow.Engine.Task.t(), form_version :: String.t() | nil) :: map()
+  defp task_list_item_map(%Letflow.Engine.Task{} = task, form_version) do
     %{
       "id" => task.id,
       "instance_id" => task.instance_id,
@@ -584,18 +601,24 @@ defmodule Letflow.Routers.Tasks do
       "assignee_type" => task.assignee_type,
       "assignee_ref" => task.assignee_ref,
       "created_at" => DateTime.to_iso8601(task.inserted_at),
-      "token_id" => task.token_id
+      "token_id" => task.token_id,
+      "form_id" => task.node_id,
+      "form_version" => form_version
     }
   end
 
   @doc false
-  # Same nine keys as task_list_item_map/1, plus correlation_key and
-  # updated_at -- ten keys total. No claimed_by (no Letflow schema column
-  # exists yet; see moduledoc).
-  @spec task_detail_map(Letflow.Engine.Task.t(), String.t() | nil) :: map()
-  defp task_detail_map(%Letflow.Engine.Task{} = task, correlation_key) do
+  # Same eleven keys as task_list_item_map/2, plus correlation_key and
+  # updated_at -- thirteen keys total. No claimed_by (no Letflow schema
+  # column exists yet; see moduledoc).
+  @spec task_detail_map(
+          Letflow.Engine.Task.t(),
+          correlation_key :: String.t() | nil,
+          form_version :: String.t() | nil
+        ) :: map()
+  defp task_detail_map(%Letflow.Engine.Task{} = task, correlation_key, form_version) do
     task
-    |> task_list_item_map()
+    |> task_list_item_map(form_version)
     |> Map.put("correlation_key", correlation_key)
     |> Map.put("updated_at", DateTime.to_iso8601(task.updated_at))
   end

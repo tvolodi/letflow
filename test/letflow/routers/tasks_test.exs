@@ -227,12 +227,63 @@ defmodule Letflow.Routers.TasksTest do
     {result.instance_id, task}
   end
 
+  # ── REQ-126 fixture helpers (form-version pinning) ──────────────────────
+
+  # Same single-hop START -> HUMAN_TASK("task") -> END shape as
+  # graph_human_task_end/0, with a different node attribute -- used as the
+  # "v2" graph in REQ-126 AC3's promote-after-task-creation scenario (design
+  # §7.2: "any graph delta ... the specific delta is irrelevant to this test,
+  # only that v2 exists as a distinct process_definitions row").
+  defp graph_human_task_end_v2 do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "task",
+          "node_type" => "HUMAN_TASK",
+          "attributes" => %{"role" => "a-different-approver"}
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "task"},
+        %{"id" => "e2", "source" => "task", "target" => "end"}
+      ]
+    }
+  end
+
+  # Like active_definition!/2 but takes an explicit `name` -- needed by AC3's
+  # scenario, which promotes a *second* version under the *same* process name
+  # (active_definition!/2 always mints a fresh unique_name/0, so it cannot
+  # express "v2 of the same process" on its own).
+  defp active_definition_named!(tenant, name, version, graph) do
+    attrs = %{
+      name: name,
+      version: version,
+      graph: graph,
+      created_by: Ecto.UUID.generate()
+    }
+
+    assert {:ok, definition} = Definitions.create(attrs, prefix: tenant.schema_name)
+
+    assert {:ok, %{definition: activated}} =
+             Definitions.activate(definition.id, prefix: tenant.schema_name)
+
+    activated
+  end
+
   defp item_ids(body), do: Enum.map(body["items"], & &1["id"])
 
+  # REQ-126 (MOB-3 form-version pinning) added "form_id"/"form_version" to both
+  # maps -- this allowlist is updated to the new, intentional 11-key/13-key
+  # shape (not weakened: the two new keys are exactly what REQ-126 AC1 asserts
+  # must be present, see the "REQ-126" describe blocks below).
   @task_list_item_keys [
     "assignee_ref",
     "assignee_type",
     "created_at",
+    "form_id",
+    "form_version",
     "id",
     "instance_id",
     "node_id",
@@ -681,6 +732,122 @@ defmodule Letflow.Routers.TasksTest do
         |> dispatch()
 
       assert conn.status == 404
+    end
+  end
+
+  # ══════════════════════════════════════════════════════════════════════
+  # REQ-126 -- version-pinned form references on task payloads (MOB-3).
+  # See test/specs/REQ-126.md for the full acceptance-criterion -> test-case
+  # mapping and rationale.
+  # ══════════════════════════════════════════════════════════════════════
+
+  # ── AC1 -- task payloads carry form_id/form_version, list and detail ────
+
+  describe "REQ-126 AC1: task payloads returned by the read routes carry form_id/form_version" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "req126-ac1")}
+
+    test "GET /tasks/:id form_id/form_version match the activated node id and the started-from definition version",
+         %{tenant: tenant} do
+      {_instance_id, task} = start_instance_with_pending_task!(tenant, graph_human_task_end())
+
+      conn =
+        build_conn(:get, "/#{task.id}", tenant, roles: ["PLATFORM_ADMIN"])
+        |> dispatch()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert body["form_id"] == "task"
+      assert body["form_version"] == "1.0.0"
+    end
+
+    test "GET /tasks list item for the same task also carries the matching form_id/form_version",
+         %{tenant: tenant} do
+      {_instance_id, task} = start_instance_with_pending_task!(tenant, graph_human_task_end())
+
+      conn =
+        build_conn(:get, "/", tenant, roles: ["PLATFORM_ADMIN"])
+        |> dispatch()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      [item] = Enum.filter(body["items"], &(&1["id"] == task.id))
+      assert item["form_id"] == "task"
+      assert item["form_version"] == "1.0.0"
+    end
+  end
+
+  # ── AC3 -- form_version is pinned at task-creation time, not re-derived ─
+
+  describe "REQ-126 AC3: form_version reflects the version pinned when the task was created, not a later promotion" do
+    test "promoting a new process_definitions version (same name, different graph) after the task was created does not change the task's form_version" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req126-ac3")
+      process_name = unique_name("req126-form-pin")
+
+      # Step 1/2 (design §7.2) -- create/promote v1, start an instance from
+      # it, which writes the instance_definition_snapshots row with
+      # definition_ver: "1.0.0" and activates the "task" HUMAN_TASK node.
+      v1 = active_definition_named!(tenant, process_name, "1.0.0", graph_human_task_end())
+
+      start_attrs = %{
+        definition_id: v1.id,
+        initial_variables: %{"seed" => "value"},
+        actor_id: Ecto.UUID.generate(),
+        idempotency_key: unique_idempotency_key("req126-ac3-start")
+      }
+
+      assert {:ok, _result} = Engine.create(start_attrs, prefix: tenant.schema_name)
+
+      [task] = Repo.all(EngineTask, prefix: tenant.schema_name)
+      assert task.status == :pending
+
+      # Step 3 -- promote a NEW definition version v2, same process name, a
+      # different graph (the "task" node's attributes changed). Definitions.
+      # activate/2 atomically deprecates v1 in the same transaction (PD-03),
+      # so v2 -- not v1 -- is now the tenant's live/active definition for
+      # this process name.
+      v2 =
+        active_definition_named!(tenant, process_name, "2.0.0", graph_human_task_end_v2())
+
+      assert v2.status == :active
+
+      v1_reloaded = Repo.get!(Letflow.Definitions.ProcessDefinition, v1.id, prefix: tenant.schema_name)
+      assert v1_reloaded.status == :deprecated
+
+      # Step 4/5 -- the task's form_version must still name v1, never v2:
+      # proof the read derives from instance_definition_snapshots.definition_ver
+      # (frozen at instance-start) rather than a live process_definitions
+      # lookup for the process's currently-active version.
+      conn =
+        build_conn(:get, "/#{task.id}", tenant, roles: ["PLATFORM_ADMIN"])
+        |> dispatch()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert body["form_version"] == "1.0.0"
+      refute body["form_version"] == "2.0.0"
+    end
+  end
+
+  # ── AC5 -- form_id/form_version are present (non-nil), not merely allowed
+  #    keys -- distinct from AC1's own "correct value" assertion, this test
+  #    exists specifically so an unimplemented/always-nil path cannot pass as
+  #    a satisfied one (design §7.3).
+
+  describe "REQ-126 AC5: form_id/form_version are present rather than null for an ordinarily-created task" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "req126-ac5")}
+
+    test "a task activated via the real engine flow has non-nil form_id and form_version in its GET /tasks/:id body",
+         %{tenant: tenant} do
+      {_instance_id, task} = start_instance_with_pending_task!(tenant, graph_human_task_end())
+
+      conn =
+        build_conn(:get, "/#{task.id}", tenant, roles: ["PLATFORM_ADMIN"])
+        |> dispatch()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      refute is_nil(body["form_id"])
+      refute is_nil(body["form_version"])
     end
   end
 

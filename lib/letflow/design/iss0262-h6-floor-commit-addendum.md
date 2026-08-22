@@ -197,6 +197,13 @@ too, by never needing to name the not-yet-existing commit at all.
 
 ### 2.3 The operational step this requires at Step Final (exact mechanism for whoever executes `GIT_MERGE.md` on this branch)
 
+**Superseded 2026-08-22 (ISS-0273):** this operational step was never executed after
+`184d846` merged (the floor stayed at the `"BOOTSTRAP"` sentinel, re-deriving dynamically
+on every run -- see `iss0273-h6-floor-commit-pin.md`). This fix performs the pin directly
+as an ordinary code change instead of as a deferred Step Final action; §2.3 below is kept
+as the historical record of the mechanism that was intended but skipped, not as a live
+instruction for any future attempt.
+
 `GIT_MERGE.md` step 4 (fetch `origin main`) already, in practice, produces a fetched tip
 sha — both prior Step Final attempts recorded it in their own summaries verbatim
 ("fetched origin main (tip fb5c251)", then "fetched origin main (tip 96ac42f)" on the

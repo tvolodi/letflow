@@ -1,0 +1,52 @@
+{
+  "handoff_id": "60a1b8e5-5e70-8091-d2a3-1e2f3a4b5c06",
+  "run_id": "WF03-ISS0273-20260822",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0273-20260822/step-03b-security-reviewer.json",
+  "created_at": "2026-08-22T12:43:14Z",
+  "started_at": "2026-08-22T12:43:14Z",
+  "completed_at": "2026-08-22T12:44:17Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/instructions/security-invariants.md",
+      "handoffs/WF03-ISS0273-20260822/step-03-elixir-dev.json",
+      "lib/mix/tasks/letflow.lint_handoffs.ex"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.lint_handoffs.ex"]
+  },
+  "task": {
+    "description": "Run the scope test from docs/agents/instructions/security-invariants.md against `git diff main...feature/WF03-ISS0273-20260822 -- lib/mix/tasks/letflow.lint_handoffs.ex lib/letflow/design/`. This is a dev-tooling Mix task over the handoffs/ audit trail, not application/tenant data -- state per-invariant APPLIES/NOT-APPLICABLE verdicts as the worked example in docs/agents/shared/HANDOFF_PROTOCOL.md's schema section demonstrates, do not skip the scope test itself.",
+    "acceptance_criteria": [
+      "Scope test run against the real diff, quoted",
+      "Verdict stated for every invariant INV-1..INV-8 (APPLIES->PASS/FAIL or NOT-APPLICABLE, with reasoning)",
+      "PASS or FAIL with itemized BLOCKER issues; next_action names REVIEWER on PASS"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test run against `git diff main...feature/WF03-ISS0273-20260822 -- lib/mix/tasks/letflow.lint_handoffs.ex lib/letflow/design/` (full diff read; quoted below). Diff touches exactly two files: (1) lib/mix/tasks/letflow.lint_handoffs.ex -- pins @h6_floor_commit from the 'BOOTSTRAP' sentinel to the literal sha c4a8e39729e253397d4f1aa34155a74522930252, deletes resolve_h6_floor_commit/0's System.cmd git-merge-base/rev-list fallback, simplifies h6_floor_commit/0 to `defp h6_floor_commit, do: @h6_floor_commit`, and replaces the stale BOOTSTRAP-state comment paragraph; (2) lib/letflow/design/iss0262-h6-floor-commit-addendum.md -- a superseded-note prose insertion at the top of section 2.3, no mechanism change. Ran the scope test's five criteria against this diff: no API route reading/writing tenant-scoped data (no Plug router, controller, or context module touched -- lint_handoffs.ex is a Mix task over handoffs/**/*.json, an internal agent-pipeline audit trail, not application data); no priv/repo/migrations/*.exs migration added or modified; no secret-resolving code added or modified (confirmed via targeted grep on the diff hunk for Repo.query/System.get_env/password/secret/token -- zero hits; the only System.cmd calls removed were git-merge-base/rev-list plumbing for a commit floor, not secret material); no response-shaping code for a tenant-scoped entity (lint_handoffs.ex emits IO.puts to a developer's terminal, not an API response); no lookup-by-ID handler (pre_floor_file?/2, unchanged in this diff, looks up a file path's git history, not a tenant record by ID). Verdict: OUT OF SCOPE -- no tenant-data path touched. Per-invariant verdicts (all NOT-APPLICABLE given the scope-test outcome, stated individually per the worked-example format in HANDOFF_PROTOCOL.md): INV-1 (tenant data isolation) -- NOT-APPLICABLE: no Ecto schema, query, or migration touched; lint_handoffs.ex reads/writes only handoffs/**/*.json on the local filesystem, never Repo. INV-2 (server-side field authorisation) -- NOT-APPLICABLE: no API response type touched, and S4 (the stage this invariant targets) has not started. INV-3 (untrusted runtime sandboxing) -- NOT-APPLICABLE: S5 has not started; no scripting/plugin surface touched. INV-4 (secrets by reference only) -- APPLIES (live now) -> PASS: ran both reference greps (`grep -rn \"System.get_env\" config/ lib/ --include=*.ex --include=*.exs` and the hardcoded-secret heuristic) against the repo; the diff itself introduces zero new literals matching either pattern -- the only literal added is a git commit sha (@h6_floor_commit), which is public VCS metadata, not secret material. INV-5 (not-found/forbidden indistinguishability) -- NOT-APPLICABLE: S4 has not started, no lookup-by-ID endpoint touched. INV-6 (new data-access paths prove their scoping) -- NOT-APPLICABLE as a scoping obligation: this diff adds no new data-access path (pre_floor_file?/2 and its git-history lookup already existed pre-diff, unchanged here); satisfied procedurally by this handoff itself existing with an explicit per-invariant verdict, per its own How-to-verify text. INV-7 (no SQL string interpolation) -- APPLIES (live now, Ecto already in use) -> PASS: `grep -rn \"Repo.query\" lib/ priv/repo/migrations/` shows no hits inside the diff's touched region; lint_handoffs.ex contains no Repo/Ecto calls at all. INV-8 (no unhandled crashes on realistic failure paths) -- APPLIES (live now) -> PASS: the diff's only externally-reachable I/O is git subprocess calls inside pre_floor_file?/2/compute_pre_floor_file?/2 (unchanged by this diff) and ancestor_or_equal?/2 (unchanged) -- both already pattern-match on `{out, 0}` vs a catch-all `_ -> false`/`nil` clause, i.e. typed tagged-tuple handling, not a bare `{:ok, x} =` match; the deleted resolve_h6_floor_commit/0 was the same shape and its removal does not introduce any new bare match. `grep -rn \"^\\s*{:ok, .*} = \" lib/letflow/` heuristic run project-wide, zero hits inside the touched module. No BLOCKER or other issues found.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0273-20260822",
+      "commit_sha_list": ["3b1c471", "203f5fb"],
+      "remote_branch": "origin/feature/WF03-ISS0273-20260822",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "REVIEWER: SECURITY-REVIEWER PASS, out of scope (no tenant-data path touched) -- proceed to idiom/supervision-integrity review of lib/mix/tasks/letflow.lint_handoffs.ex per standard WF-02/WF-03 gating."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

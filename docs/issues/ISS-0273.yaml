@@ -5,7 +5,7 @@ title: >
 discovered_by: TEST-RUNNER
 discovered_in_run: WF02-REQ124-20260822
 discovered_at: "2026-08-22T11:20:15Z"
-severity: MINOR
+severity: MAJOR
 description: >
   mix letflow.lint_handoffs H6 check (added under ISS-0262) misclassifies
   test/mix/tasks/letflow.lint_handoffs_test.exs fixtures: pre_floor_file?/2
@@ -32,4 +32,29 @@ related:
   - ISS-0262
 queue_task_id: 273
 github_issue: 537
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0273-20260822
+resolved_at: "2026-08-22T13:00:40Z"
+resolution_notes: >
+  Severity raised MINOR -> MAJOR per WF-03 Step 0.5's recurrence rule: Step 1's
+  diagnosis (handoffs/WF03-ISS0273-20260822/step-01-issue-fixer.json) confirmed
+  this is a recurrence of ISS-0262's root cause, not a new independent defect --
+  ISS-0262's implementation pass left @h6_floor_commit as a documented BOOTSTRAP
+  placeholder with a mandatory operational follow-up (pin the literal to the
+  freshly-fetched origin/main tip at Step Final) that was never executed when
+  184d846 merged, so the mechanism kept re-deriving its floor via a live
+  `git merge-base HEAD origin/main` on every run instead of using a fixed point.
+  ISS-0262 was originally filed MAJOR, so per Step 0.5 the recurrence is flagged
+  at least MAJOR regardless of ISS-0273's own filed severity.
+
+  Fixed in WF03-ISS0273-20260822 (commit 40f1b19): @h6_floor_commit pinned to
+  c4a8e39729e253397d4f1aa34155a74522930252 (184d846's parent -- the commit
+  immediately before the H6 check merged onto main), and the runtime
+  git-merge-base BOOTSTRAP fallback in resolve_h6_floor_commit/0 removed so the
+  floor can no longer drift as origin/main advances. Verified: mix test
+  test/mix/tasks/letflow.lint_handoffs_test.exs 20/20 passed (including the 3
+  previously-failing assertions T-NEW-AFTER-FLOOR-HARD-FAILS, F-H6-CONTENT-NEVER-READ,
+  F-H6-FIRES-NEW), full suite 1775/1775 passed, and mix letflow.lint_handoffs
+  clean (0 new violations) -- see
+  handoffs/WF03-ISS0273-20260822/step-04c-test-runner.json and
+  test/reports/report-20260822-WF03-ISS0273-20260822.yaml.

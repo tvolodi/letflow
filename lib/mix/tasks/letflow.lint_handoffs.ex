@@ -119,18 +119,16 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   # `lib/letflow/design/iss0262-h6-floor-commit-addendum.md` for the full
   # mechanism and why it replaced the old per-file `@grandfathered` entries.
   #
-  # 2026-08-22, ISS-0262 H6 floor-commit addendum (rework_count 2): this
-  # literal is a BOOTSTRAP placeholder only, for this implementation pass --
-  # Step Final has not yet run on this branch, so the real pre-merge
-  # `origin/main` tip is not yet known. Per the design's §2.3, whoever runs
-  # the next Step Final attempt MUST edit this literal to the freshly-fetched
-  # `origin/main` tip sha before running post-rebase checks, each attempt,
-  # until one succeeds. Until then, `h6_floor_commit/0` resolves a real,
-  # git-resolvable floor programmatically (`git merge-base HEAD origin/main`,
-  # falling back to the repo's root commit if that is not resolvable) so
-  # tests and a real `mix letflow.lint_handoffs` run both have a genuine
-  # floor today, per the design's §6 implementation note.
-  @h6_floor_commit "BOOTSTRAP"
+  # 2026-08-22, ISS-0273: pinned to `c4a8e397...930252` -- the parent of
+  # `184d846`, the commit that merged the H6 check onto `main` -- per
+  # `lib/letflow/design/iss0273-h6-floor-commit-pin.md`. This value never
+  # needs to move again: everything H6 was written to grandfather predates
+  # it, and everything introduced from `184d846` onward (including H6's own
+  # fixture) correctly lands on the "new, must pass or hard-fail honestly"
+  # side. The BOOTSTRAP runtime-resolution fallback this constant previously
+  # required has been removed -- `h6_floor_commit/0` now returns this
+  # literal directly.
+  @h6_floor_commit "c4a8e39729e253397d4f1aa34155a74522930252"
 
   # -- Individually-named pre-existing hard violations. Measured 2026-08-21
   # by this task's own first run against the corpus (626 files), then
@@ -181,35 +179,8 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   # See `lib/letflow/design/iss0262-h6-floor-commit-addendum.md` §1-§2 for
   # the full mechanism, rationale, and fail-safe direction.
 
-  @spec h6_floor_commit() :: String.t() | nil
-  defp h6_floor_commit do
-    case Process.get(:h6_floor_commit, :unset) do
-      :unset ->
-        floor = resolve_h6_floor_commit()
-        Process.put(:h6_floor_commit, floor)
-        floor
-
-      cached ->
-        cached
-    end
-  end
-
-  defp resolve_h6_floor_commit do
-    if @h6_floor_commit != "BOOTSTRAP" do
-      @h6_floor_commit
-    else
-      case System.cmd("git", ["merge-base", "HEAD", "origin/main"], stderr_to_stdout: true) do
-        {out, 0} ->
-          String.trim(out)
-
-        _ ->
-          case System.cmd("git", ["rev-list", "--max-parents=0", "HEAD"], stderr_to_stdout: true) do
-            {out, 0} -> out |> String.trim() |> String.split("\n", trim: true) |> List.first()
-            _ -> nil
-          end
-      end
-    end
-  end
+  @spec h6_floor_commit() :: String.t()
+  defp h6_floor_commit, do: @h6_floor_commit
 
   # Two git calls: (A) find the file's first-ever appearance in history
   # (`--diff-filter=A`, `--follow` across renames, `--reverse` for oldest

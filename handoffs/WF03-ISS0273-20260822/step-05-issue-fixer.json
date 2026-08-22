@@ -1,0 +1,54 @@
+{
+  "handoff_id": "b5f60d2a-a31b-3546-27f8-6d7e8f9a0b11",
+  "run_id": "WF03-ISS0273-20260822",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0273-20260822/step-05-issue-fixer.json",
+  "created_at": "2026-08-22T12:59:21Z",
+  "started_at": "2026-08-22T12:59:21Z",
+  "completed_at": "2026-08-22T13:00:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/issues/ISS-0273.yaml",
+      "handoffs/WF03-ISS0273-20260822/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0273-20260822/step-04c-test-runner.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Close ISS-0273 per WF-03_issue_resolving.md Step 5. Root cause (the @h6_floor_commit BOOTSTRAP placeholder never being pinned after the ISS-0262 merge) has been fixed, verified by mix test (20/20 including the 3 previously-failing assertions), full suite (1775/1775) and mix letflow.lint_handoffs (0 new violations). Set docs/issues/ISS-0273.yaml status to resolved with resolved_in_run/resolved_at per ISSUE_QUEUE.md's vocabulary. Also decide on Step 01's carried-forward MINOR finding: docs/issues/ISS-0273.yaml is filed at severity MINOR but this is a confirmed recurrence of ISS-0262's root cause -- per WF-03 Step 0.5's own rule ('if recurring, flag severity as at least MAJOR regardless of the original severity'), update severity to MAJOR in the same edit and state why in the issue file's own notes/resolution field. github_issue is 537 -- if gh is reachable, close it with a comment per ISSUE_QUEUE.md's resolved-status comment template, citing this run-id and the test file as the regression coverage.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0273.yaml status: resolved with correct resolved_in_run/resolved_at keys (real UTC timestamp)",
+      "severity updated to MAJOR with stated reasoning (confirmed recurrence of ISS-0262)",
+      "GH#537 closed with an accurate comment if gh is reachable, citing the run-id and regression test coverage",
+      "next_action names Step Final (git merge)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Closed ISS-0273 per WF-03 Step 5. Status set to resolved in docs/issues/ISS-0273.yaml with resolved_in_run: WF03-ISS0273-20260822 and resolved_at: 2026-08-22T13:00:40Z (real UTC timestamp from the clock). Severity raised MINOR -> MAJOR: Step 1's diagnosis (handoffs/WF03-ISS0273-20260822/step-01-issue-fixer.json) established this is a confirmed recurrence of ISS-0262's root cause -- ISS-0262's implementation pass left @h6_floor_commit as a documented BOOTSTRAP placeholder with a mandatory Step-Final follow-up (pin the literal to the freshly-fetched origin/main tip) that was never executed when 184d846 merged, so resolve_h6_floor_commit/0 kept re-deriving the H6 floor via a live `git merge-base HEAD origin/main` on every run. Per Step 0.5's rule, a recurrence is flagged at least as severe as the original (ISS-0262 was MAJOR), so MAJOR is correct regardless of ISS-0273's own filed severity -- reasoning recorded in the yaml's own resolution_notes field. Fix verified via this run's own Step 3/4 evidence: commit 40f1b19 pinned @h6_floor_commit to c4a8e39729e253397d4f1aa34155a74522930252 (184d846's parent) and removed the BOOTSTRAP git-merge-base fallback; mix test test/mix/tasks/letflow.lint_handoffs_test.exs is 20/20 passing (including the 3 previously-failing assertions T-NEW-AFTER-FLOOR-HARD-FAILS, F-H6-CONTENT-NEVER-READ, F-H6-FIRES-NEW); full suite 1775/1775 passed; mix letflow.lint_handoffs exit 0, 0 new violations (all per handoffs/WF03-ISS0273-20260822/step-04c-test-runner.json and test/reports/report-20260822-WF03-ISS0273-20260822.yaml). github_issue 537 was reachable via gh: closed with `gh issue close 537 --comment \"Fixed in WF03-ISS0273-20260822. See docs/issues/ISS-0273.yaml and the regression test at test/mix/tasks/letflow.lint_handoffs_test.exs (...) -- 20/20 passing post-fix.\"` -- comment claims only what this run actually did, per ISSUE_QUEUE.md's resolved-status template.",
+    "artifacts_out": ["docs/issues/ISS-0273.yaml"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0273-20260822",
+      "commit_sha_list": ["252d762"],
+      "remote_branch": "origin/feature/WF03-ISS0273-20260822",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step Final (git merge) -- issue resolved, GH#537 closed, all gates green."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

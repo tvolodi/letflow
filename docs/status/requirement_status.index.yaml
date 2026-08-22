@@ -210,7 +210,7 @@ volumes:
     path: docs/status/requirement_status.v3.yaml
     status: current
     opened: 2026-08-22
-    entries: 19
+    entries: 20
     note: >
       Opened by ISS-0263's roll (WF03-ISS0263-20260822), successor to volume 2.
       Created with volume 2's header text verbatim (volume number, opening date
@@ -318,6 +318,9 @@ volumes:
       written, from WF03-ISS0274-20260822's SCOPE-CHANGE done-event landing
       without its own index-note increment; both are folded into this
       recount rather than corrected retroactively).
+      Incremented to 20 by DOC-UPDATER's own REQ-116 done-event append
+      (ADHOC-20260822-001, Step E) -- 20 on-disk `- req:` entries in
+      requirement_status.v3.yaml, no rebase conflict on this file.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

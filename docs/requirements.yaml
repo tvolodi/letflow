@@ -5669,7 +5669,7 @@ requirements:
   - id: REQ-116
     title: API-contract gap inventory -- drive the migrated SPA against Letflow and record what breaks
     owner: FRONTEND-DEV
-    status: in_progress
+    status: done
     stage: S8
     impl_order: 242  # letflow-queue task id; depends_on translated to queue task ids [138, 234]
     description: >

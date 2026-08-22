@@ -652,3 +652,31 @@ history:
       does not fit an investigation-only requirement) rather than the
       literal WF-02 steps. Depends_on REQ-071 (queue 138) and REQ-128
       (queue 234), both done. Status flipped pending -> in_progress here.
+  - req: REQ-116
+    event: done
+    agent: FRONTEND-DEV
+    at: "2026-08-22T14:31:34Z"
+    note: >
+      ADHOC-20260822-001 (queue task 242, GH#480) done. FRONTEND-DEV
+      produced docs/frontend/contract-gaps.md (149 lines): 26/26 routes
+      from web/src/router.tsx reconciled (2 WORKS / 14
+      NOT-YET-IMPLEMENTED / 6 SHAPE-MISMATCH, remainder layout/callback
+      routes excluded with a stated reason), taken against commit
+      00bbdc6e3acda6e0abe6dfcb68ac7f675e984af9, authenticated as
+      operator-user/admin-user (seeded via
+      priv/keycloak/realms/bpm-default.json), read-only against lib/ and
+      web/src/ (confirmed independently by SECURITY-REVIEWER, REVIEWER,
+      and RELEASE-VALIDATOR -- no diff under either path).
+      SECURITY-REVIEWER PASS (no tenant-data path, no secrets in the
+      artefact). REVIEWER PASS (no scope creep, citations spot-checked
+      accurate; one non-blocking line-number-drift note on row 14's
+      citation, not corrected here). RELEASE-VALIDATOR independently
+      re-verified all 7 acceptance criteria PASS, including
+      independently re-running `grep -c "path:" web/src/router.tsx` = 26
+      and spot-checking rows 17/19/23/25/26 against real source. Two
+      live-environment-only findings recorded in the artefact as
+      candidate follow-on requirements (Keycloak client missing an
+      audience mapper; no default-tenant dev-bootstrap path) but NOT
+      fixed here -- out of this requirement's read-only scope -- and NOT
+      committed as any code/config change. Status flipped in_progress ->
+      done here.

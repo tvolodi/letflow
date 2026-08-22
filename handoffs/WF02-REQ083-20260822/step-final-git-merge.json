@@ -1,0 +1,53 @@
+{
+  "handoff_id": "b7e4f1a2-9d3c-4a86-8e1f-2c5d9a0b6f74",
+  "run_id": "WF02-REQ083-20260822",
+  "workflow_id": "WF-02",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ083-20260822/step-final-git-merge.json",
+  "created_at": "2026-08-22T07:00:00Z",
+  "started_at": "2026-08-22T07:00:00Z",
+  "completed_at": "2026-08-22T07:15:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-083"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ083-20260822/step-06-doc-updater.json"
+    ],
+    "branch_name": "feature/WF02-REQ083-20260822"
+  },
+  "task": {
+    "description": "Run GIT_MERGE.md's procedure (Worktree variant) for this secondary-worktree checkout: rebase feature/WF02-REQ083-20260822 onto origin/main, resolve conflicts, verify format/compile/full-suite green, push, open PR, squash-merge, clean up back to a detached HEAD at origin/main.",
+    "acceptance_criteria": [
+      "gh pr merge exited 0 (or PARTIAL correctly reported per the worktree variant's step-8 local side-effect error)",
+      "git rev-parse HEAD equals git rev-parse origin/main",
+      "git log --oneline -1 shows the squash-merge commit",
+      "git status shows a clean working tree (detached HEAD expected)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "git status was clean at start (all six prior gates' agents had already committed/pushed their own work), so proceeded straight to step 4 (fetch) per the dispatch note. First rebase onto origin/main (6394b8c) hit one conflict in docs/status/requirement_status.v2.yaml's append-only tail: this run's Step 00 REQ-083-started entry (05:23:40Z) vs. ISS-0227's done entry (05:10:23Z) that had landed on main in the interim. Composed both in chronological order by `at:` timestamp (ISS-0227 done, then REQ-083 started) rather than choosing a side. Post-rebase mix format --check-formatted and mix compile --warnings-as-errors were both clean; full mix test run found 1 failure -- test/docs/requirement_status_invariants_test.exs A9, declared entries: 32 vs actual 33 on disk for requirement_status.v2.yaml, directly attributable to the rebase composition (neither side's declared count in requirement_status.index.yaml reflected the merge). Fixed in a follow-up commit on the branch (32 -> 33, standard provenance note appended) rather than filed externally. Re-ran mix test clean: 1607/1607 passed, 0 failures (the Step 4 run's own unrelated Letflow.EngineConcurrencyTest timing flake, ISS-0260/GH#507, did not reproduce here). Plain git push was rejected non-fast-forward (expected -- rebase rewrote Step 00's published commits); republished with --force-with-lease scoped only to this branch, accepted. Opened PR #511. First gh pr merge --squash --delete-branch attempt failed: 'not mergeable' -- origin/main had advanced again (836a25b, ISS-0258) while the PR was open. Re-fetched and rebased a second time. This second rebase hit two further conflicts in the same file's tail: (1) Step 00's replay against ISS-0258's SCOPE-CHANGE/done entry (06:40:00Z) -- composed REQ-083 started (05:23:40Z) before ISS-0258 done (06:40:00Z), chronological order; (2) Step 6's REQ-083-done append (06:33:39Z) against the same ISS-0258 entry -- composed REQ-083 done before ISS-0258 done, again chronological order; (3) this run's own earlier index-count-fix commit conflicted with ISS-0258's own index-count-fix commit (both had appended a provenance note to the same scalar) -- resolved by writing one composed note describing both rebase attempts and correcting the declared count to the true recount (34, verified by grep -c '^  - req:' against the composed file each time, never carried forward from either side, per the file's own documented convention illustrated by WF03-ISS0227-20260822's precedent entry). Re-verified clean after the second rebase: mix format --check-formatted clean, mix compile --warnings-as-errors clean, mix test 1664/1664 passed (test count grew because ISS-0258 added its own tests), 0 failures, 0 attributable to this branch. Re-pushed with --force-with-lease, accepted. Updated the PR body to reflect the second rebase and the real 1664/1664 count, then gh pr merge --squash --delete-branch: GitHub-side merge succeeded but the local checkout switch to main errored as expected under the worktree variant ('main' already checked out at letflow-wt2). Verified via gh pr view 511 --json state,mergedAt -> MERGED, mergeCommit 87bd88d, before treating anything as failed. gh api DELETE on the remote branch ref returned 'Reference does not exist' (422) -- confirms --delete-branch's remote side had already run despite the local-checkout error. Ran the worktree variant's step 9w: git fetch origin main --prune, git checkout --detach origin/main, then git branch -d feature/WF02-REQ083-20260822 (warned merged-to-remote-not-to-local-HEAD, which is expected under detached HEAD; deleted cleanly). Final verification: git rev-parse HEAD == git rev-parse origin/main == 87bd88dd4a9b2cadc96543a1cc35f79bccf154a4; git log --oneline -1 -> '87bd88d feat: task routes read path -- list/get/inbox (tasks.zig port) [WF02-REQ083-20260822] (#511)'; git status -> 'HEAD detached at origin/main', clean working tree.",
+    "artifacts_out": [
+      "docs/status/requirement_status.v2.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "handoffs/WF02-REQ083-20260822/step-final-git-merge.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ083-20260822 (deleted, squash-merged)",
+      "commit_sha_list": ["ccc2cf4", "f5a5413"],
+      "remote_branch": "origin/feature/WF02-REQ083-20260822 (deleted)",
+      "push_status": "force-with-lease, accepted (twice, once per rebase attempt)",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/511",
+      "pr_create_error": null,
+      "merge_commit_sha": "87bd88dd4a9b2cadc96543a1cc35f79bccf154a4"
+    },
+    "next_action": "ORCH marks WF02-REQ083-20260822 COMPLETED and releases queue task 150's lock (per this run's own dispatch, that release is ORCH's responsibility, not part of this step)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

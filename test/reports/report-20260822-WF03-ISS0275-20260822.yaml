@@ -1,0 +1,96 @@
+report_id: report-20260822-WF03-ISS0275-20260822
+agent: TEST-RUNNER
+issue: ISS-0275
+workflow_step: WF-03 Step 4 (full-suite test run, ahead of Step Final merge)
+branch: fix/WF03-ISS0275-20260822
+date: 2026-08-22
+command: "docker compose up -d; sh scripts/test_parallel.sh"
+
+toolchain:
+  platform: "Windows 11"
+
+environment:
+  postgres: >
+    `docker compose up -d` in this worktree checkout. Initial attempt failed:
+    "Bind for 0.0.0.0:8082 failed: port is already allocated" -- a sibling
+    checkout (letflow-2-keycloak-1) already held the 8082 default. This
+    worktree's untracked .env only carried LETFLOW_DB_PORT=5472 (already
+    disambiguated from the 5462 default); LETFLOW_KEYCLOAK_PORT had no
+    override yet, so this worktree's keycloak still tried the shared 8082
+    default. Added `LETFLOW_KEYCLOAK_PORT=8092` to this worktree's .env
+    (same per-workspace-local-state pattern already used for
+    LETFLOW_DB_PORT, per docker-compose.yml's own documented override
+    mechanism) and re-ran `docker compose up -d` -- both containers came up
+    healthy (postgres 5472, keycloak 8092).
+  db_setup: >
+    Each test_parallel.sh partition's own `mix test` invocation performs
+    ecto.create/ecto.migrate --quiet automatically via the `test` alias -- no
+    separate DB-setup step taken here.
+  parallel_n: "16 (source: nproc, auto-derived, no TEST_PARALLEL_N override given)"
+
+# ---------------------------------------------------------------------------
+# Full suite (quoted verbatim)
+# ---------------------------------------------------------------------------
+
+run:
+  result: >
+    test_parallel: N=16 (source: nproc)
+    test_parallel: TEST_POOL_SIZE=5 (computed: N=16, max_connections=100, headroom=10)
+    partition 1: 106 tests, 1 property, 0 failures, exit 0
+    partition 2: 101 tests, 0 properties, 0 failures, exit 0
+    partition 3: 82 tests, 0 properties, 0 failures, exit 0
+    partition 4: 122 tests, 0 properties, 0 failures, exit 0
+    partition 5: 108 tests, 0 properties, 0 failures, exit 0
+    partition 6: 110 tests, 0 properties, 0 failures, exit 0
+    partition 7: 120 tests, 0 properties, 0 failures, exit 0
+    partition 8: 127 tests, 0 properties, 0 failures, exit 0
+    partition 9: 100 tests, 2 properties, 0 failures, exit 0
+    partition 10: 166 tests, 2 properties, 0 failures, exit 0
+    partition 11: 82 tests, 0 properties, 0 failures, exit 0
+    partition 12: 80 tests, 0 properties, 0 failures, exit 0
+    partition 13: 119 tests, 0 properties, 0 failures, exit 0
+    partition 14: 122 tests, 0 properties, 0 failures, exit 0
+    partition 15: 116 tests, 0 properties, 0 failures, exit 0
+    partition 16: 113 tests, 0 properties, 0 failures, exit 0
+    combined: 1774 tests, 5 properties, 0 failures (1779/1779 passed)
+  exit_code: 0
+  attribution: >
+    All 16 partitions completed with exit 0 and 0 parsed failures -- clean run,
+    zero failures of any kind (attributable or pre-existing) in this run. Per
+    core-directives.md's "Failure Attribution Is Structural, Never By
+    Count-Matching": there is no prior run's count being compared against here
+    -- this is a direct structural finding (0 failures observed), not an
+    inference from count deltas. No failures exist to attribute to this
+    branch's two commits (b92a93e, 72bfd12) or to anything pre-existing.
+
+new_test_confirmed_running: >
+  test/letflow/api/keycloak_realm_audience_mapper_test.exs (added in 72bfd12) is
+  collected by mix test's default path glob (test/**/*_test.exs) -- no
+  --only/--exclude tag scoping in mix.exs excludes it, and it is not present in
+  any log's "excluded" summary line. ExUnit's default (non---trace) formatter
+  does not print individual test names into partition logs, so grepping the
+  16 partition logs for "audience"/"ISS-0275" found nothing -- that is expected
+  formatter behavior, not evidence the test was skipped. Ran it in isolation to
+  confirm directly:
+  `MIX_ENV=test mix test test/letflow/api/keycloak_realm_audience_mapper_test.exs --no-color`
+  -> "Result: 4 passed", exit 0. All 4 assertions (oidc-audience-mapper present in
+  bpm-default.json, correct client-id config, mapper type, included-in-* claims)
+  pass against this branch's b92a93e fix.
+
+verdict: PASS
+
+merge_readiness: >
+  CLEAR TO MERGE. No attributable failures -- in fact no failures at all, of any
+  kind, anywhere in the 1779-test/property combined run. This branch's only
+  runtime-relevant change (b92a93e: added oidc-audience-mapper to
+  priv/keycloak/realms/bpm-default.json) has no lib/letflow/ code path exercising
+  it at unit-test level beyond the new regression test itself, which passes.
+  No `lib/letflow/` module was touched by either commit on this branch, so there
+  is no additional surface for this change to have regressed.
+
+summary_line: >
+  Full suite: 1779/1779 passed (0 failures) across all 16 partitions, exit 0
+  throughout. New regression test (keycloak_realm_audience_mapper_test.exs, 4
+  tests) confirmed running and passing both in the full parallel run and in
+  isolation. No lib/letflow/ code changed on this branch. Nothing to attribute
+  -- zero failures of any kind observed. Clear to merge.

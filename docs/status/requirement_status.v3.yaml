@@ -680,3 +680,46 @@ history:
       fixed here -- out of this requirement's read-only scope -- and NOT
       committed as any code/config change. Status flipped in_progress ->
       done here.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-08-22T15:10:38Z"
+    note: >
+      WF03-ISS0275-20260822 (queue task 275, GH#545) done. Root cause
+      confirmed directly against deps/oidcc/src/oidcc_token.erl:
+      Oidcc.Token.validate_jwt/3 rejects any token whose aud claim does not
+      contain the configured client_id ("letflow-web"), unconditionally.
+      priv/keycloak/realms/bpm-default.json's letflow-web client had only
+      the pre-existing realm-roles mapper, so no aud claim was ever added
+      to issued tokens -- every authenticated request 401ed. Fixed by
+      appending a standard oidc-audience-mapper protocol mapper
+      (included.client.audience: letflow-web, access.token.claim: true,
+      id.token.claim: false) to that client, per a CODE-DESIGN-VALIDATOR-
+      approved design (lib/letflow/design/iss0275-audience-mapper-fix.md),
+      plus a correction addendum to
+      lib/letflow/design/req128-keycloak-dev-stack.md (its original "no
+      audience mapper is added" scope note was based on an incorrect
+      assumption about Oidcc's validation requirements -- REQ-128's own
+      design had explicitly, and wrongly, ruled this out). Verified
+      against a genuinely FRESH Keycloak provisioning (docker compose -p
+      iss0275verify up -d keycloak, distinct project/port from the
+      already-hand-patched live sibling container) -- a password-grant
+      token for operator-user against letflow-web decoded to aud:
+      "letflow-web". SECURITY-REVIEWER PASS (mapper scoped narrowly to
+      letflow-web's own client id, no wildcard/custom-audience
+      broadening, no secret material, no other client touched; no
+      tenant-isolation/field-authz/secrets invariant applies to this
+      realm-config-only change). REVIEWER PASS (diff matches validated
+      design exactly, decision-record correction genuinely append-only,
+      no scope creep, no lib/letflow/ runtime code touched).
+      TEST-DESIGNER added a static-fixture regression test
+      (test/letflow/api/keycloak_realm_audience_mapper_test.exs, commit
+      72bfd12) asserting the mapper's presence/config plus a regression
+      guard on the untouched realm-roles mapper; TEST-DESIGN-VALIDATOR
+      independently reproduced the fail-then-pass proof itself (pre-fix
+      content swapped to commit 9178d2b: 1/4 passed, 3 correctly failed;
+      restored: 4/4 passed, git status --porcelain clean). TEST-RUNNER
+      ran the full suite (sh scripts/test_parallel.sh): 1774 tests, 5
+      properties, 0 failures, 1779/1779 passed -- completely clean, no
+      attribution needed. docs/issues/ISS-0275.yaml marked resolved;
+      GH#545 closed.

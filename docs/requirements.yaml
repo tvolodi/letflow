@@ -6112,7 +6112,7 @@ requirements:
   - id: REQ-127
     title: State the platform locale policy (MOB-7 prerequisite, frontend-owned)
     owner: FRONTEND-DEV
-    status: pending
+    status: done
     stage: S9
     impl_order: 233  # letflow-queue task id
     description: >

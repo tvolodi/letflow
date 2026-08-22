@@ -17,6 +17,17 @@
 
 ## 2. Color Tokens
 
+**Not yet implemented.** This section describes the intended token model, carried over
+verbatim from R-Co. As migrated into Letflow, `web/src/styles/tokens.css` does not
+exist — there is no `.css` file under `web/src/` at all — and components use inline
+`style={{...}}` objects with literal hex values instead of the custom properties
+described below. What to do about this gap (build `tokens.css` as described here,
+adopt `design-tokens/letflow.tokens.json` as the source instead, or record inline
+styles as the accepted approach and rewrite this section to match) is `REQ-120`'s
+subject, not yet decided. Treat the palette below as the specification target, not as
+a description of the code as it stands. See also `web/README.md`'s "Known drift"
+section.
+
 All colors are defined as CSS custom properties in `web/src/styles/tokens.css`. Never use raw hex/rgb values outside this file.
 
 ### 2.1 Base palette

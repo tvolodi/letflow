@@ -2,7 +2,10 @@
 
 **Version:** 0.1-draft · 2026-05-20  
 **Backend reference:** BPM_Platform_Functional_Requirements.md v0.2-draft  
-**Technology stack:** React 19 + TypeScript 5, Vite, React Router v7
+**Technology stack:** React 18.3.1 + TypeScript 5, Vite, React Router v7
+(React version corrected 2026-08-22 under `REQ-119` to match the version
+actually locked in `web/package-lock.json`; this document originally said
+"React 19", carried over from R-Co)
 
 ---
 

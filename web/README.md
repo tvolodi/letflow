@@ -126,16 +126,24 @@ the same way `docs/anti-patterns.md` works on the backend.
 Recorded honestly rather than silently fixed — each is a candidate S8
 requirement, not something this migration changed:
 
-- **React version.** `docs/frontend/frontend-requirements.md` and R-Co's own
-  frontend guide both say "React 19". The installed and locked version is
-  **React 18.3.1**. The docs are wrong, not the code.
-- **No stylesheet exists.** `docs/frontend/design-system.md` §2 says all colours
-  live as CSS custom properties in `web/src/styles/tokens.css`. That file does
-  not exist and never did — there is no `.css` file in `src/` at all, and
-  components use inline `style={{...}}` objects with literal hex values. The
-  `literal-colour` guard pattern only matches CSS-style declarations ending in
-  `;`, so inline JS style strings slip past it. The design system is aspirational
-  in exactly the place it claims to be enforced.
+- **React version — fixed by `REQ-119`.** `docs/frontend/frontend-requirements.md`
+  and `docs/guides/frontend_developer_guide.md` used to say "React 19". The
+  installed and locked version is **React 18.3.1** (`web/package-lock.json`).
+  Both docs now state 18.3.1; this entry is kept as a record of the drift that
+  existed at migration, not as a live discrepancy.
+- **No stylesheet exists — tracked by `REQ-120`, not yet resolved.**
+  `docs/frontend/design-system.md` §2 says all colours live as CSS custom
+  properties in `web/src/styles/tokens.css`. That file does not exist and
+  never did — there is no `.css` file in `src/` at all, and components use
+  inline `style={{...}}` objects with literal hex values. The `literal-colour`
+  guard pattern only matches CSS-style declarations ending in `;`, so inline JS
+  style strings slip past it. `REQ-119` marked `design-system.md` §2 as
+  not-yet-implemented with a pointer to `REQ-120` rather than deleting or
+  silently fixing the claim; `REQ-120` is the design requirement that will
+  pick one of build-`tokens.css`, adopt-the-JSON-token-file, or
+  record-inline-styles-as-accepted, and correct the doc (and the guard, if
+  applicable) to match. The design system stays aspirational in exactly the
+  place it claims to be enforced until that lands.
 - **Bundle size.** The production build emits a single 1.66 MB chunk
   (442 kB gzipped) and Vite warns about it. No code-splitting is configured
   beyond one lazy `autoLayout` chunk.

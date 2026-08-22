@@ -5,9 +5,19 @@ defmodule Letflow.Identity.Tenant do
   migration/backfill semantics", "Core types" `Tenant` struct, "Key
   invariants" 1-2).
 
-  `status` distinguishes `:active` from `:migrating` — the latter is the
-  concrete write-pause state R-Co's `src/api/middleware/tenant_status.zig`
-  checks before allowing a mutating request through (see REQ-021).
+  `status` distinguishes `:active` from `:migrating` from `:inactive` —
+  `:migrating` is the concrete write-pause state R-Co's
+  `src/api/middleware/tenant_status.zig` checks before allowing a mutating
+  request through (see REQ-021); `:inactive` (REQ-075) is the broader
+  deactivation state `Letflow.Plugs.TenantStatus` rejects on **every** HTTP
+  method (not just writes) for any non-`PLATFORM_ADMIN` caller — see that
+  module's moduledoc, and `docs/migration/stage-4-api-surface.md`'s
+  2026-08-22 (REQ-075) REVIEWER sign-off entry for the exact authorized
+  shape. Only `Letflow.Identity.deactivate_tenant/1` and
+  `Letflow.Identity.reactivate_tenant/1` (via `status_changeset/2` below)
+  ever write `:inactive`/`:active` through this path — `PATCH
+  /tenants/:slug` cannot, structurally (see `admin_patch_changeset/2`'s
+  @doc).
 
   `idp_realm_id` is nullable at the column level. adp-04b's own forward
   constraint ("non-default tenant insert requires non-empty idp_realm_id")
@@ -53,7 +63,7 @@ defmodule Letflow.Identity.Tenant do
   schema "tenants" do
     field(:slug, :string)
     field(:display_name, :string)
-    field(:status, Ecto.Enum, values: [:active, :migrating], default: :active)
+    field(:status, Ecto.Enum, values: [:active, :migrating, :inactive], default: :active)
     field(:idp_realm_id, :string)
 
     timestamps()
@@ -101,6 +111,36 @@ defmodule Letflow.Identity.Tenant do
     |> cast(attrs, [:display_name, :status])
     |> validate_required([:display_name])
     |> unique_constraint(:slug)
+  end
+
+  @doc """
+  Changeset for `PATCH /tenants/:slug` (REQ-075) — casts **only**
+  `:display_name`. `:status` is deliberately absent from this changeset's
+  cast list (a real, flagged divergence from `update_changeset/2`'s cast
+  list, which includes `:status` — see
+  `lib/letflow/design/req075-tenant-administration-routes.md` §6.4): this is
+  what makes it structurally impossible for `PATCH /tenants/:slug` to ever
+  flip a tenant's `:status`, so `deactivate_tenant/1`/`reactivate_tenant/1`
+  (via `status_changeset/2`) remain the only two writers of that field. `:slug`
+  and `:idp_realm_id` are absent for the same reason `update_changeset/2`
+  excludes them (immutability).
+  """
+  @spec admin_patch_changeset(t :: %__MODULE__{}, attrs :: map()) :: Ecto.Changeset.t()
+  def admin_patch_changeset(tenant, attrs) do
+    cast(tenant, attrs, [:display_name])
+  end
+
+  @doc """
+  Changeset for `POST /tenants/:slug/deactivate` and `POST
+  /tenants/:slug/reactivate` (REQ-075) — casts **only** `:status`. Mirrors
+  `admin_patch_changeset/2`'s structural-impossibility discipline in the
+  other direction: this changeset cannot ever touch `:display_name`.
+  """
+  @spec status_changeset(t :: %__MODULE__{}, attrs :: map()) :: Ecto.Changeset.t()
+  def status_changeset(tenant, attrs) do
+    tenant
+    |> cast(attrs, [:status])
+    |> validate_required([:status])
   end
 
   defp validate_default_tenant_pinning(changeset) do

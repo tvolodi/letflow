@@ -1,0 +1,436 @@
+defmodule Letflow.Routers.TenantsTest do
+  @moduledoc """
+  Tests for `Letflow.Routers.Tenants` (REQ-075) — the six tenant-administration
+  handlers. See `lib/letflow/design/req075-tenant-administration-routes.md`
+  §3/§4.3/§5/§6/§7.1 for the test-case rationale this file implements directly.
+
+  Uses `Letflow.DataCase` (real Postgres, per `docs/guides/test_developer_guide.md`
+  DIRECTIVE T-1) and `Letflow.TenantFixture` for real provisioned tenant schemas.
+  `async: false` — tenant provisioning/migration replay needs
+  `Sandbox.mode(Letflow.Repo, :auto)`, matching `test/letflow/routers/identity_test.exs`'s
+  own established pattern for this class of test.
+
+  Dispatch is direct `Letflow.Routers.Tenants.call/2` with `conn.assigns[:auth_context]`
+  set directly (bypassing the full `Letflow.Router` -> `Letflow.Plugs.ApiPipeline` ->
+  `AuthPipeline` chain) — this router's own `with_authorization/4` preamble reads
+  `conn.assigns.auth_context` directly, so nothing about the handlers under test depends
+  on how that assign got populated. `Letflow.Plugs.TenantStatus`'s own REQ-075 AC5
+  behavior (a plug mounted ABOVE this router, not inside it) is tested separately in
+  `test/letflow/plugs/tenant_status_test.exs` — dispatching through this router alone
+  would never invoke that plug at all.
+  """
+
+  use Letflow.DataCase, async: false
+
+  import Plug.Test
+  import Plug.Conn
+  import Ecto.Query, only: [from: 2]
+
+  alias Letflow.Identity.Tenant
+  alias Letflow.TenantFixture
+  alias Letflow.TenantProvisioning
+
+  @opts Letflow.Routers.Tenants.init([])
+
+  # ── Shared test dispatch helper ─────────────────────────────────────────
+
+  # `tenant_fixture` may be `nil` (the caller's own tenant identity is irrelevant to
+  # this router's authorization -- only `roles` matters, per the design's pure-role
+  # gate, §7.1's own note on this exact point).
+  defp build_conn(method, path, tenant_fixture, fields) do
+    roles = Keyword.get(fields, :roles, [])
+    body = Keyword.get(fields, :body, nil)
+
+    conn = conn(method, path)
+
+    conn =
+      if body do
+        %{conn | body_params: body}
+        |> put_req_header("content-type", "application/json")
+      else
+        conn
+      end
+
+    tenant_id = if tenant_fixture, do: tenant_fixture.tenant_id, else: Ecto.UUID.generate()
+
+    conn
+    |> assign(:auth_context, %{user_id: Ecto.UUID.generate(), tenant_id: tenant_id, roles: roles})
+    |> assign(:trace_id, "fixed-test-trace-id")
+  end
+
+  defp dispatch(conn), do: Letflow.Routers.Tenants.call(conn, @opts)
+
+  # ── AC1: full-body 403 for a non-PLATFORM_ADMIN caller, zero tenant data ───
+
+  describe "AC1: GET /tenants as a non-PLATFORM_ADMIN caller" do
+    setup do
+      %{
+        tenant: TenantFixture.provisioned_tenant!(slug_prefix: "req075-list-403"),
+        other: TenantFixture.provisioned_tenant!(slug_prefix: "req075-list-403-other")
+      }
+    end
+
+    test "returns 403 and no tenant data whatsoever, full-body assertion", %{
+      tenant: tenant,
+      other: other
+    } do
+      resp = build_conn(:get, "/", tenant, roles: ["PROCESS_DESIGNER"]) |> dispatch()
+
+      assert resp.status == 403
+
+      assert Jason.decode!(resp.resp_body) == %{
+               "type" => "https://bpm.example.com/problems/forbidden",
+               "title" => "Forbidden",
+               "status" => 403,
+               "detail" => "insufficient permissions",
+               "trace_id" => "fixed-test-trace-id"
+             }
+
+      refute resp.resp_body =~ other.tenant.slug
+      refute resp.resp_body =~ "items"
+      refute resp.resp_body =~ "count"
+    end
+  end
+
+  # ── AC2: cross-tenant rejection, four verbs, row unchanged ──────────────
+
+  describe "AC2: cross-tenant rejection on all four write/read verbs, row unchanged" do
+    setup do
+      %{
+        tenant_a: TenantFixture.provisioned_tenant!(slug_prefix: "req075-cross-a"),
+        tenant_b: TenantFixture.provisioned_tenant!(slug_prefix: "req075-cross-b")
+      }
+    end
+
+    test "GET /tenants/:slug on another tenant's record is rejected, row unchanged", %{
+      tenant_a: tenant_a,
+      tenant_b: tenant_b
+    } do
+      before = Repo.get!(Tenant, tenant_b.tenant_id)
+
+      resp =
+        build_conn(:get, "/#{tenant_b.tenant.slug}", tenant_a, roles: ["PROCESS_DESIGNER"])
+        |> dispatch()
+
+      assert resp.status == 403
+      assert Repo.get!(Tenant, tenant_b.tenant_id) == before
+    end
+
+    test "PATCH /tenants/:slug on another tenant's record is rejected, row unchanged despite a well-formed body",
+         %{tenant_a: tenant_a, tenant_b: tenant_b} do
+      before = Repo.get!(Tenant, tenant_b.tenant_id)
+
+      resp =
+        build_conn(:patch, "/#{tenant_b.tenant.slug}", tenant_a,
+          roles: ["PROCESS_DESIGNER"],
+          body: %{"display_name" => "Hijacked"}
+        )
+        |> dispatch()
+
+      assert resp.status == 403
+      assert Repo.get!(Tenant, tenant_b.tenant_id) == before
+    end
+
+    test "POST /tenants/:slug/deactivate on another tenant's record is rejected, row unchanged",
+         %{tenant_a: tenant_a, tenant_b: tenant_b} do
+      before = Repo.get!(Tenant, tenant_b.tenant_id)
+
+      resp =
+        build_conn(:post, "/#{tenant_b.tenant.slug}/deactivate", tenant_a,
+          roles: ["PROCESS_DESIGNER"]
+        )
+        |> dispatch()
+
+      assert resp.status == 403
+      assert Repo.get!(Tenant, tenant_b.tenant_id) == before
+    end
+
+    test "POST /tenants/:slug/reactivate on another (pre-deactivated) tenant's record is rejected, status unchanged",
+         %{tenant_a: tenant_a, tenant_b: tenant_b} do
+      tenant_b.tenant |> Tenant.status_changeset(%{status: :inactive}) |> Repo.update!()
+
+      resp =
+        build_conn(:post, "/#{tenant_b.tenant.slug}/reactivate", tenant_a,
+          roles: ["PROCESS_DESIGNER"]
+        )
+        |> dispatch()
+
+      assert resp.status == 403
+      assert Repo.get!(Tenant, tenant_b.tenant_id).status == :inactive
+    end
+  end
+
+  # ── AC3: own-tenant access rule, both directions ────────────────────────
+
+  describe "AC3: own-tenant access is not a carve-out" do
+    test "PLATFORM_ADMIN can GET/PATCH their own home tenant's record, same as any other" do
+      admin_tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req075-own-admin")
+
+      get_resp =
+        build_conn(:get, "/#{admin_tenant.tenant.slug}", admin_tenant, roles: ["PLATFORM_ADMIN"])
+        |> dispatch()
+
+      assert get_resp.status == 200
+
+      patch_resp =
+        build_conn(:patch, "/#{admin_tenant.tenant.slug}", admin_tenant,
+          roles: ["PLATFORM_ADMIN"],
+          body: %{"display_name" => "Renamed By Self"}
+        )
+        |> dispatch()
+
+      assert patch_resp.status == 200
+      assert Jason.decode!(patch_resp.resp_body)["display_name"] == "Renamed By Self"
+    end
+
+    test "a non-PLATFORM_ADMIN caller is denied GET/PATCH on their OWN home tenant's record" do
+      own_tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req075-own-denied")
+      before = Repo.get!(Tenant, own_tenant.tenant_id)
+
+      get_resp =
+        build_conn(:get, "/#{own_tenant.tenant.slug}", own_tenant, roles: ["PROCESS_DESIGNER"])
+        |> dispatch()
+
+      assert get_resp.status == 403
+
+      patch_resp =
+        build_conn(:patch, "/#{own_tenant.tenant.slug}", own_tenant,
+          roles: ["PROCESS_DESIGNER"],
+          body: %{"display_name" => "Should Not Apply"}
+        )
+        |> dispatch()
+
+      assert patch_resp.status == 403
+      assert Repo.get!(Tenant, own_tenant.tenant_id) == before
+    end
+  end
+
+  # ── GET /tenants/:slug, PATCH /tenants/:slug — PLATFORM_ADMIN happy paths ──
+
+  describe "GET /tenants/:slug as PLATFORM_ADMIN" do
+    test "returns the allowlisted 6-key shape" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req075-get")
+
+      resp =
+        build_conn(:get, "/#{tenant.tenant.slug}", tenant, roles: ["PLATFORM_ADMIN"])
+        |> dispatch()
+
+      assert resp.status == 200
+      body = Jason.decode!(resp.resp_body)
+
+      assert Map.keys(body) |> Enum.sort() ==
+               Enum.sort(["id", "slug", "display_name", "status", "inserted_at", "updated_at"])
+
+      assert body["slug"] == tenant.tenant.slug
+      assert body["status"] == "active"
+    end
+
+    test "a non-existent slug is 404" do
+      resp =
+        build_conn(:get, "/does-not-exist-#{Ecto.UUID.generate()}", nil,
+          roles: ["PLATFORM_ADMIN"]
+        )
+        |> dispatch()
+
+      assert resp.status == 404
+    end
+  end
+
+  describe "PATCH /tenants/:slug as PLATFORM_ADMIN" do
+    test "updates display_name only -- a status key in the body is silently dropped, never applied" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req075-patch")
+
+      resp =
+        build_conn(:patch, "/#{tenant.tenant.slug}", tenant,
+          roles: ["PLATFORM_ADMIN"],
+          body: %{"display_name" => "New Name", "status" => "inactive"}
+        )
+        |> dispatch()
+
+      assert resp.status == 200
+      body = Jason.decode!(resp.resp_body)
+      assert body["display_name"] == "New Name"
+      # status structurally cannot be written via PATCH -- still :active.
+      assert body["status"] == "active"
+      assert Repo.get!(Tenant, tenant.tenant_id).status == :active
+    end
+
+    test "an empty display_name is rejected 422" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req075-patch-empty")
+
+      resp =
+        build_conn(:patch, "/#{tenant.tenant.slug}", tenant,
+          roles: ["PLATFORM_ADMIN"],
+          body: %{"display_name" => ""}
+        )
+        |> dispatch()
+
+      assert resp.status == 422
+    end
+  end
+
+  # ── POST /tenants/:slug/deactivate, /reactivate ─────────────────────────
+
+  describe "deactivate/reactivate as PLATFORM_ADMIN" do
+    test "deactivate sets status to :inactive, reactivate sets it back to :active" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req075-lifecycle")
+
+      deactivate_resp =
+        build_conn(:post, "/#{tenant.tenant.slug}/deactivate", tenant, roles: ["PLATFORM_ADMIN"])
+        |> dispatch()
+
+      assert deactivate_resp.status == 200
+      assert Jason.decode!(deactivate_resp.resp_body)["status"] == "inactive"
+      assert Repo.get!(Tenant, tenant.tenant_id).status == :inactive
+
+      reactivate_resp =
+        build_conn(:post, "/#{tenant.tenant.slug}/reactivate", tenant, roles: ["PLATFORM_ADMIN"])
+        |> dispatch()
+
+      assert reactivate_resp.status == 200
+      assert Jason.decode!(reactivate_resp.resp_body)["status"] == "active"
+      assert Repo.get!(Tenant, tenant.tenant_id).status == :active
+    end
+
+    # OQ-2: re-deactivating an already-:inactive tenant is a no-op success, not
+    # :invalid_transition.
+    test "re-deactivating an already-:inactive tenant is an idempotent no-op success" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req075-idempotent")
+      tenant.tenant |> Tenant.status_changeset(%{status: :inactive}) |> Repo.update!()
+
+      resp =
+        build_conn(:post, "/#{tenant.tenant.slug}/deactivate", tenant, roles: ["PLATFORM_ADMIN"])
+        |> dispatch()
+
+      assert resp.status == 200
+      assert Jason.decode!(resp.resp_body)["status"] == "inactive"
+    end
+
+    test "deactivate/reactivate on a non-existent slug is 404" do
+      resp =
+        build_conn(:post, "/does-not-exist-#{Ecto.UUID.generate()}/deactivate", nil,
+          roles: ["PLATFORM_ADMIN"]
+        )
+        |> dispatch()
+
+      assert resp.status == 404
+    end
+  end
+
+  # ── GET /tenants as PLATFORM_ADMIN ───────────────────────────────────────
+
+  describe "GET /tenants as PLATFORM_ADMIN" do
+    test "lists tenants in the paginated allowlisted shape" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req075-list-ok")
+
+      resp = build_conn(:get, "/", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+
+      assert resp.status == 200
+      body = Jason.decode!(resp.resp_body)
+      assert is_list(body["items"])
+      assert is_integer(body["count"])
+      assert Enum.any?(body["items"], &(&1["slug"] == tenant.tenant.slug))
+    end
+
+    test "search filters by slug/display_name substring" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req075-search-match")
+
+      resp =
+        build_conn(:get, "/?search=req075-search-match", tenant, roles: ["PLATFORM_ADMIN"])
+        |> dispatch()
+
+      assert resp.status == 200
+      body = Jason.decode!(resp.resp_body)
+      assert Enum.all?(body["items"], &String.contains?(&1["slug"], "req075-search-match"))
+    end
+  end
+
+  # ── AC4/AC7: POST /tenants full orchestration ───────────────────────────
+
+  describe "AC4/AC7: POST /tenants as PLATFORM_ADMIN" do
+    test "creates a tenant row, provisions a real schema, and replays real migrations" do
+      # Real schema creation (CREATE SCHEMA) + migration replay needs :auto sandbox
+      # mode, same as Letflow.TenantFixture.provisioned_tenant!/1 -- DDL run under
+      # the default per-test :manual/:shared sandbox transaction is not reliably
+      # visible to Ecto.Migrator.run/4's own connection checkout.
+      Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+
+      slug = "req075-create-e2e-#{Ecto.UUID.generate()}"
+
+      resp =
+        build_conn(:post, "/", nil,
+          roles: ["PLATFORM_ADMIN"],
+          body: %{"slug" => slug, "display_name" => "Create E2E"}
+        )
+        |> dispatch()
+
+      assert resp.status == 201
+      body = Jason.decode!(resp.resp_body)
+      assert body["slug"] == slug
+      tenant_id = body["id"]
+
+      on_exit(fn ->
+        case TenantProvisioning.schema_name_for_tenant(tenant_id) do
+          {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
+          {:error, :invalid_tenant_id} -> :ok
+        end
+
+        Repo.delete_all(
+          from(r in TenantProvisioning.Registration, where: r.tenant_id == ^tenant_id)
+        )
+
+        Repo.delete_all(from(t in Tenant, where: t.id == ^tenant_id))
+      end)
+
+      {:ok, schema_name} = TenantProvisioning.schema_name_for_tenant(tenant_id)
+
+      # AC4's own wording: "querying information_schema for a table in the new
+      # schema -- not by trusting the 201." `events` is tenant_scoped_migrations/0's
+      # first manifest entry.
+      %{rows: rows} =
+        Repo.query!(
+          "SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'events'",
+          [schema_name]
+        )
+
+      assert rows != []
+    end
+
+    test "a duplicate slug is rejected 409" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req075-dup")
+
+      resp =
+        build_conn(:post, "/", nil,
+          roles: ["PLATFORM_ADMIN"],
+          body: %{"slug" => tenant.tenant.slug, "display_name" => "Duplicate"}
+        )
+        |> dispatch()
+
+      assert resp.status == 409
+    end
+
+    test "a missing required field is rejected 422" do
+      resp =
+        build_conn(:post, "/", nil, roles: ["PLATFORM_ADMIN"], body: %{"slug" => "no-name"})
+        |> dispatch()
+
+      assert resp.status == 422
+    end
+  end
+
+  describe "POST /tenants as a non-PLATFORM_ADMIN caller" do
+    test "is rejected 403 before any Repo call -- no row created" do
+      slug = "req075-create-denied-#{Ecto.UUID.generate()}"
+
+      resp =
+        build_conn(:post, "/", nil,
+          roles: ["PROCESS_DESIGNER"],
+          body: %{"slug" => slug, "display_name" => "Should Not Be Created"}
+        )
+        |> dispatch()
+
+      assert resp.status == 403
+      refute Repo.get_by(Tenant, slug: slug)
+    end
+  end
+end

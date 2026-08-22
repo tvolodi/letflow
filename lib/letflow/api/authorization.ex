@@ -67,6 +67,7 @@ defmodule Letflow.Api.Authorization do
           | :DlqOperate
           | :MetricsRead
           | :WebhooksManage
+          | :TenantsManage
 
   @type access_decision_kind :: :Allow | :Deny403 | :AllowWithRowFilter
 
@@ -94,6 +95,7 @@ defmodule Letflow.Api.Authorization do
           | :ServicesRead
           | :AdminServicesManage
           | :AdminServicesRead
+          | :TenantsManage
           | :Unknown
 
   @type task_row_scope :: :all | {:own_user_and_groups, String.t()}
@@ -114,7 +116,8 @@ defmodule Letflow.Api.Authorization do
     :AuditRead,
     :DlqOperate,
     :MetricsRead,
-    :WebhooksManage
+    :WebhooksManage,
+    :TenantsManage
   ]
 
   @doc "All five `Role` values, R-Co's exact names. See `roles_from_strings/1` for untrusted-input conversion."
@@ -245,6 +248,20 @@ defmodule Letflow.Api.Authorization do
       when method in ["POST", "PATCH", "DELETE"],
       do: :AdminServicesManage
 
+  # REQ-075 — tenant administration (Letflow.Routers.Tenants), a top-level
+  # sibling router, NOT under Letflow.Routers.Identity's own /identity mount
+  # (see that router's own moduledoc for why). One permission
+  # (:TenantsManage), granted to PLATFORM_ADMIN only via the existing
+  # catch-all clause in role_allows?/2 — no new role clauses added anywhere.
+  def endpoint_policy_key("POST", "/tenants"), do: :TenantsManage
+
+  def endpoint_policy_key("GET", path) when path in ["/tenants", "/tenants/:slug"],
+    do: :TenantsManage
+
+  def endpoint_policy_key("PATCH", "/tenants/:slug"), do: :TenantsManage
+  def endpoint_policy_key("POST", "/tenants/:slug/deactivate"), do: :TenantsManage
+  def endpoint_policy_key("POST", "/tenants/:slug/reactivate"), do: :TenantsManage
+
   def endpoint_policy_key(_method, _path), do: :Unknown
 
   @doc """
@@ -325,6 +342,8 @@ defmodule Letflow.Api.Authorization do
   # platform-admin enforced in handler, per Zig's comment
   def required_permission(key) when key in [:AdminServicesManage, :AdminServicesRead],
     do: :UsersGroupsRolesManage
+
+  def required_permission(:TenantsManage), do: :TenantsManage
 
   def required_permission(:Unknown), do: :MetricsRead
 

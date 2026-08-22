@@ -29,7 +29,7 @@ defmodule Letflow.Api.AuthorizationTest do
              ]
     end
 
-    test "permissions/0 returns exactly R-Co's fourteen Permission values" do
+    test "permissions/0 returns exactly R-Co's fourteen Permission values plus REQ-075's :TenantsManage" do
       assert Authorization.permissions() == [
                :DefinitionsWrite,
                :DefinitionsRead,
@@ -44,8 +44,51 @@ defmodule Letflow.Api.AuthorizationTest do
                :AuditRead,
                :DlqOperate,
                :MetricsRead,
-               :WebhooksManage
+               :WebhooksManage,
+               :TenantsManage
              ]
+    end
+  end
+
+  describe "REQ-075 — :TenantsManage permission/policy key" do
+    test "endpoint_policy_key/2 resolves all six tenant-administration routes to :TenantsManage" do
+      assert Authorization.endpoint_policy_key("POST", "/tenants") == :TenantsManage
+      assert Authorization.endpoint_policy_key("GET", "/tenants") == :TenantsManage
+      assert Authorization.endpoint_policy_key("GET", "/tenants/:slug") == :TenantsManage
+      assert Authorization.endpoint_policy_key("PATCH", "/tenants/:slug") == :TenantsManage
+
+      assert Authorization.endpoint_policy_key("POST", "/tenants/:slug/deactivate") ==
+               :TenantsManage
+
+      assert Authorization.endpoint_policy_key("POST", "/tenants/:slug/reactivate") ==
+               :TenantsManage
+    end
+
+    test "required_permission(:TenantsManage) is :TenantsManage" do
+      assert Authorization.required_permission(:TenantsManage) == :TenantsManage
+    end
+
+    test "PLATFORM_ADMIN is granted, every other role is denied" do
+      for role <- [:PROCESS_DESIGNER, :PROCESS_OPERATOR, :TASK_WORKER, :AGENT_RUNNER] do
+        refute Authorization.role_allows?(role, :TenantsManage),
+               "expected #{role} to be denied :TenantsManage"
+      end
+
+      assert Authorization.role_allows?(:PLATFORM_ADMIN, :TenantsManage)
+    end
+
+    test "evaluate_access/2 grants PLATFORM_ADMIN and denies everyone else" do
+      admin_ctx = %AccessContext{user_id: "u1", roles: [:PLATFORM_ADMIN]}
+      assert %Authorization.AccessDecision{kind: :Allow} =
+               Authorization.evaluate_access(admin_ctx, :TenantsManage)
+
+      other_ctx = %AccessContext{user_id: "u2", roles: [:PROCESS_DESIGNER]}
+      assert %Authorization.AccessDecision{kind: :Deny403} =
+               Authorization.evaluate_access(other_ctx, :TenantsManage)
+
+      no_roles_ctx = %AccessContext{user_id: "u3", roles: []}
+      assert %Authorization.AccessDecision{kind: :Deny403} =
+               Authorization.evaluate_access(no_roles_ctx, :TenantsManage)
     end
   end
 

@@ -1,7 +1,12 @@
 defmodule Letflow.Plugs.TenantStatusTest do
   @moduledoc """
-  Tests for `Letflow.Plugs.TenantStatus` (REQ-021 acceptance criterion 3). See
-  `test/specs/REQ-021.md` for the full test-case rationale.
+  Tests for `Letflow.Plugs.TenantStatus` — REQ-021 acceptance criterion 3
+  (the `:migrating` write-pause check) and REQ-075 acceptance criterion 5
+  (the `:inactive` all-methods check, authorized by REVIEWER —
+  `docs/migration/stage-4-api-surface.md`'s 2026-08-22 (REQ-075) sign-off
+  entry). See `test/specs/REQ-021.md` for the write-pause rationale and
+  `lib/letflow/design/req075-tenant-administration-routes.md` §4.3 for the
+  `:inactive` test design.
 
   Uses `Letflow.DataCase` (real Postgres, sandboxed connection, rolled back per test) per
   `docs/guides/test_developer_guide.md` DIRECTIVE T-1 — no mocked database. Per the
@@ -10,7 +15,12 @@ defmodule Letflow.Plugs.TenantStatusTest do
   directly (simulating `AuthPipeline` having already run) rather than running the full
   `AuthPipeline` first — this plug's own contract only depends on that one assign key
   being present, which `AuthPipeline`'s own tests (`auth_pipeline_test.exs`) already
-  prove gets populated correctly.
+  prove gets populated correctly. This also exercises the REQ-075 check for real: the
+  plug reads `conn.assigns.auth_context.roles` directly, so injecting `auth_context`
+  this way (rather than routing a real bearer token through `AuthPipeline`) still
+  dispatches through the exact same `TenantStatus.call/2` the full
+  `Letflow.Plugs.ApiPipeline` chain invokes — nothing about this plug's own contract
+  depends on how `auth_context` got populated.
 
   All tests run `async: true` — every test seeds its own tenant row with a unique slug
   inside its own sandboxed transaction (rolled back after the test).
@@ -37,9 +47,13 @@ defmodule Letflow.Plugs.TenantStatusTest do
     |> Repo.insert!()
   end
 
-  defp call_plug(method, tenant_id) do
+  defp call_plug(method, tenant_id, roles \\ []) do
     conn(method, "/whatever")
-    |> assign(:auth_context, %{user_id: Ecto.UUID.generate(), tenant_id: tenant_id, roles: []})
+    |> assign(:auth_context, %{
+      user_id: Ecto.UUID.generate(),
+      tenant_id: tenant_id,
+      roles: roles
+    })
     |> TenantStatus.call(TenantStatus.init([]))
   end
 
@@ -133,8 +147,13 @@ defmodule Letflow.Plugs.TenantStatusTest do
     end
   end
 
-  describe "method short-circuit — no DB query at all for a non-write method" do
-    test "a GET request issues no Ecto query at all (method short-circuit, no DB round-trip)" do
+  describe "REQ-075 restructure — every method now queries the DB once (shared lookup)" do
+    # This describe block's title/tests changed shape under REQ-075 (REVIEWER-approved,
+    # docs/migration/stage-4-api-surface.md 2026-08-22 entry, point 7): the new
+    # :inactive check must run for EVERY method, so call/2 no longer has a GET-method
+    # short-circuit that skips Repo.get/2 entirely — both GET and POST now issue
+    # exactly one shared Repo.get(Tenant, tenant_id) query, whatever the method.
+    test "a GET request now DOES issue exactly one Ecto query (the shared :inactive/:migrating lookup)" do
       tenant = insert_tenant!(:migrating)
 
       test_pid = self()
@@ -149,7 +168,7 @@ defmodule Letflow.Plugs.TenantStatusTest do
 
       try do
         call_plug(:get, tenant.id)
-        refute_received :query_fired, "expected no Ecto query for a GET request"
+        assert_received :query_fired, "expected the shared lookup query for a GET request"
       after
         :telemetry.detach(handler_id)
       end
@@ -211,6 +230,86 @@ defmodule Letflow.Plugs.TenantStatusTest do
 
       refute conn.halted
       assert conn.status == nil
+    end
+  end
+
+  # ── REQ-075 AC5 — the new :inactive, all-methods, PLATFORM_ADMIN-exempt check ──
+
+  describe "REQ-075 AC5 — a caller whose home tenant is :inactive" do
+    test "GET against an :inactive tenant is rejected 403 tenant_inactive (not just writes)" do
+      tenant = insert_tenant!(:inactive)
+
+      conn = call_plug(:get, tenant.id, ["PROCESS_DESIGNER"])
+
+      assert conn.status == 403
+      assert conn.halted
+      assert get_resp_header(conn, "retry-after") == []
+
+      assert Jason.decode!(conn.resp_body) == %{
+               "error" => "tenant_inactive",
+               "detail" => "tenant is deactivated"
+             }
+    end
+
+    test "POST against an :inactive tenant is also rejected 403 tenant_inactive (not the 503 write-pause body)" do
+      tenant = insert_tenant!(:inactive)
+
+      conn = call_plug(:post, tenant.id, ["PROCESS_DESIGNER"])
+
+      assert conn.status == 403
+      assert conn.halted
+      assert get_resp_header(conn, "retry-after") == []
+      assert Jason.decode!(conn.resp_body)["error"] == "tenant_inactive"
+    end
+
+    test "a caller with no roles at all is rejected the same as any other non-PLATFORM_ADMIN caller" do
+      tenant = insert_tenant!(:inactive)
+
+      conn = call_plug(:get, tenant.id, [])
+
+      assert conn.status == 403
+      assert Jason.decode!(conn.resp_body)["error"] == "tenant_inactive"
+    end
+  end
+
+  describe "REQ-075 AC5 — a PLATFORM_ADMIN caller whose home tenant is :inactive is exempt" do
+    test "GET against an :inactive tenant passes through unchanged for PLATFORM_ADMIN" do
+      tenant = insert_tenant!(:inactive)
+
+      conn = call_plug(:get, tenant.id, ["PLATFORM_ADMIN"])
+
+      refute conn.halted
+      assert conn.status == nil
+    end
+
+    test "POST against an :inactive tenant passes through unchanged for PLATFORM_ADMIN" do
+      tenant = insert_tenant!(:inactive)
+
+      conn = call_plug(:post, tenant.id, ["PLATFORM_ADMIN"])
+
+      refute conn.halted
+      assert conn.status == nil
+    end
+  end
+
+  describe "REQ-075 AC5 — :active and :migrating tenants are unaffected by the new check" do
+    test "GET/POST against an :active tenant pass through unchanged for a non-admin caller" do
+      tenant = insert_tenant!(:active)
+
+      for method <- [:get, :post] do
+        conn = call_plug(method, tenant.id, ["PROCESS_DESIGNER"])
+        refute conn.halted, "expected #{method} against an :active tenant to pass through"
+        assert conn.status == nil
+      end
+    end
+
+    test "a :migrating (not :inactive) tenant still gets the existing 503 write-pause for a non-admin caller's POST, not a 403" do
+      tenant = insert_tenant!(:migrating)
+
+      conn = call_plug(:post, tenant.id, ["PROCESS_DESIGNER"])
+
+      assert conn.status == 503
+      assert Jason.decode!(conn.resp_body)["error"] == "tenant_migrating"
     end
   end
 end

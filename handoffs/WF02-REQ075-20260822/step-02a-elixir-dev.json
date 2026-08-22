@@ -1,0 +1,79 @@
+{
+  "handoff_id": "9b3f7a2c-1d84-4e5f-8a6b-2c9d0e1f4a7b",
+  "run_id": "WF02-REQ075-20260822",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ075-20260822/step-02a-elixir-dev.json",
+  "created_at": "2026-08-22T02:20:00Z",
+  "started_at": "2026-08-22T01:58:00Z",
+  "completed_at": "2026-08-22T02:20:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-075"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ075-20260822/step-01-code-designer.json",
+      "handoffs/WF02-REQ075-20260822/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ075-20260822/step-01c-reviewer-tenantstatus-signoff.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req075-tenant-administration-routes.md",
+      "docs/migration/stage-4-api-surface.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/routers/tenants.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/tenant.ex",
+      "lib/letflow/plugs/tenant_status.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/api/authorization.ex"
+    ],
+    "branch_name": "feature/WF02-REQ075-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 2a -- implement REQ-075 (tenant administration routes) exactly per the validated design and REVIEWER's pre-implementation TenantStatus sign-off. Highest-risk requirement in the batch: global tenants table, no REQ-072 :prefix scoping, PLATFORM_ADMIN role check as the only protection.",
+    "acceptance_criteria": [
+      "AC1: listing tenants as a non-PLATFORM_ADMIN caller returns 403 and no tenant data whatsoever (full-body assertion)",
+      "AC2: cross-tenant reject on all four verbs (GET/PATCH/deactivate/reactivate), each its own test, target row unchanged",
+      "AC3: own-tenant access is not a carve-out, tested both directions (PLATFORM_ADMIN allowed on own tenant, non-admin denied on own tenant)",
+      "AC4: POST /tenants provisions a real schema and replays real migrations, proven via information_schema query",
+      "AC5: an :inactive tenant's non-PLATFORM_ADMIN caller gets 403 tenant_inactive on every HTTP method via Letflow.Plugs.TenantStatus, PLATFORM_ADMIN exempt -- exact shape per REVIEWER's step-01c sign-off",
+      "AC6: Letflow.Routers.Tenants moduledoc states the risk/no-prefix-scoping statement verbatim in substance",
+      "AC7: moduledoc states the POST /tenants <-> REQ-076 onboarding relationship (shared TenantProvisioning primitives)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented all six Letflow.Routers.Tenants handlers plus the REVIEWER-approved Letflow.Plugs.TenantStatus extension, exactly per the validated design and the step-01c sign-off's 8-point shape -- no deviation from that approved shape.\n\nFiles changed:\n- lib/letflow/identity/tenant.ex: Ecto.Enum status values extended to [:active, :migrating, :inactive] (no migration -- plain :string column, confirmed). Added admin_patch_changeset/2 (casts only [:display_name]) and status_changeset/2 (casts only [:status], validate_required([:status])) -- structurally split so PATCH cannot write :status and deactivate/reactivate cannot write :display_name.\n- lib/letflow/plugs/tenant_status.ex: restructured call/2 to a single clause (removed the old @write_methods-guarded first clause) that always resolves the tenant via one shared Repo.get/2, then a cond: (1) status==:inactive and 'PLATFORM_ADMIN' not in roles -> 403 {\"error\":\"tenant_inactive\",\"detail\":\"tenant is deactivated\"}, no Retry-After; (2) write method and status==:migrating -> existing 503 tenant_migrating unchanged; (3) else passthrough. Moduledoc rewritten to document both checks. This is a real, REVIEWER-authorized behavior change to a previously-done module: GET now also issues the shared Repo.get query (previously method-short-circuited with zero DB access) -- updated test/letflow/plugs/tenant_status_test.exs's own 'no DB query for GET' test to assert the query now fires (renamed describe block to explain why), added 6 new AC5 tests (inactive rejects GET+POST for non-admin, no-roles caller rejected same, PLATFORM_ADMIN exempt for GET+POST, active/migrating tenants unaffected, migrating-not-inactive still gets 503 not 403).\n- lib/letflow/api/authorization.ex: added :TenantsManage to @type permission, @permissions, @type endpoint_policy_key; 5 new endpoint_policy_key/2 clauses (POST /tenants, GET /tenants + /tenants/:slug, PATCH /tenants/:slug, POST .../deactivate, POST .../reactivate) all -> :TenantsManage; required_permission(:TenantsManage) -> :TenantsManage. No role_allows?/2 clauses added anywhere -- PLATFORM_ADMIN's existing catch-all grants it for free, every other role's closed permission list denies it for free. Updated test/letflow/api/authorization_test.exs's pinned permissions/0 list (14->15) and added a new describe block covering the 6 endpoint_policy_key clauses, required_permission, role_allows? for all 5 roles, and evaluate_access/2.\n- lib/letflow/routers/tenants.ex (NEW): Letflow.Routers.Tenants, mounted as a top-level sibling (not under Identity). All 6 routes (POST/GET /, GET/PATCH /:slug, POST /:slug/deactivate, POST /:slug/reactivate). with_authorization/4 preamble calls evaluate_access/2 before any Repo call -- no scoped_repo_opts/1 anywhere in this file, confirmed absent (the requirement's central discipline). tenant_map/1 is a hand-built 6-key map (idp_realm_id excluded, OQ-6). POST /tenants orchestrates Identity.create_tenant/1 -> TenantProvisioning.provision_tenant_schema/1 -> TenantProvisioning.replay_migrations/2 in the HANDLER itself (provision_and_respond/2), not inside create_tenant/1. Moduledoc contains the AC6 risk statement, AC3 own-tenant statement, AC7 REQ-076 relationship, and AC5 deactivation-status statement as literal prose, plus the route table.\n- lib/letflow/plugs/api_pipeline.ex: added forward(\"/tenants\", to: Letflow.Routers.Tenants).\n- lib/letflow/identity.ex: added create_tenant/1, list_tenants/1, get_tenant_by_slug/1, patch_tenant/2, deactivate_tenant/1, reactivate_tenant/1 -- none take opts/:prefix (structural difference from every REQ-073/074 function, confirmed deliberate). Cursor prefix \"T:\" for list_tenants/1, same field-slot-repurposing pagination idiom as list_users/2.\n- test/letflow/identity/tenant_test.exs: added tests for the :inactive enum value and both new changesets.\n- test/letflow/routers/tenants_test.exs (NEW): AC1 full-body 403, AC2 all 4 verbs cross-tenant + row-unchanged, AC3 both directions, AC4 information_schema proof (real schema+migration replay under Sandbox :auto mode), GET/PATCH/deactivate/reactivate happy paths, OQ-2 idempotency test, list/search tests, POST /tenants duplicate-slug/validation/403-no-row-created tests.\n\nJudgment calls (all stated per the task's instruction, none silently resolved):\n- OQ-2: confirmed no-op/idempotent for re-deactivating an already-:inactive tenant (and reactivating an already-:active one) -- no :invalid_transition variant implemented; deactivate_tenant/1 and reactivate_tenant/1 always succeed.\n- OQ-3: deactivate/reactivate are bodyless; conn.body_params ignored on both.\n- OQ-6: idp_realm_id excluded from tenant_map/1 -- no confirmed R-Co serializeTenant precedent was available to check against, so the allowlist-not-denylist default (design's own recommendation) wins.\n- OQ-4 (NOT invented, only reused): create_tenant/1 calls Tenant.create_changeset/3 with oidc_mode hardcoded to :disabled -- this reuses the ONLY existing precedent for this exact pre-existing REQ-019 gap, Letflow.TenantFixture.provisioned_tenant!/1's own opts[:oidc_mode] default (test/support/tenant_fixture.ex). No new resolution of REQ-019 §8 OQ-1 was made.\n- OQ-5 (left open, not resolved): no compensating rollback if provision_tenant_schema/1 or replay_migrations/2 fails after the tenant row is committed -- provision_and_respond/2 in lib/letflow/routers/tenants.ex returns Response.internal_error(conn) (INV-4-safe, no detail) on that path; the tenants row with no matching schema is an accepted, operationally-recoverable partial state per the design's own instruction. Flagging this again here for REVIEWER to weigh at Step 2d if concerned, per the task's explicit instruction not to add rollback logic myself.\n\nNo scoped_repo_opts/1 call added anywhere in lib/letflow/routers/tenants.ex or the 6 new Letflow.Identity functions -- grepped to confirm zero hits.\n\nTest results (all real, run to completion in this session, not claimed):\n- mix compile --warnings-as-errors: clean, no warnings.\n- Targeted runs: test/letflow/identity/tenant_test.exs + test/letflow/plugs/tenant_status_test.exs + test/letflow/routers/tenants_test.exs = 46/46 passed.\n- test/letflow/routers/identity_test.exs + test/letflow/api/authorization_test.exs + test/letflow/plugs/api_pipeline_integration_test.exs + test/letflow/router_test.exs = 92/92 passed (after fixing the authorization_test.exs permissions/0 pinned-list regression caused by the new 15th permission).\n- Full suite (mix test): 1542 passed (5 properties, 1537 tests), 0 failures, run to completion synchronously.\n\nNo deviations from the design or from REVIEWER's step-01c sign-off shape. The one real behavior change beyond REQ-075's own new code is the now-corrected pinned authorization_test.exs list and the tenant_status_test.exs GET-query-count test, both because the change they pin is exactly what this requirement and REVIEWER's sign-off intentionally added.",
+    "artifacts_out": [
+      "lib/letflow/routers/tenants.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/tenant.ex",
+      "lib/letflow/plugs/tenant_status.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/api/authorization.ex",
+      "test/letflow/identity/tenant_test.exs",
+      "test/letflow/plugs/tenant_status_test.exs",
+      "test/letflow/routers/tenants_test.exs",
+      "test/letflow/api/authorization_test.exs",
+      "handoffs/WF02-REQ075-20260822/step-02a-elixir-dev.json"
+    ],
+    "issues": [
+      "OQ-5 (no compensating rollback on partial tenant-creation failure) remains open per the design's own instruction -- flagged for REVIEWER at Step 2d, not resolved here."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ075-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ075-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c per docs/agents/workflows/WF-02_requirement_implementation.md -- this touches a tenant-data path via the global tenants table and the new Letflow.Plugs.TenantStatus check) before REVIEWER (Step 2d) and TEST-DESIGNER. Do not skip either gate."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

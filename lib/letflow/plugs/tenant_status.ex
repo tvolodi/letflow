@@ -1,15 +1,34 @@
 defmodule Letflow.Plugs.TenantStatus do
   @moduledoc """
-  Tenant write-pause check — ports `src/api/middleware/tenant_status.zig`'s
-  `checkTenantWritePause/4`. Call this **after** `Letflow.Plugs.AuthPipeline`
-  has resolved `conn.assigns[:auth_context][:tenant_id]`, and before
-  dispatching to a write handler — matching `tenant_status.zig`'s own doc
-  comment on its calling convention.
+  Tenant status gate — two independent, linearly-composed checks over the
+  same tenant lookup.
 
-  A write request (`POST`/`PUT`/`PATCH`/`DELETE`) against a tenant whose
-  `status` is `:migrating` is rejected with 503 and a `Retry-After` header.
-  `GET`/`HEAD` (and any other non-write method) pass through unchanged, with
-  no DB query at all.
+  1. **Deactivation check (REQ-075, all methods).** A request against a
+     tenant whose `status` is `:inactive`, from a caller whose roles
+     (`conn.assigns.auth_context.roles`) do not include `"PLATFORM_ADMIN"`,
+     is rejected with `403` and body `{"error": "tenant_inactive", "detail":
+     "tenant is deactivated"}` (no `Retry-After` header — that header is
+     specific to check 2 below). Runs for **every** HTTP method, including
+     `GET`/`HEAD`, matching R-Co's `enforceTenantActiveForOperation`/
+     `isTenantInactive` (`src/identity/service.zig:133-151`,
+     `src/api/middleware/auth.zig:1663-1674`). PLATFORM_ADMIN callers are
+     exempt. Authorized exactly in this shape by REVIEWER — see
+     `docs/migration/stage-4-api-surface.md`'s 2026-08-22 (REQ-075) sign-off
+     entry; do not narrow to write-only or widen the exemption without a
+     fresh sign-off.
+
+  2. **Write-pause check (REQ-021, ports `src/api/middleware/tenant_status.zig`'s
+     `checkTenantWritePause/4`), unchanged.** A write request
+     (`POST`/`PUT`/`PATCH`/`DELETE`) against a tenant whose `status` is
+     `:migrating` is rejected with `503` and a `Retry-After` header.
+     `GET`/`HEAD` (and any other non-write method) pass through this second
+     check unchanged. No PLATFORM_ADMIN exemption on this check (R-Co's own
+     write-pause has none either).
+
+  Both checks reuse the **same** `Repo.get(Tenant, tenant_id)` lookup — one
+  query per request, not two. Call this **after** `Letflow.Plugs.AuthPipeline`
+  has resolved `conn.assigns[:auth_context][:tenant_id]` (and `:roles`), and
+  before dispatching to any sub-router.
 
   **Fail-closed on a genuine DB error during the tenant-status lookup** — a
   deliberate divergence from `tenant_status.zig`'s own fail-open behavior
@@ -19,7 +38,8 @@ defmodule Letflow.Plugs.TenantStatus do
   isolation apply) rather than silently bypassing a data-integrity
   safeguard. See `lib/letflow/design/req021-auth-plug-pipeline.md` §6.4
   (OQ-14) — the design states this as a recommendation, not a mandate;
-  REVIEWER should confirm.
+  REVIEWER has confirmed this holds for the REQ-075 check too (INV-8 does
+  not favor a narrower/isolated alternative — see the sign-off entry above).
 
   **Mounted since REQ-071**, immediately after `Letflow.Plugs.AuthPipeline` in
   `Letflow.Plugs.ApiPipeline`'s plug chain, matching this module's own calling
@@ -36,39 +56,59 @@ defmodule Letflow.Plugs.TenantStatus do
 
   @write_methods ~w(POST PUT PATCH DELETE)
   @retry_after_seconds "30"
+  @platform_admin "PLATFORM_ADMIN"
 
   @impl Plug
   def init(opts), do: opts
 
   @impl Plug
-  def call(%Plug.Conn{method: method} = conn, _opts) when method in @write_methods do
+  def call(conn, _opts) do
     tenant_id = get_in(conn.assigns, [:auth_context, :tenant_id])
-    check_write_pause(conn, tenant_id)
+    check_tenant_status(conn, tenant_id)
   end
-
-  def call(conn, _opts), do: conn
 
   # No auth context resolved ahead of this plug — undefined per this design
   # (§6.3's OQ-12: TenantStatus is only ever mounted after AuthPipeline in
   # the same pipeline; this case should not occur in practice). Passing
   # through rather than crashing is the safer of two unspecified choices,
   # but this is explicitly not a defended-against case.
-  defp check_write_pause(conn, nil), do: conn
+  defp check_tenant_status(conn, nil), do: conn
 
-  defp check_write_pause(conn, tenant_id) do
+  defp check_tenant_status(conn, tenant_id) do
     case Repo.get(Tenant, tenant_id) do
-      %Tenant{status: :migrating} ->
-        reject_migrating(conn)
-
-      %Tenant{} ->
-        conn
-
       nil ->
         # Should not occur — AuthPipeline already resolved this tenant via
         # resolve_tenant_by_realm/1. A race/deletion between steps, not a
         # normal case; pass through rather than fail the request over it.
         conn
+
+      %Tenant{} = tenant ->
+        roles = get_in(conn.assigns, [:auth_context, :roles]) || []
+
+        cond do
+          tenant.status == :inactive and @platform_admin not in roles ->
+            reject_inactive(conn)
+
+          conn.method in @write_methods and tenant.status == :migrating ->
+            reject_migrating(conn)
+
+          true ->
+            conn
+        end
     end
+  end
+
+  defp reject_inactive(conn) do
+    body =
+      Jason.encode!(%{
+        error: "tenant_inactive",
+        detail: "tenant is deactivated"
+      })
+
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(403, body)
+    |> halt()
   end
 
   defp reject_migrating(conn) do

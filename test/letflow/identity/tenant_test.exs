@@ -67,6 +67,62 @@ defmodule Letflow.Identity.TenantTest do
     assert %{status: _} = errors_on(changeset)
   end
 
+  test "casting :inactive is accepted by the extended Ecto.Enum declaration (REQ-075)" do
+    changeset =
+      Ecto.Changeset.cast(
+        %Tenant{},
+        %{slug: unique_slug(), display_name: "Tenant A", status: "inactive"},
+        [:slug, :display_name, :status]
+      )
+
+    assert changeset.valid?
+    assert Ecto.Changeset.get_change(changeset, :status) == :inactive
+  end
+
+  describe "admin_patch_changeset/2 (REQ-075)" do
+    test "casts display_name but structurally cannot write status" do
+      tenant = %Tenant{slug: unique_slug(), display_name: "Original", status: :active}
+
+      changeset =
+        Tenant.admin_patch_changeset(tenant, %{"display_name" => "Renamed", "status" => "inactive"})
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_change(changeset, :display_name) == "Renamed"
+      # :status was never cast -- no change key for it at all, not merely unchanged.
+      refute Map.has_key?(changeset.changes, :status)
+    end
+
+    test "an attrs map with only display_name is a valid changeset" do
+      tenant = %Tenant{slug: unique_slug(), display_name: "Original"}
+
+      changeset = Tenant.admin_patch_changeset(tenant, %{"display_name" => "New Name"})
+
+      assert changeset.valid?
+    end
+  end
+
+  describe "status_changeset/2 (REQ-075)" do
+    test "casts status but structurally cannot write display_name" do
+      tenant = %Tenant{slug: unique_slug(), display_name: "Original", status: :active}
+
+      changeset =
+        Tenant.status_changeset(tenant, %{"status" => "inactive", "display_name" => "Renamed"})
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_change(changeset, :status) == :inactive
+      refute Map.has_key?(changeset.changes, :display_name)
+    end
+
+    test "status is required (an explicit nil in attrs is rejected)" do
+      tenant = %Tenant{slug: unique_slug(), display_name: "Original", status: :active}
+
+      changeset = Tenant.status_changeset(tenant, %{"status" => nil})
+
+      refute changeset.valid?
+      assert %{status: _} = errors_on(changeset)
+    end
+  end
+
   defp errors_on(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
       Regex.replace(~r"%{(\w+)}", msg, fn _, key ->

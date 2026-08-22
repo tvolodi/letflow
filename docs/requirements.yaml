@@ -4191,7 +4191,7 @@ requirements:
   - id: REQ-075
     title: Identity routes 3/4 -- tenant administration (identity.zig 6 tenant handlers)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S4
     impl_order: 142  # letflow-queue task id
     description: >

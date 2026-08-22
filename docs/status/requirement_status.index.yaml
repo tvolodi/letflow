@@ -208,9 +208,29 @@ volumes:
 
   - volume: 3
     path: docs/status/requirement_status.v3.yaml
-    status: current
+    status: closed
     opened: 2026-08-22
-    entries: 42
+    closed: 2026-08-23
+    entries: 43
+    lines: 1263
+    bytes_working_tree: 76551
+    # SHA-256 of lines 1..1263 with CRLF normalised to LF, i.e. the frozen prefix.
+    # The hashed stream terminates EVERY line with a single \n, including the
+    # last, so it ends in \n. Exact definition and reference implementations:
+    # lib/letflow/design/iss-0119-status-file-readability.md §8.
+    # Asserted unchanged by test/docs/requirement_status_invariants_test.exs.
+    frozen_prefix_lines: 1263
+    frozen_prefix_sha256: "10dcc89c10a288695c4db188a9c80da799831d410f8adae8aa61f92e4e486f9b"
+    closure_note: >
+      Closed under WF02-REQ082-20260823's Step Final rebase at 1263 lines /
+      76551 bytes / 43 entries -- over its own declared roll_rule ceiling
+      (max_lines: 1200), confirmed failing
+      test/docs/requirement_status_invariants_test.exs's assertion A3.
+      Reconciliation: 43 entries present immediately before this run's Step
+      Final rebase composed REQ-076's/ISS-0287's already-landed completions
+      with this run's own done-event (0 rewritten/reordered/deleted --
+      `git diff --numstat` on this file across the whole run showed
+      insertions-only). Successor: docs/status/requirement_status.v4.yaml.
     note: >
       Incremented to 42 by WF03-ISS0287-20260823 (ORCH)'s own done-event
       append -- 42 on-disk `- req:` entries in requirement_status.v3.yaml,
@@ -467,6 +487,33 @@ volumes:
       executed directly)'s own started+done event pair (2 appends) -- 39
       on-disk `- req:` entries in requirement_status.v3.yaml, no rebase
       conflict on this file.
+      Incremented to 40 by WF02-REQ082-20260823 (fork of ORCH, full pipeline
+      executed directly)'s own done-event append, against a base declaring
+      39. Composed to 43 at that same run's Step Final rebase, which
+      conflicted at requirement_status.v3.yaml's tail against
+      WF02-REQ076-20260822's own Step Final composition (landed on main at
+      41) and WF03-ISS0287-20260823's own done-event (landed on main at 42)
+      -- both landed after this run's own append had already been written
+      against a stale pre-REQ-076 base. Composed in chronological `at:`
+      order -- REQ-076 done, ISS-0287 done (23:21:37Z), REQ-082 done
+      (04:21:00Z on 2026-08-23, sorting last, no reordering needed) --
+      recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v3.yaml` = 43, rather than carrying
+      forward either side's independently-computed 40/42, per this note's
+      own recount-every-time rule. Rolled immediately after this recount
+      (this file crossed its own roll_rule ceiling) -- see volume 4 below.
+
+  - volume: 4
+    path: docs/status/requirement_status.v4.yaml
+    status: current
+    opened: 2026-08-23
+    entries: 0
+    note: >
+      Opened by WF02-REQ082-20260823's own Step Final roll, successor to
+      volume 3. Created with volume 3's header text verbatim (volume number,
+      opening date and predecessor path updated) and an empty `history:`
+      list, per this index's `roll_rule.on_exceed` procedure. `entries:`
+      will be incremented per HOW-TO-APPEND step 6 as real appends land.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

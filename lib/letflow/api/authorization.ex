@@ -77,6 +77,10 @@ defmodule Letflow.Api.Authorization do
           | :DefinitionsUpdate
           | :DefinitionsPatch
           | :DefinitionsActivate
+          | :DefinitionsDeprecate
+          | :DefinitionsArchive
+          | :DefinitionsDelete
+          | :DefinitionsImport
           | :DefinitionsRead
           | :InstancesStart
           | :InstancesCancel
@@ -192,6 +196,23 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("PUT", "/definitions/:id"), do: :DefinitionsUpdate
   def endpoint_policy_key("PATCH", "/definitions/:id"), do: :DefinitionsPatch
   def endpoint_policy_key("POST", "/definitions/:id/activate"), do: :DefinitionsActivate
+
+  # REQ-082 -- deprecate/archive/delete/import. R-Co's own authorization.zig has NO
+  # entries for these four (confirmed by grep against R-Co's source, zero hits) --
+  # same "no endpoint_policy_key clause, not permission-gated" pattern REQ-078/079
+  # already established for rebind-pins/reconstruct. REQ-082's own acceptance
+  # criterion 7 ("a caller without DefinitionsWrite receives 403 on all eight
+  # endpoints") is a DELIBERATE Letflow-side divergence from that R-Co gap, not an
+  # oversight -- these four route-local mutations are exactly the kind of state
+  # change REQ-131's future policy work is meant to generalize, but REQ-082's own
+  # acceptance criteria require the gate now rather than deferring it, so these four
+  # get real endpoint_policy_key clauses (all mapping to :DefinitionsWrite, same as
+  # the four R-Co-sourced ones above) instead of joining the rebind-pins/reconstruct
+  # no-clause precedent.
+  def endpoint_policy_key("POST", "/definitions/:id/deprecate"), do: :DefinitionsDeprecate
+  def endpoint_policy_key("POST", "/definitions/:id/archive"), do: :DefinitionsArchive
+  def endpoint_policy_key("DELETE", "/definitions/:id"), do: :DefinitionsDelete
+  def endpoint_policy_key("POST", "/definitions/import"), do: :DefinitionsImport
 
   def endpoint_policy_key("GET", path) when path in ["/definitions", "/definitions/:id"],
     do: :DefinitionsRead
@@ -365,7 +386,11 @@ defmodule Letflow.Api.Authorization do
              :DefinitionsCreate,
              :DefinitionsUpdate,
              :DefinitionsPatch,
-             :DefinitionsActivate
+             :DefinitionsActivate,
+             :DefinitionsDeprecate,
+             :DefinitionsArchive,
+             :DefinitionsDelete,
+             :DefinitionsImport
            ],
       do: :DefinitionsWrite
 

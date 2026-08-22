@@ -4611,7 +4611,7 @@ requirements:
   - id: REQ-082
     title: Definition routes 2/2 -- write and lifecycle path (definitions.zig Create/Put/Patch/Delete/Activate/Deprecate/Archive/Import)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 149  # letflow-queue task id
     description: >

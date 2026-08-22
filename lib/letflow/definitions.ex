@@ -182,6 +182,43 @@ defmodule Letflow.Definitions do
           | {:error, Ecto.Changeset.t()}
           | common_error()
 
+  # ---------------------------------------------------------------------------------
+  # REQ-082 types -- write/lifecycle routes (design §4)
+  # ---------------------------------------------------------------------------------
+
+  @typedoc """
+  Attrs for `update/3` -- the SINGLE shared backing function for both
+  `PUT /definitions/:id` (full replace, every key present) and
+  `PATCH /definitions/:id` (partial, only the keys the caller wants changed).
+  A key's PRESENCE, not its value, controls whether that column is touched --
+  `update/3` builds its `Repo.update_all/3` `:set` list from
+  `Map.has_key?/2`, so `%{description: nil}` clears the column while omitting
+  `:description` entirely leaves it unchanged. The router is responsible for
+  this distinction: PUT's `FieldConstraint` schema requires every key present
+  (so this map always carries all five), PATCH's makes every key optional.
+  """
+  @type update_attrs :: %{
+          optional(:name) => String.t(),
+          optional(:version) => String.t(),
+          optional(:description) => String.t() | nil,
+          optional(:graph) => map(),
+          optional(:stage) => String.t() | nil
+        }
+
+  @type update_error ::
+          {:error, :not_found}
+          | {:error, :not_draft}
+          | {:error, :name_invalid}
+          | {:error, :version_empty}
+          | {:error, :graph_structure_invalid}
+          | {:error, {:graph_validation_failed, [Graph.Violation.t()]}}
+          | {:error, :duplicate_name_version}
+          | {:error, variable_schema_error()}
+          | common_error()
+
+  @type hard_delete_error ::
+          {:error, :not_found} | {:error, :not_draft} | common_error()
+
   @type list_filters :: %{
           optional(:name) => String.t() | nil,
           optional(:status) => status() | nil,
@@ -1288,6 +1325,239 @@ defmodule Letflow.Definitions do
       end)
 
     {:ok, inserted}
+  end
+
+  # ===================================================================================
+  # REQ-082 -- write and lifecycle routes (design §4). `create_with_variable_schemas/3`,
+  # `update/3`, `hard_delete/2` below are this requirement's own context-layer additions;
+  # `activate/2`/`deprecate/2`/`archive/2` above are REQ-030's and are called AS-IS --
+  # this requirement invents no second lifecycle state machine.
+  # ===================================================================================
+
+  @doc """
+  `create/2` plus, atomically in the same transaction, a `register_variable_schemas/3`
+  call for `entries` (REQ-109's obligation on the create write path -- see this
+  module's moduledoc pointer and `docs/requirements.yaml`'s REQ-082 entry). `entries`
+  is typically `[]` (most creates carry no `variable_schemas`), in which case this is
+  exactly `create/2` wrapped in a transaction for no reason other than a uniform
+  return shape with the non-empty case.
+
+  A `create/2` failure never reaches `register_variable_schemas/3` (the `with` chain
+  short-circuits). A `register_variable_schemas/3` failure rolls back the just-inserted
+  definition row too -- a definition is never left on disk with a still-invalid or
+  partially-registered `variable_schemas` set (INV-8).
+
+  Returns `create/2`'s error union unchanged on a create failure, or
+  `{:error, {:variable_schema_registration_failed, variable_schema_error()}}` on a
+  registration failure -- tagged distinctly so the caller (the router) can render each
+  differently even though `create_error()` and `variable_schema_error()` are disjoint
+  atom-vs-tuple spaces that could not otherwise collide.
+  """
+  @spec create_with_variable_schemas(
+          attrs :: create_attrs(),
+          entries :: [variable_schema_input()],
+          opts :: opts()
+        ) ::
+          {:ok, ProcessDefinition.t()}
+          | create_error()
+          | {:error, {:variable_schema_registration_failed, variable_schema_error()}}
+  def create_with_variable_schemas(attrs, entries, opts)
+      when is_map(attrs) and is_list(entries) and is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+
+    Repo.transaction(fn ->
+      case create(attrs, opts) do
+        {:ok, definition} ->
+          case register_variable_schemas(definition.id, entries, prefix: prefix) do
+            {:ok, _count} ->
+              definition
+
+            {:error, reason} ->
+              Repo.rollback({:variable_schema_registration_failed, reason})
+          end
+
+        {:error, reason} ->
+          Repo.rollback(reason)
+      end
+    end)
+  end
+
+  @doc """
+  Updates a DRAFT process definition -- the shared backing function for both
+  `PUT /definitions/:id` and `PATCH /definitions/:id`. See `update_attrs()`'s own
+  typedoc for the presence-controls-touch contract.
+
+  Every subsequent transition off `:draft` is a guarded single-statement
+  `WHERE id = $1 AND status = 'draft'` UPDATE (matching
+  `Letflow.Definitions.ProcessDefinition`'s own moduledoc, "status is never castable
+  from caller input" / "a load-then-update would reintroduce the lost-update race"),
+  never a `Repo.get/2`-then-changeset read-modify-write. Steps that only inspect
+  `attrs` (name/version presence+shape, graph structural/node/edge validation via the
+  same three validators `create/2` runs) issue **zero** queries and run entirely
+  before the guarded UPDATE, so a malformed request never reaches the database
+  (INV-8, matching `create/2`'s own "zero DB calls on a validation failure" contract).
+
+  A well-formed request against a row that is missing, or present but not `:draft`,
+  cannot be told apart by the UPDATE's own row count (`{0, _}` either way) -- resolved
+  by a `Repo.get/2` fallback lookup that distinguishes `{:error, :not_found}` (row
+  absent -- collapses a cross-tenant id with a genuinely-absent one, INV-5, since
+  `Repo.get/2` is itself prefix-scoped) from `{:error, :not_draft}` (row present, wrong
+  status), exactly mirroring `run_transition/4`'s own `fallback_lookup/2` above.
+
+  `attrs[:variable_schemas]`, if present (even `[]`), REPLACES this definition's
+  entire `variable_schemas` row set inside the SAME transaction as the UPDATE --
+  existing rows for this `definition_id` are deleted first, then
+  `register_variable_schemas/3` inserts the new set. This is what makes a re-PUT with
+  an omitted `variable_key` leave no row for that key (REQ-082's AC9): the delete has
+  no "keep unless" branch, it clears every row for this `definition_id` before the
+  fresh insert. Absent entirely (no `:variable_schemas` key in `attrs`), the existing
+  `variable_schemas` rows are left untouched -- a PUT/PATCH that does not mention
+  variable schemas is not a statement that there are none.
+  """
+  @spec update(id :: Ecto.UUID.t(), attrs :: update_attrs(), opts :: opts()) ::
+          {:ok, ProcessDefinition.t()} | update_error()
+  def update(id, attrs, opts) when is_map(attrs) and is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+
+    with {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, uuid} <- cast_update_id(id),
+         :ok <- validate_update_name(attrs),
+         :ok <- validate_update_version(attrs),
+         :ok <- validate_update_graph(attrs) do
+      run_update(uuid, prefix, build_update_set(attrs), Map.get(attrs, :variable_schemas))
+    end
+  end
+
+  defp cast_update_id(id) do
+    case Ecto.UUID.cast(id) do
+      {:ok, uuid} -> {:ok, uuid}
+      :error -> {:error, :not_found}
+    end
+  end
+
+  defp validate_update_name(attrs) do
+    if Map.has_key?(attrs, :name), do: with({:ok, _} <- fetch_name(attrs), do: :ok), else: :ok
+  end
+
+  defp validate_update_version(attrs) do
+    if Map.has_key?(attrs, :version),
+      do: with({:ok, _} <- fetch_version(attrs), do: :ok),
+      else: :ok
+  end
+
+  defp validate_update_graph(attrs) do
+    if Map.has_key?(attrs, :graph) do
+      with {:ok, graph_map} <- fetch_graph_map(attrs),
+           {:ok, graph} <- convert_graph(graph_map),
+           :ok <- check_graph_result(Graph.validate_graph(graph)),
+           :ok <- check_graph_result(Graph.validate_node_attributes(graph)),
+           :ok <- check_graph_result(Graph.validate_edge_conditions(graph)) do
+        :ok
+      end
+    else
+      :ok
+    end
+  end
+
+  defp build_update_set(attrs) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    []
+    |> maybe_set(:name, attrs)
+    |> maybe_set(:version, attrs)
+    |> maybe_set(:description, attrs)
+    |> maybe_set(:graph, attrs)
+    |> maybe_set(:stage, attrs)
+    |> Keyword.put(:updated_at, now)
+  end
+
+  defp maybe_set(set, key, attrs) do
+    if Map.has_key?(attrs, key), do: Keyword.put(set, key, Map.get(attrs, key)), else: set
+  end
+
+  defp run_update(id, prefix, set, variable_schema_entries) do
+    Repo.transaction(fn ->
+      try do
+        ProcessDefinition
+        |> where([d], d.id == ^id and d.status == :draft)
+        |> select([d], d)
+        |> Repo.update_all([set: set], prefix: prefix)
+        |> case do
+          {1, [updated]} ->
+            case maybe_replace_variable_schemas(updated.id, variable_schema_entries, prefix) do
+              :ok -> updated
+              {:error, reason} -> Repo.rollback(reason)
+            end
+
+          {0, _count_and_rows} ->
+            fallback_lookup_for_update(id, prefix)
+        end
+      rescue
+        error in Postgrex.Error ->
+          if match?(%Postgrex.Error{postgres: %{code: :unique_violation}}, error) do
+            Repo.rollback(:duplicate_name_version)
+          else
+            reraise error, __STACKTRACE__
+          end
+      end
+    end)
+  end
+
+  defp fallback_lookup_for_update(id, prefix) do
+    case Repo.get(ProcessDefinition, id, prefix: prefix) do
+      nil -> Repo.rollback(:not_found)
+      %ProcessDefinition{} -> Repo.rollback(:not_draft)
+    end
+  end
+
+  # `nil` (key absent from attrs): leave existing variable_schemas rows untouched.
+  defp maybe_replace_variable_schemas(_definition_id, nil, _prefix), do: :ok
+
+  defp maybe_replace_variable_schemas(definition_id, entries, prefix) when is_list(entries) do
+    {_count, nil} =
+      VariableSchema
+      |> where([v], v.definition_id == ^definition_id)
+      |> Repo.delete_all(prefix: prefix)
+
+    case register_variable_schemas(definition_id, entries, prefix: prefix) do
+      {:ok, _count} -> :ok
+      {:error, _reason} = error -> error
+    end
+  end
+
+  @doc """
+  Hard-deletes a DRAFT process definition (PD-04's `DRAFT -> hard delete` branch).
+  Every other current status is rejected as `{:error, :not_draft}` -- the router's
+  `handle_delete/2` owns dispatching to `deprecate/2`/`archive/2` instead for
+  `:active`/`:deprecated` current status, per this module's moduledoc "REQ-082" note:
+  it reuses those two functions as-is rather than this one inventing a second
+  transition path.
+
+  Same guarded-`WHERE`-clause shape as `update/3`/`run_transition/4`: a single
+  `Repo.delete_all/2` scoped to `id AND status == :draft`, so a concurrent
+  activate-then-delete race cannot delete a row that is no longer DRAFT by the time
+  this statement runs.
+  """
+  @spec hard_delete(id :: Ecto.UUID.t(), opts :: opts()) :: {:ok, :deleted} | hard_delete_error()
+  def hard_delete(id, opts) when is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+
+    with {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, uuid} <- cast_update_id(id) do
+      run_hard_delete(uuid, prefix)
+    end
+  end
+
+  defp run_hard_delete(id, prefix) do
+    Repo.transaction(fn ->
+      ProcessDefinition
+      |> where([d], d.id == ^id and d.status == :draft)
+      |> Repo.delete_all(prefix: prefix)
+      |> case do
+        {1, _} -> :deleted
+        {0, _} -> fallback_lookup_for_update(id, prefix)
+      end
+    end)
   end
 
   # -----------------------------------------------------------------------------------

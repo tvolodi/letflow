@@ -1213,3 +1213,89 @@ history:
       TEST-RUNNER ran the full suite at the corrected TEST_POOL_SIZE=21: 1898/1898
       clean, 0 failures. Merged to main via PR #570 (squash commit b7a5c05).
       docs/issues/ISS-0287.yaml: status: resolved.
+  - req: REQ-082
+    event: done
+    agent: ORCH (fork, one-shot -- executed all WF-02 pipeline roles directly)
+    at: "2026-08-23T04:21:00Z"
+    note: >
+      Definition routes 2/2 -- write and lifecycle path (Create/Put/Patch/
+      Delete/Activate/Deprecate/Archive/Import). Added
+      Letflow.Definitions.create_with_variable_schemas/3, update/3 (shared
+      PUT/PATCH backing function, guarded single-statement UPDATE matching
+      ProcessDefinition's own lost-update-race invariant), hard_delete/2;
+      Letflow.Definitions.ExportImport.import_with_variable_schemas/4 as a
+      sibling to the already-shipped import/3 (REQ-034 untouched); four new
+      Letflow.Api.Authorization endpoint_policy_key clauses
+      (DefinitionsDeprecate/Archive/Delete/Import, all -> DefinitionsWrite) --
+      a deliberate divergence from R-Co, which gates none of these four,
+      documented in both the router moduledoc and the authorization module.
+      REQ-109's variable_schemas registration obligation wired through
+      create/put/import via the single shared
+      Letflow.Definitions.register_variable_schemas/3 (REQ-078) insert path --
+      no second insert path, confirmed structurally (a %VariableSchema{} row
+      struct is constructed nowhere in lib/ outside definitions.ex). PUT
+      onto the same definition_id replaces the row set (delete then
+      register, same transaction), satisfying the omitted-key-leaves-no-row
+      obligation. ISS-0037/GH#112's service-existence-oracle collapse
+      implemented on activate: both internal violation reasons render one
+      generic 422 detail, with the internal reason preserved via Logger for
+      server-side diagnosability only -- no production Lookup exists yet
+      (S6 scope gap, matches PinResolver's own documented default), so the
+      branch is exercised in tests via an Application-env injection seam,
+      structurally unreachable in production today.
+      Self-review (playing REVIEWER solo) caught and fixed a real bug before
+      landing: DELETE on ACTIVE/DEPRECATED was rendering archive/2's
+      {:error, :invalid_status_transition} through render_write/3, which had
+      no clause for that reason and fell through to a bare 500 instead of
+      409 -- fixed to use render_transition/3 (which already had the correct
+      clause), with two new regression tests added.
+      34 new tests (test/letflow/routers/definitions_write_test.exs),
+      covering all 12 acceptance criteria. mix letflow.check run twice
+      serially (no concurrent test process) after the fix: 1891/1891 tests,
+      letflow.lint_handoffs OK, letflow.check.test OK -- the single earlier
+      "1890/1891" result was a transient concurrent-test-DB collision
+      (ISS-0110's documented class), not a regression; confirmed by an
+      isolated clean rerun before this one. This entry's own declared count
+      (40) was computed against a pre-REQ-076/pre-ISS-0287 base during the
+      Step Final rebase that composed this file -- recounted directly from
+      `grep -c "^  - req:" docs/status/requirement_status.v3.yaml` = 43
+      after REQ-076's own started+done pair and ISS-0287's own done-event
+      were composed in above, per this note's own recount-every-time rule.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 3 — CLOSED 2026-08-23. DO NOT APPEND TO THIS FILE.
+#
+# This volume holds the complete requirement run history from 2026-08-22 through
+# 2026-08-23 (43 entries, lines 1-1263). It is frozen: every line above this
+# comment is preserved byte-for-byte. Closed under WF02-REQ082-20260823's Step
+# Final rebase because it crossed its own declared roll_rule ceiling
+# (max_lines: 1200) at 1263 lines / 76551 bytes / 43 entries -- confirmed
+# failing test/docs/requirement_status_invariants_test.exs's assertion A3
+# ("the current volume is within the roll-rule ceilings"). Reads of this volume
+# are TARGETED reads only -- a line range or a pattern match, never a
+# whole-file read (1263 lines exceeds the 1200-line roll ceiling, though it
+# remains under the Read tool's own 2000-line/256KB hard limit). Use whichever
+# your shell has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v4.yaml
+#
+# Why this file was closed: REQ-082's Step Final rebase composed
+# WF02-REQ076-20260822's and WF03-ISS0287-20260823's completions (landed on
+# main independently) with REQ-082's own done-event, bringing the on-disk
+# count to 43 across 1263 lines -- over the roll ceiling. No prior run since
+# this volume crossed the roll ceiling had executed the roll procedure
+# documented in this file's own (now-frozen) "WHEN THIS VOLUME IS FULL"
+# section; this run does so as part of its own Step Final, per that section's
+# instructions.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none declared. Volumes 1/2's declared
+# anomalies remain declared against those volumes only; this volume introduced
+# no new ones as far as this closure's own review found.
+# ─────────────────────────────────────────────────────────────────────────────

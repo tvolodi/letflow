@@ -1,0 +1,64 @@
+{
+  "handoff_id": "9b6f3d2a-1c8e-4a7f-b3d5-6e0c9a2f4b17",
+  "run_id": "WF02-REQ083-20260822",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "RELEASE-VALIDATOR",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ083-20260822/step-05-release-validator.json",
+  "created_at": "2026-08-22T07:10:00Z",
+  "started_at": "2026-08-22T07:00:00Z",
+  "completed_at": "2026-08-22T07:10:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-083"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ083-20260822/step-00-git-setup.json",
+      "handoffs/WF02-REQ083-20260822/step-01-code-designer-rework1.json",
+      "handoffs/WF02-REQ083-20260822/step-01b-design-validator-rework1.json",
+      "handoffs/WF02-REQ083-20260822/step-02a-elixir-dev-rework1.json",
+      "handoffs/WF02-REQ083-20260822/step-02c-security-reviewer-rework1.json",
+      "handoffs/WF02-REQ083-20260822/step-02d-reviewer.json",
+      "handoffs/WF02-REQ083-20260822/step-03-test-designer.json",
+      "handoffs/WF02-REQ083-20260822/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ083-20260822/step-04-test-runner.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/tasks.ex",
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/api/authorization.ex",
+      "test/letflow/routers/tasks_test.exs",
+      "docs/issues/ISS-0260.yaml",
+      "test/reports/report-20260822-WF02-REQ083-20260822.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 5 -- independent release validation of REQ-083 (Task routes read path: handleList/handleGetById/handleInbox) per docs/agents/workflows/WF-02_requirement_implementation.md's Step 5 procedure: re-run scripts/test_parallel.sh independently (not trust TEST-RUNNER's report), re-derive ISS-0260's failure attribution structurally rather than accepting Step 4's say-so, confirm all 7 acceptance criteria against actual code/tests, and check requirement_status mechanism for staleness.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh re-run independently, synchronously, foreground, to completion",
+      "ISS-0260 attribution re-checked structurally via git diff --name-only origin/main...HEAD, not accepted on Step 4's report alone",
+      "each of REQ-083's 7 acceptance criteria checked explicitly against lib/letflow/tasks.ex, lib/letflow/routers/tasks.ex, and test/letflow/routers/tasks_test.exs",
+      "docs/requirements.yaml / docs/status/requirement_status.yaml staleness checked (REQ-083 expected status: in_progress, DOC-UPDATER not yet run -- expected, not a defect)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independent re-verification, not a re-read of TEST-RUNNER's report.\n\n1. INDEPENDENT TEST RUN. Ran `docker compose up -d` (letflow-postgres-1 already Running) then `bash scripts/test_parallel.sh` myself as a normal, blocking, foreground call (no run_in_background, no Monitor). N=16 (nproc). Result: 1601 tests, 5 properties, 0 failures -- 1606/1606 passed, all 16 partitions exit 0. This run did NOT reproduce the Letflow.EngineConcurrencyTest timing failure TEST-RUNNER saw a few minutes earlier -- consistent with ISS-0260's own diagnosis (a load-dependent wall-clock flake, not a deterministic regression), and itself evidence that the failure is not caused by this branch's diff (a real regression would reproduce deterministically, not intermittently across independent runs of the same code).\n\n2. ISS-0260 ATTRIBUTION RE-DERIVED, not accepted on Step 4's say-so. Ran `git diff --name-only origin/main...HEAD` myself: docs/issues/ISS-0260.yaml, docs/requirements.yaml, docs/status/requirement_status.index.yaml, docs/status/requirement_status.v2.yaml, handoffs/WF02-REQ083-20260822/*, handoffs/registry.json, lib/letflow/api/authorization.ex, lib/letflow/design/req083-task-routes-read.md, lib/letflow/routers/tasks.ex, lib/letflow/tasks.ex, test/letflow/routers/tasks_test.exs, test/reports/report-20260822-WF02-REQ083-20260822.yaml, test/specs/REQ-083.md. Confirmed independently: this list contains neither test/letflow/engine_concurrency_test.exs nor lib/letflow/engine.ex nor any InstanceProjection file. Read lib/letflow/tasks.ex directly and confirmed no reference to Letflow.Engine, Engine.complete_task, or any concurrency/timing-relevant code path -- it is a pure Ecto read-query module with no process/spawn/GenServer involvement (matches REVIEWER's Step 2d supervision-integrity finding, independently confirmed here by direct read). Route 1 (structural, diff-based) attribution holds under my own re-derivation, not merely Step 4's. docs/issues/ISS-0260.yaml exists, status: open, github_issue: 507, queue_task_id: 260 -- already filed, not re-filed here. This run's own 0-failure result further corroborates that this branch's diff carries no causal path to that test.\n\n3. AC-BY-AC CONFIRMATION against actual code and tests (not prior-step summaries):\n\n   AC1 (each of the three handlers has an end-to-end test through the real router asserting status and response shape, list/inbox cursor-paginated across >=2 pages) -- CONFIRMED. test/letflow/routers/tasks_test.exs describe blocks 'AC1: GET /tasks/:id basic end-to-end' (line 154), 'AC1: GET /tasks paginates across at least two pages' (line 172), 'AC1: GET /tasks/inbox paginates across at least two pages' (line 209) exist and passed in my run. Router (lib/letflow/routers/tasks.ex) has real `get \"/\"`, `get \"/inbox\"`, `get \"/:id\"` Plug.Router routes wired to Letflow.Tasks.list_tasks/2 and get_task/2.\n\n   AC2 (inbox for user X returns tasks assigned directly to X, via a group, via a role, and excludes a different user Y's tasks -- four assertions) -- CONFIRMED. describe 'AC2: GET /tasks/inbox scoping for a task-worker-only caller' (line 253) plus 'AC2 extra assurance: a role held only in a DIFFERENT tenant does not leak' (line 292). Code path: lib/letflow/routers/tasks.ex's build_inbox_assignee_scope/3 (line 234) forces {:principal, Tasks.resolve_principal_scope/2} for a task-worker-only caller; lib/letflow/tasks.ex's filter_by_assignee_scope/2 {:principal, ...} clause (line 259-274) ORs USER/GROUP/ROLE assignee_type/ref matches -- all three arms present, matching REQ-047's assignee_type model.\n\n   AC3/INV-5 (a task id belonging to another tenant returns the same response as a nonexistent id) -- CONFIRMED. describe 'AC3/INV-5: GET /tasks/:id cross-tenant id is indistinguishable from a nonexistent id' (line 331). Code: lib/letflow/tasks.ex's get_task/2 (line 163-184) has exactly one not-found branch (`nil -> {:error, :not_found}`) reached identically whether the id is cross-tenant (excluded by the :prefix-scoped query) or genuinely absent -- no branch exists that could distinguish them, same mechanism as REQ-072's own AC4 per the moduledoc's own claim, verified directly against the code.\n\n   AC4/INV-1 (tenant A caller sees no tenant B task when both have identically-named nodes) -- CONFIRMED. describe 'AC4/INV-1: GET /tasks tenant isolation with identically-named nodes' (line 356). Every Repo call in lib/letflow/tasks.ex passes `prefix: prefix` (list_tasks/2 line 139, get_task/2 line 179, resolve_principal_scope/2 lines 224-236) sourced from the router's Context.scoped_repo_opts/1 (REQ-072), never from request-supplied data.\n\n   AC5/INV-2 (serialised response uses an explicit field allowlist, not wholesale struct encoding) -- CONFIRMED. describe 'AC5/INV-2: response allowlists' (line 381). task_list_item_map/1 (lib/letflow/routers/tasks.ex line 322-335) hand-builds exactly 9 keys; task_detail_map/2 (line 341-347) adds correlation_key/updated_at for 10 -- neither is a Jason.Encoder/struct pass-through.\n\n   AC6 (moduledoc states which store.zig operations were ported vs. not, explicitly rather than approximately) -- CONFIRMED by direct read of lib/letflow/tasks.ex lines 11-40: two real markdown tables ('Ported by this module' / 'Not ported by this module') enumerating specific R-Co functions with line-number citations (TaskStore.getById L239-283, listCursor L579-737, list L443-577, createInTx L161-237, completeInTx/cancelInTx L304-441, claimTask/assign/reassign L761-1002, insertTaskWaitDescriptorInTx L1025-1141) and why each was or wasn't ported. This independently reproduces REVIEWER's Step 2d finding (which I did not take on faith -- read the actual moduledoc text myself).\n\n   AC7 (a caller without TasksRead receives 403 on all three endpoints) -- CONFIRMED. describe 'AC7: a caller without TasksRead gets 403 on all three endpoints' (line 421) and passed. Code: with_authorized_scope/4 (lib/letflow/routers/tasks.ex line 115-141) returns Response.forbidden/2 on decision.kind == :Deny403 before any Repo call, wired identically at all three route call sites (lines 84-100).\n\n   All 7 acceptance criteria hold against the actual shipped code and test file, not against any prior step's narrative summary.\n\n4. STATUS-STALENESS CHECK. docs/requirements.yaml REQ-083 entry (line 4722) reads `status: in_progress` -- expected per ORCH's dispatch note, DOC-UPDATER (Step 6) has not run yet, not a defect. docs/status/requirement_status.v2.yaml's most recent REQ-083 event is a single 'started' entry (2026-08-22T05:23:40Z, agent ELIXIR-DEV) -- no 'done' event yet, consistent with in_progress. docs/status/requirement_status.index.yaml has no REQ-083-specific stale entry to flag (grep found only requirements.yaml cross-references, not a status-index row asserting a conflicting state). No staleness defect found.\n\nOverall: independently re-run tests are green (1606/1606), ISS-0260's forwarded failure re-verified as structurally unrelated to this branch via my own diff/code inspection (not TEST-RUNNER's say-so), all 7 REQ-083 acceptance criteria confirmed directly against shipped code and tests, and requirement-status is at the expected pre-DOC-UPDATER state. PASS.",
+    "artifacts_out": ["handoffs/WF02-REQ083-20260822/step-05-release-validator.json"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ083-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ083-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER (Step 6)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

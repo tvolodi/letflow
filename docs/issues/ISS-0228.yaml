@@ -1,0 +1,67 @@
+id: ISS-0228
+title: >
+  SandboxPool design doc: add the missing sixth reply row to iss0224
+  section 6.4
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0224-20260822
+discovered_at: "2026-08-22T02:01:17Z"
+severity: MINOR
+
+description: >
+  Raised by REVIEWER during WF03-ISS0224-20260822 (merge b8ebfb0), which
+  declined to mint an id itself per ISSUE_QUEUE.md.
+
+  `lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md` section 6.4
+  enumerates the `GenServer.reply/2` call sites that back the exactly-one-reply
+  invariant (INV-SP-A2), but its table was missing one row. An incomplete
+  enumeration in a design doc that is the reference for a concurrency invariant
+  is worse than no table at all: a later reader treats it as exhaustive.
+
+  Note: no `docs/issues/ISS-0228.yaml` local record was ever written by the
+  filing run (`WF03-ISS0224-20260822`) — this file was created retroactively
+  as part of resolving the issue, since none existed anywhere in git history
+  at claim time.
+
+affected_files:
+  - lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md
+
+related:
+  - REQ-113  # scripts/test_parallel.sh design lineage this file's own §6/§7 build on -- not directly related, only same design-doc family
+
+queue_task_id: 228
+github_issue: 466
+github_issue_note: >
+  register_task created both the queue task (228) and its mirrored GitHub
+  issue (466) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
+  deliberately not called separately.
+
+status: resolved
+resolved_in_run: WF03-ISS0228-20260822
+resolved_at: "2026-08-22T03:35:00Z"
+resolution_note: >
+  Verified the enumeration against the actual implementation, not against the
+  existing table: `grep -n "GenServer.reply" lib/letflow/sandbox_pool.ex`
+  found 7 call sites. Traced each to its owning code path:
+  - `complete_op` `{:provision, _}` success -> `{:ok, claim}` (1 site)
+  - `complete_op` `{:provision, _}` failure -> `{:error, :provision_failed}` (1 site)
+  - `handle_worker_death/1`'s `{:provision, p}` clause (worker crashed during
+    provisioning) -> `{:error, :provision_failed}` (1 site)
+  - `complete_op` `{:drop, d}` when `d.from != nil` (the DROP worker
+    *returned*, either `:ok` or `{:error, :release_failed}`) -> 2 call sites,
+    one table row (already present, correctly documented as one row covering
+    both outcomes)
+  - `handle_worker_death/1`'s `{:drop, d}` clause when `d.purpose == :release`
+    (the DROP worker *crashed*, distinct from the row above -- a genuinely
+    different trigger, worker exit vs. worker return) -> `{:error,
+    :release_failed}` (1 site) -- **this was the missing sixth row**
+  - `handle_info({:claim_timeout, _}, ...)` -> `{:error, :sandbox_unavailable}`
+    (1 site)
+
+  All 7 call sites accounted for across 6 table rows (one row legitimately
+  covers 2 call sites, as it already did before this fix). Added the missing
+  row, corrected "five sites" to "six sites" in section 6.4's own intro and in
+  the restated INV-SP-A2 invariant elsewhere in the document, and added an
+  explicit completeness-verification paragraph stating the grep-and-trace
+  method used, so a future reader knows this was checked, not assumed.
+  Docs-only change (one file), no code touched, self-gated per
+  ORCHESTRATOR.md §10 direct-action allowance.

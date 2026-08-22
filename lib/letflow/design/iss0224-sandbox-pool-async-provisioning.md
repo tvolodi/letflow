@@ -702,16 +702,25 @@ A name, not a tunable — no number, nothing to derive. Not a "constant" in §10
 ### 6.4 `from` held across callbacks (hazard 4)
 
 A `GenServer.from()` is `{pid(), tag :: term()}`, valid until replied to, from any callback.
-This design holds one in an op record and replies exactly once, from exactly one of five
+This design holds one in an op record and replies exactly once, from exactly one of six
 sites:
 
 | where | reply |
 |---|---|
 | `complete_op` for `{:provision, _}` with `{:ok, claim}`, `owner_down? == false` | `{:ok, claim}` |
 | `complete_op` for `{:provision, _}` with `{:error, :provision_failed}`, `owner_down? == false` | `{:error, :provision_failed}` |
-| `:DOWN` for `in_flight.task_ref` during a `{:provision, _}`, `owner_down? == false` | `{:error, :provision_failed}` |
-| `complete_op` for `{:drop, %{from: from}}` when `from != nil` | `:ok` or `{:error, :release_failed}` |
+| `:DOWN` for `in_flight.task_ref` during a `{:provision, _}`, `owner_down? == false` (`handle_worker_death/1`'s `{:provision, p}` clause) | `{:error, :provision_failed}` |
+| `complete_op` for `{:drop, d}` with `:ok` or `{:error, :release_failed}`, when `d.from != nil` (the DROP worker *returned*) | `:ok` or `{:error, :release_failed}` |
+| `:DOWN` for `in_flight.task_ref` during a `{:drop, d}` with `d.purpose == :release` (`handle_worker_death/1`'s `{:drop, d}` clause — the DROP worker *crashed*, distinct from the row above) | `{:error, :release_failed}` |
 | `handle_info({:claim_timeout, caller_ref}, …)` (`:260`, unchanged) | `{:error, :sandbox_unavailable}` |
+
+**Completeness verified against the implementation, not against this table**: every
+`GenServer.reply/2` call site in `lib/letflow/sandbox_pool.ex` was located directly
+(`grep -n "GenServer.reply" lib/letflow/sandbox_pool.ex`, 7 call sites) and each was
+traced to the row above it belongs to. Two call sites collapse into row 4 (the `:ok`
+and `{:error, :release_failed}` outcomes of the same `complete_op` drop-success clause);
+the remaining five call sites are the other five distinct rows. No call site was found
+outside these six rows.
 
 When `owner_down? == true`, **no reply is sent** — the caller is dead. (`GenServer.reply/2`
 to a dead pid is a harmless no-op, so this is a clarity choice; stated so an implementer does
@@ -1229,7 +1238,7 @@ remains open. No number and no invariant in that document changes.
   reservation is discarded on a failure path. No window exists in which a provisioning is in
   progress and its slot uncounted. Strictly stronger than INV-SP-2.
 - **INV-SP-A2 (exactly-one-reply).** Every `from` accepted by a `handle_call/3` is replied to
-  exactly once, from exactly one of §6.4's five sites — except when its owner has died, in
+  exactly once, from exactly one of §6.4's six sites — except when its owner has died, in
   which case it is deliberately not replied to at all. Per-`from`; §6.4's benign-duplicate
   case does not violate it.
 - **INV-SP-A3 (ref classification is unambiguous — RESTATED IN ROUND 2, F1).**

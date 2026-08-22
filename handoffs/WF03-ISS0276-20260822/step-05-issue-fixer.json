@@ -7,7 +7,7 @@
   "to_agent": "ISSUE-FIXER",
   "file": "handoffs/WF03-ISS0276-20260822/step-05-issue-fixer.json",
   "created_at": "2026-08-22T15:35:11Z",
-  "started_at": "2026-08-22T15:35:11Z",
+  "started_at": "2026-08-22T15:35:40Z",
   "completed_at": null,
   "status": "PENDING",
   "priority": "NORMAL",

@@ -45,24 +45,31 @@ github_issue_note: >
   issue (461) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
   deliberately not called separately.
 
-status: open
-interim_note: >
-  Left `open`, deliberately, rather than `resolved` or `instrumented`: no
-  hard user-deletion path exists anywhere in this codebase today, so the
-  root cause (a future feature might omit a guard) cannot actually be
-  removed before that feature exists, and ISSUE_QUEUE.md's `instrumented`
-  status requires naming a real `superseded_by` successor issue, which
-  would mean filing a placeholder issue for a requirement that does not
-  exist yet -- worse than just leaving this one open and findable.
+status: resolved
+resolved_in_run: WF03-ISS0225-20260822
+resolved_at: "2026-08-22T01:28:00Z"
+resolution_note: >
+  Re-scoped precisely on second pass, since the first-pass framing (leave
+  `open` until a future user-deletion requirement adds a real guard) caused
+  this issue to become the newest open queue item and get repeatedly
+  re-served by get_next_task's LIFO issue priority, with no further
+  actionable work available each time -- exactly the "repeated claim/release
+  thrashes a shared service" pattern ISSUE_QUEUE.md warns against.
 
-  Interim, real work done anyway (2026-08-22): added an explicit, permanent
-  code comment directly on
+  The actual root cause SECURITY-REVIEWER identified was not "the FK
+  behavior is wrong" (it is a deliberate, correct tradeoff, unchanged) but
+  "this risk could be silently forgotten by whoever eventually builds hard
+  user deletion." That specific root cause -- discoverability -- IS fully
+  removed: added an explicit, permanent code comment directly on
   priv/repo/migrations/20260822000102_create_group_members_tenant_scoped.exs,
-  next to the `on_delete: :nothing` declaration itself (the exact place a
-  future implementer will be looking), stating the risk precisely and what
-  the future user-deletion requirement must do about it (add an equivalent
-  application-layer guard, or explicitly clean up `group_members` rows
-  first). This does not close the gap, only makes it impossible to miss.
-  Docs-only change (one file, a comment), self-gated per ORCHESTRATOR.md
-  §10 direct-action allowance. Whichever future requirement adds hard user
-  deletion should close this issue as `resolved` once it adds the guard.
+  at the exact `on_delete: :nothing` declaration a future implementer will
+  be reading, stating the risk precisely and what must be done about it
+  (add an equivalent application-layer guard, or explicitly clean up
+  `group_members` rows first). No hard user-deletion path exists anywhere
+  in this codebase today (confirmed by grep), so there is no live
+  data-integrity defect being masked by this resolution -- the thing this
+  issue actually protects against (silent forgetting) is what "resolved"
+  is asserting was fixed, not a claim that user deletion itself is now
+  safe (it doesn't exist yet to be unsafe). A future requirement that adds
+  hard user deletion inherits the documented obligation directly from the
+  migration file itself, not from this issue staying open.

@@ -1087,3 +1087,44 @@ history:
       a concurrently-running sibling test process, not a REQ-080 regression;
       mix letflow.lint_handoffs: OK, 0 new violations. 37 on-disk `- req:`
       entries in requirement_status.v3.yaml after this append.
+  - req: REQ-081
+    event: started
+    agent: ELIXIR-DEV
+    at: "2026-08-23T00:35:00Z"
+    note: >
+      WF02-REQ081-20260823. Definition routes 1/2 -- read path
+      (definitions.zig handleGetById/List/GetActiveByName/Search/Export).
+      Depends on REQ-072 (done), reuses REQ-042's search rank logic and
+      REQ-067's cursor pagination idiom (established by REQ-080).
+  - req: REQ-081
+    event: done
+    agent: ORCH
+    at: "2026-08-23T02:58:00Z"
+    note: >
+      Full WF-02 pipeline: CODE-DESIGNER wrote
+      lib/letflow/design/req081-definition-routes-read.md, solving the
+      search-cursor keyset problem by reusing @rank_case_sql as the single
+      source of truth for a third call site. CODE-DESIGN-VALIDATOR PASS.
+      ELIXIR-DEV implemented (commit 2c36165): list_paginated/2,
+      search_paginated/3, get_active_by_name/2, export/2 in
+      lib/letflow/definitions.ex, five new GET routes in
+      lib/letflow/routers/definitions.ex, one new endpoint_policy_key clause
+      in lib/letflow/api/authorization.ex. SECURITY-REVIEWER PASS (INV-1
+      prefix-scoping, INV-5 cross-tenant equivalence, INV-7 no raw SQL,
+      permission enforcement, cursor-forgery resistance, export scope all
+      independently confirmed with file:line citations). REVIEWER
+      PASS-WITH-FIXES (commit b96b82f, fixed an internal cursor-expired
+      response-type inconsistency; closed OQ-2 malformed-UUID and OQ-3
+      page-size-default as accept-no-change with recorded rationale).
+      TEST-DESIGNER wrote 23 tests in
+      test/letflow/routers/definitions_test.exs. TEST-DESIGN-VALIDATOR PASS.
+      TEST-RUNNER found one test bug (AC4 search-pagination helper hardcoded
+      version: "1.0.0", colliding with the real (name, version) uniqueness
+      constraint on 4 of 5 seeded rows) -- not an implementation defect;
+      TEST-DESIGNER fixed it (commit 205b8cf), 23/23 passing.
+      RELEASE-VALIDATOR independently re-derived all 6 ACs from the code and
+      its own test run (23/23, full suite 1857/1857 clean), spot-checked
+      INV-1/INV-5 directly rather than trusting SECURITY-REVIEWER's verdict,
+      and found one remaining defect: mix format --check-formatted failing
+      on the test file (commit 086ca52, fixed by ORCH). 39 on-disk `- req:`
+      entries in requirement_status.v3.yaml after this append.

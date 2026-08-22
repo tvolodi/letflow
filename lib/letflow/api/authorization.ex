@@ -193,6 +193,15 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("GET", path) when path in ["/definitions", "/definitions/:id"],
     do: :DefinitionsRead
 
+  # REQ-081 -- same permission, three more path templates, no new atom.
+  def endpoint_policy_key("GET", path)
+      when path in [
+             "/definitions/active/:name",
+             "/definitions/search",
+             "/definitions/:id/export"
+           ],
+      do: :DefinitionsRead
+
   def endpoint_policy_key("POST", "/instances"), do: :InstancesStart
   def endpoint_policy_key("POST", "/instances/:id/cancel"), do: :InstancesCancel
 

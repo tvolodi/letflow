@@ -342,8 +342,12 @@ present flag, so this task's initial surface matches exactly what's specified.)
       # {488, "2026-08-22", "closed with no comment, no linked PR; pre-dates this tool"}
     ]
 
-    @spec grandfathered?(integer()) :: boolean()
-    defp grandfathered?(number), do: Enum.any?(@grandfathered, fn {n, _, _} -> n == number end)
+    @spec grandfathered?(pos_integer()) :: boolean()
+
+`grandfathered?/1` takes a GitHub issue number and returns whether it appears as the
+first element of any tuple in `@grandfathered` — i.e. whether this specific issue
+number's `ZERO_EVIDENCE` violation is a known pre-existing one rather than a new
+regression.
 
 This is the same shape as `letflow.lint_handoffs`'s `@grandfathered` (a literal list of
 tuples, each one exact, dated, and traced), adapted from `{rule, path}` to

@@ -9,6 +9,7 @@ defmodule Letflow.Router do
   |--------|---------------------|------------------------------------|-----------|-----------|
   | GET    | /health             | inline 200 `{"status":"ok"}`       | none      | none      |
   | GET    | /api/tenant-config  | `Letflow.Routers.TenantConfig`     | **none**  | global `tenants` |
+  | GET    | /api/mobile/tenant-config | `Letflow.Routers.MobileTenantConfig` | **none** | global `tenants` |
   | *      | /api/v1/…           | `Letflow.Plugs.ApiPipeline`        | delegated | delegated |
   | *      | _                   | `Letflow.Api.Response.not_found/1` | none      | none      |
 
@@ -80,6 +81,13 @@ defmodule Letflow.Router do
   # Public by design (REQ-078) -- declared BEFORE the /api/v1 forward so it
   # never enters Letflow.Plugs.AuthPipeline, which has no bypass.
   forward("/api/tenant-config", to: Letflow.Routers.TenantConfig)
+
+  # Public by design (REQ-124) -- mobile bootstrap, same reasoning as
+  # /api/tenant-config above: the mobile app has no token yet when it calls
+  # this. Declared immediately after /api/tenant-config and still BEFORE the
+  # /api/v1 forward so it never enters Letflow.Plugs.AuthPipeline. See
+  # Letflow.Routers.MobileTenantConfig's moduledoc.
+  forward("/api/mobile/tenant-config", to: Letflow.Routers.MobileTenantConfig)
 
   forward("/api/v1", to: Letflow.Plugs.ApiPipeline)
 

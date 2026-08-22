@@ -1,0 +1,59 @@
+{
+  "handoff_id": "b2f4a1e6-8d37-4c95-a1e2-7f9c3b5d0e18",
+  "run_id": "WF02-REQ083-20260822",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ083-20260822/step-02c-security-reviewer-rework1.json",
+  "created_at": "2026-08-22T06:20:00Z",
+  "started_at": "2026-08-22T06:12:00Z",
+  "completed_at": "2026-08-22T06:20:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-083"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ083-20260822/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ083-20260822/step-02a-elixir-dev-rework1.json",
+      "handoffs/WF02-REQ083-20260822/step-01-code-designer-rework1.json",
+      "handoffs/WF02-REQ083-20260822/step-01b-design-validator-rework1.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/tasks.ex",
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/design/req083-task-routes-read.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 2c RE-VERIFICATION (rework attempt 1 of 3) -- independently re-check the fix ELIXIR-DEV applied to resolve_principal_scope/2 for the prior FAIL on INV-1 (unprefixed Letflow.Identity.RoleRegistry.list_roles/0 call), and re-check INV-2/INV-5/INV-7/endpoint_policy_key additive clause since Step 1 also revised the design doc.",
+    "acceptance_criteria": [
+      "RoleRegistry.list_roles/0 has zero call sites in resolve_principal_scope/2 or elsewhere in tasks.ex",
+      "the new ROLE query passes prefix: prefix to Repo.all/2, using the same Keyword.fetch!(opts, :prefix) binding as the GroupMember query",
+      "INV-1's how-to-verify procedure re-run against this query against real source, not the handoff self-report",
+      "INV-2, INV-5, INV-7, endpoint_policy_key(\"GET\",\"/tasks/inbox\") re-confirmed unchanged/passing against current diff"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified the rework-1 fix by reading lib/letflow/tasks.ex directly (not the ELIXIR-DEV or prior SECURITY-REVIEWER handoff's self-report) and by running `mix compile --warnings-as-errors` myself.\n\nINV-1 re-verification (the prior FAIL):\n1. `grep -n RoleRegistry lib/letflow/tasks.ex` -- the only hits are two prose lines inside resolve_principal_scope/2's own @doc (lines 208-209), stating the function *no longer* calls RoleRegistry.list_roles/0 and explaining why -- this is documentation, not a call site. `Letflow.Identity.RoleRegistry` module-wide grep (lib/) confirms the only non-doc/non-test call site that ever existed was this diff's own prior version; there are now zero call sites anywhere in lib/letflow/tasks.ex or lib/letflow/routers/tasks.ex. Confirmed: RoleRegistry.list_roles/0 is not called anywhere in this function or file.\n2. Read resolve_principal_scope/2 in full (tasks.ex:219-240). `prefix = Keyword.fetch!(opts, :prefix)` at line 221 is the single source of the prefix value for the whole function body. The GroupMember query (lines 224-227) and the new TenantRole query (lines 229-236) both pass this exact same `prefix` variable to `Repo.all(query, prefix: prefix)` -- no second derivation, nothing caller-suppliable beyond the one opts[:prefix] already trusted by the GroupMember query in the version that previously passed review. `alias Letflow.Identity.TenantRole` (line 64) replaces the removed RoleRegistry alias; no other alias/import of RoleRegistry remains in the file.\n3. Re-ran INV-1's how-to-verify procedure against this specific query: (a) scoped through :prefix -- yes, `Repo.all(from(t in TenantRole, where: t.group_id in ^group_ids, select: %{name: t.name, group_id: t.group_id}), prefix: prefix)`, a genuine Ecto.Query composition with a bound (^) value and an explicit prefix: option, not the default/public schema; (b) TenantRole is the REQ-020/Decision-0006 per-tenant-schema table (migration 20260819000002_create_tenant_role_tenant_scoped.exs) -- this diff introduces no new migration and does not touch that table's reachability; (c) resolve_principal_scope/2 does not read or write any tenant_id column on TenantRole -- the query selects only `name`/`group_id` and the prefix itself is the tenant-scoping mechanism per Decision 0003, not a caller-suppliable tenant_id field, so (c) is not applicable to this read path (no tenant_id field is threaded through). All three checks satisfied. Traced what schema the query actually resolves against when a real tenant_id is present: `prefix: prefix` is passed straight into `Repo.all/2`, so Ecto issues `SELECT ... FROM \"<prefix>\".\"tenant_role\" WHERE group_id = ANY($1)` against the caller's own tenant schema -- not `public.tenant_role`, and not any other tenant's schema. This closes the exact defect the prior FAIL identified (unscoped read reaching either a crash or a shared global table). PASS.\n4. `mix compile --warnings-as-errors` run directly in this session: clean, zero output, exit 0 -- confirms the fix compiles, independent of ELIXIR-DEV's own report of the same.\n\nRe-checked other invariants against the current diff (`git diff origin/main...HEAD`), confirmed nothing shifted since the original PASS on these:\n\nINV-2 (server-side field allowlist) -- APPLIES, PASS (unchanged). `grep -n \"Jason.Encoder\\|Map.from_struct\" lib/letflow/tasks.ex lib/letflow/routers/tasks.ex` -- only hit is a comment at routers/tasks.ex:57 documenting the discipline, and a comment at :318 above the still-present nine-key hand-built map. No struct-wholesale encoding introduced.\n\nINV-5 (not-found/forbidden indistinguishability) -- APPLIES, PASS (unchanged). get_task/2's Repo.one(query, prefix: prefix) at tasks.ex:179 and its `{:error, :not_found}` branch are untouched by this rework (the diff only touched resolve_principal_scope/2's role-resolution block). routers/tasks.ex:281-287 handle_get_by_id/3 still maps the single `{:error, :not_found}` case to `Response.not_found(conn)` with no distinguishing branch. PASS.\n\nendpoint_policy_key(\"GET\", \"/tasks/inbox\") -- re-diffed lib/letflow/api/authorization.ex against origin/main...HEAD: still exactly one new clause, `def endpoint_policy_key(\"GET\", \"/tasks/inbox\"), do: :TasksList`, inserted between the existing \"/tasks\" and \"/tasks/:id\" exact-string clauses, unchanged since the original PASS. Additive/narrow, confirmed again. PASS.\n\nINV-7 (no SQL string interpolation) -- APPLIES, PASS. `grep -n \"Repo.query\\|Repo.all\\|Repo.one\" lib/letflow/tasks.ex` shows all four Repo calls (list_tasks/2's Repo.all at :139, get_task/2's Repo.one at :179, resolve_principal_scope/2's two Repo.all calls at :224 and :230) are Ecto.Query composition with pinned (^) values and explicit prefix: options -- zero Repo.query hits anywhere in the file. PASS.\n\nINV-8 -- the crash/unscoped-read risk the prior FAIL raised under INV-1 no longer applies: the new query path scopes through the caller's own resolved prefix rather than an unprefixed table read with no per-request search_path, so there is no longer a realistic external-I/O-reachable crash on this path introduced by this diff.\n\nAll applicable invariants (INV-1, INV-2, INV-5, INV-7) PASS. INV-3, INV-6 remain N/A/satisfied-by-process; INV-4 remains APPLIES-generally with no new secret-handling code in this diff.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ083-20260822/step-02c-security-reviewer-rework1.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ083-20260822",
+      "commit_sha_list": ["4ef6bdd", "b849af3", "8bb33d3"],
+      "remote_branch": "origin/feature/WF02-REQ083-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (Step 2d)"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

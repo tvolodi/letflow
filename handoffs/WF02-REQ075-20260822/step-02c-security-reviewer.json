@@ -1,0 +1,64 @@
+{
+  "handoff_id": "f2a1c9e6-7b3d-4e2a-9c5f-6d8b0a1e3f7c",
+  "run_id": "WF02-REQ075-20260822",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ075-20260822/step-02c-security-reviewer.json",
+  "created_at": "2026-08-22T02:45:00Z",
+  "started_at": "2026-08-22T02:30:00Z",
+  "completed_at": "2026-08-22T02:45:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-075"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ075-20260822/step-01c-reviewer-tenantstatus-signoff.json",
+      "handoffs/WF02-REQ075-20260822/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/routers/tenants.ex",
+      "lib/letflow/plugs/tenant_status.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/tenant.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 2c -- hard security gate on REQ-075's Step 2a implementation (tenant administration routes over the global tenants table, outside REQ-072's per-tenant :prefix scoping; PLATFORM_ADMIN role check is the only isolation layer). Flagged as the highest-risk requirement in its batch.",
+    "acceptance_criteria": [
+      "Every INV-1..INV-8 invariant assessed APPLIES/NOT-APPLICABLE against the actual diff, applicable ones verified against the running code/tests, not the design doc's claims",
+      "Authorization-ordering guarantee (evaluate_access/2 before any Repo call, all 6 handlers) traced line-by-line in the shipped router",
+      "scoped_repo_opts/1 confirmed absent from the new tenant-admin code path",
+      "AC1's zero-tenant-data 403 body verified by reading the actual test assertion",
+      "AC3's no-own-tenant-carve-out verified structurally via AccessContext's actual field set",
+      "TenantStatus's :inactive check re-verified independently against shipped call/2 code and its tests, including the :migrating regression check"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. Read the actual shipped code (not the design doc's or ELIXIR-DEV's claims) for every point in the task brief; ran the 4 relevant test files directly (74 tests, 0 failures).\n\nINV-1 (tenant data isolation) -- APPLIES (tenants is a tenant-scoped-adjacent table per the applicability note; INV-1 is live). Confirmed by direct read of lib/letflow/routers/tenants.ex and the 6 new lib/letflow/identity.ex functions (create_tenant/1, list_tenants/1, get_tenant_by_slug/1, patch_tenant/2, deactivate_tenant/1, reactivate_tenant/1): none accept or use a :prefix opt, matching the correct design for a genuinely global table with no tenant to scope by. Confirmed via `grep -n scoped_repo_opts lib/letflow/routers/tenants.ex lib/letflow/identity.ex` that the only hit is a moduledoc reference (line 35) documenting the *existing* REQ-073/074 per-tenant convention for unrelated user/group functions -- zero occurrences inside the new tenant-admin code itself. PASS.\n\nPoint 1 (authorization ordering) -- traced all 6 route macros (post \"/\", get \"/\", get \"/:slug\", patch \"/:slug\", post \"/:slug/deactivate\", post \"/:slug/reactivate\") in lib/letflow/routers/tenants.ex lines 124-158: every single one wraps its handler body in `with_authorization(conn, method, path, fn conn -> handle_X(conn, ...) end)`. with_authorization/4 (lines 170-183) builds AccessContext, calls Authorization.evaluate_access/2, and on :Deny403 returns Response.forbidden/2 immediately -- the handler closure (fun.(conn), which is the only place any Repo/Identity call occurs) is never invoked on that path. No handler function (handle_create, handle_list, handle_get, handle_patch, handle_deactivate, handle_reactivate) is reachable except through this wrapper -- confirmed no direct route macro bypasses it. No Repo/Identity call precedes evaluate_access/2 on any of the 6 paths. This is the single most load-bearing property in the run and it holds.\n\nPoint 2 (scoped_repo_opts) -- see INV-1 above. Confirmed absent.\n\nPoint 3 (AC1) -- read test/letflow/routers/tenants_test.exs lines 63-92 directly: the test asserts the full decoded JSON body equals an exact 5-key RFC7807 problem map (no tenant fields), plus explicit `refute resp.resp_body =~ other.tenant.slug`, `refute ... =~ \"items\"`, `refute ... =~ \"count\"` against a real second tenant's slug seeded in setup. This is a genuine full-body assertion, not merely presence-of-403. Ran: PASS.\n\nPoint 4 (AC3 / AccessContext structure) -- read lib/letflow/api/authorization.ex lines 131-140: `AccessContext` defstruct is exactly `[:user_id, :roles]`, `@enforce_keys [:user_id, :roles]`. There is no target-tenant, resource-owner, or 'own-tenant' field anywhere in the struct -- structurally impossible for any decision to branch on 'is this the caller's own tenant.' with_authorization/4 in tenants.ex builds this struct from only conn.assigns.auth_context.user_id and .roles -- no slug/target-tenant data is threaded into it. Confirmed by test/letflow/routers/tenants_test.exs's AC2 cross-tenant tests (lines 97-159, own tenant_a acting against tenant_b) and by the design's stated AC3 own-tenant test existing in both directions (verified via full test run, 74/74 pass). PASS.\n\nPoint 5 (TenantStatus) -- read the actual shipped lib/letflow/plugs/tenant_status.ex call/2 (lines 65-99) directly, ignoring the prior REVIEWER sign-off and ELIXIR-DEV's report as evidence: single clause, one shared Repo.get(Tenant, tenant_id), then a `cond` whose FIRST clause is `tenant.status == :inactive and @platform_admin not in roles -> reject_inactive(conn)`, running unconditionally on `conn.method` (no method filter) -- true for every HTTP method including GET/HEAD. The SECOND clause, `conn.method in @write_methods and tenant.status == :migrating -> reject_migrating(conn)`, is checked only if the first clause didn't match, matching the required ordering (:inactive checked before :migrating). reject_inactive/1 (lines 101-112) sends exactly `{\"error\":\"tenant_inactive\",\"detail\":\"tenant is deactivated\"}`, status 403, no Retry-After header set. reject_migrating/1 (lines 114-126) is byte-for-byte unchanged from its pre-REQ-075 shape (503, Retry-After: 30, tenant_migrating body). Ran test/letflow/plugs/tenant_status_test.exs directly (29 tests, 0 failures) -- confirms: :migrating write-only 503 unchanged for POST/PUT/PATCH/DELETE (no regression), GET/HEAD still pass through unaffected by :migrating, :inactive rejects GET+POST for non-admin with exact body, no-Retry-After on the 403 path, no-roles caller rejected same as any non-admin, PLATFORM_ADMIN exempt for both GET and POST, :active/:migrating tenants unaffected by the new check, and the explicit non-regression test 'a :migrating (not :inactive) tenant still gets the existing 503 write-pause ... not a 403.' No ambiguity found. PASS.\n\nPoint 6 (changesets) -- read lib/letflow/identity/tenant.ex lines 128-144: admin_patch_changeset/2 is `cast(tenant, attrs, [:display_name])` only -- no :status in its cast list, so PATCH structurally cannot touch status. status_changeset/2 is `cast(tenant, attrs, [:status]) |> validate_required([:status])` only -- no :display_name in its cast list, so deactivate/reactivate structurally cannot touch display_name. Both confirmed by direct code read, not the moduledoc's claim. PASS.\n\nPoint 7 (INV-2, tenant_map/1) -- read lib/letflow/routers/tenants.ex lines 350-359: hand-built map literal with exactly 6 keys (id, slug, display_name, status, inserted_at, updated_at), not a Jason.Encoder derivation over %Tenant{}. idp_realm_id correctly excluded. PASS (NOT-APPLICABLE per file's own note that INV-2 is formally S4-not-started, but verified anyway per the task brief's own instruction, and satisfied).\n\nINV-6/INV-7 -- grepped `Repo.query` across lib/ and the new test file: two hits, both in test/letflow/routers/tenants_test.exs (AC4's information_schema check and a teardown DROP SCHEMA), both using bound `$1` parameters, none using string interpolation of untrusted input (the DROP SCHEMA teardown interpolates a schema name derived from TenantProvisioning.schema_name_for_tenant/1's own deterministic hash output, not caller input, and is test-only cleanup, not production code). Zero hits in lib/letflow/routers/tenants.ex or lib/letflow/identity.ex. PASS.\n\nINV-8 -- grepped `^\\s*{:ok, .*} = ` across lib/letflow/identity.ex and lib/letflow/routers/tenants.ex: one hit in identity.ex (line 954, pre-existing REQ-073 code, out of scope for this diff) and one in tenants.ex (line 271, `{:ok, %Pagination.Cursor{} = cursor} ->` -- this is inside a `case` branch match, not a bare assignment that can raise; the other branch is handled). provision_and_respond/2 (tenants.ex lines 230-237) uses a `with`/`else` chain over both TenantProvisioning calls, converting any failure to `Response.internal_error(conn)` rather than crashing. create_tenant/1, patch_tenant/2, set_tenant_status/2 all pattern-match both {:ok,_} and {:error,_} branches of Repo calls exhaustively. PASS.\n\nR-Co dead-code non-port (point 9) -- with_authorization/4 derives roles exclusively from conn.assigns.auth_context.roles (via Authorization.roles_from_strings/1, itself fed only by the verified bearer-token pipeline per authorization.ex's own moduledoc) -- no hardcoded role, no header-sourced identity anywhere in the new files. Confirmed by direct read.\n\nScope (point 10) -- git diff main...HEAD --stat matches the step-02a handoff's stated file list exactly: routers/tenants.ex (new), identity.ex, identity/tenant.ex, plugs/tenant_status.ex, plugs/api_pipeline.ex, api/authorization.ex, plus their test files and docs/handoff bookkeeping. Nothing unexpected touched.\n\nINV-3, INV-5 -- NOT-APPLICABLE (S5/S4-lookup-by-ID not reached by this diff; this diff's lookups are by-slug on a global admin table with no per-tenant scoping to be indistinguishable about in the INV-5 sense -- not-found here is genuinely 'no such tenant slug exists,' not a cross-tenant probe against tenant-scoped business data).\n\nINV-4 -- APPLIES generally to the codebase; this diff introduces no new secret-handling code. Grepped for hardcoded secrets in the changed files: none found. PASS.\n\nRan mix test against the 4 directly relevant files (tenant_test.exs, tenant_status_test.exs, tenants_test.exs, authorization_test.exs): 74 passed, 0 failures, confirmed synchronously in this session.\n\nOverall: no gap found in the authorization-ordering guarantee or in the TenantStatus change -- both re-verified independently against the actual running/tested code, not trusted from prior claims. PASS, no rework needed.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ075-20260822/step-02c-security-reviewer.json"
+    ],
+    "issues": [
+      "Adjacent, non-blocking: OQ-5 (no compensating rollback if TenantProvisioning.provision_tenant_schema/1 or replay_migrations/2 fails after the tenant row is committed) remains open, already flagged by ELIXIR-DEV in step-02a for REVIEWER's Step 2d attention. Not a security invariant violation (the partial state is an operational-recovery concern, not a cross-tenant leak or secret exposure) -- not a blocker for this gate, carried forward for REVIEWER's own judgment call."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ075-20260822",
+      "commit_sha_list": ["22dca21"],
+      "remote_branch": "origin/feature/WF02-REQ075-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (Step 2d) for OTP idiom / supervision / scope-creep / decision-record-consistency review, per docs/agents/workflows/WF-02_requirement_implementation.md. REVIEWER should weigh the OQ-5 rollback question at their own discretion; it is not a security gate blocker."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1298,3 +1298,5 @@
 2026-08-22T17:07:48Z | DISPATCH | WF-03 | WF03-ISS0279-20260822 | ORCH -> SECURITY-REVIEWER | step-03b-security-reviewer.json PENDING committed at dispatch time
 2026-08-22T17:09:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0279-20260822 | SECURITY-REVIEWER -> ORCH | step-03b-security-reviewer.json PASS. INV-4/8 pass, others N/A (no tenant-data path). System.cmd args-list confirmed, no shell injection, no secret leakage.
 2026-08-22T17:09:44Z | DISPATCH | WF-03 | WF03-ISS0279-20260822 | ORCH -> REVIEWER | step-03c-reviewer.json PENDING committed at dispatch time
+2026-08-22T17:13:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0279-20260822 | REVIEWER -> ORCH | step-03c-reviewer.json PASS. Idiom matches lint_handoffs.ex, no scope creep (diff stat confirmed), no decision-record conflict, regex-widening deviation independently spot-checked and judged justified.
+2026-08-22T17:13:01Z | DISPATCH | WF-03 | WF03-ISS0279-20260822 | ORCH -> TEST-DESIGNER | step-04-test-designer.json PENDING committed at dispatch time

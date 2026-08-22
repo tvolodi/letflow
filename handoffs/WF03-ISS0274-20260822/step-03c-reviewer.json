@@ -1,0 +1,61 @@
+{
+  "handoff_id": "8c1d3e7a-7g92-a213-f4c5-3g4b5c6d7e18",
+  "run_id": "WF03-ISS0274-20260822",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0274-20260822/step-03c-reviewer.json",
+  "created_at": "2026-08-22T13:52:00Z",
+  "started_at": "2026-08-22T13:52:00Z",
+  "completed_at": "2026-08-22T13:56:20Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-115", "REQ-138"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0274-20260822/step-02-code-designer.json",
+      "handoffs/WF03-ISS0274-20260822/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0274-20260822/step-03-frontend-dev.json",
+      "handoffs/WF03-ISS0274-20260822/step-03b-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "web/package.json",
+      "web/tsconfig.json",
+      "web/tsconfig.app.json",
+      "web/tsconfig.node.json",
+      "docs/issues/ISS-0274.yaml"
+    ],
+    "owned_modules": ["web/package.json"]
+  },
+  "task": {
+    "description": "Review `git diff main...HEAD` for the one-line web/package.json type-check script fix (tsc --noEmit -> tsc -b tsconfig.json), fixing ISS-0274 (the script previously compiled zero files due to the solution-style root tsconfig, making it a silent no-op). Check against the four idiom-review questions and docs/anti-patterns.md. Build-tooling fix, not application/OTP code, so supervision-integrity questions are NOT-APPLICABLE.",
+    "acceptance_criteria": [
+      "Confirmed the fix is idiomatic (build-mode tsc -b, matching the existing build script's pattern) vs. a crutch",
+      "Confirmed no scope creep beyond the single script-value change",
+      "Confirmed consistency with any relevant decision records / prior gate results",
+      "Supervision checks explicitly stated NOT-APPLICABLE with reasoning",
+      "PASS or FAIL with itemized issues; next_action names TEST-DESIGNER on PASS"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed `git diff main...HEAD -- web/package.json` directly (not from FRONTEND-DEV's summary): the entire diff is one line, `\"type-check\": \"tsc --noEmit\"` -> `\"type-check\": \"tsc -b tsconfig.json\"`. Findings against the four review questions: (1) Idiomatic vs. crutch -- this is a build-tooling/npm-script change, not OTP code, so the gen_statem/GenServer idiom question is NOT-APPLICABLE in that specific sense. Judged on its own idiom (TypeScript project-reference tooling): the fix is correct and idiomatic, not a crutch. web/tsconfig.json is confirmed (read directly) to be a solution-style config (`\"files\": []`, `\"references\": [tsconfig.app.json, tsconfig.node.json]`) which only has meaning under `tsc -b` (build mode) -- plain `tsc --noEmit` against it resolves zero files and exits 0 unconditionally regardless of real type errors, exactly as ISS-0274 diagnosed. `tsc -b tsconfig.json` is the standard TypeScript-recommended way to type-check a solution-style root, and it matches the existing `build` script's already-established pattern (`tsc -b && vite build`, package.json line 8, unchanged by this diff) rather than inventing a new convention. This is the correct fix, not a workaround (e.g. no per-project loop, no bypassing the solution-style structure). (2) Supervision -- explicitly NOT-APPLICABLE: this is a package.json npm-script string, not Elixir/OTP code; it spawns no process outside the ordinary `npm run` child-process invocation already used by every other script in this file (dev, build, lint, test), touches no `Letflow.InstanceSupervisor` or any supervision tree, and introduces no new process at all. (3) Type-safety gaps -- NOT-APPLICABLE / none found: no new transition logic, no new state representable or unrepresentable by a type; this change is strictly a tooling-invocation fix, not a data/state-shape change, so nothing to file under docs/issues/. (4) Scope creep -- none found: the diff is confined to exactly the one script value in web/package.json that ISS-0274.yaml and the PASSED design (per step-02-code-designer.json, which read tsconfig.app.json/tsconfig.node.json directly and confirmed both already set noEmit: true, and confirmed build/dev scripts are unaffected) called for. Verified independently: `web/tsconfig.app.json` and `web/tsconfig.node.json` both already have noEmit: true (read directly), so running them in build mode via tsc -b will not emit .js output as a side effect -- no accidental build artifacts. `*.tsbuildinfo` is confirmed gitignored (`.gitignore:49: *.tsbuildinfo`), so tsc -b's incremental cache file will not get committed -- no stray build-state artifact entering version control. No other file in the diff (git diff main...HEAD is otherwise all handoff-history JSON, which is process bookkeeping, not application/tooling code). No docs/anti-patterns.md entries apply to npm-script/tsconfig changes (reviewed in full: no entries concern frontend build tooling). No decision-record conflicts: docs/migration/decisions/0011-frontend-ownership.md establishes web/ ownership but says nothing about tsconfig/type-check invocation specifics, so this fix does not contradict or silently re-decide anything on record; it is a scoped bugfix restoring an existing CI gate's real effectiveness, not a new tooling choice.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0274-20260822",
+      "commit_sha_list": ["b7a0aae", "48d90a0", "3bf9874", "75274d2", "aad1cbc", "44d3bef", "42b32b1"],
+      "remote_branch": "origin/feature/WF03-ISS0274-20260822",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (Step 4): REVIEWER PASS -- the web/package.json type-check script fix (tsc --noEmit -> tsc -b tsconfig.json) is idiomatic (matches the existing build script's tsc -b pattern), scoped to exactly one line, has no supervision-tree implications (NOT-APPLICABLE, dev tooling), introduces no new type-safety gap, and is consistent with all prior PASSED gates (design, design-validation, security) and with docs/migration/decisions/. TEST-DESIGNER should design a regression test proving the script actually fails on a real type error (the original defect was that it silently passed regardless of errors) -- e.g. a fixture/CI-level check that `npm run type-check` exits non-zero when a deliberate type error is introduced under src/, not just that it exits 0 on a clean tree."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -84,7 +84,10 @@ defmodule Letflow.Identity.TenantTest do
       tenant = %Tenant{slug: unique_slug(), display_name: "Original", status: :active}
 
       changeset =
-        Tenant.admin_patch_changeset(tenant, %{"display_name" => "Renamed", "status" => "inactive"})
+        Tenant.admin_patch_changeset(tenant, %{
+          "display_name" => "Renamed",
+          "status" => "inactive"
+        })
 
       assert changeset.valid?
       assert Ecto.Changeset.get_change(changeset, :display_name) == "Renamed"

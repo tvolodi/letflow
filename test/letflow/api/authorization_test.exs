@@ -79,14 +79,17 @@ defmodule Letflow.Api.AuthorizationTest do
 
     test "evaluate_access/2 grants PLATFORM_ADMIN and denies everyone else" do
       admin_ctx = %AccessContext{user_id: "u1", roles: [:PLATFORM_ADMIN]}
+
       assert %Authorization.AccessDecision{kind: :Allow} =
                Authorization.evaluate_access(admin_ctx, :TenantsManage)
 
       other_ctx = %AccessContext{user_id: "u2", roles: [:PROCESS_DESIGNER]}
+
       assert %Authorization.AccessDecision{kind: :Deny403} =
                Authorization.evaluate_access(other_ctx, :TenantsManage)
 
       no_roles_ctx = %AccessContext{user_id: "u3", roles: []}
+
       assert %Authorization.AccessDecision{kind: :Deny403} =
                Authorization.evaluate_access(no_roles_ctx, :TenantsManage)
     end

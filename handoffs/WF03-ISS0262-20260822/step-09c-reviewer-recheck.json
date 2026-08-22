@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0262-20260822/step-09c-reviewer-recheck.json",
   "created_at": "2026-08-22T09:31:19Z",
   "started_at": "2026-08-22T09:31:19Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-22T09:33:36Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": null,
@@ -36,18 +36,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
+    "summary": "Narrow recheck of the change-approach rework (steps 08/09) only; the original step-03c-reviewer.json PASS covers the rest of the diff and stands. (1) Design match: implementation matches lib/letflow/design/iss0262-h6-floor-commit-addendum.md exactly -- @h6_floor_commit added with the design's explicit BOOTSTRAP-placeholder-plus-runtime-resolution shape (design SS6 implementation note), h6_floor_commit/0 memoizes via Process.get/put(:h6_floor_commit, ...) mirroring the existing @artifacts_out_rule_commit pattern, resolve_h6_floor_commit/0 tries `git merge-base HEAD origin/main` then falls back to `git rev-list --max-parents=0 HEAD` exactly as the design's bootstrap note specifies; pre_floor_file?/2 implements the design's SS1.2 two-step algorithm verbatim (`git log --follow --diff-filter=A --format=%H --reverse -- <path>` for first-add sha, then `git merge-base --is-ancestor <first_add_sha> <floor>`), memoized per {path, floor} via Process dict per SS1.5; lint_file/2's :non_json branch now calls pre_floor_file?(path, h6_floor_commit()) instead of grandfathered?(\"H6\", path), message includes the resolved pre_floor? boolean and floor sha per SS1.3 point 2; all 12 {\"H6\", path} @grandfathered entries removed and replaced with the design's SS3.1 exact supersession paragraph; grandfathered?/2 itself and the 6 H1/H2/H3 entries untouched, matching SS3's ruling. No undesigned deviation found. (2) Idiom: memoization technique (Process dictionary, keyed :h6_floor_commit and {:h6_pre_floor, path, floor}) mirrors the file's own pre-existing, already-PASSED pattern (fetch_rule_commit_timestamp/rule_commit_timestamp) rather than introducing a new convention -- appropriate for a single-process Mix task, not a concern despite Process-dict use generally being a smell in long-lived OTP processes (this is neither). Error handling on all four System.cmd calls (h6_floor_commit's two, pre_floor_file?'s two) is exhaustive case-matched: {out, 0} success path, catch-all _ -> nil/false failure path -- no unhandled exceptions, no silent swallow into a wrong value. Fail-safe direction verified by direct code read: compute_pre_floor_file?(_path, nil) -> false, any non-zero/non-matching git exit in ancestor_or_equal?/2 -> false; both hard-fail as SS1.4 requires (opposite direction from the file's other, advisory-only git-error fallback, correctly not reused). Function naming/visibility: pre_floor_file?/2 is public (matches design SS6's expectation that TEST-DESIGNER calls it directly for the pre/post-floor unit cases), h6_floor_commit/0, resolve_h6_floor_commit/0, compute_pre_floor_file?/2, ancestor_or_equal?/2 are private -- narrowest visibility that satisfies actual test need, same discipline the original step-03c-reviewer.json PASS already approved for handoff_files/1 and lint_file/2. (3) T-TASK-GREEN -> T-H6-ZERO-NEW narrowing: RULED ACCEPTABLE, no coverage gap. T-TASK-GREEN asserted full run/1 exits :ok against the real corpus, which incidentally covered H1-H5 too; it was replaced because an unrelated, already-merged run (WF03-ISS0260-20260822) landed a real H1+H3 violation on main that has nothing to do with this fix, making that assertion permanently red for reasons outside this module's control -- exactly the moving-target flakiness this whole rework exists to eliminate, now recurring one rule later. The replacement, T-H6-ZERO-NEW, correctly narrows to asserting zero *new* H6 violations specifically. This does not remove real-corpus H1-H5 enforcement from the pipeline: verified directly in mix.exs (lines 64-79) that the \"letflow.check\" alias runs \"letflow.lint_handoffs\" unconditionally as a hard gate (added by ISS-0257, confirmed in this session's own git log), which invokes the real run/1 against the real handoffs/ tree and hard-fails the build on ANY new H1-H5 or H6 violation -- this is the production enforcement point, not the ExUnit suite, and it was not touched by this rework. The ExUnit suite retains per-fixture unit coverage of H1 (F-JSON-H1-STILL-FIRES), PARSE, and grandfathered-H3 classification (F-JSON-REAL-GRANDFATHERED-UNCHANGED) plus a real-corpus discovery check (F-DEFAULT-DISCOVERY-STILL-FINDS-REAL-JSON); what it no longer does is duplicate, inside mix test, the exact same full-corpus H1-H5 sweep that mix letflow.check already performs for real via the production task invocation. No gap to close; TEST-DESIGN-VALIDATOR does not need to add anything on this axis. (Separately, and already flagged by ELIXIR-DEV/not this recheck's scope: the pre-existing WF03-ISS0260-20260822 H1/H3 violation currently keeps `mix letflow.lint_handoffs`'s real exit code non-zero on main/this branch -- an existing, disclosed, out-of-scope issue routing to ISSUE-FIXER separately, not a defect in this rework.) Independently re-verified rather than trusting ELIXIR-DEV's report: `mix compile --warnings-as-errors` clean (no output); `mix test test/mix/tasks/letflow.lint_handoffs_test.exs` -- 20 passed, 0 failures.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0262-20260822",
       "commit_sha_list": [],
       "remote_branch": null,
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "TEST-DESIGN-VALIDATOR: confirm test coverage of the change-approach rework (pre_floor_file?/2, h6_floor_commit/0, and the T-H6-ZERO-NEW narrowing this REVIEWER pass ruled acceptable) is complete and isolated per usual gate criteria."
   },
   "rework_count": 0,
   "max_rework": 3

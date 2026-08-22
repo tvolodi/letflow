@@ -1,0 +1,50 @@
+{
+  "handoff_id": "19f5cb4e-9668-4999-9f8c-25be8bd6181c",
+  "run_id": "WF03-ISS0262-20260822",
+  "workflow_id": "WF-03",
+  "step": "08-rework2",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0262-20260822/step-08-code-designer-rework2.json",
+  "created_at": "2026-08-22T09:15:00Z",
+  "started_at": "2026-08-22T09:15:00Z",
+  "completed_at": "2026-08-22T09:18:23Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0262-h6-floor-commit-addendum.md",
+      "handoffs/WF03-ISS0262-20260822/step-08b-code-design-validator-rework.json"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.lint_handoffs.ex"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1 of the design gate (step-08b FAILed). CODE-DESIGN-VALIDATOR independently verified the floor-commit mechanism itself is sound (4 of 5 checks passed, including a real constructed git-plumbing test) -- the ONLY problem is that lib/letflow/design/iss0262-h6-floor-commit-addendum.md section 1.3 contains a full compilable Elixir function body for lint_file/2's :non_json branch (concrete variable bindings, an interpolated message, a complete map literal) instead of a signature/type-shape. Fix ONLY that: rewrite section 1.3 as a signature-level description (function name, arity, input/output types, and prose describing what it does) with no compilable code, matching the style of the rest of this design doc and the original iss0262-lint-handoffs-non-json-discovery.md. Do not change the floor-commit mechanism itself, which CODE-DESIGN-VALIDATOR already confirmed sound.",
+    "acceptance_criteria": [
+      "Section 1.3 of the addendum contains no compilable Elixir code -- signature/type-shape and prose only",
+      "The floor-commit mechanism (§1.1/§1.2 or wherever the mechanism itself lives) is otherwise unchanged from the version CODE-DESIGN-VALIDATOR already verified"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Rewrote lib/letflow/design/iss0262-h6-floor-commit-addendum.md Sec.1.3 to remove the compilable Elixir case-branch body flagged by step-08b-code-design-validator-rework.json's BLOCKER. The section now describes the substitution in prose only: OUTCOME 3's existing branch shape (from the original design's Sec.4.2) is unchanged structurally; the one substitution is that grandfathered?(\"H6\", path) is replaced by pre_floor_file?(path, @h6_floor_commit) as the source of the violation's grandfathered: boolean, with three prose-stated effects (grandfathered: field source, message: field gains two extra interpolated facts, hard_new/hard_grandfathered split logic unchanged). No concrete variable bindings, no map literal, no case/with block remain in Sec.1.3. Sections 1.1, 1.2, 1.4, 1.5, and 2-7 (the floor-commit mechanism itself) were not touched, per task scope.",
+    "artifacts_out": ["lib/letflow/design/iss0262-h6-floor-commit-addendum.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0262-20260822",
+      "commit_sha_list": ["1b50956"],
+      "remote_branch": "origin/feature/WF03-ISS0262-20260822",
+      "push_status": "success",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH routes to CODE-DESIGN-VALIDATOR to re-gate Sec.1.3 of the addendum against step-08-code-designer-rework2.json's acceptance criteria."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

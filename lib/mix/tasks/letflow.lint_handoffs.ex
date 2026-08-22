@@ -35,14 +35,24 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
     * **H5** -- registry coverage: every `run_id` implied by a
       `handoffs/<run_id>/` directory appears in `handoffs/registry.json`'s
       `runs[].run_id`, and vice versa.
+    * **H6** -- every discovered handoff-shaped file (basename starts with
+      `step`) is JSON. A non-`.json` file is a discovery-completeness defect
+      in its own right. **Unlike H1-H4, H6 is not grandfathered by an
+      explicit file list** -- a file whose content already existed in git
+      history at or before `@h6_floor_commit` is automatically exempt
+      (reported, does not fail the build); a file introduced after that
+      floor always fails the build. See `@h6_floor_commit`'s own comment and
+      `lib/letflow/design/iss0262-h6-floor-commit-addendum.md` for why.
 
   A hard violation on a file not in this module's grandfather maps is a
   **new** regression and fails the run. A hard violation on a grandfathered
   file is reported (so the debt stays visible) but does not fail the run --
   each grandfathered file is named individually, dated, and traced to
   ISS-0190, per that issue's "no blanket suppression" requirement. This
-  module contains **no wildcard or pattern-based grandfathering** -- adding
-  an entry always means naming one exact path.
+  module contains **no wildcard or pattern-based grandfathering, with one
+  exception: H6**, which is governed by the `@h6_floor_commit`
+  commit-boundary rule instead of a per-file list -- see above. Every other
+  hard rule's grandfathering always means naming one exact path.
 
   ### Advisory (WARN or INFO; never change the exit code)
 
@@ -102,6 +112,26 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   # predate the rule and are never flagged by the artifacts_out WARN check.
   @artifacts_out_rule_commit "48a4a55"
 
+  # The commit boundary before which a non-JSON handoff-shaped file (H6) is
+  # automatically exempt -- a file whose content already existed in git
+  # history at or before this commit is grandfathered; a file introduced
+  # strictly after it always hard-fails. See
+  # `lib/letflow/design/iss0262-h6-floor-commit-addendum.md` for the full
+  # mechanism and why it replaced the old per-file `@grandfathered` entries.
+  #
+  # 2026-08-22, ISS-0262 H6 floor-commit addendum (rework_count 2): this
+  # literal is a BOOTSTRAP placeholder only, for this implementation pass --
+  # Step Final has not yet run on this branch, so the real pre-merge
+  # `origin/main` tip is not yet known. Per the design's §2.3, whoever runs
+  # the next Step Final attempt MUST edit this literal to the freshly-fetched
+  # `origin/main` tip sha before running post-rebase checks, each attempt,
+  # until one succeeds. Until then, `h6_floor_commit/0` resolves a real,
+  # git-resolvable floor programmatically (`git merge-base HEAD origin/main`,
+  # falling back to the repo's root commit if that is not resolvable) so
+  # tests and a real `mix letflow.lint_handoffs` run both have a genuine
+  # floor today, per the design's §6 implementation note.
+  @h6_floor_commit "BOOTSTRAP"
+
   # -- Individually-named pre-existing hard violations. Measured 2026-08-21
   # by this task's own first run against the corpus (626 files), then
   # RE-MEASURED the same day once ISS-0190 landed and fixed the 24 entries
@@ -124,6 +154,16 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   # class as the three ISS-0117 markers, not yet formalised into the schema
   # either) + 2 H2 (a negative started_at/completed_at gap, the timestamp
   # class ISS-0117/HANDOFF_PROTOCOL.md §1.2 already documents separately).
+  #
+  # 2026-08-22, ISS-0262 Step 8 change-approach rework (rework_count 2): H6 no
+  # longer uses per-file grandfathering. The 12 entries previously here (10
+  # from WF03-ISS0258-20260822, 2 from WF03-ISS0261-20260822) are removed --
+  # H6 is now governed entirely by the `@h6_floor_commit` commit-boundary
+  # rule (a file whose content predates that floor in git history is
+  # automatically exempt; a file introduced at or after it always
+  # hard-fails). See `lib/letflow/design/iss0262-h6-floor-commit-addendum.md`
+  # for the mechanism and why the per-file list could not keep pace with
+  # `main`. H1-H3's grandfathering below is unaffected by this change.
   @grandfathered [
     {"H3", "handoffs/WF02-REQ023-20260816/step-06-doc-updater.json"},
     {"H2", "handoffs/WF02-REQ025-20260817/step-01b-code-design-validator.json"},
@@ -135,6 +175,87 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
 
   @spec grandfathered?(String.t(), String.t()) :: boolean()
   defp grandfathered?(rule, path), do: {rule, path} in @grandfathered
+
+  # -- H6 commit-boundary floor --------------------------------------------
+  #
+  # See `lib/letflow/design/iss0262-h6-floor-commit-addendum.md` §1-§2 for
+  # the full mechanism, rationale, and fail-safe direction.
+
+  @spec h6_floor_commit() :: String.t() | nil
+  defp h6_floor_commit do
+    case Process.get(:h6_floor_commit, :unset) do
+      :unset ->
+        floor = resolve_h6_floor_commit()
+        Process.put(:h6_floor_commit, floor)
+        floor
+
+      cached ->
+        cached
+    end
+  end
+
+  defp resolve_h6_floor_commit do
+    if @h6_floor_commit != "BOOTSTRAP" do
+      @h6_floor_commit
+    else
+      case System.cmd("git", ["merge-base", "HEAD", "origin/main"], stderr_to_stdout: true) do
+        {out, 0} ->
+          String.trim(out)
+
+        _ ->
+          case System.cmd("git", ["rev-list", "--max-parents=0", "HEAD"], stderr_to_stdout: true) do
+            {out, 0} -> out |> String.trim() |> String.split("\n", trim: true) |> List.first()
+            _ -> nil
+          end
+      end
+    end
+  end
+
+  # Two git calls: (A) find the file's first-ever appearance in history
+  # (`--diff-filter=A`, `--follow` across renames, `--reverse` for oldest
+  # first); (B) is that first-appearance commit at or before `floor`. Fails
+  # safe to `false` on any git error or nil floor -- H6 is a hard gate, so a
+  # git malfunction must surface as a failure, not silently exempt a file
+  # that might be a genuine regression (design §1.4).
+  @spec pre_floor_file?(path :: String.t(), floor :: String.t() | nil) :: boolean()
+  def pre_floor_file?(path, floor) do
+    case Process.get({:h6_pre_floor, path, floor}, :unset) do
+      :unset ->
+        result = compute_pre_floor_file?(path, floor)
+        Process.put({:h6_pre_floor, path, floor}, result)
+        result
+
+      cached ->
+        cached
+    end
+  end
+
+  defp compute_pre_floor_file?(_path, nil), do: false
+
+  defp compute_pre_floor_file?(path, floor) do
+    case System.cmd(
+           "git",
+           ["log", "--follow", "--diff-filter=A", "--format=%H", "--reverse", "--", path],
+           stderr_to_stdout: true
+         ) do
+      {out, 0} ->
+        case out |> String.trim() |> String.split("\n", trim: true) do
+          [] -> false
+          [first_add_sha | _] -> ancestor_or_equal?(first_add_sha, floor)
+        end
+
+      _ ->
+        false
+    end
+  end
+
+  defp ancestor_or_equal?(sha, floor) do
+    case System.cmd("git", ["merge-base", "--is-ancestor", sha, floor], stderr_to_stdout: true) do
+      {_, 0} -> true
+      {_, 1} -> false
+      _ -> false
+    end
+  end
 
   @impl Mix.Task
   @spec run([String.t()]) :: :ok
@@ -183,12 +304,16 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
 
   # -- discovery ----------------------------------------------------------
 
-  @spec handoff_files() :: [String.t()]
-  defp handoff_files do
-    Path.wildcard(Path.join(@handoffs_dir, "**/*.json"))
-    |> Enum.reject(&(&1 == @registry_file))
+  @spec handoff_files(dir :: String.t()) :: [String.t()]
+  def handoff_files(dir \\ @handoffs_dir) do
+    Path.wildcard(Path.join(dir, "**/step*.*"))
+    |> Enum.filter(&File.regular?/1)
+    |> Enum.reject(&(&1 == registry_file(dir)))
     |> Enum.sort()
   end
+
+  @spec registry_file(dir :: String.t()) :: String.t()
+  defp registry_file(dir), do: Path.join(dir, "registry.json")
 
   # -- §4.1(b) schema, read live from HANDOFF_PROTOCOL.md ------------------
 
@@ -231,43 +356,78 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
 
   # -- per-file lint --------------------------------------------------------
 
-  defp lint_file(path, not_agent_attested_schema) do
-    with {:ok, raw} <- File.read(path),
-         {:ok, data} <- Jason.decode(raw) do
-      hard = []
-
-      hard = hard ++ check_h1_status(path, data)
-      hard = hard ++ check_h2_timestamps(path, data)
-      hard = hard ++ check_h3_keys(path, data)
-      hard = hard ++ check_h4_not_agent_attested(path, data, not_agent_attested_schema)
-
-      {grandfathered, new} = Enum.split_with(hard, & &1.grandfathered)
-
-      advisory = check_advisory(path, data)
-
-      %{
-        path: path,
-        hard_new: new,
-        hard_grandfathered: grandfathered,
-        advisory: advisory,
-        parse_error: nil
-      }
+  @spec handoff_kind(path :: String.t()) :: :json | :non_json
+  def handoff_kind(path) do
+    if String.downcase(Path.extname(path)) == ".json" do
+      :json
     else
-      {:error, reason} ->
+      :non_json
+    end
+  end
+
+  @spec lint_file(path :: String.t(), not_agent_attested_schema :: map()) :: map()
+  def lint_file(path, not_agent_attested_schema) do
+    case handoff_kind(path) do
+      :non_json ->
+        floor = h6_floor_commit()
+        pre_floor? = pre_floor_file?(path, floor)
+
+        v =
+          violation(
+            path,
+            "H6",
+            "non-JSON handoff-shaped file: #{path} has extension " <>
+              "#{inspect(Path.extname(path))}, expected .json " <>
+              "(pre_floor?: #{pre_floor?}, h6_floor_commit: #{inspect(floor)})",
+            pre_floor?
+          )
+
         %{
           path: path,
-          hard_new: [
+          hard_new: if(v.grandfathered, do: [], else: [v]),
+          hard_grandfathered: if(v.grandfathered, do: [v], else: []),
+          advisory: %{path: path, warnings: [], size_info: %{desc_len: 0, summary_len: 0}},
+          parse_error: nil
+        }
+
+      :json ->
+        with {:ok, raw} <- File.read(path),
+             {:ok, data} <- Jason.decode(raw) do
+          hard = []
+
+          hard = hard ++ check_h1_status(path, data)
+          hard = hard ++ check_h2_timestamps(path, data)
+          hard = hard ++ check_h3_keys(path, data)
+          hard = hard ++ check_h4_not_agent_attested(path, data, not_agent_attested_schema)
+
+          {grandfathered, new} = Enum.split_with(hard, & &1.grandfathered)
+
+          advisory = check_advisory(path, data)
+
+          %{
+            path: path,
+            hard_new: new,
+            hard_grandfathered: grandfathered,
+            advisory: advisory,
+            parse_error: nil
+          }
+        else
+          {:error, reason} ->
             %{
               path: path,
-              rule: "PARSE",
-              message: "could not read/decode: #{inspect(reason)}",
-              grandfathered: false
+              hard_new: [
+                %{
+                  path: path,
+                  rule: "PARSE",
+                  message: "could not read/decode: #{inspect(reason)}",
+                  grandfathered: false
+                }
+              ],
+              hard_grandfathered: [],
+              advisory: [],
+              parse_error: inspect(reason)
             }
-          ],
-          hard_grandfathered: [],
-          advisory: [],
-          parse_error: inspect(reason)
-        }
+        end
     end
   end
 

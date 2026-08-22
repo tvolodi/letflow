@@ -1,0 +1,34 @@
+id: ISS-0266
+title: >
+  CheckDeferralStalenessTest T-LIVE-ACTIVITY assertion fails: S8/S9 now
+  active in docs/requirements.yaml, test still asserts S0..S4 only
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF03-ISS0262-20260822
+discovered_at: "2026-08-22T10:22:10Z"
+severity: MINOR
+description: >
+  test/mix/tasks/letflow_check_deferral_staleness_test.exs:842 ("T-LIVE-* --
+  the real docs/requirements.yaml T-LIVE-ACTIVITY -- S0..S4 active, S8/S9
+  inactive (MS1, MS2, MS3)") fails deterministically post-rebase:
+  `assert active == ["S0", "S1", "S2", "S3", "S4"]` but
+  `left: ["S0", "S1", "S2", "S3", "S4", "S8", "S9"]`.
+  Reproduced in isolation (`mix test
+  test/mix/tasks/letflow_check_deferral_staleness_test.exs` alone: 62/63
+  passed, this the sole failure) -- deterministic, not a load flake.
+  Structurally unrelated to WF03-ISS0262-20260822: that branch's diff never
+  touches docs/requirements.yaml or this test file (`git diff --stat
+  origin/main...HEAD` scoped to lib/mix/tasks/letflow.lint_handoffs.ex, its
+  tests, and its own handoffs/); `git log` shows this test file was last
+  touched at 836a25b (ISS-0258/#508), well before this branch existed.
+  Root cause is likely recent frontend/mobile requirement work (REQ-119,
+  REQ-127, REQ-085, landed around 96ac42f/781f15f/a507ff5) activating S8/S9
+  stage entries in docs/requirements.yaml without updating this hardcoded
+  live-fixture assertion to match.
+affected_files:
+  - test/mix/tasks/letflow_check_deferral_staleness_test.exs
+  - docs/requirements.yaml
+related:
+  - ISS-0258
+queue_task_id: 266
+github_issue: 524
+status: open

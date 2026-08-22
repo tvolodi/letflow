@@ -1,0 +1,62 @@
+{
+  "handoff_id": "4c60c7fc-b8fb-4748-8199-5fc076c60fe4",
+  "run_id": "WF03-ISS0262-20260822",
+  "workflow_id": "WF-03",
+  "step": "final-retry1",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0262-20260822/step-final-git-merge-retry1.json",
+  "created_at": "2026-08-22T08:57:19Z",
+  "started_at": "2026-08-22T08:57:19Z",
+  "completed_at": "2026-08-22T08:59:43Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_MERGE.md",
+      "handoffs/WF03-ISS0262-20260822/step-final-git-merge.json",
+      "handoffs/WF03-ISS0262-20260822/step-07-elixir-dev-rework.json"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.lint_handoffs.ex", "test/mix/tasks/letflow.lint_handoffs_test.exs"]
+  },
+  "task": {
+    "description": "Re-attempt fn:git-merge per docs/agents/protocols/GIT_MERGE.md, run_id WF03-ISS0262-20260822, branch feature/WF03-ISS0262-20260822. This is a retry of step-final-git-merge.json, which FAILed only because main moved (WF03-ISS0261-20260822 landed as fb5c251) between design and merge, exposing 2 real new H6 hits that ELIXIR-DEV then grandfathered in step-07-elixir-dev-rework.json (verified: mix letflow.lint_handoffs now exits 0, 789 files, 18 grandfathered). Start from step 4 of GIT_MERGE.md (fetch origin main again, since more time has passed and main may have moved further) through completion: rebase, format/compile/test check with structural failure attribution (do not attribute by count-matching), push, create PR (prefix 'fix:', title 'fix: lint_handoffs detects non-JSON handoff files via new H6 check [WF03-ISS0262-20260822]'), merge --squash --delete-branch, local cleanup back to main.",
+    "acceptance_criteria": [
+      "git branch --show-current == feature/WF03-ISS0262-20260822 before starting",
+      "Rebase onto latest origin/main; mix format --check-formatted, mix compile --warnings-as-errors, mix test all run post-rebase; any failures attributed structurally, not by count-matching",
+      "mix letflow.lint_handoffs run post-rebase, confirmed exit 0",
+      "PR created and merged (--squash --delete-branch) with real test counts and attribution route inline in the PR body",
+      "Local cleanup: back on main, git log -1 shows the squash-merge commit, git status clean",
+      "PASS/FAIL/PARTIAL verdict"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Re-attempted fn:git-merge per GIT_MERGE.md from step 4. Verified starting branch (feature/WF03-ISS0262-20260822), fetched origin main (tip 96ac42f, moved further since fb5c251 that the previous FAIL was attributed to). Rebased cleanly: 46 commits replayed onto 96ac42f, 0 conflicts (git rebase origin/main -> 'Successfully rebased and updated refs/heads/feature/WF03-ISS0262-20260822'). Step 5d post-rebase checks: mix format --check-formatted PASS (no output); mix compile --warnings-as-errors PASS ('Compiling 6 files (.ex)', 'Compiling 3 files (.ex)', no warnings). Ran mix letflow.lint_handoffs directly (this is the check the branch's own new mix test 'the real corpus stays green' exercises) and it FAILED: 'letflow.lint_handoffs: FAIL -- 9 new (un-grandfathered) violation(s).' All 9 are under handoffs/WF03-ISS0260-20260822/: 7x [H6] non-JSON handoff-shaped .md files (step-02-code-designer.md, step-02b-code-design-validator.md, step-02c-code-design-validator-recheck.md, step-02d-code-design-validator-final.md, step-03-elixir-dev.md, step-03b-security-reviewer.md, step-03c-reviewer.md), plus 1x [H1] missing/non-string top-level status and 1x [H3] non-schema top-level keys, both in step-04d-test-design-validator-recheck.json. ATTRIBUTION (structural, not count-matching): git diff --stat origin/main...HEAD confirms this branch's own diff never touches handoffs/WF03-ISS0260-20260822/ (diff only touches this run's own handoffs/WF03-ISS0262-20260822/ files, lib/mix/tasks/letflow.lint_handoffs.ex, its tests/fixtures, docs/issues/ISS-0262.yaml, test/specs/ISS-0262.md, and the design doc). git log --oneline -- handoffs/WF03-ISS0260-20260822/step-02-code-designer.md handoffs/WF03-ISS0260-20260822/step-04d-test-design-validator-recheck.json shows both introduced in a single commit, dff2270 ('fix(ISS-0260): make AC1 timing-flake assertion load-regime-aware (#515)') -- a separate, already-merged run (WF03-ISS0260-20260822) that landed on main strictly after this branch's grandfather list was last extended (step-07-elixir-dev-rework.json, which added only the 2 WF03-ISS0261-20260822 H6 entries). This is the same structural pattern as the prior FAIL (step-final-git-merge.json): this branch's own new H6 rule (and the pre-existing H1/H3 rules, in this case tripped by a newly-introduced malformed handoff file from the same unrelated run) has no wildcard/prefix grandfathering, so any handoff-shaped .md or malformed .json file landed on main by a DIFFERENT already-merged run after this branch's grandfather list was last fixed will always trip it on the next rebase, regardless of how many times the list is extended -- main keeps moving faster than the grandfather list can be updated. Did NOT proceed to push/PR/merge per GIT_MERGE.md step 5d ('If FAIL ... -> complete-handoff(status: FAIL, ...)') and per this run's own dispatch instruction to report FAIL rather than self-fix when main's movement exposes a new H6-class hit. Local state: branch is rebased locally (46 commits replayed onto 96ac42f) but NOT pushed -- origin/feature/WF03-ISS0262-20260822 still holds the pre-rebase tip; working tree is clean.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "id": "h6-and-h1h3-violations-wf03-iss0260-handoffs",
+        "severity": "BLOCKER",
+        "description": "Post-rebase mix letflow.lint_handoffs fails with 9 new un-grandfathered violations, all under handoffs/WF03-ISS0260-20260822/: 7x [H6] non-JSON handoff-shaped .md files (step-02-code-designer.md, step-02b-code-design-validator.md, step-02c-code-design-validator-recheck.md, step-02d-code-design-validator-final.md, step-03-elixir-dev.md, step-03b-security-reviewer.md, step-03c-reviewer.md) plus [H1] missing status + [H3] non-schema top-level keys in step-04d-test-design-validator-recheck.json. All introduced by commit dff2270 (PR #515, run WF03-ISS0260-20260822 -- a separate, already-merged run), landed on main after this branch's grandfather list was last extended in step-07-elixir-dev-rework.json. Root cause is structural: @grandfathered has no wildcard/prefix matching, so it can only ever catch up to main's history at the moment it's last edited -- any run merging handoff-shaped .md files (or malformed .json handoffs) between that edit and this branch's next rebase attempt will trip it again. This is the SAME class of issue as h6-violations-wf03-iss0261-handoffs (previous FAIL), now recurring with a 3rd unrelated run (WF03-ISS0260-20260822) and 2 additional rule IDs (H1, H3) beyond H6. ORCH should consider, alongside the file-by-file grandfather extension: (a) whether @grandfathered needs a run-id-prefix or path-glob form instead of exact-file entries to stop this recurring every rebase, or (b) whether merging this branch should be re-sequenced/paused until no other in-flight run is landing handoff-shaped non-JSON files, since the two are structurally racing. Not decided unilaterally here -- needs ISSUE-FIXER/REVIEWER routing.",
+        "evidence": "mix letflow.lint_handoffs full output quoted in result.summary; git diff --stat origin/main...HEAD and git log --oneline for the 2 named files confirm dff2270/#515 origin and non-overlap with this branch's own diff."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0262-20260822",
+      "commit_sha_list": ["fc205c3", "00d0252"],
+      "remote_branch": "origin/feature/WF03-ISS0262-20260822 (NOT updated -- rebase performed locally onto 96ac42f, 46 commits replayed, but push was never attempted since step 5d failed first; local and remote have diverged: 51 local vs 45 remote commits per git status)",
+      "push_status": "not attempted (step 5d failed before step 6)",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH routes to ISSUE-FIXER to resolve the new H6/H1/H3 violations on handoffs/WF03-ISS0260-20260822/*.md and step-04d-test-design-validator-recheck.json (extend @grandfathered with these files as pre-existing history via a reviewed change, and consider the structural fix noted in issues[0] to stop this recurring on every future rebase), then ORCH dispatches a further Step Final retry (retry2) on this same branch, resuming from GIT_MERGE.md step 4 since main will likely have moved again."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

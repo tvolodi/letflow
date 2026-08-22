@@ -1,0 +1,57 @@
+{
+  "handoff_id": "dc74d4fa-1237-4ae1-b1d6-b295e7c42d9b",
+  "run_id": "WF03-ISS0262-20260822",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0262-20260822/step-04-test-designer.json",
+  "created_at": "2026-08-22T07:47:55Z",
+  "started_at": "2026-08-22T07:47:55Z",
+  "completed_at": "2026-08-22T07:52:48Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "lib/letflow/design/iss0262-lint-handoffs-non-json-discovery.md",
+      "test/fixtures/lint_handoffs/h6/step-01-fixture-non-json.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ],
+    "owned_modules": ["test/mix/tasks/letflow.lint_handoffs_test.exs"]
+  },
+  "task": {
+    "description": "Write a regression test proving ISS-0262's fix (mix letflow.lint_handoffs' new H6 check) actually catches a non-JSON handoff-shaped file, using the fixture at test/fixtures/lint_handoffs/h6/step-01-fixture-non-json.md and the now-public handoff_files/1 and lint_file/2 functions. Per WF-03_issue_resolving.md's Step 2-4 procedure: this is a fix to EXISTING code (handoff_files/0 and lint_file/2 already existed pre-fix), not a wholly new module, so the ordinary fail-then-pass rule applies -- checkout the pre-fix commit (the parent of this branch's first implementation commit, i.e. main before this branch), confirm your new test FAILS there (the H6 rule and even handoff_files/1's public arity may not exist pre-fix -- state exactly what failure mode you observe, e.g. UndefinedFunctionError vs a wrong-classification assertion failure), then confirm it PASSES on this branch (feature/WF03-ISS0262-20260822) post-fix. Also write at least one test asserting existing .json handoff behavior (H1-H5) is unchanged, and one asserting the 10 grandfathered .md files under handoffs/WF03-ISS0258-20260822/ are correctly classified as grandfathered H6 violations (not new/failing). Use a git worktree or careful checkout/restore for the pre-fix run so the working tree is never left mutated -- verify git status --porcelain is empty when you finish.",
+    "acceptance_criteria": [
+      "New test file at test/mix/tasks/letflow.lint_handoffs_test.exs (or extending it if it already exists) covers: H6 fires on the non-JSON fixture, existing .json handoffs unaffected, the 10 grandfathered .md files classify correctly",
+      "Fail-then-pass explicitly demonstrated and reported: pre-fix run output quoted (test fails), post-fix run output quoted (test passes)",
+      "Working tree left clean after any pre-fix checkout maneuver -- git status --porcelain empty, verified and quoted",
+      "Do NOT run the full suite here -- that's TEST-RUNNER's job next; just prove your new test(s) fail-then-pass"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote test/mix/tasks/letflow.lint_handoffs_test.exs (15 tests) and test/specs/ISS-0262.md, covering all four dispatched acceptance criteria: (1) H6 fires on the non-JSON fixture (F-H6-FIRES-NEW, F-H6-CONTENT-NEVER-READ); (2) existing .json handoff behavior (H1-H5) unaffected, 6 tests including a real pre-ISS-0190 grandfathered .json entry (F-JSON-REAL-GRANDFATHERED-UNCHANGED) and both pre-existing naming styles still discovered (F-DEFAULT-DISCOVERY-STILL-FINDS-REAL-JSON); (3) the 10 real WF03-ISS0258-20260822 .md files classify as hard_grandfathered H6, never hard_new (F-GRANDFATHERED-COUNT/DISCOVERED/NOT-NEW); (4) the real corpus stays green post-fix (T-TASK-GREEN). Ordinary fail-then-pass procedure applied (not the mutant clause: handoff_files/0 and lint_file/2 both existed pre-fix -- this is a change to existing functions' arity/visibility plus one new branch, not a wholly new module, per this run's Step-4 dispatch). Isolation: git worktree add ../letflow-prefix-worktree 99ec378 (main, the commit immediately before this branch's first implementation commit a8c43ee) -- the real working tree was never mutated. Copied the two new files (test file + fixture, both absent at 99ec378) into the worktree; deps/_build borrowed from main via MIX_DEPS_PATH/MIX_BUILD_PATH env vars. PRE-FIX RUN at 99ec378: `Result: 2/15 passed / Failed: 13 tests`, every failure `** (UndefinedFunctionError) function Mix.Tasks.Letflow.LintHandoffs.<fn> is undefined or private` for handoff_files/0 (old arity, gone), handoff_files/1 (new arity, absent), handoff_kind/1 (wholly new), and lint_file/2 (private pre-fix). The 2 pre-fix passes (F-GRANDFATHERED-COUNT: pure file-existence check; T-TASK-GREEN: calls the already-public run/1) don't touch the changed API surface, confirming the other 13 failures are specifically about this fix. Worktree removed via `git worktree remove --force` after measurement. POST-FIX RUN on feature/WF03-ISS0262-20260822 HEAD: `Result: 15 passed`, re-verified a second time after writing the spec. `git status --porcelain` on the real tree shows only the expected additions (test/mix/tasks/letflow.lint_handoffs_test.exs, test/specs/ISS-0262.md) plus this handoff's own edit and the pre-existing orchestrator.log modification (present before this step started) -- no worktree side-effects.",
+    "artifacts_out": [
+      "test/mix/tasks/letflow.lint_handoffs_test.exs",
+      "test/specs/ISS-0262.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0262-20260822",
+      "commit_sha_list": ["429ead8"],
+      "remote_branch": "origin/feature/WF03-ISS0262-20260822",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

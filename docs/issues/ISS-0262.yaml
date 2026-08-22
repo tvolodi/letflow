@@ -1,0 +1,89 @@
+id: ISS-0262
+title: >
+  letflow.lint_handoffs globs *.json only -- a run using Markdown handoffs
+  passes the gate by omission, not conformance
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0262-20260822
+discovered_at: "2026-08-22T07:20:00Z"
+severity: MAJOR
+
+description: >
+  `mix letflow.lint_handoffs`'s file discovery (`lib/mix/tasks/letflow.lint_handoffs.ex`'s
+  private `handoff_files/0`) globbed `handoffs/**/*.json` exclusively. Any
+  handoff-shaped file under `handoffs/<run_id>/` that was not named `*.json` --
+  e.g. the 10 Markdown files under `handoffs/WF03-ISS0258-20260822/` -- was
+  structurally invisible to every check the task runs (H1-H5, advisory), and,
+  as a second-order consequence, to `check_registry_coverage/1`'s H5 disk-vs-registry
+  diff as well, since that function derives `disk_run_ids` from the same file
+  list: a run_id whose directory contained only non-.json files contributed
+  nothing to `disk_run_ids` and so was invisible to the H5 diff in both
+  directions, not merely unflagged by the per-file schema checks. Net effect:
+  such a run passed `mix letflow.lint_handoffs` (and therefore `mix letflow.check`,
+  which gates on it per ISS-0257) by omission -- the gate never saw the
+  non-conforming files to fail on them -- not by actually conforming to
+  HANDOFF_PROTOCOL.md's "Handoff files ... stay JSON" rule.
+
+acceptance_criteria:
+  - "handoff_files/0's discovery is broadened beyond the hardcoded **/*.json glob to see every handoff-shaped file under handoffs/<run_id>/"
+  - "A non-.json handoff-shaped file is reported as a distinct hard violation (not silently ignored, and not conflated with the existing JSON-parse-failure violation)"
+  - "The 10 pre-existing Markdown files under handoffs/WF03-ISS0258-20260822/ are given an explicit, individually-named disposition (grandfathered or converted), not left ambiguous"
+  - "A regression test proves the fix: fails against the pre-fix glob, passes against the post-fix discovery"
+
+affected_files:
+  - lib/mix/tasks/letflow.lint_handoffs.ex
+  - test/mix/tasks/letflow.lint_handoffs_test.exs
+  - lib/letflow/design/iss0262-lint-handoffs-non-json-discovery.md
+  - test/specs/ISS-0262.md
+  - test/fixtures/lint_handoffs/h6/step-01-fixture-non-json.md
+
+related:
+  - ISS-0257  # wired lint_handoffs into the letflow.check alias as a hard gate
+  - ISS-0258  # the run whose 10 .md handoff files exposed this gap
+  - ISS-0191
+  - ISS-0190
+  - ISS-0202
+  - ISS-0209
+
+queue_task_id: 262
+github_issue: 510
+
+status: resolved
+resolved_at: "2026-08-22T08:30:00Z"
+resolved_in_run: WF03-ISS0262-20260822
+resolution_note: >
+  ROOT CAUSE (confirmed by direct reproduction, see
+  handoffs/WF03-ISS0262-20260822/step-01-issue-fixer.json): `handoff_files/0` at
+  lib/mix/tasks/letflow.lint_handoffs.ex (pre-fix lines 186-191) called
+  `Path.wildcard(Path.join(@handoffs_dir, "**/*.json"))` as the sole file-discovery
+  mechanism for the entire task -- every downstream check (H1-H5, advisory) operates
+  only over that list, so a non-.json file was never read, never passed to
+  Jason.decode, and never appeared in any output branch. Reproduced live on this
+  branch pre-fix: `mix letflow.lint_handoffs` reported "OK -- 0 new violations across
+  765 handoff files" with zero mentions of WF03-ISS0258-20260822 anywhere in NEW HARD
+  VIOLATIONS, GRANDFATHERED, ADVISORY, or H5's missing_from_registry/missing_on_disk
+  lists, despite that run_id's 10 Markdown handoff files existing on disk.
+
+  FIX (ELIXIR-DEV, design at lib/letflow/design/iss0262-lint-handoffs-non-json-discovery.md,
+  independently confirmed at each gate by CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER,
+  REVIEWER, TEST-DESIGN-VALIDATOR, and TEST-RUNNER): discovery broadened to see every
+  handoff-shaped file under handoffs/<run_id>/step-*.*, each file classified into (1)
+  .json + valid JSON -- existing H1-H5 path unchanged; (2) .json + invalid JSON --
+  existing PARSE violation path unchanged; (3) non-.json extension -- new hard
+  violation H6, gating like H1-H4. The 10 pre-existing WF03-ISS0258-20260822 Markdown
+  files were grandfathered individually by exact path (not converted), per this
+  project's established precedent (ISS-0190's path-level grandfathering, ISS-0209's
+  "existing handoffs are not backfilled" ruling) and HANDOFF_PROTOCOL.md's no-blanket-backfill
+  rule for already-completed, already-reviewed historical records.
+
+  REGRESSION TEST: test/mix/tasks/letflow.lint_handoffs_test.exs (grown to cover H6
+  detection, the grandfather list, and the three-way classification), backed by
+  test/fixtures/lint_handoffs/h6/step-01-fixture-non-json.md as a fail-first fixture.
+  TEST-RUNNER (handoffs/WF03-ISS0262-20260822/step-04c-test-runner.json) independently
+  ran the full suite three times, `mix letflow.lint_handoffs` standalone (exit 0,
+  "OK -- 0 new violations across 783 handoff files (16 pre-existing grandfathered,
+  traced to ISS-0190)"), and `mix letflow.check` (green after a pure-formatting fix to
+  the new test file) -- PASS. Two findings surfaced during that run
+  (test/letflow/api/context_test.exs order-dependent flake, ISS-0069-class compiler
+  warnings recurring in unrelated files) were confirmed pre-existing on main and
+  unrelated to this diff; they are explicitly out of scope for this closure and are
+  left for ORCH to file as separate issues, per this run's own Step 5 dispatch.

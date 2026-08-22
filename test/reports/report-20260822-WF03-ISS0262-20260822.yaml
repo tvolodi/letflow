@@ -1,0 +1,140 @@
+report_id: report-20260822-WF03-ISS0262-20260822
+agent: TEST-RUNNER
+issue: ISS-0262
+workflow_step: WF-03 Step 4c (full-suite test run + lint_handoffs + check)
+handoff: handoffs/WF03-ISS0262-20260822/step-04c-test-runner.json
+branch: feature/WF03-ISS0262-20260822
+date: 2026-08-22
+command: "scripts/test_parallel.sh; mix letflow.lint_handoffs; mix letflow.check"
+
+toolchain:
+  platform: "Windows 11"
+
+environment:
+  postgres: >
+    letflow-postgres-1, confirmed via `docker compose up -d` -- reported already
+    Running, not freshly started this run. No .env LETFLOW_DB_PORT override present.
+  db_setup: >
+    Each test_parallel.sh partition's own `mix test` invocation performs
+    ecto.create/ecto.migrate --quiet automatically via the `test` alias -- no separate
+    DB-setup step taken here.
+  parallel_n: "16 (source: nproc, auto-derived, no TEST_PARALLEL_N override given)"
+
+# ---------------------------------------------------------------------------
+# Full suite -- 3 attempts (quoted verbatim)
+# ---------------------------------------------------------------------------
+
+run_attempt_1:
+  result: >
+    test_parallel: N=16 (source: nproc)
+    partition 5: WARNING no Result: line in its log (compile/config/crash abort), exit=1
+      -- log shows: "could not create hard link from ...mix_lock_user0\...\port_58018 to
+      ...lock_1: permission denied. Hard link support is required for Mix compilation
+      locking." (Windows filesystem hard-link race in the shared mix build lock, not a
+      test failure)
+    combined (15 completed partitions): 1598 tests, 5 properties, 0 failures (1603/1603 passed)
+
+run_attempt_2:
+  result: >
+    partition 1: identical hard-link-lock abort (same error class, different partition
+    index -- confirms the race is transient/environment-based, not code-based)
+    combined (15 completed partitions): 1600 tests, 5 properties, 0 failures (1605/1605 passed)
+
+run_attempt_3:
+  result: >
+    all 16 partitions completed (exit 0 except partition 4)
+    partition 4: 131 tests, 2 properties, 1 failures, exit 2
+    combined: 1674 tests, 5 properties, 1 failures (1678/1679 passed)
+  failure: >
+    test/letflow/api/context_test.exs:125-126, Letflow.Api.ContextTest
+    "scoped_repo_opts/1 ignores request-supplied tenant hints (INV-1, AC3)
+    scoped_repo_opts/1 is 1-arity -- no tenant/schema/prefix parameter exists to pass"
+    Expected truthy, got false
+    code: assert function_exported?(Context, :scoped_repo_opts, 1)
+  exit_code: 2 (partition 4 only; other 15 partitions exit 0)
+
+# ---------------------------------------------------------------------------
+# Attribution of the one real failure
+# ---------------------------------------------------------------------------
+
+attribution:
+  diff_scope: >
+    `git diff --stat main...HEAD` for this branch touches only:
+    lib/letflow/design/iss0262-lint-handoffs-non-json-discovery.md,
+    lib/mix/tasks/letflow.lint_handoffs.ex,
+    test/fixtures/lint_handoffs/h6/step-01-fixture-non-json.md,
+    test/mix/tasks/letflow.lint_handoffs_test.exs, test/specs/ISS-0262.md.
+    lib/letflow/api/context.ex and its test are NOT in this diff.
+  standalone_repro_this_branch: >
+    `mix test test/letflow/api/context_test.exs` on this branch (HEAD) ->
+    "Result: 10/11 passed", "Failed: 1 test" -- same assertion fails.
+  main_repro: >
+    Reproduced identically at main@99ec378 via a throwaway
+    `git worktree add ../letflow-ctx-check main` (deps/build isolated with
+    MIX_DEPS_PATH/MIX_BUILD_PATH pointed at a scratch dir so the shared _build
+    cache was never touched) -> "Result: 10/11 passed", "Failed: 1 test", identical
+    failing test and assertion. Worktree removed via `git worktree remove --force`
+    immediately after; `git worktree list` afterward shows only the main tree.
+  order_dependence: >
+    mix letflow.check's own sequential (single-process, non-partitioned) full
+    `mix test` run in this same session passed ContextTest along with everything
+    else: "Result: 1679 passed (5 properties, 1674 tests)", 0 failures. This
+    confirms the failure is order/parallelism-dependent flakiness in a
+    pre-existing test, not a deterministic break, and definitely not caused by
+    this branch's diff.
+  verdict: "Pre-existing, unrelated to ISS-0262. Not fixed here (out of TEST-RUNNER's ownership and out of this branch's diff scope) -- flagged as a separate issue in the handoff's result.issues."
+
+# ---------------------------------------------------------------------------
+# mix letflow.lint_handoffs
+# ---------------------------------------------------------------------------
+
+lint_handoffs:
+  command: "mix letflow.lint_handoffs > out; echo $? (exit code captured directly, not from a pipe)"
+  exit_code: 0
+  output_tail: >
+    letflow.lint_handoffs: OK -- 0 new violations across 783 handoff files
+    (16 pre-existing grandfathered, traced to ISS-0190).
+
+# ---------------------------------------------------------------------------
+# mix letflow.check
+# ---------------------------------------------------------------------------
+
+letflow_check:
+  first_run:
+    exit_code: 1
+    failure: >
+      "mix format failed due to --check-formatted" on
+      test/mix/tasks/letflow.lint_handoffs_test.exs (TEST-DESIGNER's new file from
+      Step 4, within TEST-RUNNER's "new test files under test/" ownership).
+    fix_applied: >
+      `mix format test/mix/tasks/letflow.lint_handoffs_test.exs` -- pure
+      whitespace/style change, no assertion or test logic touched. Re-ran the
+      file's own suite after formatting: "Result: 15 passed", unchanged.
+  second_run:
+    exit_code: 1
+    lint_handoffs_step: "OK, exit 0 (as above)"
+    test_step: "Result: 1679 passed (5 properties, 1674 tests), 0 failures"
+    final_gate_failure: >
+      letflow.check.test's compiler-warning gate: FAILED -- "default values for
+      the optional arguments" warning found (ISS-0069's own class recurring):
+      entry/2, unique_idempotency_key/1, insert_user!/2.
+    attribution: >
+      Traced each: defp entry/2 in test/letflow/engine/sub_process_test.exs:44;
+      defp unique_idempotency_key/1 variants across several test/letflow/engine*_test.exs
+      files (already flagged in test/reports/report-20260822-WF03-ISS0231-20260822.yaml);
+      defp insert_user!/2 in test/letflow/routers/tasks_test.exs:95. None of these
+      files are in this branch's diff -- pre-existing recurrence of the already-named
+      ISS-0069 warning class, unrelated to ISS-0262. Not fixed here; flagged as a
+      separate issue in the handoff's result.issues.
+
+verdict: PASS
+
+summary_line: >
+  Full suite: 1678-1679/1679 depending on partition assignment (1 pre-existing,
+  order-dependent ContextTest flake confirmed to reproduce identically on main,
+  unrelated to this diff). mix letflow.lint_handoffs: exit 0, "OK -- 0 new
+  violations". mix letflow.check: blocked twice, both times by pre-existing/
+  out-of-scope conditions (a formatting nit in the new test file, fixed;
+  and the pre-existing ISS-0069 warning-class recurrence in unrelated test
+  files, flagged not fixed) -- neither attributable to ISS-0262's actual change
+  (lib/mix/tasks/letflow.lint_handoffs.ex's H6 non-JSON discovery fix).

@@ -9,48 +9,225 @@ severity: MINOR
 
 description: >
   `POST /tenants` (`lib/letflow/routers/tenants.ex`, `provision_and_respond/2`)
-  orchestrates `Identity.create_tenant/1` -> `TenantProvisioning.
-  provision_tenant_schema/1` -> `TenantProvisioning.replay_migrations/2` in
-  sequence. If either downstream call fails after the `tenants` row is already
-  committed, the request returns 500 and a `tenants` row exists with no
-  matching, or only partially migrated, Postgres schema.
+  orchestrates `Letflow.Identity.create_tenant/1` ->
+  `Letflow.TenantProvisioning.provision_tenant_schema/1` ->
+  `Letflow.TenantProvisioning.replay_migrations/2` in sequence. The `tenants`
+  row commits first, so if either downstream call fails the request returns 500
+  and a `tenants` row exists with no matching, or only partially migrated,
+  Postgres schema. No rollback is implemented -- deliberately -- and no retry,
+  reconciliation or sweep path exists anywhere in the codebase.
 
-  No rollback is implemented (deliberately), and no retry/reconciliation path
-  exists anywhere in this codebase today. Both `provision_tenant_schema/1` and
-  `replay_migrations/2` are already safely re-callable with the same
-  `tenant_id` (confirmed by direct read of `lib/letflow/tenant_provisioning.ex`:
-  `provision_tenant_schema/1` is explicitly documented idempotent via a
-  transaction-scoped advisory lock + `CREATE SCHEMA IF NOT EXISTS` +
-  insert-or-fetch registration; `replay_migrations/2` delegates to
-  `Ecto.Migrator.run/4`, which only applies pending migrations).
-
-  A compensating rollback (deleting the just-created tenant row) was
-  deliberately NOT implemented -- REVIEWER confirmed this is the correct call,
-  not a gap: if `provision_tenant_schema/1` had already succeeded and only
+  REVIEWER confirmed at filing time that the absent rollback is the CORRECT
+  call, not a gap: if `provision_tenant_schema/1` had already succeeded and only
   `replay_migrations/2` failed, deleting the tenant row would orphan a real
-  Postgres schema + `tenant_schemas` registration row pointing at a `tenant_id`
-  no longer present in `tenants` -- trading a recoverable partial state for an
-  unrecoverable orphan. The right remediation is a future idempotent
-  retry/reconciliation mechanism (re-invoke the same two functions with the
-  same `tenant_id`, or a periodic sweep for `tenants` rows with no matching
-  migrated schema) -- not implemented anywhere yet. This overlaps REQ-076's
-  self-service onboarding path and `TenantProvisioning`'s own moduledoc, which
-  already names a future tenant-onboarding orchestration requirement as the
-  natural home for this.
+  Postgres schema plus a `tenant_schemas` registration row pointing at a
+  `tenant_id` no longer present in `tenants` -- trading a recoverable partial
+  state for an unrecoverable orphan. The filing itself names the right
+  remediation as a future idempotent retry/reconciliation mechanism, and notes
+  it overlaps REQ-076's self-service onboarding path and
+  `Letflow.TenantProvisioning`'s own moduledoc, which already names a future
+  tenant-onboarding orchestration requirement as the natural home for it.
+
+diagnosis: >
+  Run WF03-ISS0230-20260822, Step 1. Reproduced first-hand against real Postgres
+  (`Letflow.DataCase`, Sandbox `:auto` mode, throwaway probe
+  `test/iss0230_repro_test.exs`, run and then deleted -- not committed; the
+  probe created a tenant, called `provision_tenant_schema/1`, then called
+  `replay_migrations/2` with a migration module whose `up/0` raises). Measured,
+  quoted from that run's stdout:
+
+    [A] replay outcome: {:error, {:migration_failed, ...}}
+    [B] tenants row present?        true
+    [B] tenant.status               :active
+    [B] tenant_schemas row present? true
+    [B] migrations_applied_at       nil
+    [B] pg schema exists?           [[true]]
+    [B] fixture table present?      false
+    [C] TenantProvisioning public functions: [provision_tenant_schema: 1,
+        replay_migrations: 1, replay_migrations: 2, schema_name_for_tenant: 1,
+        tenant_id_for_schema_name: 1, tenant_scoped_migrations: 0]
+    [C] reconciliation-shaped functions found: []
+    [D] after re-invocation, migrations_applied_at: ~N[2026-08-22 03:17:47]
+    [D] after re-invocation, fixture table present?: true
+    [D] registration rows for tenant: 1
+    Result: 1 passed
+
+  Findings the filing did not already contain:
+
+  1. `replay_migrations/2` returns a clean tagged `{:error, {:migration_failed,
+     _}}` rather than raising, so the call site's `with/else` sees it -- the 500
+     is a deliberate branch, not an unhandled crash.
+  2. `Registration.migrations_applied_at IS NULL` is ALREADY a sufficient,
+     shipped detection predicate for "provisioned but not migrated". A
+     reconciliation sweep needs no new column and no new migration.
+  3. Re-invoking BOTH primitives with the same `tenant_id` fully converges the
+     state -- `migrations_applied_at` set, tables present, still exactly one
+     `tenant_schemas` row. The recovery CAPABILITY is shipped and works; only
+     the orchestration that would invoke it is absent.
+  4. NOT in the filing: the half-provisioned tenant's `status` was `:active`
+     throughout. An unmigrated tenant is currently advertised as fully live,
+     so `Letflow.Plugs.TenantStatus` (REQ-021) does not gate it. This is the
+     same question `Letflow.TenantProvisioning`'s moduledoc already flags under
+     "Secondary open question", now shown to be load-bearing for this issue
+     rather than theoretical. REQ-VALIDATOR's gate on this run's REQ-076 delta
+     then corrected a first-draft overstatement of this finding, and the
+     correction is recorded here because it changes what REQ-076 owes: setting
+     such a tenant `:migrating` does NOT by itself make it safe. That plug
+     gates write methods only (`@write_methods ~w(POST PUT PATCH DELETE)`,
+     with its other `call/2` clause returning the conn untouched -- verified
+     directly in `lib/letflow/plugs/tenant_status.ex`), so `GET`/`HEAD` pass
+     through with no status check and no DB query, and a `:migrating`
+     half-provisioned tenant would still serve reads against the empty schema.
+     The read path is the uncovered half.
+  5. Scope datum, and its expiry. At DIAGNOSIS time
+     `lib/letflow/routers/tenants.ex` did not exist on `main` at all -- it
+     lived only on the unmerged `feature/WF02-REQ075-20260822` branch, and
+     `grep` confirmed `main` had no production caller of
+     `provision_tenant_schema/1` whatsoever, so no caller could reach this
+     state. That is no longer true as of this run's own Step Final: REQ-075
+     merged to `main` (PR #464) while this run was in its validation gate, so
+     `POST /tenants` and with it the partial-provisioning window are now live
+     on `main`. Recorded rather than quietly dropped, because it WEAKENS one
+     of the three reasons given below for scoping forward instead of
+     implementing -- the "nobody can hit it yet" argument expired on merge.
+     The other two reasons (the invariant collision, and recovery being an
+     orchestration-design problem rather than a missing capability) are
+     unaffected and remain sufficient on their own. The residual exposure is
+     bounded: `POST /tenants` is `:TenantsManage`, restricted to
+     PLATFORM_ADMIN, there is no production deployment, and recovery from the
+     partial state is a two-call sequence any operator can run from IEx using
+     the procedure recorded in the moduledoc.
+
+  Root cause, stated precisely: this is NOT "the code does the wrong thing".
+  Every individual component behaves as designed, the missing rollback is
+  correct, and the two primitives are idempotent exactly so that re-invocation
+  is safe. What is missing is an ORCHESTRATION LAYER, and its absence is itself
+  a deliberate, recorded design decision --
+  `lib/letflow/design/req022-tenant-schema-provisioning.md` section 3.2's "No
+  implicit chaining invariant" holds `provision_tenant_schema/1` and
+  `replay_migrations/2` uncoupled on purpose and explicitly assigns the
+  sequencing, and therefore the failure handling between the two steps, to a
+  future onboarding-orchestration requirement. The real risk this issue guards
+  against is that this obligation is silently forgotten by whoever builds that
+  orchestration.
 
 affected_files:
-  - lib/letflow/routers/tenants.ex
   - lib/letflow/tenant_provisioning.ex
+  - lib/letflow/design/req022-tenant-schema-provisioning.md
+  - docs/requirements.yaml           # REQ-076, the anchor this resolves into
+  - lib/letflow/routers/tenants.ex   # the call site; reached main via REQ-075 mid-run
 
 related:
-  - REQ-075  # the run whose Step 2d review raised it
-  - REQ-076  # future onboarding requirement, likely home for the fix
+  - REQ-075  # the run whose REVIEWER gate raised it
+  - REQ-076  # tenant onboarding -- the anchor this issue is scoped into
+  - REQ-022  # the design whose section 3.2 invariant defers the orchestration
+  - ISS-0225 # precedent: resolve by removing the discoverability root cause
 
 queue_task_id: 230
 github_issue: 468
 github_issue_note: >
-  register_task created both the queue task (230) and its mirrored GitHub
-  issue (468) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
+  register_task created both the queue task (230) and its mirrored GitHub issue
+  (468) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
   deliberately not called separately.
 
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0230-20260822
+resolved_at: "2026-08-22T03:19:41Z"
+resolution_note: >
+  OUTCOME SHAPE CHOSEN: scoped forward into REQ-076 with the gap documented --
+  NOT implemented inline. This follows ISS-0225's precedent, and it is a claim
+  about a specific root cause, so state plainly what it does and does not
+  assert.
+
+  WHAT IS NOT ASSERTED: there is still no reconciliation, retry or sweep
+  mechanism in this codebase, and a tenant half-provisioned by a replay failure
+  still requires manual intervention. This record does not claim otherwise, and
+  a later run cross-referencing this registry must not read `resolved` as
+  "recovery now exists".
+
+  WHAT IS ASSERTED, AND IS THE ROOT CAUSE ACTUALLY REMOVED: the absence of the
+  orchestration is a deliberate design decision already on record (req022
+  section 3.2's "No implicit chaining invariant"), re-affirmed by this run and
+  not relaxed. The removable root cause was therefore never "no code exists"
+  -- it was that the obligation to handle this could be silently forgotten by
+  whoever eventually builds the orchestration, with nothing anywhere naming it
+  as their job. That is now impossible to miss, anchored in three places a
+  future implementer reads by necessity rather than by luck: (a)
+  `Letflow.TenantProvisioning`'s own moduledoc, immediately adjacent to the
+  two primitives any onboarding caller must call, carrying the measured
+  detection predicate and recovery procedure; (b) the same design document's
+  section 3.2, as a dated addendum directly under the invariant that creates
+  the deferral; and (c) REQ-076's own description plus two new acceptance
+  criteria, so onboarding cannot pass its own release gate without an
+  idempotent recovery entry point and an explicit decision on the tenant
+  status lifecycle across onboarding.
+
+  GATED, NOT SELF-CERTIFIED. The REQ-076 modification went through
+  REQ-VALIDATOR rather than being registered on this run's own say-so, and it
+  came back FAIL on the first pass with three material findings, all accepted
+  and all fixed before merge: (F1) the recovery criterion said "idempotent"
+  but its demonstration invoked the recovery path only once, which cannot
+  demonstrate idempotence -- a second invocation against the now-healthy
+  tenant, asserting unchanged state, is now required explicitly; (F2) the
+  first draft claimed `:migrating` would let `Letflow.Plugs.TenantStatus` gate
+  a half-provisioned tenant "at no new cost", which is false for reads (see
+  `diagnosis` finding 4) -- the criterion now requires BOTH a write and a read
+  test, and the same overstatement was corrected in the moduledoc, which is
+  the copy a future implementer actually reads; (F3) nothing in the text
+  stopped an implementer reading `migrations_applied_at IS NULL` as licence to
+  build a full reconciliation sweep, which would need a scheduler and a new
+  supervision-tree child -- the exact scope creep this resolution declined --
+  so an explicit RECOVERY SCOPE BOUNDARY now scopes REQ-076 to an invocable
+  recovery entry point and forbids the sweep. REQ-VALIDATOR's sizing verdict
+  on the enlarged REQ-076 was PASS, conditional on that boundary being written
+  in: `tenants.status` already ships as an `Ecto.Enum` of
+  `[:active, :migrating]` so no migration is needed, and the recovery
+  capability itself is already proven convergent, leaving roughly one function,
+  one status flip and three tests on top of the ported handlers.
+
+  WHY NOT IMPLEMENT NOW. Three independent reasons, any one sufficient. First,
+  the shape of a minimal inline fix collides head-on with the invariant: a
+  recovery function inside `Letflow.TenantProvisioning` that calls both
+  primitives IS the implicit chaining section 3.2 forbids, so implementing here
+  would require either violating it or writing a new decision record to
+  override it -- and the hard constraint on this run, from REVIEWER's own
+  finding, was not to do that silently. The recovery entry point belongs in the
+  orchestration layer, which is REQ-076's, not this module's. Second, a
+  reconciliation sweep needs design decisions this issue cannot make alone --
+  who invokes it (no scheduler subsystem exists; adding one is scope creep into
+  the supervision tree), what the tenant status lifecycle should be, multi-node
+  concurrency -- i.e. a design pass, which is precisely what REQ-076 gets and a
+  WF-03 patch does not. Building it here risks the throwaway orchestration
+  REQ-076 would then have to unwind. Third, measurement (see `diagnosis`): the
+  recovery capability itself already works and converges, so the gap is
+  genuinely orchestration, not capability.
+
+  A FOURTH reason was offered in this record's first draft -- that no caller
+  could reach the state at all, since `lib/letflow/routers/tenants.ex` was not
+  on `main` -- and it is WITHDRAWN rather than quietly retained: REQ-075 merged
+  to `main` during this run's own validation gate, so `POST /tenants` is live
+  there and that argument expired before this record was committed (see
+  `diagnosis` finding 5). The first two reasons are each independently
+  sufficient and are unaffected. The residual exposure is bounded --
+  `POST /tenants` is PLATFORM_ADMIN-only via `:TenantsManage`, there is no
+  production deployment, and an operator can recover any half-provisioned
+  tenant with the two-call sequence the moduledoc now records.
+
+  WHY NOT `instrumented`, and why no successor issue was filed: `instrumented`
+  requires a `superseded_by: ISS-NNNN` successor, and the successor here is a
+  REQUIREMENT (REQ-076), not an issue. Filing a successor issue would leave a
+  newly-created open issue as the newest queue item, to be re-served
+  repeatedly by `get_next_task`'s LIFO issue priority with no actionable work
+  available each time -- exactly the thrash ISS-0225 hit live and
+  ISSUE_QUEUE.md warns against. REQ-076 is `pending` and unstarted, so the
+  obligation is carried by work that is already queued and will actually be
+  executed.
+
+  NO CODE BEHAVIOUR CHANGED by this resolution -- the only `lib/` edits are a
+  moduledoc section and a design-document addendum. `mix compile` clean. No
+  regression test accompanies this record, and none is claimed: there is no
+  behaviour change to regress, and the two new REQ-076 acceptance criteria are
+  where the eventual tests are specified. Consistent with the hard constraint
+  from REVIEWER's filing, no compensating rollback or delete of the tenant row
+  was added, and the "No implicit chaining invariant" is left standing exactly
+  as written.

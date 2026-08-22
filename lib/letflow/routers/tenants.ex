@@ -103,6 +103,17 @@ defmodule Letflow.Routers.Tenants do
     caller sees a `500` in that case (`Response.internal_error/1`) and a
     `tenants` row with no matching schema — an operationally recoverable
     partial state, not silently retried or rolled back here.
+    Followed up as ISS-0230/GH#468, resolved by scoping the recovery path into
+    `REQ-076` (tenant onboarding) rather than building it here. The rollback
+    stays absent deliberately — adding one makes the state *worse*, since
+    deleting the `tenants` row after `provision_tenant_schema/1` already
+    succeeded orphans a real Postgres schema. "Operationally recoverable" is
+    now a measured claim rather than an assumption: re-invoking both
+    primitives with the same `tenant_id` converges the state, and
+    `tenant_schemas.migrations_applied_at IS NULL` identifies affected
+    tenants. See `Letflow.TenantProvisioning`'s moduledoc section "No
+    reconciliation path for a half-provisioned tenant" for the full
+    procedure and the obligation REQ-076 inherits.
   """
 
   use Plug.Router
@@ -226,7 +237,9 @@ defmodule Letflow.Routers.Tenants do
   end
 
   # OQ-5: no compensating rollback of the just-created tenant row on a
-  # provisioning/replay failure -- see moduledoc.
+  # provisioning/replay failure -- see moduledoc. Do NOT "fix" this by adding a
+  # delete here: it orphans a real Postgres schema (ISS-0230/GH#468). The
+  # recovery path is REQ-076's, not this function's.
   defp provision_and_respond(conn, tenant) do
     with {:ok, _registration} <- TenantProvisioning.provision_tenant_schema(tenant.id),
          {:ok, _applied_versions} <- TenantProvisioning.replay_migrations(tenant.id) do

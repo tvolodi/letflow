@@ -870,3 +870,39 @@ history:
       prose unrelated to this requirement's new routes -- no
       externally-visible behavior documented there changes, no update
       needed.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-08-22T03:19:41Z"
+    note: >
+      ISS-0230/GH#468 (run WF03-ISS0230-20260822) resolved by scoping forward
+      into REQ-076, not by implementing inline -- ISS-0225's precedent shape.
+      POST /tenants commits the `tenants` row before
+      TenantProvisioning.provision_tenant_schema/1 and replay_migrations/2, so a
+      downstream failure leaves a half-provisioned tenant with no reconciliation
+      path. Reproduced first-hand against real Postgres with replay forced to
+      fail: replay_migrations/2 returns a clean {:error, {:migration_failed, _}}
+      rather than raising; the residue is a committed tenants row, a
+      tenant_schemas row, an empty schema and migrations_applied_at nil -- so
+      `migrations_applied_at IS NULL` is already a sufficient detection predicate
+      needing no new column; re-invoking BOTH primitives with the same tenant_id
+      fully converges the state with exactly one registration row, so the
+      recovery capability is shipped and only the orchestration is missing. Two
+      findings beyond the filing: the half-provisioned tenant's status stayed
+      :active, so Letflow.Plugs.TenantStatus does not gate it; and
+      lib/letflow/routers/tenants.ex is not on main at all (unmerged
+      feature/WF02-REQ075-20260822), with main having no production caller of
+      provision_tenant_schema/1 -- no caller can hit this today. Not implemented
+      here because a recovery function calling both primitives inside
+      TenantProvisioning IS the coupling req022 section 3.2's "No implicit
+      chaining invariant" forbids; that invariant is re-affirmed, not relaxed,
+      and no compensating rollback was added (REVIEWER rejected that shape on
+      this issue -- deleting the tenants row orphans a real schema). The
+      obligation is anchored in three places a future implementer reads by
+      necessity: TenantProvisioning's moduledoc, a dated addendum under section
+      3.2 itself, and REQ-076's description plus two new acceptance criteria
+      (idempotent recovery entry point in the orchestration layer; explicit
+      tenant status lifecycle across onboarding). No successor issue filed -- the
+      successor is a requirement, and a new open issue would thrash
+      get_next_task's LIFO issue priority exactly as ISS-0225 hit live. No code
+      behaviour changed; mix compile clean.

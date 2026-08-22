@@ -75,6 +75,71 @@ defmodule Letflow.TenantProvisioning do
   status for existing tenants; `provision_tenant_schema/1` does not check it —
   left for a future tenant-onboarding-orchestration requirement to decide
   explicitly.
+
+  ## No reconciliation path for a half-provisioned tenant (ISS-0230/GH#468 —
+  ## OBLIGATION ON WHOEVER BUILDS THE ONBOARDING ORCHESTRATION)
+
+  **Read this before sequencing the two primitives above from any new call
+  site.** A caller that runs `Letflow.Identity.create_tenant/1` →
+  `provision_tenant_schema/1` → `replay_migrations/2` commits the `tenants` row
+  first. If either later step fails, the row stays committed and the tenant is
+  left half-provisioned. There is **no** reconciliation, retry, or sweep
+  mechanism anywhere in this codebase that will ever notice or repair such a
+  tenant — nothing calls these two functions except the caller that just failed.
+
+  A compensating rollback is **deliberately not** the answer and must not be
+  added (REVIEWER's finding on ISS-0230): if `provision_tenant_schema/1` already
+  succeeded and only `replay_migrations/2` failed, deleting the `tenants` row
+  orphans a real Postgres schema plus a `tenant_schemas` row pointing at a
+  `tenant_id` no longer present in `tenants` — trading a recoverable partial
+  state for an unrecoverable orphan.
+
+  Measured first-hand in run `WF03-ISS0230-20260822` (real Postgres, replay
+  forced to fail), so the next implementer does not have to re-derive it:
+
+    * `replay_migrations/2` returns a clean `{:error, {:migration_failed, _}}`;
+      it does not raise, so a `with/else` at the call site sees it.
+    * The resulting state is: `tenants` row present, `tenant_schemas` row
+      present, the Postgres schema created but **empty**, and
+      `Registration.migrations_applied_at` `nil`.
+    * `migrations_applied_at IS NULL` is therefore already a sufficient,
+      shipped **detection** predicate for "provisioned but not migrated" — a
+      sweep needs no new column.
+    * Re-invoking **both** primitives with the same `tenant_id` fully converges
+      the state (`migrations_applied_at` set, tables present, still exactly one
+      `tenant_schemas` row). The recovery *capability* exists today; only the
+      orchestration that invokes it does not.
+    * The tenant's `status` was `:active` throughout — an unmigrated tenant is
+      currently advertised as fully live. Whoever builds onboarding should
+      decide this together with the secondary open question above: creating the
+      tenant `:migrating` and flipping to `:active` only after replay succeeds
+      would make the partial state self-describing and would let
+      `Letflow.Plugs.TenantStatus` reject *writes* against it with 503.
+      **But `:migrating` is not a complete answer, and it is not free.** That
+      plug gates write methods only (`@write_methods ~w(POST PUT PATCH
+      DELETE)`; its other `call/2` clause returns the conn untouched), so
+      `GET`/`HEAD` pass through with no status check and no DB query at all —
+      a `:migrating` half-provisioned tenant would still serve *reads* straight
+      onto the empty schema, hitting a relation that does not exist. Closing or
+      explicitly accepting that read gap is part of the decision, not something
+      `:migrating` hands you for free.
+
+  What REQ-076 owes is an **invocable** recovery entry point — a function an
+  operator or a test calls with a `tenant_id`. An automatic reconciliation
+  sweep is deliberately *not* in scope: it needs a scheduler, there is no
+  scheduler subsystem to hang one on, and adding a supervision-tree child for
+  it is scope creep. The `migrations_applied_at IS NULL` predicate is recorded
+  above so a future sweep requirement need not re-derive it — not as licence to
+  build the sweep now.
+
+  This is left unbuilt here on purpose. Adding a function to this module that
+  calls both primitives would be exactly the coupling
+  `lib/letflow/design/req022-tenant-schema-provisioning.md` §3.2's "No implicit
+  chaining invariant" forbids; the orchestration layer is a caller's job, not
+  this module's. `REQ-076` (tenant onboarding, S4) owns that layer and carries
+  an explicit acceptance criterion for this gap — see its entry in
+  `docs/requirements.yaml`. `docs/issues/ISS-0230.yaml` records the full
+  reasoning.
   """
 
   import Ecto.Query

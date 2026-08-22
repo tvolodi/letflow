@@ -296,6 +296,20 @@ calls `runForSchema` across *all* registered tenants independently of any single
 provisioning event). REQ-022 builds the two primitives; a future requirement owns the
 onboarding orchestration that sequences them (not invented here).
 
+**2026-08-22 addendum (ISS-0230/GH#468, run `WF03-ISS0230-20260822`) — what this
+invariant hands to that future requirement.** The invariant above is unchanged and was
+re-affirmed, not relaxed. But holding the two primitives uncoupled means the *failure
+handling* between them is uncoupled too: any caller that sequences them commits the
+`tenants` row first, and if a later step fails the tenant is left half-provisioned with
+nothing in the codebase that will ever notice or repair it. That consequence is
+acceptable **only** because the orchestration requirement is obliged to handle it, so
+the obligation is now written down in two places a future implementer will actually be
+reading — `Letflow.TenantProvisioning`'s own moduledoc (which carries the first-hand
+measurements: `migrations_applied_at IS NULL` is already a sufficient detection
+predicate, and re-invoking both primitives converges the state) and `REQ-076`'s
+acceptance criteria. A compensating rollback is explicitly **not** the remedy; see the
+moduledoc for why deleting the `tenants` row makes the state worse, not better.
+
 ### 3.3 `schema_name_for_tenant/1`
 
 ```

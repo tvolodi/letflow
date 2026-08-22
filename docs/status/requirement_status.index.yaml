@@ -55,7 +55,7 @@ volumes:
     path: docs/status/requirement_status.v2.yaml
     status: current
     opened: 2026-08-21
-    entries: 26
+    entries: 27
     note: >
       Opened by ISS-0119's fix. Successor to volume 1. `entries:` corrected
       2026-08-21 (ISS-0199, run WF03-ISS0199-20260821) from a stale declared 0
@@ -76,12 +76,16 @@ volumes:
       done-event append took it to 25 on main, while this run's own Step
       Final rebase was independently composing its started-event (24) with
       its own done-event append (originally also computed as 25 against the
-      pre-ISS-0224 base). This Step Final rebase (WF02-REQ075-20260822)
+      pre-ISS-0224 base). That Step Final rebase (WF02-REQ075-20260822)
       composed all three appends -- REQ-075 started, ISS-0224 done, REQ-075
       done -- kept in that chronological order by `at:` timestamp, bringing
       the true on-disk count to 26. Both sides of the conflict were kept --
       the file is append-only, so the resolution is a composition, never a
-      choice between the two counts.
+      choice between the two counts. Incremented to 27 by
+      WF03-ISS0230-20260822's Step Final rebase, which had computed 25 against
+      a pre-REQ-075 base and re-derived it as 27 after composing its own
+      done-event append onto the REQ-075 and ISS-0224 entries that had landed
+      on main in the interim -- the same composition rule, applied again.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

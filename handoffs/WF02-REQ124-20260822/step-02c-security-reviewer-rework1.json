@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ124-20260822/step-02c-security-reviewer-rework1.json",
   "created_at": "2026-08-22T11:02:24Z",
   "started_at": "2026-08-22T11:02:24Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-22T11:03:58Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -41,19 +41,23 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Re-verified `git diff main...HEAD -- lib/letflow/identity.ex lib/letflow/routers/tenant_config.ex lib/letflow/routers/mobile_tenant_config.ex` against the four acceptance criteria. All hold. INV-1: NOT-APPLICABLE (Letflow.Identity.safe_get_tenant_by_slug/2 reads only the global `tenants` table via get_tenant_by_slug/1, no :prefix, no tenant-scoped schema/migration touched by the hoist). INV-2: PASS -- diffed both routers' response-building code (mobile_config_map/1's hand-built 5-key map, and tenant_config.ex's existing 2-key map) and confirmed neither was touched by this diff; only the safe_get_tenant_by_slug call sites changed. INV-3/INV-5: NOT-APPLICABLE (stages not started). INV-4: PASS -- Letflow.Identity.safe_get_tenant_by_slug/2's rescue clause logs only `context_label` (a static caller-chosen literal -- \"tenant-config\" / \"mobile-tenant-config\", confirmed by reading both call sites, not derived from any request input) and the caller-supplied `slug`; the rescued `_exception` is never referenced in the log call or anywhere else in the function body. INV-6: PASS -- this handoff is that proof. INV-7: NOT-APPLICABLE (no raw SQL in the diff). INV-8: PASS -- the hoisted function still returns typed `{:ok, _} | {:error, _}` and the rescue still prevents an unhandled crash from reaching the caller. Reachability check: `grep -rn safe_get_tenant_by_slug lib/` shows exactly two call sites, both in the router modules already covered by the prior PASS (lib/letflow/routers/tenant_config.ex:171, lib/letflow/routers/mobile_tenant_config.ex:170) plus the design doc's stale reference to the old private name (not code) -- no new caller exists, and the function is not reachable from any authenticated/tenant-scoped path. Mount placement: `lib/letflow/router.ex` still forwards `/api/tenant-config` then `/api/mobile/tenant-config` before the `/api/v1` -> Letflow.Plugs.ApiPipeline forward, both ahead of Letflow.Plugs.AuthPipeline -- unchanged by this diff (only lib/letflow/identity.ex, tenant_config.ex, and mobile_tenant_config.ex changed; router.ex has no diff in this rework). The REVIEWER-required hoist preserved every invariant the prior PASS relied on and introduced no new gap.",
+    "artifacts_out": [
+      "lib/letflow/identity.ex",
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/routers/mobile_tenant_config.ex"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ124-20260822",
       "commit_sha_list": [],
       "remote_branch": null,
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to REVIEWER (2d) for re-verification"
   },
   "rework_count": 0,
   "max_rework": 3

@@ -894,3 +894,15 @@ history:
       confirmed present on main before this change via git stash --
       filed separately as ISS-0284 (queue task 284, GH#559) rather than
       blocking this one-file fix on unrelated pre-existing debt.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-22T18:19:15Z"
+    note: >
+      ISS-0129/GH#269 (queue task 129) released done with no code change: it is a
+      stale duplicate of already-resolved ISS-0074 (same github_issue_number 269).
+      lib/letflow/tenant_provisioning.ex's INSTANCE_PINS_REBOUND seed already types
+      prior_version/new_version as "string" (lines 696-697), fixed under
+      WF03-ISS0072-20260819. Verified live: mix test
+      test/letflow/engine/pin_rebind_test.exs -> 19 passed, 0 failures. Released
+      via POST /tasks/129/release with status done and an evidence note.

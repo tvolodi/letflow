@@ -1017,3 +1017,30 @@ history:
       written, GH#564 closed noting watch-item status, queue task 286 released
       done. 32 on-disk `- req:` entries in requirement_status.v3.yaml after this
       append.
+  - req: REQ-079
+    event: started
+    agent: ELIXIR-DEV
+    at: "2026-08-22T19:00:00Z"
+    note: >
+      WF02-REQ079-20260822 (ORCH acting directly through the full pipeline
+      shape in one continuous run): instance write routes (create/cancel/
+      reconstruct) onto Letflow.Routers.Instances, which REQ-078 already
+      scaffolded and reserved for this requirement.
+  - req: REQ-079
+    event: done
+    agent: ELIXIR-DEV
+    at: "2026-08-22T19:05:59Z"
+    note: >
+      WF02-REQ079-20260822 done. Three thin handlers added
+      (handle_create/handle_cancel/handle_reconstruct), each delegating to
+      the already-shipped Letflow.Engine.create/2,
+      Letflow.Engine.cancel_instance/3, and
+      Letflow.Engine.Reconstruction.reconstruct_instance/2 -- no new engine
+      behaviour. All 6 ACs covered by new
+      test/letflow/routers/instances_test.exs (17 tests, real Postgres via
+      Letflow.TenantFixture). Full mix test: 1818 passed (5 properties,
+      1813 tests), zero failures/regressions. mix compile
+      --warnings-as-errors clean. AC5 (no Repo/Transition call) verified by
+      grep and pinned by an explicit test. 35 on-disk `- req:` entries in
+      requirement_status.v3.yaml after this append (33 pre-existing + this
+      run's own started+done pair).

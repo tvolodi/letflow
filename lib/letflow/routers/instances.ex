@@ -3,24 +3,64 @@ defmodule Letflow.Routers.Instances do
   Process-instance sub-router, mounted at `/instances` by
   `Letflow.Plugs.ApiPipeline`.
 
-  REQ-078 adds **exactly one** route to it — the explicit pin-rebind endpoint
-  (PIN-05). The rest of this module's surface is reserved for **REQ-079 and
-  REQ-080**, which co-own this file; REQ-078 does not touch the `match _`
+  REQ-078 added the explicit pin-rebind endpoint (PIN-05). REQ-079 adds the
+  three write routes below (create/cancel/reconstruct). REQ-080 (read routes,
+  `GET`) still co-owns this file; REQ-079 does not touch the `match _`
   catch-all and modifies no existing route.
 
-  | Handler | Method/path                        | Delegate                                | Permission | Response |
-  |---------|------------------------------------|-----------------------------------------|------------|----------|
-  | rebind  | `POST /instances/:id/rebind-pins`  | `Letflow.Engine.PinRebind.rebind_pins/3` | none in REQ-078 (REQ-131) | 200, `{instance_id, changes, rebound_at}` |
+  | Handler     | Method/path                        | Delegate                                                              | Permission | Response |
+  |-------------|-------------------------------------|-------------------------------------------------------------------------|------------|----------|
+  | rebind      | `POST /instances/:id/rebind-pins`  | `Letflow.Engine.PinRebind.rebind_pins/3`                                | none in REQ-078 (REQ-131) | 200, `{instance_id, changes, rebound_at}` |
+  | create      | `POST /instances`                  | `Letflow.Engine.create/2`                                               | `InstancesStart` | 201, `{instance_id, status, created_at}` |
+  | cancel      | `POST /instances/:id/cancel`       | `Letflow.Engine.cancel_instance/3`                                      | `InstancesCancel` | 200, `{instance_id, status}`; 409 if already `COMPLETED` or already `CANCELLED` |
+  | reconstruct | `POST /instances/:id/reconstruct`  | `Letflow.Engine.Reconstruction.reconstruct_instance/2` (`write_back: true`, not caller-controllable) | none (REQ-079 — same precedent as rebind, a future policy decision) | 200, `{instance_id, status, tokens: [{node_id, branch_id}], variables}` |
 
-  ## Route ordering — this route MUST precede any future `POST /instances/:id`
+  ## Route ordering — `rebind-pins`/`cancel`/`reconstruct` MUST precede any future `POST /instances/:id`
 
   R-Co's own registration carries the same constraint verbatim
   (`src/main.zig:848`: "must precede plain /:id"). `Plug.Router` matches in
-  declaration order, so a `post "/:id"` declared **above** this one would
-  swallow `/:id/rebind-pins`. **REQ-079: when you add `POST /instances/:id`,
-  declare it after this route.** REQ-078 declares no other instances route, so
-  the constraint is recorded here rather than enforced by an existing
-  neighbour.
+  declaration order, so a `post "/:id"` declared **above** these three would
+  swallow all of them. `/:id/cancel` and `/:id/reconstruct` are literal path
+  suffixes distinct from `/:id/rebind-pins` and from each other, so they do
+  not compete with one another regardless of relative order — but no bare
+  `POST "/:id"` may be declared above any of the three. **REQ-080: `GET` and
+  `POST` are independent dispatch tables in `Plug.Router`, so this constraint
+  does not extend to REQ-080's read routes.**
+
+  ## `POST /instances` — definition_id vs definition_name
+
+  `definition_id`/`definition_name` mutual exclusivity is enforced by
+  `Letflow.Engine.create/2` itself (`:missing_definition_reference` /
+  `:both_definition_id_and_name`), not by `@create_schema` —
+  `Letflow.Api.Validation.FieldConstraint` has no cross-field vocabulary, the
+  same reasoning `normalise_entries/1` below already gives for per-element
+  checks it can't express. `definition_name` is a Letflow addition over R-Co
+  (REQ-045) exposed here because `Letflow.Engine.create/2` already accepts
+  it — restricting this route to `definition_id` only would regress an
+  already-shipped capability. `create_attrs/2` drops a `nil`-valued
+  `definition_id`/`definition_name`/`correlation_key` rather than passing an
+  explicit-`null` key through, so an explicit JSON `null` and an absent key
+  are indistinguishable to `Engine.create/2`'s own XOR check either way.
+
+  ## Cancelling a terminal instance is 409, not 404 or 500
+
+  Both already-`COMPLETED` and already-`CANCELLED` map to 409, with a
+  per-status detail string (AC6) — a considered choice, not an inconsistency
+  with `render_rebind/2`'s constant-detail precedent (that precedent is about
+  not leaking *internal* detail, not about collapsing two equally-valid
+  terminal states into one message). An `:error`-status instance is **not**
+  terminal (`Letflow.EventStore.InstanceProjection.terminal?/1` only returns
+  `true` for `:completed`/`:cancelled`) — cancelling one succeeds (200), same
+  as an `:active` instance.
+
+  ## Reconstruct always write-backs, and has no route-local permission check
+
+  `write_back: true` is hardcoded, not a request option, matching R-Co's
+  `handleReconstruct` exactly. No `endpoint_policy_key/2` clause exists for
+  this route, and neither does R-Co's own `authorization.zig` (confirmed by
+  grep, zero hits) — same precedent as rebind-pins: authenticated +
+  tenant-scoped only, not permission-gated. A future permission requirement
+  is a REQ-131-class policy decision, not this requirement's to invent.
 
   ## No separate `Letflow.Routers.PinRebind`
 
@@ -99,11 +139,14 @@ defmodule Letflow.Routers.Instances do
 
   use Plug.Router
 
+  alias Letflow.Api.Authorization
   alias Letflow.Api.Context
   alias Letflow.Api.Response
   alias Letflow.Api.Validation
   alias Letflow.Api.Validation.FieldConstraint
+  alias Letflow.Engine
   alias Letflow.Engine.PinRebind
+  alias Letflow.Engine.Reconstruction
 
   @idempotency_key_header "idempotency-key"
   @max_idempotency_key_bytes 255
@@ -118,6 +161,18 @@ defmodule Letflow.Routers.Instances do
   # MUST precede any future `post "/:id"` -- see this module's moduledoc.
   post "/:id/rebind-pins" do
     handle_rebind_pins(conn, conn.params["id"])
+  end
+
+  post "/:id/cancel" do
+    handle_cancel(conn, conn.params["id"])
+  end
+
+  post "/:id/reconstruct" do
+    handle_reconstruct(conn, conn.params["id"])
+  end
+
+  post "/" do
+    handle_create(conn)
   end
 
   match _ do
@@ -212,6 +267,250 @@ defmodule Letflow.Routers.Instances do
   # {:event_append_failed, _}, %Ecto.Changeset{} and any other term land here
   # too. No 503 branch -- see the moduledoc.
   defp render_rebind(conn, {:error, _internal}), do: Response.internal_error(conn)
+
+  # ── POST /instances (design §"Routes"/create) ─────────────────────────────
+
+  @create_schema [
+    %FieldConstraint{name: "definition_id", required: false, type: :uuid},
+    %FieldConstraint{
+      name: "definition_name",
+      required: false,
+      type: :string,
+      reject_empty_string: true
+    },
+    %FieldConstraint{name: "correlation_key", required: false, type: :string},
+    %FieldConstraint{name: "initial_variables", required: true, type: :object}
+  ]
+
+  defp handle_create(conn) do
+    with_authorized_scope(conn, "POST", "/instances", fn conn, opts, actor_id ->
+      with {:ok, body} <- object_body(conn),
+           {:ok, attrs} <- validate_schema(@create_schema, body) do
+        create_attrs = create_attrs(attrs, actor_id, idempotency_key(conn))
+        render_create(conn, Engine.create(create_attrs, opts))
+      else
+        {:error, :malformed_json} ->
+          Response.bad_request(conn, "request body must be a JSON object")
+
+        {:errors, field_errors} ->
+          Response.send_problem(conn, Validation.problem(field_errors))
+      end
+    end)
+  end
+
+  # Only includes keys the request actually sent (never a nil-valued key),
+  # so a caller who supplied neither/both of definition_id/definition_name
+  # still reaches Engine.create/2's own XOR check rather than being masked
+  # by a nil key -- see this module's moduledoc.
+  defp create_attrs(attrs, actor_id, idempotency_key) do
+    %{
+      initial_variables: Map.fetch!(attrs, "initial_variables"),
+      actor_id: actor_id,
+      idempotency_key: idempotency_key
+    }
+    |> maybe_put(:definition_id, Map.get(attrs, "definition_id"))
+    |> maybe_put(:definition_name, Map.get(attrs, "definition_name"))
+    |> maybe_put(:correlation_key, Map.get(attrs, "correlation_key"))
+  end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
+
+  defp render_create(conn, {:ok, result}) do
+    Response.created(conn, %{
+      "instance_id" => result.instance_id,
+      "status" => status_string(result.status),
+      "created_at" => DateTime.to_iso8601(result.started_at)
+    })
+  end
+
+  defp render_create(conn, {:error, reason})
+       when reason in [:missing_definition_reference, :both_definition_id_and_name],
+       do:
+         Response.unprocessable(
+           conn,
+           "exactly one of definition_id or definition_name is required"
+         )
+
+  # :tenant_id_not_accepted and :invalid_initial_variables are unreachable via
+  # this route (create_attrs/2 never produces a :tenant_id key; @create_schema
+  # gates initial_variables' type before Engine.create/2 ever runs) -- mapped
+  # anyway for completeness/defence-in-depth, same style as the moduledoc's
+  # other unreachable-but-mapped rows.
+  defp render_create(conn, {:error, reason})
+       when reason in [:tenant_id_not_accepted, :invalid_initial_variables],
+       do: Response.unprocessable(conn, "request body failed validation")
+
+  defp render_create(conn, {:error, :definition_not_found}), do: Response.not_found(conn)
+
+  defp render_create(conn, {:error, :definition_not_active}),
+    do: Response.conflict(conn, "only an ACTIVE definition can be started")
+
+  defp render_create(conn, {:error, :duplicate_correlation_key}),
+    do:
+      Response.conflict(
+        conn,
+        "an active instance with this correlation key already exists"
+      )
+
+  defp render_create(conn, {:error, {tag, _detail}})
+       when tag in [
+              :unresolved_catalog_ref,
+              :unresolved_module_ref,
+              :unresolved_pin_override,
+              :variable_schema_violation
+            ],
+       do: Response.unprocessable(conn, "request body failed validation")
+
+  # {:snapshot_failed, _}, {:graph_structure_invalid, _}, {:activation_failed,
+  # _}, {:event_append_failed, _}, {:parent_pin_lookup_failed, _},
+  # %Ecto.Changeset{}, :invalid_schema_name, and any other term: INV-4's
+  # no-detail 500. No 503 branch -- see the moduledoc.
+  defp render_create(conn, {:error, _internal}), do: Response.internal_error(conn)
+
+  # ── POST /instances/:id/cancel (design §"Routes"/cancel) ──────────────────
+
+  defp handle_cancel(conn, raw_id) do
+    with_authorized_scope(conn, "POST", "/instances/:id/cancel", fn conn, opts, actor_id ->
+      case cast_instance_id(raw_id) do
+        {:ok, instance_id} ->
+          cancel_attrs = %{actor_id: actor_id, idempotency_key: idempotency_key(conn)}
+          render_cancel(conn, Engine.cancel_instance(instance_id, cancel_attrs, opts))
+
+        {:error, :invalid_instance_id} ->
+          Response.unprocessable(conn, "instance_id is not a valid UUID")
+      end
+    end)
+  end
+
+  defp render_cancel(conn, {:ok, result}) do
+    Response.ok(conn, %{"instance_id" => result.instance_id, "status" => "CANCELLED"})
+  end
+
+  defp render_cancel(conn, {:error, :invalid_instance_id}),
+    do: Response.unprocessable(conn, "instance_id is not a valid UUID")
+
+  defp render_cancel(conn, {:error, :instance_not_found}), do: Response.not_found(conn)
+
+  # Distinct detail strings per terminal status (AC6) -- both states are
+  # equally caller-meaningful, unlike render_rebind/2's constant-detail
+  # precedent, which is about not leaking *internal* detail.
+  defp render_cancel(conn, {:error, {:instance_already_terminal, :completed}}),
+    do: Response.conflict(conn, "instance is already completed and cannot be cancelled")
+
+  defp render_cancel(conn, {:error, {:instance_already_terminal, :cancelled}}),
+    do: Response.conflict(conn, "instance is already cancelled")
+
+  # {:event_append_failed, _}, %Ecto.Changeset{}, :missing_actor_id,
+  # :missing_idempotency_key, :invalid_schema_name, and any other term:
+  # INV-4's no-detail 500. The last three are route-unreachable (actor_id and
+  # idempotency_key are always sourced by this handler, never absent; the
+  # schema name is resolved from the authenticated tenant_id, never
+  # caller-supplied) -- see the moduledoc.
+  defp render_cancel(conn, {:error, _internal}), do: Response.internal_error(conn)
+
+  # ── POST /instances/:id/reconstruct (design §"Routes"/reconstruct) ────────
+  #
+  # No endpoint_policy_key/2 clause exists for this route -- see the
+  # moduledoc. Authenticated + tenant-scoped only, matching REQ-078's
+  # rebind-pins precedent.
+  defp handle_reconstruct(conn, raw_id) do
+    case scoped_repo_opts(conn) do
+      {:ok, opts} ->
+        case cast_instance_id(raw_id) do
+          {:ok, instance_id} ->
+            render_reconstruct(
+              conn,
+              Reconstruction.reconstruct_instance(
+                instance_id,
+                Keyword.put(opts, :write_back, true)
+              )
+            )
+
+          {:error, :invalid_instance_id} ->
+            Response.unprocessable(conn, "instance_id is not a valid UUID")
+        end
+
+      {:error, :missing_scope_or_actor} ->
+        Response.internal_error(conn)
+    end
+  end
+
+  defp render_reconstruct(conn, {:ok, result}) do
+    state = result.instance_state
+
+    Response.ok(conn, %{
+      "instance_id" => result.instance_id,
+      "status" => status_string(state.status),
+      "tokens" => Enum.map(state.tokens, &token_map/1),
+      "variables" => state.variables
+    })
+  end
+
+  defp render_reconstruct(conn, {:error, :invalid_instance_id}),
+    do: Response.unprocessable(conn, "instance_id is not a valid UUID")
+
+  defp render_reconstruct(conn, {:error, :instance_not_found}), do: Response.not_found(conn)
+
+  defp render_reconstruct(conn, {:error, {:lock_contention, _instance_id}}),
+    do: Response.conflict(conn, "instance is locked by another transaction")
+
+  # {:replay_failed, _}, :invalid_schema_name, and any other term: INV-4's
+  # no-detail 500. No 503 branch -- see the moduledoc.
+  defp render_reconstruct(conn, {:error, _internal}), do: Response.internal_error(conn)
+
+  defp token_map(token), do: %{"node_id" => token.node_id, "branch_id" => token.branch_id}
+
+  # Exhaustive over InstanceState.status/0's closed 4-atom union (create_result()
+  # only ever produces :active/:completed, a subset -- shared here rather than
+  # duplicated). A 5th atom would be a compile-time inexhaustive-case warning,
+  # not a silent runtime fallback.
+  defp status_string(:active), do: "ACTIVE"
+  defp status_string(:completed), do: "COMPLETED"
+  defp status_string(:cancelled), do: "CANCELLED"
+  defp status_string(:error), do: "ERROR"
+
+  # ── Authorization (temporary direct call, pending REQ-131) ────────────────
+  #
+  # Matches Letflow.Routers.Tasks's with_authorized_scope/4 shape. No Repo
+  # call of any kind happens before both steps (scope, then permission) have
+  # run and the permission check has returned :Allow/:AllowWithRowFilter.
+  defp with_authorized_scope(conn, method, path_template, fun) do
+    case scoped_repo_opts(conn) do
+      {:ok, opts} ->
+        case actor_id(conn) do
+          {:ok, actor_id} ->
+            ctx = %Authorization.AccessContext{
+              user_id: actor_id,
+              roles: Authorization.roles_from_strings(conn.assigns.auth_context.roles)
+            }
+
+            decision =
+              Authorization.evaluate_access(
+                ctx,
+                Authorization.endpoint_policy_key(method, path_template)
+              )
+
+            case decision.kind do
+              :Deny403 -> Response.forbidden(conn, "insufficient permissions")
+              _allow_or_allow_with_row_filter -> fun.(conn, opts, actor_id)
+            end
+
+          {:error, :missing_scope_or_actor} ->
+            Response.internal_error(conn)
+        end
+
+      {:error, :missing_scope_or_actor} ->
+        Response.internal_error(conn)
+    end
+  end
+
+  defp validate_schema(schema, body) do
+    case Validation.validate(schema, body) do
+      {:ok, attrs} -> {:ok, attrs}
+      {:errors, field_errors} -> {:errors, field_errors}
+    end
+  end
 
   # ── Request parsing ───────────────────────────────────────────────────────
 

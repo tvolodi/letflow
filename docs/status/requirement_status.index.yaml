@@ -210,7 +210,7 @@ volumes:
     path: docs/status/requirement_status.v3.yaml
     status: current
     opened: 2026-08-22
-    entries: 33
+    entries: 35
     note: >
       Recounted to 33 during LOOP-20260822-orch (ORCH)'s Step Final rebase for
       ISS-0119: this run's own done-event (18:39:00Z) conflicted at
@@ -417,6 +417,15 @@ volumes:
       Incremented to 32 by ORCH's own ISS-0286 done-event append (watch-item,
       docs-only, no code change) -- 32 on-disk `- req:` entries in
       requirement_status.v3.yaml, no rebase conflict on this file.
+      Incremented to 33 by a concurrent sibling session's own append (queue
+      task 119, fourth ISS-0285-class stale-duplicate occurrence, commit
+      c2e4105) -- landed on main without its own index-note increment;
+      recounted here rather than corrected retroactively, per this note's
+      own recount-every-time rule.
+      Incremented to 35 by WF02-REQ079-20260822 (ORCH acting directly through
+      the full pipeline)'s own started+done event pair (2 appends) -- 35
+      on-disk `- req:` entries in requirement_status.v3.yaml, no rebase
+      conflict on this file.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

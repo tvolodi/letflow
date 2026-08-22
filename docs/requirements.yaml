@@ -4498,7 +4498,7 @@ requirements:
   - id: REQ-079
     title: Instance routes 1/2 -- write path (instances.zig handleCreate/handleCancel/handleReconstruct)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 146  # letflow-queue task id
     description: >

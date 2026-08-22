@@ -31,4 +31,51 @@ related:
   - ISS-0262
 queue_task_id: 265
 github_issue: 523
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0265-20260822
+resolved_at: "2026-08-22T10:35:22Z"
+resolution_note: >
+  Reproduced first: `mix letflow.lint_handoffs` -> exactly 2 new
+  (un-grandfathered) violations, both on
+  handoffs/WF03-ISS0260-20260822/step-04d-test-design-validator-recheck.json
+  ([H1] missing top-level status; [H3] the ten non-schema keys already named
+  above).
+
+  Chose fix shape 1 (schema-conform the file), not grandfathering: the
+  file's content was the only deviation from an otherwise schema-conformant
+  run -- its siblings step-04b-test-design-validator.json,
+  step-04c-test-runner.json, and step-04e-test-runner-recheck.json in the
+  same run directory already use the standard envelope
+  (run_id/workflow_id/from_agent/to_agent/file/status/context/result), so
+  reshaping this one file to match is cleaner and lower-risk than growing
+  the grandfather list for a one-off.
+
+  Fix: reshaped the file to the standard top-level envelope (`run_id`,
+  `workflow_id`, `step`, `from_agent` [renamed 1:1 from `agent_id`],
+  `to_agent` [set to "TEST-RUNNER", matching the file's own
+  `next_action: "Route to TEST-RUNNER for full-suite re-run"`], `file`,
+  top-level `status: "COMPLETED"`, `context.artifacts_in`, `result`).
+  Every original field and value (`type`, `verdict`, `prior_step_reference`,
+  `fix_commit`, `fix_commit_message`, `checks` incl. all nested check
+  entries, `acceptance_criteria_coverage`, `next_action`, `timestamp_utc`)
+  was preserved unchanged, only re-nested under `result` (plus
+  `result.status: "PASS"`, copied from the original `verdict` value) -- no
+  substantive content was altered, added, or removed; this is a shape-only
+  fix to the historical record, not a rewrite of what it reports happened.
+  `lib/mix/tasks/letflow.lint_handoffs.ex` itself was NOT changed -- the
+  defect was in the handoff data, not the linter.
+
+  Verified: `mix letflow.lint_handoffs` before -> `FAIL -- 2 new
+  (un-grandfathered) violation(s)`; after -> `OK -- 0 new violations across
+  811 handoff files (25 pre-existing grandfathered, traced to ISS-0190)`.
+
+  Scoped test run: `mix test test/mix/tasks/letflow.lint_handoffs_test.exs`
+  -- 17/20 passed both before and after this change (confirmed identical via
+  `git stash`/`git stash pop` on the same commit), with the same 3
+  pre-existing failures in both runs (H6 floor-commit tests,
+  `T-NEW-AFTER-FLOOR-HARD-FAILS` and two
+  `F-H6-FIRES-NEW`/`F-H6-CONTENT-NEVER-READ` cases) -- structurally
+  unrelated to this fix: `git diff --name-only` for this branch touches
+  only the one handoffs/ JSON file, never lib/ or test/, and the failures
+  trace to the documented `@h6_floor_commit "BOOTSTRAP"` situation from
+  ISS-0262, not to anything this run changed.

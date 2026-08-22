@@ -1,0 +1,48 @@
+id: ISS-0229
+title: >
+  identity_migration_test.exs red-lights all 10 tests under plain `mix test`:
+  restore_orphaned_guard_backup_rows!/0 raises 23503 on an orphaned
+  iss060_tenant_schemas_guard_backup row whose parent tenant no longer exists
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0224-20260822
+discovered_at: "2026-08-22T01:55:00Z"
+severity: MAJOR
+
+description: >
+  Surfaced during WF03-ISS0224-20260822's verification.
+  `MIX_ENV=test mix test test/letflow/identity_migration_test.exs` reports
+  `Result: 0/10 passed`. Every test dies in `setup`, before its own body runs:
+
+    ** (Postgrex.Error) ERROR 23503 (foreign_key_violation) insert or update on
+    table "tenant_schemas" violates foreign key constraint
+    "tenant_schemas_tenant_id_fkey"
+        Key (tenant_id)=(a45c5245-e1e7-4542-b74b-9c605a9fc386) is not present in
+        table "tenants".
+        test/letflow/identity_migration_test.exs:284: anonymous fn/0 in
+          Letflow.IdentityMigrationTest.restore_orphaned_guard_backup_rows!/0
+        test/letflow/identity_migration_test.exs:376:
+          Letflow.IdentityMigrationTest.__ex_unit_setup_1/1
+
+  `public.iss060_tenant_schemas_guard_backup` in `letflow_test` held exactly one
+  row (id 75163622-df56-481e-977d-9efd35d659fb, tenant_id
+  a45c5245-e1e7-4542-b74b-9c605a9fc386, schema_name
+  tenant_a45c5245e1e74542b74b9c605a9fc386, both timestamps 2026-08-21 08:26:27)
+  while `public.tenant_schemas` and `public.tenants` were both empty.
+
+  ISS-0111's self-heal (`restore_orphaned_guard_backup_rows!/0`) is the code that
+  raises, so it does not and cannot absorb this: an FK violation is not a
+  recoverable state for its restore CTE, whose only conflict handling is
+  `ON CONFLICT (id) DO NOTHING` (primary key only).
+
+affected_files:
+  - test/letflow/identity_migration_test.exs
+
+related:
+  - ISS-0060  # introduced the guard-backup snapshot mechanism
+  - ISS-0111  # added the advisory lock and the self-heal that now raises
+  - ISS-0107  # established that a nested `mix test` shares the same database
+
+queue_task_id: 229
+github_issue: 467
+
+status: in_progress

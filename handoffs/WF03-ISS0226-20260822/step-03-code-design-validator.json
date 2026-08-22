@@ -1,0 +1,67 @@
+{
+  "handoff_id": "b7e2f4b0-4a2f-4e1b-9b3c-9f0a2b6a1d5e",
+  "run_id": "WF03-ISS0226-20260822",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0226-20260822/step-03-code-design-validator.json",
+  "created_at": "2026-08-22T03:45:04Z",
+  "started_at": "2026-08-22T03:45:04Z",
+  "completed_at": "2026-08-22T03:45:04Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["5c24c6de-2689-4675-aac4-1326a44409c7"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0226-sandbox-pool-worker-result-typing.md",
+      "lib/letflow/sandbox_pool.ex",
+      "lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/iss0226-sandbox-pool-worker-result-typing.md"
+    ]
+  },
+  "task": {
+    "description": "Hard gate (WF-02 Step 1b, applied here per WF-03's design-review step) on CODE-DESIGNER's iss0226-sandbox-pool-worker-result-typing.md design against ISS-0226's four acceptance criteria.",
+    "acceptance_criteria": [
+      "The worker result has an explicit closed type declared in lib/letflow/sandbox_pool.ex",
+      "handle_info/2 is total over that type",
+      "A test drives an unexpected return and asserts the pool survives with slot bookkeeping intact",
+      "No change to INV-SP-A1..A3 or owner-monitor reclaim semantics"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Independently re-read lib/letflow/sandbox_pool.ex, lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md, and the design doc in full (not the CODE-DESIGNER handoff summary). Every substantive claim in the design checks out against source: run_op/1 (:586-590) has no @spec and complete_op/3 (:597-665) is exactly four exact-match clauses with no catch-all -- a fifth return shape would raise FunctionClauseError inside handle_info/2, a GenServer callback (confirmed by reading both functions directly). The proposed worker_result() union (provision_result() | drop_result()) is byte-for-byte what provision_sandbox/2 (:871-894, returns {:ok, %SandboxClaim{}} or {:error, :provision_failed} via its rescue) and drop_schema/1 (:902-907, returns :ok or {:error, :release_failed} via its rescue) actually return today -- confirmed by reading both bodies. classify_worker_result/2's five-clause design (four legal pairings + catch-all) is genuinely total by construction. Routing :invalid to handle_worker_death/1 (:667-700) is a sound reuse, not a hand-wave: read handle_worker_death/1 directly and confirm its per-op-kind recovery (compensating orphan-drop for a provision, {:error, :release_failed} reply for a release-in-flight, unconditional in_flight clear) is a genuinely correct answer to 'the pool does not know what happened to the DB side effect' -- and confirmed this is the right equivalence class: an unrecognized return and a crash-without-returning are the same uncertainty from the pool's perspective (neither is a legal completion signal), so reusing the exact function clause B case 1 already calls is sound, not merely convenient. The demonitor-before-branching ordering claim in section 4.2 matches the current code's placement exactly (:397, 'flush BEFORE calling complete_op') -- preserving it identically on both branches is correct and necessary to avoid a stray :DOWN(:normal) misread by clause B case 1. Checked INV-SP-A1/A2/A3 (iss0224 design doc lines 1234-1259) and owner-monitor reclaim (:669-700, :702-...) individually against the new design, not against section 8's self-assessment: none of state shape, complete_op/3's four clauses, handle_worker_death/1, or clause B's :DOWN dispatch are modified by this design -- the invariant-preservation argument holds. The test design's :sys.replace_state/2 + fabricated task_ref + send(pool, {fake_ref, garbage}) mechanism is legitimate and deterministic: handle_info({ref, result}, state) when is_reference(ref) matches on ANY two-tuple whose first element is a reference, so a fabricated ref reaches clause A exactly as a real Task's reply would, and because the fake ref is never attached to a real Task there is no race with a genuine worker message. FAIL is for one single, specific, fixable gap: check (e) of WF-02 Step 1b and .claude/agents/code-design-validator.md's explicit prohibition -- 'no real .ex/.exs bodies -- signatures and type shapes only'. Section 4.2 ('New shape') of the design doc is not a signature or algorithm description -- it is a complete, real Elixir function body for the NEW handle_info/2 clause A: a full case statement, a real Logger.error/1 call with string interpolation, real pipe chains (state |> complete_op(...) |> service_next_waiter() |> pump()), and real {:noreply, new_state} returns. Section 6 ('Signatures... design-only -- no implementation bodies') itself concedes this by pointing back to section 4.2 for 'the full new body' rather than restating only a signature there -- an explicit acknowledgement that section 4.2 is a body, not a signature. Per WF-02 Step 1b: 'FAIL immediately on any check failure -- no partial credit', and per core-directives.md's Humanless-operation section, a validator must not rubber-stamp on the strength of the surrounding reasoning being sound -- the prohibition is unconditional regardless of how well-justified the omitted body would be.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0226-20260822/step-03-code-design-validator.json"
+    ],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "lib/letflow/design/iss0226-sandbox-pool-worker-result-typing.md section 4.2 ('New shape') contains a complete, real Elixir function body for handle_info/2's new clause A (the full if/else, the case statement over classify_worker_result/2's result, the Logger.error/1 call with its interpolated string, the state |> complete_op(...) |> service_next_waiter() |> pump() pipe chain, and both {:noreply, new_state} returns) -- this is implementation code, not a signature or type shape, and is forbidden by WF-02 Step 1b check (e) and .claude/agents/code-designer.md's 'no function bodies, no actual .ex/.exs code blocks' rule."
+      }
+    ],
+    "correction_instructions": [
+      "Rewrite section 4.2 to describe the new clause-A body as PROSE/algorithm steps plus the @spec-level signature only -- e.g.: 'after the unconditional Process.demonitor(ref, [:flush]) (unchanged from today), call classify_worker_result(state.in_flight.op, result); on {:ok, validated_result} run the existing complete_op/3 |> service_next_waiter/1 |> pump/1 pipeline unchanged; on :invalid, log the op kind/sandbox_id/raw result via Logger.error/1 then run handle_worker_death/1 |> service_next_waiter/1 |> pump/1 instead' -- keep the totality ARGUMENT (section 4.2's prose paragraph and the 4.3 justification) but delete the literal `def handle_info(...) do ... end` code block.",
+      "Section 4.1 ('Current shape') quoting the EXISTING code verbatim as a citation of what is being replaced is not the same defect (it documents current-state fact, not proposed implementation) and may stay, but re-confirm it is clearly labeled as read-only reference, not part of the design's implementation-code count.",
+      "Re-run the same no-code check across the rest of the doc (sections 3, 5, 6, 7) before resubmitting -- section 6 is fine (signatures/typespecs only) but double check no other section was written the same way section 4.2 was.",
+      "After the fix, the four acceptance criteria and all other content in this design (the closed type, the totality argument, the recovery-mechanism reasoning, the invariant-preservation checklist, the test design) were independently verified sound in this gate's summary above -- no other rework is needed."
+    ],
+    "git_evidence": {
+      "branch_name": "fix/WF03-ISS0226-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/fix/WF03-ISS0226-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Rework CODE-DESIGNER: remove section 4.2's real implementation code block, replace with algorithm prose + signature only, then re-route to CODE-DESIGN-VALIDATOR."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

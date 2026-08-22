@@ -1,0 +1,96 @@
+report_id: report-20260822-WF02-REQ074-20260822
+agent: TEST-RUNNER
+requirement: REQ-074
+workflow_step: WF-02 Step 4 (full-suite test run)
+handoff: handoffs/WF02-REQ074-20260822/step-04-test-runner.json
+branch: feature/WF02-REQ074-20260822
+date: 2026-08-22
+command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+
+toolchain:
+  platform: "Windows 11"
+
+environment:
+  postgres: >
+    letflow-postgres-1, confirmed via `docker compose up -d` -- reported already
+    Running, not freshly started this run.
+  db_setup: >
+    Each test_parallel.sh partition's own `mix test` invocation performs
+    ecto.create/ecto.migrate --quiet automatically via the `test` alias -- no separate
+    DB-setup step taken here.
+  parallel_n: >
+    Set explicitly via TEST_PARALLEL_N=4 per dispatch instructions (ISS-0219: this
+    host's auto-derived nproc value crashes every partition outright). Not left to
+    auto-derivation.
+  new_migrations_this_run: >
+    priv/repo/migrations/20260822000101_alter_groups_add_display_name_description.exs
+    and priv/repo/migrations/20260822000102_create_group_members_tenant_scoped.exs.
+    New class of thing to verify this session (prior REQ-071/072/073 runs only added
+    code, not schema). Verified clean application by grepping all four partition logs
+    for migration/Postgrex-exception patterns (`migration.*(fail|error)|\*\* \(Postgrex`)
+    -- zero matches across all partitions. Also confirmed normal per-tenant
+    provision/migrate/drop cycling continued to succeed throughout the run (repeated
+    INSERT/SELECT/UPDATE tenant_schemas plus per-tenant schema create/migrate/drop
+    log lines present in every partition, consistent with prior green runs). The only
+    `** (` exception lines found anywhere in the logs are two deliberately-injected
+    test fixtures (a RuntimeError "boom" and a RuntimeError "plugin blew up", both from
+    pre-existing engine error-routing tests that intentionally raise inside a plugin/task
+    handler to assert error-routing behavior) -- unrelated to the new migrations and not
+    real failures.
+
+# ---------------------------------------------------------------------------
+# Run
+# ---------------------------------------------------------------------------
+
+run:
+  command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+  result: >
+    test_parallel: N=4 (source: env override)
+    partition 1: 329 tests, 0 properties, 0 failures, exit 0
+    partition 2: 344 tests, 0 properties, 0 failures, exit 0
+    partition 3: 374 tests, 3 properties, 0 failures, exit 0
+    partition 4: 454 tests, 2 properties, 0 failures, exit 0
+    combined: 1501 tests, 5 properties, 0 failures (1506/1506 passed)
+  exit_code: 0
+  failures_found: 0
+
+verdict: PASS
+
+summary_line: >
+  1506/1506 passed (1501 tests + 5 properties combined), 0 failures. Both new
+  migrations applied cleanly across all four partitions -- no attribution routing
+  needed since nothing failed.
+
+# ---------------------------------------------------------------------------
+# REQ-074 own tests (test/letflow/routers/identity_test.exs)
+# ---------------------------------------------------------------------------
+
+req074_tests:
+  verification_method: >
+    Grepped all four partition logs for test_module=Letflow.Routers.IdentityTest.
+    All 52 occurrences (setup+teardown log lines, one teardown line per test) found
+    entirely inside partition-4.log, covering both the pre-existing REQ-073 section
+    and the new REQ-074 group/group-membership describe blocks (AC1 end-to-end x11,
+    AC2 cross-tenant-membership 404, AC3 tenant isolation x2, AC4 pagination x2,
+    AC5 delete-with-members x2, plus validation/error-coverage tests). Partition 4
+    reported 0 failures out of 454 tests + 2 properties -- the file's full 47-test
+    total (23 pre-existing REQ-073 + 24 new REQ-074) is accounted for with zero
+    failures, consistent with TEST-DESIGN-VALIDATOR's independent 47/47 re-run at
+    step 3b.
+  result: "0 failures, consistent with prior independent verification (twice) at 47/47 passed"
+
+attribution: "not needed -- full suite green, no failures to attribute"
+
+branch_diff_files: >
+  docs/anti-patterns.md, docs/issues/ISS-0225.yaml, docs/migration/stage-4-api-surface.md,
+  docs/requirements.yaml, docs/status/requirement_status.index.yaml,
+  docs/status/requirement_status.v2.yaml, handoffs/WF02-REQ074-20260822/*,
+  handoffs/orchestrator.log, handoffs/registry.json,
+  lib/letflow/design/req074-identity-group-routes.md, lib/letflow/identity.ex,
+  lib/letflow/identity/group.ex, lib/letflow/identity/group_member.ex,
+  lib/letflow/identity_migration.ex, lib/letflow/routers/identity.ex,
+  lib/letflow/tenant_provisioning.ex,
+  priv/repo/migrations/20260822000101_alter_groups_add_display_name_description.exs,
+  priv/repo/migrations/20260822000102_create_group_members_tenant_scoped.exs,
+  test/letflow/routers/identity_test.exs, test/letflow/support/tenant_fixture_test.exs,
+  test/support/tenant_fixture.ex

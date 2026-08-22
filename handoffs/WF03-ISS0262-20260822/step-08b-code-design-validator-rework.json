@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0262-20260822/step-08b-code-design-validator-rework.json",
   "created_at": "2026-08-22T09:10:06Z",
   "started_at": "2026-08-22T09:10:06Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-22T09:15:35Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": null,
@@ -36,19 +36,24 @@
     ]
   },
   "result": {
-    "status": "PASS",
-    "summary": "",
+    "status": "FAIL",
+    "summary": "Hard-gated lib/letflow/design/iss0262-h6-floor-commit-addendum.md against step-08-code-designer-rework.json's task.acceptance_criteria, with the 5 specific stress-tests the task named. 4 of 5 stress-tests PASS with independently re-derived evidence; the design's own 'no implementation code' criterion FAILs on one section, so the overall verdict is FAIL (no partial credit, per WF-02 Step 1b). PASSING checks: (1) Floor-commit availability -- traced GIT_MERGE.md's real procedure line by line: step 1 (verify branch), step 2 (stage), step 3 (commit) touch no check; step 4 (git fetch origin main) always precedes step 5 (rebase + format/compile/test). `mix letflow.lint_handoffs` is not named as its own command in GIT_MERGE.md step 5d's literal text, but it is exercised inside `mix test` via the existing ExUnit test Mix.Tasks.Letflow.LintHandoffsTest 'run/1 -- the real corpus stays green T-TASK-GREEN', which both real prior Step Final attempts (step-final-git-merge.json, step-final-git-merge-retry1.json) independently confirm ran only after their own step-4 fetch (tips fb5c251, then 96ac42f) -- so H6 structurally cannot run before FLOOR is capturable, confirmed by both the document's step order and two real executions, not assumed. (2) Post-floor-file-still-fails -- verified against real git plumbing, not accepted on prose, in THREE ways: (a) a real historical case in this repo's own history -- handoffs/WF03-ISS0260-20260822/step-02-code-designer.md, first-added in commit dff2270; with FLOOR=dff2270^ (413ee6f), `git merge-base --is-ancestor dff2270 413ee6f` exits 1 (not-ancestor) => pre_floor_file? would return false => hard_new, exactly as addendum Sec.2.4 claims; (b) the reverse (pre-floor) case: mix.exs's first-add commit is an ancestor of HEAD, `--is-ancestor` exits 0 => true => grandfathered, confirming the algorithm doesn't just always fail; (c) a constructed throwaway commit (handoffs/WF03-ISS0262-20260822/h6-floor-probe-DELETE-ME.md, added on top of HEAD after fixing FLOOR=HEAD's pre-commit sha) -- `--is-ancestor <new-file-sha> FLOOR` exits 1, confirming the exact 'added after floor' scenario the acceptance criterion asks about. Throwaway commit removed via `git reset --hard HEAD~1`; `git status --porcelain` confirmed empty afterward (verified, working tree clean, back at a627932). (3) Fail-safe direction -- Sec.1.4 states errors (and empty-history results) resolve to `false` (not-pre-floor => hard_new), and the reasoning (H6 is a hard gate, so erring toward loud failure beats silently exempting a possible regression, correctly contrasted with the deliberately opposite direction of the existing advisory ARTIFACTS_OUT_SELF_REF check) is sound and correctly justified for a hard gate. (4) No dangling references -- grepped lib/mix/tasks/letflow.lint_handoffs.ex for the 12 removed paths' run ids: they appear ONLY inside the @grandfathered list itself (lines 153-164) and its preceding comment block (lines 132-145), both of which Sec.3.1 gives exact replacement text for -- no other reference in that file. One real reference elsewhere was found (test/mix/tasks/letflow.lint_handoffs_test.exs still names several of these exact paths and asserts grandfathered?(\"H6\", _) behavior directly, e.g. its F-GRANDFATHERED-NOT-NEW test) -- but this is not a silent gap: addendum Sec.5's files-touched table explicitly assigns TEST-DESIGNER the job of rewriting any such existing assertion against the new mechanism, 'not deleted silently', so it is accounted for, not dangling. (5) H1-H4 untouched -- confirmed: grandfathered?/2 itself is unedited (Sec.1.3), and Sec.3.1's deletion is scoped to exactly the 12 \"H6\"-tagged tuples; the 6 H1/H2/H3 tuples are untouched. FAILING CHECK: 'No implementation code -- signatures/pseudocode only' (step-08 acceptance criterion 5; same rule stated in WF-02 Step 1b check 2e and this role's own file: 'no real .ex/.exs bodies -- signatures and type shapes only, not bodies'). Addendum Sec.1.3 contains a full, syntactically valid, independently compilable Elixir case-branch body for lint_file/2's :non_json outcome -- concrete variable bindings (`pre_floor = pre_floor_file?(path, @h6_floor_commit)`), a fully interpolated/concatenated message string, a call to `violation/4`, and a complete map literal with computed conditional values (`hard_new: (if pre_floor, do: [], else: [v])`, etc.) -- not a bare case/with control-flow shape, despite the document's own preamble claiming to contain only '@spec lines, one module attribute declaration, git command literals, and pseudocode (case/with shapes)'. This is materially the same level of detail as the actual production implementation already present in lib/mix/tasks/letflow.lint_handoffs.ex's lint_file/2 (compared directly, line for line) -- CODE-DESIGNER has written ELIXIR-DEV's code for this one branch rather than specifying it. This is the exact failure mode the gate exists to catch regardless of how minor the delta looks, and 'the original (already-approved) design used the same style for the same branch' is not a basis for waiving it now -- this run's job is to gate the addendum in front of me, not to ratify a prior gate's leniency.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "lib/letflow/design/iss0262-h6-floor-commit-addendum.md Sec.1.3 ('Where this replaces the old call -- lint_file/2's :non_json branch') is a full, compilable Elixir function-branch body, not a signature/type-shape/case-with-control-flow-shape as the document's own preamble and step-08's acceptance criterion 5 ('No implementation code -- signatures/pseudocode only') require. It contains concrete variable bindings, a fully-built interpolated/concatenated message string, and a complete map literal with computed conditional values -- materially reproducing the actual lint_file/2 production implementation. Rework: replace the literal code block with a prose/signature-level description of the branch's effect (e.g., in the same style the original design's Sec.4.2 used for the byte-for-byte-unchanged Outcome 1/2 bodies -- '...existing body...' placeholders -- or plain prose stating: the branch computes pre_floor_file?(path, @h6_floor_commit) and builds the same violation-map shape as the original design's Outcome 3, with the grandfathered:/gating split driven by that boolean instead of grandfathered?(\"H6\", path)), without spelling out concrete variable bindings, string interpolation, or a full map literal."
+      }
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0262-20260822",
       "commit_sha_list": [],
       "remote_branch": null,
-      "push_status": "skipped",
+      "push_status": "skipped -- no code change made by this validator, only handoff bookkeeping",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "ORCH routes back to CODE-DESIGNER for rework (rework_count would become 3, at max_rework=3 -- ORCH should note this is the last rework attempt before ESCALATED per ORCHESTRATOR.md Sec.5) to fix Sec.1.3 of lib/letflow/design/iss0262-h6-floor-commit-addendum.md per issues[0]; all other content in the addendum (Sec.0-2, Sec.3-7) verified correct and does not need to change."
   },
   "rework_count": 2,
   "max_rework": 3

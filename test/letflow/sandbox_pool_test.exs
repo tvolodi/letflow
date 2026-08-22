@@ -1181,6 +1181,51 @@ defmodule Letflow.SandboxPoolTest do
       # THE POOL IS ALIVE -- it never crashed replying to a dead caller.
       assert Process.alive?(pool)
     end
+
+    # ISS-0227 regression. The defect this guards is structural, not behavioural: two
+    # fields of the ISS-0224 state shape were written and never read, each a second
+    # stored copy of a value derivable from a field beside it, and therefore free to
+    # drift silently because nothing reads it. See
+    # lib/letflow/design/iss0227-sandbox-pool-dead-field-removal.md §4.2 -- the key-set
+    # assertions are sorted-list EQUALITY, deliberately, not `refute Map.has_key?/2`:
+    # equality fails both when a removed field returns AND when some future change
+    # quietly adds an undeclared one. No new helper, no new constant and no sleep -- the
+    # observation point is reached with the same synchronisation RT-4 already uses.
+    test "RT-9 (ISS-0227): the in-flight provision op and the in_flight record carry no duplicate of a derivable value" do
+      baseline = sandbox_schema_names()
+      on_exit(fn -> drop_sandbox_schemas_created_since!(baseline) end)
+
+      pool = start_pool!(max_concurrent: 1)
+
+      o = spawn_claimer(pool, :o, 1_000)
+
+      state =
+        wait_until_pool_state(pool, "O's provisioning is in flight", &provision_in_flight?/1)
+
+      # (1) EXACT key set of the in-flight provision op. `owner_pid` was write-only and
+      # is gone; `owner_ref` -- the owner monitor of ISS-0048 / ISS-0224 hazard 2, four
+      # characters away and an entirely different thing -- stays.
+      {:provision, p} = state.in_flight.op
+
+      assert Enum.sort(Map.keys(p)) == [
+               :from,
+               :owner_down?,
+               :owner_ref,
+               :sandbox_id,
+               :schema_name
+             ]
+
+      # (2) EXACT key set of the in_flight record itself. Its `schema_name` was a
+      # duplicate of the op's own and is gone; `op`, `task_ref` and `task_pid` are read.
+      assert Enum.sort(Map.keys(state.in_flight)) == [:op, :task_pid, :task_ref]
+
+      # (3) The two derivations that REPLACE the removed fields still reach their values,
+      # so this case documents the replacement and not merely the removal.
+      assert elem(p.from, 0) == o
+
+      {:provision, %{schema_name: n}} = state.in_flight.op
+      assert is_binary(n)
+    end
   end
 
   # ---------------------------------------------------------------------------------

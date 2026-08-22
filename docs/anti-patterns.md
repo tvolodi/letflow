@@ -1221,6 +1221,38 @@ the flagged substring (paraphrase the call shape, don't quote it), and verify th
 against the final wording before treating the AC as satisfied, rather than assuming
 "documented" and "not present" are independent facts about the same file.
 
+**Recurrence: 2026-08-22, ISS-0227 (`WF03-ISS0227-20260822`) — same failure, different
+medium, and the correct response inverts.** GH #465's acceptance criterion 4 was a
+`git grep` for any remaining writer of two removed `Letflow.SandboxPool` fields
+(`owner_pid:`, `op_schema_name`). Run unrestricted at branch HEAD `66c6898` it matches
+**seven tracked files and zero lines of code**: both design documents
+(`lib/letflow/design/iss0227-sandbox-pool-dead-field-removal.md`, and
+`lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md`, whose new section 17
+names the fields in order to record their removal) plus five run handoff JSONs — a count
+that only grows as the run commits further handoffs. Two of those media are ones the
+entry above does not contemplate: `lib/` also contains `lib/letflow/design/*.md`, so a
+`lib/`-scoped grep does not exclude prose, and `handoffs/**.json` quotes the removed
+identifiers verbatim by necessity. (`docs/anti-patterns.md` is now a third: this entry
+quotes both identifiers in order to document them.)
+
+**The remedy above does not apply to them.** Rewording works for a moduledoc, whose
+subject is the module and which merely *mentions* what it does not do. It does not work
+when the matching text is the file's *subject*: a design document that cannot name the
+field it removes is not a design, and a handoff is a frozen audit record that must not be
+reworded at all. For those, **restrict the criterion by path or extension** instead:
+
+```
+git grep -nE "<pattern>" -- 'lib/**/*.ex' 'test/**/*.exs'
+```
+
+**Correct alternative (generalised).** When writing a grep-shaped acceptance criterion,
+decide up front which of the two remedies applies: **reword** when the matching text is
+*incidental* to the file's purpose; **restrict the path** when the matching text is *the
+file's subject*. Then write the restriction into the criterion itself, so it is runnable
+exactly as stated. A criterion that only passes once the verifier silently narrows it is
+not a criterion — and the narrowing is the step that gets skipped, or done differently, by
+the next agent.
+
 ## A migration version can collide with a test fixture's hardcoded version constant, not just another migration file
 
 **Found:** 2026-08-22, ELIXIR-DEV, REQ-074 (`WF02-REQ074-20260822`). Two new tenant-scoped
@@ -1302,3 +1334,34 @@ log naming it** rather than raising.
 have prevented the bad state, heal first and constrain second. Adding the constraint while
 the unrecoverable row is still present raises on the constraint's own validating scan and
 bricks the file a second way.
+
+## `elixirc --warnings-as-errors` is not a proxy for `mix compile --warnings-as-errors` — it gives the opposite answer
+
+**Found:** 2026-08-22, CODE-DESIGNER, ISS-0227 (`WF03-ISS0227-20260822`), recorded as
+W7/W8 and section 3.3 of
+`lib/letflow/design/iss0227-sandbox-pool-dead-field-removal.md`. The design had to decide
+whether deleting a private function's last call site would turn `op_schema_name/1` into a
+red build, since this project's merge gate is `mix compile --warnings-as-errors`
+(`docs/agents/protocols/GIT_MERGE.md:166`, and step 3 of `mix.exs`'s `letflow.check`
+alias). The cheap way to check looks like running `elixirc --warnings-as-errors` on a
+throwaway `.ex` file — no project, no deps, one second. **Measured both ways on the same
+two-clause unused-`defp` shape: `elixirc --warnings-as-errors` prints the "is unused"
+warning and exits 0; `mix compile --warnings-as-errors` prints the same warning and exits
+1** ("Compilation failed due to warnings while using the --warnings-as-errors option").
+The cheap probe answers the opposite of the gate that actually runs.
+
+**Why this is easy to miss:** the two commands take the same flag name, emit the same
+warning text, and differ only in the exit code — the one thing scrolled terminal output
+does not show. An agent that eyeballs the warning and concludes "warnings-as-errors would
+fail here" happens to be right for the wrong reason; one that does the more rigorous thing
+and checks `$?` on the cheap probe concludes the opposite and is wrong. `mix compile`
+applies the setting as a task-level failure over the whole compilation; `elixirc`'s flag
+does not promote a file-level warning to a non-zero exit the same way.
+
+**Correct alternative:** verify a mix-gate property with the mix gate. Create a throwaway
+project with `mix new`, put the minimal reproducing shape in its `lib/`, run the **exact**
+command the gate runs, and quote its exit code — never a nearer-to-hand single-file
+compiler invocation that shares the flag name. The general rule this instantiates: **when
+the claim is about what a gate does, the probe must be the gate's own command.** A smaller
+tool that accepts the same flag is not a smaller version of the gate; it is a different
+program, and the difference will be in the exit code rather than in anything printed.

@@ -1,0 +1,61 @@
+{
+  "handoff_id": "0227-step04-test-designer",
+  "run_id": "WF03-ISS0227-20260822",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0227-20260822/step-04-test-designer.json",
+  "created_at": "2026-08-22T04:05:00Z",
+  "started_at": "2026-08-22T04:05:00Z",
+  "completed_at": "2026-08-22T04:32:42Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0227-sandbox-pool-dead-field-removal.md",
+      "test/letflow/sandbox_pool_test.exs",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "docs/agents/instructions/core-directives.md"
+    ],
+    "owned_modules": ["test/letflow/sandbox_pool_test.exs"]
+  },
+  "task": {
+    "description": "WF-03 Step 4: implement RT-9 exactly as specified by lib/letflow/design/iss0227-sandbox-pool-dead-field-removal.md section 4.2, and produce its fail-then-pass evidence against pre-fix commit a64159d in a throwaway git worktree. Do not touch lib/. Do not commit, push or branch.",
+    "acceptance_criteria": [
+      "RT-9 appended to the existing ISS-0224 describe block in test/letflow/sandbox_pool_test.exs -- one test, no new file, no new helper, no new constant, no sleep",
+      "Combined describe+test name checked against ExUnit's 255-char limit",
+      "Three assertions in the specified sorted-key-list equality form",
+      "Pre-fix run at a64159d shown FAILING with real output; post-fix run shown PASSING",
+      "Combined sandbox_pool_test.exs + sandbox_pool_call_timeout_test.exs run is 21 tests, 0 failures",
+      "git status --porcelain lib/ test/ shows only the test/ change and nothing in lib/",
+      "Throwaway worktree removed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "RT-9 written and its fail-then-pass proven with real output. (1) NAME LENGTH CHECKED FIRST, per the anti-patterns.md:467 incident class: describe = 68 chars, test = 108 chars, ExUnit's combined atom 'test <describe> <name>' = 182 chars, comfortably under the 255-char limit. No shortening needed, none applied. (2) RT-9 appended to the existing `describe \"provisioning does not block the pool's mailbox (ISS-0224 regression)\"` block at test/letflow/sandbox_pool_test.exs:1194-1228 -- one test, no new file, no new helper, no new constant, no sleep, no wall-clock or unseeded-random dependency. Observation point reached with the existing helpers start_pool!(max_concurrent: 1) / spawn_claimer(pool, :o, 1_000) / wait_until_pool_state(pool, \"O's provisioning is in flight\", &provision_in_flight?/1), byte-identical to the synchronisation RT-4 already uses at :917-918. spawn_claimer/3 was READ before use (defined at :566-580) and does return the claiming pid, which assertion (3) needs -- no substitute was necessary. Defensive teardown is the file's own idiom (sandbox_schema_names/0 baseline + on_exit(drop_sandbox_schemas_created_since!/1)), the same two lines RT-4 opens with. (3) All three assertions are in the specified sorted-key-list EQUALITY form; `refute Map.has_key?/2` was not used anywhere, per the design's explicit ruling. (4) FAIL-THEN-PASS, run in a THROWAWAY git worktree at `scratch/iss0227-prefix` created with `git worktree add scratch/iss0227-prefix a64159d --detach` -- this checkout was never moved (no checkout/stash/reset), since SECURITY-REVIEWER is reading it concurrently. `git diff a64159d HEAD --stat -- test/` produced NO output, i.e. sandbox_pool_test.exs is byte-identical at a64159d and at HEAD, so copying the edited file in makes the pre-fix tree exactly 'a64159d's test file + RT-9' -- verified additionally by `diff` showing the copy differs from the pre-fix checkout by exactly the 45 added RT-9 lines and nothing else. Pre-fix lib/letflow/sandbox_pool.ex was confirmed to still carry both fields (grep: :160 `owner_pid: pid(),`, :535 `owner_pid: owner_pid,`, :572 `schema_name: op_schema_name(op)`, :592-593 the two op_schema_name/1 clauses). PRE-FIX, isolated run of RT-9 alone (`mix test test/letflow/sandbox_pool_test.exs:1194`): 'Result: 0/1 passed ... Failed: 1 test', assertion (1) failing with left: [:from, :owner_down?, :owner_pid, :owner_ref, :sandbox_id, :schema_name] vs right: [:from, :owner_down?, :owner_ref, :sandbox_id, :schema_name] -- i.e. exactly on :owner_pid, as the design's table predicts. Because ExUnit halts a test at its first failed assertion, assertion (2)'s pre-fix failure is not observable in the same run; it was therefore demonstrated by a SECOND pre-fix probe in the same throwaway tree with assertion (1) elided: 'Result: 0/1 passed', assertion (2) failing with left: [:op, :schema_name, :task_pid, :task_ref] vs right: [:op, :task_pid, :task_ref] -- exactly on :schema_name, as predicted. That probe existed only inside the throwaway worktree and is gone with it; the committed RT-9 carries all three assertions unmodified. POST-FIX, same isolated invocation in this worktree: 'Result: 1 passed, 16 excluded'. (5) FULL PAIR, post-fix, in this worktree: `mix test test/letflow/sandbox_pool_test.exs test/letflow/sandbox_pool_call_timeout_test.exs` -> 'Finished in 43.3 seconds ... Result: 21 passed' -- the prior 20 plus RT-9, zero failures, no bound moved, no existing test touched. `mix format --check-formatted test/letflow/sandbox_pool_test.exs` exits 0. (6) `git status --porcelain lib/ test/` -> a single line, ' M test/letflow/sandbox_pool_test.exs'. NOTHING in lib/. (7) `git worktree remove --force scratch/iss0227-prefix` succeeded; `git worktree list` no longer lists it and scratch/iss0227-prefix is gone from disk. Note recorded for ORCH, not a defect: this worktree's HEAD is now 7b880a1 (SECURITY-REVIEWER's Step 3c handoff commit + d607cf2), not the cbdda6f named in the task brief; cbdda6f is still in history and `git status --porcelain lib/` is clean, so the post-fix lib/ under test is the fix commit's.",
+    "artifacts_out": ["test/letflow/sandbox_pool_test.exs"],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "The pre-fix FULL-PAIR run inside the freshly-created throwaway worktree reported 16/21 with 5 failures: RT-9 (the intended one, on :owner_pid) plus 4 pre-existing/environmental failures (RT-6 at :982 on a sandbox-schema set difference, and 'release/1,2 ... drops the schema for real' at :365 returning {:error, :provision_failed}, with DBConnection 'client is still using a connection' / query_canceled noise). These are the known ISS-0107/ISS-0110-class connection-pressure failures of a second concurrently-connected mix test invocation against the shared 5472 database -- structurally not caused by RT-9, which adds no query of its own beyond the file's existing sandbox_schema_names/0 helper. They are recorded rather than folded into 'the known set': the fail-then-pass evidence above deliberately rests on the ISOLATED single-test runs, where RT-9 is the only case executing and the failure is unambiguous, not on that noisy full-pair pre-fix run. The post-fix full pair in this worktree was 21/21 clean."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "fix/WF03-ISS0227-20260822",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (WF-03 Step 4 gate). WF-03's ':105-117' non-existence escape hatch does NOT apply and was not used -- a genuine fail-then-pass exists and is on record, so no mutation testing is owed."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

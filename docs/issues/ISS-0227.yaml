@@ -1,0 +1,207 @@
+id: ISS-0227
+title: >
+  SandboxPool carries two write-only fields that are derivable from state it
+  already holds: `owner_pid` on the provision op, and `schema_name` on the
+  `in_flight` record
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0224-20260822
+discovered_at: "2026-08-22T02:11:00Z"
+severity: MINOR
+
+description: >
+  Raised by REVIEWER during WF03-ISS0224-20260822 (merge b8ebfb0), which declined
+  to mint an id itself per ISSUE_QUEUE.md and reported the finding to ORCH for
+  registration instead.
+
+  ISS-0224 reshaped `Letflow.SandboxPool`'s internals substantially -- async
+  provisioning through a single serialized DB worker, with new `db_queue` and
+  `in_flight` state. Two fields introduced by that reshape are written but never
+  read, and each duplicates a fact the pool already holds elsewhere:
+
+    1. `owner_pid` in `provision_op()` -- declared at lib/letflow/sandbox_pool.ex
+       :160, written at :535 in `reserve_slot/2`'s op literal. The same value is
+       already recoverable from the op's own `from` field as `elem(from, 0)`,
+       which is exactly how :527 computed it in the first place.
+    2. `schema_name` on the `in_flight` record -- declared in the state-shape
+       comment at :316, written at :572 in `pump/1` as `op_schema_name(op)`. The
+       op it was computed from is retained on the very same record as
+       `in_flight.op`, so the value is recoverable as
+       `op_schema_name(in_flight.op)`.
+
+  Write-only derivable state in a process that carries concurrency invariants is
+  a future correctness hazard rather than a present bug: the two copies can drift
+  apart under a later edit, and a reader arriving afterwards cannot tell which of
+  them is authoritative. `SandboxPool`'s invariants (INV-SP-A1..A7, the
+  owner-monitor reclaim mechanism, the same-process claim/release contract) are
+  precisely the kind that a stale second copy would corrupt silently.
+
+  No test caught this and none could have. Both fields are write-only, so no
+  observable behaviour depends on them and no black-box assertion can
+  distinguish their presence from their absence; the ISS-0224 suite's white-box
+  `:sys.get_state/1` probes assert on the specific fields they need (`.op`,
+  `.task_ref`, `.task_pid`) rather than on the whole state map, so a surplus key
+  is invisible to them too. Tellingly, the two tests that DO need the in-flight
+  schema name already derive it the intended way rather than reading the stored
+  copy -- test/letflow/sandbox_pool_test.exs:920 and :1007 both destructure
+  `{:provision, %{schema_name: o_schema}} = state.in_flight.op`.
+
+affected_files:
+  - lib/letflow/sandbox_pool.ex
+  - lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md
+  - test/letflow/sandbox_pool_test.exs
+  - docs/anti-patterns.md
+
+related:
+  - ISS-0224  # the run whose reshape introduced both fields
+
+queue_task_id: 227
+github_issue: 465
+
+status: resolved
+resolved_in_run: WF03-ISS0227-20260822
+resolved_at: "2026-08-22T05:08:55Z"
+resolution_note: >
+  Both fields removed, each replaced by a derivation at the point of use, with a
+  fail-then-pass regression test. Design:
+  lib/letflow/design/iss0227-sandbox-pool-dead-field-removal.md.
+
+  WRITE-ONLY CONFIRMED BEFORE ANYTHING WAS REMOVED, by three agents
+  independently. `owner_pid` appeared in code at exactly four lines, all in
+  sandbox_pool.ex: :160 (typespec), :527 (a local), :528 (that local read by
+  `Process.monitor/1`), :535 (the op-literal write). No read of the FIELD
+  anywhere -- the four `owner_pid` tokens in sandbox_pool_test.exs (:420, :443,
+  :444, :445) bind an unrelated local for a process the test spawns and kills.
+  For `in_flight.schema_name`, every `in_flight.<field>` access in code across
+  lib/ and test/ was enumerated: `grep -rohE --include=*.ex --include=*.exs
+  "in_flight[a-z_]*\.[a-z_]+" lib test | sort | uniq -c` returns 12 hits --
+  `.op` x7, `.task_ref` x4, `.task_pid` x1 -- and ZERO `.schema_name`. No map
+  pattern destructured it, and the module's only `Map.*` lookup is
+  `Map.fetch(state.active, sandbox_id)`.
+
+  WHAT CHANGED. lib/letflow/sandbox_pool.ex, five deletions plus two trailing
+  commas: `owner_pid` out of the `@typep provision_op` and out of
+  `reserve_slot/2`'s op literal; `schema_name` out of `pump/1`'s `in_flight`
+  record and out of the state-shape comment; `op_schema_name/1` deleted, having
+  become callerless. The local `owner_pid = elem(from, 0)` and
+  `owner_ref = Process.monitor(owner_pid)` are untouched -- only the redundant
+  stored copy went, never the monitor.
+
+  THE DERIVATIONS, and why each is equivalent. `owner_pid` -> `elem(p.from, 0)`:
+  `from` is retained on the op for its whole lifetime, `owner_pid` was computed
+  from that same `from` at that same instant in `reserve_slot/2`, and the single
+  in-place rewrite this module performs on a provision op is `owner_down?: true`,
+  which touches no other key -- so the derivation cannot drift from what the
+  field held. `in_flight.schema_name` -> the name off `in_flight.op`: the record
+  retains the very op the removed copy was computed from, both op kinds keep
+  `schema_name` in their typespecs, and both `in_flight` map-updates touch only
+  the `op` key. Every existing consumer already read it that way.
+
+  NO INVARIANT MOVED. REVIEWER (the filer) verified by reading, not by diff size:
+  `owner_ref` intact at all 20 of its sites; the owner monitor still established
+  at reservation, on the caller, strictly before any schema can exist; clause B's
+  ordered classification (cases 1, 2, 3, 4, 4b, 5) untouched with 4b still ahead
+  of 5; the serialized-DB-worker property untouched (`pump/1` tests `in_flight`
+  for nil as a whole field, which a smaller record cannot affect); and the
+  `db_queue` `2 x max_concurrent` bound still sound, because it counts OPS via
+  the `op` key and is inert to a deleted sibling key. No external behaviour
+  change, no new invariant, nothing in docs/migration/decisions/ re-decided.
+
+  SECURITY. SECURITY-REVIEWER was dispatched rather than skipped, because one
+  removed field was a schema name in a module that DROPs real Postgres schemas by
+  interpolated identifier -- "dead-code deletion" is not self-evidently safe
+  there. Its scope test came back out-of-scope on all five items, but it ran
+  INV-1, INV-7 and INV-8 in full anyway and answered the load-bearing question
+  negatively: no DROP can be redirected, widened or lost, because every
+  schema-naming path (`run_op/1`, `handle_worker_death/1`, the `owner_down?`
+  discard, case 4b's orphan rewrite, case 5's reclaim) takes the name off an op,
+  off the returned `%SandboxClaim{}`, or off `state.active` -- never off the
+  `in_flight` record. PASS.
+
+  REGRESSION TEST -- RT-9, test/letflow/sandbox_pool_test.exs:1194, appended to
+  the existing ISS-0224 RT block. Sorted-key-list EQUALITY on the provision op's
+  key set and on the `in_flight` record's, chosen over `refute Map.has_key?/2`
+  so the guard catches a removed field returning AND an undeclared one appearing;
+  plus assertions that both replacement derivations still reach their values.
+  FAIL-THEN-PASS, reproduced independently by TEST-DESIGN-VALIDATOR in its own
+  throwaway worktree rather than accepted from the report: pre-fix at a64159d,
+  RT-9 alone gives `Result: 0/1 passed`, assertion (1) failing with
+  `left: [:from, :owner_down?, :owner_pid, :owner_ref, :sandbox_id, :schema_name]`
+  against a right-hand side without `:owner_pid`. ExUnit halts at the first
+  failed assertion, so assertion (2)'s pre-fix failure was shown by a second
+  probe with (1) elided: `left: [:op, :schema_name, :task_pid, :task_ref]` vs
+  `right: [:op, :task_pid, :task_ref]`. Post-fix, all three pass.
+
+  MUTATION TESTING, not owed but done. WF-03's "pre-fix failure is non-existence"
+  clause does not apply here, so no mutant set was required; TEST-DESIGN-VALIDATOR
+  ran two anyway to prove RT-9 discriminates rather than merely passes. Re-adding
+  `owner_pid` to `reserve_slot/2`'s literal kills RT-9 on assertion (1) and no
+  other; re-adding `schema_name` to `pump/1`'s record kills it on assertion (2)
+  and no other. Both applied in a throwaway worktree, never in the checkout, and
+  reverted with the revert verified.
+
+  TEST EVIDENCE. Full suite via `TEST_PARALLEL_N=4 sh scripts/test_parallel.sh`
+  (REQ-114): `combined: 1546 tests, 5 properties, 0 failures (1551/1551 passed)`,
+  all four partitions exit 0. Scoped pair
+  `mix test test/letflow/sandbox_pool_test.exs
+  test/letflow/sandbox_pool_call_timeout_test.exs`: `Result: 21 passed` --
+  the pre-change baseline of 20 plus RT-9, no bound moved and no existing test
+  rewritten, weakened or deleted. `mix compile --warnings-as-errors` exits 0
+  (including with `--force`), which is what proves `op_schema_name/1` was
+  actually deleted rather than left orphaned. `mix format --check-formatted`
+  exits 0. GH #465's acceptance criterion 4 grep, code-file-restricted, returns
+  no output: no writer of either field remains in any .ex or .exs.
+
+  ONE RUN-LOCAL FAILURE, DIAGNOSED NOT SWEPT. TEST-RUNNER's first scoped-pair
+  attempt gave 19/21, failing RT-7 and RT-3 -- both on
+  `assert sandbox_schema_names() == baseline`, a GLOBAL query over every
+  `sandbox_%` schema rather than one scoped to the pool under test. Attributed to
+  a concurrent foreign `mix test` on the shared 5472 database on four grounds:
+  `pg_stat_activity` showed it connected; the run's own log carried
+  TenantSchemaReaper declining to sweep for exactly that reason (the ISS-0110
+  guard firing as designed); diffing the MapSets showed +1 schema appearing in
+  one test and -1 vanishing in the other, which third-party drift does and a leak
+  does not; and re-running alone, after polling until no mixtest connections
+  remained, gave 21 passed. The full-suite run had already exercised both tests
+  at 0 failures. Not attributable to ISS-0227. This is the known
+  ISS-0107/ISS-0110 class and warranted no code change.
+
+  SCOPE HELD. This removed the two fields the issue names and nothing else. No
+  module-wide dead-field audit of `drop_op()`, `db_queue` or `active` was
+  performed, and the design says so explicitly rather than implying completeness
+  -- reported to ORCH as a successor candidate instead of quietly expanding a
+  MINOR issue. REVIEWER separately recorded, declining to mint an id per
+  ISSUE_QUEUE.md, that `in_flight` and both op maps are bare maps rather than
+  structs, so re-adding a redundant key remains a legal warning-free edit and
+  RT-9 is the only thing standing between it and main; a struct with
+  `@enforce_keys` would make this defect class unrepresentable rather than merely
+  detectable. Left for ORCH to weigh.
+
+  TWO ANTI-PATTERN ENTRIES WRITTEN, on REVIEWER's ruling that both were
+  write-now rather than deferrable. (1) An amendment to
+  docs/anti-patterns.md:1195: this run's own AC4 grep is tripped by three media
+  the existing entry does not contemplate -- a live design doc, a superseded
+  design doc, and handoff JSON -- and for those the entry's stated remedy
+  INVERTS. You restrict the criterion by path; you do not reword the prose,
+  because a design that cannot name the field it removes is not a design and a
+  handoff is a frozen audit record. (2) A new entry: `elixirc
+  --warnings-as-errors` exits 0 on an unused private function while
+  `mix compile --warnings-as-errors` exits 1 on the same shape. Same flag name,
+  same warning text, opposite exit code -- and this project's merge gate is the
+  mix form. In this run that divergence decided whether `op_schema_name/1` had to
+  go.
+
+  GATE CHAIN. Step 0.5+1 ISSUE-FIXER diagnosis (ec0b60f; no prior matching
+  registry entry, not a recurrence) -> Step 2 CODE-DESIGNER (a64159d) -> Step 2b
+  CODE-DESIGN-VALIDATOR FAIL (dd37ae6) -> Step 2 rework (4f6bac5) -> Step 2b
+  round 2 PASS (233af04) -> Step 3 ELIXIR-DEV (cbdda6f) -> Step 3c
+  SECURITY-REVIEWER PASS (7b880a1) -> Step 3d REVIEWER PASS (66c6898) -> Step 4
+  TEST-DESIGNER RT-9 (ccf0f00) -> Step 4b TEST-DESIGN-VALIDATOR PASS (212f702)
+  -> Step 5 DOC-UPDATER (491363b) -> Step 6 TEST-RUNNER PASS.
+
+  ONE CORRECTION MADE TO THIS RUN'S OWN RECORD. The Step 1 diagnosis handoff
+  originally cited an unrestricted grep and a count of "32" in_flight field
+  accesses. The command was not code-file-restricted and its `-n` prefix defeats
+  `uniq -c` entirely, so neither figure was reproducible. Caught by
+  CODE-DESIGN-VALIDATOR (D3), corrected in d607cf2 to the code-restricted command
+  and its real count of 12, recorded as a `corrections` entry rather than a
+  silent edit. The conclusion the figure supported was and remains true.

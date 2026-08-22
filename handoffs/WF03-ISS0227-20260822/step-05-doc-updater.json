@@ -1,0 +1,60 @@
+{
+  "handoff_id": "3d7a91f4-6c28-4b0e-9a53-1f8c20d7e5a3",
+  "run_id": "WF03-ISS0227-20260822",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF03-ISS0227-20260822/step-05-doc-updater.json",
+  "created_at": "2026-08-22T04:38:00Z",
+  "started_at": "2026-08-22T04:38:00Z",
+  "completed_at": "2026-08-22T04:44:10Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["b1e9c2a7-4f30-4c8e-9d21-7a5c0e3f8b64"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0227-20260822/step-03d-reviewer.json",
+      "docs/anti-patterns.md",
+      "mix.exs",
+      "docs/agents/protocols/GIT_MERGE.md"
+    ],
+    "owned_modules": [
+      "docs/anti-patterns.md"
+    ]
+  },
+  "task": {
+    "description": "Apply the two docs/anti-patterns.md entries REVIEWER ruled must be written in this run (WF-03 Step 3d PASS, result.issues[0] REVIEWER-ISS0227-AP-A and result.issues[1] REVIEWER-ISS0227-AP-B). Entry A is an amendment to the existing entry at docs/anti-patterns.md:1195; entry B is a new top-level entry appended at end of file. Verify the cited line numbers still resolve at branch HEAD 66c6898, match the file's existing entry format, independently re-verify REVIEWER's checkable factual claims (entry A's grep counts; entry B's mix.exs and GIT_MERGE.md citations), and confirm the edit is a pure insertion with zero deletions. docs/anti-patterns.md is the only editable file: lib/, test/, docs/issues/ISS-0227.yaml and docs/status/* belong to concurrent agents. No commit, no push, no branch, no git checkout/stash/reset.",
+    "acceptance_criteria": [
+      "1. REVIEWER's cited line numbers are confirmed against the file at HEAD before any insertion; a stale citation is relocated by heading text, not by line number, and reported.",
+      "2. Both entries match the file's existing entry conventions (heading level, Found:/Correct alternative: shape, prose voice, hard-wrapped lines, CRLF endings).",
+      "3. Entry A's grep figures are re-measured at the commit being written against and corrected if they have moved; the correction is stated.",
+      "4. Entry B's two cited gates (mix.exs's letflow.check alias, docs/agents/protocols/GIT_MERGE.md:166) are opened and confirmed, and the measurement is stated as a measurement with its provenance.",
+      "5. git diff --numstat docs/anti-patterns.md shows zero deletions; no existing entry is reflowed, truncated or reordered.",
+      "6. No file other than docs/anti-patterns.md (and this handoff) is written."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Both entries applied to docs/anti-patterns.md as a pure insertion. `git diff --numstat docs/anti-patterns.md` = `63\t0` -- 63 insertions, ZERO deletions. File went 1268 -> 1331 lines. `git status --porcelain` shows only ` M docs/anti-patterns.md` from me (`?? docs/issues/ISS-0227.yaml` is ISSUE-FIXER's own untracked file, not mine).\n\n=== 1. CITATION CHECK BEFORE WRITING: all three of REVIEWER's line numbers resolve exactly, none stale ===\n\nAt HEAD 66c6898 (REVIEWER measured at 7b880a1; three further commits have landed since, but none touched this file): `grep -n` confirms :1195 is `## A grep-shaped acceptance criterion can be tripped by the module's own moduledoc describing the invariant`, :1222 is the closing 'Correct alternative' line ending `...independent facts about the same file.`, :1224 is `## A migration version can collide with a test fixture's hardcoded version constant, not just another migration file`, and the file was 1268 lines with that migration entry last. Every figure in REVIEWER's two `location` fields is correct as written. No relocation by heading text was needed.\n\n=== 2. INSERTION POINTS ACTUALLY USED ===\n\nENTRY A: inserted after original line 1222, before original line 1223 (the blank separator preceding the `## A migration version...` heading). Written as blank line + 31 lines of text, so entry A now occupies :1223-:1254, the `## A migration version...` heading moved 1224 -> 1256, and the amended grep-shaped entry now runs :1195-:1254 with its original body byte-identical at :1195-:1222.\n\nENTRY B: appended at end of file as blank line + 30 lines; the new `## ` heading is at :1302 and the file ends at :1331. Chronological-append convention honoured -- it follows the 2026-08-22 migration-version entry, which remains the second-to-last entry, unmoved in content.\n\n=== 3. RE-MEASURED GREP FIGURES: REVIEWER'S TWO COUNTS WERE STALE BY ONE EACH; CORRECTED ===\n\nREVIEWER measured at 7b880a1, before its own handoff and TEST-DESIGNER's step-04 handoff were committed. Re-run at 66c6898:\n\n  `git grep -lF \"in_flight.schema_name\"` -> FIVE tracked files, not four: handoffs/WF03-ISS0227-20260822/step-01-issue-fixer-diagnosis.json, .../step-03c-security-reviewer.json, .../step-03d-reviewer.json (newly committed since REVIEWER measured -- it could not see its own handoff), lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md, lib/letflow/design/iss0227-sandbox-pool-dead-field-removal.md.\n\n  The actual AC4 pattern, `git grep -lE \"owner_pid:|schema_name: op_schema_name|op_schema_name\"` -> SEVEN tracked files, not six: the two design documents plus FIVE handoff JSONs (step-01, step-02b, step-03, step-03d, step-04 -- step-04-test-designer.json also landed after REVIEWER measured).\n\n  Same pattern restricted to code, `git grep -nE \"owner_pid:|schema_name: op_schema_name|op_schema_name\" -- 'lib/**/*.ex' 'test/**/*.exs'` -> no output, exit 1. Zero lines of code, exactly as REVIEWER reported.\n\n  CHANGES MADE TO REVIEWER'S exact_text FOR ENTRY A, all figure corrections or format conformance, none altering its argument:\n    (a) 'six tracked files' -> 'seven tracked files'; 'four run handoff JSONs' -> 'five run handoff JSONs'.\n    (b) 'at branch HEAD' -> 'at branch HEAD `66c6898`' -- a bare 'HEAD' in a permanent document names a moving target, and this figure is demonstrably volatile.\n    (c) Added a clause noting the count only grows as the run commits further handoffs. This is the honest generalisation of why REVIEWER's own figure went stale within one gate, and it inoculates the number against the next reader finding it wrong.\n    (d) Added a parenthetical that `docs/anti-patterns.md` is now itself a third such medium, because THIS ENTRY quotes both removed identifiers in order to document them -- so writing the entry adds the file to its own match set. REVIEWER's 'Two of those media are ones the entry above does not contemplate' is kept verbatim and the third is stated separately rather than by editing its sentence.\n    (e) ASCII `--` rendered as the em dash `\\u2014` used throughout this file.\n  Nothing else in either exact_text was altered in wording; both were hard-wrapped to the file's ~90-column convention (line breaks only, no word changed), and the fenced code block was left unwrapped.\n\n=== 4. ENTRY B'S CITATIONS: BOTH CONFIRMED BY OPENING THEM ===\n\n  `mix.exs` -- the `\"letflow.check\": [...]` alias is at :64-69 with four steps: letflow.check_toolchain (:65), format --check-formatted (:66), `compile --warnings-as-errors` (:67), letflow.check.test (:68). REVIEWER's 'step 3 of mix.exs's letflow.check alias' is exactly right.\n\n  `docs/agents/protocols/GIT_MERGE.md:166` -- line 166 reads `mix compile --warnings-as-errors`, followed at :167 by the FAIL instruction and :168 by `mix test`. This is the merge gate as cited, on the nose.\n\n  On provenance: entry B as landed opens '**Found:** 2026-08-22, CODE-DESIGNER, ISS-0227 (`WF03-ISS0227-20260822`), recorded as W7/W8 and section 3.3 of lib/letflow/design/iss0227-sandbox-pool-dead-field-removal.md', and states the divergence as '**Measured both ways on the same two-clause unused-`defp` shape**' with both exit codes and the mix failure message quoted. That is a measurement with a named measurer, a run id and a document reference -- not folklore. I did not re-run the two probes myself: CODE-DESIGNER and CODE-DESIGN-VALIDATOR measured it independently, REVIEWER separately measured the post-removal `mix compile --warnings-as-errors` -> exit 0 in this worktree, and my brief did not ask for a fourth measurement. What I verified is that the entry ATTRIBUTES the measurement rather than asserting it bare, and that the two gates it names are real.\n\n=== 5. POST-WRITE VERIFICATION ===\n\n  `git diff --numstat docs/anti-patterns.md` -> `63\t0`. Zero deletions confirms no existing line was reflowed, truncated, reordered or rewritten -- a pure splice. Both inserted regions were re-read in full after writing. The amended entry's original body (:1195-:1222) is untouched; the migration-version entry that follows entry A is intact from its heading through its closing 'renumber around a newcomer.' line.\n\n  `grep -n \"^## \"` tail confirms heading order and that no heading was duplicated or lost: :1126, :1143, :1195 (amended entry, no new heading added inside it -- entry A is correctly bold-lead prose, not a `## `), :1256 (migration-version, shifted by the insertion), :1302 (entry B, new).\n\n  Line endings: `file docs/anti-patterns.md` -> 'UTF-8 text, with CRLF line terminators' -- single, uniform ending style, no mixed LF introduced by the splice (both inserts were converted to CRLF before splicing). Em dashes verified as UTF-8 (342 200 224), matching the rest of the file.\n\n  Scope: no lib/, no test/, no docs/status/*, no docs/issues/ISS-0227.yaml touched; no commit, no push, no branch, no checkout/stash/reset. Three scratch files used for the splice were removed and `git status --porcelain` confirms nothing stray is left behind.",
+    "artifacts_out": [
+      "docs/anti-patterns.md",
+      "handoffs/WF03-ISS0227-20260822/step-05-doc-updater.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "fix/WF03-ISS0227-20260822",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ISSUE-FIXER owns the commit. docs/anti-patterns.md is staged-ready in the working tree with 63 insertions / 0 deletions; both REVIEWER-ISS0227-AP-A and -AP-B are discharged. Note for whoever commits: entry A's figures are pinned to HEAD 66c6898 and name five handoff JSONs -- committing this handoff makes it a sixth match of the AC4 pattern, which the entry's own text anticipates ('a count that only grows as the run commits further handoffs'), so no re-edit is needed."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

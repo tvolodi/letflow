@@ -1031,3 +1031,47 @@ history:
       file alongside a deliberately started second invocation, and the file passes
       6/6 when none is connected. Anti-pattern added: a self-heal wired into `setup`
       must be total over the states it can encounter.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-08-22T05:10:23Z"
+    note: >
+      ISS-0227 resolved (WF03-ISS0227-20260822, queue task 227, GH#465).
+      Removed two write-only derivable fields from Letflow.SandboxPool's
+      in-memory state -- `owner_pid` from the provision op and `schema_name`
+      from the `in_flight` record -- plus `op_schema_name/1`, which the second
+      removal left callerless. Each value is now derived at the point of use
+      instead: `elem(p.from, 0)`, and the schema name off the op the
+      `in_flight` record already retains. Filed by REVIEWER during
+      WF03-ISS0224-20260822 as a future correctness hazard -- two copies of one
+      fact can drift, and a later reader cannot tell which is authoritative.
+      Write-only status was confirmed by three agents independently before
+      anything was removed. No invariant moved: `owner_ref` and the
+      owner-monitor reclaim mechanism, clause B's ordered classification, the
+      serialized DB worker and the `db_queue` bound are all untouched, and
+      there is no external behavior change. SECURITY-REVIEWER was dispatched
+      rather than skipped -- one removed field was a schema name in a module
+      that DROPs real Postgres schemas -- and confirmed no DROP path can be
+      redirected, widened or lost. Regression test RT-9
+      (test/letflow/sandbox_pool_test.exs:1194) uses sorted-key-set equality
+      rather than `refute Map.has_key?/2` so it guards drift in both
+      directions; its fail-then-pass was reproduced independently by
+      TEST-DESIGN-VALIDATOR in its own throwaway worktree, which additionally
+      ran two mutants (not owed under WF-03's non-existence clause) and found
+      each killed by exactly its assigned assertion. Full suite 1551/1551
+      passed via scripts/test_parallel.sh; scoped sandbox-pool pair 21 passed,
+      the prior 20 plus RT-9, no test bound moved. Gate chain: Step 1 diagnosis
+      (ec0b60f) -> Step 2 design (a64159d) -> Step 2b CODE-DESIGN-VALIDATOR
+      FAIL (dd37ae6, which overruled the design's refusal to specify a
+      regression test on the ground that no truthful ISSUE_QUEUE terminal
+      status would otherwise apply) -> rework (4f6bac5) -> Step 2b round 2 PASS
+      (233af04) -> Step 3 ELIXIR-DEV (cbdda6f) -> Step 3c SECURITY-REVIEWER
+      PASS (7b880a1) -> Step 3d REVIEWER PASS (66c6898) -> Step 4 TEST-DESIGNER
+      (ccf0f00) -> Step 4b TEST-DESIGN-VALIDATOR PASS (212f702) -> Step 5
+      DOC-UPDATER (491363b) -> Step 6 TEST-RUNNER PASS. Two anti-patterns
+      entries written on REVIEWER's write-now ruling: an amendment to the
+      grep-shaped-criterion entry (the remedy inverts for design docs and
+      handoffs -- restrict the path, do not reword the prose), and a new entry
+      recording that `elixirc --warnings-as-errors` exits 0 where `mix compile
+      --warnings-as-errors` exits 1 on the same unused private function.

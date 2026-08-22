@@ -1,0 +1,64 @@
+id: ISS-0277
+title: >
+  Three GitHub issues (#360, #366, #367) closed COMPLETED despite their own
+  closing comment saying the fix was not shipped
+discovered_by: ORCH (2026-08-22 GitHub/local-docs/queue reconciliation audit)
+discovered_in_run: reconciliation-audit-20260822
+discovered_at: 2026-08-22T14:48:50Z
+severity: MAJOR
+description: >
+  GH#360 (ISS-0108, sandbox-mode-leak-related identity test flake), GH#366
+  (ISS-0112, provisioned_tenant fixture duplication), and GH#367 (ISS-0113,
+  Sandbox.mode(:auto) global leak) were each closed with GitHub stateReason
+  COMPLETED, but each one's own last comment explicitly says the opposite:
+  "left open, not closed", "left open", "leaving this issue open -- the
+  defect is real". All three read as legitimate investigation-only or
+  reverted-fix runs that correctly declined to ship an unsafe change.
+affected_files:
+  - docs/agents/protocols/TASK_QUEUE.md
+  - docs/issues/ISS-0108.yaml
+  - docs/issues/ISS-0112.yaml
+  - docs/issues/ISS-0113.yaml
+github_issue: 548
+status: resolved
+resolved_in_run: WF03-ISS0277-20260822
+resolved_at: 2026-08-22T17:20:00Z
+resolution_note: >
+  Root cause: a WF-03 closeout mistake, not a queue/GitHub auto-close
+  mechanism. release_lock(status: "done") was called by ORCH for all three
+  runs because each run's Step Final gate PASSed cleanly (diagnosis
+  produced, or an attempted fix reverted with recorded test evidence, no
+  crash/escalation) -- but "done" was read as "the run finished" rather
+  than "the issue's defect is resolved". docs/agents/protocols/
+  TASK_QUEUE.md already documents that release_lock(status: "done")
+  best-effort-closes the linked GitHub Issue unconditionally, so all three
+  GitHub mirrors closed despite their own PR bodies (#436, #430/b17cd91,
+  #428) explicitly saying the work was investigation-only and the issue
+  should stay open.
+
+  Verified via `gh pr view` on all three PRs directly: #436's body says
+  "not closing, this is a diagnosis-only update... Left open"; #430's body
+  says "Progress on #366, not closing it... Status left open"; #428's body
+  says "Not closing #367 -- status stays open". None used a "Closes #N"
+  auto-close trailer.
+
+  docs/issues/ISS-0108.yaml, ISS-0112.yaml, ISS-0113.yaml were checked and
+  were already `status: open` -- the local records were never incorrectly
+  flipped, only the GitHub-visible mirror was wrong. No local YAML content
+  change needed beyond this record.
+
+  Fix applied:
+  1. GH#360, #366, #367 reopened, each with a comment citing this root
+     cause and pointing back to the still-open local issue record.
+  2. docs/agents/protocols/TASK_QUEUE.md's `release_lock` section (§4)
+     amended with an explicit rule: `status: "done"` means the underlying
+     issue/requirement is resolved, not merely that the run finished
+     cleanly. A run whose own final report describes a diagnosis, a
+     triage/re-scoping, or a reverted fix must be released WITHOUT a
+     status (hand-back path, stays `open`) so the GitHub mirror stays open
+     too. This is a protocol-doc fix, not a code change -- it prevents
+     future WF-03 runs from repeating this exact closeout mistake.
+
+  No other issues beyond these three were found exhibiting the same
+  pattern in this audit; if one turns up later it should cite this record
+  as the known root cause rather than re-diagnosing from scratch.

@@ -24,7 +24,16 @@ defmodule Letflow.Api.AuthorizationRoleRealmTest do
 
   alias Letflow.Api.Authorization
 
-  @realm_path Path.join([__DIR__, "..", "..", "..", "priv", "keycloak", "realms", "bpm-default.json"])
+  @realm_path Path.join([
+                __DIR__,
+                "..",
+                "..",
+                "..",
+                "priv",
+                "keycloak",
+                "realms",
+                "bpm-default.json"
+              ])
 
   describe "realm role list vs. Letflow.Api.Authorization.roles/0" do
     test "the realm file defines exactly the matrix's role set, no more, no fewer" do

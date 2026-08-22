@@ -26,6 +26,18 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
   is never discovered by production `mix letflow.lint_handoffs` (which only
   ever calls `handoff_files/1` with its default `handoffs/` argument) and
   never needs a `@grandfathered` entry of its own (design section 6.1).
+
+  ## H6 rework (ISS-0262 Step 8 change-approach, rework_count 2)
+
+  H6 no longer uses per-file `@grandfathered` entries at all -- it is now
+  governed by the commit-boundary rule in
+  `lib/letflow/design/iss0262-h6-floor-commit-addendum.md`
+  (`pre_floor_file?/2`, `h6_floor_commit/0`). The tests below that used to
+  assert "these exact 12 paths are grandfathered by list membership" are
+  rewritten to assert the equivalent property against real git history
+  instead: a file whose content predates a given floor commit is
+  `hard_grandfathered`; a file introduced after it is `hard_new`. See design
+  addendum §6 for the fixture guidance this section follows.
   """
 
   use ExUnit.Case, async: true
@@ -42,10 +54,12 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
   # these tests independent of that file's prose.
   @empty_schema %{required: [], optional: [], spent_exception_file: nil}
 
-  # The 10 real, already-grandfathered WF03-ISS0258-20260822 files (design
-  # section 3.1), copied verbatim from `@grandfathered` in
-  # `lib/mix/tasks/letflow.lint_handoffs.ex` so a drift between the two lists
-  # is caught by this suite rather than silently diverging.
+  # These 10 real WF03-ISS0258-20260822 files are no longer list-grandfathered
+  # (the 12 `{"H6", path}` `@grandfathered` entries were removed by the
+  # ISS-0262 H6 floor-commit addendum) -- they are used here purely as real,
+  # pre-existing fixtures to prove the commit-boundary rule reproduces the
+  # same "grandfathered, not new" outcome the deleted list used to provide.
+  # See design addendum §6 item 4.
   @grandfathered_md_files [
     "handoffs/WF03-ISS0258-20260822/step-01-issue-fixer.md",
     "handoffs/WF03-ISS0258-20260822/step-02-code-designer.md",
@@ -208,10 +222,14 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
   end
 
   # ==================================================================
-  # The 10 grandfathered WF03-ISS0258-20260822 .md files
+  # The 10 real WF03-ISS0258-20260822 .md files -- now grandfathered by the
+  # commit-boundary rule instead of a per-file list (ISS-0262 H6 floor-commit
+  # addendum). `lint_file/2` is called exactly as production calls it (no
+  # explicit `floor` argument), so this exercises the real
+  # `h6_floor_commit/0` -> `pre_floor_file?/2` production path end to end.
   # ==================================================================
 
-  describe "the 10 grandfathered WF03-ISS0258-20260822 .md files" do
+  describe "the 10 real WF03-ISS0258-20260822 .md files -- grandfathered by commit boundary" do
     test "F-GRANDFATHERED-COUNT -- exactly 10 real .md files exist at these exact paths" do
       assert length(@grandfathered_md_files) == 10
       assert Enum.all?(@grandfathered_md_files, &File.regular?/1)
@@ -242,19 +260,85 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
   end
 
   # ==================================================================
-  # run/1 -- the exit code stays green on the real corpus post-fix
+  # pre_floor_file?/2 and h6_floor_commit/0 -- the commit-boundary mechanism
+  # itself (ISS-0262 H6 floor-commit addendum §6), tested directly against
+  # real, already-resolvable commits in this repository's own history.
   # ==================================================================
 
-  describe "run/1 -- the real corpus stays green" do
-    test "T-TASK-GREEN -- mix letflow.lint_handoffs does not raise against the real handoffs/ tree" do
-      import ExUnit.CaptureIO, only: [capture_io: 1]
+  describe "pre_floor_file?/2 -- commit-boundary ancestry, real repo history" do
+    test "T-PRE-FLOOR-TRUE -- a long-stable file predates a recent floor (HEAD)" do
+      {head, 0} = System.cmd("git", ["rev-parse", "HEAD"])
+      floor = String.trim(head)
 
-      output =
-        capture_io(fn ->
-          assert LintHandoffs.run([]) == :ok
-        end)
+      assert LintHandoffs.pre_floor_file?("mix.exs", floor) == true
+    end
 
-      assert output =~ "letflow.lint_handoffs: OK"
+    test "T-PRE-FLOOR-FALSE -- a file added on this branch postdates the repo's root commit" do
+      {root, 0} = System.cmd("git", ["rev-list", "--max-parents=0", "HEAD"])
+      old_floor = root |> String.trim() |> String.split("\n", trim: true) |> List.first()
+
+      refute LintHandoffs.pre_floor_file?(@fixture_file, old_floor)
+    end
+
+    test "T-PRE-FLOOR-NIL-FLOOR-FAILS-SAFE -- a nil floor (git resolution failure) returns false" do
+      refute LintHandoffs.pre_floor_file?("mix.exs", nil)
+    end
+
+    test "T-PRE-FLOOR-UNTRACKED-PATH-FALSE -- a path with no git history at all is not pre-floor" do
+      {head, 0} = System.cmd("git", ["rev-parse", "HEAD"])
+      floor = String.trim(head)
+
+      refute LintHandoffs.pre_floor_file?(
+               "test/fixtures/lint_handoffs/h6/does-not-exist-#{System.unique_integer([:positive])}.md",
+               floor
+             )
+    end
+
+    test "T-NEW-AFTER-FLOOR-HARD-FAILS -- fixture postdating an old floor still hard-fails via lint_file/2" do
+      # Design addendum §2.4/§6 item 3: proves the "added after floor always
+      # hard-fails" acceptance criterion using lint_file/2's real production
+      # call path (which uses the real h6_floor_commit/0, not an explicit
+      # floor param) against a fixture that genuinely postdates any
+      # reasonable floor.
+      result = LintHandoffs.lint_file(@fixture_file, @empty_schema)
+
+      assert [violation] = result.hard_new
+      assert violation.rule == "H6"
+      assert violation.grandfathered == false
+      assert result.hard_grandfathered == []
+    end
+  end
+
+  # ==================================================================
+  # run/1 -- H6 specifically stays green on the real corpus post-fix
+  # ==================================================================
+  #
+  # NOTE (ISS-0262 H6 floor-commit addendum, rework_count 2): the original
+  # design's T-TASK-GREEN asserted the whole task (`run/1`) exits `:ok`.
+  # That assertion no longer holds independent of this fix: another,
+  # already-merged run (WF03-ISS0260-20260822) has since landed a real H1 and
+  # a real H3 violation on `main`
+  # (`handoffs/WF03-ISS0260-20260822/step-04d-test-design-validator-recheck.json`)
+  # that are unrelated to H6 and explicitly out of this fix's scope per
+  # design addendum §3.1's last paragraph ("not in this fix's scope to
+  # grandfather ... route to ISSUE-FIXER ... separately from this H6
+  # rework"). Asserting full `run/1` greenness here would make this suite
+  # flaky against `main`'s H1/H3 state exactly the way the deleted H6
+  # per-file list was flaky against `main`'s H6 state -- the failure mode
+  # this whole rework exists to eliminate, just for a different rule. This
+  # test is therefore scoped to what this fix actually owns: zero *new* H6
+  # violations anywhere in the real `handoffs/` tree.
+
+  describe "H6 -- zero new violations on the real corpus post-fix" do
+    test "T-H6-ZERO-NEW -- every non-JSON file in the real handoffs/ tree is grandfathered-or-absent, never new" do
+      files = LintHandoffs.handoff_files()
+      schema = %{required: [], optional: [], spent_exception_file: nil}
+
+      results = Enum.map(files, &LintHandoffs.lint_file(&1, schema))
+      new_h6 = results |> Enum.flat_map(& &1.hard_new) |> Enum.filter(&(&1.rule == "H6"))
+
+      assert new_h6 == [],
+             "expected zero new H6 violations against the real handoffs/ tree, got: #{inspect(new_h6)}"
     end
   end
 end

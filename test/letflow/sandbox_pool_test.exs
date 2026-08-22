@@ -556,11 +556,19 @@ defmodule Letflow.SandboxPoolTest do
   # `elapsed_ms` is measured with System.monotonic_time/1 INSIDE the spawned process,
   # around the claim/2 call only, so it is that caller's own observed claim latency and
   # carries no rendezvous cost.
+  #
+  # `{:claiming, label}` is sent in the instruction immediately BEFORE claim/2, and is
+  # this file's rendezvous primitive for "this claimer's $gen_call is about to reach the
+  # pool" (see `await_claiming!/1` and RT-2 for why a message rather than a polled pool
+  # state). It is deliberately outside the monotonic_time/1 bracket so it cannot inflate
+  # `elapsed_ms`: it is sent before `started_at` is read, so the measured latency is
+  # still the claim/2 call alone and nothing about what any case asserts changes.
   defp spawn_claimer(pool, label, max_wait_ms) do
     test_pid = self()
 
     pid =
       spawn(fn ->
+        send(test_pid, {:claiming, label})
         started_at = System.monotonic_time(:millisecond)
         result = SandboxPool.claim(max_wait_ms, pool)
         elapsed_ms = System.monotonic_time(:millisecond) - started_at
@@ -570,6 +578,27 @@ defmodule Letflow.SandboxPoolTest do
 
     on_exit(fn -> if Process.alive?(pid), do: Process.exit(pid, :kill) end)
     pid
+  end
+
+  # Blocks until `label`'s claimer has reached the instruction before its claim/2 call.
+  #
+  # Bounded by @rendezvous_slack_ms rather than by a claim- or release-derived timeout,
+  # and that is the point: this rendezvous is gated on NOTHING the pool does. It waits
+  # for a spawn to be scheduled and one local `send` -- precisely the "one BEAM message
+  # hop" @rendezvous_slack_ms is already defined as covering. Using a
+  # provision_timeout_ms-derived bound here would be 44x more patience than the operation
+  # can possibly need and would hide a genuinely stuck spawn for most of a minute. No new
+  # constant is introduced (design §10.4).
+  defp await_claiming!(label) do
+    receive do
+      {:claiming, ^label} -> :ok
+    after
+      @rendezvous_slack_ms ->
+        flunk(
+          "claimer #{inspect(label)} was never scheduled: no {:claiming, #{inspect(label)}} " <>
+            "within #{@rendezvous_slack_ms} ms of spawn_claimer/3 returning."
+        )
+    end
   end
 
   defp claimer_loop(pool, label, test_pid, claim_result) do
@@ -684,13 +713,22 @@ defmodule Letflow.SandboxPoolTest do
                      claim_rendezvous_timeout(0)
 
       # W1 first, confirmed parked, THEN W2 -- so W2 is genuinely behind W1 in the FIFO
-      # queue, and so the window between W2 parking and the test observing it is one
-      # poll interval rather than however long two spawns happen to take.
+      # queue: W1 is observed IN `waiting` before W2 is spawned, so W2's $gen_call is
+      # strictly later in the pool's mailbox. Polling for W1's parked state is safe
+      # because it is not ephemeral (W1 asked for 60_000 ms).
       w1 = spawn_claimer(pool, :w1, 60_000)
+      await_claiming!(:w1)
       wait_until_pool_state(pool, "W1 parked", &(waiter_count(&1) == 1))
 
+      # W2's parking is NOT polled for. `waiter_count == 2` exists only for W2's own
+      # 50 ms before its {:claim_timeout, _} removes it again, so a poller that misses
+      # that window spins to its deadline and flunks a perfectly healthy pool -- see
+      # RT-2 for the full argument and the reproduction. Nothing in this case needs to
+      # catch W2 mid-park in the first place: `t_w2 >= 50` below is what proves it
+      # parked, and that is a measurement taken inside W2 itself, not an observation
+      # window the test has to hit.
       _w2 = spawn_claimer(pool, :w2, 50)
-      wait_until_pool_state(pool, "W2 parked behind W1", &(waiter_count(&1) == 2))
+      await_claiming!(:w2)
 
       assert_receive {:claimed, :w2, w2_result, t_w2}, claim_rendezvous_timeout(50)
       assert w2_result == {:error, :sandbox_unavailable}
@@ -730,11 +768,49 @@ defmodule Letflow.SandboxPoolTest do
       o = spawn_claimer(pool, :o, 0)
       assert_receive {:claimed, :o, {:ok, %SandboxClaim{}}, _t_o}, claim_rendezvous_timeout(0)
 
+      # W1 is parked FIRST and confirmed parked, so W2's $gen_call is strictly later in
+      # the pool's mailbox and W1 is the queue head that O's release promotes. Polling is
+      # safe here and only here: W1 asked for 60_000 ms, so its parked state is not
+      # ephemeral.
       w1 = spawn_claimer(pool, :w1, 60_000)
+      await_claiming!(:w1)
       wait_until_pool_state(pool, "W1 parked", &(waiter_count(&1) == 1))
 
+      # W2's rendezvous is a MESSAGE, not a polled pool state, and this is load-bearing
+      # rather than cosmetic. `waiter_count == 2` is true only for W2's own 50 ms: after
+      # that W2's {:claim_timeout, _} removes it from `waiting` again. A poller aimed at
+      # a state that lives 50 ms is a poller that can miss the state entirely and then
+      # flunk an idle, healthy pool -- observed once in a full-suite run that overlapped
+      # a second concurrent suite on this host, and reproduced deterministically by
+      # delaying this very poll by 200 ms (identical message, identical state shape: one
+      # waiter left in `waiting`, in_flight nil, db_queue empty). `{:claiming, :w2}` is
+      # sent by W2 in the instruction before claim/2 and is a message, so it cannot
+      # evaporate no matter how late the test process is scheduled.
+      #
+      # The barrier is TIGHTER than the poll it replaces, not looser. When it arrives,
+      # W2's $gen_call is a few microseconds of BEAM work away from the pool's mailbox,
+      # so releasing O right here is the closest this test can get to "release the
+      # instant W2's claim lands". The old poll could not fire sooner than one 5 ms
+      # interval after W2 parked, and burned part of W2's 50 ms window while running --
+      # it was actively making the race worse.
+      #
+      # And it is SUFFICIENT, not merely tight: (d) still discriminates under either
+      # order in which W2's claim and O's release reach the pool.
+      #   * W2's claim first (the canonical interleaving, and what the old poll asserted):
+      #     W2 parks behind W1; O's release then promotes W1. Pre-fix t_w2 == t_w1.
+      #   * O's release first: the pool promotes W1 and starts provisioning, and W2's
+      #     claim lands during it. Post-fix the pool is responsive, so W2 parks and is
+      #     answered on its own 50 ms timer. Pre-fix W2's claim sits UNREAD in the
+      #     blocked mailbox for the remainder of W1's provisioning and only then begins
+      #     its 50 ms wait, so t_w2 > t_w1 and (d) is red a fortiori.
+      # The one interleaving that would go vacuously green pre-fix -- W2's claim landing
+      # only after W1's provisioning has already finished -- requires W2 to be preempted
+      # between two adjacent sends for longer than an entire provisioning (>= 411 ms,
+      # design §10.4). That is 8x the window that actually broke, and unlike that window
+      # it WIDENS under load rather than narrowing, because contention lengthens a
+      # provisioning while it leaves a Process.send_after wall-clock timer untouched.
       _w2 = spawn_claimer(pool, :w2, 50)
-      wait_until_pool_state(pool, "W2 parked behind W1", &(waiter_count(&1) == 2))
+      await_claiming!(:w2)
 
       send(o, :release)
       assert_receive {:released, :o, :ok}, pool_op_rendezvous_timeout()
@@ -757,6 +833,17 @@ defmodule Letflow.SandboxPoolTest do
       # (b)
       assert {:ok, %SandboxClaim{}} = w1_result
       assert w2_result == {:error, :sandbox_unavailable}
+
+      # (b'), NEW alongside the rendezvous change and strictly a strengthening: W2 really
+      # did park and really did serve out its own window, rather than being rejected on
+      # arrival. This is what the deleted `waiter_count == 2` poll was incidentally
+      # evidencing, restored as a durable measurement taken inside W2 (RT-1 already
+      # asserts the identical thing). It cannot substitute for (d) and is not the
+      # fail-first: it holds pre-fix too, where W2 also waits at least its 50 ms.
+      assert t_w2 >= 50,
+             "RT-2(b') failed: t_w2 = #{t_w2} ms is below W2's own 50 ms max_wait_ms, " <>
+               "so W2 was answered without ever parking and (d) is measuring something " <>
+               "other than a parked waiter's timer."
 
       # (d) THE LOAD-BEARING FAIL-FIRST. A ratio of two quantities measured inside this
       # same test on this same host, so it needs no constant and no calibration. Pre-fix

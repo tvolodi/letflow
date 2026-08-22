@@ -340,3 +340,23 @@ history:
       test asserting header absence (not a status code). No changes under
       web/ (git diff --stat -- web/ empty throughout). No FAIL-then-fix
       cycles this run -- every gate passed on first attempt.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-08-22T10:35:22Z"
+    note: >
+      WF03-ISS0265-20260822 (queue task 265, GH#523) done. Fixed the H1/H3
+      handoff-lint violation on
+      handoffs/WF03-ISS0260-20260822/step-04d-test-design-validator-recheck.json
+      (introduced by commit dff2270/PR #515, first surfaced during
+      WF03-ISS0262-20260822 but structurally unrelated to it). Chose to
+      reshape the file to the standard handoff envelope rather than
+      grandfather it, since it was a one-off deviation -- sibling files
+      step-04b/04c/04e in the same run already used the standard schema.
+      Every original field/value was preserved unchanged, only re-nested
+      under `result`. `mix letflow.lint_handoffs`: FAIL -- 2 new violations
+      before, OK -- 0 new violations (811 files, 25 grandfathered) after.
+      Scoped test test/mix/tasks/letflow.lint_handoffs_test.exs: 17/20
+      passed both before and after (confirmed via git stash), same 3
+      pre-existing H6 floor-commit failures unrelated to this change (diff
+      touches only the one handoffs/ JSON file, never lib/ or test/).

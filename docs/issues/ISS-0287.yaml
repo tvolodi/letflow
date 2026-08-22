@@ -31,7 +31,26 @@ affected_files:
   - scripts/test_parallel.sh
 queue_task_id: 287
 github_issue: 569
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0287-20260823
+resolved_at: "2026-08-22T23:18:01Z"
+resolution: >
+  Root cause confirmed: scripts/test_parallel.sh's connection-pool headroom clamp
+  formula did not budget for Postgres's superuser_reserved_connections (3) or for
+  an unbudgeted raw non-pooled connection opened by test/support/tenant_schema_reaper_test.exs's
+  ISS-0110 guard test, which could collide with test/letflow/engine_concurrency_test.exs's
+  deliberate full-pool-saturation test under load -- eating into the headroom the
+  formula assumed was free and producing intermittent FATAL 53300 / DBConnection
+  checkout-timeout failures at documented TEST_PARALLEL_N=4. Fixed by adding two
+  env knobs (TEST_SUPERUSER_RESERVED, TEST_NONPOOL_CONNECTION_RESERVE) to the clamp
+  formula. Design: lib/letflow/design/iss0287-connection-pool-headroom-fix.md.
+  Fix commit: 39c7364 (fix(ISS-0287): account for superuser-reserved and non-pooled
+  connections in test_parallel.sh pool clamp). Decision-record addendum: commit
+  39c7364 also updates docs/migration/decisions/0009-test-parallel-pool-sizing.md
+  with the arithmetic. Regression test: test/scripts/test_parallel_pool_sizing_test.sh
+  (5/5 passing; commits ca9f65b and afc7c3e), proven fail-then-pass against the
+  pre-fix commit. Full-suite re-verification by TEST-RUNNER: 1898/1898 passing,
+  0 failures.
 related:
   - ISS-0219  # start-of-run auto-derived-N crash, different mechanism
   - ISS-0220

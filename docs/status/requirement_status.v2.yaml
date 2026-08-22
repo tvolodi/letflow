@@ -949,6 +949,7 @@ history:
       REQ-115..135, and `docs/requirements.yaml` is byte-identical to main on this
       branch. Two follow-ups recorded for ORCH to register: `lint_handoffs` wired
       into no gate, and the deferred bucket having no expiry.
+
   - req: REQ-077
     event: blocked
     agent: ELIXIR-DEV
@@ -1075,3 +1076,40 @@ history:
       handoffs -- restrict the path, do not reword the prose), and a new entry
       recording that `elixirc --warnings-as-errors` exits 0 where `mix compile
       --warnings-as-errors` exits 1 on the same unused private function.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-22T06:40:00Z"
+    note: >
+      ISS-0258 resolved in WF03-ISS0258-20260822 (queue task 258, GH#500) -- the second
+      of the two follow-ups ISS-0231 recorded: the DEFERRED bucket in
+      `letflow.check_requirements_registration` accepts any non-empty rationale and
+      never expires, so a requirement can sit deferred indefinitely under a green gate.
+      Fixed by a new, deliberately separate detector,
+      `lib/mix/tasks/letflow.check_deferral_staleness.ex`, wired as step 3 of the
+      `letflow.check` alias (after registration, before format/compile/test, design
+      D5's ordering). Staleness is a cross-entry aggregate (every sibling requirement's
+      status in the same stage) that the per-entry registration classifier cannot
+      express, and the registration module's own moduledoc states its deferred bucket
+      "never gates" by written contract -- a gating rule could not be added there
+      without contradicting that sentence (design D3, independently re-derived at the
+      design-validation gate with two added reasons). A `blocked_by` hatch lets a
+      deferral cite a specific blocker and stay legitimate until that blocker's status
+      expires the hatch; a self-referencing hatch is rejected as unfalsifiable.
+      TEST-DESIGN-VALIDATOR's first pass (step-04b) found the one gap that mattered: the
+      `mix.exs` alias line satisfying AC2 was itself untested -- deleting it left
+      117/117 green, the identical "built and left unwired" failure this issue exists to
+      forbid. Closed with two added tests and independently re-verified on regate
+      (step-04c): the same delete-the-alias-line mutant now goes from 0 red to 2 red.
+      Gates: SECURITY-REVIEWER OUT_OF_SCOPE (no tenant-data path), REVIEWER PASS (0
+      MAJOR, 3 MINOR, all accepted-as-is -- a live-corpus foot-gun on
+      `deferral_count == 0`, a single-detector self-license hatch, and a live activity
+      snapshot pinned to rot by ruling, design OQ-5), TEST-DESIGN-VALIDATOR PASS on
+      regate. Regression suite: 57 tests, 0 failures. Full suite (`scripts/test_parallel.sh`,
+      4-way): 1638/1638 passed, 0 failures. Two in-run process corrections recorded
+      in writing rather than silently: a MISSING-ELIXIR-DEV-handoff record was filed on
+      a wrong presumption the agent had died mid-task (it had finished) and was
+      retracted by name, not deleted (`68a4f79`, `7552a12`); a stale "zero blocked
+      requirements" design measurement was refreshed by addendum, not edited in place.
+      Historical-corpus count corrected mid-run from an initial wrong "21 S8-scoped"
+      reading to the real 8 S4 + 9 S8 + 4 S9 split.

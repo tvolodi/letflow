@@ -55,7 +55,7 @@ volumes:
     path: docs/status/requirement_status.v2.yaml
     status: current
     opened: 2026-08-21
-    entries: 31
+    entries: 32
     note: >
       Opened by ISS-0119's fix. Successor to volume 1. `entries:` corrected
       2026-08-21 (ISS-0199, run WF03-ISS0199-20260821) from a stale declared 0
@@ -108,6 +108,12 @@ volumes:
       that attempt produced -- 29 was right when it was written and wrong an
       hour later. Recount from the composed file every time; never increment
       the previous attempt's number.
+      Incremented to 32 by WF03-ISS0258-20260822's Step Final rebase, which
+      had appended its own done-event against a base declaring 29 and
+      computed 30; its rebase found main advanced to 31 (ISS-0227) and
+      re-derived 32 from the composed file (32 on-disk `- req:` entries),
+      per this note's own stated rule -- recount from the composed file,
+      never carry the previous attempt's number forward.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

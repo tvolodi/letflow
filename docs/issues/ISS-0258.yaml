@@ -65,4 +65,64 @@ github_issue_note: >
   issue (500) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
   deliberately not called separately.
 
-status: open
+status: resolved
+resolved_at: "2026-08-22T06:35:00Z"
+resolved_in_run: WF03-ISS0258-20260822
+resolution_note: >
+  Fixed by `lib/mix/tasks/letflow.check_deferral_staleness.ex`, a new detector, plus a
+  one-line addition to `mix.exs`'s `letflow.check` alias.
+
+  AC1 (staleness mechanism, distinct from legitimate deferral). The detector reads every
+  DEFERRED entry's stage and compares it against a per-stage activity table built from
+  every requirement's own `status` (`@active_statuses [:done, :in_progress, :blocked]`,
+  derived from a re-measured historical corpus of 8 S4 + 9 S8 + 4 S9
+  deferrals -- corrected mid-run by the ISSUE-FIXER step from an earlier wrong "21
+  S8-scoped" reading, see `handoffs/WF03-ISS0258-20260822/step-01-issue-fixer.md`). A
+  deferral is STALE iff its own stage is active; a deferral pending a not-yet-active
+  stage renders on the same roster but is explicitly ruled legitimate and never gates.
+  A `blocked_by` hatch lets a deferral cite a specific blocking requirement and stay
+  legitimate until that blocker's own status expires the hatch (also covers a
+  self-referencing hatch as unfalsifiable-and-rejected, and does not treat a self-loop
+  as forgiven by the S6 cycle rule -- recorded as an accepted single-detector risk,
+  MINOR-2 below).
+
+  AC2 (wired into an actual gate). `letflow.check_deferral_staleness` is step 3 of the
+  `letflow.check` alias in `mix.exs`, after `letflow.check_requirements_registration`
+  and before `format --check-formatted`, per design D5's ordering rule (report a stale
+  deferral in a second, before the slow compile/test steps run). TEST-DESIGN-VALIDATOR's
+  first pass (`step-04b`) caught that this exact wiring line was itself unprotected --
+  deleting it left 117/117 green, the identical "built and left unwired" failure this
+  issue exists to forbid, one level up. Closed by two added tests (`T-ALIAS-WIRED`,
+  `T-ALIAS-SLOT`) asserting alias membership and relative ordering; re-verified
+  independently in `step-04c` by re-applying the same mutant (delete the alias line) and
+  confirming it now goes from 0 red / 117 green to 2 red / 55 green -- mutant killed.
+
+  AC3 (separate detector, not an extension). Design §D3, re-derived independently at the
+  design-validation gate: different data shape (per-entry classification vs. a
+  cross-entry aggregate over sibling statuses), different gating semantics (the
+  registration module's own moduledoc states its deferred bucket "never gates" by
+  written contract -- adding a gating rule there would contradict that sentence),
+  different failure class, and two added reasons (different blast radius on a red run;
+  merging would couple the two modules' independent mutant sets, which matters because
+  the mutant set is this fix's only regression value).
+
+  Verification: 54-test regression suite (`test/mix/tasks/letflow_check_deferral_staleness_test.exs`),
+  grown to 57 by the MAJOR-1 rework, TEST-DESIGN-VALIDATOR PASS on regate (18 mutants
+  applied across both passes, 18 killed, plus the newly-added alias mutant also killed --
+  0 survivors). SECURITY-REVIEWER: OUT_OF_SCOPE, applied to the real diff (no tenant-data
+  path -- a Mix task reading `docs/requirements.yaml` and `mix.exs`, no HTTP surface, no
+  migration, no secret). REVIEWER: PASS, 0 MAJOR, 3 MINOR (a live-corpus foot-gun on
+  `deferral_count == 0` that will legitimately go red the first time anyone writes a real
+  deferral -- accepted as a documented, self-explaining foot-gun rather than fixed now; a
+  single-detector self-license hatch, MINOR-2 above; and a deliberately pinned
+  "S0..S4 active / S8,S9 inactive" live snapshot that will rot by ruling, not by
+  oversight, design OQ-5). Full suite: 1638/1638 passed (`scripts/test_parallel.sh`,
+  4-way partition), 0 failures.
+
+  Two in-run process errors, corrected in writing rather than silently: a prior session
+  presumed ELIXIR-DEV's in-progress handoff was abandoned (agent "died") and filed a
+  MISSING-handoff record; ELIXIR-DEV had in fact finished, so the record was retracted by
+  name (`68a4f79`, `7552a12`) rather than deleted, per `docs/anti-patterns.md` line 1143's
+  rule against silently correcting a past claim. Separately, a stale "zero blocked
+  requirements" measurement in the design doc was refreshed with an addendum rather than
+  edited in place, for the same reason.

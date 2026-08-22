@@ -1,0 +1,52 @@
+{
+  "handoff_id": "0f46eec3-ebc4-4dbc-897c-b69d5232aed9",
+  "run_id": "WF03-ISS0262-20260822",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0262-20260822/step-04c-test-runner.json",
+  "created_at": "2026-08-22T07:58:47Z",
+  "started_at": "2026-08-22T07:58:47Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/mix/tasks/letflow.lint_handoffs_test.exs",
+      "handoffs/WF03-ISS0262-20260822/step-04b-test-design-validator.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Run the FULL mix test suite (not just the new file) on branch feature/WF03-ISS0262-20260822, plus mix letflow.lint_handoffs and mix letflow.check if it exists as an alias (this project wired lint_handoffs into it per ISS-0257). Quote real output. Diagnose any failure: attribute it to this branch's change, or to a pre-existing/flaky condition unrelated to this diff (compare against known flaky baselines mentioned in recent orchestrator.log entries, e.g. IdentityMigrationTest flakiness, if that pattern recurs).",
+    "acceptance_criteria": [
+      "Full mix test run executed for real, pass/fail counts quoted",
+      "mix letflow.lint_handoffs run for real on this branch, output quoted, exits 0",
+      "Any failing test attributed to a specific cause (this branch vs. pre-existing) with evidence, not assumption",
+      "PASS/FAIL verdict, next_action naming ISSUE-FIXER (Step 5, close issue) on PASS"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

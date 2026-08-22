@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0262-20260822/step-06-issue-fixer-rework.json",
   "created_at": "2026-08-22T08:52:28Z",
   "started_at": "2026-08-22T08:52:28Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-22T09:05:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -36,18 +36,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
+    "summary": "Not a redispatch of the original ISS-0262 diagnosis -- root cause unchanged (H6 discovery was correctly broadened; the grandfather list is per-file, not per-run, so files landing on main after this branch's design step ran are structurally invisible to that list until named). This is disposition confirmation for 2 newly-discovered files under the already-approved rule. Verified by real filesystem enumeration (`ls handoffs/WF03-ISS0261-20260822/`, confirmed by `mix letflow.lint_handoffs` actually run against the rebased tree) that exactly 2 non-JSON files exist there: handoffs/WF03-ISS0261-20260822/step-01-issue-fixer.md and handoffs/WF03-ISS0261-20260822/step-03c-reviewer.md -- both currently reported as NEW HARD VIOLATIONS (H6), not yet grandfathered. Confirmed WF03-ISS0261-20260822 is fully closed, not in-flight: docs/issues/ISS-0261.yaml has status: resolved, resolved_in_run: WF03-ISS0261-20260822, resolved_at 2026-08-22T07:30:00Z; its PR #513 shows state MERGED, mergedAt 2026-08-22T07:27:27Z, merged as commit fb5c251 (the exact tip this branch rebased onto); handoffs/registry.json has zero occurrences of WF03-ISS0261-20260822 (fully archived out of the active registry, consistent with a closed run); orchestrator.log's only WF03-ISS0261 mention is ORCH's own note about the rebase exposing these 2 files, not any in-flight activity. Disposition: GRANDFATHER, same as the original 10 WF03-ISS0258 entries and for the identical reason -- these are pre-existing Markdown handoff files from an already-resolved, already-merged, already-attested run that predate this branch's H6 discovery-broadening fix; converting them to JSON now would mean retroactively reformatting another run's closed artefacts, which is out of scope and sets a bad precedent (every future rebase would then require touching arbitrary other runs' files). No reason found to treat these 2 differently from the original 10: same file kind (.md step handoffs), same closed/merged/attested status of their owning run, same 'landed after this branch's design/grandfather-list was finalized' timing story, same lint_handoffs.ex per-file (never per-rule/wildcard) grandfathering mechanism already established in the module's own moduledoc and the 2026-08-22 ISS-0262/GH#510 comment block above @grandfathered. Recommend ELIXIR-DEV add exactly 2 lines to @grandfathered in lib/mix/tasks/letflow.lint_handoffs.ex: {\"H6\", \"handoffs/WF03-ISS0261-20260822/step-01-issue-fixer.md\"} and {\"H6\", \"handoffs/WF03-ISS0261-20260822/step-03c-reviewer.md\"}, following the exact shape/style of the existing 10 WF03-ISS0258 entries, with a dated comment noting these were discovered post-rebase during ISS-0262's Step Final rework (not part of the original 10).",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0262-20260822",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "ELIXIR-DEV: add the 2 {\"H6\", <path>} entries named in result.summary to @grandfathered in lib/mix/tasks/letflow.lint_handoffs.ex, with a dated comment; do not alter the original 10 entries or their comment block."
   },
   "rework_count": 1,
   "max_rework": 3

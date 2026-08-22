@@ -64,6 +64,13 @@ defmodule Letflow.MixProject do
       "letflow.check": [
         "letflow.check_toolchain",
         "letflow.check_requirements_registration",
+        # ISS-0257: wired in as a hard gate, matching check_requirements_registration's
+        # own precedent ("a check nobody runs is not a check") -- verified green on
+        # main and against both open PRs' own new content before landing (neither adds
+        # a handoffs/ file at all), so this addition does not retroactively fail any
+        # currently in-flight branch. See HANDOFF_PROTOCOL.md's Enforcement note for
+        # what "hard" and "advisory" mean for this task's own findings.
+        "letflow.lint_handoffs",
         "format --check-formatted",
         "compile --warnings-as-errors",
         "letflow.check.test"

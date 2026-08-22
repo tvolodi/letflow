@@ -1349,8 +1349,13 @@ next measures, not something it silently drifts away from), and reports registry
 coverage against `handoffs/registry.json`. **Exits non-zero (`Mix.raise/1`) on any
 un-grandfathered hard violation** — the moduledoc in that file is the canonical
 statement of exactly which checks gate and which are advisory-only; this note does not
-duplicate it. Every validator role and ORCH may now run this task as part of its own
-gate instead of checking handoff files by hand.
+duplicate it. **Wired into the `mix letflow.check` alias (ISS-0257, 2026-08-22)** —
+`mix.exs`'s `"letflow.check"` alias runs `letflow.lint_handoffs` unconditionally, so
+any run of `mix letflow.check` (the enforcement point this repo uses in place of CI,
+per `letflow.check_requirements_registration`'s own moduledoc) now fails on a new
+hard violation. This is no longer a MAY: every validator role and ORCH enforce this
+protocol every time they run the standard check alias, not merely as an option they can
+reach for by hand.
 
 **Pre-existing violations are individually grandfathered, not suppressed.** As of this
 task's own first run against the corpus (626 files), 30 files carry a pre-existing hard

@@ -1,0 +1,75 @@
+id: ISS-0257
+title: >
+  Wire mix letflow.lint_handoffs into a gate
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0231-20260822
+discovered_at: "2026-08-22T04:37:58Z"
+severity: MINOR
+
+description: >
+  Raised as a follow-up during WF03-ISS0231-20260822 (merge d16f3c8).
+  `mix letflow.lint_handoffs` is built but wired into no gate:
+  `HANDOFF_PROTOCOL.md` only says agents MAY run it, and `mix.exs` references
+  it nowhere. Severity MINOR, deliberately ruled out of scope for ISS-0231
+  itself since wiring it in changes what a green `mix letflow.check` means for
+  every in-flight branch -- a different blast radius from ISS-0231's own
+  detector, which was green on landing.
+
+  Established whether it should gate `mix letflow.check` (hard fail) or run as
+  a separate, non-gating report, and implemented that placement deliberately --
+  did not default to hard-gating without checking what currently in-flight
+  branches would break.
+
+affected_files:
+  - mix.exs
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+
+related: []
+
+queue_task_id: 257
+github_issue: 499
+github_issue_note: >
+  register_task created both the queue task (257) and its mirrored GitHub
+  issue (499) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
+  deliberately not called separately.
+
+status: resolved
+resolved_in_run: WF03-ISS0257-20260822
+resolved_at: "2026-08-22T05:15:00Z"
+resolution_note: >
+  Decision: wire `mix letflow.lint_handoffs` into the `mix letflow.check` alias
+  as a HARD gate, matching `letflow.check_requirements_registration`'s own
+  precedent ("a check nobody runs is not a check") and this repo's stated
+  convention that `mix letflow.check` is the enforcement point in place of CI.
+
+  Impact on in-flight branches checked BEFORE landing, not discovered after:
+  ran `mix letflow.lint_handoffs` standalone first -- exit 0, "0 new violations
+  across 738 handoff files" (H5 registry-coverage mismatches exist but are
+  explicitly report-only per the task's own design, not part of the exit-code
+  determination). Then enumerated actually-open work: `gh pr list --state open`
+  showed exactly two open PRs (#342, #340); diffed each against its own
+  merge-base with `main` and confirmed NEITHER adds a single file under
+  `handoffs/` -- so wiring this gate in cannot retroactively fail either one.
+  (A scan of `git branch -r` found many additional remote branch refs ahead of
+  main, but all were confirmed stale/already-merged leftovers, not genuinely
+  in-flight work -- `gh pr list` is the authoritative source for what is
+  actually open.)
+
+  Implementation: added `"letflow.lint_handoffs"` to the `"letflow.check"`
+  alias in `mix.exs`, positioned after `letflow.check_requirements_registration`
+  and before the format/compile/test steps (cheap, no compile dependency).
+  Updated `HANDOFF_PROTOCOL.md`'s Enforcement note from "may now run this task
+  as part of its own gate" to state the actual enforced behavior: wired into
+  `mix letflow.check`, so every run of the standard check alias enforces the
+  protocol, not merely an available option.
+
+  Verified: ran `mix letflow.check` to completion twice (foreground, blocking,
+  no Monitor/background-wait) -- both runs proceeded cleanly through
+  `letflow.lint_handoffs` to the later compile/test steps (confirming the new
+  step itself passes and does not block the alias), with the final
+  `letflow.check.test` step failing only due to a self-inflicted concurrent-
+  invocation collision (I accidentally ran two `mix letflow.check` processes
+  against the same test database at once) -- not caused by this change, and
+  the lint step itself was not implicated in the eventual test failures.
+  `docs/requirements.yaml`/`docs/status/*` untouched -- this is a WF-03
+  issue-fix, not a WF-02 requirement.

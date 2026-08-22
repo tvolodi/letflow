@@ -7144,3 +7144,84 @@ requirements:
       - "a fresh grep for `#[0-9a-fA-F]{3,8}` across all of web/src/components/ (*.tsx, *.ts) returns zero hits outside of comments before this requirement tightens the guard, confirming REQ-142..145 fully landed first"
       - "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted"
     depends_on: [REQ-142, REQ-143, REQ-144, REQ-145]
+
+  - id: REQ-147
+    title: Rename pack_update_resolutions.resolution enum values to match R-Co's ResolutionKind (keep_local/take_incoming/merged)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    impl_order: 282  # letflow-queue task id, GH#556
+    description: >
+      REQ-041's design (lib/letflow/design/req041-pack-update-diff-schema.md
+      §3.3, §9 OQ-6) chose its own three-value Ecto.Enum for
+      pack_update_resolutions.resolution -- [:keep_theirs, :take_incoming,
+      :custom] -- flagged at design time as "not sourced from R-Co" because
+      R-Co's own conflict-resolution enum was unreachable then. ISS-0096's
+      2026-08-22 follow-up (GH#324) reached R-Co's actual source,
+      R-Co/src/definition/pack_update.zig:25-29, and found a real,
+      confirmed divergence: R-Co's `ResolutionKind` enum is `{ keep_local,
+      take_incoming, merged }` -- same three concepts (keep-the-local-side /
+      take-the-incoming-side / a merged custom value) but different atom
+      names on two of the three (`keep_theirs` vs `keep_local`, `custom` vs
+      `merged`; `take_incoming` already matches). REVIEWER
+      (WF03-ISS0096-20260822) decided this should be reconciled to R-Co's
+      naming rather than kept as a documented divergence, because Letflow is
+      a systematic concept-for-concept migration of R-Co and every later
+      stage/reader comparing this table against R-Co's schema would
+      otherwise have to rediscover and re-explain this exact mismatch, while
+      the fix itself is small and low-risk: only two real code files
+      reference the old atom names outside the design doc
+      (lib/letflow/definitions/pack_update_resolution.ex,
+      test/letflow/definitions/pack_update_migration_test.exs -- grepped
+      2026-08-22, real counts: `grep -rln "keep_theirs" lib/ test/` = 3 files
+      including the design doc itself, `grep -rln ":custom\b" lib/ test/` = 2
+      files including the design doc itself), and REQ-041's own moduledoc
+      states the real conflict-resolution write path was never built in
+      REQ-041's scope, so no production write path exists that could have
+      persisted the old atom names as live tenant data -- this is a rename
+      of an as-yet-unused enum, not a live-data migration of rows real
+      tenants depend on. Confirm that no non-test/non-fixture row exists
+      with the old values before treating the rename as purely
+      structural (see acceptance criteria).
+      Scope:
+      1. lib/letflow/definitions/pack_update_resolution.ex -- change the
+      Ecto.Enum values list from [:keep_theirs, :take_incoming, :custom] to
+      [:keep_local, :take_incoming, :merged], update the `@type resolution`
+      union and all moduledoc/doc-comment prose referencing the old names.
+      2. A new additive migration (this project's convention -- do not edit
+      the already-shipped 20260817083803_create_pack_update_resolutions.exs
+      migration) that, if any existing row in any environment this
+      requirement's own verification touches carries the old
+      `keep_theirs`/`custom` string values, rewrites them in place
+      (UPDATE ... SET resolution = 'keep_local' WHERE resolution =
+      'keep_theirs'; similarly custom -> merged) with a symmetric `down`
+      that rewrites back -- write this defensively even if verification
+      finds zero such rows today, since the column has no DB-level CHECK
+      constraint stopping a stray value from existing.
+      3. test/letflow/definitions/pack_update_migration_test.exs -- update
+      the two "keep_theirs" string literals (lines ~160, ~177 as of
+      2026-08-22) to "keep_local".
+      4. lib/letflow/design/req041-pack-update-diff-schema.md -- update §3.3's
+      table row and §9 OQ-6 to record the rename as done, citing this
+      requirement and R-Co/src/definition/pack_update.zig:25-29, rather than
+      leaving OQ-6 open.
+      5. docs/issues/ISS-0096.yaml and GH#324 are closed out by the REVIEWER
+      run that drafted this requirement (WF03-ISS0096-20260822), not by this
+      requirement -- do not re-close them here; if they are still open when
+      this requirement starts, flag it rather than assuming.
+      This requirement fails ORCH's §10 direct-action sizing checklist on
+      multiple grounds (more than one file touched; adds a migration;
+      changes a value an existing test asserts), so it must run the full
+      WF-02 pipeline (CODE-DESIGNER is likely unnecessary given the rename's
+      mechanical nature and REQ-041's design already covering the table's
+      shape, but ELIXIR-DEV should confirm with ORCH rather than assume;
+      SECURITY-REVIEWER and REVIEWER gates still apply since this is a
+      schema/migration change, even though it is not a tenant-data path per
+      se).
+    acceptance_criteria:
+      - "lib/letflow/definitions/pack_update_resolution.ex's resolution field's Ecto.Enum values are exactly [:keep_local, :take_incoming, :merged], with @type resolution and all doc-comment prose updated to match"
+      - "a new migration under priv/repo/migrations/ (sorting after 20260817083803_create_pack_update_resolutions.exs) exists with an up that rewrites any pre-existing 'keep_theirs' -> 'keep_local' and 'custom' -> 'merged' rows in pack_update_resolutions.resolution, and a symmetric down; mix ecto.migrate and mix ecto.rollback both run clean with real output quoted"
+      - "grep -rn \"keep_theirs\\|:custom\\b\" lib/ test/ returns zero hits after the change (excluding historical prose in this requirement's own design-doc update that explicitly narrates the old names as superseded), with the real grep output quoted"
+      - "test/letflow/definitions/pack_update_migration_test.exs and the full mix test suite pass with real output quoted"
+      - "lib/letflow/design/req041-pack-update-diff-schema.md §9 OQ-6 is updated to state the rename is done, citing this requirement and R-Co/src/definition/pack_update.zig:25-29"
+    depends_on: []

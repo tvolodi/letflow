@@ -22,7 +22,42 @@ affected_files:
   - lib/letflow/design/req041-pack-update-diff-schema.md
 queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
 github_issue: https://github.com/tvolodi/letflow/issues/324
-status: open
+status: in_progress
+resolution_note: >
+  REVIEWER decision (WF03-ISS0096-20260822, run WF03-ISS0096-20260822): chose
+  option (a) -- rename Letflow's pack_update_resolutions.resolution
+  Ecto.Enum values to match R-Co's ResolutionKind naming
+  ([:keep_theirs, :take_incoming, :custom] -> [:keep_local, :take_incoming,
+  :merged]) -- over option (b) (keep current naming, record as a deliberate
+  divergence). Reasoning: Letflow is a systematic, concept-for-concept
+  migration of R-Co, so every future reader/stage comparing this table
+  against R-Co's own schema (R-Co/src/definition/pack_update.zig:25-29)
+  would otherwise have to rediscover and re-explain this exact two-of-three
+  name mismatch -- a recurring cost that compounds over the life of the
+  migration project. Against that, the fix's real cost is small: real
+  grep counts taken 2026-08-22 (`grep -rln "keep_theirs" lib/ test/` = 3
+  files, `grep -rln ":custom\b" lib/ test/` = 2 files, both counts include
+  the design doc itself as one of the files, so only two real CODE files
+  are touched -- lib/letflow/definitions/pack_update_resolution.ex and
+  test/letflow/definitions/pack_update_migration_test.exs). Critically, this
+  is a rename of an as-yet-UNUSED enum, not a live-data migration: REQ-041's
+  own moduledoc states the real conflict-resolution write path (the
+  UI/API flow that would insert rows using these atom values) was never
+  built within REQ-041's scope, so no production tenant data exists that
+  depends on the old atom names -- the schema is shipped and tested, but
+  not yet written to by any real feature. That removes the main cost that
+  would otherwise favor option (b) (avoiding a live-data migration touching
+  shipped, tested code).
+  This is real WF-02-shaped work (touches more than one file, adds a new
+  migration, and changes a value an existing test asserts), so it fails
+  every relevant check of docs/agents/ORCHESTRATOR.md section 10's
+  direct-action sizing rule and must run the full pipeline rather than be
+  implemented directly in this REVIEWER run. Drafted as
+  docs/requirements.yaml REQ-147 (impl_order: UNREGISTERED, owner
+  ELIXIR-DEV, stage S2, depends_on []) rather than implemented here.
+  Local record status intentionally left `open` (not `resolved`) until
+  REQ-147 actually lands the rename -- the decision is made, but the code
+  divergence itself is not yet fixed.
 reconciliation_note: >
   GH#324 was found CLOSED (closedAt 2026-08-20T05:12:34Z) during ORCH's
   2026-08-22 GitHub/local/queue reconciliation audit (WF03-ISS0278-20260822),

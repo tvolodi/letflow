@@ -210,7 +210,7 @@ volumes:
     path: docs/status/requirement_status.v3.yaml
     status: current
     opened: 2026-08-22
-    entries: 24
+    entries: 25
     note: >
       Opened by ISS-0263's roll (WF03-ISS0263-20260822), successor to volume 2.
       Created with volume 2's header text verbatim (volume number, opening date
@@ -331,14 +331,37 @@ volumes:
       already one behind the true on-disk count of 22 at the time this was
       written, from a concurrently-landed run's own SCOPE-CHANGE done-event;
       both are folded into this recount rather than corrected retroactively).
-      Incremented to 24 by WF03-ISS0281-20260822 (ORCH)'s own done-event
-      append -- 24 on-disk `- req:` entries in requirement_status.v3.yaml,
-      no rebase conflict on this file. This run resolved ISS-0281 (the A9
-      entry-count-drift finding filed by WF03-ISS0276-20260822 above) as
+      Recounted to 24 by WF03-ISS0096-20260822 (REVIEWER)'s Step Final
+      rebase, which conflicted at requirement_status.v3.yaml's tail against
+      WF03-ISS0276-20260822's own SCOPE-CHANGE done-event (landed on main
+      after this run's own append). This run's own done-event (16:19:49Z)
+      sorts before WF03-ISS0276-20260822's (16:20:15Z), so it was composed
+      first rather than appended after. Recounted directly from
+      `grep -c "^  - req:" docs/status/requirement_status.v3.yaml` = 24
+      rather than incrementing either side's independently-computed 23,
+      per this note's own recount-every-time rule.
+      Separately, and concurrently, incremented to 24 by WF03-ISS0281-20260822
+      (ORCH)'s own done-event append -- 24 on-disk `- req:` entries in
+      requirement_status.v3.yaml at THAT run's own base, no rebase conflict
+      found by that run against this file. This run resolved ISS-0281 (the
+      A9 entry-count-drift finding filed by WF03-ISS0276-20260822 above) as
       already fixed: this same commit's predecessor (d88b4ec) had already
       corrected the declared count from 21 to 23 moments before ISS-0281
       was filed against the transient pre-fix state; see ISS-0281's own
       run-history entry for the full root-cause account.
+      Both notes immediately above independently and correctly computed 24
+      -- each was accurate for the file its own run produced, from a shared
+      base of 23 (WF03-ISS0276-20260822's own done-event), before either had
+      seen the other's append. Composing both onto this branch's own rebase
+      (ORCH, this Step Final) found all three done-events already present in
+      requirement_status.v3.yaml in correct chronological `at:` order with
+      NO conflict on that file itself: ISS-0096 done (16:19:49Z), ISS-0276
+      SCOPE-CHANGE done (16:20:15Z), ISS-0281 done (16:29:20Z) -- only this
+      index file's declared count and narrative needed manual composition.
+      Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v3.yaml` = 25, rather than carrying
+      forward either side's independently-computed 24, per this note's own
+      recount-every-time rule.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

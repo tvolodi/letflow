@@ -839,15 +839,30 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       assert map_size(result.statuses) > 0
     end
 
-    test "T-LIVE-ACTIVITY -- S0..S4 active, S8/S9 inactive (MS1, MS2, MS3)", %{result: result} do
+    test "T-LIVE-ACTIVITY -- S0..S4, S8, S9 active (MS1, MS2, MS3)", %{result: result} do
       # Design OQ-5: this pins the SET, not the counts, which move with every
       # merge. It will change legitimately when S5/S6/S7 are expanded or when
       # S8 starts -- a failure here means "expected update", not "regression".
+      #
+      # UPDATE (WF03-ISS0264-20260822, 2026-08-22): OQ-5's predicted event
+      # happened -- S8 and S9 both went active tonight (real in_progress/done
+      # requirements registered under REQ-115..139, per
+      # docs/migration/decisions/0011-frontend-ownership.md and
+      # 0012-mobile-tier-stack.md). New true values, re-derived directly from
+      # Mix.Tasks.Letflow.CheckDeferralStaleness.audit/1 against the live
+      # docs/requirements.yaml, confirmed independently by CODE-DESIGNER and
+      # ISSUE-FIXER: active == every stage S0..S4, S8, S9; inactive == [].
+      # This is a test-data-only update -- the detector logic in
+      # lib/mix/tasks/letflow.check_deferral_staleness.ex is unchanged and
+      # correct; it is doing exactly its job by catching this drift. The next
+      # time this assertion fails, treat it the same way: re-derive the true
+      # values with audit/1 against the live corpus, don't guess, and extend
+      # this comment rather than replacing it.
       active = for s <- result.stages, s.activity == :active, do: s.stage
       inactive = for s <- result.stages, s.activity == :inactive, do: s.stage
 
-      assert active == ["S0", "S1", "S2", "S3", "S4"]
-      assert inactive == ["S8", "S9"]
+      assert active == ["S0", "S1", "S2", "S3", "S4", "S8", "S9"]
+      assert inactive == []
     end
 
     test "T-LIVE-DEFERRED-COUNT-IS-ZERO -- documents today's vacuous green", %{result: result} do

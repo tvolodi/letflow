@@ -1,0 +1,57 @@
+{
+  "handoff_id": "3fa274d7-d8a7-4a77-952a-59e9c1875ec5",
+  "run_id": "WF03-ISS0276-20260822",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0276-20260822/step-03c-reviewer.json",
+  "created_at": "2026-08-22T15:15:46Z",
+  "started_at": "2026-08-22T15:15:46Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0276-20260822/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0276-20260822/step-03b-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.seed.ex",
+      "lib/letflow/design/iss0276-dev-bootstrap-seed.md",
+      "handoffs/WF03-ISS0276-20260822/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0276-20260822/step-03b-security-reviewer.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard gate per WF-03 Step 3 (idiom/scope gate, same as WF-02 Step 2d) on lib/mix/tasks/letflow.seed.ex and the README.md addition. Verify: OTP/mix-task idiom matches the existing lib/mix/tasks/ convention, no scope creep beyond ISS-0276's fix, implementation matches the approved design exactly (or any deviation is disclosed and justified), and no decision-record conflict.",
+    "acceptance_criteria": [
+      "Confirm implementation matches lib/letflow/design/iss0276-dev-bootstrap-seed.md's resolved decisions (attrs shape, idempotency handling, LETFLOW_DEV_DB_CONFIRMED non-handling)",
+      "Confirm no scope creep: owned_modules stayed within lib/mix/tasks/letflow.seed.ex and README.md",
+      "Confirm idiomatic mix-task structure (matches letflow.copy_identity_tables.ex precedent) and no anti-pattern from docs/anti-patterns.md",
+      "PASS or FAIL with itemized issues if FAIL"
+    ]
+  },
+  "result": {
+    "status": "BLOCKED",
+    "summary": "Not yet started.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

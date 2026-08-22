@@ -1473,6 +1473,29 @@ uses a pool with at most one claim in flight (INV-SP-T4) — but a real contract
 violation that will surface the moment a caller drives a pool with
 `max_concurrent > 1` concurrently.
 
+### 12.1 Addendum (2026-08-22): this successor issue was filed and fixed as ISS-0224
+
+Prose-only cross-reference. **No number and no invariant in this document changes** —
+recorded here so a later reader of §12 is not left believing the defect is still open.
+
+The issue above was filed as **ISS-0224** (GH#457) and fixed on
+`fix/WF03-ISS0224-20260822`, per
+`lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md`. The fix moves **every**
+`Repo` call — provisioning *and* `drop_schema/1` — out of the pool's callbacks into a
+single serialized `Task.Supervisor.async_nolink/3` worker fed by a FIFO `db_queue`, with
+at most one DB operation in flight.
+
+Two consequences matter to this document:
+
+1. **The mailbox blocking §12 describes is gone.** No `Repo` call executes inside a
+   `Letflow.SandboxPool` callback any more, so a parked waiter's `{:claim_timeout, _}` is
+   processed within one callback of its timer firing. `max_wait_ms` is now a real bound
+   (measured overshoot 1–3 ms, against a pre-fix overshoot of one full provisioning).
+   ISS-0224 §8.3 records this as INV-SP-T4a, a guarantee, while **INV-SP-T4b — total
+   `claim/2` latency under multi-slot contention — remains open**, unchanged by that fix.
+2. **`release_call_timeout/0` is unchanged, and OQ-3's premise for shrinking it is now
+   positively unmet** — see §16 OQ-3's own addendum below.
+
 ---
 
 ## 13. Decision-record consistency: 0009 is not the mechanism, and needs no amendment
@@ -1621,6 +1644,29 @@ future-proofing, not a present mechanism (§3.2). Once §12's successor issue re
 blocking, the release path's real requirement collapses to just the DROP cost, and a
 much smaller, independently derived number becomes correct. Left open rather than
 pre-committed, because the successor issue's shape determines it.
+
+> **Addendum (2026-08-22) — the successor issue landed as ISS-0224, and OQ-3 stays open.**
+> Prose only; **no number and no invariant in this document changes**, and
+> `release_call_timeout/0` is untouched.
+>
+> The successor issue is **ISS-0224** (§12.1). It did remove the head-of-line blocking —
+> from the *mailbox*, completely: no `Repo` call runs in a pool callback any more. But it
+> did **not** make the sentence above come true. Its serialized-worker shape queues a
+> release's own DROP behind any in-flight provisioning, so the release path's real
+> requirement is now **"one provisioning plus one DROP"**, not the DROP alone.
+> **OQ-3's premise for shrinking the number is therefore positively unmet**, which is a
+> stronger reason to leave `release_call_timeout/0` at `provision_timeout_ms/0` than this
+> document had when it wrote the paragraph above — not merely an unaddressed one.
+> Measured on the fixed module: a release behind a provisioning completes in 441–601 ms,
+> against the 44 000 ms budget.
+>
+> The other three reasons §3.2 gives are all untouched by ISS-0224: independent
+> revertability; `Definitions.safe_release/2`'s `rescue` hole, which `rescue` structurally
+> cannot use to catch a call-timeout `exit`; and the blast radius of the five rendezvous
+> bounds `sandbox_pool_test.exs` derives from this number (§8.2).
+>
+> **OQ-3 remains open**, and what would now close it is a design that stops a release's
+> DROP from queueing behind a provisioning — see ISS-0224 §8.3 and its §13 item 2.
 
 **OQ-4 — a production HTTP timeout for the sandbox path, once one exists.** V15
 confirms no HTTP route currently reaches `apply_promotion_assertion_rerun/6`, so a

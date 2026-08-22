@@ -56,4 +56,123 @@ github_issue_note: >
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not
   called separately.
 
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0224-20260822
+resolved_at: "2026-08-22T01:48:34Z"
+resolution_note: >
+  ROOT CAUSE CONFIRMED BY REPRODUCTION, not inferred from the filing.
+  `provision_sandbox/0` ran synchronously inside `handle_provision_now/2` and
+  `service_next_waiter/1`, so the pool processed no messages for a whole provisioning --
+  including a parked waiter's own `{:claim_timeout, caller_ref}` timer. Probe
+  `scratch/iss0224_repro.exs` (max_concurrent 1; owner holds the slot, W1 parks long, W2
+  parks behind it short, owner releases so `service_next_waiter/1` provisions for W1
+  while W2's timer runs; CONTROL is the identical setup with no release):
+
+    max_wait_ms 200 -- CONTROL overshoot +6/+11/+4 ms, DEFECT +320/+309/+309/+292/+263
+    max_wait_ms 100 -- CONTROL +5 ms,                  DEFECT +438/+469/+427/+409/+493
+
+  The decisive detail: in every DEFECT run W2's reply latency equalled W1's provisioning
+  latency TO THE MILLISECOND (520/520, 509/509, 492/492, 463/463, 538/538, 569/569,
+  527/527, 509/509, 593/593). W2's reply was gated on the provisioning finishing, not on
+  its own timer. Reproduced in five independent windows (100/120/150/200/250/300/400 ms).
+
+  HONEST MAGNITUDE. One provisioning on this quiet host is 411-1460 ms (~1500 samples,
+  ~20 windows, governing minimum 411 ms), NOT the 15373 ms ISS-0220 measured under
+  sibling-workspace load. At max_wait_ms 1000 there is no violation at all on a quiet
+  host, because one provisioning fits inside the window -- recorded as a real negative
+  result. The defect is not that the overshoot is always large; it is that the overshoot
+  is bounded by NOTHING THE CONTRACT NAMES.
+
+  FIX. All pool-side `Repo` work -- provisioning AND `drop_schema/1` -- moved into one
+  serialized `Task.Supervisor.async_nolink/3` worker behind a `db_queue` FIFO with at
+  most one op `in_flight`. No `Repo` call remains in any pool callback. Slots are
+  reserved and the owner monitored BEFORE any DB work starts, closing the window in
+  which a claim-in-progress had no owner monitor. `:DOWN` dispatch is ordered over six
+  cases; case 4b (owner died with its release-DROP queued or in flight) must precede
+  case 5. `active` and `waiting` are unchanged in shape, so no existing test technique
+  broke. Public API, error taxonomy, `provision_timeout_ms/0`, `claim_call_timeout/1`
+  and `release_call_timeout/0` are all untouched.
+
+  WHY BOTH OP KINDS, not just provisioning -- this is the run's most load-bearing
+  finding and it came from the design gate, not from the plan. Round 0 moved only
+  provisioning and left `drop_schema/1` in the callback. CODE-DESIGN-VALIDATOR measured
+  that this makes the pool a THIRD concurrent DB actor: peak demand 3, where the
+  fully-synchronous module peaks at 2 -- and it fails at `pool_size == 2`, which is
+  exactly decision 0009's `TEST_MIN_POOL_SIZE` floor. Round 0 had rejected the
+  concurrent-provisioning alternative *because its failure was reachable at that floor*,
+  then shipped a design failing at the same floor. Measured: round-0 shape 3/3 FAIL at
+  pool_size 2; serialized-worker shape 5/5 PASS. Serializing both op kinds returns peak
+  demand to 2 and makes 0009's floor adequate again.
+
+  GATES. CODE-DESIGN-VALIDATOR FAILed twice and both rounds changed the design
+  materially. Round 0 (6 findings): the peak-demand-3 regression above; RT-2's "ordering"
+  assertion did not fail pre-fix (it held 0/20, 3/20 and 5/20 across three independent
+  windows -- a coin flip -- and was DELETED, not repaired); the new Task.Supervisor was
+  ordered AFTER the pool that depends on it; two `handle_info` clauses that cannot be
+  distinguished by pattern match; a wrong cited provisioning minimum; and decision 0009
+  never named. Round 2 (3 findings): fixing the first finding put one `reference()` in
+  two collections at once, making INV-SP-A3 false and leaving an owner-death interleaving
+  unhandled -- resolved by a new ordered case 4b that frees the slot and retargets the
+  existing DROP in place rather than enqueuing a second one; plus RT-2's assertions were
+  silently re-lettered into a self-contradiction, and RT-7 lacked the vacuity guard its
+  sibling had. PASS at round 3, with the validator independently reproducing the
+  `pool_size >= P+1` deadlock rule (P=3 and P=5) and confirming peak demand 2 at
+  pool_size 2. SECURITY-REVIEWER PASS (in scope: INV-7 identifier construction relocated
+  into `mint_sandbox_identity/0`, traced to a closed provenance set; INV-1, INV-4, INV-8
+  checked, INV-8 strengthened -- a DBConnection exit now kills a worker, not the pool).
+  REVIEWER PASS. TEST-DESIGN-VALIDATOR PASS, having re-run the fail-first itself in its
+  own throwaway worktree rather than accepting reported numbers.
+
+  VERIFICATION. Fail-first is BEHAVIOURAL, not UndefinedFunctionError: run in a
+  throwaway worktree of the pre-fix commit with only the new test file added,
+  `RT-2(d) failed: t_w2 = 507 ms, t_w1 = 520 ms` and
+  `RT-7(c) failed: t_probe = 453 ms against t_b = 486 ms`, both with their >=200 ms
+  premise guards satisfied, red on 4/4 seeds; the validator independently reproduced it
+  (t_w2 548/t_w1 566; 526/543) and confirmed the guards fire by raising the floor to
+  100000 and watching both flunk. RT-3..RT-6 and RT-8 cover all five death paths --
+  caller dies parked, dies DURING provisioning, dies slot-reserved, worker Task crashes,
+  dies on its own release-DROP -- each asserting no slot leak AND no schema leak AND
+  pool survival. Full suite at TEST_PARALLEL_N=4 (REQ-114):
+  `combined: 1451 tests, 5 properties, 0 failures (1456/1456 passed)`, SIX green runs.
+
+  A FLAKE THIS RUN CAUGHT AND FIXED RATHER THAN SHIPPED. A verification run went red on
+  RT-2 ("timed out waiting for pool state: W2 parked behind W1") while a sibling session
+  ran a second `test_parallel.sh` on this host. Attributed to this branch, not the
+  environment: `waiting` held one entry, `in_flight` was nil, `db_queue` empty -- the
+  pool was idle and healthy. RT-2 polled for `waiter_count == 2`, a state that exists
+  only for W2's 50 ms window, and the poll was itself burning part of that window.
+  Reproduced deterministically by inserting one `Process.sleep(200)` before the poll on
+  the post-fix tree. Replaced with a `{:claiming, label}` message barrier sent before
+  `claim/2` -- no new constant, no sleep as a synchronisation primitive. Re-verified:
+  fail-first still red 7/7 with `t_w2 == t_w1` to the millisecond in all seven (tighter
+  than the original 9-19 ms spread), and 8 passed x8 unloaded plus 8 passed x4 under two
+  concurrent 4-partition suites, the exact condition that broke it.
+
+  INVARIANTS. INV-SP-T4 is SPLIT rather than reworded: INV-SP-T4a is a new real
+  guarantee (a parked waiter's timer is serviced within one pool callback of firing, and
+  no callback contains DB work any more -- post-fix overshoot measured at 1-3 ms);
+  INV-SP-T4b is RETAINED as a limit, because provisioning is still serialized at one op
+  in flight, so with max_concurrent c the c-th caller's total latency still approaches
+  c x provisioning. `release_call_timeout/0` is deliberately NOT shrunk despite
+  ISS-0220 §16 OQ-3 anticipating this run: re-deriving it needs its own DROP-cost
+  measurement held to that document's evidence bar, and coupling it here would undo the
+  independent revertability ISS-0220 §12 scoped these apart to preserve.
+
+  ERRORS AND CORRECTIONS RECORDED RATHER THAN QUIETLY DROPPED. (a) The design's cited
+  project-wide minimum provisioning was 446 ms; my larger sample puts it at 411 ms, so
+  the vacuity floor's stated multiple is 2.06x, not 2.2x -- the floor still holds.
+  (b) `test/specs/ISS-0224.md` claimed design §10.3's original RT-7 shape "would go green
+  pre-fix when the probe wins"; TEST-DESIGN-VALIDATOR measured it 12/12 RED in BOTH arms
+  (the probe always wins the mailbox race, finds the free slot, and is granted a claim),
+  so the direction was wrong and is corrected in the spec. (c) One of my own full-suite
+  runs went red with 3 `TenantSchemaReaperTest` failures; structurally cleared as the
+  ISS-0110/ISS-0217 external-invocation deferral, triggered by my own concurrent probe
+  VMs -- my branch had zero tracked changes to `lib/` or `test/` at that moment.
+
+  NOT FIXED, DISCLOSED. `drop_schema/1` moving into the worker means a `release/2`
+  arriving during a provisioning now waits for it -- but it waited exactly as long
+  before, in the mailbox, so the latency is relocated rather than created. Nothing
+  aborts a hung provisioning (unchanged; both budgets remain caller-side allowances). An
+  `async_nolink` worker outlives a pool that dies mid-provisioning -- a narrower sub-case
+  of `req039` §11 OQ-3's already-accepted limitation, and strictly better than a linked
+  Task that would let a provisioning crash strand every live claim.

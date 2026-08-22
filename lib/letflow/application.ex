@@ -22,6 +22,12 @@ defmodule Letflow.Application do
          }},
         {Registry, keys: :unique, name: Letflow.Registry},
         Letflow.InstanceSupervisor,
+        # ISS-0224: every SandboxPool DB operation runs under this supervisor via
+        # Task.Supervisor.async_nolink/3. It MUST precede {Letflow.SandboxPool, []} --
+        # Supervisor starts children in list order, so registering it after its
+        # dependant would leave a window in which a claim/2 makes async_nolink exit
+        # :noproc inside a pool callback and kill the pool.
+        {Task.Supervisor, name: Letflow.SandboxPool.TaskSupervisor},
         {Letflow.SandboxPool, []},
         {Task.Supervisor, name: Letflow.Engine.PluginTaskSupervisor},
         {Letflow.Engine.PluginRegistry, plugin_registrations_from_config()}

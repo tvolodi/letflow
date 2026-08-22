@@ -46,10 +46,17 @@ defmodule Letflow.Definitions.PromotionAssertionRerunTest do
      cached `{:ok, result}` IS the claim-count proof.
   2. **Mid-replay sandbox inspection (AC2, and both teardown-failure tests) -- a custom
      `assertion_evaluator` reads the pool's live state via `:sys.get_state/1` to learn
-     the currently-claimed `sandbox_id` (reliable: each test's dedicated pool never has
-     more than one claim in flight, since the whole call is synchronous, one BEAM
-     process), then either queries the sandbox schema's own real Postgres row set
-     directly (AC2), or calls the REAL `SandboxPool.release/2` itself, once, from
+     the currently-claimed `sandbox_id` (reliable: the evaluator runs only *after*
+     `claim/2` has already returned `{:ok, claim}`, so that claim is in `active` and no
+     DB work is in flight, and each test's dedicated pool is driven by a single
+     synchronous caller that never produces a second concurrent claim -- so `active`
+     holds exactly one entry. Since ISS-0224 the pool runs its DB work in a serialized
+     worker rather than inside its own callbacks, which is why the reason is stated as
+     "after the claim was granted" rather than the older "the whole call is
+     synchronous": the call is still synchronous from the caller's side, but that is no
+     longer what makes this read reliable), then either queries the sandbox schema's
+     own real Postgres row set directly (AC2), or calls the REAL
+     `SandboxPool.release/2` itself, once, from
      inside the evaluator -- genuinely triggering the exact `{:error, :not_found}`
      `finish_replay/8`'s own subsequent Step 5 release call then observes.
   3. **Real-exception injection (try/rescue span) -- a custom `assertion_evaluator`
@@ -142,9 +149,21 @@ defmodule Letflow.Definitions.PromotionAssertionRerunTest do
   end
 
   # Reads the sandbox_id of the ONE claim currently held by `pool` -- reliable because
-  # each test's dedicated pool never has more than one claim in flight at a time (the
-  # whole apply_promotion_assertion_rerun/6 call is synchronous, one BEAM process). Same
-  # :sys.get_state/1 primitive sandbox_pool_test.exs's own wait_until_waiter_queued/2
+  # this helper only ever runs inside an assertion_evaluator, which
+  # apply_promotion_assertion_rerun/6 invokes AFTER SandboxPool.claim/2 has already
+  # returned {:ok, claim}: that claim is therefore in `active`, no DB work is in flight,
+  # and the single synchronous caller driving each test's dedicated max_concurrent: 1
+  # pool never produces a second concurrent claim -- so `active` holds exactly one entry.
+  #
+  # (Before ISS-0224 this was justified with "the whole call is synchronous". The call
+  # still IS synchronous from the caller's side; what changed is that the pool now runs
+  # provisioning and dropping in a serialized worker Task instead of inside its own
+  # callbacks, so "synchronous" is no longer the property this read rests on. The
+  # partial map match below is also what keeps it working across that change: it ignores
+  # the two new `db_queue` / `in_flight` siblings, and `active`'s key set and value shape
+  # are unchanged.)
+  #
+  # Same :sys.get_state/1 primitive sandbox_pool_test.exs's own wait_until_waiter_queued/2
   # already uses in this codebase.
   defp active_sandbox_id!(pool) do
     %{active: active} = :sys.get_state(pool)

@@ -1300,3 +1300,5 @@
 2026-08-22T17:09:44Z | DISPATCH | WF-03 | WF03-ISS0279-20260822 | ORCH -> REVIEWER | step-03c-reviewer.json PENDING committed at dispatch time
 2026-08-22T17:13:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0279-20260822 | REVIEWER -> ORCH | step-03c-reviewer.json PASS. Idiom matches lint_handoffs.ex, no scope creep (diff stat confirmed), no decision-record conflict, regex-widening deviation independently spot-checked and judged justified.
 2026-08-22T17:13:01Z | DISPATCH | WF-03 | WF03-ISS0279-20260822 | ORCH -> TEST-DESIGNER | step-04-test-designer.json PENDING committed at dispatch time
+2026-08-22T17:23:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0279-20260822 | TEST-DESIGNER -> ORCH | step-04-test-designer.json PASS. 18 tests, 2 mutants applied+reverted (each isolates 1/18 targeted test), revert verified clean both times.
+2026-08-22T17:23:55Z | DISPATCH | WF-03 | WF03-ISS0279-20260822 | ORCH -> TEST-DESIGN-VALIDATOR | step-04b-test-design-validator.json PENDING committed at dispatch time

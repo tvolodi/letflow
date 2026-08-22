@@ -1,0 +1,44 @@
+{
+  "handoff_id": "f3b8a2d1-6e94-4c3a-9b02-1a7d5e8c4f60",
+  "run_id": "WF02-REQ075-20260822",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ075-20260822/step-01b-code-design-validator.json",
+  "created_at": "2026-08-22T03:10:00Z",
+  "started_at": "2026-08-22T02:40:00Z",
+  "completed_at": "2026-08-22T03:10:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-075"],
+    "related_handoff_ids": ["handoffs/WF02-REQ075-20260822/step-01-code-designer.json"],
+    "artifacts_in": [
+      "lib/letflow/design/req075-tenant-administration-routes.md"
+    ],
+    "branch_name": "feature/WF02-REQ075-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 1b -- hard gate on CODE-DESIGNER's REQ-075 design. Independently re-verified every load-bearing R-Co source claim against the actual files (not the design doc's word) given this is the highest-risk requirement in the batch: global tenants table, no REQ-072 prefix scoping, PLATFORM_ADMIN role check as the only protection.",
+    "acceptance_criteria": [
+      "listing tenants as a non-PLATFORM_ADMIN caller returns 403 and no tenant data whatsoever, including no count and no total, demonstrated by asserting the full response body",
+      "reading, patching, deactivating and reactivating another tenant's record as a caller authenticated for a different tenant is rejected, with each of the four verbs covered by its own test and each verified to leave the target tenant's row unchanged (INV-1)",
+      "the moduledoc states R-Co's actual rule on whether a tenant admin may read or patch their own tenant record, and a test covers that rule in both the allowed and denied direction",
+      "tenant creation routes to Letflow.TenantProvisioning and results in a provisioned schema with REQ-022's migrations replayed, demonstrated by querying information_schema for a table in the new schema -- not by trusting the 201",
+      "a deactivated tenant's subsequent authenticated request receives a response consistent with Letflow.Plugs.TenantStatus's behaviour, with the expected status named in the moduledoc and asserted by a test",
+      "the moduledoc states explicitly that these handlers operate outside REQ-072's per-tenant prefix scoping, names PLATFORM_ADMIN as the only protection, and explains why that makes this group higher-risk than the rest of S4",
+      "the moduledoc states how handleCreateTenant relates to REQ-076's onboarding endpoint, so the platform has one provisioning path rather than two"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-read every cited R-Co source location, not just the design's claims. (1) AC3: read src/identity/service.zig L110-568 directly -- getTenantAdmin (505-521), patchTenant (523-568+), createTenant (445-470), listTenantsAdmin (490-503), applyTenantLifecycleAction (110-131) each open with a bare `if (actor.role != .PLATFORM_ADMIN) return error.Forbidden` and none of the five bodies contains any subsequent target-tenant-vs-caller comparison -- design's claim confirmed exactly. (2) Section 1.2 dead-code finding: read main.zig's resource=='tenants' branch (1492-1541) and sibling resource=='users' branch (1447-1470) directly -- both construct `actor.role = .PLATFORM_ADMIN` unconditionally as a literal in the AuthContext, and user_id is read from the unauthenticated `X-Bpm-User-Id` header (main.zig ~302) defaulting to the all-zero UUID when absent -- confirmed exactly. The design's instruction not to port this and to derive the real role from the verified bearer token (conn.assigns.auth_context.roles) is stated unambiguously in prose, not merely implied. (3) Section 4.1: read service.zig:133-151 (enforceTenantActiveForOperation -- PLATFORM_ADMIN exempt, INACTIVE -> error.TenantInactive) and auth.zig:1663-1678 (checked on every authenticated request via authenticate/3, not gated to write methods; 403 tenant_inactive on non-exempt inactive-tenant callers) -- confirmed. Cross-checked against the actually-shipped lib/letflow/plugs/tenant_status.ex: write-methods-only (`@write_methods` guard on call/2's first clause), 503 status, no PLATFORM_ADMIN exemption, and lib/letflow/identity/tenant.ex confirms the Ecto.Enum values list is exactly `[:active, :migrating]` (no :inactive) -- design's description of the shipped file is accurate. (4) Confirmed the design's refusal to implement Section 4.2 is an explicit, unambiguous blocking condition on ELIXIR-DEV ('Do not implement Section 4.2 without REVIEWER confirming this shape first'), not a passing mention -- correctly gates a behavior-contract change to an already-shipped REQ-021 module. (5) Read lib/letflow/api/response.ex's forbidden/2 -- takes (conn, detail :: String.t()), detail is entirely caller-chosen, no query-derived data can reach it structurally -- design's claim confirmed. (6) All 7 acceptance criteria are mapped to a distinct design section (AC1->1.3/6.2, AC2->5, AC3->3/2.1pt3, AC4->7.1, AC5->4/2.1pt5, AC6->2.1pt2, AC7->2.1pt4/7.1) -- none dropped or merged, each satisfied by a specific moduledoc-text requirement plus a concrete test design. (7) Read lib/letflow/identity/tenant.ex directly: confirmed update_changeset/2 currently casts [:display_name, :status] together, so the design's flagged divergence (splitting into admin_patch_changeset/2 casting only [:display_name] and status_changeset/2 casting only [:status], so PATCH structurally cannot touch status and deactivate/reactivate structurally cannot touch display_name) is a real, correctly-identified gap, and the structural-impossibility-over-runtime-rejection reasoning matches this same module's own established idp_realm_id-immutability idiom. (8) No implementation code present: the only literal Elixir snippets are one-line endpoint_policy_key/2 pattern-match clauses, which is the identical established convention already used and passed in REQ-073's design (verified by grep against lib/letflow/design/req073-identity-user-routes.md, which uses the exact same clause-per-route style) -- not new implementation smuggled in. Everything else is @spec signatures, response/error shapes, and ExUnit test-spec sketches. (9) Read main.zig's route dispatch directly: resource=='tenants' (1492) and resource=='users' (1447) are both top-level sibling branches in the same if/else chain, not nested -- confirms the design's basis for a new sibling Letflow.Routers.Tenants module rather than nesting under Letflow.Routers.Identity. All load-bearing claims verified against primary source, not the design doc's paraphrase. No gaps found; no TBD/deferral language; every new function signature includes its full {:ok,_}|{:error,_} shape.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Route to ELIXIR-DEV (WF-02 Step 2a). Two conditions carried forward from CODE-DESIGNER's own handoff, both confirmed sound and both must remain binding: (a) Section 4.2's extension to Letflow.Plugs.TenantStatus (adding an all-methods, PLATFORM_ADMIN-exempt, 403 tenant_inactive check ahead of the existing write-only :migrating check) must not be implemented until REVIEWER confirms the shape -- ELIXIR-DEV should implement AC1-AC4/AC6/AC7 and the non-Section-4.2 parts of AC5's moduledoc/test scaffolding first, or otherwise sequence a REVIEWER checkpoint before touching tenant_status.ex; (b) OQ-4 (oidc_mode source for create_tenant/1) and OQ-5 (no compensating rollback on partial provisioning failure) are pre-existing/accepted open questions, not blockers, but ELIXIR-DEV must not silently resolve them without noting the choice made."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

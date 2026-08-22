@@ -1,0 +1,26 @@
+{
+  "run_id": "WF03-ISS0260-20260822",
+  "workflow_id": "WF-03",
+  "step": "04e",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0260-20260822/step-04e-test-runner-recheck.json",
+  "status": "COMPLETED",
+  "context": {
+    "artifacts_in": [
+      "test/letflow/engine_concurrency_test.exs (fix commit 1fbd86b)",
+      "handoffs/WF03-ISS0260-20260822/step-04d-test-design-validator-recheck.json",
+      "handoffs/WF03-ISS0260-20260822/step-04c-test-runner.json (prior FAIL this re-verifies)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-ran the FULL suite via `sh scripts/test_parallel.sh` twice (real 16-way parallel, N=16 from nproc), after TEST-DESIGNER's fix (commit 1fbd86b, capture-and-restore of TEST_PARALLEL_GROUP/TEST_AC1_TIMING_MULTIPLIER in on_exit instead of unconditional delete) and TEST-DESIGN-VALIDATOR's independent recheck PASS (cdd0178). Run 1: 'combined: 1690 tests, 5 properties, 1 failures (1694/1695 passed)', TEST_PARALLEL_GROUP=tp3971126. Run 2: 'combined: 1690 tests, 5 properties, 1 failures (1694/1695 passed)', TEST_PARALLEL_GROUP=tp3971644. Both exit 1 (single failure).\n\nA first attempt this session (before these two counted runs) hit an unrelated Windows/Mix infra fault: partition 8 failed with 'Waiting for lock on the build directory' / 'could not create hard link ... permission denied' -- a global OS-level Mix compile lock contention (likely another mix process on this machine holding the same temp lock file), producing 0 tests for that partition and aborting the run before those tests ran. This is environment noise, not a branch defect; discarded and re-run. Both counted runs below completed all 16 partitions.\n\nStructural attribution (git diff --stat origin/main...HEAD touches only test/letflow/engine_concurrency_test.exs, two design docs under lib/letflow/design/, test/specs/REQ-055.md, a prior test report, and handoffs/ files -- nothing under docs/status/):\n\nFailure (both runs, partition 1): RequirementStatusInvariantsTest A3 -- ISS-0119's own roll-rule ceiling on docs/status/requirement_status.v2.yaml (1262 lines vs 1200-line ceiling). Identical failure text/measurements to the prior TEST-RUNNER run (step-04c). PRE-EXISTING and structurally unrelated -- this branch never touches that file or its index. Expected, not a blocker.\n\nThe AC1-related failure from the prior run (step-04c: 'AC1 timing ratio 36.11x exceeded multiplier 30x (TEST_PARALLEL_GROUP unset)', caused by the old unconditional System.delete_env('TEST_PARALLEL_GROUP') in the ac1_timing_multiplier/0 describe block's on_exit wiping the partition-wide env var before the real AC1 test ran) is GONE in both runs: grep across all 32 partition logs (16 x 2 runs) for ExUnit failure headers found exactly one match per run, both times the ISS-0119 failure above -- zero AC1 or ac1_timing_multiplier/0 failures in either run. AC1 itself ('100 concurrent task completions across 100 distinct instances every completion succeeds, no cross-instance corruption, no global serialization', engine_concurrency_test.exs:297) passed in both runs.\n\nRan twice (not just once) specifically because the original bug was ExUnit-seed-ordering-dependent -- a single green run could still be luck if the seed happened to schedule the ac1_timing_multiplier/0 sub-tests after AC1 rather than before it. Two independent runs (different TEST_PARALLEL_GROUP values, different partition-to-file assignments, different mix test seeds) both passed cleanly, which is meaningfully stronger evidence than TEST-DESIGN-VALIDATOR's single seed-531662 reproduction alone (though that recheck already confirmed the mechanism directly). The capture-and-restore fix is holding under real parallel load, not passing by luck.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0260-20260822/step-04e-test-runner-recheck.json",
+      "test/reports/report-20260822-WF03-ISS0260-20260822-recheck.yaml"
+    ],
+    "issues": [],
+    "next_action": "Route to Step 5 (ISSUE-FIXER closes the issue)"
+  }
+}

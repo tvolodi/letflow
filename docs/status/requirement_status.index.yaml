@@ -210,8 +210,23 @@ volumes:
     path: docs/status/requirement_status.v3.yaml
     status: current
     opened: 2026-08-22
-    entries: 32
+    entries: 33
     note: >
+      Recounted to 33 during LOOP-20260822-orch (ORCH)'s Step Final rebase for
+      ISS-0119: this run's own done-event (18:39:00Z) conflicted at
+      requirement_status.v3.yaml's tail against a concurrently-landed sibling
+      fork's ISS-0286 done-event (18:40:00Z, queue task 286, GH#564).
+      Composed in chronological `at:` order -- ISS-0119 done (18:39:00Z) then
+      ISS-0286 done (18:40:00Z), this run's own entry sorted first and needed
+      no reordering. Recounted directly from
+      `grep -c "^  - req:" docs/status/requirement_status.v3.yaml` = 33,
+      rather than carrying forward either side's independently-computed count
+      (32 from the ISS-0286 side, 31 from this run's own pre-rebase commit),
+      per this note's own recount-every-time rule.
+      Incremented to 31 by LOOP-20260822-orch (ORCH)'s own done-event append
+      for ISS-0119 -- 31 on-disk `- req:` entries in
+      requirement_status.v3.yaml, no rebase conflict on this file (computed
+      pre-rebase, superseded by the recount above).
       Incremented to 30 by LOOP-20260822-orch (ORCH)'s own done-event append
       for ISS-0128 -- 30 on-disk `- req:` entries in
       requirement_status.v3.yaml, no rebase conflict on this file.

@@ -66,3 +66,37 @@ diagnosis:
     to letflow-queue). Filed tvolodi/letflow-queue#5 with the full
     diagnosis and an explicit ask to check production history for the two
     affected task rows, cross-linked back to this record.
+further_occurrences:
+  - queue_task_id: 128
+    note: >
+      Third consecutive occurrence (ISS-0128), already handled the
+      lightweight way per this record's protocol before this entry was
+      added. See run history around 2026-08-22 for detail.
+  - queue_task_id: 119
+    github_issue_number: 212
+    occurred_at: "2026-08-22T18:33:07Z"
+    detected_by: ORCH (LOOP-20260822-orch, later iteration)
+    finding: >
+      Fourth occurrence. get_next_task claimed queue task 119
+      (issue_ref ISS-0119, github_issue_number 212, title about
+      merge_output_variables/5's hardcoded nil variable_validations
+      argument). GH#212 was CLOSED at 2026-08-20T01:06:14Z. The local
+      docs/issues/ISS-0119.yaml record is unrelated content (renumbered
+      from ISS-0111, about requirement_status.yaml readability) --
+      confirms this repo's own ISS-NNNN numbering has independently
+      drifted from queue task ids/issue_ref values across concurrent
+      hosts, which is a second, distinct numbering-drift issue and not
+      itself evidence for H1/H2. The actual matching local record,
+      found by content/github_issue match rather than by id, is
+      docs/issues/ISS-0063.yaml (github_issue #212), already
+      `status: resolved`, `resolved_in_run: WF02-REQ109-20260819`,
+      `resolved_at: "2026-08-20T01:02:49Z"` -- closed by REQ-109 landing
+      the variable_schemas port. Task 119's own `updated_at` was
+      "2026-08-22T18:31:56Z", i.e. touched/re-surfaced within the last
+      few minutes before this claim, consistent with H1 (a queue-side
+      re-surfacing event close to claim time) more than H2 (a stale
+      Letflow-side release omitting status). No code change made;
+      released queue task 119 as status "done" directly (verified
+      already resolved, no rework needed). Recommend attaching this
+      occurrence to tvolodi/letflow-queue#5 as a fourth data point,
+      specifically the updated_at-near-claim-time observation.

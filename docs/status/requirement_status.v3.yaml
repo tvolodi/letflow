@@ -982,6 +982,29 @@ history:
   - req: SCOPE-CHANGE
     event: done
     agent: ORCH
+    at: "2026-08-22T18:39:00Z"
+    note: >
+      ISS-0119/GH#212 (queue task 119) released done with no code change:
+      fourth consecutive occurrence of the ISS-0285 stale-duplicate pattern.
+      GH#212 was CLOSED at 2026-08-20T01:06:14Z. The docs/issues/ISS-0119.yaml
+      file itself is unrelated content (renumbered from ISS-0111, about
+      requirement_status.yaml readability) -- this repo's own ISS-NNNN
+      numbering has independently drifted from queue issue_ref values across
+      concurrent hosts, a distinct, separate defect. The actual matching
+      local record, found by github_issue_number/content match, is
+      docs/issues/ISS-0063.yaml (github_issue #212), already
+      status: resolved, resolved_in_run: WF02-REQ109-20260819, resolved_at:
+      2026-08-20T01:02:49Z -- closed by REQ-109's variable_schemas port.
+      docs/issues/ISS-0285.yaml updated with a further_occurrences entry for
+      this task (queue_task_id 119), noting task 119's own updated_at
+      (2026-08-22T18:31:56Z) sat only minutes before this claim, leaning
+      toward H1 (a queue-side re-surfacing event near claim time) over H2 (a
+      stale prior Letflow-side release). Posted as a fourth data point to
+      tvolodi/letflow-queue#5. Released via POST /tasks/119/release with
+      status done and an evidence note.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
     at: "2026-08-22T18:40:00Z"
     note: >
       ISS-0286 (queue task 286, GH#564) filed by a prior fork this session as a

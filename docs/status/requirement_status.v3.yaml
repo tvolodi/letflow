@@ -874,3 +874,23 @@ history:
       stays open) whenever a run's own final report describes an
       investigation, partial finding, or reverted attempt rather than a
       shipped fix or delivered requirement.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-22T17:11:56Z"
+    note: >
+      WF03-ISS0283-20260822 resolved ISS-0283 (GH#557, queue task 283) --
+      handoffs/WF02-REQ116-20260822/step-00-git-setup.json carried a
+      non-schema top-level next_action key, a new un-grandfathered H3
+      violation in mix letflow.lint_handoffs. Relocated into
+      result.next_action, the exact fix ISS-0190 already established for
+      6 earlier files with the identical shape (PR #560, commit 348cbca).
+      Confirmed no other WF02-REQ116-20260822 handoff carried the same
+      key. mix letflow.lint_handoffs: 0 new violations after the fix.
+      mix letflow.check (single clean run, no concurrent mix test
+      collisions): 1783/1783 tests passed; the overall gate still FAILs
+      on a pre-existing, unrelated warnings-as-errors class (unused
+      default args in unique_idempotency_key/1, entry/2, insert_user!/2),
+      confirmed present on main before this change via git stash --
+      filed separately as ISS-0284 (queue task 284, GH#559) rather than
+      blocking this one-file fix on unrelated pre-existing debt.

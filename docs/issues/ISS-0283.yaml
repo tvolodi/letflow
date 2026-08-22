@@ -1,0 +1,34 @@
+id: ISS-0283
+title: >
+  handoffs/WF02-REQ116-20260822/step-00-git-setup.json fails
+  lint_handoffs H3 (non-schema key next_action), not yet grandfathered
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0096-20260822 Step Final (mix letflow.check run)
+discovered_at: 2026-08-22T16:41:03Z
+severity: MINOR
+description: >
+  mix letflow.check on branch fix/WF03-ISS0096-20260822 (REQ-147/ISS-0096,
+  unrelated work) surfaced a pre-existing NEW HARD VIOLATION from
+  mix letflow.lint_handoffs: handoffs/WF02-REQ116-20260822/step-00-git-setup.json
+  had a non-schema top-level key ["next_action"] (H3 class). Confirmed via
+  git log this file landed on main at commit f7b01de (PR #544,
+  WF02-REQ116-20260822, REQ-116 API-contract gap inventory) -- it predated
+  and was unrelated to the ISS-0096/REQ-147 branch that surfaced it.
+affected_files:
+  - handoffs/WF02-REQ116-20260822/step-00-git-setup.json
+github_issue: 557
+status: resolved
+resolved_in_run: WF03-ISS0283-20260822
+resolved_at: 2026-08-22T17:11:56Z
+resolution_note: >
+  Relocated the non-schema next_action key into result.next_action -- the
+  exact fix ISS-0190 already established for 6 earlier files with the
+  identical shape (see lib/mix/tasks/letflow.lint_handoffs.ex's own
+  comment history). No other WF02-REQ116-20260822 handoff carried the
+  same key. mix letflow.lint_handoffs: 0 new violations after the fix.
+  mix letflow.check (single clean run, no concurrent mix test collisions):
+  1783/1783 tests passed; the overall gate still FAILs on a pre-existing,
+  unrelated warnings-as-errors class, confirmed present on main before
+  this change via git stash -- filed separately as ISS-0284 (queue task
+  284, GH#559) rather than blocking this one-file fix. Merged via PR #560
+  (commit 348cbca -> merge be51d24).

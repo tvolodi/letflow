@@ -146,4 +146,54 @@ defmodule Letflow.Definitions.ExportImport do
         {:error, {:unknown_schema_version, actual}}
     end
   end
+
+  @typedoc "variable_schema_registration_failed's own tuple, re-exported for import_error/0."
+  @type import_with_variable_schemas_error ::
+          import_error()
+          | {:error, {:variable_schema_registration_failed, Definitions.variable_schema_error()}}
+
+  @doc """
+  `import/3` plus, atomically (REQ-082's own obligation -- see
+  `docs/requirements.yaml`'s REQ-082 entry, "VARIABLE_SCHEMAS REGISTRATION"), a
+  `Letflow.Definitions.register_variable_schemas/3` call for `variable_schema_entries`.
+
+  A sibling to `import/3`, not a modification of it -- `import/3` itself is
+  unchanged and still used by every caller that has no `variable_schemas` to
+  register (REQ-034's own already-shipped, already-tested behaviour is untouched).
+  This function exists because `POST /definitions/import` (REQ-082) is the ONLY
+  caller that needs the atomic variable-schemas registration `import/3` was never
+  asked to provide.
+
+  Delegates the schema-version gate and attrs construction identically to
+  `import/3` (same order: version check before any tenant resolution, graph
+  validation, or database call), then calls
+  `Letflow.Definitions.create_with_variable_schemas/3` in place of `import/3`'s
+  plain `Definitions.create/2` call -- the single insert path into
+  `variable_schemas` stays the one inside `register_variable_schemas/3`; this
+  function adds no second one.
+  """
+  @spec import_with_variable_schemas(
+          document :: ExportDocument.t(),
+          variable_schema_entries :: [Definitions.variable_schema_input()],
+          imported_by :: Ecto.UUID.t(),
+          opts :: opts()
+        ) :: {:ok, Definitions.ProcessDefinition.t()} | import_with_variable_schemas_error()
+  def import_with_variable_schemas(document, variable_schema_entries, imported_by, opts)
+      when is_list(variable_schema_entries) and is_list(opts) do
+    case document.bpm_export_schema_version do
+      @export_schema_version ->
+        attrs = %{
+          name: document.name,
+          version: document.version,
+          description: document.description,
+          graph: document.graph,
+          created_by: imported_by
+        }
+
+        Definitions.create_with_variable_schemas(attrs, variable_schema_entries, opts)
+
+      actual ->
+        {:error, {:unknown_schema_version, actual}}
+    end
+  end
 end

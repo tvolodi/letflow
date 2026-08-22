@@ -4,10 +4,9 @@ defmodule Letflow.Routers.Definitions do
   `Letflow.Plugs.ApiPipeline`.
 
   REQ-078 adds **exactly one** route to it — the definition-graph validation
-  endpoint. REQ-081 adds the five read routes below. The rest of this
-  module's surface (create/update/patch/activate/deprecate/archive/import) is
-  reserved for **REQ-082**, which co-owns this file; neither REQ-078 nor
-  REQ-081 touches the `match _` catch-all or modifies an existing route.
+  endpoint. REQ-081 adds the five read routes below. REQ-082 adds the eight
+  write/lifecycle routes below that. None of the four touches the `match _`
+  catch-all or modifies a route another of them added.
 
   | Handler               | Method/path                       | Delegate                                              | Permission        | Response |
   |------------------------|-----------------------------------|--------------------------------------------------------|-------------------|----------|
@@ -17,6 +16,25 @@ defmodule Letflow.Routers.Definitions do
   | export                 | `GET /definitions/:id/export`     | `Letflow.Definitions.ExportImport.export/2`             | `DefinitionsRead` | 200 / 404 |
   | get_by_id              | `GET /definitions/:id`            | `Letflow.Definitions.get_by_id/2`                       | `DefinitionsRead` | 200 / 404 |
   | list                   | `GET /definitions`                | `Letflow.Definitions.list_paginated/2`                  | `DefinitionsRead` | 200 |
+  | create                 | `POST /definitions`               | `Letflow.Definitions.create_with_variable_schemas/3`    | `DefinitionsWrite` | 201 / 422 / 409 |
+  | put                    | `PUT /definitions/:id`            | `Letflow.Definitions.update/3`                          | `DefinitionsWrite` | 200 / 404 / 409 / 422 |
+  | patch                  | `PATCH /definitions/:id`          | `Letflow.Definitions.update/3`                          | `DefinitionsWrite` | 200 / 404 / 409 / 422 |
+  | delete                 | `DELETE /definitions/:id`         | `hard_delete/2` (DRAFT) or `deprecate/2`+`archive/2` (ACTIVE/DEPRECATED) | `DefinitionsWrite` | 204 / 200 / 404 / 409 |
+  | activate               | `POST /definitions/:id/activate`  | `Letflow.Definitions.activate/2`                        | `DefinitionsWrite` | 200 / 404 / 409 / 422 |
+  | deprecate              | `POST /definitions/:id/deprecate` | `Letflow.Definitions.deprecate/2`                       | `DefinitionsWrite` (REQ-082 divergence — see below) | 200 / 404 / 409 |
+  | archive                | `POST /definitions/:id/archive`   | `Letflow.Definitions.archive/2`                         | `DefinitionsWrite` (REQ-082 divergence — see below) | 200 / 404 / 409 |
+  | import                 | `POST /definitions/import`        | `Letflow.Definitions.ExportImport.import_with_variable_schemas/4` | `DefinitionsWrite` (REQ-082 divergence — see below) | 201 / 422 |
+
+  ## REQ-082 — write/lifecycle routes: a permission-gate divergence from R-Co
+
+  R-Co's own `authorization.zig` has NO `endpoint_policy_key` entries for
+  deprecate/archive/delete/import — confirmed by grep against R-Co's source,
+  zero hits, the same "no clause, not permission-gated" shape REQ-078/079
+  already established for rebind-pins/reconstruct. REQ-082's own acceptance
+  criterion 7 ("a caller without DefinitionsWrite receives 403 on all eight
+  endpoints") requires gating these four anyway — see
+  `Letflow.Api.Authorization`'s own comment at its four new clauses for the
+  full reasoning.
 
   ## REQ-081 — read routes (design: `lib/letflow/design/req081-definition-routes-read.md`)
 
@@ -157,19 +175,69 @@ defmodule Letflow.Routers.Definitions do
 
   use Plug.Router
 
+  require Logger
+
   alias Letflow.Api.Authorization
   alias Letflow.Api.Context
   alias Letflow.Api.Error
   alias Letflow.Api.Pagination
   alias Letflow.Api.Response
+  alias Letflow.Api.Validation
+  alias Letflow.Api.Validation.FieldConstraint
   alias Letflow.Definitions
   alias Letflow.Definitions.ExportImport
   alias Letflow.Definitions.ExportImport.ExportDocument
   alias Letflow.Definitions.Graph
   alias Letflow.Definitions.ProcessDefinition
+  alias Letflow.Definitions.ServiceScopeValidator
 
   plug(:match)
   plug(:dispatch)
+
+  # REQ-082 -- must precede `post "/:id/activate"` etc below: "/import" is a
+  # literal one-segment suffix distinct from any `/:id/...` two-segment
+  # pattern, so it cannot actually collide with them regardless of
+  # declaration order today -- but it is declared first anyway, so that if a
+  # bare `post "/:id"` is ever added to this file (there is none today; see
+  # this module's moduledoc "Route ordering"), it is visibly obvious this
+  # route must stay above it.
+  post "/import" do
+    handle_import(conn)
+  end
+
+  post "/" do
+    handle_create(conn)
+  end
+
+  # REQ-082 write/lifecycle routes. MUST precede `get "/:id"`/`put "/:id"`
+  # sharing the same `:id` wildcard segment is fine (different HTTP methods
+  # are independent dispatch tables in `Plug.Router`, same note REQ-080's
+  # moduledoc makes for GET vs POST) -- the three `/:id/<verb>` routes below
+  # only need to stay ABOVE a hypothetical bare `post "/:id"`, which this
+  # file does not have.
+  post "/:id/activate" do
+    handle_activate(conn, conn.params["id"])
+  end
+
+  post "/:id/deprecate" do
+    handle_deprecate(conn, conn.params["id"])
+  end
+
+  post "/:id/archive" do
+    handle_archive(conn, conn.params["id"])
+  end
+
+  put "/:id" do
+    handle_put(conn, conn.params["id"])
+  end
+
+  patch "/:id" do
+    handle_patch(conn, conn.params["id"])
+  end
+
+  delete "/:id" do
+    handle_delete(conn, conn.params["id"])
+  end
 
   # REQ-081 read routes. MUST precede `get "/:id"` below -- see this
   # module's moduledoc "Route ordering".
@@ -258,7 +326,7 @@ defmodule Letflow.Routers.Definitions do
   # inherit get_by_id/2's not-found collapse (OQ-2)".
 
   defp handle_get_by_id(conn, raw_id) do
-    with_authorized_scope(conn, "GET", "/definitions/:id", fn conn, opts ->
+    with_authorized_scope(conn, "GET", "/definitions/:id", fn conn, opts, _actor_id ->
       render_get_by_id(conn, Definitions.get_by_id(raw_id, opts))
     end)
   end
@@ -272,7 +340,7 @@ defmodule Letflow.Routers.Definitions do
   # ── GET /definitions (design §4.3) ─────────────────────────────────────
 
   defp handle_list(conn) do
-    with_authorized_scope(conn, "GET", "/definitions", fn conn, opts ->
+    with_authorized_scope(conn, "GET", "/definitions", fn conn, opts, _actor_id ->
       conn = fetch_query_params(conn)
       query = conn.query_params
 
@@ -334,7 +402,7 @@ defmodule Letflow.Routers.Definitions do
   # ── GET /definitions/active/:name (design §4.3) ────────────────────────
 
   defp handle_get_active_by_name(conn, name) do
-    with_authorized_scope(conn, "GET", "/definitions/active/:name", fn conn, opts ->
+    with_authorized_scope(conn, "GET", "/definitions/active/:name", fn conn, opts, _actor_id ->
       render_get_by_id(conn, Definitions.get_active_by_name(name, opts))
     end)
   end
@@ -342,7 +410,7 @@ defmodule Letflow.Routers.Definitions do
   # ── GET /definitions/search (design §4.4 -- the requirement's stated trap) ──
 
   defp handle_search(conn) do
-    with_authorized_scope(conn, "GET", "/definitions/search", fn conn, opts ->
+    with_authorized_scope(conn, "GET", "/definitions/search", fn conn, opts, _actor_id ->
       conn = fetch_query_params(conn)
       query = conn.query_params
 
@@ -403,7 +471,7 @@ defmodule Letflow.Routers.Definitions do
   # Definitions.get_by_id/2.
 
   defp handle_export(conn, raw_id) do
-    with_authorized_scope(conn, "GET", "/definitions/:id/export", fn conn, opts ->
+    with_authorized_scope(conn, "GET", "/definitions/:id/export", fn conn, opts, _actor_id ->
       render_export(conn, ExportImport.export(raw_id, opts))
     end)
   end
@@ -411,6 +479,508 @@ defmodule Letflow.Routers.Definitions do
   defp render_export(conn, {:ok, document}), do: Response.ok(conn, export_document_map(document))
   defp render_export(conn, {:error, :not_found}), do: Response.not_found(conn)
   defp render_export(conn, {:error, _common_error}), do: Response.internal_error(conn)
+
+  # ── POST /definitions (REQ-082, design §"write routes"/create) ─────────
+
+  @create_schema [
+    %FieldConstraint{name: "name", required: true, type: :string, reject_empty_string: true},
+    %FieldConstraint{name: "version", required: true, type: :string, reject_empty_string: true},
+    %FieldConstraint{name: "description", required: false, type: :string},
+    %FieldConstraint{name: "graph", required: true, type: :object},
+    %FieldConstraint{name: "stage", required: false, type: :string},
+    %FieldConstraint{name: "variable_schemas", required: false, type: :array}
+  ]
+
+  defp handle_create(conn) do
+    with_authorized_scope(conn, "POST", "/definitions", fn conn, opts, actor_id ->
+      with {:ok, body} <- object_body(conn),
+           {:ok, attrs} <- validate_schema(@create_schema, body),
+           {:ok, entries} <- normalise_variable_schema_entries(Map.get(attrs, "variable_schemas")) do
+        create_attrs = %{
+          name: Map.fetch!(attrs, "name"),
+          version: Map.fetch!(attrs, "version"),
+          description: Map.get(attrs, "description"),
+          graph: Map.fetch!(attrs, "graph"),
+          stage: Map.get(attrs, "stage"),
+          created_by: actor_id
+        }
+
+        render_write(
+          conn,
+          Definitions.create_with_variable_schemas(create_attrs, entries || [], opts),
+          :created
+        )
+      else
+        {:error, :malformed_json} ->
+          Response.bad_request(conn, "request body must be a JSON object")
+
+        {:errors, field_errors} ->
+          Response.send_problem(conn, Validation.problem(field_errors))
+
+        {:error, :invalid_variable_schemas} ->
+          Response.unprocessable(conn, "variable_schemas entries are malformed")
+      end
+    end)
+  end
+
+  # ── PUT /definitions/:id (REQ-082, design §"write routes"/put) ─────────
+  #
+  # "Full replacement" (R-Co's own handlePut doc comment): name/version/graph
+  # are structurally required by this schema; description/stage are read
+  # directly from the raw body afterward (not through this schema, which
+  # would treat an explicit `null` identically to "absent" -- see
+  # Letflow.Api.Validation.validate_field/2's `present? = value != :missing
+  # and value != nil`) so that PUT always touches both, defaulting to `nil`
+  # when the caller omits them entirely -- the semantic difference from
+  # PATCH's has-key-based touch below, per this module's own judgment call
+  # (R-Co's PutDefinitionBody carries no `variable_schemas` field at all --
+  # a Letflow-only addition, so has-key semantics for it, same as PATCH).
+
+  @put_schema [
+    %FieldConstraint{name: "name", required: true, type: :string, reject_empty_string: true},
+    %FieldConstraint{name: "version", required: true, type: :string, reject_empty_string: true},
+    %FieldConstraint{name: "graph", required: true, type: :object}
+  ]
+
+  defp handle_put(conn, raw_id) do
+    with_authorized_scope(conn, "PUT", "/definitions/:id", fn conn, opts, _actor_id ->
+      with {:ok, body} <- object_body(conn),
+           {:ok, attrs} <- validate_schema(@put_schema, body),
+           {:ok, description} <- optional_string(Map.get(body, "description")),
+           {:ok, stage} <- optional_string(Map.get(body, "stage")),
+           {:ok, entries} <- normalise_variable_schema_entries(Map.get(body, "variable_schemas")) do
+        update_attrs =
+          %{
+            name: Map.fetch!(attrs, "name"),
+            version: Map.fetch!(attrs, "version"),
+            description: description,
+            graph: Map.fetch!(attrs, "graph"),
+            stage: stage
+          }
+          |> maybe_put_variable_schemas(entries)
+
+        render_write(conn, Definitions.update(raw_id, update_attrs, opts), :ok)
+      else
+        {:error, :malformed_json} ->
+          Response.bad_request(conn, "request body must be a JSON object")
+
+        {:errors, field_errors} ->
+          Response.send_problem(conn, Validation.problem(field_errors))
+
+        {:error, :invalid_optional_string} ->
+          Response.unprocessable(conn, "request body failed validation")
+
+        {:error, :invalid_variable_schemas} ->
+          Response.unprocessable(conn, "variable_schemas entries are malformed")
+      end
+    end)
+  end
+
+  # ── PATCH /definitions/:id (REQ-082, design §"write routes"/patch) ─────
+  #
+  # Every field optional; a key's PRESENCE in the request body (including an
+  # explicit `null`) is what controls whether `Definitions.update/3` touches
+  # that column -- see this module's `patch_attrs/1` and
+  # `Letflow.Definitions.update_attrs()`'s own typedoc.
+
+  @patch_schema [
+    %FieldConstraint{name: "name", required: false, type: :string, reject_empty_string: true},
+    %FieldConstraint{name: "version", required: false, type: :string, reject_empty_string: true},
+    %FieldConstraint{name: "graph", required: false, type: :object}
+  ]
+
+  defp handle_patch(conn, raw_id) do
+    with_authorized_scope(conn, "PATCH", "/definitions/:id", fn conn, opts, _actor_id ->
+      with {:ok, body} <- object_body(conn),
+           {:ok, attrs} <- validate_schema(@patch_schema, body),
+           {:ok, entries} <- normalise_variable_schema_entries(Map.get(body, "variable_schemas")) do
+        update_attrs = patch_attrs(body, attrs) |> maybe_put_variable_schemas(entries)
+        render_write(conn, Definitions.update(raw_id, update_attrs, opts), :ok)
+      else
+        {:error, :malformed_json} ->
+          Response.bad_request(conn, "request body must be a JSON object")
+
+        {:errors, field_errors} ->
+          Response.send_problem(conn, Validation.problem(field_errors))
+
+        {:error, :invalid_variable_schemas} ->
+          Response.unprocessable(conn, "variable_schemas entries are malformed")
+      end
+    end)
+  end
+
+  # `attrs` (from @patch_schema) carries name/version/graph only when both
+  # present AND non-nil (Validation.validate_field/2's own present? check) --
+  # description/stage are NOT in @patch_schema at all (it has no type
+  # constraint to offer beyond "is a string", which a bare
+  # `Map.has_key?/Map.get` check does not need), so they are read directly
+  # from `body` here, has-key-based, preserving an explicit `null` as "clear".
+  defp patch_attrs(body, attrs) do
+    %{}
+    |> maybe_put_present(:name, attrs, "name")
+    |> maybe_put_present(:version, attrs, "version")
+    |> maybe_put_present(:graph, attrs, "graph")
+    |> maybe_put_present(:description, body, "description")
+    |> maybe_put_present(:stage, body, "stage")
+  end
+
+  defp maybe_put_present(map, atom_key, source, string_key) do
+    if Map.has_key?(source, string_key),
+      do: Map.put(map, atom_key, Map.get(source, string_key)),
+      else: map
+  end
+
+  defp maybe_put_variable_schemas(map, nil), do: map
+  defp maybe_put_variable_schemas(map, entries), do: Map.put(map, :variable_schemas, entries)
+
+  # A shared write-outcome renderer for create_with_variable_schemas/3's,
+  # update/3's, and (below) hard_delete's non-deleted overlap. `success_status`
+  # is `:created` (POST) or `:ok` (PUT/PATCH) -- create/update never share a
+  # status code, so it is threaded through rather than guessed from the
+  # outcome shape.
+  defp render_write(conn, {:ok, %ProcessDefinition{} = definition}, :created),
+    do: Response.created(conn, definition_map(definition))
+
+  defp render_write(conn, {:ok, %ProcessDefinition{} = definition}, :ok),
+    do: Response.ok(conn, definition_map(definition))
+
+  # import-only: create/2 (and therefore create_with_variable_schemas/3) never
+  # returns this reason -- only ExportImport.import_with_variable_schemas/4's
+  # own schema-version gate does.
+  defp render_write(conn, {:error, {:unknown_schema_version, _actual}}, :created),
+    do: Response.unprocessable(conn, "unknown bpm_export_schema_version")
+
+  defp render_write(conn, {:error, :not_found}, _success_status), do: Response.not_found(conn)
+
+  defp render_write(conn, {:error, :not_draft}, _success_status),
+    do: Response.conflict(conn, "only a DRAFT definition can be modified")
+
+  defp render_write(conn, {:error, reason}, _success_status)
+       when reason in [:name_invalid, :version_empty, :graph_structure_invalid],
+       do: Response.unprocessable(conn, "request body failed validation")
+
+  defp render_write(conn, {:error, {:graph_validation_failed, violations}}, _success_status) do
+    Response.send_problem(
+      conn,
+      %{
+        Error.unprocessable("definition graph failed validation")
+        | errors: Enum.map(violations, &violation_map/1)
+      }
+    )
+  end
+
+  defp render_write(conn, {:error, :duplicate_name_version}, _success_status),
+    do: Response.conflict(conn, "a definition with this name and version already exists")
+
+  defp render_write(
+         conn,
+         {:error, {:variable_schema_registration_failed, reason}},
+         _success_status
+       ),
+       do: render_variable_schema_error(conn, reason)
+
+  defp render_write(conn, {:error, reason}, _success_status),
+    do: render_variable_schema_error_or_500(conn, reason)
+
+  # register_variable_schemas/3's own error union, reachable both tagged (via
+  # create_with_variable_schemas/3's rollback) and untagged (via update/3's
+  # own maybe_replace_variable_schemas/3, whose reason propagates through
+  # update_error() untagged since it is update/3's OWN registration call, not
+  # a nested one). Both land here.
+  defp render_variable_schema_error(conn, {:duplicate_variable_key, _key}),
+    do: Response.unprocessable(conn, "variable_schemas contains a duplicate variable_key")
+
+  defp render_variable_schema_error(conn, {:blank_variable_key, _index}),
+    do:
+      Response.unprocessable(conn, "variable_schemas entries must have a non-blank variable_key")
+
+  defp render_variable_schema_error(conn, {:variable_key_too_long, _index}),
+    do: Response.unprocessable(conn, "a variable_key exceeds the maximum length")
+
+  defp render_variable_schema_error(conn, {:not_well_formed, _key, _path}),
+    do: Response.unprocessable(conn, "a variable_schemas entry's json_schema is not well-formed")
+
+  defp render_variable_schema_error(conn, {:schema_too_deep, _key}),
+    do:
+      Response.unprocessable(conn, "a variable_schemas entry's json_schema is nested too deeply")
+
+  defp render_variable_schema_error(conn, reason)
+       when reason in [:missing_prefix, :invalid_definition_id],
+       do: Response.internal_error(conn)
+
+  defp render_variable_schema_error(conn, _other), do: Response.internal_error(conn)
+
+  defp render_variable_schema_error_or_500(conn, reason)
+       when is_tuple(reason) or reason in [:missing_prefix, :invalid_definition_id] do
+    render_variable_schema_error(conn, reason)
+  end
+
+  defp render_variable_schema_error_or_500(conn, _internal), do: Response.internal_error(conn)
+
+  defp optional_string(nil), do: {:ok, nil}
+  defp optional_string(value) when is_binary(value), do: {:ok, value}
+  defp optional_string(_invalid), do: {:error, :invalid_optional_string}
+
+  # Per-element shape (variable_key present+string, json_schema present) has
+  # no FieldConstraint vocabulary, so it is checked here -- mirrors
+  # Letflow.Routers.Instances's normalise_entries/1 precedent exactly.
+  # `nil` (key absent from the request) passes through unchanged so callers
+  # can distinguish "absent" from "present, empty list" (see
+  # Letflow.Definitions.update/3's own variable_schemas-touch contract).
+  defp normalise_variable_schema_entries(nil), do: {:ok, nil}
+
+  defp normalise_variable_schema_entries(entries) when is_list(entries) do
+    Enum.reduce_while(entries, {:ok, []}, fn entry, {:ok, acc} ->
+      case entry do
+        %{"variable_key" => key} = e when is_binary(key) ->
+          normalised = %{
+            variable_key: key,
+            json_schema: Map.get(e, "json_schema"),
+            description: Map.get(e, "description")
+          }
+
+          {:cont, {:ok, [normalised | acc]}}
+
+        _malformed ->
+          {:halt, {:error, :invalid_variable_schemas}}
+      end
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp normalise_variable_schema_entries(_not_a_list), do: {:error, :invalid_variable_schemas}
+
+  # ── DELETE /definitions/:id (REQ-082, design §"write routes"/delete) ───
+  #
+  # Status-dependent (PD-04), ported structurally from R-Co's handleDelete:
+  # DRAFT -> hard delete (204). ACTIVE -> deprecate then archive, TWO
+  # separate Definitions calls in the same request (R-Co's own comment:
+  # "Both run in the same request; the second call receives DEPRECATED
+  # status") -- reuses REQ-030's deprecate/2 and archive/2 exactly, no
+  # second state machine. DEPRECATED -> archive. ARCHIVED -> 409. A
+  # get_by_id-then-act read determines which branch to take, the same
+  # non-atomic two-step structure R-Co's own handleDelete has (it reads
+  # `current.status` then dispatches) -- not a Letflow-introduced race.
+
+  defp handle_delete(conn, raw_id) do
+    with_authorized_scope(conn, "DELETE", "/definitions/:id", fn conn, opts, _actor_id ->
+      case Definitions.get_by_id(raw_id, opts) do
+        {:ok, %ProcessDefinition{status: :draft}} ->
+          render_delete(conn, Definitions.hard_delete(raw_id, opts))
+
+        {:ok, %ProcessDefinition{status: :active}} ->
+          case Definitions.deprecate(raw_id, opts) do
+            {:ok, _deprecated} ->
+              render_transition(
+                conn,
+                Definitions.archive(raw_id, opts),
+                "definition status changed concurrently; retry"
+              )
+
+            {:error, _reason} = error ->
+              render_delete(conn, error)
+          end
+
+        {:ok, %ProcessDefinition{status: :deprecated}} ->
+          render_transition(
+            conn,
+            Definitions.archive(raw_id, opts),
+            "definition status changed concurrently; retry"
+          )
+
+        {:ok, %ProcessDefinition{status: :archived}} ->
+          Response.conflict(conn, "definition is already archived")
+
+        {:error, :not_found} ->
+          Response.not_found(conn)
+
+        {:error, _common_error} ->
+          Response.internal_error(conn)
+      end
+    end)
+  end
+
+  defp render_delete(conn, {:ok, :deleted}), do: Response.no_content(conn)
+  defp render_delete(conn, {:error, :not_found}), do: Response.not_found(conn)
+
+  defp render_delete(conn, {:error, :not_draft}),
+    do: Response.conflict(conn, "only a DRAFT definition can be hard-deleted")
+
+  defp render_delete(conn, {:error, :invalid_status_transition}),
+    do: Response.conflict(conn, "definition status changed concurrently; retry")
+
+  defp render_delete(conn, {:error, _common_error}), do: Response.internal_error(conn)
+
+  # ── POST /definitions/:id/activate (REQ-082, design §"write routes"/activate) ──
+  #
+  # ISS-0037/GH#112 -- the service-existence oracle. `opts[:service_scope_validator]`
+  # is sourced from Application env, defaulting to `nil` (the SVC-03 injection
+  # point's own documented default -- "there is no default, production-ready
+  # Lookup in this codebase yet", Letflow.Definitions.ServiceScopeValidator's
+  # moduledoc "Scope gap" section). Production therefore runs with the
+  # {:service_scope_violation, _} branch below structurally unreachable today
+  # (matching this codebase's own established "unreachable but mapped, for
+  # defence-in-depth / future-readiness" pattern) until a real Lookup ships
+  # (S6). Tests exercise it by setting
+  # `Application.put_env(:letflow, :definitions_service_scope_validator, fun)`
+  # before making the HTTP request and resetting it after -- this is the ONLY
+  # seam through which the real router's handler can be driven end-to-end with
+  # an injected validator, since `with_authorized_scope/4`'s `opts` carries no
+  # per-request override slot.
+
+  defp handle_activate(conn, raw_id) do
+    with_authorized_scope(conn, "POST", "/definitions/:id/activate", fn conn, opts, _actor_id ->
+      validator =
+        Application.get_env(:letflow, :definitions_service_scope_validator, nil)
+
+      activate_opts = Keyword.put(opts, :service_scope_validator, validator)
+      render_activate(conn, Definitions.activate(raw_id, activate_opts))
+    end)
+  end
+
+  defp render_activate(conn, {:ok, %{definition: definition}}),
+    do: Response.ok(conn, definition_map(definition))
+
+  defp render_activate(conn, {:error, :not_found}), do: Response.not_found(conn)
+
+  defp render_activate(conn, {:error, :not_draft}),
+    do: Response.conflict(conn, "only a DRAFT definition can be activated")
+
+  defp render_activate(conn, {:error, :graph_structure_invalid}),
+    do: Response.unprocessable(conn, "definition graph is not well-formed")
+
+  # ISS-0037/GH#112's own collapse: ONE generic 422 detail regardless of
+  # which of the two internal reasons produced it -- never :service_not_registered
+  # vs :service_not_available_to_tenant in the response body, never the raw
+  # service_id substring. The distinct internal reason is logged (server-side
+  # only) so diagnosability is not lost, just not externally observable.
+  defp render_activate(
+         conn,
+         {:error, {:service_scope_violation, %ServiceScopeValidator.Violation{} = violation}}
+       ) do
+    Logger.warning(
+      "definition activation blocked by service-scope violation " <>
+        "node_id=#{inspect(violation.node_id)} kind=#{inspect(violation.kind)} " <>
+        "reason=#{inspect(violation.reason)}"
+    )
+
+    Response.unprocessable(conn, "a referenced service is not usable by this tenant")
+  end
+
+  defp render_activate(conn, {:error, _common_error}), do: Response.internal_error(conn)
+
+  # ── POST /definitions/:id/deprecate (REQ-082) ───────────────────────────
+
+  defp handle_deprecate(conn, raw_id) do
+    with_authorized_scope(conn, "POST", "/definitions/:id/deprecate", fn conn, opts, _actor_id ->
+      render_transition(
+        conn,
+        Definitions.deprecate(raw_id, opts),
+        "only an ACTIVE definition can be deprecated"
+      )
+    end)
+  end
+
+  # ── POST /definitions/:id/archive (REQ-082) ─────────────────────────────
+
+  defp handle_archive(conn, raw_id) do
+    with_authorized_scope(conn, "POST", "/definitions/:id/archive", fn conn, opts, _actor_id ->
+      render_transition(
+        conn,
+        Definitions.archive(raw_id, opts),
+        "only a DEPRECATED definition can be archived"
+      )
+    end)
+  end
+
+  defp render_transition(conn, {:ok, %ProcessDefinition{} = definition}, _conflict_detail),
+    do: Response.ok(conn, definition_map(definition))
+
+  defp render_transition(conn, {:error, :not_found}, _conflict_detail),
+    do: Response.not_found(conn)
+
+  defp render_transition(conn, {:error, :invalid_status_transition}, conflict_detail),
+    do: Response.conflict(conn, conflict_detail)
+
+  defp render_transition(conn, {:error, _common_error}, _conflict_detail),
+    do: Response.internal_error(conn)
+
+  # ── POST /definitions/import (REQ-082, design §"write routes"/import) ──
+  #
+  # Body shape mirrors Letflow.Definitions.ExportImport.ExportDocument's own
+  # fields (bpm_export_schema_version/name/version/description/graph),
+  # `id`/`exported_at` accepted but IGNORED (informational only, matching
+  # R-Co's own handleImport: "id is informational only" -- ExportImport.import/3
+  # never reads document.id when building its create/2 call either), plus
+  # REQ-082's own `variable_schemas` addition.
+
+  defp handle_import(conn) do
+    with_authorized_scope(conn, "POST", "/definitions/import", fn conn, opts, actor_id ->
+      with {:ok, body} <- object_body(conn),
+           {:ok, schema_version} <- required_string(body, "bpm_export_schema_version"),
+           {:ok, name} <- required_string(body, "name"),
+           {:ok, version} <- required_string(body, "version"),
+           {:ok, graph} <- required_object(body, "graph"),
+           {:ok, entries} <- normalise_variable_schema_entries(Map.get(body, "variable_schemas")) do
+        document = %ExportDocument{
+          bpm_export_schema_version: schema_version,
+          id: Map.get(body, "id"),
+          name: name,
+          version: version,
+          description: Map.get(body, "description"),
+          graph: graph,
+          exported_at: Map.get(body, "exported_at")
+        }
+
+        render_write(
+          conn,
+          ExportImport.import_with_variable_schemas(document, entries || [], actor_id, opts),
+          :created
+        )
+      else
+        {:error, :malformed_json} ->
+          Response.bad_request(conn, "request body must be a JSON object")
+
+        {:error, {:missing_field, field}} ->
+          Response.unprocessable(conn, "#{field} is required")
+
+        {:error, :invalid_variable_schemas} ->
+          Response.unprocessable(conn, "variable_schemas entries are malformed")
+      end
+    end)
+  end
+
+  defp required_string(body, key) do
+    case Map.get(body, key) do
+      value when is_binary(value) and byte_size(value) > 0 -> {:ok, value}
+      _missing_or_invalid -> {:error, {:missing_field, key}}
+    end
+  end
+
+  defp required_object(body, key) do
+    case Map.get(body, key) do
+      value when is_map(value) and not is_struct(value) -> {:ok, value}
+      _missing_or_invalid -> {:error, {:missing_field, key}}
+    end
+  end
+
+  defp object_body(conn) do
+    case conn.body_params do
+      %{"_json" => _non_object} -> {:error, :malformed_json}
+      body when is_map(body) -> {:ok, body}
+      _other -> {:error, :malformed_json}
+    end
+  end
+
+  defp validate_schema(schema, body) do
+    case Validation.validate(schema, body) do
+      {:ok, attrs} -> {:ok, attrs}
+      {:errors, field_errors} -> {:errors, field_errors}
+    end
+  end
 
   # ── Response allowlists (INV-2, design §6) ─────────────────────────────
 
@@ -479,7 +1049,7 @@ defmodule Letflow.Routers.Definitions do
 
             case decision.kind do
               :Deny403 -> Response.forbidden(conn, "insufficient permissions")
-              _allow_or_allow_with_row_filter -> fun.(conn, opts)
+              _allow_or_allow_with_row_filter -> fun.(conn, opts, actor_id)
             end
 
           {:error, :missing_scope} ->

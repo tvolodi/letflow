@@ -1,0 +1,61 @@
+{
+  "handoff_id": "b6d1ace9-129e-466c-87d6-53e1fcd8c0ba",
+  "run_id": "WF03-ISS0226-20260822",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0226-20260822/step-05-code-design-validator-rework1.json",
+  "created_at": "2026-08-22T03:50:34Z",
+  "started_at": "2026-08-22T03:50:34Z",
+  "completed_at": "2026-08-22T03:50:34Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "5c24c6de-2689-4675-aac4-1326a44409c7",
+      "b7e2f4b0-4a2f-4e1b-9b3c-9f0a2b6a1d5e",
+      "c1a9e3d2-7b5f-4a1e-9c8b-2e6f0a4d7b1c"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0226-sandbox-pool-worker-result-typing.md",
+      "lib/letflow/sandbox_pool.ex",
+      "lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md",
+      "handoffs/WF03-ISS0226-20260822/step-04-code-designer-rework1.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/iss0226-sandbox-pool-worker-result-typing.md"
+    ]
+  },
+  "task": {
+    "description": "Re-review CODE-DESIGNER's rework (commit 7b8916c) of the single BLOCKER from step-03: section 4.2 previously contained a real, literal handle_info/2 function body. Confirm the rewritten section 4.2 is genuine prose/algorithm steps with no compilable code, section 6 no longer implies section 4.2 contains a body, and that no other section was altered from what step-03 already independently verified sound.",
+    "acceptance_criteria": [
+      "Section 4.2 contains no literal `def ... do ... end`, no `case ... ->` clause syntax, and no other construct standing in as compilable Elixir -- prose/numbered-steps only",
+      "Section 4.2's totality argument (demonitor-before-branching ordering, classify_worker_result/2's two-tag totality, both branches' pipelines) survives in substance",
+      "Section 6 no longer claims or implies section 4.2 contains a full function body",
+      "git diff b222c8b..7b8916c touches only section 4.2 and the one-line section 6 comment -- closed type (3), invariant-preservation argument (5, 8), and test design (7) are byte-for-byte unchanged from step-03's validated content"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-read lib/letflow/design/iss0226-sandbox-pool-worker-result-typing.md directly at commit 7b8916c (not CODE-DESIGNER's step-04 summary). Section 4.2 ('New shape') is now genuinely numbered prose: two top-level steps (demonitor first, then classify) with the two classify-outcome branches described as ordered actions and named function calls in inline code spans (`classify_worker_result/2`, `complete_op/3`, `service_next_waiter/1`, `pump/1`, `handle_worker_death/1`, `Logger.error/1`) -- no `def`/`do`/`end`, no `case ... ->` clause syntax, no `if/else` block syntax standing in as code. This is the 'first X happens, then Y' pattern the task explicitly calls acceptable, not the 'case block with real clause syntax, even if reformatted' pattern that remains forbidden. The totality argument immediately following (unchanged in this diff) and the ordering rationale inside the new prose (demonitor-before-classification called out as load-bearing, citing the same INV-SP-A3(ii) stray-:DOWN reasoning as before) both survive in full substance -- same claims, same citations, same conclusion. Section 6's handle_info/2 comment now reads 'see section 4.2 for the algorithm-level description of the new else-branch logic (ELIXIR-DEV writes the actual body)' -- no longer implies section 4.2 is or contains a body; section 6 itself remains signatures/@typep declarations only, no bodies. Ran git diff b222c8b 7b8916c -- lib/letflow/design/iss0226-sandbox-pool-worker-result-typing.md directly: the only hunks are section 4.2's replacement body and the single-line section-6 comment edit. Read the full current file end to end and confirm sections 3 (closed type/@typep union, classify_worker_result/2 spec), 4.3 (why complete_op/3 needs no catch-all), 5 (recovery-mechanism reasoning), 7 (test design incl. :sys.replace_state/2 mechanism), and 8 (invariant-preservation checklist) are unchanged from what step-03 (b7e2f4b0) already independently verified against source -- re-verified their content is still present and unaltered rather than re-deriving from source a second time, since step-03 already did that derivation and this rework touched nothing there. All four Step 1b checks from the task block pass; no new gap introduced by the rework.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0226-20260822/step-05-code-design-validator-rework1.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "fix/WF03-ISS0226-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/fix/WF03-ISS0226-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (Step 2a-equivalent) to implement per the now-passed design."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

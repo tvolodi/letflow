@@ -119,32 +119,32 @@ half-built `install/3` would produce exactly the half-built write path AC8 exist
 | `lib/letflow/routers/{audit,metrics,tenant_config,validation}.ex` | 1–12 each (the four reserved stubs) | §2 |
 | `lib/letflow/routers/{instances,definitions}.ex` | 1–12 each (empty stubs, "Routes added by REQ-079/080" and "REQ-081/082") | §2.3, §2.5 |
 | `lib/letflow/plugs/api_pipeline.ex` | 16–26 (deferred-plug table), 32–37 (chain), **39–49** (the eleven forwards) | §2, §11 |
-| `lib/letflow/router.ex` | 61–115 (route table, `/health` at 106, `/api/v1` forward at 110, deferred table 83–97) | §2.4, §11 |
+| `lib/letflow/router.ex` | **55 lines total.** Route table 6–12; the `deploy/redeploy-test.sh` contract note **16**; deferred-routes table 23–37; `get "/health"` **46**; `forward("/api/v1", …)` **50**; `match _` 52 | §2.4, §11 |
 | `lib/letflow/plugs/auth_pipeline.ex` | 1–32 (moduledoc), 56–80 (`call/2`) — **confirmed: no public-path bypass exists anywhere in this plug** | §2.4 |
-| `lib/letflow/api/context.ex` | 116–347; esp. **298–339** (`scoped_repo_opts/1`), 181–205 (INV-5 section), 165–176 (AC6 no-tenant-arg rule) | §3.2, §5 |
-| `lib/letflow/api/response.ex` | 348–535 (every helper's `@spec`) | §6 error maps |
-| `lib/letflow/api/error.ex` | 64–65 (`defstruct`), 85–92 (`@type t`), **103–116** (`serialise/1`, incl. the `errors: [_\|_]` clause), 213–221 (`unprocessable/1`) | §6.2 |
+| `lib/letflow/api/context.ex` | **232 lines total.** `scoped_repo_opts/1` — `@spec` **211**, `def` **213**; INV-5 moduledoc heading **66**; AC6 no-tenant-arg heading **48**; `:pipeline_run_id` reservation 21–27 and its assigns-table row **97**; `assign_trace_id/1` `@spec` 155 / `def` 156; `generate_trace_id/0` 167–168 | §3.2, §5 |
+| `lib/letflow/api/response.ex` | **188 lines total.** Content-type constants **56–57**; `send_json/3` 68–69; `ok/2` 76–77; `send_problem/2` 110–111; `bad_request/2` 120–121; `forbidden/2` 131–132; `not_found/1` 141–142; `conflict/2` 145–146; `unprocessable/2` 161–162; `internal_error/1` 177–178 | §6 error maps |
+| `lib/letflow/api/error.ex` | `@problems_base` **55** (private compile-env attr); `defstruct` **65**; `@type t` **85**; `serialise/1` clauses **104** (`errors: nil`) and **110** (`errors: [_\|_]`); `unprocessable/1` `def` **214** | §6.2 |
 | `lib/letflow/api/pagination.ex` | 43–56 (`Cursor`), 59–78 (`Page`), 111–113, 133–135, 153–154, 164–165, **188–194** (`decode_cursor/4`), 268–269 (`build_raw_cursor/3`) | §6.1 |
-| `lib/letflow/api/validation.ex` | 1–56 (`FieldConstraint`/`FieldError`), 189 (`validate/2`), 224 (`problem/1`) | §6, §7, §8 |
-| `lib/letflow/api/authorization.ex` | **227** (`endpoint_policy_key("GET", "/audit") -> :AuditRead`), **232** (`("GET","/metrics") -> :MetricsRead`), **265** (`_,_ -> :Unknown`), **272–300** (`evaluate_access/2`, incl. the `:MetricsRead` unconditional-Allow short-circuit at 281–282 and the `:Unknown` PLATFORM_ADMIN-only branch at 274–279), 336 (`required_permission(:AuditRead) -> :AuditRead`), 366–397 (`role_allows?/2` matrix; `:PROCESS_OPERATOR` holds `:AuditRead` at 388) | §4, §5 |
+| `lib/letflow/api/validation.ex` | `FieldConstraint` defmodule 1, `FieldError` defmodule 40; `validate/2` `def` **190**; `problem/1` `def` **225** — the `%{Error.unprocessable(…) \| errors: …}` idiom §7.3 must use | §6, §7, §8 |
+| `lib/letflow/api/authorization.ex` | **227** (`endpoint_policy_key("GET", "/audit") -> :AuditRead`), **232** (`("GET","/metrics") -> :MetricsRead`), **265** (catch-all `_,_ -> :Unknown`), `evaluate_access/2` `def` **272** with the `:Unknown` PLATFORM_ADMIN-only branch at **274** and the `:MetricsRead` unconditional-Allow short-circuit at **281**, 336 (`required_permission(:AuditRead)`), 366–397 (`role_allows?/2` matrix; `:PROCESS_OPERATOR` holds `:AuditRead` at 388) | §4, §5 |
 | `lib/letflow/event_store.ex` | **726–741** (`read_global_opts`/`read_global_result`/`read_global_error`), **759–761** (`read_global/1` `@spec`), 903–907 (`clamp_read_global_limit/1`) | §6.1 |
 | `lib/letflow/event_store/event.ex` | **79–90** (the `events` schema field list) | §6.1 field mapping |
 | `lib/letflow/definitions.ex` | 400 (`create/2`), 424 (`get_by_id/2`), 466 (`list/2`), 250/254 (`compute_pack_update_plan/5`), 107–210 (types). **Zero occurrences of `variable_schema` in this file** | §7, §8, §9 |
-| `lib/letflow/definitions/graph.ex` | 73–108 (`Node`/`Edge`), **110–140** (`Violation`, incl. the 26-value `code()` union), 161–168 (`Graph` struct + `result()`), 190/201 (`from_map/1`), **289** (`validate_graph/1`), **317** (`validate_node_attributes/1`), **343** (`validate_edge_conditions/1`) | §7 |
+| `lib/letflow/definitions/graph.ex` | `Node` defstruct 80, `Edge` defstruct 99; `Violation` defmodule **110**, its `defstruct [:code, :message]` **119**, its `@type code` union **121**; `Graph` defstruct 161; `from_map/1` 190/201; `validate_graph/1` `@spec` **288**/`def` **289**; `validate_node_attributes/1` **317**; `validate_edge_conditions/1` **343** | §7 |
 | `lib/letflow/definitions/service_scope_validator.ex` | 162 (`build/1`), **184** (`validate/3`) | §7 (deliberate non-call) |
 | `lib/letflow/definitions/solution_pack_install.ex` | 60–72 (schema), **83** (`insert_changeset/2`) — **the only public function; no export/install engine here** | §8, OQ-1 |
 | `lib/letflow/definitions/solution_pack_artefact_base.ex` | 50 (schema), 100 (unique constraint) | §8 |
 | `lib/letflow/definitions/pack_update_resolution.ex` | 56–71 (schema), 84 (`insert_changeset/2`) | §8 |
 | `lib/letflow/definitions/export_import.ex` | 33 (`@export_schema_version "bpm/definition/v1"`), 35–62 (`ExportDocument`), 65–72 (error types), **87** (`export/2`), **120** (`import/3`) | §8 |
-| `lib/letflow/engine/pin_rebind.ex` | 90–136 (all types, incl. `rebind_attrs` requiring `:idempotency_key`, and the full `rebind_error()` union), **162** (`rebind_pins/3`, the module's only public function) | §10 |
+| `lib/letflow/engine/pin_rebind.ex` | `@type rebind_attrs` **100** (requires `:idempotency_key`), `@type rebind_result` **116**, plus the `rebind_error()` union; `rebind_pins/3` `def` **162** — the module's only public function | §10 |
 | `lib/letflow/engine/pin_resolver.ex` | 179 (`kind()`), 199–205 (`override_entry()`), 284–290 (`default_lookup/0` + the `json_schema: nil` stub) | §10 |
-| `lib/letflow/engine/variable_schema.ex` | **120–128** (schema), 130–143 (`t()`, `schema_map()`, `error_reason()`), **145–164** (`changeset/2` + its OQ-3 `@doc`), 207–215 (`variable_validations/5`), **257–274** (`fetch_schemas/3` — the ISS-0089 site), **327–351** (`validations_for/3` + its `{:ok, _not_a_map}` clause), 56–82 (the "registration path is deferred" moduledoc section) | §9 |
+| `lib/letflow/engine/variable_schema.ex` | `schema "variable_schemas"` **122**; `changeset/2` `def` **164** (its `@doc` above carries the OQ-3 warning §9.4 must rewrite); `fetch_schemas/3` `@spec` **257**/`def` **262** — the ISS-0089 site; `validations_for/3` `def` **332** and its `{:ok, _not_a_map}` clause **342**; the "registration path is deferred" moduledoc section 56–82 | §9 |
 | `lib/letflow/event_store/registry/json_schema.ex` | 32 (`validate/2`, the only public fn), **146–173** (`properties_violations/3` — **already carries the ISS-0088 `is_map(subschema)` guard**) | §9 |
 | `lib/letflow/event_store/instance_projection.ex` | **124–128** (`instance_projections` schema, `status` enum `[:active, :completed, :cancelled, :error]`), 132 (`definition_id`) | §11 |
 | `lib/letflow/engine/task.ex` | 53–70 (`tasks` schema), **57–62** (`status` enum `[:pending, :completed, :cancelled]`) | §11 |
 | `lib/letflow/definitions/process_definition.ex` | **91–94** (`status` enum `[:draft, :active, :deprecated, :archived]`) | §11 |
 | `lib/letflow/identity.ex` | 128 (`resolve_tenant_by_realm/1`), 145 (`resolve_realm_by_tenant/1`), **627** (`get_tenant_by_slug/1`), 582/609/641/661/668 | §12 |
-| `lib/letflow/tenant_provisioning.ex` | **166** (`schema_name_for_tenant/1`), **195/208** (`tenant_id_for_schema_name/1`), 426–427 (variable_schemas migration manifest entry) | §5, §9 |
+| `lib/letflow/tenant_provisioning.ex` | **166** (`schema_name_for_tenant/1`), **195/208** (`tenant_id_for_schema_name/1`), `tenant_scoped_migrations/0` `def` **500**, variable_schemas manifest entry 426–427 | §5, §9 |
 | `lib/letflow/oidc/claim_mapping_config.ex` | 20–54 (struct), 57 (`for_realm/1`), 88 (`default/1`) | §12 (deliberate non-use) |
 | `lib/letflow/design/req070-router-decomposition.md` | 100–140 (sub-router roster + module template), 202–205 (the four forwards) | §2 |
 | `lib/letflow/design/req109-variable-schemas.md` | 78–184 (migration/schema/changeset), §11.3 OQ-3 | §9 |
@@ -156,6 +156,34 @@ half-built `install/3` would produce exactly the half-built write path AC8 exist
 | `web/src/api/audit.ts` | 1–70 (`RawAuditEntry`, `RawAuditPage`, the `/api/v1/audit` call + its six query params) | §6.1 |
 | `web/src/auth/tenantConfig.ts` | 40–52 (the `/api/tenant-config` call with `realm`-or-`host` params) | §12 |
 | `web/src/api/metrics.ts` | 126–128 (`client.getText('/metrics')`, Prometheus text) | §11, OQ-6 |
+
+### ⚠ Citation-integrity note — how the first draft's line numbers went wrong, and what changed
+
+The first draft of this table cited `router.ex`, `context.ex` and `response.ex` with line
+numbers **past end-of-file** (e.g. "`context.ex` 116–347" for a 232-line file). Caught by
+CODE-DESIGN-VALIDATOR and ELIXIR-DEV as F6. **Mechanism, since it is repeatable and worth
+naming:** those three files were read in a single `cat -n` over four concatenated files
+(`api_pipeline.ex` 60 lines, `router.ex` 55, `context.ex` 232, `response.ex` 188). `cat -n`
+numbers the **concatenated stream**, not each file, so the counter carried across file
+boundaries — giving constant offsets of **+60** for `router.ex`, **+115** for `context.ex` and
+**+347** for `response.ex`. Every wrong citation was wrong by exactly its file's offset, which
+is why every *substantive* claim was still correct: the text was read accurately, only the
+coordinates were mislabelled.
+
+**Every citation in this table has since been re-derived with per-file `grep -n`**, and cites
+a **single anchor line** (the `def`, `@spec`, `defstruct` or heading) rather than a range
+wherever one exists, so a reviewer can verify any of them with one `sed -n 'Np'`.
+
+**Never cite line numbers from a multi-file `cat -n`.** Read one file per command, or use
+`grep -n`, which always reports per-file line numbers.
+
+Three of the corrections proposed in the F6 follow-up list did not survive re-derivation and
+are **not** applied — the originals were right. Verified by `grep -n`:
+`authorization.ex` catch-all `_,_ -> :Unknown` is at **265** (not 264); `error.ex`'s
+`@type t ::` is at **85** (not 87–94); `error.ex`'s `serialise/1` clauses are at **104** and
+**110** (not 105–117). The `evaluate_access/2`, `:Unknown` and `:MetricsRead` anchors are now
+cited as the single `def`/branch lines 272/274/281 to remove the range ambiguity that produced
+the disagreement.
 
 ### R-Co (`C:\Users\tvolo\dev\ai-dala\R-Co\`)
 
@@ -258,8 +286,8 @@ mount point.
 
 **Decision:** `Letflow.Routers.TenantConfig` is forwarded from **`Letflow.Router`**, not from
 `Letflow.Plugs.ApiPipeline` — `forward("/api/tenant-config", to: Letflow.Routers.TenantConfig)`,
-declared **before** the `/api/v1` forward at `router.ex:110`, exactly as `GET /health` is
-(`router.ex:106`). The `/tenant-config` forward at `api_pipeline.ex:47` is **removed**. The
+declared **before** the `/api/v1` forward at `router.ex:50`, exactly as `GET /health` is
+(`router.ex:46`). The `/tenant-config` forward at `api_pipeline.ex:47` is **removed**. The
 module file stays where it is; only its mount moves.
 
 Disclosure analysis (INV-5) is in §12.2 — the "fall through to the default config on any
@@ -291,7 +319,7 @@ new `Letflow.Routers.SolutionPacks`, forwarded from `Letflow.Plugs.ApiPipeline`.
 > `conn.assigns[:auth_context][:tenant_id]`. No tenant identifier appears anywhere in these
 > two URLs, so no caller-supplied tenant value can reach a `:prefix` — not by precedence,
 > not by fallback, not by a future refactor.** (INV-1, and `Letflow.Api.Context`'s own AC6
-> rule at `context.ex:165-176` that no function in that module may take a tenant argument.)
+> rule at `context.ex:48` that no function in that module may take a tenant argument.)
 
 **Rejected alternative:** keep `/tenants/:slug/solution-packs/…` for path fidelity and 404 on
 a mismatch against the token's tenant. Rejected because a path segment that is authoritative
@@ -471,7 +499,7 @@ explicitly, naming REQ-131, so the gap is visible rather than silent. Recorded a
 
 **No handler may add a cross-tenant existence check to produce a nicer message.** This is
 discharged structurally at `Letflow.Api.Context`'s boundary — see its moduledoc section
-"Why no cross-tenant existence check is added anywhere (AC7, INV-5)" (`context.ex:181-205`).
+"Why no cross-tenant existence check is added anywhere (AC7, INV-5)" (`context.ex:66`).
 
 ---
 
@@ -483,7 +511,7 @@ Every authenticated route in this requirement obtains its prefix from **one** ca
 Letflow.Api.Context.scoped_repo_opts(conn)
   :: {:ok, prefix: String.t()} | {:error, :missing_auth_context | :invalid_tenant_id}
 ```
-(`lib/letflow/api/context.ex:326-328`)
+(`lib/letflow/api/context.ex` — `@spec` at **211**, `def` at **213**)
 
 `{:error, _}` → `Response.internal_error/1`, never a query. The returned keyword fragment is
 spread into the context function's `opts`. No route in this requirement calls
@@ -526,7 +554,7 @@ from the tenant-scoped `events` table via `read_global/1`.
 | `action` | `event.event_type` | |
 | `resource_type` | the constant string `"instance"` | Every Letflow event is instance-scoped; there is no second resource kind in `events`. |
 | `resource_id` | `event.instance_id` | |
-| `pipeline_run_id` | `event.metadata["pipeline_run_id"]`, else `null` | `Letflow.Api.Context` reserves `:pipeline_run_id` as a documented-but-unwritten key (`context.ex:136-142`), so nothing writes it today; the key is emitted as `null` rather than omitted, so the response shape is stable. |
+| `pipeline_run_id` | `event.metadata["pipeline_run_id"]`, else `null` | `Letflow.Api.Context` reserves `:pipeline_run_id` as a documented-but-unwritten key (`context.ex:21-27`), so nothing writes it today; the key is emitted as `null` rather than omitted, so the response shape is stable. |
 | `timestamp` | `event.created_at`, ISO 8601 UTC | |
 | `before_state` | **always `null`** | Letflow's event model has no before/after capture. Emitting a fabricated value would be worse than `null`. |
 | `after_state` | **always `null`** | same |
@@ -554,7 +582,7 @@ R-Co's `ListAuditParams` (`audit.zig:10-19`) carries eight params. Disposition:
 | `actor_id` | **supported** | new `:actor_id` opt, filtering `events.actor_id` |
 | `resource_id` | **supported** | new `:instance_id` opt, filtering `events.instance_id` (R-Co's `resource_id` is this column) |
 | `resource_type` | **NOT SUPPORTED — accepted and ignored unless it is `"instance"`** | Letflow's `events` table has exactly one resource type. A value other than `"instance"` returns an **empty page** (`items: []`, `next_cursor: null`, `count: 0`) — a truthful answer, not a silent filter drop. A missing param, or `"instance"`, is unfiltered. **This must be named in the moduledoc.** |
-| `pipeline_run_id` | **NOT SUPPORTED — 422 `invalid_filter` if supplied non-empty** | Nothing writes `metadata["pipeline_run_id"]` yet (`context.ex:136-142`), so filtering on it could only ever return an empty page while looking like it worked. An explicit 422 is honest; a silent empty page is not. **Named in the moduledoc as unsupported-until-something-populates-the-key.** |
+| `pipeline_run_id` | **NOT SUPPORTED — 422 `invalid_filter` if supplied non-empty** | Nothing writes `metadata["pipeline_run_id"]` yet (`context.ex:21-27`), so filtering on it could only ever return an empty page while looking like it worked. An explicit 422 is honest; a silent empty page is not. **Named in the moduledoc as unsupported-until-something-populates-the-key.** |
 
 ### 6.4 Cursor
 
@@ -814,11 +842,16 @@ No 503 branch — §6.6's reasoning.
 
 ## 8. Routes 3 & 4 — Solution packs (`Letflow.Routers.SolutionPacks`, new)
 
-### 8.1 ⚠ Scope finding — the backing subsystem does not exist (OQ-1, BLOCKING)
+### 8.1 Scope finding — RULED (OQ-1(a)): accept the scope, do not split
+
+> **This finding has been raised and ruled on. ORCH's ruling: accept the added scope inside
+> REQ-078; do not split. Build it, in commit 1, per §0.4.** Nothing here blocks Step 2a. The
+> finding is retained below because it is a recorded correction to REQ-078's description
+> (§20 C-2, for DOC-UPDATER), and because ELIXIR-DEV needs to know this is a context-module
+> build rather than a route port before estimating it.
 
 REQ-078's description says all six modules are "a one-to-three-handler surface over existing
-context functions". **For solution packs that is not true, and ORCH must see this before
-ELIXIR-DEV starts.**
+context functions". **For solution packs that is not true.**
 
 Verified this run:
 
@@ -834,7 +867,7 @@ Verified this run:
 So this requirement must **build a new context module**, not merely route to one. That is
 larger than "port a route", and it is the shape `stage-4-api-surface.md:101-108` warns about.
 
-**Two mitigating facts, which is why this design proceeds rather than blocking outright:**
+**Two mitigating facts, which are the basis of the ruling to build it here:**
 
 1. Letflow's pack scope is far narrower than R-Co's. R-Co's pack document carries four arrays;
    Letflow can support only two of them today (§8.2), so the port is a fraction of 700 lines.
@@ -905,7 +938,7 @@ New file `lib/letflow/definitions/solution_pack.ex`. Two public functions.
         source_definition_id: String.t(),
         new_definition_id:    Ecto.UUID.t(),
         process_key:          String.t(),
-        status:               String.t()          # "installed" | "skipped"
+        status:               String.t()          # ALWAYS "installed" -- see §8.3.1
       }
 
 @type role_checklist_entry :: %{role_name: String.t(), bound: boolean()}
@@ -929,7 +962,6 @@ New file `lib/letflow/definitions/solution_pack.ex`. Two public functions.
         {:error, :invalid_pack_document}
         | {:error, {:unknown_schema_version, actual :: String.t()}}
         | {:error, :unsupported_pack_section}
-        | {:error, {:variable_schema_conflict, definition_id :: String.t(), variable_key :: String.t()}}
         | {:error, {:malformed_variable_schema, variable_key :: String.t(), reason :: Letflow.Definitions.variable_schema_error()}}
         | {:error, :duplicate_pack_install}
         | Letflow.Definitions.create_error()
@@ -982,11 +1014,9 @@ Behaviour, in one `Ecto.Multi` executed by `Letflow.Repo.transaction/2`:
    `schema_content` is decoded with `Jason.decode/1` and checked by
    `Letflow.Definitions.JsonSchemaShape.check/1`. Any failure aborts the whole transaction
    with `{:error, {:malformed_variable_schema, variable_key, reason}}`. **Nothing is written.**
-4. Conflict pre-check, porting `store.zig:415-441`: for each entry, if a row already exists in
-   the caller's schema for the same `(definition name, variable_key)` with a **different**
-   `json_schema`, abort with
-   `{:error, {:variable_schema_conflict, definition_id, variable_key}}`. Identical content is
-   not a conflict.
+4. **No conflict pre-check. `VARIABLE_SCHEMA_CONFLICT` is a deliberate non-port** — see
+   §8.3.2 for the proof of unreachability. R-Co's check at `store.zig:415-441` has no
+   Letflow analogue to perform.
 5. Insert `SolutionPackInstall.insert_changeset/2` (`solution_pack_install.ex:83`) with
    `tenant_id` derived from the prefix via
    `Letflow.TenantProvisioning.tenant_id_for_schema_name(opts[:prefix])`
@@ -1010,6 +1040,71 @@ Behaviour, in one `Ecto.Multi` executed by `Letflow.Repo.transaction/2`:
 **INV-1 for install:** every write is `:prefix`-scoped to the caller's own schema except the
 one global `solution_pack_installs` row, whose `tenant_id` is derived from that same prefix.
 This is AC3's second clause and AC8's "none into any other tenant's schema".
+
+#### 8.3.1 Install is ALL-OR-NOTHING. There is no "skipped" definition (F2)
+
+An earlier draft's `installed_definition.status` enumerated `"installed" | "skipped"` with no
+step that could produce `"skipped"`. **Corrected: `status` is always `"installed"`.**
+
+Evidence. `Letflow.Definitions.create/2` (`definitions.ex` `@spec` **399**, `def` **400**) has
+**no upsert, no skip and no idempotent branch**: it inserts, or it returns
+`{:error, :duplicate_name_version}` when `uq_definition_version` fires — its own `@doc`
+(`definitions.ex:393-396`) states that two concurrent calls with an identical `(name, version)`
+never both succeed and the loser gets that error. §8.5 maps that error to a **409 that aborts
+the whole install**. So every packed definition that reaches the result map was inserted by
+this call, and any that was not aborted the transaction before a result map existed.
+
+Consequence, which must be stated in `Letflow.Routers.SolutionPacks`'s moduledoc:
+**re-installing a pack whose `(name, version)` pairs already exist in the caller's schema is a
+409, not a no-op.** This is a real behavioural divergence from R-Co, whose
+`buildIdempotentInstallResult` (`store.zig:680-700`) returns a synthetic success for an
+already-installed pack. Letflow has no such path today; `uq_solution_pack_install_active`
+(`solution_pack_install.ex:89`) additionally makes a second install of the same
+`(tenant_id, pack_id)` a `{:error, :duplicate_pack_install}` 409. **Named as a non-port with
+its R-Co counterpart, not left as an accident.** If idempotent re-install is wanted later it
+needs its own requirement — it is not smuggled in here.
+
+`status` is nonetheless kept as a field rather than dropped, so the response shape stays
+compatible with R-Co's `serializeInstallResult` (`solution_packs.zig:426-463`) and so a future
+idempotent-install requirement has a place to put `"skipped"` without changing the wire shape.
+
+#### 8.3.2 `VARIABLE_SCHEMA_CONFLICT` is a deliberate non-port — proof of unreachability (F3)
+
+An earlier draft specified a conflict pre-check comparing on `(definition name, variable_key)`.
+**That was not implementable**: `variable_schemas` is keyed by `definition_id`
+(`variable_schema.ex:122`, unique index `uq_variable_schema_definition_key` on
+`[:definition_id, :variable_key]`), the check ran *before* the step that mints those ids, and
+no "find definition by name in this prefix" function exists — `Letflow.Definitions` exposes
+`get_by_id/2` (**424**) and `list/2` (**466**), neither specified for that lookup.
+
+**The check is not merely unimplementable as drafted; it is unreachable in Letflow. Verified,
+not assumed:**
+
+1. `Letflow.Definitions.ProcessDefinition`'s primary key is
+   `@primary_key {:id, :binary_id, autogenerate: true}` (`process_definition.ex:85`), so every
+   successful `create/2` mints a **fresh, previously-unused** `definition_id`.
+2. `create/2` (`definitions.ex:400`) never returns a pre-existing row — it inserts or errors
+   (§8.3.1). There is no code path by which install obtains an id that already exists in the
+   schema.
+3. Step 7 writes `variable_schemas` rows keyed **only** to ids produced in step 6, resolved
+   through the `source_definition_id -> new_definition_id` mapping.
+4. Therefore no row written by an install can collide with a pre-existing row on
+   `(definition_id, variable_key)` — the id half is new in every case. The `ON CONFLICT DO
+   NOTHING` in §9.2 step 6 can only ever absorb a **duplicate within the same pack's own
+   entries**, which §9.2 step 4 already rejects earlier with
+   `{:error, {:duplicate_variable_key, key}}`.
+
+So `VARIABLE_SCHEMA_CONFLICT` joins `CATALOG_CONFLICT` and `TenantInactive` (§8.2) as a
+**deliberate non-port**: R-Co needs it because `installPack` can write schemas against
+definitions it did not create in that transaction; Letflow's install always creates them.
+`{:error, {:variable_schema_conflict, _, _}}` is removed from `install_error()` and from
+§8.5's map. **Must be named in the moduledoc alongside the other three non-ports** (§8.6
+item 3), with this reason — not omitted silently.
+
+**Standing condition:** this non-port is valid *only while* install creates every definition it
+writes schemas for. If a later requirement adds an install mode that attaches variable schemas
+to a pre-existing definition, the conflict becomes reachable and must be reinstated. That
+sentence belongs in the moduledoc too.
 
 ### 8.4 Role checklist
 
@@ -1056,9 +1151,8 @@ Request body is the pack document itself.
 | `{:error, {:unknown_schema_version, _}}` | 422 | `Response.unprocessable(conn, "invalid pack document")` | `INVALID_PACK_DOCUMENT` |
 | `{:error, :unsupported_pack_section}` | 422 | `Response.unprocessable(conn, "pack contains an unsupported section")` | *(Letflow-only, §8.2)* |
 | `{:error, {:malformed_variable_schema, key, _reason}}` | 422 | `Response.unprocessable(conn, "variable schema is not a well-formed JSON Schema document")` — **`key` is echoed, `reason` is not** (`key` is the caller's own submitted value; `reason` is internal) | *(Letflow-only, §9.3)* |
-| `{:error, {:variable_schema_conflict, _, _}}` | 409 | `Response.conflict(conn, "variable schema conflict")` | `VARIABLE_SCHEMA_CONFLICT` |
 | `{:error, :duplicate_pack_install}` | 409 | `Response.conflict(conn, "pack already installed")` | *(Letflow-only, from `uq_solution_pack_install_active`)* |
-| `create_error()` e.g. `{:error, :duplicate_name_version}` | 409 | `Response.conflict(conn, "definition already exists")` | — |
+| `{:error, :duplicate_name_version}` from `Definitions.create/2` | 409 | `Response.conflict(conn, "definition already exists")` — **aborts the whole install**, §8.3.1 | — |
 | other `create_error()` / `%Ecto.Changeset{}` | 422 | `Response.unprocessable(conn, "validation failed")` | — |
 | `common_error()` / `{:error, term()}` | 500 | `Response.internal_error/1` | `internal_error` |
 | success | 200 | `Response.ok/2` (`install_result()`) | — |
@@ -1070,9 +1164,11 @@ No 503 (§6.6). No 409 `CATALOG_CONFLICT`, no 409 `TenantInactive` (§8.2).
 1. Route table for the two endpoints.
 2. **The dropped path `tenant_id`**, with the verbatim-intent sentence from §2.6 that no
    caller-supplied tenant value can reach a `:prefix`.
-3. The four non-ports and their owners: `service_catalog_entries`/`CATALOG_CONFLICT` (S6),
-   `MODULE_NON_EXPORTABLE` (S5), `TenantInactive` (upstream in `Letflow.Plugs.TenantStatus`),
-   503 (§6.6).
+3. The **six** non-ports, each with its reason and owner: `service_catalog_entries` /
+   `CATALOG_CONFLICT` (S6 service catalog), `MODULE_NON_EXPORTABLE` (S5 process modules),
+   `TenantInactive` (already enforced upstream by `Letflow.Plugs.TenantStatus`), 503 (§6.6),
+   **`VARIABLE_SCHEMA_CONFLICT` (unreachable — §8.3.2, including its standing condition)**, and
+   **R-Co's idempotent re-install (§8.3.1 — Letflow returns 409, not a synthetic success)**.
 4. The AC8 statement: install writes `variable_schemas` rows **only** through
    `Letflow.Definitions.register_variable_schemas/3`, and no other insert path into that table
    exists in the route layer.
@@ -1425,7 +1521,7 @@ deliberate"**, immediately followed by the AC7 statement (§11.5):
 |---|---|---|---|
 | **Auth** | unauthenticated — `metrics.zig:20` says so verbatim; mounted top-level at `main.zig:457` | **authenticated** — `/api/v1/metrics`, behind `Letflow.Plugs.AuthPipeline` | Every Letflow figure comes from a tenant schema; reaching one requires `scoped_repo_opts/1`, which requires `conn.assigns[:auth_context]`. An unauthenticated endpoint could only be empty or cross-tenant. |
 | **Scope** | platform-global, in-memory `MetricsRegistry` | **per-tenant** — every figure computed inside the caller's own schema | See §11.3. |
-| **Format** | Prometheus exposition text (`content_type = PROMETHEUS_CONTENT_TYPE`) | **JSON**, via `Letflow.Api.Response.ok/2` | `Letflow.Api.Response` has no Prometheus-text helper (`response.ex:403-404` defines only `application/json` and `application/problem+json`); adding one is scope. JSON is this codebase's universal response convention. |
+| **Format** | Prometheus exposition text (`content_type = PROMETHEUS_CONTENT_TYPE`) | **JSON**, via `Letflow.Api.Response.ok/2` | `Letflow.Api.Response` has no Prometheus-text helper (`response.ex:56-57` defines only `application/json` and `application/problem+json`); adding one is scope. JSON is this codebase's universal response convention. |
 
 > **Do not "correct" any of the three back toward R-Co.** Reverting the scope divergence in
 > particular would reintroduce a cross-tenant disclosure — see §11.3.
@@ -1761,7 +1857,7 @@ OQ-8) — it belongs to REQ-076, not to a route port.
 | `lib/letflow/routers/instances.ex` | adds `post "/:id/rebind-pins"` + moduledoc (§10) |
 | **`lib/letflow/routers/validation.ex`** | **DELETED** (§2.3) |
 | `lib/letflow/plugs/api_pipeline.ex` | **removes** the `/validation` forward (L48); **removes** the `/tenant-config` forward (L47); **adds** `forward("/solution-packs", to: Letflow.Routers.SolutionPacks)`; moduledoc note on all three |
-| `lib/letflow/router.ex` | **adds** `forward("/api/tenant-config", to: Letflow.Routers.TenantConfig)` before the `/api/v1` forward; route-table row; note that the deferred-routes table (L83-97) is unchanged — none of these six modules is in it |
+| `lib/letflow/router.ex` | **adds** `forward("/api/tenant-config", to: Letflow.Routers.TenantConfig)` before the `/api/v1` forward; route-table row; note that the deferred-routes table (L23-37) is unchanged — none of these six modules is in it |
 | `lib/letflow/event_store.ex` | widens `read_global_opts()` by four keys and `read_global_error()` by two; extends `read_global/1`'s filtering; `@doc` update (§6.5) |
 | `lib/letflow/definitions.ex` | adds `validate_definition_graph/2` (§7.2), `register_variable_schemas/3` (§9.2), `count_definitions_by_status/1` (§11.4) + the new `@type`s (`graph_validation_result`, `variable_schema_input`, `variable_schema_error`) |
 | `lib/letflow/engine.ex` | adds `count_instances_by_status/1`, `count_tasks_by_status/1`, `status_counts()` (§11.4) |
@@ -1790,7 +1886,7 @@ job (§4.3). `lib/letflow/event_store/registry/json_schema.ex` — its ISS-0088 
 | INV-RT-3 | Authorization (where it applies) and prefix resolution both complete before any `Repo` call, including pre-fetch reads. | §3.2 |
 | INV-RT-4 | Every response body is a hand-built map with an explicit key list; no `Jason.Encoder` derivation over an Ecto struct anywhere in this requirement. | §3.1, §12.2 |
 | INV-RT-5 | Cross-tenant resource access yields **404** with no detail, on the same code path and same query count as a genuine miss. Missing permission yields **403**. The two are never conflated. | §4.4 |
-| INV-VS-1 | **Exactly one** insert path into `variable_schemas` exists in `lib/`: `Letflow.Definitions.register_variable_schemas/3`. Verified by `grep -rn "VariableSchema" lib/letflow/routers/ lib/letflow/definitions/solution_pack.ex` → the route dir returns zero, and `solution_pack.ex` shows only `register_variable_schemas` calls, never a changeset or `Repo` call against the schema. | §9.2, AC8 |
+| INV-VS-1 | **Exactly one *insert path* into `variable_schemas` exists in `lib/`:** `Letflow.Definitions.register_variable_schemas/3`. Stated as an insert-path rule, **not** a substring rule — moduledoc prose in the route layer may and must name the table and the function (§8.6 item 4). Verified by the three mechanical checks in §18 T-19. | §9.2, AC8 |
 | INV-VS-2 | No `variable_schemas` row that is not a well-formed JSON Schema document at every level can be written through any path in `lib/` or `test/`. | §9.3 |
 | INV-VS-3 | Registration rows are keyed to the `definition_id` argument, so concurrent registrations for different definitions write disjoint row sets. | §9.2 |
 | INV-MT-1 | The metrics response body contains no platform-wide figure and no figure derived from more than one tenant. | §11.3 |
@@ -1856,7 +1952,38 @@ MUST NOT add a second insert path.
 | **AC5** | the metrics tenant-exposure rule is stated in the moduledoc (aggregate-only or per-tenant) and enforced by a test that a tenant A caller sees no tenant B figure | §11.3 (the rule, required verbatim in `Letflow.Routers.Metrics`'s moduledoc), §11.4 (all three counters `:prefix`-scoped), §11.5 (`"scope" => "tenant"`) | **T-13**: seed A with 1 active instance and B with 7; request as A; assert `instances.active == 1` and that **no** value in the body equals 7 or 8 — i.e. neither B's figure nor a platform total is present. **T-14**: a doc test / `Code.fetch_docs/1` assertion that the moduledoc contains the phrase "PER-TENANT-SCOPED" |
 | **AC6** | the moduledoc distinguishes `routes/validation.zig` from `src/api/validation.zig` so the two are not conflated | §7.4 (the required section in `Letflow.Routers.Definitions`, plus the pointer added to `Letflow.Api.Validation`) | **T-15**: `Code.fetch_docs/1` on `Letflow.Routers.Definitions` asserting the moduledoc names **both** `routes/validation.zig` and `src/api/validation.zig` and attributes the latter to REQ-068 / `Letflow.Api.Validation` |
 | **AC7** | `metrics.zig`'s moduledoc states no metrics subsystem is built here and names S6 observability as its owner | §11.5 (the required AC7 paragraph, placed immediately after §11.2's divergence table) | **T-16**: `Code.fetch_docs/1` on `Letflow.Routers.Metrics` asserting the moduledoc contains both "No metrics subsystem is built here" and "S6 observability" |
-| **AC8** | installing a pack whose document carries `variable_schemas` writes those rows into the **calling** tenant's `variable_schemas` and none into any other tenant's, verified by reading both schemas back; and the write goes through the single shared `Letflow.Definitions` registration function REQ-082's import also calls, with grep confirming no second insert path in the route layer | §9.2 (`register_variable_schemas/3` — the single insert path, full `@spec` and error tuples), §8.3 step 7 (install calls it and nothing else), §9.3 (well-formedness), §9.4 (the OQ-3 closing moduledoc text), INV-VS-1 | **T-17**: install a pack carrying `variable_schemas` entries as A; read `variable_schemas` back with `prefix: <A schema>` (rows present, `json_schema` decoded to the expected maps) and with `prefix: <B schema>` (**zero** rows). **T-18**: install a pack whose `schema_content` is `"[1,2]"` (a top-level non-object); assert **422**, and assert **zero** `variable_schemas` rows and **zero** `process_definitions` rows were written in A — the whole transaction rolled back. **T-19 (grep test)**: an ExUnit test that reads every file in `lib/letflow/routers/` and asserts none contains `"VariableSchema"` or `"variable_schemas"`, and reads `lib/letflow/definitions/solution_pack.ex` and asserts it contains no `Repo.insert` against `VariableSchema` — the mechanical form of "grep confirming no second insert path" |
+| **AC8** | installing a pack whose document carries `variable_schemas` writes those rows into the **calling** tenant's `variable_schemas` and none into any other tenant's, verified by reading both schemas back; and the write goes through the single shared `Letflow.Definitions` registration function REQ-082's import also calls, with grep confirming no second insert path in the route layer | §9.2 (`register_variable_schemas/3` — the single insert path, full `@spec` and error tuples), §8.3 step 7 (install calls it and nothing else), §9.3 (well-formedness), §9.4 (the OQ-3 closing moduledoc text), INV-VS-1 | **T-17**: install a pack carrying `variable_schemas` entries as A; read `variable_schemas` back with `prefix: <A schema>` (rows present, `json_schema` decoded to the expected maps) and with `prefix: <B schema>` (**zero** rows). **T-18**: install a pack whose `schema_content` is `"[1,2]"` (a top-level non-object); assert **422**, and assert **zero** `variable_schemas` rows and **zero** `process_definitions` rows were written in A — the whole transaction rolled back. **T-19 (mechanical no-second-insert-path test)** — see the note below this table for why it is phrased as an *insert-path* check and not a substring check |
+
+### 18.1 T-19 in full — an *insert-path* check, never a substring check
+
+An earlier draft specified T-19 as "no file in `lib/letflow/routers/` contains the substring
+`VariableSchema` or `variable_schemas`". **That was self-contradictory and is corrected here**
+(F1): §8.6 item 4 *requires* `Letflow.Routers.SolutionPacks`'s moduledoc to state that install
+writes `variable_schemas` rows only through
+`Letflow.Definitions.register_variable_schemas/3` — a sentence containing both substrings. The
+mandated test would have failed on the mandated moduledoc.
+
+AC8 asks for "no second **insert path** into `variable_schemas` anywhere in the route layer".
+Documentation naming the table is not an insert path — it is the opposite, it is the route
+layer pointing at the single path. T-19 therefore asserts three things, all mechanical:
+
+1. **No `Repo.` call in the route layer at all.** For every file in `lib/letflow/routers/`,
+   assert the source contains no `Repo.` call. This is INV-RT-1 (§3.3, §20.3) and it alone
+   makes a route-layer insert impossible, whatever any file's prose says.
+2. **No changeset/insert against the schema in the route layer.** For every file in
+   `lib/letflow/routers/`, assert the source contains no `VariableSchema.changeset`,
+   no `Repo.insert`, no `Repo.insert_all` and no `Ecto.Multi.insert`.
+3. **Exactly one insert against the schema in all of `lib/`.** Across `lib/**/*.ex`, assert the
+   only occurrence of an insert whose subject is `Letflow.Engine.VariableSchema` — a
+   `Repo.insert`/`insert_all`/`Ecto.Multi.insert` whose changeset comes from
+   `VariableSchema.changeset/2` — is inside `Letflow.Definitions.register_variable_schemas/3`
+   in `lib/letflow/definitions.ex`.
+
+**Comments and moduledoc prose are explicitly exempt** from all three. A test that reads source
+text must strip or ignore `#` comments and `@moduledoc`/`@doc` heredocs before asserting, or
+assert on the specific call shapes above rather than on bare module names. If TEST-DESIGNER
+finds textual stripping too brittle, checks 1 and 2 may instead be expressed against the
+compiled module's remote-call set — the guarantee is what matters, not the technique.
 
 Additional non-AC tests the design implies (for TEST-DESIGNER): cursor round-trip across two
 pages on `/audit` (§6.4); `from > to` → 422 (§6.5); `pipeline_run_id` → 422 (§6.3);
@@ -1952,7 +2079,7 @@ review: this requirement adds NO migration at all.**
 today (the endpoint emits no problem document), but it is an inconsistency with every other
 Letflow endpoint. Fixable later by mounting `assign_trace_id/1` on `Letflow.Router` itself;
 not done here because that would change `GET /health`'s response headers, which
-`deploy/redeploy-test.sh` pins (`router.ex:74-76`).
+`deploy/redeploy-test.sh` pins (`router.ex:16`).
 
 **OQ-10 — REQ-070's roster is now stale — RULED: DOC-UPDATER annotates, does not rewrite.**
 `lib/letflow/design/req070-router-decomposition.md:126-136` lists ten sub-routers including
@@ -1981,7 +2108,7 @@ ruling wins and the affected section has been updated to match.**
 | **OQ-6** | **Accepted** — `idempotency-key` header, else generated UUID. Condition: an explicit sentence in `Letflow.Routers.Instances`'s moduledoc that **REQ-079/080 must adopt this same convention**, since it is the first HTTP-layer idempotency convention in the codebase. | §10.2, §10.5, §19 |
 | **OQ-7** | **Accepted as a known, recorded breakage; out of scope.** ORCH carries the FRONTEND-DEV follow-up in the run report so it is not discovered in UAT. C-4 stays exactly as written. | §14 C-4, §19 |
 | **OQ-8** | **Smaller option, overruling this design's first specified path.** Drop the `tenant_hostnames` table, Ecto schema, migration and `resolve_realm_by_hostname/1`. Serve `?realm=` only; `?host=` falls through to default. A table with no writer is the REQ-056 failure mode this requirement invokes twice against `sandbox_access.zig`. Owner named: **REQ-076**. | §12.1, §12.3, §12.5, §15, §17 |
-| **OQ-9** | **Accepted as-is.** Do not mount `assign_trace_id/1` on `Letflow.Router` — it would change `GET /health`'s response headers, which `deploy/redeploy-test.sh` pins (`router.ex:74-76`). | §12.4, §19 |
+| **OQ-9** | **Accepted as-is.** Do not mount `assign_trace_id/1` on `Letflow.Router` — it would change `GET /health`'s response headers, which `deploy/redeploy-test.sh` pins (`router.ex:16`). | §12.4, §19 |
 | **OQ-10** | **DOC-UPDATER annotates, does not rewrite.** REQ-070's design and `stage-4-api-surface.md`'s group-(a) table are historical artefacts. Routed at closeout. | §19 |
 | **C-1** | **Design is right; REQ-078's text is wrong.** GH#305/ISS-0088 is already `resolved` and `json_schema.ex:146-172` already carries the `is_map(subschema)` guard. **Do NOT reopen GH#305.** Only GH#306/ISS-0089 is closed by §9.4. **DOC-UPDATER: REQ-078's "WELL-FORMEDNESS, NOT JUST PRESENCE" paragraph is stale on this point and should be corrected.** | §9.3, §9.4, §14 C-1 |
 | **C-2** | **Recorded correction to REQ-078's description.** **DOC-UPDATER: amend the "one-to-three-handler surface over existing context functions" sentence to except solution packs**, so the next reader is not misled the way ORCH was. | §0.1, §8.1, §14 C-2 |
@@ -1993,7 +2120,7 @@ ruling wins and the affected section has been updated to match.**
 **REQ-078 adds zero files under `priv/repo/migrations/`.** After the OQ-8 ruling, the only
 migration this design ever contemplated is gone. Verification at review:
 `git diff --name-only origin/main... -- priv/repo/migrations/` must be **empty**.
-`Letflow.TenantProvisioning.tenant_scoped_migrations/0` (`tenant_provisioning.ex:499`) is
+`Letflow.TenantProvisioning.tenant_scoped_migrations/0` (`tenant_provisioning.ex:500`) is
 likewise unchanged.
 
 ### 20.2 Sub-router files co-owned with pending requirements — for the queue

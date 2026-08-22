@@ -154,6 +154,7 @@ defmodule Letflow.Plugs.CorsTest do
 
       assert get_resp_header(conn, "access-control-allow-origin") == [@allowed_origin]
       assert get_resp_header(conn, "vary") == ["origin"]
+
       assert get_resp_header(conn, "access-control-allow-methods") ==
                ["GET, POST, PUT, PATCH, DELETE, OPTIONS"]
 

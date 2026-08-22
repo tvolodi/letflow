@@ -1,0 +1,57 @@
+{
+  "handoff_id": "e7c1a9f4-2b6d-4a3e-8f5c-1d9b7a4e6c02",
+  "run_id": "WF03-ISS0226-20260822",
+  "workflow_id": "WF-03",
+  "step": "11",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0226-20260822/step-11-elixir-dev-git-merge.json",
+  "created_at": "2026-08-22T04:55:00Z",
+  "started_at": "2026-08-22T04:40:00Z",
+  "completed_at": "2026-08-22T04:55:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0226-20260822/step-10-release-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/sandbox_pool.ex",
+      "test/letflow/sandbox_pool_test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step Final (fn:git-merge): rebase fix/WF03-ISS0226-20260822 onto current main, re-verify format/compile/test, push, PR, squash-merge, and clean up.",
+    "acceptance_criteria": [
+      "gh pr merge exited 0 or worktree-variant verification confirms MERGED",
+      "post-merge HEAD equals origin/main tip",
+      "git log --oneline -1 shows the squash-merge commit",
+      "git status shows a clean working tree"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Fetched and checked out fix/WF03-ISS0226-20260822 at gate commit 8303637 (RELEASE-VALIDATOR PASS). git status was already clean (no leftover uncommitted artifacts from step 10). Fetched origin/main and rebased: 11 commits replayed cleanly, no conflicts, no manual resolution needed. Post-rebase conflict-marker sweep (git grep '^<<<<<<<'/'^>>>>>>>') found zero matches; the only '^=======' hits were pre-existing markdown separator lines in lib/letflow/design/iss0106-toolchain-pin-and-format-fix.md, not real conflict markers.\n\nmix format --check-formatted: PASS (no output). mix compile --warnings-as-errors: PASS (clean, 4 files compiled, no warnings). Full suite run in foreground, blocking, TEST_PARALLEL_N=4 per RELEASE-VALIDATOR's finding that this host's default N=16 is unreliable (Windows Mix hard-link lock contention): 518.5s, Result: 1542/1552 passed (5/5 properties, 1537/1547 tests), 10 failed.\n\nAttribution (structural, not count-matching): all 10 failures are in Letflow.IdentityMigrationTest (copy_tenant/2, copy_all_tenants/0, DropLegacyPublicIdentityTables guard, ISS-0060 self-heal/racer-visibility tests). git diff --stat origin/main...HEAD lists exactly 13 changed files: 9 handoff JSONs, 1 design doc, lib/letflow/sandbox_pool.ex, test/letflow/sandbox_pool_test.exs, and this run's test report -- no file under identity_migration.ex or its test is touched by this branch. All 10 failures match the standing documented flaky class tracked under ISS-0050/ISS-0059/ISS-0060/ISS-0062/ISS-0064/ISS-0106/ISS-0109/ISS-0116 (tenant-schema provisioning/teardown races, full-suite-only, load-dependent). 0 failures attributable to this branch.\n\nPush: plain 'git push origin fix/WF03-ISS0226-20260822' rejected non-fast-forward (expected -- rebase replayed 11 commits since the branch's last push). Republished with --force-with-lease scoped only to this branch; accepted (bc93cb1...). Opened PR #501 with real post-rebase counts and attribution in the body. Merged via 'gh pr merge --squash --delete-branch'; this errored locally with \"fatal: 'main' is already used by worktree at 'C:/Users/tvolo/dev/ai-dala/letflow-wt2'\" -- the documented worktree-variant partial failure. Verified via 'gh pr view 501 --json state,mergedAt,mergeCommit' before treating as FAIL: state MERGED, mergeCommit 97330d2449eb5fe6a565b95468d42c57350fa8c3, mergedAt 2026-08-22T04:52:11Z. Since --delete-branch never ran, deleted the remote ref explicitly via 'gh api -X DELETE repos/tvolodi/letflow/git/refs/heads/fix/WF03-ISS0226-20260822'. Applied the worktree-variant Step 9 replacement (git checkout main was not possible, main is held by the other worktree): 'git fetch origin main --prune' then 'git checkout --detach origin/main'. Deleted the local feature branch with 'git branch -d' (succeeded once off it).\n\nFinal verification: git rev-parse HEAD == git rev-parse origin/main == 97330d2449eb5fe6a565b95468d42c57350fa8c3. git log --oneline -1 shows the squash-merge commit. git status: HEAD detached at origin/main, clean working tree (expected under this variant, not a failure).",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0226-20260822/step-11-elixir-dev-git-merge.json",
+      "PR: https://github.com/tvolodi/letflow/pull/501 (merged, squashed)",
+      "merge commit: 97330d2449eb5fe6a565b95468d42c57350fa8c3"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "fix/WF03-ISS0226-20260822",
+      "commit_sha_list": ["bc93cb1"],
+      "remote_branch": "origin/fix/WF03-ISS0226-20260822 (deleted post-merge)",
+      "push_status": "force-with-lease, accepted",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/501",
+      "pr_create_error": null,
+      "merge_commit_sha": "97330d2449eb5fe6a565b95468d42c57350fa8c3"
+    },
+    "next_action": "ORCH marks WF03-ISS0226-20260822 COMPLETED and releases queue task 226."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

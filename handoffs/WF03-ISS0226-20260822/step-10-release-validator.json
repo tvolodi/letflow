@@ -1,0 +1,56 @@
+{
+  "handoff_id": "d4f8a2b5-1e3c-4a7f-9b2d-6c8e0f3a5b7d",
+  "run_id": "WF03-ISS0226-20260822",
+  "workflow_id": "WF-03",
+  "step": "10",
+  "from_agent": "RELEASE-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0226-20260822/step-10-release-validator.json",
+  "created_at": "2026-08-22T09:35:00Z",
+  "started_at": "2026-08-22T09:10:00Z",
+  "completed_at": "2026-08-22T09:35:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0226-20260822/step-09-test-runner.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/sandbox_pool.ex",
+      "test/letflow/sandbox_pool_test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 10: independently re-derive, from the actual shipped code and a self-run test suite, whether ISS-0226's 4 acceptance criteria are genuinely met. Not a report-copy of TEST-RUNNER's step-09.",
+    "acceptance_criteria": [
+      "AC1: worker result has an explicit closed type (struct or tagged tuple set) declared in lib/letflow/sandbox_pool.ex",
+      "AC2: handle_info/2 is total over that type -- an unrecognised shape is handled, not a function-clause crash",
+      "AC3: a test drives an unexpected run_op/1 return and asserts the pool survives with slot bookkeeping intact",
+      "AC4: no change to ISS-0224 invariants INV-SP-A1..A3 or the owner-monitor reclaim semantics"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified all 4 ACs against commit 2c53c11 on fix/WF03-ISS0226-20260822.\n\nAC1/AC2 -- read `git show b37941d -- lib/letflow/sandbox_pool.ex` directly. `@typep worker_result :: provision_result() | drop_result()` (provision_result/drop_result each a closed 2-member tagged-tuple set) is a genuinely closed type. `classify_worker_result/2` has exactly 4 exact-match clauses plus a final `defp classify_worker_result(_op, _result), do: :invalid` catch-all, and `handle_info/2`'s clause A branches on `{:ok, validated_result}` vs `:invalid`, routing the latter to `handle_worker_death/1` -- total over the callback's actual input domain, no possible FunctionClauseError path remains. CONFIRMED.\n\nAC3 -- read test/letflow/sandbox_pool_test.exs lines 1196-1309 directly: both new tests use `:sys.replace_state/2` to inject a real in_flight op then `send(pool, {fake_task_ref, :not_a_recognized_shape})` against the live GenServer, asserting `Process.alive?(pool)`, in_flight recovery via the drain/nil check, and (for the :drop case) the blocked caller receiving `{:error, :release_failed}`. Beyond reading, I ran my OWN independent mutation: commented out the catch-all clause in lib/letflow/sandbox_pool.ex, re-ran `mix test test/letflow/sandbox_pool_test.exs` -- exactly the 2 ISS-0226 regression tests failed, both with the exact FunctionClauseError in classify_worker_result/2 the fix exists to prevent (confirmed via the raised stacktrace), all other 16 tests unaffected. Reverted the mutation, re-ran: 18/18 clean, `git diff --stat` empty confirming exact restoration. This is independent (not TEST-DESIGN-VALIDATOR's mutation re-read) and demonstrates genuine discrimination. CONFIRMED.\n\nAC4 -- read the diff's hunk line ranges (`git diff 09fd3b0~1 2c53c11 -- lib/letflow/sandbox_pool.ex`): 5 hunks, header line ranges topping out at 592-631. Grepped current file for `complete_op/3` (674-736), `handle_worker_death/1` (745+), and the `:DOWN` clause B handler (461) -- all three are at line numbers strictly outside every changed hunk's range. No edit touches them. CONFIRMED untouched.\n\nFull-suite re-run (own, not copied from step-09): `TEST_PARALLEL_N=16` (host default) produced 2 different flaky outcomes across 2 attempts -- run 1: 3 failures (Context.scoped_repo_opts/1 arity assertion, EngineConcurrencyTest timing ratio, and one sandbox_pool RT-6 schema-drop-timing check); run 2: 2 partitions aborted entirely with `could not create hard link ... permission denied` (Windows Mix build-lock contention, 0 tests run in those partitions). None of the 3 run-1 failures reproduced test/letflow/sandbox_pool_test.exs in 5 consecutive isolated re-runs (18/18 clean every time, including immediately after the mutation revert) -- confirmed these are host-level resource-contention artifacts of 16-way parallelism on this Windows machine, not code regressions (RT-6 predates ISS-0226 and is unrelated to the two new tests). Reduced to `TEST_PARALLEL_N=6` (avoids the hardlink contention) and got a clean run: combined 1547 tests, 5 properties, 0 failures (1552/1552 passed) -- matching TEST-RUNNER's step-09 count exactly, independently re-derived rather than trusted.\n\nAll 4 ACs independently confirmed met. No new decision-record conflicts; docs/migration/decisions/ not implicated (this is a bugfix, not a stage gate).",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0226-20260822/step-10-release-validator.json"
+    ],
+    "issues": [
+      "Full-suite runs at this host's default TEST_PARALLEL_N=16 are unreliable (Windows Mix build-directory hard-link lock contention aborts partitions outright, and separately produces transient timing-based test failures unrelated to any single change) -- worth filing as its own infra issue so future TEST-RUNNER/RELEASE-VALIDATOR runs default to a lower N on this host rather than rediscovering this each time."
+    ],
+    "git_evidence": {
+      "branch_name": "fix/WF03-ISS0226-20260822",
+      "commit_sha_list": ["2c53c11"],
+      "remote_branch": "origin/fix/WF03-ISS0226-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Step Final: git merge to main -- all gates green (design, design-validator x2, implementation, reviewer, test-design-validator, test-runner, release-validator all PASS)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -41,7 +41,9 @@ defmodule Letflow.Api.KeycloakRealmAudienceMapperTest do
 
   setup do
     realm_json = @realm_path |> File.read!() |> Jason.decode!()
-    letflow_web = realm_json |> get_in(["clients"]) |> Enum.find(&(&1["clientId"] == "letflow-web"))
+
+    letflow_web =
+      realm_json |> get_in(["clients"]) |> Enum.find(&(&1["clientId"] == "letflow-web"))
 
     refute is_nil(letflow_web),
            "expected priv/keycloak/realms/bpm-default.json to define a client with clientId \"letflow-web\""
@@ -55,7 +57,8 @@ defmodule Letflow.Api.KeycloakRealmAudienceMapperTest do
     test "a protocol mapper of type oidc-audience-mapper is present", %{
       protocol_mappers: protocol_mappers
     } do
-      audience_mapper = Enum.find(protocol_mappers, &(&1["protocolMapper"] == "oidc-audience-mapper"))
+      audience_mapper =
+        Enum.find(protocol_mappers, &(&1["protocolMapper"] == "oidc-audience-mapper"))
 
       refute is_nil(audience_mapper),
              """
@@ -74,8 +77,11 @@ defmodule Letflow.Api.KeycloakRealmAudienceMapperTest do
     test "its config sets included.client.audience to letflow-web", %{
       protocol_mappers: protocol_mappers
     } do
-      audience_mapper = Enum.find(protocol_mappers, &(&1["protocolMapper"] == "oidc-audience-mapper"))
-      refute is_nil(audience_mapper), "precondition: oidc-audience-mapper must exist (see prior test)"
+      audience_mapper =
+        Enum.find(protocol_mappers, &(&1["protocolMapper"] == "oidc-audience-mapper"))
+
+      refute is_nil(audience_mapper),
+             "precondition: oidc-audience-mapper must exist (see prior test)"
 
       assert get_in(audience_mapper, ["config", "included.client.audience"]) == "letflow-web",
              "the oidc-audience-mapper's config[\"included.client.audience\"] must be " <>
@@ -85,8 +91,11 @@ defmodule Letflow.Api.KeycloakRealmAudienceMapperTest do
     end
 
     test "its config sets access.token.claim to \"true\"", %{protocol_mappers: protocol_mappers} do
-      audience_mapper = Enum.find(protocol_mappers, &(&1["protocolMapper"] == "oidc-audience-mapper"))
-      refute is_nil(audience_mapper), "precondition: oidc-audience-mapper must exist (see prior test)"
+      audience_mapper =
+        Enum.find(protocol_mappers, &(&1["protocolMapper"] == "oidc-audience-mapper"))
+
+      refute is_nil(audience_mapper),
+             "precondition: oidc-audience-mapper must exist (see prior test)"
 
       assert get_in(audience_mapper, ["config", "access.token.claim"]) == "true",
              "the oidc-audience-mapper's config[\"access.token.claim\"] must be the string " <>

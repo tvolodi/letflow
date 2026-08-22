@@ -56,8 +56,10 @@
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ124-20260822",
-      "commit_sha_list": [],
-      "remote_branch": null,
+      "commit_sha_list": [
+        "6c22103bcce090c1d6d0b9747df4010105eea7a2"
+      ],
+      "remote_branch": "origin/feature/WF02-REQ124-20260822",
       "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null

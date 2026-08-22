@@ -1365,3 +1365,53 @@ compiler invocation that shares the flag name. The general rule this instantiate
 the claim is about what a gate does, the probe must be the gate's own command.** A smaller
 tool that accepts the same flag is not a smaller version of the gate; it is a different
 program, and the difference will be in the exit code rather than in anything printed.
+
+## A side-finding's filing-time queue task outlives its own resolution when `queue_task_id:` was never recorded
+
+**Found:** 2026-08-22, ORCH fork, ISS-0286's own conditional trigger ("investigate on a
+third occurrence") — met by three cases in one session: queue task 22/ISS-0007
+(filed 2026-08-15T17:04:52Z, resolved 2026-08-16T10:43:18Z as a side effect of
+REQ-022 landing, not a dedicated fix run), task 70/ISS-0029 (filed
+2026-08-17T05:15:45Z, resolved 2026-08-18T01:52:35Z via a dedicated
+`WF03-ISS0029-20260818` run), task 165/ISS-0090 (filed 2026-08-19T20:22:38Z,
+resolved — per its own backfilled record — 2026-08-20T00:00:00Z). All three sat
+`open` and unlocked on `letflow-queue` for days after their underlying issue was
+genuinely resolved, and each eventually resurfaced via ordinary `get_next_task`
+polling as false claimable work, costing one fork dispatch + verification cycle
+each time before the fork found nothing left to do.
+
+**Root cause:** `TASK_QUEUE.md`'s `queue_task_id:` field on `docs/issues/<ISS>.yaml`
+— the thing that lets a later resolving run `set_lock` the *exact* filing-time task
+directly — was only added 2026-08-20 (`ISSUE_QUEUE.md`'s matching update, same
+date). All three issues above were filed *before* that date and so were never
+back-filled with it. Without a known `queue_task_id`, `TASK_QUEUE.md`'s own
+documented fallback applies: exactly one `get_next_task` call, and if it doesn't
+match this issue's `github_issue_number`, `release_lock` it back to `open` and
+**do not chase further down the stack** — a deliberate rule (see the ISS-0092/GH#314
+incident this same file documents elsewhere) that exists specifically to prevent an
+agent from guessing at task ids and hitting an unrelated live task. The
+side-effect is exactly this: a pre-2026-08-20 issue's original filing-time task has
+no reliable path back to being released except waiting for `get_next_task`'s normal
+FIFO-by-`impl_order` sequencing to surface it again on its own.
+
+**This is not an ongoing defect.** Every issue filed on or after 2026-08-20 gets
+`queue_task_id:` recorded at filing time (`ISSUE_QUEUE.md` step 2a), so a dedicated
+resolving run for a *current* issue can `set_lock` the exact task directly per
+`TASK_QUEUE.md`'s "Known `queue_task_id`" path — this class of staleness cannot
+recur for issues filed after that date. It is a bounded, self-draining residue from
+issues filed in the eleven days before the field existed: each stale task costs
+one extra fork-verification cycle when it naturally resurfaces, then closes with no
+code change, exactly as all three cases above did. **Do not react to a fourth
+occurrence by re-deriving this root cause from scratch** — check the issue's
+`discovered_at`/filing date against 2026-08-20 first; if it predates the field, this
+is that same bounded residue, not a new defect. If a fourth occurrence names an
+issue filed *after* 2026-08-20 (meaning `queue_task_id:` existed but still wasn't
+used to release the original task), *that* would be a genuine regression worth a
+fresh investigation.
+
+**Not fixed by proactive bulk backfill:** `letflow-queue` deliberately exposes no
+bulk-list/search-by-`github_issue_number` endpoint (see `TASK_QUEUE.md`'s "Design"
+citation), so finding every pre-2026-08-20 stale task without a live claim in hand
+would require exactly the kind of task-id guessing the "do not chase further" rule
+exists to prevent. Letting the existing queue loop's `get_next_task` polling drain
+them naturally is the correct, already-in-place remediation.

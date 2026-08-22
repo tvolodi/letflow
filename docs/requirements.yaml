@@ -4384,7 +4384,7 @@ requirements:
       - "approving a review that has already been applied returns a 409-class problem document and does not re-apply, verified by asserting the review's state and the target definition are unchanged"
       - "a review id belonging to another tenant returns the same response as a nonexistent review id on every one of get, approve, reject and apply -- four explicit tests (INV-5)"
       - "no route module contains an Ecto query or Repo call -- every handler delegates to a promotion context module, confirmed by grep for Repo. in lib/letflow/api/ returning no hit in these modules"
-    depends_on: [REQ-072]
+    depends_on: [REQ-072, REQ-140]  # depends_on translated to queue task ids [139, 259]
 
   - id: REQ-078
     title: Supporting routes -- audit, definition validation, tenant config, solution packs, pin rebind, metrics
@@ -6801,7 +6801,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
-    impl_order: UNREGISTERED  # not yet through register_task -- do not guess a queue task id
+    impl_order: 259  # letflow-queue task id
     description: >
       REQ-077 ports six promotion-pipeline route modules; four of its ten
       routes reach context functions that `Keyword.fetch!` an

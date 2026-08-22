@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ124-20260822/step-01-code-designer.json",
   "created_at": "2026-08-22T10:38:43Z",
   "started_at": "2026-08-22T10:38:43Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-22T11:20:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -47,19 +47,19 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Corrected premises per ORCH's note: Letflow.Routers.TenantConfig (REQ-078) is done, not a stub, and already mounted unauthenticated ahead of Letflow.Plugs.ApiPipeline/AuthPipeline -- that placement pattern is reused, not redesigned. Design adds a SECOND module, Letflow.Routers.MobileTenantConfig, at GET /api/mobile/tenant-config, forwarded from Letflow.Router the same way (ahead of /api/v1, outside ApiPipeline/AuthPipeline) -- chosen over a discriminator on the existing route to keep the 2-key web allowlist and 5-key mobile allowlist structurally isolated (INV-2), each auditable independently. realm_url is derived per-slug the same way oidc_authority is (idp_base_url<>/realms/<>realm_id); locales/default_locale/branding/environment_kind have no backing tenants column and no migration is added (per task instruction mirroring REQ-078's no-tenant_hostnames-table reasoning) -- they are global config/env-derived with hardcoded defaults, flagged as explicit open question OQ-1. Unknown/missing slug, lookup miss, and DB-exception branches all fall through to the byte-identical default-realm response (never-error rule + INV-5-flavored anti-enumeration, restated locally per the task's explicit instruction not to assume it carries over). Exact-shape test strategy specified (sorted-key-set equality, not subset). Design doc: lib/letflow/design/req124-mobile-tenant-config.md.",
+    "artifacts_out": ["lib/letflow/design/req124-mobile-tenant-config.md"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ124-20260822",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

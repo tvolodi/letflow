@@ -710,3 +710,38 @@ history:
       nonexistent, via REQ-072's mechanism). Branch feature/WF02-REQ074-20260822
       created off origin/main and pushed (Step 00). Status flipped pending ->
       in_progress here.
+  - req: REQ-074
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-22T01:12:25Z"
+    note: >
+      Shipped six new routes extending REQ-073's identity router for group
+      management and group membership (lib/letflow/routers/identity.ex),
+      backed by six new Letflow.Identity functions and a new group_members
+      join table (priv/repo/migrations/), scoped through REQ-072's
+      scoped_repo_opts/1 -- the same mechanism every prior S4 route uses to
+      discharge INV-1's cross-tenant-membership escape risk this
+      requirement's own text named. Gate chain, no rework: Step 1 design
+      (5c7f312) found and evidenced two real R-Co routing divergences --
+      handleListGroupMembers and handleRemoveGroupMember both exist as
+      tested R-Co code but are never wired to any live route -- independently
+      re-verified against src/main.zig's live route table at Step 1b
+      (fb58ab4) and a third time at Step 5. Both findings are recorded in the
+      shipped moduledoc per AC6. Step 2a ELIXIR-DEV (4a0af45) also found and
+      fixed two pre-existing regressions incidental to this work: a legacy
+      migration's SELECT broken by the new columns, and a migration-number
+      collision with a test fixture. Step 2c SECURITY-REVIEWER PASS
+      (22f97c1) traced the cross-tenant-membership join structurally and
+      filed ISS-0225 (non-blocking: orphaned-row risk for a future
+      user-deletion path). Step 2d REVIEWER PASS (5f07679) recorded explicit
+      sign-off in docs/migration/stage-4-api-surface.md on OQ-1 (single-
+      member removal at a new route shape, not R-Co's live bulk-remove-all)
+      and OQ-3 (uniform :GroupsManage policy, not R-Co's dead-code
+      PLATFORM_ADMIN-only gate) -- confirmed present, not duplicated here.
+      Step 3b TEST-DESIGN-VALIDATOR PASS (b4dbdca). Step 4 TEST-RUNNER PASS
+      (9c10394): full suite 1506/1506, new migrations verified clean across
+      all partitions. Step 5 RELEASE-VALIDATOR PASS (e95eeb0): all 6
+      acceptance criteria independently re-verified, including a third
+      independent re-check of R-Co's routing behavior. README.md checked
+      directly (grep for "group"): no hit needing an update -- no
+      externally-visible behavior documented there changes.

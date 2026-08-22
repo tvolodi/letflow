@@ -4809,7 +4809,7 @@ requirements:
   - id: REQ-085
     title: Task routes 2/2 -- write path (tasks.zig handleComplete/handleClaim/handleAssign/handleReassign)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 152  # letflow-queue task id
     description: >

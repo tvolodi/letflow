@@ -536,3 +536,37 @@ history:
       test 178/178 passed unmodified; npm run guards 48/48 passed including
       the new spec. Status flipped pending -> done here. No FAIL-then-fix
       cycles -- every gate passed on first attempt.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-22T13:12:26Z"
+    note: >
+      WF03-ISS0273-20260822 (queue task 273, GH#537) done, PR #540 merged.
+      Fixed the exact 3 mix test failures REQ-129's own entry above flags as
+      "pre-existing Mix.Tasks.Letflow.LintHandoffsTest commit-boundary
+      fixture failures" -- root cause was a recurrence of ISS-0262: that
+      run's own H6 floor-commit mechanism left @h6_floor_commit as a
+      "BOOTSTRAP" placeholder (lib/mix/tasks/letflow.lint_handoffs.ex),
+      re-deriving the floor via `git merge-base HEAD origin/main` on every
+      run instead of being pinned once at Step Final, per
+      lib/letflow/design/iss0262-h6-floor-commit-addendum.md section 2.3's
+      own unfulfilled instruction. ISSUE-FIXER confirmed via git blame the
+      pin was never done since the 184d846 merge. CODE-DESIGNER's
+      lib/letflow/design/iss0273-h6-floor-commit-pin.md specified pinning
+      @h6_floor_commit to 184d846's parent (c4a8e39729e253397d4f1aa34155a74522930252,
+      not 184d846 itself, since --is-ancestor's reflexivity would wrongly
+      grandfather the H6 fixture added in 184d846) and deleting
+      resolve_h6_floor_commit/0's runtime git-merge-base fallback entirely.
+      ELIXIR-DEV implemented exactly per design; SECURITY-REVIEWER PASS
+      (out of scope, dev tooling, no tenant-data path); REVIEWER PASS (no
+      scope creep, dead code fully removed, supervision checks
+      NOT-APPLICABLE); TEST-DESIGNER/TEST-DESIGN-VALIDATOR independently
+      reproduced fail-then-pass on the 3 named tests via a throwaway
+      worktree at main (17/20 pre-fix) vs. the feature branch (20/20
+      post-fix); TEST-RUNNER full suite 1775/1775 passed, mix
+      letflow.lint_handoffs 0 new violations. docs/issues/ISS-0273.yaml
+      severity raised MINOR -> MAJOR (confirmed recurrence of ISS-0262,
+      per WF-03 Step 0.5's severity-escalation rule) and status set to
+      resolved. GH#537 closed. Queue task 273 released with status done.
+      No FAIL-then-fix cycles -- every gate passed on first attempt.

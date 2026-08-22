@@ -1,0 +1,71 @@
+{
+  "handoff_id": "3f1c9a72-5d84-4b6e-9c0a-71e2b8d4f0a3",
+  "run_id": "WF03-ISS0227-20260822",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0227-20260822/step-04b-test-design-validator.json",
+  "created_at": "2026-08-22T09:36:00Z",
+  "started_at": "2026-08-22T09:36:00Z",
+  "completed_at": "2026-08-22T09:58:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0227-20260822/step-04-test-designer.json",
+      "test/letflow/sandbox_pool_test.exs",
+      "lib/letflow/design/iss0227-sandbox-pool-dead-field-removal.md",
+      "lib/letflow/sandbox_pool.ex",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 4 gate on TEST-DESIGNER's RT-9 (test/letflow/sandbox_pool_test.exs:1194-1228, commit ccf0f00). Independently reproduce the fail-first evidence rather than accept the reported counts; judge whether RT-9 discriminates the defect; check the spec-to-code match, the expected key sets against the real post-fix source, fixture self-sufficiency, the 255-char ExUnit name limit, and coverage of the removal set; rule on the disclosed known-noise MINOR.",
+    "acceptance_criteria": [
+      "Pre-fix failure of RT-9 independently reproduced in a throwaway git worktree at a64159d, with own quoted output",
+      "Post-fix full pair independently reproduced, with own quoted output",
+      "RT-9 checked point-for-point against design section 4.2 (sorted-key-list equality, exact key lists, three assertions, existing helpers / no sleep / no new constant)",
+      "Expected key lists verified against the actual post-fix lib/letflow/sandbox_pool.ex",
+      "Fixture judged self-sufficient and isolated (no wall clock, no unseeded randomness, no cross-test ordering, teardown matches file idiom)",
+      "ExUnit combined describe+test name length measured directly",
+      "Coverage of R1..R5 confirmed with nothing left silently unproven",
+      "Ruling given on the disclosed known-noise MINOR",
+      "Every throwaway worktree removed and the main worktree's git status --porcelain lib/ test/ confirmed empty"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS on all nine criteria. Every count below is my own measurement, not TEST-DESIGNER's.\n\n(1) PREMISE RE-VERIFIED FIRST. `git diff a64159d cbdda6f --stat -- test/` produced NO output -- the fix commit touched no test file -- so copying the current sandbox_pool_test.exs into an a64159d checkout yields exactly 'a64159d's test file + RT-9'. (`git diff a64159d HEAD --stat -- test/` is NOT empty: it is the 45-line RT-9 addition, i.e. TEST-DESIGNER's phrasing meant the pre-RT-9 tree; the substance of the premise holds.)\n\n(2) PRE-FIX, REPRODUCED MYSELF. Throwaway `git worktree add C:/Users/tvolo/tdv0227pre a64159d --detach`, .env copied (LETFLOW_DB_PORT=5472 confirmed by grep), current test file copied in and `diff`-confirmed byte-identical to this checkout's, `mix deps.get`. `mix test test/letflow/sandbox_pool_test.exs:1194` ->\n  '1) test provisioning does not block the pool's mailbox (ISS-0224 regression) RT-9 (ISS-0227): ...'\n  'code:  assert Enum.sort(Map.keys(p)) == [:from, :owner_down?, :owner_ref, :sandbox_id, :schema_name]'\n  'left:  [:from, :owner_down?, :owner_pid, :owner_ref, :sandbox_id, :schema_name]'\n  'right: [:from, :owner_down?, :owner_ref, :sandbox_id, :schema_name]'\n  'Result: 0/1 passed, 16 excluded'\nExactly the reported figure and exactly the reported cause.\n\n(3) SECOND PRE-FIX PROBE, REPRODUCED MYSELF. Same throwaway tree, assertion (1) commented out (ExUnit halts at the first failed assertion, so this is the only way to observe assertion (2) pre-fix): 'code:  assert Enum.sort(Map.keys(state.in_flight)) == [:op, :task_pid, :task_ref]' / 'left:  [:op, :schema_name, :task_pid, :task_ref]' / 'right: [:op, :task_pid, :task_ref]' / 'Result: 0/1 passed, 16 excluded'. The elision was then undone and the file re-copied from this checkout and `diff`-confirmed IDENTICAL before the next run.\n\n(4) PRE-FIX FULL PAIR, RUN ALONE -- this is the ruling on the disclosed MINOR. `mix test test/letflow/sandbox_pool_test.exs test/letflow/sandbox_pool_call_timeout_test.exs` in the throwaway tree with NO concurrent mix test -> 'Finished in 26.2 seconds' / 'Result: 20/21 passed' / 'Failed: 1 test', the single failure being RT-9 on :owner_pid. TEST-DESIGNER's 4 extra failures (RT-6 at :982 and 'release/1,2 ... drops the schema for real' at :365) did NOT occur for me. THE ATTRIBUTION HOLDS: those 4 were ISS-0107/ISS-0110-class connection pressure from a concurrently-connected second mix test against the shared 5472 database, not real failures, and resting the fail-first evidence on the isolated runs was legitimate. Nothing was hidden.\n\n(5) POST-FIX, REPRODUCED MYSELF. Second throwaway worktree `C:/Users/tvolo/tdv0227post` at ccf0f00 --detach, .env copied, deps fetched. Full pair -> 'Finished in 29.0 seconds' / 'Result: 21 passed', zero failures. RT-9 alone -> 'Result: 1 passed, 16 excluded'. `mix compile --warnings-as-errors --force` -> 'Generated letflow app', EXIT=0, discharging R5 (op_schema_name/1 deleted, nothing orphaned).\n\n(6) MUTATION TESTING -- NOT OWED, DONE ANYWAY. WF-03:105-117's non-existence clause does not apply (a genuine fail-then-pass exists), but the underlying question -- does RT-9 discriminate? -- does, so I applied both mutants IN THE THROWAWAY POST WORKTREE, never in this checkout. MUTANT A, re-add `owner_pid: owner_pid,` to reserve_slot/2's op literal only (typespec untouched): RT-9 FAILS on assertion (1), 'left: [:from, :owner_down?, :owner_pid, :owner_ref, :sandbox_id, :schema_name]', 'Result: 0/1 passed, 16 excluded'. MUTANT B (A reverted first, confirmed by `git diff --stat -- lib/` showing only the pump hunk), re-add a schema_name field to pump/1's in_flight record: RT-9 FAILS on assertion (2), 'left: [:op, :schema_name, :task_pid, :task_ref]' vs 'right: [:op, :task_pid, :task_ref]', 'Result: 0/1 passed, 16 excluded'. Each mutant is killed by exactly the assertion the design's coverage map assigns to it, and by no other -- RT-9 is sensitive to the specific defect, not merely present. After reverting mutant B, `git diff --stat -- lib/ test/` in that worktree produced no output and RT-9 re-ran 'Result: 1 passed, 16 excluded'.\n\n(7) SPEC-TO-CODE, point for point against design section 4.2. Observation point: start_pool!(max_concurrent: 1) / spawn_claimer(pool, :o, 1_000) / wait_until_pool_state(pool, \"O's provisioning is in flight\", &provision_in_flight?/1) -- all pre-existing helpers, no new helper, no new constant, no Process.sleep in the test body. All three assertions present. Both key-set assertions are sorted-list EQUALITY (`assert Enum.sort(Map.keys(...)) == [...]`); `refute Map.has_key?/2`, which section 4.2 rules out explicitly, appears nowhere. Assertion (3) carries both derivations (`elem(p.from, 0) == o` and `is_binary(n)` off the retained op). No grep-shaped source-text assertion, per section 4.2's 'One thing RT-9 must not become'.\n\n(8) KEY LISTS VERIFIED AGAINST THE REAL SOURCE, not against the report. `lib/letflow/sandbox_pool.ex` @typep provision_op (:158-164) declares from/owner_ref/sandbox_id/schema_name/owner_down?, and reserve_slot/2's literal (:529-537) writes exactly those five -- sorted, [:from, :owner_down?, :owner_ref, :sandbox_id, :schema_name], matching assertion (1). pump/1's in_flight literal (:565-569) writes op/task_ref/task_pid -- sorted, [:op, :task_pid, :task_ref], matching assertion (2). Neither assertion passes for the wrong reason. `owner_down?` is genuinely a runtime key set by reserve_slot/2, so listing it is correct.\n\n(9) FIXTURE ISOLATION. Module is `use Letflow.DataCase, async: false` (:52), so no concurrent-test interference. start_pool!/1 mints a unique pool name per test (`System.unique_integer([:positive, :monotonic])`) and registers `on_exit(GenServer.stop)`; spawn_claimer/3 registers `on_exit(Process.exit(pid, :kill))`; teardown is the file's own idiom (`sandbox_schema_names/0` baseline + `on_exit(drop_sandbox_schemas_created_since!/1)`), identical to RT-4's opening two lines. No wall-clock assertion, no sleep, no unseeded randomness the test reads, no dependence on any other test having run, no hardcoded secret or connection string. wait_until_pool_state/3 bounds itself on a monotonic deadline derived from SandboxPool.release_call_timeout/0 -- an existing single source of truth, not a new literal. A grep for `@tag`, `TODO` and `:skip` over the whole file returns NOTHING: no skipped test, no unimplemented placeholder.\n\n(10) NAME LENGTH, MEASURED MYSELF (docs/anti-patterns.md:467, four prior incidents). describe = 68, test = 108, ExUnit's combined atom 'test <describe> <test>' = 182 characters. Under 255 with 73 to spare. Matches the reported figures exactly.\n\n(11) COVERAGE. R2 -> assertion (1), proven by mutant A. R4 -> assertion (2), proven by mutant B. The section 2.2/2.3 derivations -> assertion (3). R5 -> my own `mix compile --warnings-as-errors` EXIT=0. R1 (the `owner_pid: pid(),` line in @typep provision_op) is genuinely not runtime-observable -- a @typep is erased at compile time and this project runs no dialyzer gate -- so no test can cover it, and the design names that explicitly rather than leaving it silently uncovered. R3 (the state-shape comment) is likewise a comment. I AGREE that non-test discharge is adequate for R1 and R3 and it does not rise to a FAIL: both are declarations-about-code, both are visible one-line deletions in `git show cbdda6f`, REVIEWER's idiom gate covers a typespec/comment disagreeing with the value it describes (66c6898 records that PASS), and the alternative -- inventing a source-text grep assertion -- is precisely what section 4.1's grep hazard and section 4.2's closing paragraph forbid. Nothing in the removal set R1..R5 is left silently unproven.\n\n(12) CLEANUP. `git worktree remove --force` on BOTH throwaway trees succeeded; `git worktree list` no longer lists either and both paths are gone from disk ('No such file or directory'). THIS worktree was never checked out, stashed, reset, or mutated at any point -- all mutation happened in the throwaway trees. `git status --porcelain lib/ test/` here produces NO OUTPUT. Its HEAD advanced ccf0f00 -> 66c6898 during my run (REVIEWER's Step 3d PASS handoff commit, landing concurrently as expected); `git diff ccf0f00 HEAD --stat -- lib/letflow/sandbox_pool.ex test/` is empty, so the code and tests I validated are unchanged by it.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0227-20260822/step-04b-test-design-validator.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "TEST-DESIGNER's own disclosed MINOR is RULED LEGITIMATE, not a concealed failure -- recorded here only so the ruling is on the record. Re-running the pre-fix FULL PAIR alone in my own throwaway worktree, with no second mix test connected to the 5472 database, gave 20/21 passed with RT-9 as the ONLY failure. The 4 extra failures TEST-DESIGNER saw (RT-6 at :982; 'release/1,2 ... drops the schema for real' at :365 returning {:error, :provision_failed}, with DBConnection 'client is still using a connection' / query_canceled noise) did not reproduce, confirming the ISS-0107/ISS-0110-class connection-pressure attribution and confirming that resting the fail-first evidence on the isolated single-test runs hid nothing."
+      },
+      {
+        "severity": "MINOR",
+        "description": "Wording only, no rework: TEST-DESIGNER's summary states `git diff a64159d HEAD --stat -- test/` 'produced NO output'. Run against the current HEAD it produces the 45-line RT-9 addition; the empty result belongs to `git diff a64159d cbdda6f --stat -- test/` (the pre-RT-9 tree), which I verified empty. The isolation premise it was supporting -- that the pre-fix tree becomes exactly 'a64159d's test file + RT-9' -- is CORRECT and independently re-derived; only the commit named in the sentence is loose."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "fix/WF03-ISS0227-20260822",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "PASS -- route to TEST-RUNNER (WF-03 Step 4 / WF-02 Step 4). No rework owed to TEST-DESIGNER."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

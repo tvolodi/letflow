@@ -261,6 +261,35 @@ nothing shipped, so `instrumented` was false. The gap was found by that run's ow
 diagnosis and fixed in the same run rather than filed, because Step 5 could not legally
 close the issue without a terminal status that told the truth.
 
+## Closing an issue's GitHub mirror — evidence is mandatory
+
+`WF-03_issue_resolving.md` Step 5 owns the close procedure itself; this section states
+the rule that procedure implements, so a reader who lands here first (e.g. via a
+cross-reference from a filing) doesn't have to guess whether it's optional.
+
+**A `gh issue close` on any issue this protocol tracks — and any local status flip to
+a terminal value (`resolved` / `instrumented` / `no_defect`) — MUST carry either:**
+
+1. a `--comment` on the GitHub issue citing the resolving evidence (the run-id, the
+   `docs/issues/ISS-NNNN.yaml` record, and — for `resolved` only — the regression test
+   path), or
+2. a genuinely linked/merged PR with a `Closes`/`Fixes` reference recorded in the
+   issue's own GitHub timeline (visible as a non-empty
+   `closedByPullRequestsReferences` in `gh issue view --json`).
+
+A closure carrying neither is **undocumented, not merely under-documented** — it
+cannot be checked against its own reasoning after the fact, because it states none.
+This is not a hypothetical: GH#324 and GH#326 were both closed 2026-08-20 this way,
+and the gap went undetected until an unrelated reconciliation audit
+(`WF03-ISS0278-20260822`) caught it by chance (see `docs/issues/ISS-0279.yaml` — filed
+from that finding).
+
+`mix letflow.audit_issue_closures` (`lib/mix/tasks/letflow.audit_issue_closures.ex`)
+mechanically re-checks every closed, `github_issue`-linked entry in `docs/issues/` for
+this rule. It is a **standalone, on-demand tool** — see its own `@moduledoc` for why it
+is not wired into `mix letflow.check` — run it periodically (e.g. as part of a
+reconciliation pass) rather than relying on Step 5's prose compliance alone.
+
 ## Picking up a queued issue later
 
 As of `letflow-queue` going live, task **selection** happens through `get_next_task`

@@ -164,7 +164,18 @@ acceptance criterion to revert-and-verify; its TEST-DESIGN-VALIDATOR reverted vi
    verdict_in_run:/verdict_at:, never resolved_*. Check which one this run's outcome
    actually supports against ISSUE_QUEUE.md BEFORE writing this line -- writing the
    wrong one asserts something about reality that did not happen.
-2. If github_issue is set and gh is reachable: gh issue close <n> --comment "<...>".
+2. **Evidence-on-close is a HARD requirement, not agent discretion.** If `github_issue`
+   is set and `gh` is reachable: `gh issue close <n> --comment "<...>"`. **A GitHub
+   issue close is only valid if it carries EITHER (i) a `--comment` citing the
+   resolving evidence, OR (ii) a genuinely linked/merged PR with a `Closes`/`Fixes`
+   reference in its own GitHub timeline (`closedByPullRequestsReferences` non-empty).**
+   Closing without either is not a smaller version of this step done correctly -- it is
+   this step **not done**, full stop, exactly as if `docs/issues/ISS-NNNN.yaml` had
+   been left at `status: open`. `mix letflow.audit_issue_closures` (§2 below) is the
+   mechanical check that catches a violation of this rule after the fact -- this step's
+   own prose compliance is necessary but not sufficient; the audit tool is what makes
+   it durable.
+
    The comment BRANCHES ON THE STATUS -- it is published to an external audience, so
    it must claim only what the run actually did:
      resolved     -> "Fixed in <run-id>. See docs/issues/ISS-NNNN.yaml and the
@@ -176,7 +187,11 @@ acceptance criterion to revert-and-verify; its TEST-DESIGN-VALIDATOR reverted vi
                       nothing was changed. No fix was made and there is no
                       regression test. See docs/issues/ISS-NNNN.yaml and the
                       diagnosis handoff at <handoff path>."
-   Never claim a fix or cite a regression test on a non-`resolved` close.
+   Never claim a fix or cite a regression test on a non-`resolved` close. **Never close
+   a GitHub issue with no `--comment` at all in the belief that a "self-evident" fix
+   needs no explanation** -- GH#324/GH#326 (`ISS-0279`'s own filing evidence) are the
+   concrete cost of that shortcut: a closure with no comment and no linked PR cannot
+   even be checked against its own stated reasoning, because it has none.
 3. Complete the handoff: PASS, next_action: "Route to Step Final".
 ```
 
@@ -202,3 +217,7 @@ unreachable (checked both `$QUEUE_AUTH_TOKEN` and `.env`), state that explicitly
 The issue's root cause is fixed, proven by a fail-then-pass regression test, merged to
 `main`, and the issue record closed with a real resolution timestamp — not just marked
 done on an agent's say-so.
+
+A GitHub-side close that skips both evidence forms is a Step 5 failure even when the
+local `docs/issues/ISS-NNNN.yaml` write is otherwise correct — the two halves of this
+step are both mandatory, not the yaml write alone.

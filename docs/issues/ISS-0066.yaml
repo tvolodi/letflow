@@ -51,4 +51,18 @@ description: >
 affected_files:
   - test/support/tenant_slug_test.exs
 github_issue: https://github.com/tvolodi/letflow/issues/221
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0065-20260819
+resolved_at: 2026-08-19T00:00:00Z
+resolution_note: >
+  Backfilled 2026-08-22 by ORCH's GitHub/local/queue reconciliation audit --
+  GH#221 was closed 2026-08-19T03:43:07Z with the comment "Fixed in
+  WF03-ISS0065-20260819. See docs/issues/ISS-0065.yaml and the regression
+  tests at test/support/tenant_slug_test.exs (commit 7bc0269)" but this local
+  record's `status:` field was never flipped, leaving it looking open for
+  three days. No independent re-verification performed here beyond reading
+  the closing comment and confirming commit 7bc0269 and ISS-0065.yaml exist
+  -- see ISS-0065.yaml for the actual fix's own verification record. Exact
+  `resolved_at` timestamp not separately recorded at fix time; using the
+  GitHub closedAt timestamp's date, time zeroed, as the best available
+  approximation.

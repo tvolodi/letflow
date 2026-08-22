@@ -44,4 +44,19 @@ description: >
 affected_files:
   - lib/letflow/engine/sub_process.ex   # exists only on feature/WF02-REQ062-20260819
 github_issue: 255
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0071
+resolved_at: 2026-08-19T16:11:25Z
+resolution_note: >
+  Backfilled 2026-08-22 by ORCH's GitHub/local/queue reconciliation audit.
+  GH#255 closed 2026-08-19T16:11:49Z citing commit de0a73f, merged to main
+  via PR #294 -- independently verified: commit de0a73f exists
+  ("fix(WF03-ISS0071): extract idempotency-key suffixes into shared
+  derive_idempotency_key/3 helper"), PR #294 confirmed MERGED at
+  2026-08-19T16:11:25Z with a matching title. lib/letflow/engine/sub_process.ex's
+  three hand-interpolated idempotency-key suffixes were replaced with module
+  attributes plus the shared helper -- a pure refactor, byte-identical output
+  independently verified per the closing comment (SECURITY-REVIEWER,
+  TEST-DESIGN-VALIDATOR via empirical pre-fix-commit test run,
+  RELEASE-VALIDATOR via manual diff). This local record's `status:` was
+  never flipped when the fix landed.

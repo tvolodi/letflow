@@ -120,6 +120,7 @@ defmodule Letflow.SandboxPool do
   """
 
   use GenServer
+  require Logger
 
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
@@ -180,6 +181,18 @@ defmodule Letflow.SandboxPool do
          }
 
   @typep op :: {:provision, provision_op()} | {:drop, drop_op()}
+
+  # ISS-0226: the closed set of values run_op/1 (and therefore a worker Task) may ever
+  # return. Before this fix nothing enforced that these four shapes were the only ones
+  # -- a fifth, unanticipated shape reached complete_op/3's four exact-match clauses
+  # with no catch-all and raised FunctionClauseError INSIDE handle_info/2, crashing the
+  # single supervised GenServer that holds every slot's bookkeeping. See
+  # lib/letflow/design/iss0226-sandbox-pool-worker-result-typing.md §3.1 for why this
+  # is a tagged-tuple union (matching exactly what provision_sandbox/2 and
+  # drop_schema/1 already return) rather than a new wrapping struct.
+  @typep provision_result :: {:ok, SandboxClaim.t()} | {:error, :provision_failed}
+  @typep drop_result :: :ok | {:error, :release_failed}
+  @typep worker_result :: provision_result() | drop_result()
 
   # Client API
 
@@ -393,14 +406,42 @@ defmodule Letflow.SandboxPool do
       {:noreply, state}
     else
       # Flush, so a normally-returning worker never ALSO delivers a :DOWN that
-      # clause B would misread as a crash.
+      # clause B would misread as a crash. This must happen BEFORE classification,
+      # unconditionally, regardless of whether `result` turns out to be a legal
+      # worker_result() or not (ISS-0226 design §4.2 step 1 -- load-bearing ordering).
       Process.demonitor(ref, [:flush])
 
       new_state =
-        state
-        |> complete_op(state.in_flight.op, result)
-        |> service_next_waiter()
-        |> pump()
+        case classify_worker_result(state.in_flight.op, result) do
+          {:ok, validated_result} ->
+            # Legal shape -- unchanged from pre-ISS-0226 behavior.
+            state
+            |> complete_op(state.in_flight.op, validated_result)
+            |> service_next_waiter()
+            |> pump()
+
+          :invalid ->
+            # ISS-0226: `result` is not one of worker_result()'s four legal shapes.
+            # complete_op/3 was never written to accept it (no catch-all clause), so
+            # routing here instead of into complete_op/3 is what keeps this callback
+            # total and avoids a FunctionClauseError crashing the pool. Logged first
+            # so an operator can find the root cause without a crash dump, then
+            # recovered via the same conservative path clause B case 1 already uses
+            # for an actual worker crash -- design §5's reasoning is that "worker
+            # returned a value I don't recognize" and "worker died without returning
+            # anything" are the same kind of uncertainty from the pool's point of view.
+            Logger.error(
+              "SandboxPool: worker returned an unrecognized result for " <>
+                "op_kind=#{inspect(op_kind(state.in_flight.op))} " <>
+                "sandbox_id=#{inspect(op_sandbox_id(state.in_flight.op))}: " <>
+                inspect(result)
+            )
+
+            state
+            |> handle_worker_death()
+            |> service_next_waiter()
+            |> pump()
+        end
 
       {:noreply, new_state}
     end
@@ -582,7 +623,9 @@ defmodule Letflow.SandboxPool do
   defp pump(state), do: state
 
   # Runs INSIDE the worker Task -- the only context from which any Repo call in this
-  # module is ever executed.
+  # module is ever executed. Spec ADDED by ISS-0226 (was unspecced): declares the
+  # closed contract this function must honor -- no behavioral change to its body.
+  @spec run_op(op :: op()) :: worker_result()
   defp run_op({:provision, %{sandbox_id: sandbox_id, schema_name: schema_name}}) do
     provision_sandbox(sandbox_id, schema_name)
   end
@@ -591,6 +634,39 @@ defmodule Letflow.SandboxPool do
 
   defp op_schema_name({:provision, %{schema_name: schema_name}}), do: schema_name
   defp op_schema_name({:drop, %{schema_name: schema_name}}), do: schema_name
+
+  # ISS-0226 §3.2/§4.3: the single enforcement point for worker_result()'s closed
+  # type. Total over (op(), term()) -- the four legal (op-kind, result) pairings
+  # (term-for-term the same four pairings complete_op/3's four existing clauses
+  # already match on) return {:ok, result}; anything else -- a shape complete_op/3 was
+  # never written to accept -- returns :invalid. This is what lets complete_op/3 stay
+  # exactly as it is (§4.3): once classify_worker_result/2 has returned {:ok, _}, the
+  # result is guaranteed by construction to be one of the four shapes complete_op/3
+  # already covers.
+  @spec classify_worker_result(op :: op(), result :: term()) ::
+          {:ok, worker_result()} | :invalid
+  defp classify_worker_result({:provision, _}, {:ok, %SandboxClaim{}} = result), do: {:ok, result}
+
+  defp classify_worker_result({:provision, _}, {:error, :provision_failed} = result),
+    do: {:ok, result}
+
+  defp classify_worker_result({:drop, _}, :ok = result), do: {:ok, result}
+
+  defp classify_worker_result({:drop, _}, {:error, :release_failed} = result),
+    do: {:ok, result}
+
+  defp classify_worker_result(_op, _result), do: :invalid
+
+  # ISS-0226 §6: small accessors for the Logger.error/1 call in handle_info/2's new
+  # :invalid branch -- mirrors op_schema_name/1's existing per-op-kind idiom rather
+  # than inventing a new one.
+  @spec op_kind(op :: op()) :: :provision | :drop
+  defp op_kind({:provision, _}), do: :provision
+  defp op_kind({:drop, _}), do: :drop
+
+  @spec op_sandbox_id(op :: op()) :: String.t()
+  defp op_sandbox_id({:provision, %{sandbox_id: sandbox_id}}), do: sandbox_id
+  defp op_sandbox_id({:drop, %{sandbox_id: sandbox_id}}), do: sandbox_id
 
   # Applies a completed op's result to the state and replies where a `from` exists.
   # Always clears `in_flight`.

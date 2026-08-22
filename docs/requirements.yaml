@@ -4277,6 +4277,42 @@ requirements:
       SCOPE BOUNDARY: does not build a new tenant-provisioning mechanism;
       routes to REQ-022's Letflow.TenantProvisioning, the same one REQ-075's
       handleCreateTenant uses.
+      PARTIAL-PROVISIONING RECOVERY (added by ISS-0230/GH#468, run
+      WF03-ISS0230-20260822 -- this requirement is the anchor that issue was
+      resolved into, so it is not optional scope). Onboarding sequences
+      Identity.create_tenant/1 -> provision_tenant_schema/1 ->
+      replay_migrations/2, and the tenants row commits first. If either later
+      step fails the tenant is left half-provisioned, and today NOTHING in the
+      codebase notices or repairs it. A compensating rollback is explicitly NOT
+      the fix and must not be added: REVIEWER established on ISS-0230 that
+      deleting the tenants row after provision_tenant_schema/1 already
+      succeeded orphans a real Postgres schema plus a tenant_schemas row
+      pointing at a tenant_id no longer in tenants -- an unrecoverable state
+      traded for a recoverable one. The remedy is an idempotent recovery path,
+      and REQ-022's design left this to whichever requirement owns the
+      orchestration (req022-tenant-schema-provisioning.md section 3.2's "No
+      implicit chaining invariant", which must NOT be dropped -- the recovery
+      entry point belongs in this requirement's own orchestration layer, never
+      as a function inside Letflow.TenantProvisioning that calls both
+      primitives). WF03-ISS0230-20260822 measured the groundwork first-hand
+      against real Postgres so this requirement does not re-derive it:
+      replay_migrations/2 returns a clean {:error, {:migration_failed, _}}
+      rather than raising; the resulting state is a committed tenants row, a
+      tenant_schemas row, an empty Postgres schema, and
+      Registration.migrations_applied_at nil; `migrations_applied_at IS NULL`
+      is therefore already a sufficient detection predicate for "provisioned
+      but not migrated" and no new column is needed; and re-invoking BOTH
+      primitives with the same tenant_id fully converges the state with no
+      duplicate registration row. This requirement must also settle the tenant
+      status lifecycle across onboarding, which ISS-0230 found is currently
+      unhandled: the half-provisioned tenant's status was :active throughout,
+      i.e. an unmigrated tenant is advertised as fully live. Creating the
+      tenant :migrating and flipping to :active only after replay succeeds
+      would make the partial state self-describing and let REQ-021's
+      Letflow.Plugs.TenantStatus gate it; this is the same open question
+      Letflow.TenantProvisioning's moduledoc already flags under "Secondary
+      open question", and it is to be decided explicitly here rather than left
+      silent again.
     acceptance_criteria:
       - "creating an API token returns the plaintext exactly once in the 201 body, and a subsequent GET of that token returns metadata with no token field, demonstrated by two tests (INV-4)"
       - "the persisted token record does not contain the plaintext in any column, verified by querying the row and asserting no column equals the returned plaintext (INV-4)"
@@ -4286,6 +4322,8 @@ requirements:
       - "handleUpsertRole's constraint on role names matches R-Co's actual behaviour, with the observed constraint named in the moduledoc and a test covering both an accepted and a rejected role name"
       - "GET onboarding by an unknown hostname returns a response indistinguishable from one for a hostname whose tenant exists but is not the caller's, demonstrated by comparing the two responses (INV-5)"
       - "onboarding creates a tenant via Letflow.TenantProvisioning rather than a second provisioning path, confirmed by inspection and stated in the moduledoc"
+      - "a tenant left half-provisioned by a replay failure is recoverable by an idempotent recovery entry point this requirement adds in its own orchestration layer (never inside Letflow.TenantProvisioning, per req022 section 3.2), demonstrated by a test that forces replay_migrations/2 to fail, asserts the tenants row survived with migrations_applied_at NULL and no rollback occurred, then invokes the recovery path and asserts the schema is fully migrated with exactly one tenant_schemas row (ISS-0230)"
+      - "the tenant status a half-provisioned tenant carries between creation and successful replay is decided explicitly, stated in the moduledoc, and asserted by a test covering what a request for that tenant receives while it is in that state, consistent with Letflow.Plugs.TenantStatus rather than a second conflicting status rule (ISS-0230)"
     depends_on: [REQ-075]
 
   - id: REQ-077

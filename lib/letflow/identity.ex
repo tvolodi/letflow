@@ -45,6 +45,8 @@ defmodule Letflow.Identity do
 
   import Ecto.Query
 
+  require Logger
+
   alias Letflow.Api.Pagination
   alias Letflow.Identity.Group
   alias Letflow.Identity.GroupMember
@@ -629,6 +631,38 @@ defmodule Letflow.Identity do
       %Tenant{} = tenant -> {:ok, tenant}
       nil -> {:error, :not_found}
     end
+  end
+
+  @doc """
+  Same lookup as `get_tenant_by_slug/1`, but swallows any exception into
+  `{:error, :lookup_failed}` instead of letting it propagate. Shared by the two
+  unauthenticated tenant-config bootstrap routes
+  (`Letflow.Routers.TenantConfig`, REQ-078; `Letflow.Routers.MobileTenantConfig`,
+  REQ-124) — both need this exact never-raise wrapper so a DB hiccup falls
+  through to their default response instead of a 500 (their own moduledocs'
+  "never-error rule"), and until REQ-124's rework both routers duplicated an
+  identical private `safe_get_tenant_by_slug/1` to get it (see
+  `handoffs/WF02-REQ124-20260822/step-02d-reviewer.json`).
+
+  `context_label` is a short caller-supplied string (e.g. `"tenant-config"`,
+  `"mobile-tenant-config"`) folded into the warning log line so the two
+  callers stay distinguishable in logs despite sharing this implementation.
+
+  Logs only the caller-supplied `slug` and `context_label` — **never** the
+  exception itself (INV-4: it can carry connection strings and query text).
+  """
+  @spec safe_get_tenant_by_slug(slug :: String.t(), context_label :: String.t()) ::
+          {:ok, Tenant.t()} | {:error, :not_found | :lookup_failed}
+  def safe_get_tenant_by_slug(slug, context_label) do
+    get_tenant_by_slug(slug)
+  rescue
+    _exception ->
+      Logger.warning(
+        "#{context_label} slug lookup failed; falling through to the default realm " <>
+          "(slug=#{inspect(slug)})"
+      )
+
+      {:error, :lookup_failed}
   end
 
   @doc """

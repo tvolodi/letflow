@@ -1,0 +1,70 @@
+{
+  "handoff_id": "c4a8e2f1-7b3d-4c5a-8e19-3f6b1d8a2c7e",
+  "run_id": "WF02-REQ124-20260822",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ124-20260822/step-01b-design-validator.json",
+  "created_at": "2026-08-22T10:43:28Z",
+  "started_at": "2026-08-22T10:43:28Z",
+  "completed_at": "2026-08-22T10:46:20Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-124"],
+    "requirement_text": {
+      "REQ-124": "MOB-2 (docs/mobile/requirements.md) needs GET /tenant-config to return { realm_url, locales, default_locale, branding, environment_kind } WITHOUT a bearer token: the mobile app calls it to discover which realm to authenticate against, so by definition it has no token yet. Verified against lib/ on 2026-08-21, this is two gaps, not one: (a) Letflow.Routers.TenantConfig is a stub whose routes land in REQ-078; and (b) Letflow.Plugs.ApiPipeline mounts it behind Letflow.Plugs.AuthPipeline, so implementing the route is not sufficient -- it would still demand the token the caller cannot have. Resolve (b) explicitly: either an unauthenticated variant mounted ahead of AuthPipeline, or a documented exemption inside it. Pick one and record why in the moduledoc. This is the gate for the entire mobile tier -- without it the app cannot reach a login screen -- which is why it is sequenced first in docs/mobile/build-order.md phase M-0. Security scope: an unauthenticated endpoint returning per-tenant data is a tenant-data path by definition and needs SECURITY-REVIEWER. The response must expose only what bootstrap requires. Check the shape field-by-field against docs/agents/instructions/security-invariants.md -- in particular whether an unauthenticated caller enumerating slugs can learn which tenants exist, and what the answer should be for a slug that does not exist."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["b3f7d1e2-8a4c-4b6e-9f21-5c7a2d9e4b1f"],
+    "artifacts_in": [
+      "lib/letflow/design/req124-mobile-tenant-config.md",
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/router.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/mobile/requirements.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/router.ex"
+    ]
+  },
+  "task": {
+    "description": "Validate lib/letflow/design/req124-mobile-tenant-config.md per WF-02 Step 1b's standard procedure (docs/agents/workflows/WF-02_requirement_implementation.md). Read the design artefact directly -- do not read CODE-DESIGNER's handoff result.summary as a substitute. Give explicit attention to three open questions the design itself flags rather than silently resolving: OQ-1 (locales/default_locale/branding/environment_kind sourced from global config, not per-tenant, because Tenant schema has no backing column and no migration is authorized for this requirement -- confirm this is an acceptable scope boundary, not a silent under-delivery of MOB-2), OQ-2 (mobile route has no ?host= branch, only ?slug=), and OQ-3 (branding's internal sub-schema is the design's own proposal, not pinned by any existing contract). Also confirm the new-route-vs-discriminator decision in §1 is adequately justified (it is a real design choice with tradeoffs stated, not a placeholder) and that the exact-shape test strategy in §9 (Map.keys sorted-equality assertion) and the unknown-slug/anti-enumeration justification in §4 are both concrete enough for TEST-DESIGNER and ELIXIR-DEV to build against without further judgement calls.",
+    "acceptance_criteria": [
+      "Every MUST/acceptance criterion in the requirement has a corresponding design element -- no TBD/deferral language",
+      "Function signatures fully specified: name, inputs, outputs, error cases (including mobile_config_map/1's exact 5-key shape)",
+      "Error handling shape stated as tagged tuples / explicit branches, not left implicit",
+      "Cross-module dependencies listed",
+      "No implementation code present -- signatures and type shapes only, no .ex code bodies"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "lib/letflow/design/req124-mobile-tenant-config.md read in full and cross-checked against lib/letflow/routers/tenant_config.ex, lib/letflow/router.ex, lib/letflow/plugs/api_pipeline.ex, lib/letflow/plugs/auth_pipeline.ex, lib/letflow/identity/tenant.ex, and docs/mobile/requirements.md MOB-2 directly (not CODE-DESIGNER's self-report). All 5 gate checks pass. Corrected premises (design §0) verified true: TenantConfig is not a stub (REQ-078 implemented it, forwarded outside ApiPipeline), and AuthPipeline's call/2 has no bypass branch -- confirmed by reading it in full. Tenant schema confirmed to have exactly slug/display_name/status/idp_realm_id (grep of tenant.ex field/1 calls) -- OQ-1's 'no backing column' premise is factually correct, not asserted. Verdicts on the three flagged open questions and the route-decision, as instructed: (1) Route-vs-discriminator decision (§1) ACCEPTED -- four independently sufficient reasons given (allowlist isolation, moduledoc scope, no existing integration to preserve, project's one-module-per-concern convention), a real tradeoff analysis, not a placeholder. (2) OQ-1 (global, not per-tenant, config for locales/default_locale/branding/environment_kind) ACCEPTED as a legitimate scope boundary, not silent under-delivery -- it satisfies MOB-2's exact 5-field shape; the four fields have no per-tenant backing anywhere in the system today (also cited: REQ-127/MOB-7 finding that the web platform itself has no locale policy), so per-tenant values would require an out-of-scope migration this task explicitly did not authorize. (3) OQ-2 (no ?host= branch) ACCEPTED -- verified against docs/mobile/requirements.md MOB-2 text directly: 'resolve tenant identity from a deep-link subdomain or manual slug entry' happens client-side before the endpoint is called, and Letflow has zero host->tenant binding infrastructure today (confirmed in tenant_config.ex's own moduledoc), so a ?host= param would be dead weight, not a missing capability. (4) OQ-3 (branding sub-schema is the design's own proposal) ACCEPTED -- confirmed docs/mobile/requirements.md specifies no branding sub-schema anywhere, so a placeholder proposal flagged as revisable is the correct move, not a guess presented as fact. §9's exact-shape test strategy (Map.keys sorted-equality assertion, explicit expected key list) and §4/§6's unknown-slug anti-enumeration justification (exhaustive branch table, all byte-identical) are both concrete enough for TEST-DESIGNER/ELIXIR-DEV to build against without further judgement calls. Checklist: (a) every requirement acceptance criterion has a design element via §9's resolution-map table, no TBD/deferral language found (grepped for TBD/'to be determined'/'to be decided' -- only forward references to future out-of-scope requirements, not deferred current-scope work); (b) function signatures fully specified in §3 (handle_mobile_tenant_config/1, resolve_realm_id/1, mobile_config_map/1 with its exact concrete 5-key shape spelled out field-by-field, safe_get_tenant_by_slug/1, idp_base_url/0, environment_kind/0); (c) error handling stated as explicit tagged tuples ({:ok, %Tenant{}} | {:error, :not_found | :lookup_failed}) plus the never-error/fallthrough rule stated as explicit branches, nothing implicit; (d) cross-module dependencies listed in full in §10; (e) no .ex implementation code bodies present -- §3 is @spec/comment only, and the two single-line snippets present (the Router forward/2 declaration in §2, and the terminal match _ do Response.not_found(conn) end in §3) are declarative routing lines with no business logic, matching the exact pattern already accepted in the precedent design lib/letflow/design/req078-supporting-routes.md (grepped: same forward(...) and match _ do Response.not_found(conn) end lines appear there too), not a new precedent being set by this validator. One MINOR non-blocking note recorded under issues: §3's mobile_config_map/1 @spec writes the map-key type as required(String) instead of the correct Dialyzer syntax required(String.t()) -- does not block ELIXIR-DEV since the concrete field-by-field shape immediately below it is unambiguous, but should be corrected when the real @spec is written.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "lib/letflow/design/req124-mobile-tenant-config.md §3's @spec for mobile_config_map/1 writes the return type's key as required(String) -- missing .t(), should be required(String.t()) per correct Dialyzer/typespec syntax. Non-blocking: the concrete field-by-field shape given immediately below the @spec in the same section is unambiguous, so ELIXIR-DEV has no judgement call to make, but the literal @spec should be corrected to the valid form when written into the real .ex file."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ124-20260822",
+      "commit_sha_list": ["bde192192e29d047ce36d86f712f85dce5e9be77"],
+      "remote_branch": "origin/feature/WF02-REQ124-20260822",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (2a)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

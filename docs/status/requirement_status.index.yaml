@@ -210,7 +210,7 @@ volumes:
     path: docs/status/requirement_status.v3.yaml
     status: current
     opened: 2026-08-22
-    entries: 12
+    entries: 14
     note: >
       Opened by ISS-0263's roll (WF03-ISS0263-20260822), successor to volume 2.
       Created with volume 2's header text verbatim (volume number, opening date
@@ -279,6 +279,29 @@ volumes:
       Incremented to 12 by WF02-REQ129-20260822 (ELIXIR-DEV)'s own
       done-event append (12 on-disk `- req:` entries in
       requirement_status.v3.yaml), no rebase conflict on this file.
+      Incremented to 13 by WF02-REQ124-20260822 (ELIXIR-DEV)'s Step Final
+      rebase (second attempt -- main advanced again past the first
+      attempt's push, from REQ-129 landing before the PR could merge). The
+      first attempt had appended its own started-event against a base
+      declaring 6 and computed 7, then re-derived 12 after composing with
+      main's ISS-0265 done, REQ-126 started+done, and REQ-120 started+done
+      (11 on-disk entries pre-composition). This second attempt found main
+      further advanced by REQ-129's own done-event (12:07:32Z, no conflict
+      on requirement_status.v3.yaml itself -- it landed cleanly at the file's
+      tail after REQ-126's done-event, while this run's own started-event
+      from the first attempt's composition remained, unmoved, between
+      ISS-0265's done and REQ-126's started). Only this index file's count
+      and narrative needed manual re-composition here. Recounted from the
+      composed file: 13 on-disk `- req:` entries in requirement_status.v3.yaml.
+      Incremented to 14 in the same Step Final rebase's second conflict on
+      this attempt, when this run's own done-event (12:04:29Z) replayed:
+      it conflicted at requirement_status.v3.yaml's tail against
+      WF02-REQ129-20260822's own done-event (12:07:32Z, landed on main
+      after this attempt's rebase began). Composed in chronological `at:`
+      order -- REQ-124 done (12:04:29Z) then REQ-129 done (12:07:32Z),
+      REQ-124's done-event sorted immediately before REQ-129's and needed
+      no reordering relative to any earlier entry. Recounted from the
+      composed file: 14 on-disk `- req:` entries in requirement_status.v3.yaml.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

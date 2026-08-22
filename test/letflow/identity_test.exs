@@ -757,6 +757,76 @@ defmodule Letflow.IdentityTest do
     end
   end
 
+  # ── REQ-124: Identity.safe_get_tenant_by_slug/2 exception-swallowing ──────
+  #
+  # Shared by the two unauthenticated tenant-config bootstrap routes
+  # (Letflow.Routers.TenantConfig, Letflow.Routers.MobileTenantConfig) -- see
+  # lib/letflow/identity.ex's own @doc for safe_get_tenant_by_slug/2. This
+  # describe block is REQ-124's own contribution (its handoff's acceptance
+  # criterion 5), independent of REQ-018/REQ-019 above.
+
+  describe "safe_get_tenant_by_slug/2 — exception-swallowing (REQ-124 acceptance criterion 5)" do
+    test "a genuine hit resolves exactly like get_tenant_by_slug/1" do
+      tenant =
+        insert_tenant!(
+          %{
+            slug: unique_slug("req124-safe-hit"),
+            display_name: "REQ-124 Safe Hit",
+            idp_realm_id: unique_realm("req124-safe-hit")
+          },
+          :disabled
+        )
+
+      assert {:ok, ^tenant} = Identity.safe_get_tenant_by_slug(tenant.slug, "req124-test")
+      assert {:ok, ^tenant} = Identity.get_tenant_by_slug(tenant.slug)
+    end
+
+    test "a genuine miss returns {:error, :not_found}, same as get_tenant_by_slug/1" do
+      missing_slug = unique_slug("req124-missing")
+
+      assert {:error, :not_found} = Identity.safe_get_tenant_by_slug(missing_slug, "req124-test")
+      assert {:error, :not_found} = Identity.get_tenant_by_slug(missing_slug)
+    end
+
+    test "a raise inside get_tenant_by_slug/1 is swallowed into {:error, :lookup_failed}, never propagates" do
+      # Passing a non-binary `slug` makes Ecto's own query planner raise
+      # Ecto.Query.CastError at query-execution time -- confirmed against this
+      # project's vendored Ecto dependency (deps/ecto/lib/ecto/query/planner.ex,
+      # `"value \`#{inspect(v)}\` cannot be dumped to type #{...}"` -> `raise
+      # Ecto.Query.CastError`). This is a REAL exception raised from inside
+      # get_tenant_by_slug/1's own Repo.get_by/2 call, not a simulated or
+      # mocked one. If safe_get_tenant_by_slug/2's `rescue` clause were ever
+      # removed, this test would fail with an unhandled Ecto.Query.CastError
+      # instead of matching {:error, :lookup_failed} -- see the companion
+      # "unwrapped" test below, which pins that this input genuinely raises
+      # when NOT going through the wrapper.
+      assert {:error, :lookup_failed} =
+               Identity.safe_get_tenant_by_slug(12_345, "req124-raise-test")
+    end
+
+    test "get_tenant_by_slug/1 itself (unwrapped) DOES raise for the same bad input -- proves the rescue in safe_get_tenant_by_slug/2 is load-bearing, not a no-op" do
+      assert_raise Ecto.Query.CastError, fn ->
+        Identity.get_tenant_by_slug(12_345)
+      end
+    end
+
+    test "the warning log names the context_label and the slug, and never the exception itself (INV-4)" do
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:error, :lookup_failed} =
+                   Identity.safe_get_tenant_by_slug(98_765, "req124-log-test")
+        end)
+
+      assert log =~ "req124-log-test"
+      assert log =~ "98765"
+      # INV-4: never logs the exception itself -- its message would mention
+      # "QueryError" / "cannot be dumped" / the underlying query/connection
+      # details, none of which this warning line may carry.
+      refute log =~ "QueryError"
+      refute log =~ "cannot be dumped"
+    end
+  end
+
   # Minimal local helper mirroring Ecto's own test-helper convention (avoids pulling
   # in a full Phoenix-style ConnCase/errors_on just for this one assertion).
   defp errors_on(changeset) do

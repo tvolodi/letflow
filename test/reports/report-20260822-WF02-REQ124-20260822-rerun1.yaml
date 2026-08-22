@@ -1,0 +1,107 @@
+report_id: report-20260822-WF02-REQ124-20260822-rerun1
+agent: TEST-RUNNER
+requirement: REQ-124
+workflow_step: WF-02 Step 4 (test run) -- rerun 1, after TEST-DESIGNER's rework-1 fix
+handoff: handoffs/WF02-REQ124-20260822/step-04-test-runner-rerun1.json
+branch: feature/WF02-REQ124-20260822
+date: 2026-08-22
+command: "scripts/test_parallel.sh"
+
+context: >
+  Prior run (test/reports/report-20260822-WF02-REQ124-20260822.yaml) found 4
+  failures: 1 in this branch's own new test (test/letflow/identity_test.exs:807,
+  wrong expected exception module) and 3 pre-existing lint_handoffs H6 failures
+  in test/mix/tasks/letflow.lint_handoffs_test.exs, structurally attributed to
+  merge-base (not in this branch's diff, reproduced identically at merge-base
+  e5cce479) and reported for filing -- since filed as ISS-0273 (not fixed yet).
+  TEST-DESIGNER's rework-1 corrected the identity_test.exs assertion to expect
+  Ecto.Query.CastError instead of Ecto.QueryError. This run re-verifies the full
+  suite.
+
+environment:
+  postgres: >
+    letflow-postgres-1 confirmed Running via `docker compose up -d`
+    (letflow-keycloak-1 also started; no port conflict this run). No .env
+    LETFLOW_DB_PORT override present -- default port 5462 used.
+  db_setup: >
+    Each test_parallel.sh partition's own `mix test` invocation performs
+    ecto.create/ecto.migrate --quiet automatically via the `test` alias -- no
+    separate DB-setup step taken here.
+
+run:
+  parallel_n: "16 (source: nproc, auto-derived, no TEST_PARALLEL_N override -- no
+    connection-pool burst this run, unlike attempt 1 of the prior report)"
+  pool_size: "TEST_POOL_SIZE=5 (computed: N=16, max_connections=100, headroom=10)"
+  result: |
+    test_parallel: N=16 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=5 (computed: N=16, max_connections=100, headroom=10)
+    partition 1: 101 tests, 0 properties, 3 failures, exit 2
+    partition 2: 95 tests, 0 properties, 0 failures, exit 0
+    partition 3: 125 tests, 0 properties, 0 failures, exit 0
+    partition 4: 107 tests, 0 properties, 0 failures, exit 0
+    partition 5: 130 tests, 0 properties, 0 failures, exit 0
+    partition 6: 127 tests, 0 properties, 0 failures, exit 0
+    partition 7: 100 tests, 2 properties, 0 failures, exit 0
+    partition 8: 162 tests, 2 properties, 0 failures, exit 0
+    partition 9: 82 tests, 0 properties, 0 failures, exit 0
+    partition 10: 80 tests, 0 properties, 0 failures, exit 0
+    partition 11: 119 tests, 0 properties, 0 failures, exit 0
+    partition 12: 122 tests, 0 properties, 0 failures, exit 0
+    partition 13: 116 tests, 0 properties, 0 failures, exit 0
+    partition 14: 113 tests, 0 properties, 0 failures, exit 0
+    partition 15: 86 tests, 1 property, 0 failures, exit 0
+    partition 16: 100 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 1765 tests, 5 properties, 3 failures (1767/1770 passed)
+    [exited with code 0]
+
+identity_test_exs_status: >
+  Confirmed passing: no failure entries for identity_test.exs in any partition
+  log this run (grep across all 16 partition logs under
+  /tmp/letflow_test_parallel.Ok9Zok/ for "identity_test" turned up zero failure
+  matches; the file appears only as the source of passing tests in partition 6's
+  log). The previously-failing assertion at identity_test.exs:807-811 (the
+  "get_tenant_by_slug/1 itself (unwrapped) DOES raise" test) now passes with
+  the corrected expected exception, Ecto.Query.CastError.
+
+failures:
+  - id: "lint_handoffs_test.exs x3 (partition 1)"
+    test: >
+      Mix.Tasks.Letflow.LintHandoffsTest -- "pre_floor_file?/2 -- commit-boundary
+      ancestry, real repo history T-NEW-AFTER-FLOOR-HARD-FAILS" (line 297),
+      "lint_file/2 -- H6 fires on the non-JSON fixture (un-grandfathered)
+      F-H6-CONTENT-NEVER-READ" (line 127), "lint_file/2 -- H6 fires on the
+      non-JSON fixture (un-grandfathered) F-H6-FIRES-NEW" (line 106)
+    error: >
+      All three: `assert [violation] = result.hard_new` (or
+      `[%{rule: "H6"}]`), `left: [violation]`, `right: []` -- identical
+      assertion shapes, same test names, same line numbers as the prior run's
+      report.
+    attribution: >
+      Same 3 tests, same failure mode, same location as the prior run's
+      structurally-attributed finding (not in this branch's diff; reproduced
+      identically at merge-base e5cce4794524401e77e7993a2cd3027c03feb8d1 via
+      throwaway worktree). That finding was reported for filing and has since
+      been filed as ISS-0273 (per this rerun's task instructions). Re-attributing
+      to ISS-0273 on recurrence, per core-directives.md's "Failure Attribution Is
+      Structural, Never By Count-Matching" -- not re-derived from scratch, not
+      treated as a new finding, not re-filed.
+    disposition: "PRE-EXISTING, tracked as ISS-0273 (not yet fixed). Does not
+      block this step's PASS verdict -- neither test/mix/tasks/letflow.lint_handoffs_test.exs
+      nor lib/mix/tasks/letflow.lint_handoffs.ex is in this branch's diff or
+      among its owned_modules."
+
+verdict: PASS
+
+summary_line: >
+  scripts/test_parallel.sh (N=16, default nproc, no pool-exhaustion burst this
+  run) completed all 16 partitions with real results: combined 1765 tests, 5
+  properties, 3 failures (1767/1770 passed). The previously in-scope failure
+  (test/letflow/identity_test.exs:807, wrong expected exception module) is gone
+  -- confirmed fixed by TEST-DESIGNER's rework-1. The remaining 3 failures are
+  the same test/mix/tasks/letflow.lint_handoffs_test.exs H6 failures from the
+  prior run, structurally attributed to ISS-0273 (not in this branch's diff,
+  previously reproduced identically at merge-base) rather than re-derived or
+  re-filed. REQ-124's own test coverage is fully green; verdict PASS, route to
+  RELEASE-VALIDATOR.

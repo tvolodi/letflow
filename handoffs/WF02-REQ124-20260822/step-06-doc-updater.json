@@ -1,0 +1,67 @@
+{
+  "handoff_id": "b8c9d0e1-2f3a-4b4c-d5e6-f7a8b9c0d1e2",
+  "run_id": "WF02-REQ124-20260822",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ124-20260822/step-06-doc-updater.json",
+  "created_at": "2026-08-22T12:03:12Z",
+  "started_at": "2026-08-22T12:03:12Z",
+  "completed_at": "2026-08-22T12:05:48Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-124"],
+    "requirement_text": {
+      "REQ-124": "MOB-2 (docs/mobile/requirements.md) needs GET /tenant-config to return { realm_url, locales, default_locale, branding, environment_kind } WITHOUT a bearer token: the mobile app calls it to discover which realm to authenticate against, so by definition it has no token yet. Verified against lib/ on 2026-08-21, this is two gaps, not one: (a) Letflow.Routers.TenantConfig is a stub whose routes land in REQ-078; and (b) Letflow.Plugs.ApiPipeline mounts it behind Letflow.Plugs.AuthPipeline, so implementing the route is not sufficient -- it would still demand the token the caller cannot have. Resolve (b) explicitly: either an unauthenticated variant mounted ahead of AuthPipeline, or a documented exemption inside it. Pick one and record why in the moduledoc. This is the gate for the entire mobile tier -- without it the app cannot reach a login screen -- which is why it is sequenced first in docs/mobile/build-order.md phase M-0. Security scope: an unauthenticated endpoint returning per-tenant data is a tenant-data path by definition and needs SECURITY-REVIEWER. The response must expose only what bootstrap requires. Check the shape field-by-field against docs/agents/instructions/security-invariants.md -- in particular whether an unauthenticated caller enumerating slugs can learn which tenants exist, and what the answer should be for a slug that does not exist."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["a7b8c9d0-1e2f-4a3b-c4d5-e6f7a8b9c0d1"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v3.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "docs/mobile/build-order.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/router.ex"
+    ]
+  },
+  "task": {
+    "description": "Per WF-02 Step 6's standard procedure: flip REQ-124's status from in_progress to done in docs/requirements.yaml. Append a 'done' event to the current run-history volume (confirm via docs/status/requirement_status.index.yaml which volume is current -- follow that file's own HOW-TO-APPEND procedure exactly: read the current volume in full first, get the timestamp from the clock, append, verify with git diff --numstat that the line count only grew, then increment that volume's entries: count in the index in the same commit). Summarize what shipped: new module Letflow.Routers.MobileTenantConfig at GET /api/mobile/tenant-config (unauthenticated, mounted ahead of ApiPipeline/AuthPipeline on Letflow.Router, mirroring REQ-078's Letflow.Routers.TenantConfig precedent), hand-built 5-field response allowlist (realm_url/locales/default_locale/branding/environment_kind), shared safe_get_tenant_by_slug/2 hoisted onto Letflow.Identity (shared with the existing 2-field web-SPA endpoint after a REVIEWER-driven rework), and note that this is the MOB-2 gate for the mobile tier's build-order phase M-0 -- check docs/mobile/build-order.md to see if M-0's completion should be marked/annotated there (read it first; only touch it if it names REQ-124 or MOB-2 as a tracked checklist item awaiting this). Also note in the run-history event that one incidental issue (ISS-0273, lint_handoffs H6 floor-commit regression) was filed during this run but NOT fixed here -- it is a separate, forwarded issue. Do not touch any file outside what this requirement or its incidental-issue bookkeeping actually needs.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml: REQ-124's status field is 'done'",
+      "A 'done' event for REQ-124 is appended to the current run-history volume with a real UTC timestamp, agent DOC-UPDATER, and a note summarizing what shipped including the ISS-0273 forward",
+      "The volume's entries: count in docs/status/requirement_status.index.yaml is incremented to match the real on-disk count, in the same commit",
+      "docs/mobile/build-order.md checked for an M-0/REQ-124/MOB-2 tracked item; updated only if one exists that this closes",
+      "artifacts_out lists every file actually touched, explicitly"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-124 flipped pending/in_progress -> done in docs/requirements.yaml. Shipped: Letflow.Routers.MobileTenantConfig at GET /api/mobile/tenant-config (unauthenticated, mounted on Letflow.Router ahead of Letflow.Plugs.ApiPipeline/AuthPipeline, mirroring REQ-078's Letflow.Routers.TenantConfig precedent), hand-built 5-field response allowlist (realm_url/locales/default_locale/branding/environment_kind), shared safe_get_tenant_by_slug/2 hoisted onto Letflow.Identity (shared with the existing 2-field web-SPA endpoint after a REVIEWER-driven rework). This is the MOB-2 gate for build-order.md phase M-0 -- checked build-order.md and it names no per-requirement tracked checklist item (M-0's row is a structural dependency table, not a checklist), so left unchanged. One incidental issue, ISS-0273 (lint_handoffs H6 floor-commit regression), was filed during this run and is forwarded, not fixed here. Appended a 'done' event to requirement_status.v3.yaml (current volume per the index), verified insertions-only via git diff --numstat (27/0), re-read the tail to confirm content, and incremented the index's volume-3 entries: count from 7 to 8 (real on-disk count) with a matching narrative note, in the same commit. Also updated README.md's stale 'Router now serves only GET /health' claim to reflect the real current route table (tenant-config, mobile tenant-config, CORS), since it directly concerns the router this requirement changed.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v3.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "README.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ124-20260822",
+      "commit_sha_list": ["06d87a7b1fad83b6cd5a8f6416adf7fed2ee36b4"],
+      "remote_branch": "origin/feature/WF02-REQ124-20260822",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV for Step Final"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

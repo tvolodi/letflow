@@ -1,0 +1,74 @@
+{
+  "handoff_id": "a7b8c9d0-1e2f-4a3b-c4d5-e6f7a8b9c0d1",
+  "run_id": "WF02-REQ124-20260822",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ124-20260822/step-05-release-validator.json",
+  "created_at": "2026-08-22T11:54:58Z",
+  "started_at": "2026-08-22T11:54:58Z",
+  "completed_at": "2026-08-22T12:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": [
+      "REQ-124"
+    ],
+    "requirement_text": {
+      "REQ-124": "MOB-2 (docs/mobile/requirements.md) needs GET /tenant-config to return { realm_url, locales, default_locale, branding, environment_kind } WITHOUT a bearer token: the mobile app calls it to discover which realm to authenticate against, so by definition it has no token yet. Verified against lib/ on 2026-08-21, this is two gaps, not one: (a) Letflow.Routers.TenantConfig is a stub whose routes land in REQ-078; and (b) Letflow.Plugs.ApiPipeline mounts it behind Letflow.Plugs.AuthPipeline, so implementing the route is not sufficient -- it would still demand the token the caller cannot have. Resolve (b) explicitly: either an unauthenticated variant mounted ahead of AuthPipeline, or a documented exemption inside it. Pick one and record why in the moduledoc. This is the gate for the entire mobile tier -- without it the app cannot reach a login screen -- which is why it is sequenced first in docs/mobile/build-order.md phase M-0. Security scope: an unauthenticated endpoint returning per-tenant data is a tenant-data path by definition and needs SECURITY-REVIEWER. The response must expose only what bootstrap requires. Check the shape field-by-field against docs/agents/instructions/security-invariants.md -- in particular whether an unauthenticated caller enumerating slugs can learn which tenants exist, and what the answer should be for a slug that does not exist."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "e5f6a7b8-9c0d-4e1f-b2a3-b4c5d6e7f8a9",
+      "f6a7b8c9-0d1e-4f2a-b3c4-d5e6f7a8b9c0"
+    ],
+    "artifacts_in": [
+      "lib/letflow/routers/mobile_tenant_config.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/router.ex",
+      "test/letflow/routers/mobile_tenant_config_test.exs",
+      "test/letflow/identity_test.exs",
+      "test/reports/report-20260822-WF02-REQ124-20260822-rerun1.yaml",
+      "docs/requirements.yaml"
+    ],
+    "owned_modules": [
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/router.ex"
+    ]
+  },
+  "task": {
+    "description": "Independently re-run scripts/test_parallel.sh (do not trust TEST-RUNNER's report alone) and confirm all 5 acceptance criteria for REQ-124 are satisfied -- check each against the actual code/test, not against any prior agent's summary. This run went through one rework cycle on Step 2a (safe_get_tenant_by_slug/1 duplication, hoisted into Letflow.Identity.safe_get_tenant_by_slug/2 -- re-verified PASS by both SECURITY-REVIEWER and REVIEWER after the hoist) and one rework cycle on Step 3/4 (a test asserted the wrong Ecto exception module, fixed, full suite re-run PASS at 1767/1770 with the only 3 remaining failures structurally attributed to ISS-0273, a pre-existing, already-filed, unrelated regression). Confirm test/reports/report-20260822-WF02-REQ124-20260822-rerun1.yaml's ISS-0273 attribution is sound (not in this branch's diff, reproduced at merge-base) before accepting it as non-blocking. Also check docs/requirements.yaml and docs/status/requirement_status.v3.yaml for staleness relative to what actually shipped -- REQ-124 is still status in_progress in the yaml at this point (Step 6/DOC-UPDATER flips it after you PASS, not before).",
+    "acceptance_criteria": [
+      "GET /api/mobile/tenant-config returns the five specified fields for a known tenant slug with no Authorization header, demonstrated by a test that sends no token",
+      "the auth-pipeline placement question is resolved explicitly and the chosen mechanism is stated in the moduledoc with its reason",
+      "a test asserts that the endpoint exposes no field beyond the five specified -- an exact-shape assertion, not a subset check",
+      "the behaviour for an unknown tenant slug is decided, tested, and justified against tenant-enumeration risk in the moduledoc",
+      "every other route under Letflow.Plugs.ApiPipeline still requires authentication, proven by a test that would fail if the exemption were pipeline-wide"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-ran scripts/test_parallel.sh as a blocking foreground call (not the prior report's numbers taken on trust): combined 1765 tests, 5 properties, 3 failures (1767/1770 passed) -- exact match to TEST-RUNNER's rerun1 report. Pulled the 3 failing test names/lines directly from partition 1's own log (not the report's prose): all 3 are test/mix/tasks/letflow.lint_handoffs_test.exs (H6 fixture-classification, lines 106/127/297), identical to ISS-0273. Verified the ISS-0273 attribution structurally rather than accepting it: `git diff --name-only $(git merge-base main HEAD)...HEAD` does not include lib/mix/tasks/letflow.lint_handoffs.ex or its test file, confirming the failure is not in this branch's diff; docs/issues/ISS-0273.yaml exists (status: open, github_issue 537) and independently states the same merge-base reproduction (e5cce4794524401e77e7993a2cd3027c03feb8d1) documented in the report. Ran the two REQ-124-owned test files directly as well (mix test test/letflow/routers/mobile_tenant_config_test.exs test/letflow/identity_test.exs): 46/46 passed, 0 failures. All 5 acceptance criteria re-verified against actual code/tests, not summaries: AC1 PASS -- lib/letflow/routers/mobile_tenant_config.ex `get \"/\"` returns the 5-field map via mobile_config_map/1; test/letflow/routers/mobile_tenant_config_test.exs describe \"AC1/AC3\" dispatches through Letflow.Router.call/2 with get_req_header(conn, \"authorization\") == [] asserted before the call. AC2 PASS -- moduledoc section \"Why this is mounted on Letflow.Router, NOT in Letflow.Plugs.ApiPipeline\" states the mechanism (forwarded from Letflow.Router, before the /api/v1 forward, same pattern as REQ-078's /api/tenant-config) and the reason (Letflow.Plugs.AuthPipeline has no public-path bypass, read in full, so mounting behind it would make the route unreachable by its only caller). AC3 PASS -- test asserts `Map.keys(body) |> Enum.sort() == @expected_keys` (sorted-key-set equality against the literal 5-key list), an exact-shape assertion, not a subset/pattern match; confirmed present in 3 separate test cases. AC4 PASS -- moduledoc \"Anti-enumeration\" section states the decision (every miss/nil-realm/lookup-error/missing-slug path falls through to the byte-identical default body) and justifies it against enumeration risk; describe \"AC4\" test asserts 4 distinct inputs (missing slug, unknown slug, nil-realm slug, empty-string slug) produce byte-identical response bodies. AC5 PASS -- test \"GET /api/v1/tenants with no Authorization header still returns 401\" dispatches through the same Letflow.Router and asserts 401, which would fail if the AC124 exemption had leaked pipeline-wide; lib/letflow/plugs/api_pipeline.ex confirmed unchanged (still `plug(Letflow.Plugs.AuthPipeline)` ahead of :match/:dispatch, no new forwards added by this branch's diff). Checked docs/requirements.yaml (REQ-124 entry: status in_progress, as expected pre-DOC-UPDATER) and docs/status/requirement_status.v3.yaml (only a 'started' event recorded for REQ-124, no 'done' yet) -- neither is stale; both correctly reflect that Step 6/DOC-UPDATER has not run yet. No decision-record contradictions found; Letflow.Routers.TenantConfig (REQ-078) is confirmed untouched in behavior and now shares Letflow.Identity.safe_get_tenant_by_slug/2 with the new module (hoisted per the Step 2a rework), consistent with both modules' moduledocs.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ124-20260822/step-05-release-validator.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ124-20260822",
+      "commit_sha_list": [
+        "cf96962"
+      ],
+      "remote_branch": "origin/feature/WF02-REQ124-20260822",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,64 @@
+{
+  "handoff_id": "e6c0a4b3-5d2f-4e8c-9b30-6f7d2a9c4e8b",
+  "run_id": "WF02-REQ124-20260822",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ124-20260822/step-02c-security-reviewer.json",
+  "created_at": "2026-08-22T10:51:57Z",
+  "started_at": "2026-08-22T10:51:57Z",
+  "completed_at": "2026-08-22T10:53:38Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-124"],
+    "requirement_text": {
+      "REQ-124": "MOB-2 (docs/mobile/requirements.md) needs GET /tenant-config to return { realm_url, locales, default_locale, branding, environment_kind } WITHOUT a bearer token: the mobile app calls it to discover which realm to authenticate against, so by definition it has no token yet. Verified against lib/ on 2026-08-21, this is two gaps, not one: (a) Letflow.Routers.TenantConfig is a stub whose routes land in REQ-078; and (b) Letflow.Plugs.ApiPipeline mounts it behind Letflow.Plugs.AuthPipeline, so implementing the route is not sufficient -- it would still demand the token the caller cannot have. Resolve (b) explicitly: either an unauthenticated variant mounted ahead of AuthPipeline, or a documented exemption inside it. Pick one and record why in the moduledoc. This is the gate for the entire mobile tier -- without it the app cannot reach a login screen -- which is why it is sequenced first in docs/mobile/build-order.md phase M-0. Security scope: an unauthenticated endpoint returning per-tenant data is a tenant-data path by definition and needs SECURITY-REVIEWER. The response must expose only what bootstrap requires. Check the shape field-by-field against docs/agents/instructions/security-invariants.md -- in particular whether an unauthenticated caller enumerating slugs can learn which tenants exist, and what the answer should be for a slug that does not exist."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["b3f7d1e2-8a4c-4b6e-9f21-5c7a2d9e4b1f", "c4a8e2f1-7b3d-4c5a-8e19-3f6b1d8a2c7e", "d5b9f3a2-6c1e-4d7b-9a28-4e5c7f1b3d6a"],
+    "artifacts_in": [
+      "lib/letflow/routers/mobile_tenant_config.ex",
+      "lib/letflow/router.ex",
+      "lib/letflow/design/req124-mobile-tenant-config.md",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/router.ex"
+    ]
+  },
+  "task": {
+    "description": "This diff is explicitly in scope -- do not stop at the scope test. Run: git diff main...HEAD -- lib/letflow/routers/mobile_tenant_config.ex lib/letflow/router.ex, then determine APPLIES/NOT-APPLICABLE for each of INV-1..INV-8 against docs/agents/instructions/security-invariants.md, and for each APPLIES invariant run its 'How to verify' check against the actual diff -- not against the design doc's claims. Give explicit, first-hand attention to: (1) INV-2 (response-shaping allowlist) -- confirm mobile_config_map/1 is a hand-built map literal with exactly 5 keys and is never derived from %Letflow.Identity.Tenant{} or Map.from_struct/1, by reading the actual function body. (2) INV-5-flavored tenant-enumeration risk on an unauthenticated per-tenant-data endpoint -- confirm every branch (resolvable slug, unknown slug, missing slug, DB error/exception) produces a byte-identical response for the four non-realm_url fields, and that realm_url's variance is the minimum necessary disclosure (same class of information any authenticated user of that tenant already has), not an unjustified expansion. (3) INV-4 -- confirm no exception is logged (only the caller-supplied slug), and no secret material (env-sourced or otherwise) appears in the response or logs. (4) Confirm this route is mounted ONLY on Letflow.Router, never inside Letflow.Plugs.ApiPipeline, so the exemption from Letflow.Plugs.AuthPipeline is structurally scoped to this one route and /api/tenant-config -- not pipeline-wide -- by reading the actual diff to Letflow.Router and confirming zero lines changed in api_pipeline.ex/auth_pipeline.ex (git diff --stat already shows this from Step 2a; verify it yourself, don't take Step 2a's word for it).",
+    "acceptance_criteria": [
+      "Scope test result stated (in scope -- unauthenticated endpoint returning per-tenant data)",
+      "Every applicable invariant (expect at minimum INV-2, INV-4, INV-5-flavored) verdicted PASS/FAIL against the actual code, not the design doc",
+      "Tenant-enumeration risk explicitly assessed: what an attacker with a slug wordlist can and cannot learn from this endpoint",
+      "Unknown-slug behavior explicitly confirmed as byte-identical to the default/miss/error branches",
+      "Confirmation that the AuthPipeline exemption is route-scoped, not pipeline-wide"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: IN SCOPE -- unauthenticated route (GET /api/mobile/tenant-config) returning per-tenant data. Verified against the actual diff (git diff main...HEAD -- lib/letflow/routers/mobile_tenant_config.ex lib/letflow/router.ex), not the design doc's claims. INV-1 NOT-APPLICABLE: resolve_realm_id/1 only reads the global `tenants` table via Letflow.Identity.get_tenant_by_slug/1 (no per-tenant schema/:prefix reachable from this module, no migration in this diff). INV-2 APPLIES/PASS: read mobile_config_map/1's full body (lib/letflow/routers/mobile_tenant_config.ex L~213-224) -- it is a hand-built map literal with exactly 5 keys (realm_url, locales, default_locale, branding, environment_kind), built from local variables/module attributes/env lookups, never from %Letflow.Identity.Tenant{} or Map.from_struct/1; the struct alias Tenant is used only for a guard-pattern match (`%Tenant{idp_realm_id: realm_id}`) inside resolve_realm_id/1 to extract one scalar field, never passed through to the response. INV-3 NOT-APPLICABLE (S5 not started). INV-4 APPLIES/PASS: safe_get_tenant_by_slug/1's rescue clause logs only the caller-supplied slug (`Logger.warning(...slug=#{inspect(slug)})`), the rescued `_exception` is never interpolated into the log or response; idp_base_url/0 and environment_kind/0 resolve System.get_env at point of use and return the value directly into the response map with no intermediate struct/log threading -- and none of BPM_IDP_BASE_URL/KEYCLOAK_BASE_URL/LETFLOW_ENVIRONMENT_KIND is secret material (base URLs / environment label, not credentials). grep -rn \"System.get_env\" confirms env-sourced, not hardcoded; grep -rniE secret-heuristic pattern produced no hits in this diff's files. INV-5-flavored tenant-enumeration APPLIES/PASS: resolve_realm_id/1 falls through to @default_realm (\"bpm-default\") for all of: nil slug (missing ?slug=), {:error, :not_found} (unknown slug), a resolved tenant with nil/empty idp_realm_id, and the rescued-exception path -- all four produce the identical default realm_url, and locales/default_locale/branding/environment_kind are sourced from module attributes/env only, never from slug or Tenant, so they are byte-identical across every branch including the resolvable-slug branch. Unknown-slug behavior is confirmed byte-identical to missing-slug and DB-error behavior (same @default_realm fallthrough). The only signal an attacker with a slug wordlist gets is: does realm_url differ from the default realm -- i.e. whether a slug is bound to a non-default IdP realm. This mirrors the already-accepted precedent at lib/letflow/routers/tenant_config.ex (REQ-078, same never-error/anti-oracle design, same 'realm bound' disclosure already reviewed and accepted for /api/tenant-config) -- it is the minimum necessary disclosure (the realm the mobile app must be told to authenticate against), not an unjustified expansion; no tenant id, slug, display name, status or user count is ever returned. INV-6 satisfied by this handoff itself. INV-7 NOT-APPLICABLE to this diff (no Repo.query in these files; get_tenant_by_slug/1 in lib/letflow/identity.ex is unchanged, out of this diff's scope). INV-8 APPLIES/PASS: safe_get_tenant_by_slug/1 wraps the only external-I/O call in rescue, converting any exception to {:error, :lookup_failed} rather than letting it crash the shared router process; no bare `{:ok, x} = ...` pattern reachable from external input in this diff. Route-mount confirmation: git diff main...HEAD -- lib/letflow/plugs/api_pipeline.ex lib/letflow/plugs/auth_pipeline.ex produced zero lines of diff (verified directly, not taken on Step 2a's word) -- the new forward(\"/api/mobile/tenant-config\", ...) is added only to lib/letflow/router.ex, alongside the existing /api/tenant-config forward and before the /api/v1 forward into Letflow.Plugs.ApiPipeline, so the AuthPipeline exemption is structurally scoped to these two routes only, not pipeline-wide.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ124-20260822/step-02c-security-reviewer.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ124-20260822",
+      "commit_sha_list": ["78177191fa896ab9068dcb4dbe78b68505faf279"],
+      "remote_branch": "origin/feature/WF02-REQ124-20260822",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

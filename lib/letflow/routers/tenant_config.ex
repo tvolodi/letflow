@@ -130,8 +130,6 @@ defmodule Letflow.Routers.TenantConfig do
 
   use Plug.Router
 
-  require Logger
-
   alias Letflow.Api.Response
   alias Letflow.Identity
   alias Letflow.Identity.Tenant
@@ -170,7 +168,7 @@ defmodule Letflow.Routers.TenantConfig do
   # Step 1: ?realm=<slug>. A hit with a non-nil idp_realm_id wins outright and
   # the host branch is skipped.
   defp resolve_realm(slug, host) when is_binary(slug) do
-    case safe_get_tenant_by_slug(slug) do
+    case Identity.safe_get_tenant_by_slug(slug, "tenant-config") do
       {:ok, %Tenant{idp_realm_id: realm_id}} when is_binary(realm_id) and realm_id != "" ->
         realm_id
 
@@ -187,20 +185,9 @@ defmodule Letflow.Routers.TenantConfig do
   # Step 3: neither parameter.
   defp resolve_realm(nil, _absent_host), do: @default_realm
 
-  # Any {:error, _} or raised exception falls through to the default. The slug
-  # is caller-supplied and therefore safe to log; the exception is NOT logged
-  # (INV-4 -- it can carry connection strings and query text).
-  defp safe_get_tenant_by_slug(slug) do
-    Identity.get_tenant_by_slug(slug)
-  rescue
-    _exception ->
-      Logger.warning(
-        "tenant-config slug lookup failed; falling through to the default realm " <>
-          "(slug=#{inspect(slug)})"
-      )
-
-      {:error, :lookup_failed}
-  end
+  # The never-raise, INV-4-compliant lookup wrapper itself is shared with
+  # Letflow.Routers.MobileTenantConfig via Letflow.Identity.safe_get_tenant_by_slug/2
+  # (hoisted there per REVIEWER's REQ-124 rework -- see that function's @doc).
 
   defp non_empty(nil), do: nil
   defp non_empty(""), do: nil

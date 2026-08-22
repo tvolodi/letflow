@@ -1,0 +1,70 @@
+{
+  "handoff_id": "d5b9f3a2-6c1e-4d7b-9a28-4e5c7f1b3d6a",
+  "run_id": "WF02-REQ124-20260822",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ124-20260822/step-02a-elixir-dev.json",
+  "created_at": "2026-08-22T10:47:55Z",
+  "started_at": "2026-08-22T10:58:41Z",
+  "completed_at": "2026-08-22T11:00:46Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-124"],
+    "requirement_text": {
+      "REQ-124": "MOB-2 (docs/mobile/requirements.md) needs GET /tenant-config to return { realm_url, locales, default_locale, branding, environment_kind } WITHOUT a bearer token: the mobile app calls it to discover which realm to authenticate against, so by definition it has no token yet. Verified against lib/ on 2026-08-21, this is two gaps, not one: (a) Letflow.Routers.TenantConfig is a stub whose routes land in REQ-078; and (b) Letflow.Plugs.ApiPipeline mounts it behind Letflow.Plugs.AuthPipeline, so implementing the route is not sufficient -- it would still demand the token the caller cannot have. Resolve (b) explicitly: either an unauthenticated variant mounted ahead of AuthPipeline, or a documented exemption inside it. Pick one and record why in the moduledoc. This is the gate for the entire mobile tier -- without it the app cannot reach a login screen -- which is why it is sequenced first in docs/mobile/build-order.md phase M-0. Security scope: an unauthenticated endpoint returning per-tenant data is a tenant-data path by definition and needs SECURITY-REVIEWER. The response must expose only what bootstrap requires. Check the shape field-by-field against docs/agents/instructions/security-invariants.md -- in particular whether an unauthenticated caller enumerating slugs can learn which tenants exist, and what the answer should be for a slug that does not exist."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["b3f7d1e2-8a4c-4b6e-9f21-5c7a2d9e4b1f", "c4a8e2f1-7b3d-4c5a-8e19-3f6b1d8a2c7e"],
+    "artifacts_in": [
+      "lib/letflow/design/req124-mobile-tenant-config.md",
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/router.ex",
+      "lib/letflow/identity.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/router.ex"
+    ]
+  },
+  "task": {
+    "description": "Implement lib/letflow/design/req124-mobile-tenant-config.md exactly: a new module Letflow.Routers.MobileTenantConfig (new file, e.g. lib/letflow/routers/mobile_tenant_config.ex) mounted at GET /api/mobile/tenant-config, forwarded from Letflow.Router immediately after the existing /api/tenant-config forward and before /api/v1 -- ahead of and outside Letflow.Plugs.ApiPipeline (so it never passes through Letflow.Plugs.AuthPipeline), mirroring exactly how Letflow.Routers.TenantConfig is already mounted. Do NOT modify Letflow.Plugs.ApiPipeline or Letflow.Plugs.AuthPipeline's plug chains, and do NOT modify Letflow.Routers.TenantConfig's existing 2-field response -- both stay untouched per the design's §10. Write the module's moduledoc per the design's §7 outline (must restate locally: why mounted ahead of ApiPipeline/AuthPipeline, the never-error rule, the exact 5-key allowlist statement with the 'adding a 6th key is a security change' framing, the unknown-slug/anti-enumeration justification, and OQ-1's explicit 'these four fields are global, not per-tenant' framing). Implement mobile_config_map/1 as a hand-built 5-key map literal (never derived from %Letflow.Identity.Tenant{} or Map.from_struct/1), resolve_realm_id/1 keyed only on ?slug= (no ?host= branch, per design OQ-2), and safe_get_tenant_by_slug/1 with the same exception-swallowing/no-exception-logging pattern as the existing module's safe_get_tenant_by_slug/1 (log only the caller-supplied slug, never the exception -- INV-4). Use the design's proposed literal defaults for locales/default_locale/branding/environment_kind (OQ-1/OQ-3, both design-validator-accepted as adjustable placeholders, not load-bearing) -- read from env at point of use where the design specifies (LETFLOW_ENVIRONMENT_KIND), hardcoded defaults otherwise. One MINOR fix from the design gate: use required(String.t()) not required(String) in any @spec/@type you write for the response map, per CODE-DESIGN-VALIDATOR's note. After implementing: mix compile --warnings-as-errors (fix and retry on FAIL), mix ecto.migrate is a no-op here since no migration is added -- confirm no migration file was created, mix format --check-formatted (fix formatting if it fails), then run the Step 2a self-review checklist below.\n\nREWORK ITERATION 1: REVIEWER (Step 2d, handoffs/WF02-REQ124-20260822/step-02d-reviewer.json) FAILed this work on one narrow ground -- everything else in the diff (two-module split, response-map allowlists, mount placement, moduledocs) is approved as-is and must NOT be touched in this rework. The one issue: safe_get_tenant_by_slug/1 in lib/letflow/routers/mobile_tenant_config.ex is duplicated verbatim from lib/letflow/routers/tenant_config.ex's function of the same name (identical rescue clause, identical INV-4 log-the-slug-not-the-exception behavior, identical {:error, :lookup_failed} fallback), differing only in a log-message prefix string. Hoist this rescue-and-log wrapper into one shared implementation both router modules call -- e.g. fold it into Letflow.Identity.get_tenant_by_slug/1 itself so it never raises past the context boundary, or a small shared helper (e.g. Letflow.Identity.safe_get_tenant_by_slug/2 taking a caller-label for the log line). After the hoist: re-run mix compile --warnings-as-errors and mix format --check-formatted, confirm both existing router modules still call the shared function correctly, and complete this handoff as normal (status COMPLETED/FAILED, result filled in) exactly as any other step -- this is not a first dispatch, so there is no separate claim step beyond the usual IN_PROGRESS->COMPLETED flow.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "No migration file created under priv/repo/migrations/ (design adds none -- OQ-1 explicitly rejects one)",
+      "No SQL string interpolation of tenant/user data (this route reads via Letflow.Identity.get_tenant_by_slug/1 only, no raw SQL)",
+      "All existing callers still compile -- no change to any existing function signature",
+      "mobile_config_map/1 returns exactly 5 keys (realm_url, locales, default_locale, branding, environment_kind), hand-built, never derived from the Tenant struct",
+      "Letflow.Plugs.ApiPipeline and Letflow.Plugs.AuthPipeline are unchanged -- diff must show zero lines touched in either file",
+      "Letflow.Routers.TenantConfig's existing 2-field response and behavior are unchanged -- diff must show zero lines touched in that file",
+      "Every code path (resolvable slug, unknown slug, missing slug, DB error) returns 200 with the full 5-field body -- no 404, no partial body",
+      "REWORK ITERATION 1: safe_get_tenant_by_slug/1's rescue-and-log wrapper is hoisted into one shared implementation both lib/letflow/routers/mobile_tenant_config.ex and lib/letflow/routers/tenant_config.ex call, rather than duplicated verbatim in both modules"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REWORK ITERATION 1 complete. Hoisted the rescue-and-log wrapper that was duplicated verbatim between lib/letflow/routers/tenant_config.ex and lib/letflow/routers/mobile_tenant_config.ex into a single shared implementation, Letflow.Identity.safe_get_tenant_by_slug/2 (lib/letflow/identity.ex), added directly below the existing get_tenant_by_slug/1 it wraps. The new function takes a caller-supplied context_label (\"tenant-config\" / \"mobile-tenant-config\") folded into the warning log line so the two callers stay distinguishable in logs despite sharing one implementation; it preserves the exact prior behavior of both call sites -- delegates to get_tenant_by_slug/1, rescues any exception, logs only the caller-supplied slug via Logger.warning (never the exception itself -- INV-4), and falls back to {:error, :lookup_failed}. Both lib/letflow/routers/tenant_config.ex and lib/letflow/routers/mobile_tenant_config.ex had their private safe_get_tenant_by_slug/1 functions deleted and their call sites changed to Identity.safe_get_tenant_by_slug(slug, <label>); each file's now-unused `require Logger` was also removed (Logger is no longer called directly from either router module). No other lines in either router module were touched -- the two-module split, response-map allowlists (2-key / 5-key), mount placement, and moduledocs are all unchanged from the prior (REVIEWER-approved-except-for-this-one-ground) diff. `mix compile --warnings-as-errors` -> 'Compiling 5 files (.ex)', exit 0, no warnings. `mix format --check-formatted lib/letflow/identity.ex lib/letflow/routers/tenant_config.ex lib/letflow/routers/mobile_tenant_config.ex` -> exit 0, no output (all three already correctly formatted). No migration file created (`git status --porcelain priv/repo/migrations/` -> empty output). `git diff --stat` against the pre-rework tree shows only the three files above touched: lib/letflow/identity.ex (+34/-0), lib/letflow/routers/mobile_tenant_config.ex (+4/-23 net), lib/letflow/routers/tenant_config.ex (+4/-21 net) -- Letflow.Plugs.ApiPipeline and Letflow.Plugs.AuthPipeline remain untouched (zero lines) as required. Confirmed both router modules still call the shared function correctly and both retain identical INV-4 log-only-the-slug behavior and identical {:error, :lookup_failed} fallback shape as before the hoist.",
+    "artifacts_out": [
+      "lib/letflow/identity.ex",
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/routers/mobile_tenant_config.ex"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ124-20260822",
+      "commit_sha_list": ["5b1b216", "c617469"],
+      "remote_branch": "origin/feature/WF02-REQ124-20260822",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (2c) for re-verification of the changed diff"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

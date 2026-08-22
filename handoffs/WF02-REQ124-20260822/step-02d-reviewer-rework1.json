@@ -1,0 +1,71 @@
+{
+  "handoff_id": "b2c3d4e5-8f7a-4b6c-a5d4-e3f2a1b0c9d8",
+  "run_id": "WF02-REQ124-20260822",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ124-20260822/step-02d-reviewer-rework1.json",
+  "created_at": "2026-08-22T11:05:00Z",
+  "started_at": "2026-08-22T11:05:00Z",
+  "completed_at": "2026-08-22T11:08:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": [
+      "REQ-124"
+    ],
+    "requirement_text": {
+      "REQ-124": "MOB-2 (docs/mobile/requirements.md) needs GET /tenant-config to return { realm_url, locales, default_locale, branding, environment_kind } WITHOUT a bearer token: the mobile app calls it to discover which realm to authenticate against, so by definition it has no token yet. Verified against lib/ on 2026-08-21, this is two gaps, not one: (a) Letflow.Routers.TenantConfig is a stub whose routes land in REQ-078; and (b) Letflow.Plugs.ApiPipeline mounts it behind Letflow.Plugs.AuthPipeline, so implementing the route is not sufficient -- it would still demand the token the caller cannot have. Resolve (b) explicitly: either an unauthenticated variant mounted ahead of AuthPipeline, or a documented exemption inside it. Pick one and record why in the moduledoc. This is the gate for the entire mobile tier -- without it the app cannot reach a login screen -- which is why it is sequenced first in docs/mobile/build-order.md phase M-0. Security scope: an unauthenticated endpoint returning per-tenant data is a tenant-data path by definition and needs SECURITY-REVIEWER. The response must expose only what bootstrap requires. Check the shape field-by-field against docs/agents/instructions/security-invariants.md -- in particular whether an unauthenticated caller enumerating slugs can learn which tenants exist, and what the answer should be for a slug that does not exist."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "f7d1b5c4-4e3a-4f9d-8c41-7e8f3b0d5f9c",
+      "a1b2c3d4-9e8f-4a7b-b6c5-d4e3f2a1b0c9"
+    ],
+    "artifacts_in": [
+      "lib/letflow/identity.ex",
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/routers/mobile_tenant_config.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/router.ex"
+    ]
+  },
+  "task": {
+    "description": "RE-VERIFICATION of your own prior FAIL (handoffs/WF02-REQ124-20260822/step-02d-reviewer.json), not a fresh review of new scope. That FAIL named exactly one issue: safe_get_tenant_by_slug/1 duplicated verbatim between lib/letflow/routers/mobile_tenant_config.ex and lib/letflow/routers/tenant_config.ex. ELIXIR-DEV hoisted it into a new public function Letflow.Identity.safe_get_tenant_by_slug/2 (lib/letflow/identity.ex), and SECURITY-REVIEWER has already re-verified INV-4/INV-2/mount-placement hold on the new diff (see handoffs/WF02-REQ124-20260822/step-02c-security-reviewer-rework1.json, PASS). Your job now: confirm the hoist itself is idiomatic (a clear, well-placed shared function on Letflow.Identity vs. a worse alternative), confirm the fix actually resolves your original finding (grep to confirm no duplicate rescue/log wrapper remains anywhere), and confirm nothing else changed outside the narrow scope of this fix (git diff main...HEAD -- lib/letflow/identity.ex lib/letflow/routers/tenant_config.ex lib/letflow/routers/mobile_tenant_config.ex -- everything else you approved in your first pass, e.g. the two-module split itself, moduledocs, response allowlists, mount placement, should still read the same).",
+    "acceptance_criteria": [
+      "Confirm the original duplication finding is resolved -- no duplicate rescue/log wrapper remains",
+      "Idiomatic verdict on the hoisted Letflow.Identity.safe_get_tenant_by_slug/2 placement and shape",
+      "Confirm no scope creep beyond the narrow fix",
+      "Confirm everything previously approved (two-module split, allowlists, mount placement, moduledocs) is unchanged"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-verified: the sole prior FAIL finding (duplicated safe_get_tenant_by_slug/1 rescue/log wrapper across the two routers) is resolved. grep across lib/ confirms exactly one rescue clause now exists, in Letflow.Identity.safe_get_tenant_by_slug/2; the only other hits are the two call sites (tenant_config.ex:171, mobile_tenant_config.ex:170) and a stale reference inside the pre-implementation design doc (lib/letflow/design/req124-mobile-tenant-config.md), which is not live code and not a duplicate. The hoist is idiomatic: it lives on Letflow.Identity (the context module both routers already alias for get_tenant_by_slug/1), keeps the never-raise/never-log-the-exception contract (INV-4) in exactly one place, and takes a context_label parameter so each caller's log lines stay distinguishable -- a clean shared-context-function shape, not a macro/behaviour/new abstraction layer, so no scope creep. @spec and @doc are present and accurate. git diff main...HEAD scoped to the three artifacts_in files shows only: (1) the hoisted function + `require Logger` added to identity.ex, (2) tenant_config.ex's private wrapper deleted and its one call site repointed to Identity.safe_get_tenant_by_slug/2, (3) mobile_tenant_config.ex's own copy deleted and repointed identically -- no other behavior change. Everything previously approved and unchanged by this diff: the two-module split (mobile_tenant_config.ex is untouched except the wrapper deletion), both moduledocs' reasoning and INV-2 response allowlists (5-key mobile map, 2-key web map, both hand-built, no %Tenant{} derivation), and router.ex's mount order (/api/mobile/tenant-config declared after /api/tenant-config, still before /api/v1, ahead of AuthPipeline) -- router.ex's diff is purely additive and matches what this pass's first review already covered. `mix compile --warnings-as-errors` exits 0.",
+    "artifacts_out": [
+      "lib/letflow/identity.ex",
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/routers/mobile_tenant_config.ex"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ124-20260822",
+      "commit_sha_list": [
+        "6c22103bcce090c1d6d0b9747df4010105eea7a2"
+      ],
+      "remote_branch": "origin/feature/WF02-REQ124-20260822",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

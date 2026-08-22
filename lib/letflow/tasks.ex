@@ -239,8 +239,7 @@ defmodule Letflow.Tasks do
   `prefix` is supplied by the caller.
   """
   @spec get_task(id :: String.t(), opts()) ::
-          {:ok,
-           {Task.t(), correlation_key :: String.t() | nil, form_version :: String.t() | nil}}
+          {:ok, {Task.t(), correlation_key :: String.t() | nil, form_version :: String.t() | nil}}
           | {:error, :not_found | :invalid_id}
   def get_task(id, opts) do
     prefix = Keyword.fetch!(opts, :prefix)

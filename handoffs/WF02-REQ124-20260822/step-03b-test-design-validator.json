@@ -1,0 +1,69 @@
+{
+  "handoff_id": "d4e5f6a7-8b9c-4d0e-b1f2-a3b4c5d6e7f8",
+  "run_id": "WF02-REQ124-20260822",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ124-20260822/step-03b-test-design-validator.json",
+  "created_at": "2026-08-22T11:17:31Z",
+  "started_at": "2026-08-22T11:17:31Z",
+  "completed_at": "2026-08-22T11:19:06Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-124"],
+    "requirement_text": {
+      "REQ-124": "MOB-2 (docs/mobile/requirements.md) needs GET /tenant-config to return { realm_url, locales, default_locale, branding, environment_kind } WITHOUT a bearer token: the mobile app calls it to discover which realm to authenticate against, so by definition it has no token yet. Verified against lib/ on 2026-08-21, this is two gaps, not one: (a) Letflow.Routers.TenantConfig is a stub whose routes land in REQ-078; and (b) Letflow.Plugs.ApiPipeline mounts it behind Letflow.Plugs.AuthPipeline, so implementing the route is not sufficient -- it would still demand the token the caller cannot have. Resolve (b) explicitly: either an unauthenticated variant mounted ahead of AuthPipeline, or a documented exemption inside it. Pick one and record why in the moduledoc. This is the gate for the entire mobile tier -- without it the app cannot reach a login screen -- which is why it is sequenced first in docs/mobile/build-order.md phase M-0. Security scope: an unauthenticated endpoint returning per-tenant data is a tenant-data path by definition and needs SECURITY-REVIEWER. The response must expose only what bootstrap requires. Check the shape field-by-field against docs/agents/instructions/security-invariants.md -- in particular whether an unauthenticated caller enumerating slugs can learn which tenants exist, and what the answer should be for a slug that does not exist."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["c3d4e5f6-7a8b-4c9d-b0e1-f2a3b4c5d6e7"],
+    "artifacts_in": [
+      "test/specs/REQ-124.md",
+      "test/letflow/routers/mobile_tenant_config_test.exs",
+      "test/letflow/identity_test.exs",
+      "lib/letflow/design/req124-mobile-tenant-config.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/router.ex"
+    ]
+  },
+  "task": {
+    "description": "Validate test/specs/REQ-124.md and the two test files (test/letflow/routers/mobile_tenant_config_test.exs, test/letflow/identity_test.exs's new safe_get_tenant_by_slug/2 describe block) independently, per WF-02 Step 3b's standard procedure. Read the test spec and source files directly -- do not read TEST-DESIGNER's result.summary as a substitute. Give particular attention to: (1) the exact-shape test really does a sorted-key-set equality assertion, not a subset/pattern match. (2) the unknown-slug/missing-slug/nil-realm-id branches are asserted BYTE-IDENTICAL (plain map equality), not merely 'both 200'. (3) the pipeline-wide-vs-route-specific auth test actually calls a real ApiPipeline-mounted route with no Authorization header and asserts 401. (4) fixtures are per-test unique, no shared hardcoded tenant slugs that could collide across tests or with other suites. (5) TEST-DESIGNER flagged one discrepancy in its handoff -- the dispatch named test/letflow/routers/tenant_config_test.exs as a reference file that doesn't exist, and TEST-DESIGNER used test/letflow/routers/req078_supporting_routes_test.exs's actual dispatch style instead. Confirm that substitution was reasonable and the resulting test style is still consistent with the codebase's established router-test pattern.",
+    "acceptance_criteria": [
+      "At least one runnable test targets each of the five acceptance criteria listed below -- no @tag :skip without a passing counterpart",
+      "No 'TODO: implement test' left in either spec or test file",
+      "Test fixtures use per-test unique data, no cross-test pollution",
+      "Tests are self-sufficient -- don't depend on other tests running first",
+      "No hardcoded secrets/connection strings in test files",
+      "GET /tenant-config [/api/mobile/tenant-config] returns the five specified fields for a known tenant slug with no Authorization header, demonstrated by a test that sends no token",
+      "a test asserts that the endpoint exposes no field beyond the five specified -- an exact-shape assertion (sorted key-set equality), not a subset check",
+      "the behaviour for an unknown tenant slug is tested and shown byte-identical to the default/missing-slug branch",
+      "every other route under Letflow.Plugs.ApiPipeline still requires authentication, proven by a test that would fail if the exemption were pipeline-wide",
+      "Letflow.Identity.safe_get_tenant_by_slug/2's exception-swallowing behavior is tested"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read test/specs/REQ-124.md, test/letflow/routers/mobile_tenant_config_test.exs, identity_test.exs's new safe_get_tenant_by_slug/2 describe block (lines 760-828), and the shipped implementation (lib/letflow/routers/mobile_tenant_config.ex, lib/letflow/router.ex forward order lines 83/90/92, lib/letflow/identity.ex safe_get_tenant_by_slug/2 lines 644-666) directly -- not TEST-DESIGNER's summary. All checks pass: (a) every one of the 5 acceptance criteria has >=1 runnable test, no @tag :skip anywhere in either file; (b) no 'TODO: implement test' in spec or test files (grepped, zero hits); (c) fixtures are per-test unique -- mobile_tenant_config_test.exs uses Letflow.TenantSlugFixture.unique_slug/1 (Ecto.UUID-based, collision-proof per ISS-0059) plus System.unique_integer-suffixed realm ids, identity_test.exs's new describe block reuses that same file's pre-existing unique_slug/unique_realm/insert_tenant! helpers unchanged -- no literal/shared slug anywhere; (d) every test builds its own fixtures inline and runs inside Letflow.DataCase's rolled-back sandbox transaction (async: true) -- none depends on another test's prior execution; (e) no hardcoded secrets/connection strings -- grepped for password/secret/postgres:// and Bearer-with-real-token patterns, zero hits (the one Authorization header sent is a deliberate literal garbage string 'Bearer not-a-real-token', not a real credential). Task-specific spot checks: (1) confirmed the exact-shape assertion at mobile_tenant_config_test.exs:114 is `Map.keys(body) |> Enum.sort() == @expected_keys` -- true sorted-key-set equality, not assert_subset/has_key?; (2) confirmed the byte-identical assertions at lines 193-196 use plain `==` on the full decoded body map across all four branches (missing/unknown/nil-realm/empty), not a per-field or 'both 200' check; (3) confirmed the AC4 test at lines 232-244 dispatches GET /api/v1/tenants (a real route mounted under Letflow.Plugs.ApiPipeline per router.ex:92) through the same Letflow.Router.call/2 used by every other test, with no Authorization header, and asserts 401 -- this genuinely exercises the pipeline-mounted route, not a mock; (4) fixtures verified unique (see (c) above); (5) verified the substitution TEST-DESIGNER made (test/letflow/routers/tenant_config_test.exs does not exist; REQ-078 coverage lives in req078_supporting_routes_test.exs) is accurate -- grepped req078_supporting_routes_test.exs and found its GET /api/tenant-config case at line 281-282 dispatching via `conn |> Letflow.Router.call(@tenant_opts)`, the same dispatch-through-the-real-router style mobile_tenant_config_test.exs follows (@router_opts/call/2 helper). Style is consistent, substitution reasonable. Implementation cross-check: router.ex mounts /api/tenant-config then /api/mobile/tenant-config both before /api/v1 (ApiPipeline), matching the moduledoc's claimed mount order and the tests' assumptions; Identity.safe_get_tenant_by_slug/2's rescue clause logs only context_label/slug, never the exception, matching the INV-4 test at identity_test.exs:813-827.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ124-20260822/step-03b-test-design-validator.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ124-20260822",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

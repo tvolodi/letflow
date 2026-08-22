@@ -1,0 +1,35 @@
+id: ISS-0273
+title: >
+  lint_handoffs H6 floor-commit regression -- fixture misclassified as
+  grandfathered instead of new
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ124-20260822
+discovered_at: "2026-08-22T11:20:15Z"
+severity: MINOR
+description: >
+  mix letflow.lint_handoffs H6 check (added under ISS-0262) misclassifies
+  test/mix/tasks/letflow.lint_handoffs_test.exs fixtures: pre_floor_file?/2
+  resolves @h6_floor_commit dynamically via `git merge-base HEAD origin/main`
+  every run. As main has advanced past the fixture's own commit since
+  ISS-0262 was marked resolved, the floor commit computed today is later
+  than at ISS-0262 resolution time, so a fixture that should be classified
+  NEW is now classified as grandfathered (or vice versa), failing 3
+  assertions in test/mix/tasks/letflow.lint_handoffs_test.exs. Discovered
+  incidentally by TEST-RUNNER during WF02-REQ124-20260822 Step 4 (full-suite
+  run) -- not caused by that branch: `git diff --name-only main...HEAD`
+  does not touch lint_handoffs.ex or its test file, and the failure was
+  reproduced identically at merge-base
+  e5cce4794524401e77e7993a2cd3027c03feb8d1 via an isolated git worktree.
+  See test/reports/report-20260822-WF02-REQ124-20260822.yaml for full
+  quoted output. Fix likely needs @h6_floor_commit pinned to a fixed commit
+  sha (as originally intended by ISS-0262) rather than re-derived via
+  merge-base on every run, or the fixture updated to track whatever the
+  floor legitimately is post-merge.
+affected_files:
+  - lib/mix/tasks/letflow.lint_handoffs.ex
+  - test/mix/tasks/letflow.lint_handoffs_test.exs
+related:
+  - ISS-0262
+queue_task_id: 273
+github_issue: 537
+status: open

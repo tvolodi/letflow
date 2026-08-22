@@ -1,0 +1,67 @@
+{
+  "handoff_id": "c3d4e5f6-7a8b-4c9d-b0e1-f2a3b4c5d6e7",
+  "run_id": "WF02-REQ124-20260822",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ124-20260822/step-03-test-designer.json",
+  "created_at": "2026-08-22T11:08:06Z",
+  "started_at": "2026-08-22T11:36:36Z",
+  "completed_at": "2026-08-22T11:38:34Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-124"],
+    "requirement_text": {
+      "REQ-124": "MOB-2 (docs/mobile/requirements.md) needs GET /tenant-config to return { realm_url, locales, default_locale, branding, environment_kind } WITHOUT a bearer token: the mobile app calls it to discover which realm to authenticate against, so by definition it has no token yet. Verified against lib/ on 2026-08-21, this is two gaps, not one: (a) Letflow.Routers.TenantConfig is a stub whose routes land in REQ-078; and (b) Letflow.Plugs.ApiPipeline mounts it behind Letflow.Plugs.AuthPipeline, so implementing the route is not sufficient -- it would still demand the token the caller cannot have. Resolve (b) explicitly: either an unauthenticated variant mounted ahead of AuthPipeline, or a documented exemption inside it. Pick one and record why in the moduledoc. This is the gate for the entire mobile tier -- without it the app cannot reach a login screen -- which is why it is sequenced first in docs/mobile/build-order.md phase M-0. Security scope: an unauthenticated endpoint returning per-tenant data is a tenant-data path by definition and needs SECURITY-REVIEWER. The response must expose only what bootstrap requires. Check the shape field-by-field against docs/agents/instructions/security-invariants.md -- in particular whether an unauthenticated caller enumerating slugs can learn which tenants exist, and what the answer should be for a slug that does not exist."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["b3f7d1e2-8a4c-4b6e-9f21-5c7a2d9e4b1f", "b2c3d4e5-8f7a-4b6c-a5d4-e3f2a1b0c9d8"],
+    "artifacts_in": [
+      "lib/letflow/design/req124-mobile-tenant-config.md",
+      "lib/letflow/routers/mobile_tenant_config.ex",
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/router.ex",
+      "test/letflow/routers/tenant_config_test.exs"
+    ],
+    "owned_modules": [
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/router.ex"
+    ]
+  },
+  "task": {
+    "description": "Write tests for lib/letflow/routers/mobile_tenant_config.ex and the new lib/letflow/identity.ex function (Letflow.Identity.safe_get_tenant_by_slug/2), per WF-02 Step 3's standard procedure. This has real application-executable surface (a new Plug router module, a new public context function) so the full Step 3/3b/4 sequence applies, not the docs-only skip. Existing test/letflow/routers/tenant_config_test.exs is your reference for the router-dispatched test style already established for this endpoint family (Letflow.Router.call/2, no Authorization header). Cover, at minimum, every acceptance criterion below -- in particular AC3's exact-shape assertion must be a sorted-key-set equality check (Map.keys(body) |> Enum.sort() == [...]), not a subset/pattern match, and AC5 needs a test against a real Letflow.Plugs.ApiPipeline-mounted route (e.g. GET /api/v1/tenants with no Authorization header) asserting 401, to prove the exemption is route-specific and not pipeline-wide. Also test: known slug with idp_realm_id set -> realm_url reflects it; slug with nil/empty idp_realm_id -> default; unknown slug -> default, byte-identical to the missing-slug case; missing ?slug= param -> default; every branch returns HTTP 200 (never 404/500); locales/default_locale/branding/environment_kind are identical across every branch (only realm_url varies); no Authorization header is sent by any test (that's the whole point of this endpoint). Write test/specs/REQ-124.md (requirement text, test cases, why each exists) and test code under test/letflow/ (test/letflow/routers/mobile_tenant_config_test.exs, plus identity_test.exs additions for the new safe_get_tenant_by_slug/2 function if lib/letflow/identity.ex doesn't already have adequate coverage of it -- check test/letflow/identity_test.exs first).\n\nREWORK ITERATION 1: TEST-RUNNER (Step 4, handoffs/WF02-REQ124-20260822/step-04-test-runner.json) FAILed on one narrow ground -- everything else in test/specs/REQ-124.md and both test files is unaffected and must NOT be touched in this rework. The one issue: test/letflow/identity_test.exs:808 asserts `assert_raise Ecto.QueryError, fn -> ... end` for Identity.get_tenant_by_slug(12_345), but against the vendored Ecto 3.14.1 in this repo, passing a non-binary slug into Repo.get_by/2 actually raises Ecto.Query.CastError, not Ecto.QueryError -- confirmed by TEST-RUNNER's own real test run output. This is a test-code bug (wrong exception-module assumption), not an app bug: Letflow.Identity.safe_get_tenant_by_slug/2's bare `rescue` still correctly swallows whichever exception is raised (the companion wrapped-call test in the same describe block already passes). Fix: change the asserted exception module at line 808 (and the companion assert_raise a few lines below it, if it makes the same assumption) from Ecto.QueryError to Ecto.Query.CastError. Do not weaken the assertion to a bare rescue/catch-all -- keep it a specific assert_raise so a future change to the wrapped function's failure mode is still caught. After the fix: confirm the two identity_test.exs assertions parse and are mix-format-clean, then complete this handoff as normal (status COMPLETED/FAILED, result filled in fresh) -- this is not a first dispatch, so there is no separate claim step beyond the usual IN_PROGRESS->COMPLETED flow.",
+    "acceptance_criteria": [
+      "GET /tenant-config [/api/mobile/tenant-config] returns the five specified fields for a known tenant slug with no Authorization header, demonstrated by a test that sends no token",
+      "a test asserts that the endpoint exposes no field beyond the five specified -- an exact-shape assertion (sorted key-set equality), not a subset check",
+      "the behaviour for an unknown tenant slug is tested and shown byte-identical to the default/missing-slug branch",
+      "every other route under Letflow.Plugs.ApiPipeline still requires authentication, proven by a test that would fail if the exemption were pipeline-wide (e.g. GET /api/v1/tenants with no token -> 401)",
+      "Letflow.Identity.safe_get_tenant_by_slug/2's exception-swallowing behavior is tested (raises inside get_tenant_by_slug/1 -> {:error, :lookup_failed}, never propagates)",
+      "REWORK ITERATION 1: test/letflow/identity_test.exs:808's assert_raise targets Ecto.Query.CastError, not Ecto.QueryError, matching what Repo.get_by/2 actually raises against this repo's vendored Ecto version"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REWORK ITERATION 1 fix, narrow scope per TEST-RUNNER's Step 4 report: test/letflow/identity_test.exs:808's `assert_raise Ecto.QueryError, fn -> Identity.get_tenant_by_slug(12_345) end` changed to `assert_raise Ecto.Query.CastError, ...`, matching what Repo.get_by/2 actually raises against this repo's vendored Ecto 3.14.1 (deps/ecto/lib/ecto/query/planner.ex line ~1161: a dump-type mismatch raises Ecto.Query.CastError, which internally wraps an Ecto.QueryError-built message via Exception.message/1 but is itself raised as Ecto.Query.CastError). Also updated the three explanatory comment lines directly above the test (lines ~792-799, previously stating 'Ecto.QueryError' as the raised module) to say 'Ecto.Query.CastError' so the comment matches the fixed assertion -- these comments describe the exact same fact the assertion encodes and were left wrong (not merely untouched) by leaving only the assert_raise line fixed, so they were in-scope for this narrow fix rather than being separate content. The assertion remains a specific assert_raise (not weakened to a bare rescue/catch-all), per the task's explicit instruction. No other lines in identity_test.exs, mobile_tenant_config_test.exs, or test/specs/REQ-124.md were touched. Confirmed the companion assertions in the same describe block make no matching wrong-module assumption: the 'genuine miss' and 'raise inside get_tenant_by_slug/1 is swallowed' tests assert {:error, ...} tuples, not exception modules, and the INV-4 log test's `refute log =~ \"QueryError\"` remains correct because Ecto.Query.CastError's message text (built from Ecto.QueryError.exception/1's formatted message field, not the module name) never contains the literal substring 'QueryError' -- verified by reading Ecto.QueryError.exception/1's message-building code in deps/ecto/lib/ecto/exceptions.ex, which interpolates only `message`/`query`/`hint`, none of which include the module name. Verified: `mix format --check-formatted test/letflow/identity_test.exs` passed (implies the file parses, since mix format cannot format an unparseable file).",
+    "artifacts_out": [
+      "test/letflow/identity_test.exs"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ124-20260822",
+      "commit_sha_list": ["c7bf983", "2e29fcc"],
+      "remote_branch": "origin/feature/WF02-REQ124-20260822",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (Step 4) for re-run"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

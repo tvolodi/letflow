@@ -1,0 +1,66 @@
+{
+  "handoff_id": "b3f7d1e2-8a4c-4b6e-9f21-5c7a2d9e4b1f",
+  "run_id": "WF02-REQ124-20260822",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ124-20260822/step-01-code-designer.json",
+  "created_at": "2026-08-22T10:38:43Z",
+  "started_at": "2026-08-22T10:38:43Z",
+  "completed_at": "2026-08-22T11:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-124"],
+    "requirement_text": {
+      "REQ-124": "MOB-2 (docs/mobile/requirements.md) needs GET /tenant-config to return { realm_url, locales, default_locale, branding, environment_kind } WITHOUT a bearer token: the mobile app calls it to discover which realm to authenticate against, so by definition it has no token yet. Verified against lib/ on 2026-08-21, this is two gaps, not one: (a) Letflow.Routers.TenantConfig is a stub whose routes land in REQ-078; and (b) Letflow.Plugs.ApiPipeline mounts it behind Letflow.Plugs.AuthPipeline, so implementing the route is not sufficient -- it would still demand the token the caller cannot have. Resolve (b) explicitly: either an unauthenticated variant mounted ahead of AuthPipeline, or a documented exemption inside it. Pick one and record why in the moduledoc. This is the gate for the entire mobile tier -- without it the app cannot reach a login screen -- which is why it is sequenced first in docs/mobile/build-order.md phase M-0. Security scope: an unauthenticated endpoint returning per-tenant data is a tenant-data path by definition and needs SECURITY-REVIEWER. The response must expose only what bootstrap requires. Check the shape field-by-field against docs/agents/instructions/security-invariants.md -- in particular whether an unauthenticated caller enumerating slugs can learn which tenants exist, and what the answer should be for a slug that does not exist."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/router.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/design/req078-supporting-routes.md",
+      "docs/mobile/requirements.md",
+      "docs/mobile/build-order.md",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/router.ex"
+    ]
+  },
+  "task": {
+    "description": "IMPORTANT -- ORCH verified two of this requirement's premises against lib/ just now (2026-08-22) and found them STALE; correct them rather than re-deriving from the requirement text alone (per HANDOFF_PROTOCOL.md §1.1, a handoff's factual claims are checkable and this one is wrong): (1) Letflow.Routers.TenantConfig is NOT a stub -- REQ-078 fully implemented it, with an extensive moduledoc. (2) Gap (b) -- the auth-pipeline placement problem -- is ALREADY RESOLVED by REQ-078: the module is forwarded from Letflow.Router at GET /api/tenant-config, mounted AHEAD of and OUTSIDE Letflow.Plugs.ApiPipeline (so it never passes through Letflow.Plugs.AuthPipeline at all), exactly like GET /health. Read the moduledoc's 'Why this is mounted on Letflow.Router, NOT in Letflow.Plugs.ApiPipeline' section in full -- it already states the reasoning and cites tenant_config.zig. Do not redesign this placement; it is done and correct. What is NOT done, and IS this requirement's real remaining scope: the existing endpoint's response shape is {oidc_authority, client_id} (exactly 2 keys, hand-built allowlist, INV-2) -- built for the WEB SPA's OIDC bootstrap. REQ-124 needs a DIFFERENT 5-field shape for MOBILE bootstrap: { realm_url, locales, default_locale, branding, environment_kind }. Design how the mobile shape is served without breaking the existing web-SPA shape or its INV-2 allowlist discipline -- options include (not prescriptive, your call): a query/header discriminator on the same route branching to a second hand-built response map, or a second route/module mounted the same way (ahead of ApiPipeline, same unauthenticated placement, same never-error-to-caller rule the existing moduledoc documents for tenant_config.zig). Either way: (a) every acceptance criterion below must be met, (b) the never-error rule and the anti-tenant-enumeration-oracle reasoning already established in tenant_config.ex's moduledoc apply identically to the new shape -- decide explicitly what an unknown slug returns for the mobile shape and justify it the same way the existing default-realm fallback is justified, (c) do not derive the new response map from %Letflow.Identity.Tenant{} -- hand-build an explicit allowlist of exactly the 5 named fields, nothing else, mirroring config_map/1's INV-2 discipline. Write the design per WF-02 Step 1's standard procedure: lib/letflow/design/req124-mobile-tenant-config.md, function signatures, response shape per branch, DB reads involved (global tenants table only, no migration -- REQ-078's moduledoc explains why no tenant_hostnames-style table is added; the same reasoning applies here, do not add a migration), and explicit resolution of every acceptance criterion below, including the exact-shape test strategy and the unknown-slug behavior with its tenant-enumeration justification.",
+    "acceptance_criteria": [
+      "GET /tenant-config returns the five specified fields for a known tenant slug with no Authorization header, demonstrated by a test that sends no token",
+      "the auth-pipeline placement question is resolved explicitly and the chosen mechanism is stated in the moduledoc with its reason -- note: ORCH has verified this is ALREADY true structurally (unauthenticated, mounted ahead of ApiPipeline/AuthPipeline) via REQ-078; the design must state this explicitly for the mobile-shape response too, not silently assume it carries over",
+      "a test asserts that the endpoint exposes no field beyond the five specified -- an exact-shape assertion, not a subset check",
+      "the behaviour for an unknown tenant slug is decided, tested, and justified against tenant-enumeration risk in the moduledoc",
+      "every other route under Letflow.Plugs.ApiPipeline still requires authentication, proven by a test that would fail if the exemption were pipeline-wide"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Corrected premises per ORCH's note: Letflow.Routers.TenantConfig (REQ-078) is done, not a stub, and already mounted unauthenticated ahead of Letflow.Plugs.ApiPipeline/AuthPipeline -- that placement pattern is reused, not redesigned. Design adds a SECOND module, Letflow.Routers.MobileTenantConfig, at GET /api/mobile/tenant-config, forwarded from Letflow.Router the same way (ahead of /api/v1, outside ApiPipeline/AuthPipeline) -- chosen over a discriminator on the existing route to keep the 2-key web allowlist and 5-key mobile allowlist structurally isolated (INV-2), each auditable independently. realm_url is derived per-slug the same way oidc_authority is (idp_base_url<>/realms/<>realm_id); locales/default_locale/branding/environment_kind have no backing tenants column and no migration is added (per task instruction mirroring REQ-078's no-tenant_hostnames-table reasoning) -- they are global config/env-derived with hardcoded defaults, flagged as explicit open question OQ-1. Unknown/missing slug, lookup miss, and DB-exception branches all fall through to the byte-identical default-realm response (never-error rule + INV-5-flavored anti-enumeration, restated locally per the task's explicit instruction not to assume it carries over). Exact-shape test strategy specified (sorted-key-set equality, not subset). Design doc: lib/letflow/design/req124-mobile-tenant-config.md.",
+    "artifacts_out": ["lib/letflow/design/req124-mobile-tenant-config.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ124-20260822",
+      "commit_sha_list": ["e5046f6"],
+      "remote_branch": "origin/feature/WF02-REQ124-20260822",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

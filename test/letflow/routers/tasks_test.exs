@@ -810,7 +810,9 @@ defmodule Letflow.Routers.TasksTest do
 
       assert v2.status == :active
 
-      v1_reloaded = Repo.get!(Letflow.Definitions.ProcessDefinition, v1.id, prefix: tenant.schema_name)
+      v1_reloaded =
+        Repo.get!(Letflow.Definitions.ProcessDefinition, v1.id, prefix: tenant.schema_name)
+
       assert v1_reloaded.status == :deprecated
 
       # Step 4/5 -- the task's form_version must still name v1, never v2:

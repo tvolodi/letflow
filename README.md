@@ -56,9 +56,14 @@ The original pilot slice (`Letflow.ProcessInstance`, a hand-rolled
 machine) was retired as of REQ-046 — superseded by the real,
 definition-driven instance engine landing across Stage 3
 (`Letflow.Engine.create/2`; see `docs/migration/stage-3-instance-engine.md`).
-`Letflow.Router` now serves only `GET /health` (Plug + Bandit, no
-Phoenix — see `docs/migration/decisions/0001-web-framework.md`); the
-real tenant-scoped instance-management HTTP API is deferred to S4
+`Letflow.Router` (Plug + Bandit, no Phoenix — see
+`docs/migration/decisions/0001-web-framework.md`) serves `GET /health`,
+the unauthenticated `GET /api/tenant-config` (REQ-078, web-SPA
+login-bootstrap) and `GET /api/mobile/tenant-config` (REQ-124, the
+MOB-2 mobile-tier bootstrap gate — see `docs/mobile/build-order.md`
+phase M-0), plus `Letflow.Plugs.Cors` (REQ-118) mounted ahead of all of
+them; see `Letflow.Router`'s own moduledoc for the full route table.
+The real tenant-scoped instance-management HTTP API is deferred to S4
 (api-surface) and will be built against `Letflow.Engine.create/2`, not
 a revival of the old pilot contract's three routes. `Letflow.InstanceSupervisor`
 is retained, with `start_instance/1` removed, reserved for REQ-056/057.

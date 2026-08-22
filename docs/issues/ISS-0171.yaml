@@ -40,6 +40,9 @@ affected_files:
 
 related:
   - ISS-0065  # same class: a Windows-wrapper subprocess-invocation defect in a test helper
+  - ISS-0107  # SAME defect, duplicate local filename for the same GH#357 -- queue task 171's
+              # own description pointed at a stale/wrong path; ISS-0107.yaml backfilled
+              # resolved 2026-08-22 (WF03-ISS0278-20260822) pointing back at this record.
 
 queue_task_id: 171
 github_issue: https://github.com/tvolodi/letflow/issues/357

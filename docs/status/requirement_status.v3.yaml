@@ -723,3 +723,43 @@ history:
       properties, 0 failures, 1779/1779 passed -- completely clean, no
       attribution needed. docs/issues/ISS-0275.yaml marked resolved;
       GH#545 closed.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-08-22T15:18:38Z"
+    note: >
+      WF03-ISS0278-20260822 (queue task 278, GH#549) done. Reconciled four
+      GitHub issues closed COMPLETED with zero comment while their local
+      docs/issues/ISS-NNNN.yaml records still said status: open: GH#329
+      (ISS-0101) and GH#357 (ISS-0107) were both genuinely resolved --
+      #329 by merged PR #337 (R-Co's instance.zig mergeVariables confirmed
+      to use the same variable_schemas lookup for sub-process and
+      task-completion merges), #357 by merged PR #437 but filed under a
+      duplicate local filename (ISS-0171.yaml, not ISS-0107.yaml, due to a
+      stale queue-task filename pointer) -- both backfilled resolved and
+      cross-linked. GH#326 (ISS-0098) had zero evidence trail at closing
+      time but was verified genuinely resolved by this run itself: R-Co's
+      instance.zig (unreachable at design time, reachable now) confirms
+      cancelInstance has no reason/note parameter (OQ-1) and issues direct
+      SQL UPDATEs against tasks/timers rather than per-branch transition
+      events (OQ-2), matching the design's own independent reasoning --
+      lib/letflow/design/req052-instance-cancellation.md updated to cite
+      this and marked RESOLVED, no code change needed. GH#324 (ISS-0096)
+      was a genuine mistaken closure -- zero comment, no PR, no commit_id
+      -- reopened via gh issue reopen after reinvestigation surfaced a
+      REAL divergence: R-Co's pack_update.zig ResolutionKind enum is
+      {keep_local, take_incoming, merged}, not Letflow's
+      {:keep_theirs, :take_incoming, :custom} -- already implemented and
+      tested in code, so reconciling the naming needs REVIEWER sign-off
+      and is out of this run's scope; local record left open. Checked
+      against the sibling ISS-0277/GH#548 finding explicitly: different
+      mechanism (that one is investigation-only work wrongly marked
+      complete despite a self-contradicting comment; this one is zero
+      comment/evidence of any kind on three of the four, not a
+      self-contradiction). Filed ISS-0279 (queue task 279, GH#551) as its
+      own process-gap follow-up: closing an issue should require either a
+      comment citing evidence or a genuinely linked/merged PR, and a
+      periodic audit should flag closures with neither. No code changes to
+      lib/ or test/ -- pure documentation reconciliation (two design docs
+      annotated with R-Co citations, five docs/issues/ files updated/added).

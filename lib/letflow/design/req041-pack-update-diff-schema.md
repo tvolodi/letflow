@@ -732,6 +732,19 @@ resolution-recording write path should confirm this enum matches whatever UI/API
 REQ-041's downstream consumer actually needs, and extend it (a 4th migration, per this
 project's additive-migration convention) if not.
 
+**Checked against R-Co 2026-08-22 (GH#324, WF03-ISS0278-20260822) — STILL OPEN, now with a
+concrete divergence, not merely unverified.** `R-Co/src/definition/pack_update.zig` is
+reachable now and defines `pub const ResolutionKind = enum { keep_local, take_incoming,
+merged };` (lines 25-29; the moduledoc at line 5 states the same three names). Two of the
+three atom names differ from this design's choice (`keep_theirs` vs. R-Co's `keep_local`;
+`custom` vs. R-Co's `merged`) while representing the same three concepts. The schema is
+already implemented (`lib/letflow/definitions/pack_update_resolution.ex`,
+`priv/repo/migrations/20260817083803_create_pack_update_resolutions.exs`) and tested, so
+renaming to match R-Co is a real code change (migration + schema + call sites), not a doc
+edit — flagged for REVIEWER to decide whether to rename for R-Co parity or keep the current
+naming with this citation recorded as the documented reason it diverges. Not resolved by
+this run; GH#324 reopened rather than closed on the strength of this finding.
+
 **OQ-7 (MINOR): `pack_update_resolutions.resolved_by` has no FK to `users.id`**, even
 though both tables are GLOBAL here (unlike `req035`'s cross-schema reason for omitting
 the same FK on `promotion_reviews`). This design omits it anyway because REQ-041 names

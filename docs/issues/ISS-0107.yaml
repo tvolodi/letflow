@@ -58,9 +58,44 @@ description: >
 affected_files:
   - test/mix/tasks/letflow_check_test_test.exs
   - lib/mix/tasks/letflow.check.test.ex
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0171-20260821 (fixed under a duplicate-numbered local record, see resolution_note)
+resolved_at: "2026-08-21T14:27:48Z"
+resolution_note: >
+  GH#357 was closed 2026-08-21T14:28:44Z via PR #437 ("Closes #357 (ISS-0171)",
+  MERGED). The fix landed under a DIFFERENT local filename,
+  docs/issues/ISS-0171.yaml, not this one -- the queue task 171's own
+  description pointed at "docs/issues/ISS-0106.yaml" (stale/wrong, per that
+  file's own filename_note: ISS-0106.yaml belongs to an unrelated
+  toolchain-drift issue), and the executing session found no local record
+  under any filename for this GH issue, so it created ISS-0171.yaml instead
+  of discovering or updating this file (ISS-0107.yaml). This is a second,
+  independent instance of the pre-2026-08-21 hand-numbering collision class
+  documented in docs/anti-patterns.md ("ISS-NNNN collisions keep recurring"),
+  specifically its "same GitHub issue linked from two different local
+  filenames" variant, not a mistaken closure -- the underlying defect this
+  file describes genuinely was fixed.
+
+  Verified for real, 2026-08-22 (WF03-ISS0278-20260822): PR #437's diff
+  (test/mix/tasks/letflow_check_test_test.exs, +79/-10) is on `main` today.
+  `install_fake_mix/2` branches on `:os.type/0`; on `{:win32, _}` it writes
+  `mix.bat` (not the POSIX-only extensionless shell script) with a
+  `type`-based companion output file and joins PATH with `;` (not `:`), plus
+  a fail-fast guard asserting `System.find_executable("mix")` actually
+  resolves inside the fake's own directory before any test body runs
+  (test/mix/tasks/letflow_check_test_test.exs:104-171, confirmed present).
+  PR #437's own body reports 3/3 passed in 0.3s on a real Windows host (was
+  2x60s timeout + 1 error, ~2 min) and 43/43 for the surrounding
+  test/mix/ + identity_migration_test.exs suite -- the orphaned-BEAM/
+  connection-exhaustion hazard this file's severity (MAJOR) was about.
+  ISS-0171.yaml carries the full first-hand resolution detail; this record
+  is being closed out as a duplicate pointing at the same fix rather than
+  left open, since the GitHub issue and the underlying defect are both
+  genuinely resolved -- only this filename's own status bookkeeping was
+  never updated.
 github_issue: 357
 queue_task_id: 171
 related_issues:
   - ISS-0065
   - ISS-0069
+  - ISS-0171

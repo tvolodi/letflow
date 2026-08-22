@@ -24,6 +24,8 @@ defmodule Letflow.Routers.TasksTest do
   import Plug.Test
   import Plug.Conn
 
+  alias Letflow.Definitions
+  alias Letflow.Engine
   alias Letflow.Engine.Task, as: EngineTask
   alias Letflow.Engine.TokenRecord
   alias Letflow.EventStore.InstanceProjection
@@ -36,12 +38,27 @@ defmodule Letflow.Routers.TasksTest do
   @opts Letflow.Routers.Tasks.init([])
 
   # ── Shared test dispatch helper (matches identity_test.exs's shape) ────
-
+  #
+  # REQ-085 extends this helper with an optional `:body` field -- identical
+  # shape to identity_test.exs's own build_conn/4 -- so the four new write
+  # routes can dispatch a JSON request body the same way GET-only REQ-083
+  # tests never needed to.
   defp build_conn(method, path, tenant, fields) do
     roles = Keyword.get(fields, :roles, [])
     user_id = Keyword.get(fields, :user_id, Ecto.UUID.generate())
+    body = Keyword.get(fields, :body, nil)
 
-    conn(method, path)
+    conn = conn(method, path)
+
+    conn =
+      if body do
+        %{conn | body_params: body}
+        |> put_req_header("content-type", "application/json")
+      else
+        conn
+      end
+
+    conn
     |> assign(:auth_context, %{
       user_id: user_id,
       tenant_id: tenant.tenant_id,
@@ -128,6 +145,86 @@ defmodule Letflow.Routers.TasksTest do
     %TenantRole{}
     |> Ecto.Changeset.change(%{name: role_name, group_id: group_id})
     |> Repo.insert!(prefix: tenant.schema_name)
+  end
+
+  # ── REQ-085 fixture helpers (write-path tests) ──────────────────────────
+
+  # Directly force a task row's status column -- used only to construct an
+  # already-COMPLETED/already-CANCELLED fixture for AC3 (Task.complete_changeset/2
+  # is production code driven exclusively by Letflow.Engine.complete_task/3;
+  # bypassing it here with a raw Ecto.Changeset.change/2, matching this file's own
+  # insert_group!/insert_group_member!/insert_role! precedent for direct fixture
+  # writes, is deliberate -- REQ-085's own claim/assign/reassign functions never
+  # write :status themselves, so there is no "real" write path to drive here).
+  defp force_task_status!(tenant, task, status) do
+    task
+    |> Ecto.Changeset.change(%{status: status})
+    |> Repo.update!(prefix: tenant.schema_name)
+  end
+
+  defp unique_name(prefix \\ "req085-def") do
+    prefix <> "-" <> to_string(System.unique_integer([:positive, :monotonic]))
+  end
+
+  defp unique_idempotency_key(prefix) do
+    prefix <> "-" <> to_string(System.unique_integer([:positive, :monotonic]))
+  end
+
+  # START -> task(HUMAN_TASK) -> END -- the plainest graph shape, matching
+  # engine_complete_task_test.exs's own single-hop shape. Completing `task`
+  # drives the instance straight to :completed within the same call, which is
+  # exactly what AC1 needs to observe ("the token has moved").
+  defp graph_human_task_end do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{"id" => "task", "node_type" => "HUMAN_TASK", "attributes" => %{"role" => "approver"}},
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "task"},
+        %{"id" => "e2", "source" => "task", "target" => "end"}
+      ]
+    }
+  end
+
+  defp active_definition!(tenant, graph) do
+    attrs = %{
+      name: unique_name(),
+      version: "1.0.0",
+      graph: graph,
+      created_by: Ecto.UUID.generate()
+    }
+
+    assert {:ok, definition} = Definitions.create(attrs, prefix: tenant.schema_name)
+
+    assert {:ok, %{definition: activated}} =
+             Definitions.activate(definition.id, prefix: tenant.schema_name)
+
+    activated
+  end
+
+  # Starts a real instance (via the real Letflow.Engine.create/2, REQ-045) and
+  # returns {instance_id, pending_task} -- the one real, non-Repo-bypassing way to
+  # get a genuinely PENDING task whose owning instance is a live engine instance,
+  # needed by AC1's "advances the owning instance" assertion (a task inserted via
+  # insert_task!/2 alone has no instance an engine transition could actually drive).
+  defp start_instance_with_pending_task!(tenant, graph) do
+    definition = active_definition!(tenant, graph)
+
+    start_attrs = %{
+      definition_id: definition.id,
+      initial_variables: %{"seed" => "value"},
+      actor_id: Ecto.UUID.generate(),
+      idempotency_key: unique_idempotency_key("req085-start")
+    }
+
+    assert {:ok, result} = Engine.create(start_attrs, prefix: tenant.schema_name)
+
+    [task] = Repo.all(EngineTask, prefix: tenant.schema_name)
+    assert task.status == :pending
+
+    {result.instance_id, task}
   end
 
   defp item_ids(body), do: Enum.map(body["items"], & &1["id"])
@@ -585,5 +682,508 @@ defmodule Letflow.Routers.TasksTest do
 
       assert conn.status == 404
     end
+  end
+
+  # ══════════════════════════════════════════════════════════════════════
+  # REQ-085 -- write path (POST /tasks/:id/complete|claim|assign|reassign).
+  # See test/specs/REQ-085.md for the full acceptance-criterion -> test-case
+  # mapping and rationale.
+  # ══════════════════════════════════════════════════════════════════════
+
+  # ── AC1 -- completing a task advances the owning instance ──────────────
+
+  describe "REQ-085 AC1: POST /tasks/:id/complete advances the owning instance" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "req085-ac1")}
+
+    test "output variables merge into the instance's variables and the token moves, asserted through the real router response and via a direct instance/task read",
+         %{tenant: tenant} do
+      {instance_id, task} = start_instance_with_pending_task!(tenant, graph_human_task_end())
+
+      conn =
+        build_conn(:post, "/#{task.id}/complete", tenant,
+          roles: ["PLATFORM_ADMIN"],
+          body: %{"decision" => "approved"}
+        )
+        |> dispatch()
+
+      assert conn.status == 200
+      resp = Jason.decode!(conn.resp_body)
+      assert resp["task_id"] == task.id
+      assert resp["instance_id"] == instance_id
+      assert resp["instance_status"] == "COMPLETED"
+      assert resp["current_nodes"] == []
+      assert resp["variables"] == %{"seed" => "value", "decision" => "approved"}
+
+      # Not only the 200 -- the owning instance's own row, read directly.
+      projection = Repo.get!(InstanceProjection, instance_id, prefix: tenant.schema_name)
+      assert projection.status == :completed
+      assert projection.current_nodes == []
+      assert projection.variables == %{"seed" => "value", "decision" => "approved"}
+
+      completed_task = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert completed_task.status == :completed
+      assert completed_task.output_variables == %{"decision" => "approved"}
+
+      # The token moved -- no token remains active at the old node.
+      refute Enum.any?(
+               Repo.all(TokenRecord, prefix: tenant.schema_name),
+               &(&1.node_id == "task" and &1.status == :active)
+             )
+    end
+  end
+
+  # ── AC2 -- handleComplete performs no direct write to the tasks table ──
+
+  describe "REQ-085 AC2/INV-TW85-2: handleComplete routes to the engine, never writes tasks directly" do
+    test "grep for Repo. inside lib/letflow/routers/tasks.ex (source with comments/docstrings stripped) returns no hit" do
+      source =
+        "lib/letflow/routers/tasks.ex"
+        |> File.read!()
+        |> strip_comments_and_docs()
+
+      refute source =~ "Repo.",
+             "a Repo. call was found in lib/letflow/routers/tasks.ex -- handleComplete must " <>
+               "route through Letflow.Engine.complete_task/3 (REQ-048), never write the " <>
+               "tasks table directly"
+    end
+  end
+
+  # ── AC3 -- completing an already-completed/-cancelled task is a 409, no second transition ──
+
+  describe "REQ-085 AC3: completing a non-PENDING task returns 409 with no second transition" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "req085-ac3")}
+
+    test "completing an already-COMPLETED task returns 409 and leaves the task/instance state unchanged",
+         %{tenant: tenant} do
+      task = insert_task!(tenant, %{}) |> then(&force_task_status!(tenant, &1, :completed))
+      before_task = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+
+      before_projection =
+        Repo.get!(InstanceProjection, task.instance_id, prefix: tenant.schema_name)
+
+      conn =
+        build_conn(:post, "/#{task.id}/complete", tenant, roles: ["PLATFORM_ADMIN"], body: %{})
+        |> dispatch()
+
+      assert conn.status == 409
+
+      after_task = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert after_task.status == before_task.status
+      assert after_task.output_variables == before_task.output_variables
+      assert after_task.completed_by == before_task.completed_by
+      assert after_task.updated_at == before_task.updated_at
+
+      after_projection =
+        Repo.get!(InstanceProjection, task.instance_id, prefix: tenant.schema_name)
+
+      assert after_projection.status == before_projection.status
+      assert after_projection.variables == before_projection.variables
+    end
+
+    test "completing an already-CANCELLED task returns 409 and leaves the task/instance state unchanged",
+         %{tenant: tenant} do
+      task = insert_task!(tenant, %{}) |> then(&force_task_status!(tenant, &1, :cancelled))
+      before_task = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+
+      before_projection =
+        Repo.get!(InstanceProjection, task.instance_id, prefix: tenant.schema_name)
+
+      conn =
+        build_conn(:post, "/#{task.id}/complete", tenant, roles: ["PLATFORM_ADMIN"], body: %{})
+        |> dispatch()
+
+      assert conn.status == 409
+
+      after_task = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert after_task.status == before_task.status
+      assert after_task.output_variables == before_task.output_variables
+      assert after_task.updated_at == before_task.updated_at
+
+      after_projection =
+        Repo.get!(InstanceProjection, task.instance_id, prefix: tenant.schema_name)
+
+      assert after_projection.status == before_projection.status
+      assert after_projection.variables == before_projection.variables
+    end
+  end
+
+  # ── AC4 -- two concurrent claims of the same task, exactly one winner ──
+
+  describe "REQ-085 AC4: two concurrent claims of the same task" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "req085-ac4")}
+
+    test "produce exactly one 200 success and one deterministic non-500 rejection, real concurrency",
+         %{tenant: tenant} do
+      task = insert_task!(tenant, %{})
+      user_1 = Ecto.UUID.generate()
+      user_2 = Ecto.UUID.generate()
+
+      async_1 =
+        Task.async(fn ->
+          build_conn(:post, "/#{task.id}/claim", tenant, roles: ["TASK_WORKER"], user_id: user_1)
+          |> dispatch()
+        end)
+
+      async_2 =
+        Task.async(fn ->
+          build_conn(:post, "/#{task.id}/claim", tenant, roles: ["TASK_WORKER"], user_id: user_2)
+          |> dispatch()
+        end)
+
+      [resp_1, resp_2] = Task.await_many([async_1, async_2], 5_000)
+      statuses = [resp_1.status, resp_2.status]
+
+      assert Enum.sort(statuses) == [200, 409]
+      refute 500 in statuses
+
+      winner_id = if resp_1.status == 200, do: user_1, else: user_2
+
+      claimed = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert claimed.assignee_type == "USER"
+      assert claimed.assignee_ref == winner_id
+    end
+  end
+
+  # ── AC5 -- claim rejected for a different user / a non-member group ────
+
+  describe "REQ-085 AC5: claim rejected with no state change" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "req085-ac5")}
+
+    test "claiming a task assigned to a different user in the same tenant is rejected, task row unchanged",
+         %{tenant: tenant} do
+      other_user = Ecto.UUID.generate()
+      caller = Ecto.UUID.generate()
+      task = insert_task!(tenant, %{assignee_type: "USER", assignee_ref: other_user})
+
+      conn =
+        build_conn(:post, "/#{task.id}/claim", tenant, roles: ["TASK_WORKER"], user_id: caller)
+        |> dispatch()
+
+      assert conn.status == 409
+
+      unchanged = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert unchanged.assignee_type == "USER"
+      assert unchanged.assignee_ref == other_user
+    end
+
+    test "claiming a task assigned to a group the caller does not belong to is rejected, task row unchanged",
+         %{tenant: tenant} do
+      caller = Ecto.UUID.generate()
+      group = insert_group!(tenant, name: "req085-ac5-group")
+      task = insert_task!(tenant, %{assignee_type: "GROUP", assignee_ref: group.id})
+
+      # caller deliberately never added as a member of `group`
+      conn =
+        build_conn(:post, "/#{task.id}/claim", tenant, roles: ["TASK_WORKER"], user_id: caller)
+        |> dispatch()
+
+      assert conn.status == 409
+
+      unchanged = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert unchanged.assignee_type == "GROUP"
+      assert unchanged.assignee_ref == group.id
+    end
+  end
+
+  # ── AC6 -- cross-tenant task id == nonexistent id, all four verbs ──────
+
+  describe "REQ-085 AC6/INV-TW85-4: a cross-tenant task id behaves identically to a nonexistent id" do
+    test "complete/claim/assign/reassign each 404 identically, no state change on the other tenant's row" do
+      tenant_a = TenantFixture.provisioned_tenant!(slug_prefix: "req085-ac6-a")
+      tenant_b = TenantFixture.provisioned_tenant!(slug_prefix: "req085-ac6-b")
+
+      task_b = insert_task!(tenant_b, %{})
+      nonexistent_id = Ecto.UUID.generate()
+
+      verb_bodies = [
+        {"complete", %{}},
+        {"claim", nil},
+        {"assign", %{"user_id" => Ecto.UUID.generate()}},
+        {"reassign", %{"user_id" => Ecto.UUID.generate()}}
+      ]
+
+      for {verb, body} <- verb_bodies do
+        fields = [roles: ["PLATFORM_ADMIN"]] ++ if body, do: [body: body], else: []
+
+        resp_cross_tenant =
+          build_conn(:post, "/#{task_b.id}/#{verb}", tenant_a, fields) |> dispatch()
+
+        resp_nonexistent =
+          build_conn(:post, "/#{nonexistent_id}/#{verb}", tenant_a, fields) |> dispatch()
+
+        assert resp_cross_tenant.status == 404, "#{verb}: expected 404 for a cross-tenant id"
+
+        assert resp_cross_tenant.status == resp_nonexistent.status,
+               "#{verb}: cross-tenant and nonexistent-id responses diverged in status"
+
+        assert resp_cross_tenant.resp_body == resp_nonexistent.resp_body,
+               "#{verb}: cross-tenant and nonexistent-id responses diverged in body"
+      end
+
+      unchanged = Repo.get!(EngineTask, task_b.id, prefix: tenant_b.schema_name)
+      assert unchanged.status == :pending
+      assert unchanged.assignee_type == nil
+      assert unchanged.assignee_ref == nil
+    end
+  end
+
+  # ── AC7 -- permission gates, no state change on 403 ─────────────────────
+
+  describe "REQ-085 AC7: permission gates deny with no state change" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "req085-ac7")}
+
+    # AGENT_RUNNER is a real, recognized role (per REQ-083's own precedent in
+    # this file) that role_allows?/2 grants zero permissions to -- lacks
+    # TasksComplete specifically.
+    test "a caller without TasksComplete cannot complete (403), task state unchanged",
+         %{tenant: tenant} do
+      task = insert_task!(tenant, %{})
+
+      conn =
+        build_conn(:post, "/#{task.id}/complete", tenant, roles: ["AGENT_RUNNER"], body: %{})
+        |> dispatch()
+
+      assert conn.status == 403
+
+      unchanged = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert unchanged.status == :pending
+    end
+
+    # Design §2's own resolution: claim shares complete's :TasksComplete gate,
+    # not :TasksAssign -- AC7's own text names complete only, so this
+    # assertion is added explicitly per the design doc's own instruction.
+    test "a caller without TasksComplete cannot claim (403), task state unchanged",
+         %{tenant: tenant} do
+      task = insert_task!(tenant, %{})
+
+      conn =
+        build_conn(:post, "/#{task.id}/claim", tenant, roles: ["AGENT_RUNNER"])
+        |> dispatch()
+
+      assert conn.status == 403
+
+      unchanged = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert unchanged.assignee_type == nil
+    end
+
+    # TASK_WORKER holds :TasksComplete but not :TasksAssign (confirmed at
+    # design doc §0) -- exactly the role class that must be denied here.
+    test "a caller without TasksAssign cannot assign (403), task state unchanged",
+         %{tenant: tenant} do
+      task = insert_task!(tenant, %{})
+
+      conn =
+        build_conn(:post, "/#{task.id}/assign", tenant,
+          roles: ["TASK_WORKER"],
+          body: %{"user_id" => Ecto.UUID.generate()}
+        )
+        |> dispatch()
+
+      assert conn.status == 403
+
+      unchanged = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert unchanged.assignee_type == nil
+    end
+
+    test "a caller without TasksAssign cannot reassign (403), task state unchanged",
+         %{tenant: tenant} do
+      other_user = Ecto.UUID.generate()
+      task = insert_task!(tenant, %{assignee_type: "USER", assignee_ref: other_user})
+
+      conn =
+        build_conn(:post, "/#{task.id}/reassign", tenant,
+          roles: ["TASK_WORKER"],
+          body: %{"user_id" => Ecto.UUID.generate()}
+        )
+        |> dispatch()
+
+      assert conn.status == 403
+
+      unchanged = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert unchanged.assignee_ref == other_user
+    end
+  end
+
+  # ══════════════════════════════════════════════════════════════════════
+  # Additional coverage the design doc flags as testable (assign/reassign
+  # happy paths, error branches, invalid-UUID/missing-body-field cases) --
+  # not literally named by any single AC, but explicitly called out by the
+  # design's own AC traceability and error-union tables.
+  # ══════════════════════════════════════════════════════════════════════
+
+  describe "REQ-085: assign/reassign happy paths and error branches" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "req085-assign")}
+
+    test "assign writes assignee_type/assignee_ref on an unassigned task", %{tenant: tenant} do
+      task = insert_task!(tenant, %{})
+      target_user = Ecto.UUID.generate()
+
+      conn =
+        build_conn(:post, "/#{task.id}/assign", tenant,
+          roles: ["PLATFORM_ADMIN"],
+          body: %{"user_id" => target_user}
+        )
+        |> dispatch()
+
+      assert conn.status == 200
+      resp = Jason.decode!(conn.resp_body)
+      assert resp["assignee_type"] == "USER"
+      assert resp["assignee_ref"] == target_user
+
+      row = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert row.assignee_type == "USER"
+      assert row.assignee_ref == target_user
+    end
+
+    test "assign on an already-assigned task returns 409 :already_assigned, no state change",
+         %{tenant: tenant} do
+      existing = Ecto.UUID.generate()
+      task = insert_task!(tenant, %{assignee_type: "USER", assignee_ref: existing})
+
+      conn =
+        build_conn(:post, "/#{task.id}/assign", tenant,
+          roles: ["PLATFORM_ADMIN"],
+          body: %{"user_id" => Ecto.UUID.generate()}
+        )
+        |> dispatch()
+
+      assert conn.status == 409
+      row = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert row.assignee_ref == existing
+    end
+
+    test "reassign writes a new assignee on an already-assigned task, overwriting the old one",
+         %{tenant: tenant} do
+      existing = Ecto.UUID.generate()
+      new_user = Ecto.UUID.generate()
+      task = insert_task!(tenant, %{assignee_type: "USER", assignee_ref: existing})
+
+      conn =
+        build_conn(:post, "/#{task.id}/reassign", tenant,
+          roles: ["PLATFORM_ADMIN"],
+          body: %{"user_id" => new_user}
+        )
+        |> dispatch()
+
+      assert conn.status == 200
+      row = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert row.assignee_type == "USER"
+      assert row.assignee_ref == new_user
+    end
+
+    test "reassign on an unassigned task returns 409 :not_currently_assigned, no state change",
+         %{tenant: tenant} do
+      task = insert_task!(tenant, %{})
+
+      conn =
+        build_conn(:post, "/#{task.id}/reassign", tenant,
+          roles: ["PLATFORM_ADMIN"],
+          body: %{"user_id" => Ecto.UUID.generate()}
+        )
+        |> dispatch()
+
+      assert conn.status == 409
+      row = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert row.assignee_type == nil
+    end
+
+    test "claim on a task whose assignee_type is not USER/GROUP/ROLE returns 409 :not_claimable, no state change",
+         %{tenant: tenant} do
+      task = insert_task!(tenant, %{assignee_type: "BOGUS", assignee_ref: "x"})
+
+      conn =
+        build_conn(:post, "/#{task.id}/claim", tenant, roles: ["TASK_WORKER"])
+        |> dispatch()
+
+      assert conn.status == 409
+      row = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert row.assignee_type == "BOGUS"
+    end
+
+    test "re-claiming a task already claimed by the same caller is an idempotent 200 no-op (design §3.4 OQ-2)",
+         %{tenant: tenant} do
+      caller = Ecto.UUID.generate()
+      task = insert_task!(tenant, %{assignee_type: "USER", assignee_ref: caller})
+
+      conn =
+        build_conn(:post, "/#{task.id}/claim", tenant, roles: ["TASK_WORKER"], user_id: caller)
+        |> dispatch()
+
+      assert conn.status == 200
+      row = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert row.assignee_ref == caller
+    end
+
+    test "claiming a task assigned to a role the caller holds succeeds and rewrites it to USER/caller",
+         %{tenant: tenant} do
+      caller = insert_user!(tenant, %{username: "req085-role-claim-caller"}).id
+      group = insert_group!(tenant, name: "req085-role-claim-group")
+      insert_group_member!(tenant, group.id, caller)
+      insert_role!(tenant, "approver", group.id)
+      task = insert_task!(tenant, %{assignee_type: "ROLE", assignee_ref: "approver"})
+
+      conn =
+        build_conn(:post, "/#{task.id}/claim", tenant, roles: ["TASK_WORKER"], user_id: caller)
+        |> dispatch()
+
+      assert conn.status == 200
+      row = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert row.assignee_type == "USER"
+      assert row.assignee_ref == caller
+    end
+
+    test "POST /tasks/:id/assign with a malformed id is rejected with 400", %{tenant: tenant} do
+      conn =
+        build_conn(:post, "/not-a-uuid/assign", tenant,
+          roles: ["PLATFORM_ADMIN"],
+          body: %{"user_id" => Ecto.UUID.generate()}
+        )
+        |> dispatch()
+
+      assert conn.status == 400
+    end
+
+    test "POST /tasks/:id/assign with a missing user_id is rejected with 422", %{tenant: tenant} do
+      task = insert_task!(tenant, %{})
+
+      conn =
+        build_conn(:post, "/#{task.id}/assign", tenant, roles: ["PLATFORM_ADMIN"], body: %{})
+        |> dispatch()
+
+      assert conn.status == 422
+    end
+
+    test "POST /tasks/:id/reassign with an empty-string user_id is rejected with 422",
+         %{tenant: tenant} do
+      task = insert_task!(tenant, %{assignee_type: "USER", assignee_ref: Ecto.UUID.generate()})
+
+      conn =
+        build_conn(:post, "/#{task.id}/reassign", tenant,
+          roles: ["PLATFORM_ADMIN"],
+          body: %{"user_id" => ""}
+        )
+        |> dispatch()
+
+      assert conn.status == 422
+    end
+
+    test "POST /tasks/:id/complete with a malformed id is rejected with 400", %{tenant: tenant} do
+      conn =
+        build_conn(:post, "/not-a-uuid/complete", tenant, roles: ["PLATFORM_ADMIN"], body: %{})
+        |> dispatch()
+
+      assert conn.status == 400
+    end
+  end
+
+  # ── Test-file-local helper (REQ-085 AC2) -- matches
+  #    test/letflow/routers/req078_supporting_routes_test.exs's own
+  #    strip_comments_and_docs/1 precedent for a grep-shaped structural test.
+  defp strip_comments_and_docs(source) do
+    source
+    |> String.replace(~r/@(module)?doc\s+"""(.|\n)*?"""/, "")
+    |> String.split("\n")
+    |> Enum.map(fn line -> line |> String.split("#") |> hd() end)
+    |> Enum.join("\n")
   end
 end

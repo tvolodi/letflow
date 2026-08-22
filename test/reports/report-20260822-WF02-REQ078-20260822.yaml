@@ -1,0 +1,153 @@
+report_id: report-20260822-WF02-REQ078-20260822
+agent: TEST-RUNNER
+requirement: REQ-078
+workflow_step: WF-02 Step 4 (full-suite test run)
+branch: feature/WF02-REQ078-20260822
+commit: 0bf083aa236df48ac71c0a7e4a360bf243e986e6
+date: 2026-08-22
+command: "TEST_PARALLEL_N=4 sh scripts/test_parallel.sh"
+
+toolchain:
+  platform: "Windows 11 (Git Bash)"
+
+environment:
+  postgres: >
+    docker compose up -d in worktree
+    C:\Users\tvolo\dev\ai-dala\letflow-2\.claude\worktrees\agent-aee44e378a80a2525 --
+    container agent-aee44e378a80a2525-postgres-1 started (was not already running).
+    LETFLOW_DB_PORT=5472 per this worktree's untracked .env.
+  db_setup: >
+    Each test_parallel.sh partition's own `mix test` invocation performs
+    ecto.create/ecto.migrate --quiet automatically via the `test` alias in mix.exs --
+    no separate DB-setup step taken here.
+  parallel_n: "Set explicitly via TEST_PARALLEL_N=4 per dispatch instructions."
+
+# ---------------------------------------------------------------------------
+# Run
+# ---------------------------------------------------------------------------
+
+run:
+  command: "TEST_PARALLEL_N=4 sh scripts/test_parallel.sh"
+  raw_output: |
+    test_parallel: N=4 (source: env override)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=22 (computed: N=4, max_connections=100, headroom=10)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.OEg5ua
+    test_parallel: TEST_PARALLEL_GROUP=tp3889895 (shared by all 4 partitions)
+    partition 1: 330 tests, 2 properties, 0 failures, exit 0
+    partition 2: 363 tests, 0 properties, 0 failures, exit 0
+    partition 3: 406 tests, 1 property, 0 failures, exit 0
+    partition 4: 470 tests, 2 properties, 0 failures, exit 0
+    ---
+    combined: 1569 tests, 5 properties, 0 failures (1574/1574 passed)
+  exit_code: 0
+  failures_found: 0
+
+verdict: PASS
+
+summary_line: >
+  1574/1574 passed (1569 tests + 5 properties combined across 4 partitions), 0 failures.
+  Nothing needs failure attribution since nothing failed.
+
+# ---------------------------------------------------------------------------
+# REQ-078's own tests -- verified they actually ran inside the full-suite run,
+# not just that the file exists
+# ---------------------------------------------------------------------------
+
+req078_tests:
+  file: test/letflow/routers/req078_supporting_routes_test.exs
+  landed_in: partition-1.log (confirmed via grep -rl on partition log directory;
+    54 req078-tagged fixture rows appear in partition-1.log, 0 in partitions 2-4)
+  partition_1_result: "332 passed (2 properties, 330 tests), 0 failures, Finished in 151.1 seconds"
+  test_count_in_file: 24 tests (2 describe blocks not tied to a named AC: AC1's 7
+    end-to-end tests plus 2 INV-5 tests, all mapped below)
+  verification_method: >
+    Ran `awk` over the test file to map every `test "..."` to its enclosing
+    `describe` block by line number, confirming the file itself is organized
+    AC1..AC8 plus a supplemental INV-5 describe block. Then grepped
+    partition-1.log for req078-tagged tenant/fixture inserts (54 matches, one
+    per fixture created across the 24 tests) to confirm the file was actually
+    executed inside this run, not skipped, and that partition 1's own
+    330-tests/0-failures result is inclusive of it.
+
+acceptance_criteria_checklist:
+  - ac: "AC1 -- each of the six modules has at least one end-to-end test through the real router asserting status and response shape"
+    tests: >
+      "GET /api/tenant-config -- reachable with NO Authorization header, through
+      Letflow.Router" (line 281), "GET /audit -- 200, {items, next_cursor, count}
+      shape" (291), "POST /definitions/:id/validate -- 200, valid graph" (310),
+      "POST /instances/:id/rebind-pins -- 200, changes/rebound_at shape" (325),
+      "POST /solution-packs/export -- 200, pack document shape" (351),
+      "POST /solution-packs/install -- 200, install result shape" (378),
+      "GET /metrics -- 200, scope/generated_at/instances/tasks/definitions shape" (405)
+    status: PASS (all 7 within partition 1's 0-failure result)
+  - ac: "AC2 -- audit list is tenant-isolated; caller without :AuditRead gets 403 (INV-1)"
+    tests: >
+      "requesting as tenant A returns only A's events, never a B event_id, same
+      time window" (427), "a caller with only TASK_WORKER (no :AuditRead) gets
+      403 and no events" (457)
+    status: PASS
+  - ac: "AC3 -- solution-pack export/install are tenant-isolated (INV-1)"
+    tests: >
+      "export as A naming an A id and a B id contains no B artefact -- 422, not
+      a leaked document" (481), "install as A writes only into A's schema --
+      verified by reading B's schema back, zero rows" (499)
+    status: PASS
+  - ac: "AC4 -- definition-validation endpoint returns the same outcome as calling the validators directly, proving no second validation rule"
+    tests: >
+      "T-12a: a valid graph -- 200, findings == [], and all three direct
+      validators report zero violations" (535), "T-12b: an invalid graph --
+      422, errors == the concatenation of the three direct validators'
+      violations, in order" (555)
+    status: PASS
+  - ac: "AC5 -- metrics endpoint's tenant-exposure rule stated in moduledoc and enforced by a test that tenant A sees no tenant B figure"
+    tests: >
+      "tenant A (1 active instance) sees no tenant B figure (7 active
+      instances)" (586), "moduledoc states the tenant-exposure rule verbatim
+      (PER-TENANT-SCOPED)" (615)
+    status: PASS
+  - ac: "AC6 -- moduledoc distinguishes routes/validation.zig (ported here) from src/api/validation.zig (REQ-068)"
+    tests: "Letflow.Routers.Definitions names both and attributes the second to REQ-068 (628)"
+    status: PASS
+  - ac: "AC7 -- metrics.zig's moduledoc states no metrics subsystem is built here, names S6 observability as owner"
+    tests: "Letflow.Routers.Metrics moduledoc contains both required phrases (643)"
+    status: PASS
+  - ac: >
+      AC8 -- installing a solution pack with variable_schemas entries writes
+      rows only into the calling tenant's schema, through the single shared
+      Letflow.Definitions registration function, with grep confirming no
+      second insert path
+    tests: >
+      "T-17: install with one variable_schemas entry writes it into A's
+      schema and none into B's" (657), "T-18: a malformed (non-object)
+      variable schema aborts the WHOLE transaction -- 422, zero rows either
+      table" (690), "T-19: no Repo. call anywhere under lib/letflow/routers/
+      (INV-RT-1)" (720), "T-19: no VariableSchema.changeset / insert call
+      anywhere under lib/letflow/routers/" (734), "T-19: exactly one insert
+      path against Letflow.Engine.VariableSchema exists in lib/, inside
+      register_variable_schemas/3" (754)
+    status: PASS
+
+supplemental_tests_beyond_the_8_acs:
+  describe: "INV-5: cross-tenant resource access yields 404, same as a genuine miss"
+  tests: >
+    "POST /definitions/:id/validate on tenant B's definition_id, called as
+    tenant A, is 404" (784), "POST /instances/:id/rebind-pins on tenant B's
+    instance_id, called as tenant A, is 404, same body as a genuine miss" (802)
+  status: PASS (not required by name for any single AC but reinforces AC1/AC3's INV-5 posture)
+
+attribution: "not needed -- full suite green, 0 failures to attribute"
+
+branch_diff_files: >
+  docs/status/requirement_status.index.yaml, docs/status/requirement_status.v2.yaml,
+  lib/letflow/api/validation.ex, lib/letflow/definitions.ex,
+  lib/letflow/definitions/export_import.ex, lib/letflow/definitions/json_schema_shape.ex,
+  lib/letflow/definitions/solution_pack.ex,
+  lib/letflow/design/req078-supporting-routes.md, lib/letflow/engine.ex,
+  lib/letflow/engine/variable_schema.ex, lib/letflow/event_store.ex,
+  lib/letflow/plugs/api_pipeline.ex, lib/letflow/router.ex,
+  lib/letflow/routers/audit.ex, lib/letflow/routers/definitions.ex,
+  lib/letflow/routers/instances.ex, lib/letflow/routers/metrics.ex,
+  lib/letflow/routers/solution_packs.ex, lib/letflow/routers/tenant_config.ex,
+  lib/letflow/routers/validation.ex (12 lines removed),
+  test/letflow/routers/req078_supporting_routes_test.exs, test/specs/REQ-078.md

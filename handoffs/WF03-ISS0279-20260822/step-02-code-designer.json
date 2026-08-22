@@ -1,0 +1,44 @@
+{
+  "handoff_id": "step02-WF03-ISS0279-20260822",
+  "run_id": "WF03-ISS0279-20260822",
+  "workflow_id": "WF-03",
+  "step": "2",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0279-20260822/step-02-code-designer.json",
+  "created_at": "2026-08-22T16:42:54Z",
+  "started_at": "2026-08-22T16:42:54Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {
+      "ISS-0279": "See handoffs/WF03-ISS0279-20260822/step-01-issue-fixer.json context.requirement_text for the full original text."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0279-20260822/step-01-issue-fixer.json"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0279-20260822/step-01-issue-fixer.json",
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ],
+    "owned_modules": ["docs/agents/protocols/ISSUE_QUEUE.md", "docs/agents/workflows/WF-03_issue_resolving.md", "lib/mix/tasks/letflow.audit_issue_closures.ex"]
+  },
+  "task": {
+    "description": "Design the fix for ISS-0279 per ISSUE-FIXER's diagnosis in handoffs/WF03-ISS0279-20260822/step-01-issue-fixer.json result.summary (read it in full -- it is your primary spec). Two surfaces: (1) doc/protocol wording upgrades to docs/agents/workflows/WF-03_issue_resolving.md Step 5 and docs/agents/protocols/ISSUE_QUEUE.md making it a stated HARD requirement that any issue close (gh issue close, or a local status flip to resolved/no_defect/instrumented) must carry either a resolving --comment or a genuinely linked/merged PR with a Closes/Fixes reference; (2) a new Mix.Task, lib/mix/tasks/letflow.audit_issue_closures.ex, modeled structurally on lib/mix/tasks/letflow.lint_handoffs.ex (read it for the pattern: grandfather-list of pre-existing violations, exit non-zero only on NEW un-grandfathered violations, clear stdout report). It queries gh (issue list/view) for issues referenced by docs/issues/*.yaml github_issue fields, and flags any CLOSED issue with zero comments AND no linked/merged PR reference. You MUST resolve the open design question ISSUE-FIXER flagged and left unresolved: whether this tool assumes live GitHub network access (this repo has no .github/workflows and no CI network precedent -- mix letflow.check is the CI-substitute per ISS-0257) -- decide and document explicitly whether it (a) requires `gh` CLI + live network and is therefore documented as a LOCAL/ON-DEMAND-ONLY check (not silently assumed to run in a sandboxed/offline agent environment -- state this plainly so ELIXIR-DEV and REVIEWER don't wire it into a hard gate that will spuriously fail with no network), or (b) some other shape (e.g. reads a locally cached JSON export). Given ISS-0257's own precedent of wiring lint_handoffs into `letflow.check` as a hard gate, decide explicitly whether THIS tool should also be wired into `letflow.check` now, or left as a standalone `mix letflow.audit_issue_closures` invoked manually/periodically -- your design must state the rationale either way (a network-dependent tool folded unconditionally into a gate that must pass without network access would break the existing check alias for every offline run, so the default lean should be standalone unless you find a reason to run it conditionally/gracefully-skip-when-gh-unavailable). Write a design artefact to lib/letflow/design/iss0279-issue-closure-audit.md covering: the exact new/changed prose for both docs, the audit tool's @moduledoc, its CLI invocation shape, its data flow (how it enumerates docs/issues/*.yaml, what gh command(s) it runs, exact JSON fields consulted), its grandfather-list format (mirror lint_handoffs's own format precisely), its exit-code/violation-report format, and how ELIXIR-DEV should populate the initial grandfather list (a fresh scan is out of scope for design -- direct ELIXIR-DEV to run the real audit once implemented and grandfather whatever pre-existing violations it finds, explicitly excluding GH#324 and GH#326 which are already resolved by WF03-ISS0278-20260822 and must NOT be grandfathered as violations if they now carry evidence). No implementation code -- design only (interfaces/specs/data shapes/CLI flags/exact doc prose), per CODE-DESIGN-VALIDATOR's own gate criteria. Complete this handoff: status PASS, artifacts_out listing the design doc path, next_action 'Route to CODE-DESIGN-VALIDATOR'. Claim by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "Design artefact lib/letflow/design/iss0279-issue-closure-audit.md exists and covers both fix surfaces",
+      "Exact new/upgraded prose specified for WF-03_issue_resolving.md Step 5 and ISSUE_QUEUE.md making evidence-on-close a hard requirement",
+      "letflow.audit_issue_closures Mix.Task design: @moduledoc, CLI shape, gh command(s) and JSON fields used, grandfather-list format (matching lint_handoffs's own convention), exit-code/report format",
+      "The live-GitHub-network-in-CI open question is explicitly resolved with stated rationale, not left open",
+      "Explicit rationale given for whether/how this tool is wired into the letflow.check alias, addressing the network-availability risk to that alias if done unconditionally",
+      "No implementation code in the design artefact"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

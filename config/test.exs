@@ -60,22 +60,27 @@ config :letflow, Letflow.Repo,
         end
   ]
 
-# Placeholder — no real Keycloak instance exists yet. Replace with a real
-# per-environment issuer URL once realm provisioning (deferred past S1, see
-# the S1 section note in docs/requirements.yaml) exists.
-# Duplicated from config/dev.exs: this repo's config files don't cascade
-# (each env file loads independently via config.exs's
+# REQ-128: real local Keycloak issuer, same as config/dev.exs (see that
+# file's comment for the full rationale and docker-compose.yml's keycloak
+# service). Duplicated from config/dev.exs: this repo's config files don't
+# cascade (each env file loads independently via config.exs's
 # import_config "#{config_env()}.exs"), so the :oidc key must be set here
 # too or it's absent under MIX_ENV=test.
 #
 # token_verifier is overridden here (unlike dev/prod's real
 # Letflow.Oidc.TokenVerifier.Oidcc adapter) to Letflow.Oidc.TokenVerifierDouble
-# — no real, Letflow-provisioned Keycloak issuer is reachable in this
-# environment (see lib/letflow/design/req021-auth-plug-pipeline.md §3.2).
+# — mix test/scripts/test_parallel.sh runs do not depend on a real Keycloak
+# being up (see lib/letflow/design/req021-auth-plug-pipeline.md §3.2); the
+# issuer string is still updated to the real local one (rather than left as
+# the old placeholder) purely so Oidcc.ProviderConfiguration.Worker has a
+# real host to resolve discovery against on the rare run where Keycloak
+# happens to be reachable, and so dev/test stay in sync.
+{keycloak_port, _bindings} = Code.eval_file(Path.expand("keycloak_port.exs", __DIR__))
+
 config :letflow, :oidc,
-  issuer: "https://placeholder-keycloak.invalid/realms/bpm-default",
+  issuer: "http://localhost:#{keycloak_port}/realms/bpm-default",
   provider_name: Letflow.Oidc.DefaultProvider,
-  client_id: "letflow-placeholder-client",
+  client_id: "letflow-web",
   signing_algs: ["RS256"],
   token_verifier: Letflow.Oidc.TokenVerifierDouble
 
@@ -84,6 +89,8 @@ config :letflow, :oidc,
 # claim-path configuration for Letflow.Oidc.ClaimMapping, distinct from the
 # :oidc key. A realm with no entry here falls back to
 # Letflow.Oidc.ClaimMappingConfig.default/1.
+# Key unchanged (REQ-128 deliberately keeps the realm name "bpm-default" --
+# see the :oidc issuer comment in config/dev.exs).
 config :letflow, :oidc_claim_mapping, %{
   "bpm-default" => %{
     tenant_id_claim: "tenant_id",
@@ -105,6 +112,7 @@ config :letflow, :oidc_claim_mapping, %{
 # way test/letflow/plugs/auth_pipeline_test.exs can exercise the
 # :jit_disabled -> 403 branch without mutating this file's config at
 # runtime (unsafe under async: true). Not used by any other test.
+# Key unchanged (REQ-128), same reason as :oidc_claim_mapping above.
 config :letflow, :oidc_jit_provisioning, %{
   "bpm-default" => %{
     enabled: true,

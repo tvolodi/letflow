@@ -22,5 +22,35 @@ services:
     volumes:
       - letflow_pg:/var/lib/postgresql/data
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+      KC_HTTP_MANAGEMENT_HEALTH_ENABLED: "false"
+    ports:
+      # Same per-workspace pattern as postgres above (LETFLOW_DB_PORT).
+      # Default 8082: R-Co's own stack (c:\Users\tvolo\dev\ai-dala\R-Co\docker-compose.yml)
+      # maps 8081:8080 for its nginx-fronted Keycloak gateway, plus 5432/5433
+      # for postgres -- 8082 avoids all three. Letflow exposes Keycloak
+      # directly with no nginx gateway: R-Co's gateway exists solely to raise
+      # nginx's large_client_header_buffers past 8k for oversized
+      # service-account JWTs, which is not a problem Letflow has today. A
+      # workspace running its own instance alongside another sets
+      # LETFLOW_KEYCLOAK_PORT in the untracked .env next to this file (read
+      # by both docker compose here and config/keycloak_port.exs, so the
+      # container and Ecto/Oidcc never disagree -- same pattern as
+      # LETFLOW_DB_PORT/config/db_port.exs).
+      - "${LETFLOW_KEYCLOAK_PORT:-8082}:8080"
+    volumes:
+      - ./priv/keycloak/realms:/opt/keycloak/data/import:ro
+    healthcheck:
+      test: ["CMD-SHELL", "echo > /dev/tcp/127.0.0.1/8080"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
 volumes:
   letflow_pg:

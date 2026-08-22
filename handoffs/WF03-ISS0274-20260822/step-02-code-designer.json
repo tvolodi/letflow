@@ -1,0 +1,58 @@
+{
+  "handoff_id": "3d8e9f5b-2b4c-5d6e-af70-8b9c0d1e2f14",
+  "run_id": "WF03-ISS0274-20260822",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0274-20260822/step-02-code-designer.json",
+  "created_at": "2026-08-22T13:45:08Z",
+  "started_at": "2026-08-22T13:45:08Z",
+  "completed_at": "2026-08-22T13:58:30Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-115", "REQ-138"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0274-20260822/step-01-issue-fixer.json"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0274-20260822/step-01-issue-fixer.json",
+      "docs/issues/ISS-0274.yaml",
+      "web/tsconfig.json",
+      "web/tsconfig.app.json",
+      "web/tsconfig.node.json",
+      "web/package.json"
+    ],
+    "owned_modules": ["web/package.json"]
+  },
+  "task": {
+    "description": "Read step-01-issue-fixer.json's diagnosis in full: web/tsconfig.json is a TypeScript solution-style root config ('files': [] plus references-only), meaningful only under 'tsc -b' (build mode). web/package.json's type-check script runs plain 'tsc --noEmit', which resolves to zero files and always exits 0. Produce a design for the fix specifying: (1) the exact new type-check script command (build-mode tsc -b, matching the existing build script's 'tsc -b && vite build' pattern); (2) whether incremental .tsbuildinfo caching needs handling for fail-fast CI reliability (flagged as open question) -- decide and justify; (3) confirm no regression to tsconfig.app.json/tsconfig.node.json's project-reference structure or the build/dev scripts; (4) acceptance-criteria mapping back to ISS-0274.yaml.",
+    "acceptance_criteria": [
+      "Exact new type-check script command stated, matching the build script's tsc -b pattern",
+      "Explicit decision (with reasoning) on whether --force/clean-step/as-is is correct for .tsbuildinfo incremental caching under CI fail-fast reliability, not deferred as still-open",
+      "Confirmation that tsconfig.app.json/tsconfig.node.json's project-reference structure and the build/dev scripts are unaffected",
+      "Mapping from ISS-0274.yaml's acceptance criteria to concrete design elements",
+      "No .ts/.ex/.json implementation code beyond the single literal script-value change -- design doc only",
+      "next_action names CODE-DESIGN-VALIDATOR"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read step-01-issue-fixer.json's result.summary in full and docs/issues/ISS-0274.yaml. Verified by direct read: web/tsconfig.json is exactly the solution-style { \"files\": [], \"references\": [...] } config ISSUE-FIXER described; web/tsconfig.app.json (include: [\"src\"], noEmit: true) and web/tsconfig.node.json (include: [\"vite.config.ts\"], noEmit: true) both already have noEmit set; web/package.json's build script is already 'tsc -b && vite build' (line 8) and type-check is currently 'tsc --noEmit' (line 10).\n\nProduced lib/letflow/design/iss0274-typecheck-solution-style-fix.md specifying: (1) exact new script -- change package.json line 10 to \"type-check\": \"tsc -b tsconfig.json\" (explicit root-config argument, matching build's -b pattern; considered and rejected the equivalent bare 'tsc -b' and the two-leaf-project form, with reasoning, in section 2.1); (2) DECIDED (not deferred): leave -b mode's default incremental .tsbuildinfo caching as-is, no --force/clean step -- reasoning in section 3 is that TypeScript's incremental cache is invalidated on any real input/config change so it cannot mask a genuine type error, CI runs start from a clean checkout (no stale .tsbuildinfo), and REQ-138 (not yet implemented, no CI workflow exists yet for web/) is where the actual CI invocation shape gets decided -- adding --force now would be designing for a CI environment that doesn't exist yet; explicitly flagged as a forward-pointer for REQ-138 to reconsider only if CI turns out to reuse a persistent checkout; (3) section 4 confirms zero changes needed to tsconfig.app.json, tsconfig.node.json, the build script, or the dev script -- the fix is a single-line package.json change, config-side solution-style structure is correct as-is and was never the bug; (4) section 5 maps ISS-0274.yaml's description-derived acceptance criteria (fix shape per the issue's own suggested 'tsc -b' form; CI no-op must stop being unconditional pass; must not touch/regress REQ-115's other script additions) to concrete design sections. No implementation code in the doc -- one literal script-value line change, quoted JSON snippets of existing (unmodified) files for context only, and prose/reasoning throughout.",
+    "artifacts_out": ["lib/letflow/design/iss0274-typecheck-solution-style-fix.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0274-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0274-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR to verify lib/letflow/design/iss0274-typecheck-solution-style-fix.md covers every acceptance criterion, contains no implementation code, and is unambiguous enough for FRONTEND-DEV to build from."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

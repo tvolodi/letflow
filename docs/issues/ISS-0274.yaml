@@ -1,0 +1,36 @@
+id: ISS-0274
+title: "web/tsconfig.json is solution-style, making npm run type-check a no-op"
+discovered_by: ORCH
+discovered_in_run: REQ-115-run-20260822
+discovered_at: 2026-08-22T13:38:07Z
+severity: MAJOR
+description: >
+  web/tsconfig.json uses the solution-style "files": [] pattern (referencing project
+  configs like tsconfig.app.json/tsconfig.node.json via "references" only), which
+  means the root tsconfig compiles zero files itself. REQ-115 added the
+  `npm run type-check` command (intended as a fail-fast type-checking gate, to be
+  wired into CI by REQ-138) but because it invokes tsc against this solution-style
+  root config with no direct file list, it silently passes regardless of real type
+  errors in the referenced project configs -- confirmed independently by both
+  REVIEWER and RELEASE-VALIDATOR during the REQ-115 run (2026-08-22). This is
+  pre-existing and unrelated to REQ-115's own diff. Needs a fix (e.g. running
+  tsc -b against the project references explicitly, or a type-check script that
+  iterates each tsconfig.*.json with --noEmit) before or alongside REQ-138, or
+  CI's type-check step will pass unconditionally and provide no real coverage.
+affected_files:
+  - web/tsconfig.json
+  - web/package.json
+queue_task_id: 274
+github_issue: 542
+status: resolved
+resolved_in_run: "WF03-ISS0274-20260822"
+resolved_at: "2026-08-22T13:56:34Z"
+resolution_notes: >
+  Fixed by changing web/package.json's type-check script from `tsc --noEmit` (which
+  compiled zero files against the solution-style root tsconfig.json, silently passing
+  regardless of real type errors) to `tsc -b tsconfig.json` (build mode, which walks
+  the real referenced project configs -- 964 files). Build-config-only change (no
+  ExUnit/vitest surface); verified with a fail-then-pass proof instead of a new test
+  file: `npm run type-check` failed with TS2322 against a deliberately injected type
+  error in a source file, then passed after reverting it. Full command output captured
+  in handoffs/WF03-ISS0274-20260822/step-03-frontend-dev.json.

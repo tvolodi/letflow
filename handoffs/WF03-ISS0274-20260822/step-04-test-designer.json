@@ -1,0 +1,58 @@
+{
+  "handoff_id": "b2d3f5a6-7c8e-4f90-a1b2-3c4d5e6f7a08",
+  "run_id": "WF03-ISS0274-20260822",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0274-20260822/step-04-test-designer.json",
+  "created_at": "2026-08-22T14:05:00Z",
+  "started_at": "2026-08-22T14:05:00Z",
+  "completed_at": "2026-08-22T14:12:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0274-20260822/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0274-20260822/step-02-code-designer.json",
+      "handoffs/WF03-ISS0274-20260822/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0274-20260822/step-03-frontend-dev.json",
+      "handoffs/WF03-ISS0274-20260822/step-03b-security-reviewer.json",
+      "handoffs/WF03-ISS0274-20260822/step-03c-reviewer.json"
+    ],
+    "artifacts_in": [
+      "web/package.json",
+      "handoffs/WF03-ISS0274-20260822/step-03-frontend-dev.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Run the WF-02 Step 3 scope test on ISS-0274's fix (web/package.json's type-check script changed from `tsc --noEmit` to `tsc -b tsconfig.json`) before writing any test artefact, and verify the fail-then-pass regression evidence already captured in Step 3's handoff is real and adequate.",
+    "acceptance_criteria": [
+      "Scope test explicitly applied per WF-02_requirement_implementation.md Step 3",
+      "If out of scope: no fabricated test written; Step 3's fail-then-pass command-output proof independently confirmed as real and adequate",
+      "next_action correctly routes around Steps 4b/4c per the scope-test-NO precedent"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "out of scope — no executable surface produced by this fix (build-config-only: web/package.json's type-check script value change from `tsc --noEmit` to `tsc -b tsconfig.json`). Per WF-02 Step 3's explicit exemption, project/build configuration (mix.exs aliases/deps declarations, .formatter.exs, and by direct analogy an npm script value in package.json) is 'in the same nothing to unit-test category as decision-record prose -- it's verified by actually running the command it declares, not by an ExUnit test asserting on its own declaration.' There is no ExUnit/vitest-exercisable logic in a script string; the only real verification is running `npm run type-check` itself, which Step 3 already did. Independently reviewed handoffs/WF03-ISS0274-20260822/step-03-frontend-dev.json's quoted evidence and confirm it is a genuine, adequate fail-then-pass regression proof, not a fabricated one: (1) `npx tsc -b tsconfig.json --listFiles` walked 964 real files, proving the new script does real compilation work versus the old script's silent 0-file no-op; (2) a deliberate type error was injected into web/src/main.tsx (`const __iss0274_deliberate_type_error: number = 'not a number'`), `npm run type-check` failed with `TS2322: Type 'string' is not assignable to type 'number'` at exit code 2; (3) the injected line was reverted (confirmed via `git diff --stat src/main.tsx` showing zero diff), and `npm run type-check` passed again at exit 0; (4) `npm run build` and the combined `npm run check` gate (type-check + lint + 178 vitest unit tests + 48 guard tests) both remained green post-fix. This satisfies the fail-then-pass requirement in genuine command-output form, the substitute WF-02 Step 3 anticipates for build-config-only changes -- no additional test file is warranted and writing one (e.g. a script/grep-based test asserting on the package.json string) would be exactly the manufactured-busywork anti-pattern core-directives.md and WF-02 Step 3 both warn against, since it would test the declaration rather than any real behavior.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0274-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0274-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route directly to Step 5 (ISSUE-FIXER closes the issue) -- Steps 4b/4c (TEST-DESIGN-VALIDATOR/TEST-RUNNER) skipped per WF-02 Step 3's scope-test-NO precedent, same as the WF03-ISS0273 handling pattern for build-config-only changes."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

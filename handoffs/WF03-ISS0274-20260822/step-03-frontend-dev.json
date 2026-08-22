@@ -1,0 +1,59 @@
+{
+  "handoff_id": "a1c2e3f4-5b6d-4e7f-8091-2a3b4c5d6e07",
+  "run_id": "WF03-ISS0274-20260822",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "FRONTEND-DEV",
+  "file": "handoffs/WF03-ISS0274-20260822/step-03-frontend-dev.json",
+  "created_at": "2026-08-22T13:45:00Z",
+  "started_at": "2026-08-22T13:45:00Z",
+  "completed_at": "2026-08-22T13:52:30Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0274-20260822/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0274-20260822/step-02-code-designer.json",
+      "handoffs/WF03-ISS0274-20260822/step-02b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0274-typecheck-solution-style-fix.md",
+      "web/package.json"
+    ],
+    "owned_modules": ["web/package.json"]
+  },
+  "task": {
+    "description": "Implement the PASSED design at lib/letflow/design/iss0274-typecheck-solution-style-fix.md exactly: change web/package.json's type-check script from `tsc --noEmit` to `tsc -b tsconfig.json` (build mode, matching the existing build script's `-b` pattern). No changes to tsconfig.app.json/tsconfig.node.json (already correctly set up with noEmit:true and correct include globs) and no --force/clean step, per the design's section 3 reasoning. Verify by running npm run type-check (confirm it walks real files, not zero), deliberately introduce and then revert a type error to demonstrate fail-then-pass (build-config-only change has no ExUnit/vitest surface, so this substitutes for a regression test), and confirm npm run build and the combined npm run check gate still succeed.",
+    "acceptance_criteria": [
+      "web/package.json's type-check script changed to `tsc -b tsconfig.json`, exact string per design section 2",
+      "No changes to tsconfig.app.json, tsconfig.node.json, or tsconfig.json",
+      "npm run type-check walks real source files (non-zero file count via tsc -b --listFiles), not the previous 0-file no-op",
+      "Deliberate type error injected into a real .tsx/.ts file causes npm run type-check to fail (non-zero exit), then reverting it restores a passing (exit 0) type-check -- fail-then-pass regression proof quoted",
+      "npm run build still succeeds (no regression to build/dev scripts)",
+      "npm run check (type-check + lint + test + guards) still succeeds now that type-check does real work",
+      "Working tree clean of stray/throwaway files when done"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented the design at lib/letflow/design/iss0274-typecheck-solution-style-fix.md exactly, on top of web/package.json's prior state. Single-line change: web/package.json line 10 from `\"type-check\": \"tsc --noEmit\"` to `\"type-check\": \"tsc -b tsconfig.json\"`. No changes to tsconfig.app.json, tsconfig.node.json, or tsconfig.json -- confirmed by direct read before editing, matching design section 4's regression checklist. Verification (all commands run for real from web/, output quoted, not assumed): (1) `npx tsc -b tsconfig.json --listFiles 2>&1 | wc -l` -> 964 files listed, confirming type-check now walks the real src/** and vite.config.ts trees instead of the previous 0-file no-op. `npm run type-check` -> exit 0, clean, no errors. (2) Fail-then-pass regression demonstration (substitutes for a test file since this is a build-config-only change with no ExUnit/vitest surface): added `const __iss0274_deliberate_type_error: number = 'not a number'` to web/src/main.tsx, ran `npm run type-check` -> FAILED with `src/main.tsx(9,7): error TS2322: Type 'string' is not assignable to type 'number'.` plus a TS6133 unused-var error, exit code 2 (non-zero), proving the script now catches real type errors it previously ignored unconditionally. Reverted the injected line via Edit (git diff --stat src/main.tsx showed zero diff afterward, confirming clean revert), re-ran `npm run type-check` -> exit 0, passing again. (3) `npm run build` (`tsc -b && vite build`) -> succeeded, exit 0, 384 modules transformed, dist/ produced (only pre-existing chunk-size advisory warning, unrelated to this change). (4) `npm run check` (type-check && lint && test && guards) -> full green run: type-check clean, lint clean (0 warnings, --max-warnings 0), vitest unit suite 30 files / 178 tests passed, guards suite 4 files / 48 tests passed (meta-control, source-scan, bundle-scan, role-set), all exit 0. `git status --porcelain` after all work shows only web/package.json modified (plus this handoff file and an unrelated untracked docs/issues/ISS-0274.yaml pre-existing in the tree, not touched by this task) -- working tree otherwise clean of stray files.",
+    "artifacts_out": ["web/package.json"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0274-20260822",
+      "commit_sha_list": ["aad1cbc"],
+      "remote_branch": "origin/feature/WF03-ISS0274-20260822",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 3b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

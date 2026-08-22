@@ -53,7 +53,7 @@ agreed with the diagnosis.
 | W1 | `owner_pid` exists at exactly three places in `lib/`: the `@typep` field (`:160`), the local binding (`:527`), and the op-literal write (`:535`). The local at `:527` is genuinely read at `:528` by `Process.monitor/1` | **VERIFIED (read + grep)** |
 | W2 | No pattern match, guard, or dynamic access ever reads `owner_pid` **off an op**. The only `Map.fetch/get/take/has_key?/pop` call anywhere in the module is `Map.fetch(state.active, sandbox_id)` at `:344` — on `active`, never on an op | **VERIFIED (grep of `Map\.(get\|fetch\|take\|has_key\?\|pop)\(` over the whole module, 1 hit)** |
 | W3 | `test/letflow/sandbox_pool_test.exs:420` binds a **local** variable named `owner_pid` for a spawned test process (used at `:443-445` for `Process.monitor` / `Process.exit` / `assert_receive`). It is not the struct field and has no relationship to it | **VERIFIED (read)** |
-| W4 | Every `in_flight.<field>` access across all of `lib/` and `test/` is one of `.op`, `.task_ref`, `.task_pid`. **Zero** `.schema_name` | **VERIFIED (measured):** `grep -rnohE "in_flight[a-z_]*\.[a-z_]+" lib test \| sort \| uniq -c` → 32 hits, all `.op` / `.task_ref` / `.task_pid` |
+| W4 | Every `in_flight.<field>` access in the **code** of `lib/` and `test/` is one of `.op`, `.task_ref`, `.task_pid`. **Zero** `.schema_name` | **VERIFIED (measured):** `grep -rohE --include=*.ex --include=*.exs "in_flight[a-z_]*\.[a-z_]+" lib test \| sort \| uniq -c` → **12 hits** — `.op` ×7, `.task_ref` ×4, `.task_pid` ×1. The `--include` restriction is load-bearing, not tidiness: see §4.1 |
 | W5 | No map pattern anywhere binds `schema_name` out of an `in_flight` record | **VERIFIED (read of all 32 sites + the two `%{in_flight \| …}` updates at `:958`-equivalent and case 4b)** |
 | W6 | `op_schema_name/1` has exactly one call site — `:572`, the `in_flight` literal — and two clause heads at `:592-593`. Nothing else in `lib/` or `test/` names it | **VERIFIED (measured):** `grep -rn "op_schema_name" lib test` → 3 lines, all in `sandbox_pool.ex` |
 | W7 | An unused `defp` is a warning, and `mix compile --warnings-as-errors` **exits 1** on it | **VERIFIED (measured, §3.3)** — throwaway mix project in `scratch/iss0227/probeproj/`, this exact two-clause `op_schema_name/1` shape, `EXIT=1`, "Compilation failed due to warnings while using the --warnings-as-errors option" |
@@ -245,7 +245,11 @@ of the derivation is §2.3 of this file, which costs nothing at compile time.
 ## 4. No test bound moves
 
 **Confirmed from the actual test files: zero assertions, zero pattern matches and zero helper
-bodies reference either removed field. No test needs rewriting at all, not even a weakened one.**
+bodies in the EXISTING suite reference either removed field. No existing test needs rewriting at
+all, not even a weakened one.** That is a statement about *rewrites*, not about coverage: §4.2
+specifies **one new test, RT-9**, which ISS-0227 does require. Round 1 conflated the two and
+concluded no test was needed at all; CODE-DESIGN-VALIDATOR overruled that (D1) and §4.2 carries
+the ruling.
 
 | File | `owner_pid` (the field) | `in_flight.schema_name` | Verdict |
 |---|---|---|---|
@@ -254,30 +258,145 @@ bodies reference either removed field. No test needs rewriting at all, not even 
 | `test/letflow/definitions/promotion_assertion_rerun_test.exs` | **absent** | **absent.** Its only `in_flight` mention is the prose comment at `:163` explaining that `active_sandbox_id!/1`'s partial map match `%{active: active} = :sys.get_state(pool)` deliberately **ignores** the `db_queue`/`in_flight` siblings. That comment names the two siblings as a pair; it makes no claim about `in_flight`'s internal fields, so it stays accurate verbatim | **no change** |
 | `test/specs/ISS-0224.md` (the test spec, checked for completeness) | **absent** | **absent.** Its many `in_flight` references are to `in_flight` being `nil` / a `{:provision, _}` / `.task_pid`, plus one literal pre-fix failure dump at `:505` (`in_flight: nil, db_queue: {[], []}, max_concurrent: 1`) which contains no field list | **no change** |
 
-**Method** (so this is re-derivable rather than asserted): `grep -rnohE
-"in_flight[a-z_]*\.[a-z_]+" lib test | sort | uniq -c` → 32 hits, every one `.op` / `.task_ref`
-/ `.task_pid`, zero `.schema_name` (W4); `grep -rn "owner_pid" lib test docs` → the four `lib/`
+**Method** (so this is re-derivable rather than asserted). **The grep must be restricted to
+code files** — `lib/` also contains `lib/letflow/design/*.md`, and an unrestricted run returns
+prose hits including `.schema_name` ones, which is a scare, not a finding (§4.1):
+
+```
+grep -rohE --include=*.ex --include=*.exs "in_flight[a-z_]*\.[a-z_]+" lib test | sort | uniq -c
+```
+
+→ **12 hits: `in_flight.op` ×7, `in_flight.task_ref` ×4, `in_flight.task_pid` ×1, and zero
+`.schema_name`** (W4). Second grep: `grep -rn "owner_pid" lib test docs` → the four `lib/letflow/`
 lines of §1.1, the three unrelated test locals of W3, two `test/specs/ISS-0048.md` prose lines
 about `Process.exit(owner_pid, :kill)`, and four `lib/letflow/design/` prose lines (§5).
+
+*Round 1 of this design stated the first command without `--include` and reported "32 hits".
+Neither figure was reproducible: run verbatim it returns ~50 hits (ten of them `.schema_name`,
+all prose); the 32 was a miscount of `-n`-prefixed lines, which `uniq -c` cannot aggregate
+because the line-number prefix makes every line unique. CODE-DESIGN-VALIDATOR caught both
+(D3); the **conclusion** was correct and was independently re-derived by it. Corrected above,
+command and count together.*
 
 **Had one been found**, this section would have specified an equivalent-strength rewrite —
 `assert elem(op.from, 0) == pid` in place of `assert op.owner_pid == pid`, and the §2.4 form in
 place of any `in_flight.schema_name` read — never a deleted or loosened assertion. None was
 found, so there is nothing to rewrite.
 
-### 4.1 A negative consequence worth stating plainly
+### 4.1 The grep hazard this design is itself an instance of
 
-Because no test reads either field, **no test can detect this change either.** The regression
-protection for ISS-0227 is therefore: (a) `mix compile --warnings-as-errors` exiting 0 with
-R1-R5 applied (proves R5 was done and nothing was orphaned), and (b) the full existing
-`sandbox_pool_test.exs` / `sandbox_pool_call_timeout_test.exs` /
-`promotion_assertion_rerun_test.exs` suites continuing to pass unchanged (proves no behavioural
-drift). **No new regression test is specified, and no new test file is created** — a test
-asserting the *absence* of a struct field would assert this design's implementation choice
-rather than any behaviour of the pool, and would have to be deleted the day the field is
-legitimately re-introduced. TEST-DESIGNER should be dispatched, if at all, only to re-run the
-existing suites, not to author new cases.
+`git grep -lE "in_flight[a-z_]*\.schema_name" -- lib test` returns **exactly one file: this
+design document.** The only thing in the repository that still contains the literal string
+`in_flight.schema_name` is the document proving the field is gone.
 
+That is `docs/anti-patterns.md:1195` — **"A grep-shaped acceptance criterion can be tripped by
+the module's own moduledoc describing the invariant"** (REQ-072: a moduledoc sentence stating
+"this module never calls `Process.put/2`" contained the literal substring its own AC's grep was
+hunting for) — recurring here with a design doc in the moduledoc's place. Found by ISSUE-FIXER
+during D3 rework.
+
+**The response is to restrict the grep, never to garble the prose.** A design that cannot name
+the field it removes is not a design. Every structural grep in this document, and the one
+GH #465 acceptance criterion 4 asks for (§12), is therefore code-file-restricted.
+
+### 4.2 The regression test: RT-9 (TEST-DESIGNER implements)
+
+> **This section replaces round 1's §4.1, which declined to specify any regression test.
+> CODE-DESIGN-VALIDATOR OVERRULED that position (D1, MAJOR) and its decisive ground is one
+> round 1 never weighed, so this is a reversal on the merits, not a wording pass:** upholding
+> §4.1 would leave ISS-0227 with **no truthful terminal status**. `ISSUE_QUEUE.md:180-247`'s
+> vocabulary is `open` / `in_progress` / `resolved` / `instrumented` / `no_defect`. `resolved`
+> (`:187`) requires "a root cause was actually removed, **and a regression test proves it**";
+> `no_defect` is false (a defect existed); `instrumented` is false (the root cause *is*
+> removed, and that status additionally demands a `superseded_by` successor carrying remaining
+> work, which does not exist). A design that forbids the test forces the run to write a false
+> `resolved` or to leave a genuinely-fixed issue non-terminal. Round 1's evidence — (a) a clean
+> warnings-as-errors compile and (b) the existing suites still green — is **absence-of-regression
+> evidence only: both would read identically if ELIXIR-DEV changed nothing at all.** It is kept
+> below as *additional* evidence, never as the sole evidence.
+>
+> Round 1's "it pins an implementation detail" objection is also withdrawn. ISS-0227's defect
+> **is** structural — a second stored copy of derivable state that can silently diverge — so a
+> white-box key-set assertion is not a gratuitous pin, it is the only mechanical detector of the
+> filed hazard, and it is this suite's standing style already (`:sys.get_state/1` at `:920`,
+> `:1007`, `:1008`, `:1146`). Round 1's further objection that the test "would have to be
+> deleted the day the field is legitimately re-introduced" is the guard **working as intended**:
+> re-introduction should require a deliberate edit that confronts this design's rationale, which
+> is precisely what silent re-introduction is not.
+
+**One test. No new file.** Appended to the existing ISS-0224 RT block in
+`test/letflow/sandbox_pool_test.exs`, named:
+
+```
+RT-9 (ISS-0227): the in-flight provision op and the in_flight record carry no duplicate
+of a derivable value
+```
+
+#### Reaching the observation point — existing helpers, no sleep
+
+The file already has everything needed; this is the **exact** synchronisation `:917-918` uses,
+so no new helper and no timing constant is introduced:
+
+- `pool = start_pool!(max_concurrent: 1)`
+- `spawn_claimer(pool, :o, 1_000)` — returns the claiming pid, which assertion (3) needs
+- `state = wait_until_pool_state(pool, "O's provisioning is in flight", &provision_in_flight?/1)`
+
+#### The three assertions
+
+1. **Exact key set of the in-flight provision op.** Bind `{:provision, p} = state.in_flight.op`
+   and assert
+   `Enum.sort(Map.keys(p)) == [:from, :owner_down?, :owner_ref, :sandbox_id, :schema_name]`.
+   **Sorted-key-list equality, NOT `refute Map.has_key?(p, :owner_pid)`.** Equality is what makes
+   it a drift guard in *both* directions: it fails if `owner_pid` returns, and it fails if some
+   future change quietly adds another undeclared field. A `refute Map.has_key?` guards one
+   direction only and is not an acceptable substitute.
+2. **Exact key set of the record.** `assert Enum.sort(Map.keys(state.in_flight)) == [:op, :task_pid, :task_ref]`
+   — same equality form, same reason.
+3. **The derivations still reach their values**, so the case documents the *replacement* and not
+   merely the removal: `assert elem(p.from, 0) ==` the claiming pid returned by
+   `spawn_claimer/3`, and `{:provision, %{schema_name: n}} = state.in_flight.op` with
+   `assert is_binary(n)`.
+
+#### Fail-then-pass (WF-03 Step 4, `WF-03_issue_resolving.md:99-103`)
+
+A genuine fail-then-pass is available and must be shown — the module exists and both fields
+exist pre-fix, so `:105-117`'s "when the pre-fix failure is non-existence" escape hatch does
+**not** apply here.
+
+| | assertion (1) | assertion (2) | assertion (3) |
+|---|---|---|---|
+| **pre-fix** (`sandbox_pool.ex` at this branch's `a64159d`, both fields present) | **FAILS** on `:owner_pid` | **FAILS** on `:schema_name` | passes |
+| **post-fix** (R1-R5 applied) | passes | passes | passes |
+
+TEST-DESIGNER states both runs explicitly, with real output, per `WF-03:99-103`.
+
+#### Coverage map — so nothing is left unproven
+
+| Removal | Proven by |
+|---|---|
+| **R2** (`owner_pid` out of `reserve_slot/2`'s op literal) | RT-9 assertion (1) |
+| **R4** (`schema_name` out of `pump/1`'s `in_flight` record) | RT-9 assertion (2) |
+| **The §2.2 / §2.3 derivations remain reachable** | RT-9 assertion (3) |
+| **R5** (`op_schema_name/1` deleted) | `mix compile --warnings-as-errors` exiting **0** — evidence (a) |
+| **No behavioural drift** | the existing `sandbox_pool_test.exs` / `sandbox_pool_call_timeout_test.exs` / `promotion_assertion_rerun_test.exs` suites passing unchanged — evidence (b) |
+| **R1** (the `owner_pid: pid(),` line in `@typep provision_op`) | **NOT runtime-observable by any test, and named as such rather than left silently uncovered.** A `@typep` is erased at compile time: no `:sys.get_state/1` read, no `Map.keys/1`, no dialyzer run in this project's gate can distinguish a map's runtime key set from its declared typespec. R1 is discharged by **ELIXIR-DEV's diff** (the line is deleted, visibly, in the PR) and by **REVIEWER**, whose idiom gate covers a typespec that no longer matches the value it describes. RT-9 assertion (1) makes the *runtime* half true; R1 makes the *declared* half agree with it, and only a human-or-agent reading of the diff closes that half. |
+
+#### Evidence (a) and (b), retained
+
+Both stay in the record as **additional** evidence, with their limitation stated: `mix compile
+--warnings-as-errors` exiting 0 proves R5 was done and nothing was orphaned, and the unchanged
+suites prove no behavioural drift — but neither, alone or together, proves a root cause was
+removed, because both would read identically against an empty diff. RT-9 is what makes the
+`resolved` status truthful.
+
+#### One thing RT-9 must not become
+
+RT-9 asserts key sets and derivations at one observation point. It must **not** be grown into a
+grep-shaped assertion over source text (`refute File.read!("lib/letflow/sandbox_pool.ex") =~
+"owner_pid"` or similar) — §4.1 is the standing reason: this design document itself contains
+every one of those literals, and the AC-4 grep of §12 is code-file-restricted for exactly that
+reason. Structural facts about the pool are asserted against the pool's **runtime state**, never
+against file contents.
 ---
 
 ## 5. Companion edits to `iss0224-sandbox-pool-async-provisioning.md`
@@ -299,7 +418,7 @@ Three existing precedents, all in `lib/letflow/design/`:
    specifically what is superseded** ("§13 supersedes: §1's scope-boundary table …").
 2. **`iss064-orphaned-tenant-schemas-fix.md:619`** — a new numbered, dated, issue-attributed
    section appended at the end: `## 11. Extension (ISS-0110, 2026-08-21) — <what changed>`,
-   followed at `:632` by `## 12. Extension (ISS-0217, 2026-08-21) — …`.
+   followed at `:656` by `## 12. Extension (ISS-0217, 2026-08-21) — …`.
 3. **`iss0224-…md` round 2's own R2-F2 fix** (`:38`) — for a *removal inside a table*, the
    removed row is kept "as an explicit struck-through **deleted** row in the table so the audit
    trail lives in the table, not only in prose."
@@ -470,9 +589,14 @@ like it belongs to the monitor mechanism. It does not:
 |---|---|---|
 | `lib/letflow/sandbox_pool.ex` | R1-R5 (§2) — five deletions plus two trailing-comma fixes. Nothing else | ELIXIR-DEV |
 | `lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md` | C1-C5 (§5) — two in-place markers, one prose-literal edit + one added line, one new §17, one top-of-file pointer | ELIXIR-DEV |
+| `test/letflow/sandbox_pool_test.exs` | **RT-9 appended to the existing ISS-0224 RT block** (§4.2) — one new test, no new file, no new helper, no new constant. No existing test in this file changes | TEST-DESIGNER |
 | `docs/issues/ISS-0227.yaml` | status transitions | DOC-UPDATER |
 
-**Explicitly NOT touched:** every test file (§4), `test/specs/ISS-0224.md`,
+**Explicitly NOT touched:** every test file **except** `test/letflow/sandbox_pool_test.exs`
+(which gains RT-9 and nothing else — §4.2) — so in particular
+`test/letflow/sandbox_pool_call_timeout_test.exs` and
+`test/letflow/definitions/promotion_assertion_rerun_test.exs` are untouched (§4) —
+`test/specs/ISS-0224.md`,
 `lib/letflow/application.ex`, `lib/letflow/definitions.ex`,
 `lib/letflow/sandbox_pool/fixture_loader.ex`, any `config/*.exs`, any
 `priv/repo/migrations/*`, any `docs/migration/decisions/*`, `mix.exs`, `scripts/test_parallel.sh`.
@@ -486,8 +610,10 @@ like it belongs to the monitor mechanism. It does not:
    op_schema_name/1 is unused`, R5 was skipped; if it reports an undefined variable at `:528`,
    the local at `:527` was deleted in error (§2.1).
 3. `mix test test/letflow/sandbox_pool_test.exs test/letflow/sandbox_pool_call_timeout_test.exs
-   test/letflow/definitions/promotion_assertion_rerun_test.exs` — expected unchanged, since §4
-   establishes no test reads either field.
+   test/letflow/definitions/promotion_assertion_rerun_test.exs` — the pre-existing cases are
+   expected unchanged, since §4 establishes no existing test reads either field. **RT-9 is
+   TEST-DESIGNER's at WF-03 Step 4, after ELIXIR-DEV's step**, and its pre-fix run is made
+   against `a64159d` per §4.2 — ELIXIR-DEV does not run or author it here.
 
 ---
 
@@ -506,7 +632,13 @@ like it belongs to the monitor mechanism. It does not:
    reordering, no extra typespecs. ISS-0227 is five deletions and two commas.
 6. **Do not delete the superseded lines from `iss0224-…md`.** They are marked in place (§5.2,
    §5.3), per this repo's own convention (§5.1).
-7. **Do not write any new test file** (§4.1).
+7. **Do not write RT-9 yourself, and do not skip it.** §4.2's RT-9 is **TEST-DESIGNER's** to
+   write, in the existing `test/letflow/sandbox_pool_test.exs` — **no new test file is created**,
+   it is appended to the ISS-0224 RT block. ELIXIR-DEV does not author it and does not treat the
+   fix as complete without it; WF-03 Step 4 owns it, and `resolved` is not a truthful terminal
+   status for ISS-0227 until it exists and its fail-then-pass is on record (§4.2).
+   *(Round 1 stated this item as "Do not write any new test file", which forbade RT-9 outright.
+   Inverted per D1.)*
 
 ---
 
@@ -561,7 +693,9 @@ module"; it is the complete set of fields **this issue is about**.
 | Derivation for each removed field, with an equivalence argument | §2.2 (`elem(p.from, 0)`; `from` set once, never rewritten on a provision op) and §2.3 (`op_schema_name(in_flight.op)`'s value; `in_flight.op` never patched in a way that changes its schema name, citing case 4b's own note), plus §2.4's corroboration that the tests already derive it this way |
 | Explicit statement that no invariant changes: INV-SP-A1..A7, owner monitor, `owner_ref` stays, serialized worker, no external behaviour change, no new invariant | §6 (per-invariant table incl. INV-SP-1..7 / DOWN-1..5 / T1..T5), §6.1 (owner monitor, spelled out), §6.2 (worker, behaviour, `:sys.get_state` consumers, security), §10 (no new invariant) |
 | Companion edits to `iss0224-…md` §5 and §7 step 2, precisely located, annotated as superseded rather than silently deleted, following an existing convention | §5.1 (the three precedents found in-repo, with file:line), §5.2 C1 (`:502`), §5.3 C2 (`:520-521`), §5.4 C3 (`:802-804`), §5.5 C4 (new §17), §5.6 C5 (top-of-file pointer), §5.7 (what must not be edited) |
-| "No test bound moves" section, confirmed from the actual test files; an equivalent-strength rewrite if any assertion is found | §4 — per-file table with line numbers, the re-derivable grep method, and the explicit statement of what the rewrite *would* have been had one been found. None was. §4.1 states the consequence (no new regression test) |
+| "No test bound moves" section, confirmed from the actual test files; an equivalent-strength rewrite if any assertion is found | §4 — per-file table with line numbers, the code-restricted re-derivable grep method (§4 Method, corrected per D3), and the explicit statement of what the rewrite *would* have been had one been found. None was |
+| **A regression test that proves the root cause was removed** (`ISSUE_QUEUE.md:187`'s condition for a truthful `resolved`; `WF-03_issue_resolving.md:99-103`'s fail-then-pass) | **§4.2 — RT-9**, with its observation point (existing helpers, no sleep), its three equality-form assertions, its pre-fix/post-fix table against `a64159d`, and its coverage map. R1 is explicitly named as compile-time-only and discharged by ELIXIR-DEV's diff + REVIEWER rather than left silently uncovered. §7 assigns it to TEST-DESIGNER; §8 item 7 forbids ELIXIR-DEV writing it and forbids skipping it |
+| **GH #465 AC4: "`git grep` confirms no remaining writer of either field"** | Run **code-file-restricted**, so this design document's own prose cannot trip it: `git grep -nE "owner_pid:\|schema_name: op_schema_name\|op_schema_name" -- 'lib/**/*.ex' 'test/**/*.exs'`. **Pre-fix it returns exactly the five removal-set lines** (`sandbox_pool.ex:160`, `:535`, `:572`, `:592`, `:593` — i.e. R1, R2, R4, R5); **post-fix it must return nothing and exit non-zero.** The restriction is mandatory, not cosmetic: an unrestricted pattern matches this file and `iss0224-…md`, which name the removed fields in prose by necessity — see §4.1 and `docs/anti-patterns.md:1195` |
 | No implementation code in the design | This document contains `@typep`/field-shape fragments, prose algorithm references, comment text to be inserted into another **markdown** document, and exact line-number deletion instructions. It contains no `.ex`/`.exs` function bodies and no code block presented as source to paste into `lib/` |
 
 ---

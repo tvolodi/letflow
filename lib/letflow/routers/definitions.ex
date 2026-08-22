@@ -381,8 +381,14 @@ defmodule Letflow.Routers.Definitions do
   defp render_search_result(conn, {:error, :wrong_endpoint}),
     do: Response.bad_request(conn, "cursor is not valid for this endpoint")
 
+  # REVIEWER fix (WF02-REQ081): use the dedicated cursor-expired problem
+  # type, matching handle_list's own :expired clause above and
+  # Letflow.Routers.Instances's established idiom -- a plain bad_request/2
+  # here (as the design doc's §4.4 prose literally read) would give this
+  # error condition a different wire-level `type` than every other
+  # cursor-expired response in the API, for no reason.
   defp render_search_result(conn, {:error, :expired}),
-    do: Response.bad_request(conn, "cursor has expired")
+    do: Response.send_problem(conn, Error.cursor_expired())
 
   defp render_search_result(conn, {:error, _common_error}), do: Response.internal_error(conn)
 

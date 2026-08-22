@@ -575,3 +575,72 @@ next_cursor}` (`next_cursor` is `nil`, serialised as JSON `null`, on the last pa
   cursor-paginated S4 endpoint, and this design does not carve out a
   per-endpoint exception. Flagged as a deliberate parity divergence, not a
   silently-guessed default.
+
+---
+
+## 9. REVIEWER decisions (WF02-REQ081, 2026-08-23)
+
+Reviewed commit `2c36165`. Idiom/OTP-quality pass only — SECURITY-REVIEWER already
+passed INV-1/5/7, permission enforcement, cursor-forgery resistance, and export scope.
+
+**OQ-2 — malformed UUID collapses to 404, not R-Co's 422.** Decision: **accept the
+divergence, no change requested.** `handle_get_by_id`/`handle_export` correctly do not
+pre-cast `:id`; they let `Definitions.get_by_id/2`'s existing `cast_uuid/1` collapse
+both "malformed" and "well-formed but absent/cross-tenant" into one `{:error,
+:not_found}` path. This is a strictly *stronger* form of INV-5 (not-found/forbidden
+indistinguishability now also covers not-found/malformed), it costs nothing (no new
+code path, no modification to REQ-030's `get_by_id/2`), and matching R-Co's 422 would
+require either widening REQ-030's function (out of this requirement's scope) or
+duplicating a UUID pre-cast that `Letflow.Routers.Instances` only has because
+`Letflow.Instances.get_by_id/2` itself distinguishes the two cases (a different
+existing idiom, not one this requirement should retrofit onto `Definitions.get_by_id/2`
+as a side effect). Literal R-Co parity is not an obligation where it would weaken an
+invariant for no behavioral gain.
+
+**OQ-3 — page_size default 50/max 200, not R-Co's search-specific 20/100.** Decision:
+**accept, no change requested.** No `docs/migration/decisions/` record fixes a
+search-specific page-size constant, so this isn't overriding a settled decision — it's
+a straightforward application of `Letflow.Api.Pagination`'s existing single-authority
+default (REQ-067) to a fifth cursor-paginated endpoint, consistent with every other S4
+list/search-shaped endpoint. Introducing a per-endpoint page-size exception here would
+itself be the scope-creep move (a second page-size policy with no requirement asking
+for one); keeping one authority is the idiomatic choice.
+
+**Fix applied directly (mechanical, in scope for REVIEWER):**
+`lib/letflow/routers/definitions.ex`'s `render_search_result/2` mapped `{:error,
+:expired}` to a plain `Response.bad_request(conn, "cursor has expired")`, while the
+sibling `render_list_result/2` (same file, same error atom, same cursor-decode path)
+correctly used `Response.send_problem(conn, Error.cursor_expired())` — matching
+`Letflow.Routers.Instances`'s established idiom of giving cursor-expiry its own
+problem-document `type`, not a generic bad-request one. This was an internal
+inconsistency (two different wire-level `type` values for the identical error
+condition, within one router module) traceable to following §4.4's prose literally for
+`handle_search` while `handle_list` instead followed `Letflow.Routers.Instances`'s
+actual code. Fixed `render_search_result/2`'s `:expired` clause to match
+`render_list_result/2` and the established idiom. `mix compile --warnings-as-errors`
+and `mix format --check-formatted` both clean after the fix.
+
+**Idiom/structure:** `list_paginated/2`'s keyset WHERE (`filter_by_definitions_list_cursor/2`,
+`{d.created_at, d.id} < {^ts, ^id}`) is a faithful mirror of `Letflow.Instances.list/2`'s
+`filter_by_list_cursor/2` — same tuple-comparison shape, same DESC/DESC `order_by`,
+same `limit(^(page_size + 1))` + `split_*_page/2` overfetch pattern. `page_size` as a
+required `Map.fetch!/2` key (diverging from the design doc's own `optional(:page_size)`
+type) is explicitly noted in both a code comment (`lib/letflow/definitions.ex`, directly
+above `@type list_paginated_filters`) and the commit message — not silently left for a
+future reader to discover as a mismatch against the design doc. `@rank_case_sql` is
+referenced verbatim at all four call sites (`select_with_rank/3`, `order_by_rank/3`,
+`filter_by_search_cursor/4` ×3 fragment calls, `order_by_rank_paginated/3`) — genuine
+reuse of one module attribute, no duplicated SQL text. Router/context module naming,
+error-tuple shapes (`{:error, :not_found}`, `{:error, :invalid_cursor}`, etc.),
+moduledoc structure, and the `with_authorized_scope/4` shape all match
+`Letflow.Instances`/`Letflow.Routers.Instances`'s REQ-080 precedent closely enough that
+a reader moving between the two sibling modules would find no unexplained convention
+gap.
+
+**Scope:** commit `2c36165` touches exactly `lib/letflow/api/authorization.ex`,
+`lib/letflow/definitions.ex`, `lib/letflow/routers/definitions.ex`, and this design
+doc — no changes to `Letflow.Instances`, `Letflow.Routers.Instances`, or any other
+REQ-080 code; no handler beyond the five specified; no refactor beyond what REQ-081
+needed.
+
+**Result: PASS-WITH-FIXES.** Ready for TEST-DESIGNER.

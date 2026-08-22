@@ -2094,6 +2094,22 @@
       "queue_task_id": 276,
       "queue_agent_id": "tvolodi-orch",
       "note": "WF-03 for ISS-0276 (GH#546, queue task 276, stage S0 -- no dev-bootstrap path creates a default tenant row, blocking any fresh dev DB from authenticating). Discovered during REQ-116's read-only frontend/API contract sweep (ADHOC-20260822-001). Fix: new mix letflow.seed task (lib/mix/tasks/letflow.seed.ex) provisioning a default tenant (slug bpm-default, idp_realm_id bpm-default) via the already-shipped Identity.create_tenant/1 -> TenantProvisioning.provision_tenant_schema/1 -> replay_migrations/1 chain, idempotent on re-run, documented in README.md. Regression test test/mix/tasks/letflow.seed_test.exs proven fail-then-pass via mutation testing (net-new module), TEST-DESIGN-VALIDATOR independently reproduced one mutant. Full suite green pre-merge (1779/1779); one unrelated pre-existing test failure (A9 count-drift on requirement_status.v3.yaml, traced to WF03-ISS0278-20260822 already on main) surfaced post-rebase, structurally unattributed to this branch. No rework cycles -- every gate passed on first attempt."
+    },
+    {
+      "run_id": "WF03-ISS0279-20260822",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "stage": "S0",
+      "status": "IN_PROGRESS",
+      "owned_modules": ["docs/agents/protocols/ISSUE_QUEUE.md", "docs/agents/workflows/WF-03_issue_resolving.md", "lib/mix/tasks/letflow.audit_issue_closures.ex"],
+      "lock_acquired_at": "2026-08-22T16:35:52Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 COMPLETED PASS -- branch feature/WF03-ISS0279-20260822 pushed.",
+      "backfilled": false,
+      "queue_task_id": 279,
+      "queue_agent_id": "tvolodi-orch",
+      "note": "WF-03 for ISS-0279 (GH#551, queue task 279, stage S0 -- process gap: GitHub issues closed with zero evidence trail (no comment, no linked PR) go undetected until manual reconciliation, found during WF03-ISS0278-20260822's reconciliation audit on GH#324/GH#326). Recommends a mechanical gate on issue closure (require a resolving --comment or a linked/merged PR) plus a periodic/CI audit that flags closed issues lacking both."
     }
   ]
 }

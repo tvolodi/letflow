@@ -1,0 +1,57 @@
+{
+  "handoff_id": "32c3c618-5519-4439-9883-423fbae65eae",
+  "run_id": "WF03-ISS0276-20260822",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0276-20260822/step-04b-test-design-validator.json",
+  "created_at": "2026-08-22T15:24:49Z",
+  "started_at": "2026-08-22T15:24:49Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/agents/workflows/WF-03_issue_resolving.md": "TEST-DESIGN-VALIDATOR must independently APPLY at least one of the reported mutants and run it -- accepting the reported pass counts is copying a claim, not validating one."
+    },
+    "related_handoff_ids": ["handoffs/WF03-ISS0276-20260822/step-04-test-designer.json"],
+    "artifacts_in": [
+      "test/mix/tasks/letflow.seed_test.exs",
+      "test/specs/ISS-0276.md",
+      "handoffs/WF03-ISS0276-20260822/step-04-test-designer.json",
+      "lib/mix/tasks/letflow.seed.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard gate on TEST-DESIGNER's regression test at test/mix/tasks/letflow.seed_test.exs. Read step-04-test-designer.json's result.summary for the two claimed mutants (Mutant A: omit idp_realm_id -- claimed 0/4 pass; Mutant B: disable idempotency fallback -- claimed 3/4 pass). Independently APPLY AT LEAST ONE of these two mutants yourself (in a throwaway git worktree, per the same technique TEST-DESIGNER used -- never mutate the main checkout in place unless you revert-and-verify per the source_text rule) and run the test file against it to reproduce the reported fail count. Also confirm the unmutated post-fix run is 100% green by running it yourself.",
+    "acceptance_criteria": [
+      "Post-fix (unmutated) test run independently reproduced, real output quoted, 100% green",
+      "At least one mutant independently applied and run (not merely re-read from TEST-DESIGNER's report), fail count matches or discrepancy is reported",
+      "All 3 ISS-0276 acceptance criteria confirmed covered by the test file (read the test file directly)",
+      "If mutating in a real worktree: worktree removed after; if mutated in the main checkout: git status --porcelain lib/ test/ verified empty",
+      "PASS or FAIL with itemized issues if FAIL"
+    ]
+  },
+  "result": {
+    "status": "BLOCKED",
+    "summary": "Not yet started.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

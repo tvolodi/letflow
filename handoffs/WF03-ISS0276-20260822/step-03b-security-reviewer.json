@@ -7,7 +7,7 @@
   "to_agent": "SECURITY-REVIEWER",
   "file": "handoffs/WF03-ISS0276-20260822/step-03b-security-reviewer.json",
   "created_at": "2026-08-22T15:13:03Z",
-  "started_at": "2026-08-22T15:13:03Z",
+  "started_at": "2026-08-22T15:13:26Z",
   "completed_at": null,
   "status": "PENDING",
   "priority": "NORMAL",

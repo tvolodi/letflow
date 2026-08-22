@@ -1,0 +1,55 @@
+{
+  "handoff_id": "4c60c7fc-b8fb-4748-8199-5fc076c60fe4",
+  "run_id": "WF03-ISS0262-20260822",
+  "workflow_id": "WF-03",
+  "step": "final-retry1",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0262-20260822/step-final-git-merge-retry1.json",
+  "created_at": "2026-08-22T08:57:19Z",
+  "started_at": "2026-08-22T08:57:19Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_MERGE.md",
+      "handoffs/WF03-ISS0262-20260822/step-final-git-merge.json",
+      "handoffs/WF03-ISS0262-20260822/step-07-elixir-dev-rework.json"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.lint_handoffs.ex", "test/mix/tasks/letflow.lint_handoffs_test.exs"]
+  },
+  "task": {
+    "description": "Re-attempt fn:git-merge per docs/agents/protocols/GIT_MERGE.md, run_id WF03-ISS0262-20260822, branch feature/WF03-ISS0262-20260822. This is a retry of step-final-git-merge.json, which FAILed only because main moved (WF03-ISS0261-20260822 landed as fb5c251) between design and merge, exposing 2 real new H6 hits that ELIXIR-DEV then grandfathered in step-07-elixir-dev-rework.json (verified: mix letflow.lint_handoffs now exits 0, 789 files, 18 grandfathered). Start from step 4 of GIT_MERGE.md (fetch origin main again, since more time has passed and main may have moved further) through completion: rebase, format/compile/test check with structural failure attribution (do not attribute by count-matching), push, create PR (prefix 'fix:', title 'fix: lint_handoffs detects non-JSON handoff files via new H6 check [WF03-ISS0262-20260822]'), merge --squash --delete-branch, local cleanup back to main.",
+    "acceptance_criteria": [
+      "git branch --show-current == feature/WF03-ISS0262-20260822 before starting",
+      "Rebase onto latest origin/main; mix format --check-formatted, mix compile --warnings-as-errors, mix test all run post-rebase; any failures attributed structurally, not by count-matching",
+      "mix letflow.lint_handoffs run post-rebase, confirmed exit 0",
+      "PR created and merged (--squash --delete-branch) with real test counts and attribution route inline in the PR body",
+      "Local cleanup: back on main, git log -1 shows the squash-merge commit, git status clean",
+      "PASS/FAIL/PARTIAL verdict"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

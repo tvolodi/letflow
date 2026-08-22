@@ -1949,20 +1949,20 @@
       "workflow_id": "WF-02",
       "requirement_ids": ["REQ-075"],
       "stage": "S4",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/routers/identity.ex",
         "lib/letflow/identity.ex",
         "lib/letflow/tenant_provisioning.ex"
       ],
       "lock_acquired_at": "2026-08-22T01:29:36Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 PASS — branch feature/WF02-REQ075-20260822 created and pushed, commit fda9a59. Next: Step 1 (CODE-DESIGNER).",
+      "lock_released_at": "2026-08-22T03:29:35Z",
+      "released_lock": true,
+      "last_known_step": "Step Final PASS — merged to main as e1f93be (PR #496), handoff 6c45c40. Queue task 142 released done, GH#282 closed.",
       "backfilled": false,
       "queue_task_id": 142,
       "queue_agent_id": "tvolo-win-orch",
-      "note": "WF-02 for REQ-075 (GH#282, queue task 142, stage S4), claimed via get_next_task immediately after REQ-074's close. Third of four split requirements (REQ-073..076) porting identity.zig's user-management group; this one is the requirement's OWN TEXT flags as categorically higher-risk than every other route requirement in the batch -- tenant-administration handlers operate on the global tenant_schemas table, outside REQ-072's per-tenant prefix scoping entirely, so PLATFORM_ADMIN role-gating is the ONLY protection and a bug here is a platform-wide cross-tenant leak. Explicit investigations required before design: whether a tenant admin may access their own tenant record (R-Co's real rule), how tenant creation here relates to REQ-022's TenantProvisioning and REQ-076's onboarding flow (one path, not two), and how tenant deactivation interacts with the already-mounted Letflow.Plugs.TenantStatus without a second conflicting status rule. Every gate in this run gets extra scrutiny given the requirement's own explicit high-risk framing."
+      "note": "WF-02 for REQ-075 (GH#282, queue task 142, stage S4), claimed via get_next_task immediately after REQ-074's close. Third of four split requirements (REQ-073..076) porting identity.zig's user-management group; the requirement's OWN TEXT flags it as categorically higher-risk than every other route requirement in the batch -- tenant-administration handlers operate on the global tenant_schemas table, outside REQ-072's per-tenant prefix scoping entirely, so PLATFORM_ADMIN role-gating is the ONLY protection. Every gate received extra scrutiny. Two R-Co findings independently verified TWICE against real source (own-tenant access has no carve-out; R-Co's route table hardcodes PLATFORM_ADMIN as dead code, correctly not ported). An out-of-sequence Step 1c REVIEWER pre-implementation sign-off was obtained BEFORE any code was written, approving a behavior-contract extension to the already-shipped Letflow.Plugs.TenantStatus (REQ-021): new :inactive check, all HTTP methods, 403, PLATFORM_ADMIN-exempt. The authorization-ordering guarantee (the single load-bearing security property in this run) was independently mutation-tested THREE separate times by three different agents breaking three different parts of the mechanism (TEST-DESIGN-VALIDATOR: branch inversion; RELEASE-VALIDATOR: role-matching injection), all three catching the regression. Step 2d decided OQ-5 (no compensating rollback for partial tenant-provisioning failure -- the provisioning primitives are genuinely idempotent, and rollback would risk orphaning a real schema), filed as ISS-0230. Full pipeline: Step 1 design (65f6c9c) -> 1b PASS (4d88e18) -> 1c out-of-sequence REVIEWER pre-approval (680bc09) -> 2a implement (dc5a7ac) -> 2c security PASS, line-by-line authorization trace (8ff0872) -> 2d REVIEWER PASS + OQ-5 decision (d060f86) -> 3b PASS, mutation test #1 (e610c51) -> 4 TEST-RUNNER PASS 1542/1542 (17f21d9) -> 5 RELEASE-VALIDATOR PASS, all 7 ACs independently re-verified, mutation test #2 (424ef4a) -> 6 DOC-UPDATER flipped to done (e41f8bd) -> ORCH added missing Step 2d sign-off entry to stage-4-api-surface.md (2b718df) -> Step Final merged (e1f93be, PR #496, 1550/1550 post-rebase after a transient connection-pool re-run, mutation test #3 implicit in the run history). rework_count 0 of 3 throughout -- every gate PASS first attempt despite the elevated scrutiny."
     }
   ]
 }

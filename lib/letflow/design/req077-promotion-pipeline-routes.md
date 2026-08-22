@@ -7,8 +7,27 @@ Ports six R-Co route modules as one requirement: `src/api/routes/promotion_revie
 No implementation code below — signatures, route tables, status matrices, response-key
 allowlists and test specs only.
 
-**Read §11 (Open Questions) before starting implementation.** OQ-1 is a hard blocker on
-two of the ten routes and needs REVIEWER sign-off, not an ELIXIR-DEV judgement call.
+> ## ⚠ REQ-077 IS BLOCKED — read this before scheduling any implementation
+>
+> **Four of the ten routes (R7 apply, R8 run-assertions, R9 rollback, R10 ENV-03 promote)
+> cannot be built until a separate, not-yet-drafted requirement lands: the
+> platform-event-appender requirement (id TBD, proposed
+> `depends_on: [REQ-023, REQ-024]`).** All four call a context function that
+> `Keyword.fetch!`es `opts[:event_appender]`, and no production appender exists or can
+> exist today (**F-5**). REVIEWER has ruled: build it as Option (B) — a new
+> `Letflow.EventStore` sibling entry point — **in its own requirement**, not inside this
+> one (**§11 OQ-1**, resolved, with the full rationale and the three grounds for the split).
+>
+> **REQ-077's `depends_on` gains that requirement alongside REQ-072.** No id is minted in
+> this document — REQ-ANALYST assigns ids.
+>
+> **Consequence for acceptance criteria: AC1, AC2 and AC4 are unreachable, and AC5 is
+> reachable for only three of its four cases, until that requirement ships.** AC3 and AC6
+> are reachable now. The per-AC table is at the end of §11; TEST-DESIGNER should plan for
+> two passes (§12.0's sequencing note).
+>
+> Everything else in this design is buildable and gate-verified. §4, §5, §6, §9 and §10 are
+> unaffected.
 
 ---
 
@@ -112,7 +131,7 @@ oversight. Each is a real behavioural divergence.
 | D-8 | `handleApproveReview` / `handleRejectReview` / `handleApplyReview` return **400** `INVALID_REVIEW_TRANSITION` for an illegal state transition (`:443`, `:539`, `:640`) | as cited | **409** — AC4 explicitly requires a 409-class problem document (§6) |
 | D-9 | `plan.human_readable` (`promotions.zig:165-168`) is a domain-computed prose rendering of the plan | `promotions.zig` | **not ported** — `PromotionPlan.t()` has no such field and computing one is a domain feature, not a route concern. Response omits the key. **OQ-6.** |
 
-### F-5 — There is no production `event_appender` anywhere in `lib/`, and there cannot be one today
+### F-5 — There is no production `event_appender` anywhere in `lib/`, and it gates FOUR routes, at three different severities
 
 `grep -rn "event_appender" lib/ --include=*.ex` finds only the three definitions of the
 opt (`promotion.ex`, `definitions.ex`) and one comment. Every one is `Keyword.fetch!/2`'d
@@ -121,7 +140,7 @@ with **no default**, deliberately.
 `Letflow.TenantProvisioning`'s `@platform_event_type_seed_attrs` comment states it
 outright: `"DEFINITION_PROMOTED"`, `"DEFINITION_VERSION_ROLLED_BACK"` and
 `"PROMOTION_ASSERTION_TEARDOWN_FAILED"` are **deliberately unseeded** because no production
-writer exists. **REQ-077 is that writer.** And a naive appender does not work:
+writer exists. And a naive appender does not work:
 `Letflow.EventStore.append/2`'s `active_instance_guard/3` hard-fails with
 `{:error, :instance_not_started}` unless `attrs[:instance_id]` names an existing
 `instance_projections` row, while `EventStore.platform_instance_id/0`
@@ -129,8 +148,87 @@ writer exists. **REQ-077 is that writer.** And a naive appender does not work:
 says so in its own header (`20260816120001_create_events.exs:44`, "Never inserted into
 instance_projections").
 
-This is **OQ-1**, the largest open question in this design, and it blocks
-`POST /promotions/:id/apply` and `POST /definitions/:process_key/rollback`. See §11.
+#### F-5.1 — Which routes are affected: R7, R8, R9 **and R10** (four, not two)
+
+An earlier revision of this design scoped this to R7 and R9 only. That was wrong in two
+places, both corrected here:
+
+* **R8 is affected**, because `apply_promotion_assertion_rerun/6` reads the opt
+  **eagerly and unconditionally** — `definitions.ex:805-806`, the fourth and fifth lines
+  of the function body, before the idempotency claim and before any branch:
+  ```
+  prefix = Keyword.get(opts, :prefix)
+  event_appender = Keyword.fetch!(opts, :event_appender)
+  ```
+  The appender is only *called* on the teardown-failure path, but it must be **present**
+  or the function raises `KeyError` on every request, including the happy path. Its own
+  `@doc` (`:780`) states the no-default stance explicitly.
+* **R10 is affected**, because §9.5's `promote_active_definition/5` carries the same
+  `promote_opts()` as `promote_definition/3`, in which `event_appender` is
+  `Keyword.fetch!`'d.
+
+#### F-5.2 — The three severities, which are NOT the same
+
+This distinction is the difference between "REQ-077 cannot ship" and "REQ-077 ships with
+one disclosed gap," so it is stated per route rather than in aggregate.
+
+**Severity 1 — R9 needs a *real* appender: it surfaces `event_id` in a client-visible
+body.** §7.6's `rollback_map/1` emits `"event_id"`, and `finish_rollback/8`
+(`definitions.ex:1288-1330`) additionally feeds that id into
+`supersede_matching_review/4`, which persists it in the `promotion_reviews.superseded_by`
+column. A stub appender returning a fabricated UUID would put a fabrication in both a
+response field and a durable audit column. **This is what disqualifies option (C) in
+§11's OQ-1.**
+
+**Severity 1 — R7 is worse than a missing event; it would make the route lie about a
+durable state change.** `append_promotion_event/9` (`promotion.ex:302-338`) runs **after
+the version-pointer transaction has committed** and propagates `{:error, _}` unchanged as
+`promote_definition/3`'s own result. So with a stub appender: the target definition is
+durably `:active`, `apply_review/4` (§9.3 step 4) sees the error and marks the review
+`:failed`, and the client receives a 500 — for an operation that succeeded. The natural
+client retry then hits `:duplicate_version` → 409. `finish_rollback/8` has the identical
+structure for R9 (`definitions.ex:1288-1330`). A route that reports failure for a
+committed write is worse than a route that is unavailable.
+
+**Severity 2 — R8 is the least damaging of the four, but it is still blocked.** The
+mechanics are the mildest: `apply_teardown_precedence/7` has exactly three clauses
+(`definitions.ex:1702-1758`), and only the third — the `{:error, release_reason}`
+teardown-failure clause — calls the appender at all; the `:not_attempted` and `:ok`
+clauses return `{pre_teardown_status, nil, true}` without touching it. And when that third
+clause does call it, `append_teardown_failure_event/6` **absorbs** the result
+(`definitions.ex:1782-1789`, `{:error, _reason} -> false`), flipping only
+`teardown_event_appended` — a field §7.5's 6-key response allowlist already excludes. So a
+failing appender is invisible to the client and cannot corrupt a response.
+
+**That is not sufficient to ship R8 without a real appender.** The tempting move — have
+R8's handler hardcode an appender that returns
+`{:error, :platform_event_writer_unavailable}`, since nothing observable depends on it —
+is **option (C) in different clothing, and is rejected for the same reason**:
+
+* On the teardown-failure branch it **silently discards a real
+  `PROMOTION_ASSERTION_TEARDOWN_FAILED` event** — the one event type that exists
+  specifically to make an otherwise-invisible infrastructure failure visible to operators.
+  A sandbox that failed to tear down is a leaked schema; losing its audit record is a real
+  operational loss, not a bookkeeping one.
+* **"The gap exists today anyway, so it does not widen" is false.** R8 does not exist
+  today, so nothing is dropped, because nothing runs. Shipping R8 with a stub creates a
+  **new** live path on which a genuine production teardown failure loses its audit record.
+* A hardcoded stub on a production handler is easy to forget to unwire once the real
+  appender lands.
+
+**Distinguish this from the existing, legitimate test injection.**
+`promotion_assertion_rerun_test.exs`'s `recording_event_appender/1` /
+`exploding_event_appender/0` call `apply_promotion_assertion_rerun/6` **directly** — a unit
+test exercising a context module's documented, caller-injected extension point. That is
+correct and stays. What is rejected is a **route handler** supplying a fixed value for
+`opts[:event_appender]` on a real request path. The injection point is the same; the caller
+and the consequences are not.
+
+**Consequence: AC2 is gated on the platform-event-appender requirement, not independent of
+it.** R8 is the only route AC2 exercises. §8.1's *mechanism* for AC2 is unaffected and
+remains correct; only its reachability changes. See §11's AC-reachability table.
+
+See §11's OQ-1, which is **resolved**, not open.
 
 ### F-6 — AC6's grep path does not cover the files AC6 is about
 
@@ -191,9 +289,11 @@ and `Letflow.Routers.Promotion` renamed to `Letflow.Routers.Promotions`.
 Justification:
 
 * **Nothing breaks.** `grep -rn "Routers.Promotion"` over the whole worktree returns
-  exactly two hits: the `forward/2` line and the stub's own `defmodule` line. Zero test
-  references, zero other callers. The stub serves no route, so no URL contract exists to
-  preserve.
+  **two code hits** — `lib/letflow/plugs/api_pipeline.ex:44` (the `forward/2` line) and
+  `lib/letflow/routers/promotion.ex:1` (the stub's own `defmodule`) — plus **two stale
+  documentation references**, `req070-router-decomposition.md:131` and `:200`, which the
+  paragraph below already requires updating. **Zero test references, zero other callers.**
+  The stub serves no route, so no URL contract exists to preserve.
 * **`/promotions` is R-Co's path** (`main.zig:1567`, and all six modules' header docs).
   Keeping `/promotion` would diverge every path in §1 from R-Co for no reason, and would
   make `POST /promotion` read as an action rather than a collection.
@@ -512,6 +612,15 @@ Body in every cell: the RFC 9457 404 document from `Response.not_found/1`, i.e.
 `Content-Type: application/problem+json`. `trace_id` differs per request by design and is
 excluded from the byte-identity assertion (the convention REQ-073's test helper already uses).
 
+**INV-5's timing half, affirmatively for R4–R7 as well as R3.** For R4, R5, R6 and R7 the
+nonexistent case and the cross-tenant case are not merely *mapped* to the same response —
+they are produced by **the same single prefix-scoped primary-key lookup returning `nil`**,
+executed at the same point in the same function, with no branch between them. There is no
+second read on either path, so the DB round-trip count is identical by construction and
+cannot vary with the outcome. R3 reaches the same guarantee by a different route (two reads
+on every path, including the not-found one — see the paragraph below), which is why it is
+argued separately.
+
 **R3's `null`-vs-404 distinction, stated because it is easy to get wrong.** R-Co's
 `promotion_read.zig:79-83` returns **200** `{"assertion_run": null}` when the query finds no
 row, and it filters on `review_id` alone with no tenant scoping (`:63-73`). Letflow splits
@@ -816,7 +925,15 @@ does not silently retry the promotion.
    `Response.unprocessable(conn, "artifact is not a well-formed promotion artifact")`. The
    offending field name is **not** echoed into the detail (**OQ-7** covers a richer
    per-field validation).
-2. `Definitions.apply_promotion_assertion_rerun(review_id, attrs["plan_digest"], artifact, sandbox_pool, max_wait_ms, opts)`.
+2. `Definitions.apply_promotion_assertion_rerun(review_id, attrs["plan_digest"], artifact, sandbox_pool, max_wait_ms, opts ++ [event_appender: <appender>])`.
+
+**`event_appender:` is mandatory here and is easy to miss** — `apply_promotion_assertion_rerun/6`
+`Keyword.fetch!`es it on the fifth line of its body, unconditionally, so passing only the
+`[prefix: …]` fragment from §3 step 1 makes the route raise `KeyError` on **every** request
+including the happy path (F-5.1). The value is the **real** appender from the
+platform-event-appender requirement (§11 OQ-1) — R8 must not ship with a hardcoded stub,
+for the reasons in F-5.2's Severity-2 entry. R7, R9 and R10 take the same opt from the same
+source; **all four routes are blocked on that requirement landing.**
 
 `sandbox_pool` and `max_wait_ms` — the route does **not** hardcode either:
 
@@ -1053,6 +1170,14 @@ that the two responses' `status` and `resp_body` are equal. Note `trace_id` appe
 problem documents, never in a success body, so for R8's success path the raw `resp_body`
 values compare equal directly with no stripping.
 
+**Reachability caveat.** Everything above describes the *mechanism*, and the mechanism is
+correct and unaffected by OQ-1. But **AC2 cannot actually be exercised until the
+platform-event-appender requirement lands**: R8 is the only route AC2 touches, and
+`apply_promotion_assertion_rerun/6` `Keyword.fetch!`es `event_appender` eagerly
+(`definitions.ex:806`), so the route cannot serve a request at all without one — and
+supplying a stub from the handler is rejected (F-5.2, Severity 2). §11's AC-reachability
+table records the consequence.
+
 ### 8.2 REQ-064 per-tenant `plan_digest` uniqueness (AC3)
 
 Two tenants submitting the same `plan_digest` get two independent reviews, and this falls
@@ -1094,8 +1219,13 @@ returns `{:ok, attrs}` with **string** keys (it is `Map.take(body, field_names)`
 |---|---|---|---|
 | `"source_tenant_id"` | `true` | `:uuid` | `reject_empty_string: true` |
 | `"target_tenant_id"` | `true` | `:uuid` | `reject_empty_string: true` |
-| `"process_key"` | `true` | `:string` | `reject_empty_string: true`, `max_length: <see OQ-9>` |
+| `"process_key"` | `true` | `:string` | `reject_empty_string: true`, `max_length: 255` |
 | `"base_version"` | `true` | `:string` | `reject_empty_string: true`, `max_length: 64` |
+
+`max_length: 255` on `process_key` matches `process_definitions.name`, which is
+`add :name, :string, null: false` with no `size:`
+(`20260816193001_create_process_definitions.exs:77`) — Ecto's default `varchar(255)` — and
+matches `Definitions.fetch_name/1`'s own 255-byte guard.
 
 `base_version` is `:string`, diverging from R-Co's "JSON integer or decimal string parsed as
 u32" (`promotion_review.zig:116-123`) — same reasoning as §7.6: Letflow versions are
@@ -1108,7 +1238,25 @@ free-form text.
 
 | `name` | `required` | `type` | other |
 |---|---|---|---|
-| `"plan_digest"` | `true` | `:string` | `reject_empty_string: true`, `min_length`/`max_length` = digest width, **see OQ-9** |
+| `"plan_digest"` | `true` | `:string` | `reject_empty_string: true`, **`min_length: 64`, `max_length: 64`** |
+
+**The 64/64 bound is a crash guard, not a length nicety — do not widen it.**
+`PromotionDigest.verify_digest/2` calls **`:crypto.hash_equals/2`** directly on the
+caller-supplied binary (`promotion_digest.ex:77-83`), and `:crypto.hash_equals/2`
+**raises `ArgumentError` on binaries of unequal length** rather than returning `false`
+(verified: `:crypto.hash_equals("abc", "abcd")` → `ArgumentError`). Since the stored digest
+is always exactly 64 characters, any request whose `plan_digest` is a different length
+reaches that raise. Pinning `min_length` **and** `max_length` to 64 makes the raise
+unreachable from HTTP; relaxing either bound reintroduces a remote unhandled exception
+triggerable by attacker-controlled body data on an authenticated endpoint.
+
+64 is exact, not approximate: `compute_plan_digest/1` is
+`:crypto.hash(:sha256, …) |> Base.encode16(case: :lower)` (`promotion_digest.ex:57-63`) —
+a 32-byte digest hex-encoded to 64 lowercase characters.
+
+**Only R5 and R7 forward a caller-supplied value into `verify_digest/2`** — confirmed
+against every call site; no other route in §1 does. So these two schemas are the complete
+set of places this guard is load-bearing.
 
 **R6 — `@reject_schema` = `[]`** (empty list). `validate([], body)` still runs the structural
 checks (`check_is_object/1`, `check_no_null_bytes/1`) and then returns `{:ok, %{}}`,
@@ -1336,10 +1484,13 @@ extracted values plus `actor_id`, `review` and `event_appender` explicitly.
 * `base_version` for the conflict re-check is read from the **target tenant's current ACTIVE
   row** (`nil` when the target has none), not from a caller-supplied value — R10 parses no
   body (§8.4), so there is nothing else it could be.
-* `review_id` is `nil` in the appended `DEFINITION_PROMOTED` event payload. **Confirm the
-  event's registered JSON schema tolerates a null `review_id`** once OQ-1 settles how these
-  events are registered — an ENV-03 promotion genuinely has no review, and forcing a
-  synthetic id would put a lie in the audit log.
+* `review_id` is `nil` in the appended `DEFINITION_PROMOTED` event payload. **The
+  platform-event-appender requirement's `DEFINITION_PROMOTED` `json_schema` must therefore
+  admit a null `review_id`** (`"review_id" => %{"type" => ["string", "null"]}`), because
+  `Registry.validate_payload/3` runs on every append — an ENV-03 promotion genuinely has no
+  review, and forcing a synthetic id would put a lie in the audit log. Carry this into that
+  requirement's text; it is a constraint REQ-077 imposes on it, and §11 OQ-1 records that
+  the three schemas must match their producers' real attrs shapes.
 * Returns the new row's `id`, `version` and `status`, which `promote_result/0` does not
   carry, because R10's response body needs all three (§7.7).
 * `opts` is the same `promote_opts()`: `permission_checker` and `event_appender`
@@ -1443,41 +1594,95 @@ and recorded in `docs/anti-patterns.md`.
 
 ## 11. Open questions — not silently resolved
 
-**OQ-1 (BLOCKING; largest in this design) — there is no working `event_appender`, and one
-cannot be written today without changing a shipped module.**
-R7 (`apply` → `promote_definition/3`) and R9 (`rollback_definition_version/4`) both
-`Keyword.fetch!` an `event_appender`, and F-5 establishes that (a) no production
-implementation exists anywhere in `lib/`; (b) the three event types (`DEFINITION_PROMOTED`,
-`DEFINITION_VERSION_ROLLED_BACK`, `PROMOTION_ASSERTION_TEARDOWN_FAILED`) are deliberately
-unseeded in `Letflow.TenantProvisioning`'s `@platform_event_type_seed_attrs` "because no
-production writer exists"; and (c) `EventStore.append/2`'s `active_instance_guard/3`
-hard-fails with `{:error, :instance_not_started}` unless `attrs[:instance_id]` names a real
-`instance_projections` row — while `EventStore.platform_instance_id/0` deliberately has none
-(`20260816120001_create_events.exs:44`: "Never inserted into instance_projections").
-R9 makes this unavoidable: its response body includes `event_id` (§7.6), so a stub appender
-returning a fabricated id would put a lie in a client-visible field **and** in the
-`superseded_by` column `supersede_matching_review/4` writes.
+**OQ-1 — RESOLVED by REVIEWER. Not an open question: a recorded dependency and a required
+split.**
 
-Options, with a recommendation:
-* **(A) Seed a sentinel `instance_projections` row per tenant at provisioning time.**
-  Feasible — no FK on `definition_id` (confirmed:
-  `20260818110001_alter_instance_projections_add_engine_columns.exs:17-19`, "NO FK ON
-  `definition_id`, confirmed rather than assumed"). But it **contradicts the documented
-  sentinel semantics** in the events migration header and REQ-023's design.
-* **(B, RECOMMENDED) Add `Letflow.EventStore.append_platform_event/2`** — a sibling of
-  `append/2` that skips the active-instance guard for, and only for,
-  `platform_instance_id/0`, leaving `append/2`'s contract and every existing caller
-  untouched and keeping "never inserted into instance_projections" literally true. Requires
-  seeding the three event types, plus a backfill for already-provisioned tenants (the seed
-  step is documented as idempotent on re-run). ELIXIR-DEV must also confirm whether
-  `assign_sequence/3`'s insert-if-absent step touches `instance_projections` or a separate
-  sequence table — that determines how much of `append/2`'s machinery
-  `append_platform_event/2` can reuse.
-* **(C) A no-op appender.** Rejected: it makes R9's `event_id` a fabrication.
+**Ruling: Option (B), built as its own separate requirement. REQ-077 is blocked on it for
+R7, R8, R9 and R10.**
 
-**Must be settled by REVIEWER before ELIXIR-DEV starts.** It changes REQ-023/024/025's
-shipped contract either way, and it is not an implementation detail a routes requirement
-decides unilaterally. The route contracts in §7.5/§7.6 do not change under any option.
+**Why (A) is rejected — a harder reason than "it contradicts a comment".**
+`req023-event-store-schema.md` §3.1.3 records that the schema was shaped *around* the
+sentinel having no projection row: *"Platform/scheduler events therefore carry an
+`instance_id` with no projection row, which an FK would reject"* (`:428-429`). Seeding such
+a row inverts the recorded rationale for an FK's absence, and leaks the sentinel into every
+`instance_projections` read path — every list, every status scan, every `idx_proj_status`
+partial-index match.
+
+**Why (B) is right — it completes a design already on record rather than diverging from
+one.** `event_store.ex:349-353` records a prior REVIEWER Step-2d ruling that *"append/2
+never originates an instance_projections row"*. A sibling entry point that skips the
+projection machinery is the idiomatic complement to that ruling, not a contradiction of it.
+Two sub-questions an earlier revision of this design left for the implementer are now
+**closed**:
+
+* **M2 (`assign_sequence`) is safe to reuse verbatim.** `instance_sequence` is a separate
+  table from `instance_projections`, keyed on `instance_id`, inserted `on_conflict:
+  :nothing`, with no FK — and `20260816120002_create_instance_sequence.exs`'s own header
+  states it "inserts this row before any projection row necessarily exists."
+* **M6 must be skipped as well as M1, and this is forced, not a choice.**
+  `update_projection/3` (`event_store.ex:545-556`) pattern-matches on
+  `active_instance_guard: %InstanceProjection{}`, which never exists for the sentinel — so
+  the new function needs its **own** `Ecto.Multi` dropping **M1 and M6** and reusing M2
+  (`assign_sequence`) / M3 (`claim_idempotency`) / M4 (`insert_event`) verbatim. This is
+  not a guard-clause tweak to `append/2`.
+
+**No migration is needed** — neither `events` nor `instance_sequence` carries an FK on
+`instance_id`.
+
+**Why (C) — a no-op or unavailability-reporting appender — is rejected for all four
+routes.** For R9 it fabricates a client-visible `event_id` and a persisted
+`superseded_by` value. For R7 it turns a committed promotion into a reported failure. For
+R8 it silently discards a real `PROMOTION_ASSERTION_TEARDOWN_FAILED` event on a path that
+does not exist today, which is a new gap rather than an unchanged one. Full reasoning per
+route in F-5.2.
+
+**Why the split into a separate requirement is mandatory**, on three independent grounds:
+
+1. **It is another requirement's explicitly deferred scope.**
+   `lib/letflow/design/req026-event-read-archive-platform-sentinels.md:144` lists *"Real
+   emission of scheduler/platform events using the three sentinel constants"* as not built
+   there, owned by *"a later stage's engine work"*, citing `requirements.yaml:1119-1121`
+   ("this requirement only needs the constants to exist"). REQ-077 absorbing it would
+   swallow scope another requirement deliberately deferred.
+2. **It touches four `done` requirements' modules** (REQ-022's provisioning, REQ-023's
+   schema assumptions, REQ-024's registry, REQ-025's `append/2`).
+3. **Not one of REQ-077's six acceptance criteria mentions an event.** A routes requirement
+   is the wrong place for an event-store entry point.
+
+**The appender requirement is substantially larger than "add a function"** — recorded here
+so it is not under-sized when it is drafted:
+
+* `append/2` **rejects `:tenant_id` outright** (`event_store.ex:216-222`,
+  `{:error, :tenant_id_not_accepted}`), yet the `PROMOTION_ASSERTION_TEARDOWN_FAILED`
+  producer puts `tenant_id` directly in its attrs map (`definitions.ex:1775-1780`).
+* `append/2` requires `:payload` and `:idempotency_key`, and **none of the three producers
+  supplies either** — verified against all three attrs maps (`promotion.ex:317-325`,
+  `definitions.ex:1310-1316`, `definitions.ex:1774-1780`).
+* `Registry.validate_payload/3` runs on every append, so **three seeded `json_schema`s must
+  match three separate producers' real attrs shapes**.
+
+So the work is: a new entry point + a translation/idempotency-derivation module + three
+event-type schemas + a `TenantProvisioning` seed change + a backfill for already-provisioned
+tenants.
+
+**Dependency to record:** REQ-077's `depends_on` gains **the platform-event-appender
+requirement (id TBD, proposed `depends_on: [REQ-023, REQ-024]`)** alongside REQ-072.
+**No id is minted here** — REQ-ANALYST assigns requirement ids, and any concrete id
+appearing in a gate report is a proposal, not an assignment.
+
+### OQ-1's consequence — acceptance-criterion reachability
+
+| AC | Reachable before the appender requirement lands? |
+|---|---|
+| **AC1** (all six modules; five `promotion_review.zig` handlers each) | **NO** — R7 (apply) is blocked, and `promotion.zig` (R10), `promotion_assertion.zig` (R8) and `definition_rollback.zig` (R9) are each blocked in full, which means three of the six modules have no reachable route at all. R1/R2/R5/R6 are reachable. |
+| **AC2** (assertion-run idempotency, one row, two identical responses) | **NO** — R8 is the only route AC2 exercises. §8.1's mechanism is unaffected; only reachability changes. |
+| **AC3** (per-tenant `plan_digest`) | **YES** — submit (R1) touches no events. |
+| **AC4** (409 on already-applied, nothing re-applied) | **Effectively NO** — the fixture needs a review that genuinely reached `:applied` with a real promoted target definition to assert "unchanged" against, and reaching `:applied` goes through R7. |
+| **AC5** (four cross-tenant 404s) | **3 of 4** — get (R4), approve (R5) and reject (R6) are reachable; apply (R7) is blocked. |
+| **AC6** (no repo access in routes) | **YES** — structural, verifiable by §10.2's greps against whatever ships. |
+
+Sequencing consequence: REQ-077 cannot be completed before the platform-event-appender
+requirement. Four of its six acceptance criteria are wholly or partly gated on it.
 
 **OQ-2 (SECURITY-REVIEWER) — the always-true `permission_checker` leaves cross-tenant
 definition reads unenforced on R1/R2/R10.** Fully stated in §7.9. §4's Option-A decision
@@ -1517,10 +1722,14 @@ be advanced. Follows `finish_rollback/8`'s and `append_teardown_failure_event/6`
 established "an already-durable outcome is not undone by a side-effect's failure"
 resolution, but it is a judgement call.
 
-**OQ-9 — two `FieldConstraint` bounds must be read off the source, not assumed** (§8.4):
-`plan_digest`'s width from `PromotionDigest.compute_plan_digest/1`'s actual output, and
-`process_key`'s `max_length` from `process_definitions.name`'s real column width. A wrong
-bound rejects every legitimate request, so these must be verified before they are pinned.
+**OQ-9 — CLOSED.** Both bounds are now read off the source and pinned in §8.4:
+`plan_digest` is exactly 64 lowercase hex characters
+(`:crypto.hash(:sha256, …) |> Base.encode16(case: :lower)`, `promotion_digest.ex:57-63`),
+and `process_key`'s `max_length` is 255 (`process_definitions.name` is `:string` with no
+`size:`, `20260816193001_create_process_definitions.exs:77`). §8.4 also records the reason
+the digest bound is pinned in **both** directions: `verify_digest/2` calls
+`:crypto.hash_equals/2`, which raises `ArgumentError` on unequal-length binaries, so the
+bound is a crash guard on attacker-controlled input rather than a cosmetic limit.
 
 **OQ-10 — `Ecto.Query.CastError` on a non-UUID id may not be the only raise path.** §3.2 and
 §9.1 close the `promotion_reviews` primary-key case, and §3.2 applies the pre-cast to R8 as
@@ -1534,12 +1743,76 @@ function if not.
 
 ## 12. Test specifications (shapes, for TEST-DESIGNER)
 
+### 12.0 What "through the real router" means for AC1 — SETTLED, do not re-decide
+
+AC1 says each module needs "at least one end-to-end test **through the real router**." Two
+precedents exist in this codebase and the phrase does not by itself pick between them, so
+this design picks, with reasons, rather than leaving TEST-DESIGNER to guess:
+
+* **Sub-router dispatch** — `Letflow.Routers.Tenants.call(conn, @opts)` with
+  `conn.assigns[:auth_context]` set directly (`test/letflow/routers/tenants_test.exs:33,57,61`;
+  `identity_test.exs` likewise). The established precedent, from three gate-passed
+  requirements (REQ-073/074/075).
+* **Full-stack dispatch** — `Letflow.Router.call(conn, Letflow.Router.init([]))` with a
+  real `Bearer valid-test-token` against a real provisioned tenant
+  (`test/letflow/plugs/api_pipeline_integration_test.exs:103`).
+
+**Decision: sub-router dispatch satisfies AC1 for all ten routes (option (a)), plus one
+mandatory full-stack smoke test (§12.9).**
+
+Reasoning:
+
+1. **It is a real router.** `Letflow.Routers.Promotions.call/2` runs real `Plug.Router`
+   `:match`/`:dispatch`, real path-segment matching and parameter extraction, the real
+   clause-ordering in §2.2, and the real `match _` 404 fallback. AC1's own object — "status
+   and response shape" — is entirely determined at this layer. What sub-router dispatch
+   skips is the *pipeline* (`Plug.Parsers`, trace-id assignment, `AuthPipeline`,
+   `TenantStatus`), none of which REQ-077 authors and all of which REQ-071 already covers
+   with its own integration test.
+2. **It is the established precedent for exactly this kind of test**, set by the three
+   route requirements immediately preceding this one and accepted by the gates each time.
+   Diverging would make REQ-077's suite inconsistent with its three siblings for no
+   coverage gain.
+3. **Full-stack dispatch for the happy paths is currently blocked by a test-support gap,
+   and closing it buys nothing here.** §4's Option A makes every route PLATFORM_ADMIN-only,
+   so a full-stack 2xx test needs a PLATFORM_ADMIN token — but **both token doubles
+   hardcode `realm_access.roles`**: `test/support/token_verifier_double.ex:36` and
+   `configurable_token_verifier_double.ex:69,106` both emit `["VIEWER"]` (and `:80` emits
+   `[]`). `ConfigurableTokenVerifierDouble`'s grammar has `"realm-token:" <> realm`,
+   `… <> ":sub=" <> subject`, and `"no-sub-token:" <> realm` forms (`:40-48`) — **no roles
+   parameter**. `Letflow.Plugs.AuthPipeline` takes roles straight from claims, so a
+   full-stack PLATFORM_ADMIN test would require extending a shared test-support module used
+   by other suites, to re-verify path matching that sub-router dispatch already verifies.
+
+**But option (a) alone leaves one real gap, which §12.9 closes.** §12.8's denial test uses
+hand-set `assigns`, so nothing in the suite would catch it if `AuthPipeline`'s real
+claim→roles mapping disagreed with what the tests assume — every promotion route could be
+admin-locked (or worse, open) in production with a fully green suite.
+
+The fix needs **no token-double change**, because the gap is on the *denial* side and the
+existing double already produces a non-admin role: §12.9 dispatches a real
+`Bearer valid-test-token` (`["VIEWER"]`) full-stack at a promotion route and asserts **403**.
+A VIEWER token traversing the real pipeline and being denied by the real `:Unknown` gate
+proves the gate is live end-to-end. The positive case stays at the sub-router layer.
+
+**If a later requirement genuinely needs a full-stack PLATFORM_ADMIN test**, the
+token-double extension is the prerequisite, and the grammar it should add is a roles-bearing
+form parallel to the existing ones — e.g. `"realm-token:" <> realm <> ":roles=" <> comma_separated`,
+composing with the existing `:sub=` form. Named here so that requirement does not have to
+rediscover it; **not** a build requirement for REQ-077.
+
+---
+
 Every test dispatches through a **real router** — `Letflow.Routers.Promotions.call/2`,
 `Letflow.Routers.Definitions.call/2` or `Letflow.Routers.Tenants.call/2` with a conn whose
-`assigns.auth_context` is populated as `Letflow.Plugs.AuthPipeline` would — or, where the
-pipeline itself is under test, through `Letflow.Plugs.ApiPipeline.call/2`. Tenants come from
-the provisioned-tenant fixture REQ-073/075's suites already use. Every caller carries
-`roles: ["PLATFORM_ADMIN"]` unless the test is specifically about denial (§12.8).
+`assigns.auth_context` is populated as `Letflow.Plugs.AuthPipeline` would — except §12.9,
+which is full-stack. Tenants come from the provisioned-tenant fixture REQ-073/075's suites
+already use. Every caller carries `roles: ["PLATFORM_ADMIN"]` unless the test is
+specifically about denial (§12.8, §12.9).
+
+**Sequencing:** the tests for R7, R8, R9 and R10 — and therefore AC1, AC2 and AC4 — cannot
+be written against a working route until the platform-event-appender requirement lands
+(§11 OQ-1). TEST-DESIGNER should expect to build this suite in two passes, not one.
 
 ### 12.1 AC1 — one end-to-end test per route module, five for `promotion_review.zig`
 
@@ -1644,3 +1917,44 @@ contains **no** `entries` key and no plan data of any kind.
 This is what makes §4's Option A auditable rather than an invisible fallthrough: if a later
 requirement adds a promotion clause to `Letflow.Api.Authorization`, the first assertion fails
 and forces the change to be deliberate rather than silently re-gating ten routes.
+
+### 12.9 Full-stack smoke test — the gate is live through the real pipeline (§12.0)
+
+One test, dispatching through `Letflow.Router.call/2` rather than a sub-router, closing the
+gap §12.0 identifies: every other test hand-sets `conn.assigns[:auth_context]`, so none of
+them would catch a disagreement between `AuthPipeline`'s real claim→roles mapping and what
+the suite assumes.
+
+```
+tenant = insert_tenant_for_realm!("bpm-default")     # api_pipeline_integration_test.exs's own fixture
+
+conn =
+  conn(:post, "/api/v1/promotions/plan", Jason.encode!(%{...valid body...}))
+  |> put_req_header("content-type", "application/json")
+  |> put_req_header("authorization", "Bearer valid-test-token")
+  |> Letflow.Router.call(Letflow.Router.init([]))
+
+assert conn.status == 403
+assert conn.assigns.auth_context.roles == ["VIEWER"]          # the double's real output
+body = Jason.decode!(conn.resp_body)
+assert body["detail"] == "insufficient permissions"
+refute Map.has_key?(body, "entries")                          # no plan data in a denial
+```
+
+Why this is the right smoke test, and why it needs no test-support change:
+
+* It exercises the **whole** stack — `Plug.Parsers`, trace-id assignment, `AuthPipeline`
+  (real token verification, real claim→roles mapping, real tenant resolution),
+  `TenantStatus`, the `/promotions` forward from §2.1, and the sub-router's own matching —
+  and proves §4's gate denies a real non-admin caller end-to-end.
+* It uses the **denial** direction deliberately: the existing doubles already emit
+  `["VIEWER"]` (`token_verifier_double.ex:36`), which is exactly the non-admin role this
+  test needs. The positive direction would need a PLATFORM_ADMIN token and therefore the
+  token-double extension §12.0 declines to require.
+* Asserting `conn.assigns.auth_context.roles == ["VIEWER"]` pins the mapping itself, so if
+  a future change to `AuthPipeline` or the doubles alters what reaches
+  `Authorization.roles_from_strings/1`, this test fails rather than silently passing while
+  the gate's real behaviour drifts.
+* `POST /promotions/plan` is chosen as the target because it is the one route that is
+  **not** blocked by OQ-1 and has a request body worth parsing — so this test is runnable in
+  the first of the two passes §12.0's sequencing note describes.

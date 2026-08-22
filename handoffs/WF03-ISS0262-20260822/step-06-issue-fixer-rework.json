@@ -1,0 +1,54 @@
+{
+  "handoff_id": "bb301282-a719-4667-9b4f-38aae45c8aa9",
+  "run_id": "WF03-ISS0262-20260822",
+  "workflow_id": "WF-03",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0262-20260822/step-06-issue-fixer-rework.json",
+  "created_at": "2026-08-22T08:52:28Z",
+  "started_at": "2026-08-22T08:52:28Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0262-20260822/step-final-git-merge.json",
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "handoffs/WF03-ISS0261-20260822/step-01-issue-fixer.md",
+      "handoffs/WF03-ISS0261-20260822/step-03c-reviewer.md"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.lint_handoffs.ex"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1 of 3 (Step Final rework per GIT_MERGE.md step 5d, not a rejection of ISS-0262's own design -- a real repo-state race). This run's fix (already merged locally into this branch, currently rebased onto origin/main) added a new H6 hard check that now, after the Step Final rebase onto current main (tip fb5c251), correctly flags TWO real files that were not in scope when this run's design/grandfather-list was finalized: handoffs/WF03-ISS0261-20260822/step-01-issue-fixer.md and handoffs/WF03-ISS0261-20260822/step-03c-reviewer.md -- landed on main by a different, already-merged run (WF03-ISS0261-20260822, PR #513) after this branch's design step ran. Diagnose and confirm: (1) verify these are exactly the only 2 files in that directory that are non-.json (run ls/find yourself, don't assume); (2) determine disposition -- grandfather (same precedent as the original 10: net-new-to-history files from an already-resolved, already-attested run, not to be retroactively reformatted) is almost certainly correct here by the same reasoning CODE-DESIGNER and REVIEWER already established for the original 10, but confirm no reason exists to treat these 2 differently (e.g. check whether WF03-ISS0261-20260822 is itself still open/in-flight anywhere -- it should not be, since it's already merged to main). State this is NOT a redispatch of the original diagnosis (root cause unchanged) -- it's confirming disposition of 2 newly-discovered files under the same already-approved rule. Do NOT implement the grandfather-list edit -- route to ELIXIR-DEV to make the 1-line-per-file addition to @grandfathered in lib/mix/tasks/letflow.lint_handoffs.ex, following the exact same {\"H6\", \"<path>\"} shape and dated-comment convention as the existing 10 entries.",
+    "acceptance_criteria": [
+      "Confirmed via real ls/find that exactly 2 non-JSON files exist under handoffs/WF03-ISS0261-20260822/, named precisely",
+      "Confirmed WF03-ISS0261-20260822 is a completed, merged run (not still in-flight) -- check handoffs/registry.json and/or orchestrator.log",
+      "Clear grandfather-vs-convert recommendation with reasoning, consistent with the original 10-file precedent",
+      "Does NOT implement the .ex change itself; next_action names ELIXIR-DEV"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

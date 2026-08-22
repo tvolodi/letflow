@@ -4389,7 +4389,7 @@ requirements:
   - id: REQ-078
     title: Supporting routes -- audit, definition validation, tenant config, solution packs, pin rebind, metrics
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 145  # letflow-queue task id
     description: >

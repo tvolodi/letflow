@@ -726,7 +726,11 @@ defmodule Letflow.EventStore do
   @type read_global_opts :: [
           prefix: String.t(),
           after_global_seq: pos_integer() | nil,
-          limit: non_neg_integer() | nil
+          limit: non_neg_integer() | nil,
+          actor_id: Ecto.UUID.t() | nil,
+          instance_id: Ecto.UUID.t() | nil,
+          from: DateTime.t() | nil,
+          to: DateTime.t() | nil
         ]
 
   @type read_global_result :: %{
@@ -737,6 +741,8 @@ defmodule Letflow.EventStore do
 
   @type read_global_error ::
           {:error, :invalid_schema_name}
+          | {:error, :invalid_actor_id}
+          | {:error, :invalid_instance_id}
           | {:error, {:payload_resolution_failed, event_id :: Ecto.UUID.t()}}
           | {:error, term()}
 
@@ -755,6 +761,31 @@ defmodule Letflow.EventStore do
   `limit` more rows exist and no others, `has_more` reports `true` but the
   very next call returns zero new rows -- the ordinary cursor-pagination
   boundary case.
+
+  ## Filter opts (REQ-078, `lib/letflow/design/req078-supporting-routes.md` §6.5)
+
+  `:actor_id`, `:instance_id`, `:from` and `:to` were added **additively** so
+  that `GET /api/v1/audit` reads through this one function rather than a
+  second `list_audit/1` that could drift from it -- **one read path, not
+  two.** Every existing caller is unaffected: each new key defaults to `nil`
+  and contributes no predicate.
+
+    * All four are `AND`-composed with each other and with
+      `:after_global_seq`.
+    * `:from` / `:to` are **inclusive** bounds on `events.created_at`. The
+      `from > to` case is deliberately **not** checked here -- it is the
+      route's, matching R-Co's own handler-level check
+      (`src/api/routes/audit.zig:26-30`, `invalid_time_range`).
+    * `:actor_id` / `:instance_id` are validated with `Ecto.UUID.cast/1`
+      **before any query is constructed**; a malformed value returns
+      `{:error, :invalid_actor_id}` / `{:error, :invalid_instance_id}` with
+      zero queries issued -- the same validate-then-query ordering
+      `Letflow.Engine.VariableSchema.fetch_schemas/3` establishes.
+    * Composed with `Ecto.Query` and bound parameters only; no SQL string
+      interpolation (INV-7).
+
+  Ordering (`asc: global_seq`), `:prefix` scoping and `$ref` payload
+  resolution are unchanged.
   """
   @spec read_global(opts :: read_global_opts()) ::
           {:ok, read_global_result()} | read_global_error()
@@ -763,10 +794,17 @@ defmodule Letflow.EventStore do
     after_global_seq = Keyword.get(opts, :after_global_seq)
     effective_limit = clamp_read_global_limit(Keyword.get(opts, :limit))
 
-    with {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+    with {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, actor_id} <- cast_optional_uuid(Keyword.get(opts, :actor_id), :invalid_actor_id),
+         {:ok, instance_id} <-
+           cast_optional_uuid(Keyword.get(opts, :instance_id), :invalid_instance_id) do
       raw_events =
         Event
         |> apply_after_global_seq(after_global_seq)
+        |> apply_global_actor_id(actor_id)
+        |> apply_global_instance_id(instance_id)
+        |> apply_global_from(Keyword.get(opts, :from))
+        |> apply_global_to(Keyword.get(opts, :to))
         |> order_by([e], asc: e.global_seq)
         |> limit(^effective_limit)
         |> Repo.all(prefix: prefix)
@@ -898,6 +936,32 @@ defmodule Letflow.EventStore do
 
   defp apply_after_global_seq(query, after_global_seq),
     do: where(query, [e], e.global_seq > ^after_global_seq)
+
+  # REQ-078 §6.5 -- the four additive filter opts. Each is a no-op when nil,
+  # so every pre-REQ-078 caller composes to exactly the query it did before.
+  defp apply_global_actor_id(query, nil), do: query
+  defp apply_global_actor_id(query, actor_id), do: where(query, [e], e.actor_id == ^actor_id)
+
+  defp apply_global_instance_id(query, nil), do: query
+
+  defp apply_global_instance_id(query, instance_id),
+    do: where(query, [e], e.instance_id == ^instance_id)
+
+  defp apply_global_from(query, nil), do: query
+  defp apply_global_from(query, %DateTime{} = from), do: where(query, [e], e.created_at >= ^from)
+
+  defp apply_global_to(query, nil), do: query
+  defp apply_global_to(query, %DateTime{} = to), do: where(query, [e], e.created_at <= ^to)
+
+  # Validate-then-query: a malformed uuid issues zero queries.
+  defp cast_optional_uuid(nil, _error), do: {:ok, nil}
+
+  defp cast_optional_uuid(value, error) do
+    case Ecto.UUID.cast(value) do
+      {:ok, uuid} -> {:ok, uuid}
+      :error -> {:error, error}
+    end
+  end
 
   # Design doc §5.2 -- GlobalReadOpts limit clamping.
   defp clamp_read_global_limit(nil), do: 100

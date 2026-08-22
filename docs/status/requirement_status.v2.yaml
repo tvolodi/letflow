@@ -1360,3 +1360,48 @@ history:
       tenant-data path, docs-only. REVIEWER checked for accuracy against
       the greps and idiom consistency with REQ-119/REQ-120's prior
       docs/frontend/ correction style.
+  - req: REQ-085
+    event: started
+    agent: ELIXIR-DEV
+    at: 2026-08-22T07:15:00Z
+    note: >
+      Run WF02-REQ085-20260822, queue task 152. Task routes 2/2 -- write path
+      (handleComplete/handleClaim/handleAssign/handleReassign), depends_on
+      queue task 150 (REQ-083, done). Branch feature/WF02-REQ085-20260822
+      created off origin/main. Full WF-02 pipeline: CODE-DESIGNER produced
+      lib/letflow/design/req085-task-routes-write.md, resolving two genuine
+      gaps -- claim's permission gate (:TasksComplete, matching R-Co's own
+      handleClaim, not :TasksAssign) and the claimed_by/no-migration
+      decision (atomic conditional self-assignment against the existing
+      assignee_type/assignee_ref columns, no new column). CODE-DESIGN-
+      VALIDATOR PASSed.
+  - req: REQ-085
+    event: done
+    agent: ELIXIR-DEV
+    at: 2026-08-22T08:48:26Z
+    note: >
+      Implemented per the approved design: Letflow.Engine.Task.
+      assignment_changeset/2 (new, no migration), one additive
+      Letflow.Api.Authorization.endpoint_policy_key/2 clause for
+      POST /tasks/:id/claim -> :TasksComplete, Letflow.Tasks.claim_task/3
+      /assign_task/4/reassign_task/4 (row-locked via SELECT ... FOR UPDATE
+      inside Ecto.Multi, the same idiom Letflow.Engine.complete_task/3
+      already established -- no second locking scheme), and four new routes
+      on lib/letflow/routers/tasks.ex (REQ-083's own module).
+      POST /tasks/:id/complete routes exclusively to the already-shipped
+      Letflow.Engine.complete_task/3 (REQ-048) -- zero Repo. calls in the
+      router module, confirmed by grep. claim_task/3's group/role rejection
+      reuses Letflow.Tasks.resolve_principal_scope/2 unchanged (REQ-083's
+      own inbox resolution) -- one resolution path. SECURITY-REVIEWER
+      PASSed (INV-1/5/8). REVIEWER PASSed (scope, idiom, module-ownership
+      judgment, decision-record consistency). TEST-DESIGNER extended
+      test/letflow/routers/tasks_test.exs (REQ-083's own file) with 22 tests
+      covering all 7 acceptance criteria, including a real Task.async
+      concurrent-claim test (AC4) and cross-tenant/nonexistent parity across
+      all four verbs (AC6). TEST-DESIGN-VALIDATOR PASSed. TEST-RUNNER: full
+      suite 1710/1711 (the one failure is the pre-existing, unrelated A3
+      doc-volume-size invariant on this same file, present on main before
+      this branch and still present after -- not fixed here, out of this
+      requirement's scope). RELEASE-VALIDATOR independently re-ran the
+      suite and re-verified all 7 acceptance criteria against the shipped
+      code and tests directly -- PASS. Status flipped pending -> done here.

@@ -55,8 +55,13 @@ volumes:
     path: docs/status/requirement_status.v2.yaml
     status: current
     opened: 2026-08-21
-    entries: 41
+    entries: 43
     note: >
+      Incremented to 43 by WF02-REQ085-20260822's own started+done event pair
+      (2 appends, recounted from the composed file per this note's own
+      recount-every-time rule -- 43 on-disk `- req:` entries in
+      requirement_status.v2.yaml after rebasing this run's branch cleanly
+      onto origin/main at 41).
       Incremented to 38 in the same commit as WF03-ISS0260-20260822's own done-event
       append (Step 5/Step Final, ISSUE-FIXER) -- 38 on-disk `- req:` entries at that
       point. That run's Step Final rebase conflicted at this file's tail against

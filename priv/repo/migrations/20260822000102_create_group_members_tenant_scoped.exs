@@ -16,6 +16,16 @@
 # exist, so this FK's `on_delete` clause is never really exercised against a
 # non-empty group in practice.
 #
+# ISS-0225: the group_id side of this tradeoff is covered (delete_group/2's
+# guard). The user_id side is NOT -- no hard user-deletion path exists
+# anywhere in this codebase yet, so `on_delete: :nothing` on `user_id` is
+# currently untested territory. Whichever future requirement adds hard user
+# deletion must either add an equivalent application-layer guard (refuse
+# deleting a user with existing group_members rows) or explicitly clean up
+# that user's group_members rows first -- otherwise `on_delete: :nothing`
+# silently leaves orphaned rows that `Identity.list_group_members/3`'s join
+# would then silently drop (INNER JOIN to a nonexistent user), not error.
+#
 # No surrogate `:id` primary key (OQ-7, ELIXIR-DEV's call) -- this is a pure
 # join table and every `Letflow.Identity` function signature operates on
 # `(group_id, user_id)`, never a bare `GroupMember` id. The composite unique

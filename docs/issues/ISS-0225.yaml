@@ -46,3 +46,23 @@ github_issue_note: >
   deliberately not called separately.
 
 status: open
+interim_note: >
+  Left `open`, deliberately, rather than `resolved` or `instrumented`: no
+  hard user-deletion path exists anywhere in this codebase today, so the
+  root cause (a future feature might omit a guard) cannot actually be
+  removed before that feature exists, and ISSUE_QUEUE.md's `instrumented`
+  status requires naming a real `superseded_by` successor issue, which
+  would mean filing a placeholder issue for a requirement that does not
+  exist yet -- worse than just leaving this one open and findable.
+
+  Interim, real work done anyway (2026-08-22): added an explicit, permanent
+  code comment directly on
+  priv/repo/migrations/20260822000102_create_group_members_tenant_scoped.exs,
+  next to the `on_delete: :nothing` declaration itself (the exact place a
+  future implementer will be looking), stating the risk precisely and what
+  the future user-deletion requirement must do about it (add an equivalent
+  application-layer guard, or explicitly clean up `group_members` rows
+  first). This does not close the gap, only makes it impossible to miss.
+  Docs-only change (one file, a comment), self-gated per ORCHESTRATOR.md
+  §10 direct-action allowance. Whichever future requirement adds hard user
+  deletion should close this issue as `resolved` once it adds the guard.

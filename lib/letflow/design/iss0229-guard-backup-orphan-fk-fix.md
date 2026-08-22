@@ -220,12 +220,40 @@ an already-shipped mechanism*, and it is visible to that mechanism — unlike to
 which by construction is invisible to it. `reclaim_row/2` additionally `rescue`s and logs per row
 rather than aborting the sweep, so even an unexpected raise there degrades gracefully.
 
-**Can the FK block the reaper itself?** No. A tenant's registry row is *either* in
-`tenant_schemas` *or* parked in the backup table, never both (`tenant_schemas_tenant_id_index` is
-UNIQUE on `tenant_id`, and the move-out is a `DELETE … RETURNING` feeding the `INSERT`). The
-reaper only ever deletes tenants it selected *from `tenant_schemas`*, so by construction those
-tenants have no parked row and the new FK cannot match. Additionally, the reaper defers its sweep
-entirely when a concurrent invocation is present (ISS-0110/ISS-0217's `application_name` tag).
+**Can the FK block the reaper itself? Practically unreachable and self-limiting — not impossible
+by construction.** An earlier draft of this section argued impossibility, and that argument was
+wrong; it is corrected here rather than quietly dropped, because this is the safety section and it
+must not assert more than it can support.
+
+*Why the construction argument fails.* "A tenant's registry row is either in `tenant_schemas` or
+parked in the backup table, never both" is true, but it is an **instantaneous** invariant, and the
+reaper's decision is not instantaneous. `sweep_orphans/2` selects its entire candidate set in one
+query (`test/support/tenant_schema_reaper.ex:142-146`) and then iterates; `reclaim_row/2` issues
+its `DELETE FROM tenants` (line 231) potentially many rows later. A concurrent invocation's
+move-out can park an already-selected row inside that window. Line 230's `DELETE FROM
+tenant_schemas` then matches 0 rows and line 231 raises `23503` under the new FK. So the FK *can*
+in principle block the reaper. The conclusion below survives; the reasoning is different.
+
+*Why it is nevertheless not a concern, on two independent grounds:*
+
+1. **The precondition is near-eliminated by the reaper's own deferral.** Reaching that window at
+   all requires a second `mix test` invocation to be mid-critical-section — and `sweep_orphans/2`
+   checks for exactly that first: `concurrent_invocation_present?/2` (line 128) hard-returns
+   `{:ok, %{reclaimed: 0, skipped_invalid_format: 0}}` and reaps nothing whenever another
+   invocation is connected (ISS-0110/ISS-0217's `application_name` tag). The sweep that could
+   collide is precisely the sweep that does not run. The residual is the narrow race in which the
+   other invocation connects *after* that check and reaches its move-out before this sweep's loop
+   reaches that row.
+2. **If it happens anyway, it degrades gracefully and retries.** `reclaim_row/2` `rescue`s
+   per row, logs a `Logger.warning/1` naming the id/tenant_id/schema_name, and returns `false`,
+   so the remaining rows still sweep; `sweep_orphans/2` additionally `rescue`s at the outer level
+   (line 167) and returns `{:ok, %{reclaimed: 0, …}}` rather than propagating. The row is left in
+   place for the next boundary sweep, which — the parked row having since been restored — will
+   reclaim it normally. Nothing is corrupted and nothing is lost; a single reclaim is deferred by
+   one sweep.
+
+Net: bounded improbability with a self-healing failure mode, not impossibility. No change to
+`tenant_schema_reaper.ex` is required, and §4.3's scope boundary is unaffected.
 
 **Effect on this file's own existing tests — checked, not assumed.** Two existing tests insert
 into the backup table or into `tenant_schemas` directly:
@@ -477,13 +505,75 @@ today. Sequence:
 3. Call `restore_orphaned_guard_backup_rows!/0` directly (the same helper `setup` calls).
 
 Against the current code, step 3 raises `Postgrex.Error` 23503 — a real, demonstrated failure.
-Against the fix it returns `:ok`. The test must `on_exit` restore a known-good state (call
-`ensure_backup_table_fk!/0`, and clean up any tenant it created) so it cannot itself poison the
-database it is testing.
+Against the fix it returns `:ok`.
 
 Because the helpers are `defp`, this test **must live in
 `test/letflow/identity_migration_test.exs`**, in a new `describe "ISS-0229: …"` block. It cannot
 be a separate file.
+
+#### 5.1.1 Cleanup — mandatory shape, and why the obvious one is wrong
+
+An earlier draft of this section said the test should `on_exit` "call `ensure_backup_table_fk!/0`,
+and clean up any tenant it created." **That is wrong on two counts and must not be implemented.**
+
+- **It inverts §3.3's heal-before-constrain rule.** The test body deliberately drops the
+  constraint and then parks an orphan. If the body raises before step 3 — which is *exactly* what
+  the fail-first run requires be demonstrated — an `on_exit` calling `ensure_backup_table_fk!/0`
+  would attempt the validating `ALTER` with the orphan still parked. It raises `23503` and leaves
+  the constraint absent with the orphan present: ISS-0229's own poisoned state, re-created by
+  ISS-0229's regression test.
+- **It makes fail-first undemonstrable.** `ensure_backup_table_fk!/0` does not exist before the
+  fix, so a test naming it does not *compile* against pre-fix helper bodies. The pre-fix failure
+  would be an `undefined function` compile error — precisely the module-nonexistence shape §5
+  rules out — rather than the behavioural 23503 the fail-then-pass rule demands.
+
+**Mandatory cleanup, in this order, for every test in the new block** (including assertion 9's
+scenario, per §5.2):
+
+1. `DELETE FROM public.iss060_tenant_schemas_guard_backup WHERE id = ANY($1)` with the ids this
+   test seeded. A targeted `DELETE` on the *referencing* side is never FK-checked, so this cannot
+   raise regardless of what state the body left, and it removes only what this test created.
+2. `DELETE FROM public.tenant_schemas WHERE tenant_id = $1` for any real tenant the test created,
+   **before** deleting the tenant itself — the same ordering the two existing ISS-0060 tests
+   already use, for the same FK reason.
+3. `Repo.delete_all(from(t in Tenant, where: t.id == ^tenant_id))`.
+4. `restore_orphaned_guard_backup_rows!/0` — **never `ensure_backup_table_fk!/0` directly.** It is
+   the composed heal-then-constrain entry point (§3.3), so calling it restores the constraint in
+   the correct order, is a no-op on the already-clean table steps 1-3 left, and — being a helper
+   that already exists pre-fix — keeps the block compilable against reverted helper bodies.
+
+**General rule this instance of:** the new `describe` block must name, in its own source, **only
+helpers that already exist before the fix** — `restore_orphaned_guard_backup_rows!/0`,
+`with_only_this_tenant_visible!/2`, `ensure_backup_table!/0`. It must reach the new behaviour
+*through* them and never call `ensure_backup_table_fk!/0` or `restore_or_discard_backup_rows!/0`
+by name. Everything the new helpers are responsible for is observable without naming them:
+constraint presence, `confdeltype` and enforcement are all checked with raw SQL (§5.2 assertions
+6-7).
+
+#### 5.1.2 The fail-first run — concretely what to execute
+
+The regression test lives in the same file as the fix, so "check out the old file" would revert
+the test too. The demonstration is therefore:
+
+1. Keep the new `describe "ISS-0229: …"` block; revert **only** the §3 helper-body changes
+   (`ensure_backup_table!/0`'s inline `CONSTRAINT`, `restore_orphaned_guard_backup_rows!/0`'s new
+   two-step body, `with_only_this_tenant_visible!/2`'s `after`-block call), and remove the two
+   new helpers. §5.1.1's naming rule is what makes this still compile.
+2. Run `MIX_ENV=test mix test test/letflow/identity_migration_test.exs` and **quote the actual
+   output**. The expected pre-fix failure is behavioural, not a compile error: assertion 1 dies
+   with `** (Postgrex.Error) ERROR 23503 (foreign_key_violation) insert or update on table
+   "tenant_schemas" violates foreign key constraint "tenant_schemas_tenant_id_fkey"`, raised from
+   `restore_orphaned_guard_backup_rows!/0`. If instead an `undefined function` error appears, the
+   test violates §5.1.1's naming rule and must be rewritten, not worked around.
+3. Restore the §3 helper bodies and re-run the same command; the block passes.
+
+**Expected residue of the pre-fix run, and why nobody should hand-clean it:** in step 2 the
+cleanup's own step 4 also raises (pre-fix, `restore_orphaned_guard_backup_rows!/0` is exactly the
+function that cannot survive an orphan), so the seeded orphan is left in the backup table with no
+constraint — i.e. the same shape as the state ISS-0229 was filed for. That is self-correcting by
+design: step 3's first run heals it via §6's exact path and then converges the constraint. Do not
+`DELETE` it by hand; doing so would discard the best available end-to-end confirmation that §6
+works.
 
 ### 5.2 What must be asserted
 
@@ -520,6 +610,15 @@ Minimum set; each line is a distinct failure mode a partial fix could pass witho
    orphan-survival property at the second call site: with the constraint dropped and an orphan
    row parked, `with_only_this_tenant_visible!/2` completes and returns `fun.()`'s value rather
    than raising from its `after` block.
+   **Cleanup for this scenario must be specified, not inherited by assumption.** Unlike
+   assertions 1-8, this path does **not** converge the constraint: per §3.3,
+   `with_only_this_tenant_visible!/2` calls `restore_or_discard_backup_rows!/0` but **not**
+   `ensure_backup_table_fk!/0`, so the scenario finishes with the constraint still dropped. Its
+   `on_exit` must therefore run §5.1.1's four steps in full — in particular step 4's
+   `restore_orphaned_guard_backup_rows!/0`, which is the only thing that puts the constraint
+   back, and which must run *after* steps 1-3 have emptied the backup table so the validating
+   `ALTER` cannot raise. A test that asserts this property and then leaves the constraint off
+   silently disarms the FK for every test that runs after it in the same database.
 
 TEST-DESIGNER should note the file is `async: false` and its `setup` already calls
 `restore_orphaned_guard_backup_rows!/0` before every test — so any state the new tests seed must

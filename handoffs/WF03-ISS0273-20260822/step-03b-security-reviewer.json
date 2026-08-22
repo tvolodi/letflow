@@ -1,0 +1,52 @@
+{
+  "handoff_id": "60a1b8e5-5e70-8091-d2a3-1e2f3a4b5c06",
+  "run_id": "WF03-ISS0273-20260822",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0273-20260822/step-03b-security-reviewer.json",
+  "created_at": "2026-08-22T12:43:14Z",
+  "started_at": "2026-08-22T12:43:14Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/instructions/security-invariants.md",
+      "handoffs/WF03-ISS0273-20260822/step-03-elixir-dev.json",
+      "lib/mix/tasks/letflow.lint_handoffs.ex"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.lint_handoffs.ex"]
+  },
+  "task": {
+    "description": "Run the scope test from docs/agents/instructions/security-invariants.md against `git diff main...feature/WF03-ISS0273-20260822 -- lib/mix/tasks/letflow.lint_handoffs.ex lib/letflow/design/`. This is a dev-tooling Mix task over the handoffs/ audit trail, not application/tenant data -- state per-invariant APPLIES/NOT-APPLICABLE verdicts as the worked example in docs/agents/shared/HANDOFF_PROTOCOL.md's schema section demonstrates, do not skip the scope test itself.",
+    "acceptance_criteria": [
+      "Scope test run against the real diff, quoted",
+      "Verdict stated for every invariant INV-1..INV-8 (APPLIES->PASS/FAIL or NOT-APPLICABLE, with reasoning)",
+      "PASS or FAIL with itemized BLOCKER issues; next_action names REVIEWER on PASS"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

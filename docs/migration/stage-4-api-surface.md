@@ -517,3 +517,93 @@ filed, non-blocking, and not a type-safety gap this review would separately
 file.
 
 No rework requested.
+
+**2026-08-22 (REQ-075, out-of-sequence pre-implementation consult) — PASS.**
+Not a normal post-implementation gate: `lib/letflow/design/req075-tenant-
+administration-routes.md` §4.2 (OQ-7) explicitly blocks ELIXIR-DEV from
+implementing until REVIEWER signs off on a behavior-contract change to an
+already-`done` module, `Letflow.Plugs.TenantStatus` (REQ-021, mounted by
+REQ-071). Read the design's full §4 (both §4.1's R-Co evidence and §4.2's
+recommendation), the shipped `lib/letflow/plugs/tenant_status.ex`, and
+`lib/letflow/identity/tenant.ex` directly before deciding.
+
+- **Decision: approve the design's recommended shape as-is — all HTTP
+  methods, 403, PLATFORM_ADMIN-exempt — matching R-Co's actual behavior
+  precisely, not the narrower write-only alternative.** Reasoning:
+  `:migrating` already exists as this codebase's write-pause mechanism
+  (`Letflow.Plugs.TenantStatus`'s current, unchanged behavior). If the new
+  `:inactive` check were also write-only, it would be operationally
+  indistinguishable from `:migrating` — a "deactivated" tenant's callers
+  would keep full read access indefinitely, which contradicts what
+  deactivation is for (REQ-075's own AC5 and R-Co's `getTenantAdmin`'s
+  deactivate/reactivate action pair exist specifically to take a tenant out
+  of service, not to pause its writes). A narrower rule would be a real
+  product-behavior weakening disguised as a "minimize surface change"
+  engineering caution, not a neutral simplification.
+- **INV-8 does not favor the narrower alternative.** This is a plain
+  authorization branch (role/status comparison, no I/O beyond the existing
+  `Repo.get(Tenant, tenant_id)` this plug already performs) — not a crash
+  boundary, and it introduces no new failure mode `Letflow.ProcessInstance`'s
+  one-process-per-instance isolation model exists to contain. The all-methods
+  rule was weighed as a real tradeoff (a deactivated tenant's caller loses
+  read access too, including in-flight `GET` polling), not waved through, and
+  found to be the correct call: read access surviving deactivation
+  indefinitely is the actual risk here, not a crash blast radius.
+- **No `docs/migration/decisions/*.md` contradiction.** Checked all 13
+  records. `0003-ecto-schema-strategy.md`/`0006-identity-tables-schema-per-
+  tenant.md` (schema-per-tenant) are not implicated — `tenants` is a
+  default-schema table already outside that mechanism (per this design's own
+  intro), and this change adds an enum value, not a scoping mechanism.
+  `0013-authorization-role-set.md` (the five-role matrix) is not implicated —
+  this check reads `conn.assigns.auth_context.roles` for a
+  `"PLATFORM_ADMIN"` string match, the same source REQ-069/071 already
+  established, no new role introduced. No record addresses tenant-status
+  gating scope, so there is nothing to silently re-decide.
+- **No migration needed, confirmed by direct read.** `lib/letflow/identity/
+  tenant.ex:56`: `field(:status, Ecto.Enum, values: [:active, :migrating],
+  default: :active)` — a plain `:string` column
+  (`priv/repo/migrations/20260816000001_create_tenants.exs`, no native
+  Postgres enum type, no DB `CHECK` constraint). Adding `:inactive` to the
+  `values:` list is an application-layer change only.
+- **Idiom/scope.** The recommended shape keeps `Letflow.Plugs.TenantStatus` a
+  plain `@behaviour Plug` module with two independent, linearly-composed
+  checks (new all-methods `:inactive` check, then the existing write-only
+  `:migrating` check) — no new abstraction, no state machine, no singleton
+  process. This is the minimum change the requirement's own AC5 needs, not
+  scope creep ahead of it.
+
+**Exact shape authorized for ELIXIR-DEV (Step 2a) — no ambiguity left:**
+
+1. `Letflow.Identity.Tenant`: extend the `status` field's `Ecto.Enum` values
+   to `[:active, :migrating, :inactive]`. No migration file. Default stays
+   `:active`.
+2. `Letflow.Plugs.TenantStatus.call/2`: restructure so a new check runs for
+   **every** HTTP method (not gated by the existing `@write_methods` guard
+   clause), and runs **before** the existing `:migrating` write-only check.
+3. **Trigger condition:** the resolved tenant's `status == :inactive` **AND**
+   the caller's roles (`conn.assigns.auth_context.roles`, same source
+   `AuthPipeline` already populates) do **not** include `"PLATFORM_ADMIN"`.
+4. **On trigger:** `send_resp(conn, 403, body) |> halt()`, `Content-Type:
+   application/json`, body exactly
+   `{"error": "tenant_inactive", "detail": "tenant is deactivated"}` — no
+   `Retry-After` header (that header is specific to the existing 503
+   write-pause response and must not appear on this new 403).
+5. **No trigger** (tenant `:active`, tenant `:migrating` but not `:inactive`,
+   or caller has `"PLATFORM_ADMIN"`): fall through unchanged to the existing
+   `:migrating`/write-method logic exactly as shipped today — no other
+   behavior of the module changes.
+6. The existing no-`auth_context`/no-`tenant_id`/tenant-not-found passthrough
+   cases (§ shipped moduledoc) apply identically to the new check — no new
+   handling invented for those edge cases.
+7. Fail-closed behavior is unchanged and extends naturally: the new check's
+   own tenant lookup reuses the same `Repo.get(Tenant, tenant_id)` result
+   already fetched for the existing check (one lookup, not two) — a genuine
+   DB error still propagates as a process crash, matching REQ-071's
+   already-signed-off fail-closed determination; do not add new
+   `try`/`rescue` around this.
+8. Update `Letflow.Plugs.TenantStatus`'s `@moduledoc` to document the new
+   `:inactive` check alongside the existing write-pause description (mirrors
+   this file's own AC6 precedent for every prior S4 sign-off).
+
+No rework requested — this is a forward-authorizing consult, not a review of
+already-written code.
